@@ -44,7 +44,6 @@ Groups parameterised at runtime (``target``, ``autobot-backend``,
 they are resolved via --limit or passed as extra-vars.
 """
 
-import json
 import logging
 import os
 import re
@@ -56,6 +55,7 @@ from typing import Any
 import yaml
 
 from autobot_shared.ssot_config import config
+from services.ansible_extra_vars import dump_extra_vars
 
 logger = logging.getLogger(__name__)
 
@@ -640,8 +640,8 @@ def write_temp_inventory(inv: dict, uid_tmp_dir: str | None = None) -> Path:
     return tmp_path
 
 
-def write_temp_extra_vars(extra_vars: dict, uid_tmp_dir: str | None = None) -> Path:
-    """Write *extra_vars* to a unique 0600 JSON temp file and return its Path.
+def write_temp_extra_vars(extra_vars: dict, uid_tmp_dir: str | None = None, unsafe_keys: Any = ()) -> Path:
+    """Write *extra_vars* to a unique 0600 YAML temp file and return its Path.
 
     Passed to ansible-playbook as ``-e @<file>`` so secret extra_vars (the
     stored SLM secrets auto-merged by PlaybookExecutor, #3519) never appear
@@ -649,26 +649,26 @@ def write_temp_extra_vars(extra_vars: dict, uid_tmp_dir: str | None = None) -> P
     ``/proc/<pid>/cmdline`` for the whole playbook run (#11735).  The caller
     deletes the file after the run, same contract as write_temp_inventory.
 
+    Values under *unsafe_keys* (caller-supplied) get the ``!unsafe`` tag, which JSON cannot
+    carry, so Ansible never templates them (#19005); other keys (merged secrets) stay plain.
+
     Args:
         extra_vars: Mapping passed to the playbook as extra vars.
         uid_tmp_dir: Directory for the temp file.  If None, uses
             ``/tmp/ansible_local_tmp_<uid>`` (nosec B108 — uid-scoped).
+        unsafe_keys: Keys of *extra_vars* whose string values are tagged ``!unsafe``.
 
     Returns:
-        Path to the written 0600 JSON file.
+        Path to the written 0600 YAML file.
     """
     if uid_tmp_dir is None:
         uid_tmp_dir = f"/tmp/ansible_local_tmp_{os.getuid()}"  # nosec B108
     tmp_dir = Path(uid_tmp_dir)
     tmp_dir.mkdir(mode=0o700, exist_ok=True)
 
-    fd, tmp_path_str = tempfile.mkstemp(
-        prefix="autobot_evars_",
-        suffix=".json",
-        dir=str(tmp_dir),
-    )
+    fd, tmp_path_str = tempfile.mkstemp(prefix="autobot_evars_", suffix=".yml", dir=str(tmp_dir))
     with os.fdopen(fd, "w", encoding="utf-8") as fh:
-        json.dump(extra_vars, fh)
+        dump_extra_vars(extra_vars, fh, unsafe_keys)
     return Path(tmp_path_str)
 
 

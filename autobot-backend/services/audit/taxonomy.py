@@ -21,6 +21,8 @@ from dataclasses import asdict, dataclass, field
 from enum import Enum
 from typing import Any, Dict
 
+from autobot_shared.audit_actions import canonical_action, spellings_of
+
 
 class AuditCategory(str, Enum):
     """Top-level audit taxonomy; each category has its own retention (retention.py)."""
@@ -65,7 +67,30 @@ class AuditAction(str, Enum):
     API_KEY_REVOKE = "api_key.revoke"  # pragma: allowlist secret -- an action name, not a key
     USER_CREATE = "user.create"
     USER_DELETE = "user.delete"
-    CONFIG_CHANGE = "config.change"
+    USER_UPDATE = "user.update"  # #18716
+    ROLE_ASSIGN = "role.assign"  # #18716
+    ROLE_REVOKE = "role.revoke"  # #18716
+    ROLE_CHANGE = "role.change"  # #18716
+    PASSWORD_CHANGE = "password.change"  # nosec B105  # pragma: allowlist secret -- an action name (#18716)
+    # auth.login / auth.logout (#18716): the outcome column says success or failure. One backend login
+    # writes up to three rows, each a different fact, kept on purpose:
+    #   1. middleware/audit_middleware.py path map -- the HTTP *attempt* (every status, no actor yet);
+    #   2. shared UserService.authenticate via audit_row -- the credential *verdict* with user/org id and
+    #      the failure reason (the only record of a failure the SLM also writes);
+    #   3. api/auth.py emit_compliance -- the *session issued* record that feeds the admin event-log view.
+    # auth_middleware.authenticate_user rows (a legacy file-user path with no production caller) use the same
+    # spelling. A logout writes rows 1 and 3 only.
+    AUTH_LOGIN = "auth.login"
+    AUTH_LOGOUT = "auth.logout"
+    AUTH_PERMISSION_CHECK = "auth.permission_check"  # #18716
+    FILE_UPLOAD = "file.upload"  # #18716
+    FILE_DOWNLOAD = "file.download"  # #18716
+    FILE_CREATE = "file.create"  # #18716
+    FILE_DELETE = "file.delete"  # #18716
+    ELEVATION_REQUEST = "elevation.request"  # #18716
+    ELEVATION_AUTHORIZE = "elevation.authorize"  # #18716
+    ELEVATION_EXECUTE = "elevation.execute"  # #18716
+    CONFIG_UPDATE = "config.update"  # #18716: was config.change; the writers and the dashboard say update
     ADMIN_ACTION = "admin.action"
     RUN_JWT_MINT = "run_jwt.mint"
     RUN_JWT_REVOKE = "run_jwt.revoke"
@@ -128,8 +153,8 @@ def event_from_dict(data: Dict[str, Any]) -> AuditEvent:
 
 
 def action_name(action: Any) -> str:
-    """The stored action string for an enum member or a plain string."""
-    return action.value if isinstance(action, Enum) else str(action)
+    """The stored action string for an enum member or a plain string, in its canonical spelling (#18716)."""
+    return canonical_action(action)
 
 
 @dataclass(frozen=True)
@@ -153,8 +178,18 @@ class AuditFilter:
     to_ts: float | None = None
 
     def _column_values(self) -> Dict[str, Any]:
-        cols = ("actor_id", "action", "session_id", "outcome", "resource_type", "resource_id")
+        cols = ("actor_id", "session_id", "outcome", "resource_type", "resource_id")
         return {c: getattr(self, c) for c in cols if getattr(self, c) is not None}
+
+    def action_set(self) -> frozenset[str] | None:
+        """Every stored spelling ``action`` / ``actions`` accept, aliases of old rows included (#18716).
+
+        The alias half shrinks once the approved data migration has rewritten the stored rows.
+        """
+        sets = [spellings_of(self.action)] if self.action is not None else []
+        if self.actions is not None:
+            sets.append(frozenset().union(*(spellings_of(a) for a in self.actions)))
+        return frozenset.intersection(*sets) if sets else None
 
     def matches(self, event: Dict[str, Any]) -> bool:
         """True when a stored event dict satisfies every set field."""
@@ -162,7 +197,8 @@ class AuditFilter:
             return False
         if any(event.get(col) != want for col, want in self._column_values().items()):
             return False
-        if self.actions is not None and event.get("action") not in self.actions:
+        accepted = self.action_set()
+        if accepted is not None and event.get("action") not in accepted:
             return False
         meta = event.get("metadata") or {}
         if any(str(meta.get(k)) != v for k, v in self.metadata):

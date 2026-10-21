@@ -19,6 +19,7 @@ import pytest
 
 from models.atomic_fact import AtomicFact, FactType, TemporalType
 from services.fact_extraction_service import FactExtractionService
+from testkit.fake_redis_pipeline import FakeAsyncPipeline
 
 _NOW = datetime.now(tz=timezone.utc)
 
@@ -39,17 +40,6 @@ def _stored(**overrides) -> str:
     return json.dumps(AtomicFact(**fields).to_dict())
 
 
-class _Pipe:
-    def __init__(self, store: dict) -> None:
-        self._store, self._keys = store, []
-
-    def hget(self, key: str, _field: str) -> None:
-        self._keys.append(key)
-
-    async def execute(self) -> list:
-        return [self._store.get(key) for key in self._keys]
-
-
 class _Redis:
     def __init__(self, facts: dict) -> None:
         self._facts = {f"fact:{fact_id}": data for fact_id, data in facts.items()}
@@ -58,8 +48,11 @@ class _Redis:
     async def smembers(self, _key: str) -> set:
         return set(self._ids)
 
-    def pipeline(self) -> _Pipe:
-        return _Pipe(self._facts)
+    async def hget(self, key: str, _field: str):
+        return self._facts.get(key)
+
+    def pipeline(self) -> FakeAsyncPipeline:
+        return FakeAsyncPipeline(self)
 
 
 async def _criteria(facts: dict, **kwargs):

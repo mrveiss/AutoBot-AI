@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from api.feature_flags import require_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from services.audit.taxonomy import AuditAction
 from services.audit_logger import audit_log
 from services.scheduler_toggles import (
     clear_scheduler_override,
@@ -77,7 +78,7 @@ async def set_scheduler(
         raise HTTPException(status_code=503, detail=f"Could not persist toggle for '{name}'")
 
     await audit_log(
-        operation="config.update",
+        operation=AuditAction.CONFIG_UPDATE.value,
         result="success",
         user_id=admin.get("username", "admin"),
         resource=f"scheduler:{name}",
@@ -105,7 +106,7 @@ async def clear_scheduler(
 
     job = get_job(name)
     await audit_log(
-        operation="config.update",
+        operation=AuditAction.CONFIG_UPDATE.value,
         result="success",
         user_id=admin.get("username", "admin"),
         resource=f"scheduler:{name}",

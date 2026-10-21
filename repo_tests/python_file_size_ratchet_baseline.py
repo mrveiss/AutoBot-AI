@@ -396,7 +396,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/tests/services/test_grounded_agent.py": 679,
     "autobot-backend/tests/services/test_tool_output_filter.py": 1060,
     "autobot-backend/tests/test_claude_adapter_wiring.py": 708,
-    "autobot-backend/tests/test_cross_worker_registries.py": 724,
+    "autobot-backend/tests/test_cross_worker_registries.py": 666,
     "autobot-backend/tests/test_execution_backends.py": 1185,
     "autobot-backend/tests/test_gateway_manager.py": 801,
     "autobot-backend/tests/test_provider_registry.py": 692,
@@ -435,7 +435,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/api/errors.py": 866,
     "autobot-slm-backend/api/infrastructure.py": 724,
     "autobot-slm-backend/api/monitoring.py": 1087,
-    "autobot-slm-backend/api/nodes.py": 2905,
+    "autobot-slm-backend/api/nodes.py": 2903,
     "autobot-slm-backend/api/nodes_execution.py": 699,
     "autobot-slm-backend/api/nodes_execution_test.py": 756,
     "autobot-slm-backend/api/orchestration.py": 769,
@@ -443,7 +443,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/api/roles.py": 685,
     "autobot-slm-backend/api/security.py": 962,
     "autobot-slm-backend/api/services.py": 1017,
-    "autobot-slm-backend/api/setup_wizard.py": 1341,
+    "autobot-slm-backend/api/setup_wizard.py": 1338,
     "autobot-slm-backend/api/stateful.py": 685,
     "autobot-slm-backend/api/tls.py": 994,
     "autobot-slm-backend/api/updates.py": 1107,
@@ -460,7 +460,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/services/drift_checker.py": 839,
     "autobot-slm-backend/services/drift_checker_test.py": 1351,
     "autobot-slm-backend/services/inventory_builder.py": 710,
-    "autobot-slm-backend/services/playbook_executor.py": 1402,  # #17150: ansible_dir self-heal, re-detect before sync
+    "autobot-slm-backend/services/playbook_executor.py": 1401,  # #17150: ansible_dir self-heal, re-detect before sync
     "autobot-slm-backend/services/reconciler.py": 2219,
     # Not legacy debt: created after this guard existed (#14465/#14548). Tracked
     # as a live violation, not #5060 backlog -- see #14630.

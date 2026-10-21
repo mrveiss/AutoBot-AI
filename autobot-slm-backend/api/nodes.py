@@ -1261,14 +1261,12 @@ async def _run_role_removal(
         "backup_before_removal": str(backup).lower(),
     }
     if target_path:
-        # Extract directory name from full path
-        # e.g. /opt/autobot/autobot-npu-worker -> autobot-npu-worker
-        extra_vars["role_target_dir"] = os.path.basename(target_path.rstrip("/"))
-    result = await executor.execute_playbook(
-        playbook_name="playbooks/remove-role.yml",
-        limit=[node_id],
-        extra_vars=extra_vars,
-    )
+        extra_vars["role_target_dir"] = os.path.basename(target_path.rstrip("/"))  # /opt/x/y -> y
+    try:
+        result = await executor.execute_playbook("playbooks/remove-role.yml", limit=[node_id], extra_vars=extra_vars)
+    except ValueError:  # #19005: Role.systemd_service is not a unit name; the sink refused before spawning
+        logger.warning("Role removal refused: role=%s systemd_service=%s", role_name, repr(service_name)[:80])
+        return {"success": False, "output": "Role systemd_service is not a valid unit name"}
     # Extract backup path from output if backup was requested
     if backup and result["success"]:
         result["backup_path"] = _parse_backup_path(result.get("output", ""))
