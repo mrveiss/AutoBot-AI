@@ -100,6 +100,9 @@ jobs:
           # `jq -r '.[0].version'` fails and `version` is always empty (#9870).
           # The bumped version is the output FILE content -> `content` output.
           CLIFF_CONTENT: ${{ steps.version.outputs.content }}
+          # The range outputs reach the script through env, never its text (#18666 review).
+          CURRENT_TAG: ${{ steps.range.outputs.current_tag }}
+          COMMIT_COUNT: ${{ steps.range.outputs.commit_count }}
         run: |
           NEXT_VERSION="$(tr -d '[:space:]' <<<"$CLIFF_CONTENT")"
           if [[ ! "$NEXT_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
@@ -111,14 +114,12 @@ jobs:
           # from HEAD) when there is nothing to bump — that, not "a tag with
           # this name exists somewhere", is the no-release condition. A name
           # collision with a NON-ancestor tag must not skip the release (#11826).
-          CURRENT_TAG="${{ steps.range.outputs.current_tag }}"
           if [[ "$NEXT_VERSION" == "$CURRENT_TAG" ]]; then
             # #13835: a no-release outcome is legitimate only when the range is
             # genuinely empty. Reaching here with commits in range means the
             # version decision could not see them, and exiting 0 quietly is how
             # that went unnoticed for a 276-commit promotion.
-            COMMIT_COUNT="${{ steps.range.outputs.commit_count }}"
-            if [[ "$COMMIT_COUNT" -gt 0 ]]; then
+              if [[ "$COMMIT_COUNT" -gt 0 ]]; then
               echo "::error::git-cliff found nothing to bump, but ${COMMIT_COUNT} commits are in ${CURRENT_TAG}..HEAD — the version decision is not seeing the release range (#13835)."
               exit 1
             fi
@@ -167,8 +168,9 @@ jobs:
 
       - name: Compile changelog fragments + write per-version file (A+B)
         if: steps.check.outputs.release_needed == 'true'
+        env:
+          VERSION: ${{ steps.check.outputs.version }}  # via env, never interpolated into the script
         run: |
-          VERSION="${{ steps.check.outputs.version }}"
           python3 scripts/compile_changelog.py \
             --version "${VERSION}" \
             --cliff-notes RELEASE_NOTES.md
@@ -188,8 +190,9 @@ jobs:
       - name: Commit changelog files and tag
         id: commit
         if: steps.check.outputs.release_needed == 'true'
+        env:
+          VERSION: ${{ steps.check.outputs.version }}  # via env, never interpolated into the script
         run: |
-          VERSION="${{ steps.check.outputs.version }}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add CHANGELOG.md "changelog/${VERSION}.md" changelog/
@@ -215,39 +218,60 @@ jobs:
 
       # #18666: the documented one-liner ran an unpinned `main` install.sh as root with no
       # integrity check. Each release publishes a copy whose DEFAULT_BRANCH is this release's tag
-      # (so it installs exactly that release), its SHA256, and a cosign signature made with the
-      # same key image-sign.yml uses; INSTALL.md shows how to verify all three before running.
+      # (so it installs exactly that release) and its SHA256, plus a cosign signature made with the
+      # key image-sign.yml uses -- once that key exists. Until the owner replaces the placeholder
+      # cosign.pub (#19126) the installer ships checksummed but UNSIGNED, with a warning; a missing
+      # key never fails the release (its tag is already pushed above) and never yields a fake signature.
       - name: Build the release's pinned installer (#18666)
         if: steps.check.outputs.release_needed == 'true'
         env:
           VERSION: ${{ steps.check.outputs.version }}
         run: |
           set -euo pipefail
+          [[ "${VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] \
+            || { echo "::error::release version '${VERSION}' is not vX.Y.Z[-suffix]; refusing to pin install.sh to it"; exit 1; }
+          # The tag name alone is mutable: pin the commit it points at too, and install.sh refuses a
+          # checkout whose HEAD differs, so the signature covers the code it installs (#18666).
+          COMMIT="$(git rev-parse "refs/tags/${VERSION}^{commit}")"
+          [[ "${COMMIT}" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::tag ${VERSION} does not resolve to a commit"; exit 1; }
           mkdir -p dist
-          sed "s/^readonly DEFAULT_BRANCH=\"main\"$/readonly DEFAULT_BRANCH=\"${VERSION}\"/" install.sh > dist/install.sh
-          grep -qx "readonly DEFAULT_BRANCH=\"${VERSION}\"" dist/install.sh \
+          sed "s/^readonly DEFAULT_BRANCH=\"main\" PINNED_COMMIT=\"\"/readonly DEFAULT_BRANCH=\"${VERSION}\" PINNED_COMMIT=\"${COMMIT}\"/" install.sh > dist/install.sh
+          grep -q "^readonly DEFAULT_BRANCH=\"${VERSION}\" PINNED_COMMIT=\"${COMMIT}\"" dist/install.sh \
             || { echo "::error::install.sh's DEFAULT_BRANCH line changed; the release pin did not apply"; exit 1; }
           (cd dist && sha256sum install.sh > install.sh.sha256)
 
-      - name: Install cosign
+      - name: Check the signing key is real (#18666)
+        id: signkey
         if: steps.check.outputs.release_needed == 'true'
+        run: |
+          set -euo pipefail
+          if grep -q PLACEHOLDER cosign.pub; then
+            echo "real=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::cosign.pub is still the placeholder (#19126): install.sh is published UNSIGNED (checksum only) until the owner generates the signing key"
+          else
+            echo "real=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install cosign
+        if: steps.check.outputs.release_needed == 'true' && steps.signkey.outputs.real == 'true'
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
 
       - name: Sign the pinned installer (key-based, #18666)
-        if: steps.check.outputs.release_needed == 'true'
+        if: steps.check.outputs.release_needed == 'true' && steps.signkey.outputs.real == 'true'
         env:
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          # The key reaches the shell through env, never the script text, and is gone however the step ends.
-          trap 'rm -f /tmp/cosign.key' EXIT
-          (umask 077 && printf '%s' "$COSIGN_PRIVATE_KEY" | base64 -d > /tmp/cosign.key)
-          cosign sign-blob --yes --key /tmp/cosign.key --output-signature dist/install.sh.sig dist/install.sh
-          rm -f /tmp/cosign.key
+          key="$(mktemp)"
+          trap 'rm -f "${key}"' EXIT
+          (umask 077 && printf '%s' "${COSIGN_PRIVATE_KEY}" | base64 -d > "${key}")
+          cosign sign-blob --yes --key "${key}" --output-signature dist/install.sh.sig dist/install.sh
           # Self-check: what a user runs from INSTALL.md must pass here first.
           cosign verify-blob --key cosign.pub --signature dist/install.sh.sig dist/install.sh
           (cd dist && sha256sum -c install.sh.sha256)
+          # The key's fingerprint in the release notes, so a verifier need not trust on first use.
+          printf '\n\n---\nInstaller signing key (`cosign.pub`) SHA256: `%s`\n' "$(sha256sum cosign.pub | cut -d' ' -f1)" >> RELEASE_NOTES.md
 
       - name: Create GitHub Release
         if: steps.check.outputs.release_needed == 'true'
@@ -268,10 +292,12 @@ jobs:
           prerelease: true
           generate_release_notes: false
           # #18666: the pinned installer, its checksum and its signature.
+          # The signature exists only when the key is real (signkey); list it only then.
           files: |
             dist/install.sh
             dist/install.sh.sha256
-            dist/install.sh.sig
+            ${{ steps.signkey.outputs.real == 'true' && 'dist/install.sh.sig' || '' }}
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

@@ -89,9 +89,12 @@ def test_nothing_to_release_with_commits_in_range_fails_the_run():
     A range that is genuinely empty is a legitimate no-op; a non-empty one means
     the version decision could not see the commits, and that must not exit 0.
     """
-    body = _step("check")["run"]
+    step = _step("check")
+    body = step["run"]
 
-    assert "commit_count" in body, "the guard does not consult the range size"
+    # The range size reaches the script through env (#18666 review), never as `${{ }}` text.
+    assert step.get("env", {}).get("COMMIT_COUNT") == "${{ steps.range.outputs.commit_count }}"
+    assert '"$COMMIT_COUNT" -gt 0' in body, "the guard does not consult the range size"
     assert "exit 1" in body, "a version decision that misses its range still exits 0"
     assert "::error::" in body
 
