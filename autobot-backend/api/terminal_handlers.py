@@ -36,7 +36,6 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import CommandRisk
 from chat_history import ChatHistoryManager
 from constants.path_constants import PATH
-from constants.terminal_constants import MODERATE_RISK_PATTERNS, RISKY_COMMAND_PATTERNS
 from constants.threshold_constants import TimingConstants
 from services.agent_terminal.utils import security_warning_payload
 from services.simple_pty import simple_pty_manager
@@ -47,7 +46,7 @@ from services.terminal_completion_service import TerminalCompletionService
 from services.terminal_session_store import SessionConfigStore
 
 # Import extracted modules (Issue #290)
-from services.terminal_websocket import HIGH_RISK_COMMAND_LEVELS, LOGGING_SECURITY_LEVELS, SHELL_OPERATORS
+from services.terminal_websocket import LOGGING_SECURITY_LEVELS, command_assessor
 
 # Issue #380: Module-level frozenset for terminal close event types
 _TERMINAL_CLOSE_EVENTS = frozenset({"eo", "close"})
@@ -1057,35 +1056,11 @@ class TerminalWebSocket:
 
     def _assess_command_risk(self, command: str) -> CommandRisk:
         """Assess the security risk level of a command"""
-        command_lower = command.lower().strip()
-
-        # Check for dangerous patterns
-        for pattern in RISKY_COMMAND_PATTERNS:
-            if pattern in command_lower:
-                return CommandRisk.DANGEROUS
-
-        # Check for moderate risk patterns
-        for pattern in MODERATE_RISK_PATTERNS:
-            if pattern in command_lower:
-                return CommandRisk.MODERATE
-
-        # Special checks for high-risk operations (Issue #326: O(1) lookups)
-        if any(x in command_lower for x in SHELL_OPERATORS):
-            return CommandRisk.HIGH
-
-        return CommandRisk.SAFE
+        return command_assessor.assess_command_risk(command)
 
     async def _should_block_command(self, command: str, risk_level: CommandRisk) -> bool:
         """Determine if command should be blocked based on security level"""
-        if self.security_level == SecurityLevel.RESTRICTED:
-            return risk_level in HIGH_RISK_COMMAND_LEVELS
-        elif self.security_level == SecurityLevel.ELEVATED:
-            # #13845: ``.blocks`` covers FORBIDDEN as well as DANGEROUS. The
-            # equality check this replaces let the executor's own blocking
-            # verdict through once both enums became one.
-            return risk_level.blocks
-
-        return False  # STANDARD level allows most commands
+        return command_assessor.should_block_command(command, risk_level, self.security_level)
 
     def _log_command_activity(self, activity_type: str, data: dict):
         """Log command activity for security audit trail"""

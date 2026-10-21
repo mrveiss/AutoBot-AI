@@ -138,7 +138,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/settings.py": 881,
     "autobot-backend/api/system.py": 1011,
     "autobot-backend/api/terminal.py": 1294,
-    "autobot-backend/api/terminal_handlers.py": 1497,
+    "autobot-backend/api/terminal_handlers.py": 1472,
     "autobot-backend/api/validation_dashboard.py": 670,
     "autobot-backend/api/vnc_manager.py": 1651,
     "autobot-backend/api/vnc_mcp.py": 763,
@@ -437,7 +437,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/api/performance.py": 894,
     "autobot-slm-backend/api/roles.py": 685,
     "autobot-slm-backend/api/security.py": 962,
-    "autobot-slm-backend/api/services.py": 1017,
+    "autobot-slm-backend/api/services.py": 1016,
     "autobot-slm-backend/api/setup_wizard.py": 1338,
     "autobot-slm-backend/api/stateful.py": 685,
     "autobot-slm-backend/api/tls.py": 994,
@@ -456,7 +456,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/services/drift_checker_test.py": 1351,
     "autobot-slm-backend/services/inventory_builder.py": 710,
     "autobot-slm-backend/services/playbook_executor.py": 1401,  # #17150: ansible_dir self-heal, re-detect before sync
-    "autobot-slm-backend/services/reconciler.py": 2219,
+    "autobot-slm-backend/services/reconciler.py": 2216,
     # Not legacy debt: created after this guard existed (#14465/#14548). Tracked
     # as a live violation, not #5060 backlog -- see #14630.
     "autobot-slm-backend/services/reconciler_remediation_tracker_expiry_14465_test.py": 783,

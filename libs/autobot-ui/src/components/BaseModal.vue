@@ -17,6 +17,7 @@
     slots   : title (rich header, falls back to `title` prop), subtitle (block
               content under the title, #14777), default (body), actions (footer)
     emits   : update:modelValue, close
+    attrs   : non-prop attributes land on the role="dialog" element, not the Teleport
 
   Accessibility (unchanged behavior):
     - role="dialog" + aria-modal, labelled/described via generated ids
@@ -35,6 +36,8 @@ import { useFocusTrap } from '../composables/useFocusTrap'
 import { useFocusRestore } from '../composables/useFocusRestore'
 import { useInitialFocus } from '../composables/useInitialFocus'
 import { useBodyScrollLock } from '../composables/useBodyScrollLock'
+
+defineOptions({ inheritAttrs: false })
 
 export type ModalSize = 'sm' | 'md' | 'lg'
 
@@ -157,6 +160,7 @@ const onAfterEnter = () => focusFirst()
       >
         <div
           ref="dialogRef"
+          v-bind="$attrs"
           role="dialog"
           aria-modal="true"
           :aria-labelledby="titleId"

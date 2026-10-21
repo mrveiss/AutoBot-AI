@@ -144,13 +144,11 @@
   timeout: 300  # Issue #2835: prevent indefinite hang on dependency resolution
   tags: ['slm_agent', 'packages']
 
-- name: "SLM Agent | Copy agent source - __init__.py (slm package)"
-  copy:
-    content: |
-      # AutoBot - AI-Powered Automation Platform
-      # Copyright (c) 2025 mrveiss
-      # Author: mrveiss
-      """SLM Package."""
+# #19040: the package marker is the canonical slm/__init__.py from the same code_source
+# tree as the modules below, not an inline copy that drifts from it.
+- name: "SLM Agent | Copy agent source - __init__.py (slm package) (#19040)"
+  ansible.builtin.copy:
+    src: "{{ slm_agent_source_dir | dirname }}/__init__.py"
     dest: "{{ slm_agent_dir }}/slm/__init__.py"
     owner: "{{ slm_agent_user }}"
     group: "{{ slm_agent_group }}"

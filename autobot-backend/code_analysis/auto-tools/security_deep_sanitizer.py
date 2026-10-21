@@ -41,7 +41,6 @@ logger = get_logger(__name__)
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 # Issue #380: Module-level constant for HTML extensions (performance optimization)
-_HTML_EXTENSIONS = (".html", ".htm")
 
 # Issue #1183: Module-level constant extracted from _build_security_enhancements() to reduce function length
 _DOM_PURIFY_SCRIPT = """
@@ -236,35 +235,14 @@ class DeepSecurityFixAgent(SecurityFixToolBase):
         self.xss_patterns = self._build_xss_patterns()
         self.security_enhancements = self._build_security_enhancements()
 
-    def analyze_context_safety(self, match: str, pattern_name: str) -> bool:
-        """Analyze if a potential vulnerability is actually safe in context."""
-        pattern_info = self.xss_patterns.get(pattern_name, {})
-        safe_contexts = pattern_info.get("context_safe", [])
+    def _csp_header(self) -> str:
+        return self.security_enhancements["csp_header"]
 
-        # Check if the match is in a safe context
-        for safe_context in safe_contexts:
-            if safe_context in match:
-                return True
+    def _meta_tags_block(self) -> str:
+        return "\n" + self.security_enhancements["security_meta_tags"] + "\n"
 
-        # Additional context analysis for minified code
-        if self.is_minified_library_code(match):
-            return True
-
-        # Check for React/framework internal usage
-        if any(framework in match for framework in ["React", "Vue", "Angular", "__webpack"]):
-            return True
-
-        return False
-
-    def is_minified_library_code(self, code: str) -> bool:
-        """Detect if code appears to be from a minified library."""
-        indicators = [
-            len(code) > 200,  # Very long single line
-            re.search(r"[a-zA-Z]\.[a-zA-Z]\.[a-zA-Z]", code),  # Minified property access
-            code.count(",") > 10 and "\n" not in code,  # Many commas, no newlines
-            any(lib in code.lower() for lib in ["react", "vue", "angular", "jquery", "lodash"]),
-        ]
-        return sum(indicators) >= 2
+    def _dom_helper_block(self) -> str:
+        return "\n" + self.security_enhancements["dom_purify_script"] + "\n"
 
     def scan_for_vulnerabilities(self, content: str, file_path: str) -> List[Dict[str, Any]]:
         """Enhanced vulnerability scanning with context analysis."""
@@ -306,63 +284,6 @@ class DeepSecurityFixAgent(SecurityFixToolBase):
                 vulnerabilities.append(vulnerability)
 
         return vulnerabilities
-
-    def inject_security_headers(self, content: str) -> Tuple[str, List[str]]:
-        """Inject security headers and meta tags."""
-        enhancements = []
-
-        # Find head section
-        head_match = re.search(r"<head[^>]*>(.*?)</head>", content, re.DOTALL | re.IGNORECASE)
-        if not head_match:
-            return content, enhancements
-
-        head_content = head_match.group(1)
-        head_start = head_match.start(1)
-        head_end = head_match.end(1)
-
-        # Check if CSP already exists
-        if not re.search(r"Content-Security-Policy", head_content, re.IGNORECASE):
-            # Inject CSP header
-            new_head_content = "\n" + self.security_enhancements["csp_header"] + "\n" + head_content
-            content = content[:head_start] + new_head_content + content[head_end:]
-            enhancements.append("Content Security Policy (CSP) injected")
-
-        # Check for other security headers
-        if not re.search(r"X-Content-Type-Options", head_content, re.IGNORECASE):
-            # Inject additional security meta tags
-            security_tags_pos = content.find("</head>")
-            if security_tags_pos != -1:
-                content = (
-                    content[:security_tags_pos]
-                    + "\n"
-                    + self.security_enhancements["security_meta_tags"]
-                    + "\n"
-                    + content[security_tags_pos:]
-                )
-                enhancements.append("Security meta tags injected")
-
-        return content, enhancements
-
-    def inject_dom_sanitization(self, content: str) -> Tuple[str, List[str]]:
-        """Inject DOM sanitization helpers."""
-        enhancements = []
-
-        # Find first script tag or before </head>
-        injection_point = content.find("</head>")
-        if injection_point == -1:
-            injection_point = content.find("<script")
-
-        if injection_point != -1:
-            content = (
-                content[:injection_point]
-                + "\n"
-                + self.security_enhancements["dom_purify_script"]
-                + "\n"
-                + content[injection_point:]
-            )
-            enhancements.append("DOM sanitization helpers injected")
-
-        return content, enhancements
 
     def apply_targeted_fixes(
         self, content: str, vulnerabilities: List[Dict[str, Any]]
@@ -459,23 +380,6 @@ class DeepSecurityFixAgent(SecurityFixToolBase):
     def fix_javascript_protocol(self, original: str) -> str:
         """Fix javascript: protocol vulnerabilities."""
         return original.replace("javascript:", "#")  # Replace with safe anchor
-
-    def validate_html_structure(self, content: str) -> bool:
-        """Enhanced HTML structure validation."""
-        try:
-            # Basic structure checks
-            has_doctype = "<!DOCTYPE" in content.upper()
-            has_html_tag = "<html" in content.lower()
-            has_head_tag = "<head" in content.lower()
-
-            # Check for balanced tags
-            script_opens = content.count("<script")
-            script_closes = content.count("</script>")
-
-            return has_doctype and has_html_tag and has_head_tag and script_opens == script_closes
-
-        except Exception:
-            return False
 
     @staticmethod
     def _display_vuln_counts(vulnerabilities: List[Dict[str, Any]]) -> Tuple[int, int]:
@@ -575,22 +479,6 @@ class DeepSecurityFixAgent(SecurityFixToolBase):
                 "status": "error",
                 "error": "File processing failed",
             }
-
-    def scan_directory(self, directory: str) -> List[str]:
-        """Scan directory for HTML files to fix."""
-        html_files = []
-
-        try:
-            for root, dirs, files in os.walk(directory):
-                for file in files:
-                    if file.lower().endswith(_HTML_EXTENSIONS):
-                        file_path = os.path.join(root, file)
-                        html_files.append(file_path)
-
-        except Exception as e:
-            logger.error("Error scanning directory %s: %s", directory, e)
-
-        return html_files
 
     def _compute_report_stats(self, results: List[Dict[str, Any]]) -> Dict[str, int]:
         """

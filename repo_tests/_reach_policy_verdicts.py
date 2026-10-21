@@ -579,4 +579,9 @@ ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test Python under thirteen source roots, a subset of tracked Python; the test-file share drifts.",
     ),
+    "slm-agent-single-definition-19040": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Tracked Python, YAML and Jinja files, a subset of the tree; the other extensions grow at their own rate.",
+    ),
 }

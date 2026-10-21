@@ -824,7 +824,6 @@
 1|ssot|autobot-infrastructure/shared/scripts/setup_browser_vnc.sh|:3000
 2|ssot|autobot-infrastructure/shared/scripts/setup_browser_vnc.sh|:6080
 1|ssot|autobot-infrastructure/shared/scripts/simple_populate.py|:8001
-1|other|autobot-infrastructure/shared/scripts/slm-agent-standalone.py|30
 1|other|autobot-infrastructure/shared/scripts/test_startup_coordinator.sh|http://127.0.0.3:8001/api/system/health
 1|ssot|autobot-infrastructure/shared/scripts/test_startup_coordinator.sh|:8001
 5|ssot|autobot-infrastructure/shared/scripts/testing/manage_playwright.sh|:3000
@@ -1090,8 +1089,6 @@
 1|ssot|autobot-slm-backend/ansible/playbooks/fix-backend-clean-restart.yml|:8443
 1|ssot|autobot-slm-backend/ansible/playbooks/fix-backend-environment.yml|:8443
 1|ssot|autobot-slm-backend/ansible/playbooks/fix-backend-symlink.yml|:8443
-1|other|autobot-slm-backend/ansible/playbooks/fix-slm-agent-node-id.yml|Group=autobot
-1|other|autobot-slm-backend/ansible/playbooks/fix-slm-agent-node-id.yml|User=autobot
 2|other|autobot-slm-backend/ansible/playbooks/health-check.yml|"/var/lib/autobot/models
 2|other|autobot-slm-backend/ansible/playbooks/health-check.yml|30
 1|ssot|autobot-slm-backend/ansible/playbooks/health-check.yml|:3000
@@ -1219,7 +1216,6 @@
 1|other|autobot-slm-backend/ansible/roles/xrdp/tasks/main.yml|30
 1|other|autobot-slm-backend/ansible/setup-backup-admin.yml|/home/autobot
 1|ssot|autobot-slm-backend/ansible/setup-user-backend.yml|:8001
-1|other|autobot-slm-backend/ansible/upgrade-backend-agent.yml|          autobot ALL=
 1|other|autobot-slm-backend/ansible/utils/backup.sh|"/opt/autobot/backups
 1|other|autobot-slm-backend/ansible/utils/backup.sh|/home/autobot
 1|other|autobot-slm-backend/ansible/verify-backup-restore.yml|"/tmp/autobot-restore-verify-{{ ansible_facts[

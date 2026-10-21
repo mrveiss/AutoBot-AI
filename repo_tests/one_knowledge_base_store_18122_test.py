@@ -40,13 +40,9 @@ from tools.lint._scan_helpers import tracked_paths
 #: Modules still allowed to cache a KnowledgeBase, with why. SHRINK-ONLY: removing a
 #: store means deleting its line, never adding one.
 #:
-#: Both remaining stores are real and the consolidation is unfinished — this pins the
-#: debt rather than claiming it is paid. `_composed` is reached by ~44 lazy import sites
-#: across memory/, llc/ and mcp_server/; `knowledge_factory` owns `app.state` and is
-#: reached by ~20 `api/knowledge*.py` routes plus lifespan. Collapsing them changes which
-#: store those call sites read, which is the remaining half of #18122.
+#: `knowledge_factory` is the one store: it owns `app.state` plus the app-free global.
+#: `_composed` became a facade over it in S2 (`composed_is_facade_18122_test.py`).
 KNOWN_STORES = {
-    "autobot-backend/knowledge/_composed.py": "the app-free singleton reached by lazy imports",
     "autobot-backend/knowledge_factory.py": "owns app.state.knowledge_base plus an app-free global",
 }
 
@@ -228,10 +224,9 @@ def test_the_facade_holds_no_store() -> None:
 def test_the_store_count_is_recorded() -> None:
     """States the number rather than implying it, so progress is legible.
 
-    Two, down from three. Not one — the remaining consolidation changes which store ~64
-    call sites read, and is tracked on #18122 rather than smuggled into a facade change.
+    One, down from three: `knowledge_factory`. The facades hold nothing.
     """
-    assert len(_modules_caching_a_knowledge_base()) == 2
+    assert len(_modules_caching_a_knowledge_base()) == 1
 
 
 def _publication_report(source: str) -> tuple[dict[str, set[str]], set[str], set[str]]:

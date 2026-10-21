@@ -43,7 +43,6 @@ from models.schemas import (
 from services.auth import get_current_user
 from services.database import get_db
 from services.journal_fetch import JournalFetchTimeout, build_journal_command, fetch_service_journal
-from services.service_categorizer import categorize_service
 from services.service_restart import (
     build_service_ssh_cmd,
     fetch_failure_diagnostics,
@@ -51,8 +50,8 @@ from services.service_restart import (
     restart_slm_services,
     run_ansible_service_action,
 )
+from services.service_upsert import upsert_service
 from services.ssh_utils import ssh_destination_args, ssh_options
-from services.unit_names import discovered_unit_name_ok
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["services"])
@@ -310,6 +309,41 @@ async def scan_node_services(
         return _build_scan_failure_response(node_id, "Service scan failed")
 
 
+def _status_from_systemd_states(active_state: str, sub_state: str) -> str:
+    """Map ``active``/``sub`` states from ``service_facts`` to a ``SystemdState`` value."""
+    if active_state == "active" and sub_state == "running":
+        return SystemdState.RUNNING.value
+    if active_state == "inactive" or sub_state == "dead":
+        return SystemdState.STOPPED.value
+    if active_state == "failed":
+        return SystemdState.FAILED.value
+    return SystemdState.UNKNOWN.value
+
+
+def _apply_scanned_state(service: Service, status: str, svc_data: dict, now: datetime) -> None:
+    """Overwrite the scan-owned columns of an existing row; ``enabled`` is left to the detailed scan."""
+    service.status = status
+    service.active_state = svc_data.get("active", "unknown")
+    service.sub_state = svc_data.get("sub", "unknown")
+    service.description = svc_data.get("description") or service.description
+    service.last_checked = now
+
+
+def _new_scanned_service(node_id: str, name: str, category: str, status: str, svc_data: dict, now: datetime) -> Service:
+    """Build a new row from a scan; ``enabled`` starts False (updated on the next detailed scan)."""
+    return Service(
+        node_id=node_id,
+        service_name=name,
+        status=status,
+        category=category,
+        active_state=svc_data.get("active", "unknown"),
+        sub_state=svc_data.get("sub", "unknown"),
+        description=svc_data.get("description"),
+        enabled=False,
+        last_checked=now,
+    )
+
+
 async def _upsert_service(
     db: AsyncSession,
     node_id: str,
@@ -317,56 +351,21 @@ async def _upsert_service(
     svc_data: dict,
     now: datetime,
 ) -> Tuple[bool, bool]:
+    """Insert or update a scanned service record via the shared upsert (#19021).
+
+    Returns (created, updated); (False, False) when the unit name is refused (#19005).
     """
-    Insert or update a service record.
-
-    Returns (created, updated) tuple.
-    """
-    if not discovered_unit_name_ok(node_id, service_name):  # #19005
-        return False, False
-    active_state = svc_data.get("active", "unknown")
-    sub_state = svc_data.get("sub", "unknown")
-
-    if active_state == "active" and sub_state == "running":
-        status = SystemdState.RUNNING.value
-    elif active_state == "inactive" or sub_state == "dead":
-        status = SystemdState.STOPPED.value
-    elif active_state == "failed":
-        status = SystemdState.FAILED.value
-    else:
-        status = SystemdState.UNKNOWN.value
-
-    result = await db.execute(
-        select(Service).where(
-            Service.node_id == node_id,
-            Service.service_name == service_name,
-        )
+    status = _status_from_systemd_states(svc_data.get("active", "unknown"), svc_data.get("sub", "unknown"))
+    outcome = await upsert_service(
+        db,
+        node_id,
+        service_name,
+        update=lambda row: _apply_scanned_state(row, status, svc_data, now),
+        create=lambda category: _new_scanned_service(node_id, service_name, category, status, svc_data, now),
     )
-    service = result.scalar_one_or_none()
-
-    if service:
-        # Update existing
-        service.status = status
-        service.active_state = active_state
-        service.sub_state = sub_state
-        service.description = svc_data.get("description") or service.description
-        service.last_checked = now
-        return False, True
-    else:
-        category = categorize_service(service_name)
-        service = Service(
-            node_id=node_id,
-            service_name=service_name,
-            status=status,
-            category=category,
-            active_state=active_state,
-            sub_state=sub_state,
-            description=svc_data.get("description"),
-            enabled=False,  # Will be updated on next detailed scan
-            last_checked=now,
-        )
-        db.add(service)
-        return True, False
+    if outcome is None:
+        return False, False
+    return outcome.created, not outcome.created
 
 
 @router.post("/{node_id}/services/{service_name}/start", **NODE_SERVICE_ACTION_ROUTE)

@@ -27,7 +27,8 @@ from typing import Dict, List, Optional
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot-backend"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[4] / "autobot_shared"))
 
-from autobot_shared.redis_client import get_async_redis_client
+from _session_redis import SessionDataMixin
+
 from autobot_shared.time_utils import now_utc, parse_utc_iso
 
 # Configure logging
@@ -35,8 +36,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 
-class OrphanedSessionCleaner:
+class OrphanedSessionCleaner(SessionDataMixin):
     """Identifies and cleans up orphaned chat sessions"""
+
+    # Scans many possibly-stale keys: one unreadable session is debug noise, not an error.
+    SESSION_READ_FAILURE_LEVEL = logging.DEBUG
 
     def __init__(self, dry_run: bool = False, min_age_days: int = 7):
         """Initialize cleaner.
@@ -60,54 +64,6 @@ class OrphanedSessionCleaner:
             "deleted": 0,
             "failed": 0,
         }
-
-    async def connect_redis(self) -> None:
-        """Connect to Redis database"""
-        try:
-            self.redis_client = await get_async_redis_client(database="main")
-            await self.redis_client.ping()
-            logger.info("Connected to Redis successfully")
-        except Exception as e:
-            logger.error(f"Failed to connect to Redis: {e}")
-            raise
-
-    async def get_all_sessions(self) -> List[str]:
-        """Get all session IDs from Redis.
-
-        Returns:
-            List of session IDs
-        """
-        try:
-            keys = await self.redis_client.keys("chat:session:*")
-            session_ids = [key.decode("utf-8").split(":", 2)[2] for key in keys]
-            logger.info(f"Found {len(session_ids)} sessions")
-            return session_ids
-        except Exception as e:
-            logger.error(f"Failed to get sessions: {e}")
-            return []
-
-    async def get_session_data(self, session_id: str) -> Optional[Dict]:
-        """Get session data from Redis.
-
-        Args:
-            session_id: Session ID to retrieve
-
-        Returns:
-            Session data dictionary or None
-        """
-        try:
-            key = f"chat:session:{session_id}"
-            data = await self.redis_client.get(key)
-            if not data:
-                return None
-
-            if isinstance(data, bytes):
-                data = data.decode("utf-8")
-
-            return json.loads(data)
-        except Exception as e:
-            logger.debug(f"Failed to get session {session_id}: {e}")
-            return None
 
     async def has_messages(self, session_id: str) -> bool:
         """Check if session has any messages.

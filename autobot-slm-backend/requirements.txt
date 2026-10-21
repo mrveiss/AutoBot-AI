@@ -23,7 +23,7 @@ aiosqlite>=0.22.1  # matches autobot-backend/requirements.txt's pin
 prometheus-client>=0.26.0
 
 # Web framework
-fastapi>=0.143.0                # SECURITY UPDATE - requires starlette >=1.7.0
+fastapi>=0.143.3                # SECURITY UPDATE - requires starlette >=1.7.0
 # Held at 1.6.0. #17706 proposed >=1.7.0, which cannot be taken alone: the CI plane
 # pins `starlette==1.6.0` (requirements-ci/framework.txt) and the dependency-patching
 # role floors it at 1.6.0, so a bump here alone fails the parity guard and leaves CI

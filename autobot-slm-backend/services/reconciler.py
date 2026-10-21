@@ -40,7 +40,6 @@ from models.database import (
 )
 from services.db_transaction_errors import is_connection_level_db_error
 from services.node_capability import apply_capability_profile
-from services.service_categorizer import categorize_service
 from services.service_extra_data import engine_degraded_fields, is_managed_autobot_service
 from services.service_remediation_tracker import (
     clear_service_remediation,
@@ -48,6 +47,7 @@ from services.service_remediation_tracker import (
     read_service_remediation,
     write_service_remediation,
 )
+from services.service_upsert import upsert_service
 from services.unit_names import discovered_unit_name_ok
 
 logger = logging.getLogger(__name__)
@@ -1867,6 +1867,8 @@ class ReconcilerService:
         status: str,
         svc_extra: dict,
         now: datetime,
+        *,
+        category: str,
     ) -> Service:
         """Construct a new Service ORM object from heartbeat data.
 
@@ -1876,9 +1878,9 @@ class ReconcilerService:
         against (#14465) -- a first observation genuinely has no rate
         information yet, so `n_restarts_increased_at` is deliberately left
         unset here rather than backfilled; the next observed increase arms
-        the churn window (see `_restart_churn_active`).
+        the churn window (see `_restart_churn_active`). `category` comes from
+        the shared upsert (#19021).
         """
-        category = categorize_service(service_name)
         if "n_restarts" in svc_data:
             svc_extra = {**svc_extra, "n_restarts": svc_data["n_restarts"]}
         return Service(
@@ -1912,32 +1914,27 @@ class ReconcilerService:
         SAVEPOINT (#17070) so a row-level failure can't poison the session.
         """
         service_name = svc_data.get("name")
-        if not service_name or not discovered_unit_name_ok(node_id, service_name):  # #19005
+        if not service_name:
             return False
 
         try:
             async with db.begin_nested():
-                result = await db.execute(
-                    select(Service).where(
-                        Service.node_id == node_id,
-                        Service.service_name == service_name,
-                    )
-                )
-                service = result.scalar_one_or_none()
-
                 status = svc_data.get("status", "unknown")
                 if status not in [s.value for s in SystemdState]:
                     status = SystemdState.UNKNOWN.value
-
                 error_msg = svc_data.get("error_message", "")  # #1019: error context for failed services
                 svc_extra = {"error_message": error_msg} if error_msg else {}
                 svc_extra.update(engine_degraded_fields(svc_data))
-
-                if service:
-                    return self._update_existing_service(service, svc_data, status, error_msg, now)
-                service = self._create_new_service(node_id, service_name, svc_data, status, svc_extra, now)
-                db.add(service)
-                return False
+                outcome = await upsert_service(  # unit-name guard + lookup + categorise live in the core (#19021)
+                    db,
+                    node_id,
+                    service_name,
+                    update=lambda row: self._update_existing_service(row, svc_data, status, error_msg, now),
+                    create=lambda category: self._create_new_service(
+                        node_id, service_name, svc_data, status, svc_extra, now, category=category
+                    ),
+                )
+                return bool(outcome and outcome.update_result)
         except Exception as exc:
             if is_connection_level_db_error(exc):
                 raise

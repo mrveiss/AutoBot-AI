@@ -21,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from api._post_sync_plan import ordered_post_sync_plan
+from api._role_procedure_vars import role_procedure_extra_vars
 from models.database import Node, NodeRole, Role, RoleStatus, SyncType
 from services.auth import get_current_user
 from services.database import get_db
@@ -433,11 +434,10 @@ async def run_role_full_procedure(role: Role, target_node_id: str) -> dict:
     try:
         result = await executor.execute_playbook(
             playbook_name=role.ansible_playbook,
-            # deploy_role.yml requires `role_name` and derives deploy_role from
-            # it; passing `deploy_role` alone tripped its role_name-undefined
-            # guard so every Migrate/Redeploy failed validation (#11782).
+            # deploy_role.yml needs `role_name` (not `deploy_role` alone, #11782); the
+            # slm-agent playbook also gets slm_agent_run_common=false (#19040).
             limit=[target_node_id],
-            extra_vars={"role_name": role.name},
+            extra_vars=role_procedure_extra_vars(role),
         )
     except FileNotFoundError as exc:
         logger.exception("Playbook not found: %s", role.ansible_playbook)

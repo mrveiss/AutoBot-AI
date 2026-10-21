@@ -50,6 +50,8 @@ export type { LocaleOption } from './src/utils/locales'
 export { default as BaseModal } from './src/components/BaseModal.vue'
 export type { ModalSize } from './src/components/BaseModal.vue'
 
+export { default as BaseDrawer } from './src/components/BaseDrawer.vue'
+
 export { default as BrandMark } from './src/components/BrandMark.vue'
 
 export { default as BaseTooltip } from './src/components/BaseTooltip.vue'

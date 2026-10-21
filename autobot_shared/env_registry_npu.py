@@ -59,8 +59,8 @@ _register(
     str,
     "00-SLM-Manager",
     "Node id. The SLM backend uses it as the manager's own registry id (default shown). "
-    "slm/agent/agent.py accepts --node-id; slm-agent-standalone.py reads only SLM_NODE_ID. "
-    "Both refuse to start without one.",
+    "slm/agent/agent.py accepts --node-id. "
+    "The agent refuses to start without one.",
     "slm",
 )
 _register(

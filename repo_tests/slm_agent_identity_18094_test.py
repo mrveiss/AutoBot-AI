@@ -7,45 +7,17 @@
 from __future__ import annotations
 
 import ast
-import importlib.util
 
 import pytest
 from repo_tests._paths import repo_root
 
 _ROOT = repo_root()
-_STANDALONE = _ROOT / "autobot-infrastructure" / "shared" / "scripts" / "slm-agent-standalone.py"
 _AGENT = _ROOT / "autobot-slm-backend" / "slm" / "agent" / "agent.py"
 _KEY_NAME = "AUTOBOT_INTERNAL_API_KEY"
 
 
-def _load_standalone():
-    spec = importlib.util.spec_from_file_location("slm_agent_standalone_18094", _STANDALONE)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-def test_standalone_agent_refuses_to_register_without_a_node_id(monkeypatch, tmp_path):
-    monkeypatch.delenv("SLM_NODE_ID", raising=False)
-    module = _load_standalone()
-
-    with pytest.raises(SystemExit) as raised:
-        module.SLMAgent(config_path=str(tmp_path / "absent.yaml"))
-
-    assert raised.value.code == 1
-
-
-def test_standalone_agent_uses_the_configured_node_id(monkeypatch, tmp_path):
-    monkeypatch.setenv("SLM_NODE_ID", "node-under-test")
-    module = _load_standalone()
-
-    agent = module.SLMAgent(config_path=str(tmp_path / "absent.yaml"))
-
-    assert agent.config["node_id"] == "node-under-test"
-
-
-# The Ansible mirror is gone (#18548); the role deploys this one file, and
-# slm_agent_deploys_source_tree_18548_test fails if a copy reappears.
+# The Ansible mirror and the standalone/upgrade copies are gone (#18548, #19040); the role deploys
+# this one file, and slm_agent_single_definition_19040_test fails if a copy reappears.
 @pytest.mark.parametrize("path", [_AGENT], ids=["canonical"])
 def test_agent_reads_the_key_through_the_one_reader(path):
     tree = ast.parse(path.read_text(encoding="utf-8"))
