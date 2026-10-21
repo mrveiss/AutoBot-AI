@@ -26,8 +26,10 @@ import {
 
 export { toNPUWorker }
 export type { NPUWorker, NPUWorkerDefinition, NPUWorkerTestResult }
+import type * as LF from '@/composables/autobotAdminModels'
 import type { AgentConfigSummary, MCPServer, PermissionRule } from '@/composables/autobotAdminModels'
 export type { AgentConfigSummary, MCPServer, PermissionRule }
+export type { LogForwardingDestination } from '@/composables/autobotAdminModels'
 
 // Type definitions for AutoBot API responses
 
@@ -56,14 +58,6 @@ export interface CacheStats {
   misses: number
   size_mb: number
   entries: number
-}
-
-export interface LogForwardingDestination {
-  id: string
-  name: string
-  type: 'syslog' | 'http' | 'file' | 'elasticsearch'
-  enabled: boolean
-  config: Record<string, unknown>
 }
 
 export interface PromptTemplate {
@@ -749,17 +743,16 @@ export function useAutobotApi() {
   // Log Forwarding API
   // =============================================================================
 
-  async function getLogForwardingDestinations(): Promise<LogForwardingDestination[]> {
-    const response = await client.get<{ destinations: LogForwardingDestination[] }>(
-      '/log-forwarding/destinations'
-    )
-    return response.data.destinations
+  // Destinations are keyed by `name`; the list is a bare array (api/log_forwarding.py).
+  async function getLogForwardingDestinations(): Promise<LF.LogForwardingDestination[]> {
+    const response = await client.get<LF.LogForwardingDestination[]>('/log-forwarding/destinations')
+    return response.data
   }
 
   async function createLogForwardingDestination(
-    destination: Omit<LogForwardingDestination, 'id'>
-  ): Promise<LogForwardingDestination> {
-    const response = await client.post<LogForwardingDestination>(
+    destination: LF.LogForwardingDestinationCreate
+  ): Promise<LF.LogForwardingMutationResult> {
+    const response = await client.post<LF.LogForwardingMutationResult>(
       '/log-forwarding/destinations',
       destination
     )
@@ -767,25 +760,26 @@ export function useAutobotApi() {
   }
 
   async function updateLogForwardingDestination(
-    id: string,
-    data: Partial<LogForwardingDestination>
-  ): Promise<LogForwardingDestination> {
-    const response = await client.put<LogForwardingDestination>(
-      `/log-forwarding/destinations/${id}`,
+    name: string,
+    data: LF.LogForwardingDestinationUpdate
+  ): Promise<LF.LogForwardingMutationResult> {
+    const response = await client.put<LF.LogForwardingMutationResult>(
+      `/log-forwarding/destinations/${encodeURIComponent(name)}`,
       data
     )
     return response.data
   }
 
-  async function deleteLogForwardingDestination(id: string): Promise<void> {
-    await client.delete(`/log-forwarding/destinations/${id}`)
+  async function deleteLogForwardingDestination(name: string): Promise<LF.LogForwardingMessage> {
+    const response = await client.delete<LF.LogForwardingMessage>(
+      `/log-forwarding/destinations/${encodeURIComponent(name)}`
+    )
+    return response.data
   }
 
-  async function testLogForwardingDestination(
-    id: string
-  ): Promise<{ success: boolean; message: string }> {
-    const response = await client.post<{ success: boolean; message: string }>(
-      `/log-forwarding/destinations/${id}/test`
+  async function testLogForwardingDestination(name: string): Promise<LF.LogForwardingTestResult> {
+    const response = await client.post<LF.LogForwardingTestResult>(
+      `/log-forwarding/destinations/${encodeURIComponent(name)}/test`
     )
     return response.data
   }
@@ -1493,36 +1487,35 @@ export function useAutobotApi() {
   // Log Forwarding Status/Control (Issue #729)
   // =============================================================================
 
-  async function getLogForwardingStatus(): Promise<{
-    running: boolean
-    total_destinations: number
-    enabled_destinations: number
-    healthy_destinations: number
-    total_sent: number
-    total_failed: number
-    auto_start: boolean
-  }> {
-    const response = await client.get('/log-forwarding/status')
+  async function getLogForwardingStatus(): Promise<LF.LogForwardingStatus> {
+    const response = await client.get<LF.LogForwardingStatus>('/log-forwarding/status')
     return response.data
   }
 
-  async function startLogForwarding(): Promise<{ status: string }> {
-    const response = await client.post<{ status: string }>('/log-forwarding/start')
+  async function startLogForwarding(): Promise<LF.LogForwardingMessage> {
+    const response = await client.post<LF.LogForwardingMessage>('/log-forwarding/start')
     return response.data
   }
 
-  async function stopLogForwarding(): Promise<{ status: string }> {
-    const response = await client.post<{ status: string }>('/log-forwarding/stop')
+  async function stopLogForwarding(): Promise<LF.LogForwardingMessage> {
+    const response = await client.post<LF.LogForwardingMessage>('/log-forwarding/stop')
     return response.data
   }
 
-  async function setLogForwardingAutoStart(enabled: boolean): Promise<{ status: string }> {
-    const response = await client.put<{ status: string }>('/log-forwarding/auto-start', null, { params: { enabled } })
+  async function getLogForwardingAutoStart(): Promise<LF.LogForwardingAutoStart> {
+    const response = await client.get<LF.LogForwardingAutoStart>('/log-forwarding/auto-start')
     return response.data
   }
 
-  async function testAllLogForwardingDestinations(): Promise<{ results: Array<{ id: string; success: boolean; message: string }> }> {
-    const response = await client.post<{ results: Array<{ id: string; success: boolean; message: string }> }>('/log-forwarding/test-all')
+  async function setLogForwardingAutoStart(enabled: boolean): Promise<LF.LogForwardingAutoStart> {
+    const response = await client.put<LF.LogForwardingAutoStart>('/log-forwarding/auto-start', null, {
+      params: { enabled },
+    })
+    return response.data
+  }
+
+  async function testAllLogForwardingDestinations(): Promise<LF.LogForwardingTestAllResult> {
+    const response = await client.post<LF.LogForwardingTestAllResult>('/log-forwarding/test-all')
     return response.data
   }
 
@@ -2060,6 +2053,7 @@ export function useAutobotApi() {
     probeBackendHealth,
     // Log Forwarding Control (Issue #729)
     getLogForwardingStatus,
+    getLogForwardingAutoStart,
     startLogForwarding,
     stopLogForwarding,
     setLogForwardingAutoStart,

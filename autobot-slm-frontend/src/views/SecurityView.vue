@@ -17,7 +17,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
-import { BaseModal, usePagination } from '@autobot/ui'
+import { BaseModal, usePagination, BasePagination } from '@autobot/ui'
 import type { TLSEndpointResponse, FleetCert } from '@/types/api-responses'
 import { createLogger } from '@/utils/debugUtils'
 import { formatRelativeTime } from '@/utils/dateUtils'
@@ -92,8 +92,7 @@ const {
   currentPage: auditPage,
   totalPages: auditTotalPages,
   itemsPerPage: auditPerPage,
-  next: auditNext,
-  prev: auditPrev,
+  goToPage: auditGoTo,
 } = usePagination<AuditLog>(auditLogs, {
   itemsPerPage: PER_PAGE,
   serverTotalItems: auditLogsTotal,
@@ -104,8 +103,7 @@ const {
   currentPage: eventsPage,
   totalPages: eventsTotalPages,
   itemsPerPage: eventsPerPage,
-  next: eventsNext,
-  prev: eventsPrev,
+  goToPage: eventsGoTo,
 } = usePagination<SecurityEvent>(securityEvents, {
   itemsPerPage: PER_PAGE,
   serverTotalItems: eventsTotal,
@@ -116,8 +114,7 @@ const {
   currentPage: policiesPage,
   totalPages: policiesTotalPages,
   itemsPerPage: policiesPerPage,
-  next: policiesNext,
-  prev: policiesPrev,
+  goToPage: policiesGoTo,
 } = usePagination<SecurityPolicy>(policies, {
   itemsPerPage: PER_PAGE,
   serverTotalItems: policiesTotal,
@@ -1077,19 +1074,16 @@ const scoreColor = computed(() => {
         >
           <span class="text-sm text-gray-500" role="status">{{ $t('securityView.showingCountOfValue1Logs', { count: auditLogs.length, value1: auditLogsTotal }) }}</span>
           <div class="flex items-center gap-3">
-            <span class="text-sm text-gray-500">{{ $t('securityView.pageValue0OfValue1', { value0: auditPage, value1: auditTotalPages }) }}</span>
-            <div class="flex gap-2">
-              <button
-                @click="auditPrev"
-                :disabled="auditPage === 1"
-                class="px-3 py-1 text-sm border rounded-sm hover:bg-gray-50 disabled:opacity-50"
-              >{{ $t('securityView.previous') }}</button>
-              <button
-                @click="auditNext"
-                :disabled="auditPage * auditPerPage >= auditLogsTotal"
-                class="px-3 py-1 text-sm border rounded-sm hover:bg-gray-50 disabled:opacity-50"
-              >{{ $t('securityView.next') }}</button>
-            </div>
+            <BasePagination
+              class="flex-1"
+              :page="auditPage"
+              :total-pages="auditTotalPages"
+              :labels="{ previous: $t('securityView.previous'), next: $t('securityView.next') }"
+              :label="$t('securityView.paginationAria')"
+              @update:page="auditGoTo"
+            >
+              <template #summary>{{ $t('securityView.pageValue0OfValue1', { value0: auditPage, value1: auditTotalPages }) }}</template>
+            </BasePagination>
           </div>
         </div>
       </div>
@@ -1200,19 +1194,16 @@ const scoreColor = computed(() => {
         >
           <span class="text-sm text-gray-500" role="status">{{ $t('securityView.showingCountOfValue1Events', { count: securityEvents.length, value1: eventsTotal }) }}</span>
           <div class="flex items-center gap-3">
-            <span class="text-sm text-gray-500">{{ $t('securityView.pageValue0OfValue1', { value0: eventsPage, value1: eventsTotalPages }) }}</span>
-            <div class="flex gap-2">
-              <button
-                @click="eventsPrev"
-                :disabled="eventsPage === 1"
-                class="px-3 py-1 text-sm border rounded-sm hover:bg-gray-50 disabled:opacity-50"
-              >{{ $t('securityView.previous') }}</button>
-              <button
-                @click="eventsNext"
-                :disabled="eventsPage * eventsPerPage >= eventsTotal"
-                class="px-3 py-1 text-sm border rounded-sm hover:bg-gray-50 disabled:opacity-50"
-              >{{ $t('securityView.next') }}</button>
-            </div>
+            <BasePagination
+              class="flex-1"
+              :page="eventsPage"
+              :total-pages="eventsTotalPages"
+              :labels="{ previous: $t('securityView.previous'), next: $t('securityView.next') }"
+              :label="$t('securityView.paginationAria')"
+              @update:page="eventsGoTo"
+            >
+              <template #summary>{{ $t('securityView.pageValue0OfValue1', { value0: eventsPage, value1: eventsTotalPages }) }}</template>
+            </BasePagination>
           </div>
         </div>
       </div>
@@ -1274,19 +1265,16 @@ const scoreColor = computed(() => {
         >
           <span class="text-sm text-gray-500" role="status">{{ $t('securityView.showingCountOfValue1Policies', { count: policies.length, value1: policiesTotal }) }}</span>
           <div class="flex items-center gap-3">
-            <span class="text-sm text-gray-500">{{ $t('securityView.pageValue0OfValue1', { value0: policiesPage, value1: policiesTotalPages }) }}</span>
-            <div class="flex gap-2">
-              <button
-                @click="policiesPrev"
-                :disabled="policiesPage === 1"
-                class="px-3 py-1 text-sm border rounded-sm hover:bg-gray-50 disabled:opacity-50"
-              >{{ $t('securityView.previous') }}</button>
-              <button
-                @click="policiesNext"
-                :disabled="policiesPage * policiesPerPage >= policiesTotal"
-                class="px-3 py-1 text-sm border rounded-sm hover:bg-gray-50 disabled:opacity-50"
-              >{{ $t('securityView.next') }}</button>
-            </div>
+            <BasePagination
+              class="flex-1"
+              :page="policiesPage"
+              :total-pages="policiesTotalPages"
+              :labels="{ previous: $t('securityView.previous'), next: $t('securityView.next') }"
+              :label="$t('securityView.paginationAria')"
+              @update:page="policiesGoTo"
+            >
+              <template #summary>{{ $t('securityView.pageValue0OfValue1', { value0: policiesPage, value1: policiesTotalPages }) }}</template>
+            </BasePagination>
           </div>
         </div>
       </div>

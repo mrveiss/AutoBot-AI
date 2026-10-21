@@ -7758,6 +7758,7 @@
       "noLogs": "No audit logs found",
       "previous": "Previous",
       "pageOf": "Page {page}",
+      "paginationAria": "Audit log pages",
       "next": "Next",
       "entryDetails": "Audit Entry Details",
       "id": "ID",
