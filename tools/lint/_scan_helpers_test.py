@@ -19,7 +19,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from autobot_shared.paths import scrubbed_git_env  # noqa: E402
+from autobot_shared.isolated_git import isolated_git_env  # noqa: E402
 
 # Load the module-under-test directly (tools/lint is not a package).
 _HELPER_PATH = Path(__file__).parent / "_scan_helpers.py"
@@ -40,7 +40,7 @@ def _make_tree(root: Path, rel_paths: list[str]) -> None:
 def _run_git(root: Path, *argv: str) -> None:
     """Run one git command in *root*, refusing to continue if it failed.
 
-    ``env=scrubbed_git_env()`` is not optional here (#15490): pytest inherits
+    ``env=isolated_git_env()`` is not optional here (#15490): pytest inherits
     the ambient hook environment, and an inherited ``GIT_DIR`` makes ``git
     init``/``git add`` operate on the real repository instead of ``tmp_path``.
     """
@@ -51,7 +51,7 @@ def _run_git(root: Path, *argv: str) -> None:
         text=True,
         encoding="utf-8",
         check=False,
-        env=scrubbed_git_env(),
+        env=isolated_git_env(),
     )
     if result.returncode != 0:
         raise RuntimeError(f"git {' '.join(argv)} failed in {root}: {result.stderr.strip()}")

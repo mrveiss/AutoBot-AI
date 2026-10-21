@@ -17,10 +17,15 @@ whole service stack), so it reads source with ``ast`` and is blind to what only 
 * ``include_router`` calls whose receiver or child is not a plain imported name;
 * a router mounted with a non-literal ``prefix=``.
 
+``add_api_route``, loop-built routes and computed prefixes are tracked by #19033: enumerate from the real
+router objects. A ``@router.websocket`` route is read as method ``WEBSOCKET``, so it only ever collides with
+another WebSocket route.
+
 Ordering rules it models, each matching how FastAPI builds the list:
 
-* a router's own decorators in source order, then the routers included into it (``X.include_router(Y)``
-  anywhere in the tree), in file then line order -- the includes run after the defining module;
+* a router's own decorators in source order (``@router.api_route`` expands to one route per literal
+  method), then the routers included into it (``X.include_router(Y)`` anywhere in the tree), in file
+  then line order -- the includes run after the defining module;
 * a registry/``main.py`` mount appends that router's whole flattened list at that point.
 """
 
@@ -34,7 +39,7 @@ from typing import Dict, Iterable, List, Optional, Tuple
 
 __all__ = ["OrderedRoute", "RouteOrder", "shadowed_literals"]
 
-_VERBS = ("get", "post", "put", "patch", "delete", "head", "options")
+_VERBS = ("get", "post", "put", "patch", "delete", "head", "options", "api_route", "websocket")
 _SKIP_PARTS = frozenset({"tests", "node_modules", ".venv", "venv", "__pycache__", "migrations"})
 Key = Tuple[str, str]
 
@@ -234,7 +239,19 @@ def _collect_routers(tree: ast.AST, mod: _Module) -> None:
                 mod.prefixes[target.id] = prefix
 
 
-def _decorator_routes(func: ast.AST, mod: _Module) -> Iterable[Tuple[str, int, str, Optional[str]]]:
+def _route_methods(dec: ast.Call, verb: str) -> Optional[List[str]]:
+    """The HTTP methods one route decorator declares; ``None`` when ``api_route``'s are not literal."""
+    if verb != "api_route":
+        return [verb.upper()]
+    methods = _kwarg(dec, "methods")
+    if methods is None:
+        return ["GET"]  # FastAPI's APIRouter.api_route default when ``methods=`` is omitted
+    names = [_const_str(e) for e in methods.elts] if isinstance(methods, (ast.List, ast.Tuple, ast.Set)) else []
+    literal = [n.upper() for n in names if n is not None]
+    return literal if literal and len(literal) == len(names) else None
+
+
+def _decorator_routes(func: ast.AST, mod: _Module) -> Iterable[Tuple[str, int, Optional[List[str]], Optional[str]]]:
     for dec in getattr(func, "decorator_list", []):
         if not (isinstance(dec, ast.Call) and isinstance(dec.func, ast.Attribute)):
             continue
@@ -242,16 +259,17 @@ def _decorator_routes(func: ast.AST, mod: _Module) -> Iterable[Tuple[str, int, s
         if not (isinstance(owner, ast.Name) and owner.id in mod.prefixes and dec.func.attr in _VERBS):
             continue
         arg = dec.args[0] if dec.args else _kwarg(dec, "path")
-        yield owner.id, dec.lineno, dec.func.attr.upper(), _const_str(arg)
+        yield owner.id, dec.lineno, _route_methods(dec, dec.func.attr), _const_str(arg)
 
 
 def _collect_routes(tree: ast.AST, dotted: str, mod: _Module, unresolved: List[str]) -> None:
     for node in ast.walk(tree):
-        for var, line, method, path in _decorator_routes(node, mod):
-            if path is None:
-                unresolved.append(f"{dotted}:{line} non-literal route path")
+        for var, line, methods, path in _decorator_routes(node, mod):
+            if path is None or methods is None:
+                unresolved.append(f"{dotted}:{line} non-literal route path or methods")
                 continue
-            mod.routes.setdefault(var, []).append((line, method, path))
+            for method in methods:
+                mod.routes.setdefault(var, []).append((line, method, path))
 
 
 # -- the two apps -------------------------------------------------------------------------------------

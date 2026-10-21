@@ -45,7 +45,7 @@ from repo_tests._reach import REGISTRY, Reach, ReachFloorError, declare
 from repo_tests._reach_policy import ALLOWANCE_VERDICTS
 from repo_tests._reach_unscoped import UNSCOPED
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 
 _REPO_TESTS = Path(__file__).resolve().parent
 _REPO_ROOT = _REPO_TESTS.parent
@@ -205,7 +205,7 @@ def empty_repo(tmp_path: Path) -> Path:
         ["git", "init", "--quiet", str(tmp_path)],
         check=True,
         capture_output=True,
-        env=scrubbed_git_env(),
+        env=isolated_git_env(),
     )
     return tmp_path
 

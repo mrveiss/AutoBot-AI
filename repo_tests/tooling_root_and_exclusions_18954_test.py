@@ -23,7 +23,7 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 
 REPO_ROOT = repo_root()
 _SIZE_SCRIPTS = {
@@ -47,7 +47,7 @@ def _git_repo(root: Path, files: dict[str, str]) -> Path:
         (root / rel).parent.mkdir(parents=True, exist_ok=True)
         (root / rel).write_text(text, encoding="utf-8")
     for argv in (["init", "-q"], ["add", "-A"]):
-        subprocess.run(["git", *argv], cwd=root, check=True, env=scrubbed_git_env())  # nosec B603 B607
+        subprocess.run(["git", *argv], cwd=root, check=True, env=isolated_git_env())  # nosec B603 B607
     return root
 
 

@@ -129,7 +129,7 @@ REACH = declare(
     "root-resolver-depth-scan",
     discover=_population,
     # Mid-window, re-pinned 5880 -> 6061 on main df211d3ba6: population 6211, skips 0, growth 300 -> window [5911, 6211].
-    floor=6490,
+    floor=6616,  # re-pinned mid-window (train 53): population 6766, window [6466, 6766]
     what="tracked python",
     roots=_ROOTS,
     growth=300,

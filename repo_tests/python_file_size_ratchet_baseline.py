@@ -209,7 +209,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/events/types.py": 885,
     "autobot-backend/hardware_acceleration.py": 609,
     "autobot-backend/initialization/lifespan.py": 2320,
-    "autobot-backend/initialization/router_registry/feature_routers.py": 779,
+    "autobot-backend/initialization/router_registry/feature_routers.py": 762,
     "autobot-backend/integrations/cloud_integration.py": 616,
     "autobot-backend/integrations/communication_integration.py": 605,
     "autobot-backend/integrations/microsoft365_integration.py": 632,

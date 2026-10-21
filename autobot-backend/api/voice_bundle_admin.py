@@ -30,7 +30,8 @@ bundle_me_router = APIRouter(tags=["voice", "rbac"])
 # Router for admin operations
 bundle_admin_router = APIRouter(prefix="/admin", tags=["admin", "voice", "rbac"])
 
-# Combined router for feature_routers.py discovery (GH#8605)
+# Combined router (GH#8605). NOT mounted: core_routers.py mounts bundle_me_router and
+# bundle_admin_router directly (#17325); mounting this too would register every route twice.
 router = APIRouter()
 router.include_router(bundle_me_router, prefix="/voice")
 router.include_router(bundle_admin_router)

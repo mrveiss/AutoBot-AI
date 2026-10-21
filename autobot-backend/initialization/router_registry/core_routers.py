@@ -57,7 +57,6 @@ from api.knowledge import router as knowledge_router
 from api.knowledge_ai_stack import router as knowledge_ai_stack_router
 from api.knowledge_ai_stack_extraction import router as knowledge_ai_stack_extraction_router
 from api.knowledge_audit import router as knowledge_audit_router
-from api.knowledge_boards import router as knowledge_boards_router
 from api.knowledge_categories import router as knowledge_categories_router
 from api.knowledge_chroma import router as knowledge_chroma_router  # MVA-2046
 from api.knowledge_claude_memory import router as knowledge_claude_memory_router
@@ -75,7 +74,6 @@ from api.knowledge_ownership import router as knowledge_ownership_router
 from api.knowledge_population import router as knowledge_population_router
 from api.knowledge_rag_feedback import router as knowledge_rag_feedback_router
 from api.knowledge_search import router as knowledge_search_router
-from api.knowledge_search_aggregator import router as knowledge_search_aggregator_router
 from api.knowledge_search_analytics import router as knowledge_search_analytics_router
 from api.knowledge_search_documentation import router as knowledge_search_documentation_router
 from api.knowledge_search_scoped import router as knowledge_search_scoped_router
@@ -337,12 +335,8 @@ def _get_knowledge_feature_routers() -> list:
             ["knowledge-ai-extraction"],
             "knowledge_ai_stack_extraction",
         ),
-        (
-            knowledge_boards_router,
-            "/knowledge_base",
-            ["knowledge-boards"],
-            "knowledge_boards",
-        ),
+        # NOTE (#17325): knowledge_boards and knowledge_search_aggregator are not mounted here --
+        # api/knowledge.py includes both into the knowledge router mounted above, which registers first.
         (
             knowledge_debug_router,
             "/knowledge_base",
@@ -354,12 +348,6 @@ def _get_knowledge_feature_routers() -> list:
             "/knowledge_base",
             ["knowledge-grounding"],
             "knowledge_grounding",
-        ),
-        (
-            knowledge_search_aggregator_router,
-            "/knowledge_base",
-            ["knowledge-multi-source", "knowledge-search"],
-            "knowledge_search_aggregator",
         ),
         (
             knowledge_search_documentation_router,
