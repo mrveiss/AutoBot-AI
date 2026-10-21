@@ -20,7 +20,7 @@ from __future__ import annotations
 
 KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/a2a/a2a_test.py": 713,
-    "autobot-backend/advanced_rag_optimizer.py": 1180,
+    "autobot-backend/advanced_rag_optimizer.py": 1091,
     "autobot-backend/agent_loop/loop.py": 2046,
     "autobot-backend/agent_loop/types.py": 669,
     "autobot-backend/agents/agent_orchestration/distributed_management.py": 649,
@@ -131,7 +131,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/schemas_chat.py": 702,
     "autobot-backend/api/schemas_code.py": 3265,
     "autobot-backend/api/schemas_knowledge.py": 5127,
-    "autobot-backend/api/schemas_system.py": 4362,  # #13051: SecretModel ownership fields
+    "autobot-backend/api/schemas_system.py": 4345,  # #13051: SecretModel ownership fields
     "autobot-backend/api/schemas_workflows.py": 2907,
     "autobot-backend/api/secrets.py": 1179,  # #16444 review: except HTTPException, ValueError handlers
     "autobot-backend/api/security_assessment.py": 913,
@@ -348,7 +348,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/nl_database_service.py": 775,
     "autobot-backend/services/notification_service.py": 634,
     "autobot-backend/services/npu_worker_manager.py": 1419,
-    "autobot-backend/services/rag_service.py": 1176,
+    "autobot-backend/services/rag_service.py": 1156,
     "autobot-backend/services/redis_service_manager_test.py": 839,
     "autobot-backend/services/secrets_service.py": 688,
     "autobot-backend/services/security_memory_integration.py": 1031,
@@ -475,7 +475,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/tests/test_cleanup_never_destroys_data_14856.py": 981,
     "autobot-slm-backend/user_management/services/sso_service.py": 775,
     "autobot_shared/circuit_breaker.py": 689,
-    "autobot_shared/env_registry.py": 1164,  # #13602, #18765: sibling imports; blocks moved to siblings
+    "autobot_shared/env_registry.py": 1125,  # #13602, #18765: sibling imports; blocks moved to siblings
     "autobot_shared/monitoring/prometheus_metrics.py": 949,
     "autobot_shared/network_constants.py": 614,
     "autobot_shared/npu/integration.py": 929,

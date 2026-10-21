@@ -13,16 +13,24 @@ import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Optional
 
 import requests
 
-from autobot_shared.paths import project_root
-
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-API_URL = "http://localhost:8001"
+# Runs from any directory with no PYTHONPATH: put the repository root on the path for
+# `autobot_shared` (#18964).
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.network_constants import ServiceURLs  # noqa: E402
+from autobot_shared.paths import project_root  # noqa: E402
+
+API_URL = ServiceURLs.BACKEND_LOCAL
 
 
 @dataclass

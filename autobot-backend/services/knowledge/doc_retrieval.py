@@ -17,6 +17,7 @@ import time
 from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_llm_logger
+from knowledge.search_filters import KbPrincipal, filter_for_principal, require_kb_principal
 
 from .doc_searcher import DocumentationSearcher
 
@@ -76,14 +77,18 @@ class DocumentationRetrievalMixin:
             logger.warning("[Doc Search] Failed: %s", e)
             return ""
 
-    def _retrieve_raw_doc_results(
-        self, query: str, n_results: int = 3, score_threshold: float = 0.3
+    async def _retrieve_raw_doc_results(
+        self, query: str, n_results: int = 3, score_threshold: float = 0.3, *, principal: KbPrincipal
     ) -> List[Dict[str, Any]]:
         """Return raw doc-search results without pre-formatting (#10658).
+
+        Issue #18944: only the chunks *principal* may read, through ``filter_for_principal``. Doc chunks
+        carry the platform-docs grant, so any signed-in user keeps them. Needs ``self.rag_service``.
 
         Used by ``conversation_aware_retrieve`` to build [Source N] labels that
         continue from the KB citation count, keeping citation indices contiguous.
         """
+        principal = require_kb_principal(principal)
         if not self.doc_searcher:
             return []
         try:
@@ -94,6 +99,7 @@ class DocumentationRetrievalMixin:
                 n_results=n_results,
                 score_threshold=score_threshold,
             )
+            results = await filter_for_principal(results, principal, self.rag_service._ownership_manager())
             if results:
                 logger.info(
                     "[Doc Search] Retrieved %d raw documentation chunks for: '%s...'",

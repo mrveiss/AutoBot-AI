@@ -29,6 +29,7 @@ from services.knowledge_base_adapter import KnowledgeBaseAdapter
 from services.neural_mesh_retriever import NeuralMeshRetriever
 from services.rag_cache_tiers import RAGCacheTiersMixin
 from services.rag_config import RAGConfig, get_rag_config
+from services.rag_derived_context import RAGDerivedContextMixin
 from services.rag_visibility import VISIBILITY_OVERFETCH, cache_scope, filter_ranked
 from services.session_adaptive_reranker import get_session_adaptive_reranker, session_adapted_weights
 from type_defs.common import Metadata
@@ -72,7 +73,7 @@ def reset_synthesis_schema_cache() -> None:
     _SYNTHESIS_SCHEMA_CACHE = None
 
 
-class RAGService(RAGCacheTiersMixin):
+class RAGService(RAGDerivedContextMixin, RAGCacheTiersMixin):
     """
     Reusable RAG service providing advanced knowledge retrieval capabilities.
 
@@ -683,17 +684,24 @@ class RAGService(RAGCacheTiersMixin):
         self,
         query: str,
         max_context_length: int | None = None,
+        *,
+        principal: KbPrincipal,
     ) -> Tuple[str, RAGMetrics]:
         """
         Get optimized context for RAG-based response generation.
 
+        Issue #18944: ``principal`` is required (``kb_principal(user)`` or ``SYSTEM_SCOPE``); the optimizer
+        results and the synthesis and lessons legs keep only what it may read. None raises.
+
         Args:
             query: Search query string
             max_context_length: Maximum context length (uses config default if not provided)
+            principal: Who is asking
 
         Returns:
             Tuple of (optimized_context, metrics)
         """
+        principal = require_kb_principal(principal)  # before any read (#18944)
         if not await self.initialize():
             return "RAG optimizer not available", RAGMetrics()
 
@@ -710,17 +718,17 @@ class RAGService(RAGCacheTiersMixin):
 
         try:
             context, metrics = await self.optimizer.get_optimized_context(
-                query=query, max_context_length=context_length
+                query=query, max_context_length=context_length, principal=principal
             )
 
             # Issue #4564: enrich context with KB synthesis summaries (optional)
-            synthesis_prefix = await self._get_kb_synthesis_context(query)
+            synthesis_prefix = await self._get_kb_synthesis_context(query, principal)
             if synthesis_prefix:
                 context = synthesis_prefix + "\n\n" + context
 
             # Issue #4678: optionally inject AnalyzerService lessons (low-weight)
             if self.config.enable_analyzer_lessons:
-                lessons_ctx = await self._get_analyzer_lessons_context(query)
+                lessons_ctx = await self._get_analyzer_lessons_context(query, principal)
                 if lessons_ctx:
                     context = context + "\n\n" + lessons_ctx
 
@@ -730,14 +738,16 @@ class RAGService(RAGCacheTiersMixin):
             logger.error("Failed to get optimized context: %s", e)
             return "Error: RAG context retrieval failed", RAGMetrics()
 
-    async def _get_kb_synthesis_context(self, query: str) -> str:
+    async def _get_kb_synthesis_context(self, query: str, principal: KbPrincipal) -> str:
         """Query all KB synthesis ChromaDB collections for enrichment (Issue #4564, #4635).
 
         Queries the default ``kb_synthesis`` collection plus any
         ``synthesis_target`` collections defined in synthesis_schema.yaml.
         Results from all collections are merged.  Per-collection errors are
         logged and swallowed so the main context path is never interrupted.
+        Issue #18944: each hit is kept only if *principal* may read it (:meth:`_visible_synthesis_docs`).
         """
+        principal = require_kb_principal(principal)
         from knowledge.backends import get_async_default_client
 
         # Collect all synthesis collection names: default + schema-defined targets.
@@ -761,43 +771,13 @@ class RAGService(RAGCacheTiersMixin):
         for col_name in collection_names:
             try:
                 collection = await client.get_or_create_collection(name=col_name)
-                results = await collection.query(query_texts=[query], n_results=2)
-                if results and results.get("ids") and results["ids"][0]:
-                    docs = results.get("documents", [[]])[0]
-                    all_docs.extend(d for d in docs if d)
+                all_docs.extend(await self._visible_synthesis_docs(collection, query, principal))
             except Exception as exc:
                 logger.debug("KB synthesis fetch from '%s' failed (non-fatal): %s", col_name, exc)
 
         if not all_docs:
             return ""
         return "KB synthesis summaries:\n" + "\n".join(f"- {d}" for d in all_docs)
-
-    async def _get_analyzer_lessons_context(self, query: str) -> str:
-        """Query the ``autobot_lessons`` ChromaDB collection for supplemental context.
-
-        Issue #4678: Injects AnalyzerService-distilled lessons as low-weight
-        supplemental context after primary synthesis summaries.  Requires
-        ``RAGConfig.enable_analyzer_lessons`` to be True (checked by caller).
-
-        Returns an empty string on any error so the main context path is never
-        interrupted.
-        """
-        try:
-            from knowledge.backends import get_async_default_client
-
-            client = await get_async_default_client()
-            collection = await client.get_or_create_collection(name="autobot_lessons")
-            results = await collection.query(query_texts=[query], n_results=2)
-            if not (results and results.get("ids") and results["ids"][0]):
-                return ""
-            docs = results.get("documents", [[]])[0]
-            relevant = [d for d in docs if d]
-            if not relevant:
-                return ""
-            return "Analyzer lessons:\n" + "\n".join(f"- {d}" for d in relevant)
-        except Exception as exc:
-            logger.debug("Analyzer lessons fetch failed (non-fatal): %s", exc)
-            return ""
 
     async def rerank_results(
         self,

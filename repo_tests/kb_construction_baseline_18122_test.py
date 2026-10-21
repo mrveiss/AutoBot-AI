@@ -103,7 +103,6 @@ BASELINE: dict[str, tuple[int, str]] = {
         f"{_DRAIN} (S4+): the embedded MCP server lazily builds its own KB; use knowledge_factory",
     ),
     "autobot-infrastructure/shared/scripts/direct_kb_populate.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/fix_kb_dimensions.py": (1, _SCRIPT),
     "autobot-infrastructure/shared/scripts/identity_config_utility.py": (1, _SCRIPT),
     "autobot-infrastructure/shared/scripts/kb_dimension_utility.py": (1, _SCRIPT),
     "autobot-infrastructure/shared/scripts/populate_docs_knowledge.py": (1, _SCRIPT),

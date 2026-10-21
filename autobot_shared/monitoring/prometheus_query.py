@@ -38,11 +38,13 @@ _INSTANT_TIMEOUT = aiohttp.ClientTimeout(total=10)
 _RANGE_TIMEOUT = aiohttp.ClientTimeout(total=30)
 
 
-async def query_instant(promql: str) -> Dict[str, Any] | None:
+async def query_instant(promql: str, base_url: str | None = None) -> Dict[str, Any] | None:
     """Execute an instant PromQL query.
 
     Args:
         promql: PromQL expression.
+        base_url: Prometheus base URL; defaults to the SSOT backend-VM address. The
+            standalone Prometheus MCP server passes its ``AUTOBOT_PROMETHEUS_URL`` (#18964).
 
     Returns:
         Prometheus ``data`` dict (``{"resultType": ..., "result": [...]}``),
@@ -51,7 +53,7 @@ async def query_instant(promql: str) -> Dict[str, Any] | None:
     try:
         http_client = get_http_client()
         async with await http_client.get(
-            f"{_PROMETHEUS_BASE}/api/v1/query",
+            f"{base_url or _PROMETHEUS_BASE}/api/v1/query",
             params={"query": promql},
             timeout=_INSTANT_TIMEOUT,
         ) as resp:

@@ -26,7 +26,12 @@ def _metrics(keys):
     if inst is None:  # pragma: no cover - class name guard
         pytest.skip("SkillMetrics not exported")
     redis = AsyncMock()
-    redis.keys = AsyncMock(return_value=keys)
+
+    async def _scan_iter(match=None, count=None):
+        for key in keys:
+            yield key
+
+    redis.scan_iter = _scan_iter  # KEYS blocks the server; SCAN is used (#18999)
     inst._get_redis = AsyncMock(return_value=redis)
     return inst
 

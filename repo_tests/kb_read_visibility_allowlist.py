@@ -69,7 +69,6 @@ _SCOPED_ADMIN_ROUTER = (
 ALLOWLIST: dict[tuple[str, str], str] = {
     ("autobot-backend/advanced_rag_optimizer.py", "AdvancedRAGOptimizer._perform_semantic_search"): _T2,
     ("autobot-backend/advanced_rag_optimizer.py", "AdvancedRAGOptimizer._retrieve_hybrid_results"): _T2,
-    ("autobot-backend/advanced_rag_optimizer.py", "advanced_knowledge_search"): _T2,
     ("autobot-backend/agents/kb_librarian/librarian.py", "KBLibrarian.get_tool_instructions"): _T2,
     ("autobot-backend/agents/kb_librarian/librarian.py", "KBLibrarian.search_tool_knowledge"): _T2,
     ("autobot-backend/agents/kb_librarian_agent.py", "KBLibrarianAgent.search_knowledge"): _T2,

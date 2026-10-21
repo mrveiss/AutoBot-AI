@@ -36,6 +36,8 @@ from knowledge.search_components.reranking import (
     compute_blended_score,
     set_reranking_active,
 )
+from knowledge.search_filters import SYSTEM_SCOPE, KbPrincipal
+from rag_optimizer_context import OptimizedContextMixin
 from utils.semantic_chunker_gpu import get_gpu_semantic_chunker
 
 logger = get_llm_logger("advanced_rag_optimizer")
@@ -105,7 +107,7 @@ class _MapElitesCell:
     score: float
 
 
-class AdvancedRAGOptimizer:
+class AdvancedRAGOptimizer(OptimizedContextMixin):
     """
     Advanced RAG optimizer implementing state-of-the-art retrieval strategies.
 
@@ -975,97 +977,6 @@ class AdvancedRAGOptimizer:
         log_fn("  - GPU acceleration: %s", metrics.gpu_acceleration_used)
         log_fn("  - Hybrid search: %s", metrics.hybrid_search_enabled)
 
-    def _build_context_parts(
-        self,
-        results: List[RankedResult],
-        max_context_length: int,
-        query_context: QueryContext,
-    ) -> List[str]:
-        """Build context parts from search results with length optimization.
-
-        Args:
-            results: Search results to build context from.
-            max_context_length: Maximum total context length.
-            query_context: Query context for complexity-based decisions.
-
-        Returns:
-            List of formatted context entries.
-
-        Issue #620.
-        """
-        context_parts = []
-        current_length = 0
-
-        for i, result in enumerate(results):
-            source_info = f"Source: {result.source_path}"
-            if result.chunk_index > 0:
-                source_info += f" (section {result.chunk_index + 1})"
-
-            context_entry = f"{source_info}\nContent: {result.content}\n"
-            entry_length = len(context_entry)
-
-            if current_length + entry_length > max_context_length and context_parts:
-                break
-
-            context_parts.append(context_entry)
-            current_length += entry_length
-
-            if i >= 2 and query_context.complexity_score < 0.6:
-                break
-
-        return context_parts
-
-    def _build_context_header(self, query: str, context_parts: List[str], query_context: QueryContext) -> str:
-        """Build the header for optimized context output.
-
-        Args:
-            query: Original query string.
-            context_parts: List of context entries.
-            query_context: Query context with type information.
-
-        Returns:
-            Formatted header string.
-
-        Issue #620.
-        """
-        header = f"Relevant Information for: {query}\n"
-        header += f"Sources: {len(context_parts)} documents\n"
-        header += f"Query type: {query_context.query_type}\n\n"
-        return header
-
-    async def get_optimized_context(self, query: str, max_context_length: int = 2000) -> Tuple[str, RAGMetrics]:
-        """Get optimized context for RAG-based response generation."""
-        try:
-            results, metrics = await self.advanced_search(query, max_results=8)
-
-            if not results:
-                return "No relevant information found.", metrics
-
-            query_context = self._analyze_query_context(query)
-            context_parts = self._build_context_parts(results, max_context_length, query_context)
-            header = self._build_context_header(query, context_parts, query_context)
-            final_context = header + "\n---\n".join(context_parts)
-
-            # #10552, #16771: the one shared RAG inspection point
-            from security.content_firewall import inspect_rag_context
-
-            fw_verdict = await inspect_rag_context(final_context, context_label=query[:80])
-            if fw_verdict.blocked:
-                return "[RAG context blocked by content firewall]", metrics
-            final_context = fw_verdict.content
-
-            logger.info(
-                "Optimized context generated: %s characters from %s sources",
-                len(final_context),
-                len(context_parts),
-            )
-
-            return final_context, metrics
-
-        except Exception as e:
-            logger.error("Context optimization failed: %s", e)
-            return "Error retrieving context", RAGMetrics()
-
     def get_performance_stats(self) -> Dict[str, Any]:
         """Get performance statistics for the RAG optimizer."""
         return {
@@ -1138,17 +1049,17 @@ async def get_rag_optimizer() -> AdvancedRAGOptimizer:
 
 
 # Convenience functions for integration
-async def advanced_knowledge_search(query: str, max_results: int = 5) -> List[RankedResult]:
-    """Perform advanced knowledge search with all optimizations."""
+async def advanced_knowledge_search(query: str, max_results: int = 5, *, principal: KbPrincipal) -> List[RankedResult]:
+    """Perform advanced knowledge search with all optimizations; only what *principal* may read (#18944)."""
     optimizer = await get_rag_optimizer()
-    results, _ = await optimizer.advanced_search(query, max_results)
+    results, _ = await optimizer.search_visible(query, max_results, principal)
     return results
 
 
-async def get_optimized_knowledge_context(query: str, max_length: int = 2000) -> str:
-    """Get optimized knowledge context for response generation."""
+async def get_optimized_knowledge_context(query: str, max_length: int = 2000, *, principal: KbPrincipal) -> str:
+    """Get optimized knowledge context for response generation (#18944: scoped to *principal*)."""
     optimizer = await get_rag_optimizer()
-    context, _ = await optimizer.get_optimized_context(query, max_length)
+    context, _ = await optimizer.get_optimized_context(query, max_length, principal=principal)
     return context
 
 
@@ -1165,11 +1076,11 @@ if __name__ == "__main__":
     async def main():
         """Run CLI query against optimized RAG search."""
         if args.context:
-            context = await get_optimized_knowledge_context(args.query)
+            context = await get_optimized_knowledge_context(args.query, principal=SYSTEM_SCOPE)
             logger.info("=== Optimized Context ===")
             logger.info(context)
         else:
-            results = await advanced_knowledge_search(args.query, args.max_results)
+            results = await advanced_knowledge_search(args.query, args.max_results, principal=SYSTEM_SCOPE)
             logger.info("=== Search Results for: %s ===", args.query)
             for i, result in enumerate(results, 1):
                 logger.info("Result %s:", i)

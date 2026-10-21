@@ -244,6 +244,7 @@ class DocumentationSearcher:
             "subsection": meta.get("subsection", ""),
             "doc_type": meta.get("doc_type", "documentation"),
             "priority": meta.get("priority", "medium"),
+            "metadata": dict(meta),  # #18944: the stored visibility grant, for filter_for_principal
         }
 
     def search(self, query: str, n_results: int = 3, score_threshold: float = 0.3) -> List[Dict[str, Any]]:
