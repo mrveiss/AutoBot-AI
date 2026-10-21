@@ -45,7 +45,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/analytics/panels/CodebaseCrossLanguagePanel.vue": 656,
     "autobot-frontend/src/components/analytics/panels/CodebaseIntelligenceScoresPanel.vue": 1332,
     "autobot-frontend/src/components/analytics/panels/CodebaseOwnershipPanel.vue": 1035,
-    "autobot-frontend/src/components/audit/AuditLogTable.vue": 758,
+    "autobot-frontend/src/components/audit/AuditLogTable.vue": 741,  # #14780 BasePagination: 758 -> 741
     "autobot-frontend/src/components/browser/BrowserSessionManager.vue": 653,  # #18849: 654 -> 653
     "autobot-frontend/src/components/charts/BaseChart.vue": 602,
     "autobot-frontend/src/components/charts/FunctionCallGraph.vue": 2165,
@@ -190,11 +190,11 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-frontend/src/views/MaintenanceView.vue": 794,  # #14777 batch 2: 817 -> 794
     "autobot-slm-frontend/src/views/OrchestrationView.vue": 2189,
     "autobot-slm-frontend/src/views/ReplicationView.vue": 706,  # #18819 + #14777: 731 -> 706
-    "autobot-slm-frontend/src/views/SecurityView.vue": 1386,  # #18819 + #14777: 1409 -> 1386
+    "autobot-slm-frontend/src/views/SecurityView.vue": 1374,  # #14780 BasePagination: 1386 -> 1374
     "autobot-slm-frontend/src/views/SetupWizardView.vue": 1834,
     "autobot-slm-frontend/src/views/SkillsView.vue": 633,  # #18819 + #14777: 645 -> 633
     "autobot-slm-frontend/src/views/SystemUpdatesTab.vue": 635,  # #18819: 638 -> 635
-    "autobot-slm-frontend/src/views/monitoring/ErrorMonitor.vue": 617,  # #18819 + #14777: 640 -> 617
+    "autobot-slm-frontend/src/views/monitoring/ErrorMonitor.vue": 609,  # #14780 BasePagination: 617 -> 609
     "autobot-slm-frontend/src/views/monitoring/LogViewer.vue": 602,
     "autobot-slm-frontend/src/views/settings/SecuritySettings.vue": 773,  # #18819 + #14777: 807 -> 773
     "autobot-slm-frontend/src/views/settings/admin/DataHygieneView.vue": 662,  # #18819 + #14777: 669 -> 662

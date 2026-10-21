@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import base64
+import re
 
 import pytest
 
@@ -20,6 +21,47 @@ _SID = "secret:abc"  # a representative stable secret id used for AAD binding
 def root_key(monkeypatch) -> bytes:
     monkeypatch.setenv(env.ROOT_KEY_ENV, _ROOT)
     return env.load_root_key()
+
+
+class TestRootKeyFailureIsLogged:
+    """#19051: callers swallow the RuntimeError, so the reason must reach the log."""
+
+    @pytest.fixture(autouse=True)
+    def _fresh_once_cache(self):
+        env._log_root_key_reason_once.cache_clear()
+        yield
+        env._log_root_key_reason_once.cache_clear()
+
+    @staticmethod
+    def _capture(monkeypatch) -> list:
+        lines: list = []
+        monkeypatch.setattr(env.logger, "error", lambda msg, *args: lines.append(msg % args))
+        return lines
+
+    @pytest.mark.parametrize(
+        "value, expected",
+        [
+            ("", "is not set"),
+            ("a", "is not valid url-safe base64"),  # 1 char: never a whole base64 quantum
+            (base64.urlsafe_b64encode(b"tooshort").decode(), "must decode to 32 bytes (got 8)"),
+        ],
+    )
+    def test_each_failing_check_is_named(self, monkeypatch, value, expected) -> None:
+        lines = self._capture(monkeypatch)
+        monkeypatch.setenv(env.ROOT_KEY_ENV, value)
+        with pytest.raises(RuntimeError, match=re.escape(expected)):
+            env.load_root_key()
+        assert len(lines) == 1 and expected in lines[0]
+
+    def test_logged_once_per_reason_and_never_the_value(self, monkeypatch) -> None:
+        lines = self._capture(monkeypatch)
+        bad = "c2VjcmV0LXZhbHVl"  # decodes to 12 bytes
+        monkeypatch.setenv(env.ROOT_KEY_ENV, bad)
+        for _ in range(3):
+            with pytest.raises(RuntimeError):
+                env.load_root_key()
+        assert len(lines) == 1
+        assert bad not in lines[0]
 
 
 class TestRootKey:

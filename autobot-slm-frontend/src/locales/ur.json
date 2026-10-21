@@ -1181,7 +1181,8 @@
       "trend": "Trend",
       "type": "قسم",
       "unresolved": "Unresolved",
-      "resolvedByAt": "By {by} at {at}"
+      "resolvedByAt": "By {by} at {at}",
+      "paginationAria": "Error list pages"
     },
     "fleetMetricsCard": {
       "acrossValue0Nodes": "Across {value0} nodes",
@@ -1716,7 +1717,8 @@
       "status1": "Status",
       "time": "Time:",
       "time1": "Time",
-      "value0TracePlural": "{value0} trace{plural}"
+      "value0TracePlural": "{value0} trace{plural}",
+      "paginationAria": "Trace list pages"
     }
   },
   "performanceView": {
@@ -2101,7 +2103,8 @@
     "uploadTLSCertificate": "Upload TLS Certificate",
     "user": "صارف",
     "value0Violations": "{value0} violations",
-    "whatHappensWhenYouEnableTLS": "What happens when you enable TLS?"
+    "whatHappensWhenYouEnableTLS": "What happens when you enable TLS?",
+    "paginationAria": "Security list pages"
   },
   "settings": {
     "aPISettings": {

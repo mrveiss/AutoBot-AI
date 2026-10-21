@@ -62,17 +62,19 @@ export function buildCreateBody(form: LogForwardingForm): LogForwardingDestinati
     retry_count: 3,
     retry_delay: 1,
     scope: 'global',
+    ssl_verify: true, // the contract lists it as required; true is the backend's default
   }
 }
 
 /** A credential is sent only when newly typed; a masked value must never round-trip. */
 export function buildUpdateBody(form: LogForwardingForm): LogForwardingDestinationUpdate {
   const body: LogForwardingDestinationUpdate = buildCommonFields(form)
-  // Typed value wins; "remove" sends an explicit null (the handler clears it); else omit.
-  if (form.api_key) body.api_key = form.api_key
-  else if (form.clear_api_key) body.api_key = null
-  if (form.password) body.password = form.password
-  else if (form.clear_password) body.password = null
+  // "Remove" wins: it sends an explicit null (the handler clears it) even if a value was typed
+  // before ticking it; otherwise a typed value is sent; otherwise the field is omitted (#18797).
+  if (form.clear_api_key) body.api_key = null
+  else if (form.api_key) body.api_key = form.api_key
+  if (form.clear_password) body.password = null
+  else if (form.password) body.password = form.password
   return body
 }
 

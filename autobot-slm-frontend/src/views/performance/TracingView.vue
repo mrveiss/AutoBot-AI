@@ -13,7 +13,7 @@
 
 import { ref, onMounted, watch } from 'vue'
 import { formatDuration } from '@/utils/formatHelpers'
-import { BaseAlert, usePagination } from '@autobot/ui'
+import { BaseAlert, usePagination, BasePagination } from '@autobot/ui'
 import { usePerformanceMonitoring } from '@/composables/usePerformanceMonitoring'
 import { formatDateTime } from '@/composables/useTimezone'
 import type {
@@ -411,30 +411,16 @@ onMounted(() => {
     </div>
 
     <!-- Pagination -->
-    <div v-if="totalPages > 1" class="flex items-center justify-between">
-      <span class="text-sm text-gray-500">{{ $t('performance.tracingView.pageValue0OfValue1', { value0: page, value1: totalPages }) }}</span>
-      <div class="flex items-center gap-1">
-        <button
-          @click="goToPage(1)"
-          :disabled="page === 1"
-          class="px-2 py-1 text-sm border border-gray-300 rounded-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-        >{{ $t('performance.tracingView.first') }}</button>
-        <button
-          @click="goToPage(page - 1)"
-          :disabled="page === 1"
-          class="px-2 py-1 text-sm border border-gray-300 rounded-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-        >{{ $t('performance.tracingView.prev') }}</button>
-        <button
-          @click="goToPage(page + 1)"
-          :disabled="page >= totalPages"
-          class="px-2 py-1 text-sm border border-gray-300 rounded-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-        >{{ $t('performance.tracingView.next') }}</button>
-        <button
-          @click="goToPage(totalPages)"
-          :disabled="page >= totalPages"
-          class="px-2 py-1 text-sm border border-gray-300 rounded-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-        >{{ $t('performance.tracingView.last') }}</button>
-      </div>
-    </div>
+    <BasePagination
+      v-if="totalPages > 1"
+      :page="page"
+      :total-pages="totalPages"
+      show-first-last
+      :labels="{ previous: $t('performance.tracingView.prev'), next: $t('performance.tracingView.next'), first: $t('performance.tracingView.first'), last: $t('performance.tracingView.last') }"
+      :label="$t('performance.tracingView.paginationAria')"
+      @update:page="goToPage"
+    >
+      <template #summary>{{ $t('performance.tracingView.pageValue0OfValue1', { value0: page, value1: totalPages }) }}</template>
+    </BasePagination>
   </div>
 </template>

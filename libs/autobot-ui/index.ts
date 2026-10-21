@@ -52,6 +52,9 @@ export type { ModalSize } from './src/components/BaseModal.vue'
 
 export { default as BaseDrawer } from './src/components/BaseDrawer.vue'
 
+export { default as BasePagination } from './src/components/BasePagination.vue'
+export type { PaginationLabels } from './src/components/BasePagination.vue'
+
 export { default as BrandMark } from './src/components/BrandMark.vue'
 
 export { default as BaseTooltip } from './src/components/BaseTooltip.vue'

@@ -188,12 +188,12 @@ async function testDestination(name: string): Promise<void> {
 
   try {
     const result = await api.testLogForwardingDestination(name)
+    await fetchDestinations() // first: it clears `error`, which would hide an unhealthy result (#18797)
     if (result.healthy) {
       success.value = t('settings.admin.logForwardingSettings.testSucceeded')
     } else {
       error.value = result.message
     }
-    await fetchDestinations()
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('settings.admin.logForwardingSettings.testFailed')
@@ -208,8 +208,8 @@ async function testAllDestinations(): Promise<void> {
 
   try {
     const response = await api.testAllLogForwardingDestinations()
-    success.value = t('settings.admin.logForwardingSettings.testAllSummary', { healthy: response.healthy, total: response.total })
-    await fetchDestinations()
+    await fetchDestinations() // a partial failure is an error, never the green banner (#18797)
+    ;(response.healthy === response.total ? success : error).value = t('settings.admin.logForwardingSettings.testAllSummary', { healthy: response.healthy, total: response.total })
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('settings.admin.logForwardingSettings.testAllFailed')
@@ -243,9 +243,9 @@ async function deleteDestination(): Promise<void> {
 }
 
 // Initialize
-onMounted(async () => {
-  await Promise.all([fetchStatus(), fetchAutoStart(), fetchDestinations()])
-})
+// Mount and Refresh read all three, so Refresh retries a failed auto-start read (#18797).
+const refreshAll = () => Promise.all([fetchStatus(), fetchAutoStart(), fetchDestinations()])
+onMounted(refreshAll)
 </script>
 
 <template>
@@ -320,7 +320,7 @@ onMounted(async () => {
           </button>
 
           <button
-            @click="fetchStatus(); fetchDestinations()"
+            @click="refreshAll" data-test="refresh"
             class="p-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

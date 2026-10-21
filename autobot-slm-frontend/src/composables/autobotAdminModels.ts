@@ -8,6 +8,8 @@
  * routes, as the SLM's useAutobotApi calls them (#15536). useAutobotApi re-exports these.
  */
 
+import type { components as backend } from '@autobot/backend-contract'
+
 /** A tool permission rule (autobot-backend/api/permissions.py); rules have no id. */
 export interface PermissionRule {
   tool: string
@@ -45,121 +47,27 @@ export interface AgentConfigSummary {
 }
 
 // ---------------------------------------------------------------------------
-// Log forwarding (#18734): autobot-backend/api/log_forwarding.py. Destinations
-// are keyed by `name`; there is no id. Credentials are returned MASKED.
+// Log forwarding (#18734): autobot-backend/api/log_forwarding.py, typed from the main
+// backend's generated OpenAPI contract (type-only alias; no runtime import), never by hand.
+// Destinations are keyed by `name`; there is no id. Credentials are returned MASKED.
 // ---------------------------------------------------------------------------
 
-export type LogForwardingDestinationType =
-  | 'seq'
-  | 'elasticsearch'
-  | 'loki'
-  | 'syslog'
-  | 'webhook'
-  | 'file'
+type BackendSchemas = backend['schemas']
 
 /** GET /log-forwarding/destinations item (bare list); api_key/password are masked. */
-export interface LogForwardingDestination {
-  name: string
-  type: LogForwardingDestinationType
-  enabled: boolean
-  url: string | null
-  api_key: string | null
-  username: string | null
-  password: string | null
-  index: string | null
-  file_path: string | null
-  min_level: string
-  batch_size: number
-  batch_timeout: number
-  retry_count: number
-  retry_delay: number
-  scope: string
-  target_hosts: string[]
-  syslog_protocol: string
-  ssl_verify: boolean
-  ssl_ca_cert: string | null
-  ssl_client_cert: string | null
-  ssl_client_key: string | null
-  healthy: boolean
-  last_error: string | null
-  sent_count: number
-  failed_count: number
-}
-
-/** POST /log-forwarding/destinations body (LogFwdDestinationCreate). */
-export interface LogForwardingDestinationCreate {
-  name: string
-  type: LogForwardingDestinationType
-  enabled: boolean
-  url?: string | null
-  api_key?: string | null
-  username?: string | null
-  password?: string | null
-  index?: string | null
-  file_path?: string | null
-  min_level: string
-  batch_size: number
-  batch_timeout: number
-  retry_count: number
-  retry_delay: number
-  scope: string
-  syslog_protocol?: string
-}
-
-/** PUT /log-forwarding/destinations/{name} body (LogFwdDestinationUpdate); all optional. */
-export type LogForwardingDestinationUpdate = Partial<
-  Omit<LogForwardingDestinationCreate, 'name' | 'type'>
->
-
-export interface LogForwardingMessage {
-  message: string
-}
-
+export type LogForwardingDestination = BackendSchemas['LogForwardingDestinationItem']
+export type LogForwardingDestinationType = LogForwardingDestination['type']
+/** POST /log-forwarding/destinations body. */
+export type LogForwardingDestinationCreate = BackendSchemas['LogFwdDestinationCreate']
+/** PUT /log-forwarding/destinations/{name} body; every field optional. */
+export type LogForwardingDestinationUpdate = BackendSchemas['LogFwdDestinationUpdate']
+export type LogForwardingMessage = BackendSchemas['LogFwdMessageResponse']
 /** POST/PUT destination response; `destination` is the sanitized (masked) config. */
-export interface LogForwardingMutationResult extends LogForwardingMessage {
-  destination: Record<string, unknown>
-}
-
-export interface LogForwardingTestResult {
-  name: string
-  healthy: boolean
-  last_error: string | null
-  message: string
-}
-
-/** POST /log-forwarding/test-all; `results` maps destination name to healthy (bool). */
-export interface LogForwardingTestAllResult {
-  results: Record<string, boolean>
-  total: number
-  healthy: number
-  unhealthy: number
-}
-
-export interface LogForwardingDestinationStatus {
-  name: string
-  type: string
-  enabled: boolean
-  healthy: boolean
-  last_error: string | null
-  sent_count: number
-  failed_count: number
-  scope: string
-}
-
+export type LogForwardingMutationResult = BackendSchemas['LogFwdCreateUpdateResponse']
+export type LogForwardingTestResult = BackendSchemas['LogFwdTestResponse']
+/** POST /log-forwarding/test-all; `results` maps destination name to healthy. */
+export type LogForwardingTestAllResult = BackendSchemas['LogFwdTestAllResponse']
+export type LogForwardingDestinationStatus = BackendSchemas['LogFwdDestinationStatusItem']
 /** GET /log-forwarding/status. Carries NO auto_start; read it from /auto-start. */
-export interface LogForwardingStatus {
-  running: boolean
-  hostname: string
-  queue_size: number
-  destinations: LogForwardingDestinationStatus[]
-  total_destinations: number
-  enabled_destinations: number
-  healthy_destinations: number
-  total_sent: number
-  total_failed: number
-}
-
-export interface LogForwardingAutoStart {
-  auto_start: boolean
-  message: string
-}
+export type LogForwardingStatus = BackendSchemas['LogFwdStatusResponse']
+export type LogForwardingAutoStart = BackendSchemas['LogFwdAutoStartResponse']

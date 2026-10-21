@@ -32,7 +32,7 @@ const t = (en as { settings: { admin: Record<string, Record<string, string>> } }
 function served(name: string, over: Record<string, unknown> = {}) {
   return {
     name, type: 'webhook', enabled: true, url: `https://${name}.example/logs`,
-    api_key: '****abcd', username: null, password: null, index: null, file_path: null,
+    api_key_masked: '****abcd', username: null, password_masked: null, index: null, file_path: null,
     min_level: 'Information', batch_size: 10, batch_timeout: 5, retry_count: 3, retry_delay: 1,
     scope: 'global', target_hosts: [], syslog_protocol: 'udp', ssl_verify: true,
     ssl_ca_cert: null, ssl_client_cert: null, ssl_client_key: null,
@@ -155,6 +155,14 @@ describe('Log Forwarding edit mode details', () => {
     expect('password' in body).toBe(false)
   })
 
+  it('remove wins over a value typed before it was ticked: the body carries null (#18797)', async () => {
+    const wrapper = await openEdit()
+    await wrapper.get('[data-test="field-api-key"]').setValue('typed-then-removed')
+    await wrapper.get('[data-test="remove-api-key"]').setValue(true)
+    const body = await save(wrapper)
+    expect(body.api_key).toBeNull()
+  })
+
   it('untouched omits the credential; a typed value sends the value', async () => {
     const wrapper = await openEdit()
     expect('api_key' in (await save(wrapper))).toBe(false)
@@ -199,6 +207,16 @@ describe('Log Forwarding auto-start toggle (#18797 review)', () => {
     expect(box(w).element.checked).toBe(false)
   })
 
+  it('Refresh retries a failed auto-start read and enables the toggle (#18797)', async () => {
+    api.getLogForwardingAutoStart.mockRejectedValueOnce(new Error('503'))
+    const w = await mountPage()
+    expect(box(w).element.disabled).toBe(true)
+    await w.get('[data-test="refresh"]').trigger('click')
+    await flushPromises()
+    expect(api.getLogForwardingAutoStart).toHaveBeenCalledTimes(2)
+    expect(box(w).element.disabled).toBe(false)
+  })
+
   it('a failed save leaves the checkbox at the stored value', async () => {
     api.setLogForwardingAutoStart.mockRejectedValue(new Error('500'))
     const w = await mountPage()
@@ -206,5 +224,36 @@ describe('Log Forwarding auto-start toggle (#18797 review)', () => {
     await box(w).trigger('change')
     await flushPromises()
     expect(box(w).element.checked).toBe(true)
+  })
+})
+
+describe('Log Forwarding test results are shown truthfully (#18797 review)', () => {
+  const errorAlert = (w: Awaited<ReturnType<typeof mountPage>>) => w.find('.aui-alert--error')
+
+  it("an unhealthy single test keeps its message: the list refresh after it does not clear it", async () => {
+    api.testLogForwardingDestination.mockResolvedValue({ name: 'alpha', healthy: false, last_error: 'refused', message: 'connection refused' })
+    const w = await mountPage()
+    await buttonByTitle(w, t.testConnection, 0).trigger('click')
+    await flushPromises()
+    expect(errorAlert(w).exists()).toBe(true)
+    expect(errorAlert(w).text()).toContain('connection refused')
+  })
+
+  it('test all with a failure is an error, not the success banner', async () => {
+    api.testAllLogForwardingDestinations.mockResolvedValue({ results: { alpha: true, beta: false }, total: 2, healthy: 1, unhealthy: 1 })
+    const w = await mountPage()
+    await w.findAll('button').find((b) => b.text().includes(t.testAll))!.trigger('click')
+    await flushPromises()
+    expect(errorAlert(w).text()).toContain('1/2')
+    expect(w.text()).toContain('1/2 destinations healthy')
+  })
+
+  it('contrast: test all with every destination healthy shows no error', async () => {
+    api.testAllLogForwardingDestinations.mockResolvedValue({ results: { alpha: true, beta: true }, total: 2, healthy: 2, unhealthy: 0 })
+    const w = await mountPage()
+    await w.findAll('button').find((b) => b.text().includes(t.testAll))!.trigger('click')
+    await flushPromises()
+    expect(errorAlert(w).exists()).toBe(false)
+    expect(w.text()).toContain('2/2 destinations healthy')
   })
 })

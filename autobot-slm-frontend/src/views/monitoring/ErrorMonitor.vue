@@ -11,7 +11,7 @@
  */
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { BaseModal, usePagination } from '@autobot/ui'
+import { BaseModal, usePagination, BasePagination } from '@autobot/ui'
 import { useSlmApi } from '@/composables/useSlmApi'
 import type {
   RecentError,
@@ -55,8 +55,7 @@ const {
   currentPage,
   totalPages,
   itemsPerPage: perPage,
-  next: nextPage,
-  prev: prevPage,
+  goToPage,
 } = usePagination<RecentError>(errors, {
   itemsPerPage: 20,
   serverTotalItems: totalErrors,
@@ -407,23 +406,16 @@ onUnmounted(() => {
             v-if="totalErrors > perPage"
             class="px-4 py-3 border-t border-gray-200 flex items-center justify-between"
           >
-            <span class="text-sm text-gray-500">{{ $t('monitoring.errorMonitor.pageValue0OfValue1', { value0: currentPage, value1: totalPages }) }}</span>
-            <div class="flex gap-2">
-              <button
-                @click="prevPage"
-                :disabled="currentPage === 1"
-                class="px-3 py-1 text-sm border rounded-sm hover:bg-gray-50 disabled:opacity-50"
-              >
-                {{ $t('monitoring.errorMonitor.previous') }}
-              </button>
-              <button
-                @click="nextPage"
-                :disabled="currentPage * perPage >= totalErrors"
-                class="px-3 py-1 text-sm border rounded-sm hover:bg-gray-50 disabled:opacity-50"
-              >
-                {{ $t('monitoring.errorMonitor.next') }}
-              </button>
-            </div>
+            <BasePagination
+              class="flex-1"
+              :page="currentPage"
+              :total-pages="totalPages"
+              :labels="{ previous: $t('monitoring.errorMonitor.previous'), next: $t('monitoring.errorMonitor.next') }"
+              :label="$t('monitoring.errorMonitor.paginationAria')"
+              @update:page="goToPage"
+            >
+              <template #summary>{{ $t('monitoring.errorMonitor.pageValue0OfValue1', { value0: currentPage, value1: totalPages }) }}</template>
+            </BasePagination>
           </div>
         </div>
       </div>
