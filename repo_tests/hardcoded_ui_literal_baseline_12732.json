@@ -778,19 +778,7 @@
   "fc10feaf"
  ],
  "autobot-frontend/src/components/settings/TelegramSettingsPanel.vue": [
-  "1ee0d243",
-  "2f010816",
-  "31322e03",
-  "37d36a0c",
-  "3f773c1c",
-  "5479b957",
-  "91d95eda",
-  "a7dacbb1",
-  "a9d9ae21",
-  "ac6f7e27",
-  "ae6c2afc",
-  "b1870e5b",
-  "fc7d8533"
+  "a9d9ae21"
  ],
  "autobot-frontend/src/components/settings/ThemePresetPicker.vue": [
   "23cbc8bb",

@@ -1028,3 +1028,14 @@ not 13 issues:
 
 B6 (vector-store forensics) is deliberately **not** filed: it is only worth doing after item 2
 lands, since a read-side screen makes stored poison inert without having to find it.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #16533 — Post-generation grounding check for RAG answers
+- #16646 — feat(coordination): claim events never fire — hold_scopes calls try_acquire directly instead of the publishing wrapper
+- #16649 — feat(coordination): one queryable view of who is doing what, in which state — extend /coordination/claims with task state
+- #16776 — security(agents): no taint propagation — approval gates never learn that untrusted content entered the context
+- #16780 — security(rag): RAGService.advanced_search() merges doc_indexer_service results with no content-firewall inspection
+- #16963 — bug(llc): LLCWorkspaceLease has no writer, no reader, and no reaper — wire in or retire

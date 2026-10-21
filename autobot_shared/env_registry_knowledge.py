@@ -53,3 +53,48 @@ register_env_var(
         range=(0.1, 3600.0),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_REDIS_SCAN_COUNT",
+        type=int,
+        default=1000,
+        description=(
+            "COUNT hint for every pattern walk through autobot_shared/redis_scan.py: keys the "
+            "server examines per SCAN call. redis-py defaults to 10, which turns a 1500-key "
+            "keyspace into ~150 round trips per walk (#18999)."
+        ),
+        component="knowledge",
+        range=(10, 100000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_METRICS_COUNT_REFRESH_SECONDS",
+        type=float,
+        default=300.0,
+        description=(
+            "Minimum seconds between the doc:* and kb_cache:* keyspace walks that feed the "
+            "kb_vector_count / kb_cache_entries gauges; the cached count is served in between; "
+            "read by utils/system_metrics.py (#18999)."
+        ),
+        component="knowledge",
+        range=(1.0, 86400.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_RETRY_COOLDOWN_SECONDS",
+        type=int,
+        default=60,
+        description=(
+            "Seconds after a failed knowledge-base initialization during which every access "
+            "path returns None instead of retrying ChromaDB; force_refresh bypasses it; read "
+            "by knowledge_factory.py (#3094, #18122)."
+        ),
+        component="knowledge",
+        range=(1, 86400),
+    )
+)

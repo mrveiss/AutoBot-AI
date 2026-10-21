@@ -332,3 +332,11 @@ flag; the GPU-torch install should gate on `backend_gpu_available` alone.
 feature that never activates) > G2 (a guard that needs evidence, not removal-on-sight).
 
 **Filed:** #15162 (G3), #15163 (G1), #15164 (G2) — 2026-08-28.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #15162 — fix(deploy): CUDA torch is gated behind the vLLM flag, so GPU hosts without vLLM silently run CPU torch (closed)
+- #15163 — fix(rag): FAISS-GPU vector search path never activates — faiss-gpu is installed by no automated path (closed)
+- #15164 — chore(rag): re-validate the blanket WSL GPU disable in gpu_vector_search, or document why it stays

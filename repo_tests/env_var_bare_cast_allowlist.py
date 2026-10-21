@@ -73,9 +73,6 @@ BARE_ENV_CASTS = {
     "autobot-infrastructure/shared/scripts/analysis/redis_final_analysis.py::_DB_KNOWLEDGE": (
         "#15691 -- DELIBERATE, operator-run script; see module docstring above"
     ),
-    "autobot-infrastructure/shared/scripts/fix_kb_dimensions.py::_DB_KNOWLEDGE": (
-        "#15691 -- DELIBERATE, operator-run script; see module docstring above"
-    ),
     "autobot-infrastructure/shared/scripts/utilities/migrate_codebase_to_chromadb.py::_DB_ANALYTICS": (
         "#15691 -- DELIBERATE, operator-run script; see module docstring above"
     ),
@@ -97,7 +94,7 @@ BARE_ENV_CASTS = {
 #: all converted -- none joined the 7. NEVER raise this to let a new bare
 #: cast through, in either spelling -- convert it to a crash-safe reader, or
 #: record it above with an issue number.
-MAX_BARE_ENV_CASTS = 7
+MAX_BARE_ENV_CASTS = 5
 
 #: The combined #15691 + #15710 measurement, kept so a future reader can tell
 #: a population that is draining (this number falling) from one that is

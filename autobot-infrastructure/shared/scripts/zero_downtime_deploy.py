@@ -36,7 +36,7 @@ import time
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import aiohttp
 import yaml
@@ -75,23 +75,8 @@ class TimingConstants:
 from deployment_registry import (  # noqa: E402
     SERVICE_DEFINITIONS,
     DeploymentMode,
-    ServiceRegistry,
+    get_service_registry,
 )
-
-_registry: Optional[ServiceRegistry] = None
-
-
-def get_service_registry() -> ServiceRegistry:
-    """Get the process-wide ServiceRegistry instance."""
-    global _registry
-    if _registry is None:
-        # #18132: this script filled the registry itself through update_service_url, so
-        # its ServiceRegistry started EMPTY. The shared class builds URLs eagerly by
-        # default, so the original behaviour is preserved explicitly rather than by
-        # accident of which copy it used.
-        _registry = ServiceRegistry(populate_services=False)
-    return _registry
-
 
 # --- end standalone replacements (#11761) -----------------------------------
 
@@ -129,7 +114,10 @@ class ZeroDowntimeDeployer:
         self.deployment_dir = self.project_root / deployment_dir
         self.deployment_dir.mkdir(exist_ok=True)
 
-        self.service_registry = get_service_registry()
+        # #18132: this script fills the registry itself through update_service_url, so
+        # its ServiceRegistry starts EMPTY; the shared class builds URLs eagerly by
+        # default, so the original behaviour is requested explicitly.
+        self.service_registry = get_service_registry(populate_services=False)
         self.backup_manager = BackupManager()
 
         # Load deployment configuration

@@ -776,7 +776,6 @@
 1|other|autobot-infrastructure/shared/scripts/deployment_rollback.py|300
 1|ssot|autobot-infrastructure/shared/scripts/environment/set-env-deepseek.sh|:8001
 1|ssot|autobot-infrastructure/shared/scripts/export_service_keys.py|:6379
-2|ssot|autobot-infrastructure/shared/scripts/fix_search.py|:8001
 1|ssot|autobot-infrastructure/shared/scripts/infrastructure/deploy_browser_vnc_services.sh|:3000
 1|ssot|autobot-infrastructure/shared/scripts/infrastructure/deploy_browser_vnc_services.sh|:6080
 1|other|autobot-infrastructure/shared/scripts/install-bare-metal.sh|"/opt/autobot
@@ -813,7 +812,6 @@
 1|ssot|autobot-infrastructure/shared/scripts/network/test-dns-resolution.sh|:6379
 1|ssot|autobot-infrastructure/shared/scripts/network/test-dns-resolution.sh|:8001
 1|other|autobot-infrastructure/shared/scripts/performance_dashboard.py|https://cdn.jsdelivr.net/npm/chart.js
-1|ssot|autobot-infrastructure/shared/scripts/search_index_utility.py|:8001
 1|ssot|autobot-infrastructure/shared/scripts/security/mtls-migrate.py|:6379
 2|ssot|autobot-infrastructure/shared/scripts/setup/setup_repair.sh|:3000
 2|ssot|autobot-infrastructure/shared/scripts/setup/setup_repair.sh|:8081
@@ -843,10 +841,6 @@
 1|other|autobot-infrastructure/shared/scripts/utilities/enable_npu_support.py|60
 2|ssot|autobot-infrastructure/shared/scripts/utilities/fix-vnc-desktop.sh|:6080
 2|ssot|autobot-infrastructure/shared/scripts/utilities/fix-vnc-wsl.sh|:6080
-1|ssot|autobot-infrastructure/shared/scripts/utilities/fix_settings_loading.py|:11434
-2|ssot|autobot-infrastructure/shared/scripts/utilities/fix_settings_loading.py|:5173
-4|ssot|autobot-infrastructure/shared/scripts/utilities/fix_settings_loading.py|:8001
-1|ssot|autobot-infrastructure/shared/scripts/utilities/fix_settings_loading.py|qwen3.5:9b
 1|ssot|autobot-infrastructure/shared/scripts/utilities/frontend_api_utility.js|:11434
 5|ssot|autobot-infrastructure/shared/scripts/utilities/frontend_api_utility.js|:8001
 1|ssot|autobot-infrastructure/shared/scripts/utilities/frontend_api_utility.js|deepseek-r1:14b

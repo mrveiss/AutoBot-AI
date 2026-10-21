@@ -120,7 +120,6 @@ UNCLASSIFIED: frozenset[str] = frozenset(
         "autobot-infrastructure/shared/docker/ai-stack/ai_api_server.py",
         "autobot-infrastructure/shared/mcp/tools/knowledge-base-mcp/autobot_knowledge_mcp/embedded.py",
         "autobot-infrastructure/shared/scripts/direct_kb_populate.py",
-        "autobot-infrastructure/shared/scripts/fix_kb_dimensions.py",
         "autobot-infrastructure/shared/scripts/identity_config_utility.py",
         "autobot-infrastructure/shared/scripts/kb_dimension_utility.py",
         "autobot-infrastructure/shared/scripts/populate_docs_knowledge.py",

@@ -11,7 +11,7 @@ transformers==5.19.0
 sentence-transformers==6.1.0
 -c ../constraints/shared.txt  # single source of truth for shared versions (#10524)
 numpy  # version from constraints/shared.txt
-pillow==12.3.0
+pillow==13.0.0
 # Mirrors autobot-backend/requirements.txt:42. training/evaluator.py imports it at
 # module level, so without it completion_trainer_test.py's 17 tests never run —
 # including the torch.load weights_only=True RCE regression test (#13086).

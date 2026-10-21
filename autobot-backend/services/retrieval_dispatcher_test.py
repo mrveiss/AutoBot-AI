@@ -106,6 +106,7 @@ async def test_get_context_rag_mode():
     assert ctx == "rag-context"
     assert getattr(metrics, "strategy", None) == "rag"
     cag.get_full_context.assert_not_called()
+    rag.get_optimized_context.assert_awaited_once_with(query="q", principal=SYSTEM_SCOPE)  # #18944
 
 
 async def test_get_context_cag_mode_enabled():

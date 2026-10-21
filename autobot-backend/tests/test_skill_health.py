@@ -18,6 +18,16 @@ from services.skill_management.skill_health_scheduler import SkillHealthSchedule
 from services.skill_management.skill_metrics import SkillMetrics
 
 
+def _scan_iter_of(keys):
+    """A ``scan_iter`` stand-in: SkillMetrics walks keys via SCAN (#18999), not KEYS."""
+
+    async def _scan_iter(*_args, **_kwargs):
+        for key in keys:
+            yield key
+
+    return MagicMock(side_effect=_scan_iter)
+
+
 @pytest.fixture
 def mock_redis():
     """Create a mock Redis client (async — see commit 2d22e8580, #5946)."""
@@ -104,7 +114,7 @@ async def test_log_invocation_with_feedback(skill_metrics):
 async def test_get_metrics_empty(skill_metrics):
     """Test getting metrics when no data exists."""
     skill_metrics._redis.get = AsyncMock(return_value=None)
-    skill_metrics._redis.keys = AsyncMock(return_value=[])
+    skill_metrics._redis.scan_iter = _scan_iter_of([])
     skill_metrics._redis.lrange = AsyncMock(return_value=[])
 
     metrics = await skill_metrics.get_metrics("test-skill", days=30)
@@ -128,7 +138,7 @@ async def test_get_metrics_with_data(skill_metrics):
         return None
 
     skill_metrics._redis.get = AsyncMock(side_effect=mock_get)
-    skill_metrics._redis.keys = AsyncMock(return_value=[])
+    skill_metrics._redis.scan_iter = _scan_iter_of([])
     skill_metrics._redis.lrange = AsyncMock(return_value=[])
 
     # Get metrics for 1 day only (so 10 invocations total)
@@ -166,7 +176,7 @@ async def test_health_score_healthy(skill_metrics):
         return None
 
     skill_metrics._redis.get = AsyncMock(side_effect=mock_get)
-    skill_metrics._redis.keys = AsyncMock(return_value=[])
+    skill_metrics._redis.scan_iter = _scan_iter_of([])
     skill_metrics._redis.lrange = AsyncMock(return_value=[])
 
     health_score = await skill_metrics.get_health_score("test-skill", days=1)
@@ -188,7 +198,7 @@ async def test_health_score_degraded(skill_metrics):
         return None
 
     skill_metrics._redis.get = AsyncMock(side_effect=mock_get)
-    skill_metrics._redis.keys = AsyncMock(return_value=[])
+    skill_metrics._redis.scan_iter = _scan_iter_of([])
     skill_metrics._redis.lrange = AsyncMock(return_value=[])
 
     health_score = await skill_metrics.get_health_score("test-skill", days=1)
@@ -212,8 +222,8 @@ async def test_mark_stale(skill_metrics):
 @pytest.mark.asyncio
 async def test_get_stale_skills(skill_metrics):
     """Test retrieving list of stale skills."""
-    skill_metrics._redis.keys = AsyncMock(
-        return_value=[
+    skill_metrics._redis.scan_iter = _scan_iter_of(
+        [
             b"skill_health:old-skill-1:stale",
             b"skill_health:old-skill-2:stale",
         ]

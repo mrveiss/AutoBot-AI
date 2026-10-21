@@ -57,6 +57,9 @@ UNSCOPED = frozenset(
         "prompt-injection-detector-strict-mode",
         "redaction-concept-census",
         "redis-config-path-census",
+        # Whole tree (#18999): walks the repo root and excludes by rule, so a new top-level
+        # directory is swept with no edit; a roots= list would turn that into a red.
+        "redis-keys-runtime-18999-scan",
         "reduced-motion-animate-call",
         "reduced-motion-animate-option",
         "reduced-motion-apex-animations",

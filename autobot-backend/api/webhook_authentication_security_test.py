@@ -145,6 +145,7 @@ class TestTelegramWebhookAuthentication:
                 "api.telegram_bot.get_telegram_webhook_secret",
                 return_value="correct_secret_123",
             ),
+            patch("api.telegram_bot.get_ingest_mode", new_callable=AsyncMock, return_value="webhook"),
             patch("api.telegram_bot.gateway_manager") as mock_gateway,
             patch("api.telegram_bot._route_to_chat_and_reply", new_callable=AsyncMock),
         ):
@@ -170,6 +171,41 @@ class TestTelegramWebhookAuthentication:
             )
 
             assert response.status_code == status.HTTP_200_OK
+
+
+class TestTelegramWebhookIngestModeGate:
+    """The webhook refuses updates while polling is the ingest mode (#19010)."""
+
+    UPDATE = {"update_id": 1, "message": {"message_id": 1, "chat": {"id": 7}, "date": 1, "text": "hi"}}
+    HEADERS = {"X-Telegram-Bot-Api-Secret-Token": "correct_secret_123"}
+
+    def _post(self, client, mode):
+        with (
+            patch("api.telegram_bot.get_telegram_webhook_secret", return_value="correct_secret_123"),
+            patch("api.telegram_bot.get_ingest_mode", new_callable=AsyncMock, return_value=mode),
+            patch("api.telegram_bot.process_telegram_update", new_callable=AsyncMock) as process,
+        ):
+            response = client.post("/api/telegram/webhook", json=self.UPDATE, headers=self.HEADERS)
+        return response, process
+
+    def test_polling_mode_rejects_update_carrying_valid_old_secret(self, client):
+        response, process = self._post(client, "polling")
+        assert response.status_code == status.HTTP_409_CONFLICT
+        process.assert_not_awaited()
+
+    def test_webhook_mode_processes_update(self, client):
+        response, process = self._post(client, "webhook")
+        assert response.status_code == status.HTTP_200_OK
+        process.assert_awaited_once()
+
+    def test_mode_is_not_revealed_before_authentication(self, client):
+        with (
+            patch("api.telegram_bot.get_telegram_webhook_secret", return_value="correct_secret_123"),
+            patch("api.telegram_bot.get_ingest_mode", new_callable=AsyncMock, return_value="polling") as mode,
+        ):
+            response = client.post("/api/telegram/webhook", json=self.UPDATE, headers={})
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+        mode.assert_not_awaited()
 
 
 class TestAlertManagerWebhookAuthentication:

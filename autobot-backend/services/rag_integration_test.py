@@ -466,8 +466,8 @@ class TestKBSynthesisSchemaCache:
             ),
         ):
             service = RAGService.__new__(RAGService)
-            await service._get_kb_synthesis_context("query one")
-            await service._get_kb_synthesis_context("query two")
+            await service._get_kb_synthesis_context("query one", SYSTEM_SCOPE)
+            await service._get_kb_synthesis_context("query two", SYSTEM_SCOPE)
 
         mock_loader.assert_called_once()
 

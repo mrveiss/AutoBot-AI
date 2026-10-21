@@ -18,8 +18,8 @@
       "why": "frontend-analysis result (console logs) vs conversation-analysis result (conversation counts)"
     },
     "AutoBotMonitor": {
-      "verdict": "real",
-      "issue": 18964
+      "verdict": "homonym",
+      "why": "codebase-health dashboard (analysis freshness, API perf, security status) vs host/hardware monitor (GPU, NPU, services, models)"
     },
     "Block": {
       "verdict": "homonym",
@@ -137,10 +137,6 @@
       "verdict": "homonym",
       "why": "pydantic model vs health enum in a native-deployment validator"
     },
-    "SettingsLoadingFixer": {
-      "verdict": "real",
-      "issue": 18964
-    },
     "ShardPlan": {
       "verdict": "homonym",
       "why": "immutable layer-to-worker assignment vs ordered list of shards"
@@ -197,10 +193,6 @@
       "verdict": "homonym",
       "why": "per-linter file checks with different violation types"
     },
-    "check_openvino_npu": {
-      "verdict": "real",
-      "issue": 18964
-    },
     "check_paths": {
       "verdict": "real",
       "issue": 18954
@@ -245,10 +237,6 @@
       "verdict": "variant",
       "why": "documented Windows NPU worker exception: docs/developer/ARCHITECTURE_EXCEPTIONS.md (#5438); the packaged worker cannot import autobot_shared"
     },
-    "fix_dimensions": {
-      "verdict": "real",
-      "issue": 18964
-    },
     "fix_file": {
       "verdict": "homonym",
       "why": "flake8 critical-issue fixer vs bare-except fixer"
@@ -271,19 +259,15 @@
     },
     "get_service_registry": {
       "verdict": "real",
-      "issue": 18964
-    },
-    "hash_password": {
-      "verdict": "real",
-      "issue": 18964
+      "issue": 12771
     },
     "in_scope": {
       "verdict": "homonym",
       "why": "blocking-IO test-path split vs SPDX target filter"
     },
     "is_test_path": {
-      "verdict": "real",
-      "issue": 18964
+      "verdict": "homonym",
+      "why": "route-order parser skip predicate (tests/venv/migrations dirs) vs unwired-tracker audit predicate (_test./.test./__tests__ fragments); different sets by design"
     },
     "lifespan": {
       "verdict": "homonym",
@@ -294,8 +278,8 @@
       "why": "audit_api_wiring path baseline vs symbol-fork cluster baseline"
     },
     "load_config": {
-      "verdict": "real",
-      "issue": 18964
+      "verdict": "homonym",
+      "why": "complete.yaml reader (#18964 one home now) vs the worker and watchdog config loaders, which read different files"
     },
     "matches": {
       "verdict": "homonym",
@@ -325,13 +309,9 @@
       "verdict": "variant",
       "why": "identical two-line wrapper that binds each process's own NPU queue singleton (#12656); one per service by design"
     },
-    "prometheus_query": {
-      "verdict": "real",
-      "issue": 18964
-    },
     "query_range": {
-      "verdict": "real",
-      "issue": 18964
+      "verdict": "homonym",
+      "why": "Prometheus MCP tool that renders a time series as text vs the canonical client that returns flattened points"
     },
     "render": {
       "verdict": "homonym",
@@ -344,10 +324,6 @@
     "report_lines": {
       "verdict": "homonym",
       "why": "dead-surface report vs scope-box drift report"
-    },
-    "report_output": {
-      "verdict": "real",
-      "issue": 18964
     },
     "reset_knowledge_base": {
       "verdict": "homonym",
@@ -389,17 +365,9 @@
       "verdict": "real",
       "issue": 18954
     },
-    "upload_docs_as_searchable_facts": {
-      "verdict": "real",
-      "issue": 18964
-    },
     "violations": {
       "verdict": "homonym",
       "why": "three unrelated lint rules"
-    },
-    "write_atomically": {
-      "verdict": "real",
-      "issue": 18964
     }
   }
 }

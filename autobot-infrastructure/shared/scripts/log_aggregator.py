@@ -38,7 +38,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -61,21 +61,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # deployment_registry.py beside this file.
 from deployment_registry import (  # noqa: E402
     DeploymentMode,
-    ServiceRegistry,
+    get_service_registry,
 )
-
-
-
-
-_registry: Optional[ServiceRegistry] = None
-
-
-def get_service_registry() -> ServiceRegistry:
-    """Get the process-wide ServiceRegistry instance."""
-    global _registry
-    if _registry is None:
-        _registry = ServiceRegistry()
-    return _registry
 
 
 # --- end standalone replacements (#11761) -----------------------------------

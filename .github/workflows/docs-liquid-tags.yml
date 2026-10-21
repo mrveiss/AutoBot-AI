@@ -48,6 +48,7 @@ on:
       - 'docs/**/*.md'
       - 'docs/_config.yml'
       - 'repo_tests/docs_liquid_tags_are_defined_17930_test.py'
+      - 'repo_tests/research_doc_linked_issues_18967_test.py'
       - '.github/workflows/docs-liquid-tags.yml'
   push:
     branches: [main]
@@ -55,6 +56,7 @@ on:
       - 'docs/**/*.md'
       - 'docs/_config.yml'
       - 'repo_tests/docs_liquid_tags_are_defined_17930_test.py'
+      - 'repo_tests/research_doc_linked_issues_18967_test.py'
       - '.github/workflows/docs-liquid-tags.yml'
 
 # Same rationale as every other path-gated job here (#14434): a superseded run
@@ -90,3 +92,8 @@ jobs:
 
       - name: Every Liquid-rendered doc parses
         run: python3 -m pytest repo_tests/docs_liquid_tags_are_defined_17930_test.py -q
+
+      # #18967: the research-doc linked-issues guard reads only docs/research/*.md,
+      # so a docs-only pull request must run it here for the same reason as above.
+      - name: Every research doc links its issues
+        run: python3 -m pytest repo_tests/research_doc_linked_issues_18967_test.py -q

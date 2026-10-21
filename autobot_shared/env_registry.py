@@ -79,6 +79,7 @@ from autobot_shared import env_registry_tls  # noqa: E402,F401
 from autobot_shared import (  # noqa: E402,F401
     env_registry_analytics,
     env_registry_batch,
+    env_registry_gateway,
     env_registry_ledger,
     env_registry_rag,
     env_registry_terminal,
@@ -674,47 +675,7 @@ register_env_var(
     )
 )
 
-# --- gateway connectors (#14223) ---------------------------------------------
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_IMESSAGE_ENABLED",
-        type=bool,
-        default=False,
-        description=(
-            "Opt in to the iMessage gateway adapter. Off by default: it is "
-            "macOS-only and needs Full Disk Access to the Messages database."
-        ),
-        component="gateway",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_SIGNAL_ENABLED",
-        type=bool,
-        default=False,
-        description=(
-            "Opt in to the Signal gateway adapter. Off by default: it needs a "
-            "running signal-cli daemon and a registered number."
-        ),
-        component="gateway",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_MATRIX_E2EE",
-        type=bool,
-        default=False,
-        description=(
-            "Opt in to end-to-end encryption for the Matrix adapter. Off by "
-            "default because E2EE needs the optional olm dependency and a "
-            "persisted device store."
-        ),
-        component="gateway",
-    )
-)
+# --- gateway connectors: env_registry_gateway.py (#19010) ---
 
 # --- execution sandbox and snapshots (#14223) --------------------------------
 

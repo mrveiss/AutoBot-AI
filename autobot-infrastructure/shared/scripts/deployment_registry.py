@@ -57,7 +57,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 # The repo root goes on sys.path so autobot_shared is importable from this
 # standalone-script directory -- same bootstrap deployment_rollback.py already uses for
@@ -82,7 +82,14 @@ logger = get_logger(__name__)
 #: #6973: the canonical ladder, aliased rather than re-declared.
 ServiceStatus = HealthStatus
 
-__all__ = ["SERVICE_DEFINITIONS", "DeploymentMode", "ServiceHealth", "ServiceRegistry", "ServiceStatus"]
+__all__ = [
+    "SERVICE_DEFINITIONS",
+    "DeploymentMode",
+    "ServiceHealth",
+    "ServiceRegistry",
+    "ServiceStatus",
+    "get_service_registry",
+]
 
 
 class ServiceRegistry:
@@ -166,3 +173,19 @@ class ServiceRegistry:
         the canonical registry lives in autobot-backend/utils/service_registry.py.
         """
         self.services[name] = url
+
+
+_registries: Dict[Tuple[Optional[str], bool], ServiceRegistry] = {}
+
+
+def get_service_registry(config_file: Optional[str] = None, *, populate_services: bool = True) -> ServiceRegistry:
+    """Get the process-wide ServiceRegistry for these arguments (#18964).
+
+    One instance per ``(config_file, populate_services)`` pair, so the script that fills
+    the map itself (``populate_services=False``) never shares an instance with one that
+    expects the eager default, even when both run in the same process.
+    """
+    key = (config_file, populate_services)
+    if key not in _registries:
+        _registries[key] = ServiceRegistry(config_file, populate_services=populate_services)
+    return _registries[key]

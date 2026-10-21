@@ -333,3 +333,11 @@ Prioritised by impact.
 | `autobot-backend/plugin_manager.py` | Fix the `grant_capabilities` call at `:271` |
 | `autobot_shared/websocket_subprotocol.py` | Deadline constant for the `?token=` fallback, read by the warning and a test |
 | `autobot-backend/services/incremental_trainer.py` | `:19` top-level `training.completion_trainer` import makes torch eager, defeating this module's own `lazy_torch` use at `:17` |
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #17419 — bug(config): AUTOBOT_* vars are declared in two planes and 13 defaults already disagree (AUTOBOT_ENV: development vs production)
+- #17420 — bug(plugins): manual plugin load passes grant_capabilities= to a loader that accepts no such argument, so the #9049 approval gate raises TypeError (closed)
+- #17421 — security(plugins): every discovered plugin is imported and enabled at boot — no opt-in gate, no persisted enable state, no integrity check
