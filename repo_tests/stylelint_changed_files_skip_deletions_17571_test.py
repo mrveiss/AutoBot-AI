@@ -32,7 +32,7 @@ import pytest
 import yaml
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env, make_repo
 
 _WORKFLOW = repo_root() / ".github" / "workflows" / "stylelint-tokens.yml"
 _STEP = "Determine changed frontend CSS/Vue files"
@@ -47,7 +47,7 @@ def _run(cwd: Path, *args: str) -> str:
 
     The pre-push hook exports GIT_DIR and GIT_INDEX_FILE into its environment,
     so an unscrubbed subprocess here writes to the REAL repository instead of
-    `cwd` -- #15246, and the #15783 family `scrubbed_git_env` exists to end.
+    `cwd` -- #15246, and the #15783 family `isolated_git_env` (#18940) exists to end.
     This guard learned it the direct way: green standalone, `git commit` exit 1
     inside the hook.
 
@@ -61,7 +61,7 @@ def _run(cwd: Path, *args: str) -> str:
         text=True,
         encoding="utf-8",
         check=True,
-        env=scrubbed_git_env(),
+        env=isolated_git_env(),
     )
     return done.stdout
 
@@ -80,9 +80,7 @@ def repo(tmp_path: Path) -> Path:
     """A repo whose HEAD adds one CSS file, edits another, and deletes a third."""
     root = tmp_path / "repo"
     (root / "autobot-frontend" / "src").mkdir(parents=True)
-    _run(root, "git", "init", "-q", "-b", "main")
-    _run(root, "git", "config", "user.email", "t@example.invalid")
-    _run(root, "git", "config", "user.name", "t")
+    make_repo(root, default_branch="main")
 
     fe = root / "autobot-frontend" / "src"
     (fe / "kept.css").write_text("a{color:red}\n", encoding="utf-8")

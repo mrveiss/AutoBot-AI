@@ -161,7 +161,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/code_intelligence/anti_pattern_detection/analyzer.py": 755,
     "autobot-backend/code_intelligence/bug_predictor.py": 1501,
     "autobot-backend/code_intelligence/bug_predictor_test.py": 759,
-    "autobot-backend/code_intelligence/co_change_test.py": 736,
+    "autobot-backend/code_intelligence/co_change_test.py": 705,
     "autobot-backend/code_intelligence/code_evolution_miner.py": 698,
     "autobot-backend/code_intelligence/code_fingerprinting_test.py": 896,
     "autobot-backend/code_intelligence/code_review_engine.py": 1219,
