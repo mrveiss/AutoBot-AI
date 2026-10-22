@@ -23,7 +23,7 @@ known base · `resolve_within_sandbox` (:288) the file-management sandbox ·
 - Containment is the **sole** authority — `relative_to`, both sides realpath'd. Pre-resolution refusals (absolute, `..`, drive qualifier) are defence in depth only; replacing it is a smell (#15786).
 - The validated string is the string used. Validating `user_path` then opening something rebuilt from the original input is a finding.
 - `resolve_within_sandbox` forbids **any** `..`, `~`, leading `/`, or `SANDBOX_INVALID_PATH_CHARACTERS` (:45) — in-bounds or not. `''`, `'/'`, `'//'` legitimately address the sandbox root and return it unchanged (#11823); a diff that makes them raise again breaks root listing.
-- Upload **filenames** are their own gate: [`autobot-backend/security/upload_filename_policy.py`](../../autobot-backend/security/upload_filename_policy.py) `is_safe_file` (:111) — a bare name only (no `/`, no `\\`), one allow-list, a deny-list by name; every upload route imports it, and a route-local copy is a finding (the conversation copy accepted `a/b.txt` until #18704).
+- Upload **filenames** are their own gate: [`autobot_shared/security/upload_filename_policy.py`](../../autobot_shared/security/upload_filename_policy.py) `is_safe_file(filename, allowed)` / `require_safe_upload` (re-exported by `autobot-backend/security/upload_filename_policy.py`) — a bare name only (no `/`, no `\\`), a per-purpose allow-list (`ALLOWED_EXTENSIONS` documents, `AUDIO_EXTENSIONS`, `IMAGE_EXTENSIONS`, `ZIP_EXTENSIONS`, `TARBALL_EXTENSIONS`), a deny-list by name; every `UploadFile` route reaches it — `repo_tests/upload_routes_call_is_safe_file_guard_19088_test.py` fails on one that does not (#19088) — and a route-local copy is a finding (the conversation copy accepted `a/b.txt` until #18704).
 
 **Known bypass shapes:** double percent-encoding (`%252e%252e`), Unicode confusables (`﹒﹒`, `‥`), null byte via encoding,
 symlink pointing out of the root, a `MagicMock` or arbitrary object stringifying into a creatable tree (#14217).
@@ -58,13 +58,13 @@ Two postures, one validator (#14016): the contract is the docstring of [`securit
 `Depends` on [`auth_middleware.py`](../../autobot-backend/auth_middleware.py)
 `check_admin_permission` (:950).
 Archive safety lives in [`autobot-backend/archive_safety.py`](../../autobot-backend/archive_safety.py)
-— `validate_zip_metadata` (:27), `safe_extract` (:58), `MAX_UPLOAD_BYTES` (:19).
+— `validate_zip_metadata` (:29), `safe_extract` (:60), `MAX_UPLOAD_BYTES` (:21).
 
 **Invariants**
 - A plugin route without `Depends(check_admin_permission)` is remote code execution. This is the single highest-severity shape in this subsystem — check it first.
 - Extraction goes through `archive_safety`; [`plugin_install.py`](../../autobot-backend/plugin_install.py) only re-exports `_validate_zip_metadata` and `_safe_extract`. A local `zf.extractall` reintroduces zip-slip and symlink escape.
-- Names match `_NAME_PATTERN` (:36) before any filesystem touch; the target is claimed by `_claim_install_target` (:126) via `mkdir(exist_ok=False)`, which — with the per-name `_install_locks` — is what makes the collision check TOCTOU-free.
-- Git installs: scheme restricted to http(s), `--` before the URL, `protocol.file.allow=never`, no submodule recursion, ref matched against `_GIT_REF_PATTERN` (:39), rejecting a leading `-` or `..`. Dropping any one is a finding on its own.
+- Names match `_NAME_PATTERN` (:37) before any filesystem touch; the target is claimed by `_claim_install_target` (:127) via `mkdir(exist_ok=False)`, which — with the per-name `_install_locks` — is what makes the collision check TOCTOU-free.
+- Git installs: scheme restricted to http(s), `--` before the URL, `protocol.file.allow=never`, no submodule recursion, ref matched against `_GIT_REF_PATTERN` (:40), rejecting a leading `-` or `..`. Dropping any one is a finding on its own.
 - `PluginRegistry._plugins` and `HookRegistry` are process-wide singletons that do not dedupe — a load path re-initialising a live plugin double-registers its callbacks (#14000).
 - A credential resolver is injected only into a plugin whose resolved directory lies under a trusted built-in root ([`credential_binding.py`](../../autobot_shared/plugin_sdk/credential_binding.py) `bound_resolver`), never by `manifest.name` alone, since a self-declared name lets any installed plugin claim it (#18094); `plugin_install.py` refuses a community install that takes a built-in name. Both plugin hosts (startup `PluginManager`, API `PluginLoader`) take their search and trust lists from [`plugin_paths.py`](../../autobot-backend/plugin_paths.py); the CWD-relative dev fallback is searched but never trusted. The resolver narrows the sanctioned path and is not isolation: an in-process plugin can still read `os.environ` and module state.
 
