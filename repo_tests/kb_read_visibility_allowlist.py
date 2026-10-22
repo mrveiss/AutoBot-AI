@@ -71,7 +71,7 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("autobot-backend/advanced_rag_optimizer.py", "AdvancedRAGOptimizer._retrieve_hybrid_results"): _T2,
     ("autobot-backend/agents/kb_librarian/librarian.py", "KBLibrarian.get_tool_instructions"): _T2,
     ("autobot-backend/agents/kb_librarian/librarian.py", "KBLibrarian.search_tool_knowledge"): _T2,
-    ("autobot-backend/agents/kb_librarian_agent.py", "KBLibrarianAgent.search_knowledge"): _T2,
+    ("autobot-backend/agents/kb_librarian_agent.py", "KBLibrarianAgent._search_formatted"): _T2,
     ("autobot-backend/agents/knowledge_retrieval_agent.py", "KnowledgeRetrievalAgent.find_similar_documents"): _T2,
     ("autobot-backend/agents/knowledge_retrieval_agent.py", "KnowledgeRetrievalAgent.process_query"): _T2,
     ("autobot-backend/ai_hardware_accelerator.py", "AIHardwareAccelerator._gpu_semantic_search"): _T2,

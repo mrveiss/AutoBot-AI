@@ -195,9 +195,8 @@ async def proxy_check(
     as full admin. This answers "does this session hold the role the key
     actually confers?": 204 for a session whose role grants
     ``Permission.ADMIN_SYSTEM``, 403 for anyone authenticated but without it
-    -- including SUPERADMIN, which holds no granular permissions (#13854)
-    and is refused here as on every other permission-gated SLM admin route
-    -- and an unknown role resolves to USER, so it also fails closed. 401
+    -- SUPERADMIN is admitted, since it holds admin's permissions (#19125),
+    including ``ADMIN_SYSTEM`` -- and an unknown role resolves to USER, so it also fails closed. 401
     covers a missing Authorization header (the upstream ``HTTPBearer``'s
     ``auto_error=True`` raises it before this dependency runs) or an
     invalid/expired token (``get_current_user`` raises it). Returns no body

@@ -110,9 +110,9 @@ async def _handle_orchestrator_step(ctx: WorkflowStepContext) -> None:
 
 async def _handle_knowledge_manager_step(ctx: WorkflowStepContext) -> None:
     """Handle knowledge manager agent step (Issue #336 - extracted handler, Issue #322 - context)."""
-    from knowledge_base import KnowledgeBase
+    from knowledge import get_knowledge_base
 
-    kb = KnowledgeBase()
+    kb = await get_knowledge_base()  # raises RuntimeError when the canonical KB is unavailable (D2)
     content = f"Workflow step result: {ctx.step.get('result', ctx.action)}"
     metadata = {
         "workflow_id": ctx.workflow_id,

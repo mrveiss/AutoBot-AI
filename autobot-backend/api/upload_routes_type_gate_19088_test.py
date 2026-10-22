@@ -85,6 +85,8 @@ async def test_voice_routes_refuse_a_bad_name(name):
     req = _security_request()
     await _refused(_unwrap(voice.voice_clone_api)(req, "hello", FakeUpload(name), "user"))
     await _refused(_unwrap(voice.voice_create_api)("v", FakeUpload(name)))
+    if name in ("noextension", ""):  # transcribe is MIME-driven: an unnamed Blob is legitimate there (tested below)
+        return
     await _refused(_unwrap(voice.voice_transcribe_api)(req, FakeUpload(name), ""))
 
 
@@ -176,7 +178,7 @@ async def test_a_real_wav_clears_the_voice_gate_and_reaches_the_audio_read(monke
     class Reached(Exception):
         pass
 
-    async def stop(upload):
+    async def stop(upload, **kwargs):
         raise Reached
 
     import media.audio.upload_limits as limits
@@ -293,7 +295,32 @@ async def test_combine_refuses_a_non_image_content_type_like_process_image():
 async def test_general_file_upload_refuses_a_bad_name_before_reading_the_body(name, monkeypatch):
     from api import files
 
-    auth = SimpleNamespace(check_file_permissions=lambda request, action: (True, {"user_id": "u"}))
+    async def _allowed(request, action):  # check_file_permissions is async since #18688
+        return True, {"user_id": "u"}
+
+    auth = SimpleNamespace(check_file_permissions=_allowed)
     monkeypatch.setattr(files, "get_auth_middleware", lambda: auth)
     request = SimpleNamespace(state=SimpleNamespace())
     await _refused(_unwrap(files.upload_file)(request, BodyForbidden(name), "", False))
+
+
+# --- /voice/transcribe is MIME-driven: it ignores the filename, so an unnamed recorder Blob must pass ------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name", ["blob", "clip", "", None, "speech.wav", "recording.webm"])
+async def test_transcribe_accepts_a_recorder_blob_with_no_audio_extension(name):
+    from media.audio.upload_limits import read_capped_audio
+
+    assert (
+        await read_capped_audio(FakeUpload(name, "audio/webm;codecs=opus", b"RIFFdata"), name_from_mime="audio/webm")
+        == b"RIFFdata"
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name", ["a/b", "..\\x", "../clip", "clip‮", "x∕y", "payload.exe", "notes.txt", "x\x00"])
+async def test_transcribe_still_refuses_traversal_and_bad_names(name):
+    from media.audio.upload_limits import read_capped_audio
+
+    await _refused(read_capped_audio(BodyForbidden(name), name_from_mime="audio/webm"))

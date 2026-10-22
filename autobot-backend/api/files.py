@@ -130,7 +130,7 @@ def get_security_layer(request: Request) -> SecurityLayer:
     return request.app.state.security_layer
 
 
-def _check_file_permission(request: Request, permission: str) -> dict:
+async def _check_file_permission(request: Request, permission: str) -> dict:
     """
     Check file permissions and return user data.
 
@@ -146,7 +146,7 @@ def _check_file_permission(request: Request, permission: str) -> dict:
 
     Issue #620.
     """
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, permission)
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, permission)
     if not has_permission:
         raise HTTPException(
             status_code=403,
@@ -263,7 +263,7 @@ async def list_files(request: Request, path: str = ""):
     Args:
         path: Relative path within the sandbox (optional, defaults to root)
     """
-    _check_file_permission(request, "view")
+    await _check_file_permission(request, "view")
     target_path = validate_and_resolve_path(path)
 
     # Issue #358/#718: Use dedicated executor for non-blocking file I/O
@@ -555,7 +555,7 @@ async def upload_file(
         overwrite: Whether to overwrite existing files
     """
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "upload")
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, "upload")
     if not has_permission:
         raise HTTPException(status_code=403, detail="Insufficient permissions for file upload")
 
@@ -618,7 +618,7 @@ async def download_file(request: Request, path: str):
         path: File path within the sandbox
     """
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "download")
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, "download")
     if not has_permission:
         raise HTTPException(status_code=403, detail="Insufficient permissions for file download")
 
@@ -673,7 +673,7 @@ async def view_file(request: Request, path: str):
         path: File path within the sandbox
     """
     # SECURITY FIX: Use modern auth_middleware instead of deprecated function
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "view")
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, "view")
     if not has_permission:
         raise HTTPException(status_code=403, detail="Insufficient permissions for file viewing")
 
@@ -797,7 +797,7 @@ async def rename_file_or_directory(request: Request, path: str = Form(...), new_
         path: Current path of the file/directory
         new_name: New name for the file/directory (not full path, just name)
     """
-    user_data = _check_file_permission(request, "upload")
+    user_data = await _check_file_permission(request, "upload")
 
     if is_invalid_name(new_name):
         raise HTTPException(status_code=400, detail="Invalid file/directory name")
@@ -887,7 +887,7 @@ async def preview_file(request: Request, path: str):
     Returns:
         Dict with type, url, and content for preview
     """
-    _check_file_permission(request, "view")
+    await _check_file_permission(request, "view")
     target_file = validate_and_resolve_path(path)
 
     # Issue #358/#718: Use dedicated executor for non-blocking file I/O
@@ -932,7 +932,7 @@ async def delete_file(request: Request, path: str):
     Args:
         path: Path to the file/directory to delete (query parameter)
     """
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "delete")
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, "delete")
     if not has_permission:
         raise HTTPException(status_code=403, detail="Insufficient permissions for file deletion")
 
@@ -1000,7 +1000,7 @@ async def create_directory(request: Request, path: str = Form(...), name: str = 
         path: Parent directory path
         name: New directory name
     """
-    user_data = _check_file_permission(request, "upload")
+    user_data = await _check_file_permission(request, "upload")
 
     if is_invalid_name(name):
         raise HTTPException(status_code=400, detail="Invalid directory name")
@@ -1076,7 +1076,7 @@ def collect_directory_stats(root: Path) -> tuple:
 async def get_directory_tree(request: Request, path: str = ""):
     """Get directory tree structure for file browser"""
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "view")
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, "view")
     if not has_permission:
         raise HTTPException(
             status_code=403,
@@ -1110,7 +1110,7 @@ async def get_directory_tree(request: Request, path: str = ""):
 async def get_file_stats(request: Request):
     """Get file system statistics for the sandbox"""
     # SECURITY FIX: Enable proper authentication and authorization
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "view")
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, "view")
     if not has_permission:
         raise HTTPException(status_code=403, detail="Insufficient permissions for file statistics")
 

@@ -191,6 +191,41 @@ def ungated_upload_routes() -> list[str]:
     return out
 
 
+def stale_documented_exceptions(exceptions: frozenset[str] = _DOCUMENTED_EXCEPTIONS) -> list[str]:
+    """Exemptions that no longer name a live, ungated upload route (renamed, removed, or now gated)."""
+    by_key, routes = _index()
+    live = {(rel, name): called for rel, name, _line, called in routes}
+    stale = []
+    for entry in sorted(exceptions):
+        rel, _, name = entry.rpartition(":")
+        if (rel, name) not in live:
+            stale.append(f"{entry} (no such upload route)")
+        elif _reaches_gate(live[(rel, name)], by_key) and _gate_precedes_body_read(*_CONTEXT[(rel, name)], by_key):
+            stale.append(f"{entry} (now gated; drop the exemption)")
+    return stale
+
+
+def test_no_documented_exception_is_stale():
+    stale = stale_documented_exceptions()
+    assert (
+        not stale
+    ), "remove these _DOCUMENTED_EXCEPTIONS entries (and their ARCHITECTURE_EXCEPTIONS.md lines):\n" + "\n".join(stale)
+
+
+def test_control_a_missing_route_and_a_gated_route_are_stale_exemptions():
+    _by_key, routes = _index()
+    gated = next(
+        f"{rel}:{name}" for rel, name, _line, _called in routes if f"{rel}:{name}" not in _DOCUMENTED_EXCEPTIONS
+    )
+    stale = stale_documented_exceptions(frozenset({"autobot-backend/api/no_such_module.py:gone", gated}))
+    assert stale == sorted(
+        [
+            "autobot-backend/api/no_such_module.py:gone (no such upload route)",
+            f"{gated} (now gated; drop the exemption)",
+        ]
+    )
+
+
 def test_the_sweep_finds_the_upload_routes():
     _, routes = _index()
     assert len(routes) >= _UPLOAD_ROUTE_FLOOR, (

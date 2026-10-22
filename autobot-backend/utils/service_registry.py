@@ -269,6 +269,12 @@ class ServiceRegistry:
         Returns:
             Full service URL
 
+        Raises:
+            ValueError: the service is not registered. A miss never falls back
+                to a default host (#18639); the SSOT lookup
+                ``autobot_shared.ssot_config`` ``get_service_url`` returns None
+                instead. Neither guesses an endpoint.
+
         Example:
             registry.get_service_url("redis")
             registry.get_service_url("ai-stack", "/api/process")

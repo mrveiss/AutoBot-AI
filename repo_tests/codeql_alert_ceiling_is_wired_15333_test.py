@@ -173,11 +173,11 @@ def test_the_gate_is_not_soft_failed():
 _SCRIPT_SRC = _SCRIPT.read_text(encoding="utf-8")
 
 #: Check-runs on a commit CodeQL never ran for -- the paths filter excluded it (#18105).
-_CHECKS_WITHOUT_CODEQL = '{"check_runs":[{"name":"python-suite"},{"name":"code-quality"}]}'
+_CHECKS_WITHOUT_CODEQL = '{"total_count":2,"check_runs":[{"name":"python-suite"},{"name":"code-quality"}]}'
 #: codeql.yml's own job name.
-_CHECKS_WORKFLOW_JOB = '{"check_runs":[{"name":"Analyze (python)"},{"name":"python-suite"}]}'
+_CHECKS_WORKFLOW_JOB = '{"total_count":2,"check_runs":[{"name":"Analyze (python)"},{"name":"python-suite"}]}'
 #: GitHub's code-scanning status check, which codeql.yml does not name.
-_CHECKS_PLATFORM = '{"check_runs":[{"name":"CodeQL"},{"name":"python-suite"}]}'
+_CHECKS_PLATFORM = '{"total_count":2,"check_runs":[{"name":"CodeQL"},{"name":"python-suite"}]}'
 
 
 # ---------------------------------------------------------------------------
@@ -188,6 +188,7 @@ _CHECKS_PLATFORM = '{"check_runs":[{"name":"CodeQL"},{"name":"python-suite"}]}'
 # fake `gh` on PATH and assert the exit status, which is what CI acts on.
 # ---------------------------------------------------------------------------
 
+import json
 import os
 import pathlib
 import stat
@@ -216,20 +217,24 @@ def _fake_gh(
     bin_dir.mkdir(exist_ok=True)
     unscoped = alerts_unscoped if alerts_unscoped is not None else alerts
     script = bin_dir / "gh"
+    pages = checks if checks.lstrip().startswith("[") else f"[{checks}]"
+    checks_file = tmp_path / "checks.json"
+    checks_file.write_text(pages, encoding="utf-8")
     script.write_text(
         "#!/usr/bin/env bash\n"
-        # The check-runs call is the only one made with `--jq`, so the filter is pulled
-        # out and applied with real jq (#18105). Returning a pre-reduced number instead
-        # would leave the matcher itself untested, which is the half that can be wrong:
-        # it must catch GitHub's own `CodeQL` status check AND codeql.yml's
-        # `Analyze (<language>)` / `Detect changed languages` jobs.
-        'JQF=""; prev=""\n'
-        'for a in "$@"; do [ "$prev" = "--jq" ] && JQF="$a"; prev="$a"; done\n'
+        # The check-runs call is read by scripts/lib/check_run_status.py with
+        'JQF=""; prev=""\n' 'for a in "$@"; do [ "$prev" = "--jq" ] && JQF="$a"; prev="$a"; done\n'
+        # `--paginate --slurp`, so the stub answers with a JSON ARRAY of pages. A `checks`
+        # that is already an array is the page list; a single page document is wrapped.
+        # The matcher itself stays real (#18105, #19085).
         'for a in "$@"; do\n'
         '  case "$a" in\n'
         f"    *code-scanning/analyses*) printf '%s' '{analyses}'; exit 0 ;;\n"
         f"    *check-runs*) {'exit 1' if checks_fail else 'true'}\n"
-        f"      if [ -n \"$JQF\" ]; then printf '%s' '{checks}' | jq -r \"$JQF\"; else printf '%s' '{checks}'; fi\n"
+        # Like the real CLI: only `--paginate` reaches later pages. Without it the answer is
+        # page 1 alone, so a single-page read is genuinely blind to a CodeQL run on page 2.
+        '      case " $* " in *" --paginate "*) cat \'' + str(checks_file) + "' ;;\n"
+        f"        *) jq -c '.[0]' '{checks_file}' | {{ if [ -n \"$JQF\" ]; then jq -r \"$JQF\"; else cat; fi; }} ;; esac\n"
         "      exit 0 ;;\n"
         f"    *code-scanning/alerts*ref=*) printf '%s' '{alerts}'; exit 0 ;;\n"
         f"    *code-scanning/alerts*)   printf '%s' '{unscoped}'; exit 0 ;;\n"
@@ -262,6 +267,7 @@ def _run_gate(
     )
     env = dict(os.environ)
     env["PATH"] = f"{bin_dir}{os.pathsep}{env['PATH']}"
+    env["AUTOBOT_CHECK_RUNS_RETRY_DELAY"] = "0"
     env["ALERT_REF"] = "refs/pull/1/merge"
     env["GITHUB_SHA"] = sha
     return subprocess.run(
@@ -310,6 +316,44 @@ def test_a_codeql_check_without_any_analysis_still_trips(tmp_path, checks, label
     looked for the workflow's jobs would miss the status check GitHub publishes itself.
     """
     assert _run_gate(tmp_path, analyses="[]", alerts=_NO_ALERTS, checks=checks) == 1, label
+
+
+def _paged_checks(codeql_page: int, *, declared_total: int | None = None) -> str:
+    """130 check runs over two pages of 100/30, CodeQL's `Analyze (python)` on `codeql_page`."""
+    names = [f"job-{i}" for i in range(130)]
+    names[10 if codeql_page == 1 else 120] = "Analyze (python)"
+    runs = [{"name": n} for n in names]
+    total = 130 if declared_total is None else declared_total
+    return json.dumps(
+        [{"total_count": total, "check_runs": runs[:100]}, {"total_count": total, "check_runs": runs[100:]}]
+    )
+
+
+def test_codeql_on_page_two_of_the_check_runs_is_seen_not_called_absent(tmp_path):
+    """SHOULD trip (#19085): CodeQL ran, past run 100, and produced no analysis for the commit.
+
+    A single-page read counted 0 here and took the "did not run" branch -> exit 0, enforcing
+    the ceiling against the default branch. Seeing it must take the `CodeQL reported N
+    check(s)` failure instead. The page-1 twin pins that the count is the same either way.
+    """
+    assert _run_gate(tmp_path, analyses="[]", alerts=_NO_ALERTS, checks=_paged_checks(2)) == 1
+    assert _run_gate(tmp_path, analyses="[]", alerts=_NO_ALERTS, checks=_paged_checks(1)) == 1
+
+
+def test_a_check_runs_listing_that_does_not_add_up_fails_closed(tmp_path):
+    """SHOULD trip (#19085): total_count says 131, 130 were read -- an incomplete read is no verdict."""
+    short = _paged_checks(2, declared_total=131).replace("Analyze (python)", "job-x")
+    assert _run_gate(tmp_path, analyses="[]", alerts=_NO_ALERTS, checks=short) == 1
+
+
+def test_a_complete_two_page_listing_without_codeql_takes_the_did_not_run_branch(tmp_path):
+    """SHOULD NOT trip: the contrast for the two cases above -- same 130 runs, correct total, no CodeQL.
+
+    Proves the multi-page read itself succeeds, so their exit 1 comes from CodeQL being
+    seen and from the miscount respectively, not from the paging.
+    """
+    complete = _paged_checks(2).replace("Analyze (python)", "job-x")
+    assert _run_gate(tmp_path, analyses="[]", alerts=_NO_ALERTS, checks=complete) == 0
 
 
 def test_an_errored_check_runs_api_trips_rather_than_guessing(tmp_path):

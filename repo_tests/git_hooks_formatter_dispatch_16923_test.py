@@ -27,7 +27,7 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, make_repo
 
 _REPO_ROOT = repo_root()
 _INSTALLER = _REPO_ROOT / "scripts" / "install-git-hooks.sh"
@@ -59,9 +59,9 @@ repos:
 
 
 def _git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
-    """#15246: env scrubbed -- an inherited GIT_DIR would point these calls at
+    """#15246/#18940: isolated env -- an inherited GIT_DIR would point these calls at
     the real repository instead of the throwaway one under tmp_path."""
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=check, env=scrubbed_git_env())
+    return git(cwd, *args, check=check)
 
 
 def _seed_repo(tmp_path: Path, *, name: str = "main") -> Path:
@@ -73,9 +73,7 @@ def _seed_repo(tmp_path: Path, *, name: str = "main") -> Path:
     (repo / "tools" / "git-hooks" / "pre-commit").write_bytes(_TEMPLATE.read_bytes())
     (repo / "scripts" / "install-git-hooks.sh").write_bytes(_INSTALLER.read_bytes())
     (repo / ".pre-commit-config.yaml").write_text(_FIXTURE_CONFIG, encoding="utf-8")
-    _git(repo.parent, "init", "--quiet", "--initial-branch=main", str(repo))
-    _git(repo, "config", "user.email", "t@t")
-    _git(repo, "config", "user.name", "t")
+    make_repo(repo, default_branch="main")
     _git(repo, "add", "-A")
     _git(repo, "commit", "--quiet", "-m", "seed")
     _git(repo, "checkout", "--quiet", "-b", "issue-1")
@@ -218,9 +216,7 @@ def test_negative_control_the_pre_16923_hook_would_not_have_caught_this(tmp_path
     (repo / "tools" / "git-hooks" / "pre-commit").write_text(guard_only, encoding="utf-8")
     (repo / "scripts" / "install-git-hooks.sh").write_bytes(_INSTALLER.read_bytes())
     (repo / ".pre-commit-config.yaml").write_text(_FIXTURE_CONFIG, encoding="utf-8")
-    _git(repo.parent, "init", "--quiet", "--initial-branch=main", str(repo))
-    _git(repo, "config", "user.email", "t@t")
-    _git(repo, "config", "user.name", "t")
+    make_repo(repo, default_branch="main")
     _git(repo, "add", "-A")
     _git(repo, "commit", "--quiet", "-m", "seed")
     _git(repo, "checkout", "--quiet", "-b", "issue-1")

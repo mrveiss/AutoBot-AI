@@ -240,7 +240,7 @@ async def workspace_shell(
     # Authentication (bearer header / cookie-session / internal-service key) + admin
     # is decided solely here, so cookie-authenticated admins and internal-key clients
     # are no longer locked out by an Authorization-header precondition (#11016).
-    if not _authenticate_ws_admin(websocket):
+    if not await _authenticate_ws_admin(websocket):
         await _ws_error(websocket, "Authentication required (admin)")
         await websocket.close(code=1008)
         return
@@ -352,11 +352,11 @@ async def _ws_error(websocket: WebSocket, content: str) -> None:
     await _ws_send(websocket, "error", content)
 
 
-def _authenticate_ws_admin(websocket: WebSocket) -> bool:
+async def _authenticate_ws_admin(websocket: WebSocket) -> bool:
     """Fail-closed auth+authz for the shell WS — delegates to the shared,
     audited implementation in :mod:`api.ws_security` (#12178).
     """
-    return authenticate_ws_admin(websocket)
+    return await authenticate_ws_admin(websocket)
 
 
 def _info_to_response(info: WorkspaceInfo) -> WorkspaceInfoResponse:

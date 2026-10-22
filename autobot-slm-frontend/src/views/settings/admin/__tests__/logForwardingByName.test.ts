@@ -15,6 +15,7 @@ const api = {
   getLogForwardingStatus: vi.fn(),
   getLogForwardingAutoStart: vi.fn(),
   getLogForwardingDestinations: vi.fn(),
+  getLogForwardingDestination: vi.fn(),
   createLogForwardingDestination: vi.fn(),
   updateLogForwardingDestination: vi.fn(),
   deleteLogForwardingDestination: vi.fn(),
@@ -56,6 +57,8 @@ beforeEach(() => {
   api.getLogForwardingStatus.mockResolvedValue({ running: true, total_destinations: 2 })
   api.getLogForwardingAutoStart.mockResolvedValue({ auto_start: true, message: 'on' })
   api.getLogForwardingDestinations.mockResolvedValue([served('alpha'), served('beta', { type: 'file', url: null, file_path: '/var/log/b.log' })])
+  // Edit reads the destination fresh by name (#18734).
+  api.getLogForwardingDestination.mockImplementation(async (name: string) => served(name))
 })
 
 describe('Log Forwarding served shapes', () => {
@@ -70,6 +73,7 @@ describe('Log Forwarding served shapes', () => {
     api.updateLogForwardingDestination.mockResolvedValue({ message: 'ok', destination: {} })
     const wrapper = await mountPage()
     await buttonByTitle(wrapper, t.edit).trigger('click')
+    await flushPromises() // the edit dialog opens after the fresh read by name
     const key = wrapper.get('[data-test="field-api-key"]')
     expect((key.element as HTMLInputElement).value).toBe('')
     expect(wrapper.text()).toContain(t.leaveBlankToKeep)
@@ -89,6 +93,7 @@ describe('Log Forwarding served shapes', () => {
     api.updateLogForwardingDestination.mockResolvedValue({ message: 'ok', destination: {} })
     const wrapper = await mountPage()
     await buttonByTitle(wrapper, t.edit).trigger('click')
+    await flushPromises() // the edit dialog opens after the fresh read by name
     await wrapper.get('[data-test="field-api-key"]').setValue('new-secret')
     await wrapper.findAll('button').find((b) => b.text() === t.update)!.trigger('click')
     await flushPromises()
@@ -134,6 +139,7 @@ describe('Log Forwarding edit mode details', () => {
     api.updateLogForwardingDestination.mockResolvedValue({ message: 'ok', destination: {} })
     const wrapper = await mountPage()
     await buttonByTitle(wrapper, t.edit).trigger('click')
+    await flushPromises() // the edit dialog opens after the fresh read by name
     return wrapper
   }
   async function save(wrapper: ReturnType<typeof mount>) {
@@ -168,6 +174,7 @@ describe('Log Forwarding edit mode details', () => {
     expect('api_key' in (await save(wrapper))).toBe(false)
     api.updateLogForwardingDestination.mockClear()
     await buttonByTitle(wrapper, t.edit).trigger('click')
+    await flushPromises() // the edit dialog opens after the fresh read by name
     await wrapper.get('[data-test="field-api-key"]').setValue('typed')
     expect((await save(wrapper)).api_key).toBe('typed')
   })
@@ -255,5 +262,26 @@ describe('Log Forwarding test results are shown truthfully (#18797 review)', () 
     await flushPromises()
     expect(errorAlert(w).exists()).toBe(false)
     expect(w.text()).toContain('2/2 destinations healthy')
+  })
+})
+
+describe('Log Forwarding edit reads the destination by name (#18734 AC1)', () => {
+  it('opens the edit form from GET /destinations/{name}, not the list row', async () => {
+    // the list row is stale: the fresh read says the url changed since the list was fetched
+    api.getLogForwardingDestination.mockResolvedValue(served('alpha', { url: 'https://fresh.example/logs' }))
+    const w = await mountPage()
+    await buttonByTitle(w, t.edit).trigger('click')
+    await flushPromises()
+    expect(api.getLogForwardingDestination).toHaveBeenCalledWith('alpha')
+    expect(w.get<HTMLInputElement>('[data-test="field-url"]').element.value).toBe('https://fresh.example/logs')
+  })
+
+  it('a failed read shows the error and does not open the dialog', async () => {
+    api.getLogForwardingDestination.mockRejectedValue(new Error('gone'))
+    const w = await mountPage()
+    await buttonByTitle(w, t.edit).trigger('click')
+    await flushPromises()
+    expect(w.text()).toContain('gone')
+    expect(w.find('[data-test="field-url"]').exists()).toBe(false)
   })
 })

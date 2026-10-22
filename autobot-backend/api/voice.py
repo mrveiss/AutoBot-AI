@@ -554,7 +554,7 @@ async def voice_transcribe_api(
     # Function-local: the media package import chain is not inert (see _whisper_sync).
     from media.audio.upload_limits import read_capped_audio  # noqa: PLC0415
 
-    audio_bytes = await read_capped_audio(audio)
+    audio_bytes = await read_capped_audio(audio, name_from_mime=audio.content_type or "audio/webm")
     if not audio_bytes:
         return JSONResponse(
             status_code=400,

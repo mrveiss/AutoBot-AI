@@ -35,16 +35,16 @@ not an auth boundary — the caller is logged in — so a missing check reads as
 endpoint.
 
 **Canonical enforcement:** [`autobot-backend/security/session_ownership.py`](../../autobot-backend/security/session_ownership.py)
-— `build_owner_metadata` (:36) the one owner stamper · `validate_session_ownership` (:745) the one read-side gate · `validate_ownership` (:583).
+— `build_owner_metadata` (:37) the one owner stamper · `validate_session_ownership` (:743) the one read-side gate · `validate_ownership` (:581).
 Two postures, one validator (#14016): the contract is the docstring of [`security/session_posture.py`](../../autobot-backend/security/session_posture.py). A failed durable owner lookup denies under both and claims nothing: "unknown" is never "unowned" (#14033).
 
 **Invariants**
 - Redis keys are `chat:session:{session_id}` — **not** namespaced by user. Key construction is never an ownership check; the metadata comparison is.
 - Owner identity is `metadata.owner` = **username**, never a user id. A diff comparing against `user_id` is comparing the wrong field.
-- Redis is a TTL cache; the session file's `metadata.owner` is the record of truth. An absent Redis record means "not cached", never "unowned" — [`session_ownership.py`](../../autobot-backend/security/session_ownership.py) `_owner_when_cache_is_empty` (:509) asks disk first and rehydrates **for the real owner, never for the caller** (#14018).
+- Redis is a TTL cache; the session file's `metadata.owner` is the record of truth. An absent Redis record means "not cached", never "unowned" — [`session_ownership.py`](../../autobot-backend/security/session_ownership.py) `_owner_when_cache_is_empty` (:507) asks disk first and rehydrates **for the real owner, never for the caller** (#14018).
 - Undetermined enforcement policy degrades, in [`security/enforcement_mode.py`](../../autobot-backend/security/enforcement_mode.py), to `DEGRADED_ENFORCEMENT_MODE` (:53) and never to `disabled`: checks still run and violations are still recorded (#14010). A new `except` that returns `"disabled"` is a fail-open.
 - A resolution that degraded stays marked `degraded` (:73), so a `log_only` decision record says which of the two `log_only` states produced it (#15159). It marks the record only — `log_only` is allow-and-audit in both, deliberately. A degraded route reporting the chosen `reason` is a finding.
-- Only two legitimate fast-path bypasses exist, in [`security/session_ownership.py`](../../autobot-backend/security/session_ownership.py) — `_resolve_fast_paths` (:459): global auth disabled, and enforcement explicitly `disabled`. A third one added in a diff is a finding.
+- Only two legitimate fast-path bypasses exist, in [`security/session_ownership.py`](../../autobot-backend/security/session_ownership.py) — `_resolve_fast_paths` (:457): global auth disabled, and enforcement explicitly `disabled`. A third one added in a diff is a finding.
 - Creating over an existing session id is a 409, identical for "owned by someone else" and "no recorded owner" — a 403 on the first would confirm who owns it (#14012).
 
 ## 3. Plugin loading
@@ -56,15 +56,15 @@ Two postures, one validator (#14016): the contract is the docstring of [`securit
 **Canonical enforcement:** every route in
 [`autobot-backend/plugin_manager.py`](../../autobot-backend/plugin_manager.py) carries a
 `Depends` on [`auth_middleware.py`](../../autobot-backend/auth_middleware.py)
-`check_admin_permission` (:950).
+`check_admin_permission` (:943).
 Archive safety lives in [`autobot-backend/archive_safety.py`](../../autobot-backend/archive_safety.py)
-— `validate_zip_metadata` (:27), `safe_extract` (:58), `MAX_UPLOAD_BYTES` (:19).
+— `validate_zip_metadata` (:29), `safe_extract` (:60), `MAX_UPLOAD_BYTES` (:21).
 
 **Invariants**
 - A plugin route without `Depends(check_admin_permission)` is remote code execution. This is the single highest-severity shape in this subsystem — check it first.
 - Extraction goes through `archive_safety`; [`plugin_install.py`](../../autobot-backend/plugin_install.py) only re-exports `_validate_zip_metadata` and `_safe_extract`. A local `zf.extractall` reintroduces zip-slip and symlink escape.
-- Names match `_NAME_PATTERN` (:36) before any filesystem touch; the target is claimed by `_claim_install_target` (:126) via `mkdir(exist_ok=False)`, which — with the per-name `_install_locks` — is what makes the collision check TOCTOU-free.
-- Git installs: scheme restricted to http(s), `--` before the URL, `protocol.file.allow=never`, no submodule recursion, ref matched against `_GIT_REF_PATTERN` (:39), rejecting a leading `-` or `..`. Dropping any one is a finding on its own.
+- Names match `_NAME_PATTERN` (:37) before any filesystem touch; the target is claimed by `_claim_install_target` (:127) via `mkdir(exist_ok=False)`, which — with the per-name `_install_locks` — is what makes the collision check TOCTOU-free.
+- Git installs: scheme restricted to http(s), `--` before the URL, `protocol.file.allow=never`, no submodule recursion, ref matched against `_GIT_REF_PATTERN` (:40), rejecting a leading `-` or `..`. Dropping any one is a finding on its own.
 - `PluginRegistry._plugins` and `HookRegistry` are process-wide singletons that do not dedupe — a load path re-initialising a live plugin double-registers its callbacks (#14000).
 - A credential resolver is injected only into a plugin whose resolved directory lies under a trusted built-in root ([`credential_binding.py`](../../autobot_shared/plugin_sdk/credential_binding.py) `bound_resolver`), never by `manifest.name` alone, since a self-declared name lets any installed plugin claim it (#18094); `plugin_install.py` refuses a community install that takes a built-in name. Both plugin hosts (startup `PluginManager`, API `PluginLoader`) take their search and trust lists from [`plugin_paths.py`](../../autobot-backend/plugin_paths.py); the CWD-relative dev fallback is searched but never trusted. The resolver narrows the sanctioned path and is not isolation: an in-process plugin can still read `os.environ` and module state.
 
@@ -97,7 +97,7 @@ response, a log line, an issue, a PR comment — is already redacted.
   `decode_token_async` refuses the token (503 `revocation_check_unavailable`, with `Retry-After`; #18892 — 401 stays for an invalid or revoked token) instead of reading "could not check" as "not revoked" — a Redis outage takes SLM login down, including the backend admin path reached through the proxy (#16374).
 - The RS256 authority-token path fails CLOSED the same way (#16412): [`rs256_denylist.py`](../../autobot-slm-backend/services/rs256_denylist.py)
   `is_rs256_jti_revoked` (:89) raises on a Redis error rather than reporting "not revoked"; its caller
-  [`jwks_verifier.py`](../../autobot-slm-backend/services/jwks_verifier.py) `verify_authority_token` (:218) denies the token (401) at both call sites; the write side stays best-effort.
+  [`jwks_verifier.py`](../../autobot-slm-backend/services/jwks_verifier.py) `verify_authority_token` (:219) denies the token (401) at both call sites; the write side stays best-effort.
 - The shared password-epoch helper fails CLOSED in both services (#16411, #16422, owner decisions): a Redis error, or a non-integer stored
   marker or `iat`, raises `RevocationCheckUnavailable` (a `ConnectionError`), which the SLM denies as above and [`auth_revocation.py`](../../autobot-backend/auth_revocation.py) denies with 401; an `except` reading it as "not revoked" is a fail-open.
 
@@ -117,8 +117,9 @@ refused `1008` before any RFB byte. Full reasoning is in that function's docstri
 - **`control`, never `read`.** RFB carries framebuffer and input on one stream, so the socket
   cannot grant view without input — `mcp.desktop.read` would be a view-only grant that is not.
 - **The permission table decides, not `is_admin_role`** (#13854). A bypass here reverses that
-  ruling one call site at a time. Consequence: `superadmin`'s entry is empty, so it is refused —
-  fix that in `ROLE_PERMISSIONS`, not in the gate. `desktop_ws_role_gate_17054_test.py` asserts
+  ruling one call site at a time. Consequence: `superadmin` is admitted because its entry is derived from
+  admin's set (#19125, owner decision 2026-10-21: "Super admin is the highest form of admin") —
+  grant or change it in `ROLE_PERMISSIONS`, not in the gate. `desktop_ws_role_gate_17054_test.py` asserts
   both the table's answer and the socket's.
 
 ## 6. Memory graph / Graph-RAG ownership

@@ -69,6 +69,14 @@ async def test_pre_12924_token_without_iat_is_not_revoked():
 
 
 @pytest.mark.asyncio
+async def test_a_login_token_with_only_a_username_claim_is_revoked():
+    """Backend login tokens carry ``username`` and no ``sub``; the epoch must still apply (#19061)."""
+    with patch(_MOD, AsyncMock(return_value=_redis(get_value="1000"))):
+        assert await is_token_revoked_by_password_change({"username": "alice", "iat": 999}) is True
+        assert await is_token_revoked_by_password_change({"username": "alice", "iat": 1001}) is False
+
+
+@pytest.mark.asyncio
 async def test_token_without_subject_is_not_revoked():
     with patch(_MOD, AsyncMock(return_value=_redis(get_value="1000"))):
         assert await is_token_revoked_by_password_change({"iat": 1}) is False

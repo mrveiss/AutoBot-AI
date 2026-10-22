@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json as _json
 import logging
+import signal
 from typing import TYPE_CHECKING, List
 
 from sqlalchemy import select
@@ -101,6 +102,26 @@ async def _persist_resume_plan(
         len(remaining_node_ids),
         (target_commit[:_LOG_SHA_PREFIX] if target_commit else None),
     )
+
+
+def restart_cut_the_wait(result: dict, node_id: str) -> bool:
+    """Whether the self-update's waiter was SIGTERMed by this SLM's own restart (#19139).
+
+    The playbook runs detached, but its ``systemd-run --wait`` waiter stays in this
+    service's cgroup, so the restart the run itself triggers ends the waiter with
+    -SIGTERM. That is not a failure -- the run continues, and the plan persisted for
+    the restarted process must survive. A real failure arrives as the unit's own
+    exit code, and a timeout as -SIGKILL with ``timed_out``; both still fail. An ATTACHED run
+    (no detach possible, "UPDATE-ALL DEGRADED") dies itself on that SIGTERM -- a real failure.
+    """
+    cut = bool(result.get("detached")) and result.get("returncode") == -signal.SIGTERM and not result.get("timed_out")
+    if cut:
+        logger.info(
+            "self-update for %s: this SLM is restarting; the detached run continues and the "
+            "resume plan is kept for the restarted process (#19139)",
+            node_id,
+        )
+    return cut
 
 
 async def _clear_resume_plan() -> None:
