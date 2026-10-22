@@ -102,6 +102,14 @@ NOT_CONSUMERS: dict[str, str] = {
         "is meant to rescue, which is the deadlock it exists to prevent. There "
         "is no inline list here to keep in step with the canonical set."
     ),
+    "llm-optimization-real-torch.yml": (
+        "a narrow, non-required lane (#13049, #19170) that runs three "
+        "llm_shared/optimization oracle tests against real CPU torch. Its `paths:` "
+        "is the import-time closure of those tests (llm_shared plus the specific "
+        "autobot_shared modules they load), not 'backend Python changed', so the "
+        "canonical set would run a 20-minute torch install on unrelated changes. "
+        "It is not a required context, so path-filtering it cannot deadlock a PR."
+    ),
 }
 
 # ── a second canonical set: `code-quality`'s path list (#15608) ──────────────

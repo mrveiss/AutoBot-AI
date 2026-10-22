@@ -30,6 +30,7 @@ import numpy as np
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 from knowledge.backends import BaseClient, BaseCollection
+from knowledge.backends.where_filter import matches_where
 from knowledge.hnsw_prefetch import attach_prefetcher
 from utils.async_initializable import AsyncInitializable
 
@@ -1116,13 +1117,8 @@ class HybridVectorSearch(AsyncInitializable):
             return [], self._create_error_metrics()
 
     def _matches_filter(self, metadata: Dict[str, Any], filter_dict: Dict[str, Any]) -> bool:
-        """Check if metadata matches filter."""
-        for key, value in filter_dict.items():
-            if key not in metadata:
-                return False
-            if metadata[key] != value:
-                return False
-        return True
+        """Check metadata against a ChromaDB ``where`` filter (shared evaluator, #18874)."""
+        return matches_where(metadata, filter_dict)
 
     async def sync_from_chromadb(self, collection_name: str = "default") -> int:
         """

@@ -340,7 +340,6 @@ BASELINE: dict[str, int] = {
     "autobot-infrastructure/autobot-slm-backend/README.md": 4,
     "autobot-infrastructure/autobot-slm-database/README.md": 3,
     "autobot-infrastructure/autobot-slm-frontend/README.md": 4,
-    "autobot-infrastructure/shared/config/environment-files.md": 3,
     "autobot-infrastructure/shared/config/grafana/dashboards/autobot-multi-machine.json": 44,
     "autobot-infrastructure/shared/config/grafana/grafana.ini": 1,
     "autobot-infrastructure/shared/mcp/tools/knowledge-base-mcp/README.md": 3,
