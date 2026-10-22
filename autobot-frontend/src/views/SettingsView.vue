@@ -167,7 +167,7 @@ Issue #753: User preference management interface
             <p class="section-description">{{ $t('settings.webResearch.desc') }}</p>
           </div>
           <div class="section-content">
-            <WebResearchSettingsPanel />
+            <WebResearchSettings embedded />
           </div>
         </section>
 
@@ -377,7 +377,7 @@ import ThemePresetPicker from '@/components/settings/ThemePresetPicker.vue'
 import UiModeSettingsCard from '@/components/settings/UiModeSettingsCard.vue'
 import LanguageSettingsPanel from '@/components/settings/LanguageSettingsPanel.vue'
 import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
-import WebResearchSettingsPanel from '@/components/settings/WebResearchSettingsPanel.vue'
+import WebResearchSettings from '@/components/knowledge/WebResearchSettings.vue'
 import TelegramSettingsPanel from '@/components/settings/TelegramSettingsPanel.vue'
 import ApiKeySetupWizard from '@/components/settings/ApiKeySetupWizard.vue'
 import ProviderOAuthConnect from '@/components/settings/ProviderOAuthConnect.vue'

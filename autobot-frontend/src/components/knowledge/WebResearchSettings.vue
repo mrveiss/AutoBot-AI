@@ -11,17 +11,15 @@ Issue #3850: useWebResearchStore exists but has no view
   <div class="web-research-settings">
     <!-- Header -->
     <div class="panel-header">
-      <div class="header-content">
+      <div v-if="!embedded" class="header-content">
         <h2>
           <svg class="header-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
-          Web Research Settings
+          {{ $t('settings.webResearch.title') }}
         </h2>
-        <p class="header-subtitle">
-          Configure automated web research behaviour, rate limiting, and cache management.
-        </p>
+        <p class="header-subtitle">{{ $t('settings.webResearch.desc') }}</p>
       </div>
       <div class="header-actions">
         <button
@@ -37,7 +35,7 @@ Issue #3850: useWebResearchStore exists but has no view
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          Refresh
+          {{ $t('settings.webResearch.refresh') }}
         </button>
       </div>
     </div>
@@ -49,7 +47,7 @@ Issue #3850: useWebResearchStore exists but has no view
           d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
       </svg>
       <span>{{ store.lastError }}</span>
-      <button class="error-dismiss" @click="store.clearError()" aria-label="Dismiss error">
+      <button class="error-dismiss" @click="store.clearError()" :aria-label="$t('settings.webResearch.dismissError')">
         <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true" class="dismiss-icon">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
         </svg>
@@ -66,8 +64,8 @@ Issue #3850: useWebResearchStore exists but has no view
           </svg>
         </div>
         <div class="status-card-body">
-          <span class="status-label">Research Status</span>
-          <span class="status-value">{{ store.isEnabled ? 'Enabled' : 'Disabled' }}</span>
+          <span class="status-label">{{ $t('settings.webResearch.statusLabel') }}</span>
+          <span class="status-value">{{ $t(store.isEnabled ? 'settings.webResearch.statusEnabled' : 'settings.webResearch.statusDisabled') }}</span>
         </div>
       </div>
 
@@ -79,7 +77,7 @@ Issue #3850: useWebResearchStore exists but has no view
           </svg>
         </div>
         <div class="status-card-body">
-          <span class="status-label">Cache Size</span>
+          <span class="status-label">{{ $t('settings.webResearch.cacheSizeLabel') }}</span>
           <span class="status-value">{{ store.cacheSize }}</span>
         </div>
       </div>
@@ -92,11 +90,11 @@ Issue #3850: useWebResearchStore exists but has no view
           </svg>
         </div>
         <div class="status-card-body">
-          <span class="status-label">Rate Limiter</span>
+          <span class="status-label">{{ $t('settings.webResearch.rateLimiterLabel') }}</span>
           <span class="status-value">
             {{ store.rateLimiterStatus
               ? `${store.rateLimiterStatus.current_requests ?? 0} / ${store.rateLimiterStatus.max_requests ?? store.settings.rate_limit_requests}`
-              : 'N/A' }}
+              : $t('settings.webResearch.notAvailable') }}
           </span>
         </div>
       </div>
@@ -109,8 +107,8 @@ Issue #3850: useWebResearchStore exists but has no view
           </svg>
         </div>
         <div class="status-card-body">
-          <span class="status-label">Preferred Method</span>
-          <span class="status-value capitalize">{{ store.status.preferred_method || store.settings.preferred_method }}</span>
+          <span class="status-label">{{ $t('settings.webResearch.methodLabel') }}</span>
+          <span class="status-value">{{ methodName(store.status.preferred_method || store.settings.preferred_method) }}</span>
         </div>
       </div>
     </div>
@@ -120,22 +118,22 @@ Issue #3850: useWebResearchStore exists but has no view
 
       <!-- Enable / Disable toggle -->
       <section class="settings-section">
-        <h3 class="section-heading">General</h3>
+        <h3 class="section-heading">{{ $t('settings.webResearch.generalLabel') }}</h3>
 
         <div class="field-row">
           <div class="field-label-block">
-            <label class="field-label" for="wr-enabled">Enable Web Research</label>
-            <p class="field-hint">Allow AutoBot agents to perform automated internet searches.</p>
+            <label class="field-label" for="wr-enabled">{{ $t('settings.webResearch.enabledLabel') }}</label>
+            <p class="field-hint">{{ $t('settings.webResearch.enabledHint') }}</p>
           </div>
           <div class="field-control">
-            <BaseSwitch id="wr-enabled" :model-value="store.settings.enabled" :label="$t('settings.webResearch.enabledLabel')" :disabled="isToggling" @change="handleToggle" />
+            <BaseSwitch id="wr-enabled" :model-value="store.settings.enabled" :label="$t('settings.webResearch.enabledLabel')" :disabled="isToggling" @change="handleToggle($event)" />
           </div>
         </div>
 
         <div class="field-row">
           <div class="field-label-block">
-            <label class="field-label" for="wr-confirmation">Require User Confirmation</label>
-            <p class="field-hint">Ask for confirmation before each research request.</p>
+            <label class="field-label" for="wr-confirmation">{{ $t('settings.webResearch.confirmationLabel') }}</label>
+            <p class="field-hint">{{ $t('settings.webResearch.confirmationHint') }}</p>
           </div>
           <div class="field-control">
             <BaseSwitch id="wr-confirmation" :model-value="store.settings.require_user_confirmation" :label="$t('settings.webResearch.confirmationLabel')" @change="store.updateSettings({ require_user_confirmation: $event })" />
@@ -144,8 +142,8 @@ Issue #3850: useWebResearchStore exists but has no view
 
         <div class="field-row">
           <div class="field-label-block">
-            <label class="field-label" for="wr-method">Preferred Method</label>
-            <p class="field-hint">Search strategy used by the research agent.</p>
+            <label class="field-label" for="wr-method">{{ $t('settings.webResearch.methodLabel') }}</label>
+            <p class="field-hint">{{ $t('settings.webResearch.methodHint') }}</p>
           </div>
           <div class="field-control">
             <select
@@ -154,9 +152,9 @@ Issue #3850: useWebResearchStore exists but has no view
               :value="store.settings.preferred_method"
               @change="store.updateSettings({ preferred_method: ($event.target as HTMLSelectElement).value as 'basic' | 'advanced' | 'api_based' })"
             >
-              <option value="basic">Basic</option>
-              <option value="advanced">Advanced</option>
-              <option value="api_based">API Based</option>
+              <option value="basic">{{ $t('settings.webResearch.methodBasic') }}</option>
+              <option value="advanced">{{ $t('settings.webResearch.methodAdvanced') }}</option>
+              <option value="api_based">{{ $t('settings.webResearch.methodApiBased') }}</option>
             </select>
           </div>
         </div>
@@ -164,12 +162,12 @@ Issue #3850: useWebResearchStore exists but has no view
 
       <!-- Limits -->
       <section class="settings-section">
-        <h3 class="section-heading">Limits</h3>
+        <h3 class="section-heading">{{ $t('settings.webResearch.limitsLabel') }}</h3>
 
         <div class="field-row">
           <div class="field-label-block">
-            <label class="field-label" for="wr-max-results">Max Results</label>
-            <p class="field-hint">Maximum number of results returned per research query.</p>
+            <label class="field-label" for="wr-max-results">{{ $t('settings.webResearch.maxResultsLabel') }}</label>
+            <p class="field-hint">{{ $t('settings.webResearch.maxResultsHint') }}</p>
           </div>
           <div class="field-control">
             <input
@@ -179,15 +177,15 @@ Issue #3850: useWebResearchStore exists but has no view
               min="1"
               max="50"
               :value="store.settings.max_results"
-              @input="store.updateSettings({ max_results: parseInt(($event.target as HTMLInputElement).value, 10) || 5 })"
+              @change="setNumber('max_results', $event, 1, 50)"
             />
           </div>
         </div>
 
         <div class="field-row">
           <div class="field-label-block">
-            <label class="field-label" for="wr-timeout">Timeout (seconds)</label>
-            <p class="field-hint">Maximum time to wait for a research response.</p>
+            <label class="field-label" for="wr-timeout">{{ $t('settings.webResearch.timeoutLabel') }}</label>
+            <p class="field-hint">{{ $t('settings.webResearch.timeoutHint') }}</p>
           </div>
           <div class="field-control">
             <input
@@ -195,17 +193,17 @@ Issue #3850: useWebResearchStore exists but has no view
               type="number"
               class="field-input"
               min="5"
-              max="300"
+              max="120"
               :value="store.settings.timeout_seconds"
-              @input="store.updateSettings({ timeout_seconds: parseInt(($event.target as HTMLInputElement).value, 10) || 30 })"
+              @change="setNumber('timeout_seconds', $event, 5, 120)"
             />
           </div>
         </div>
 
         <div class="field-row">
           <div class="field-label-block">
-            <label class="field-label" for="wr-threshold">Auto Research Threshold</label>
-            <p class="field-hint">Confidence score (0–1) above which research triggers automatically.</p>
+            <label class="field-label" for="wr-threshold">{{ $t('settings.webResearch.thresholdLabel') }}</label>
+            <p class="field-hint">{{ $t('settings.webResearch.thresholdHint') }}</p>
           </div>
           <div class="field-control">
             <input
@@ -216,7 +214,7 @@ Issue #3850: useWebResearchStore exists but has no view
               max="1"
               step="0.05"
               :value="store.settings.auto_research_threshold"
-              @input="store.updateSettings({ auto_research_threshold: parseFloat(($event.target as HTMLInputElement).value) || 0.3 })"
+              @change="setNumber('auto_research_threshold', $event, 0, 1)"
             />
           </div>
         </div>
@@ -224,12 +222,12 @@ Issue #3850: useWebResearchStore exists but has no view
 
       <!-- Rate Limiting -->
       <section class="settings-section">
-        <h3 class="section-heading">Rate Limiting</h3>
+        <h3 class="section-heading">{{ $t('settings.webResearch.rateLimitLabel') }}</h3>
 
         <div class="field-row">
           <div class="field-label-block">
-            <label class="field-label" for="wr-rate-requests">Max Requests per Window</label>
-            <p class="field-hint">Number of research requests allowed within the rate limit window.</p>
+            <label class="field-label" for="wr-rate-requests">{{ $t('settings.webResearch.rateLimitRequests') }}</label>
+            <p class="field-hint">{{ $t('settings.webResearch.rateRequestsHint') }}</p>
           </div>
           <div class="field-control">
             <input
@@ -237,17 +235,17 @@ Issue #3850: useWebResearchStore exists but has no view
               type="number"
               class="field-input"
               min="1"
-              max="1000"
+              max="100"
               :value="store.settings.rate_limit_requests"
-              @input="store.updateSettings({ rate_limit_requests: parseInt(($event.target as HTMLInputElement).value, 10) || 5 })"
+              @change="setNumber('rate_limit_requests', $event, 1, 100)"
             />
           </div>
         </div>
 
         <div class="field-row">
           <div class="field-label-block">
-            <label class="field-label" for="wr-rate-window">Rate Limit Window (seconds)</label>
-            <p class="field-hint">Time window in seconds for the rate limit counter.</p>
+            <label class="field-label" for="wr-rate-window">{{ $t('settings.webResearch.rateLimitWindow') }}</label>
+            <p class="field-hint">{{ $t('settings.webResearch.rateWindowHint') }}</p>
           </div>
           <div class="field-control">
             <input
@@ -257,7 +255,7 @@ Issue #3850: useWebResearchStore exists but has no view
               min="10"
               max="3600"
               :value="store.settings.rate_limit_window"
-              @input="store.updateSettings({ rate_limit_window: parseInt(($event.target as HTMLInputElement).value, 10) || 60 })"
+              @change="setNumber('rate_limit_window', $event, 10, 3600)"
             />
           </div>
         </div>
@@ -265,42 +263,42 @@ Issue #3850: useWebResearchStore exists but has no view
 
       <!-- Privacy & Storage -->
       <section class="settings-section">
-        <h3 class="section-heading">Privacy and Storage</h3>
+        <h3 class="section-heading">{{ $t('settings.webResearch.privacyLabel') }}</h3>
 
         <div class="field-row">
           <div class="field-label-block">
-            <label class="field-label" for="wr-store-kb">Store Results in Knowledge Base</label>
-            <p class="field-hint">Save research results to the knowledge base for future use.</p>
+            <label class="field-label" for="wr-store-kb">{{ $t('settings.webResearch.storeInKbLabel') }}</label>
+            <p class="field-hint">{{ $t('settings.webResearch.storeInKbHint') }}</p>
           </div>
           <div class="field-control">
-            <BaseSwitch id="wr-store-kb" :model-value="store.settings.store_results_in_kb" :label="$t('settings.webResearch.storeInKbHint')" @change="store.updateSettings({ store_results_in_kb: $event })" />
+            <BaseSwitch id="wr-store-kb" :model-value="store.settings.store_results_in_kb" :label="$t('settings.webResearch.storeInKbLabel')" @change="store.updateSettings({ store_results_in_kb: $event })" />
           </div>
         </div>
 
         <div class="field-row">
           <div class="field-label-block">
-            <label class="field-label" for="wr-anonymize">Anonymize Requests</label>
-            <p class="field-hint">Strip identifying information from outbound research requests.</p>
+            <label class="field-label" for="wr-anonymize">{{ $t('settings.webResearch.anonymizeLabel') }}</label>
+            <p class="field-hint">{{ $t('settings.webResearch.anonymizeHint') }}</p>
           </div>
           <div class="field-control">
-            <BaseSwitch id="wr-anonymize" :model-value="store.settings.anonymize_requests" :label="$t('settings.webResearch.anonymizeHint')" @change="store.updateSettings({ anonymize_requests: $event })" />
+            <BaseSwitch id="wr-anonymize" :model-value="store.settings.anonymize_requests" :label="$t('settings.webResearch.anonymizeLabel')" @change="store.updateSettings({ anonymize_requests: $event })" />
           </div>
         </div>
 
         <div class="field-row">
           <div class="field-label-block">
-            <label class="field-label" for="wr-filter-adult">Filter Adult Content</label>
-            <p class="field-hint">Exclude adult or explicit content from research results.</p>
+            <label class="field-label" for="wr-filter-adult">{{ $t('settings.webResearch.filterAdultLabel') }}</label>
+            <p class="field-hint">{{ $t('settings.webResearch.filterAdultHint') }}</p>
           </div>
           <div class="field-control">
-            <BaseSwitch id="wr-filter-adult" :model-value="store.settings.filter_adult_content" :label="$t('settings.webResearch.filterAdultHint')" @change="store.updateSettings({ filter_adult_content: $event })" />
+            <BaseSwitch id="wr-filter-adult" :model-value="store.settings.filter_adult_content" :label="$t('settings.webResearch.filterAdultLabel')" @change="store.updateSettings({ filter_adult_content: $event })" />
           </div>
         </div>
       </section>
 
       <!-- Circuit Breakers -->
       <section v-if="circuitBreakerEntries.length" class="settings-section">
-        <h3 class="section-heading">Circuit Breakers</h3>
+        <h3 class="section-heading">{{ $t('settings.webResearch.circuitBreakersLabel') }}</h3>
         <div class="cb-grid">
           <div
             v-for="[name, state] in circuitBreakerEntries"
@@ -326,7 +324,7 @@ Issue #3850: useWebResearchStore exists but has no view
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
           </svg>
-          Clear Cache
+          {{ $t('settings.webResearch.clearCache') }}
         </button>
 
         <button
@@ -340,7 +338,7 @@ Issue #3850: useWebResearchStore exists but has no view
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
           </svg>
-          Reset Circuit Breakers
+          {{ $t('settings.webResearch.resetCircuitBreakers') }}
         </button>
 
         <div class="form-actions-right">
@@ -349,7 +347,7 @@ Issue #3850: useWebResearchStore exists but has no view
             class="btn btn-secondary"
             @click="store.resetSettings()"
           >
-            Reset Defaults
+            {{ $t('settings.reset') }}
           </button>
           <button
             type="submit"
@@ -360,7 +358,7 @@ Issue #3850: useWebResearchStore exists but has no view
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                 d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
             </svg>
-            {{ isSaving ? 'Saving...' : 'Save Settings' }}
+            {{ $t(isSaving ? 'settings.webResearch.saving' : 'settings.webResearch.save') }}
           </button>
         </div>
       </div>
@@ -371,7 +369,7 @@ Issue #3850: useWebResearchStore exists but has no view
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
             d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
         </svg>
-        Settings saved successfully.
+        {{ $t('settings.webResearch.saved') }}
       </div>
     </form>
   </div>
@@ -379,21 +377,24 @@ Issue #3850: useWebResearchStore exists but has no view
 
 <script setup lang="ts">
 /**
- * WebResearchSettings — Issue #3850
+ * WebResearchSettings — Issue #3850, #19217
  *
- * Settings panel for useWebResearchStore. Hydrates settings + status from the
- * backend on mount (store.loadFromBackend, #11665), exposes all
- * WebResearchSettings fields, and saves changes via PUT /web-research/settings.
- * Toggle enable/disable uses the dedicated /web-research/enable|disable
- * endpoints. All paths come from the shared WEB_RESEARCH_API constant.
+ * The one web research settings component: Knowledge → Research → Settings and
+ * Settings → Web research both mount it. Hydrates settings + status from the backend
+ * on mount (store.loadFromBackend, #11665). Every write goes through a store action
+ * (#19217), so no surface can keep a setting in the browser only.
  */
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { BaseSwitch } from '@autobot/ui'
-import { useWebResearchStore, WEB_RESEARCH_API } from '@/stores/useWebResearchStore'
-import ApiClient from '@/utils/ApiClient'
-import { getApiBase } from '@/config/ssot-config'
+import { useWebResearchStore, type WebResearchSettings } from '@/stores/useWebResearchStore'
 import { createLogger } from '@/utils/debugUtils'
 
+withDefaults(defineProps<{
+  embedded?: boolean // in a frame that shows the title: hide this one's own (#16744)
+}>(), { embedded: false })
+
+const { t } = useI18n()
 const logger = createLogger('WebResearchSettings')
 const store = useWebResearchStore()
 
@@ -411,84 +412,65 @@ const circuitBreakerEntries = computed<[string, unknown][]>(() => {
   return Object.entries(cb as Record<string, unknown>)
 })
 
-async function handleToggle(): Promise<void> {
-  isToggling.value = true
+const METHOD_KEYS: Record<string, string> = {
+  basic: 'settings.webResearch.methodBasic',
+  advanced: 'settings.webResearch.methodAdvanced',
+  api_based: 'settings.webResearch.methodApiBased',
+}
+
+function methodName(method: string): string {
+  return METHOD_KEYS[method] ? t(METHOD_KEYS[method]) : method
+}
+
+type NumericSetting = 'max_results' | 'timeout_seconds' | 'auto_research_threshold' | 'rate_limit_requests' | 'rate_limit_window'
+
+/** A typed number, clamped to the range its hint states; an empty or invalid entry keeps the current value. */
+function setNumber(field: NumericSetting, event: Event, min: number, max: number): void {
+  const input = event.target as HTMLInputElement
+  const value = Number(input.value)
+  if (input.value === '' || Number.isNaN(value)) {
+    input.value = String(store.settings[field])
+    return
+  }
+  store.updateSettings({ [field]: Math.min(Math.max(value, min), max) } as Partial<WebResearchSettings>)
+}
+
+/** Runs one backend write, reporting a failure in the banner under `failedKey`. */
+async function runWrite(busy: { value: boolean }, failedKey: string, write: () => Promise<void>): Promise<boolean> {
+  busy.value = true
   store.clearError()
-  const endpoint = store.settings.enabled ? WEB_RESEARCH_API.disable : WEB_RESEARCH_API.enable
   try {
-    await ApiClient.post<unknown>(`${getApiBase()}${endpoint}`, {})
-    store.toggleWebResearch()
-    store.updateStatus({ enabled: store.settings.enabled })
-    logger.info('Web research toggled:', store.settings.enabled ? 'enabled' : 'disabled')
+    await write()
+    return true
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err)
-    logger.error('Toggle web research failed:', msg)
-    store.setError(`Failed to ${store.settings.enabled ? 'disable' : 'enable'} web research: ${msg}`)
+    const error = err instanceof Error ? err.message : String(err)
+    logger.error(`${failedKey}:`, error)
+    store.setError(t(failedKey, { error }))
+    return false
   } finally {
-    isToggling.value = false
+    busy.value = false
   }
 }
 
+async function handleToggle(enabled: boolean): Promise<void> {
+  const failedKey = enabled ? 'settings.webResearch.enableFailed' : 'settings.webResearch.disableFailed'
+  await runWrite(isToggling, failedKey, () => store.setEnabledOnBackend(enabled))
+}
+
 async function saveSettings(): Promise<void> {
-  isSaving.value = true
   saveSuccess.value = false
-  store.clearError()
-  try {
-    await ApiClient.put<unknown>(`${getApiBase()}${WEB_RESEARCH_API.settings}`, {
-      enabled: store.settings.enabled,
-      require_user_confirmation: store.settings.require_user_confirmation,
-      preferred_method: store.settings.preferred_method,
-      max_results: store.settings.max_results,
-      timeout_seconds: store.settings.timeout_seconds,
-      auto_research_threshold: store.settings.auto_research_threshold,
-      rate_limit_requests: store.settings.rate_limit_requests,
-      rate_limit_window: store.settings.rate_limit_window,
-      store_results_in_kb: store.settings.store_results_in_kb,
-      anonymize_requests: store.settings.anonymize_requests,
-      filter_adult_content: store.settings.filter_adult_content
-    })
+  if (await runWrite(isSaving, 'settings.webResearch.saveFailed', store.saveSettings)) {
     saveSuccess.value = true
-    logger.info('Web research settings saved')
     setTimeout(() => { saveSuccess.value = false }, 3000)
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err)
-    logger.error('Failed to save web research settings:', msg)
-    store.setError(`Failed to save settings: ${msg}`)
-  } finally {
-    isSaving.value = false
   }
 }
 
 async function clearCache(): Promise<void> {
-  isClearingCache.value = true
-  store.clearError()
-  try {
-    await ApiClient.post<unknown>(`${getApiBase()}${WEB_RESEARCH_API.clearCache}`, {})
-    store.updateStatus({ cache_stats: { cache_size: 0, rate_limiter: store.status.cache_stats?.rate_limiter } })
-    logger.info('Web research cache cleared')
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err)
-    logger.error('Failed to clear cache:', msg)
-    store.setError(`Failed to clear cache: ${msg}`)
-  } finally {
-    isClearingCache.value = false
-  }
+  await runWrite(isClearingCache, 'settings.webResearch.clearCacheFailed', store.clearCache)
 }
 
 async function resetCircuitBreakers(): Promise<void> {
-  isResettingBreakers.value = true
-  store.clearError()
-  try {
-    await ApiClient.post<unknown>(`${getApiBase()}${WEB_RESEARCH_API.resetCircuitBreakers}`, {})
-    store.updateStatus({ circuit_breakers: null })
-    logger.info('Web research circuit breakers reset')
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err)
-    logger.error('Failed to reset circuit breakers:', msg)
-    store.setError(`Failed to reset circuit breakers: ${msg}`)
-  } finally {
-    isResettingBreakers.value = false
-  }
+  await runWrite(isResettingBreakers, 'settings.webResearch.resetBreakersFailed', store.resetCircuitBreakers)
 }
 
 onMounted(() => {
@@ -652,10 +634,6 @@ onMounted(() => {
   font-weight: 600;
   color: var(--text-primary);
   word-break: break-word;
-}
-
-.capitalize {
-  text-transform: capitalize;
 }
 
 /* ── Settings Form ────────────────────────── */

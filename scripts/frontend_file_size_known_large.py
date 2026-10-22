@@ -83,7 +83,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/knowledge/KnowledgeVerificationQueue.vue": 799,
     "autobot-frontend/src/components/knowledge/SystemKnowledgeManager.vue": 1034,  # #18849: 1035 -> 1034
     "autobot-frontend/src/components/knowledge/WebResearchPanel.vue": 779,
-    "autobot-frontend/src/components/knowledge/WebResearchSettings.vue": 931,
+    "autobot-frontend/src/components/knowledge/WebResearchSettings.vue": 909,
     "autobot-frontend/src/components/knowledge/connectors/ConnectorConfigModal.vue": 1626,  # #18849: 1627 -> 1626
     "autobot-frontend/src/components/knowledge/modals/BulkEditModal.vue": 615,  # #18849: 616 -> 615
     "autobot-frontend/src/components/knowledge/modals/CategoryEditModal.vue": 726,  # #18849: 727 -> 726
