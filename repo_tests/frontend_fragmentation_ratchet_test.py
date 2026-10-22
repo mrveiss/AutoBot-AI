@@ -99,7 +99,7 @@ BASELINE = {
     # cross-referencing sibling admin views) -- this pair is documented above
     # as measuring page SIZE, not duplication, and is interim until #15455
     # replaces them with a real duplication measure.
-    "distinct_class_names": 5492,  # #14778: -10, the local BaseInput fork retired into the kit (on main's 5502); #18242: -1 on main's 5503 (CustomDashboard onto DashboardGrid); #18849: -14, the local BaseButton fork retired into the kit; #18819: -14 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-26);  #14776: local BaseBadge retired (5594 -> 5585), then local BaseCard + BasePanel (5585 -> 5557); #17565: App.vue's hand-rolled .skip-links/.skip-link
+    "distinct_class_names": 5490,  # #14780 BaseSwitch: the web research hand-rolled switch classes left for the kit (-2); #14778: -10, the local BaseInput fork retired into the kit (on main's 5502); #18242: -1 on main's 5503 (CustomDashboard onto DashboardGrid); #18849: -14, the local BaseButton fork retired into the kit; #18819: -14 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-26);  #14776: local BaseBadge retired (5594 -> 5585), then local BaseCard + BasePanel (5585 -> 5557); #17565: App.vue's hand-rolled .skip-links/.skip-link
     # replaced by the shared kit SkipLink (lowered from 5615). Earlier: #17020,
     # Terminal.vue removed -- pure deletion of dead code, lowered, not held.
     # #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit (5611 -> 5594).
@@ -107,7 +107,7 @@ BASELINE = {
     #
     # #16972/#15455: same owner-approved, one-off exception as distinct_class_names
     # directly above -- see that comment.
-    "css_rule_declarations": 9168,  # #14780: -1, AuditLogTable's pager layout left for the kit BasePagination; #14778: -16, the local BaseInput fork retired into the kit (on main's 9185); #18242: -3 on main's 9188 (CustomDashboard onto DashboardGrid); #18849: -30, the local BaseButton fork retired into the kit; #18819: -25 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-46);  #14776: local BaseBadge retired (9354 -> 9337), then local BaseCard + BasePanel (9337 -> 9289); #14785: density reuses the existing
+    "css_rule_declarations": 9162,  # #14780 BaseSwitch: the web research switch rules left for the kit (-6); #14780: -1, AuditLogTable's pager layout left for the kit BasePagination; #14778: -16, the local BaseInput fork retired into the kit (on main's 9185); #18242: -3 on main's 9188 (CustomDashboard onto DashboardGrid); #18849: -30, the local BaseButton fork retired into the kit; #18819: -25 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-46);  #14776: local BaseBadge retired (9354 -> 9337), then local BaseCard + BasePanel (9337 -> 9289); #14785: density reuses the existing
     # [data-layout-density] attribute (no .density-* classes), and the dead
     # assets/main.css .sr-only rule went with that file (lowered from 9379).
     # #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit (9371 -> 9354).
@@ -151,7 +151,7 @@ FAMILY_BASELINE = {
     "section": 23,
     "summary": 27,
     "text": 28,
-    "toggle": 24,
+    "toggle": 22,  # #14780 BaseSwitch: the web research switches left for the kit (24 -> 22)
     "field": 20,
     "icon": 12,  # #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit (16 -> 12)
     "checkbox": 9,

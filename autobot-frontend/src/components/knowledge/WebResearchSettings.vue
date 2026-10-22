@@ -128,18 +128,7 @@ Issue #3850: useWebResearchStore exists but has no view
             <p class="field-hint">Allow AutoBot agents to perform automated internet searches.</p>
           </div>
           <div class="field-control">
-            <button
-              type="button"
-              class="toggle"
-              :class="store.settings.enabled ? 'toggle-on' : 'toggle-off'"
-              role="switch"
-              :aria-checked="store.settings.enabled"
-              id="wr-enabled"
-              :disabled="isToggling"
-              @click="handleToggle"
-            >
-              <span class="toggle-thumb" />
-            </button>
+            <BaseSwitch id="wr-enabled" :model-value="store.settings.enabled" :label="$t('settings.webResearch.enabledLabel')" :disabled="isToggling" @change="handleToggle" />
           </div>
         </div>
 
@@ -149,17 +138,7 @@ Issue #3850: useWebResearchStore exists but has no view
             <p class="field-hint">Ask for confirmation before each research request.</p>
           </div>
           <div class="field-control">
-            <button
-              type="button"
-              class="toggle"
-              :class="store.settings.require_user_confirmation ? 'toggle-on' : 'toggle-off'"
-              role="switch"
-              :aria-checked="store.settings.require_user_confirmation"
-              id="wr-confirmation"
-              @click="store.updateSettings({ require_user_confirmation: !store.settings.require_user_confirmation })"
-            >
-              <span class="toggle-thumb" />
-            </button>
+            <BaseSwitch id="wr-confirmation" :model-value="store.settings.require_user_confirmation" :label="$t('settings.webResearch.confirmationLabel')" @change="store.updateSettings({ require_user_confirmation: $event })" />
           </div>
         </div>
 
@@ -294,17 +273,7 @@ Issue #3850: useWebResearchStore exists but has no view
             <p class="field-hint">Save research results to the knowledge base for future use.</p>
           </div>
           <div class="field-control">
-            <button
-              type="button"
-              class="toggle"
-              :class="store.settings.store_results_in_kb ? 'toggle-on' : 'toggle-off'"
-              role="switch"
-              :aria-checked="store.settings.store_results_in_kb"
-              id="wr-store-kb"
-              @click="store.updateSettings({ store_results_in_kb: !store.settings.store_results_in_kb })"
-            >
-              <span class="toggle-thumb" />
-            </button>
+            <BaseSwitch id="wr-store-kb" :model-value="store.settings.store_results_in_kb" :label="$t('settings.webResearch.storeInKbHint')" @change="store.updateSettings({ store_results_in_kb: $event })" />
           </div>
         </div>
 
@@ -314,17 +283,7 @@ Issue #3850: useWebResearchStore exists but has no view
             <p class="field-hint">Strip identifying information from outbound research requests.</p>
           </div>
           <div class="field-control">
-            <button
-              type="button"
-              class="toggle"
-              :class="store.settings.anonymize_requests ? 'toggle-on' : 'toggle-off'"
-              role="switch"
-              :aria-checked="store.settings.anonymize_requests"
-              id="wr-anonymize"
-              @click="store.updateSettings({ anonymize_requests: !store.settings.anonymize_requests })"
-            >
-              <span class="toggle-thumb" />
-            </button>
+            <BaseSwitch id="wr-anonymize" :model-value="store.settings.anonymize_requests" :label="$t('settings.webResearch.anonymizeHint')" @change="store.updateSettings({ anonymize_requests: $event })" />
           </div>
         </div>
 
@@ -334,17 +293,7 @@ Issue #3850: useWebResearchStore exists but has no view
             <p class="field-hint">Exclude adult or explicit content from research results.</p>
           </div>
           <div class="field-control">
-            <button
-              type="button"
-              class="toggle"
-              :class="store.settings.filter_adult_content ? 'toggle-on' : 'toggle-off'"
-              role="switch"
-              :aria-checked="store.settings.filter_adult_content"
-              id="wr-filter-adult"
-              @click="store.updateSettings({ filter_adult_content: !store.settings.filter_adult_content })"
-            >
-              <span class="toggle-thumb" />
-            </button>
+            <BaseSwitch id="wr-filter-adult" :model-value="store.settings.filter_adult_content" :label="$t('settings.webResearch.filterAdultHint')" @change="store.updateSettings({ filter_adult_content: $event })" />
           </div>
         </div>
       </section>
@@ -439,6 +388,7 @@ Issue #3850: useWebResearchStore exists but has no view
  * endpoints. All paths come from the shared WEB_RESEARCH_API constant.
  */
 import { ref, computed, onMounted } from 'vue'
+import { BaseSwitch } from '@autobot/ui'
 import { useWebResearchStore, WEB_RESEARCH_API } from '@/stores/useWebResearchStore'
 import ApiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
@@ -794,53 +744,6 @@ onMounted(() => {
 .field-input[type="number"] {
   width: 100px;
   text-align: right;
-}
-
-/* ── Toggle ───────────────────────────────── */
-
-.toggle {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  width: 44px;
-  height: var(--spacing-6);
-  border-radius: var(--radius-xl);
-  border: none;
-  cursor: pointer;
-  transition: background-color var(--duration-200);
-  outline: none;
-}
-
-.toggle:focus-visible {
-  box-shadow: 0 0 0 2px var(--color-info);
-}
-
-.toggle:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.toggle-on {
-  background: var(--color-success);
-}
-
-.toggle-off {
-  background: var(--border-default);
-}
-
-.toggle-thumb {
-  position: absolute;
-  left: var(--spacing-0-5);
-  width: var(--spacing-5);
-  height: var(--spacing-5);
-  border-radius: 50%;
-  background: var(--text-inverse);
-  transition: transform var(--duration-200);
-  box-shadow: var(--shadow-sm);
-}
-
-.toggle-on .toggle-thumb {
-  transform: translateX(var(--spacing-5));
 }
 
 /* ── Circuit Breakers ─────────────────────── */

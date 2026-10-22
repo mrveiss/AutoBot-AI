@@ -26,16 +26,7 @@ Issue #3850: web research settings UI missing
         </legend>
         <label class="toggle-row">
           <span class="toggle-description">{{ t('settings.webResearch.enabledHint') }}</span>
-          <button
-            type="button"
-            role="switch"
-            :aria-checked="settings.enabled"
-            class="toggle-btn"
-            :class="{ active: settings.enabled }"
-            @click="patch({ enabled: !settings.enabled })"
-          >
-            <span class="toggle-thumb"></span>
-          </button>
+          <BaseSwitch :model-value="settings.enabled" :label="t('settings.webResearch.enabledLabel')" @change="patch({ enabled: $event })" />
         </label>
       </fieldset>
 
@@ -47,16 +38,7 @@ Issue #3850: web research settings UI missing
         </legend>
         <label class="toggle-row">
           <span class="toggle-description">{{ t('settings.webResearch.confirmationHint') }}</span>
-          <button
-            type="button"
-            role="switch"
-            :aria-checked="settings.require_user_confirmation"
-            class="toggle-btn"
-            :class="{ active: settings.require_user_confirmation }"
-            @click="patch({ require_user_confirmation: !settings.require_user_confirmation })"
-          >
-            <span class="toggle-thumb"></span>
-          </button>
+          <BaseSwitch :model-value="settings.require_user_confirmation" :label="t('settings.webResearch.confirmationLabel')" @change="patch({ require_user_confirmation: $event })" />
         </label>
       </fieldset>
 
@@ -176,44 +158,17 @@ Issue #3850: web research settings UI missing
 
         <label class="toggle-row">
           <span class="toggle-description">{{ t('settings.webResearch.storeInKbHint') }}</span>
-          <button
-            type="button"
-            role="switch"
-            :aria-checked="settings.store_results_in_kb"
-            class="toggle-btn"
-            :class="{ active: settings.store_results_in_kb }"
-            @click="patch({ store_results_in_kb: !settings.store_results_in_kb })"
-          >
-            <span class="toggle-thumb"></span>
-          </button>
+          <BaseSwitch :model-value="settings.store_results_in_kb" :label="t('settings.webResearch.storeInKbHint')" @change="patch({ store_results_in_kb: $event })" />
         </label>
 
         <label class="toggle-row">
           <span class="toggle-description">{{ t('settings.webResearch.anonymizeHint') }}</span>
-          <button
-            type="button"
-            role="switch"
-            :aria-checked="settings.anonymize_requests"
-            class="toggle-btn"
-            :class="{ active: settings.anonymize_requests }"
-            @click="patch({ anonymize_requests: !settings.anonymize_requests })"
-          >
-            <span class="toggle-thumb"></span>
-          </button>
+          <BaseSwitch :model-value="settings.anonymize_requests" :label="t('settings.webResearch.anonymizeHint')" @change="patch({ anonymize_requests: $event })" />
         </label>
 
         <label class="toggle-row">
           <span class="toggle-description">{{ t('settings.webResearch.filterAdultHint') }}</span>
-          <button
-            type="button"
-            role="switch"
-            :aria-checked="settings.filter_adult_content"
-            class="toggle-btn"
-            :class="{ active: settings.filter_adult_content }"
-            @click="patch({ filter_adult_content: !settings.filter_adult_content })"
-          >
-            <span class="toggle-thumb"></span>
-          </button>
+          <BaseSwitch :model-value="settings.filter_adult_content" :label="t('settings.webResearch.filterAdultHint')" @change="patch({ filter_adult_content: $event })" />
         </label>
       </fieldset>
 
@@ -232,6 +187,7 @@ Issue #3850: web research settings UI missing
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
+import { BaseSwitch } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import { useWebResearchStore } from '@/stores/useWebResearchStore'
 import type { WebResearchSettings } from '@/stores/useWebResearchStore'
@@ -334,39 +290,6 @@ function clamp(value: number, min: number, max: number): number {
   font-size: var(--font-size-sm);
   color: var(--text-secondary);
   flex: 1;
-}
-
-.toggle-btn {
-  position: relative;
-  width: 44px;
-  height: 24px;
-  border-radius: var(--radius-xl);
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  cursor: pointer;
-  transition: background var(--duration-200) var(--ease-out), border-color var(--duration-200) var(--ease-out);
-  flex-shrink: 0;
-}
-
-.toggle-btn.active {
-  background: var(--color-primary);
-  border-color: var(--color-primary);
-}
-
-.toggle-thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: white;
-  transition: transform var(--duration-200) var(--ease-out);
-  pointer-events: none;
-}
-
-.toggle-btn.active .toggle-thumb {
-  transform: translateX(20px);
 }
 
 /* Select */
