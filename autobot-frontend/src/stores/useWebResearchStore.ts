@@ -156,18 +156,34 @@ export const useWebResearchStore = defineStore('webResearch', () => {
     }
   }
 
+  // Backend writes (#19217). Every surface saves through these, so none can keep a
+  // setting in the browser only. Each throws on failure and leaves the state unchanged.
+
+  /** Turns web research on or off through POST /enable or /disable. */
+  async function setEnabledOnBackend(enabled: boolean): Promise<void> {
+    const endpoint = enabled ? WEB_RESEARCH_API.enable : WEB_RESEARCH_API.disable
+    await ApiClient.post<unknown>(`${getApiBase()}${endpoint}`, {})
+    settings.value.enabled = enabled
+    updateStatus({ enabled })
+  }
+
+  /** Saves every setting through PUT /settings, which replaces the whole set. */
+  async function saveSettings(): Promise<void> {
+    await ApiClient.put<unknown>(`${getApiBase()}${WEB_RESEARCH_API.settings}`, { ...settings.value })
+  }
+
+  async function clearCache(): Promise<void> {
+    await ApiClient.post<unknown>(`${getApiBase()}${WEB_RESEARCH_API.clearCache}`, {})
+    updateStatus({ cache_stats: { cache_size: 0, rate_limiter: status.value.cache_stats?.rate_limiter } })
+  }
+
+  async function resetCircuitBreakers(): Promise<void> {
+    await ApiClient.post<unknown>(`${getApiBase()}${WEB_RESEARCH_API.resetCircuitBreakers}`, {})
+    updateStatus({ circuit_breakers: null })
+  }
+
   function updateStatus(newStatus: Partial<ResearchStatus>) {
     status.value = { ...status.value, ...newStatus }
-  }
-
-  function toggleWebResearch() {
-    settings.value.enabled = !settings.value.enabled
-    // Issue #821: Clear stale error when toggling
-    lastError.value = null
-  }
-
-  function setEnabled(enabled: boolean) {
-    settings.value.enabled = enabled
   }
 
   function setLoading(loading: boolean) {
@@ -216,8 +232,10 @@ export const useWebResearchStore = defineStore('webResearch', () => {
     updateSettings,
     updateStatus,
     loadFromBackend,
-    toggleWebResearch,
-    setEnabled,
+    setEnabledOnBackend,
+    saveSettings,
+    clearCache,
+    resetCircuitBreakers,
     setLoading,
     setError,
     clearError,
