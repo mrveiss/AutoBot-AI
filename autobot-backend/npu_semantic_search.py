@@ -34,7 +34,6 @@ from autobot_shared.ssot_config import config
 from config import cfg
 
 # Import existing AutoBot components
-from constants.threshold_constants import TimingConstants
 from knowledge.backends import get_default_client
 from knowledge.embedding_cache import EmbeddingCache, get_embedding_cache
 from knowledge.index_embedding_space import (
@@ -44,7 +43,7 @@ from knowledge.index_embedding_space import (
     require_query_dim,
 )
 from knowledge.serving import servable_response
-from knowledge_base import KnowledgeBase
+from knowledge_factory import get_knowledge_base_async
 
 # Issue #387: GPU-accelerated vector search
 from utils.gpu_vector_search import (
@@ -250,14 +249,10 @@ class NPUSemanticSearch:
 
         # Initialize dependencies
         self.ai_accelerator = await get_ai_accelerator()
-        self.knowledge_base = KnowledgeBase()
-
-        # Wait for knowledge base initialization
-        max_wait = TimingConstants.SHORT_TIMEOUT  # seconds
-        wait_time = 0
-        while not self.knowledge_base.vector_store and wait_time < max_wait:
-            await asyncio.sleep(TimingConstants.STANDARD_DELAY)
-            wait_time += 1
+        # #18122: the canonical, already-initialised instance (no private KB, no init wait)
+        self.knowledge_base = await get_knowledge_base_async()
+        if self.knowledge_base is None:
+            raise RuntimeError("Knowledge base unavailable (init failed or cooling down)")
 
         if self.knowledge_base.vector_store:
             logger.info("✅ Knowledge base vector store ready")

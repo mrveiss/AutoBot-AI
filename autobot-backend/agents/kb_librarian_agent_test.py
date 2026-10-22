@@ -64,7 +64,6 @@ def _mocked_init_dependencies():
         mock.patch.object(kb_agent_module, "get_agent_provider_explicit", return_value="ollama"),
         mock.patch.object(kb_agent_module, "get_agent_endpoint_explicit", return_value="http://127.0.0.1:11434"),
         mock.patch.object(kb_agent_module, "get_agent_model_explicit", return_value="test-model"),
-        mock.patch.object(kb_agent_module, "KnowledgeBase", return_value=create_autospec(KnowledgeBase, instance=True)),
         mock.patch.object(kb_agent_module, "get_llm_service", return_value=mock.Mock()),
     ):
         yield
@@ -112,3 +111,24 @@ async def test_search_knowledge_empty_kb_returns_empty_list():
     results = await agent.search_knowledge("nothing relevant", limit=5)
 
     assert results == []
+
+
+@pytest.mark.asyncio
+async def test_kb_resolved_lazily_from_canonical_accessor():
+    """#18122 S4: no private KnowledgeBase at construction; the factory instance is used at first use."""
+    with _mocked_init_dependencies():
+        agent = KBLibrarianAgent()
+    assert agent.knowledge_base is None
+    kb = create_autospec(KnowledgeBase, instance=True)
+    kb.get_stats.return_value = {"total_facts": 1}
+    with mock.patch.object(kb_agent_module, "get_knowledge_base_async", mock.AsyncMock(return_value=kb)):
+        assert await agent.get_knowledge_stats() == {"total_facts": 1}
+
+
+@pytest.mark.asyncio
+async def test_unavailable_canonical_kb_surfaces_as_error_not_a_private_instance():
+    """#18122 D2: a failed init / cooldown (None) is reported, never papered over with a new KB."""
+    with _mocked_init_dependencies():
+        agent = KBLibrarianAgent()
+    with mock.patch.object(kb_agent_module, "get_knowledge_base_async", mock.AsyncMock(return_value=None)):
+        assert await agent.get_knowledge_stats() == {"error": "Failed to retrieve knowledge base stats"}

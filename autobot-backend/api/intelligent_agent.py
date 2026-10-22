@@ -47,14 +47,14 @@ def get_lazy_dependencies():
     """Lazy import of heavy dependencies to prevent startup blocking"""
     try:
         from intelligence.intelligent_agent import IntelligentAgent
-        from knowledge_base import KnowledgeBase
+        from knowledge_factory import get_knowledge_base_async
         from services.llm_service import get_llm_service
         from utils.command_validator import CommandValidator
         from worker_node import WorkerNode
 
         return (
             IntelligentAgent,
-            KnowledgeBase,
+            get_knowledge_base_async,
             get_llm_service,
             CommandValidator,
             WorkerNode,
@@ -83,14 +83,17 @@ async def get_agent() -> "IntelligentAgent":
             logger.info("Lazy loading intelligent agent dependencies...")
             (
                 IntelligentAgent,
-                KnowledgeBase,
+                get_knowledge_base_async,
                 get_llm_service,
                 CommandValidator,
                 WorkerNode,
             ) = get_lazy_dependencies()
 
             logger.info("Initializing intelligent agent with lazy-loaded dependencies..."),
-            _agent_instance = IntelligentAgent(get_llm_service(), KnowledgeBase(), WorkerNode(), CommandValidator())
+            kb = await get_knowledge_base_async()
+            if kb is None:
+                raise RuntimeError("Knowledge base unavailable (init failed or cooling down)")
+            _agent_instance = IntelligentAgent(get_llm_service(), kb, WorkerNode(), CommandValidator())
             await _agent_instance.initialize()
             logger.info("✅ Intelligent agent initialized successfully with lazy loading")
             return _agent_instance

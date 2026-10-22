@@ -79,22 +79,6 @@ BASELINE: dict[str, tuple[int, str]] = {
         1,
         f"{_PERM}: builds its KB inside its own event loop in a worker process; cannot share the app instance",
     ),
-    "autobot-backend/api/knowledge_debug.py": (2, f"{_DRAIN} (D5): use the canonical instance"),
-    "autobot-backend/api/knowledge_eval.py": (2, f"{_DRAIN} (D5): use the canonical instance"),
-    "autobot-backend/utils/system_validator.py": (2, f"{_DRAIN}: validator builds a private KB"),
-    "autobot-backend/agents/knowledge_retrieval_agent.py": (1, f"{_DRAIN}: agent builds a private KB"),
-    "autobot-backend/agents/kb_librarian_agent.py": (1, f"{_DRAIN}: agent builds a private KB"),
-    "autobot-backend/agents/librarian_assistant.py": (1, f"{_DRAIN}: agent builds a private KB"),
-    "autobot-backend/knowledge_sync_incremental.py": (1, f"{_DRAIN}: sync builds a private KB"),
-    "autobot-backend/api/chat_knowledge_manager.py": (1, f"{_DRAIN}: manager builds a private KB"),
-    "autobot-backend/worker_node.py": (1, f"{_DRAIN}: worker builds a private KB"),
-    "autobot-backend/orchestrator.py": (1, f"{_DRAIN}: orchestrator builds a private KB"),
-    "autobot-backend/npu_semantic_search.py": (1, f"{_DRAIN}: search builds a private KB"),
-    "autobot-backend/api/workflow.py": (1, f"{_DRAIN}: route builds a private KB"),
-    "autobot-backend/utils/operation_timeout_integration.py": (1, f"{_DRAIN}: helper builds a private KB"),
-    "autobot-backend/api/intelligent_agent.py": (1, f"{_DRAIN}: route builds a private KB"),
-    "autobot-backend/utils/error_boundary_examples.py": (1, f"{_DRAIN}: example code builds a private KB"),
-    "autobot-backend/services/advanced_workflow/coordinator.py": (1, f"{_DRAIN}: coordinator builds a private KB"),
     # autobot-infrastructure: one-shot operator scripts are separate processes that cannot share
     # the backend's published singleton; they drain by calling `get_knowledge_base_async()`.
     "autobot-infrastructure/shared/mcp/tools/knowledge-base-mcp/autobot_knowledge_mcp/embedded.py": (

@@ -28,7 +28,7 @@ from autobot_shared.ssot_config import (
 from config import config_manager
 from constants.path_constants import PATH
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
-from knowledge_base import KnowledgeBase
+from knowledge_factory import get_knowledge_base_async
 from services.llm_service import get_llm_service
 
 from .base_agent import AgentDeploymentMode
@@ -46,7 +46,8 @@ class KBLibrarianAgent(StandardizedAgent):
     def __init__(self):
         """Initialize KB librarian agent (#3387: migrated to StandardizedAgent)."""
         super().__init__("kb_librarian", AgentDeploymentMode.LOCAL)
-        self.knowledge_base = KnowledgeBase()
+        # #18122: resolved lazily from the canonical instance (see _resolve_kb)
+        self.knowledge_base = None
         self.llm = get_llm_service()
 
         # Use explicit SSOT config - raises AgentConfigurationError if not set
@@ -154,6 +155,13 @@ class KBLibrarianAgent(StandardizedAgent):
         """Handle get_stats action via StandardizedAgent routing."""
         return await self.get_knowledge_stats()
 
+    async def _resolve_kb(self):
+        """Return the canonical KnowledgeBase (an injected one wins); raise while it is unavailable."""
+        kb = self.knowledge_base or await get_knowledge_base_async()
+        if kb is None:
+            raise RuntimeError("Knowledge base unavailable (init failed or cooling down)")
+        return kb
+
     async def search_knowledge(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
         """Search the knowledge base for relevant information."""
         try:
@@ -162,7 +170,8 @@ class KBLibrarianAgent(StandardizedAgent):
             # returns a Dict, not the List this method iterates -- use top_k to
             # stay on the Basic (List[Dict]) path.
             # Issue #13009: exclude quarantined research facts (#12622).
-            results = await self.knowledge_base.search(query, top_k=limit, filters=RESEARCH_QUARANTINE_FILTER)
+            kb = await self._resolve_kb()
+            results = await kb.search(query, top_k=limit, filters=RESEARCH_QUARANTINE_FILTER)
 
             if results:
                 logger.info("KB-LIBRARIAN: Found %s results for '%s'", len(results), query)
@@ -312,7 +321,7 @@ class KBLibrarianAgent(StandardizedAgent):
             for docs_dir in docs_dirs:
                 await self._scan_directory_for_docs(docs_dir)
 
-            await self.knowledge_base.populate_knowledge_base()
+            await (await self._resolve_kb()).populate_knowledge_base()
 
         except Exception as e:
             logger.error("AUTO-LEARNING: Failed to trigger population: %s", e)
@@ -341,7 +350,7 @@ class KBLibrarianAgent(StandardizedAgent):
             content = await _read_file_async(file_path)
 
             # Add to knowledge base
-            await self.knowledge_base.add_text(
+            await (await self._resolve_kb()).add_text(
                 content,
                 title=os.path.basename(file_path),
                 source=f"AutoBot Documentation: {file_path}",
@@ -354,7 +363,7 @@ class KBLibrarianAgent(StandardizedAgent):
     async def get_knowledge_stats(self) -> Dict[str, Any]:
         """Get knowledge base statistics."""
         try:
-            stats = await self.knowledge_base.get_stats()
+            stats = await (await self._resolve_kb()).get_stats()
             return stats
         except Exception as e:
             logger.error("KB-LIBRARIAN: Failed to get stats: %s", e)
@@ -366,7 +375,7 @@ class KBLibrarianAgent(StandardizedAgent):
             if not source:
                 source = f"Added by KB Librarian: {title}"
 
-            await self.knowledge_base.add_text(content, title=title, source=source)
+            await (await self._resolve_kb()).add_text(content, title=title, source=source)
             logger.info("KB-LIBRARIAN: Added new knowledge: %s", title)
         except Exception as e:
             logger.error("KB-LIBRARIAN: Failed to add knowledge '%s': %s", title, e)
