@@ -23,14 +23,14 @@ aiosqlite>=0.22.1  # matches autobot-backend/requirements.txt's pin
 prometheus-client>=0.26.0
 
 # Web framework
-fastapi>=0.143.3                # SECURITY UPDATE - requires starlette >=1.7.0
+fastapi>=0.147.0                # SECURITY UPDATE - requires starlette >=1.9.0
 # Held at 1.6.0. #17706 proposed >=1.7.0, which cannot be taken alone: the CI plane
 # pins `starlette==1.6.0` (requirements-ci/framework.txt) and the dependency-patching
 # role floors it at 1.6.0, so a bump here alone fails the parity guard and leaves CI
 # installing a release this file forbids. 1.6.0 already carries the Range-header DoS
 # fix that floor records. Moving the three together is a coordinated migration with
 # fastapi compatibility to check, not a grouped dependency bump (#17833).
-starlette>=1.7.0              # explicit pin — avoids python_multipart __all__ ImportError on older starlette (#8275)
+starlette>=1.9.0              # explicit pin — avoids python_multipart __all__ ImportError on older starlette (#8275)
 uvicorn[standard]>=0.54.0
 
 # Database - PostgreSQL (Issue #786)
@@ -46,7 +46,7 @@ uvicorn[standard]>=0.54.0
 # into a recorded one. Migrating to 2.1.x is its own work and is NOT a
 # base-unblocking change; the tracking issue is on the cap for whoever lifts it.
 # Do not raise this bound without running the SLM suite against 2.1.x first.
-sqlalchemy>=2.0.54,<2.1
+sqlalchemy>=2.0.55,<2.1
 # Dependabot raised this to `>=2.1.0,<2.2` in #17706 and left the paragraph above
 # saying not to. Restored. The cap is not stale: #17445 is OPEN and records the
 # 27 failures 2.1.0 causes in this service. Lifting it needs the SLM suite run
@@ -65,7 +65,7 @@ psycopg2-binary>=2.9.13  # Sync PostgreSQL driver for migrations
 
 # Data validation
 pydantic[email]>=2.14.1
-pydantic-settings>=2.15.0
+pydantic-settings>=2.16.0
 typing_extensions>=4.16.0  # For Python 3.8 compatibility
 
 # Authentication
@@ -98,13 +98,13 @@ aiohttp>=3.14.5  # SECURITY UPDATE — matches autobot-backend/requirements.txt 
 psutil>=7.2.2
 
 # SSH connectivity (for connection testing and node management)
-paramiko>=5.0.0
+paramiko>=5.1.0
 
 # Cron expression parsing (Issue #741 - Scheduled updates)
 croniter  # version from constraints/shared.txt
 
 # SSO Integration (Issue #576 Phase 4)
-authlib>=1.8.0  # OAuth2/OIDC client
+authlib>=1.9.1  # OAuth2/OIDC client
 ldap3>=2.9.1  # LDAP/Active Directory
 pysaml2>=7.5.5  # SAML 2.0 Service Provider
 
