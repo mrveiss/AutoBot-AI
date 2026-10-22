@@ -69,7 +69,7 @@ from deployment_registry import (  # noqa: E402
     ServiceStatus,
     DeploymentMode,
     ServiceHealth,
-    get_service_registry,
+    get_deployment_registry,
 )
 
 
@@ -92,7 +92,7 @@ class AutoBotDeployer:
         self.deployment_started = False
 
         # Load deployment configuration
-        self.service_registry = get_service_registry(config_file)
+        self.service_registry = get_deployment_registry(config_file)
 
         logger.info("🚀 AutoBot Deployer initialized")
         logger.info(f"   Mode: {self.mode.value}")

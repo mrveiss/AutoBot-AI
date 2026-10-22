@@ -24,7 +24,7 @@ from types import ModuleType
 from repo_tests._isolated_git_detect import is_skipped, is_test_file, offends
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
-from repo_tests.isolated_git_env_baseline_18940 import ALLOWLIST, FROZEN_TOTAL
+from repo_tests.isolated_git_env_baseline_18940 import ALLOWLIST, FROZEN_TOTAL, PERMANENT_PREFIX
 
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
@@ -89,7 +89,9 @@ def test_baseline_only_shrinks() -> None:
     stale = sorted(ALLOWLIST.keys() - _offenders(root))
     assert not stale, "Migrated (or removed) files still in the baseline; delete these lines:\n  " + "\n  ".join(stale)
     assert len(ALLOWLIST) == FROZEN_TOTAL, f"baseline has {len(ALLOWLIST)} rows but FROZEN_TOTAL is {FROZEN_TOTAL}"
-    assert all(reason.strip() for reason in ALLOWLIST.values())
+    assert all(
+        reason.startswith(PERMANENT_PREFIX) and reason[len(PERMANENT_PREFIX) :].strip() for reason in ALLOWLIST.values()
+    ), "every baseline row is an owner-decided PERMANENT exception with its reason (#18940)"
 
 
 _RAW_ARGV = "import subprocess\nsubprocess.run(['git', 'init', '-q'])\n"

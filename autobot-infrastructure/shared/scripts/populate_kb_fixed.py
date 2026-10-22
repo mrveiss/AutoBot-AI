@@ -91,11 +91,12 @@ async def populate_knowledge_base_chromadb():
     logger.info("=== Populating Knowledge Base with ChromaDB ===")
     os.environ["AUTOBOT_VECTOR_STORE_TYPE"] = "chroma"
 
-    from knowledge_base import KnowledgeBase
+    from knowledge_factory import get_knowledge_base_async
 
-    kb = KnowledgeBase()
+    kb = await get_knowledge_base_async()
+    if kb is None:
+        raise RuntimeError("Knowledge base unavailable: initialization failed or retry cooldown active")
     logger.info("Vector store type: %s", kb.vector_store_type)
-    await kb.ainit()
 
     if kb.vector_store is None:
         logger.error("Failed to initialize vector store")

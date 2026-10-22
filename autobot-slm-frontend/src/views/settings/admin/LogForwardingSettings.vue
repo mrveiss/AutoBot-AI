@@ -11,7 +11,7 @@
  */
 
 import { ref, reactive, onMounted } from 'vue'
-import { BaseAlert, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseModal, BaseSwitch } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import { useAutobotApi } from '@/composables/useAutobotApi'
 import type { LogForwardingDestination } from '@/composables/autobotAdminModels'
@@ -118,10 +118,9 @@ async function toggleService(): Promise<void> {
   }
 }
 
-async function toggleAutoStart(event: Event): Promise<void> {
-  // The native checkbox has already flipped; it shows the confirmed value until the server answers.
-  const box = event.target as HTMLInputElement
-  box.checked = autoStart.value
+// BaseSwitch shows `autoStart`, the server-confirmed value, so a pending or failed save never
+// leaves it flipped; a change while one is pending is ignored (#18797).
+async function toggleAutoStart(): Promise<void> {
   if (!autoStartLoaded.value || autoStartSaving.value) return
   autoStartSaving.value = true
   try {
@@ -133,7 +132,6 @@ async function toggleAutoStart(event: Event): Promise<void> {
     error.value = e instanceof Error ? e.message : t('settings.admin.logForwardingSettings.autoStartFailed')
   } finally {
     autoStartSaving.value = false
-    box.checked = autoStart.value
   }
 }
 
@@ -352,17 +350,13 @@ onMounted(refreshAll)
 
       <!-- Auto-start toggle -->
       <div class="flex items-center gap-3 pt-4 border-t border-gray-200">
-        <label class="relative inline-flex items-center cursor-pointer">
-          <input
-            type="checkbox"
-            :checked="autoStart"
-            :disabled="!autoStartLoaded || autoStartSaving"
-            data-test="auto-start"
-            @change="toggleAutoStart"
-            class="sr-only peer"
-          />
-          <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-        </label>
+        <BaseSwitch
+          :model-value="autoStart"
+          :label="$t('settings.admin.logForwardingSettings.autoStartOnBackend')"
+          :disabled="!autoStartLoaded || autoStartSaving"
+          data-test="auto-start"
+          @change="toggleAutoStart"
+        />
         <span class="text-sm text-gray-700">{{ $t('settings.admin.logForwardingSettings.autoStartOnBackend') }}</span>
       </div>
     </div>
@@ -609,10 +603,7 @@ onMounted(refreshAll)
 
       <!-- Enabled Toggle -->
       <div class="flex items-center gap-3 pt-2">
-        <label class="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" v-model="formData.enabled" class="sr-only peer" />
-          <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-        </label>
+        <BaseSwitch v-model="formData.enabled" :label="$t('settings.admin.logForwardingSettings.enabled')" />
         <span class="text-sm text-gray-700">{{ $t('settings.admin.logForwardingSettings.enabled') }}</span>
       </div>
       </div>

@@ -25,6 +25,7 @@ from pydantic import BaseModel
 
 from api.websocket import ws_manager
 from autobot_shared.async_compat import fire_and_forget
+from autobot_shared.role_group_ownership import split_node_role_rows, warn_stale_detected_roles, withhold_unowned_groups
 from config import settings
 from services.auth import get_current_user
 from services.database import db_service
@@ -115,22 +116,17 @@ async def _set_setting(key: str, value: str) -> None:
         await session.commit()
 
 
-def _groups_for_role_tokens_both_vocabularies(role_tokens: list[str]) -> set[str]:
+def _groups_for_role_tokens_both_vocabularies(role_tokens: list[str], detected_tokens: list[str] = ()) -> set[str]:
     """Union of the canonical map AND the legacy ``ROLE_ANSIBLE_GROUPS`` one.
 
-    Split out so both the raw (all NodeRole rows) and declared (Node.roles
-    alone) group sets in ``_ansible_groups_for_nodes`` are computed the same
-    way -- a role like ``vnc`` reaches ``backend`` ONLY through the legacy
-    map (it has no entry in ``inventory_builder._ROLE_TO_GROUPS`` at all), so
-    computing "declared" through the canonical map alone would strip a role
-    the node genuinely declared (#14638).
+    Raw and declared sets in ``_ansible_groups_for_nodes`` share it: ``vnc``
+    reaches ``backend`` ONLY through the legacy map (#14638). ``detected_tokens``
+    take the same owner gate as ``build_registry_inventory`` (#19197).
     """
-    groups = set(groups_for_role_tokens(role_tokens))
-    for token in role_tokens:
-        legacy = ROLE_ANSIBLE_GROUPS.get(token)
-        if legacy:
-            groups.add(legacy)
-    return groups
+    legacy = {ROLE_ANSIBLE_GROUPS[t] for t in role_tokens if t in ROLE_ANSIBLE_GROUPS}
+    legacy_seen = {ROLE_ANSIBLE_GROUPS[t] for t in detected_tokens if t in ROLE_ANSIBLE_GROUPS}
+    owned = withhold_unowned_groups(legacy_seen, detected_tokens)
+    return groups_for_role_tokens(role_tokens, detected_tokens) | legacy | owned
 
 
 def _ansible_groups_for_nodes(
@@ -173,23 +169,25 @@ def _ansible_groups_for_nodes(
         Every group each host belongs to, from both mappings, privileged
         groups stripped for any node that did not declare its way in.
     """
-    roles_by_node: dict[str, list[str]] = {}
+    rows_by_node: dict[str, list] = {}
     raw_node_groups: dict[str, set[str]] = {}
 
     for nr in node_roles:
         inv_name = node_id_to_inv_name.get(nr.node_id)
         if not inv_name:
             continue
-        roles_by_node.setdefault(inv_name, []).append(nr.role_name)
-
-    for inv_name, role_tokens in roles_by_node.items():
-        raw_node_groups[inv_name] = _groups_for_role_tokens_both_vocabularies(role_tokens)
+        rows_by_node.setdefault(inv_name, []).append(nr)
 
     declared_roles_by_inv: dict[str, list[str]] = {}
     for node in db_nodes:
         inv_name = node_id_to_inv_name.get(node.node_id)
         if inv_name:
             declared_roles_by_inv[inv_name] = _declared_roles(node)
+            warn_stale_detected_roles(node, _groups_for_role_tokens_both_vocabularies)
+
+    for inv_name, rows in rows_by_node.items():
+        split = split_node_role_rows(rows, declared_roles_by_inv.get(inv_name, []))
+        raw_node_groups[inv_name] = _groups_for_role_tokens_both_vocabularies(*split)
 
     groups: dict[str, set[str]] = {}
     for inv_name, node_group_set in raw_node_groups.items():

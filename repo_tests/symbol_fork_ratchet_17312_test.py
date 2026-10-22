@@ -44,7 +44,7 @@ def test_the_sweep_has_a_reach_floor_not_a_findings_floor() -> None:
     findings-based floor cannot tell a clean tree from a broken walk. The floor
     is on files PARSED (CodeRabbit).
     """
-    listed = detector.tracked_python_files()
+    listed = detector.fork_scan_files()
     _clusters, parsed = detector.find_clusters(listed)
     assert detector.MIN_FILES_PARSED >= 1000, "a floor this low would not detect a collapse"
     assert parsed >= detector.MIN_FILES_PARSED, (
@@ -59,7 +59,7 @@ def test_the_sweep_has_a_reach_floor_not_a_findings_floor() -> None:
 
 def test_a_collapsed_sweep_refuses_to_give_a_verdict(monkeypatch, capsys) -> None:
     """Contrast control for the floor: it must actually fire, not just exist."""
-    monkeypatch.setattr(detector, "tracked_python_files", lambda: [Path("only.py")])
+    monkeypatch.setattr(detector, "fork_scan_files", lambda: [Path("only.py")])
     assert detector.main([]) == 2, "a collapsed sweep must not return pass or fail"
     assert "sweep collapsed" in capsys.readouterr().err
 
@@ -245,7 +245,7 @@ def _independent_population() -> set[str]:
 
 def test_the_population_matches_an_independent_derivation() -> None:
     """Rule 4: compare SETS, not counts — two implementations can agree on a total."""
-    mine = set(detector.find_clusters(detector.tracked_python_files())[0])
+    mine = set(detector.find_clusters(detector.fork_scan_files())[0])
     theirs = _independent_population()
     only_detector = sorted(mine - theirs)
     only_control = sorted(theirs - mine)
@@ -278,7 +278,7 @@ def test_a_single_definition_is_not_a_cluster(tmp_path, monkeypatch) -> None:
 
 def _effective_clusters() -> dict:
     """Live clusters minus those fully covered by the recorded exceptions (#18688)."""
-    raw = detector.find_clusters(detector.tracked_python_files())[0]
+    raw = detector.find_clusters(detector.fork_scan_files())[0]
     effective, problems = detector.apply_exceptions(raw, detector.load_exceptions())
     assert not problems, problems
     return effective

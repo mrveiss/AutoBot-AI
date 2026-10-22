@@ -216,7 +216,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:bg-emerald-600": 3,
     "slm:bg-emerald-700": 1,
     "slm:bg-gray-100": 198,  # #14780 BaseDrawer: 199 -> 198
-    "slm:bg-gray-200": 118,
+    "slm:bg-gray-200": 100,  # #14780 BaseSwitch: 118 -> 100
     "slm:bg-gray-300": 9,
     "slm:bg-gray-400": 41,
     "slm:bg-gray-400/15": 1,
@@ -291,7 +291,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:border-emerald-500/30": 2,
     "slm:border-gray-100": 55,
     "slm:border-gray-200": 309,  # #14780 BaseDrawer: 313 -> 309
-    "slm:border-gray-300": 340,  # train-63: #14780 BasePagination 347 -> 343 (-4) and #18734 (-3)
+    "slm:border-gray-300": 322,  # #14780 BaseSwitch: 340 -> 322
     "slm:border-gray-50": 4,
     "slm:border-gray-500": 2,
     "slm:border-gray-500/30": 4,
@@ -393,4 +393,4 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
 }
 
 #: Frozen total, asserted separately so a hand edit of one number cannot pass.
-TOTAL_OCCURRENCES = 6153  # train-63: #14780 BasePagination 6180 -> 6159 (-21) and #18734 (-6)
+TOTAL_OCCURRENCES = 6117  # #14780 BaseSwitch: 6153 -> 6117

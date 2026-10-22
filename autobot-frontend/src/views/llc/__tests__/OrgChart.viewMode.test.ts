@@ -94,7 +94,8 @@ async function mountChart() {
   const wrapper = mount(OrgChart, {
     global: {
       plugins: [i18n],
-      stubs: { HireAgentModal: true },
+      // The node drawer is the kit BaseDrawer, which teleports to body (#14780).
+      stubs: { HireAgentModal: true, Teleport: true },
     },
   })
   await flushPromises()
@@ -419,5 +420,48 @@ describe('OrgChart canvas tabs follow the container rule (#13994)', () => {
     const canvas = wrapper.findComponent(WorkflowCanvas)
     expect(canvas.props('activeTabId')).toBe('all')
     expect(canvas.props('nodes')).toHaveLength(12)
+  })
+})
+
+describe('OrgChart node drawer (#19198 review)', () => {
+  const sidebar = (w: Awaited<ReturnType<typeof mountChart>>) => w.findComponent({ name: 'CanvasNodeSidebar' })
+  type SidebarVm = { node: { id: string }; activeRail: string; assignedItems: { status: string; items: unknown[] } }
+
+  it('switching nodes with the drawer open gets a fresh sidebar, and drops the old late response', async () => {
+    let finishOld: (v: unknown) => void = () => {}
+    const wrapper = await mountChart()
+    await wrapper.get('[data-testid="org-view-canvas"]').trigger('click')
+    wrapper.findComponent(WorkflowCanvas).vm.$emit('node-selected', 'dev')
+    await flushPromises()
+    const first = sidebar(wrapper)
+    // The first node's checklist read is still in flight when the user picks another node.
+    get.mockImplementationOnce(() => new Promise((r) => { finishOld = r }))
+    ;(first.vm as unknown as { selectRail: (r: string) => void }).selectRail('checklist')
+    await flushPromises()
+    wrapper.findComponent(WorkflowCanvas).vm.$emit('node-selected', 'ceo')
+    await flushPromises()
+    const second = sidebar(wrapper)
+    const vm = second.vm as unknown as SidebarVm
+    expect(vm.node.id).toBe('ceo')
+    expect(vm.activeRail).toBe('info')
+    expect(vm.assignedItems.status).toBe('idle')
+    finishOld([{ id: 'late', title: 'Late item from the previous node' }])
+    await flushPromises()
+    expect((sidebar(wrapper).vm as unknown as SidebarVm).assignedItems.status).toBe('idle')
+    expect(wrapper.text()).not.toContain('Late item from the previous node')
+  })
+
+  it('Escape closes the drawer and clears the selection; it reopens cleanly', async () => {
+    const wrapper = await mountChart()
+    await wrapper.get('[data-testid="org-view-canvas"]').trigger('click')
+    wrapper.findComponent(WorkflowCanvas).vm.$emit('node-selected', 'dev')
+    await flushPromises()
+    await wrapper.get('.aui-drawer-overlay').trigger('keydown', { key: 'Escape' })
+    await flushPromises()
+    expect((wrapper.vm as unknown as { selectedNode: unknown }).selectedNode).toBeNull()
+    expect(sidebar(wrapper).exists()).toBe(false)
+    wrapper.findComponent(WorkflowCanvas).vm.$emit('node-selected', 'dev')
+    await flushPromises()
+    expect((sidebar(wrapper).vm as unknown as SidebarVm).node.id).toBe('dev')
   })
 })

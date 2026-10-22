@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, BaseSwitch } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -114,10 +114,7 @@ onMounted(fetchSettings)
               <p class="font-medium text-gray-900">{{ $t('settings.notificationsSettings.nodeHealthAlerts') }}</p>
               <p class="text-sm text-gray-500">{{ $t('settings.notificationsSettings.getNotifiedWhenNodes') }}</p>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" v-model="notifications.node_health_alerts" class="sr-only peer" />
-              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-            </label>
+            <BaseSwitch v-model="notifications.node_health_alerts" :label="$t('settings.notificationsSettings.nodeHealthAlerts')" />
           </div>
 
           <div class="flex items-center justify-between py-3 border-b border-gray-100">
@@ -125,10 +122,7 @@ onMounted(fetchSettings)
               <p class="font-medium text-gray-900">{{ $t('settings.notificationsSettings.deploymentNotifications') }}</p>
               <p class="text-sm text-gray-500">{{ $t('settings.notificationsSettings.notificationsForDeploymentProgress') }}</p>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" v-model="notifications.deployment_notifications" class="sr-only peer" />
-              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-            </label>
+            <BaseSwitch v-model="notifications.deployment_notifications" :label="$t('settings.notificationsSettings.deploymentNotifications')" />
           </div>
 
           <div class="flex items-center justify-between py-3 border-b border-gray-100">
@@ -136,10 +130,7 @@ onMounted(fetchSettings)
               <p class="font-medium text-gray-900">{{ $t('settings.notificationsSettings.backupCompletionAlerts') }}</p>
               <p class="text-sm text-gray-500">{{ $t('settings.notificationsSettings.getNotifiedWhenBackups') }}</p>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" v-model="notifications.backup_completion_alerts" class="sr-only peer" />
-              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-            </label>
+            <BaseSwitch v-model="notifications.backup_completion_alerts" :label="$t('settings.notificationsSettings.backupCompletionAlerts')" />
           </div>
 
           <div class="flex items-center justify-between py-3 border-b border-gray-100">
@@ -147,10 +138,7 @@ onMounted(fetchSettings)
               <p class="font-medium text-gray-900">{{ $t('settings.notificationsSettings.maintenanceReminders') }}</p>
               <p class="text-sm text-gray-500">{{ $t('settings.notificationsSettings.remindersForScheduledMaintenance') }}</p>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" v-model="notifications.maintenance_reminders" class="sr-only peer" />
-              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-            </label>
+            <BaseSwitch v-model="notifications.maintenance_reminders" :label="$t('settings.notificationsSettings.maintenanceReminders')" />
           </div>
 
           <div class="flex items-center justify-between py-3 border-b border-gray-100">
@@ -158,10 +146,7 @@ onMounted(fetchSettings)
               <p class="font-medium text-gray-900">{{ $t('settings.notificationsSettings.securityAlerts') }}</p>
               <p class="text-sm text-gray-500">{{ $t('settings.notificationsSettings.criticalSecurityNotifications') }}</p>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" v-model="notifications.security_alerts" class="sr-only peer" />
-              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-            </label>
+            <BaseSwitch v-model="notifications.security_alerts" :label="$t('settings.notificationsSettings.securityAlerts')" />
           </div>
 
           <div class="flex items-center justify-between py-3">
@@ -169,10 +154,7 @@ onMounted(fetchSettings)
               <p class="font-medium text-gray-900">{{ $t('settings.notificationsSettings.performanceWarnings') }}</p>
               <p class="text-sm text-gray-500">{{ $t('settings.notificationsSettings.alertsForPerformanceDegradation') }}</p>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" v-model="notifications.performance_warnings" class="sr-only peer" />
-              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-            </label>
+            <BaseSwitch v-model="notifications.performance_warnings" :label="$t('settings.notificationsSettings.performanceWarnings')" />
           </div>
         </div>
       </div>
@@ -187,10 +169,7 @@ onMounted(fetchSettings)
               <p class="font-medium text-gray-900">{{ $t('settings.notificationsSettings.enableEmail') }}</p>
               <p class="text-sm text-gray-500">{{ $t('settings.notificationsSettings.sendNotificationsViaEmail') }}</p>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input type="checkbox" v-model="notifications.email_notifications" class="sr-only peer" />
-              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-            </label>
+            <BaseSwitch v-model="notifications.email_notifications" :label="$t('settings.notificationsSettings.enableEmail')" />
           </div>
 
           <div v-if="notifications.email_notifications" class="py-3">

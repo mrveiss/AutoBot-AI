@@ -12,7 +12,6 @@ half and be useless in production.
 from __future__ import annotations
 
 import asyncio
-import subprocess
 from pathlib import Path
 from unittest.mock import AsyncMock
 
@@ -28,32 +27,14 @@ from api.sandbox_files import (
     _uncommitted_entries,
 )
 from autobot_shared.env_utils import env_int_clamped
-from autobot_shared.paths import scrubbed_git_env
-
-
-def _fixture_git_env() -> dict[str, str]:
-    """The canonical scrub, plus the identity a throwaway repo needs to commit.
-
-    Wrapping rather than inlining ``{**scrubbed_git_env(), ...}`` at three call
-    sites is the pattern ``check_git_write_env_scrubbed`` expects: without the
-    scrub, an ambient ``GIT_DIR`` -- which the pre-push hook exports -- makes
-    these writes land in the pushing worktree's real index rather than in
-    ``tmp_path`` (#15246).
-    """
-    return {
-        **scrubbed_git_env(),
-        "GIT_AUTHOR_NAME": "t",
-        "GIT_AUTHOR_EMAIL": "t@e",
-        "GIT_COMMITTER_NAME": "t",
-        "GIT_COMMITTER_EMAIL": "t@e",
-    }
+from autobot_shared.isolated_git import git, make_repo
 
 
 def _init_repo(root: Path) -> None:
-    subprocess.run(["git", "init", "-q", str(root)], check=True, env=_fixture_git_env())
+    make_repo(root)
     (root / "tracked.txt").write_text("committed\n", encoding="utf-8")
-    subprocess.run(["git", "-C", str(root), "add", "-A"], check=True, env=_fixture_git_env())
-    subprocess.run(["git", "-C", str(root), "commit", "-qm", "seed"], check=True, env=_fixture_git_env())
+    git(root, "add", "-A")
+    git(root, "commit", "-qm", "seed")
 
 
 class TestNonEmptyDirectory:
