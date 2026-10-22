@@ -141,13 +141,13 @@ async def populate_docs_knowledge():
 
     logger.info("=== Populating Knowledge Base with AutoBot Documentation ===")
 
-    from knowledge_base import KnowledgeBase
+    from knowledge_factory import get_knowledge_base_async
 
     try:
-        kb = KnowledgeBase()
+        kb = await get_knowledge_base_async()
+        if kb is None:
+            raise RuntimeError("Knowledge base unavailable: initialization failed or retry cooldown active")
         logger.info("✓ Knowledge base initialized")
-
-        await asyncio.sleep(2)
 
         # #14517: was a shell placeholder in a plain string literal, so the gather
         # below globbed a directory that cannot exist and indexed nothing. Named

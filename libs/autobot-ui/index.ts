@@ -52,6 +52,9 @@ export type { ModalSize } from './src/components/BaseModal.vue'
 
 export { default as BaseDrawer } from './src/components/BaseDrawer.vue'
 
+export { default as BaseSwitch } from './src/components/BaseSwitch.vue'
+export type { SwitchSize } from './src/components/BaseSwitch.vue'
+
 export { default as BasePagination } from './src/components/BasePagination.vue'
 export type { PaginationLabels } from './src/components/BasePagination.vue'
 

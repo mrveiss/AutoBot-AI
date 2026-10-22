@@ -87,7 +87,7 @@ BASELINE = {
     # `.vue` components carrying their own <style> rules. Target is a small
     # number of shared stylesheets, not 381 components each with a private
     # copy of the design system.
-    "components_declaring_styles": 367,  # #14778: -1, the local BaseInput fork retired into the kit (on main's 368); #18849: -1, the local BaseButton fork retired into the kit; #18819: -2 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-2);  #14776: the local BaseBadge fork left for the kit (376 -> 375), then the local BaseCard + BasePanel (375 -> 373); #18240: App.vue's scoped <style> went with the header split (lowered from 379).; #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit
+    "components_declaring_styles": 366,  # #14780 OrgChart drawer: 367 -> 366 (the slide transition CSS left for BaseDrawer); #14778: -1, the local BaseInput fork retired into the kit (on main's 368); #18849: -1, the local BaseButton fork retired into the kit; #18819: -2 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-2);  #14776: the local BaseBadge fork left for the kit (376 -> 375), then the local BaseCard + BasePanel (375 -> 373); #18240: App.vue's scoped <style> went with the header split (lowered from 379).; #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit
     # Earlier #17020: Terminal.vue removed (dead, zero live callers)
     # Distinct class names declared anywhere in the frontend.
     #
@@ -107,7 +107,7 @@ BASELINE = {
     #
     # #16972/#15455: same owner-approved, one-off exception as distinct_class_names
     # directly above -- see that comment.
-    "css_rule_declarations": 9168,  # #14780: -1, AuditLogTable's pager layout left for the kit BasePagination; #14778: -16, the local BaseInput fork retired into the kit (on main's 9185); #18242: -3 on main's 9188 (CustomDashboard onto DashboardGrid); #18849: -30, the local BaseButton fork retired into the kit; #18819: -25 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-46);  #14776: local BaseBadge retired (9354 -> 9337), then local BaseCard + BasePanel (9337 -> 9289); #14785: density reuses the existing
+    "css_rule_declarations": 9166,  # #14780 OrgChart drawer: 9168 -> 9166 (the slide transition CSS left for BaseDrawer); #14780: -1, AuditLogTable's pager layout left for the kit BasePagination; #14778: -16, the local BaseInput fork retired into the kit (on main's 9185); #18242: -3 on main's 9188 (CustomDashboard onto DashboardGrid); #18849: -30, the local BaseButton fork retired into the kit; #18819: -25 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-46);  #14776: local BaseBadge retired (9354 -> 9337), then local BaseCard + BasePanel (9337 -> 9289); #14785: density reuses the existing
     # [data-layout-density] attribute (no .density-* classes), and the dead
     # assets/main.css .sr-only rule went with that file (lowered from 9379).
     # #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit (9371 -> 9354).

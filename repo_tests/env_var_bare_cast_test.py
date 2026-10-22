@@ -86,7 +86,7 @@ def repo_root() -> Path:
         pytest.skip("not a git checkout -- this check enumerates tracked files")
 
 
-def tracked_python_files(root: Path) -> list[str]:
+def bare_cast_scanned_files(root: Path) -> list[str]:
     """Tracked ``.py`` files this guard's population covers, relative to *root*."""
     out = subprocess.run(
         ["git", "-C", str(root), "ls-files", "*.py"],
@@ -227,7 +227,7 @@ def measurement() -> Measurement:
     found: dict[str, list[str]] = {}
     unparsed: list[str] = []
     parsed = 0
-    for rel in tracked_python_files(root):
+    for rel in bare_cast_scanned_files(root):
         try:
             names = bare_casts_in_file(root / rel)
         except (SyntaxError, UnicodeDecodeError, OSError):
@@ -276,7 +276,7 @@ EXPECTED_SKIPS = 0
 #: is why adoption is measured by declaration rather than by pattern.
 REACH = declare(
     "env-var-bare-cast",
-    discover=tracked_python_files,
+    discover=bare_cast_scanned_files,
     floor=MIN_FILES_SCANNED,
     growth=MAX_GROWTH_BEFORE_RATCHET,
     skips=EXPECTED_SKIPS,

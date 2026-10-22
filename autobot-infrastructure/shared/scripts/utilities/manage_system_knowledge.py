@@ -27,7 +27,7 @@ import yaml  # noqa: E402 - must follow the sys.path setup above
 
 from agents.system_knowledge_manager import SystemKnowledgeManager  # noqa: E402
 from autobot_shared.ssot_constants import CategoryDefaults  # noqa: E402
-from knowledge import KnowledgeBase  # noqa: E402
+from knowledge_factory import get_knowledge_base_async  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -37,8 +37,9 @@ async def init_knowledge(force: bool = False):
     logger.info("🔄 Initializing system knowledge...")
 
     try:
-        kb = KnowledgeBase()
-        await kb.ainit()
+        kb = await get_knowledge_base_async()
+        if kb is None:
+            raise RuntimeError("Knowledge base unavailable: initialization failed or retry cooldown active")
 
         manager = SystemKnowledgeManager(kb)
         await manager.initialize_system_knowledge(force_reinstall=force)
@@ -60,8 +61,9 @@ async def reload_knowledge():
     logger.info("🔄 Reloading system knowledge...")
 
     try:
-        kb = KnowledgeBase()
-        await kb.ainit()
+        kb = await get_knowledge_base_async()
+        if kb is None:
+            raise RuntimeError("Knowledge base unavailable: initialization failed or retry cooldown active")
 
         manager = SystemKnowledgeManager(kb)
         await manager.reload_system_knowledge()

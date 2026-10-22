@@ -55,7 +55,6 @@
     "build_arg_parser",
     "check",
     "check_file",
-    "check_paths",
     "classify",
     "compute_drift",
     "configure_logging",
@@ -71,7 +70,6 @@
     "get_npu_client",
     "get_redis_client",
     "get_redis_config",
-    "get_service_registry",
     "in_scope",
     "is_test_path",
     "lifespan",
@@ -90,14 +88,12 @@
     "report_lines",
     "reset_knowledge_base",
     "run",
-    "run_audit",
     "run_duplicate_analysis",
     "scan",
     "scan_directory",
     "scan_file",
     "setup_logging",
     "test_api_endpoints",
-    "tracked_python_files",
     "violations"
   ]
 }
