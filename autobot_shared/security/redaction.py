@@ -26,7 +26,7 @@ import re
 
 from autobot_shared.env_utils import env_int
 from autobot_shared.secret_redaction import LOG_MASK as _MASK
-from autobot_shared.secret_redaction import redact_mapping, redact_text
+from autobot_shared.secret_redaction import redact_content, redact_mapping, redact_text
 
 # ---------------------------------------------------------------------------
 # Cloud-provider identifiers (#15324)
@@ -137,6 +137,25 @@ def sanitize_log_value(value: object, *, max_chars: int | None = None) -> str:
     return escaped
 
 
+def safe_log_text(value: object) -> str:
+    """Free text (a command, an exception) made safe to log: shaped tokens and key=value /
+    Authorization secrets masked, then CR/LF and length neutralised (#19082). Composes the
+    canonical redactors; declares no detector of its own."""
+    return sanitize_log_value(redact_text(redact_content(str(value))))
+
+
+def command_log_label(command: object) -> str:
+    """A command reduced to what is safe to log: its program name and argument count.
+
+    Free-form command arguments can carry credentials in shapes no redactor recognises
+    (a quoted multi-word value, a bare positional secret), so elevated-command logs name
+    the program only (#19082)."""
+    parts = str(command).split()
+    if not parts:
+        return "<empty command>"
+    return f"{sanitize_log_value(parts[0], max_chars=64)} (+{len(parts) - 1} args)"
+
+
 def _escape_char(char: str) -> str:
     """One unsafe character as a readable escape."""
     code = ord(char)
@@ -144,6 +163,8 @@ def _escape_char(char: str) -> str:
 
 
 __all__ = [
+    "safe_log_text",
+    "command_log_label",
     "LOG_VALUE_MAX_CHARS",
     "redact_text",
     "redact_mapping",
