@@ -103,12 +103,12 @@ describe('Log Forwarding served shapes', () => {
   it('auto-start toggle sends the inverse of the value read from GET /auto-start', async () => {
     api.setLogForwardingAutoStart.mockResolvedValue({ auto_start: false, message: 'off' })
     const wrapper = await mountPage()
-    const box = wrapper.get('input[type="checkbox"]')
-    expect((box.element as HTMLInputElement).checked).toBe(true)
-    await box.trigger('change')
+    const toggle = wrapper.get('[data-test="auto-start"]')
+    expect(toggle.attributes('aria-checked')).toBe('true')
+    await toggle.trigger('click')
     await flushPromises()
     expect(api.setLogForwardingAutoStart).toHaveBeenCalledWith(false)
-    expect((wrapper.get('input[type="checkbox"]').element as HTMLInputElement).checked).toBe(false)
+    expect(wrapper.get('[data-test="auto-start"]').attributes('aria-checked')).toBe('false')
   })
 
   it('test and delete address the destination by name', async () => {
@@ -181,13 +181,15 @@ describe('Log Forwarding edit mode details', () => {
 })
 
 describe('Log Forwarding auto-start toggle (#18797 review)', () => {
-  const box = (w: Awaited<ReturnType<typeof mountPage>>) => w.find<HTMLInputElement>('input[data-test="auto-start"]')
+  // The kit BaseSwitch: a role=switch button, its state in aria-checked (#14780).
+  const box = (w: Awaited<ReturnType<typeof mountPage>>) => w.find<HTMLButtonElement>('[data-test="auto-start"]')
+  const on = (w: Awaited<ReturnType<typeof mountPage>>) => box(w).attributes('aria-checked') === 'true'
 
   it('stays disabled when the auto-start read failed, instead of showing "off"', async () => {
     api.getLogForwardingAutoStart.mockRejectedValue(new Error('503'))
     const w = await mountPage()
     expect(box(w).element.disabled).toBe(true)
-    await box(w).trigger('change')
+    await box(w).trigger('click')
     expect(api.setLogForwardingAutoStart).not.toHaveBeenCalled()
   })
 
@@ -195,23 +197,23 @@ describe('Log Forwarding auto-start toggle (#18797 review)', () => {
     api.setLogForwardingAutoStart.mockResolvedValue({ auto_start: false })
     const w = await mountPage()
     expect(box(w).element.disabled).toBe(false)
-    await box(w).trigger('change')
+    await box(w).trigger('click')
     await flushPromises()
     expect(api.setLogForwardingAutoStart).toHaveBeenCalledWith(false)
-    expect(box(w).element.checked).toBe(false)
+    expect(on(w)).toBe(false)
   })
 
   it('ignores a second change while the first is pending, and shows the confirmed value', async () => {
     let finish: (v: { auto_start: boolean }) => void = () => {}
     api.setLogForwardingAutoStart.mockReturnValue(new Promise((r) => { finish = r }))
     const w = await mountPage()
-    await box(w).trigger('change')
-    await box(w).trigger('change')
+    await box(w).trigger('click')
+    await box(w).trigger('click')
     expect(api.setLogForwardingAutoStart).toHaveBeenCalledTimes(1)
-    expect(box(w).element.checked).toBe(true) // unconfirmed: still the stored value
+    expect(on(w)).toBe(true) // unconfirmed: still the stored value
     finish({ auto_start: false })
     await flushPromises()
-    expect(box(w).element.checked).toBe(false)
+    expect(on(w)).toBe(false)
   })
 
   it('Refresh retries a failed auto-start read and enables the toggle (#18797)', async () => {
@@ -224,13 +226,12 @@ describe('Log Forwarding auto-start toggle (#18797 review)', () => {
     expect(box(w).element.disabled).toBe(false)
   })
 
-  it('a failed save leaves the checkbox at the stored value', async () => {
+  it('a failed save leaves the switch at the stored value', async () => {
     api.setLogForwardingAutoStart.mockRejectedValue(new Error('500'))
     const w = await mountPage()
-    box(w).element.checked = false
-    await box(w).trigger('change')
+    await box(w).trigger('click')
     await flushPromises()
-    expect(box(w).element.checked).toBe(true)
+    expect(on(w)).toBe(true)
   })
 })
 

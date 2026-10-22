@@ -54,6 +54,7 @@ from typing import Any
 
 import yaml
 
+from autobot_shared.role_group_ownership import declared_and_detected, withhold_unowned_groups
 from autobot_shared.ssot_config import config
 from services.ansible_extra_vars import dump_extra_vars
 
@@ -297,12 +298,8 @@ def unmatched_role_tokens(role_tokens: list[str]) -> set[str]:
 def _union_roles(node: Any) -> list[str]:
     """Return union of node.roles and node.detected_roles as a deduped list.
 
-    Detection legitimately adds groups: a node running redis that nobody
-    declared still needs the redis plays to reach it, which
-    ``test_detected_roles_merged_with_roles`` pins.
-
-    What detection must NOT do is grant a privileged group -- see
-    ``_strip_undeclared_privileged_groups`` for why (#14513).
+    Feeds the ``node_roles`` hostvar only; group mapping goes through
+    ``groups_for_role_tokens`` with declared and detected kept apart (#19197).
     """
     seen: set[str] = set()
     result: list[str] = []
@@ -458,22 +455,25 @@ def _build_hostvars(node: Any, local_ip_check: Any) -> dict:
     return hostvars
 
 
-def groups_for_role_tokens(role_tokens: list[str]) -> set[str]:
+def groups_for_role_tokens(role_tokens: list[str], detected_tokens: Any = ()) -> set[str]:
     """Complete ansible group set for one node, universal groups included.
 
-    Extracted from ``build_registry_inventory`` so the setup-wizard inventory
-    path can reach the same answer instead of carrying its own mapping
-    (#14286). Two builders emitting different group vocabularies for one fleet
-    is what made plays gated on ``aiml`` / ``database`` match zero hosts and
-    report success having done nothing.
+    Shared with the setup-wizard inventory path so two builders never emit
+    different group vocabularies for one fleet (#14286): plays gated on
+    ``aiml`` / ``database`` then matched zero hosts and reported success.
 
     Args:
-        role_tokens: role / detected_role strings for one node.
+        role_tokens: DECLARED role strings -- full mapping.
+        detected_tokens: running roles; owner-gated (``role_group_ownership``, #19197).
 
     Returns:
         Every ansible group the node belongs to.
     """
-    node_groups = _role_tokens_to_groups(role_tokens)
+    detected_tokens = list(detected_tokens)
+    node_groups = _role_tokens_to_groups(role_tokens) | withhold_unowned_groups(
+        _role_tokens_to_groups(detected_tokens), detected_tokens
+    )
+    role_tokens = list(role_tokens) + detected_tokens
 
     # Every node joins autobot + autobot_cluster (centralized logging, etc.)
     node_groups |= _UNIVERSAL_ALL
@@ -552,10 +552,10 @@ def build_registry_inventory(nodes: list[Any], local_ip_check: Any) -> dict:
 
     for node in nodes:
         host_name: str = node.node_id  # host name IS the node_id (#10109)
-        hostvars = _build_hostvars(node, local_ip_check)
-        host_section[host_name] = hostvars
-
-        node_groups = _strip_undeclared_privileged_groups(node, groups_for_role_tokens(_union_roles(node)))
+        host_section[host_name] = _build_hostvars(node, local_ip_check)
+        node_groups = _strip_undeclared_privileged_groups(
+            node, groups_for_role_tokens(*declared_and_detected(node, _role_tokens_to_groups))
+        )
 
         for g in node_groups:
             if g not in groups:

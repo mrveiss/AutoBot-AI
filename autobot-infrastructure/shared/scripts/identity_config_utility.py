@@ -19,7 +19,7 @@ from pathlib import Path
 project_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(project_root))
 
-from knowledge_base import KnowledgeBase
+from knowledge_factory import get_knowledge_base_async
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -102,7 +102,9 @@ async def main():
     try:
         # Initialize knowledge base
         logger.info("Initializing knowledge base...")
-        kb = KnowledgeBase()
+        kb = await get_knowledge_base_async()
+        if kb is None:
+            raise RuntimeError("Knowledge base unavailable: initialization failed or retry cooldown active")
 
         # Check if AutoBot identity document exists
         identity_file = project_root / "data" / "system_knowledge" / "autobot_identity.md"

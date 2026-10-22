@@ -114,6 +114,8 @@ def _load_module():
         "fastapi.responses": MagicMock(),
         "api": MagicMock(),
         "api.code_source": MagicMock(),
+        "api.memory_lifecycle_proxy": MagicMock(),
+        "api.code_sync": MagicMock(),
         "api.performance": MagicMock(),
         "api.personality_proxy": MagicMock(),
         "api.roles": MagicMock(),
@@ -153,7 +155,8 @@ def _patched_seams(mod, mock_db):
     - ``settings.slm_node_id``: env-driven since #9956 — pin the sentinel.
     - ``_compose_nodes_enabled``: the stubbed compose_fleet returns a truthy
       MagicMock, which would route every test into the compose static-IP branch.
-    - ``sync_slm_node_roles``: the stub module attribute is not awaitable.
+    - ``heal_existing_slm_node_roles``: the stub module attribute is not awaitable (#19197 moved
+      the existing-node role heal, including ``sync_slm_node_roles``, into services.node_seeder).
     """
     stack = contextlib.ExitStack()
     stack.enter_context(patch.object(mod, "db_service", mock_db))
@@ -161,7 +164,7 @@ def _patched_seams(mod, mock_db):
     _settings.slm_node_id = _NODE_ID
     stack.enter_context(patch.object(mod, "settings", _settings))
     stack.enter_context(patch.object(mod, "_compose_nodes_enabled", MagicMock(return_value=False)))
-    stack.enter_context(patch.object(mod, "sync_slm_node_roles", AsyncMock()))
+    stack.enter_context(patch.object(mod, "heal_existing_slm_node_roles", AsyncMock()))
     return stack
 
 
@@ -226,6 +229,28 @@ class TestEnsureLocalNode:
         # syncs role rows, committing unconditionally — "idempotent" means no
         # NEW rows, not no commit.
         session.commit.assert_awaited_once()
+
+    @pytest.mark.asyncio
+    async def test_existing_node_goes_through_the_role_heal(self):
+        """#19197: an existing SLM node's roles are healed (declared + synced) via node_seeder."""
+        current_ip = "192.168.1.50"
+        existing = _make_mock_node(ip=current_ip)
+        session = _make_session(existing_node=existing)
+        mock_db = MagicMock()
+        mock_db.session = MagicMock(return_value=_ctx(session))
+        heal = AsyncMock()
+
+        with (
+            _patched_seams(self._mod, mock_db),
+            patch.object(self._mod, "heal_existing_slm_node_roles", heal),
+            patch.dict(os.environ, {"SLM_EXTERNAL_URL": f"https://{current_ip}"}),
+        ):
+            await self._fn()
+
+        heal.assert_awaited_once()
+        args = heal.await_args.args
+        assert args[0] is session and args[1] is existing and args[2] == _NODE_ID
+        assert "slm-database" in args[3], "the SLM's own roles are what gets declared"
 
     # ------------------------------------------------------------------
     # Node present, IP stale — updates IP field only

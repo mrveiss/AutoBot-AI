@@ -90,7 +90,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import _exclude_anchoring as _shared
 import _scan_helpers
-from _scan_helpers import configure_logging  # noqa: E402
+from _scan_helpers import configure_logging, report_audit  # noqa: E402
 
 # Plain stdlib logging, deliberately (#1082) — see check_flake8_exclude_anchoring.py.
 logger = logging.getLogger(__name__)
@@ -217,16 +217,6 @@ audit_excludes = functools.partial(
 )
 
 
-def run_audit() -> int:
-    reached, problems = audit_excludes()
-    if problems:
-        logger.error("%s", "\n\n".join(problems))
-        logger.error("\n.bandit exclude_dirs audit FAILED over %d entries (#14489).", reached)
-        return 1
-    logger.info(".bandit exclude_dirs audit clean over %d entries (#14489).", reached)
-    return 0
-
-
 def main(argv: list[str]) -> int:
     configure_logging(logger)
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -238,7 +228,14 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     if not args.audit_excludes:
         parser.error("nothing to do — pass --audit-excludes")
-    return run_audit()
+    reached, problems = audit_excludes()
+    return report_audit(
+        logger,
+        problems,
+        "\n.bandit exclude_dirs audit FAILED over %d entries (#14489).",
+        ".bandit exclude_dirs audit clean over %d entries (#14489).",
+        reached,
+    )
 
 
 if __name__ == "__main__":

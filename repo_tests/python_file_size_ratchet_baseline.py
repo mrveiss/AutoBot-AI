@@ -427,7 +427,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/workflow_scheduler.py": 1070,
     "autobot-npu-worker/npu_worker_pool_test.py": 1010,
     "autobot-slm-backend/api/code_source.py": 708,
-    "autobot-slm-backend/api/code_sync.py": 5819,  # #18052: six path/rsync helpers moved to api/_rsync_paths.py
+    "autobot-slm-backend/api/code_sync.py": 5804,  # #16644 (was 5818)
     "autobot-slm-backend/api/errors.py": 866,
     "autobot-slm-backend/api/infrastructure.py": 724,
     "autobot-slm-backend/api/monitoring.py": 1087,
@@ -439,11 +439,11 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/api/roles.py": 685,
     "autobot-slm-backend/api/security.py": 962,
     "autobot-slm-backend/api/services.py": 1016,
-    "autobot-slm-backend/api/setup_wizard.py": 1338,
+    "autobot-slm-backend/api/setup_wizard.py": 1336,
     "autobot-slm-backend/api/stateful.py": 685,
     "autobot-slm-backend/api/tls.py": 994,
     "autobot-slm-backend/api/updates.py": 1107,
-    "autobot-slm-backend/main.py": 778,  # #18672: admin password sync moved into services/admin_password_sync.py
+    "autobot-slm-backend/main.py": 774,  # #18672: admin password sync moved into services/admin_password_sync.py
     "autobot-slm-backend/models/database.py": 1140,
     "autobot-slm-backend/models/schemas.py": 2145,
     "autobot-slm-backend/monitoring/business_intelligence_dashboard.py": 1159,
@@ -484,7 +484,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot_shared/plugin_sdk/plugin_load_visibility_test.py": 750,
     "autobot_shared/plugin_sdk/plugin_sdk_test.py": 941,
     "autobot_shared/rate_limiter_test.py": 618,
-    "autobot_shared/redis_client.py": 679,
+    "autobot_shared/redis_client.py": 677,
     "autobot_shared/redis_management/connection_manager.py": 1425,
     "autobot_shared/security/ssrf_guard_test.py": 633,
     "autobot_shared/ssot_config.py": 3260,  # #16375: AUTOBOT_PROMETHEUS_SCRAPE_TOKEN

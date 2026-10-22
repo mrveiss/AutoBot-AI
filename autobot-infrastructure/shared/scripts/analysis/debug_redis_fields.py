@@ -8,22 +8,22 @@ Debug Redis vector store fields to understand the data structure
 """
 
 import logging
-import os
+import sys
 
-import redis
+from autobot_shared.paths import project_root
+
+sys.path.insert(0, str(project_root()))
+from autobot_shared.redis_client import require_redis_client  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# DB number from redis-databases.yaml SSOT (#2806): knowledge = 1
-_DB_KNOWLEDGE = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))
 
 
 def debug_redis_vector_fields():
     """Debug what fields are available in Redis vector store"""
     try:
         # Connect to Redis (knowledge DB — llama_index vectors live in DB 1)
-        client = redis.Redis(host="localhost", port=6379, db=_DB_KNOWLEDGE, decode_responses=True)
+        client = require_redis_client(database="knowledge", decode_responses=True)
 
         # Get index info
         logger.info("Getting Redis FT.INFO for llama_index...")
