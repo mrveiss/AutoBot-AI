@@ -1,6 +1,6 @@
 # Document processing and text extraction
 python-docx==1.2.0
-pypdf==6.21.0
+pypdf==6.21.1
 reportlab>=5.0.1            # MVA-2174: PDF export for transcripts
 # #15600: `markdown` was declared here and required by nothing. It is the
 # mirror image of the nltk entry below, and the same instrument settled both:
@@ -16,11 +16,9 @@ reportlab>=5.0.1            # MVA-2174: PDF export for transcripts
 # match 0 files), but it is NOT removable: llama-index-core declares
 # `nltk>=3.9.3` in its distribution metadata, and requirements-ci.txt pulls in
 # requirements-ci/llama-index.txt alongside this file. Dropping this line would
-# leave nltk installed and merely unpinned -- strictly worse, and it would not
-# retire the PYSEC-2026-3740 allowance in .github/workflows/security.yml, which
-# has no patched release to bump to. Keep the pin; it is what bounds the
-# transitive version.
-nltk==3.10.3
+# leave nltk installed and merely unpinned -- strictly worse. Keep the pin; it is
+# what bounds the transitive version (3.10.4 also cleared PYSEC-2026-3740).
+nltk==3.10.4
 beautifulsoup4==4.15.0
 markdownify==1.2.3
 # OCR fallback (#13896). CI installs requirements-ci/*, never

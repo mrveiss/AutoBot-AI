@@ -408,7 +408,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/utils/claude_api_integration.py": 917,
     "autobot-backend/utils/error_catalog.py": 775,
     "autobot-backend/utils/file_categorization.py": 724,
-    "autobot-backend/utils/gpu_vector_search.py": 1231,
+    "autobot-backend/utils/gpu_vector_search.py": 1227,
     "autobot-backend/utils/graceful_degradation.py": 704,
     "autobot-backend/utils/hardware_metrics.py": 1267,
     "autobot-backend/utils/monitoring_alerts.py": 858,
