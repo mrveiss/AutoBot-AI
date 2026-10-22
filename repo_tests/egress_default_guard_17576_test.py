@@ -383,8 +383,8 @@ def test_declared_registry_is_part_of_the_census() -> None:
 
 def test_the_sweep_reaches_a_known_outbound_caller() -> None:
     """A known positive, so an empty sweep cannot read as a clean tree."""
-    found = scan_paths(repo_root(), ["autobot-backend/knowledge/connectors/jira.py"])
-    assert found, "jira.py makes tracked_request calls; the detector found nothing"
+    found = scan_paths(repo_root(), ["autobot-backend/knowledge/connectors/atlassian_base.py"])
+    assert found, "atlassian_base.py makes tracked_request calls; the detector found nothing"
 
 
 def test_the_sweep_population_floors() -> None:

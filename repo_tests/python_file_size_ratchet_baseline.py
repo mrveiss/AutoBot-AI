@@ -81,7 +81,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/batch_jobs.py": 916,
     "autobot-backend/api/browser_mcp.py": 1323,
     "autobot-backend/api/cache_management.py": 779,
-    "autobot-backend/api/chat.py": 2690,  # #18316: delete delegates to the canonical path
+    "autobot-backend/api/chat.py": 2686,  # #18316: delete delegates to the canonical path
     "autobot-backend/api/chat_sessions.py": 1859,  # #18293: legacy transcripts only ever proposed
     "autobot-backend/api/code_intelligence.py": 2151,
     "autobot-backend/api/code_search.py": 828,
@@ -229,9 +229,8 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/knowledge/collections.py": 728,
     "autobot-backend/knowledge/connectors/base.py": 663,
     "autobot-backend/knowledge/connectors/credential_store.py": 768,  # #16444: rotate() validates the merged bundle
-    "autobot-backend/knowledge/connectors/gdrive.py": 702,
+    "autobot-backend/knowledge/connectors/gdrive.py": 660,
     "autobot-backend/knowledge/connectors/gitlab.py": 873,
-    "autobot-backend/knowledge/connectors/onedrive.py": 642,
     "autobot-backend/knowledge/connectors/tests/test_credential_store.py": 1021,
     "autobot-backend/knowledge/facts.py": 1760,
     "autobot-backend/knowledge/ownership.py": 757,
@@ -342,7 +341,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/services/graph_rag_service_test.py": 890,
     "autobot-backend/services/knowledge/autonomous_loop.py": 798,
     "autobot-backend/services/knowledge/code_indexer.py": 1179,
-    "autobot-backend/services/knowledge/doc_indexer.py": 1263,
+    "autobot-backend/services/knowledge/doc_indexer.py": 1259,
     "autobot-backend/services/knowledge/service.py": 849,  # train 48: #18935 merged onto #18945
     "autobot-backend/services/knowledge/test_autonomous_loop.py": 708,
     "autobot-backend/services/knowledge/test_doc_indexer.py": 1466,
@@ -353,7 +352,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/services/nl_database_service.py": 775,
     "autobot-backend/services/notification_service.py": 634,
     "autobot-backend/services/npu_worker_manager.py": 1419,
-    "autobot-backend/services/rag_service.py": 1156,
+    "autobot-backend/services/rag_service.py": 1149,
     "autobot-backend/services/redis_service_manager_test.py": 839,
     "autobot-backend/services/secrets_service.py": 688,
     "autobot-backend/services/security_memory_integration.py": 1031,
