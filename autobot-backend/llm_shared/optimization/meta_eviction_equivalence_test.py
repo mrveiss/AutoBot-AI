@@ -14,6 +14,7 @@ identical weights.
 """
 
 import gc
+import os
 import types
 import weakref
 
@@ -21,10 +22,17 @@ import pytest
 import torch
 
 _TORCH_IS_STUB = not isinstance(torch, types.ModuleType)
-pytestmark = pytest.mark.skipif(_TORCH_IS_STUB, reason="requires real PyTorch")
+# AUTOBOT_REQUIRE_REAL_TORCH=1 (set by the real-torch CI job) turns the skip into a failure.
+_REQUIRE_REAL_TORCH = os.environ.get("AUTOBOT_REQUIRE_REAL_TORCH") == "1"
+pytestmark = pytest.mark.skipif(_TORCH_IS_STUB and not _REQUIRE_REAL_TORCH, reason="requires real PyTorch")
 
 from llm_shared.optimization.layer_inference import LayerInferenceConfig, LayerInferenceEngine  # noqa: E402
 from llm_shared.optimization.meta_eviction import evict_layer_to_meta  # noqa: E402
+
+
+def test_real_torch_is_installed_when_required():
+    if _REQUIRE_REAL_TORCH:
+        assert not _TORCH_IS_STUB, "AUTOBOT_REQUIRE_REAL_TORCH=1 but torch is a stub: the install is broken"
 
 
 class _Block(torch.nn.Module):
