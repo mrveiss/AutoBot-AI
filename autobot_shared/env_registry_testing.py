@@ -118,3 +118,18 @@ register_env_var(
         component="tooling",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_REQUIRE_REAL_TORCH",
+        type=bool,
+        default=False,
+        description=(
+            "Set to 1 to make the real-torch oracle tests under "
+            "autobot-backend/llm_shared/optimization fail, instead of skip, when torch is "
+            "a stub (meta_eviction_equivalence_test.py, #13049). Set by the "
+            "llm-optimization-real-torch CI job so a broken torch install cannot pass silently."
+        ),
+        component="testing",
+    )
+)
