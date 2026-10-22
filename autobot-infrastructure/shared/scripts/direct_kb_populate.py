@@ -43,10 +43,11 @@ async def populate_directly():
     logger.info("=== Direct Knowledge Base Population ===")
 
     # Import and initialize knowledge base directly
-    from knowledge_base import KnowledgeBase
+    from knowledge_factory import get_knowledge_base_async
 
-    kb = KnowledgeBase()
-    await kb.ainit()
+    kb = await get_knowledge_base_async()
+    if kb is None:
+        raise RuntimeError("Knowledge base unavailable: initialization failed or retry cooldown active")
 
     if kb.index is None:
         logger.error("❌ Knowledge base index not initialized")

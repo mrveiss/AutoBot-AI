@@ -81,28 +81,6 @@ BASELINE: dict[str, tuple[int, str]] = {
     ),
     # autobot-infrastructure: one-shot operator scripts are separate processes that cannot share
     # the backend's published singleton; they drain by calling `get_knowledge_base_async()`.
-    "autobot-infrastructure/shared/mcp/tools/knowledge-base-mcp/autobot_knowledge_mcp/embedded.py": (
-        1,
-        f"{_DRAIN} (S4+): the embedded MCP server lazily builds its own KB; use knowledge_factory",
-    ),
-    "autobot-infrastructure/shared/scripts/direct_kb_populate.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/identity_config_utility.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/kb_dimension_utility.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/populate_docs_knowledge.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/populate_kb_fixed.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/populate_knowledge_base.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/quick_populate_kb.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/reset_kb_dimensions.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/setup/knowledge/fresh_kb_setup.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/sync_kb_docs.py": (2, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/utilities/index_all_man_pages.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/utilities/integrate_system_knowledge.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/utilities/manage_system_knowledge.py": (2, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/utilities/migrate_redis_to_chromadb.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/utilities/quick_test_os_context.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/utilities/sync_documentation_kb.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/utilities/vectorize_existing_docs.py": (1, _SCRIPT),
-    "autobot-infrastructure/shared/scripts/verify_knowledge_consistency.py": (3, _SCRIPT),
 }
 
 

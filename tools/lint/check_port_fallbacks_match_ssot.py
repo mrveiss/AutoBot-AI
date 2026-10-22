@@ -65,6 +65,7 @@ _ALLOWLIST = frozenset(
 )
 
 
+# Not project_root: this resolves the git toplevel with a scrubbed git environment (#15176), and dies when it cannot.
 def _repo_root() -> Path:
     """Absolute repo root, or die — every path below is resolved against it.
 

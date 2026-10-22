@@ -168,14 +168,16 @@ async def fresh_setup():
     # Deferred: ``knowledge/__init__`` loads the composed class lazily (#1514),
     # so a module-scope import would pull redis, chromadb and llama_index in
     # merely to inspect this script.
-    from knowledge import KnowledgeBase
+    from knowledge_factory import get_knowledge_base_async
 
-    kb = KnowledgeBase()
-    logger.info(f"   Will use embedding model: {kb.embedding_model_name}")
-    logger.info(f"   Will use Redis DB: {kb.redis_db}")
-    logger.info(f"   Will use index name: {kb.redis_index_name}")
+    kb = await get_knowledge_base_async()
+    if kb is None:
+        logger.error("   Knowledge base unavailable: initialization failed or retry cooldown active")
+        return False
+    logger.info(f"   Using embedding model: {kb.embedding_model_name}")
+    logger.info(f"   Using Redis DB: {kb.redis_db}")
+    logger.info(f"   Using index name: {kb.redis_index_name}")
 
-    await kb.ainit()
     logger.info("   Knowledge base initialized!")
 
     return await _test_knowledge_base(kb, r)

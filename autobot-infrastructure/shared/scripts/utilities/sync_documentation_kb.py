@@ -33,7 +33,7 @@ from typing import Dict, List, Set, Tuple
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from knowledge_base import KnowledgeBase
+from knowledge_factory import get_knowledge_base_async
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -54,8 +54,9 @@ class DocumentationSyncManager:
 
     async def initialize(self):
         """Initialize knowledge base connection"""
-        self.kb = KnowledgeBase()
-        await self.kb.initialize()
+        self.kb = await get_knowledge_base_async()
+        if self.kb is None:
+            raise RuntimeError("Knowledge base unavailable: initialization failed or retry cooldown active")
         logger.info("Knowledge base initialized")
 
     def load_sync_state(self) -> Dict:

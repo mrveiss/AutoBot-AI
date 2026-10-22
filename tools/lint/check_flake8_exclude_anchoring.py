@@ -52,6 +52,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import _exclude_anchoring as _shared
 import _scan_helpers
 from _scan_helpers import configure_logging  # noqa: E402
+from _scan_helpers import report_audit  # noqa: E402
 from _scan_helpers import project_root as repo_root  # noqa: E402
 
 # Plain stdlib logging, deliberately (#1082). This runs as a bare script inside
@@ -184,16 +185,6 @@ audit_excludes = functools.partial(
 )
 
 
-def run_audit() -> int:
-    reached, problems = audit_excludes()
-    if problems:
-        logger.error("%s", "\n\n".join(problems))
-        logger.error("\n.flake8 exclude audit FAILED over %d entries (#14419).", reached)
-        return 1
-    logger.info(".flake8 exclude audit clean over %d entries (#14419).", reached)
-    return 0
-
-
 def main(argv: list[str]) -> int:
     configure_logging(logger)
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
@@ -205,7 +196,14 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     if not args.audit_excludes:
         parser.error("nothing to do — pass --audit-excludes")
-    return run_audit()
+    reached, problems = audit_excludes()
+    return report_audit(
+        logger,
+        problems,
+        "\n.flake8 exclude audit FAILED over %d entries (#14419).",
+        ".flake8 exclude audit clean over %d entries (#14419).",
+        reached,
+    )
 
 
 if __name__ == "__main__":
