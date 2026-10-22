@@ -6286,7 +6286,7 @@ export interface paths {
         };
         /**
          * Get Fresh Knowledge Stats
-         * @description Get knowledge base stats using a completely fresh instance (bypasses all cache)
+         * @description Get knowledge base stats from the canonical shared instance (uncached read)
          */
         get: operations["get_fresh_knowledge_stats_api_knowledge_base_debug_fresh_stats_get"];
         put?: never;
@@ -10005,7 +10005,7 @@ export interface paths {
         };
         /**
          * Get Fresh Knowledge Stats
-         * @description Get knowledge base stats using a completely fresh instance (bypasses all cache)
+         * @description Get knowledge base stats from the canonical shared instance (uncached read)
          */
         get: operations["get_fresh_knowledge_stats_api_knowledge_base_fresh_stats_get"];
         put?: never;
