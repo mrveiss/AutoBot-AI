@@ -23,7 +23,7 @@ import os
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, FrozenSet, List, Optional
 
-from autobot_shared.model_taxonomy import ArchitectureFamily
+from autobot_shared.model_taxonomy import ArchitectureFamily, UnsupportedArchitectureError
 
 logger = logging.getLogger(__name__)
 
@@ -64,17 +64,15 @@ def _get_supported_families() -> FrozenSet[str]:
 SUPPORTED_FAMILIES: FrozenSet[str] = frozenset({ArchitectureFamily.TRANSFORMER})
 
 
-class UnsupportedArchitectureError(ValueError):
-    """Raised when the worker has no inference path for the requested family."""
-
-    def __init__(self, family: str) -> None:
-        self.family = family
-        super().__init__(
-            f"architecture_family '{family}' is not supported on this OpenVINO worker. "
-            f"Supported families: {sorted(_get_supported_families())}. "
-            "SSM path requires NPU_SSM_ENABLED=true and validated OpenVINO SSM kernels "
-            "— see GH#7352 / MVA-1383 for details."
-        )
+def _unsupported(family: str) -> UnsupportedArchitectureError:
+    """Build the shared error with this worker's supported-family message."""
+    return UnsupportedArchitectureError(
+        family,
+        f"architecture_family '{family}' is not supported on this OpenVINO worker. "
+        f"Supported families: {sorted(_get_supported_families())}. "
+        "SSM path requires NPU_SSM_ENABLED=true and validated OpenVINO SSM kernels "
+        "— see GH#7352 / MVA-1383 for details.",
+    )
 
 
 @dataclass(frozen=True)
@@ -185,7 +183,7 @@ def get_inference_config(
     resolved_family = (architecture_family or ArchitectureFamily.TRANSFORMER).lower()
 
     if resolved_family not in _get_supported_families():
-        raise UnsupportedArchitectureError(resolved_family)
+        raise _unsupported(resolved_family)
 
     inference_backend = _select_backend(resolved_family)
 
@@ -213,4 +211,4 @@ def _select_backend(family: str) -> str:
         return "openvino_ssm"
     # linear_attention and hybrid are not yet supported; this is unreachable
     # until SUPPORTED_FAMILIES is expanded for those families.
-    raise UnsupportedArchitectureError(family)
+    raise _unsupported(family)
