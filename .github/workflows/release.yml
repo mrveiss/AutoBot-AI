@@ -271,6 +271,7 @@ jobs:
           cosign verify-blob --key cosign.pub --signature dist/install.sh.sig dist/install.sh
           (cd dist && sha256sum -c install.sh.sha256)
           # The key's fingerprint in the release notes, so a verifier need not trust on first use.
+          # shellcheck disable=SC2016  # the backticks are literal Markdown code spans, not command substitution
           printf '\n\n---\nInstaller signing key (`cosign.pub`) SHA256: `%s`\n' "$(sha256sum cosign.pub | cut -d' ' -f1)" >> RELEASE_NOTES.md
 
       - name: Create GitHub Release
