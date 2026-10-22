@@ -25,9 +25,9 @@ the router modules bound with the real functions from ``real_auth_middleware``,
 and controls only the identity the real code reads.
 """
 
-import sys
 from types import SimpleNamespace
 from typing import Dict, Tuple
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI
@@ -410,8 +410,8 @@ def test_the_bodiless_slice_1_routers_admit_their_own_callers(client, monkeypatc
     monkeypatch.setattr(resilience_api, "get_circuit_breaker_manager", lambda: breakers)
     state = SimpleNamespace(get_project_status=lambda use_cache=True: {"phases": {}})
     monkeypatch.setattr(phases_api, "get_project_state_manager", lambda: state)
-    monkeypatch.setattr(knowledge_eval_api, "TimingConstants", SimpleNamespace(SERVICE_STARTUP_DELAY=0))
-    monkeypatch.setitem(sys.modules, "knowledge_base", SimpleNamespace(KnowledgeBase=_FakeKnowledgeBase))
+    # #18122 D5: the route reads the canonical instance, so the accessor is the seam.
+    monkeypatch.setattr(knowledge_eval_api, "get_knowledge_base_async", AsyncMock(return_value=_FakeKnowledgeBase()))
 
     identity.user = dict(_NON_ADMIN)
     for path in ("/api/resilience/circuit-breakers", "/api/phases/status", "/api/knowledge-test/test/fresh_stats"):

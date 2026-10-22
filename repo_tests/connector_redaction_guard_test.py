@@ -74,7 +74,7 @@ def _connector_module_files(root: Path) -> list[str]:
 REACH = declare(
     "connector-redaction-sweep",
     discover=_connector_module_files,
-    floor=22,
+    floor=24,  # re-pinned mid-window (train 71) (#17844)
     growth=3,
     skips=0,
     what="importable files under knowledge/connectors/",

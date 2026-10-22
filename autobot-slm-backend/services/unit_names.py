@@ -55,6 +55,11 @@ def validate_journal_since(since: str) -> str:
     return since
 
 
+def loggable_unit_name(name: object) -> str:
+    """The ``repr`` of a length-capped slice: safe to log for node-controlled input (no forging)."""
+    return repr(name)[:_LOGGED_NAME_MAX]
+
+
 def discovered_unit_name_ok(node_id: str, name: object) -> bool:
     """True if a heartbeat/scan-discovered service *name* may be stored; else warn and say False (#19005).
 
@@ -68,7 +73,7 @@ def discovered_unit_name_ok(node_id: str, name: object) -> bool:
         logger.warning(
             "dropping discovered service with an invalid unit name node=%s name=%s",
             node_id,
-            repr(name)[:_LOGGED_NAME_MAX],
+            loggable_unit_name(name),
         )
         return False
     return True

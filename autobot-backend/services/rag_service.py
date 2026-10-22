@@ -22,6 +22,7 @@ from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_30_DAYS
 from events.bus import publish_event
 from events.event_types import RAG_RETRIEVAL
+from knowledge.chunk_identity import resolve_chunk_id
 from knowledge.search_components.query_classifier import get_query_classifier
 from knowledge.search_components.retrieval_learner import GLOBAL_USER, get_retrieval_learner
 from knowledge.search_filters import KbPrincipal, require_kb_principal
@@ -507,17 +508,9 @@ class RAGService(RAGDerivedContextMixin, RAGCacheTiersMixin):
         metrics = RAGMetrics()
         metrics.final_results_count = len(results)
 
-        retrieved_ids = [r.metadata.get("chunk_id", r.source_path) for r in results]
-        await self._emit_retrieval_feedback(
-            query=query,
-            retrieved_ids=retrieved_ids,
-            ranked_ids=retrieved_ids,
-        )
-        await self._store_feedback_in_stream(
-            query=query,
-            retrieved_ids=retrieved_ids,
-            ranked_ids=retrieved_ids,
-        )
+        retrieved_ids = [resolve_chunk_id(r) for r in results]
+        await self._emit_retrieval_feedback(query=query, retrieved_ids=retrieved_ids, ranked_ids=retrieved_ids)
+        await self._store_feedback_in_stream(query=query, retrieved_ids=retrieved_ids, ranked_ids=retrieved_ids)
         return results, metrics
 
     async def _emit_ranked_feedback(
@@ -537,9 +530,9 @@ class RAGService(RAGDerivedContextMixin, RAGCacheTiersMixin):
         """
         classifier = get_query_classifier()
         complexity = classifier.classify(query)
-        ranked_ids = [r.metadata.get("chunk_id", r.source_path) for r in results]
+        ranked_ids = [resolve_chunk_id(r) for r in results]
         pre_rerank_order = sorted(results, key=lambda r: r.hybrid_score, reverse=True)
-        retrieved_ids = [r.metadata.get("chunk_id", r.source_path) for r in pre_rerank_order]
+        retrieved_ids = [resolve_chunk_id(r) for r in pre_rerank_order]
         await self._emit_retrieval_feedback(
             query=query,
             retrieved_ids=retrieved_ids,

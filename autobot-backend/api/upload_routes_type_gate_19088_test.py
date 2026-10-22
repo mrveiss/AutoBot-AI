@@ -295,7 +295,10 @@ async def test_combine_refuses_a_non_image_content_type_like_process_image():
 async def test_general_file_upload_refuses_a_bad_name_before_reading_the_body(name, monkeypatch):
     from api import files
 
-    auth = SimpleNamespace(check_file_permissions=lambda request, action: (True, {"user_id": "u"}))
+    async def _allowed(request, action):  # check_file_permissions is async since #18688
+        return True, {"user_id": "u"}
+
+    auth = SimpleNamespace(check_file_permissions=_allowed)
     monkeypatch.setattr(files, "get_auth_middleware", lambda: auth)
     request = SimpleNamespace(state=SimpleNamespace())
     await _refused(_unwrap(files.upload_file)(request, BodyForbidden(name), "", False))
