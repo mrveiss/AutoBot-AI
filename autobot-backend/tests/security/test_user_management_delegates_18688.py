@@ -167,9 +167,13 @@ def test_me_derives_platform_admin_from_the_shared_predicate(claims, expected):
 
 
 def test_a_human_admin_jwt_still_lists_companies(monkeypatch):
+    import auth_revocation  # noqa: PLC0415
     import llc.api.companies as companies_api  # noqa: PLC0415
 
     install_canonical_gate(monkeypatch, _jwt_middleware())
+    # #19061 review: a username-only login token is now epoch-checked (it was silently skipped
+    # without a `sub`), so this test stands in the epoch store like its neighbours.
+    monkeypatch.setattr(auth_revocation, "is_token_revoked_by_password_change", AsyncMock(return_value=False))
     svc = MagicMock()
     svc.list_root_companies = AsyncMock(return_value=[])
     app = FastAPI()

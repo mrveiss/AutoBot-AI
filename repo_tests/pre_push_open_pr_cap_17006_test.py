@@ -47,7 +47,7 @@ from pathlib import Path
 import pytest
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env, make_repo
 
 HOOK_PATH = repo_root() / "tools" / "git-hooks" / "pre-push"
 
@@ -175,18 +175,16 @@ def _base_env(tmp_path: Path, bin_dir: Path) -> dict:
     """A hand-built env, deliberately NOT derived from `os.environ` -- the whole
     point of the PATH sandbox is that nothing ambient (a real `gh`, a real
     `GITHUB_TOKEN`) can leak in. #15246: still routed through
-    `scrubbed_git_env()` so a `git init`/`add`/`commit` this suite runs under
+    `isolated_git_env()` so a `git init`/`add`/`commit` this suite runs under
     this repo's own pre-push hook (which exports GIT_DIR with no
     GIT_WORK_TREE) can never be redirected at the live repo -- moot here since
     the dict below carries none of AMBIENT_GIT_VARS, but that is exactly the
     case the helper is a no-op for, not a case for skipping it.
     """
-    return scrubbed_git_env(
+    return isolated_git_env(
         {
             "PATH": str(bin_dir),
             "HOME": str(tmp_path),
-            "GIT_CONFIG_GLOBAL": "/dev/null",
-            "GIT_CONFIG_SYSTEM": "/dev/null",
             # #16728's `python3 -m tools.lint.prepush_selection` call resolves
             # `tools` via PYTHONPATH, not cwd -- cwd is the synthetic repo
             # below, which has no `tools/` package of its own. Runs the REAL
@@ -207,9 +205,7 @@ def _seed_repo(tmp_path: Path, env: dict, branch: str, *, second_commit: bool) -
     bare = tmp_path / "origin.git"
     local = tmp_path / "local"
     _git(tmp_path, "init", "--quiet", "--bare", str(bare), env=env)
-    _git(tmp_path, "init", "--quiet", "-b", "main", str(local), env=env)
-    _git(local, "config", "user.email", "t@t", env=env)
-    _git(local, "config", "user.name", "t", env=env)
+    make_repo(local, default_branch="main")
     (local / "README.md").write_text("seed\n", encoding="utf-8")
     # prepush_selection.py's main() reads `(Path.cwd() / "pytest.ini")` --
     # needs SOME pytest.ini in the synthetic repo, or it raises before ever

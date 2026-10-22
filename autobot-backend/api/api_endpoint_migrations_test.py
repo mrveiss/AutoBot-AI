@@ -21393,7 +21393,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         # Check start uses operator permission
         source_start = inspect.getsource(redis_service.start_redis_service)
-        self.assertIn("check_operator_permission", source_start)
+        self.assertIn("require_human_operator", source_start)  # canonical gate (#18688)
 
         # Check stop uses admin permission
         source_stop = inspect.getsource(redis_service.stop_redis_service)
@@ -21401,7 +21401,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         # Check restart uses operator permission
         source_restart = inspect.getsource(redis_service.restart_redis_service)
-        self.assertIn("check_operator_permission", source_restart)
+        self.assertIn("require_human_operator", source_restart)  # canonical gate (#18688)
 
     def test_batch_127_migration_preserves_service_manager_operations(self):
         """Verify migration preserves RedisServiceManager operations"""

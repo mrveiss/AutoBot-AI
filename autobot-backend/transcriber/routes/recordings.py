@@ -29,6 +29,7 @@ from fastapi.responses import StreamingResponse
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
 from autobot_shared.ssot_constants import SecurityConstants
+from security.upload_filename_policy import require_safe_upload
 from transcriber.database import Database
 from transcriber.deps import authenticate, caller_can_access, caller_id_of, get_transcriber_db_from_request
 from transcriber.models import RecordingOut
@@ -60,9 +61,8 @@ async def upload_recording(
     project = await db.get_project(project_id)
     if not project or not caller_can_access(project, request):
         raise HTTPException(404, "Project not found")
-    ext = Path(file.filename or "").suffix.lower()
-    if ext not in _ALLOWED_EXTENSIONS:
-        raise HTTPException(400, f"Unsupported audio format: {ext}")
+    require_safe_upload(file.filename, _ALLOWED_EXTENSIONS)  # #19088: bare name + audio allow-list
+    ext = Path(file.filename).suffix.lower()
     safe_name = f"{uuid.uuid4().hex}{ext}"
     dest = _upload_dir(request) / safe_name
     # GH#12331: enforce MAX_FILE_SIZE during streaming (never buffer the whole

@@ -15,6 +15,12 @@ ABSOLUTE = "ABSOLUTE"
 CONVERTIBLE = "CONVERTIBLE"
 
 ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
+    "chunk-identity-single-home-18142": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test Python under the backend and shared trees, a subset of tracked Python; the test share and "
+        "the other trees grow at their own rate, so a share of all Python would sink with nothing wrong.",
+    ),
     "shadowed-literal-routes": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

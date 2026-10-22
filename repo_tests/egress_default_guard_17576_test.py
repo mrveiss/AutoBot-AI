@@ -383,8 +383,12 @@ def test_declared_registry_is_part_of_the_census() -> None:
 
 def test_the_sweep_reaches_a_known_outbound_caller() -> None:
     """A known positive, so an empty sweep cannot read as a clean tree."""
-    found = scan_paths(repo_root(), ["autobot-backend/knowledge/connectors/jira.py"])
-    assert found, "jira.py makes tracked_request calls; the detector found nothing"
+    rel = "autobot-backend/knowledge/connectors/atlassian_base.py"
+    found = scan_paths(repo_root(), [rel])
+    # The exact key: an `(UNPARSED)` entry is a non-empty dict too, and must not satisfy this.
+    assert rel in found and any(
+        s.kind == "manager" for s in found[rel]
+    ), "atlassian_base.py makes tracked_request calls; the detector found no site under its own key"
 
 
 def test_the_sweep_population_floors() -> None:

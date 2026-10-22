@@ -89,15 +89,9 @@ def canonical_role_permissions(user_role: str) -> List[str]:
     lookups always agree on who a role is — a normalisation applied to one source
     of three creates a second identity that holds some grants and not others.
 
-    ``superadmin`` resolves to ``[]`` here, and since #13854 it does so for a
-    stated reason rather than by accident. It is now a first-class ``Role``
-    member whose ``ROLE_PERMISSIONS`` entry is explicitly empty: administrative
-    as a predicate (``require_role``, ``is_admin_role``), holder of no granular
-    permission. Before #13854 this ``[]`` came from ``Role("superadmin")``
-    *raising* — the same answer, but indistinguishable from an unrecognised
-    role, and contradicted by ``role_has_permission``, which granted superadmin
-    everything. Both paths now agree, and they agree because one mapping says
-    so.
+    ``superadmin`` (#13854) resolves to admin's grants: its ``ROLE_PERMISSIONS``
+    entry is derived from admin's (#19125, owner decision 2026-10-21), and every
+    path agrees because one mapping says so.
 
     An unrecognised role yields ``[]`` — no grant, and no exception either.
 
@@ -555,10 +549,14 @@ class SecurityLayer:
         # "superadmin" could clear the permission gate and arrive here with an
         # empty permission list, so no approval branch could fire and a HIGH-risk
         # command ran unapproved.
+        canonical = canonical_role_permissions(user_role)
         user_role = _normalise_role(user_role)
         role_permissions = self.roles.get(user_role, {}).get("permissions", [])
         if not role_permissions:
             role_permissions = self._get_default_role_permissions(user_role)
+        # #19125: superadmin has canonical grants but no configured/default entry;
+        # without this it clears the permission gate unapproved (#13820 hazard).
+        role_permissions = role_permissions or canonical
 
         if "allow_all" in role_permissions:
             return False

@@ -744,8 +744,14 @@ export function useAutobotApi() {
   // =============================================================================
 
   // Destinations are keyed by `name`; the list is a bare array (api/log_forwarding.py).
+  const lfDest = (name: string) => `/log-forwarding/destinations/${encodeURIComponent(name)}`
   async function getLogForwardingDestinations(): Promise<LF.LogForwardingDestination[]> {
     const response = await client.get<LF.LogForwardingDestination[]>('/log-forwarding/destinations')
+    return response.data
+  }
+
+  async function getLogForwardingDestination(name: string): Promise<LF.LogForwardingDestination> {
+    const response = await client.get<LF.LogForwardingDestination>(lfDest(name))
     return response.data
   }
 
@@ -763,24 +769,17 @@ export function useAutobotApi() {
     name: string,
     data: LF.LogForwardingDestinationUpdate
   ): Promise<LF.LogForwardingMutationResult> {
-    const response = await client.put<LF.LogForwardingMutationResult>(
-      `/log-forwarding/destinations/${encodeURIComponent(name)}`,
-      data
-    )
+    const response = await client.put<LF.LogForwardingMutationResult>(lfDest(name), data)
     return response.data
   }
 
   async function deleteLogForwardingDestination(name: string): Promise<LF.LogForwardingMessage> {
-    const response = await client.delete<LF.LogForwardingMessage>(
-      `/log-forwarding/destinations/${encodeURIComponent(name)}`
-    )
+    const response = await client.delete<LF.LogForwardingMessage>(lfDest(name))
     return response.data
   }
 
   async function testLogForwardingDestination(name: string): Promise<LF.LogForwardingTestResult> {
-    const response = await client.post<LF.LogForwardingTestResult>(
-      `/log-forwarding/destinations/${encodeURIComponent(name)}/test`
-    )
+    const response = await client.post<LF.LogForwardingTestResult>(`${lfDest(name)}/test`)
     return response.data
   }
 
@@ -1914,6 +1913,7 @@ export function useAutobotApi() {
     warmupCache,
     // Log Forwarding
     getLogForwardingDestinations,
+    getLogForwardingDestination,
     createLogForwardingDestination,
     updateLogForwardingDestination,
     deleteLogForwardingDestination,

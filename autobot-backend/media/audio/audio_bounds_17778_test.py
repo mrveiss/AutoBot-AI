@@ -71,6 +71,10 @@ async def test_max_duration_becomes_a_t_flag_and_is_absent_otherwise(webm_file, 
 
 
 class _Upload:
+    # Every real caller hands over a FastAPI UploadFile, which always has .filename; the audio routes that
+    # need one (clone/create/process-audio) send an audio-typed name, so the fake sends one too (#19088).
+    filename = "clip.wav"
+
     def __init__(self, data: bytes):
         self._buf = io.BytesIO(data)
 

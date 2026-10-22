@@ -26,6 +26,7 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
 from autobot_shared.logging_manager import get_logger
+from security.upload_filename_policy import require_safe_upload
 
 from ._common import agent_context, agent_node_uuid, assert_item_in_company
 
@@ -406,7 +407,6 @@ async def agent_upload_attachment(
 
     from ..services.attachment_service import AttachmentService, AttachmentTooLarge
 
-    content = await file.read()
     factory = get_async_session_factory()
     try:
         async with factory() as session:
@@ -415,9 +415,9 @@ async def agent_upload_attachment(
                 session,
                 company_id=company_id,
                 work_item_id=work_item_id,
-                filename=file.filename or "upload",
+                filename=require_safe_upload(file.filename),  # #19088: gate before the body is read
                 content_type=file.content_type or "application/octet-stream",
-                content=content,
+                content=await file.read(),
                 uploaded_by_agent_id=agent_id,
             )
         return {

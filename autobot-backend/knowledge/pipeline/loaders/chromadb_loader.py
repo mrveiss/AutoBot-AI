@@ -89,6 +89,7 @@ class ChromaDBLoader(BaseLoader):
                 "chunk_index": chunk.chunk_index,
                 "document_type": chunk.document_type,
                 **chunk.metadata,
+                "chunk_id": str(chunk.id),  # #18142: the mesh node's chunk_id joins on this
             }
             for chunk in chunks
         ]

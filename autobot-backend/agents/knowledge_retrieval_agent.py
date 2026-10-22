@@ -20,7 +20,7 @@ from autobot_shared.ssot_config import (
     get_agent_provider_explicit,
 )
 from constants.threshold_constants import LLMDefaults
-from knowledge_base import KnowledgeBase
+from knowledge_base import get_knowledge_base
 from services.llm_service import get_llm_service
 
 from .base_agent import AgentDeploymentMode
@@ -139,8 +139,7 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
         """Ensure knowledge base is initialized (lazy loading)."""
         if not self._kb_initialized:
             try:
-                self.knowledge_base = KnowledgeBase()
-                await self.knowledge_base.ainit()
+                self.knowledge_base = await get_knowledge_base()  # canonical instance (#18122)
                 self._kb_initialized = True
                 logger.info("Knowledge base initialized successfully")
             except Exception as e:

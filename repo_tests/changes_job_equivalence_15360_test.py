@@ -198,6 +198,8 @@ ALLOWED_ADDITIONS = {
             "docker/*/*entrypoint*.sh",
             # #18666: install_release_signed_18666_test.py compares release.yml's cosign pin with this one.
             f"{WORKFLOWS}/image-sign.yml",
+            # #18666: the same test runs the signing-key gate against the real cosign.pub.
+            "cosign.pub",
         ]
     },
     # frontend_path_filter_mirror_test pins frontend-test.yml's on.push.paths to this file, so the

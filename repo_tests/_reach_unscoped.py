@@ -25,6 +25,8 @@ UNSCOPED = frozenset(
         # Whole tree (#18940): every tracked test file, wherever a test lives; the population is
         # the test suite itself, so a roots= list would only go stale as tests move.
         "isolated-git-env",
+        # #19076: items are (role, unit) pairs from one registry file, not paths -- no roots= to check.
+        "role-registry-installed-units",
         "ansible-inventory-shell-sweep",
         "audio-extension-allowlist",
         "blanket-skip-test-module-sweep",

@@ -39,7 +39,7 @@ from autobot_shared.content_digest import content_digest
 from autobot_shared.logging_manager import get_llm_logger
 from constants.threshold_constants import TimingConstants
 from knowledge.ingestion_visibility import stamp_if_document
-from knowledge_base import KnowledgeBase
+from knowledge_base import KnowledgeBase, get_knowledge_base
 from utils.semantic_chunker_gpu import get_gpu_semantic_chunker
 
 logger = get_llm_logger("knowledge_sync_incremental")
@@ -237,9 +237,8 @@ class IncrementalKnowledgeSync:
     async def initialize(self):
         """Initialize knowledge base and components."""
         try:
-            # Initialize knowledge base
-            self.kb = KnowledgeBase()
-            await self.kb.ainit()
+            # Initialize knowledge base (#18122: the canonical instance; raises when unavailable, D2)
+            self.kb = await get_knowledge_base()
             logger.info("Knowledge base initialized")
 
             # Initialize GPU semantic chunker

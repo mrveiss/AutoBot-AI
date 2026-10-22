@@ -209,7 +209,8 @@ async def is_token_revoked_by_password_change(claims: dict) -> bool:
             every caller must deny it (503, #18892).
         MalformedTokenClaims: the token's ``iat`` is not an integer; deny with 401.
     """
-    subject = claims.get("sub")
+    # Backend login tokens carry the username in ``username`` and no ``sub``; SLM tokens use ``sub`` (#19061).
+    subject = claims.get("sub") or claims.get("username")
     if not subject:
         return False
 

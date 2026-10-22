@@ -42,6 +42,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.user_management.models.user import resolve_display_name
 from llc.deps import assert_company_access, get_session, service_dep
 from models.agent_org import AgentOrgNode
+from security.upload_filename_policy import require_safe_upload
 from user_management.models.user import User
 from user_management.services import TenantContext
 
@@ -1304,14 +1305,13 @@ async def upload_attachment(
     if existing is None or str(existing.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail="Work item not found")
     try:
-        content = await file.read()
         row = await _attachment_service().upload(
             session,
             work_item_id=work_item_id,
             company_id=str(ctx.org_id),  # #17300: not the query param -- this builds the storage path
-            filename=file.filename or "upload",
+            filename=require_safe_upload(file.filename),  # #19088: gate before the body is read
             content_type=file.content_type or "application/octet-stream",
-            content=content,
+            content=await file.read(),
             uploaded_by_agent_id=uploaded_by_agent_id,
             uploaded_by_user_id=uploaded_by_user_id,
         )
