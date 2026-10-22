@@ -112,11 +112,8 @@ from autobot_shared.redis_management.statistics import (
     PoolStatistics,
     RedisStats,
 )
-from autobot_shared.redis_management.types import (
-    DATABASE_MAPPING,
-    ConnectionState,
-    RedisDatabase,
-)
+from autobot_shared.redis_management.types import DATABASE_MAPPING, ConnectionState, RedisDatabase
+from autobot_shared.redis_require import require_redis_client
 
 logger = logging.getLogger(__name__)
 
@@ -141,6 +138,7 @@ __all__ = [
     # Convenience functions
     "get_redis_client",
     "get_async_redis_client",
+    "require_redis_client",
     "get_knowledge_base_redis",
     "get_prompts_redis",
     "get_agents_redis",

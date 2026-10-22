@@ -73,7 +73,7 @@ def _production_files(root: Path) -> list[str]:
 REACH = declare(
     "store-fact-chokepoint",
     discover=_production_files,
-    floor=2772,
+    floor=2853,  # re-pinned mid-window (train 77): population 2953, window [2753, 2953]
     growth=200,
     skips=0,
     # Scope as data (#17844); `declare` renders the longhand from `roots`.

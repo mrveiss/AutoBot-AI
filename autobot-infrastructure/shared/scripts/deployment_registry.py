@@ -88,7 +88,7 @@ __all__ = [
     "ServiceHealth",
     "ServiceRegistry",
     "ServiceStatus",
-    "get_service_registry",
+    "get_deployment_registry",
 ]
 
 
@@ -178,7 +178,7 @@ class ServiceRegistry:
 _registries: Dict[Tuple[Optional[str], bool], ServiceRegistry] = {}
 
 
-def get_service_registry(config_file: Optional[str] = None, *, populate_services: bool = True) -> ServiceRegistry:
+def get_deployment_registry(config_file: Optional[str] = None, *, populate_services: bool = True) -> ServiceRegistry:
     """Get the process-wide ServiceRegistry for these arguments (#18964).
 
     One instance per ``(config_file, populate_services)`` pair, so the script that fills

@@ -17,7 +17,7 @@
   re-declaring them.
 -->
 <script setup lang="ts">
-import { computed, onMounted, ref, useId } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
@@ -27,7 +27,6 @@ import type { OrgNode } from '@/views/llc/OrgTreeNode.vue'
 import type { WorkItem } from '@/views/llc/workItemTypes'
 import WorkItemBadge from './WorkItemBadge.vue'
 import HandoffModal from './HandoffModal.vue'
-import { useFocusTrap, useFocusRestore, useInitialFocus } from '@autobot/ui'
 import {
   SIDEBAR_RAIL_ICONS,
   NOTE_TABS,
@@ -54,7 +53,6 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  close: []
   pause: [OrgNode]
   terminate: [OrgNode]
 }>()
@@ -63,16 +61,6 @@ const logger = createLogger('CanvasNodeSidebar')
 const api = useApiClient()
 const { t } = useI18n()
 
-// #14609: the drawer traps Tab/Shift+Tab, moves focus into itself on open,
-// and restores focus to whatever was focused before it mounted — the
-// canvas/tree/people-list row that triggered it — on close. Mount-based:
-// this component only ever exists while the parent's `v-if` is true.
-const panelRef = ref<HTMLElement | null>(null)
-const { onKeydown: onFocusTrapKeydown } = useFocusTrap(panelRef)
-useFocusRestore()
-const { focusFirst } = useInitialFocus(panelRef)
-const _uid = useId()
-const titleId = `canvas-node-sidebar-title-${_uid}`
 
 const RAIL_ICON_CLASS: Record<SidebarRailIcon, string> = {
   info: 'fa-circle-info',
@@ -201,41 +189,12 @@ function formatTime(ts: string | null): string {
   return new Date(ts).toLocaleString()
 }
 
-// #14609: fires after this component's own onMounted registration above
-// (useFocusRestore's save-focus onMounted), so the origin element is
-// captured before focus moves in here.
-onMounted(() => {
-  void focusFirst()
-})
 </script>
 
 <template>
-  <div
-    ref="panelRef"
-    class="flex flex-col h-full"
-    data-testid="node-sidebar"
-    role="dialog"
-    aria-modal="true"
-    :aria-labelledby="titleId"
-    tabindex="-1"
-    @keydown="onFocusTrapKeydown"
-    @keydown.escape="emit('close')"
-  >
-    <div class="flex items-center justify-between px-5 py-4 border-b border-autobot-border">
-      <h2 :id="titleId" class="text-lg font-semibold text-autobot-text-primary">
-        {{ node.is_human ? t('llc.orgChart.personDetail') : t('llc.orgChart.agentDetail') }}
-      </h2>
-      <button
-        class="text-autobot-text-muted hover:text-autobot-text-secondary"
-        :aria-label="t('common.close')"
-        @click="emit('close')"
-      >
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-    </div>
-
+  <!-- Content of OrgChart's kit BaseDrawer (#14780): the drawer owns the dialog role,
+       title, close button, focus trap, initial focus, focus restore and Escape (#14609). -->
+  <div class="flex flex-col h-full" data-testid="node-sidebar">
     <div class="flex flex-1 min-h-0">
       <!-- Fixed slot order (#13940): owner -> tools -> notes -> attributes. -->
       <div class="flex-1 overflow-y-auto px-5 py-4 space-y-5">

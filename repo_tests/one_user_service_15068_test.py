@@ -80,7 +80,7 @@ def _sweep() -> tuple[dict[str, list[str]], int]:
     """Offenders by file over the detector's population, and how many files were parsed."""
     offenders: dict[str, list[str]] = {}
     parsed = 0
-    for path in detector.tracked_python_files():
+    for path in detector.fork_scan_files():
         rel = path.as_posix()
         if not detector.in_population(path) or rel in CANONICAL:
             continue
@@ -111,7 +111,7 @@ def test_no_second_user_service_implementation_by_behaviour() -> None:
 @functools.lru_cache(maxsize=1)
 def _live_clusters() -> dict[str, detector.Cluster]:
     """One detector sweep for every parametrised case below."""
-    return detector.find_clusters(detector.tracked_python_files())[0]
+    return detector.find_clusters(detector.fork_scan_files())[0]
 
 
 @pytest.mark.parametrize("name", SINGLE_DEFINITIONS)

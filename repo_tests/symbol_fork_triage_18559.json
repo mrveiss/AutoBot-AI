@@ -189,10 +189,6 @@
       "verdict": "homonym",
       "why": "per-linter file checks with different violation types"
     },
-    "check_paths": {
-      "verdict": "real",
-      "issue": 18954
-    },
     "classify": {
       "verdict": "homonym",
       "why": "session backfill, npm audit and umbrella label drift classifiers"
@@ -252,10 +248,6 @@
     "get_redis_config": {
       "verdict": "variant",
       "why": "Windows NPU worker copy under the same PyInstaller packaging constraint as the documented exception (#5438, ARCHITECTURE_EXCEPTIONS); the other definition is the backend config accessor, so the copy is per-deploy-target, not listed in the doc itself"
-    },
-    "get_service_registry": {
-      "verdict": "real",
-      "issue": 12771
     },
     "in_scope": {
       "verdict": "homonym",
@@ -329,10 +321,6 @@
       "verdict": "homonym",
       "why": "unrelated runners (A/B script, CI retry sweep, lint runner)"
     },
-    "run_audit": {
-      "verdict": "real",
-      "issue": 18954
-    },
     "run_duplicate_analysis": {
       "verdict": "homonym",
       "why": "script runner wrapper vs Celery task"
@@ -356,10 +344,6 @@
     "test_api_endpoints": {
       "verdict": "homonym",
       "why": "performance profiling vs endpoint definition test"
-    },
-    "tracked_python_files": {
-      "verdict": "real",
-      "issue": 18954
     },
     "violations": {
       "verdict": "homonym",

@@ -93,7 +93,7 @@ def test_an_exception_whose_site_no_longer_exists_is_stale(tmp_path, monkeypatch
 
 
 def test_the_recorded_get_current_user_exceptions_hold_on_the_real_tree() -> None:
-    raw = detector.find_clusters(detector.tracked_python_files())[0]
+    raw = detector.find_clusters(detector.fork_scan_files())[0]
     assert "get_current_user" in raw, "contrast: the raw tree still has the cluster"
     effective, problems = detector.apply_exceptions(raw, detector.load_exceptions())
     assert problems == [] and "get_current_user" not in effective

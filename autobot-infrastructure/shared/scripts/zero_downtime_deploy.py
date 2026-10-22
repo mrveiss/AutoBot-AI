@@ -75,7 +75,7 @@ class TimingConstants:
 from deployment_registry import (  # noqa: E402
     SERVICE_DEFINITIONS,
     DeploymentMode,
-    get_service_registry,
+    get_deployment_registry,
 )
 
 # --- end standalone replacements (#11761) -----------------------------------
@@ -117,7 +117,7 @@ class ZeroDowntimeDeployer:
         # #18132: this script fills the registry itself through update_service_url, so
         # its ServiceRegistry starts EMPTY; the shared class builds URLs eagerly by
         # default, so the original behaviour is requested explicitly.
-        self.service_registry = get_service_registry(populate_services=False)
+        self.service_registry = get_deployment_registry(populate_services=False)
         self.backup_manager = BackupManager()
 
         # Load deployment configuration

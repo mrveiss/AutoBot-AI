@@ -70,6 +70,7 @@ _OWN_LAYER_PACKAGES = {"middleware", "skills", "plugins"}
 _BACKEND_ROOT_NAME = "autobot-backend"
 
 
+# Not autobot_shared.paths.project_root: that honours AUTOBOT_PROJECT_ROOT, this must stay this file's own checkout.
 def _repo_root() -> Path:
     """Locate the repo root from this file, not the caller's cwd.
 

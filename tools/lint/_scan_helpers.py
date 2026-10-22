@@ -454,6 +454,23 @@ def configure_logging(target: logging.Logger) -> None:
     target.setLevel(logging.INFO)
 
 
+def report_audit(log: logging.Logger, problems: List[str], failed: str, clean: str, *counts: int) -> int:
+    """Report a full-repo ``--audit`` sweep: ``1`` with every problem logged, else ``0``.
+
+    Seven checkers each ended their ``run_audit`` with this same block: the
+    problems joined by a blank line at ERROR, then a one-line FAILED summary,
+    or a one-line clean summary at INFO. *failed* and *clean* are the
+    %-format summaries (each begins with the newline the FAILED form has
+    always carried), filled from *counts*; the checker owns its wording.
+    """
+    if problems:
+        log.error("%s", "\n\n".join(problems))
+        log.error(failed, *counts)
+        return 1
+    log.info(clean, *counts)
+    return 0
+
+
 def logical_lines(text: str) -> List[Tuple[int, str]]:
     """`(first line number, joined line)` with shell `\\`-continuations folded in.
 
