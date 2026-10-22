@@ -77,10 +77,9 @@ ALLOWANCE_VERDICTS: dict[str, tuple[str, str, str]] = {
     ),
     "audio-extension-allowlist": (
         ABSOLUTE,
-        "COMPLETION_GAP",
-        "It declares `skips` because it cannot read every file it lists, and the relative mode "
-        "applies one fraction to both bounds -- a value that clears `examined()` fails "
-        "`completed()` and the reverse.",
+        "SUBSET_DRIFTS",
+        "Tracked Python minus the canonical file and `repo_tests/` (#16724); tests grow at their "
+        "own rate, so a share of all tracked Python sinks with nothing wrong with the sweep.",
     ),
     "blanket-skip-test-module-sweep": (
         ABSOLUTE,
