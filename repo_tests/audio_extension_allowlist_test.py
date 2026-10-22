@@ -220,7 +220,7 @@ REACH = declare(
     # train-36: population 7045 -> window [6345, 6745], completed() 6434; 6409 is the middle of [6385, 6434].
     # security train (#18904): population 7093 -> window [6393, 6793], completed() 6472; 6452 is the middle of [6433, 6472].
     # train-51: population 7163 -> 6517, the middle of [6503, 6532].
-    floor=6576,  # re-pinned (train 66): mid of [window bottom 6532 + 40, completed() 6580]; population 7232 (#16724)
+    floor=6583,  # re-pinned (train 71): mid of [window bottom 6541 + 40, completed() 6586]; population 7241 (#16724)
     growth=400,
     skips=300,
     what="tracked python files",
