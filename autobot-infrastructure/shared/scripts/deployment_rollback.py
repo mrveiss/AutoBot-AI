@@ -89,7 +89,7 @@ from deployment_registry import (  # noqa: E402
     ServiceStatus,
     DeploymentMode,
     ServiceHealth,
-    get_service_registry,
+    get_deployment_registry,
 )
 
 
@@ -118,7 +118,7 @@ class RollbackManager:
         self.rollback_dir = self.project_root / rollback_dir
         self.rollback_dir.mkdir(exist_ok=True)
 
-        self.service_registry = get_service_registry()
+        self.service_registry = get_deployment_registry()
         self.backup_manager = BackupManager(backup_dir)
 
         # Rollback configuration

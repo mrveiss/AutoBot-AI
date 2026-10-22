@@ -249,7 +249,7 @@ def _block_hits(rel: str, block: Block, pattern: re.Pattern[str]) -> list[Findin
     ]
 
 
-def check_paths(
+def scan_markdown_for_fleet_addresses(
     paths: Iterable[pathlib.Path], base: pathlib.Path, pattern: re.Pattern[str]
 ) -> tuple[list[Finding], list[str]]:
     """Scan the given Markdown files. An unreadable file is a problem, never a skip."""
@@ -296,7 +296,7 @@ def audit(base: pathlib.Path | None = None) -> tuple[int, list[str]]:
             f"discovery returned only {len(files)} Markdown file(s) under {DOCS_DIR}/ "
             f"(floor {DISCOVERY_FLOOR}) — the sweep broke, so a clean result below would assert nothing."
         )
-    findings, scan_problems = check_paths(files, base, pattern)
+    findings, scan_problems = scan_markdown_for_fleet_addresses(files, base, pattern)
     problems.extend(scan_problems)
     if findings:
         problems.append(_leak_problem(findings))
@@ -315,7 +315,7 @@ def _run(args: argparse.Namespace, base: pathlib.Path) -> tuple[str, list[str]]:
         reached, problems = audit(base)
         return f"{reached} Markdown file(s) under {DOCS_DIR}/", problems
     selected = _selected_paths(args.paths, base)
-    findings, problems = check_paths(selected, base, fleet_address_pattern(base))
+    findings, problems = scan_markdown_for_fleet_addresses(selected, base, fleet_address_pattern(base))
     if findings:
         problems.append(_leak_problem(findings))
     return f"{len(selected)} given file(s)", problems

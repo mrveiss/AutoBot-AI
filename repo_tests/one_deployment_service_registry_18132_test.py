@@ -60,7 +60,7 @@ _CONSUMERS = tuple(
 
 
 #: What a consumer may import: the class, or the shared process-wide accessor that builds it (#18964).
-_SHARED_REGISTRY_NAMES = frozenset({"ServiceRegistry", "get_service_registry"})
+_SHARED_REGISTRY_NAMES = frozenset({"ServiceRegistry", "get_deployment_registry"})
 
 
 def _defines_registry(source: str) -> bool:
@@ -132,7 +132,7 @@ def test_the_infrastructure_tree_has_one_service_registry() -> None:
 def test_each_former_copy_imports_the_shared_registry(rel: str) -> None:
     assert _imports_shared_registry(
         _read(rel)
-    ), f"#18132: {rel} no longer imports ServiceRegistry or get_service_registry from deployment_registry"
+    ), f"#18132: {rel} no longer imports ServiceRegistry or get_deployment_registry from deployment_registry"
 
 
 def test_service_status_is_the_canonical_health_enum() -> None:

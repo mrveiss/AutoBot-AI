@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, BaseSwitch } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -263,14 +263,7 @@ onMounted(fetchSettings)
               <label class="block text-sm font-medium text-gray-900">{{ $t('settings.monitoringSettings.alerting') }}</label>
               <p class="text-xs text-gray-500 mt-1">{{ $t('settings.monitoringSettings.enableAlertNotifications') }}</p>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                v-model="settings.alerting_enabled"
-                class="sr-only peer"
-              />
-              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-            </label>
+            <BaseSwitch v-model="settings.alerting_enabled" :label="$t('settings.monitoringSettings.alerting')" />
           </div>
         </div>
       </div>
