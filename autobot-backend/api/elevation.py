@@ -9,6 +9,7 @@ Handles privilege escalation requests through GUI dialogs
 """
 
 import asyncio
+import hashlib
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Dict
@@ -29,6 +30,8 @@ from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.security.redaction import command_log_label
+from autobot_shared.security.redaction import safe_log_text as _safe_log_text
 
 logger = get_logger(__name__)
 
@@ -43,6 +46,12 @@ _ALLOWED_ELEVATED_COMMANDS = frozenset({"apt", "systemctl", "mount", "umount", "
 # In-memory storage for elevation sessions (in production, use Redis)
 elevation_sessions: Dict[str, dict] = {}
 pending_requests: Dict[str, dict] = {}
+
+
+def _token_fingerprint(session_token: str) -> str:
+    """Non-reversible 8-char identifier for a session token, safe to log (#19082)."""
+    return hashlib.sha256(session_token.encode("utf-8")).hexdigest()[:8]
+
 
 # Locks for thread-safe access
 _elevation_sessions_lock = asyncio.Lock()
@@ -119,7 +128,11 @@ async def authorize_elevation(auth: ElevationAuthorization):
             pending_requests[request_id]["status"] = "authorized"
             pending_requests[request_id]["session_token"] = session_token
 
-        logger.info("Elevation authorized: %s", request_id)
+        logger.info(
+            "Elevation authorized: %s (session %s)",
+            request_id,
+            _token_fingerprint(session_token),
+        )
 
         return {
             "success": True,
@@ -129,13 +142,13 @@ async def authorize_elevation(auth: ElevationAuthorization):
         }
 
     except ValueError as e:
-        logger.error("Elevation authorization failed due to invalid input: %s", e)
+        logger.error("Elevation authorization failed due to invalid input: %s", _safe_log_text(e))
         raise HTTPException(status_code=400, detail="Invalid authorization data")
     except (OSError, IOError) as e:
-        logger.error("Elevation authorization failed due to system error: %s", e)
+        logger.error("Elevation authorization failed due to system error: %s", _safe_log_text(e))
         raise HTTPException(status_code=500, detail="System error during authorization")
     except Exception as e:
-        logger.error("Elevation authorization failed: %s", e)
+        logger.error("Elevation authorization failed: %s", _safe_log_text(e))
         raise HTTPException(status_code=500, detail="Authorization failed")
 
 
@@ -186,7 +199,11 @@ async def execute_elevated_command(session_token: str, command: str):
         # In production, implement proper security controls
         result = await run_elevated_command(command)
 
-        logger.info("Elevated command executed: %s", command)
+        logger.info(
+            "Elevated command executed: %s (session %s)",
+            command_log_label(command),
+            _token_fingerprint(session_token),
+        )
 
         return {
             "success": True,
@@ -196,13 +213,13 @@ async def execute_elevated_command(session_token: str, command: str):
         }
 
     except (OSError, IOError) as e:
-        logger.error("Failed to execute elevated command due to system error: %s", e)
+        logger.error("Failed to execute elevated command due to system error: %s", _safe_log_text(e))
         raise HTTPException(status_code=500, detail="System error during command execution")
     except asyncio.TimeoutError as e:
-        logger.error("Failed to execute elevated command due to timeout: %s", e)
+        logger.error("Failed to execute elevated command due to timeout: %s", _safe_log_text(e))
         raise HTTPException(status_code=408, detail="Command execution timed out")
     except Exception as e:
-        logger.error("Failed to execute elevated command: %s", e)
+        logger.error("Failed to execute elevated command: %s", _safe_log_text(e))
         raise HTTPException(status_code=500, detail="Command execution failed")
 
 
@@ -245,13 +262,13 @@ async def verify_sudo_password(password: str) -> bool:
         return process.returncode == 0
 
     except (OSError, IOError) as e:
-        logger.error("Password verification failed due to system error: %s", e)
+        logger.error("Password verification failed due to system error: %s", _safe_log_text(e))
         return False
     except asyncio.TimeoutError as e:
-        logger.error("Password verification failed due to timeout: %s", e)
+        logger.error("Password verification failed due to timeout: %s", _safe_log_text(e))
         return False
     except Exception as e:
-        logger.error("Password verification failed: %s", e)
+        logger.error("Password verification failed: %s", _safe_log_text(e))
         return False
 
 
@@ -285,13 +302,14 @@ async def run_elevated_command(command: str) -> dict:
         }
 
     except (OSError, IOError) as e:
-        logger.error("Command execution failed due to system error: %s", e)
+        logger.error("Command execution failed due to system error: %s", _safe_log_text(e))
         return {"stdout": "", "stderr": "System error", "return_code": 1}
     except asyncio.TimeoutError as e:
-        logger.error("Command execution failed due to timeout: %s", e)
+        logger.error("Command execution failed due to timeout: %s", _safe_log_text(e))
         return {"stdout": "", "stderr": "Command timed out", "return_code": 124}
-    except Exception:
-        logger.exception("Command execution failed")
+    except Exception as e:
+        # No traceback / raw message: an allowlist ValueError carries the command text (#19082).
+        logger.error("Command execution failed: %s: %s", type(e).__name__, _safe_log_text(e))
         return {"stdout": "", "stderr": "An internal error occurred", "return_code": 1}
 
 
@@ -305,7 +323,10 @@ async def revoke_elevation_session(session_token: str):
     """Revoke an elevation session"""
     if session_token in elevation_sessions:
         del elevation_sessions[session_token]
-        logger.info("Elevation session revoked: %s", session_token)
+        logger.info(
+            "Elevation session revoked: %s",
+            _token_fingerprint(session_token),
+        )
 
     return {"success": True, "message": "Session revoked"}
 
