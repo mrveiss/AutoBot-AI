@@ -56,7 +56,7 @@ readonly REPO_HOST="github.com"
 readonly REPO_SLUG="mrveiss/AutoBot-AI"
 readonly DEFAULT_REPO="https://${REPO_HOST}/${REPO_SLUG}.git"
 readonly NODESOURCE_HOST="deb.nodesource.com"
-readonly DEFAULT_BRANCH="main"
+readonly DEFAULT_BRANCH="main" PINNED_COMMIT=""  # a release build pins both: tag and its commit (#18666)
 # #18586: where this script was started from, resolved before any cd; empty under `curl | bash`
 SCRIPT_DIR=""
 [[ -f "${BASH_SOURCE[0]:-}" ]] && SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -567,18 +567,18 @@ code_deployment() {
         done
 
         run_ok "Fetching latest code" \
-            sudo -u "${AUTOBOT_USER}" git -C "${CODE_SOURCE}" fetch origin
+            sudo -u "${AUTOBOT_USER}" git -C "${CODE_SOURCE}" fetch --tags origin
         run_ok "Checking out ${GIT_BRANCH}" \
             sudo -u "${AUTOBOT_USER}" git -C "${CODE_SOURCE}" checkout "${GIT_BRANCH}"
         run_ok "Pulling latest changes" \
-            sudo -u "${AUTOBOT_USER}" git -C "${CODE_SOURCE}" pull origin "${GIT_BRANCH}"
+            sudo -u "${AUTOBOT_USER}" sh -c 'git -C "$1" symbolic-ref -q HEAD >/dev/null || exit 0; git -C "$1" pull origin "$2"' _ "${CODE_SOURCE}" "${GIT_BRANCH}"  # a release tag is already exact (#18666)
     else
         run_ok "Cloning AutoBot repository (branch: ${GIT_BRANCH})" \
             sudo -u "${AUTOBOT_USER}" git clone -b "${GIT_BRANCH}" "${DEFAULT_REPO}" "${CODE_SOURCE}"
     fi
 
     local installed_sha  # #18586: record exactly what was installed
-    installed_sha="$(sudo -u "${AUTOBOT_USER}" git -C "${CODE_SOURCE}" rev-parse HEAD)"
+    installed_sha="$(sudo -u "${AUTOBOT_USER}" git -C "${CODE_SOURCE}" rev-parse HEAD)"; [[ -z "${PINNED_COMMIT}" || "${GIT_BRANCH}" != "${DEFAULT_BRANCH}" || "${installed_sha}" == "${PINNED_COMMIT}" ]] || fatal "${GIT_BRANCH} checked out ${installed_sha}, but this signed installer was built for ${PINNED_COMMIT}; the tag moved -- refusing (#18666)"
     success "Installing ${DEFAULT_REPO} branch ${GIT_BRANCH} @ ${installed_sha}"
 
     # Copy code from code_source to service directories where Ansible expects them

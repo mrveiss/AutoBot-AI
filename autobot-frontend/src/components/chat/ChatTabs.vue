@@ -56,8 +56,9 @@ const { holdsPermission } = usePermissions()
 /**
  * The permission the desktop socket itself asks for (#17054). Read through
  * `holdsPermission` -- the role table, no administrative override -- because
- * `hasPermission` short-circuits on `isAdmin` and would offer the tab to a
- * superadmin, whose table entry is empty and whom the socket refuses (#17370).
+ * `hasPermission` short-circuits on `isAdmin`, which is not what the socket
+ * asks. Superadmin holds it through admin's derived table entry (#19125), so
+ * the two agree (#17370).
  */
 const DESKTOP_PERMISSION = 'mcp.desktop.control'
 

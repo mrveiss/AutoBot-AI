@@ -21,6 +21,7 @@ from typing import Dict
 from fastapi import HTTPException, Request
 
 from auth_middleware import get_auth_middleware
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import TTL_30_DAYS
 from security.enforcement_mode import (
@@ -381,13 +382,10 @@ class SessionOwnershipValidator:
         )
 
     async def _is_org_admin_access(self, user_data: Dict, session_id: str) -> bool:
-        """Check if user is an org admin accessing a session in their org.
-
-        Helper for validate_ownership (#684).
-        """
+        """Check if user is an org admin accessing a session in their org (#684)."""
         user_role = user_data.get("role", "")
         user_org_id = user_data.get("org_id")
-        if user_role not in ("admin", "org_admin") or not user_org_id:
+        if not (is_admin_role(user_role) or user_role == "org_admin") or not user_org_id:
             return False
         session_ctx = await self.get_session_context(session_id)
         return session_ctx.get("org_id") == user_org_id

@@ -80,8 +80,23 @@ sha256sum -c install.sh.sha256 \
 The `&&` chain is the point: if a download is missing, the checksum differs or the signature does
 not verify, `install.sh` never runs.
 
-Keep the `cosign.pub` you trust and compare it with later downloads: a signature only proves the
-script matches the key, so the key is the thing to check once.
+A signature only proves the script matches the key, so the key is the thing to check. Fetching
+`cosign.pub` from the same tag, as above, proves nothing by itself: whoever can replace a tag can
+replace its key, signature and release notes together. The first time, compare `sha256sum cosign.pub`
+with a fingerprint from a channel a release cannot rewrite:
+
+- `cosign.pub` on the `main` branch, viewed in the repository's web interface at a commit you pin
+  (its history shows when the key last changed), and
+- the fingerprint the owner publishes alongside the key (#19126).
+
+Then keep that `cosign.pub` and verify later releases against your copy. The SHA256 printed in each
+signed release's notes is a comparison aid only, never the proof.
+
+Until the signing key is set up, a release carries `install.sh` and `install.sh.sha256` but no
+`install.sh.sig`; its release job says so in a warning. For such a release, verify the checksum and
+drop the `cosign` step from the chain: `sha256sum -c install.sh.sha256 && sudo bash install.sh`. A checksum downloaded from
+the same release proves the file arrived intact, not who made it: authenticity needs the signing key
+(#19126).
 
 Pinned but unverified, as a one-liner next to the `main` one:
 

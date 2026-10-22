@@ -186,7 +186,8 @@ def install_real_resolution(real_auth_middleware, monkeypatch) -> SimpleNamespac
         "api.user_management.dependencies._canonical_resolve_human_user", real_auth_middleware.resolve_human_user
     )
     monkeypatch.setattr(real_auth_middleware, "verify_internal_api_key", lambda provided: provided == INTERNAL_KEY)
-    monkeypatch.setattr(real_auth_middleware, "reject_if_revoked_by_password_change", AsyncMock())
+    # resolve_human_user_via (auth_revocation) owns the gate since #19061.
+    monkeypatch.setattr("auth_revocation.reject_if_revoked_by_password_change", AsyncMock())
     run_jwt = SimpleNamespace(validate_run_jwt=token_validator(lambda: state.run_secret, RUN_AUD))
     device_jwt = SimpleNamespace(validate_device_jwt=token_validator(lambda: state.device_secret, DEVICE_AUD))
     monkeypatch.setitem(sys.modules, "services.run_jwt", run_jwt)

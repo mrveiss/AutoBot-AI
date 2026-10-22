@@ -100,6 +100,34 @@ class AuditAction(str, Enum):
     CLAIMS_CREDENTIAL_MINT = "claims_credential.mint"  # #18811
     CLAIMS_CREDENTIAL_REVOKE = "claims_credential.revoke"  # #18811
     CLAIMS_CREDENTIAL_CHECK_FAILURES = "claims_credential.check_failures"  # #18811: one per source per window
+    # identity vocabulary (#19035); IdentityAuditAction spellings map here through audit_actions.ACTION_ALIASES.
+    # auth.mfa carries verified / failed / backup-code in the outcome column, like auth.login.
+    AUTH_MFA = "auth.mfa"
+    AUTH_LOCKOUT = "auth.lockout"
+    AUTH_UNLOCK = "auth.unlock"
+    MFA_ENABLE = "mfa.enable"
+    MFA_DISABLE = "mfa.disable"
+    ACCESS_DENIED = "access.denied"
+    PASSWORD_RESET_REQUEST = "password.reset_request"  # nosec B105  # pragma: allowlist secret -- an action name
+    PASSWORD_RESET = "password.reset"  # nosec B105  # pragma: allowlist secret -- an action name
+    SSO_LINK = "sso.link"
+    SSO_UNLINK = "sso.unlink"
+    USER_ACTIVATE = "user.activate"
+    USER_DEACTIVATE = "user.deactivate"
+    TEAM_CREATE = "team.create"
+    TEAM_UPDATE = "team.update"
+    TEAM_DELETE = "team.delete"
+    TEAM_MEMBER_ADD = "team.member_add"
+    TEAM_MEMBER_REMOVE = "team.member_remove"
+    TEAM_MEMBER_ROLE_CHANGE = "team.member_role_change"
+    ORG_CREATE = "org.create"
+    ORG_UPDATE = "org.update"
+    ORG_DELETE = "org.delete"
+    ROLE_CREATE = "role.create"
+    ROLE_UPDATE = "role.update"
+    ROLE_DELETE = "role.delete"
+    API_KEY_USE = "api_key.use"  # pragma: allowlist secret -- an action name, not a key
+    SECURITY_SUSPICIOUS_ACTIVITY = "security.suspicious_activity"
 
 
 class ComplianceEventType(str, Enum):

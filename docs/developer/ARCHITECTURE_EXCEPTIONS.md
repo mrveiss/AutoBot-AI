@@ -516,24 +516,6 @@ it and this entry be removed.
 
 ---
 
-## Direct Redis Health Probes
-
-**Files:** `autobot-backend/utils/distributed_service_discovery.py`, `autobot-backend/utils/service_discovery.py`
-**Canonical it does not use:** `autobot_shared/redis_client.py`
-**Issue:** #18553
-
-**Reason:** each builds a fresh `redis.Redis(...)` to ask "is THIS endpoint answering" for a host and
-port supplied by the caller, with its own short timeouts, and closes it
-afterwards. The canonical client addresses named databases on the configured Redis through pooled,
-circuit-broken connections, so it cannot probe an arbitrary endpoint and would report the pool's
-state instead of the endpoint's. The sites are frozen in `repo_tests/redis_direct_constructor_baseline_18553.py`.
-
-**Revisit when:** the canonical layer grows an endpoint-probe entry point; delete these constructors then.
-
-**Grep check:** `grep -n "redis.Redis(" autobot-backend/utils/distributed_service_discovery.py autobot-backend/utils/service_discovery.py` — if empty, this exception is obsolete.
-
----
-
 ## Memory graph vs knowledge-base visibility — two models on purpose
 
 **Files:** `autobot-backend/autobot_memory_graph/owner_scope.py`, `autobot-backend/knowledge/search_filters.py`

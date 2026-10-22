@@ -447,6 +447,9 @@ _REAL_SERVICE_MODULES = (
     # than an error (the #14307 reasoning this list exists for).
     "capability_tiers",
     "node_capability",
+    # #19125: the SLM's JWKS token verifier; its co-located admin-family test
+    # imports it directly and must exercise the real claim normalisation.
+    "jwks_verifier",
 )
 
 # The placeholder a failed real-load falls back to (#15563). Loaded by path for

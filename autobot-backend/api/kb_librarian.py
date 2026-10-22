@@ -44,6 +44,7 @@ from api.schemas_knowledge import (
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from knowledge_factory import peek_knowledge_base
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -129,7 +130,7 @@ async def get_kb_librarian_status(
             "similarity_threshold": kb_librarian.similarity_threshold,
             "max_results": kb_librarian.max_results,
             "auto_summarize": kb_librarian.auto_summarize,
-            "knowledge_base_active": kb_librarian.knowledge_base is not None,
+            "knowledge_base_active": (kb_librarian.knowledge_base or peek_knowledge_base()) is not None,
         }
 
     except Exception as e:

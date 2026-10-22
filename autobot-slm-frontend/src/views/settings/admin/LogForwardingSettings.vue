@@ -143,15 +143,18 @@ function openAddModal(): void {
   showModal.value = true
 }
 
-function openEditModal(dest: LogForwardingDestination): void {
-  editingDestination.value = dest
-  Object.assign(formData, formFromDestination(dest))
+async function openEditModal(dest: LogForwardingDestination): Promise<void> {
+  try {
+    editingDestination.value = await api.getLogForwardingDestination(dest.name) // fresh, not the list row (#18734)
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : t('settings.admin.logForwardingSettings.loadFailed')
+    return
+  }
+  Object.assign(formData, formFromDestination(editingDestination.value))
   showModal.value = true
 }
 
-function resetForm(): void {
-  Object.assign(formData, defaultForm())
-}
+const resetForm = (): void => { Object.assign(formData, defaultForm()) }
 
 function closeModal(): void {
   showModal.value = false
@@ -162,18 +165,15 @@ function closeModal(): void {
 async function saveDestination(): Promise<void> {
   saving.value = true
   error.value = null
-
   try {
     if (editingDestination.value) {
       await api.updateLogForwardingDestination(editingDestination.value.name, buildUpdateBody(formData))
     } else {
       await api.createLogForwardingDestination(buildCreateBody(formData))
     }
-
     success.value = t(editingDestination.value ? 'settings.admin.logForwardingSettings.destinationUpdated' : 'settings.admin.logForwardingSettings.destinationCreated')
     closeModal()
-    await fetchDestinations()
-    await fetchStatus()
+    await Promise.all([fetchDestinations(), fetchStatus()])
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('settings.admin.logForwardingSettings.saveFailed')

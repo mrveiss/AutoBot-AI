@@ -17,7 +17,7 @@ from typing import Dict, Tuple
 
 from fastapi import HTTPException, Request, status
 
-from auth_revocation import reject_if_revoked_by_password_change
+from auth_revocation import resolve_human_user_via, token_passes_revocation
 from autobot_shared.auth.interactive_principal import LOGIN_TOKEN_TYPE, is_login_token, is_purpose_bound
 from autobot_shared.auth.internal_api_key import verify_internal_api_key
 from autobot_shared.auth.jwt_core import (
@@ -287,7 +287,7 @@ class AuthenticationMiddleware:
 
             # Audit log the lockout
             self.security_layer.audit_log(
-                action="account_locked",
+                action="auth.lockout",
                 user=username,
                 outcome="security_action",
                 details={
@@ -818,9 +818,11 @@ class AuthenticationMiddleware:
             },
         )
 
-    def check_file_permissions(self, request: Request, operation: str) -> Tuple[bool, Dict | None]:
+    async def check_file_permissions(self, request: Request, operation: str) -> Tuple[bool, Dict | None]:
         """
         Enhanced permission checking with comprehensive security measures.
+
+        The caller resolves via ``resolve_human_user``: revoked JWT 401, epoch store down 503 (#18688).
 
         Issue #620: Refactored to use helper methods for audit logging.
 
@@ -828,7 +830,7 @@ class AuthenticationMiddleware:
             Tuple of (permission_granted: bool, user_data: Dict)
         """
         try:
-            user_data = self.get_user_from_request(request)
+            user_data = await resolve_human_user_via(self, request)  # this instance's key, not the singleton's
             if not user_data:
                 return False, None
 
@@ -849,6 +851,8 @@ class AuthenticationMiddleware:
             self._log_file_access_granted(username, operation, user_role, user_data, ip_address)
             return True, user_data
 
+        except HTTPException:
+            raise  # revoked (401), store unavailable (503), device token (403): not a plain denial
         except Exception as e:
             logger.error(f"Error checking file permissions for operation '{operation}': {e}")
             return False, None
@@ -859,18 +863,7 @@ get_auth_middleware = lazy_singleton(AuthenticationMiddleware)
 
 async def resolve_human_user(request: Request) -> Dict | None:
     """The human a request's JWT / session / dev header names, or None; reads no internal key (#18688)."""
-    user_data = get_auth_middleware().get_user_from_request(request)
-    if not user_data:
-        return None
-    if user_data.get("auth_method") == "device_jwt":  # device JWTs: see get_current_user (GH#9493)
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Device tokens not permitted on this endpoint. Use mobile-specific API.",
-        )
-    # #12924, #16411: a token minted before a password change is void; a check that cannot run denies.
-    if user_data.get("auth_method") == "jwt":
-        await reject_if_revoked_by_password_change(user_data)
-    return user_data
+    return await resolve_human_user_via(get_auth_middleware(), request)
 
 
 async def get_current_user(request: Request) -> Dict:
@@ -949,18 +942,9 @@ async def get_current_user(request: Request) -> Dict:
 
 async def check_admin_permission(request: Request) -> bool:
     """
-    FastAPI dependency to check if user has admin permission; a revoked JWT is 401 (#18688).
+    FastAPI dependency: True for an admin (``Depends(check_admin_permission)``); a revoked JWT is 401 (#18688).
 
-    Use as: Depends(check_admin_permission)
-
-    Args:
-        request: FastAPI Request object
-
-    Returns:
-        True if user has admin role
-
-    Raises:
-        HTTPException: 401 if not authenticated, 403 if not admin
+    Raises HTTPException: 401 if not authenticated, 403 if not admin.
     """
     # Issue #1145: Allow trusted internal services (e.g. SLM backend) via API key.
     # The key is set via AUTOBOT_INTERNAL_API_KEY env var on both services.
@@ -1043,11 +1027,7 @@ async def authenticate_websocket(websocket) -> dict | None:
     Issue #2818: Add auth before websocket.accept() to reject unauthenticated
     connections at the protocol handshake level.
 
-    Args:
-        websocket: FastAPI WebSocket instance.
-
-    Returns:
-        User dict or None if authentication fails.
+    Returns the user dict, or None if authentication fails (websocket: FastAPI WebSocket).
     """
     # #16457: prefer Sec-WebSocket-Protocol (['bearer', '<jwt>']) over the query param so the
     # token never lands in URL access logs/browser history; query stays a fallback during migration.
@@ -1058,7 +1038,8 @@ async def authenticate_websocket(websocket) -> dict | None:
             # NEW ephemeral RS256 keypair, so it can't verify tokens signed by the
             # singleton used at login → every WS handshake 403'd ("Disconnected").
             token_data = get_auth_middleware().verify_jwt_token(token)
-            if token_data and not is_purpose_bound(token_data):  # #17049
+            # #17049: a purpose-bound token is not a login; #18688: nor is one revoked by a password change
+            if token_data and not is_purpose_bound(token_data) and await token_passes_revocation(token_data):
                 result = {
                     "username": token_data["username"],
                     "role": token_data["role"],

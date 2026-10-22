@@ -44,6 +44,7 @@ from api.session_events import (
 )
 from auth_middleware import get_auth_middleware, get_current_user, resolve_human_user
 from autobot_memory_graph import AutoBotMemoryGraph
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 
@@ -583,11 +584,9 @@ async def _list_org_sessions(
     user_role = user_data.get("role", "")
     if not org_id:
         return create_chat_response(
-            data={"sessions": [], "count": 0, "scope": "org"},
-            message="User has no organization",
-            request_id=request_id,
+            data={"sessions": [], "count": 0, "scope": "org"}, message="User has no organization", request_id=request_id
         )
-    if user_role not in ("admin", "org_admin"):
+    if not (is_admin_role(user_role) or user_role == "org_admin"):
         (
             AutoBotError,
             InternalError,
@@ -1833,7 +1832,7 @@ async def clear_session_checkpoints(
     which removes the Redis-backed LangGraph checkpoint data.
     """
     user_role = current_user.get("role", "")
-    if user_role not in ("admin", "org_admin"):
+    if not (is_admin_role(user_role) or user_role == "org_admin"):
         (
             _AutoBotError,
             _InternalError,

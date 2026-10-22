@@ -62,6 +62,33 @@ ACTION_ALIASES: dict[str, str] = {
     "password_changed": "password.change",  # nosec B105  # pragma: allowlist secret -- an action name
     **dict.fromkeys(("api_key_created", "api_key.created"), "api_key.create"),  # pragma: allowlist secret
     **dict.fromkeys(("api_key_revoked", "api_key.deleted"), "api_key.revoke"),  # pragma: allowlist secret
+    # identity vocabulary (#19035): IdentityAuditAction is a public constant set, mapped here on write
+    **dict.fromkeys(("mfa_verified", "mfa_failed", "backup_code_used"), "auth.mfa"),  # outcome says which
+    "mfa_enabled": "mfa.enable",
+    "mfa_disabled": "mfa.disable",
+    "account_locked": "auth.lockout",
+    "account_unlocked": "auth.unlock",
+    "permission_denied": "access.denied",
+    "password_reset_requested": "password.reset_request",  # nosec B105  # pragma: allowlist secret -- an action name
+    "password_reset_completed": "password.reset",  # nosec B105  # pragma: allowlist secret -- an action name
+    "sso_linked": "sso.link",
+    "sso_unlinked": "sso.unlink",
+    "user_activated": "user.activate",
+    "user_deactivated": "user.deactivate",
+    "team_created": "team.create",
+    "team_updated": "team.update",
+    "team_deleted": "team.delete",
+    "team_member_added": "team.member_add",
+    "team_member_removed": "team.member_remove",
+    "team_member_role_changed": "team.member_role_change",
+    "org_created": "org.create",
+    "org_updated": "org.update",
+    "org_deleted": "org.delete",
+    "role_created": "role.create",
+    "role_updated": "role.update",
+    "role_deleted": "role.delete",
+    "api_key_used": "api_key.use",  # pragma: allowlist secret
+    "suspicious_activity": "security.suspicious_activity",
 }
 
 

@@ -81,7 +81,8 @@ class TestDependencyInjection:
         # Verify that default dependencies are created
         assert orchestrator.config_manager is not None
         assert orchestrator.llm_service is not None
-        assert orchestrator.knowledge_base is not None
+        # #18122: no private KnowledgeBase at construction; the canonical one is resolved at first use
+        assert orchestrator.knowledge_base is None
         assert orchestrator.diagnostics is not None
 
         # Verify they are the expected types

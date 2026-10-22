@@ -15,7 +15,7 @@ The owner accepted the cost on 2026-09-12 -- a Redis outage takes backend login 
 
 from typing import Dict
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException, Request, status
 
 from autobot_shared.auth.revocation_unavailable import revocation_unavailable_error
 from autobot_shared.logging_manager import get_logger
@@ -53,3 +53,46 @@ async def reject_if_revoked_by_password_change(user_data: Dict) -> None:
             detail="Token is no longer valid — password was changed. Please sign in again.",
             headers=_BEARER_CHALLENGE,
         )
+
+
+async def revoked_by_password_change_for_introspection(claims: Dict) -> bool:
+    """Whether *claims* (a token being inspected, not the caller) predate its subject's password change.
+
+    Introspection reports the verdict instead of refusing the request: revoked and unreadable
+    claims are ``True``; a check that cannot run is the same 503 as every other gate (#18688).
+    """
+    try:
+        return await is_token_revoked_by_password_change(claims)
+    except MalformedTokenClaims:
+        return True
+    except RevocationCheckUnavailable as exc:
+        logger.error("password-epoch introspection reached no verdict (%s); denying", exc)
+        raise revocation_unavailable_error() from exc
+
+
+async def token_passes_revocation(token_data: Dict) -> bool:
+    """False when the password-epoch check refuses the token or cannot run (fail closed); for non-HTTP callers."""
+    try:
+        await reject_if_revoked_by_password_change(token_data)
+    except HTTPException:
+        return False
+    return True
+
+
+async def resolve_human_user_via(middleware, request: Request) -> Dict | None:
+    """The human *middleware* (its own signing key) resolves from *request*, or None (#18688, #19061).
+
+    A device JWT is a 403 (GH#9493); a pre-password-change JWT is 401 and an epoch store that cannot answer
+    is 503. ``auth_middleware.resolve_human_user`` binds this to the singleton for existing callers.
+    """
+    user_data = middleware.get_user_from_request(request)
+    if not user_data:
+        return None
+    if user_data.get("auth_method") == "device_jwt":  # device JWTs: see get_current_user (GH#9493)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Device tokens not permitted on this endpoint. Use mobile-specific API.",
+        )
+    if user_data.get("auth_method") == "jwt":  # #12924, #16411: a token minted before a password change is void
+        await reject_if_revoked_by_password_change(user_data)
+    return user_data

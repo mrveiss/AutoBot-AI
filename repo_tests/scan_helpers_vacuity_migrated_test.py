@@ -24,7 +24,7 @@ from pathlib import Path
 import pytest
 from repo_tests.scan_helpers_vacuity_test import _REPO_ROOT, _git, _run_isolated, _seed
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env, make_repo
 from tools.lint._scan_helpers import PY_FLOOR
 
 _CHECKERS = ("check_field_defaults.py", "check_getenv_ssot_drift.py")
@@ -51,7 +51,7 @@ def _getenv_sites(drift: bool) -> str:
 def _repo(root: Path, ssot: str | None, *, fillers: int = 0, sites: str | None = None) -> Path:
     """A tracked throwaway repository: the seeded checkers, *ssot*, and optional bulk."""
     root.mkdir(parents=True, exist_ok=True)
-    _git(root, "init", "-q")
+    make_repo(root)
     _seed(root)
     if ssot is not None:
         (root / "autobot_shared" / "ssot_config.py").write_text(ssot, encoding="utf-8")
@@ -90,7 +90,7 @@ def test_the_checker_answers_the_same_from_a_subdirectory(
             capture_output=True,
             text=True,
             encoding="utf-8",
-            env={**scrubbed_git_env(), "PYTHONPATH": str(_REPO_ROOT)},
+            env={**isolated_git_env(), "PYTHONPATH": str(_REPO_ROOT)},
         )
         for cwd in (repo, repo / "tools")
     ]
