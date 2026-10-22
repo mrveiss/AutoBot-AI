@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import IDENTITY_NAME, git, isolated_git_env, make_repo
 
 SCRIPT = Path(__file__).resolve().parent / "lint-conventions.sh"
 LIB_DIR = Path(__file__).resolve().parent / "lib"
@@ -46,10 +46,10 @@ def _required_libs() -> list[str]:
 
 
 def _git(repo: Path, *args: str) -> None:
-    """#15246: env scrubbed -- an inherited GIT_DIR would run this against the
+    """#15246/#18940: isolated env -- an inherited GIT_DIR would run this against the
     real repository instead of the throwaway one at ``repo``.
     """
-    subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, env=scrubbed_git_env())
+    git(repo, *args)
 
 
 @pytest.fixture()
@@ -62,9 +62,7 @@ def repo(tmp_path: Path) -> Path:
     (r / "scripts" / "lib").mkdir(parents=True)
     for name in _required_libs():
         (r / "scripts" / "lib" / name).write_bytes((LIB_DIR / name).read_bytes())
-    _git(r.parent, "init", "-q", "-b", "main", str(r))
-    _git(r, "config", "user.email", "t@example.invalid")
-    _git(r, "config", "user.name", "t")
+    make_repo(r, default_branch="main")
     _git(r, "add", "-A")
     _git(r, "commit", "-q", "-m", "chore(init): base (#1)")
     return r
@@ -213,8 +211,7 @@ def _bot_commit(repo: Path, subject: str, name: str, email: str) -> None:
         check=True,
         capture_output=True,
         env={
-            "PATH": "/usr/bin:/bin",
-            "HOME": str(repo),
+            **isolated_git_env(identity=False),
             "GIT_AUTHOR_NAME": name,
             "GIT_AUTHOR_EMAIL": email,
             "GIT_COMMITTER_NAME": name,
@@ -277,7 +274,7 @@ def test_a_rejected_commit_names_the_author_it_parsed(repo: Path) -> None:
 
     result = run(repo, "--range", "HEAD~1..HEAD")
 
-    assert "author='t'" in result.stdout, result.stdout
+    assert f"author='{IDENTITY_NAME}'" in result.stdout, result.stdout
 
 
 def test_a_subject_containing_the_field_separator_cannot_shift_the_parse(repo: Path) -> None:
@@ -322,7 +319,7 @@ def _is_shallow(repo: Path) -> bool:
         ["git", "-C", str(repo), "rev-parse", "--is-shallow-repository"],
         capture_output=True,
         text=True,
-        env=scrubbed_git_env(),
+        env=isolated_git_env(),
     )
     return res.stdout.strip() == "true"
 
@@ -376,16 +373,14 @@ def test_every_sha_exemption_names_a_commit_that_exists() -> None:
         res = subprocess.run(
             ["git", "-C", str(REPO_ROOT), "cat-file", "-e", f"{sha}^{{commit}}"],
             capture_output=True,
-            env=scrubbed_git_env(),
+            env=isolated_git_env(),
         )
         assert res.returncode == 0, f"SHA exemption {sha} names no commit in this repository"
 
 
 def _tiny_repo(at: Path) -> Path:
     at.mkdir()
-    _git(at.parent, "init", "-q", "-b", "main", str(at))
-    _git(at, "config", "user.email", "t@example.invalid")
-    _git(at, "config", "user.name", "t")
+    make_repo(at, default_branch="main")
     (at / "a").write_text("1", encoding="utf-8")
     _git(at, "add", "-A")
     _git(at, "commit", "-q", "-m", "chore(init): one (#1)")
@@ -398,7 +393,7 @@ def _head_of(repo: Path) -> str:
         capture_output=True,
         text=True,
         check=True,
-        env=scrubbed_git_env(),
+        env=isolated_git_env(),
     ).stdout.strip()
 
 
@@ -429,7 +424,7 @@ def test_a_missing_object_is_distinguishable_from_a_present_one(tmp_path: Path) 
             subprocess.run(
                 ["git", "-C", str(r), "cat-file", "-e", f"{sha}^{{commit}}"],
                 capture_output=True,
-                env=scrubbed_git_env(),
+                env=isolated_git_env(),
             ).returncode
             == 0
         )

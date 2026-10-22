@@ -410,7 +410,7 @@ _OPTIONAL_ROLES = [
         # guard (which checks only target_path) and activate path-existence + systemd
         # checks — mirrors the postgres fix in #9853 (#9965).
         "target_path": "/usr/bin/Xtigervnc",
-        "systemd_service": "tigervncserver",
+        "systemd_service": "vnc-server",  # #19076 review: the unit roles/vnc installs (vnc_service_name)
         "auto_restart": False,
         "required": False,
         "degraded_without": ["Remote desktop access — headed browser mode unavailable"],

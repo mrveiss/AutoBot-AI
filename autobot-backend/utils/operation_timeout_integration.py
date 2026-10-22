@@ -425,8 +425,7 @@ class OperationIntegrationManager:
             from pathlib import Path
 
             from constants.path_constants import PATH
-
-            from ..knowledge_base import KnowledgeBase
+            from knowledge import get_knowledge_base
 
             codebase_path = context.get("codebase_path", str(PATH.PROJECT_ROOT))
             file_patterns = context.get("file_patterns", ["*.py", "*.js", "*.vue", "*.ts"])
@@ -441,7 +440,7 @@ class OperationIntegrationManager:
             await exec_context.update_progress("Initializing indexing", 0, 1)
 
             # Simulate actual indexing work
-            kb = KnowledgeBase()
+            kb = await get_knowledge_base()  # raises RuntimeError when unavailable (D2)
             result = await kb.populate_from_codebase(
                 codebase_path,
                 patterns=file_patterns,

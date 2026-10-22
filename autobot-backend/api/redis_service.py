@@ -20,17 +20,14 @@ from api.schemas_system import (
     ServiceStatusResponse,
 )
 from api.system_health import ComponentHealth, register_health_probe
-from auth_middleware import check_admin_permission, get_current_user, resolve_human_user
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from security.human_admin import refuse_service_principal
+from security.human_admin import refuse_service_principal, require_human_operator
 from services.redis_service_manager import RedisConnectionError, RedisServiceManager
 
 logger = get_logger(__name__)
 router = APIRouter(tags=["Redis Service Management"])
-
-# Performance optimization: O(1) lookup for privileged roles (Issue #326)
-PRIVILEGED_ROLES = {"admin", "operator"}
 
 # Global service manager instance (singleton)
 _service_manager: RedisServiceManager | None = None
@@ -70,32 +67,6 @@ async def get_service_manager() -> RedisServiceManager:
     return _service_manager
 
 
-async def check_operator_permission(request: Request) -> str:
-    """
-    Check if user has operator or admin permissions
-
-    Returns:
-        User ID if authorized
-
-    Raises:
-        HTTPException: If user lacks operator/admin permissions
-    """
-    user_data = await resolve_human_user(request)  # a revoked JWT is 401 (#18688)
-
-    if not user_data:
-        raise HTTPException(status_code=401, detail="Authentication required")
-
-    # Check if user has admin or operator role
-    role = user_data.get("role", "")
-    if role not in PRIVILEGED_ROLES:
-        raise HTTPException(
-            status_code=403,
-            detail="Admin or operator role required for this operation",
-        )
-
-    return user_data.get("username", "unknown")
-
-
 # API Endpoints
 @router.post("/start", response_model=ServiceOperationResponse)
 @with_error_handling(
@@ -103,15 +74,19 @@ async def check_operator_permission(request: Request) -> str:
     operation="start_redis_service",
     error_code_prefix="REDIS_SERVICE",
 )
-async def start_redis_service(request: Request, manager: RedisServiceManager = Depends(get_service_manager)):
+async def start_redis_service(
+    request: Request,
+    manager: RedisServiceManager = Depends(get_service_manager),
+    operator: dict = Depends(require_human_operator),
+):
     """
     Start Redis service on Redis VM
 
-    Requires: Admin or operator role
+    Requires: Admin or operator role; the internal service key is refused (403, #18688)
     """
     try:
-        # Check permissions
-        user_id = await check_operator_permission(request)
+        # The canonical operator gate is the Depends above; the name is for the audit log only
+        user_id = operator.get("username", "unknown")
 
         logger.info("Starting Redis service, requested by user: %s", user_id)
 
@@ -193,15 +168,19 @@ async def stop_redis_service(
     operation="restart_redis_service",
     error_code_prefix="REDIS_SERVICE",
 )
-async def restart_redis_service(request: Request, manager: RedisServiceManager = Depends(get_service_manager)):
+async def restart_redis_service(
+    request: Request,
+    manager: RedisServiceManager = Depends(get_service_manager),
+    operator: dict = Depends(require_human_operator),
+):
     """
     Restart Redis service on Redis VM
 
-    Requires: Admin or operator role
+    Requires: Admin or operator role; the internal service key is refused (403, #18688)
     """
     try:
-        # Check permissions
-        user_id = await check_operator_permission(request)
+        # The canonical operator gate is the Depends above; the name is for the audit log only
+        user_id = operator.get("username", "unknown")
 
         logger.info("Restarting Redis service, requested by user: %s", user_id)
 

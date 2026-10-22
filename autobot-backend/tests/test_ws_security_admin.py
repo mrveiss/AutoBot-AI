@@ -11,6 +11,7 @@ those two sockets did Origin validation only — an authenticated non-admin (or,
 with a permissive Origin, any caller) could open them.
 """
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -26,37 +27,37 @@ def _ws(headers=None):
 def test_authenticate_ws_admin_denies_unauthenticated():
     with (
         patch.dict("os.environ", {"AUTOBOT_REQUIRE_WS_AUTH": "1"}),
-        patch("auth_middleware.get_auth_middleware") as gam,
+        patch("auth_middleware.resolve_human_user", new=AsyncMock()) as rhu,
         patch("auth_middleware.verify_internal_api_key", return_value=False),
     ):
-        gam.return_value.get_user_from_request.return_value = None
-        assert authenticate_ws_admin(_ws()) is False
+        rhu.return_value = None
+        assert asyncio.run(authenticate_ws_admin(_ws())) is False
 
 
 def test_authenticate_ws_admin_denies_non_admin():
     with (
         patch.dict("os.environ", {"AUTOBOT_REQUIRE_WS_AUTH": "1"}),
-        patch("auth_middleware.get_auth_middleware") as gam,
+        patch("auth_middleware.resolve_human_user", new=AsyncMock()) as rhu,
         patch("auth_middleware.verify_internal_api_key", return_value=False),
     ):
-        gam.return_value.get_user_from_request.return_value = {"role": "user"}
-        assert authenticate_ws_admin(_ws()) is False
+        rhu.return_value = {"role": "user"}
+        assert asyncio.run(authenticate_ws_admin(_ws())) is False
 
 
 def test_authenticate_ws_admin_allows_admin_and_internal_key():
     with (
         patch.dict("os.environ", {"AUTOBOT_REQUIRE_WS_AUTH": "1"}),
-        patch("auth_middleware.get_auth_middleware") as gam,
+        patch("auth_middleware.resolve_human_user", new=AsyncMock()) as rhu,
         patch("auth_middleware.verify_internal_api_key", side_effect=lambda key: key == "k"),
     ):
-        gam.return_value.get_user_from_request.return_value = {"role": "admin"}
-        assert authenticate_ws_admin(_ws()) is True
-        assert authenticate_ws_admin(_ws({"X-Internal-API-Key": "k"})) is True
+        rhu.return_value = {"role": "admin"}
+        assert asyncio.run(authenticate_ws_admin(_ws())) is True
+        assert asyncio.run(authenticate_ws_admin(_ws({"X-Internal-API-Key": "k"}))) is True
 
 
 def test_authenticate_ws_admin_dev_bypass_when_disabled():
     with patch.dict("os.environ", {"AUTOBOT_REQUIRE_WS_AUTH": "0"}):
-        assert authenticate_ws_admin(_ws()) is True
+        assert asyncio.run(authenticate_ws_admin(_ws())) is True
 
 
 def test_authenticate_ws_admin_fail_closed_on_error():
@@ -65,7 +66,7 @@ def test_authenticate_ws_admin_fail_closed_on_error():
         patch.dict("os.environ", {"AUTOBOT_REQUIRE_WS_AUTH": "1"}),
         patch("auth_middleware.verify_internal_api_key", side_effect=RuntimeError("boom")),
     ):
-        assert authenticate_ws_admin(_ws()) is False
+        assert asyncio.run(authenticate_ws_admin(_ws())) is False
 
 
 @pytest.mark.asyncio
@@ -75,10 +76,10 @@ async def test_enforce_ws_admin_accepts_then_closes_4001_when_denied():
     ws = SimpleNamespace(headers={}, accept=AsyncMock(), close=AsyncMock())
     with (
         patch.dict("os.environ", {"AUTOBOT_REQUIRE_WS_AUTH": "1"}),
-        patch("auth_middleware.get_auth_middleware") as gam,
+        patch("auth_middleware.resolve_human_user", new=AsyncMock()) as rhu,
         patch("auth_middleware.verify_internal_api_key", return_value=False),
     ):
-        gam.return_value.get_user_from_request.return_value = {"role": "user"}
+        rhu.return_value = {"role": "user"}
         assert await enforce_ws_admin(ws) is False
     ws.accept.assert_awaited_once()
     ws.close.assert_awaited_once()

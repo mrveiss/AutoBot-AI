@@ -116,6 +116,19 @@ because `autobot_shared` must not import backend code; the guard fails when an a
 | `password_changed` | `password.change` |
 | `api_key_created`, `api_key.created` | `api_key.create` |
 | `api_key_revoked`, `api_key.deleted` | `api_key.revoke` |
+| `mfa_verified`, `mfa_failed`, `backup_code_used` (#19035; `outcome` says which) | `auth.mfa` |
+| `mfa_enabled` / `mfa_disabled` | `mfa.enable` / `mfa.disable` |
+| `account_locked` / `account_unlocked` | `auth.lockout` / `auth.unlock` |
+| `permission_denied` | `access.denied` |
+| `password_reset_requested` / `password_reset_completed` | `password.reset_request` / `password.reset` |
+| `sso_linked` / `sso_unlinked` | `sso.link` / `sso.unlink` |
+| `user_activated` / `user_deactivated` | `user.activate` / `user.deactivate` |
+| `team_created`, `team_updated`, `team_deleted` | `team.create`, `team.update`, `team.delete` |
+| `team_member_added`, `team_member_removed`, `team_member_role_changed` | `team.member_add`, `team.member_remove`, `team.member_role_change` |
+| `org_created`, `org_updated`, `org_deleted` | `org.create`, `org.update`, `org.delete` |
+| `role_created`, `role_updated`, `role_deleted` | `role.create`, `role.update`, `role.delete` |
+| `api_key_used` | `api_key.use` |
+| `suspicious_activity` | `security.suspicious_activity` |
 
 **Where it is applied.**
 
@@ -157,13 +170,14 @@ caller) uses the same spelling.
 row with a non-`success` `outcome`, so no consumer may filter failures by action alone; read `outcome`
 (the SLM's own table carries it in the `success` column).
 
-**A known second vocabulary.** `IdentityAuditAction` (`autobot_shared/user_management/models/audit.py`) is a
-public constant set of the shared package, and only the concepts above are mapped. Its other underscore
-spellings are still stored as written: `mfa_enabled`, `mfa_disabled`, `mfa_verified`, `mfa_failed`,
-`backup_code_used`, `sso_linked`, `sso_unlinked`, `user_activated`, `user_deactivated`, `team_*`, `org_*`,
-`role_created`, `role_updated`, `role_deleted`, `api_key_used`, `account_locked`, `account_unlocked`,
-`suspicious_activity`, `permission_denied`, `password_reset_requested`, `password_reset_completed`. The
-guard lists the ones a writer passes in its baseline. Migrating them to the dotted form is tracked by #19035.
+**Identity vocabulary (#19035).** `IdentityAuditAction` (`autobot_shared/user_management/models/audit.py`) stays
+a public constant set of the shared package; `audit_row` canonicalises every value on write, so the stored
+row is dotted with no call-site change. `auth.mfa`, `auth.lockout` and `auth.unlock` fall under the threat
+ingest's `auth.` prefix, so an event carrying one that reaches ingest is classified for the authentication
+analyzers; identity-service `audit_row` rows do not reach ingest yet (see the end of this section). `access.denied` deliberately stays
+`api_request`: an RBAC denial is an authorization verdict by an authenticated caller, not a credential guess
+the brute-force analyzer should count. Rows already stored under the old spellings are matched through
+`spellings_of`; rewriting them waits for the approval queue (#17038).
 
 **Guard and adding an action.** `repo_tests/audit_action_vocabulary_18716_test.py` scans the writer calls
 (`audit_log`, `_audit_log`, `log_action`, `audit_row`, `AuditEvent(`, `create_audit_log`,

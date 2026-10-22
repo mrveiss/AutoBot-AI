@@ -31,3 +31,21 @@ def test_spellings_of_includes_the_canonical_form_and_every_alias() -> None:
 
 def test_no_alias_chains() -> None:
     assert all(new not in ACTION_ALIASES for new in ACTION_ALIASES.values())
+
+
+def test_identity_underscore_spellings_map_to_dotted_and_audit_row_writes_canonical() -> None:
+    """#19035: every IdentityAuditAction spelling not mapped by #18716 canonicalises on write."""
+    from autobot_shared.user_management.audit_rows import audit_row
+    from autobot_shared.user_management.models.audit import IdentityAuditAction
+
+    for name in ("MFA_FAILED", "ACCOUNT_LOCKED", "PERMISSION_DENIED", "TEAM_CREATED", "ORG_UPDATED", "ROLE_CREATED"):
+        legacy = getattr(IdentityAuditAction, name)
+        assert "." in canonical_action(legacy), name
+        row = audit_row(action=legacy, resource_type="x")
+        assert row.action == canonical_action(legacy) != legacy
+
+
+def test_a_canonical_identity_name_also_finds_the_old_stored_rows() -> None:
+    assert spellings_of("auth.lockout") == {"auth.lockout", "account_locked"}
+    assert spellings_of("account_locked") == spellings_of("auth.lockout")
+    assert spellings_of("team.member_add") == {"team.member_add", "team_member_added"}

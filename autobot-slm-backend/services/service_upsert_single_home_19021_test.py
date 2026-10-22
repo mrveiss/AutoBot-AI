@@ -22,9 +22,7 @@ from pathlib import Path
 
 _SLM_ROOT = Path(__file__).resolve().parent.parent
 _CORE = "services/service_upsert.py"
-# Known third copy, tracked in #19059; delete this entry when it moves onto the core -- the
-# stale-entry check below fails until it is deleted.
-_KNOWN_FORKS = {"services/service_orchestrator.py:_update_service_record"}
+_KNOWN_FORKS: set[str] = set()  # the third copy moved onto the core (#19059)
 _FORK_FIXTURE = """
 async def _upsert_service(db, node_id, name):
     r = await db.execute(select(Service).where(Service.node_id == node_id, Service.service_name == name))

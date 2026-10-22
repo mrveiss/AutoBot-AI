@@ -55,7 +55,7 @@ class TelegramBotService:
 
         Security: Automatically decrypts encrypted tokens (prefixed with 'enc:').
         """
-        redis = await get_redis_client()
+        redis = await get_redis_client(async_client=True)
         if redis is None:
             logger.error("Redis client not available for Telegram bot service")
             return cls(bot_token=None)
@@ -461,7 +461,7 @@ async def save_telegram_bot_token(bot_token: str) -> None:
     Args:
         bot_token: Telegram Bot API token
     """
-    redis = await get_redis_client()
+    redis = await get_redis_client(async_client=True)
     if redis is None:
         raise RuntimeError("Redis client not available")
 
@@ -482,7 +482,7 @@ async def get_telegram_bot_token() -> Optional[str]:
     Returns:
         Decrypted bot token or None if not configured
     """
-    redis = await get_redis_client()
+    redis = await get_redis_client(async_client=True)
     if redis is None:
         logger.error("Redis client not available")
         return None
@@ -512,7 +512,7 @@ async def save_telegram_bot_id(bot_id: str) -> None:
     Args:
         bot_id: Numeric Telegram user id from getMe()
     """
-    redis = await get_redis_client()
+    redis = await get_redis_client(async_client=True)
     if redis is None:
         raise RuntimeError("Redis client not available")
     await redis.set(TELEGRAM_BOT_ID_KEY, bot_id)
@@ -527,7 +527,7 @@ async def get_telegram_bot_id() -> Optional[str]:
     Returns:
         The bot's numeric Telegram user id as a string, or None if not yet resolved.
     """
-    redis = await get_redis_client()
+    redis = await get_redis_client(async_client=True)
     if redis is None:
         return None
 
@@ -546,7 +546,7 @@ async def save_telegram_webhook_secret(secret: str) -> None:
     Args:
         secret: Webhook secret token
     """
-    redis = await get_redis_client()
+    redis = await get_redis_client(async_client=True)
     if redis is None:
         raise RuntimeError("Redis client not available")
 
@@ -565,7 +565,7 @@ async def get_telegram_webhook_secret() -> Optional[str]:
     Returns:
         Decrypted webhook secret or None if not configured
     """
-    redis = await get_redis_client()
+    redis = await get_redis_client(async_client=True)
     if redis is None:
         logger.error("Redis client not available")
         return None

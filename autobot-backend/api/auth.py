@@ -12,12 +12,12 @@ from typing import Dict, List
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from api.auth_introspection import _build_validate_claims, _extract_token_from_request
 from api.auth_me import router as me_router
 from api.schemas_agent import (
     AuthCheckResponse,
     AuthPermissionResponse,
     AuthRoleEntry,
-    AuthValidateClaims,
     AuthValidateRequest,
     AuthValidateResponse,
     ChangePasswordRequest,
@@ -32,7 +32,8 @@ from api.schemas_agent import (
 from api.schemas_agent_requests import RS256RevokeRequest
 from api.schemas_common import DataResponse
 from api.schemas_system import AuthLogoutData, AuthRefreshData
-from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user
+from auth_middleware import check_admin_permission, get_auth_middleware, get_current_user, resolve_human_user
+from auth_revocation import reject_if_revoked_by_password_change, revoked_by_password_change_for_introspection
 from autobot_shared.auth.jwt_core import JWTDecodeError, _peek_alg, decode_jwt_no_verify_exp
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Role, is_admin_role, role_value
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -188,7 +189,10 @@ async def logout(request: Request, logout_data: LogoutRequest):
         if session_id:
             get_auth_middleware().invalidate_session(session_id)
 
-        user_data = get_auth_middleware().get_user_from_request(request)
+        try:
+            user_data = await resolve_human_user(request)
+        except HTTPException:
+            user_data = None  # a void credential is not named in the audit; logout still succeeds (#18688)
         user_id = user_data.get("user_id", user_data.get("username", "unknown")) if user_data else "unknown"
         _emit_event(ComplianceEventType.USER_LOGOUT, user_id, ip_address=ip_address)
 
@@ -280,7 +284,7 @@ async def check_authentication(request: Request):
         from user_management.config import get_deployment_config
 
         config = get_deployment_config()
-        user_data = get_auth_middleware().get_user_from_request(request)
+        user_data = await resolve_human_user(request)  # a revoked JWT is 401 (#18688)
 
         return {
             "authenticated": user_data is not None,
@@ -289,6 +293,8 @@ async def check_authentication(request: Request):
             "deployment_mode": config.mode.value,
         }
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("Auth check error: %s", e)
         return {
@@ -310,7 +316,7 @@ async def check_permission(request: Request, operation: str):
     Check if current user has permission for specific operation
     """
     try:
-        has_permission, user_data = get_auth_middleware().check_file_permissions(request, operation)
+        has_permission, user_data = await get_auth_middleware().check_file_permissions(request, operation)
 
         return {
             "permitted": has_permission,
@@ -319,6 +325,8 @@ async def check_permission(request: Request, operation: str):
             "username": user_data["username"] if user_data else None,
         }
 
+    except HTTPException:
+        raise  # revoked JWT (401) / epoch store down (503): not a plain "not permitted" (#18688)
     except Exception as e:
         logger.error("Permission check error for operation %s: %s", operation, e)
         return {
@@ -398,7 +406,7 @@ async def change_password(request: Request, password_data: ChangePasswordRequest
     Rate limited to 5 attempts per 5 minutes.
     """
     try:
-        user_data = get_auth_middleware().get_user_from_request(request)
+        user_data = await resolve_human_user(request)  # a revoked JWT is 401 (#18688)
         if not user_data or user_data.get("auth_method") == "guest":
             raise HTTPException(status_code=401, detail="Authentication required")
 
@@ -530,6 +538,9 @@ async def refresh_token(request: Request):
 
     token = auth_header.split(" ")[1]
     payload = _decode_refresh_token(token)
+    await reject_if_revoked_by_password_change(payload)  # a pre-password-change token cannot be refreshed (#18688)
+    if _is_session_revoked(payload):  # a logged-out session cannot be refreshed; an unreadable store reads as gone
+        raise HTTPException(status_code=401, detail=ERR_INVALID_TOKEN)
 
     user_data = {
         "username": payload["username"],
@@ -537,10 +548,7 @@ async def refresh_token(request: Request):
         "email": payload.get("email", ""),
     }
     # Issue #684: Preserve org hierarchy across token refresh
-    if payload.get("user_id"):
-        user_data["user_id"] = payload["user_id"]
-    if payload.get("org_id"):
-        user_data["org_id"] = payload["org_id"]
+    user_data.update({k: payload[k] for k in ("user_id", "org_id") if payload.get(k)})
     new_token = get_auth_middleware().create_jwt_token(user_data)
     expiry_seconds = get_auth_middleware().jwt_expiry_hours * 3600
 
@@ -554,30 +562,6 @@ async def refresh_token(request: Request):
 # ---------------------------------------------------------------------------
 # Identity authority introspection + RBAC discovery (#10195)
 # ---------------------------------------------------------------------------
-
-
-def _extract_token_from_request(request: Request, body: AuthValidateRequest | None) -> str | None:
-    """Return the token string from body or Bearer header (body takes priority)."""
-    if body and body.token:
-        return body.token
-    auth_header = request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        return auth_header.split(" ", 1)[1]
-    return None
-
-
-def _build_validate_claims(payload: Dict) -> AuthValidateClaims:
-    """Extract the public claim fields from a verified JWT payload."""
-    exp_raw = payload.get("exp")
-    exp_int: int | None = int(exp_raw) if exp_raw is not None else None
-    return AuthValidateClaims(
-        username=payload.get("username"),
-        role=payload.get("role"),
-        user_id=payload.get("user_id"),
-        org_id=payload.get("org_id"),
-        email=payload.get("email"),
-        exp=exp_int,
-    )
 
 
 def _is_session_revoked(payload: Dict) -> bool:
@@ -622,7 +606,7 @@ async def validate_token(
     # Step 1: try full verification (signature + expiry)
     payload = mw.verify_jwt_token(token)
     if payload is not None:
-        revoked = _is_session_revoked(payload)
+        revoked = _is_session_revoked(payload) or await revoked_by_password_change_for_introspection(payload)
         return AuthValidateResponse(
             valid=not revoked,
             claims=_build_validate_claims(payload),
@@ -638,7 +622,9 @@ async def validate_token(
         else:
             expired_payload = decode_jwt_no_verify_exp(token, secret=mw.jwt_secret, algorithms=["HS256"])
         # Signature valid but token is expired
-        revoked = _is_session_revoked(expired_payload)
+        revoked = _is_session_revoked(expired_payload) or await revoked_by_password_change_for_introspection(
+            expired_payload
+        )
         return AuthValidateResponse(
             valid=False,
             claims=_build_validate_claims(expired_payload),

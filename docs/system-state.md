@@ -972,7 +972,7 @@ if isinstance(fact_key, bytes):
 
 **Problem**: Distributed service discovery infrastructure created but never integrated, causing 2-30 second DNS resolution delays on every Redis connection.
 
-**Solution**: Integrated `distributed_service_discovery.py` into 4 backend modules with fallback mechanisms:
+**Solution** (historical; `distributed_service_discovery.py` was retired in #18639 in favour of `utils/service_registry.py` + `autobot_shared.ssot_config`): Integrated `distributed_service_discovery.py` into 4 backend modules with fallback mechanisms:
 
 **Files Modified**:
 1. `autobot-backend/utils/distributed_service_discovery.py` - Added synchronous helper functions

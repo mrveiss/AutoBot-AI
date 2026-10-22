@@ -14,6 +14,7 @@ import re
 from dataclasses import dataclass, field
 
 from autobot_shared.logging_manager import get_logger
+from knowledge.chunk_identity import resolve_chunk_id
 from security.prompt_injection_detector import PromptInjectionDetector
 
 logger = get_logger(__name__)
@@ -300,7 +301,7 @@ class QueryDecomposer:
             else:
                 evidence.append(
                     {
-                        "chunk_id": getattr(chunk, "source_path", ""),
+                        "chunk_id": resolve_chunk_id(chunk),
                         "content": getattr(chunk, "content", ""),
                         "score": getattr(chunk, "score", 0.0),
                         "metadata": getattr(chunk, "metadata", {}),

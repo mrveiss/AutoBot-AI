@@ -268,7 +268,7 @@ def test_vnc_role_has_non_empty_target_path():
     it due to the old guard that only checked target_path (#9965)."""
     role = _role("vnc")
     assert role["target_path"], "vnc target_path must be non-empty so role_detector detects it"
-    assert role["systemd_service"] == ["tigervncserver"]  # #16025: no manifest -- wrapped as a sequence
+    assert role["systemd_service"] == ["vnc-server"]  # #16025: no manifest -- wrapped as a sequence
     assert role["required"] is False
 
 

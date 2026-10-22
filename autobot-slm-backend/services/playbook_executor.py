@@ -541,13 +541,9 @@ class PlaybookExecutor:
 
     @staticmethod
     async def _iter_log_file_lines(log_path: Path, process: asyncio.subprocess.Process):
-        """Tail a log file for a detached run's output (#11492).
+        """Tail a detached run's log while ``process`` (the systemd-run waiter) lives (#11492).
 
-        Polls for newly appended lines while ``process`` (the detaching
-        wrapper) is still running; stops once it has exited and no further
-        lines are pending. The detached ansible-playbook process itself keeps
-        writing to this same file independently after this backend restarts —
-        this generator simply stops watching, it never stops the write side.
+        Stopping here never stops the writer: the detached ansible-playbook keeps writing after a restart.
         """
         with open(log_path, "r", encoding="utf-8", errors="replace") as fh:
             while True:
@@ -983,16 +979,17 @@ class PlaybookExecutor:
             await process.wait()
             return lines
 
-        if timeout_s is None:
-            output_lines = await _collect()
-            return {"output": "\n".join(output_lines), "returncode": process.returncode, "timed_out": False}
-
-        try:
+        try:  # timeout=None waits without a deadline -- the one path for both
             output_lines = await asyncio.wait_for(_collect(), timeout=timeout_s)
         except asyncio.TimeoutError:
             return await self._handle_playbook_timeout(process, effective_cmd, timeout_s)
 
-        return {"output": "\n".join(output_lines), "returncode": process.returncode, "timed_out": False}
+        return self._run_result(output_lines, process.returncode, detached=log_path is not None)
+
+    @staticmethod
+    def _run_result(output_lines: List[str], returncode: int | None, detached: bool) -> dict:
+        """#19139: ``detached`` says a -SIGTERM hit the systemd-run waiter, not ansible itself."""
+        return {"output": "\n".join(output_lines), "returncode": returncode, "timed_out": False, "detached": detached}
 
     async def _handle_playbook_timeout(
         self, process: asyncio.subprocess.Process, cmd: List[str], timeout_s: float
@@ -1353,6 +1350,7 @@ class PlaybookExecutor:
                 "output": proc_result["output"],
                 "returncode": proc_result["returncode"],
                 "timed_out": proc_result.get("timed_out", False),
+                "detached": proc_result.get("detached", False),
             }
 
         except Exception as e:

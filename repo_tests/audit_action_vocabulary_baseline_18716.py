@@ -48,31 +48,12 @@ _DOTTED = (
     "voice.realtime.tool_call",
 )
 
-_IDENTITY_REASON = (
-    "team / organization / RBAC-denial identity action: `IdentityAuditAction` is a public "
-    "constant set of the shared user-management package and audit_row (the one boundary) stores "
-    "it unchanged until the follow-up vocabulary expansion"
-)
-_IDENTITY = (
-    "org_created",
-    "org_deleted",
-    "org_updated",
-    "permission_denied",
-    "team_created",
-    "team_deleted",
-    "team_member_added",
-    "team_member_removed",
-    "team_member_role_changed",
-    "team_updated",
-)
-
 _COMMAND_REASON = (
     "security-layer command, approval, service-control or lockout event: an operation record "
     "outside the #18716 concepts, still underscore-spelled; rename belongs to the vocabulary "
     "expansion"
 )
 _COMMAND = (
-    "account_locked",
     "command_approval",
     "command_approval_decision",
     "command_approval_request",
@@ -160,7 +141,6 @@ _REST = (
 
 LEGACY_SPELLINGS: dict[str, str] = {
     **dict.fromkeys(_DOTTED, _DOTTED_REASON),
-    **dict.fromkeys(_IDENTITY, _IDENTITY_REASON),
     **dict.fromkeys(_COMMAND, _COMMAND_REASON),
     **dict.fromkeys(_HANDLER, _HANDLER_REASON),
     **dict.fromkeys(_REST, _REST_REASON),

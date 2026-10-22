@@ -181,7 +181,7 @@ def test_the_table_is_a_real_mix_not_a_uniform_answer(verdicts):
         ("user|db|org|admin.system", "allow"),  # ... and applies inside it
         ("user|no-db|org|admin.system", "403"),  # no user_id, no DB lookup
         ("Admin|no-db|no-org|chat.use", "403"),  # strict role reading
-        ("superadmin|no-db|no-org|admin.system", "403"),  # #13854: no granular permissions
+        ("superadmin|no-db|no-org|admin.system", "allow"),  # #19125: superadmin holds admin's set
     ],
 )
 def test_pinned_rows(verdicts, row, expected):

@@ -11,9 +11,9 @@ this router, so the path is unchanged.
 
 #16270 adds ``permissions`` and ``is_admin`` so the frontend can gate on the
 server's answer instead of on its own copy of the role map (#16243). Both are
-required. Superadmin holds no granular permissions by design (#13854), so a
-frontend that gated on ``permissions`` alone would hide everything from a
-superadmin. ``is_admin`` carries the other kind of server check.
+required. Superadmin holds admin's permissions, derived from admin's set
+(#19125); ``is_admin`` carries the other kind of server check (the
+administrative predicate) and stays authoritative for it.
 """
 
 from typing import List
