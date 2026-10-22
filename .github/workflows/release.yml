@@ -187,6 +187,35 @@ jobs:
           OUTPUT: CHANGELOG.md
           GITHUB_REPO: ${{ github.repository }}
 
+      # #18666: classify the signing key BEFORE the tag is created and pushed. Once the tag is
+      # out, a signing failure strands a tagged release with no assets. A missing or empty
+      # cosign.pub, or a real key with no private-key secret, fails here instead, while nothing
+      # has been published. The placeholder (#19126) publishes checksum-only, with a warning.
+      # COSIGN_PASSWORD is not checked: a cosign key pair may legitimately have an empty one.
+      - name: Check the signing key is real (#18666)
+        id: signkey
+        if: steps.check.outputs.release_needed == 'true'
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ ! -s cosign.pub ]]; then
+            echo "::error::cosign.pub is missing or empty; refusing to tag a release that cannot be verified (#18666)"
+            exit 1
+          fi
+          if grep -q PLACEHOLDER cosign.pub; then
+            echo "real=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::cosign.pub is still the placeholder (#19126): install.sh is published UNSIGNED (checksum only) until the owner generates the signing key"
+            if [[ -n "${COSIGN_PRIVATE_KEY}" ]]; then
+              echo "::warning::COSIGN_PRIVATE_KEY is set but cosign.pub is still the placeholder: commit the matching public key (#19126)"
+            fi
+          elif [[ -z "${COSIGN_PRIVATE_KEY}" ]]; then
+            echo "::error::cosign.pub is a real key but the COSIGN_PRIVATE_KEY secret is empty; refusing to tag a release that would ship unsigned (#18666)"
+            exit 1
+          else
+            echo "real=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Commit changelog files and tag
         id: commit
         if: steps.check.outputs.release_needed == 'true'
@@ -220,8 +249,8 @@ jobs:
       # integrity check. Each release publishes a copy whose DEFAULT_BRANCH is this release's tag
       # (so it installs exactly that release) and its SHA256, plus a cosign signature made with the
       # key image-sign.yml uses -- once that key exists. Until the owner replaces the placeholder
-      # cosign.pub (#19126) the installer ships checksummed but UNSIGNED, with a warning; a missing
-      # key never fails the release (its tag is already pushed above) and never yields a fake signature.
+      # cosign.pub (#19126) the installer ships checksummed but UNSIGNED, with a warning, and never
+      # with a fake signature. The key was classified before the tag (signkey, above).
       - name: Build the release's pinned installer (#18666)
         if: steps.check.outputs.release_needed == 'true'
         env:
@@ -239,18 +268,6 @@ jobs:
           grep -q "^readonly DEFAULT_BRANCH=\"${VERSION}\" PINNED_COMMIT=\"${COMMIT}\"" dist/install.sh \
             || { echo "::error::install.sh's DEFAULT_BRANCH line changed; the release pin did not apply"; exit 1; }
           (cd dist && sha256sum install.sh > install.sh.sha256)
-
-      - name: Check the signing key is real (#18666)
-        id: signkey
-        if: steps.check.outputs.release_needed == 'true'
-        run: |
-          set -euo pipefail
-          if grep -q PLACEHOLDER cosign.pub; then
-            echo "real=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::cosign.pub is still the placeholder (#19126): install.sh is published UNSIGNED (checksum only) until the owner generates the signing key"
-          else
-            echo "real=true" >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Install cosign
         if: steps.check.outputs.release_needed == 'true' && steps.signkey.outputs.real == 'true'

@@ -69,6 +69,7 @@ from dependencies import provide_config_manager, provide_knowledge_base
 
 # Import shared exception classes (Issue #292 - Eliminate duplicate code)
 from exceptions import get_exceptions_lazy
+from knowledge.chunk_identity import resolve_chunk_id
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 
 # CRITICAL SECURITY FIX: Import session ownership validation
@@ -644,17 +645,12 @@ def _build_citations_from_kb_results(kb_results: List[Dict[str, Any]]) -> List[C
     citations: List[Citation] = []
     for idx, result in enumerate(kb_results[:5]):
         raw_meta = result.get("metadata") or {}
-        chunk_id = raw_meta.get("chunk_id") or raw_meta.get("id") or f"chunk-{idx}"
+        chunk_id = resolve_chunk_id({"metadata": raw_meta}) or raw_meta.get("id") or f"chunk-{idx}"
         source_path = result.get("source") or raw_meta.get("source_path") or ""
         title = raw_meta.get("title") or (source_path.split("/")[-1] if source_path else f"Source {idx + 1}")
+        score = float(result.get("score") or 0.0)
         citations.append(
-            Citation(
-                id=str(chunk_id),
-                source_type="chunk",
-                title=title,
-                uri=source_path or None,
-                score=float(result.get("score") or 0.0),
-            )
+            Citation(id=str(chunk_id), source_type="chunk", title=title, uri=source_path or None, score=score)
         )
     return citations
 

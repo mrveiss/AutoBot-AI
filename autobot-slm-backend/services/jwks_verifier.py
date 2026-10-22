@@ -43,6 +43,7 @@ import httpx
 from fastapi import HTTPException, status
 
 from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError, _peek_alg, decode_jwt
+from autobot_shared.auth.permissions import is_admin_role
 
 try:  # redis-py exceptions do NOT inherit builtin ConnectionError/OSError
     from redis.exceptions import RedisError as _RedisError
@@ -160,7 +161,7 @@ def _normalize_claims(payload: Dict[str, Any]) -> Dict[str, Any]:
       - ``sub``      — username (set from ``username`` if ``sub`` absent)
       - ``username`` — canonical username
       - ``role``     — role string (preserved as-is)
-      - ``admin``    — bool derived from role (True when role == "admin")
+      - ``admin``    — bool derived from role (True for any administrative role, superadmin included)
       - ``authority_token`` — True (marks the token source)
     """
     username = payload.get("username") or payload.get("sub", "")
@@ -169,7 +170,7 @@ def _normalize_claims(payload: Dict[str, Any]) -> Dict[str, Any]:
     normalized["sub"] = username
     normalized["username"] = username
     normalized["role"] = role
-    normalized["admin"] = role == "admin"
+    normalized["admin"] = is_admin_role(role)
     normalized["authority_token"] = True
     return normalized
 

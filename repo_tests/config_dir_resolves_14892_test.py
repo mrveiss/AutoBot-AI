@@ -193,8 +193,8 @@ def _named_config_file(node: ast.AST) -> str | None:
 class TestEveryNamedConfigFileExists:
     """#14892: a consumer must not name a config file that is not in the tree.
 
-    ``utils/service_discovery.py`` resolved ``CONFIG_DIR / "services.json"``,
-    stored it and never read it again. No commit on any branch has ever added a
+    The retired ``utils/service_discovery.py`` (#18639) resolved
+    ``CONFIG_DIR / "services.json"``, stored it and never read it again. No commit on any branch has ever added a
     ``services.json``. That is the failure this guard makes loud: a path to a
     file that has never existed reads exactly like live configuration, and
     fixing the constant under it changes nothing at all.
@@ -234,30 +234,6 @@ class TestEveryNamedConfigFileExists:
                 f"{relative} now exists — delete its entry from _KNOWN_ABSENT_CONFIG_FILES so the guard covers it"
             )
         assert len(_KNOWN_ABSENT_CONFIG_FILES) == 2, "this exemption is a ratchet: it may shrink, never grow"
-
-
-class TestServiceDiscoveryKeepsNoDeadConfigPath:
-    """#14892 AC3, the `services.json` consumer specifically.
-
-    Asserted on the class rather than on the file text so that reintroducing the
-    field under any spelling fails here.
-    """
-
-    def test_service_discovery_takes_no_config_file_argument(self) -> None:
-        import inspect
-
-        from utils.service_discovery import ServiceDiscovery
-
-        parameters = set(inspect.signature(ServiceDiscovery.__init__).parameters)
-        assert parameters == {"self"}, f"ServiceDiscovery.__init__ grew arguments again: {sorted(parameters)}"
-
-    def test_service_discovery_stores_no_config_file_attribute(self) -> None:
-        from utils.service_discovery import service_discovery
-
-        assert not hasattr(service_discovery, "config_file"), (
-            "ServiceDiscovery.config_file is back. It named "
-            "CONFIG_DIR/services.json, a file no commit has ever added, and nothing read it."
-        )
 
 
 class TestEventManagerDistinguishesAMiss:

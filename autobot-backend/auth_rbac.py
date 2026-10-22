@@ -34,9 +34,10 @@ Usage:
 
 from typing import Callable, List
 
-from fastapi import Request
+from fastapi import Depends, Request
 
-from auth_middleware import resolve_human_user
+from auth_middleware import check_admin_permission, resolve_human_user
+from autobot_shared.auth.mcp_tool_permissions import required_permission
 from autobot_shared.auth.permission_gate import PermissionGate
 from autobot_shared.auth.permissions import (  # noqa: F401 — re-exported for callers
     ADMIN_ROLES,
@@ -84,6 +85,28 @@ def _wire_rbac() -> None:
 _permission_gate = PermissionGate(_request_caller, wire_rbac=_wire_rbac)
 require_permission = _permission_gate.require_permission
 require_any_permission = _permission_gate.require_any_permission
+
+
+async def check_mcp_tool_permission(request: Request) -> None:
+    """Router dependency for a bridge's ``/mcp/<tool>`` routes: the caller holds the tool's permission (#19087).
+
+    The permission is read from ``mcp_tool_permissions.TOOL_PERMISSIONS`` (the SSOT), never named per route. An
+    undeclared tool is refused, as the dispatcher refuses it (#14523). Routes outside ``/mcp/<tool>`` (and the
+    ``/mcp/tools`` listing) pass; the router's own gate still applies to them.
+    """
+    route_path = getattr(request.scope.get("route"), "path", "")
+    parts = route_path.rstrip("/").split("/")
+    if len(parts) < 2 or parts[-2] != "mcp" or parts[-1] == "tools":
+        return
+    permission = required_permission(parts[-1])
+    if permission is None:
+        raise_auth_error("AUTH_0003", f"MCP tool {parts[-1]} has no declared permission")
+    await _permission_gate.enforce(request, await _request_caller(request), (permission,))
+
+
+async def check_admin_mcp_tool_permission(request: Request, _admin: bool = Depends(check_admin_permission)) -> None:
+    """The admin-role gate (a sub-dependency), then the tool's declared permission (#19087)."""
+    await check_mcp_tool_permission(request)
 
 
 def _deny_role_access(user_data: dict, allowed_roles: List[str], user_role: str, request: Request) -> None:

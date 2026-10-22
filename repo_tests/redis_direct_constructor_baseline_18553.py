@@ -30,9 +30,6 @@ EXCEPTION = "EXCEPTION"
 MIGRATE = "MIGRATE"
 VERDICTS = (EXCEPTION, MIGRATE)
 
-_PROBE = (
-    "health probe of an arbitrary caller-supplied endpoint: fresh short-lived connection per check, no pool by design"
-)
 _SCRIPT_A = "#18553 scripts batch A: standard named db, decode_responses=True; moves to get_redis_client"
 _SCRIPT_B = (
     "#18553 scripts batch B, owner decision pending: needs decode_responses=False or a raw db-number loop, "
@@ -44,8 +41,6 @@ _SCRIPTS = "autobot-infrastructure/shared/scripts"
 
 BASELINE: dict[str, tuple[int, str, str]] = {
     # --- product code -------------------------------------------------------------------------
-    "autobot-backend/utils/distributed_service_discovery.py": (1, EXCEPTION, _PROBE),
-    "autobot-backend/utils/service_discovery.py": (1, EXCEPTION, _PROBE),
     # --- worker, infrastructure, shell --------------------------------------------------------
     "autobot-npu-worker/resources/windows-npu-worker/app/utils/redis_client.py": (
         2,
@@ -98,4 +93,4 @@ BASELINE: dict[str, tuple[int, str, str]] = {
 }
 
 #: Sum of the site counts above. It may only go DOWN.
-FROZEN_TOTAL = 36
+FROZEN_TOTAL = 34

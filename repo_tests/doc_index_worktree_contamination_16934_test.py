@@ -29,7 +29,7 @@ from pathlib import Path
 
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import git, make_repo
 from tools.lint._comment_syntax import code_lines
 
 _REPO_ROOT = repo_root()
@@ -48,9 +48,9 @@ Path(__file__).resolve().parent.parent.joinpath("{marker}").write_text("invoked"
 
 
 def _git(cwd: Path, *args: str, check: bool = True) -> subprocess.CompletedProcess:
-    """#15246: env scrubbed -- an inherited GIT_DIR would point these calls at
+    """#15246/#18940: isolated env -- an inherited GIT_DIR would point these calls at
     the real repository instead of the throwaway one under tmp_path."""
-    return subprocess.run(["git", *args], cwd=cwd, capture_output=True, text=True, check=check, env=scrubbed_git_env())
+    return git(cwd, *args, check=check)
 
 
 def _seed_repo(tmp_path: Path, *, name: str, branch: str) -> Path:
@@ -71,9 +71,7 @@ def _seed_repo(tmp_path: Path, *, name: str, branch: str) -> Path:
     hook_dest.chmod(0o755)
     (repo / ".git" / "hooks" / "lib" / "_common.sh").write_bytes(_COMMON_LIB.read_bytes())
 
-    _git(tmp_path, "init", "--quiet", f"--initial-branch={branch}", str(repo))
-    _git(repo, "config", "user.email", "t@t")
-    _git(repo, "config", "user.name", "t")
+    make_repo(repo, default_branch=branch)
     _git(repo, "add", "-A")
     _git(repo, "commit", "--quiet", "-m", "seed")
     return repo

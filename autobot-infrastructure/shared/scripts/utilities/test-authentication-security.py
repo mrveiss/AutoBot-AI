@@ -8,6 +8,7 @@ AutoBot Authentication Security Test Suite
 Tests the newly implemented authentication and authorization system
 """
 
+import asyncio
 import logging
 import os
 import sys
@@ -21,7 +22,7 @@ sys.path.insert(0, str(project_root))
 
 from unittest.mock import Mock
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 
 from auth_middleware import AuthenticationMiddleware
 
@@ -153,17 +154,33 @@ class SecurityTester:
             logger.error("  ❌ JWT authentication failed")
             self.failed += 1
 
+    def _delete_request_for(self, user_data: dict):
+        """A mock request bearing a fresh JWT for *user_data*."""
+        token = self.auth_middleware.create_jwt_token(user_data)
+        return self.create_mock_request(headers={"Authorization": f"Bearer {token}"})
+
+    async def _delete_permission_results(self, admin_request, readonly_request):
+        """Both checks in ONE event loop: the Redis epoch client is loop-bound, so a second asyncio.run would fail."""
+        admin = await self.auth_middleware.check_file_permissions(admin_request, "delete")
+        readonly = await self.auth_middleware.check_file_permissions(readonly_request, "delete")
+        return admin, readonly
+
     def test_file_permissions(self):
         """Test file operation permissions"""
         logger.info("\n🧪 Testing file permissions...")
 
-        # Test with admin role
-        admin_data = {"username": "admin", "role": "admin", "email": "admin@test.com"}
-        token = self.auth_middleware.create_jwt_token(admin_data)
-        headers = {"Authorization": f"Bearer {token}"}
-        request = self.create_mock_request(headers=headers)
+        admin_request = self._delete_request_for({"username": "admin", "role": "admin", "email": "admin@test.com"})
+        readonly_request = self._delete_request_for(
+            {"username": "readonly", "role": "readonly", "email": "readonly@test.com"}
+        )
+        try:
+            admin, readonly = asyncio.run(self._delete_permission_results(admin_request, readonly_request))
+        except HTTPException as exc:  # revoked token (401) or epoch store down (503): a failure, not an abort
+            logger.error("  ❌ Permission check raised HTTP %s", exc.status_code)
+            self.failed += 2
+            return
 
-        has_permission, user_data = self.auth_middleware.check_file_permissions(request, "delete")
+        has_permission, user_data = admin
         if has_permission and user_data.get("role") == "admin":
             logger.info("  ✅ Admin has delete permission")
             self.passed += 1
@@ -171,18 +188,8 @@ class SecurityTester:
             logger.error("  ❌ Admin delete permission failed")
             self.failed += 1
 
-        # Test with readonly role
-        readonly_data = {
-            "username": "readonly",
-            "role": "readonly",
-            "email": "readonly@test.com",
-        }
-        token = self.auth_middleware.create_jwt_token(readonly_data)
-        headers = {"Authorization": f"Bearer {token}"}
-        request = self.create_mock_request(headers=headers)
-
-        has_permission, user_data = self.auth_middleware.check_file_permissions(request, "delete")
-        if not has_permission and user_data.get("role") == "readonly":
+        has_permission, user_data = readonly
+        if not has_permission and user_data and user_data.get("role") == "readonly":
             logger.info("  ✅ Readonly role correctly denied delete permission")
             self.passed += 1
         else:

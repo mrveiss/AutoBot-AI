@@ -17,6 +17,7 @@ _API = Path(__file__).parent
 _UPLOAD_PATH = {
     "knowledge.py": {
         "_validate_file_upload",
+        "require_safe_kb_name",
         "_extract_pdf_document",
         "_extract_docx_document",
         "_extract_file_content",

@@ -62,7 +62,7 @@ MAX_FILE_SIZE = 50 * 1024 * 1024
 
 async def _authorize_file_operation(request: Request, session_id: str, operation: str) -> dict:
     """Authorize file operation and return user data (Issue #398: extracted)."""
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, operation)
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, operation)
     if not has_permission:
         raise HTTPException(status_code=403, detail=f"Insufficient permissions for file {operation}")
     request.state.user = user_data
@@ -420,7 +420,7 @@ async def preview_conversation_file(request: Request, session_id: str, file_id: 
         500: Server error
     """
     # Authenticate and authorize
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "view")
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, "view")
     if not has_permission:
         raise HTTPException(status_code=403, detail="Insufficient permissions for file preview")
 

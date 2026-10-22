@@ -80,6 +80,14 @@ def _module_path(name: str, call):
     return build
 
 
+def _operator_gate(monkeypatch, role: str = "operator"):
+    import security.human_admin as human_admin  # noqa: PLC0415
+
+    real = _sees(monkeypatch, human_admin, {**_JWT_ADMIN, "role": role})
+    monkeypatch.setattr(human_admin, "auth_middleware", real)  # the gate reads the module at call time
+    return lambda request: human_admin.require_human_operator(request)
+
+
 def _envelope_principal(monkeypatch):
     from user_management.middleware.rbac_middleware import rbac_middleware  # noqa: PLC0415
 
@@ -96,9 +104,7 @@ _PATHS = {
     "session_posture.authenticated_user": _module_path(
         "security.session_posture", lambda m, r: m.authenticated_user("session-1", r)
     ),
-    "redis_service.check_operator_permission": _module_path(
-        "api.redis_service", lambda m, r: m.check_operator_permission(r)
-    ),
+    "human_admin.require_human_operator (redis_service /start, /restart)": lambda mp: _operator_gate(mp),
     "chat_shared_links._enforce_require_login": _module_path(
         "api.chat_shared_links", lambda m, r: m._enforce_require_login(SimpleNamespace(require_login=True), r)
     ),
@@ -124,6 +130,26 @@ def test_a_fresh_jwt_passes(monkeypatch, path):
     _epoch_says(monkeypatch, revoked=False)
 
     _resolve(call(_request()))  # no refusal
+
+
+@pytest.mark.parametrize("role", ["superadmin", "admin", "operator"])
+def test_the_admin_family_and_operator_pass_the_redis_gate(monkeypatch, role):
+    """#19125: superadmin is the highest admin -- main's literal {"admin","operator"} refused it."""
+    call = _operator_gate(monkeypatch, role)
+    _epoch_says(monkeypatch, revoked=False)
+
+    principal = _resolve(call(_request()))
+    assert principal["username"] == "alice"  # the audit trail attributes the action to this identity
+
+
+@pytest.mark.parametrize("role", ["analyst", "user"])
+def test_a_role_outside_the_admin_family_is_refused_by_the_redis_gate(monkeypatch, role):
+    call = _operator_gate(monkeypatch, role)
+    _epoch_says(monkeypatch, revoked=False)
+
+    with pytest.raises(HTTPException) as refused:
+        _resolve(call(_request()))
+    assert refused.value.status_code == 403
 
 
 def test_an_epoch_store_that_cannot_answer_denies_the_admin_gate(monkeypatch):

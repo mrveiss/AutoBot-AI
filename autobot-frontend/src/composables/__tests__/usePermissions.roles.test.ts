@@ -36,8 +36,12 @@ describe('usePermissions role map (#14937, #16491)', () => {
     expect(ROLE_PERMISSIONS[role]).not.toEqual(ROLE_PERMISSIONS.user)
   })
 
-  it('gives superadmin the backend empty set -- admitted by the admin short-circuit, not by a grant (#13854)', () => {
-    expect(getPermissionsForRole('superadmin')).toEqual([])
+  it('gives superadmin a superset of the admin permission set -- the backend derives it from admin (#19125)', () => {
+    const superadmin = getPermissionsForRole('superadmin')
+    expect(superadmin.length).toBeGreaterThan(0)
+    for (const permission of getPermissionsForRole('admin')) {
+      expect(superadmin).toContain(permission)
+    }
   })
 
   it('carries an entry for exactly the canonical roles -- no viewer, no guest', () => {
