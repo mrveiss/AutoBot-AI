@@ -7261,7 +7261,8 @@
       "rangeMedium": "Medium",
       "rangeHigh": "High",
       "rangeCritical": "Critical",
-      "usage": "Usage"
+      "usage": "Usage",
+      "loadFailed": "Heatmap data could not be loaded:"
     },
     "systemArchitecture": {
       "defaultTitle": "System Architecture",

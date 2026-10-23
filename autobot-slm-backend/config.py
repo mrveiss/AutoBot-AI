@@ -22,6 +22,7 @@ from pydantic import ConfigDict, field_validator
 from pydantic_settings import BaseSettings
 
 from autobot_shared.secret_redaction import RedactedReprMixin
+from user_management.config import get_autobot_db_config, get_slm_db_config
 
 logger = logging.getLogger(__name__)
 
@@ -225,16 +226,12 @@ class Settings(RedactedReprMixin, BaseSettings):
     )
 
     # SLM admin users database (fleet administrators)
-    slm_users_database_url: str = os.getenv(
-        "SLM_USERS_DATABASE_URL",
-        "postgresql+asyncpg://slm_app@127.0.0.1:5432/slm_users",
-    )
+    # #18094: the one resolver (SLM_USERS_DATABASE_URL, else the SLM_POSTGRES_* parts)
+    # lives in user_management.config; a literal DSN here was a second default for it.
+    slm_users_database_url: str = get_slm_db_config().url
 
     # AutoBot application users database (colocated on SLM server)
-    autobot_users_database_url: str = os.getenv(
-        "AUTOBOT_USERS_DATABASE_URL",
-        "postgresql+asyncpg://slm_app@127.0.0.1:5432/autobot_users",
-    )
+    autobot_users_database_url: str = get_autobot_db_config().url
 
     # Database connection pool settings (#2860) — SSOT-coordinated defaults.
     # SLM_DB_POOL_* env vars still override for per-service tuning.

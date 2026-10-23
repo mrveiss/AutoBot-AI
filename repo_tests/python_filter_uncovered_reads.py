@@ -68,7 +68,6 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         # -- a synthetic /opt/autobot inside a tmp dir, never a read of a repo tree.
         "autobot",
         "constraints/shared.txt",
-        "docker/generate-secrets.sh",
         "docker/secrets-init.sh",
         "docker/with-secrets.sh",
         "docs/audit/python_314_consistency.md",
@@ -146,7 +145,9 @@ UNCOVERED_READS: frozenset[str] = frozenset(
 # literal reads, which covered six entries recorded here as uncovered.
 #: RAISED 39 -> 40 by #18653: `autobot` above is a tmp_path fixture segment of the
 #: uninstall guard (a fake /opt/autobot tree), a new bypass and not a real read.
-MAX_UNCOVERED_READS = 40
+#: LOWERED 40 -> 39 by the train-81 CodeRabbit round: the filter now covers
+#: `docker/generate-secrets.sh`, which two guards really read (#17500, #18729).
+MAX_UNCOVERED_READS = 39
 
 #: A deliberate raise of ``MAX_UNCOVERED_READS`` is recorded here, as
 #: ``(value, "#issue")``. #17650's criterion is that raising is **justified**, not
@@ -158,4 +159,4 @@ MAX_UNCOVERED_READS = 40
 #: It is checked in both directions, like every other baseline on this page: a record
 #: that no longer matches MAX fails as stale, so lowering MAX later cannot leave a
 #: standing permission behind it.
-ACKNOWLEDGED_RAISE: tuple[int, str] | None = (40, "#18653")
+ACKNOWLEDGED_RAISE: tuple[int, str] | None = None

@@ -6,15 +6,11 @@ Complete installation instructions for AutoBot. Two deployment methods: bare-met
 
 ### System Requirements
 
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| OS | Debian/Ubuntu or WSL2 | Ubuntu 22.04 LTS |
-| RAM | 16 GB | 32 GB+ |
-| CPU | 8 cores | 16+ cores |
-| Storage | 50 GB | 200 GB+ (model + knowledge base storage) |
-| GPU | — | NVIDIA (CUDA) or Intel NPU for accelerated inference |
-| Python | 3.12 | 3.12 (installed automatically by installer) |
-| Node.js | 18 | 20 (installed automatically by installer) |
+Requirements (OS, systemd, RAM, disk) live in one place: [INSTALL.md - Requirements](../../INSTALL.md#requirements).
+
+The installer sets up the runtime itself: Python 3.14 and Node.js 20.
+
+A GPU is optional and only speeds up local model inference; see [GPU Acceleration](#gpu-acceleration-optional).
 
 ### Required Permissions (Bare-Metal Install)
 
@@ -59,10 +55,10 @@ sudo ./install.sh --unattended # Unattended (CI/automation)
 | `--unattended` | No prompts, use all defaults |
 | `--reinstall` | Force reinstall over existing installation |
 | `--branch=BRANCH` | Git branch to install (default: `main`) |
-| `--admin-pass=PASS` | SLM admin password (auto-generated if not set) |
+| `--admin-pass-file=PATH` | Read the SLM admin password from the first line of PATH (auto-generated if not set). The file must be non-empty and mode `600` or tighter (`chmod 600 PATH`); the installer refuses a group- or world-readable file or an empty first line |
 
 **The installer will:**
-1. Verify root access, systemd, disk space (5 GB+), memory (2 GB+), and internet
+1. Verify root access, systemd, disk space and memory (minimums in INSTALL.md), and internet
 2. Install system packages (Python 3.14, Node.js 20, nginx, Ansible, build tools, libpq)
 3. Create the `autobot` system user with passwordless sudo
 4. Clone the repository and distribute code to service directories
@@ -76,220 +72,88 @@ Takes 10-20 minutes depending on internet speed. Logs: `/var/log/autobot/`.
 
 | Service | URL |
 |---------|-----|
-| SLM Admin | `https://<server-ip>/` |
+| SLM Admin | `https://<server>/slm/` |
 | Service Logs | `journalctl -u autobot-slm-backend -f` |
 
 ### Method 2: Docker (Single Node)
 
-Run the entire stack on one machine with Docker Compose. No system users or packages installed on the host — Docker handles all isolation.
+Run the stack on one machine with Docker Compose. No system users or packages are installed on the host.
 
-**Requirements:** Docker Engine 24+ and Docker Compose v2.
+The full, current procedure (per-host secrets, the SLM-only start, TLS, profiles, the first admin login) is in [INSTALL.md - Docker Deployment](../../INSTALL.md#docker-deployment). The short form:
 
 ```bash
 git clone https://github.com/mrveiss/AutoBot-AI.git
 cd AutoBot-AI
-
-# Core services (backend, SLM, frontend, Redis, PostgreSQL, ChromaDB)
-docker compose --env-file docker/.env.docker up -d --build
-
-# Include local Ollama LLM
-docker compose --env-file docker/.env.docker --profile ollama up -d --build
-
-# Include Prometheus + Grafana monitoring
-docker compose --env-file docker/.env.docker --profile monitoring up -d --build
+bash docker/generate-secrets.sh   # once per host; writes docker/.env.secrets
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d --build
 ```
 
 | Service | URL |
 |---------|-----|
-| Frontend | http://localhost |
-| SLM Admin | http://localhost/slm |
-| Backend API | http://localhost/api |
-| RedisInsight | http://localhost:8001 |
-| Ollama | http://localhost:11434 (if `--profile ollama`) |
-| Grafana | http://localhost:3000 (if `--profile monitoring`) |
+| Frontend (user UI) | http://localhost |
+| SLM Admin | http://localhost/slm/ |
+| Backend API (via the frontend proxy) | http://localhost/api |
+| RedisInsight | http://localhost:8001 (host-local only) |
+| Ollama | http://localhost:11434 (only with `--profile ollama`) |
+| Grafana | http://localhost:3000 (only with `--profile monitoring`) |
 
-**Dev mode** with hot reload:
-```bash
-# Optional: cp docker-compose.override.example.yml docker-compose.override.yml
-docker compose up -d
-```
+The backend publishes no host port of its own: reach it through `http://localhost/api`. Host port 8001 is RedisInsight, not the backend.
+
+Log in at http://localhost with user `admin`; the password is `AUTOBOT_ADMIN_PASSWORD` in `docker/.env.secrets` (see INSTALL.md).
 
 ## LLM Provider Setup
 
-Choose one or more LLM providers for AutoBot:
+Providers (local Ollama, OpenAI, Anthropic and others) are configured in the running system, not by hand-editing YAML:
 
-### Option A: Ollama (Local, Recommended)
+- **SLM Admin > Settings > LLM Configuration** (tabs: Providers, Server Settings, Models) sets the active provider, endpoint, model and API key.
+- **SLM Admin > Settings > LLM Fallbacks** sets the fallback order between providers.
+- To run models on this host with Docker, start the `ollama` profile and pull the models named in `docker/.env.docker`; see [INSTALL.md - Profiles](../../INSTALL.md#profiles).
+- How AutoBot picks a model per request: [Model Selection Guide](../user/guides/model-selection.md). Fallback behaviour: [LLM Model Fallback](../developer/llm-fallback.md).
 
-**Installation:**
+Cloud providers need no local model.
+
+## GPU Acceleration (Optional)
+
+GPU drivers and toolkits (NVIDIA CUDA, AMD ROCm, Intel OpenVINO) are host software. Install them from the vendor's current instructions for your distribution and release; this guide does not pin a version.
+
+Check that the driver sees the GPU:
+
 ```bash
-# Install Ollama
-curl -fsSL https://ollama.ai/install.sh | sh
-
-# Start Ollama service
-ollama serve &
-
-# Pull recommended models
-ollama pull tinyllama:latest    # Fast, low resource
-ollama pull phi:2.7b           # Better quality
-ollama pull llama2:7b          # High quality (requires 8GB+ RAM)
+nvidia-smi   # NVIDIA
+rocm-smi     # AMD
 ```
 
-**Configuration:** Ollama runs on `http://localhost:11434` by default - no additional config needed.
-
-### Option B: OpenAI API
-
-**Setup:**
-```bash
-# Set API key as environment variable
-export OPENAI_API_KEY="your-openai-api-key-here"  # pragma: allowlist secret
-
-# Or add to your shell profile
-echo 'export OPENAI_API_KEY="your-api-key"' >> ~/.bashrc  # pragma: allowlist secret
-source ~/.bashrc
-```
-
-**Configuration:** Configure via `.env` or environment variables:
-```yaml
-llm_config:
-  default_llm: "openai_gpt35"
-  openai:
-    api_key: ""  # Uses environment variable
-    models:
-      - "gpt-3.5-turbo"
-      - "gpt-4"
-```
-
-### Option C: Anthropic Claude
-
-**Setup:**
-```bash
-# Set API key
-export ANTHROPIC_API_KEY="your-anthropic-api-key-here"  # pragma: allowlist secret
-echo 'export ANTHROPIC_API_KEY="your-api-key"' >> ~/.bashrc  # pragma: allowlist secret
-```
-
-**Configuration:** Configure via `.env` or environment variables:
-```yaml
-llm_config:
-  default_llm: "anthropic_claude"
-  anthropic:
-    api_key: ""  # Uses environment variable
-    models:
-      - "claude-3-sonnet-20240229"
-      - "claude-3-haiku-20240307"
-```
-
-## GPU Acceleration Setup (Optional)
-
-### NVIDIA GPU Setup
-
-**Install CUDA:**
-```bash
-# Download and install CUDA 11.8 (or latest compatible)
-wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-ubuntu2004.pin
-sudo mv cuda-ubuntu2004.pin /etc/apt/preferences.d/cuda-repository-pin-600
-wget https://developer.download.nvidia.com/compute/cuda/11.8.0/local_installers/cuda-repo-ubuntu2004-11-8-local_11.8.0-520.61.05-1_amd64.deb
-sudo dpkg -i cuda-repo-ubuntu2004-11-8-local_11.8.0-520.61.05-1_amd64.deb
-sudo cp /var/cuda-repo-ubuntu2004-11-8-local/cuda-*-keyring.gpg /usr/share/keyrings/
-sudo apt-get update
-sudo apt-get -y install cuda
-```
-
-**Install PyTorch with CUDA:**
-```bash
-# Activate the AutoBot virtual environment
-source /opt/autobot/autobot-slm-backend/venv/bin/activate
-
-# Install PyTorch with CUDA support
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-```
-
-### AMD GPU Setup (ROCm)
-
-**Install ROCm:**
-```bash
-# Add ROCm repository
-wget -q -O - https://repo.radeon.com/rocm/rocm.gpg.key | sudo apt-key add -
-echo "deb [arch=amd64] https://repo.radeon.com/rocm/apt/debian/ ubuntu main" | sudo tee /etc/apt/sources.list.d/rocm.list
-sudo apt update
-sudo apt install rocm-dkms rocm-dev rocm-libs
-```
-
-**Install PyTorch with ROCm:**
-```bash
-source /opt/autobot/autobot-slm-backend/venv/bin/activate
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/rocm5.4.2
-```
-
-### Intel NPU Setup (OpenVINO)
-
-**Install OpenVINO:**
-```bash
-# Download and install OpenVINO toolkit
-wget https://storage.openvinotoolkit.org/repositories/openvino/packages/2024.0/linux/l_openvino_toolkit_ubuntu20_2024.0.0.14509.34caeefd078_x86_64.tgz
-tar -xzf l_openvino_toolkit_ubuntu20_2024.0.0.14509.34caeefd078_x86_64.tgz
-sudo mv l_openvino_toolkit_ubuntu20_2024.0.0.14509.34caeefd078 /opt/intel/openvino_2024
-echo 'source /opt/intel/openvino_2024/setupvars.sh' >> ~/.bashrc
-```
+For GPU problems see [Troubleshooting](04-troubleshooting.md).
 
 ## Verification
 
 ### Bare-Metal Install
 
-The installer runs its own verification (Phase 5). After completion, confirm services are healthy:
+The installer verifies services itself. To confirm afterwards:
 
 ```bash
-# Check systemd services
 systemctl status autobot-slm-backend --no-pager
 systemctl status postgresql --no-pager
 systemctl status nginx --no-pager
 
-# Verify HTTPS endpoint
-curl -sk https://127.0.0.1/api/health | jq
+# SLM backend health, through nginx
+curl -sk https://127.0.0.1/slm/api/health | jq
 
-# Check recent logs for errors
+# Recent logs
 journalctl -u autobot-slm-backend -n 20 --no-pager
 ```
 
-**Access the web interface:**
-
-| Service | URL |
-|---------|-----|
-| SLM Admin | `https://<server-ip>/` |
-
-Credentials are displayed at the end of the install and saved to `/root/autobot-credentials.txt`.
+Open `https://<server>/slm/` and accept the self-signed certificate warning. The admin password is printed at the end of the install and saved to `/root/autobot-credentials.txt`. The first login starts the Setup Wizard.
 
 ### Docker Install
 
 ```bash
-# Verify all containers are running
-docker compose ps
-
-# Check backend health
-curl -s http://localhost/api/health | jq
-
-# View logs
-docker compose logs -f --tail=50
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets ps
+curl -s http://localhost/api/health | jq   # backend, via the frontend proxy
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets logs -f --tail=50
 ```
 
-**Access the web interface:**
-
-| Service | URL |
-|---------|-----|
-| Frontend | http://localhost |
-| SLM Admin | http://localhost/slm |
-| Backend API | http://localhost/api |
-
-### GPU Verification (Optional)
-
-```bash
-# NVIDIA
-nvidia-smi
-
-# PyTorch CUDA check (inside the AutoBot venv)
-source /opt/autobot/autobot-slm-backend/venv/bin/activate
-python -c "import torch; print(f'CUDA available: {torch.cuda.is_available()}')"
-```
+If you started only the SLM GUI (`--profile slm`), use `curl -s http://localhost/slm/api/health` instead.
 
 ## Troubleshooting Installation
 
@@ -332,19 +196,13 @@ sudo apt-get install -y nodejs
 # Check the install log for details
 tail -100 /var/log/autobot/install-*.log
 
-# Re-run just the Ansible phase
-cd /opt/autobot/code_source/autobot-slm-backend/ansible
-ansible-playbook -i inventory/localhost.yml playbooks/deploy-slm-manager.yml --skip-tags seed,provision
+# Then see INSTALL.md, "Installer fails at Ansible Deployment"
 ```
 
 **Issue: GPU not detected**
 ```bash
-# Check GPU status
-nvidia-smi  # For NVIDIA
-rocm-smi    # For AMD
-
-# Verify drivers
-lsmod | grep nvidia  # Should show nvidia modules
+nvidia-smi  # NVIDIA
+rocm-smi    # AMD
 ```
 
 ### Getting Help
@@ -359,6 +217,6 @@ If installation fails:
 ### Next Steps
 
 After successful installation:
-1. **[Quick Start Guide](../user/quick-start-chat.md)** - Your first conversation
-2. **[Settings Guide](../user/guides/settings.md)** - Configuration and preferences
+1. **[Quick Start Guide](02-quickstart.md)** - Your first conversation
+2. **[Configuration Guide](03-configuration.md)** - Where settings live
 3. **[User Guides](../user/README.md)** - Complete user documentation

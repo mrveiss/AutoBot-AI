@@ -160,7 +160,54 @@ jobs:
     steps:
     - uses: actions/checkout@v7
 
+    # #18102: the runner's apt mirror can be too slow to fetch the ~63 MB ffmpeg/tesseract set
+    # inside the per-attempt bound, and a failed provision skips every shard. The archive cache,
+    # including the partial downloads apt resumes from, is carried between runs: a hit installs
+    # offline, and a slow run still saves what it fetched (if: always()), so the next run resumes
+    # instead of starting from zero. Keys are per run (caches are immutable); restore takes the
+    # newest for this image, then any image -- debs a newer image no longer wants are ignored.
+    - name: "Restore the apt archive cache (#18102)"
+      uses: actions/cache/restore@v6
+      with:
+        path: ${{ runner.temp }}/apt-archive-cache
+        key: ci-apt-archives-${{ runner.os }}-${{ env.ImageVersion }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: |
+          ci-apt-archives-${{ runner.os }}-${{ env.ImageVersion }}-
+          ci-apt-archives-${{ runner.os }}-
+
+    - name: "Seed apt's archive directory from the cache (#18102)"
+      shell: bash
+      run: |
+        set -euo pipefail
+        src="${RUNNER_TEMP}/apt-archive-cache"
+        if [ -d "$src" ] && [ -n "$(ls -A "$src" 2>/dev/null)" ]; then
+          sudo mkdir -p /var/cache/apt/archives/partial
+          sudo cp -a "$src"/. /var/cache/apt/archives/
+          echo "seeded $(find "$src" -maxdepth 1 -name '*.deb' | wc -l) .deb(s) and $(find "$src/partial" -type f 2>/dev/null | wc -l) partial file(s)"
+        else
+          echo "no apt archive cache for this image yet; downloading from the mirror"
+        fi
+
     - uses: ./.github/actions/setup-python-suite
+
+    - name: "Stage the apt archive for the cache, complete or partial (#18102)"
+      if: always()
+      shell: bash
+      run: |
+        set -euo pipefail
+        dst="${RUNNER_TEMP}/apt-archive-cache"
+        rm -rf "$dst" && mkdir -p "$dst/partial"
+        sudo cp /var/cache/apt/archives/*.deb "$dst"/ 2>/dev/null || true
+        sudo cp /var/cache/apt/archives/partial/* "$dst/partial"/ 2>/dev/null || true
+        sudo chown -R "$(id -u):$(id -g)" "$dst"
+        echo "staged $(find "$dst" -maxdepth 1 -name '*.deb' | wc -l) .deb(s), $(du -sb "$dst" | cut -f1) bytes"
+
+    - name: "Save the apt archive cache (#18102)"
+      if: always()
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ runner.temp }}/apt-archive-cache
+        key: ci-apt-archives-${{ runner.os }}-${{ env.ImageVersion }}-${{ github.run_id }}-${{ github.run_attempt }}
 
     - name: "Collect the downloaded .debs for the shards (#18102)"
       shell: bash

@@ -1904,11 +1904,9 @@ async def _init_web_researcher(app: FastAPI) -> None:
     try:
         from agents.web_researcher import _load_web_research_config, get_web_researcher
 
-        # Load stored config then enable — passing only {"enabled": True} would
-        # discard all other settings (rate limits, timeouts, circuit breaker).
-        config = _load_web_research_config()
-        config["enabled"] = True
-        researcher = get_web_researcher(config=config)
+        # The saved settings, enabled included: an admin's "off" survives a restart (#19226).
+        # Unsaved, web research defaults to on (services/web_research_config.py).
+        researcher = get_web_researcher(config=_load_web_research_config())
         await researcher.initialize()
         app.state.web_researcher = researcher
         logger.info("[ 99%%] WebResearcher: Browser automation ready")

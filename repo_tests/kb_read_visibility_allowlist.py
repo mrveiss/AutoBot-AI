@@ -61,6 +61,13 @@ _WATCH_RECONCILE = (
     "filename/file_path/collection), which is itself open as the watch-folder visibility ruling "
     "on #17533"
 )
+_SYSTEM_IMPORT = (
+    "NOT_USER_FACING: #19216 system-knowledge import resolving a store 'duplicate' to the fact it matched. "
+    "It runs from the import job with no user in context, reads only that fact's metadata (type, name, "
+    "link id) to decide whether to merge the link id, and returns a fact id and a status, never content, "
+    "to a caller or a prompt. An owner filter would be WRONG here: the duplicate may be a legacy fact "
+    "with no owner, and a scoped miss would make the import store another copy instead of linking"
+)
 _SCOPED_ADMIN_ROUTER = (
     "SCOPED: route requires Depends(check_admin_permission) (403 for non-admins), and "
     "check_access already grants admins unconditional read (#16665)"
@@ -71,6 +78,7 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("autobot-backend/advanced_rag_optimizer.py", "AdvancedRAGOptimizer._retrieve_hybrid_results"): _T2,
     ("autobot-backend/agents/kb_librarian/librarian.py", "KBLibrarian.get_tool_instructions"): _T2,
     ("autobot-backend/agents/kb_librarian/librarian.py", "KBLibrarian.search_tool_knowledge"): _T2,
+    ("autobot-backend/agents/kb_librarian/stable_ids.py", "_adopt_duplicate"): _SYSTEM_IMPORT,
     ("autobot-backend/agents/kb_librarian_agent.py", "KBLibrarianAgent._search_formatted"): _T2,
     ("autobot-backend/agents/knowledge_retrieval_agent.py", "KnowledgeRetrievalAgent.find_similar_documents"): _T2,
     ("autobot-backend/agents/knowledge_retrieval_agent.py", "KnowledgeRetrievalAgent.process_query"): _T2,

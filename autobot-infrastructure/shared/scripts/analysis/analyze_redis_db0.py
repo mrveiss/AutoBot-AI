@@ -8,17 +8,23 @@ Analyze what's stored in Redis database 0 to understand the full scope
 """
 
 import logging
-import os
+import sys
 from collections import defaultdict
+from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 import redis
 
+# Runs from any directory with no PYTHONPATH: put the repository root on the path for
+# `autobot_shared` (#18289).
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.redis_client import require_redis_client  # noqa: E402
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# DB number from redis-databases.yaml SSOT (#2806): main = 0
-_DB_MAIN = int(os.getenv("AUTOBOT_REDIS_DB_MAIN", "0"))
 
 # Issue #338: Key pattern dispatch table for categorization
 KEY_PATTERN_PREFIXES = [
@@ -169,7 +175,7 @@ def analyze_redis_db0():
     """Analyze what's in Redis database 0"""
     # Issue #338: Refactored to use extracted helpers, reducing depth from 11 to 2
     try:
-        client = redis.Redis(host="localhost", port=6379, db=_DB_MAIN, decode_responses=False)
+        client = require_redis_client(database="main", decode_responses=False)
 
         logger.info("=== ANALYZING REDIS DATABASE 0 ===")
 

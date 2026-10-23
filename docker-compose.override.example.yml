@@ -54,7 +54,8 @@ services:
       #   docker exec -it autobot-backend pip install debugpy
       # then restart with:
       #   python -m debugpy --listen 0.0.0.0:5678 -m uvicorn ...
-      - "5678:5678"
+      # Loopback only (#17500): a debugger on every interface runs any code anyone on the LAN sends it.
+      - "127.0.0.1:5678:5678"
     healthcheck:
       interval: 30s
       timeout: 15s

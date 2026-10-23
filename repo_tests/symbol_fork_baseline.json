@@ -82,7 +82,6 @@
     "pending_background_tasks",
     "process_file",
     "process_with_npu_fallback",
-    "query_range",
     "render",
     "report",
     "report_lines",

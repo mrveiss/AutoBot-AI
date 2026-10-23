@@ -62,10 +62,14 @@ _ALLOWED: dict[str, frozenset[str]] = {
     # loader-incompatible file that overwrote it) is removed.
     "llm_models.yaml": frozenset({"autobot-backend/config/llm_models.yaml"}),
 }
+#: #18577: the system-knowledge templates live ONLY under autobot-backend/resources/knowledge
+#: (``autobot_shared.system_knowledge_paths``). ``data/system_knowledge`` is the managers' RUNTIME
+#: dir (data/* is gitignored), so nothing under it may be tracked: a second template tree.
+_RUNTIME_ONLY_PREFIX = "data/system_knowledge/"
 #: Roots that hold an allowed file today: the reach claim (every one must be populated).
 _ROOTS = ("autobot-backend", "autobot-slm-backend", "autobot-infrastructure", "autobot-monitoring")
 #: Whole-repo pathspecs: a copy outside every root above must still be seen.
-_PATHSPECS = tuple(f"*{name}" for name in _ALLOWED)
+_PATHSPECS = (*(f"*{name}" for name in _ALLOWED), f"{_RUNTIME_ONLY_PREFIX}*")
 
 
 def _name(rel: str) -> str:
@@ -78,8 +82,13 @@ def _violations(paths: Iterable[str]) -> list[str]:
     An empty ``paths`` is NOT clean: every allowed path is then reported missing, so a scan that
     examined nothing cannot read as a pass.
     """
+    paths = list(paths)
     present = {rel for rel in paths if _name(rel) in _ALLOWED}
     found = [
+        f"{rel}: tracked under the runtime-only {_RUNTIME_ONLY_PREFIX} (templates live in autobot-backend/resources/knowledge)"
+        for rel in sorted(rel for rel in paths if rel.startswith(_RUNTIME_ONLY_PREFIX))
+    ]
+    found += [
         f"{rel}: not an allowed path for {_name(rel)} (allowed: {sorted(_ALLOWED[_name(rel)])})"
         for rel in sorted(present)
         if rel not in _ALLOWED[_name(rel)]
@@ -94,7 +103,7 @@ def _population(root: Path) -> list[str]:
         tracked = tracked_paths(root, *_PATHSPECS)
     except EmptyEnumeration:
         return []
-    return [rel for rel in tracked if _name(rel) in _ALLOWED]
+    return [rel for rel in tracked if _name(rel) in _ALLOWED or rel.startswith(_RUNTIME_ONLY_PREFIX)]
 
 
 REACH = declare(
@@ -195,3 +204,15 @@ def test_a_global_ignore_rule_cannot_untrack_a_file_in_the_throwaway_tree(tmp_pa
     fork = "autobot-infrastructure/shared/config/prometheus/prometheus.yml"
     _tracked_tree(tmp_path / "repo", {fork: b"x\n"})
     assert fork in _population(tmp_path / "repo")
+
+
+@pytest.mark.parametrize(
+    "returned",
+    [
+        "data/system_knowledge/tools/file_analysis.yaml",
+        "data/system_knowledge/.imported",
+        "data/system_knowledge/workflows/brand_new_but_drifted.yaml",
+    ],
+)
+def test_contrast_a_tracked_runtime_system_knowledge_file_fails(returned: str) -> None:
+    assert any(v.startswith(f"{returned}: tracked under the runtime-only") for v in _violations([*_CLEAN, returned]))
