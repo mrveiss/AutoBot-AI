@@ -50,7 +50,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/charts/BaseChart.vue": 602,
     "autobot-frontend/src/components/charts/FunctionCallGraph.vue": 2165,
     "autobot-frontend/src/components/charts/ImportTreeChart.vue": 1365,
-    "autobot-frontend/src/components/chat/ChatInput.vue": 1716,
+    "autobot-frontend/src/components/chat/ChatInput.vue": 1672,
     "autobot-frontend/src/components/chat/ChatInterface.vue": 1521,
     "autobot-frontend/src/components/chat/ChatMessages.vue": 2118,  # #18849: 2119 -> 2118
     "autobot-frontend/src/components/chat/ChatSidebar.vue": 807,  # #18849: 808 -> 807
@@ -134,7 +134,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/models/controllers/KnowledgeController.ts": 645,
     "autobot-frontend/src/models/repositories/ChatRepository.ts": 675,
     "autobot-frontend/src/models/repositories/KnowledgeRepository.ts": 897,
-    "autobot-frontend/src/router/index.ts": 1506,
+    "autobot-frontend/src/router/index.ts": 1495,
     "autobot-frontend/src/services/GlobalWebSocketService.ts": 905,
     "autobot-frontend/src/services/TerminalService.ts": 1137,
     "autobot-frontend/src/stores/useChatStore.ts": 1176,
@@ -155,7 +155,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/MarketplaceView.vue": 711,
     "autobot-frontend/src/views/OnboardingWizard.vue": 884,
     "autobot-frontend/src/views/PluginsView.vue": 1094,
-    "autobot-frontend/src/views/SettingsView.vue": 784,
+    "autobot-frontend/src/views/SettingsView.vue": 739,
     "autobot-frontend/src/views/VisionAutomationView.vue": 873,
     "autobot-frontend/src/views/WorkflowBuilderView.vue": 2300,
     "autobot-frontend/src/views/llc/BacklogView.vue": 842,

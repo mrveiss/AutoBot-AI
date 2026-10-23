@@ -941,8 +941,6 @@
       "noApiKeyRequired": "Klucz API nie jest wymagany.",
       "redirecting": "Przekierowywanie...",
       "disconnectFailed": "Nie udało się rozłączyć",
-      "redirectNeedsCallback": "Przepływ OAuth z przekierowaniem w przeglądarce wymaga konfiguracji wywołania zwrotnego po stronie serwera. W środowiskach bez interfejsu użyj kodu urządzenia.",
-      "deviceNotConfigured": "Uwierzytelnianie urządzenia nie jest skonfigurowane dla tego dostawcy",
       "deviceInitFailed": "Nie udało się rozpocząć przepływu urządzenia",
       "stillWaiting": "Nadal oczekiwanie na zatwierdzenie — spróbuj ponownie za chwilę.",
       "pollFailed": "Sprawdzanie nie powiodło się"

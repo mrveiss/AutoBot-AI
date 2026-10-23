@@ -258,6 +258,10 @@ MUST_STAY_VISIBLE = {
     ],
     "auth": ["google_oauth_client_id", "microsoft_oauth_client_id"],
     "llm": ["searxng_basic_auth_user"],
+    # Public provider token ENDPOINT URLs (#19241): an address saying where a token is obtained, not a token.
+    # Defaults are "" (operator-supplied) or https://huggingface.co/oauth/token; no userinfo is embedded, and
+    # the redactor keeps the host of a ``token_url``-named field (secret_redaction_vocabulary.py).
+    "llm_oauth": ["openai_token_url", "anthropic_token_url", "huggingface_token_url"],
 }
 
 CANARY = "CANARY-VALUE-13325-MUST-NOT-APPEAR"
