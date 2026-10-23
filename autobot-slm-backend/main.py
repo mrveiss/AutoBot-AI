@@ -738,9 +738,9 @@ async def prometheus_registry_metrics() -> Response:
 
 
 if __name__ == "__main__":
-    import os
-
     import uvicorn
+
+    from autobot_shared.env_registry_tls import DEFAULT_TLS_REMOTE_CERT_DIR
 
     # TLS Configuration - Issue #725 Phase 5
     tls_enabled = os.getenv("SLM_TLS_ENABLED", "false").lower() == "true"
@@ -749,7 +749,7 @@ if __name__ == "__main__":
     port = settings.port
 
     if tls_enabled:
-        cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "/etc/autobot/certs")
+        cert_dir = os.getenv("AUTOBOT_TLS_REMOTE_CERT_DIR", DEFAULT_TLS_REMOTE_CERT_DIR)  # node's flat dir (#19317)
         ssl_keyfile = os.path.join(cert_dir, "server-key.pem")
         ssl_certfile = os.path.join(cert_dir, "server-cert.pem")
         port = int(os.getenv("SLM_TLS_PORT", "8443"))

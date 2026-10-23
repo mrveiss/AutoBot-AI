@@ -65,6 +65,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/documented_playbook_invocations_test.py",
             "repo_tests/redis_config_path_is_canonical_17434_test.py",
             "repo_tests/sdk_docs_paths_test.py",
+            "repo_tests/tls_cert_dir_one_home_19317_test.py",
         },
         "root-relative `*.md` sweep; the matching files live outside the python filter's trees",
     ),

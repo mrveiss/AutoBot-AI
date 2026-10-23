@@ -198,3 +198,7 @@ backend_has_gpu: "auto"
 # `..._gateway_host` reaches the Windows side when it is not.
 backend_wsl2_loopback_host: "127.0.0.1"
 backend_wsl2_gateway_host: "10.255.255.254"
+
+# #19366: the node's shared TLS directory for this role's tasks. The two templates spell the
+# fallback themselves because deploy-backend-env.yml / deploy-nginx-proxy.yml render them outside the role.
+backend_tls_cert_dir: "{{ autobot_tls_remote_cert_dir | default('/etc/autobot/certs') }}"

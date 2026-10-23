@@ -387,9 +387,10 @@ appears outside the known overlays.
 | `AUTOBOT_TERMINAL_SESSION_TTL_SECONDS` | terminal | int | `86400` | TTL for terminal:session_config:* Redis keys — the cross-worker terminal session registry (services/terminal_session_store.py, #14961). A session config outlives the connection it was created for (the WebSocket may attach on a different uvicorn worker, or reconnect after one), so this is deliberately generous: 24h matches the sibling chat:session:* cache TTL (chat_history/cache.py) rather than the lifetime of any single PTY process. Range: 60–604800. |
 | `AUTOBOT_THREAT_INTEL_CACHE_TTL` | security | int | `7200` | Seconds a threat-intelligence verdict (VirusTotal/URLVoid) stays cached in-process (#18888). Measured on a monotonic clock, so a wall-clock step cannot extend it. Clamped to 1-604800. |
 | `AUTOBOT_TLS_CA_PATH` | tls | str | *(none)* | Path to the CA certificate file for TLS verification. |
-| `AUTOBOT_TLS_CERT_DIR` | tls | str | `'/etc/autobot/certs'` | Directory containing TLS certificate and key files. |
+| `AUTOBOT_TLS_CERT_DIR` | tls | str | `'certs'` | PKI certificate tree on the CA host (ca/, main-host/, <vm>/); relative to the project root unless absolute. A node's installed certs are AUTOBOT_TLS_REMOTE_CERT_DIR (#19317). |
 | `AUTOBOT_TLS_CERT_PATH` | tls | str | *(none)* | Path to the TLS client/server certificate file. |
 | `AUTOBOT_TLS_KEY_PATH` | tls | str | *(none)* | Path to the TLS private key file. |
+| `AUTOBOT_TLS_REMOTE_CERT_DIR` | tls | str | `'/etc/autobot/certs'` | Flat directory a fleet node serves TLS from (server-cert.pem, server-key.pem, ca-cert.pem) (#19317). |
 | `AUTOBOT_TOOL_OUTPUT_SPILL` | agent_loop | bool | false | Master switch for spilling oversized tool output to disk and returning a short excerpt plus an anchor (agent_loop/tool_output_spill.py). |
 | `AUTOBOT_TOOL_OUTPUT_SPILL_EXCERPT` | agent_loop | int | `2000` | Characters of a spilled tool result kept inline as the excerpt; clamped below the spill threshold (agent_loop/tool_output_spill.py). |
 | `AUTOBOT_TOOL_OUTPUT_SPILL_MAX` | agent_loop | int | `5000000` | Largest payload written to a spill artifact; above this the stored copy is truncated and marked (agent_loop/tool_output_spill.py). |

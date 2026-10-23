@@ -115,7 +115,7 @@
 - name: "Backend | Stat SLM TLS certs (#6677/#7272)"
   ansible.builtin.include_tasks: ../../../_shared/tasks/stat_tls_certs.yml
   vars:
-    tls_cert_dir: /etc/autobot/certs
+    tls_cert_dir: "{{ backend_tls_cert_dir }}"
   tags: ['backend', 'config']
 
 # #7689: Read SLM_AUTH_TOKEN from /etc/autobot/slm-secrets.env on the target
@@ -1341,8 +1341,8 @@
       owner: "{{ backend_user }}"
       group: "{{ backend_group }}"
     loop:
-      - /etc/autobot/certs/server-key.pem
-      - /etc/autobot/certs/server-cert.pem
+      - "{{ backend_tls_cert_dir }}/server-key.pem"
+      - "{{ backend_tls_cert_dir }}/server-cert.pem"
 
   # #10636: full-user-management secrets for the runtime .env. The DB password
   # is created by the postgresql role above (db_password); the initial-admin

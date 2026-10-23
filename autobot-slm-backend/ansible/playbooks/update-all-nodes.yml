@@ -768,6 +768,7 @@
 
   vars:
     deploy_tmp: "/tmp/autobot-deploy"
+    node_cert_dir: "{{ autobot_tls_remote_cert_dir | default('/etc/autobot/certs') }}"  # #19366
 
   pre_tasks:
     - name: "[PLAY 2] Login to SLM API"
@@ -865,8 +866,8 @@
         owner: autobot
         group: autobot
       loop:
-        - /etc/autobot/certs/server-key.pem
-        - /etc/autobot/certs/server-cert.pem
+        - "{{ node_cert_dir }}/server-key.pem"
+        - "{{ node_cert_dir }}/server-cert.pem"
       become: true
       when: "'backend' in group_names"
       tags: [backend]
@@ -1347,7 +1348,7 @@
     # for the full reasoning.
     - name: "[PLAY 2] Frontend | Set TLS key permissions"
       file:
-        path: /etc/autobot/certs/server-key.pem
+        path: "{{ node_cert_dir }}/server-key.pem"
         mode: "0640"
         owner: root
         group: autobot

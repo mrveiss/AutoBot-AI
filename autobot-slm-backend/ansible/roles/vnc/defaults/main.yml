@@ -112,8 +112,9 @@ vnc_always_shared: "{{ lookup('env', 'VNC_ALWAYS_SHARED') | default('0', true) }
 # running as vnc_user) and websockify --ssl-only (also vnc_user). The shared node
 # key at /etc/autobot/certs/server-key.pem is root:root 0600 and is consumed by
 # nginx, Redis and PostgreSQL, so it must not be opened up to vnc_user.
-vnc_tls_cert: /etc/autobot/certs/vnc-cert.pem
-vnc_tls_key: /etc/autobot/certs/vnc-key.pem
+vnc_tls_cert_dir: "{{ autobot_tls_remote_cert_dir | default('/etc/autobot/certs') }}"  # #19366
+vnc_tls_cert: "{{ vnc_tls_cert_dir }}/vnc-cert.pem"
+vnc_tls_key: "{{ vnc_tls_cert_dir }}/vnc-key.pem"
 
 # Service management
 vnc_service_name: vnc-server
