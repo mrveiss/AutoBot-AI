@@ -1,0 +1,73 @@
+name: Wiki from docs
+
+# #19278 (owner decision 2026-10-23): the GitHub wiki is generated from docs/ on every merge to
+# main and is never edited by hand. Pages and their sources: docs/wiki/manifest.yml. Each page
+# names its source path and commit, and a hand edit is overwritten on the next run.
+#
+# Writing to the wiki repository needs a credential GITHUB_TOKEN does not carry. The repo owner
+# creates it and stores it as the WIKI_TOKEN Actions secret -- no agent does. Until it exists the
+# pages are still built and checked here, and the publish step says it was skipped.
+#
+# A pull request touching the pipeline gets a build-only run: no secret, no publish.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    paths:
+      - docs/wiki/manifest.yml
+      - scripts/ci/build_wiki.py
+      - scripts/ci/build_wiki_test.py
+      - .github/workflows/wiki.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wiki-from-docs-${{ github.event_name == 'pull_request' && github.ref || 'publish' }}
+  # Publishes queue rather than cancel: a cancelled run could leave the wiki a commit behind.
+  cancel-in-progress: false
+
+jobs:
+  wiki:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Build the wiki pages (#19278)
+        run: |
+          python3 -m pip install --quiet pyyaml pytest
+          python3 -m pytest -q scripts/ci/build_wiki_test.py
+          python3 scripts/ci/build_wiki.py "${RUNNER_TEMP}/wiki" --sha "${GITHUB_SHA}"
+
+      - name: Publish to the wiki
+        if: github.event_name != 'pull_request'
+        env:
+          WIKI_TOKEN: ${{ secrets.WIKI_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WIKI_TOKEN}" ]; then
+            echo "::notice title=wiki not published::the WIKI_TOKEN secret is not set (owner action, #19278); pages were built and checked only"
+            exit 0
+          fi
+          # The token rides in a header from env, never in a URL a log or .git/config could keep.
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "${WIKI_TOKEN}" | base64 -w0)"
+          echo "::add-mask::${auth#AUTHORIZATION: basic }"
+          wiki_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.wiki.git"
+          git -c http.extraheader="${auth}" clone --quiet --depth 1 "${wiki_url}" "${RUNNER_TEMP}/wiki-repo"
+          # --delete: a page dropped from the manifest leaves the wiki too.
+          rsync -a --delete --exclude=.git --exclude=.env "${RUNNER_TEMP}/wiki/" "${RUNNER_TEMP}/wiki-repo/"
+          cd "${RUNNER_TEMP}/wiki-repo"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "wiki already matches ${GITHUB_SHA}"
+            exit 0
+          fi
+          git commit --quiet -m "wiki: generated from ${GITHUB_SHA} (#19278)"
+          git -c http.extraheader="${auth}" push --quiet origin HEAD
