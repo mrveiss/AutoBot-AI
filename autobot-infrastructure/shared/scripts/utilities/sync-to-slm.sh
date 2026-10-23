@@ -32,8 +32,10 @@ source "${SCRIPT_DIR}/../lib/db-update-classify.sh" || {
 REMOTE_HOST="${AUTOBOT_SLM_HOST:-localhost}"
 REMOTE_USER="${AUTOBOT_SSH_USER:-autobot}"
 # #9956: SLM manager DB node_id is overridable — deployments may rename the
-# node. Defaults to the inventory default (slm_server host in slm-nodes.yml).
-SLM_NODE_ID="${AUTOBOT_SLM_NODE_ID:-00-SLM-Manager}"
+# node. #19322: no default of its own -- ssot-config.sh (sourced above) defaults
+# AUTOBOT_SLM_NODE_ID from MiscConfig.slm_node_id, the id the SLM backend registers,
+# and honours the deprecated SLM_NODE_ID alias in the backend's order.
+SLM_NODE_ID="${AUTOBOT_SLM_NODE_ID}"
 # #14459: this value ends up embedded in a remote SSH command string that is
 # parsed twice (once here, once by the remote shell). Constrain it to what a
 # `nodes.node_id` value actually looks like (see models/database.py,

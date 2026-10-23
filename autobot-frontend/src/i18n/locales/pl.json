@@ -4247,6 +4247,9 @@
       "errorEnterBoth": "Podaj encję źródłową i docelową.",
       "notInGraph": "Te encje nie znajdują się jeszcze w grafie relacji.",
       "notInGraphHint": "Istnieją, ale nie mają powiązań w grafie, więc nie można prześledzić połączenia. Uruchom ponownie wyodrębnianie encji."
+    },
+    "chromaExplorer": {
+      "subtitle": "Przeglądaj i przeszukuj kolekcje wektorów"
     }
   },
   "workflow": {

@@ -4247,6 +4247,9 @@
       "errorEnterBoth": "Bitte geben Sie sowohl eine Quell- als auch eine Zielentität ein.",
       "notInGraph": "Diese Entitäten sind noch nicht im Beziehungsgraphen.",
       "notInGraphHint": "Sie existieren, haben aber keine Graphverknüpfungen — daher lässt sich keine Verbindung verfolgen. Führen Sie die Entitätsextraktion erneut aus."
+    },
+    "chromaExplorer": {
+      "subtitle": "Vektorsammlungen durchsuchen und erkunden"
     }
   },
   "workflow": {

@@ -9,7 +9,7 @@
         </svg>
         <h1>ChromaDB Explorer</h1>
       </div>
-      <p class="header-subtitle">Browse and search vector collections at port 8100</p>
+      <p class="header-subtitle">{{ $t('knowledge.chromaExplorer.subtitle') }}</p>
     </div>
 
     <!-- Error Alert -->

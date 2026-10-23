@@ -174,6 +174,33 @@ def _get_ssot_backend_url() -> str:
         return "http://127.0.0.1:8001"  # canonical: ignore py-hardcoded-url - bootstrap: ssot_config unavailable
 
 
+#: #19322: the backend's old name for the manager's node id, now a deprecated alias of
+#: AUTOBOT_SLM_NODE_ID. The name stays live as the SLM agent's OWN per-host id
+#: (slm-agent.service sets it on every node), which is why the manager's id left it.
+_LEGACY_SLM_NODE_ID_VAR = "SLM_NODE_ID"
+
+
+def _resolve_slm_node_id() -> str:
+    """The SLM manager's node id: ``MiscConfig.slm_node_id`` (AUTOBOT_SLM_NODE_ID), the one home.
+
+    A deployment that set only the legacy ``SLM_NODE_ID`` keeps the id it registered under,
+    with a deprecation warning, so no existing manager row is orphaned (#19322).
+    """
+    from autobot_shared.ssot_config import get_config
+
+    misc = get_config().misc
+    canonical = misc.slm_node_id
+    legacy = os.environ.get(_LEGACY_SLM_NODE_ID_VAR)
+    if not legacy or legacy == canonical:
+        return canonical
+    # Set explicitly (environment or .env), even to the default value: the canonical name wins.
+    if "slm_node_id" in misc.model_fields_set:
+        logger.error("SLM_NODE_ID=%s ignored: AUTOBOT_SLM_NODE_ID=%s is set and wins", legacy, canonical)
+        return canonical
+    logger.warning("SLM_NODE_ID is deprecated for the manager's node id; set AUTOBOT_SLM_NODE_ID=%s", legacy)
+    return legacy
+
+
 # Load SSOT defaults at module level so Settings class can reference them.
 _SSOT_POOL_SIZE, _SSOT_MAX_OVERFLOW, _SSOT_POOL_RECYCLE = _get_ssot_pool_defaults()
 _SSOT_BACKEND_URL = _get_ssot_backend_url()
@@ -245,14 +272,13 @@ class Settings(RedactedReprMixin, BaseSettings):
     port: int = 8000
     debug: bool = False
 
-    # SLM self-identity (#9956, #10110)
-    # The SLM manager's own DB node_id — the one well-known, stable identity
-    # in the registry-driven model (#10110: the DB node registry is the source
-    # of truth; every other node self-registers with a uuid4()[:8] node_id).
-    # Deployments may rename the manager, so this is read from the environment
-    # instead of being hardcoded; the default matches the legacy slm_server
-    # fallback host in slm-nodes.yml.
-    slm_node_id: str = os.getenv("SLM_NODE_ID", "00-SLM-Manager")
+    # SLM self-identity (#9956, #10110): the SLM manager's own DB node_id -- the one
+    # well-known, stable identity in the registry-driven model (every other node
+    # self-registers with a uuid4()[:8] node_id). A property, not a field: as a
+    # field, env_prefix also bound it to a third name, SLM_SLM_NODE_ID (#19322).
+    @cached_property
+    def slm_node_id(self) -> str:
+        return _resolve_slm_node_id()
 
     # Authentication
     secret_key: str = os.getenv("SLM_SECRET_KEY", "")

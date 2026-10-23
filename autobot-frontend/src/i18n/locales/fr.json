@@ -4247,6 +4247,9 @@
       "errorEnterBoth": "Veuillez saisir une entité de départ et une entité d'arrivée.",
       "notInGraph": "Ces entités ne sont pas encore dans le graphe de relations.",
       "notInGraphHint": "Elles existent mais n'ont aucun lien dans le graphe : aucune connexion ne peut être tracée. Relancez l'extraction d'entités."
+    },
+    "chromaExplorer": {
+      "subtitle": "Parcourir et rechercher des collections de vecteurs"
     }
   },
   "workflow": {

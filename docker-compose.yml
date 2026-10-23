@@ -130,6 +130,10 @@ services:
     container_name: autobot-chromadb
     restart: unless-stopped
     ports:
+      # #19321: two ports, two meanings. Host side = PortConfig.chromadb (8100, what
+      # bare-metal ChromaDB listens on and host clients dial). Container side = the
+      # image's own listen port (8000), which in-network clients below dial as
+      # AUTOBOT_CHROMADB_PORT. repo_tests/chromadb_port_one_home_19321_test.py pins both.
       - "127.0.0.1:8100:8000"
     volumes:
       - chroma_data:/data

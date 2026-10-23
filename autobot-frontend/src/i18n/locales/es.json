@@ -4247,6 +4247,9 @@
       "errorEnterBoth": "Introduzca una entidad de origen y una de destino.",
       "notInGraph": "Estas entidades aún no están en el grafo de relaciones.",
       "notInGraphHint": "Existen, pero no tienen enlaces en el grafo, por lo que no se puede trazar ninguna conexión. Vuelva a ejecutar la extracción de entidades."
+    },
+    "chromaExplorer": {
+      "subtitle": "Explorar y buscar colecciones de vectores"
     }
   },
   "workflow": {

@@ -57,10 +57,11 @@ _register(
 _register(
     "SLM_NODE_ID",
     str,
-    "00-SLM-Manager",
-    "Node id. The SLM backend uses it as the manager's own registry id (default shown). "
-    "slm/agent/agent.py accepts --node-id. "
-    "The agent refuses to start without one.",
+    None,
+    "This node's own SLM agent id, set per host by slm-agent.service (slm/agent/agent.py also "
+    "accepts --node-id); the agent refuses to start without one, so there is no default. "
+    "Deprecated as the SLM manager's id (#19322): that is AUTOBOT_SLM_NODE_ID "
+    "(MiscConfig.slm_node_id); the backend still honours this name when that one is unset.",
     "slm",
 )
 _register(

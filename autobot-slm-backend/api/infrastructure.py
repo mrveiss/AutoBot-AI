@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""
-SLM Infrastructure API Routes
+"""SLM Infrastructure API Routes
 
 Issue #786: Provides endpoints for running infrastructure setup playbooks
 such as database deployment, monitoring setup, and other infrastructure tasks.
@@ -23,6 +22,7 @@ from typing_extensions import Annotated
 
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
+from autobot_shared.ssot_config import config
 from services.ansible_utils import _extract_failure_summary
 from services.auth import get_current_user
 from services.playbook_output_stream import PIPE_LINE_LIMIT, iter_pipe_lines
@@ -314,7 +314,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         category=PlaybookCategory.DATABASE,
         playbook_file="setup-ai-stack.yml",
         target_hosts=["ai_stack"],
-        variables={"chromadb_port": 8080},
+        variables={"chromadb_port": config.port.chromadb},  # #19321: was 8080, the AI-stack port
         estimated_duration="4 minutes",
         requires_confirmation=True,
     ),
