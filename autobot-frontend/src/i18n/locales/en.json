@@ -5911,7 +5911,13 @@
       "lastCheck": "Last Check:",
       "consecutiveFailures": "Consecutive Failures:",
       "errorDetails": "Error Details:",
-      "dismiss": "Dismiss"
+      "dismiss": "Dismiss",
+      "states": {
+        "healthy": "Healthy",
+        "degraded": "Degraded",
+        "critical": "Unreachable",
+        "unknown": "Unknown"
+      }
     },
     "themeToggle": {
       "system": "System",
@@ -8099,7 +8105,13 @@
       "announceMinimal": "Minimal interface on. Advanced features hidden.",
       "announceFull": "Full interface on. All features shown."
     },
-    "llcLedger": "Agent ledger"
+    "llcLedger": "Agent ledger",
+    "backendHealth": {
+      "degradedTitle": "Backend degraded",
+      "degradedMessage": "Some backend services are slow or failing. Features may not work as expected.",
+      "criticalTitle": "Backend unreachable",
+      "criticalMessage": "AutoBot cannot reach its backend. Changes may not be saved until it is back."
+    }
   },
   "llcCompanyStatus": {
     "showArchived": "Show archived",
