@@ -104,7 +104,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/knowledge_maintenance.py": 1970,
     "autobot-backend/api/knowledge_mcp.py": 1453,
     "autobot-backend/api/knowledge_population.py": 1425,
-    "autobot-backend/api/knowledge_search.py": 819,  # #16665: analytics endpoints moved out
+    "autobot-backend/api/knowledge_search.py": 813,  # #16665: analytics endpoints moved out
     "autobot-backend/api/knowledge_search_aggregator.py": 951,  # #16665: doc-search moved out
     "autobot-backend/api/knowledge_tags.py": 887,
     "autobot-backend/api/knowledge_vectorization.py": 1690,
@@ -342,7 +342,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/nl_database_service.py": 775,
     "autobot-backend/services/notification_service.py": 634,
     "autobot-backend/services/npu_worker_manager.py": 1419,
-    "autobot-backend/services/rag_service.py": 1149,
+    "autobot-backend/services/rag_service.py": 1076,
     "autobot-backend/services/redis_service_manager_test.py": 839,
     "autobot-backend/services/secrets_service.py": 688,
     "autobot-backend/services/security_memory_integration.py": 1031,
@@ -377,7 +377,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/tests/orchestration/test_causal_error_recovery.py": 746,
     "autobot-backend/tests/orchestration/test_execution_strategies.py": 603,
     "autobot-backend/tests/services/notification_service_test.py": 714,
-    "autobot-backend/tests/services/rag_service_events_test.py": 1084,
+    "autobot-backend/tests/services/rag_service_events_test.py": 1080,
     "autobot-backend/tests/services/test_causal_inference_engine.py": 807,
     "autobot-backend/tests/services/test_claim_classifier.py": 689,
     "autobot-backend/tests/services/test_claim_verifier.py": 1053,
