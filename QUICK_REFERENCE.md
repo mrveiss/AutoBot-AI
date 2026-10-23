@@ -17,7 +17,7 @@ docker compose up -d
 - ✅ Your data stays on your infrastructure (no cloud lock-in)
 - ✅ No per-request costs — unlimited automations
 - ✅ Millisecond latency for infrastructure decisions
-- ✅ Meet compliance requirements (HIPAA, GDPR, SOC2)
+- ✅ Keeps data on your hardware, which helps with your own compliance obligations (see [Compliance Targets](docs/compliance/COMPLIANCE_TARGETS.md); no compliance is claimed)
 - ✅ Full customization and control
 
 [Learn more about self-hosted automation](docs/self-hosted-advantages.md)

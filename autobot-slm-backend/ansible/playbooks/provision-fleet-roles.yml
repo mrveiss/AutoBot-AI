@@ -129,7 +129,7 @@
     - name: "[PRE-FLIGHT] Ensure code_source has full history, not a shallow clone (#16310)"
       ansible.builtin.command:
         cmd: >-
-          /opt/autobot/autobot-slm-backend/venv/bin/python3
+          {{ autobot.base_dir }}/autobot-slm-backend/venv/bin/python3
           {{ git_repo_root }}/autobot-slm-backend/scripts/sync_deletion_planner.py
           ensure-full-history --repo-root {{ git_repo_root }}
       changed_when: false
@@ -616,7 +616,7 @@
     # deps already installed.
     - name: "SLM | Ensure SLM frontend node_modules exist (#7472)"
       community.general.npm:
-        path: "{{ slm_frontend_dir | default('/opt/autobot/autobot-slm-frontend') }}"
+        path: "{{ slm_frontend_dir | default(autobot.base_dir ~ '/autobot-slm-frontend') }}"
         state: present
       become_user: "{{ slm_user | default('autobot') }}"
       when: _is_slm_frontend_colocated | bool
@@ -632,7 +632,7 @@
       ansible.builtin.include_tasks: ../roles/_shared/tasks/build_publish_slm_frontend.yml
       vars:
         slm_frontend_publish_label: "SLM"
-        slm_frontend_publish_dir: "{{ slm_frontend_dir | default('/opt/autobot/autobot-slm-frontend') }}"
+        slm_frontend_publish_dir: "{{ slm_frontend_dir | default(autobot.base_dir ~ '/autobot-slm-frontend') }}"
         slm_frontend_publish_user: "{{ slm_user | default('autobot') }}"
       when: _is_slm_frontend_colocated | bool
       tags: ['frontend', 'slm-nginx', 'provision']

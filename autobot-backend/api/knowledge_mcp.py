@@ -29,7 +29,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 from constants.model_constants import ModelConstants
 from dependencies import provide_config_manager
 from knowledge.ownership_index import drop_ownership_unless_admin, refuses_platform_wide
-from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
+from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER, with_quarantine
 from knowledge.schemas.mcp import (
     DocumentAddRequest,
     KnowledgeSearchRequest,
@@ -461,12 +461,11 @@ async def mcp_search_knowledge_base(
     try:
         kb = get_knowledge_base()
 
-        # Issue #13009: exclude quarantined research facts (#12622) when the caller doesn't
-        # request a filter of their own. #18820: KB.search withholds rejected and invalid facts itself.
+        # #13009/#18946: quarantined facts excluded; caller filter AND-ed in. #18820: KB.search withholds the rest.
         results = await kb.search(
             query=request.query,
             top_k=request.top_k,
-            filters=request.filters or RESEARCH_QUARANTINE_FILTER,
+            filters=with_quarantine(request.filters),
         )
 
         # Format results for MCP

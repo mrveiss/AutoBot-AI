@@ -107,11 +107,13 @@ control:
 - **Complete Data Privacy** — full data control, no external dependencies, runs entirely
   on your hardware, no vendor lock-in
 - **Governance-Ready Architecture** — audit logging, MFA, a secrets vault, retention
-  policies, and RBAC built for GDPR/SOC2/ISO27001 today, on an architecture (self-hosted
-  data, a provider-agnostic LLM gateway, human-oversight-capable governance) that maps
-  cleanly onto EU AI Act, NIS2, and ISO/IEC 42001 (AI management systems) obligations. See
-  [EU AI Act, NIS2 & Governance Fit](docs/architecture/EU_AI_GOVERNANCE.md) for
-  what's covered and what's still a gap — no compliance certification is claimed.
+  policies, and RBAC, on an architecture (self-hosted data, a provider-agnostic LLM
+  gateway, human-oversight-capable governance) designed to help with EU AI Act, NIS2 and
+  data-protection obligations. The standards and regulations we are **working towards**,
+  with their status and open work, are listed in
+  [Compliance Targets](docs/compliance/COMPLIANCE_TARGETS.md); see also
+  [EU AI Act, NIS2 & Governance Fit](docs/architecture/EU_AI_GOVERNANCE.md). No
+  compliance or certification is claimed.
 
 → Browse everything in the [Capability Catalog](docs/features/CATALOG.md).
 
@@ -183,8 +185,8 @@ what they deliver.
 
 AutoBot keeps your AI and your data on infrastructure you control:
 
-- **Data privacy & compliance** — your data never leaves your hardware; supports HIPAA,
-  GDPR, and SOC2 requirements
+- **Data privacy** — your data never leaves your hardware, which helps you meet your own
+  data-protection obligations ([what we are working towards](docs/compliance/COMPLIANCE_TARGETS.md))
 - **Predictable cost** — local inference runs at zero marginal cost per request; no
   per-request fees
 - **Full control** — run custom models, modify the code, no vendor lock-in

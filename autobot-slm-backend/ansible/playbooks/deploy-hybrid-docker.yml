@@ -19,7 +19,7 @@
   vars:
     docker_compose_version: "2.29.1"
     autobot_repo: "https://github.com/autobot/autobot.git"
-    autobot_dir: "/opt/autobot"
+    autobot_dir: "{{ autobot.base_dir }}"
 
   tasks:
     - name: Install Docker on all VMs
@@ -242,7 +242,7 @@
 
     - name: Copy AutoBot source for building
       synchronize:
-        src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/
+        src: ${AUTOBOT_PROJECT_ROOT:-{{ autobot.base_dir }}/code_source}/
         dest: /tmp/autobot/
         delete: false
         recursive: true
@@ -365,7 +365,7 @@
 
     - name: Copy AutoBot source for building
       synchronize:
-        src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/
+        src: ${AUTOBOT_PROJECT_ROOT:-{{ autobot.base_dir }}/code_source}/
         dest: /tmp/autobot/
         delete: false
         recursive: true

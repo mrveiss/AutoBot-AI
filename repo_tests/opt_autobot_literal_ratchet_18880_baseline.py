@@ -12,6 +12,7 @@ independent grep that dropped `#` comment lines: the same 72-file set. Each entr
 #18881 (playbooks) and #18882 (roles, templates, inventory, tests) take it to empty.
 
 Retired by #19040: upgrade-backend-agent.yml (2) and fix-slm-agent-node-id.yml (4), so 303 in 70 files.
+#18881 moved every playbook to `autobot.base_dir`: 176 occurrences in 29 files, so 127 in 41 files.
 """
 
 BASELINE: dict[str, int] = {
@@ -26,35 +27,6 @@ BASELINE: dict[str, int] = {
     "autobot-slm-backend/ansible/enable-tls.yml": 4,
     "autobot-slm-backend/ansible/fix-slm-env-ports.yml": 1,
     "autobot-slm-backend/ansible/playbooks/README-backend-fixes.md": 2,
-    "autobot-slm-backend/ansible/playbooks/cleanup-nodes.yml": 16,
-    "autobot-slm-backend/ansible/playbooks/configure-python-provision-permissions.yml": 1,
-    "autobot-slm-backend/ansible/playbooks/decommission-node.yml": 7,
-    "autobot-slm-backend/ansible/playbooks/deploy-backend-local.yml": 1,
-    "autobot-slm-backend/ansible/playbooks/deploy-backend-remote.yml": 1,
-    "autobot-slm-backend/ansible/playbooks/deploy-base.yml": 2,
-    "autobot-slm-backend/ansible/playbooks/deploy-database.yml": 8,
-    "autobot-slm-backend/ansible/playbooks/deploy-development-services.yml": 8,
-    "autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml": 3,
-    "autobot-slm-backend/ansible/playbooks/deploy-native-services.yml": 21,
-    "autobot-slm-backend/ansible/playbooks/deploy-nginx-proxy.yml": 2,
-    "autobot-slm-backend/ansible/playbooks/diagnose-backend-crash.yml": 2,
-    "autobot-slm-backend/ansible/playbooks/enroll-local.yml": 1,
-    "autobot-slm-backend/ansible/playbooks/enroll-node.yml": 2,
-    "autobot-slm-backend/ansible/playbooks/fix-backend-clean-restart.yml": 1,
-    "autobot-slm-backend/ansible/playbooks/fix-backend-environment.yml": 1,
-    "autobot-slm-backend/ansible/playbooks/fix-backend-symlink.yml": 2,
-    "autobot-slm-backend/ansible/playbooks/fix-node-ownership.yml": 4,
-    "autobot-slm-backend/ansible/playbooks/pre-deployment-validation.yml": 6,
-    "autobot-slm-backend/ansible/playbooks/pre-flight-code-sync.yml": 1,
-    "autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml": 3,
-    "autobot-slm-backend/ansible/playbooks/remove-role.yml": 3,
-    "autobot-slm-backend/ansible/playbooks/rollback-dependencies.yml": 3,
-    "autobot-slm-backend/ansible/playbooks/setup-ssh-known-hosts.yml": 1,
-    "autobot-slm-backend/ansible/playbooks/setup-vm-names-and-lvm.yml": 6,
-    "autobot-slm-backend/ansible/playbooks/sync-user-backend.yml": 3,
-    "autobot-slm-backend/ansible/playbooks/toggle-enforcement.yml": 2,
-    "autobot-slm-backend/ansible/playbooks/update-all-nodes.yml": 61,
-    "autobot-slm-backend/ansible/playbooks/update-node.yml": 4,
     "autobot-slm-backend/ansible/pre-migration-check.yml": 1,
     "autobot-slm-backend/ansible/roles/_shared/tasks/clean_legacy_dir.yml": 14,
     "autobot-slm-backend/ansible/roles/_shared/tasks/clean_wrong_node_dir.yml": 1,
