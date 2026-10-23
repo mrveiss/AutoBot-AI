@@ -41,7 +41,13 @@ def _run_generator(tmp: Path) -> tuple[str, dict[str, str]]:
         pytest.skip("bash and openssl are needed to run generate-secrets.sh")
     script = tmp / "generate-secrets.sh"
     shutil.copy(_GENERATOR, script)
-    env = {**os.environ, "AUTOBOT_DOCKER_MGMT_PREFIX": "10.77.3"}
+    # #17793: generate-secrets refuses a DB password when docker cannot say no Postgres volume
+    # exists; a stub docker that lists no volumes stands for a fresh host.
+    bin_dir = tmp / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    (bin_dir / "docker").write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    (bin_dir / "docker").chmod(0o755)
+    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "AUTOBOT_DOCKER_MGMT_PREFIX": "10.77.3"}
     out = subprocess.run([bash, str(script)], capture_output=True, text=True, timeout=60, env=env)
     assert out.returncode == 0, out.stderr
     lines = (tmp / ".env.secrets").read_text(encoding="utf-8").splitlines()
@@ -63,7 +69,8 @@ def test_generate_secrets_writes_an_admin_password_the_user_policy_accepts() -> 
 
 def test_the_admin_password_reaches_the_backend_container() -> None:
     env = _backend_env()
-    assert re.fullmatch(r"\$\{AUTOBOT_ADMIN_PASSWORD(:-)?\}", env.get("AUTOBOT_ADMIN_PASSWORD", "")), env.get(
+    # #17793: required, not empty-when-unset -- compose refuses to start without it.
+    assert re.fullmatch(r"\$\{AUTOBOT_ADMIN_PASSWORD:\?[^}]+\}", env.get("AUTOBOT_ADMIN_PASSWORD", "")), env.get(
         "AUTOBOT_ADMIN_PASSWORD"
     )
 

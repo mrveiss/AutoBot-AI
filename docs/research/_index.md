@@ -16,6 +16,7 @@ Research reports covering hardware integration, system conflicts, and technology
 | --- | --- |
 | [[INTEL_NPU_WINDOWS_DEPLOYMENT_ANALYSIS]] | Intel NPU Windows deployment analysis and feasibility |
 | [[lean-hardware-model-loading]] | Large-model inference on lean hardware — target architecture and capability audit of `llm_shared/optimization/` (#13030) |
+| [[plugin-kernel-agent-harness]] | Plugin-kernel agent harness — pattern-by-pattern comparison with AutoBot (log-derived context, spill, compaction, sandbox, durable goal, versioned sessions); gaps filed as #19290, #19298–#19303 |
 | [[REDIS_OWNERSHIP_CONFLICT_RESEARCH_REPORT]] | Redis ownership conflict investigation and resolution research |
 | [[visual-operations-blueprint]] | Visual operations blueprint — capability research and Company OS audit; GUI-only adoption decision, canvas already owned, org-chart human branch unreachable (#13935) |
 | [[canvas-grid-rendering-review]] | Canvas and grid rendering review — techniques audit of `WorkflowCanvas`, the LLC Gantt and the graph charts; grid/geometry/edge-index gaps fixed, motion and safe-area gaps open (#14765, #14766, #14767, #14769, #14770, #14771) |

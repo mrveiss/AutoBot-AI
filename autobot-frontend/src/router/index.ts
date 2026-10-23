@@ -35,6 +35,7 @@ import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { getBackendUrl, getSLMAdminUrl } from '@/config/ssot-config'
 import { llcCompanyParamGuard } from './llcGuards'
 import { llcCompanyChildren } from './llcRoutes'
+import { preferencesRoutes } from './preferencesRoutes'
 
 const logger = createLogger('Router');
 
@@ -631,19 +632,7 @@ export const routes: RouteRecordRaw[] = [
       },
     ]
   },
-  // Issue #753: User preferences (appearance, font size, colors, etc.)
-  {
-    path: '/preferences',
-    name: 'preferences',
-    component: () => import('@/views/SettingsView.vue'),
-    meta: {
-      title: 'Preferences',
-      icon: 'fas fa-cog',
-      description: 'Customize your AutoBot experience',
-      requiresAuth: true,
-      hideInNav: true,
-    }
-  },
+  ...preferencesRoutes, // Issue #753 Settings + #19241 provider sign-in callback
   // Issue #4492: Home serves custom dashboard — renamed from /custom-dashboard
   {
     path: '/home',

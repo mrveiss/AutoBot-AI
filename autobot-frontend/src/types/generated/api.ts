@@ -31116,6 +31116,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/llm-auth/providers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Providers
+         * @description List the sign-in providers, their configured flows and missing setting NAMES — never a value.
+         */
+        get: operations["list_providers_api_llm_auth_providers_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/llm-auth/oauth/initiate": {
         parameters: {
             query?: never;
@@ -31129,11 +31149,9 @@ export interface paths {
          * Oauth Initiate
          * @description Begin a provider auth-code + PKCE flow; return the authorize URL + state.
          *
-         *     The server mints the PKCE verifier/challenge and an unguessable ``state``,
-         *     stashes them in Redis (short TTL, keyed to the initiating admin), and returns
-         *     the provider authorize URL. The client never supplies the verifier — the
-         *     callback takes it from the stored state (#11297). Requires admin: the stored
-         *     credential is shared by the admin's org (per-org scoped, #11497).
+         *     The provider and client come from the registry; ``redirect_uri`` must be on
+         *     the SSOT frontend origin. The server mints the PKCE verifier and a single-use
+         *     ``state`` bound to the caller, scope and subject (#11297, #19241).
          */
         post: operations["oauth_initiate_api_llm_auth_oauth_initiate_post"];
         delete?: never;
@@ -31153,15 +31171,12 @@ export interface paths {
         put?: never;
         /**
          * Oauth Callback
-         * @description Exchange an OAuth authorization code for tokens and persist to vault.
+         * @description Exchange an OAuth authorization code for tokens and persist to the vault.
          *
-         *     Authorized by a server-minted, **single-use** ``state`` (from /oauth/initiate):
-         *     the state is atomically consumed (GETDEL), must belong to the current admin,
-         *     and supplies the verifier / token_url / client_id — none of which the client
-         *     provides. This closes the CSRF / code-injection hole where a lured admin could
-         *     bind an attacker's account as the shared system credential (#11297).
-         *
-         *     Requires admin — stored credential is per-org scoped (shared within the admin's org, #11497).
+         *     Authorized by a server-minted, **single-use** ``state``: atomically consumed
+         *     (GETDEL), it must belong to the caller and supplies the verifier, provider,
+         *     scope and subject — none of which the client provides (#11297). The token is
+         *     written to the scope the flow started with (#19241).
          */
         post: operations["oauth_callback_api_llm_auth_oauth_callback_post"];
         delete?: never;
@@ -31181,13 +31196,10 @@ export interface paths {
         put?: never;
         /**
          * Device Initiate
-         * @description Start a device-code flow.
+         * @description Start a device-code flow at the registry's device endpoint (RFC 8628).
          *
-         *     Calls the provider's device authorization endpoint and returns the
-         *     ``user_code`` + ``verification_uri`` for the user to complete on another device.
-         *     The caller polls ``/device/poll`` until approval or expiry.
-         *
-         *     Requires admin — stored credential is per-org scoped (shared within the admin's org, #11497).
+         *     Returns the ``user_code`` + ``verification_uri``; the context (caller, scope,
+         *     subject) is held server-side so /device/poll stores to the right place.
          */
         post: operations["device_initiate_api_llm_auth_device_initiate_post"];
         delete?: never;
@@ -31209,10 +31221,8 @@ export interface paths {
          * Device Poll
          * @description Poll the token endpoint for a device-code grant and persist on approval.
          *
-         *     Returns ``stored=False`` when the grant is still pending (caller should
-         *     retry after the ``interval`` from ``/device/initiate``).
-         *
-         *     Requires admin — stored credential is per-org scoped (shared within the admin's org, #11497).
+         *     Returns ``stored=False`` while the grant is pending. Only the initiator may
+         *     poll, and the token goes to the scope the flow started with (#19241).
          */
         post: operations["device_poll_api_llm_auth_device_poll_post"];
         delete?: never;
@@ -31230,11 +31240,10 @@ export interface paths {
         };
         /**
          * Provider Auth Status
-         * @description Return the auth connection status for a provider.
+         * @description Return the caller's connection status for a provider at *scope* (default: the caller's own).
          *
-         *     Dual-read (finding #1, #11497): reports the caller's org-scoped token when
-         *     present, else the legacy ``"global"`` token — so orgs that connected before
-         *     the change still show connected with zero reconnect.
+         *     System scope (admin only) dual-reads (finding #1, #11497): the org-scoped token, else the
+         *     legacy ``"global"`` one. User scope reads only the caller's own token.
          */
         get: operations["provider_auth_status_api_llm_auth_status__provider_name__get"];
         put?: never;
@@ -31257,11 +31266,37 @@ export interface paths {
         post?: never;
         /**
          * Revoke Provider Auth
-         * @description Revoke stored OAuth / device-code / session tokens for a provider.
+         * @description Disconnect the caller's provider sign-in at *scope* (system needs admin).
          *
-         *     Requires admin — credential is per-org scoped (shared within the admin's org, #11497).
+         *     *scope* is required (422 without it): a scope-less "disconnect" from an
+         *     admin must never default to deleting the org-shared credential. A
+         *     multi-tenant system disconnect leaves a per-org stop marker; see
+         *     ``api.provider_auth_revoke``, which also revokes at the provider and audits.
          */
         delete: operations["revoke_provider_auth_api_llm_auth__provider_name__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llm-auth/{provider_name}/shared": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke Shared Provider Auth
+         * @description Superadmin: delete the shared legacy ``"global"`` token and revoke it at the provider.
+         *
+         *     Every org still falling back to it loses it, which is the point (key
+         *     compromise, account-owner offboarding). Audited like every disconnect.
+         */
+        delete: operations["revoke_shared_provider_auth_api_llm_auth__provider_name__shared_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -35173,7 +35208,7 @@ export interface paths {
         put?: never;
         /**
          * Enable Web Research
-         * @description Enable web research functionality
+         * @description Enable web research, saved across restarts.
          */
         post: operations["enable_web_research_api_web_research_enable_post"];
         delete?: never;
@@ -35193,7 +35228,7 @@ export interface paths {
         put?: never;
         /**
          * Disable Web Research
-         * @description Disable web research functionality
+         * @description Disable web research, saved across restarts.
          */
         post: operations["disable_web_research_api_web_research_disable_post"];
         delete?: never;
@@ -35211,12 +35246,12 @@ export interface paths {
         };
         /**
          * Get Research Settings
-         * @description Get current web research settings
+         * @description Every web research setting, read from the one section the researcher uses (#19226).
          */
         get: operations["get_research_settings_api_web_research_settings_get"];
         /**
          * Update Research Settings
-         * @description Update web research settings
+         * @description Save the sent settings and apply them to the running researcher, no restart (#19226).
          */
         put: operations["update_research_settings_api_web_research_settings_put"];
         post?: never;
@@ -73147,15 +73182,11 @@ export interface components {
         DeviceInitiateRequest: {
             /** Provider Name */
             provider_name: string;
-            /** Device Authorization Url */
-            device_authorization_url: string;
-            /** Client Id */
-            client_id: string;
             /**
              * Scope
-             * @default openid
+             * @enum {string}
              */
-            scope: string;
+            scope: "system" | "user";
         } & {
             [key: string]: unknown;
         };
@@ -73190,10 +73221,6 @@ export interface components {
         DevicePollRequest: {
             /** Provider Name */
             provider_name: string;
-            /** Token Url */
-            token_url: string;
-            /** Client Id */
-            client_id: string;
             /** Device Code */
             device_code: string;
         } & {
@@ -87436,8 +87463,8 @@ export interface components {
          * OAuthCallbackRequest
          * @description Body for POST /oauth/callback — bound to a server-minted, single-use state.
          *
-         *     The verifier / token_url / client_id are taken from the stored state, never
-         *     from the client, so a lured admin cannot inject an attacker's credentials.
+         *     The verifier, provider, scope and subject are taken from the stored state,
+         *     never from the client, so a lured user cannot inject an attacker's credentials.
          */
         OAuthCallbackRequest: {
             /** State */
@@ -87452,20 +87479,19 @@ export interface components {
         /**
          * OAuthInitiateRequest
          * @description Body for POST /oauth/initiate — starts a server-driven PKCE auth-code flow.
+         *
+         *     ``scope`` is required: the caller always says whose connection this is (#19241).
          */
         OAuthInitiateRequest: {
             /** Provider Name */
             provider_name: string;
-            /** Authorize Url */
-            authorize_url: string;
-            /** Token Url */
-            token_url: string;
-            /** Client Id */
-            client_id: string;
             /** Redirect Uri */
             redirect_uri: string;
-            /** Scopes */
-            scopes?: string[] | null;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "system" | "user";
         } & {
             [key: string]: unknown;
         };
@@ -87477,6 +87503,8 @@ export interface components {
             stored: boolean;
             /** Expires At */
             expires_at?: number | null;
+            /** Scope */
+            scope?: ("system" | "user") | null;
         } & {
             [key: string]: unknown;
         };
@@ -91322,6 +91350,18 @@ export interface components {
             expires_at?: number | null;
             /** Auth Kind */
             auth_kind?: string | null;
+            /** Scope */
+            scope?: ("system" | "user") | null;
+            /**
+             * Needs Reauth
+             * @default false
+             */
+            needs_reauth: boolean;
+            /**
+             * Shared
+             * @default false
+             */
+            shared: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -91405,6 +91445,46 @@ export interface components {
             base_url_required: boolean;
             /** Documentation Url */
             documentation_url: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ProviderListing
+         * @description One row of GET /providers — setting NAMES only, never a value.
+         */
+        ProviderListing: {
+            /** Name */
+            name: string;
+            /** Label */
+            label: string;
+            /** Flows */
+            flows: ("redirect" | "device")[];
+            /** Configured */
+            configured: boolean;
+            /** Missing Settings */
+            missing_settings: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ProviderRevokeResult
+         * @description Return of DELETE /{provider}: the local delete always happens; the provider-side
+         *     RFC 7009 revoke is reported separately (None when no revoke URL is configured).
+         */
+        ProviderRevokeResult: {
+            /** Provider Name */
+            provider_name: string;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "system" | "user" | "shared";
+            /** Deleted */
+            deleted: number;
+            /** Provider Revoked */
+            provider_revoked?: boolean | null;
+            /** Provider Error */
+            provider_error?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -104976,46 +105056,35 @@ export interface components {
         };
         /**
          * WebResearchSettings
-         * @description Web research settings model.
+         * @description Every web research setting, as GET /web-research/settings returns it.
          */
         WebResearchSettings: {
             /** Enabled */
             enabled: boolean;
-            /**
-             * Require User Confirmation
-             * @default true
-             */
+            /** Require User Confirmation */
             require_user_confirmation: boolean;
-            /**
-             * Preferred Method
-             * @default basic
-             */
+            /** Preferred Method */
             preferred_method: string;
-            /**
-             * Max Results
-             * @default 5
-             */
+            /** Max Results */
             max_results: number;
-            /**
-             * Timeout Seconds
-             * @default 30
-             */
+            /** Timeout Seconds */
             timeout_seconds: number;
-            /**
-             * Auto Research Threshold
-             * @default 0.3
-             */
+            /** Auto Research Threshold */
             auto_research_threshold: number;
-            /**
-             * Rate Limit Requests
-             * @default 5
-             */
+            /** Rate Limit Requests */
             rate_limit_requests: number;
-            /**
-             * Rate Limit Window
-             * @default 60
-             */
+            /** Rate Limit Window */
             rate_limit_window: number;
+            /** Daily Limit */
+            daily_limit: number;
+            /** Quality Threshold */
+            quality_threshold: number;
+            /** Store Results In Kb */
+            store_results_in_kb: boolean;
+            /** Filter Adult Content */
+            filter_adult_content: boolean;
+            /** Anonymize Requests */
+            anonymize_requests: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -105026,28 +105095,56 @@ export interface components {
         WebResearchSettingsData: {
             /** Status */
             status: string;
-            /** Settings */
-            settings: {
-                [key: string]: unknown;
-            };
+            settings: components["schemas"]["WebResearchSettings"];
             /** Timestamp */
             timestamp: string;
         } & {
             [key: string]: unknown;
         };
         /**
+         * WebResearchSettingsUpdate
+         * @description PUT /web-research/settings body: only the fields sent are changed (#19226).
+         */
+        WebResearchSettingsUpdate: {
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Require User Confirmation */
+            require_user_confirmation?: boolean | null;
+            /** Preferred Method */
+            preferred_method?: ("basic" | "advanced" | "api_based") | null;
+            /** Max Results */
+            max_results?: number | null;
+            /** Timeout Seconds */
+            timeout_seconds?: number | null;
+            /** Auto Research Threshold */
+            auto_research_threshold?: number | null;
+            /** Rate Limit Requests */
+            rate_limit_requests?: number | null;
+            /** Rate Limit Window */
+            rate_limit_window?: number | null;
+            /** Daily Limit */
+            daily_limit?: number | null;
+            /** Quality Threshold */
+            quality_threshold?: number | null;
+            /** Store Results In Kb */
+            store_results_in_kb?: boolean | null;
+            /** Filter Adult Content */
+            filter_adult_content?: boolean | null;
+            /** Anonymize Requests */
+            anonymize_requests?: boolean | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * WebResearchSettingsUpdateData
-         * @description Response data for update_research_settings.
+         * @description Response data for update_research_settings: the full set after the change.
          */
         WebResearchSettingsUpdateData: {
             /** Status */
             status: string;
             /** Message */
             message: string;
-            /** Settings */
-            settings: {
-                [key: string]: unknown;
-            };
+            settings: components["schemas"]["WebResearchSettings"];
             /** Timestamp */
             timestamp: string;
         } & {
@@ -146748,6 +146845,26 @@ export interface operations {
             };
         };
     };
+    list_providers_api_llm_auth_providers_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderListing"][];
+                };
+            };
+        };
+    };
     oauth_initiate_api_llm_auth_oauth_initiate_post: {
         parameters: {
             query?: never;
@@ -146882,7 +146999,9 @@ export interface operations {
     };
     provider_auth_status_api_llm_auth_status__provider_name__get: {
         parameters: {
-            query?: never;
+            query?: {
+                scope?: "system" | "user";
+            };
             header?: never;
             path: {
                 provider_name: string;
@@ -146913,6 +147032,39 @@ export interface operations {
     };
     revoke_provider_auth_api_llm_auth__provider_name__delete: {
         parameters: {
+            query: {
+                scope: "system" | "user";
+            };
+            header?: never;
+            path: {
+                provider_name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderRevokeResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_shared_provider_auth_api_llm_auth__provider_name__shared_delete: {
+        parameters: {
             query?: never;
             header?: never;
             path: {
@@ -146923,11 +147075,13 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ProviderRevokeResult"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -152704,7 +152858,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["WebResearchSettings"];
+                "application/json": components["schemas"]["WebResearchSettingsUpdate"];
             };
         };
         responses: {

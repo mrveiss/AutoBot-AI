@@ -259,7 +259,8 @@ if [ -n "$PLAYWRIGHT_CONTAINER" ]; then
 else
     echo "❌ Playwright container not found. Please run setup_agent.sh to deploy it."
     echo "   Or manually start the VNC-enabled container with:"
-    echo "   docker-compose -f docker/compose/docker-compose.playwright-vnc.yml up -d"
+    echo "   docker compose --env-file docker/.env.secrets -f autobot-infrastructure/shared/docker/compose/docker-compose.playwright-vnc.yml up -d"
+    echo "   (VNC_PASSWORD comes from docker/.env.secrets; create it with: bash docker/generate-secrets.sh)"
     exit 1
 fi
 

@@ -56,6 +56,10 @@ readonly REPO_HOST="github.com"
 readonly REPO_SLUG="mrveiss/AutoBot-AI"
 readonly DEFAULT_REPO="https://${REPO_HOST}/${REPO_SLUG}.git"
 readonly NODESOURCE_HOST="deb.nodesource.com"
+# #19239: each pinned to its source of truth by a repo test -- autobot-frontend/package.json
+# engines.node, the slm_manager role's slm_backend_port -- since the installer runs before the code exists.
+readonly NODE_MIN_VERSION="20.19.0" SLM_BACKEND_PORT="8000"
+readonly IP_CACHE_FILE="/run/autobot-install-ip"  # root-only, unlike /tmp, which any user can plant a file in
 readonly DEFAULT_BRANCH="main" PINNED_COMMIT=""  # a release build pins both: tag and its commit (#18666)
 # #18586: where this script was started from, resolved before any cd; empty under `curl | bash`
 SCRIPT_DIR=""
@@ -72,6 +76,7 @@ UNINSTALL=false
 VALIDATE=false
 CONFIRM_YES=false
 ROTATE_SECRETS=false  # #7075: --rotate-secrets opts in to replacing existing SLM_ADMIN_PASSWORD
+INSTALL_TMP="" ADMIN_PASSWORD_GENERATED=false ADMIN_PASSWORD_PRESERVED=false  # #19236: private temp dir; print the password only if generated. PRESERVED: a reinstall kept the stored one
 GIT_BRANCH="${DEFAULT_BRANCH}"
 ADMIN_PASSWORD=""
 OVERRIDE_IP=""  # --ip= override for multi-interface hosts (#2832)
@@ -218,13 +223,12 @@ detect_local_ip() {
     # garble any curl command that interpolates the result.
     # On reinstall, always clear the cache so the interface prompt re-runs
     # and the user can select the correct interface (#3194).
-    local cache_file="/tmp/.autobot_detected_ip"
-    if [[ "${REINSTALL}" == true ]]; then
-        rm -f "${cache_file}"
-    fi
-    if [[ -f "${cache_file}" ]]; then
-        cat "${cache_file}"
-        return
+    local cache_file="${IP_CACHE_FILE}" cached=""
+    [[ "${REINSTALL}" == true ]] && rm -f "${cache_file}"
+    [[ -f "${cache_file}" ]] && cached="$(head -n1 "${cache_file}")"
+    # #19239: reuse a cached address only while it is still assigned to an interface here.
+    if [[ -n "${cached}" ]] && ip -4 -o addr show | awk '{print $4}' | cut -d/ -f1 | grep -qxF "${cached}"; then
+        echo "${cached}"; return
     fi
 
     # Gather all interfaces with IPv4 addresses (exclude loopback)
@@ -263,10 +267,9 @@ detect_local_ip() {
         for i in "${!ifaces[@]}"; do
             echo -e "    ${CYAN}[$((i+1))]${NC} ${ifaces[$i]}: ${ips[$i]}" >&2
         done
-        echo -ne "\n  ${YELLOW}Select interface for AutoBot [1-${#ips[@]}]:${NC} " >&2
-        local choice
-        read -r choice
-        choice=$((choice - 1))
+        local choice=""  # /dev/tty, never stdin: under curl | bash stdin is the script itself (#17929)
+        prompt_from_tty choice "  Select interface for AutoBot [1-${#ips[@]}]: " || fatal "No terminal to choose an interface: rerun with AUTOBOT_INSTALL_INTERFACE=<name> (one of: ${ifaces[*]})."
+        [[ "${choice}" =~ ^[0-9]+$ ]] || fatal "Invalid selection"; choice=$((choice - 1))
         if [[ $choice -lt 0 || $choice -ge ${#ips[@]} ]]; then
             fatal "Invalid selection"
         fi
@@ -314,7 +317,7 @@ print_usage() {
     cat << EOF
 Usage: $0 [OPTIONS]
 
-Installs AutoBot SLM (Service Lifecycle Manager) on a blank Debian/Ubuntu host.
+Installs AutoBot SLM (Service Lifecycle Manager) on a blank Ubuntu 22.04+ host.
 After installation, use the SLM web UI setup wizard to add fleet nodes.
 
 Options:
@@ -324,16 +327,16 @@ Options:
   --validate            Verify installation integrity (check required service distributions)
   --yes                 Skip confirmation prompts (use with --uninstall)
   --branch=BRANCH       Git branch to install (default: ${DEFAULT_BRANCH})
-  --admin-pass=PASS     SLM admin password (auto-generated if not set)
+  --admin-pass-file=F   read the SLM admin password from file F (mode 600 or tighter, auto-generated if not set)
   --ip=IP               Override auto-detected IP address (#2832)
   --rotate-secrets      Replace existing SLM_ADMIN_PASSWORD on reinstall (#7075).
                         By default reinstall PRESERVES the wizard-set password
-                        and ignores --admin-pass= / AUTOBOT_SLM_ADMIN_PASSWORD.
+                        and ignores --admin-pass-file= / AUTOBOT_SLM_ADMIN_PASSWORD.
   --help                Show this help message
 
 Environment overrides (skip the corresponding interactive prompt; #7057):
   AUTOBOT_INSTALL_BRANCH=<branch>     same as --branch=
-  AUTOBOT_SLM_ADMIN_PASSWORD=<pass>   same as --admin-pass=
+  AUTOBOT_SLM_ADMIN_PASSWORD=<pass>   the admin password itself (not a file path)
   AUTOBOT_INSTALL_INTERFACE=<iface>   pick an interface by name (eth2, eth0, ...)
                                       instead of the menu prompt
   OVERRIDE_IP=<ip>                    skip detection entirely and use this IP
@@ -341,7 +344,7 @@ Environment overrides (skip the corresponding interactive prompt; #7057):
 Examples:
   sudo $0                                    # Interactive install
   sudo $0 --unattended                       # Default unattended install
-  sudo $0 --unattended --admin-pass=MyPass   # Unattended with custom password
+  sudo $0 --unattended --admin-pass-file=/root/pw   # Unattended with custom password
   sudo $0 --reinstall                        # Reinstall over existing
   sudo $0 --uninstall                        # Full uninstall (with confirmation)
   sudo $0 --uninstall --yes                  # Full uninstall (no prompt)
@@ -360,7 +363,7 @@ EOF
 
 # #18583: name the requirement and the way out for this host — not a WSL2-only hint for all
 systemd_missing_hint() {
-    local fix="Use a Debian/Ubuntu VM or bare-metal host booted with systemd; in a container or a host without systemd, use the Docker path in INSTALL.md instead."
+    local fix="Use an Ubuntu 22.04+ VM or bare-metal host booted with systemd; in a container or a host without systemd, use the Docker path in INSTALL.md instead."
     grep -qi microsoft "${PROC_VERSION_FILE}" 2>/dev/null && fix="On WSL2 (WSL1 cannot run systemd): add [boot] systemd=true to /etc/wsl.conf and restart WSL."
     echo "systemd must be running as PID 1 (see Requirements in INSTALL.md). ${fix}"
 }
@@ -383,11 +386,11 @@ preflight_checks() {
     fi
     success "systemd is running"
 
-    if [[ ! -f /etc/debian_version ]]; then
-        fatal "This script requires Debian or Ubuntu"
-    fi
-    local os_name
-    os_name=$(. /etc/os-release 2>/dev/null && echo "${NAME} ${VERSION_ID}" || cat /etc/debian_version)
+    # #19235: Ubuntu 22.04+ only -- Python 3.14 and Ansible come from Launchpad PPAs, which Debian lacks.
+    local os_id="" os_version="" os_name
+    os_id=$(. /etc/os-release 2>/dev/null && echo "${ID:-}") || true; os_version=$(. /etc/os-release 2>/dev/null && echo "${VERSION_ID:-}") || true
+    [[ "${os_id}" == ubuntu && "$(printf '%s\n' 22.04 "${os_version}" | sort -V | head -1)" == 22.04 ]] || fatal "This installer supports Ubuntu 22.04 or newer (found: ${os_id:-unknown} ${os_version}). On other systems use the Docker path in INSTALL.md."
+    os_name=$(. /etc/os-release 2>/dev/null && echo "${NAME} ${VERSION_ID}")
     success "OS: ${os_name}"
 
     if [[ -f "${INSTALL_MARKER}" ]] && [[ "${REINSTALL}" != true ]]; then
@@ -481,6 +484,8 @@ system_setup() {
         run_ok "Adding NodeSource repository" \
             bash -c "curl -fsSL https://${NODESOURCE_HOST}/setup_20.x | bash -"
         apt_install_recorded "Installing Node.js" nodejs; record_install apt_source nodesource
+    elif [[ "$(printf '%s\n' "${NODE_MIN_VERSION}" "$(node --version | tr -d v)" | sort -V | head -1)" != "${NODE_MIN_VERSION}" ]]; then
+        fatal "Node.js $(node --version) is installed, but AutoBot needs ${NODE_MIN_VERSION} or newer. Upgrade or remove it, then rerun this installer."
     else
         success "  Node.js already installed ($(node --version))"
     fi
@@ -645,7 +650,7 @@ INVENTORY
     success "  Localhost inventory generated"
 
     if [[ -z "${ADMIN_PASSWORD}" ]]; then
-        ADMIN_PASSWORD=$(generate_admin_password)
+        ADMIN_PASSWORD=$(generate_admin_password); ADMIN_PASSWORD_GENERATED=true
     fi
 
     if [[ ! -f "${SECRETS_FILE}" ]] || [[ "${REINSTALL}" == true ]]; then
@@ -715,12 +720,13 @@ EOF
     echo
 
     cd "${ansible_dir}"
-    set +o pipefail
+    local vars_file="${INSTALL_TMP}/ansible-vars.json"  # #19236: never argv; the EXIT trap removes INSTALL_TMP
+    (umask 077 && PW="${ADMIN_PASSWORD}" jq -n '{slm_admin_password: env.PW}' > "${vars_file}"); set +o pipefail
     ansible-playbook \
         -i "${inventory}" \
         playbooks/deploy-slm-manager.yml \
         --skip-tags "seed" \
-        -e "slm_admin_password=${ADMIN_PASSWORD}" \
+        -e "@${vars_file}" \
         -e "target_host=localhost" \
         2>&1 | tee -a "${LOG_FILE}" | \
         grep --line-buffered -E \
@@ -772,7 +778,7 @@ service_verification() {
     local max_attempts=80
     local attempt=0
     while [[ ${attempt} -lt ${max_attempts} ]]; do
-        if curl -sf --max-time 3 http://127.0.0.1:8000/api/health > /dev/null 2>&1; then
+        if curl -sf --max-time 3 http://127.0.0.1:${SLM_BACKEND_PORT}/api/health > /dev/null 2>&1; then
             success "SLM backend health check passed"
             break
         fi
@@ -781,16 +787,18 @@ service_verification() {
         sleep 5
     done
 
-    if [[ ${attempt} -ge ${max_attempts} ]]; then
-        warn "SLM backend did not respond within 7 minutes"
-        warn "Check: journalctl -u autobot-slm-backend -n 50"
-    fi
+    # #19234: a failed required step stops the install -- no marker, so a plain rerun retries it.
+    [[ ${attempt} -lt ${max_attempts} ]] || fatal "Step 'SLM backend health' failed: no answer within 7 minutes. Check: journalctl -u autobot-slm-backend -n 50, then rerun this installer."
+    wait_for_https || fatal "Step 'HTTPS endpoint' failed: https://127.0.0.1/api/health did not answer within 60s. Check: nginx -t; journalctl -u nginx -n 50, then rerun this installer."
+    success "HTTPS endpoint accessible"
+}
 
-    if curl -sfk --max-time 3 https://127.0.0.1/api/health > /dev/null 2>&1; then
-        success "HTTPS endpoint accessible"
-    else
-        warn "HTTPS endpoint not responding (nginx may need time)"
-    fi
+wait_for_https() {  # 0 once https://127.0.0.1/api/health answers, 1 after 60s (#2830, #19234)
+    local waited=0
+    until curl -sfk --max-time 3 https://127.0.0.1/api/health >/dev/null 2>&1; do
+        [[ ${waited} -ge 60 ]] && return 1
+        sleep 2; waited=$((waited + 2))
+    done
 }
 
 # =============================================================================
@@ -802,22 +810,9 @@ register_local_node() {
 
     local api_url="https://127.0.0.1"
 
-    # Wait for HTTPS to be ready before registering (#2830)
-    # After Ansible deployment, nginx may still be loading TLS certificates
-    # or the reverse-proxy upstream may not be connected yet.
+    # nginx may still be loading TLS certificates after the Ansible deploy (#2830).
     info "Waiting for HTTPS endpoint to be ready..."
-    local max_wait=60
-    local waited=0
-    while ! curl -sk --max-time 3 "${api_url}/api/health" >/dev/null 2>&1; do
-        sleep 2
-        waited=$((waited + 2))
-        if [[ ${waited} -ge ${max_wait} ]]; then
-            warn "HTTPS not ready after ${max_wait}s — skipping node registration"
-            warn "Register manually once services are up: SLM UI > Fleet > Add Node"
-            return
-        fi
-        log "  Waiting for HTTPS (${waited}s / ${max_wait}s)..."
-    done
+    wait_for_https || fatal "Step 'node registration' failed: HTTPS is not answering. Check: journalctl -u nginx -n 50, then rerun this installer."
     success "HTTPS endpoint is ready"
 
     local local_ip
@@ -833,17 +828,11 @@ register_local_node() {
     # failure the installer died here and the two warn lines -- which read as
     # careful handling -- could never run. `-f` is kept deliberately: on a 401
     # we want no body to parse, not an error page fed to jq.
-    token=$(curl -sfk --max-time 10 \
-        -X POST "${api_url}/api/auth/login" \
-        -H "Content-Type: application/json" \
-        -d "{\"username\":\"admin\",\"password\":\"${ADMIN_PASSWORD}\"}" \
-        2>/dev/null | jq -r '.access_token // empty') || true
+    token=$(PW="${ADMIN_PASSWORD}" jq -n '{username: "admin", password: env.PW}' | curl -sfk --max-time 10 \
+        -X POST "${api_url}/api/auth/login" -H "Content-Type: application/json" --data @- \
+        2>/dev/null | jq -r '.access_token // empty') || true  # #19236: the body goes on stdin, never argv
 
-    if [[ -z "${token}" ]]; then
-        warn "Could not authenticate with SLM API — skipping node registration"
-        warn "Register manually: SLM UI > Fleet > Add Node"
-        return
-    fi
+    [[ -n "${token}" ]] || fatal "Step 'admin login' failed: the SLM API refused the admin credentials. Check /etc/autobot/slm-secrets.env and journalctl -u autobot-slm-backend -n 50, then rerun this installer."
     success "Authenticated with SLM API"
 
     # Register this node with all single-host roles
@@ -884,8 +873,7 @@ register_local_node() {
     case "${http_code:-000}" in
         201) success "Local node registered (${hostname_val} / ${local_ip})" ;;
         400) success "Local node already registered" ;;
-        *)   warn "Node registration returned HTTP ${http_code:-000} — register manually via SLM UI"
-             return ;;
+        *)   fatal "Step 'node registration' failed: the SLM API returned HTTP ${http_code:-000}. Check journalctl -u autobot-slm-backend -n 50, then rerun this installer." ;;
     esac
 
     # Auto-assign SLM Manager as code source (#2755)
@@ -905,7 +893,7 @@ register_local_node() {
 
     case "${cs_code:-000}" in
         200) success "Code source assigned: ${CODE_SOURCE} (branch: ${GIT_BRANCH})" ;;
-        *)   warn "Code source assignment returned HTTP ${cs_code:-000} — assign manually via SLM UI > Code Sync" ;;
+        *)   warn "Optional step 'code source' returned HTTP ${cs_code:-000} — assign it in SLM UI > Code Sync" ;;
     esac
 }
 
@@ -947,7 +935,7 @@ EOF
     echo
     echo -e "  ${BLUE}SLM URL:${NC}         https://${server_ip}/slm/"
     echo -e "  ${BLUE}Admin Username:${NC}  admin"
-    echo -e "  ${BLUE}Admin Password:${NC}  ${ADMIN_PASSWORD}"
+    if ${ADMIN_PASSWORD_GENERATED}; then echo -e "  ${BLUE}Admin Password:${NC}  ${ADMIN_PASSWORD}"; else echo -e "  ${BLUE}Admin Password:${NC}  $(${ADMIN_PASSWORD_PRESERVED} && echo "the existing password, kept from the previous install (see ${creds_file})" || echo "the one you supplied")"; fi
     echo
     echo -e "  ${YELLOW}Note:${NC} Using self-signed certificate — browser will show a warning."
     echo
@@ -969,7 +957,7 @@ EOF
     echo
 
     # Clean up IP detection cache file (#3010)
-    rm -f /tmp/.autobot_detected_ip 2>/dev/null || true
+    rm -f "${IP_CACHE_FILE}" 2>/dev/null || true
 }
 
 # =============================================================================
@@ -1030,7 +1018,7 @@ prompt_config() {
                 warn "AUTOBOT_SLM_ADMIN_PASSWORD env-var ignored — existing wizard-set password preserved."
                 warn "  To rotate: rerun with --rotate-secrets (warns + replaces) or edit ${secrets_file} manually."
             fi
-            ADMIN_PASSWORD="${existing_pass}"
+            ADMIN_PASSWORD="${existing_pass}"; ADMIN_PASSWORD_PRESERVED=true
             info "Preserving existing SLM_ADMIN_PASSWORD from ${secrets_file}"
         fi
     fi
@@ -1038,7 +1026,7 @@ prompt_config() {
     if ${UNATTENDED}; then
         GIT_BRANCH="${GIT_BRANCH:-${DEFAULT_BRANCH}}"
         if [[ -z "${ADMIN_PASSWORD}" ]]; then
-            ADMIN_PASSWORD=$(generate_admin_password)
+            ADMIN_PASSWORD=$(generate_admin_password); ADMIN_PASSWORD_GENERATED=true
         fi
         return
     fi
@@ -1065,7 +1053,7 @@ prompt_config() {
         if [[ -n "${input}" ]]; then
             ADMIN_PASSWORD="${input}"
         else
-            ADMIN_PASSWORD=$(generate_admin_password)
+            ADMIN_PASSWORD=$(generate_admin_password); ADMIN_PASSWORD_GENERATED=true
             info "  Password auto-generated; it is printed at the end of this run."
         fi
     fi
@@ -1100,6 +1088,12 @@ validate_distributions() {
 # Argument Parsing
 # =============================================================================
 
+read_admin_pass_file() {  # owner-only and non-empty, or refuse (#19236)
+    [[ -r "$1" ]] || arg_error "Cannot read $1"
+    [[ "$(stat -c %a "$1")" =~ ^[0-7]00$ ]] || arg_error "$1 is readable by group or others; chmod 600 it first"
+    ADMIN_PASSWORD="$(head -n1 "$1")"; [[ -n "${ADMIN_PASSWORD}" ]] || arg_error "$1 is empty"
+}
+arg_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; exit 2; }  # parse_args runs before _log_init: no log yet
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case $1 in
@@ -1109,11 +1103,12 @@ parse_args() {
             --validate)       VALIDATE=true;           shift ;;
             --yes|-y)         CONFIRM_YES=true;        shift ;;
             --branch=*)       GIT_BRANCH="${1#*=}";    shift ;;
-            --admin-pass=*)   ADMIN_PASSWORD="${1#*=}"; shift ;;
+            --admin-pass-file=*) read_admin_pass_file "${1#*=}"; shift ;;
+            --admin-pass=*)   arg_error "--admin-pass= puts the password on the command line, readable by every local user (#19236). Use --admin-pass-file=PATH, AUTOBOT_SLM_ADMIN_PASSWORD, or the prompt." ;;
             --ip=*)           OVERRIDE_IP="${1#*=}";    shift ;;
             --rotate-secrets) ROTATE_SECRETS=true;     shift ;;
             --help|-h)        print_usage; exit 0 ;;
-            *)                fatal "Unknown option: $1 (use --help for usage)" ;;
+            *)                arg_error "Unknown option: $1 (use --help for usage)" ;;
         esac
     done
 }
@@ -1155,6 +1150,8 @@ main() {
     fi
 
     _log_init
+    # #19236: one owner-only temp dir for the run, removed however it ends -- exit, fatal, Ctrl-C.
+    INSTALL_TMP="$(umask 077 && mktemp -d)"; trap 'rm -rf "${INSTALL_TMP:-}"' EXIT; trap 'exit 130' INT TERM
     print_banner
     log "AutoBot Installer v${SCRIPT_VERSION}"
     log "Log file: ${LOG_FILE}"

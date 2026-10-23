@@ -19,14 +19,18 @@ import aiofiles
 import yaml
 
 from agents.kb_librarian import KBLibrarian
+from agents.kb_librarian.stable_ids import SystemFactIds, SystemFactStoreError
+from agents.system_knowledge_defaults import DefaultKnowledgeMixin
+from agents.system_knowledge_runtime import sync_runtime_copy, sync_runtime_text
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.system_knowledge_paths import system_knowledge_dirs
 from constants.threshold_constants import CategoryDefaults
 from knowledge_base import KnowledgeBase
 
 logger = get_logger(__name__)
 
 
-class SystemKnowledgeManager:
+class SystemKnowledgeManager(DefaultKnowledgeMixin):
     """Manages system knowledge templates and runtime knowledge base integration"""
 
     def __init__(self, knowledge_base: KnowledgeBase):
@@ -34,13 +38,14 @@ class SystemKnowledgeManager:
         self.knowledge_base = knowledge_base
         self.librarian = KBLibrarian(knowledge_base)
 
-        # Paths - use absolute paths to avoid working directory issues
-        project_root = Path(
-            __file__
-        ).parent.parent.parent  # Go up 3 levels: src/agents/system_knowledge_manager.py -> AutoBot/
-        self.system_knowledge_dir = project_root / "system_knowledge"
-        self.runtime_knowledge_dir = project_root / "data/system_knowledge"
-        self.backup_dir = project_root / "data/system_knowledge_backups"
+        # Template, runtime and backup dirs all come from ONE root; the template tree is read-only here.
+        dirs = system_knowledge_dirs()
+        self.system_knowledge_dir = dirs.templates
+        self.runtime_knowledge_dir = dirs.runtime
+        self.backup_dir = dirs.backup
+        self.fact_ids = SystemFactIds()
+        self._import_failures: List[str] = []
+        self._import_unresolved: List[str] = []
 
         # Ensure directories exist
         self.runtime_knowledge_dir.mkdir(parents=True, exist_ok=True)
@@ -66,7 +71,11 @@ class SystemKnowledgeManager:
             logger.info(f"Detected changes in {len(changed_files)} files: " f"{changed_files[:3]}{ellipsis}")
 
         # Import all system knowledge
-        await self._import_system_knowledge()
+        failed = await self._import_system_knowledge()
+        if failed:
+            # No cache write: the next start sees the files as changed and retries the failed items.
+            logger.error("System knowledge import incomplete: %d item(s) failed, will retry", failed)
+            return
 
         # Update the change tracking cache
         await self._update_system_knowledge_cache()
@@ -246,250 +255,35 @@ class SystemKnowledgeManager:
         # This would need to be implemented based on your KB's delete functionality
         logger.info("Clearing system knowledge from knowledge base")
 
-    async def _import_system_knowledge(self):
-        """Import all system knowledge from templates"""
+    async def _import_system_knowledge(self) -> int:
+        """Import all system knowledge from templates. Returns how many items failed to store."""
+        self._import_failures, self._import_unresolved = [], []
+        await self.fact_ids.load()
         dir_exists = await asyncio.to_thread(self.system_knowledge_dir.exists)
         if not dir_exists:
+            # Never generate into the tracked template tree: defaults go to the runtime dir.
             logger.warning(f"System knowledge directory not found: {self.system_knowledge_dir}")
             await self._create_default_system_knowledge()
+            await self._import_from_runtime_files()
+        else:
+            await self._import_tools_knowledge()
+            await self._import_workflows_knowledge()
+            await self._import_procedures_knowledge()
+        self._report_unresolved()
+        return len(self._import_failures)
 
-        # Import tools knowledge
-        await self._import_tools_knowledge()
-
-        # Import workflows
-        await self._import_workflows_knowledge()
-
-        # Import procedures
-        await self._import_procedures_knowledge()
-
-    def _get_steghide_tool_definition(self) -> Dict[str, Any]:
-        """Get steghide tool definition."""
-        return {
-            "name": "steghide",
-            "type": "steganography",
-            "purpose": "Extract and embed hidden data in image and audio files",
-            "installation": {
-                "apt": "sudo apt-get install steghide",
-                "yum": "sudo yum install steghide",
-                "pacman": "sudo pacman -S steghide",
-            },
-            "usage": {
-                "extract": "steghide extract -sf {image_file}",
-                "info": "steghide info {image_file}",
-                "embed": "steghide embed -cf {cover_file} -ef {data_file}",
-            },
-            "common_examples": [
-                {
-                    "description": "Extract hidden data from image",
-                    "command": "steghide extract -sf suspicious.jpg",
-                    "expected_output": "Enter passphrase: (if password protected)",
-                },
-                {
-                    "description": "Check image capacity for hidden data",
-                    "command": "steghide info suspicious.jpg",
-                    "expected_output": "capacity: 57.8% (can hide data)",
-                },
-            ],
-            "troubleshooting": [
-                {
-                    "problem": "could not extract any data with that passphrase",
-                    "solution": "Try empty passphrase or common passwords",
-                },
-                {
-                    "problem": "file format is not supported",
-                    "solution": "Convert to JPEG or BMP format first",
-                },
-            ],
-            "security_notes": [
-                "Use strong passphrases for embedding",
-                "Steganography can be detected by analysis tools",
-                "Consider using multiple tools to avoid detection",
-            ],
-            "related_tools": ["binwalk", "outguess", "jsteg", "zsteg"],
-            "output_formats": ["original file format", "text output for info"],
-            "limitations": [
-                "Only supports JPEG, BMP, WAV, AU formats",
-                "Cannot process encrypted or corrupted images",
-            ],
-        }
-
-    def _get_binwalk_tool_definition(self) -> Dict[str, Any]:
-        """Get binwalk tool definition."""
-        return {
-            "name": "binwalk",
-            "type": "file_analysis",
-            "purpose": "Analyze and extract files from binary images",
-            "installation": {
-                "apt": "sudo apt-get install binwalk",
-                "yum": "sudo yum install binwalk",
-                "pacman": "sudo pacman -S binwalk",
-            },
-            "usage": {
-                "analyze": "binwalk {file}",
-                "extract": "binwalk -e {file}",
-                "signature": "binwalk --signature {file}",
-            },
-            "common_examples": [
-                {
-                    "description": "Scan for embedded files",
-                    "command": "binwalk suspicious.jpg",
-                    "expected_output": "List of detected file signatures and offsets",
-                },
-                {
-                    "description": "Extract all found files",
-                    "command": "binwalk -e suspicious.jpg",
-                    "expected_output": "Creates _suspicious.jpg.extracted/ directory",
-                },
-            ],
-            "related_tools": ["foremost", "scalpel", "photorec"],
-            "output_formats": ["extracted files", "signature analysis text"],
-        }
-
-    def _get_steganography_tools_data(self) -> Dict[str, Any]:
-        """Get steganography tools knowledge data."""
-        return {
-            "metadata": {
-                "category": "steganography",
-                "description": "Tools for steganography analysis and detection",
-                "last_updated": datetime.now(tz=timezone.utc).isoformat(),
-                "version": "1.0.0",
-            },
-            "tools": [
-                self._get_steghide_tool_definition(),
-                self._get_binwalk_tool_definition(),
-            ],
-        }
-
-    def _get_workflow_metadata(self) -> Dict[str, Any]:
-        """Get metadata for image forensics workflow. Issue #620."""
-        return {
-            "name": "Image Steganography Analysis",
-            "category": "forensics",
-            "complexity": "medium",
-            "estimated_time": "10-30 minutes",
-            "version": "1.0.0",
-        }
-
-    def _get_workflow_required_tools(self) -> List[Dict[str, Any]]:
-        """Get required tools for image forensics workflow. Issue #620."""
-        return [
-            {
-                "name": "steghide",
-                "purpose": "Extract hidden data from images",
-                "optional": False,
-            },
-            {
-                "name": "binwalk",
-                "purpose": "Detect and extract embedded files",
-                "optional": False,
-            },
-            {
-                "name": "exiftool",
-                "purpose": "Analyze image metadata",
-                "optional": True,
-            },
-        ]
-
-    def _get_workflow_steps(self) -> List[Dict[str, Any]]:
-        """Get workflow steps for image forensics analysis. Issue #620."""
-        return [
-            {
-                "step": 1,
-                "action": "Initial image analysis",
-                "details": "Gather basic information about the target image",
-                "commands": [
-                    "file {image_file}",
-                    "ls -la {image_file}",
-                    "identify {image_file}",
-                ],
-                "expected_output": "Image format, size, and basic properties",
-            },
-            {
-                "step": 2,
-                "action": "Metadata examination",
-                "details": "Check for hidden information in image metadata",
-                "commands": [
-                    "exiftool {image_file}",
-                    "strings {image_file} | head -20",
-                ],
-                "expected_output": "EXIF data, embedded comments, text strings",
-            },
-            {
-                "step": 3,
-                "action": "Steganography detection",
-                "details": "Check for steganographic content using steghide",
-                "commands": ["steghide info {image_file}"],
-                "expected_output": "Capacity information or error if no hidden data",
-            },
-            {
-                "step": 4,
-                "action": "File signature analysis",
-                "details": "Look for embedded files using binwalk",
-                "commands": ["binwalk {image_file}", "binwalk -e {image_file}"],
-                "expected_output": "List of detected files and extraction results",
-            },
-        ]
-
-    def _get_workflow_decision_points(self) -> List[Dict[str, str]]:
-        """Get decision points for image forensics workflow. Issue #620."""
-        return [
-            {
-                "condition": "steghide reports capacity > 0",
-                "if_true": "Attempt extraction with common passwords",
-                "if_false": "Move to alternative steganography tools",
-            },
-            {
-                "condition": "binwalk finds embedded files",
-                "if_true": "Extract and analyze each file",
-                "if_false": "Check for other steganography methods",
-            },
-        ]
-
-    def _get_workflow_quality_and_pitfalls(self) -> Dict[str, Any]:
-        """Get quality checks and common pitfalls for workflow. Issue #620."""
-        return {
-            "quality_checks": [
-                "Verify extracted files are not corrupted",
-                "Check that original image wasn't modified during analysis",
-                "Confirm all potential hiding methods were tested",
-            ],
-            "common_pitfalls": [
-                {
-                    "issue": "Assuming empty passphrase when extraction fails",
-                    "prevention": "Try common passwords and dictionary attacks",
-                },
-                {
-                    "issue": "Missing hidden data due to format limitations",
-                    "prevention": "Test with multiple steganography tools",
-                },
-            ],
-        }
-
-    def _get_image_forensics_workflow_data(self) -> Dict[str, Any]:
-        """Get image forensics workflow data. Issue #620."""
-        quality_and_pitfalls = self._get_workflow_quality_and_pitfalls()
-        return {
-            "metadata": self._get_workflow_metadata(),
-            "objective": ("Analyze images for hidden files, steganographic content, " "and embedded data"),
-            "prerequisites": [
-                "Target image file(s)",
-                "Basic understanding of steganography techniques",
-                "Sufficient disk space for extracted files",
-            ],
-            "required_tools": self._get_workflow_required_tools(),
-            "workflow_steps": self._get_workflow_steps(),
-            "decision_points": self._get_workflow_decision_points(),
-            "quality_checks": quality_and_pitfalls["quality_checks"],
-            "common_pitfalls": quality_and_pitfalls["common_pitfalls"],
-        }
+    async def _copy_to_runtime(self, template: Path, kind: str) -> None:
+        """Mirror a template into the runtime dir, keeping an operator-edited copy (#18556)."""
+        await asyncio.to_thread(sync_runtime_copy, template, self.runtime_knowledge_dir, f"{kind}/{template.name}")
 
     async def _save_yaml_file(self, file_path: Path, data: Dict[str, Any]) -> bool:
-        """Save data to a YAML file."""
+        """Write generated YAML into the runtime dir, keeping an operator-edited file (#18556)."""
         try:
-            async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
-                await f.write(yaml.dump(data, default_flow_style=False, indent=2))
+            relative = str(file_path.relative_to(self.runtime_knowledge_dir))
+            text = yaml.dump(data, default_flow_style=False, indent=2)
+            await asyncio.to_thread(sync_runtime_text, text, self.runtime_knowledge_dir, relative)
             return True
-        except OSError as e:
+        except (OSError, ValueError) as e:
             logger.error("Failed to save YAML file %s: %s", file_path, e)
             return False
 
@@ -497,10 +291,10 @@ class SystemKnowledgeManager:
         """Create default system knowledge templates."""
         logger.info("Creating default system knowledge templates...")
 
-        # Create directory structure
-        tools_dir = self.system_knowledge_dir / "tools"
-        workflows_dir = self.system_knowledge_dir / "workflows"
-        procedures_dir = self.system_knowledge_dir / "procedures"
+        # Create directory structure (runtime dir: the tracked template tree is never written)
+        tools_dir = self.runtime_knowledge_dir / "tools"
+        workflows_dir = self.runtime_knowledge_dir / "workflows"
+        procedures_dir = self.runtime_knowledge_dir / "procedures"
         await asyncio.gather(
             asyncio.to_thread(tools_dir.mkdir, parents=True, exist_ok=True),
             asyncio.to_thread(workflows_dir.mkdir, parents=True, exist_ok=True),
@@ -538,10 +332,7 @@ class SystemKnowledgeManager:
                 logger.error("Failed to read tools file %s: %s", yaml_file, e)
                 continue
 
-            # Copy to runtime directory
-            runtime_file = self.runtime_knowledge_dir / "tools" / yaml_file.name
-            await asyncio.to_thread(runtime_file.parent.mkdir, parents=True, exist_ok=True)
-            await asyncio.to_thread(shutil.copy2, yaml_file, runtime_file)
+            await self._copy_to_runtime(yaml_file, "tools")
 
             # Import tools into knowledge base
             for tool_data in tools_data.get("tools", []):
@@ -569,45 +360,11 @@ class SystemKnowledgeManager:
             "verified": "system_knowledge",
         }
 
-        await self.librarian.store_tool_knowledge(tool_info)
-        logger.info("Imported tool: %s", tool_name)
-
-    def _format_installation(self, install_data: Dict[str, str]) -> str:
-        """Format installation commands from YAML"""
-        if not install_data:
-            return "Installation information not available"
-
-        formatted = []
-        for package_manager, command in install_data.items():
-            formatted.append(f"{package_manager}: {command}")
-
-        return "\n".join(formatted)
-
-    def _format_usage(self, usage_data: Dict[str, str]) -> str:
-        """Format usage information from YAML"""
-        if not usage_data:
-            return "Usage information not available"
-
-        formatted = []
-        for action, command in usage_data.items():
-            formatted.append(f"{action}: {command}")
-
-        return "\n".join(formatted)
-
-    def _format_troubleshooting(self, trouble_data: List[Dict[str, str]]) -> str:
-        """Format troubleshooting information from YAML"""
-        if not trouble_data:
-            return "No troubleshooting information available"
-
-        formatted = []
-        for item in trouble_data:
-            problem = item.get("problem", "Unknown problem")
-            solution = item.get("solution", "No solution provided")
-            formatted.append(f"Problem: {problem}")
-            formatted.append(f"Solution: {solution}")
-            formatted.append("")
-
-        return "\n".join(formatted)
+        try:
+            result = await self.librarian.store_tool_knowledge(tool_info, ref=self.fact_ids.of("tool", tool_name))
+        except SystemFactStoreError as e:
+            return self._record_import_failure("tool", tool_name, e)
+        self._log_imported("tool", tool_name, result)
 
     async def _import_workflows_knowledge(self):
         """Import workflow knowledge from YAML templates"""
@@ -629,10 +386,7 @@ class SystemKnowledgeManager:
                 logger.error("Failed to read workflow file %s: %s", yaml_file, e)
                 continue
 
-            # Copy to runtime directory
-            runtime_file = self.runtime_knowledge_dir / "workflows" / yaml_file.name
-            await asyncio.to_thread(runtime_file.parent.mkdir, parents=True, exist_ok=True)
-            await asyncio.to_thread(shutil.copy2, yaml_file, runtime_file)
+            await self._copy_to_runtime(yaml_file, "workflows")
 
             # Import workflow into knowledge base
             await self._import_single_workflow(workflow_data)
@@ -658,20 +412,13 @@ class SystemKnowledgeManager:
             "category": "workflows",
         }
 
-        await self.librarian.store_workflow_knowledge(workflow_info)
-        logger.info("Imported workflow: %s", workflow_name)
-
-    def _format_pitfalls(self, pitfalls_data: List[Dict[str, str]]) -> List[Dict[str, str]]:
-        """Format pitfalls data for librarian"""
-        formatted = []
-        for pitfall in pitfalls_data:
-            formatted.append(
-                {
-                    "issue": pitfall.get("issue", "Unknown issue"),
-                    "prevention": pitfall.get("prevention", "No prevention method"),
-                }
+        try:
+            result = await self.librarian.store_workflow_knowledge(
+                workflow_info, ref=self.fact_ids.of("workflow", workflow_name)
             )
-        return formatted
+        except SystemFactStoreError as e:
+            return self._record_import_failure("workflow", workflow_name, e)
+        self._log_imported("workflow", workflow_name, result)
 
     async def _import_procedures_knowledge(self):
         """Import procedures knowledge from YAML templates"""
@@ -693,10 +440,7 @@ class SystemKnowledgeManager:
                 logger.error("Failed to read procedure file %s: %s", yaml_file, e)
                 continue
 
-            # Copy to runtime directory
-            runtime_file = self.runtime_knowledge_dir / "procedures" / yaml_file.name
-            await asyncio.to_thread(runtime_file.parent.mkdir, parents=True, exist_ok=True)
-            await asyncio.to_thread(shutil.copy2, yaml_file, runtime_file)
+            await self._copy_to_runtime(yaml_file, "procedures")
 
             # Import procedure into knowledge base
             await self._import_single_procedure(procedure_data)
@@ -719,20 +463,11 @@ class SystemKnowledgeManager:
             "verification": procedure_data.get("verification", []),
         }
 
-        await self.librarian.store_system_documentation(doc_info)
-        logger.info("Imported procedure: %s", title)
-
-    def _format_procedure_issues(self, issues_data: List[Dict[str, str]]) -> List[Dict[str, str]]:
-        """Format procedure issues for librarian"""
-        formatted = []
-        for issue in issues_data:
-            formatted.append(
-                {
-                    "problem": issue.get("problem", "Unknown problem"),
-                    "solution": issue.get("solution", "No solution provided"),
-                }
-            )
-        return formatted
+        try:
+            result = await self.librarian.store_system_documentation(doc_info, ref=self.fact_ids.of("procedure", title))
+        except SystemFactStoreError as e:
+            return self._record_import_failure("procedure", title, e)
+        self._log_imported("procedure", title, result)
 
     async def reload_system_knowledge(self):
         """Reload system knowledge from runtime files"""
@@ -741,9 +476,18 @@ class SystemKnowledgeManager:
         # Clear current system knowledge from KB
         await self._clear_system_knowledge_from_kb()
 
+        self._import_failures = []
+        await self.fact_ids.load()
         # Reimport from runtime files
         await self._import_from_runtime_files()
 
+        if self._import_failures:
+            logger.error(
+                "System knowledge reload incomplete: %d item(s) failed: %s",
+                len(self._import_failures),
+                ", ".join(self._import_failures),
+            )
+            return
         logger.info("System knowledge reloaded successfully")
 
     async def _import_runtime_tools(self):

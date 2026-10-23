@@ -350,7 +350,8 @@
       "thinkingOffLabel": "thinking Off",
       "thinkingOn": "Thinking on",
       "thinkingOnLabel": "thinking On",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "stopFailed": "Couldn't stop the reply"
     },
     "translate": {
       "title": "Translate Text",
@@ -941,9 +942,38 @@
       "noApiKeyRequired": "No API key required.",
       "redirecting": "Redirecting...",
       "disconnectFailed": "Disconnect failed",
-      "redirectNeedsCallback": "OAuth browser-redirect flow requires server-side callback configuration. Use device-code for headless environments.",
-      "deviceNotConfigured": "Device auth is not configured for this provider",
+      "needsReauth": "{provider} rejected the saved sign-in. Sign in again to reconnect.",
+      "providerRevokeFailed": "Disconnected here, but the provider did not confirm revoking access: {reason}",
+      "shared": {
+        "heading": "Shared sign-in (all organisations)",
+        "description": "Organisations without their own system sign-in fall back to this shared token. Revoking it removes it for every one of them and revokes it at the provider.",
+        "revokeButton": "Revoke shared {provider} token",
+        "confirmTitle": "Revoke the shared {provider} token?",
+        "confirmMessage": "Every organisation that relies on the shared {provider} sign-in loses it immediately and falls back to its API key. This cannot be undone; a new sign-in is needed to restore it.",
+        "done": "The shared {provider} token was revoked.",
+        "superadminOnly": "This account has no organisation, so this is the {provider} sign-in every organisation shares. Only a superadmin can revoke it."
+      },
       "deviceInitFailed": "Device flow initiation failed",
+      "initiateFailed": "Could not start sign-in",
+      "notConfigured": "{provider} sign-in is not configured on this server. Ask an administrator to set:",
+      "systemHeading": "System (shared)",
+      "systemDesc": "Connections shared by everyone in your organization. Administrators only.",
+      "userHeading": "My account",
+      "userDesc": "Connect your own provider account. Only you can use these credentials.",
+      "loadFailed": "Could not load the list of sign-in providers",
+      "tos": {
+        "openai": "Connecting uses your OpenAI account subscription. Charges apply per the OpenAI ToS.",
+        "anthropic": "Connecting uses your Anthropic Console account. Charges apply per the Anthropic ToS.",
+        "huggingface": "Uses your HuggingFace account token (PRO or Inference API access required)."
+      },
+      "callback": {
+        "finishing": "Finishing provider sign-in...",
+        "missingParams": "The provider did not return a sign-in code.",
+        "notStored": "The provider sign-in did not complete.",
+        "failed": "Provider sign-in failed",
+        "failedWith": "Provider sign-in failed: {reason}",
+        "success": "Provider connected"
+      },
       "stillWaiting": "Still waiting for approval — try again in a moment.",
       "pollFailed": "Poll failed"
     },
@@ -7261,7 +7291,8 @@
       "rangeMedium": "Medium",
       "rangeHigh": "High",
       "rangeCritical": "Critical",
-      "usage": "Usage"
+      "usage": "Usage",
+      "loadFailed": "Heatmap data could not be loaded:"
     },
     "systemArchitecture": {
       "defaultTitle": "System Architecture",

@@ -34,7 +34,6 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/agents/browser/captcha_solver.py": 663,
     "autobot-backend/agents/development_speedup_agent.py": 831,
     "autobot-backend/agents/graph_entity_extractor.py": 790,
-    "autobot-backend/agents/kb_librarian/librarian.py": 726,
     "autobot-backend/agents/knowledge_extraction_agent.py": 766,
     "autobot-backend/agents/knowledge_manager.py": 1131,
     "autobot-backend/agents/knowledge_manager_test.py": 807,
@@ -47,8 +46,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/agents/rag_agent.py": 602,
     "autobot-backend/agents/security_scanner_agent.py": 663,
     "autobot-backend/agents/system_command_agent.py": 903,
-    "autobot-backend/agents/system_knowledge_manager.py": 843,
-    "autobot-backend/agents/web_researcher.py": 1435,
+    "autobot-backend/agents/web_researcher.py": 1390,
     "autobot-backend/ai_hardware_accelerator.py": 1040,
     "autobot-backend/api/advanced_control.py": 615,
     "autobot-backend/api/agent.py": 1370,
@@ -128,7 +126,6 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/npu_workers.py": 1481,
     "autobot-backend/api/orchestration.py": 610,
     "autobot-backend/api/playwright.py": 877,
-    "autobot-backend/api/provider_auth.py": 608,
     "autobot-backend/api/redis_mcp/tools.py": 658,
     "autobot-backend/api/schemas_agent.py": 2224,
     "autobot-backend/api/schemas_analytics.py": 3533,
@@ -136,7 +133,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/schemas_code.py": 3265,
     "autobot-backend/api/schemas_knowledge.py": 5127,
     "autobot-backend/api/schemas_system.py": 4176,  # #18734: log-forwarding schemas moved out (4345 -> 4176)
-    "autobot-backend/api/schemas_workflows.py": 2907,
+    "autobot-backend/api/schemas_workflows.py": 2824,
     "autobot-backend/api/secrets.py": 1179,  # #16444 review: except HTTPException, ValueError handlers
     "autobot-backend/api/security_assessment.py": 913,
     "autobot-backend/api/settings.py": 881,
@@ -157,7 +154,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
     "autobot-backend/chat_workflow/graph.py": 1643,  # train 50: #18993 on main's 1652
     "autobot-backend/chat_workflow/llm_handler.py": 1301,
-    "autobot-backend/chat_workflow/manager.py": 3886,  # #17273: graph turn lifecycle moved to turn_control
+    "autobot-backend/chat_workflow/manager.py": 3885,  # #17273: graph turn lifecycle moved to turn_control
     "autobot-backend/chat_workflow/tool_handler.py": 3697,  # #11542 dispatch merge + #14068 mirror
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
@@ -196,7 +193,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/code_intelligence/vue_analyzer.py": 613,
     "autobot-backend/command_manual_manager.py": 908,
     "autobot-backend/computer_vision/screen_analyzer.py": 662,
-    "autobot-backend/conftest.py": 1500,  # #16483: _make_pkg_stub/_real_load_and_bind moved to testkit/module_stubs.py
+    "autobot-backend/conftest.py": 1498,  # #16483: _make_pkg_stub/_real_load_and_bind moved to testkit/module_stubs.py
     "autobot-backend/context_aware_decision/decision_engine.py": 815,
     "autobot-backend/context_aware_decision/tests/test_counterfactual_reasoner.py": 663,
     "autobot-backend/context_window_manager.py": 626,
@@ -207,7 +204,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/events/stream_manager.py": 654,
     "autobot-backend/events/types.py": 885,
     "autobot-backend/hardware_acceleration.py": 609,
-    "autobot-backend/initialization/lifespan.py": 2320,
+    "autobot-backend/initialization/lifespan.py": 2318,
     "autobot-backend/initialization/router_registry/feature_routers.py": 762,
     "autobot-backend/integrations/cloud_integration.py": 616,
     "autobot-backend/integrations/communication_integration.py": 605,
@@ -265,8 +262,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/llm_shared/optimization/kv_cache_test.py": 675,
     "autobot-backend/llm_shared/optimization/layer_inference.py": 869,
     "autobot-backend/llm_shared/optimization/layer_inference_test.py": 715,
-    "autobot-backend/llm_shared/provider_auth.py": 653,
-    "autobot-backend/llm_shared/tests/test_provider_auth.py": 1187,
+    "autobot-backend/llm_shared/tests/test_provider_auth.py": 1145,
     "autobot-backend/markdown_reference_system.py": 707,
     "autobot-backend/mcp_server/autobot_server.py": 790,
     "autobot-backend/mcp_server/mcp_security_test.py": 812,
@@ -484,8 +480,8 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot_shared/plugin_sdk/plugin_load_visibility_test.py": 750,
     "autobot_shared/plugin_sdk/plugin_sdk_test.py": 941,
     "autobot_shared/rate_limiter_test.py": 618,
-    "autobot_shared/redis_client.py": 677,
-    "autobot_shared/redis_management/connection_manager.py": 1425,
+    "autobot_shared/redis_client.py": 674,
+    "autobot_shared/redis_management/connection_manager.py": 1387,
     "autobot_shared/security/ssrf_guard_test.py": 633,
     "autobot_shared/ssot_config.py": 3260,  # #16375: AUTOBOT_PROMETHEUS_SCRAPE_TOKEN
     "autobot_shared/ssot_config_test.py": 782,
