@@ -691,7 +691,8 @@ jobs:
     - name: Run frontend unit tests with coverage gate
       run: |
         cd autobot-frontend
-        # test:coverage enforces 70% threshold via vitest.config.ts thresholds (#3285)
+        # test:coverage enforces the floors in autobot-frontend/vitest.config.ts
+        # (source of truth, #17324); 70% is the long-term target, not the enforced value.
         npm run test:coverage
 
     - name: Cleanup

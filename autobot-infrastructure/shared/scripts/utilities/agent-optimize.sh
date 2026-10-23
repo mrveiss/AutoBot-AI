@@ -32,10 +32,12 @@ NC='\033[0m' # No Color
 # Script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+# The optimizer imports autobot_shared, which lives at the repository root (#14873)
+export PYTHONPATH="$PROJECT_ROOT${PYTHONPATH:+:$PYTHONPATH}"
 
 # Paths
 AGENT_DIR="$PROJECT_ROOT/.claude/agents"
-OPTIMIZER_SCRIPT="$SCRIPT_DIR/optimize_agents.py"
+OPTIMIZER_SCRIPT="$SCRIPT_DIR/../optimize_agents.py"
 
 # Functions
 print_header() {
@@ -104,7 +106,7 @@ run_optimization() {
 
     # Run Python optimizer
     cd "$PROJECT_ROOT"
-    python3 "$OPTIMIZER_SCRIPT" $force_flag $stats_flag
+    python3 "$OPTIMIZER_SCRIPT" --apply --git-backup --cache --strip-code-blocks --no-collapse-policy $force_flag $stats_flag
 
     print_success "Optimization complete!"
     print_info "Agents optimized in: $AGENT_DIR"

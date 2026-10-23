@@ -97,7 +97,7 @@ jobs:
           # first per verb is a readability convention, not a requirement -- ERE
           # is leftmost-longest, so the order does not change what matches.
           # Kept identical to check_pr_issue_batching.py's _CLOSING_WORDS, and
-          # scripts/check_pr_issue_batching_test.py reads both files and fails if
+          # scripts/check_pr_issue_batching_keywords_17580_test.py reads both files and fails if
           # they drift: the parity was previously maintained by hand, and holding
           # while both diverged from GitHub is exactly how this went unnoticed.
           if ! printf '%s' "$BODY" | grep -iqE "(^|[^[:alnum:]_-])(closes|closed|close|fixes|fixed|fix|resolves|resolved|resolve|refs|references|part of):?[[:space:]]+(#?[0-9]+|MVA-[0-9]+)"; then

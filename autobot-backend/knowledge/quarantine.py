@@ -36,9 +36,19 @@ call site that already excludes quarantined facts also excludes rejected ones.
 
 from autobot_shared.ssot_config import config
 from knowledge.serving import SERVING_TRUST_WHERE
+from knowledge.where_combine import and_where
 
 # Module-level constant (not a function): the filter is a static dict, cheap
 # to import and share; no per-call construction needed.
 RESEARCH_QUARANTINE_FILTER: dict = {
     "$and": [{"collection": {"$ne": config.research_quarantine_collection}}, SERVING_TRUST_WHERE]
 }
+
+
+def with_quarantine(caller_where: dict | None = None) -> dict:
+    """The quarantine filter, with the caller's own ``where`` AND-ed in (#18946).
+
+    A caller filter can only narrow what is served; it never replaces the quarantine
+    (and serving-trust) predicate. ``None`` or ``{}`` yields the bare quarantine filter.
+    """
+    return and_where(RESEARCH_QUARANTINE_FILTER, caller_where)  # type: ignore[return-value]

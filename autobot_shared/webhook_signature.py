@@ -26,4 +26,7 @@ def verify_webhook_signature(payload: bytes, signature_header: Optional[str], se
         return False
     provided = signature_header[len(_SIGNATURE_PREFIX) :]
     expected = hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(provided, expected)
+    try:
+        return hmac.compare_digest(provided.encode("utf-8"), expected.encode("ascii"))
+    except (UnicodeError, TypeError):
+        return False

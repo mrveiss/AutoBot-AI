@@ -37,3 +37,8 @@ def test_former_callers_resolve_to_the_shared_function():
     whatsapp = pytest.importorskip("api.whatsapp")
     assert github.verify_webhook_signature is shared.verify_webhook_signature
     assert whatsapp.verify_webhook_signature is shared.verify_webhook_signature
+
+
+@pytest.mark.parametrize("header", ["sha256=é" * 2, "sha256=" + "€" * 64, "sha256=\udcff"])
+def test_non_ascii_header_returns_false_not_typeerror_18464(header):
+    assert verify_webhook_signature(b"x", header, "s") is False

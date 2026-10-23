@@ -192,7 +192,7 @@
     - name: Create backup scripts
       template:
         src: "{{ item }}.j2"
-        dest: "/opt/autobot/scripts/{{ item }}"
+        dest: "{{ autobot.base_dir }}/scripts/{{ item }}"
         owner: "{{ autobot.user }}"
         group: "{{ autobot.group }}"
         mode: '0755'
@@ -212,11 +212,11 @@
         - name: "critical backup"
           minute: "0"
           hour: "*/4"
-          job: "/opt/autobot/scripts/backup-database.sh --critical"
+          job: "{{ autobot.base_dir }}/scripts/backup-database.sh --critical"
         - name: "full backup"
           minute: "0"
           hour: "1"
-          job: "/opt/autobot/scripts/backup-database.sh --full"
+          job: "{{ autobot.base_dir }}/scripts/backup-database.sh --full"
       when: backup.enabled
 
     # ==========================================
@@ -241,7 +241,7 @@
     - name: Configure Redis optimization script
       template:
         src: optimize-redis.sh.j2
-        dest: /opt/autobot/scripts/optimize-redis.sh
+        dest: "{{ autobot.base_dir }}/scripts/optimize-redis.sh"
         mode: '0755'
         owner: "{{ autobot.user }}"
         group: "{{ autobot.group }}"
@@ -253,7 +253,7 @@
     - name: Create Redis monitoring script
       template:
         src: monitor-redis.sh.j2
-        dest: /opt/autobot/scripts/monitor-redis.sh
+        dest: "{{ autobot.base_dir }}/scripts/monitor-redis.sh"
         mode: '0755'
         owner: "{{ autobot.user }}"
         group: "{{ autobot.group }}"
@@ -262,7 +262,7 @@
       cron:
         name: "Redis monitoring"
         minute: "*/5"
-        job: "/opt/autobot/scripts/monitor-redis.sh >> /var/log/autobot/redis-monitor.log 2>&1"
+        job: "{{ autobot.base_dir }}/scripts/monitor-redis.sh >> /var/log/autobot/redis-monitor.log 2>&1"
         user: "{{ autobot.user }}"
       when: monitoring.redis_monitoring.enabled
 
@@ -280,7 +280,7 @@
     - name: Create model management scripts
       template:
         src: "{{ item }}.j2"
-        dest: "/opt/autobot/scripts/{{ item }}"
+        dest: "{{ autobot.base_dir }}/scripts/{{ item }}"
         owner: "{{ autobot.user }}"
         group: "{{ autobot.group }}"
         mode: '0755'
@@ -294,7 +294,7 @@
         name: "Model cache cleanup"
         minute: "0"
         hour: "3"
-        job: "/opt/autobot/scripts/cleanup-model-cache.sh >> /var/log/autobot/model-cleanup.log 2>&1"
+        job: "{{ autobot.base_dir }}/scripts/cleanup-model-cache.sh >> /var/log/autobot/model-cleanup.log 2>&1"
         user: "{{ autobot.user }}"
 
     # ==========================================

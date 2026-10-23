@@ -24,7 +24,7 @@ When you choose **self-hosted automation**, you're choosing independence from cl
 
 **The Self-Hosted Solution:**
 - Your infrastructure data never leaves your hardware
-- Meet HIPAA, GDPR, SOC2, and other regulatory requirements
+- Helps you meet your own regulatory obligations (e.g. GDPR, HIPAA). AutoBot claims no compliance; what we work towards is in [Compliance Targets](compliance/COMPLIANCE_TARGETS.md)
 - No data residency issues — your data stays in your jurisdiction
 - Audit-friendly: complete control over data access and storage
 
@@ -167,7 +167,7 @@ A fintech company processes trading infrastructure through AutoBot. By keeping a
 
 ### Example 2: Healthcare Organization
 A hospital manages infrastructure for patient data systems. Self-hosted automation:
-- Ensures HIPAA compliance with on-premises data
+- Keeps patient-data systems on premises, which supports the hospital's own HIPAA programme (AutoBot itself claims no HIPAA compliance)
 - Integrates with legacy medical systems
 - Responds to incidents in real-time
 - Provides complete audit trails for regulatory inspections
@@ -224,7 +224,7 @@ AutoBot is part of a growing movement toward self-hosted, privacy-respecting inf
 
 ---
 
-**Learn more:** 
+**Learn more:**
 - [AutoBot GitHub Repository](https://github.com/mrveiss/AutoBot-AI)
 - [Blog: Why Self-Hosted AI Matters](https://dev.to/mrveiss/building-a-self-hosted-ai-platform-with-autobot-bg5)
 - [Support the Project](https://github.com/sponsors/mrveiss)
