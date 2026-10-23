@@ -166,13 +166,21 @@ jobs:
     # offline, and a slow run still saves what it fetched (if: always()), so the next run resumes
     # instead of starting from zero. Keys are per run (caches are immutable); restore takes the
     # newest for this image, then any image -- debs a newer image no longer wants are ignored.
+    # #19308: `env.ImageVersion` was always empty -- ImageOS/ImageVersion are runner
+    # environment variables, not entries of the `env` context -- so every key read
+    # `ci-apt-archives-Linux--<run>` and debs from any runner image were restored alike.
+    - name: "Runner image for the apt cache key (#19308)"
+      id: image
+      shell: bash
+      run: echo "image=${ImageOS}-${ImageVersion}" >> "$GITHUB_OUTPUT"
+
     - name: "Restore the apt archive cache (#18102)"
       uses: actions/cache/restore@v6
       with:
         path: ${{ runner.temp }}/apt-archive-cache
-        key: ci-apt-archives-${{ runner.os }}-${{ env.ImageVersion }}-${{ github.run_id }}-${{ github.run_attempt }}
+        key: ci-apt-archives-${{ runner.os }}-${{ steps.image.outputs.image }}-${{ github.run_id }}-${{ github.run_attempt }}
         restore-keys: |
-          ci-apt-archives-${{ runner.os }}-${{ env.ImageVersion }}-
+          ci-apt-archives-${{ runner.os }}-${{ steps.image.outputs.image }}-
           ci-apt-archives-${{ runner.os }}-
 
     - name: "Seed apt's archive directory from the cache (#18102)"
@@ -207,7 +215,7 @@ jobs:
       uses: actions/cache/save@v6
       with:
         path: ${{ runner.temp }}/apt-archive-cache
-        key: ci-apt-archives-${{ runner.os }}-${{ env.ImageVersion }}-${{ github.run_id }}-${{ github.run_attempt }}
+        key: ci-apt-archives-${{ runner.os }}-${{ steps.image.outputs.image }}-${{ github.run_id }}-${{ github.run_attempt }}
 
     - name: "Collect the downloaded .debs for the shards (#18102)"
       shell: bash
