@@ -423,7 +423,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/workflow_scheduler.py": 1070,
     "autobot-npu-worker/npu_worker_pool_test.py": 1010,
     "autobot-slm-backend/api/code_source.py": 708,
-    "autobot-slm-backend/api/code_sync.py": 5804,  # #16644 (was 5818)
+    "autobot-slm-backend/api/code_sync.py": 5801,  # #19320 (was 5804)
     "autobot-slm-backend/api/errors.py": 866,
     "autobot-slm-backend/api/infrastructure.py": 724,
     "autobot-slm-backend/api/monitoring.py": 1087,
@@ -472,7 +472,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/tests/test_cleanup_never_destroys_data_14856.py": 981,
     "autobot-slm-backend/user_management/services/sso_service.py": 775,
     "autobot_shared/circuit_breaker.py": 689,
-    "autobot_shared/env_registry.py": 1125,  # #13602, #18765: sibling imports; blocks moved to siblings
+    "autobot_shared/env_registry.py": 1061,  # #19320: postgres block -> env_registry_postgres (was 1125)
     "autobot_shared/monitoring/prometheus_metrics.py": 949,
     "autobot_shared/network_constants.py": 614,
     "autobot_shared/npu/integration.py": 929,

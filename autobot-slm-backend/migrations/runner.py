@@ -176,19 +176,8 @@ def _resolve_migration_db_url(module, default_db_url: str) -> str:
 
 
 def _parse_db_url(url: str) -> dict:
-    """Parse PostgreSQL URL into connection parameters (#786)."""
-    # postgresql://user:pass@host:port/database
-    # postgresql://user@host:port/database (no password)
-    from urllib.parse import urlparse
-
-    parsed = urlparse(url)
-    return {
-        "host": parsed.hostname or "localhost",
-        "port": parsed.port or 5432,
-        "database": parsed.path.lstrip("/") if parsed.path else "slm",
-        "user": parsed.username or "slm_app",
-        "password": parsed.password,
-    }
+    """Parse PostgreSQL URL into connection parameters (#786; one parser, #19320)."""
+    return _migration_utils.parse_db_url(url)
 
 
 def get_connection(db_url: str = None, timeout: int = 10) -> psycopg2.extensions.connection:

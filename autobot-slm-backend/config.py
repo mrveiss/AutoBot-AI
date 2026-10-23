@@ -21,6 +21,7 @@ from typing import Optional
 from pydantic import ConfigDict, field_validator
 from pydantic_settings import BaseSettings
 
+from autobot_shared import postgres_identity as pg
 from autobot_shared.secret_redaction import RedactedReprMixin
 from user_management.config import get_autobot_db_config, get_slm_db_config
 
@@ -222,7 +223,7 @@ class Settings(RedactedReprMixin, BaseSettings):
     # Main SLM operational database (nodes, deployments, backups, etc.)
     database_url: str = os.getenv(
         "SLM_DATABASE_URL",
-        "postgresql+asyncpg://slm_app@127.0.0.1:5432/slm",
+        f"postgresql+asyncpg://{pg.SLM_DB_ROLE}@{pg.SLM_DB_HOST}:{pg.DB_PORT}/{pg.SLM_DB_NAME}",
     )
 
     # SLM admin users database (fleet administrators)

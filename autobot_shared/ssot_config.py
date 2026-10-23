@@ -50,6 +50,7 @@ from urllib.parse import quote
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from autobot_shared import postgres_identity as _pg
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.paths import project_root
 from autobot_shared.secret_redaction import RedactedReprMixin
@@ -1725,18 +1726,17 @@ class MiscConfig(RedactedSettings):
     memory_log_threshold_mb: int = Field(default=1, alias="AUTOBOT_MEMORY_LOG_THRESHOLD_MB")
     memory_pool_size: int = Field(default=100, alias="AUTOBOT_MEMORY_POOL_SIZE")
     memory_threshold_mb: int = Field(default=500, alias="AUTOBOT_MEMORY_THRESHOLD_MB")
-    # #11834: restore pre-#7437 meta-agent defaults (see #11681 pattern);
-    # llm_model default stays "" — backend falls back to its model constant.
+    # #11834: pre-#7437 meta-agent defaults (#11681); llm_model "" -> backend falls back to its model constant.
     meta_agent_approval_threshold: float = Field(default=0.1, alias="AUTOBOT_META_AGENT_APPROVAL_THRESHOLD")
     meta_agent_llm_model: str = Field(default="", alias="AUTOBOT_META_AGENT_LLM_MODEL")
     meta_agent_max_module_lines: int = Field(default=500, alias="AUTOBOT_META_AGENT_MAX_MODULE_LINES")
     meta_agent_test_timeout: int = Field(default=60, alias="AUTOBOT_META_AGENT_TEST_TIMEOUT")
     ollama_url: str = Field(default="", alias="AUTOBOT_OLLAMA_URL")
-    postgres_db: str = Field(default="autobot", alias="AUTOBOT_POSTGRES_DB")  # #13264 batch 3
-    postgres_host: str = Field(default="", alias="AUTOBOT_POSTGRES_HOST")
+    postgres_db: str = Field(default=_pg.USERS_DB_NAME, alias="AUTOBOT_POSTGRES_DB")  # #19320
+    postgres_host: str = Field(default=_pg.USERS_DB_HOST, alias="AUTOBOT_POSTGRES_HOST")  # #19320
     postgres_password: str = Field(default="", alias="AUTOBOT_POSTGRES_PASSWORD")
-    postgres_port: int = Field(default=5432, alias="AUTOBOT_POSTGRES_PORT")  # #13264 batch 3
-    postgres_user: str = Field(default="autobot", alias="AUTOBOT_POSTGRES_USER")  # #13264 batch 3
+    postgres_port: int = Field(default=_pg.DB_PORT, alias="AUTOBOT_POSTGRES_PORT")  # #19320
+    postgres_user: str = Field(default=_pg.USERS_DB_ROLE, alias="AUTOBOT_POSTGRES_USER")  # #19320
     project_root: str = Field(default="", alias="AUTOBOT_PROJECT_ROOT")
     project_state_db_path: str = Field(default="", alias="AUTOBOT_PROJECT_STATE_DB_PATH")
     prompt_compression_enabled: bool = Field(default=False, alias="AUTOBOT_PROMPT_COMPRESSION_ENABLED")

@@ -81,9 +81,11 @@ class TestEnvGcPostgresTracingDefaultsRestored13264:
 
         with patch.dict(os.environ, {}, clear=True):
             cfg = MiscConfig(_env_file=None)
-            assert cfg.postgres_db == "autobot"
+            # #19320: the provisioned identity (postgres_identity), not ``autobot``,
+            # which names no database or role any install path creates.
+            assert cfg.postgres_db == "autobot_users"
             assert cfg.postgres_port == 5432
-            assert cfg.postgres_user == "autobot"
+            assert cfg.postgres_user == "autobot_app"
             assert all(
                 [cfg.postgres_db, cfg.postgres_port, cfg.postgres_user]
             ), "an empty name/user or a port of 0 cannot form a valid DSN"

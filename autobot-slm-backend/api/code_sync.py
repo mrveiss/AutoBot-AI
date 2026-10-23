@@ -2006,11 +2006,8 @@ def _resolve_pg_db_url(env_vars: Dict[str, str]) -> str:
     # Merge env_vars (higher precedence) over os.environ; filter empty strings so
     # assemble_postgres_url falls back to its per-key defaults correctly (#11466).
     merged = {k: v for k in _PG_COMPONENT_KEYS if (v := env_vars.get(k) or os.environ.get(k, ""))}
-    return assemble_postgres_url(
-        merged,
-        default_user="autobot_app",
-        default_db="autobot_users",
-    )
+    # User/DB fall back to the shared identity defaults (postgres_identity, #19320).
+    return assemble_postgres_url(merged)
 
 
 def _build_pg_dump_command(parsed, dump_path: Path, env_vars: Dict[str, str]) -> Tuple[List[str], Dict[str, str]]:

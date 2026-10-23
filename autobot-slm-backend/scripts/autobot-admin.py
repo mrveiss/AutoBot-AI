@@ -49,8 +49,11 @@ def get_db_url() -> str:
 
     host = env.get("SLM_DB_HOST", "127.0.0.1")
     port = env.get("SLM_DB_PORT", "5432")
-    name = env.get("SLM_DB_NAME", "autobot_slm")
-    user = env.get("SLM_DB_USER", "autobot")
+    # The SLM_DB_* keys are what the fleet postgresql role writes (#19320: these
+    # defaults were the compose values, which no fleet host -- where this CLI is
+    # installed -- has). Pinned to autobot_shared/postgres_identity.py.
+    name = env.get("SLM_DB_NAME", "slm")
+    user = env.get("SLM_DB_USER", "slm_app")
     password = env.get("SLM_DB_PASSWORD", "")
     return f"postgresql://{user}:{password}@{host}:{port}/{name}"
 
