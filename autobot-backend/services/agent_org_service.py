@@ -10,7 +10,7 @@ direct reports, reporting-line updates with cycle detection, and role defaults.
 """
 
 import uuid
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -99,28 +99,33 @@ class AgentOrgService:
 
     def _build_tree(self, nodes: List[AgentOrgNode], parent_id: str | None) -> List[Dict[str, Any]]:
         """Recursively build tree from flat node list. Helper (#1405)."""
-        children = [n for n in nodes if n.reports_to == parent_id]
-        return [
-            {
-                "agent_id": node.agent_id,
-                "name": node.name,
-                "org_role": node.org_role,
-                "title": node.title,
-                "capabilities": node.capabilities,
-                "direct_reports_count": sum(1 for n in nodes if n.reports_to == node.agent_id),
-                "children": self._build_tree(nodes, node.agent_id),
-            }
-            for node in children
-        ]
+        return [self._subtree(node, nodes) for node in nodes if node.reports_to == parent_id]
 
-    async def get_org_tree(self) -> List[Dict[str, Any]]:
+    def _subtree(self, node: AgentOrgNode, nodes: List[AgentOrgNode]) -> Dict[str, Any]:
+        """One node with its reports, recursively (#1405)."""
+        return {
+            "agent_id": node.agent_id,
+            "name": node.name,
+            "org_role": node.org_role,
+            "title": node.title,
+            "capabilities": node.capabilities,
+            "direct_reports_count": sum(1 for n in nodes if n.reports_to == node.agent_id),
+            "children": self._build_tree(nodes, node.agent_id),
+        }
+
+    async def get_org_tree(self, *, can_see: Callable[[Any], bool]) -> List[Dict[str, Any]]:
         """
         Return recursive org tree from root agents (#1405).
 
-        Root agents are those with reports_to == None.
+        Root agents are those with reports_to == None. ``can_see`` is the caller's
+        company_id predicate (#19246), required so no caller can forget to scope: only
+        visible agents are kept, and a visible agent whose manager is hidden becomes a root
+        rather than disappearing.
         """
-        nodes = await self.get_all_nodes()
-        return self._build_tree(nodes, parent_id=None)
+        nodes = [n for n in await self.get_all_nodes() if can_see(n.company_id)]
+        visible = {n.agent_id for n in nodes}
+        roots = [n for n in nodes if n.reports_to is None or n.reports_to not in visible]
+        return [self._subtree(root, nodes) for root in roots]
 
     @staticmethod
     def _status_for_node(node: AgentOrgNode) -> str:
@@ -129,7 +134,7 @@ class AgentOrgService:
             return "paused"
         return "idle"
 
-    async def get_agent_statuses(self) -> List[Dict[str, Any]]:
+    async def get_agent_statuses(self, *, can_see: Callable[[Any], bool]) -> List[Dict[str, Any]]:
         """Return all registered agents with runtime status (#10502).
 
         Backs ``GET /api/agents/status`` for the Home dashboard "Agent
@@ -137,7 +142,7 @@ class AgentOrgService:
         of agents. Sourced from the org registry so every registered agent
         is returned.
         """
-        nodes = await self.get_all_nodes()
+        nodes = [n for n in await self.get_all_nodes() if can_see(n.company_id)]  # #19246: caller's view
         return [
             {
                 "id": node.agent_id,

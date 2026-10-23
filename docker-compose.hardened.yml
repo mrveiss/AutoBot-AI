@@ -3,7 +3,7 @@
 #
 # Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.hardened.yml \
-#     --env-file docker/.env.docker up -d
+#     --env-file docker/.env.docker --env-file docker/.env.secrets up -d
 #
 # What this overlay adds on top of the base compose:
 #   • read_only: true on all writable-root services (backend, worker, slm, redis, postgres, chromadb)

@@ -35173,7 +35173,7 @@ export interface paths {
         put?: never;
         /**
          * Enable Web Research
-         * @description Enable web research functionality
+         * @description Enable web research, saved across restarts.
          */
         post: operations["enable_web_research_api_web_research_enable_post"];
         delete?: never;
@@ -35193,7 +35193,7 @@ export interface paths {
         put?: never;
         /**
          * Disable Web Research
-         * @description Disable web research functionality
+         * @description Disable web research, saved across restarts.
          */
         post: operations["disable_web_research_api_web_research_disable_post"];
         delete?: never;
@@ -35211,12 +35211,12 @@ export interface paths {
         };
         /**
          * Get Research Settings
-         * @description Get current web research settings
+         * @description Every web research setting, read from the one section the researcher uses (#19226).
          */
         get: operations["get_research_settings_api_web_research_settings_get"];
         /**
          * Update Research Settings
-         * @description Update web research settings
+         * @description Save the sent settings and apply them to the running researcher, no restart (#19226).
          */
         put: operations["update_research_settings_api_web_research_settings_put"];
         post?: never;
@@ -104979,46 +104979,35 @@ export interface components {
         };
         /**
          * WebResearchSettings
-         * @description Web research settings model.
+         * @description Every web research setting, as GET /web-research/settings returns it.
          */
         WebResearchSettings: {
             /** Enabled */
             enabled: boolean;
-            /**
-             * Require User Confirmation
-             * @default true
-             */
+            /** Require User Confirmation */
             require_user_confirmation: boolean;
-            /**
-             * Preferred Method
-             * @default basic
-             */
+            /** Preferred Method */
             preferred_method: string;
-            /**
-             * Max Results
-             * @default 5
-             */
+            /** Max Results */
             max_results: number;
-            /**
-             * Timeout Seconds
-             * @default 30
-             */
+            /** Timeout Seconds */
             timeout_seconds: number;
-            /**
-             * Auto Research Threshold
-             * @default 0.3
-             */
+            /** Auto Research Threshold */
             auto_research_threshold: number;
-            /**
-             * Rate Limit Requests
-             * @default 5
-             */
+            /** Rate Limit Requests */
             rate_limit_requests: number;
-            /**
-             * Rate Limit Window
-             * @default 60
-             */
+            /** Rate Limit Window */
             rate_limit_window: number;
+            /** Daily Limit */
+            daily_limit: number;
+            /** Quality Threshold */
+            quality_threshold: number;
+            /** Store Results In Kb */
+            store_results_in_kb: boolean;
+            /** Filter Adult Content */
+            filter_adult_content: boolean;
+            /** Anonymize Requests */
+            anonymize_requests: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -105029,28 +105018,56 @@ export interface components {
         WebResearchSettingsData: {
             /** Status */
             status: string;
-            /** Settings */
-            settings: {
-                [key: string]: unknown;
-            };
+            settings: components["schemas"]["WebResearchSettings"];
             /** Timestamp */
             timestamp: string;
         } & {
             [key: string]: unknown;
         };
         /**
+         * WebResearchSettingsUpdate
+         * @description PUT /web-research/settings body: only the fields sent are changed (#19226).
+         */
+        WebResearchSettingsUpdate: {
+            /** Enabled */
+            enabled?: boolean | null;
+            /** Require User Confirmation */
+            require_user_confirmation?: boolean | null;
+            /** Preferred Method */
+            preferred_method?: ("basic" | "advanced" | "api_based") | null;
+            /** Max Results */
+            max_results?: number | null;
+            /** Timeout Seconds */
+            timeout_seconds?: number | null;
+            /** Auto Research Threshold */
+            auto_research_threshold?: number | null;
+            /** Rate Limit Requests */
+            rate_limit_requests?: number | null;
+            /** Rate Limit Window */
+            rate_limit_window?: number | null;
+            /** Daily Limit */
+            daily_limit?: number | null;
+            /** Quality Threshold */
+            quality_threshold?: number | null;
+            /** Store Results In Kb */
+            store_results_in_kb?: boolean | null;
+            /** Filter Adult Content */
+            filter_adult_content?: boolean | null;
+            /** Anonymize Requests */
+            anonymize_requests?: boolean | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * WebResearchSettingsUpdateData
-         * @description Response data for update_research_settings.
+         * @description Response data for update_research_settings: the full set after the change.
          */
         WebResearchSettingsUpdateData: {
             /** Status */
             status: string;
             /** Message */
             message: string;
-            /** Settings */
-            settings: {
-                [key: string]: unknown;
-            };
+            settings: components["schemas"]["WebResearchSettings"];
             /** Timestamp */
             timestamp: string;
         } & {
@@ -152707,7 +152724,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["WebResearchSettings"];
+                "application/json": components["schemas"]["WebResearchSettingsUpdate"];
             };
         };
         responses: {

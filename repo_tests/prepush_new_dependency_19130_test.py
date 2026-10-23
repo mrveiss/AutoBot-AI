@@ -269,3 +269,157 @@ class TestTheDeferralUsesTheExistingCouldNotRunPath:
                 f'{stubs}ALLOW_UNRUNNABLE={allow}\n{_fn("could_not_run")}\ncould_not_run vitest "r"; echo $EXIT_CODE'
             )
             assert _bash(script, tmp_path).stdout.strip() == code
+
+
+def _grouped(files: list[str], package: str) -> str:
+    """vitest's dedupe of one identical collection error: every header, then the error once."""
+    headers = "".join(f" FAIL  {f} [ {f} ]\n" for f in files)
+    return headers + f'Error: Failed to resolve import "{package}" from "../libs/x.ts". Does the file exist?\n'
+
+
+class TestVitestGroupedCollectionErrors:
+    """#19130 follow-up: a kit change failed 46 files under ONE shared error, and the per-header
+    check closed 45 of them with no error seen, so the deferral never applied."""
+
+    def test_a_grouped_new_dep_error_defers(self, tmp_path: Path) -> None:
+        root, base, head = _repo(tmp_path)
+        _stage_tool(root)
+        output = _grouped(["src/a.test.ts", "src/b.test.ts", "src/c.test.ts"], "dompurify") + "⎯⎯⎯[1/1]⎯\n"
+        assert _verdict(root, base, head, output, _install(root, "vue")).returncode == 0
+
+    def test_a_grouped_error_naming_an_existing_module_fails(self, tmp_path: Path) -> None:
+        root, base, head = _repo(tmp_path)
+        _stage_tool(root)
+        output = _grouped(["src/a.test.ts", "src/b.test.ts"], "vue")
+        assert _verdict(root, base, head, output, _install(root, "vue")).returncode != 0
+
+    def test_an_assertion_header_inside_a_group_fails(self, tmp_path: Path) -> None:
+        root, base, head = _repo(tmp_path)
+        _stage_tool(root)
+        output = " FAIL  src/b.test.ts > suite > adds\n" + _grouped(["src/a.test.ts"], "dompurify")
+        assert _verdict(root, base, head, output, _install(root, "vue")).returncode != 0
+
+    def test_an_assertion_header_inside_a_shared_error_group_fails(self, tmp_path: Path) -> None:
+        root, base, head = _repo(tmp_path)
+        _stage_tool(root)
+        output = " FAIL  src/a.test.ts [ src/a.test.ts ]\n FAIL  src/b.test.ts > suite > adds\n" + _grouped(
+            ["src/c.test.ts"], "dompurify"
+        )
+        assert _verdict(root, base, head, output, _install(root, "vue")).returncode != 0
+
+    def test_a_coloured_grouped_new_dep_error_defers(self, tmp_path: Path) -> None:
+        root, base, head = _repo(tmp_path)
+        _stage_tool(root)
+        red, dim, clr = "\x1b[31m", "\x1b[2m", "\x1b[39m\x1b[22m"
+        plain = _grouped(["src/a.test.ts", "src/b.test.ts"], "dompurify")
+        output = (
+            plain.replace(" FAIL ", f" {red}FAIL{clr} ").replace("Error:", f"{red}Error{clr}:") + f"{dim}⎯[1/2]⎯{clr}\n"
+        )
+        assert _verdict(root, base, head, output, _install(root, "vue")).returncode == 0
+
+    def test_a_header_after_a_block_body_still_needs_its_own_error(self, tmp_path: Path) -> None:
+        root, base, head = _repo(tmp_path)
+        _stage_tool(root)
+        output = _UNRESOLVED + "  Plugin: vite:import-analysis\n FAIL  src/z.test.ts [ src/z.test.ts ]\n"
+        assert _verdict(root, base, head, output, _install(root, "vue")).returncode != 0
+
+
+def _tsc_verdict(diagnostics: str, absent: str, tmp_path: Path) -> int:
+    script = f'{_fn("tsc_failed_on_new_dep_only")}\ntsc_failed_on_new_dep_only "$1" "$2"'
+    return subprocess.run(
+        ["bash", "-c", script, "x", diagnostics, absent], cwd=tmp_path, capture_output=True, check=False
+    ).returncode
+
+
+def _vitest_verdict(output: str, absent: str, tmp_path: Path) -> int:
+    script = f'{_fn("vitest_failed_on_new_dep_only")}\nvitest_failed_on_new_dep_only "$1" "$2"'
+    return subprocess.run(
+        ["bash", "-c", script, "x", output, absent], cwd=tmp_path, capture_output=True, check=False
+    ).returncode
+
+
+class TestARelativeSpecifierNeverDefers:
+    """The `pkg ~ /^[.\\/]/` guard: a relative or absolute specifier's first segment is `.`, `..` or empty,
+    never a valid npm name, so the absent-name check alone rejects it today. These pin the guard itself:
+    a manifest key that is not a package name must still not defer a relative import."""
+
+    def test_vitest_relative_import_with_a_dotdot_absent_name_fails(self, tmp_path: Path) -> None:
+        output = _grouped(["src/a.test.ts"], "../missing")
+        assert _vitest_verdict(output, "..", tmp_path) != 0
+
+    def test_tsc_relative_module_with_a_dotdot_absent_name_fails(self, tmp_path: Path) -> None:
+        line = TestVueTscNewDependency._TS2307.format("../missing")
+        assert _tsc_verdict(line, "..", tmp_path) != 0
+
+
+class TestVueTscNewDependency:
+    """#19130 follow-up: vue-tsc blocked the same push on TS2307 for the added-and-absent package."""
+
+    _TS2307 = "../libs/autobot-ui/src/utils/sanitize.ts(12,23): error TS2307: Cannot find module '{0}' or its corresponding type declarations."
+
+    def test_ts2307_for_the_absent_new_dep_defers(self, tmp_path: Path) -> None:
+        lines = "\n".join([self._TS2307.format("dompurify"), self._TS2307.format("dompurify/dist/purify")])
+        assert _tsc_verdict(lines, "dompurify", tmp_path) == 0
+
+    def test_any_other_diagnostic_beside_it_fails(self, tmp_path: Path) -> None:
+        other = "src/a.ts(1,1): error TS2322: Type 'string' is not assignable to type 'number'."
+        assert _tsc_verdict(self._TS2307.format("dompurify") + "\n" + other, "dompurify", tmp_path) != 0
+
+    def test_ts2307_for_a_module_not_added_fails(self, tmp_path: Path) -> None:
+        assert _tsc_verdict(self._TS2307.format("lodash"), "dompurify", tmp_path) != 0
+
+    def test_ts2307_for_a_relative_module_fails(self, tmp_path: Path) -> None:
+        assert _tsc_verdict(self._TS2307.format("./missing"), "dompurify", tmp_path) != 0
+
+    def test_a_ts2307_quoted_inside_another_diagnostic_fails(self, tmp_path: Path) -> None:
+        """CodeRabbit on #19272: only the diagnostic's own code counts, not a TS2307 quoted in a message."""
+        line = (
+            "src/a.ts(4,7): error TS2322: Type '\"error TS2307: Cannot find module 'dompurify'\"' "
+            "is not assignable to type 'number'."
+        )
+        assert _tsc_verdict(line, "dompurify", tmp_path) != 0
+
+    _COLON = (
+        "src/utils/sanitize.ts:12:23 - error TS2307: Cannot find module '{0}' or its corresponding type declarations."
+    )
+
+    def test_the_colon_position_format_for_the_absent_new_dep_defers(self, tmp_path: Path) -> None:
+        """CodeRabbit on #19286: vue-tsc's `file:line:col - error` form defers like the parenthesised one."""
+        assert _tsc_verdict(self._COLON.format("dompurify"), "dompurify", tmp_path) == 0
+
+    def test_a_ts2307_quoted_inside_a_colon_format_diagnostic_fails(self, tmp_path: Path) -> None:
+        line = (
+            "src/a.ts:4:7 - error TS2322: Type '\"error TS2307: Cannot find module 'dompurify'\"' "
+            "is not assignable to type 'number'."
+        )
+        assert _tsc_verdict(line, "dompurify", tmp_path) != 0
+
+    def test_a_colon_format_ts2307_for_a_module_not_added_fails(self, tmp_path: Path) -> None:
+        assert _tsc_verdict(self._COLON.format("lodash"), "dompurify", tmp_path) != 0
+
+    def test_a_lookalike_package_name_fails(self, tmp_path: Path) -> None:
+        assert _tsc_verdict(self._TS2307.format("dompurify-extra"), "dompurify", tmp_path) != 0
+
+    def test_a_scoped_new_dep_defers(self, tmp_path: Path) -> None:
+        assert _tsc_verdict(self._TS2307.format("@scope/pkg/sub"), "@scope/pkg", tmp_path) == 0
+
+    def test_coloured_ts2307_fails_closed(self, tmp_path: Path) -> None:
+        coloured = self._TS2307.format("dompurify").replace("error", "\x1b[91merror\x1b[0m")
+        assert _tsc_verdict(coloured, "dompurify", tmp_path) != 0
+
+    def test_no_diagnostics_is_not_a_deferral(self, tmp_path: Path) -> None:
+        assert _tsc_verdict("", "dompurify", tmp_path) != 0
+
+    def test_the_vue_tsc_branch_is_guarded_and_still_fails_otherwise(self) -> None:
+        guard = (
+            'if [ -n "$relevant" ] && new_dep_absent=$(absent_added_deps "${base:-$remote_sha}" "$local_sha" "$project_dir") \\\n'
+            '             && tsc_failed_on_new_dep_only "$relevant" "$new_dep_absent"; then\n'
+            "            # It ran: show exactly which diagnostics are being set aside, never a bare skip.\n"
+            '            echo "$relevant" | head -20 >&2\n'
+            '            could_not_run "vue-tsc (${project})" \\\n'
+            '              "ran; only TS2307 for the new dependency (CI\'s npm ci verifies): $(echo $new_dep_absent)"'
+        )
+        assert guard in _SOURCE
+        after = _SOURCE.find(guard)
+        assert _SOURCE.find('elif [ -n "$relevant" ]; then', after) > after
+        assert _SOURCE.count('tsc_failed_on_new_dep_only "$') == 1

@@ -8,10 +8,21 @@ Check all Redis databases to understand data distribution
 """
 
 import logging
+import sys
 from collections import defaultdict
+from contextlib import closing
+from pathlib import Path
 from typing import Any, Dict
 
 import redis
+
+# Runs from any directory with no PYTHONPATH: put the repository root on the path for
+# `autobot_shared` (#18289).
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.redis_client import survey_databases  # noqa: E402
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -123,14 +134,15 @@ def analyze_all_redis_databases():
 
     logger.info("=== REDIS DATABASE DISTRIBUTION ANALYSIS ===")
 
-    for db_num in range(16):  # Redis typically has 16 databases (0-15)
-        try:
-            client = redis.Redis(host="localhost", port=6379, db=db_num, decode_responses=False)
-            info = client.info()
-            _analyze_database(client, db_num, info)
-        except Exception as e:
-            if _handle_connection_error(e, db_num):
-                break
+    # Every database the server has (CONFIG GET databases), named or not, via the canonical survey (#18553)
+    with closing(survey_databases(decode_responses=False)) as survey:
+        for db_num, _name, client in survey:
+            try:
+                info = client.info()
+                _analyze_database(client, db_num, info)
+            except Exception as e:
+                if _handle_connection_error(e, db_num):
+                    break
 
     # Summary and recommendations
     logger.info("\n=== SUMMARY & RECOMMENDATIONS ===")

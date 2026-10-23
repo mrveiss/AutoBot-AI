@@ -226,10 +226,15 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     # locale_html_entity_leak_test.py sweep over this specific path is no longer
     # uncovered -- confirmed by reading the filter file directly, not assumed from
     # the guard's own failure message alone.
+    "*docker-compose*.yml": (
+        {"repo_tests/_compose_files.py"},
+        "the one enumeration of every tracked compose file at any depth (#17500); the stacks under "
+        "autobot-infrastructure/ are outside the python filter's trees",
+    ),
     "docker/*.yml": (
-        {"repo_tests/chromadb_bind_not_hardcoded_15317_test.py"},
-        "sweeps compose files for a hardcoded ChromaDB bind address (#15317); `docker/` is "
-        "outside the python filter's trees",
+        {"repo_tests/_compose_files.py"},
+        "the one compose-file enumeration (#17500), shared by the ChromaDB bind (#15317) and "
+        "exposure/credentials guards; `docker/` is outside the python filter's trees",
     ),
     "libs/autobot-sdk-ts/src/resources/*.ts": (
         {"repo_tests/sdk_ts_request_contract_test.py"},

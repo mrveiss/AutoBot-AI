@@ -193,7 +193,7 @@ register_env_var(
         name="AUTOBOT_DEPLOYMENT_MODE",
         type=str,
         default="distributed",
-        description="Deployment topology: 'distributed' or 'standalone'.",
+        description="Topology. Unset: the backend assumes 'distributed'; deploy scripts detect it from /.dockerenv.",
         component="system",
     )
 )

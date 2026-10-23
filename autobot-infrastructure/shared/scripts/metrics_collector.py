@@ -31,18 +31,13 @@ import asyncio
 import json
 import logging
 import os
-import socket
 import statistics
 import sys
 import threading
 import time
-import urllib.error
-import urllib.parse
-import urllib.request
 from collections import defaultdict, deque
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
-from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -67,12 +62,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 from deployment_registry import (  # noqa: E402
-    ServiceStatus,
-    DeploymentMode,
-    ServiceHealth,
     get_deployment_registry,
 )
-
 
 # Port env aliases + defaults mirror autobot_shared/ssot_config.py;
 # health paths mirror autobot_shared/ssot_constants.py.
@@ -342,14 +333,17 @@ class MetricsCollector:
 
     async def _collect_redis_metrics(self) -> List[Metric]:
         """Collect Redis-specific metrics."""
+        # deployment_registry (imported above) put the repo root on sys.path (#18553). Imported before
+        # the try so the except clause below can always name RedisConnectionError.
+        from redis.exceptions import ConnectionError as RedisConnectionError
+
+        from autobot_shared.redis_client import require_redis_client
+
         metrics = []
         timestamp = time.time()
 
         try:
-            import redis
-
-            redis_url = self.service_registry.get_service_url("redis")
-            r = redis.from_url(redis_url)
+            r = require_redis_client(database="main", decode_responses=False)
 
             # Get Redis info
             info = r.info()
@@ -387,6 +381,9 @@ class MetricsCollector:
                 )
             )
 
+        except (RedisConnectionError, ConnectionError) as e:
+            # Builtin ConnectionError: the canonical client is disabled, unreachable or its circuit is open.
+            logger.warning("Redis metrics skipped, Redis unavailable: %s", e)
         except Exception:
             logger.debug("Suppressed exception in try block", exc_info=True)
 

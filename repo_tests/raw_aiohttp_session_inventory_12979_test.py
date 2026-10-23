@@ -94,7 +94,7 @@ SIBLING_GUARD = "autobot-backend/tests/test_raw_client_session_ceiling_12992.py"
 #: needs no argument. Raising one, or adding a key, must also satisfy
 #: ``CATEGORY`` below — the inventory alone cannot authorise it.
 INVENTORY: dict[str, int] = {
-    "autobot-infrastructure/shared/mcp/servers/prometheus-mcp/server.py": 2,
+    "autobot-infrastructure/shared/mcp/servers/prometheus-mcp/server.py": 1,
     "autobot-infrastructure/shared/scripts/analysis/npu_performance_measurement.py": 2,
     "autobot-infrastructure/shared/scripts/automated_testing_procedure.py": 1,
     "autobot-infrastructure/shared/scripts/comprehensive_log_aggregator.py": 1,
