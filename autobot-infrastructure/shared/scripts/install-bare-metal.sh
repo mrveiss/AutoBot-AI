@@ -784,7 +784,7 @@ verify_installation() {
 
     # Check ChromaDB
     if [[ "$SKIP_CHROMADB" == false ]]; then
-        if curl -sf "http://127.0.0.1:${CHROMADB_PORT}/api/v1/heartbeat" >/dev/null 2>&1; then
+        if curl -sf "http://127.0.0.1:${CHROMADB_PORT}/api/v2/heartbeat" >/dev/null 2>&1; then  # #19413: pinned copy
             log_info "ChromaDB: OK"
         else
             log_warn "ChromaDB: not responding (may still be starting)"

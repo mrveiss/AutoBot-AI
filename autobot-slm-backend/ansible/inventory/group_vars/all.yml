@@ -25,6 +25,15 @@ autobot_ssh_key_path: "/etc/autobot/ssh/autobot_key"
 ai_stack_port: 8080
 
 # ==========================================
+# CHROMADB HEARTBEAT PATH (#19413)
+# ==========================================
+# The ONE ansible literal for the ChromaDB liveness path. Mirrors
+# autobot_shared/chromadb_endpoints.py CHROMADB_HEARTBEAT_PATH; chromadb 1.x serves only the v2
+# heartbeat (v1 answers 410, /health 404). Kept equal by
+# repo_tests/chromadb_heartbeat_one_home_19413_test.py.
+chromadb_heartbeat_path: "/api/v2/heartbeat"
+
+# ==========================================
 # AUTOBOT APPLICATION CONFIGURATION
 # ==========================================
 
