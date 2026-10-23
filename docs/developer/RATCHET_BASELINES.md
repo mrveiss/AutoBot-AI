@@ -479,6 +479,24 @@ binding, exact `path:qualname`; a module-level binding's qualname is its name), 
 - `--freeze` writes the baseline from the clusters left after exceptions, so an excepted name
   leaves the baseline in a removals-only diff.
 
+## Down-only tables are compared with the base, not with a hand total (#19283)
+
+A per-entry table (file-size `KNOWN_LARGE`, the colour and palette baselines) used to carry a
+hand-summed total or a mirrored copy, so that a raise showed up somewhere. Every PR that lowered
+*any* entry then edited the same total line, and two such PRs always conflicted.
+`repo_tests/_ratchet_base.py` now holds each entry to the same table at the base commit instead:
+an entry above the base, or a key the base lacks, is a raise.
+
+- **The base:** `AUTOBOT_RATCHET_BASE_SHA` in CI (a merge group's `base_sha`, a push's
+  `before`), else `HEAD^1`. Locally it is the merge-base with `origin/main`.
+- **The backstop:** `AUTOBOT_RATCHET_ANCHOR`, the last main commit whose CI passed (ci.yml
+  sets it). The base alone is one-shot: a cancelled run that spanned a raise would make the raise
+  the next base. `base_table` takes each key's minimum over both, so such a raise stays red.
+- **Fail closed:** a base or anchor that cannot be read raises `BaseUnavailable`. It never
+  passes as "nothing rose".
+- **Moving a table:** pass the old path after the new one,
+  `base_table(root, ("new.py", "old.py"), NAME)`. Without it every entry reads as an addition.
+
 ## Checklist for a new ratchet
 
 - [ ] The population boundary is stated where a reader meets the baseline

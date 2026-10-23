@@ -392,5 +392,6 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:text-yellow-900": 1,
 }
 
-#: Frozen total, asserted separately so a hand edit of one number cannot pass.
-TOTAL_OCCURRENCES = 6116  # #14780 BaseSwitch: 6153 -> 6117, LoadBalancingView 6117 -> 6116
+# No hand-maintained total (#19283): a raised entry is caught by comparing each entry with this
+# table at the base commit (repo_tests/_ratchet_base.py), so PRs lowering different entries
+# never edit a shared line.

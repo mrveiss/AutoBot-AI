@@ -30,6 +30,7 @@ import importlib.util
 import pytest
 import yaml
 from repo_tests._paths import repo_root
+from repo_tests._ratchet_base import base_table, raised_entries
 from repo_tests.frontend_file_size_ratchet_baseline import RATCHET_BASELINE
 
 from tools.lint._scan_helpers import tracked_paths
@@ -322,69 +323,13 @@ def test_the_commit_path_reports_an_unreadable_staged_file(hook, tmp_path, monke
     assert hook.check_paths(["autobot-frontend/src/never_written.vue"]) == 1
 
 
-#: The sum of every recorded ceiling, which only ever moves DOWN.
-#:
-#: WHY A THIRD NUMBER (#17970). The two records are compared against each other
-#: by `test_no_ceiling_exceeds_its_recorded_baseline`, so that check fires when
-#: ONE anchor is raised and is blind when BOTH are. Moving both is the
-#: documented way to grow a grandfathered file here --
-#: `autobot-backend/api/schemas_system.py` went 4306 -> 4346 across five merged
-#: commits exactly that way -- so "no ceiling may be raised" was a claim the
-#: Python ratchet made and did not enforce.
-#:
-#: A mirrored pair detects a transcription error between the copies. It cannot
-#: detect movement OF the pair, because both sides of the comparison move
-#: together. Direction needs a figure that does not move with the edit, which
-#: is what this is.
-#:
-#: The repo reached this conclusion once already and applied it to the other
-#: half: `MAX_KNOWN_LARGE_ENTRIES` exists because a two-sided *addition* passes
-#: the record-to-record check. This is the same argument one step over, for
-#: ceiling VALUES rather than entry COUNT.
-#:
-#: Re-pin DOWN when files shrink. Raising it is the thing being prevented, so a
-#: raise needs a recorded reason in the pull request, not a quiet edit.
-#:
-#: WHAT THIS NUMBER CANNOT SEE (#17989). It is a SUM, so it only reports the
-#: NET. A ceiling raised here and an unrelated file shrinking there cancel, and
-#: a total that moved DOWN reads as a clean shrink while individual ceilings
-#: rose. That happened on this very re-pin: 184571 -> 184531 is -40 net, and
-#: underneath it seven ceilings ROSE (+45) while two FELL (-85). Both tests
-#: below pass on the net and see none of the seven. The argument that produced
-#: this constant -- a comparison cannot police what moves with it -- applies to
-#: the sum one step further out, so the per-entry direction check still has no
-#: fixed reference. Do not read a falling total as "no ceiling was raised".
-MAX_CEILING_TOTAL = 179144  # train-74 on main: #14780 WorkItemDetail (-33) on train 77 (179177 -> 179144); #14780: WorkItemDetail 1046 -> 1013 (179191 -> 179158, -33); train-63: #18734 useAutobotApi, LogForwardingSettings (-62) on top of main's 179253; #14780 BasePagination: AuditLogTable, SecurityView, ErrorMonitor on main's 179290 (179290 -> 179253); train-58: #14780 FleetOverview 786 -> 708 (-78) on top of main's 179368; #16744: WorkflowVisualization 1020 -> 1019 (-1); #14777 batch 2: AddNodeModal 1111 -> 1067, MaintenanceView 817 -> 794, RoleManagementModal 614 left the list (180050 -> 179369, -681); train-43 review (#18941): DecommissionModal 621 -> 619 (-2); train-43 on main: sum of the merged known-large table, #14777 kit BaseModal (-309) on top of train 42 (180361 -> 180052); train-43: #14777 kit BaseModal on top of trains 40/41 (180590 -> 180281, -309); train-42 review round 2: CustomDashboard 879 -> 878 (dashboard switch keeps unsaved work, -1); train-42 review: CustomDashboard 884 -> 879 (widgetConfig.ts, -5); train-42: sum of the merged known-large table, #14778 kit BaseInput ProjectBrowserView 1373 -> 1372 (-1) on #18242 CustomDashboard 1106 -> 884 (-222) on top of main's 180590; train-41: sum of the merged known-large table, #18849 kit BaseButton on top of #18819 kit BaseAlert (180605 -> 180590, -15); train-40: sum of the merged known-large table, RolesView 1028 -> 1027 on the merge (#18819's -210 on top of main's 180815); train-35 CodeRabbit fix: usePatternAnalysis 895 -> 867, the analyze request built once (-28); #18718 with #18730: usePatternAnalysis 898 -> 895 measured on the merged file (-3); #13103: ChatInterface.vue 1526 -> 1521 (TTS fast-start, -5); #14776: RolesView 1029 -> 1028 (card, -1); #18755 CodeRabbit fix: KnowledgeResearchPanel.vue 1190 -> 1189 (-1); #18730: CodebaseIntelligenceScoresPanel.vue 1421 -> 1332, KnowledgeResearchPanel.vue 1200 -> 1190, usePatternAnalysis.ts 900 -> 898, DevSpeedupView.vue 672 -> 658, WorkItemDetail.vue 1069 -> 1046 (-138); #12732: OrchestrationView.vue 2193 -> 2189 ("services" became a pluralised key, -4); #15536: SLM useAutobotApi.ts 2080 -> 2068 (served types moved to npuWorkerModel.ts and autobotAdminModels.ts), NPUWorkersSettings.vue 737 -> 733, UserManagementSettings.vue 1235 -> 1099 (-152); #14776: RolesView 1030 -> 1029 (-1); #15402: GlobalWebSocketService 908 -> 905 (-3); #18432: RoutinesView 691 -> 688 (-3); #18391: router/index.ts 1631 -> 1506, the company child routes moved to router/llcRoutes.ts (-125); train-16: #17856 ApiClient.ts 834->816, useAutobotApi.ts 2092->2080 (-30) and #18353 useSystemStatus.ts 622 left the list (-622), measured on the union; train-8: #18441 measured; #18240 App.vue 1144 left the list (-1144 off main's 183687); merge train: #18274/#15502 -37 (ssot-config.ts, ssot-config.spec.ts) and #18262 -615 off 184350; #17983/#15008: SecretsManager.vue 2947 -> 2775 (unenforced controls removed); merged with #18065's useVoiceConversation 986
-
-
-def test_the_ceiling_total_only_shrinks(hook):
-    """A two-sided raise is invisible to the record-to-record check; this sees it.
-
-    `test_no_ceiling_exceeds_its_recorded_baseline` compares KNOWN_LARGE against
-    RATCHET_BASELINE. Raise an entry in both and they agree again, so it passes
-    while a grandfathered file just grew. The total is pinned against a constant
-    that does not move with either record, so the raise shows up here.
-    """
-    total = sum(hook.KNOWN_LARGE.values())
-
-    assert total <= MAX_CEILING_TOTAL, (
-        f"recorded ceilings now total {total}, over the pinned {MAX_CEILING_TOTAL} "
-        f"(+{total - MAX_CEILING_TOTAL}). A grandfathered file grew. Raising both "
-        "records agrees with itself and passes every other check here (#17970) -- "
-        "this is the one that sees it. Split the file, or state in the PR why the "
-        "ceiling must rise and move this number with it."
-    )
-
-
-def test_the_ceiling_total_is_not_stale(hook):
-    """The contrast. Without it, the pin above could drift far above the real sum
-    and silently license growth up to the gap -- a floor that permits anything is
-    not a floor. Mirrors how `MAX_KNOWN_LARGE_ENTRIES` is kept honest.
-    """
-    total = sum(hook.KNOWN_LARGE.values())
-
-    assert total == MAX_CEILING_TOTAL, (
-        f"ceilings total {total} but the pin says {MAX_CEILING_TOTAL}. Files shrank "
-        "and the pin was not lowered, which re-licenses the lines just cut. Set "
-        f"MAX_CEILING_TOTAL = {total}."
+def test_no_ceiling_rose_against_the_base(hook):
+    """#19283: each KNOWN_LARGE entry is at most what the base commit's table recorded, and an
+    entry the base did not have is a raise. The fixed reference a sum or a mirrored pair could
+    not give: a two-sided raise moves both records together, never the base commit."""
+    base = base_table(repo_root(), ("scripts/frontend_file_size_known_large.py",), "KNOWN_LARGE")
+    rose = raised_entries(dict(hook.KNOWN_LARGE), base)
+    assert not rose, (
+        f"ceilings raised or added against the base (base, now): {rose}. Split the file instead "
+        "of raising its ceiling; raises are refused, against the base and the last green main."
     )

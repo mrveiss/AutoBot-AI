@@ -86,6 +86,7 @@ concurrency:
 permissions:
   contents: read
   packages: read  # pull the ghcr CI image mirror (#18160)
+  actions: read  # find the last passing main CI run, the ratchet anchor (#19283)
 
 jobs:
   changes:
@@ -325,6 +326,33 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
+      # #19283: depth 2, so HEAD^1 -- the merge ref's base parent -- is readable. Down-only
+      # ratchets compare each entry with the base commit's table (repo_tests/_ratchet_base.py)
+      # instead of a hand-summed total, and refuse when the base cannot be read.
+      with:
+        fetch-depth: 2
+
+    # #19283 review: HEAD^1 alone is one-shot. A raise is seen only by the run whose base spans
+    # it, and runs are cancelled freely, so every ratchet is also held to the last main commit
+    # whose CI passed (AUTOBOT_RATCHET_ANCHOR). A merge group or a multi-commit push names its
+    # real base (AUTOBOT_RATCHET_BASE_SHA) instead of HEAD^1. Both commits are fetched here, and
+    # a missing anchor fails this step instead of quietly dropping the backstop.
+    - name: Ratchet base and anchor (#19283)
+      env:
+        GH_TOKEN: ${{ github.token }}
+        EVENT_BASE: ${{ github.event.merge_group.base_sha || github.event.before || '' }}
+      run: |
+        anchor=$(gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=1" --jq '.workflow_runs[0].head_sha // empty')
+        if [ -z "$anchor" ]; then
+          echo "::error::no passing main CI run found, so the ratchet backstop has no anchor"
+          exit 1
+        fi
+        git fetch --no-tags --depth=1 origin "$anchor"
+        echo "AUTOBOT_RATCHET_ANCHOR=${anchor}" >> "$GITHUB_ENV"
+        if [ -n "${EVENT_BASE//0/}" ]; then
+          git fetch --no-tags --depth=1 origin "$EVENT_BASE"
+          echo "AUTOBOT_RATCHET_BASE_SHA=${EVENT_BASE}" >> "$GITHUB_ENV"
+        fi
 
     # #18102: the .debs provision-packages already fetched. The setup action installs from
     # this directory with --no-download when it exists, so a shard does no network fetch.
