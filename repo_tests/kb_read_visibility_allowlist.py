@@ -178,12 +178,12 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ),
     ("autobot-backend/async_chat_workflow.py", "AsyncChatWorkflow._execute_kb_search"): _T2,
     (
-        "autobot-backend/knowledge/adapters/okf_adapter.py",
-        "OKFAdapter.export_from_kb",
+        "autobot-backend/knowledge/quarantine.py",
+        "read_every_fact",
     ): (
-        "NOT_USER_FACING: no caller anywhere in the tree besides its own test and the "
-        "module-level export_to_okf() re-export, which is itself uncalled outside tests "
-        "(#16665) -- not reachable from any route, CLI entry point, or scheduled task"
+        "NOT_USER_FACING: the backup and export serialisers read every fact through the audited "
+        "include_quarantined opt-out (one audit entry per read) and write operator files; nothing "
+        "reaches a chat, prompt or API response (#19163)"
     ),
     (
         "autobot-backend/knowledge/vector_search_engine.py",
@@ -232,7 +232,7 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("autobot-backend/api/knowledge_chroma.py", "search_collection"): _EXPLORER,
     ("autobot-backend/knowledge/facts.py", "FactsMixin._find_duplicate"): _IMPL_DEDUP,
     ("autobot-backend/knowledge/search.py", "SearchMixin._query_chromadb"): _IMPL_SEARCH,
-    ("autobot-backend/api/knowledge_maintenance.py", "_fetch_all_chunks._load"): _RAW_ADMIN,
+    ("autobot-backend/api/knowledge_lint_chunks.py", "_fetch_all_chunks._load"): _RAW_ADMIN,
     ("autobot-backend/api/knowledge_vectorization.py", "_fetch_chunks_by_ids"): _RAW_ADMIN,
     ("autobot-backend/api/knowledge_vectorization.py", "_fetch_unenriched_ids"): _RAW_ADMIN,
     ("autobot-backend/knowledge/summary_search.py", "SummarySearchService.search_summaries"): _SUMMARIES,

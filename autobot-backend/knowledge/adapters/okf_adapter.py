@@ -68,6 +68,7 @@ import yaml
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.slug import url_slug
+from knowledge.quarantine import EXPORT_AUDIT_ACTOR, read_every_fact
 
 logger = get_logger(__name__)
 
@@ -618,9 +619,8 @@ class OKFAdapter:
     ) -> Dict[str, Any]:
         """Export facts from a live KB to an OKF bundle.
 
-        Requires ``self._kb`` to be a fully initialised ``KnowledgeBase``
-        instance.
-
+        Requires ``self._kb`` to be a fully initialised ``KnowledgeBase``. Reads quarantined
+        facts too (audited); their ``collection`` marker lands in the frontmatter (#19163).
         Args:
             output_dir: Target directory for ``.md`` files.
             collection: Optional collection filter (passed to ``get_all_facts``).
@@ -633,7 +633,7 @@ class OKFAdapter:
         if self._kb is None:
             return {"status": "error", "message": "No KnowledgeBase instance provided"}
 
-        facts = await self._kb.get_all_facts(limit=limit, offset=offset, collection=collection)
+        facts = await read_every_fact(self._kb, EXPORT_AUDIT_ACTOR, limit=limit, offset=offset, collection=collection)
         return await self.export_to_okf(facts, output_dir)
 
     async def import_into_kb(

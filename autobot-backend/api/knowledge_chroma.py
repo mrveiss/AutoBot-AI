@@ -10,8 +10,9 @@ Endpoints support listing collections, getting details, browsing documents,
 and performing similarity searches.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
+from api.quarantine_read_audit import audit_admin_quarantine_read, quarantined_row_ids
 from api.schemas_knowledge_chroma import (
     ChromaSearchRequest,
     ChromaSearchResponse,
@@ -170,6 +171,7 @@ async def list_documents(
     limit: int = Query(100, ge=1, le=1000, description="Maximum results to return"),
     offset: int = Query(0, ge=0, description="Number of results to skip"),
     _: bool = Depends(check_admin_permission),
+    request: Request = None,
 ) -> DocumentListResponse:
     """
     List documents in a collection with pagination.
@@ -209,13 +211,21 @@ async def list_documents(
         # Get total count
         total = await collection.count()
 
+        # #19163: admins may see research-quarantined rows, but audited and labelled.
+        ids = results.get("ids", [])
+        metadatas = results.get("metadatas", [])
+        quarantined = quarantined_row_ids(ids, metadatas or [])
+        if quarantined:
+            await audit_admin_quarantine_read(request, f"chroma.list_documents:{name}", quarantined)
+
         return DocumentListResponse(
             success=True,
             data={
-                "ids": results.get("ids", []),
+                "ids": ids,
                 "documents": results.get("documents", []),
-                "metadatas": results.get("metadatas", []),
+                "metadatas": metadatas,
                 "embedding_dim": embedding_dim,
+                "quarantined_ids": quarantined,
             },
             total=total,
         )
@@ -247,6 +257,7 @@ async def search_collection(
     name: str,
     request: ChromaSearchRequest,
     _: bool = Depends(check_admin_permission),
+    http_request: Request = None,
 ) -> ChromaSearchResponse:
     """
     Perform similarity search on a collection using query text.
@@ -292,6 +303,7 @@ async def search_collection(
             metadatas = results.get("metadatas", [[]])[0]
             distances = results.get("distances", [[]])[0]
 
+            quarantined = set(quarantined_row_ids(ids, metadatas))
             for i, doc_id in enumerate(ids):
                 search_results.append(
                     SearchResultItem(
@@ -299,8 +311,11 @@ async def search_collection(
                         document=documents[i] if i < len(documents) else None,
                         metadata=metadatas[i] if i < len(metadatas) else None,
                         distance=distances[i] if i < len(distances) else None,
+                        quarantined=doc_id in quarantined,
                     )
                 )
+            if quarantined:
+                await audit_admin_quarantine_read(http_request, f"chroma.search_collection:{name}", sorted(quarantined))
 
         return ChromaSearchResponse(
             success=True,

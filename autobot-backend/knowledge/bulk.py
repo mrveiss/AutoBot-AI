@@ -23,6 +23,8 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import require_path_string
 from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import CategoryDefaults
+from knowledge.export_fields import filter_fact_fields
+from knowledge.quarantine import BACKUP_AUDIT_ACTOR, EXPORT_AUDIT_ACTOR, read_every_fact
 
 if TYPE_CHECKING:
     import aioredis
@@ -145,7 +147,7 @@ class BulkOperationsMixin:
         date_to: str | None,
     ) -> List[Dict[str, Any]]:
         """Get and filter facts for export (Issue #398: extracted)."""
-        facts = await self._get_facts_by_ids(fact_ids) if fact_ids else await self.get_all_facts()
+        facts = await self._get_facts_by_ids(fact_ids) if fact_ids else await read_every_fact(self, EXPORT_AUDIT_ACTOR)
         facts = self._apply_category_filter(facts, category)
         facts = self._apply_categories_filter(facts, categories)
         facts = self._apply_tags_filter(facts, tags)
@@ -209,39 +211,8 @@ class BulkOperationsMixin:
         include_metadata: bool,
         include_tags: bool,
     ) -> List[Dict[str, Any]]:
-        """
-        Filter fact fields based on include flags.
-
-        Issue #415: Control what fields are included in export.
-        """
-        result = []
-        for fact in facts:
-            filtered_fact = {
-                "fact_id": fact.get("fact_id"),
-                "content": fact.get("content"),
-            }
-
-            # Include timestamp if present
-            if "timestamp" in fact:
-                filtered_fact["timestamp"] = fact["timestamp"]
-
-            # Include embedding if present
-            if "embedding" in fact:
-                filtered_fact["embedding"] = fact["embedding"]
-
-            if include_metadata:
-                metadata = fact.get("metadata", {}).copy()
-                if not include_tags:
-                    metadata.pop("tags", None)
-                filtered_fact["metadata"] = metadata
-            elif include_tags:
-                # Only tags requested, not full metadata
-                tags = fact.get("metadata", {}).get("tags", [])
-                filtered_fact["tags"] = tags
-
-            result.append(filtered_fact)
-
-        return result
+        """Filter fact fields based on include flags (Issue #415); see ``knowledge.export_fields``."""
+        return filter_fact_fields(facts, include_metadata, include_tags)
 
     def _apply_tags_filter(self, facts: List[Dict[str, Any]], tags: List[str] | None) -> List[Dict[str, Any]]:
         """Filter facts by tags (match any)."""
@@ -1448,7 +1419,7 @@ class BulkOperationsMixin:
             backup_name, backup_file = self._generate_backup_path(backup_dir, compression)
             logger.info("Creating backup: %s", backup_file)
 
-            facts = await self.get_all_facts()
+            facts = await read_every_fact(self, BACKUP_AUDIT_ACTOR)
             if include_embeddings:
                 facts = await self._add_embeddings_to_facts(facts)
 

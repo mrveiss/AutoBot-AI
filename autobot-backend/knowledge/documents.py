@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from knowledge.quarantine import EXPORT_AUDIT_ACTOR, read_every_fact
 
 if TYPE_CHECKING:
     pass
@@ -114,7 +115,7 @@ class DocumentsMixin:
             await asyncio.to_thread(output_path.mkdir, parents=True, exist_ok=True)
 
             # Export facts
-            facts = await self.get_all_facts()
+            facts = await read_every_fact(self, EXPORT_AUDIT_ACTOR)
             facts_file = output_path / "facts.json"
             await asyncio.to_thread(
                 facts_file.write_text,
