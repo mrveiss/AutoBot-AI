@@ -20,6 +20,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.scoping import Principal
 from autobot_shared.ssot_config import config
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
+from knowledge.where_combine import and_where
 
 logger = get_logger(__name__)
 
@@ -377,7 +378,7 @@ def non_private_where(caller_where: Dict | None = None) -> Dict:
             {"access_level": {"$in": list(NON_PRIVATE_ACCESS)}},
         ]
     }
-    return {"$and": [platform_wide, RESEARCH_QUARANTINE_FILTER, *([caller_where] if caller_where else [])]}
+    return and_where(platform_wide, RESEARCH_QUARANTINE_FILTER, caller_where)  # type: ignore[return-value]
 
 
 def is_non_private(metadata: Dict | None) -> bool:

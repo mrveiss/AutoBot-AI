@@ -47,7 +47,7 @@
 # exploitable, not merely untidy: a crafted filename containing `|` lets a
 # reader resolve the FILE field to an unrelated, untouched decoy. The
 # no-growth guard refuses an ambiguous key outright rather than guessing.
-# All 1408 entries below carry exactly three.
+# All 1407 entries below carry exactly three.
 1|other|autobot-backend/a2a/__init__.py|https://a2a-protocol.org/latest/
 1|other|autobot-backend/a2a/agent_card.py|https://backend-host:8443
 1|other|autobot-backend/a2a/agent_card.py|https://github.com/mrveiss/AutoBot-AI
@@ -854,7 +854,6 @@
 1|ssot|autobot-infrastructure/shared/scripts/utilities/prevent-local-frontend.sh|:5173
 1|other|autobot-infrastructure/shared/scripts/utilities/run_unit_tests.py|60
 1|ssot|autobot-infrastructure/shared/scripts/utilities/settings_diagnostic_utility.py|qwen3.5:9b
-9|other|autobot-infrastructure/shared/scripts/utilities/sync-all-vms.sh|/home/autobot
 4|other|autobot-infrastructure/shared/scripts/utilities/sync-frontend.sh|/home/autobot
 2|ssot|autobot-infrastructure/shared/scripts/utilities/sync-npu-worker-to-windows.sh|:8082
 1|other|autobot-infrastructure/shared/scripts/utilities/sync-to-slm.sh|"/opt/autobot
@@ -997,7 +996,6 @@
 1|ssot|autobot-slm-backend/ansible/migrate-grafana-to-vm.yml|:9090
 1|other|autobot-slm-backend/ansible/playbooks/bootstrap-node.yml|"/var/lib/autobot
 1|other|autobot-slm-backend/ansible/playbooks/bootstrap-node.yml|/home/autobot
-1|other|autobot-slm-backend/ansible/playbooks/configure-python-provision-permissions.yml|"/opt/autobot/code_source/autobot-slm-backend/ansible/playbooks/provision-local-python.yml
 1|other|autobot-slm-backend/ansible/playbooks/data-migration.yml|"/tmp/autobot-migration
 3|other|autobot-slm-backend/ansible/playbooks/data-migration.yml|"/tmp/autobot-migration-{{ hostvars[
 2|other|autobot-slm-backend/ansible/playbooks/data-migration.yml|"/tmp/autobot-migration-{{ migration_timestamp }}
@@ -1013,19 +1011,11 @@
 2|other|autobot-slm-backend/ansible/playbooks/data-migration.yml|"/var/lib/autobot/data
 1|other|autobot-slm-backend/ansible/playbooks/data-migration.yml|"/var/lib/autobot/data/
 1|other|autobot-slm-backend/ansible/playbooks/data-migration.yml|60
-2|other|autobot-slm-backend/ansible/playbooks/decommission-node.yml|'/opt/autobot/autobot-db-stack/chromadb/data
 1|other|autobot-slm-backend/ansible/playbooks/deploy-aiml.yml|120
 1|other|autobot-slm-backend/ansible/playbooks/deploy-aiml.yml|60
 1|other|autobot-slm-backend/ansible/playbooks/deploy-backend-env.yml|60
 1|other|autobot-slm-backend/ansible/playbooks/deploy-backend-local.yml|https://0.0.0.0:8443
 1|ssot|autobot-slm-backend/ansible/playbooks/deploy-backend-local.yml|:8443
-1|other|autobot-slm-backend/ansible/playbooks/deploy-base.yml|"/opt/autobot/scripts/health-check.sh
-1|other|autobot-slm-backend/ansible/playbooks/deploy-base.yml|"/opt/autobot/scripts/health-check.sh >> /var/log/autobot/health.log 2>&1
-1|other|autobot-slm-backend/ansible/playbooks/deploy-database.yml|"/opt/autobot/scripts/backup-database.sh --critical
-1|other|autobot-slm-backend/ansible/playbooks/deploy-database.yml|"/opt/autobot/scripts/backup-database.sh --full
-1|other|autobot-slm-backend/ansible/playbooks/deploy-database.yml|"/opt/autobot/scripts/cleanup-model-cache.sh >> /var/log/autobot/model-cleanup.log 2>&1
-1|other|autobot-slm-backend/ansible/playbooks/deploy-database.yml|"/opt/autobot/scripts/monitor-redis.sh >> /var/log/autobot/redis-monitor.log 2>&1
-2|other|autobot-slm-backend/ansible/playbooks/deploy-database.yml|"/opt/autobot/scripts/{{ item }}
 1|other|autobot-slm-backend/ansible/playbooks/deploy-database.yml|60
 1|other|autobot-slm-backend/ansible/playbooks/deploy-development-services.yml|'/tmp/autobot-deployment
 1|other|autobot-slm-backend/ansible/playbooks/deploy-development-services.yml|30
@@ -1035,7 +1025,6 @@
 1|other|autobot-slm-backend/ansible/playbooks/deploy-development-services.yml|https://deb.nodesource.com/gpgkey/nodesource.gpg.key
 1|other|autobot-slm-backend/ansible/playbooks/deploy-development-services.yml|https://deb.nodesource.com/node_20.x
 2|other|autobot-slm-backend/ansible/playbooks/deploy-full.yml|60
-1|other|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|"/opt/autobot
 3|other|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|120
 1|other|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|60
 1|other|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|https://download.docker.com/linux/ubuntu
@@ -1095,36 +1084,26 @@
 1|ssot|autobot-slm-backend/ansible/playbooks/health-check.yml|:8080
 2|ssot|autobot-slm-backend/ansible/playbooks/health-check.yml|:8081
 2|ssot|autobot-slm-backend/ansible/playbooks/health-check.yml|:8443
-1|other|autobot-slm-backend/ansible/playbooks/pre-deployment-validation.yml|"/opt/autobot/autobot-frontend/package.json
-1|other|autobot-slm-backend/ansible/playbooks/pre-deployment-validation.yml|"/opt/autobot/venv
 1|other|autobot-slm-backend/ansible/playbooks/pre-deployment-validation.yml|https://github.com
 1|other|autobot-slm-backend/ansible/playbooks/pre-flight-code-sync.yml|https://github.com/mrveiss/AutoBot-AI.git
-2|other|autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml|'/opt/autobot/autobot-slm-frontend
 1|other|autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml|https://github.com/mrveiss/AutoBot-AI.git
 3|other|autobot-slm-backend/ansible/playbooks/recover_host.yml|/home/autobot
-1|other|autobot-slm-backend/ansible/playbooks/remove-role.yml|'/opt/autobot/autobot-db-stack/chromadb/data
-3|other|autobot-slm-backend/ansible/playbooks/rollback-dependencies.yml|'/opt/autobot/backups
 1|other|autobot-slm-backend/ansible/playbooks/rotate-certs.yml|120
 1|other|autobot-slm-backend/ansible/playbooks/rotate-certs.yml|30
 1|other|autobot-slm-backend/ansible/playbooks/rotate-certs.yml|60
 2|other|autobot-slm-backend/ansible/playbooks/rotate-ssh-keys.yml|/home/autobot
 1|other|autobot-slm-backend/ansible/playbooks/setup-vm-names-and-lvm.yml|300
-1|other|autobot-slm-backend/ansible/playbooks/sync-user-backend.yml|"/opt/autobot
-1|other|autobot-slm-backend/ansible/playbooks/sync-user-backend.yml|"/opt/autobot/autobot-backend/{{ item }}
 1|ssot|autobot-slm-backend/ansible/playbooks/sync-user-backend.yml|:8001
 1|other|autobot-slm-backend/ansible/playbooks/system-update.yml|120
 1|other|autobot-slm-backend/ansible/playbooks/system-update.yml|30
 7|other|autobot-slm-backend/ansible/playbooks/system-update.yml|300
 2|other|autobot-slm-backend/ansible/playbooks/system-update.yml|60
-1|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|"/opt/autobot/{{ item }}
 3|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|"/tmp/autobot-deploy
 2|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|30
 2|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|60
 1|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|chown --no-dereference -R autobot:autobot
 1|other|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|https://github.com/mrveiss/AutoBot-AI.git
 1|ssot|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|:8001
-1|other|autobot-slm-backend/ansible/playbooks/update-node.yml|"/opt/autobot
-3|other|autobot-slm-backend/ansible/playbooks/update-node.yml|'/opt/autobot/cache
 1|other|autobot-slm-backend/ansible/playbooks/update-node.yml|60
 1|ssot|autobot-slm-backend/ansible/playbooks/update-node.yml|:8001
 1|ssot|autobot-slm-backend/ansible/playbooks/vars/backend-env.yml|:11434

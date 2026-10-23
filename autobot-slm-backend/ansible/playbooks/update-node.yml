@@ -64,7 +64,7 @@
       block:
         - name: "List cached roles on SLM server"
           ansible.builtin.find:
-            paths: "{{ slm_cache_dir | default('/opt/autobot/cache') }}"
+            paths: "{{ slm_cache_dir | default(autobot.base_dir ~ '/cache') }}"
             file_type: directory
             depth: 1
             patterns: "autobot-*"
@@ -90,7 +90,7 @@
           - ""
           - "Target node : {{ node_id }}"
           - "Roles       : {{ resolved_role_names | join(', ') }}"
-          - "Cache dir   : {{ slm_cache_dir | default('/opt/autobot/cache') }}"
+          - "Cache dir   : {{ slm_cache_dir | default(autobot.base_dir ~ '/cache') }}"
           - ""
 
     # #15557: this playbook deploys from the SLM's cache to a node that has no
@@ -113,8 +113,8 @@
   hosts: "{{ node_id }}"
   gather_facts: false
   vars:
-    cache_base: "{{ slm_cache_dir | default('/opt/autobot/cache') }}"
-    install_base: "/opt/autobot"
+    cache_base: "{{ slm_cache_dir | default(autobot.base_dir ~ '/cache') }}"
+    install_base: "{{ autobot.base_dir }}"
     # Role → systemd service mapping.  Empty string = no service restart.
     role_service_map:
       autobot-backend: autobot-backend

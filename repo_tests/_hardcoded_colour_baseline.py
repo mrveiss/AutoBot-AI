@@ -121,7 +121,6 @@ IMPORTANT_DECLARATIONS: dict[str, int] = {
     "components/charts/FunctionCallGraph.vue": 12,
     "components/chat/ChatInterface.vue": 5,
     "components/knowledge/KnowledgeGraph.vue": 10,
-    "components/knowledge/panels/SourcePreviewPanel.vue": 1,
     "components/knowledge/pipeline/PipelineRunner.vue": 1,
     "components/operations/OperationsList.vue": 1,
     "components/security/SecretsManager.vue": 2,
@@ -137,4 +136,4 @@ IMPORTANT_DECLARATIONS: dict[str, int] = {
 }
 
 #: Frozen total, asserted separately.
-TOTAL_IMPORTANT = 61  # #18242: 62 -> 61, CustomDashboard moved onto the shared DashboardGrid
+TOTAL_IMPORTANT = 60  # #14780: 61 -> 60, SourcePreviewPanel onto BaseDrawer; #18242: 62 -> 61 (DashboardGrid)

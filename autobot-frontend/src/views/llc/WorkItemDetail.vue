@@ -2,22 +2,23 @@
 <!-- Copyright (c) 2025 mrveiss -->
 <!-- Author: mrveiss -->
 <template>
-  <div class="work-item-detail-overlay" @click.self="$emit('close')">
-    <div class="detail-drawer">
-      <!-- Drawer Header -->
-      <div class="drawer-header">
-        <div class="header-left">
-          <span class="item-identifier">{{ item.identifier }}</span>
-          <WorkItemBadge kind="type" :value="item.type" />
-          <WorkItemBadge kind="status" :value="item.status" />
-        </div>
-        <button class="close-btn" @click="$emit('close')" :aria-label="$t('common.close')">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="close-icon">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-
+  <!-- Kit BaseDrawer (#14780); the parent's v-if removes it, and focus returns to the trigger. -->
+  <BaseDrawer
+    :model-value="true"
+    :title="item.identifier"
+    width="640px"
+    flush
+    :close-label="$t('common.close')"
+    @close="$emit('close')"
+  >
+    <template #title>
+      <span class="header-left">
+        <span class="item-identifier">{{ item.identifier }}</span>
+        <WorkItemBadge kind="type" :value="item.type" />
+        <WorkItemBadge kind="status" :value="item.status" />
+      </span>
+    </template>
+    <div class="detail-body">
       <!-- Save-failure banner (#12348): an optimistic edit could not be persisted. -->
       <div v-if="saveError" class="save-error" role="alert">{{ saveError }}</div>
 
@@ -223,21 +224,22 @@
         </template>
       </div>
     </div>
+  </BaseDrawer>
 
-    <HandoffModal
-      v-if="handoffDirection"
-      :work-item-id="props.item.id"
-      :company-id="props.companyId"
-      :direction="handoffDirection"
-      :agent-assignee-id="localItem.assignee_agent_id"
-      @close="handoffDirection = null"
-      @done="onHandoffDone"
-    />
-  </div>
+  <HandoffModal
+    v-if="handoffDirection"
+    :work-item-id="props.item.id"
+    :company-id="props.companyId"
+    :direction="handoffDirection"
+    :agent-assignee-id="localItem.assignee_agent_id"
+    @close="handoffDirection = null"
+    @done="onHandoffDone"
+  />
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { BaseDrawer } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
@@ -558,37 +560,18 @@ onMounted(() => {
   font-size: 0.8rem;
 }
 
-.work-item-detail-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.3);
-  display: flex;
-  justify-content: flex-end;
-  z-index: 60;
-}
 
-.detail-drawer {
-  width: 640px;
-  max-width: 90vw;
+/* Fills the kit drawer's body so the sections keep their own scrolling tab area. */
+.detail-body {
   height: 100%;
-  background: var(--bg-surface);
-  border-left: 1px solid var(--border-default);
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-.drawer-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid var(--border-default);
-  flex-shrink: 0;
-}
 
 .header-left {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.5rem;
 }
@@ -599,24 +582,8 @@ onMounted(() => {
   color: var(--text-secondary);
 }
 
-.close-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0.25rem;
-  color: var(--text-secondary);
-  border-radius: 0.25rem;
-  transition: background 0.15s;
-}
 
-.close-btn:hover {
-  background: var(--bg-hover);
-}
 
-.close-icon {
-  width: 1.25rem;
-  height: 1.25rem;
-}
 
 .goal-breadcrumb {
   display: flex;

@@ -31,6 +31,7 @@ it exists to catch.
 import ast
 import re
 
+import yaml
 from repo_tests._paths import repo_root
 
 from tools.lint._comment_syntax import code_text
@@ -39,6 +40,8 @@ REPO_ROOT = repo_root()
 _PLAYBOOK = REPO_ROOT / "autobot-slm-backend/ansible/playbooks/configure-python-provision-permissions.yml"
 _CODE_SYNC = REPO_ROOT / "autobot-slm-backend/api/code_sync.py"
 _GIT_TRACKER = REPO_ROOT / "autobot-slm-backend/services/git_tracker.py"
+# The install root's one definition (#18587); the playbook spells the path through it (#18881).
+_GROUP_VARS_ALL = REPO_ROOT / "autobot-slm-backend/ansible/inventory/group_vars/all.yml"
 
 
 def _strip_comments(text: str) -> str:
@@ -55,11 +58,12 @@ def _strip_comments(text: str) -> str:
 
 
 def ansible_playbook_path() -> str:
-    """The literal the sudoers rule is built from."""
+    """The path the sudoers rule is built from, as Ansible renders it."""
     text = _strip_comments(_PLAYBOOK.read_text(encoding="utf-8"))
     match = re.search(r'^\s*provision_playbook:\s*"([^"]+)"\s*$', text, re.MULTILINE)
     assert match, "provision_playbook is no longer a plain literal in the playbook"
-    return match.group(1)
+    root = yaml.safe_load(_GROUP_VARS_ALL.read_text(encoding="utf-8"))["autobot"]["base_dir"]
+    return match.group(1).replace("{{ autobot.base_dir }}", root)  # what Ansible renders
 
 
 def default_repo_path() -> str:
