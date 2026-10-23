@@ -237,7 +237,9 @@ workflow = EnterpriseWorkflow(
 - [ ] Performance metrics collection
 - [ ] Incident response procedures
 
-### **Compliance Frameworks Supported**
+### **Design Goals for Regulated Deployments**
+
+> These are capabilities we design towards, **not compliance claims**. AutoBot is not certified against any framework below. Which standards we actively work towards, and their status, is in [Compliance Targets](../compliance/COMPLIANCE_TARGETS.md). SOX and PCI DSS are not currently assessed targets.
 
 **SOX (Sarbanes-Oxley):**
 - Complete audit trail for all financial automation
@@ -252,7 +254,7 @@ workflow = EnterpriseWorkflow(
 **HIPAA (Healthcare):**
 - PHI encryption and access controls
 - Audit logging for healthcare data access
-- Business associate agreement compliance
+- Deployment patterns compatible with a customer's business associate agreement obligations
 
 **PCI DSS (Payment Card Industry):**
 - Secure payment data handling

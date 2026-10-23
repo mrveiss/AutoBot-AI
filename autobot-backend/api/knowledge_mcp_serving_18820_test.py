@@ -6,7 +6,7 @@
 
 ``KB.search`` withholds rejected and invalid facts for every caller (see
 ``knowledge/search_serving_modes_18820_test.py``). This route must therefore not opt out, and
-must pass the caller's filter through unchanged; it keeps no filter of its own.
+must AND the caller's filter with the quarantine filter (#18946), never substitute it.
 """
 
 from __future__ import annotations

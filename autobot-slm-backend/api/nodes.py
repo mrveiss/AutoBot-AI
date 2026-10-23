@@ -10,11 +10,9 @@ import asyncio
 import hashlib
 import logging
 import os
-import tempfile
 import time
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import List
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -86,6 +84,7 @@ from services.encryption import encrypt_data
 from services.node_events import create_node_event
 from services.reconciler import reconciler_service
 from services.ssh_utils import build_ssh_base_cmd
+from services.temp_inventory import write_linked_inventory
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["nodes"])
@@ -1041,26 +1040,14 @@ async def _execute_provision_playbook(
         "      ansible_python_interpreter: /usr/bin/python3\n"
         "      node_roles:\n" + roles_yaml + ("      node_dependencies:\n" + deps_yaml if deps_yaml else "")
     )
-    tmp_inv = None
+    tmp_inv = write_linked_inventory(inventory_content, "provision_inv_", executor.ansible_dir)  # #19202
     try:
-        tmp_inv = tempfile.NamedTemporaryFile(
-            mode="w",
-            suffix=".yml",
-            prefix="provision_inv_",
-            dir=str(executor.ansible_dir),
-            delete=False,
-        )
-        tmp_inv.write(inventory_content)
-        tmp_inv.flush()
-        tmp_inv.close()
-
         result = await executor.execute_playbook(
             playbook_name="playbooks/provision-fleet-roles.yml",
-            inventory_path=Path(tmp_inv.name),
+            inventory_path=tmp_inv,
         )
     finally:
-        if tmp_inv and os.path.exists(tmp_inv.name):
-            os.unlink(tmp_inv.name)
+        tmp_inv.unlink(missing_ok=True)
 
     for role in roles:
         role.status = "installed" if result["success"] else "failed"
@@ -1411,22 +1398,11 @@ async def _run_decommission_playbook(ip_address: str, ssh_user: str, backup: boo
         "      ansible_ssh_private_key_file: ~/.ssh/autobot_key\n"
         "      ansible_python_interpreter: /usr/bin/python3\n"
     )
-    tmp_inv = None
+    tmp_inv = write_linked_inventory(inventory_content, "decommission_inv_", executor.ansible_dir)  # #19202
     try:
-        tmp_inv = tempfile.NamedTemporaryFile(
-            mode="w",
-            suffix=".yml",
-            prefix="decommission_inv_",
-            dir=str(executor.ansible_dir),
-            delete=False,
-        )
-        tmp_inv.write(inventory_content)
-        tmp_inv.flush()
-        tmp_inv.close()
-
         result = await executor.execute_playbook(
             playbook_name="playbooks/decommission-node.yml",
-            inventory_path=Path(tmp_inv.name),
+            inventory_path=tmp_inv,
             extra_vars={
                 "backup_before_decommission": str(backup).lower(),
             },
@@ -1445,8 +1421,7 @@ async def _run_decommission_playbook(ip_address: str, ssh_user: str, backup: boo
             )
         return result
     finally:
-        if tmp_inv and os.path.exists(tmp_inv.name):
-            os.unlink(tmp_inv.name)
+        tmp_inv.unlink(missing_ok=True)
 
 
 async def _cleanup_decommissioned_node(
