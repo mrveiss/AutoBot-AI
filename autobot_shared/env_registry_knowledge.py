@@ -98,3 +98,18 @@ register_env_var(
         range=(1, 86400),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_EMBEDDING_PROBE_TTL_SECONDS",
+        type=int,
+        default=300,
+        description=(
+            "Seconds a background test embedding of the configured embedding model stays valid "
+            "for the embedding_model health probe before it is re-run; read by "
+            "api/embedding_model_health.py (#18834)."
+        ),
+        component="knowledge",
+        range=(10, 86400),
+    )
+)
