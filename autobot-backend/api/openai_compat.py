@@ -45,6 +45,7 @@ from llm_shared import get_provider_registry
 from llm_shared.model_fallback_coordinator import get_fallback_coordinator
 from llm_shared.models import LLMRequest
 from llm_shared.provider_degradation import AllCredentialsNeedReauthError
+from llm_shared.run_credentials import get_llm_principal, llm_principal_scope_for, stream_with_llm_principal
 from llm_shared.tiered_routing.registry import get_active_router
 from llm_shared.tiered_routing.tier_router import get_tiered_router
 from services.llm_api_key_service import LLMApiKeyRecord, get_llm_api_key_service
@@ -466,14 +467,17 @@ def _streaming_response(
     if body.model in _AUTO_MODEL_NAMES:
         stream_headers["x-llm-routed-from"] = body.model
     return StreamingResponse(
-        _stream_generator(
-            provider,
-            llm_request,
-            completion_id,
-            resolved_model,
-            include_usage=include_usage,
-            prompt_text=prompt_text,
-            api_key_record=api_key_record,
+        stream_with_llm_principal(  # #19241: the body streams after the endpoint's principal scope has ended
+            get_llm_principal(),
+            _stream_generator(
+                provider,
+                llm_request,
+                completion_id,
+                resolved_model,
+                include_usage=include_usage,
+                prompt_text=prompt_text,
+                api_key_record=api_key_record,
+            ),
         ),
         media_type="text/event-stream",
         headers=stream_headers,
@@ -498,9 +502,14 @@ async def chat_completions(
     """
     _user, api_key_record = await _resolve_auth(request)
     await _oai_limiter.check_or_429(_remote_addr(request))
-
     await _enforce_virtual_key(api_key_record, body.model)  # model whitelist + budget (#6590)
+    # #19241: a JWT user's own signed-in provider token first; a team sk- key names no user (system, then API key).
+    with llm_principal_scope_for(_user):
+        return await _complete_chat(body, api_key_record)
 
+
+async def _complete_chat(body: ChatCompletionRequest, api_key_record: LLMApiKeyRecord | None) -> Any:
+    """Route, call and format one chat completion, under the caller's LLM principal (#19241)."""
     # Resolve auto-* model aliases to concrete model names via tiered routing (#6592)
     resolved_model = await _resolve_requested_model(body)
 

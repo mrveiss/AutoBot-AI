@@ -126,7 +126,6 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/npu_workers.py": 1481,
     "autobot-backend/api/orchestration.py": 610,
     "autobot-backend/api/playwright.py": 877,
-    "autobot-backend/api/provider_auth.py": 608,
     "autobot-backend/api/redis_mcp/tools.py": 658,
     "autobot-backend/api/schemas_agent.py": 2224,
     "autobot-backend/api/schemas_analytics.py": 3533,
@@ -155,7 +154,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
     "autobot-backend/chat_workflow/graph.py": 1643,  # train 50: #18993 on main's 1652
     "autobot-backend/chat_workflow/llm_handler.py": 1301,
-    "autobot-backend/chat_workflow/manager.py": 3886,  # #17273: graph turn lifecycle moved to turn_control
+    "autobot-backend/chat_workflow/manager.py": 3885,  # #17273: graph turn lifecycle moved to turn_control
     "autobot-backend/chat_workflow/tool_handler.py": 3697,  # #11542 dispatch merge + #14068 mirror
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
@@ -194,7 +193,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/code_intelligence/vue_analyzer.py": 613,
     "autobot-backend/command_manual_manager.py": 908,
     "autobot-backend/computer_vision/screen_analyzer.py": 662,
-    "autobot-backend/conftest.py": 1500,  # #16483: _make_pkg_stub/_real_load_and_bind moved to testkit/module_stubs.py
+    "autobot-backend/conftest.py": 1498,  # #16483: _make_pkg_stub/_real_load_and_bind moved to testkit/module_stubs.py
     "autobot-backend/context_aware_decision/decision_engine.py": 815,
     "autobot-backend/context_aware_decision/tests/test_counterfactual_reasoner.py": 663,
     "autobot-backend/context_window_manager.py": 626,
@@ -263,8 +262,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/llm_shared/optimization/kv_cache_test.py": 675,
     "autobot-backend/llm_shared/optimization/layer_inference.py": 869,
     "autobot-backend/llm_shared/optimization/layer_inference_test.py": 715,
-    "autobot-backend/llm_shared/provider_auth.py": 653,
-    "autobot-backend/llm_shared/tests/test_provider_auth.py": 1187,
+    "autobot-backend/llm_shared/tests/test_provider_auth.py": 1145,
     "autobot-backend/markdown_reference_system.py": 707,
     "autobot-backend/mcp_server/autobot_server.py": 790,
     "autobot-backend/mcp_server/mcp_security_test.py": 812,
