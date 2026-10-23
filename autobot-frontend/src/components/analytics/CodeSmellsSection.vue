@@ -78,7 +78,7 @@
           <transition name="accordion">
             <div v-if="isSmellTypeExpanded(smellType)" class="accordion-items">
               <div
-                v-for="(smell, idx) in group.smells.slice(0, 20)"
+                v-for="(smell, idx) in visible(smellType, group.smells)"
                 :key="idx"
                 class="list-item"
                 :class="getItemSeverityClass(smell.severity)"
@@ -94,9 +94,7 @@
                 </div>
                 <div v-if="smell.suggestion" class="item-suggestion">{{ smell.suggestion }}</div>
               </div>
-              <div v-if="group.smells.length > 20" class="show-more">
-                <span class="muted">{{ $t('analytics.codeSmells.showingOf', { shown: 20, total: group.smells.length.toLocaleString(), type: formatCodeSmellType(String(smellType)) }) }}</span>
-              </div>
+              <TruncationNotice :shown="shown(smellType, group.smells.length)" :total="group.smells.length" :step="20" @show-more="showMore(smellType)" />
             </div>
           </transition>
         </div>
@@ -125,6 +123,8 @@
  */
 
 import Icon from '@/components/ui/Icon.vue'
+import { useShowMore } from '@autobot/ui'
+import TruncationNotice from './TruncationNotice.vue'
 import { computed } from 'vue'
 import { useGroupingMemo } from '@/composables/useComputedMemo'
 import { useExpansion } from '@/composables/useExpansion'
@@ -150,6 +150,10 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+
+// #12741: a capped list is expandable; the notice below it is the control.
+const PAGE_SIZE = 20
+const { visible, shown, showMore } = useShowMore(PAGE_SIZE, () => props.smells)
 const emit = defineEmits<{
   export: [format: 'md' | 'json']
 }>()
@@ -393,16 +397,6 @@ const getItemSeverityClass = (severity: string): string => {
   color: var(--color-info);
   font-size: var(--text-xs);
   margin-top: var(--spacing-1-5);
-}
-
-.show-more {
-  text-align: center;
-  padding: var(--spacing-2);
-}
-
-.muted {
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
 }
 
 .accordion-enter-active,

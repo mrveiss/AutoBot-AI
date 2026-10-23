@@ -82,7 +82,7 @@ export { useBodyScrollLock, __resetLockStateForTests } from './src/composables/u
 // Data composables — pagination + form-validation primitives promoted from
 // the main app (#10885) so both frontends import them from one canonical
 // home instead of re-deriving them per view.
-export { usePagination, useSimplePagination, useShowAllToggle } from './src/composables/usePagination'
+export { usePagination, useSimplePagination, useShowAllToggle, useShowMore } from './src/composables/usePagination'
 export type { PaginationOptions, UsePaginationReturn } from './src/composables/usePagination'
 
 export { useFormValidation, quickValidate, validators } from './src/composables/useFormValidation'
