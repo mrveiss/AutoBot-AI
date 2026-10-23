@@ -22,6 +22,7 @@ import {
   type AgentDirectReport,
   type AgentOrgNode,
 } from '@/composables/useAutobotApi'
+import { BaseFormField } from '@autobot/ui'
 import OrgTreeNode from './OrgTreeNode.vue'
 
 const api = useAutobotApi()
@@ -185,9 +186,8 @@ onMounted(fetchTree)
           <div v-else class="delegate-form">
             <h4>{{ $t('agents.orgChartTab.newDelegation') }}</h4>
             <div v-if="delegateError" class="error-inline">{{ delegateError }}</div>
-            <div class="form-group">
-              <label>{{ $t('agents.orgChartTab.assignTo') }}</label>
-              <select v-model="delegateForm.assignee_id">
+            <BaseFormField id="delegate-assignee" :label="$t('agents.orgChartTab.assignTo')" v-slot="{ describedBy }">
+              <select id="delegate-assignee" v-model="delegateForm.assignee_id" class="delegate-control" :aria-describedby="describedBy">
                 <option value="" disabled>{{ $t('agents.orgChartTab.selectReport') }}</option>
                 <option
                   v-for="r in directReports"
@@ -197,15 +197,17 @@ onMounted(fetchTree)
                   {{ r.name }}
                 </option>
               </select>
-            </div>
-            <div class="form-group">
-              <label>{{ $t('agents.orgChartTab.task') }}</label>
+            </BaseFormField>
+            <BaseFormField id="delegate-task" :label="$t('agents.orgChartTab.task')" v-slot="{ describedBy }">
               <textarea
+                id="delegate-task"
                 v-model="delegateForm.task_description"
+                class="delegate-control"
+                :aria-describedby="describedBy"
                 rows="3"
                 :placeholder="$t('agents.orgChartTab.describeTheTask')"
               />
-            </div>
+            </BaseFormField>
             <div class="form-actions">
               <button class="btn-primary" @click="submitDelegation">{{ $t('agents.orgChartTab.submit') }}</button>
               <button class="btn-cancel" @click="showDelegateForm = false">{{ $t('agents.orgChartTab.cancel') }}</button>
@@ -265,9 +267,7 @@ h4 { font-size: var(--text-sm); font-weight: 600; margin: 0 0 var(--spacing-3) 0
 .direct-reports ul { list-style: none; padding: 0; margin: 0; }
 .direct-reports li { padding: 6px 0; display: flex; align-items: center; gap: var(--spacing-2); font-size: var(--text-sm); }
 .delegate-form { background: var(--slm-gray-50); border-radius: var(--radius-lg); padding: var(--spacing-4); }
-.form-group { display: flex; flex-direction: column; gap: var(--spacing-1); margin-bottom: var(--spacing-3); }
-.form-group label { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
-.form-group select, .form-group textarea { padding: var(--spacing-2) var(--spacing-3); border: 1px solid var(--slm-gray-300); border-radius: var(--radius-lg); font-size: var(--text-sm); font-family: inherit; }
+.delegate-control { padding: var(--spacing-2) var(--spacing-3); border: 1px solid var(--slm-gray-300); border-radius: var(--radius-lg); font-size: var(--text-sm); font-family: inherit; }
 .form-actions { display: flex; gap: var(--spacing-2); }
 .btn-primary { background: var(--slm-indigo-500); color: white; border: none; padding: var(--spacing-2) var(--spacing-4); border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 500; cursor: pointer; }
 .btn-primary:hover { background: var(--slm-indigo-600); }

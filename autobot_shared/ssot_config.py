@@ -53,6 +53,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.paths import project_root
 from autobot_shared.secret_redaction import RedactedReprMixin
+from autobot_shared.ssot_llm_oauth_config import LlmOAuthConfig
 from autobot_shared.ssot_tls import TLSConfig, TLSMode
 
 # Determine project root for .env file location.
@@ -2342,10 +2343,8 @@ class AutoBotConfig(RedactedSettings):
         env_file=str(PROJECT_ROOT / ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
-        env_ignore={
-            "PORT",
-            "HOST",
-        },  # Issue #858: Ignore uvicorn's env vars to prevent conflicts
+        # Issue #858: Ignore uvicorn's env vars to prevent conflicts
+        env_ignore={"PORT", "HOST"},
     )
 
     # Sub-configurations
@@ -2360,6 +2359,7 @@ class AutoBotConfig(RedactedSettings):
     permission: PermissionConfig = Field(default_factory=PermissionConfig)
     database_pool: DatabasePoolConfig = Field(default_factory=DatabasePoolConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
+    llm_oauth: LlmOAuthConfig = Field(default_factory=LlmOAuthConfig)  # #19241
     path: PathConfig = Field(
         default_factory=PathConfig, alias="AUTOBOT_PATH_CONFIG"
     )  # Issue #3397; alias avoids collision with system PATH env var

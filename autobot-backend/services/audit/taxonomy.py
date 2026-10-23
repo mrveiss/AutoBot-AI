@@ -100,6 +100,8 @@ class AuditAction(str, Enum):
     CLAIMS_CREDENTIAL_MINT = "claims_credential.mint"  # #18811
     CLAIMS_CREDENTIAL_REVOKE = "claims_credential.revoke"  # #18811
     CLAIMS_CREDENTIAL_CHECK_FAILURES = "claims_credential.check_failures"  # #18811: one per source per window
+    # #19241: a provider sign-in disconnect (user / org system) or a superadmin's shared-token revoke.
+    PROVIDER_SIGNIN_REVOKE = "provider_signin.revoke"
     # identity vocabulary (#19035); IdentityAuditAction spellings map here through audit_actions.ACTION_ALIASES.
     # auth.mfa carries verified / failed / backup-code in the outcome column, like auth.login.
     AUTH_MFA = "auth.mfa"

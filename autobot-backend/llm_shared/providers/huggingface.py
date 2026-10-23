@@ -71,10 +71,10 @@ class HuggingFaceProvider(BaseProvider):
         )
         return self._api_token
 
-    def _build_headers(self) -> Dict[str, str]:
-        """Build request headers, injecting the HF token when available."""
+    def _build_headers(self, signed_in_token: str | None = None) -> Dict[str, str]:
+        """Build request headers: a signed-in token (#19241) wins over the configured HF token."""
         headers = {"Content-Type": "application/json"}
-        token = self._resolve_api_token()
+        token = signed_in_token or self._resolve_api_token()
         if token:
             headers["Authorization"] = f"Bearer {token}"
         return headers
@@ -104,7 +104,7 @@ class HuggingFaceProvider(BaseProvider):
             timeout = aiohttp.ClientTimeout(total=request.timeout or 60)
             async with await http_client.post(
                 url,
-                headers=self._build_headers(),
+                headers=self._build_headers(await self._signed_in_token()),
                 json=self._build_chat_payload(request, model),
                 timeout=timeout,
             ) as resp:
@@ -159,7 +159,7 @@ class HuggingFaceProvider(BaseProvider):
             timeout = aiohttp.ClientTimeout(total=None, connect=5.0, sock_read=None)
             async with await http_client.post(
                 url,
-                headers=self._build_headers(),
+                headers=self._build_headers(await self._signed_in_token()),
                 json=payload,
                 timeout=timeout,
             ) as resp:

@@ -415,3 +415,21 @@ register_env_var(
         range=(0, 3600),
     )
 )
+
+# --- LLM provider sign-in (#19241) -------------------------------------------
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_OAUTH_UNUSABLE_TTL_SECONDS",
+        type=int,
+        default=300,
+        description=(
+            "How long a signed-in LLM provider token whose refresh failed is skipped before "
+            "another refresh is tried (llm_shared/provider_token_refresh.py). While skipped, "
+            "calls fall through to the next credential (the system token, then the API key). "
+            "Floored at 60 so the backoff cannot become a re-POST on every call."
+        ),
+        component="auth",
+        range=(60, None),
+    )
+)

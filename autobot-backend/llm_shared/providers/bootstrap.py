@@ -74,11 +74,20 @@ def _register_local(registry: "ProviderRegistry", fallback: List[str]) -> None:
         logger.debug("Ollama provider not registered: %s", exc)
 
 
-def _register_keyed(registry: "ProviderRegistry", fallback: List[str], label: str, resolve, build) -> str:
+def _sign_in_only(sign_in: str) -> bool:
+    """True when *sign_in* names a provider whose OAuth sign-in the operator configured (#19241)."""
+    from llm_shared.provider_oauth_credentials import sign_in_configured
+
+    return bool(sign_in) and sign_in_configured(sign_in)
+
+
+def _register_keyed(registry: "ProviderRegistry", fallback: List[str], label: str, resolve, build, sign_in="") -> str:
     """Register ``build(key)`` when ``resolve()`` yields a key (vault first; env as a logged fallback, #10088 Task 7).
 
     A vault refusal (the vault holds the key but could not read it, #18094) skips
     this provider with the reason logged at ERROR; the siblings still register.
+    With no key, a provider whose sign-in is configured (*sign_in*, #19241) still
+    registers keyless: its calls use a signed-in token and fail over without one.
     Returns the resolved key, or ``""`` when absent or refused.
     """
     from services.provider_key_vault import registration_refusal
@@ -86,7 +95,7 @@ def _register_keyed(registry: "ProviderRegistry", fallback: List[str], label: st
     key = ""
     with registration_refusal(f"{label} provider"):
         key = resolve()
-    if not key:
+    if not key and not _sign_in_only(sign_in):
         logger.debug("%s not set — provider not registered", label)
         return ""
     provider = build(key)
@@ -119,9 +128,16 @@ def _register_api_key_providers(registry: "ProviderRegistry", fallback: List[str
         base_url, model = config.mistral_api_base_url or None, config.mistral_default_model or None
         return MistralProvider(settings={"api_key": k, "base_url": base_url, "default_model": model})
 
-    _register_keyed(registry, fallback, "OPENAI_API_KEY", _openai, lambda k: OpenAIProvider(settings={"api_key": k}))
     _register_keyed(
-        registry, fallback, "ANTHROPIC_API_KEY", _anthropic, lambda k: AnthropicProvider(settings={"api_key": k})
+        registry, fallback, "OPENAI_API_KEY", _openai, lambda k: OpenAIProvider(settings={"api_key": k}), "openai"
+    )
+    _register_keyed(
+        registry,
+        fallback,
+        "ANTHROPIC_API_KEY",
+        _anthropic,
+        lambda k: AnthropicProvider(settings={"api_key": k}),
+        "anthropic",
     )
     _register_keyed(registry, fallback, "GROQ_API_KEY", _groq, lambda k: GroqProvider(settings={"api_key": k}))
     _register_keyed(registry, fallback, "MISTRAL_API_KEY", _mistral, _mistral_provider)
@@ -142,7 +158,7 @@ def _resolve_hf_token() -> str:
 def _register_huggingface(registry: "ProviderRegistry", fallback: List[str]) -> str:
     """HF token, reused by Nous Portal as its fallback (#15268); HF_TOKEN first, then HUGGINGFACE_API_TOKEN."""
     hf_token = _resolve_hf_token()
-    if hf_token:
+    if hf_token or _sign_in_only("huggingface"):  # #19241: sign-in alone is enough to register
         hf_provider = HuggingFaceProvider(settings={"api_token": hf_token})
         registry.register(hf_provider)
         fallback.append(hf_provider.provider_name)

@@ -367,10 +367,15 @@ def test_an_asgi_client_with_network_mounts_is_still_an_outbound_call() -> None:
 
 
 def test_known_live_misses_are_now_found() -> None:
-    """The review's three live misses: an aliased session under ``with`` and an httpx client."""
+    """The review's live misses: an aliased session under ``with`` and an httpx client.
+
+    provider_auth had two ``ClientSession`` sites (device_initiate, device_poll); #19241/#19259 folded both into
+    the single ``_post_form`` helper, which calls ``assert_public_egress`` first (api/provider_auth.py), so one
+    session site remains and the recorded count is 1 (measured: the other site was removed, not hidden).
+    """
     found = scan_paths(repo_root(), ["autobot-backend/api/provider_auth.py", "autobot-backend/content_reach/_http.py"])
     # By kind, not line number: a line pin breaks on every unrelated edit to the file (#17576).
-    assert [s.kind for s in found["autobot-backend/api/provider_auth.py"]] == ["session", "session"]
+    assert [s.kind for s in found["autobot-backend/api/provider_auth.py"]] == ["session"]
     assert 68 in {s.lineno for s in found["autobot-backend/content_reach/_http.py"]}
 
 
