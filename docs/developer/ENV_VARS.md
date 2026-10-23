@@ -438,6 +438,7 @@ appears outside the known overlays.
 | `OPENAI_API_KEY` | image_generation | str | *(none)* | OpenAI image API key for the image-generation plugin. Environment fallback only: credentials belong in the secrets service. |
 | `SLM_ENCRYPTION_KEY` | slm | str | `""` | Key for SLM data-at-rest encryption. Empty and unset are equivalent (not configured). |
 | `SLM_NODE_ID` | slm | str | `'00-SLM-Manager'` | Node id. The SLM backend uses it as the manager's own registry id (default shown). slm/agent/agent.py accepts --node-id. The agent refuses to start without one. |
+| `SLM_REPO_PATH` | slm | str | `'/opt/autobot/code_source'` | The SLM's code_source git CHECKOUT (the directory holding .git), never the install root that contains it (default: fleet_constants.FLEET_CODE_SOURCE_DIR). Read once, in services/git_tracker.py as DEFAULT_REPO_PATH; drift checks, packaging and the python-provision playbook path all resolve under it. The provision sudoers rule does not follow an override (#19204), so leave it at the default unless that rule is changed too (#15708). |
 | `SLM_SECRET_KEY` | slm | str | `""` | SLM JWT signing secret. Empty and unset are equivalent (both mean not configured). |
 | `SLM_USERS_DATABASE_URL` | slm | str | *(none)* | SQLAlchemy DSN of the SLM admin-users database. Unset falls back to the slm_users database on the colocated PostgreSQL. |
 | `STABILITY_API_KEY` | image_generation | str | *(none)* | Stability AI API key for the image-generation plugin. Environment fallback only: credentials belong in the secrets service. |
