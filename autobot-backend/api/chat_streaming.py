@@ -12,6 +12,7 @@ import json
 
 from autobot_shared.error_utils import safe_http_detail
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.principal import resolve_principal_id
 
 logger = get_logger(__name__)
 
@@ -19,7 +20,8 @@ logger = get_logger(__name__)
 def principal_scope(current_user: dict | None) -> dict:
     """The AUTHENTICATED principal's org and user, for the AI lines' scope (#18430)."""
     user = current_user or {}
-    return {"org_id": user.get("org_id"), "user_id": user.get("id") or user.get("user_id")}
+    # #19241: the canonical claim order (#13688), shared with provider sign-in and the LLM principal.
+    return {"org_id": user.get("org_id"), "user_id": resolve_principal_id(user)}
 
 
 async def _stream_chat_workflow_messages(

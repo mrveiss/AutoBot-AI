@@ -40,6 +40,7 @@ from autobot_shared.logging_manager import get_logger
 from llm_shared import get_provider_registry
 from llm_shared.model_fallback_coordinator import get_fallback_coordinator
 from llm_shared.models import LLMRequest
+from llm_shared.run_credentials import get_llm_principal, llm_principal_scope_for, stream_with_llm_principal
 from services.llm_api_key_service import LLMApiKeyRecord, get_llm_api_key_service
 from services.llm_cost_tracker import get_cost_tracker
 from services.llm_usage_recording import (
@@ -313,9 +314,14 @@ async def messages(
     """
     _user, api_key_record = await _resolve_auth(request)
     await _oai_limiter.check_or_429(_remote_addr(request))
-
     await _enforce_virtual_key(api_key_record, body.model)  # model whitelist + budget (#6590)
+    # #19241: a JWT user's own signed-in provider token first; a team sk- key names no user (system, then API key).
+    with llm_principal_scope_for(_user):
+        return await _handle_messages(body, api_key_record)
 
+
+async def _handle_messages(body: AnthropicRequest, api_key_record: LLMApiKeyRecord | None) -> Any:
+    """Route, call and format one Messages request, under the caller's LLM principal (#19241)."""
     # Resolve auto-* model aliases via tiered routing
     if body.model in _AUTO_MODEL_NAMES:
         messages_raw: List[Dict[str, str]] = []
@@ -350,13 +356,16 @@ async def messages(
         if body.model in _AUTO_MODEL_NAMES:
             stream_headers["x-llm-routed-from"] = body.model
         return StreamingResponse(
-            _stream_generator_anthropic(
-                provider,
-                llm_request,
-                message_id,
-                resolved_model,
-                prompt_text=prompt_text,
-                api_key_record=api_key_record,
+            stream_with_llm_principal(  # #19241: the body streams after the endpoint's principal scope has ended
+                get_llm_principal(),
+                _stream_generator_anthropic(
+                    provider,
+                    llm_request,
+                    message_id,
+                    resolved_model,
+                    prompt_text=prompt_text,
+                    api_key_record=api_key_record,
+                ),
             ),
             media_type="text/event-stream",
             headers=stream_headers,

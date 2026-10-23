@@ -941,8 +941,6 @@
       "noApiKeyRequired": "Aucune clé API requise.",
       "redirecting": "Redirection...",
       "disconnectFailed": "Échec de la déconnexion",
-      "redirectNeedsCallback": "Le flux OAuth par redirection du navigateur nécessite une configuration de callback côté serveur. Utilisez le code d'appareil dans les environnements sans interface.",
-      "deviceNotConfigured": "L'authentification par appareil n'est pas configurée pour ce fournisseur",
       "deviceInitFailed": "Échec du lancement du flux par appareil",
       "stillWaiting": "Approbation toujours en attente — réessayez dans un instant.",
       "pollFailed": "Échec de la vérification"
