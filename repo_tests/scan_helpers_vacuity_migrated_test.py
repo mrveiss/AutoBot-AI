@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 """The two single-target checkers on the shared harness: exit 2 on a vacuous scan (#14896).
 
-``check_field_defaults`` and ``check_getenv_ssot_drift`` always sweep the whole
+``check_field_defaults``, ``check_getenv_ssot_drift`` and ``check_env_forks`` always sweep the whole
 tree -- there is no argv mode, so they cannot join the per-file parametrised set
 in ``scan_helpers_vacuity_test``. Their three properties are asserted here against
 copies of the checker run in a throwaway repository, the same way:
@@ -17,6 +17,7 @@ copies of the checker run in a throwaway repository, the same way:
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -25,9 +26,12 @@ import pytest
 from repo_tests.scan_helpers_vacuity_test import _REPO_ROOT, _git, _run_isolated, _seed
 
 from autobot_shared.isolated_git import isolated_git_env, make_repo
+from tools.lint import check_getenv_ssot_drift  # noqa: F401 -- puts tools/lint on sys.path for the sibling import
 from tools.lint._scan_helpers import PY_FLOOR
 
-_CHECKERS = ("check_field_defaults.py", "check_getenv_ssot_drift.py")
+from tools.lint._env_fork_scan import FORK_READ_FLOOR, KNOWN_ENV_FORKS  # isort: skip
+
+_CHECKERS = ("check_field_defaults.py", "check_getenv_ssot_drift.py", "check_env_forks.py")
 #: Assembled from fragments: the ban is on the literal, not on this fixture.
 _LIVE = "/opt/" + "autobot"
 _FIELD_CALLS = 320  # above both FIELD_CALL_FLOOR (200) and FIELD_DEFAULT_FLOOR (300)
@@ -48,15 +52,33 @@ def _getenv_sites(drift: bool) -> str:
     return "import os\n\n" + "\n".join(lines) + f'\nos.getenv("AUTOBOT_PLANT_9", "{other}")\n'
 
 
+def _fork_sites(fork: bool, reads: int = FORK_READ_FLOOR + 5) -> dict[str, str]:
+    """*reads* literal-fallback env reads clearing ``FORK_READ_FLOOR``; with *fork*, one var gets a second fallback."""
+    lines = [f'os.getenv("AUTOBOT_PLANT_{i}", "v{i}")' for i in range(reads)]
+    files = {"plant.py": "import os\n\n" + "\n".join(lines) + "\n"}
+    # A listed fork that stops forking is itself a finding, so a clean tree must still fork every listed var.
+    for suffix, fallback in (("a", "x"), ("b", "y")):
+        known = [f'os.getenv("{name}", "{fallback}")' for name in sorted(KNOWN_ENV_FORKS)]
+        files[f"known_{suffix}.py"] = "import os\n\n" + "\n".join(known) + "\n"
+    if fork:
+        files["other.py"] = 'import os\n\nos.getenv("AUTOBOT_PLANT_0", "forked")\n'
+    return files
+
+
 def _repo(root: Path, ssot: str | None, *, fillers: int = 0, sites: str | None = None) -> Path:
     """A tracked throwaway repository: the seeded checkers, *ssot*, and optional bulk."""
     root.mkdir(parents=True, exist_ok=True)
     make_repo(root)
     _seed(root)
+    # ``registry_defaults`` imports the env registry modules, and ``_seed`` copies only paths.py.
+    for registry in sorted((_REPO_ROOT / "autobot_shared").glob("env_registry*.py")):
+        shutil.copy2(registry, root / "autobot_shared" / registry.name)
     if ssot is not None:
         (root / "autobot_shared" / "ssot_config.py").write_text(ssot, encoding="utf-8")
         # The drift checker also reads the TLS SSOT module (#17312); an empty one adds no defaults.
         (root / "autobot_shared" / "ssot_tls.py").write_text("", encoding="utf-8")
+        # The env-fork sweep reads all three SSOT modules (#19215); an empty one adds no constants.
+        (root / "autobot_shared" / "ssot_constants.py").write_text("", encoding="utf-8")
     if sites is not None:
         (root / "autobot-backend").mkdir()
         (root / "autobot-backend" / "plant.py").write_text(sites, encoding="utf-8")
@@ -70,6 +92,13 @@ def _repo(root: Path, ssot: str | None, *, fillers: int = 0, sites: str | None =
 
 def _verdict_repo(root: Path, checker: str, *, planted: bool) -> Path:
     """A repository clearing every floor, so the checker reaches a real verdict: 1 planted, 0 clean."""
+    if checker == "check_env_forks.py":
+        repo = _repo(root, _ssot_source(False))
+        for name, text in _fork_sites(planted).items():
+            (repo / "autobot-backend").mkdir(exist_ok=True)
+            (repo / "autobot-backend" / name).write_text(text, encoding="utf-8")
+        _git(repo, "add", "-A")
+        return repo
     if checker == "check_field_defaults.py":
         return _repo(root, _ssot_source(planted))
     return _repo(root, _ssot_source(False), fillers=PY_FLOOR, sites=_getenv_sites(planted))
@@ -127,6 +156,8 @@ def test_a_repository_without_ssot_config_exits_two(tmp_path: Path, checker: str
         # getenv: PY_FLOOR files and 320 field defaults both clear, zero comparable
         # pairs against GETENV_CALL_FLOOR (8) is what is left to refuse.
         ("check_getenv_ssot_drift.py", _FIELD_CALLS, PY_FLOOR, "floor is 8"),
+        # env-forks: no literal-fallback reads against FORK_READ_FLOOR.
+        ("check_env_forks.py", 5, 0, f"env fallback read(s); floor is {FORK_READ_FLOOR}"),
     ],
 )
 def test_a_population_below_the_checkers_own_floor_exits_two(
@@ -166,3 +197,27 @@ def test_a_missing_tls_ssot_source_is_a_loud_refusal(tmp_path: Path) -> None:
     result = _run_isolated(repo, "check_getenv_ssot_drift.py")
     assert result.returncode == 2, result.stdout + result.stderr
     assert "ssot_tls.py is not in" in result.stderr
+
+
+@pytest.mark.parametrize(("fork", "expected"), [(True, 1), (False, 0)])
+def test_a_planted_env_fork_exits_one(tmp_path: Path, fork: bool, expected: int) -> None:
+    """The sweep's own verdict, reached with the floor met -- and the drift hook untouched by it (#19215)."""
+    repo = _verdict_repo(tmp_path / "r", "check_env_forks.py", planted=fork)
+
+    result = _run_isolated(repo, "check_env_forks.py")
+
+    assert result.returncode == expected, result.stdout + result.stderr
+    assert ("AUTOBOT_PLANT_0" in result.stderr) is fork
+    assert ("differing fallbacks" in result.stderr) is fork
+    assert _run_isolated(repo, "check_getenv_ssot_drift.py").returncode != 1  # the drift verdict is its own
+
+
+def test_an_env_fork_repo_without_the_ssot_constants_source_exits_two(tmp_path: Path) -> None:
+    repo = _verdict_repo(tmp_path / "r", "check_env_forks.py", planted=False)
+    (repo / "autobot_shared" / "ssot_constants.py").unlink()
+    _git(repo, "add", "-A")
+
+    result = _run_isolated(repo, "check_env_forks.py")
+
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "ssot_constants.py is not in" in result.stderr and "Traceback" not in result.stderr

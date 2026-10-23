@@ -196,10 +196,20 @@ ALLOWED_ADDITIONS = {
             ".python-version",
             # #18729: docker_admin_seed_18729_test.py reads every Docker entrypoint.
             "docker/*/*entrypoint*.sh",
+            # #17500: compose_exposure_and_credentials_17500_test.py checks every compose file.
+            "docker-compose.hardened.yml",
+            "docker-compose.override.example.yml",
+            "docker/mcp-bridges.yml",
             # #18666: install_release_signed_18666_test.py compares release.yml's cosign pin with this one.
             f"{WORKFLOWS}/image-sign.yml",
             # #18666: the same test runs the signing-key gate against the real cosign.pub.
             "cosign.pub",
+            # #17793: compose_exposure_and_credentials_17500_test.py checks that both smoke jobs export
+            # exactly the credentials compose requires, so editing either workflow must run the suite.
+            f"{WORKFLOWS}/docker-smoke-test.yml",
+            f"{WORKFLOWS}/co-located-smoke.yml",
+            # #17500, #18729: both guards read the secrets generator, so editing it must run the suite.
+            "docker/generate-secrets.sh",
         ]
     },
     # frontend_path_filter_mirror_test pins frontend-test.yml's on.push.paths to this file, so the

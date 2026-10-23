@@ -853,7 +853,9 @@
       "type2": "Tipo",
       "value0Critical": "{value0} critical",
       "value0Security": "({value0} security)",
-      "value0UpdatePluralAvailable": "{value0} update{plural} available"
+      "value0UpdatePluralAvailable": "{value0} update{plural} available",
+      "eventsUnavailable": "Lifecycle events could not be loaded.",
+      "retry": "Tentar novamente"
     },
     "nodeServicesPanel": {
       "actionFailed": "Failed to {action} {service}",

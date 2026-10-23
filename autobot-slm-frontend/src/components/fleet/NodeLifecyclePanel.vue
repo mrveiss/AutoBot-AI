@@ -15,6 +15,7 @@
  */
 
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { BaseButton } from '@autobot/ui'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
 import { getConfig, getSlmApiBase } from '@/config/ssot-config'
@@ -100,6 +101,8 @@ const fleetStore = useFleetStore()
 const events = ref<LifecycleEvent[]>([])
 const totalEvents = ref(0)
 const isLoading = ref(true)
+const loadError = ref(false) // a flag, never the exception text: detail is logged
+let fetchSeq = 0 // newest fetchEvents call; an older response landing later is ignored
 const isLoadingMore = ref(false)
 const currentOperation = ref<string | null>(null)
 const lastRefresh = ref<string | null>(null)
@@ -312,11 +315,9 @@ function getUpdateSeverityClass(severity: string): string {
 
 // API Methods - wired to real backend endpoints
 async function fetchEvents(): Promise<void> {
+  const seq = ++fetchSeq
   try {
-    const filters: EventFilters = {
-      limit: pageSize,
-      offset: 0,
-    }
+    const filters: EventFilters = { limit: pageSize, offset: 0 }
     // Note: Don't send event_type filter to API - we filter by category client-side
     // The API expects exact event types (e.g., 'deployment_completed') but UI filters
     // by category (e.g., 'deployment'). Client-side filteredEvents handles this.
@@ -330,6 +331,7 @@ async function fetchEvents(): Promise<void> {
       offset: filters.offset,
     })
 
+    if (seq !== fetchSeq) return // stale
     // Map backend events to local LifecycleEvent type
     events.value = nodeEvents.map((e) => ({
       id: e.id,
@@ -342,15 +344,17 @@ async function fetchEvents(): Promise<void> {
     totalEvents.value = events.value.length
     currentOffset.value = events.value.length
     lastRefresh.value = new Date().toISOString()
+    loadError.value = false
   } catch (error) {
     logger.error('Failed to fetch lifecycle events:', error)
-    // Fallback to mock data if API fails
-    events.value = generateMockEvents()
-    totalEvents.value = events.value.length
-    currentOffset.value = events.value.length
-    lastRefresh.value = new Date().toISOString()
+    if (seq !== fetchSeq) return
+    // Say the events could not be loaded; never show invented ones (#19270).
+    events.value = []
+    totalEvents.value = 0
+    currentOffset.value = 0
+    loadError.value = true
   } finally {
-    isLoading.value = false
+    if (seq === fetchSeq) isLoading.value = false
   }
 }
 
@@ -550,62 +554,6 @@ function mapEventSeverity(eventType: string): SeverityLevel {
   if (eventType.includes('warning') || eventType.includes('degraded')) return 'warning'
   if (eventType.includes('critical')) return 'critical'
   return 'info'
-}
-
-// Mock data generator for development
-function generateMockEvents(): LifecycleEvent[] {
-  const eventTypes: EventType[] = [
-    'enrollment_started',
-    'enrollment_completed',
-    'deployment_started',
-    'deployment_completed',
-    'health_check_failed',
-    'update_applied',
-    'certificate_renewed',
-    'status_change',
-    'maintenance_start',
-    'maintenance_end',
-  ]
-
-  const mockEvents: LifecycleEvent[] = []
-  const now = new Date()
-
-  for (let i = 0; i < 15; i++) {
-    const eventType = eventTypes[Math.floor(Math.random() * eventTypes.length)]
-    let severity: SeverityLevel = 'info'
-
-    // Set appropriate severity based on event type
-    if (eventType.includes('failed') || eventType.includes('error')) {
-      severity = Math.random() > 0.5 ? 'error' : 'critical'
-    } else if (eventType.includes('completed') || eventType.includes('renewed')) {
-      severity = 'info'
-    } else if (eventType.includes('started') || eventType.includes('change')) {
-      severity = Math.random() > 0.7 ? 'warning' : 'info'
-    }
-
-    const timestamp = new Date(now.getTime() - i * 300000 - Math.random() * 300000)
-
-    mockEvents.push({
-      id: `evt-${Date.now()}-${i}`,
-      event_type: eventType,
-      timestamp: timestamp.toISOString(),
-      message: `${formatEventType(eventType)} for node ${props.nodeName}`,
-      severity,
-      duration_ms: Math.random() > 0.5 ? Math.floor(Math.random() * 60000) : undefined,
-      details:
-        Math.random() > 0.6
-          ? {
-              version: '1.0.0',
-              previous_status: 'healthy',
-              new_status: 'degraded',
-            }
-          : undefined,
-    })
-  }
-
-  return mockEvents.sort(
-    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-  )
 }
 
 // Watch for filter changes
@@ -843,6 +791,17 @@ onUnmounted(() => {
         <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
       </svg>
       <span>{{ $t('fleet.nodeLifecyclePanel.loadingEvents') }}</span>
+    </div>
+
+    <!-- Load failure: the events are unknown, not empty (#19270) -->
+    <div
+      v-else-if="loadError"
+      role="alert"
+      class="flex-1 flex flex-col items-center justify-center gap-2 py-12 text-autobot-text-secondary"
+      data-testid="lifecycle-load-error"
+    >
+      <p class="text-center">{{ $t('fleet.nodeLifecyclePanel.eventsUnavailable') }}</p>
+      <BaseButton variant="secondary" size="sm" @click="fetchEvents">{{ $t('fleet.nodeLifecyclePanel.retry') }}</BaseButton>
     </div>
 
     <!-- Empty State -->
