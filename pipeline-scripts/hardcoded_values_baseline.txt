@@ -651,8 +651,6 @@
 1|other|autobot-frontend/src/utils/urlUtils.ts|https://duckduckgo.com/?q=${encodeURIComponent(input
 1|other|autobot-frontend/src/views/EvolutionView.vue|"/opt/autobot
 1|other|autobot-frontend/src/views/EvolutionView.vue|'/opt/autobot
-1|other|autobot-frontend/src/views/SettingsView.vue|https://huggingface.co/oauth/device
-1|other|autobot-frontend/src/views/SettingsView.vue|https://huggingface.co/oauth/token
 2|other|autobot-frontend/src/views/SharedChatView.vue|'user'
 1|other|autobot-frontend/src/views/llc/ProjectBrowserView.vue|https://github.com/${p.code_source.repo}
 3|ssot|autobot-frontend/start-frontend-dev.sh|:5173

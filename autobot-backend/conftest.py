@@ -553,8 +553,8 @@ if "llm_shared" not in sys.modules:
     _real_load_and_bind("llm_shared.structured_ops", _llm_root / "structured_ops.py")
     _real_load_and_bind("llm_shared.optimization.rate_limiter", _llm_root / "optimization" / "rate_limiter.py")
     _real_load_and_bind("llm_shared.fallback_chain", _llm_root / "fallback_chain.py")
-    # #10551/#15022: provider_auth first -- provider_degradation imports its error base
-    # (ProviderAuthError); light deps only.
+    # #10551/#15022/#19241: provider_auth (+ its split-out token helpers) before provider_degradation.
+    _real_load_and_bind("llm_shared.provider_token_response", _llm_root / "provider_token_response.py")
     _real_load_and_bind("llm_shared.provider_auth", _llm_root / "provider_auth.py")
     # #11519: provider degradation store — load real BEFORE model_fallback_coordinator
     # and provider_registry which import it at module level.
@@ -567,16 +567,14 @@ if "llm_shared" not in sys.modules:
     # / events.event_types are unstubbed lightweight modules, safe to import here.
     _real_load_and_bind("llm_shared.fallback_events", _llm_root / "fallback_events.py")
     _real_load_and_bind("llm_shared.model_fallback_coordinator", _llm_root / "model_fallback_coordinator.py")
-    # #9017: reasoning_effort utility is imported by chat_workflow.manager at module level;
-    # load the real file so tests that import manager don't hit the providers MagicMock stub.
-    _real_load_and_bind(
-        "llm_shared.providers.reasoning_effort",
-        _llm_root / "providers" / "reasoning_effort.py",
-    )
-    # #9037: per-run credential primitives (ContextVar + RunCredentialContext) live
-    # in the lightweight run_credentials module; load it real so tests importing
-    # them don't hit the llm_shared MagicMock stub.
+    # #9017: chat_workflow.manager imports reasoning_effort at module level -- real, not the providers stub.
+    _real_load_and_bind("llm_shared.providers.reasoning_effort", _llm_root / "providers" / "reasoning_effort.py")
+    # #9037: per-run credential primitives (ContextVar + RunCredentialContext); #19241: the LLM sign-in
+    # registry + token resolution, which base_provider imports lazily (empty stub __path__, see #10917 below).
     _real_load_and_bind("llm_shared.run_credentials", _llm_root / "run_credentials.py")
+    _real_load_and_bind("llm_shared.llm_oauth_registry", _llm_root / "llm_oauth_registry.py")
+    _real_load_and_bind("llm_shared.provider_token_refresh", _llm_root / "provider_token_refresh.py")
+    _real_load_and_bind("llm_shared.provider_oauth_credentials", _llm_root / "provider_oauth_credentials.py")
     # #11762: credential redaction — was never real-loaded, so its co-located
     # tests silently failed collection and a redaction bug went unnoticed.
     _real_load_and_bind("llm_shared.credential_redaction", _llm_root / "credential_redaction.py")

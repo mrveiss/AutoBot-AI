@@ -396,8 +396,8 @@ export class ChatController {
         logger.debug('Stream started:', data.session_id)
         return fallbackMessageId
       }
-      if (data.type === 'end') {
-        logger.debug('Stream ended')
+      if (data.type === 'end' || data.type === 'cancelled') { // #17829: a stopped turn keeps its shown text
+        logger.debug('Stream ended:', data.type)
         return fallbackMessageId
       }
       if (data.type === 'segment_complete') {

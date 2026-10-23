@@ -7015,8 +7015,6 @@
       "noApiKeyRequired": "אין צורך במפתח API.",
       "redirecting": "מפנה...",
       "disconnectFailed": "הניתוק נכשל",
-      "redirectNeedsCallback": "זרימת OAuth עם הפניה בדפדפן דורשת הגדרת callback בצד השרת. בסביבות ללא ממשק יש להשתמש בקוד מכשיר.",
-      "deviceNotConfigured": "אימות מכשיר אינו מוגדר עבור ספק זה",
       "deviceInitFailed": "הפעלת זרימת המכשיר נכשלה",
       "stillWaiting": "עדיין ממתין לאישור — נסו שוב בעוד רגע.",
       "pollFailed": "הבדיקה נכשלה"

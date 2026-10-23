@@ -58,6 +58,8 @@ export type { SwitchSize } from './src/components/BaseSwitch.vue'
 export { default as BasePagination } from './src/components/BasePagination.vue'
 export type { PaginationLabels } from './src/components/BasePagination.vue'
 
+export { default as BaseFormField } from './src/components/BaseFormField.vue'
+
 export { default as BrandMark } from './src/components/BrandMark.vue'
 
 export { default as BaseTooltip } from './src/components/BaseTooltip.vue'

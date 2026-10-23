@@ -941,8 +941,6 @@
       "noApiKeyRequired": "API atslēga nav nepieciešama.",
       "redirecting": "Pāradresē...",
       "disconnectFailed": "Neizdevās atvienot",
-      "redirectNeedsCallback": "OAuth pārlūka pāradresācijas plūsmai nepieciešama servera puses atzvanīšanas konfigurācija. Vidēs bez saskarnes izmantojiet ierīces kodu.",
-      "deviceNotConfigured": "Ierīces autentifikācija šim pakalpojuma sniedzējam nav konfigurēta",
       "deviceInitFailed": "Neizdevās sākt ierīces plūsmu",
       "stillWaiting": "Joprojām gaida apstiprinājumu — pēc brīža mēģiniet vēlreiz.",
       "pollFailed": "Pārbaude neizdevās"

@@ -191,24 +191,7 @@ Issue #753: User preference management interface
               <p class="provider-auth-desc">
                 {{ $t('settings.providerAuthDesc') }}
               </p>
-              <div class="provider-auth-list">
-                <ProviderOAuthConnect
-                  v-for="p in oauthProviders"
-                  :key="p.name"
-                  :provider-name="p.name"
-                  :provider-label="p.label"
-                  :tos-note="p.tosNote"
-                  :device-auth="p.deviceAuth"
-                  :device-authorization-url="p.deviceAuthorizationUrl"
-                  :token-url="p.tokenUrl"
-                  :client-id="p.clientId"
-                  :scope="p.scope"
-                >
-                  <template #apikey>
-                    <p class="apikey-hint">{{ $t('settings.providerAuth.apiKeyHint') }}</p>
-                  </template>
-                </ProviderOAuthConnect>
-              </div>
+              <ProviderAccountsSection :is-admin="userStore.isAdmin" />
             </div>
           </div>
         </section>
@@ -380,7 +363,7 @@ import VoiceSettingsPanel from '@/components/settings/VoiceSettingsPanel.vue'
 import WebResearchSettingsPanel from '@/components/settings/WebResearchSettingsPanel.vue'
 import TelegramSettingsPanel from '@/components/settings/TelegramSettingsPanel.vue'
 import ApiKeySetupWizard from '@/components/settings/ApiKeySetupWizard.vue'
-import ProviderOAuthConnect from '@/components/settings/ProviderOAuthConnect.vue'
+import ProviderAccountsSection from '@/components/settings/ProviderAccountsSection.vue'
 import ConnectionSettingsPanel from '@/components/desktop/ConnectionSettingsPanel.vue'
 import FeatureFlagsSettingsPanel from '@/components/settings/FeatureFlagsSettingsPanel.vue'
 import SchedulerToggles from '@/components/schedulers/SchedulerToggles.vue'
@@ -390,7 +373,8 @@ import DeviceManagementPanel from '@/components/profile/DeviceManagementPanel.vu
 import TelemetrySettingsPanel from '@/components/settings/TelemetrySettingsPanel.vue'
 import MemoryPrivacyPanel from '@/components/settings/MemoryPrivacyPanel.vue'
 import Icon from '@/components/ui/Icon.vue'
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { useNotificationBus } from '@/composables/useNotificationBus'
@@ -407,42 +391,13 @@ logger.debug('Settings view initialized')
 
 type PreferenceTab = 'appearance' | 'language' | 'voice' | 'webresearch' | 'apikeys' | 'connection' | 'featureflags' | 'presets' | 'telegram' | 'notifications' | 'devices' | 'privacy'
 const activeTab = ref<PreferenceTab>('appearance')
-const showApiKeyWizard = ref(false)
 
-// #10551: OAuth-capable providers — operators configure client_id / tokenUrl via .env / SLM.
-// Each entry shows a "Sign in with {label}" tab alongside the API key option.
-const oauthProviders = [
-  {
-    name: 'openai',
-    label: 'OpenAI',
-    tosNote: 'Connecting uses your OpenAI account subscription. Charges apply per the OpenAI ToS.',
-    deviceAuth: false,
-    deviceAuthorizationUrl: '',
-    tokenUrl: '',
-    clientId: '',
-    scope: 'openid',
-  },
-  {
-    name: 'anthropic',
-    label: 'Anthropic',
-    tosNote: 'Connecting uses your Anthropic Console account. Charges apply per the Anthropic ToS.',
-    deviceAuth: false,
-    deviceAuthorizationUrl: '',
-    tokenUrl: '',
-    clientId: '',
-    scope: 'openid',
-  },
-  {
-    name: 'huggingface',
-    label: 'HuggingFace',
-    tosNote: 'Uses your HuggingFace account token (PRO or Inference API access required).',
-    deviceAuth: true,
-    deviceAuthorizationUrl: 'https://huggingface.co/oauth/device',
-    tokenUrl: 'https://huggingface.co/oauth/token',
-    clientId: '',
-    scope: 'read-repos inference-api',
-  },
-]
+// #19241: the provider OAuth callback returns here as `?tab=apikeys&oauth=..`.
+const route = useRoute()
+onMounted(() => {
+  if (route.query.tab === 'apikeys') activeTab.value = 'apikeys'
+})
+const showApiKeyWizard = ref(false)
 
 // Backend reachability check (#6964 wire-in for apiClient.validateConnection, resolves #6845)
 const isChecking = ref(false)

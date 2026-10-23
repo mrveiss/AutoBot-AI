@@ -36,6 +36,7 @@ from constants.api_constants import PATH_OLLAMA_GENERATE
 from constants.model_constants import ModelConfig
 from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT, TTL_24_HOURS
 from llm_shared.providers.reasoning_effort import map_effort_to_provider_params
+from llm_shared.run_credentials import llm_principal_scope_for
 from services.tool_output_filter import cap_unmatched_output, get_tool_output_filter
 from slash_command_handler import get_slash_command_handler
 
@@ -3765,18 +3766,16 @@ before summarizing.
         context = await self._apply_session_role(session_id, context, auth_role, auth_scope)
         self._active_streams += 1
         try:
-            try:
-                async with aclosing(self._process_via_graph(session_id, message, context)) as graph_stream:
-                    async for msg in graph_stream:
-                        yield msg
-            except Exception as graph_err:
-                logger.warning(
-                    "LangGraph flow failed, falling back to legacy: %s",
-                    graph_err,
-                )
-                async with aclosing(stream_legacy_turn(self, session_id, message, context)) as legacy:
-                    async for msg in legacy:
-                        yield msg
+            with llm_principal_scope_for(auth_scope):  # #19241: this turn's signed-in provider tokens, reset after
+                try:
+                    async with aclosing(self._process_via_graph(session_id, message, context)) as graph_stream:
+                        async for msg in graph_stream:
+                            yield msg
+                except Exception as graph_err:
+                    logger.warning("LangGraph flow failed, falling back to legacy: %s", graph_err)
+                    async with aclosing(stream_legacy_turn(self, session_id, message, context)) as legacy:
+                        async for msg in legacy:
+                            yield msg
         finally:
             self._active_streams -= 1
 

@@ -53,23 +53,11 @@ class AdvisoryException:
 #: failing on a date would block every Python PR, where the gate blocks only the PRs that
 #: trigger the frontend suite. So the suite stays date-independent and #17890 carries the
 #: reminder to look again before 2026-11-14.
-ADVISORY_EXCEPTIONS: dict[str, AdvisoryException] = {
-    "GHSA-vfj7-8cjw-p6xm": AdvisoryException(
-        expires="2026-11-14",
-        reason=(
-            "braces <= 3.0.3 stack-exhaustion DoS, published 2026-09-18, advisory API reports "
-            "first_patched_version NULL and npm reports range '*' -- no non-vulnerable version of "
-            "braces exists, which is the owner's condition for this record. No bump OF BRACES is "
-            "possible; npm does offer a fix path via the parent, and it is stylelint 7.7.0 against "
-            "a declared ^17.15.0 -- a rollback across ten majors of a devDependency. The owner "
-            "declines that trade: the chain is stylelint and @vue/eslint-config-typescript through "
-            "micromatch/fast-glob/globby, all devDependencies, and nothing in a shipped bundle "
-            "imports it. An earlier wording said 'no bump exists', which was true of braces and "
-            "wrong about the question the gate asks (ae, review of #17889). Owner decision "
-            "2026-10-03, recorded on #13400; the dependency-type scoping question is #17890."
-        ),
-    )
-}
+#:
+#: The table is EMPTY by design when nothing is currently unfixable. GHSA-vfj7-8cjw-p6xm
+#: (braces, owner decision 2026-10-03, #13400) was retired once upstream stopped reporting
+#: it (2026-10-23): the stale-record check above is what demanded its removal.
+ADVISORY_EXCEPTIONS: dict[str, AdvisoryException] = {}
 
 
 _LOWER_BOUND = re.compile(r">=?\s*(\d+(?:\.\d+)*)")
