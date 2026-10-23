@@ -216,7 +216,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:bg-emerald-600": 3,
     "slm:bg-emerald-700": 1,
     "slm:bg-gray-100": 198,  # #14780 BaseDrawer: 199 -> 198
-    "slm:bg-gray-200": 100,  # #14780 BaseSwitch: 118 -> 100
+    "slm:bg-gray-200": 99,  # #14780 BaseSwitch: 118 -> 100, LoadBalancingView 100 -> 99
     "slm:bg-gray-300": 9,
     "slm:bg-gray-400": 41,
     "slm:bg-gray-400/15": 1,
@@ -393,4 +393,4 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
 }
 
 #: Frozen total, asserted separately so a hand edit of one number cannot pass.
-TOTAL_OCCURRENCES = 6117  # #14780 BaseSwitch: 6153 -> 6117
+TOTAL_OCCURRENCES = 6116  # #14780 BaseSwitch: 6153 -> 6117, LoadBalancingView 6117 -> 6116

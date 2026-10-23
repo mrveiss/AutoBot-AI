@@ -188,7 +188,9 @@ MIN_READS_FOUND = 40
 #: No detector change. The optimizer's context path moved to ``rag_optimizer_context.py`` and the synthesis and
 #: lessons legs to ``services/rag_derived_context.py``; neither holds a detected read. The live set was compared
 #: before and after over every changed file: the only difference is that one key.
-UNFILTERED_READ_CEILING = 86
+#: Then 86 -> 87 (#19216): the system-knowledge import's ``_adopt_duplicate`` reads the matched fact's
+#: metadata only, from a job with no user, and returns an id and status (classified NOT_USER_FACING).
+UNFILTERED_READ_CEILING = 87
 
 _REASON_PREFIXES = ("TRACKED_GAP #", "SCOPED: ", "NOT_USER_FACING: ", "IMPL: ", "ADMIN_ONLY: ")
 _NESTED = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)

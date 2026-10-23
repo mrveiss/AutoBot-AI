@@ -42,92 +42,35 @@ export function useResourceMetrics(machine: () => string) {
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
-  function getTimeIntervals(): Date[] {
-    const intervals: Date[] = []
-    const now = new Date()
-    let count: number
-    let step: number
-
-    switch (timeRange.value) {
-      case '1h':
-        count = 12
-        step = 5 * 60 * 1000
-        break
-      case '6h':
-        count = 24
-        step = 15 * 60 * 1000
-        break
-      case '24h':
-        count = 24
-        step = 60 * 60 * 1000
-        break
-      case '7d':
-        count = 28
-        step = 6 * 60 * 60 * 1000
-        break
-      default:
-        count = 12
-        step = 5 * 60 * 1000
-    }
-
-    for (let i = count - 1; i >= 0; i--) {
-      intervals.push(new Date(now.getTime() - i * step))
-    }
-    return intervals
-  }
-
   function formatTimeLabel(date: Date): string {
     switch (timeRange.value) {
       case '1h':
       case '6h':
-        return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+        return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
       case '24h':
-        return date.toLocaleTimeString('en-US', { hour: '2-digit' }) + 'h'
+        return date.toLocaleTimeString(undefined, { hour: '2-digit' })
       case '7d':
         return (
-          date.toLocaleDateString('en-US', { weekday: 'short' }) +
+          date.toLocaleDateString(undefined, { weekday: 'short' }) +
           ' ' +
-          date.toLocaleTimeString('en-US', { hour: '2-digit' })
+          date.toLocaleTimeString(undefined, { hour: '2-digit' })
         )
       default:
         return date.toLocaleTimeString()
     }
   }
 
-  function generateSampleData(): void {
-    const machines = ['Main (WSL)', 'Frontend VM', 'NPU Worker', 'Redis VM', 'AI Stack', 'Browser VM']
-    const intervals = getTimeIntervals()
-
-    heatmapData.value = machines.map((machineName, machineIdx) => ({
-      name: machineName,
-      data: intervals.map((interval, idx) => {
-        let baseValue = 30 + Math.random() * 20
-
-        const hour = new Date(interval).getHours()
-        if (hour >= 9 && hour <= 17) baseValue += 20
-
-        if (machineIdx === 0) baseValue += 10
-        if (machineIdx === 2) baseValue += Math.sin(idx / 5) * 15
-
-        if (Math.random() > 0.9) baseValue += 30
-
-        return {
-          x: formatTimeLabel(interval),
-          y: Math.min(100, Math.max(0, Math.round(baseValue)))
-        }
-      })
-    }))
-  }
-
   function processData(data: MetricsApiResponse): void {
+    // No machines reported is an empty heatmap, never invented values (#19270).
     if (!data.machines || !Array.isArray(data.machines)) {
-      generateSampleData()
+      heatmapData.value = []
       return
     }
 
     heatmapData.value = data.machines.map(m => ({
       name: m.name,
-      data: m.metrics.map(metric => ({ x: metric.time, y: metric.value }))
+      // The backend sends ISO timestamps; label them for the selected range (#19270).
+      data: m.metrics.map(metric => ({ x: formatTimeLabel(new Date(metric.time)), y: metric.value }))
     }))
   }
 
@@ -143,8 +86,8 @@ export function useResourceMetrics(machine: () => string) {
         processData(data)
       } catch (err) {
         logger.error('Failed to fetch heatmap data:', err)
-        error.value = err instanceof Error ? err.message : 'Failed to load data'
-        generateSampleData()
+        error.value = err instanceof Error ? err.message : String(err) // shown under the translated heading
+        heatmapData.value = [] // the error state shows; no invented values behind it (#19270)
       }
     })
   }

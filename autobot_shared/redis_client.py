@@ -106,12 +106,8 @@ from autobot_shared.redis_management.config import (
     RedisDbConfig,
 )
 from autobot_shared.redis_management.connection_manager import RedisConnectionManager
-from autobot_shared.redis_management.statistics import (
-    ConnectionMetrics,
-    ManagerStats,
-    PoolStatistics,
-    RedisStats,
-)
+from autobot_shared.redis_management.keyspace_survey import survey_databases
+from autobot_shared.redis_management.statistics import ConnectionMetrics, ManagerStats, PoolStatistics, RedisStats
 from autobot_shared.redis_management.types import DATABASE_MAPPING, ConnectionState, RedisDatabase
 from autobot_shared.redis_require import require_redis_client
 
@@ -139,6 +135,7 @@ __all__ = [
     "get_redis_client",
     "get_async_redis_client",
     "require_redis_client",
+    "survey_databases",
     "get_knowledge_base_redis",
     "get_prompts_redis",
     "get_agents_redis",
