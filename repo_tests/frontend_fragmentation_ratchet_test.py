@@ -87,7 +87,7 @@ BASELINE = {
     # `.vue` components carrying their own <style> rules. Target is a small
     # number of shared stylesheets, not 381 components each with a private
     # copy of the design system.
-    "components_declaring_styles": 366,  # #14780 OrgChart drawer: 367 -> 366 (the slide transition CSS left for BaseDrawer); #14778: -1, the local BaseInput fork retired into the kit (on main's 368); #18849: -1, the local BaseButton fork retired into the kit; #18819: -2 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-2);  #14776: the local BaseBadge fork left for the kit (376 -> 375), then the local BaseCard + BasePanel (375 -> 373); #18240: App.vue's scoped <style> went with the header split (lowered from 379).; #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit
+    "components_declaring_styles": 365,  # #19217: the retired main-app web research editors (366 -> 365); #14780 OrgChart drawer: 367 -> 366 (the slide transition CSS left for BaseDrawer); #14778: -1, the local BaseInput fork retired into the kit (on main's 368); #18849: -1, the local BaseButton fork retired into the kit; #18819: -2 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-2);  #14776: the local BaseBadge fork left for the kit (376 -> 375), then the local BaseCard + BasePanel (375 -> 373); #18240: App.vue's scoped <style> went with the header split (lowered from 379).; #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit
     # Earlier #17020: Terminal.vue removed (dead, zero live callers)
     # Distinct class names declared anywhere in the frontend.
     #
@@ -99,7 +99,7 @@ BASELINE = {
     # cross-referencing sibling admin views) -- this pair is documented above
     # as measuring page SIZE, not duplication, and is interim until #15455
     # replaces them with a real duplication measure.
-    "distinct_class_names": 5484,  # #14780 drawer adoption: 5492 -> 5484 (SourcePreviewPanel, WorkItemDetail on BaseDrawer); #14778: -10, the local BaseInput fork retired into the kit (on main's 5502); #18242: -1 on main's 5503 (CustomDashboard onto DashboardGrid); #18849: -14, the local BaseButton fork retired into the kit; #18819: -14 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-26);  #14776: local BaseBadge retired (5594 -> 5585), then local BaseCard + BasePanel (5585 -> 5557); #17565: App.vue's hand-rolled .skip-links/.skip-link
+    "distinct_class_names": 5461,  # #19217: the retired main-app web research editors (5484 -> 5461); #14780 drawer adoption: 5492 -> 5484 (SourcePreviewPanel, WorkItemDetail on BaseDrawer); #14778: -10, the local BaseInput fork retired into the kit (on main's 5502); #18242: -1 on main's 5503 (CustomDashboard onto DashboardGrid); #18849: -14, the local BaseButton fork retired into the kit; #18819: -14 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-26);  #14776: local BaseBadge retired (5594 -> 5585), then local BaseCard + BasePanel (5585 -> 5557); #17565: App.vue's hand-rolled .skip-links/.skip-link
     # replaced by the shared kit SkipLink (lowered from 5615). Earlier: #17020,
     # Terminal.vue removed -- pure deletion of dead code, lowered, not held.
     # #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit (5611 -> 5594).
@@ -107,7 +107,7 @@ BASELINE = {
     #
     # #16972/#15455: same owner-approved, one-off exception as distinct_class_names
     # directly above -- see that comment.
-    "css_rule_declarations": 9150,  # train-74 on main: drawer adoption (-16) on train 77 OrgChart drawer (-2), 9168 -> 9150; #14780 drawer adoption: 9168 -> 9152 (SourcePreviewPanel, WorkItemDetail on BaseDrawer); #14780: -1, AuditLogTable's pager layout left for the kit BasePagination; #14778: -16, the local BaseInput fork retired into the kit (on main's 9185); #18242: -3 on main's 9188 (CustomDashboard onto DashboardGrid); #18849: -30, the local BaseButton fork retired into the kit; #18819: -25 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-46);  #14776: local BaseBadge retired (9354 -> 9337), then local BaseCard + BasePanel (9337 -> 9289); #14785: density reuses the existing
+    "css_rule_declarations": 9080,  # #19217: the retired main-app web research editors (9150 -> 9080); train-74 on main: drawer adoption (-16) on train 77 OrgChart drawer (-2), 9168 -> 9150; #14780 drawer adoption: 9168 -> 9152 (SourcePreviewPanel, WorkItemDetail on BaseDrawer); #14780: -1, AuditLogTable's pager layout left for the kit BasePagination; #14778: -16, the local BaseInput fork retired into the kit (on main's 9185); #18242: -3 on main's 9188 (CustomDashboard onto DashboardGrid); #18849: -30, the local BaseButton fork retired into the kit; #18819: -25 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-46);  #14776: local BaseBadge retired (9354 -> 9337), then local BaseCard + BasePanel (9337 -> 9289); #14785: density reuses the existing
     # [data-layout-density] attribute (no .density-* classes), and the dead
     # assets/main.css .sr-only rule went with that file (lowered from 9379).
     # #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit (9371 -> 9354).
@@ -116,7 +116,7 @@ BASELINE = {
     # earlier #17020, same reason as distinct_class_names
     # Files declaring at least one `.btn-*` CSS rule. Target is 1 — a single
     # shared stylesheet.
-    "button_definition_files": 100,  # #18849: 101 -> 100, the local BaseButton fork retired into the kit; Distinct `.btn-*` class names declared anywhere.
+    "button_definition_files": 99,  # #19217: the retired main-app web research editors (100 -> 99); #18849: 101 -> 100, the local BaseButton fork retired into the kit; Distinct `.btn-*` class names declared anywhere.
     "button_class_names": 103,  # #18849: 115 -> 103, the local BaseButton fork retired into the kit; Distinct notification entry points. Target is 1 canonical API, the rest
     # thin shims or removed.
     "notification_entry_points": 4,
@@ -143,7 +143,7 @@ FAMILY_BASELINE = {
     "progress": 47,
     "stat": 38,
     "panel": 19,  # #14780 drawer adoption: 23 -> 19 (SourcePreviewPanel, WorkItemDetail on BaseDrawer); #14776: local BaseCard + BasePanel merged into the kit card (34 -> 23)
-    "form": 27,
+    "form": 26,  # #19217: the retired main-app web research editors (27 -> 26)
     "action": 27,
     "modal": 25,
     "empty": 22,  # #14778: DataTable empty-cell left (23 -> 22)
@@ -151,8 +151,8 @@ FAMILY_BASELINE = {
     "section": 23,
     "summary": 27,
     "text": 28,
-    "toggle": 24,
-    "field": 20,
+    "toggle": 22,  # #19217: the retired main-app web research editors (24 -> 22)
+    "field": 17,  # #19217: the retired main-app web research editors (20 -> 17)
     "icon": 12,  # #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit (16 -> 12)
     "checkbox": 9,
     "sidebar": 9,

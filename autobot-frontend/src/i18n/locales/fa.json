@@ -6843,31 +6843,11 @@
   },
   "settings": {
     "webResearch": {
-      "enabledLabel": "Enable web research",
-      "timeoutHint": "Maximum time to wait for search results (5–120 s)",
-      "filterAdultHint": "Filter adult content from search results",
-      "enabledHint": "Allow AutoBot to search the web when answering questions",
-      "maxResultsHint": "Maximum number of search results to retrieve (1–50)",
-      "methodHint": "Choose how web searches are performed",
-      "methodLabel": "Search method",
-      "rateLimitHint": "Limit how many requests are sent in a given time window",
-      "rateLimitLabel": "Rate limiting",
       "methodApiBased": "API-based",
-      "rateLimitRequests": "Requests",
       "title": "Web Research",
-      "confirmationLabel": "Require confirmation",
-      "timeoutLabel": "Timeout (seconds)",
-      "storeInKbHint": "Save research results to the knowledge base",
       "desc": "Configure automated web research behaviour and privacy settings",
-      "confirmationHint": "Ask before performing a web search on your behalf",
-      "anonymizeHint": "Anonymize requests before sending to search engines",
-      "maxResultsLabel": "Max results",
-      "privacyLabel": "Privacy & storage",
-      "rateLimitWindow": "Window (s)",
       "methodBasic": "Basic",
-      "methodAdvanced": "Advanced",
-      "thresholdHint": "Confidence level below which AutoBot triggers an automatic search",
-      "thresholdLabel": "Auto-research threshold"
+      "methodAdvanced": "Advanced"
     },
     "backend": "Backend",
     "apiKeys": {

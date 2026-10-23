@@ -11,9 +11,8 @@
  * Issue #729 - Migrating admin functionality to SLM.
  */
 
-import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios'
-import { useAuthStore } from '@/stores/auth'
-import { getBackendUrl } from '@/config/ssot-config'
+import type { AxiosRequestConfig } from 'axios'
+import { createAutobotBackendClient } from '@/composables/autobotBackendClient'
 import type { SlmUserResponse } from '@/composables/useSlmUserApi'
 import type { components } from '@/types/generated/api'
 import {
@@ -638,26 +637,7 @@ export function autobotApiErrorMessage(err: unknown, fallback: string): string {
 }
 
 export function useAutobotApi() {
-  const authStore = useAuthStore()
-
-  const client: AxiosInstance = axios.create({
-    baseURL: getBackendUrl(),
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    timeout: 30000,
-  })
-
-  // Add auth token to all requests
-  client.interceptors.request.use((config) => {
-    // The SLM session token; nothing writes `autobot_access_token`, so the old
-    // fallback to it is gone (#17856 row 8)
-    const token = authStore.token
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  })
+  const client = createAutobotBackendClient() // shared with the per-feature admin composables (#19217)
 
   // =============================================================================
   // Settings API

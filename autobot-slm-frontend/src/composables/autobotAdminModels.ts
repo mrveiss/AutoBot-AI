@@ -71,3 +71,24 @@ export type LogForwardingDestinationStatus = BackendSchemas['LogFwdDestinationSt
 /** GET /log-forwarding/status. Carries NO auto_start; read it from /auto-start. */
 export type LogForwardingStatus = BackendSchemas['LogFwdStatusResponse']
 export type LogForwardingAutoStart = BackendSchemas['LogFwdAutoStartResponse']
+
+// ---------------------------------------------------------------------------
+// Web research (#19217): autobot-backend/api/web_research_settings.py. The routes answer
+// with the flat `*Data` bodies below (the contract's DataResponse envelope is documentation
+// only), typed from the generated OpenAPI contract, never by hand.
+// ---------------------------------------------------------------------------
+
+/** GET /web-research/settings `settings`; PUT answers with the full set after the change. */
+export type WebResearchSettings = BackendSchemas['WebResearchSettings']
+export type WebResearchSettingKey = keyof WebResearchSettings
+/** PUT /web-research/settings body: only the fields sent are changed; extra fields are rejected. */
+export type WebResearchSettingsUpdate = BackendSchemas['WebResearchSettingsUpdate']
+export type WebResearchSettingsData = BackendSchemas['WebResearchSettingsData']
+/** PUT answer; `status` is "saved_not_applied" when saved but the running researcher did not take it. */
+export type WebResearchSettingsUpdateData = BackendSchemas['WebResearchSettingsUpdateData']
+/** GET /web-research/status; a 503 means the researcher failed to start. */
+export type WebResearchStatusData = BackendSchemas['WebResearchStatusData']
+/** POST /web-research/enable and /disable; `status` can be "saved_not_applied" too. */
+export type WebResearchToggleData = BackendSchemas['WebResearchToggleData']
+/** POST /web-research/clear-cache and /reset-circuit-breakers. */
+export type WebResearchCacheClearData = BackendSchemas['WebResearchCacheClearData']
