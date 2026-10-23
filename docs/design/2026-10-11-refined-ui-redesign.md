@@ -127,7 +127,7 @@ first item of the **Danger Zone** card in SLM console → Advanced control. Refe
 Route/view as found on `main` at 940da29. **New** = no view exists yet; confirm the backend before
 building UI for it.
 
-Page groups on the canvas (130 screens): Entry & Home 8 · Chat & Workspace 3 · Knowledge 9 ·
+Page groups on the canvas (130 screens; the 131st file, `screens/CompanyOSRefined.dc.html`, is not placed on the canvas): Entry & Home 8 · Chat & Workspace 3 · Knowledge 9 ·
 Company OS 40 (includes BusinessIntelligence, the Transcriber screens and Handbook) · Automation 8 · Agents 3 ·
 Analytics 6 · Settings 2 (Secrets, Preferences) · **SLM console (server-wide) 25** · Auth & Account
 10 · Components 16. The SLM console group holds Operations, ErrorMonitoring, FailureAnalysis,
@@ -159,7 +159,10 @@ need-to-know scoping per reader. `Handbook`.
 **Schedules (#18432).** One clickable schedule picker (Routines, workflow Schedule trigger, automation
 setup); lists show a plain-language summary; storage is translated in the background to standard
 cron, an RFC 5545 calendar rule, or a one-off run. The routes below are the current user-frontend
-routes; the group says where the mockup now puts the screen.
+routes; the group says where the mockup now puts the screen. For the 25 SLM-console screens the Route
+column gives the route in `autobot-slm-frontend` on `main` (`router/index.ts`, `router/monitoringRoutes.ts`)
+or **new**; "moving from" is the user-frontend path being retired, and "closest today" is a route
+that exists but does not serve the screen.
 
 | Mockup | Route | View / component |
 |---|---|---|
@@ -177,7 +180,7 @@ routes; the group says where the mockup now puts the screen.
 | Knowledge | `/knowledge/browser` | `components/knowledge/KnowledgeBrowser.vue` |
 | KnowledgeGraph | `/knowledge/graph` | `components/knowledge/KnowledgeGraphView.vue` |
 | KnowledgeVectorStore | `/knowledge/vector-store` | (route `knowledge-vector-store`, #8999) |
-| KnowledgeHealth | `/knowledge/health` → **SLM** Monitoring › Knowledge base (admin only) | `components/knowledge/KnowledgeHealth.vue` — moves to `autobot-slm-frontend`, install-wide |
+| KnowledgeHealth | `/knowledge/health` → **SLM** Monitoring › Knowledge base (admin only) — SLM route **new** (closest today: `/monitoring/admin`) | `components/knowledge/KnowledgeHealth.vue` — moves to `autobot-slm-frontend`, install-wide |
 | KnowledgeResearch | `/knowledge/research` | `components/knowledge/KnowledgeResearchTabs.vue` |
 | KnowledgeMcpResources | `/knowledge/mcp-resources` | `components/knowledge/McpResourceBrowser.vue` |
 | KnowledgeSystemDocs | `/knowledge/system-docs` | `components/knowledge/KnowledgeSystemDocs.vue` |
@@ -232,29 +235,29 @@ routes; the group says where the mockup now puts the screen.
 | AnalyticsCodeGeneration | `/analytics/code-generation` | `components/analytics/CodeGenerationDashboard.vue` |
 | BusinessIntelligence | `/analytics/bi` | `views/BusinessIntelligenceView.vue` |
 | Usage | `/analytics/usage` | `views/UsageView.vue` |
-| Operations | `/analytics/operations` | `views/OperationsView.vue` |
-| ErrorMonitoring | `/analytics/errors` | `views/ErrorMonitoringView.vue` |
-| FailureAnalysis | `/analytics/diagnostics` | `views/FailureAnalysisDashboard.vue` |
-| Plugins / Marketplace | `/plugins`, `/plugins/marketplace` | `views/PluginsView.vue`, `MarketplaceView.vue` |
-| Secrets / SecretsApiKeys / SecretsAudit | `/secrets`, `/secrets/llm-keys`, `/secrets/audit-log` | `components/security/SecretsManager.vue` + child routes |
+| Operations | SLM — **new** (closest today: `/monitoring/system`); moving from `/analytics/operations` | `views/OperationsView.vue` |
+| ErrorMonitoring | SLM `/monitoring/errors`; moving from `/analytics/errors` | `views/ErrorMonitoringView.vue` → `autobot-slm-frontend` `views/monitoring/ErrorMonitor.vue` |
+| FailureAnalysis | SLM — **new** (closest today: `/monitoring/errors`); moving from `/analytics/diagnostics` | `views/FailureAnalysisDashboard.vue` |
+| Plugins / Marketplace | SLM — **new**; moving from `/plugins`, `/plugins/marketplace` | `views/PluginsView.vue`, `MarketplaceView.vue` |
+| Secrets / SecretsApiKeys / SecretsAudit | SLM — **new** (closest today: `/settings/admin/secrets`, system secrets only; there is no `/secrets` route in the SLM); moving from `/secrets`, `/secrets/llm-keys`, `/secrets/audit-log` | `components/security/SecretsManager.vue` + child routes |
 | Preferences | `/preferences` | `views/SettingsView.vue` |
-| LlmConfig | SLM `admin/llm` | `autobot-slm-frontend` (`/llm-config` in the user frontend redirects) |
+| LlmConfig | SLM `/settings/admin/llm` | `autobot-slm-frontend` (`/llm-config` in the user frontend redirects) |
 | ThemeManager | SLM — **new** | SLM admin screen for installed themes (#10472) |
-| AdminUsers | `/admin/users` | `views/AdminUsersView.vue` |
-| AdminSandbox | `/admin/sandbox` | `views/AdminSandboxView.vue` |
-| AdminAdvancedControl | `/admin/advanced-control` | `views/AdvancedControlView.vue` |
-| AdminBudgetPolicies | `/admin/budget-policies` | `views/BudgetPolicies.vue` |
-| AdminProviderFallback | `/admin/provider-fallback` | `views/ProviderFallbackView.vue` |
-| AdminPricing | `/admin/pricing` | `views/AdminPricingView.vue` |
-| AdminMcpServers | `/admin/mcp-servers` | `views/AdminMcpServersView.vue` |
-| AdminPermissionScopes | `/admin/permission-scopes` | `views/AdminPermissionScopesView.vue` (empty state today) |
-| AuditLogs | `/analytics/audit` | `views/AuditLogsView.vue` |
-| SystemHealth | `/admin/system-health` | `views/SystemHealthView.vue` |
-| SlmAgentLedger | SLM — **new** | install-wide agent ledger: presence, claims, contention, dev-loop history (#18391) |
-| Experiments | `/experiments` | `views/ExperimentDashboard.vue` |
-| Benchmark | `/analytics/benchmark` | `views/BenchmarkView.vue` |
-| Evolution | `/analytics/evolution` | `views/EvolutionView.vue` |
-| DevSpeedup | `/analytics/dev-tools` | (moved there by #902) |
+| AdminUsers | SLM `/settings/admin/users`; moving from `/admin/users` | `views/AdminUsersView.vue` → SLM `views/settings/admin/UserManagementSettings.vue` |
+| AdminSandbox | SLM — **new**; moving from `/admin/sandbox` | `views/AdminSandboxView.vue` |
+| AdminAdvancedControl | SLM `/tools/advanced-control`; moving from `/admin/advanced-control` | `views/AdvancedControlView.vue` → SLM `views/tools/admin/AdvancedControlTool.vue` |
+| AdminBudgetPolicies | SLM — **new** (closest today: `/settings/admin/budget-audit`, read-only audit); moving from `/admin/budget-policies` | `views/BudgetPolicies.vue` |
+| AdminProviderFallback | SLM `/settings/admin/llm-fallbacks`; moving from `/admin/provider-fallback` | `views/ProviderFallbackView.vue` → SLM `views/settings/admin/LLMFallbacksView.vue` |
+| AdminPricing | SLM — **new**; moving from `/admin/pricing` | `views/AdminPricingView.vue` |
+| AdminMcpServers | SLM — **new** (closest today: `/tools/mcp`, the MCP Registry); moving from `/admin/mcp-servers` | `views/AdminMcpServersView.vue` |
+| AdminPermissionScopes | SLM — **new**; moving from `/admin/permission-scopes` | `views/AdminPermissionScopesView.vue` (empty state today) |
+| AuditLogs | SLM `/security/audit` (Audit Logs tab); moving from `/analytics/audit` | `views/AuditLogsView.vue` → SLM `views/SecurityView.vue` |
+| SystemHealth | SLM — **new** (closest today: `/monitoring/system`); moving from `/admin/system-health` | `views/SystemHealthView.vue` |
+| SlmAgentLedger | SLM `/monitoring/agent-ledger` (admin only, #18391) | install-wide agent ledger: presence, claims, contention, dev-loop history — SLM `views/monitoring/AgentLedgerMonitor.vue` |
+| Experiments | SLM — **new**; moving from `/experiments` | `views/ExperimentDashboard.vue` |
+| Benchmark | SLM — **new**; moving from `/analytics/benchmark` | `views/BenchmarkView.vue` |
+| Evolution | SLM — **new**; moving from `/analytics/evolution` | `views/EvolutionView.vue` |
+| DevSpeedup | SLM — **new**; moving from `/analytics/dev-tools` | (moved there by #902) |
 | SignUp, ForgotPassword, TwoFactor, AcceptInvite | — **new** | confirm auth backend support first |
 | AccountSecurity, AccountNotifications, AccountApiKeys, AccountIntegrations | — **new** | account area linked from Profile settings |
 | HelpCenter, SearchResults | — **new** | — |

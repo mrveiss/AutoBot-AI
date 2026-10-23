@@ -243,18 +243,19 @@ def _ls_files(repo_root: Path, git_args: Sequence[str], described: str) -> List[
     return lines
 
 
-def enforce_reach(reached: int, floor: int, *, hook: str, full_repo: bool) -> int:
+def enforce_reach(reached: int, floor: int, *, hook: str, full_repo: bool, unit: str = "file(s)") -> int:
     """``1`` when a full-repo sweep landed under *floor*, else ``0``.
 
     **Full-repo mode only.** pre-commit passes the changed files as argv, and
     a PR touching nothing in a hook's scope legitimately gives it zero files;
     a floor applied there would fail every such PR in the repository. That is
     why *full_repo* is a keyword the caller must state rather than something
-    inferred here.
+    inferred here. *unit* names what *reached* counts, so a sweep that counts
+    reads or plays does not report them as files.
     """
     if not full_repo or reached >= floor:
         return 0
-    logger.error("[%s] full-repo sweep reached only %d file(s); floor is %d.", hook, reached, floor)
+    logger.error("[%s] full-repo sweep reached only %d %s; floor is %d.", hook, reached, unit, floor)
     logger.error("FIX THE SWEEP, not the tree — a clean result below this floor asserts nothing.")
     return 1
 

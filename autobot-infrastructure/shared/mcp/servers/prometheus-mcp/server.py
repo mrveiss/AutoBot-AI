@@ -11,10 +11,10 @@ Provides agents with access to Prometheus metrics data
 import asyncio
 import os
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from functools import partial
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, List
 
 import aiohttp
 
@@ -25,14 +25,15 @@ from mcp.types import Resource, TextContent, Tool
 # Prometheus configuration - uses SSOT env var with fallback (#639)
 PROMETHEUS_URL = os.getenv("AUTOBOT_PROMETHEUS_URL", "http://10.0.0.4:9090")
 
-# The instant query is the canonical client's (#18964); `autobot_shared` is the repo-root package.
+# The instant and range queries are the canonical client's (#18964); `autobot_shared` is the repo-root package.
 _REPO_ROOT = Path(__file__).resolve().parents[5]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from autobot_shared.monitoring.prometheus_query import query_instant  # noqa: E402
+from autobot_shared.monitoring.prometheus_query import query_instant, query_range_series  # noqa: E402
 
 _query_instant = partial(query_instant, base_url=PROMETHEUS_URL)
+_query_range_series = partial(query_range_series, base_url=PROMETHEUS_URL)
 
 app = Server("prometheus-mcp")
 
@@ -138,7 +139,7 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
     elif name == "query_range":
         duration = arguments.get("duration", "1h")
         step = arguments.get("step", "15s")
-        return await query_range(arguments["query"], duration, step)
+        return await render_query_range(arguments["query"], duration, step)
 
     elif name == "get_system_metrics":
         return await get_system_metrics()
@@ -155,30 +156,6 @@ async def call_tool(name: str, arguments: Any) -> List[TextContent]:
 
     else:
         return [TextContent(type="text", text=f"Unknown tool: {name}")]
-
-
-async def prometheus_query_range(query: str, start: datetime, end: datetime, step: str) -> Optional[Dict]:
-    """Execute range Prometheus query."""
-    try:
-        async with aiohttp.ClientSession() as session:
-            params = {
-                "query": query,
-                "start": start.isoformat() + "Z",
-                "end": end.isoformat() + "Z",
-                "step": step,
-            }
-            async with session.get(f"{PROMETHEUS_URL}/api/v1/query_range", params=params, timeout=30) as response:
-                if response.status != 200:
-                    return None
-
-                data = await response.json()
-                if data.get("status") != "success":
-                    return None
-
-                return data.get("data", {})
-
-    except Exception:
-        return None
 
 
 async def query_metric(query: str) -> List[TextContent]:
@@ -203,8 +180,8 @@ async def query_metric(query: str) -> List[TextContent]:
     return [TextContent(type="text", text=f"Query: {query}\n\nResults:\n" + "\n".join(results))]
 
 
-async def query_range(query: str, duration: str, step: str) -> List[TextContent]:
-    """Query metric over time range."""
+async def render_query_range(query: str, duration: str, step: str) -> List[TextContent]:
+    """Render the ``query_range`` MCP tool: the last points of each series as text."""
     # Parse duration
     duration_map = {
         "15m": timedelta(minutes=15),
@@ -215,16 +192,13 @@ async def query_range(query: str, duration: str, step: str) -> List[TextContent]
     }
 
     delta = duration_map.get(duration, timedelta(hours=1))
-    end = datetime.now(timezone.utc)
-    start = end - delta
+    series_list = await _query_range_series(query, delta.total_seconds() / 3600, step)
 
-    data = await prometheus_query_range(query, start, end, step)
-
-    if not data or not data.get("result"):
+    if not series_list:
         return [TextContent(type="text", text=f"No data found for query: {query}")]
 
     results = []
-    for result in data["result"]:
+    for result in series_list:
         metric = result["metric"]
         values = result.get("values", [])
 

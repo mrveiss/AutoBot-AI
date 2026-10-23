@@ -66,6 +66,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from autobot_shared.logging_manager import get_logger  # noqa: E402
 from autobot_shared.service_registry_core import (  # noqa: E402 - follows the sys.path setup
     SERVICE_DEFINITIONS,
     DeploymentMode,
@@ -74,7 +75,6 @@ from autobot_shared.service_registry_core import (  # noqa: E402 - follows the s
     join_service_path,
     parse_deployment_mode,
 )
-from autobot_shared.logging_manager import get_logger  # noqa: E402
 from autobot_shared.status_enums import HealthStatus  # noqa: E402
 
 logger = get_logger(__name__)
@@ -109,7 +109,9 @@ class ServiceRegistry:
     @staticmethod
     def _detect_deployment_mode() -> DeploymentMode:
         """Detect deployment mode from env, falling back to container heuristic."""
-        explicit = parse_deployment_mode(os.environ.get("AUTOBOT_DEPLOYMENT_MODE", ""), logger, "AUTOBOT_DEPLOYMENT_MODE")
+        # Unset means "detect from /.dockerenv", not the backend's "distributed" (#18094).
+        raw = os.environ.get("AUTOBOT_DEPLOYMENT_MODE", "")  # ssot-config-exempt: unset -> container detection
+        explicit = parse_deployment_mode(raw, logger, "AUTOBOT_DEPLOYMENT_MODE")
         return detect_deployment_mode(
             explicit, in_container=os.path.exists("/.dockerenv"), kubernetes=False, distributed=False
         )

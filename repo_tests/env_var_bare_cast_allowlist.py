@@ -57,19 +57,6 @@ Editing rules:
 #: come back, which is the failure this repo keeps finding in its own checks.
 #: Widening it changes nothing here: the count is still 7.
 BARE_ENV_CASTS = {
-    # Standalone operator-run maintenance/analysis scripts (#15691): invoked
-    # directly via `python3 <script>`, never imported by a running service,
-    # so a malformed AUTOBOT_REDIS_DB_* crashes in the operator's own
-    # terminal instead of silently clamping to a DIFFERENT logical database
-    # and having the script inspect or migrate the wrong data. Silent
-    # fallback is the worse failure here, not the safer one -- clamping is
-    # the wrong fix for this shape, not merely an unapplied one.
-    "autobot-infrastructure/shared/scripts/analysis/analyze_redis_db0.py::_DB_MAIN": (
-        "#15691 -- DELIBERATE, operator-run script; see module docstring above"
-    ),
-    "autobot-infrastructure/shared/scripts/utilities/migrate_codebase_to_chromadb.py::_DB_ANALYTICS": (
-        "#15691 -- DELIBERATE, operator-run script; see module docstring above"
-    ),
     # autobot_knowledge_mcp is packaged independently (own pyproject.toml,
     # own dependency list, its own console-script entry point) and does not
     # declare autobot_shared as a dependency. Importing
@@ -88,7 +75,7 @@ BARE_ENV_CASTS = {
 #: all converted -- none joined the 7. NEVER raise this to let a new bare
 #: cast through, in either spelling -- convert it to a crash-safe reader, or
 #: record it above with an issue number.
-MAX_BARE_ENV_CASTS = 3
+MAX_BARE_ENV_CASTS = 1
 
 #: The combined #15691 + #15710 measurement, kept so a future reader can tell
 #: a population that is draining (this number falling) from one that is

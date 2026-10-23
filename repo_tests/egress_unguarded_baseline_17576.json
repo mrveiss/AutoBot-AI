@@ -69,7 +69,7 @@
   "autobot-backend/web_fetch/fetcher.py": 1,
   "autobot-backend/web_fetch/robots.py": 1,
   "autobot-backend/web_fetch/site_mapper.py": 1,
-  "autobot-infrastructure/shared/mcp/servers/prometheus-mcp/server.py": 2,
+  "autobot-infrastructure/shared/mcp/servers/prometheus-mcp/server.py": 1,
   "autobot-infrastructure/shared/mcp/tools/knowledge-base-mcp/autobot_knowledge_mcp/server.py": 5,
   "autobot-infrastructure/shared/scripts/analysis/check_backend_status.py": 2,
   "autobot-infrastructure/shared/scripts/analysis/npu_performance_measurement.py": 8,

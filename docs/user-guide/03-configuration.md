@@ -1,294 +1,72 @@
 # User Configuration Guide
 
-Simple, user-friendly configuration options for AutoBot. For detailed technical configuration, see [Complete Configuration Reference](../configuration.md).
-
-## Quick Configuration
-
-### Accessing Settings
-
-AutoBot provides multiple ways to configure settings:
-
-1. **Web Interface**: Click the gear icon (⚙️) in the web interface
-2. **Chat Commands**: Type `/settings` in the chat
-3. **Configuration File**: Edit `config/config.yaml` directly
+Where AutoBot's settings live and how to change them. Reference for every environment variable: [ENV_VARS.md](../developer/ENV_VARS.md).
 
-### Essential Settings
-
-#### Choose Your AI Provider
+## Where Settings Live
 
-**Option 1: Ollama (Local, Free)**
-```yaml
-llm_config:
-  default_llm: "ollama_tinyllama"
-  ollama:
-    host: "http://localhost:11434"
-```
+| What | Where |
+|------|-------|
+| Infrastructure and admin settings (LLM providers, nodes, security, users, secrets) | **SLM Admin > Settings** |
+| Appearance, language, voice | **Preferences**, the cog icon in the main app header ([guide](05-preferences.md)) |
+| Environment variables (ports, hosts, feature switches) | Env files, see [Environment files](#environment-files) |
+| Backend defaults shipped with the code | `autobot-backend/config.yaml` in the source tree |
 
-**Option 2: OpenAI (Cloud, Paid)**
-```yaml
-llm_config:
-  default_llm: "openai_gpt35"
-  openai:
-    api_key: ""  # Set via environment variable OPENAI_API_KEY
-```
+The main app's `/settings` address does not open a page in the main app: it sends you to **SLM Admin > Settings**. SLM Admin is at `https://<server>/slm/` on a bare-metal install and `http://localhost/slm/` on Docker (see [Installation](01-installation.md)).
 
-**Option 3: Anthropic Claude (Cloud, Paid)**
-```yaml
-llm_config:
-  default_llm: "anthropic_claude"
-  anthropic:
-    api_key: ""  # Set via environment variable ANTHROPIC_API_KEY
-```
+## SLM Admin Settings
 
-#### Basic System Settings
-
-```yaml
-# Change ports if needed
-backend:
-  server_port: 8001
-
-# Frontend port (if running development server)
-frontend:
-  port: 5173
+SLM Admin > Settings has these sections:
 
-# Enable/disable features
-memory:
-  redis:
-    enabled: true    # Set false if Redis not available
-  chromadb:
-    enabled: true    # Vector database for knowledge search
-```
+| Section | Covers |
+|---------|--------|
+| General | System configuration; re-run the Setup Wizard |
+| Monitoring, Notifications | Monitoring and alert delivery |
+| Security | MFA and API keys |
+| API, Backend | API and backend settings |
+| Disposal Policy, Findings Policy | Data disposal and findings policies |
+| Users | User management (admin) |
+| Cache, Prompts, Personality | Cache, prompt and personality settings (admin) |
+| Secrets | System secrets (admin) |
+| Log Forwarding | Log forwarding (admin) |
+| LLM, LLM Fallbacks | LLM providers and their fallback order (admin) |
+| Budget Audit, SSO / OIDC, Data Hygiene | Budget audit, single sign-on, data hygiene (admin) |
 
-## Configuration Through Web Interface
+Admin-only sections need an admin account.
 
-### LLM Settings
+## Choose Your AI Provider
 
-1. **Access Settings**: Click ⚙️ icon → "LLM Configuration"
-2. **Choose Provider**: Select Ollama, OpenAI, or Anthropic
-3. **Select Model**: Pick from available models
-4. **Adjust Temperature**:
-   - Low (0.1-0.3): More focused, deterministic responses
-   - Medium (0.4-0.7): Balanced creativity and consistency
-   - High (0.8-1.0): More creative, varied responses
+1. Open **SLM Admin > Settings > LLM**.
+2. On **Providers**, add or select a provider and set its model, endpoint and API key. Use **Server Settings** for the local Ollama server and **Models** for the model list.
+3. Open **LLM Fallbacks** to set what AutoBot tries when the active provider fails.
 
-### System Behavior
+Ollama is the shipped default provider (`default_provider` and `active_provider` in `autobot-backend/config.yaml`). Cloud providers need only an API key. To run Ollama inside the Docker stack, see [INSTALL.md - Profiles](../../INSTALL.md#profiles).
 
-1. **Access Settings**: Click ⚙️ icon → "Agent Behavior"
-2. **Autonomy Level**:
-   - **Supervised**: Asks permission for system commands (recommended)
-   - **Autonomous**: Executes approved commands automatically
-   - **Restricted**: Chat only, no system access
-3. **Command Permissions**: Enable/disable file system, network, and command execution
+How AutoBot picks a model per request: [Model Selection Guide](../user/guides/model-selection.md). Fallback behavior: [LLM Model Fallback](../developer/llm-fallback.md).
 
-### Performance Settings
+## GPU
 
-1. **Access Settings**: Click ⚙️ icon → "Performance"
-2. **Hardware Acceleration**: Enable GPU if available
-3. **Memory Limits**: Set RAM usage limits
-4. **Model Options**: Choose faster vs higher quality models
+`autobot-backend/config.yaml` ships GPU and Ollama GPU settings (`gpu_enabled`, `gpu_layers`) switched on, with the device priority cuda, openvino, cpu. Driver installation is host software: see [Installation - GPU Acceleration](01-installation.md#gpu-acceleration-optional). Provider and model choice stays in SLM Admin.
 
-## Common Configuration Scenarios
+## Environment Files
 
-### Home User Setup (Recommended)
+Ports, hosts and feature switches are environment variables, set through env files:
 
-```yaml
-llm_config:
-  default_llm: "ollama_tinyllama"  # Fast, local, free
+- **Docker**: `docker/.env.docker` is the only Docker env file; per-host secrets go in `docker/.env.secrets` (created by `bash docker/generate-secrets.sh`). Pass both with `--env-file`, as in [INSTALL.md](../../INSTALL.md#docker-deployment).
+- **Bare-metal**: the installer writes the real env files. `.env.example` is the annotated reference; `.env.base` plus one overlay (`.env.localhost`, `.env.native-vm`, `.env.network`) is the layout. Details: [ENV_VARS.md - Env-file family](../developer/ENV_VARS.md#env-file-family).
+- Generated admin credentials and secrets for a bare-metal install: `/etc/autobot/slm-secrets.env` ([INSTALL.md - Post-Install Structure](../../INSTALL.md#post-install-structure)).
 
-agent:
-  autonomy_level: "supervised"     # Safe, asks permission
+Host keys (`*_HOST`) take a bare host name or IP address with no scheme or port; ports go in the matching `*_PORT` key.
 
-memory:
-  redis:
-    enabled: true                  # Enhanced features
-  chromadb:
-    enabled: true                  # Knowledge search
+Keep API keys and passwords out of committed files and shared shell profiles: store them in **SLM Admin > Settings > Secrets** or the env files above.
 
-hardware:
-  gpu:
-    enabled: false                 # Use CPU (stable)
-```
+## After Changing Settings
 
-### Developer Setup
+- After editing an env file: Docker, `docker compose ... up -d` again with the same `--env-file` flags; bare-metal, `sudo systemctl restart autobot-slm-backend`.
+- Check health with the commands in [Quick Start - Check Health](02-quickstart.md#check-health).
+- Problems: [Troubleshooting](04-troubleshooting.md).
 
-```yaml
-llm_config:
-  default_llm: "ollama_llama2"     # Better code understanding
+## More
 
-agent:
-  autonomy_level: "autonomous"     # Faster workflow
-  max_task_depth: 15               # Complex tasks
-
-debugging:
-  enabled: true                    # Development tools
-  log_level: "debug"               # Detailed logs
-
-hardware:
-  gpu:
-    enabled: true                  # Faster inference
-```
-
-### Enterprise Setup
-
-```yaml
-llm_config:
-  default_llm: "openai_gpt4"       # Highest quality
-
-security:
-  strict_mode: true                # Enhanced security
-  command_filter:
-    enabled: true                  # Filter dangerous commands
-
-logging:
-  audit_enabled: true              # Compliance logging
-  retention_days: 90               # Keep logs longer
-
-network:
-  require_auth: true               # Authentication required
-```
-
-## Environment Variables
-
-For sensitive information, use environment variables instead of config files:
-
-```bash
-# AI Provider API Keys
-export OPENAI_API_KEY="your-openai-key"  # pragma: allowlist secret
-export ANTHROPIC_API_KEY="your-anthropic-key"  # pragma: allowlist secret
-
-# Server Configuration
-export AUTOBOT_BACKEND_PORT=8001
-export AUTOBOT_FRONTEND_PORT=5173
-
-# Redis Configuration
-export AUTOBOT_REDIS_HOST="localhost"
-export AUTOBOT_REDIS_PORT=6379
-export AUTOBOT_REDIS_PASSWORD="your-password"  # pragma: allowlist secret
-
-# Security
-export AUTOBOT_SECRET_KEY="your-secure-secret"  # pragma: allowlist secret
-```
-
-Add these to your shell profile (`.bashrc`, `.zshrc`) to persist across sessions.
-
-## Configuration Validation
-
-### Check Configuration
-
-```bash
-# Validate configuration file
-python -c "from src.config import config; print('✓ Configuration valid')"
-
-# Test specific components
-python -c "from src.diagnostics import check_llm; check_llm()"
-python -c "from src.diagnostics import check_redis; check_redis()"
-```
-
-### Configuration Status
-
-Use the web interface or chat commands:
-
-```
-/status config
-```
-
-```
-/settings validate
-```
-
-## Backup and Restore
-
-### Backup Current Configuration
-
-```bash
-# Create timestamped backup
-cp config/config.yaml config/config.backup.$(date +%Y%m%d_%H%M%S).yaml
-
-# Quick backup
-cp config/config.yaml config/config.backup.yaml
-```
-
-### Restore Configuration
-
-```bash
-# Restore from backup
-cp config/config.backup.yaml config/config.yaml
-
-# Reset to defaults
-cp config/config.yaml.template config/config.yaml
-```
-
-### Export Settings
-
-Through web interface:
-1. Settings → "Export Configuration"
-2. Save the downloaded file as backup
-3. Import on other AutoBot instances
-
-## Troubleshooting Configuration
-
-### Common Issues
-
-**Issue: Changes not taking effect**
-- Restart AutoBot: `./run_agent.sh`
-- Check configuration syntax: `python -c "import yaml; yaml.safe_load(open('config/config.yaml'))"`
-
-**Issue: LLM connection failed**
-- Verify API keys in environment variables
-- For Ollama: ensure service is running (`ollama serve`)
-- Check network connectivity
-
-**Issue: Port conflicts**
-- Change ports in configuration:
-```yaml
-backend:
-  server_port: 8002  # Change from default 8001
-```
-
-**Issue: Performance problems**
-- Disable GPU if causing issues:
-```yaml
-hardware:
-  gpu:
-    enabled: false
-```
-- Use lighter models (tinyllama instead of llama2)
-
-### Configuration Help
-
-1. **Built-in Validation**: AutoBot validates configuration on startup
-2. **Web Interface**: Visual feedback for configuration errors
-3. **Log Files**: Check `logs/autobot.log` for configuration issues
-4. **Chat Support**: Ask AutoBot about configuration: "Help me configure my settings"
-
-## Advanced Configuration
-
-For advanced users who need detailed technical configuration:
-
-- **[Complete Configuration Reference](../configuration.md)**: All YAML sections and options
-- **[API Configuration](../backend_api.md)**: REST API settings and security
-- **[Developer Configuration](../project.md)**: Development and deployment options
-
-## Configuration Best Practices
-
-### Security
-1. **Never commit API keys** to version control
-2. **Use environment variables** for sensitive data
-3. **Set secure file permissions**: `chmod 600 config/config.yaml`
-4. **Regular backups** of working configurations
-
-### Performance
-1. **Start simple**: Use default settings first
-2. **Monitor resources**: Watch CPU/RAM usage
-3. **GPU acceleration**: Enable only if stable
-4. **Model selection**: Balance speed vs quality
-
-### Maintenance
-1. **Version control**: Track configuration changes
-2. **Documentation**: Comment complex settings
-3. **Testing**: Validate after changes
-4. **Monitoring**: Watch logs for issues
-
----
-
-**Need more advanced configuration options?** See the [Complete Configuration Reference](../configuration.md) for technical details.
+- [Environment variable reference](../developer/ENV_VARS.md)
+- [Configuration section of the docs](../configuration/_index.md)
+- [Port mappings](../guides/PORT_MAPPINGS.md)
