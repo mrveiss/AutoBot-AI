@@ -340,6 +340,24 @@ def test_a_templated_deploy_root_still_resolves_to_a_repo_path():
     assert unresolvable == [], "the templated value was reported unresolvable, not resolved"
 
 
+def test_a_deploy_root_derived_from_group_vars_still_resolves(tmp_path):
+    """#19147 spells the root `{{ autobot.base_dir }}/src` (the #15632 SSOT).
+
+    That is not a literal, so without rendering group_vars/all the variable is
+    dropped and every reference behind it leaves the population.
+    """
+    group_vars = tmp_path / "component" / "ansible" / "inventory" / "group_vars"
+    group_vars.mkdir(parents=True)
+    (group_vars / "all.yml").write_text('autobot:\n  base_dir: "/opt/autobot"\n', encoding="utf-8")
+    playbook = _TEMPLATED_PLAYBOOK.replace("/opt/autobot/src", '"{{ autobot.base_dir }}/src"')
+
+    resolved, unresolvable = guard._referenced_repo_paths(playbook, guard.inventory_vars(tmp_path))
+
+    assert resolved == [(6, "requirements", "autobot-npu-worker/requirements.txt")]
+    assert unresolvable == []
+    assert guard._referenced_repo_paths(playbook)[0] == [], "rendered without the inventory"
+
+
 def test_a_wrong_path_behind_a_template_is_still_caught():
     """#13744 restated against the templated form.
 
@@ -410,9 +428,10 @@ def test_this_repository_still_resolves_its_deployed_src_references():
     """
     root = pathlib.Path(__file__).resolve().parents[1]
     resolved = 0
+    inventory = guard.inventory_vars(root)
     for play in guard._ansible_files(root):
         try:
-            hits, _ = guard._referenced_repo_paths(play.read_text(encoding="utf-8"))
+            hits, _ = guard._referenced_repo_paths(play.read_text(encoding="utf-8"), inventory)
         except OSError:
             continue
         resolved += len(hits)

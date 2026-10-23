@@ -137,6 +137,13 @@ record_install() {  # record_install <key> <value>, once (#18653)
     mkdir -p "$(dirname "${INSTALL_RECORD}")"
     grep -qxF "$1=$2" "${INSTALL_RECORD}" 2>/dev/null || echo "$1=$2" >> "${INSTALL_RECORD}"
 }
+pkg_installed() { dpkg-query -W -f='${Status}' "$1" 2>/dev/null | grep -q 'ok installed'; }
+apt_install_recorded() {  # <desc> <pkg>...: install; record only packages absent BEFORE (#18727)
+    local desc="$1" p new=(); shift
+    for p in "$@"; do pkg_installed "${p}" || new+=("${p}"); done
+    run_ok "${desc}" env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$@" || return
+    for p in "${new[@]}"; do record_install package "${p}"; done
+}
 
 # add_ppa_if_missing: prefer device-shipped PPA; only add if not already configured (#7144)
 #   $1 = ppa spec for apt-add-repository, e.g. "ppa:ansible/ansible"
@@ -456,10 +463,7 @@ system_setup() {
         add_ppa_if_missing "ppa:deadsnakes/ppa" "deadsnakes/ppa" "deadsnakes (Python 3.14)"
         run_ok "Updating package lists (Python 3.14)" \
             apt-get update -qq
-        run_ok "Installing Python 3.14" \
-            env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-                python3.14 python3.14-venv python3.14-dev
-        for p in python3.14 python3.14-venv python3.14-dev; do record_install package "${p}"; done
+        apt_install_recorded "Installing Python 3.14" python3.14 python3.14-venv python3.14-dev
     else
         success "  Python 3.14 already installed ($(python3.14 --version))"
     fi
@@ -468,9 +472,7 @@ system_setup() {
         add_ppa_if_missing "ppa:ansible/ansible" "ansible/ansible" "Ansible"
         run_ok "Updating package lists (Ansible)" \
             apt-get update -qq
-        run_ok "Installing Ansible" \
-            env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq ansible
-        record_install package ansible
+        apt_install_recorded "Installing Ansible" ansible
     else
         success "  Ansible already installed ($(ansible --version | head -1))"
     fi
@@ -478,9 +480,7 @@ system_setup() {
     if ! command -v node &>/dev/null; then
         run_ok "Adding NodeSource repository" \
             bash -c "curl -fsSL https://${NODESOURCE_HOST}/setup_20.x | bash -"
-        run_ok "Installing Node.js" \
-            env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nodejs
-        record_install package nodejs; record_install apt_source nodesource
+        apt_install_recorded "Installing Node.js" nodejs; record_install apt_source nodesource
     else
         success "  Node.js already installed ($(node --version))"
     fi

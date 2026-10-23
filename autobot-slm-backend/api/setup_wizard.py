@@ -12,7 +12,6 @@ node addition, enrollment, role assignment, and fleet provisioning.
 
 import asyncio
 import logging
-import tempfile
 import time
 import uuid
 from datetime import datetime, timezone
@@ -30,7 +29,7 @@ from config import settings
 from services.auth import get_current_user
 from services.database import db_service
 from services.inventory_builder import _DECLARED_ONLY_GROUPS, _declared_roles, groups_for_role_tokens
-from services.playbook_executor import ANSIBLE_LOCAL_TMP, get_playbook_executor, link_group_vars
+from services.playbook_executor import get_playbook_executor
 from services.provision_progress import (
     PROVISION_STALE_SECONDS,
     handle_provision_result,
@@ -40,6 +39,7 @@ from services.provision_progress import mark_progress as _mark_provision_progres
 from services.provision_progress import write_provision_log as _write_provision_log
 from services.role_registry import ROLE_ANSIBLE_GROUPS
 from services.ssh_utils import ssh_destination_args, ssh_options
+from services.temp_inventory import write_linked_inventory
 
 logger = logging.getLogger(__name__)
 
@@ -654,13 +654,8 @@ def _write_wizard_inventory(inventory: dict) -> str:
     Returns:
         Path to the written file, as a string.
     """
-    tmp_dir = Path(ANSIBLE_LOCAL_TMP)
-    tmp_dir.mkdir(mode=0o700, exist_ok=True)
-    fd, path = tempfile.mkstemp(suffix=".yml", prefix="wizard-inventory-", dir=str(tmp_dir))
-    with open(fd, "w", encoding="utf-8") as f:
-        yaml.dump(inventory, f, default_flow_style=False)
-    link_group_vars(Path(path), get_playbook_executor().ansible_dir)
-    return path
+    content = yaml.dump(inventory, default_flow_style=False)
+    return str(write_linked_inventory(content, "wizard-inventory-", get_playbook_executor().ansible_dir))
 
 
 async def _generate_dynamic_inventory(

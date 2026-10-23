@@ -29,7 +29,7 @@
   gather_facts: true
 
   vars:
-    backup_dir: /opt/autobot/backups
+    backup_dir: "{{ autobot.base_dir }}/backups"
     backup_timestamp: "{{ ansible_facts['date_time'].epoch }}"
     decommission_backup_path: "{{ backup_dir }}/decommission-{{ backup_timestamp }}"
     default_data_dirs:
@@ -37,7 +37,7 @@
       - /var/lib/postgresql
       - /var/lib/chromadb  # legacy path (kept so old nodes are still cleaned)
       # Real ChromaDB data dir (#11099) — /var/lib/chromadb alone left it behind.
-      - "{{ chromadb_data_dir | default('/opt/autobot/autobot-db-stack/chromadb/data') }}"
+      - "{{ chromadb_data_dir | default(autobot.base_dir ~ '/autobot-db-stack/chromadb/data') }}"
       - /var/lib/autobot
       - /usr/share/ollama/.ollama
       - /var/lib/ollama
@@ -212,7 +212,7 @@
     # =======================================================================
     - name: "Phase 4 — Remove application code, data, and logs"
       block:
-        - name: Copy backup out of /opt/autobot if backup was requested
+        - name: Copy backup out of {{ autobot.base_dir }} if backup was requested
           ansible.builtin.shell: |
             if [ -d "{{ decommission_backup_path }}" ]; then
               mkdir -p /tmp/autobot-decommission-backup
@@ -220,9 +220,9 @@
             fi
           when: backup_before_decommission | default(false) | bool
 
-        - name: Remove /opt/autobot entirely
+        - name: Remove {{ autobot.base_dir }} entirely
           ansible.builtin.file:
-            path: /opt/autobot
+            path: "{{ autobot.base_dir }}"
             state: absent
 
         - name: Restore backup to /tmp if it was requested
@@ -238,7 +238,7 @@
             - /var/lib/autobot
             - /var/lib/chromadb  # legacy path (kept so old nodes are still cleaned)
             # Real ChromaDB data dir (#11099).
-            - "{{ chromadb_data_dir | default('/opt/autobot/autobot-db-stack/chromadb/data') }}"
+            - "{{ chromadb_data_dir | default(autobot.base_dir ~ '/autobot-db-stack/chromadb/data') }}"
             - /var/lib/ollama
             - /usr/share/ollama
             - /var/log/autobot
@@ -412,7 +412,7 @@
           - IP: {{ ansible_facts['default_ipv4'].address | default(ansible_host) }}
           - Services: stopped and removed
           - Systemd units: removed
-          - Application code: /opt/autobot removed
+          - Application code: {{ autobot.base_dir }} removed
           - Data directories: cleaned
           - Packages: AutoBot-specific packages purged
           - APT repos: removed (redis, nodesource, ollama)

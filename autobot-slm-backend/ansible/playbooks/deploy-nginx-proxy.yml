@@ -20,8 +20,8 @@
   vars:
     backend_user: autobot
     backend_group: autobot
-    backend_install_dir: /opt/autobot/autobot-backend
-    backend_code_dir: /opt/autobot/autobot-backend
+    backend_install_dir: "{{ autobot.base_dir }}/autobot-backend"
+    backend_code_dir: "{{ autobot.base_dir }}/autobot-backend"
     backend_log_dir: /var/log/autobot
     service_auth_service_id: "main-backend"
     service_auth_keys_dir: "/etc/autobot/service-keys"

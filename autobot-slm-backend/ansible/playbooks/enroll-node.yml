@@ -327,14 +327,14 @@
           block:
             - name: "Create git hooks directory"
               file:
-                path: "{{ slm_code_repository | default('${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}') }}/.git/hooks"
+                path: "{{ slm_code_repository | default('${AUTOBOT_PROJECT_ROOT:-' ~ autobot.base_dir ~ '/code_source}') }}/.git/hooks"
                 state: directory
                 mode: '0755'
 
             - name: "Deploy SLM post-commit hook"
               copy:
                 src: "{{ playbook_dir }}/../../../autobot-infrastructure/shared/scripts/hooks/slm-post-commit"
-                dest: "{{ slm_code_repository | default('${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}') }}/.git/hooks/post-commit"
+                dest: "{{ slm_code_repository | default('${AUTOBOT_PROJECT_ROOT:-' ~ autobot.base_dir ~ '/code_source}') }}/.git/hooks/post-commit"
                 mode: '0755'
 
             - name: "Create SLM agent environment file for code-source"
