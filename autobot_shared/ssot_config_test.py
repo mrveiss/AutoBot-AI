@@ -181,7 +181,7 @@ class TestAutoBotConfig:
         with patch.dict(os.environ, {}, clear=True):
             config = AutoBotConfig(_env_file=None)
             # Test that values are valid types/formats
-            assert config.deployment_mode in ("distributed", "hybrid", "local")
+            assert config.deployment_mode == ""  # unset = auto-detect (owner, #19315)
             assert isinstance(config.debug, bool)
             assert config.log_level in ("DEBUG", "INFO", "WARNING", "ERROR")
 

@@ -40,6 +40,8 @@ UNSCOPED = frozenset(
         "config-router-auth-coverage",
         "conflict-marker-scanned-files",
         "connector-redaction-sweep",
+        # #19315: items are (path, line, var, value) assignments across the whole tree, not paths.
+        "deployment-profile-writers-19315",
         "detect-environment-env-files",
         "docstring-restatement-scan",
         "dpkg-ansible-registrations",

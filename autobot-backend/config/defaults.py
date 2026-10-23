@@ -13,6 +13,7 @@ SSOT Migration (Issue #639):
 
 from typing import Any, Dict
 
+from autobot_shared import deployment_profile
 from autobot_shared.ssot_config import config
 from config.registry import ConfigRegistry
 
@@ -283,7 +284,7 @@ def _get_deployment_config(redis_host: str, backend_port: int) -> Dict[str, Any]
         backend_port: Backend API port
     """
     return {
-        "mode": "local",
+        "mode": deployment_profile.deployment_mode(),  # #19316: the one home; "" = auto-detect
         "host": redis_host,
         "port": config.port.backend,
     }

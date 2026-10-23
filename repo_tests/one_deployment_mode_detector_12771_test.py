@@ -65,6 +65,10 @@ def test_literal_expectations() -> None:
     assert detect_deployment_mode(M.CLOUD, True, True, True) is M.CLOUD
 
 
+#: The shared functions a thin ``_detect_deployment_mode`` may delegate to (#19372 added the resolver).
+_DELEGATES = {"detect_deployment_mode", "resolve_deployment_mode"}
+
+
 def _forking_detectors(source: str) -> list[str]:
     """`_detect_deployment_mode` defs that do not delegate, or that return a mode themselves."""
     bad = []
@@ -81,7 +85,7 @@ def _forking_detectors(source: str) -> list[str]:
             )
             for r in ast.walk(node)
         )
-        if "detect_deployment_mode" not in calls or decides:
+        if not calls & _DELEGATES or decides:
             bad.append(node.name)
     return bad
 

@@ -43,6 +43,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Python files under two of the tracked trees, a subset of all tracked Python; the other trees drift.",
     ),
+    "deployment-profile-writers-19315": (
+        ABSOLUTE,
+        "NOT_PATHS",
+        "Assignment lines, not paths: one item per literal AUTOBOT_ENVIRONMENT/DEPLOYMENT_MODE/DEBUG write.",
+    ),
     "egress-default-outbound-call-sites": (
         ABSOLUTE,
         "NOT_PATHS",

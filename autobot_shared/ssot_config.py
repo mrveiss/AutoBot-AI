@@ -44,18 +44,20 @@ import os
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import ClassVar, Dict, FrozenSet, List
+from typing import Annotated, ClassVar, Dict, FrozenSet, List
 from urllib.parse import quote
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, BeforeValidator, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from autobot_shared import deployment_profile as _profile  # #19315/#19316: environment/mode/debug home
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.paths import project_root
 from autobot_shared.secret_redaction import RedactedReprMixin
 from autobot_shared.ssot_llm_oauth_config import LlmOAuthConfig
 from autobot_shared.ssot_tls import TLSConfig, TLSMode
 
+_Env = Annotated[str, BeforeValidator(_profile.env_field), Field(validation_alias=AliasChoices(*_profile.ENV_NAMES))]
 # Determine project root for .env file location.
 #
 # The resolution itself lives in ``autobot_shared.paths`` (#13149) so that the
@@ -1599,7 +1601,6 @@ class MiscConfig(RedactedSettings):
         default="",
         validation_alias=AliasChoices("AUTOBOT_ENCRYPTION_KEY", "ENCRYPTION_KEY"),
     )
-    env: str = Field(default="development", alias="AUTOBOT_ENV")  # #13264 batch 3
     error_resolved_ttl_seconds: str = Field(
         default="",
         alias="AUTOBOT_ERROR_RESOLVED_TTL_SECONDS",
@@ -2367,10 +2368,9 @@ class AutoBotConfig(RedactedSettings):
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)  # Issue #9035
     cost_model: CostModelConfig = Field(default_factory=CostModelConfig)  # Issue #10720
 
-    # Top-level settings
-    deployment_mode: str = Field(default="distributed", alias="AUTOBOT_DEPLOYMENT_MODE")
-    environment: str = Field(default="development", alias="AUTOBOT_ENVIRONMENT")
-    debug: bool = Field(default=False, alias="AUTOBOT_DEBUG")
+    deployment_mode: str = Field(default=_profile.DEPLOYMENT_MODE_DEFAULT, alias="AUTOBOT_DEPLOYMENT_MODE")
+    environment: _Env = _profile.ENVIRONMENT_DEFAULT  # #19315: one normalisation, deployment_profile.env_field
+    debug: bool = Field(default=_profile.DEBUG_DEFAULT, alias="AUTOBOT_DEBUG")
     log_level: str = Field(default="INFO", alias="AUTOBOT_LOG_LEVEL")
 
     # GH#8995: Data-hygiene TTL settings (retention OFF by default — 0 means disabled)

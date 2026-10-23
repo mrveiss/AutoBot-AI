@@ -59,11 +59,11 @@ class TestEnvGcPostgresTracingDefaultsRestored13264:
     """#13264 batch 3: 9 more defaults the #7437 migration silently dropped."""
 
     def test_environment_name_is_not_empty(self) -> None:
-        from autobot_shared.ssot_config import MiscConfig
+        """#19315 folded ``MiscConfig.env`` into ``AutoBotConfig.environment`` (AUTOBOT_ENV is its alias)."""
+        from autobot_shared.ssot_config import AutoBotConfig
 
         with patch.dict(os.environ, {}, clear=True):
-            cfg = MiscConfig(_env_file=None)
-            assert cfg.env == "development"
+            assert AutoBotConfig(_env_file=None).environment == "production"
 
     def test_gc_thresholds_do_not_disable_collection(self) -> None:
         """A gen-0 threshold of 0 means CPython never collects automatically."""

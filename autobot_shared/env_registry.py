@@ -15,6 +15,8 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
+from autobot_shared import deployment_profile as _profile  # #19315: env/mode defaults live there
+
 
 @dataclass(frozen=True)
 class EnvVarSpec:
@@ -192,8 +194,8 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_DEPLOYMENT_MODE",
         type=str,
-        default="distributed",
-        description="Topology. Unset: the backend assumes 'distributed'; deploy scripts detect it from /.dockerenv.",
+        default=_profile.DEPLOYMENT_MODE_DEFAULT,
+        description="Topology. Unset: auto-detect -- docker_local in a container, else local (#19316).",
         component="system",
     )
 )
@@ -202,8 +204,8 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_ENV",
         type=str,
-        default="production",
-        description="Short environment label used in logs and traces (e.g. 'development', 'production').",
+        default=_profile.ENVIRONMENT_DEFAULT,
+        description="Legacy spelling of AUTOBOT_ENVIRONMENT, read only when that is unset (#19315).",
         component="system",
     )
 )
@@ -212,10 +214,8 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_ENVIRONMENT",
         type=str,
-        default="development",
-        description=(
-            "Full environment name for OTel deployment.environment attribute. " "Prefer AUTOBOT_ENV for new code."
-        ),
+        default=_profile.ENVIRONMENT_DEFAULT,
+        description="Deployment environment (production/development/test); profiles in deployment_profile.py.",
         component="system",
     )
 )

@@ -31,6 +31,8 @@ import os
 import warnings
 from functools import cached_property
 
+from autobot_shared import deployment_profile as _profile
+
 
 def _get_config_value(key: str, default: str) -> str:
     """Get configuration value with lazy ConfigRegistry import.
@@ -419,22 +421,17 @@ class NetworkConfig:
     Provides context-aware URL generation.
 
     SSOT Migration (Issue #763):
-        This class now uses ConfigRegistry for deployment mode.
-        For direct access, prefer using ConfigRegistry:
-            from config.registry import ConfigRegistry
-            mode = ConfigRegistry.get("deployment.mode", "distributed")
+        The mode comes from the one resolver (#19316, #19372):
+            from autobot_shared import service_registry_core
+            mode = service_registry_core.resolve_deployment_mode().value
     """
 
     def __init__(self) -> None:
         """Initialize network config using ConfigRegistry values."""
-        self._deployment_mode = _get_config_value(
-            "deployment.mode", os.getenv("AUTOBOT_DEPLOYMENT_MODE", "distributed")
-        )
-        # ssot-config-exempt: deliberately conservative — assume "production"
-        # (not ssot_config's "" default) when unset, so an unconfigured
-        # deployment never silently behaves as dev.
-        env_default = os.getenv("AUTOBOT_ENV", "production")  # ssot-config-exempt: see comment above
-        self._is_development = _get_config_value("deployment.environment", env_default) == "development"
+        from autobot_shared.service_registry_core import resolve_deployment_mode  # lazy (ssot_config); #19316
+
+        self._deployment_mode = resolve_deployment_mode().value
+        self._is_development = _get_config_value("deployment.environment", _profile.environment_name()) == "development"
 
     @property
     def backend_url(self) -> str:
