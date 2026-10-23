@@ -763,59 +763,12 @@ class TestProviderAuthSecurity:
 
         _validate_outbound_url("https://login.microsoftonline.com/common/oauth2/v2.0/token")
 
-    # -- Endpoint auth requirement tests (via FastAPI dependency inspection) --
-    # We cannot boot the full FastAPI app in unit test scope (missing DB/Redis/autobot_shared),
-    # so we verify auth by inspecting the Depends() wiring directly.  This is the
-    # correct approach for testing dependency presence without integration infrastructure.
-
-    def _get_endpoint_dependencies(self, endpoint_fn):
-        """Return the set of dependency callables declared on a FastAPI endpoint function."""
-        import inspect
-
-        from fastapi import params as fa_params
-
-        deps = set()
-        sig = inspect.signature(endpoint_fn)
-        for param in sig.parameters.values():
-            if isinstance(param.default, fa_params.Depends):
-                deps.add(param.default.dependency)
-        return deps
-
-    def test_device_initiate_requires_auth_no_token(self):
-        """device_initiate must declare both get_current_user and check_admin_permission."""
-        from api.provider_auth import device_initiate
-        from auth_middleware import check_admin_permission, get_current_user
-
-        deps = self._get_endpoint_dependencies(device_initiate)
-        assert get_current_user in deps, "device_initiate missing get_current_user dependency"
-        assert check_admin_permission in deps, "device_initiate missing check_admin_permission dependency"
-
-    def test_oauth_callback_requires_auth_no_token(self):
-        """oauth_callback must declare both get_current_user and check_admin_permission."""
-        from api.provider_auth import oauth_callback
-        from auth_middleware import check_admin_permission, get_current_user
-
-        deps = self._get_endpoint_dependencies(oauth_callback)
-        assert get_current_user in deps, "oauth_callback missing get_current_user dependency"
-        assert check_admin_permission in deps, "oauth_callback missing check_admin_permission dependency"
-
-    def test_device_poll_requires_auth_no_token(self):
-        """device_poll must declare both get_current_user and check_admin_permission."""
-        from api.provider_auth import device_poll
-        from auth_middleware import check_admin_permission, get_current_user
-
-        deps = self._get_endpoint_dependencies(device_poll)
-        assert get_current_user in deps, "device_poll missing get_current_user dependency"
-        assert check_admin_permission in deps, "device_poll missing check_admin_permission dependency"
-
-    def test_revoke_requires_auth_no_token(self):
-        """revoke_provider_auth must declare both get_current_user and check_admin_permission."""
-        from api.provider_auth import revoke_provider_auth
-        from auth_middleware import check_admin_permission, get_current_user
-
-        deps = self._get_endpoint_dependencies(revoke_provider_auth)
-        assert get_current_user in deps, "revoke_provider_auth missing get_current_user dependency"
-        assert check_admin_permission in deps, "revoke_provider_auth missing check_admin_permission dependency"
+    # -- Endpoint auth requirements --
+    # The admin-only dependency checks that lived here (#10551 review, #11061/#11298
+    # status gate) encoded the pre-#19241 rule. Per-user scope replaced it; the
+    # behavioural contract -- unauthenticated is rejected everywhere, system scope
+    # needs admin on every entry and completion, user scope touches only the
+    # caller's own subject -- is in api/tests/test_provider_auth_security.py.
 
     def test_ssrf_blocked_before_network_on_device_initiate(self):
         """Non-allowlisted URL must be rejected 400 even if the endpoint were authenticated."""
@@ -845,14 +798,6 @@ class TestProviderAuthSecurity:
         with pytest.raises(HTTPException) as exc_info:
             _validate_outbound_url("https://accounts.google.com:99999/token")
         assert exc_info.value.status_code == 400
-
-    def test_status_endpoint_requires_admin(self):
-        """provider_auth_status must declare check_admin_permission (MED finding #11061)."""
-        from api.provider_auth import provider_auth_status
-        from auth_middleware import check_admin_permission
-
-        deps = self._get_endpoint_dependencies(provider_auth_status)
-        assert check_admin_permission in deps, "provider_auth_status missing check_admin_permission dependency"
 
 
 # ---------------------------------------------------------------------------
@@ -1110,15 +1055,19 @@ class TestRedirectsAreNotFollowedOnTheDeviceFlow:
     ``allow_redirects=False`` (#13311) with the consequence a caller can see.
     """
 
-    ALLOWED_DEVICE_URL = "https://accounts.google.com/o/oauth2/device/code"
-    ALLOWED_TOKEN_URL = "https://oauth2.googleapis.com/token"
+    # #19241: the endpoints come from the server-side registry, never the request.
+    ALLOWED_DEVICE_URL = "https://huggingface.co/oauth/device"
+    ALLOWED_TOKEN_URL = "https://huggingface.co/oauth/token"  # nosec B105  # endpoint URL, not a credential
+    _USER = {"user_id": "u1"}
 
     @pytest.fixture
-    def session_spy(self, monkeypatch):
-        """Swap aiohttp's session and neuter the DNS-pinning connector."""
+    def session_spy(self, monkeypatch, single_use_fake_redis):
+        """Swap aiohttp's session, neuter DNS pinning, and resolve "huggingface" to the URLs above."""
         import aiohttp
 
         from api import provider_auth as pa
+        from knowledge.connectors.oauth_flow import OAuthProvider
+        from llm_shared.llm_oauth_registry import LlmOAuthClient
 
         created: list[_RedirectFollowingSession] = []
 
@@ -1127,8 +1076,20 @@ class TestRedirectsAreNotFollowedOnTheDeviceFlow:
             created.append(session)
             return session
 
+        provider = OAuthProvider(
+            name="huggingface",
+            authorize_url="",
+            token_url=self.ALLOWED_TOKEN_URL,
+            client_id_setting="huggingface_client_id",
+            client_secret_setting="AUTOBOT_LLM_OAUTH_HUGGINGFACE_CLIENT_SECRET",  # pragma: allowlist secret
+            device_authorization_url=self.ALLOWED_DEVICE_URL,
+        )
         monkeypatch.setattr(aiohttp, "ClientSession", _factory)
         monkeypatch.setattr(pa, "_pinned_connector", AsyncMock(return_value=None))
+        monkeypatch.setattr(pa, "assert_public_egress", AsyncMock(return_value=None))
+        monkeypatch.setattr(pa, "resolve_client", lambda name, flow=None: LlmOAuthClient(provider, "cid"))
+        monkeypatch.setattr(pa, "get_redis_client", lambda database=None: single_use_fake_redis)
+        self.redis = single_use_fake_redis
         return created
 
     @pytest.mark.asyncio
@@ -1139,42 +1100,39 @@ class TestRedirectsAreNotFollowedOnTheDeviceFlow:
 
         with pytest.raises(HTTPException) as exc_info:
             await device_initiate(
-                req=DeviceInitiateRequest(
-                    provider_name="google",
-                    client_id="cid",
-                    device_authorization_url=self.ALLOWED_DEVICE_URL,
-                ),
-                user={"id": "u1"},
-                _admin=True,
+                req=DeviceInitiateRequest(provider_name="huggingface", scope="user"), user=self._USER, is_admin=False
             )
 
         assert exc_info.value.status_code == 502, "a followed redirect would have returned 200 and leaked a device code"
+        assert session_spy[0].calls[0]["url"] == self.ALLOWED_DEVICE_URL
         assert session_spy[0].calls[0]["allow_redirects"] is False
+        assert not self.redis.store, "no device context may be saved for a redirected initiate"
 
     @pytest.mark.asyncio
-    async def test_device_poll_surfaces_the_302_instead_of_following_it(self, session_spy, monkeypatch):
+    async def test_device_poll_surfaces_the_302_instead_of_following_it(self, session_spy):
+        import json
+
         from fastapi import HTTPException
 
-        from api import provider_auth as pa
+        from api import provider_auth_flow_state as flow_state
         from api.provider_auth import DevicePollRequest, device_poll
 
-        monkeypatch.setattr(pa, "get_redis_client", lambda database=None: None)
+        ctx = {"initiator_id": "u1", "provider_name": "huggingface", "scope": "user", "subject": "user:u1"}
+        self.redis.store[flow_state.device_context_key("dc")] = json.dumps(ctx)
+        session = AsyncMock()
 
         with pytest.raises(HTTPException) as exc_info:
             await device_poll(
-                req=DevicePollRequest(
-                    provider_name="google",
-                    client_id="cid",
-                    device_code="dc",
-                    token_url=self.ALLOWED_TOKEN_URL,
-                ),
-                session=AsyncMock(),
-                user={"id": "u1"},
-                _admin=True,
+                req=DevicePollRequest(provider_name="huggingface", device_code="dc"),
+                session=session,
+                user=self._USER,
+                is_admin=False,
             )
 
         assert exc_info.value.status_code == 502, "a followed redirect would have persisted an internally-sourced token"
+        assert session_spy[0].calls[0]["url"] == self.ALLOWED_TOKEN_URL
         assert session_spy[0].calls[0]["allow_redirects"] is False
+        session.commit.assert_not_awaited()
 
     @pytest.mark.asyncio
     async def test_the_spy_really_would_have_followed_a_redirect(self, session_spy):

@@ -153,6 +153,49 @@ def _extract_text_content(response_content: list, preserve_reasoning: bool) -> s
     return text
 
 
+def _tool_calls_from(response_content: list) -> list:
+    """The ``tool_use`` blocks of an Anthropic response as ToolCalls (from _chat_completion_impl)."""
+    return [
+        ToolCall(id=block.id, name=block.name, arguments=block.input if isinstance(block.input, dict) else {})
+        for block in response_content
+        if getattr(block, "type", None) == "tool_use"
+    ]
+
+
+def _usage_from(usage: Any, total_tokens: int) -> Dict[str, Any]:
+    """Token usage, with thinking tokens when the response reports them (MVA-3089)."""
+    usage_dict: Dict[str, Any] = {
+        "prompt_tokens": usage.input_tokens,
+        "completion_tokens": usage.output_tokens,
+        "total_tokens": total_tokens,
+    }
+    output_details = getattr(usage, "output_tokens_details", None)
+    thinking_tokens = getattr(output_details, "thinking_tokens", None) if output_details else None
+    if thinking_tokens is not None and thinking_tokens > 0:
+        usage_dict["thinking_tokens"] = thinking_tokens
+    return usage_dict
+
+
+async def _record_adapter_send(
+    adapter: Any, context_type: str, request: LLMRequest, response_time: float, error: str | None = None
+) -> None:
+    """Adapter post-send metric recording (#10849); best-effort, never raises."""
+    if adapter is None or not adapter.is_initialized:
+        return
+    outcome: Dict[str, Any] = {"success": error is None}
+    if error is not None:
+        outcome["error_message"] = error
+    try:
+        await adapter.record_send_result(
+            context_type=context_type,
+            content_len=sum(len(m.get("content", "")) for m in request.messages if isinstance(m, dict)),
+            response_time=response_time,
+            **outcome,
+        )
+    except Exception as rec_err:
+        logger.debug("Claude adapter post-send record skipped: %s", rec_err)
+
+
 def _extract_content_pair(response_content: list, preserve_reasoning: bool) -> tuple[str, Optional[str]]:
     """
     Extract ``(content, reasoning_content)`` from an Anthropic response block list.
@@ -214,6 +257,7 @@ class AnthropicProvider(BaseProvider):
         super().__init__(settings)
         self._api_key: str | None = None
         self._client = None
+        self._oauth_client = None  # #19241: base client for signed-in tokens
 
     def _resolve_api_key(self) -> str | None:
         """Resolve API key from settings or environment."""
@@ -228,21 +272,38 @@ class AnthropicProvider(BaseProvider):
         """Lazily initialize the async Anthropic client."""
         if self._client is not None:
             return self._client
-        try:
-            import anthropic
-        except ImportError as exc:
-            raise ImportError("anthropic package not installed. Run: pip install anthropic") from exc
         api_key = self._resolve_api_key()
         if not api_key:
             raise ValueError(
                 "Anthropic API key not configured. " "Set ANTHROPIC_API_KEY or provide api_key in provider settings."
             )
-        kwargs: Dict[str, Any] = {"api_key": api_key}
+        self._client = self._new_client(api_key=api_key)
+        return self._client
+
+    def _new_client(self, **credential: str):
+        """An ``AsyncAnthropic`` for one credential: ``api_key=`` or a signed-in ``auth_token=`` (#19241)."""
+        try:
+            import anthropic
+        except ImportError as exc:
+            raise ImportError("anthropic package not installed. Run: pip install anthropic") from exc
+        kwargs: Dict[str, Any] = dict(credential)
         http_client = self._headroom_http_client(getattr(anthropic, "DefaultAsyncHttpxClient", None))
         if http_client is not None:
             kwargs["http_client"] = http_client  # #15026: harvest rate-limit headers
-        self._client = anthropic.AsyncAnthropic(**kwargs)
-        return self._client
+        return anthropic.AsyncAnthropic(**kwargs)
+
+    async def _request_client(self):
+        """The client for this call: a signed-in bearer token when there is one, else the API key (#19241).
+
+        An explicit ``auth_token`` stops the SDK reading ANTHROPIC_API_KEY, so the
+        request carries the bearer only; copies share the base client's pool.
+        """
+        token = await self._signed_in_token()
+        if not token:
+            return self._ensure_client()
+        if self._oauth_client is None:
+            self._oauth_client = self._new_client(auth_token=token)
+        return self._oauth_client.with_options(auth_token=token)
 
     def _apply_system_content(self, kwargs: Dict[str, Any], request: LLMRequest, system_content: str) -> None:
         """Set ``kwargs["system"]``, in place. Prompt caching (#8171, #10597):
@@ -321,7 +382,7 @@ class AnthropicProvider(BaseProvider):
         await _apply_adapter_pre_send(request, _context_type)
 
         try:
-            client = self._ensure_client()
+            client = await self._request_client()
             kwargs, extra_headers, preserve_reasoning = self._build_request_kwargs(model, request)
 
             call_kwargs: Dict[str, Any] = dict(kwargs)
@@ -334,29 +395,9 @@ class AnthropicProvider(BaseProvider):
             total_tokens = response.usage.input_tokens + response.usage.output_tokens
             processing_time = time.time() - start
 
-            tool_calls = []
-            for block in response.content:
-                if getattr(block, "type", None) == "tool_use":
-                    tool_calls.append(
-                        ToolCall(
-                            id=block.id,
-                            name=block.name,
-                            arguments=block.input if isinstance(block.input, dict) else {},
-                        )
-                    )
+            tool_calls = _tool_calls_from(response.content)
             finish_reason = "tool_calls" if tool_calls else response.stop_reason
-
-            # MVA-3089: Extract thinking metadata from Anthropic response
-            usage_dict = {
-                "prompt_tokens": response.usage.input_tokens,
-                "completion_tokens": response.usage.output_tokens,
-                "total_tokens": total_tokens,
-            }
-            output_details = getattr(response.usage, "output_tokens_details", None)
-            if output_details:
-                thinking_tokens = getattr(output_details, "thinking_tokens", None)
-                if thinking_tokens is not None and thinking_tokens > 0:
-                    usage_dict["thinking_tokens"] = thinking_tokens
+            usage_dict = _usage_from(response.usage, total_tokens)
 
             llm_response = LLMResponse(
                 content=content,
@@ -374,37 +415,13 @@ class AnthropicProvider(BaseProvider):
                 ),
                 reasoning_content=reasoning_content,
             )
-            # --- Adapter post-send: metric recording (#10849) ---------------------
-            if _adapter is not None and _adapter.is_initialized:
-                try:
-                    _raw_len = sum(len(m.get("content", "")) for m in request.messages if isinstance(m, dict))
-                    await _adapter.record_send_result(
-                        context_type=_context_type,
-                        content_len=_raw_len,
-                        response_time=processing_time,
-                        success=True,
-                    )
-                except Exception as _rec_err:
-                    logger.debug("Claude adapter post-send record skipped: %s", _rec_err)
-            # ----------------------------------------------------------------------
+            await _record_adapter_send(_adapter, _context_type, request, processing_time)
             return llm_response
         except Exception as exc:
             self._total_errors += 1
             logger.error("Anthropic chat_completion error: %s", exc)
             processing_time = time.time() - start
-            # --- Adapter post-send: error metric recording (#10849) ---------------
-            if _adapter is not None and _adapter.is_initialized:
-                try:
-                    await _adapter.record_send_result(
-                        context_type=_context_type,
-                        content_len=sum(len(m.get("content", "")) for m in request.messages if isinstance(m, dict)),
-                        response_time=processing_time,
-                        success=False,
-                        error_message=str(exc),
-                    )
-                except Exception as _rec_err:
-                    logger.debug("Claude adapter post-send error record skipped: %s", _rec_err)
-            # ----------------------------------------------------------------------
+            await _record_adapter_send(_adapter, _context_type, request, processing_time, error=str(exc))
             return LLMResponse(
                 content="",
                 model=model,
@@ -438,7 +455,7 @@ class AnthropicProvider(BaseProvider):
 
         _stream_start = time.time()
         try:
-            client = self._ensure_client()
+            client = await self._request_client()
             kwargs, extra_headers, _preserve = self._build_request_kwargs(model, request)
 
             call_kwargs: Dict[str, Any] = dict(kwargs)

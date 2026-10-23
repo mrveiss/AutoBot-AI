@@ -941,8 +941,6 @@
       "noApiKeyRequired": "Kein API-Schlüssel erforderlich.",
       "redirecting": "Weiterleitung...",
       "disconnectFailed": "Trennen fehlgeschlagen",
-      "redirectNeedsCallback": "Der OAuth-Weiterleitungsablauf im Browser erfordert eine serverseitige Callback-Konfiguration. Verwenden Sie in Umgebungen ohne Oberfläche den Gerätecode.",
-      "deviceNotConfigured": "Die Geräteauthentifizierung ist für diesen Anbieter nicht konfiguriert",
       "deviceInitFailed": "Der Geräteablauf konnte nicht gestartet werden",
       "stillWaiting": "Die Zustimmung steht noch aus — versuchen Sie es gleich noch einmal.",
       "pollFailed": "Abfrage fehlgeschlagen"

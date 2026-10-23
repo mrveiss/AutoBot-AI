@@ -6,7 +6,8 @@
 
 Proves the callback is authorized by a server-minted, single-use ``state`` (not a
 client-supplied verifier): missing/replayed/expired state → 400, admin mismatch →
-403, and the happy path exchanges with the SERVER-STORED verifier.
+403 without consuming the state (#19241 L3), and the happy path exchanges with
+the SERVER-STORED verifier.
 """
 
 import json
@@ -18,13 +19,34 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from api import provider_auth as mod
+from api.provider_auth_scope import provider_caller_is_admin
 from api.user_management.dependencies import get_db_session
-from auth_middleware import check_admin_permission, get_current_user
+from auth_middleware import get_current_user
+from autobot_shared.ssot_config import config
 from knowledge.connectors import oauth_flow
+from llm_shared.llm_oauth_registry import LlmOAuthClient, UnknownProviderError
 
 _ADMIN = types.SimpleNamespace(user_id="admin-1")
 _INITIATE = "/api/llm-auth/oauth/initiate"
 _CALLBACK = "/api/llm-auth/oauth/callback"
+# #19241: redirect_uri must sit on the SSOT frontend origin.
+_REDIRECT = config.frontend_url + "/preferences/oauth/callback"
+_PROVIDER = oauth_flow.OAuthProvider(
+    name="acme",
+    authorize_url="https://auth.example.com/authorize",
+    token_url="https://token.example.com/token",  # nosec B106  # endpoint URL, not a credential
+    client_id_setting="acme_client_id",
+    client_secret_setting="ACME_CLIENT_SECRET",  # nosec B106  # pragma: allowlist secret  # setting NAME
+    default_scopes=("read",),
+    token_endpoint_auth_method="none",
+)
+
+
+def _fake_resolve_client(provider_name, flow=None):
+    """Registry stand-in (#19241): only "acme" exists; its client comes from the server."""
+    if provider_name != "acme":
+        raise UnknownProviderError("unknown sign-in provider: %r" % provider_name)
+    return LlmOAuthClient(provider=_PROVIDER, client_id="cid-123", client_secret="")
 
 
 @pytest.fixture
@@ -34,30 +56,28 @@ def ctx(monkeypatch, single_use_fake_redis):
     monkeypatch.setattr(mod, "get_redis_client", lambda database="main": fake_redis)
     # Allow the test provider hosts through the SSRF guard.
     monkeypatch.setattr(mod, "get_oauth_allowed_hosts", lambda: {"auth.example.com", "token.example.com"})
+    monkeypatch.setattr(mod, "resolve_client", _fake_resolve_client)
     # Persist step is exercised elsewhere; isolate the state/PKCE/admin logic.
     monkeypatch.setattr(mod, "_vault_write", AsyncMock(return_value=None))
     monkeypatch.setattr(mod, "build_token_data", lambda resp, created_by: {"expires_at": 111.0})
     # #11497 finding #2: the outbound POST is now IP-pinned. Stub the resolve so the
     # test never does real DNS on the fake token host.
     monkeypatch.setattr(mod, "_pinned_connector", AsyncMock(return_value=None))
+    # The code exchange's public-egress check resolves DNS; the fake token host has none. That the
+    # check runs and blocks is proved in test_provider_auth_hardening.py (#19241).
+    monkeypatch.setattr(mod, "assert_public_egress", AsyncMock(return_value=None))
 
     app = FastAPI()
     app.include_router(mod.router, prefix="/api")
     app.dependency_overrides[get_current_user] = lambda: _ADMIN
-    app.dependency_overrides[check_admin_permission] = lambda: True
+    app.dependency_overrides[provider_caller_is_admin] = lambda: True
     app.dependency_overrides[get_db_session] = lambda: AsyncMock()
     return TestClient(app), fake_redis, app
 
 
 def _valid_initiate_body():
-    return {
-        "provider_name": "acme",
-        "authorize_url": "https://auth.example.com/authorize",
-        "token_url": "https://token.example.com/token",
-        "client_id": "cid-123",
-        "redirect_uri": "https://app.local/cb",
-        "scopes": ["read"],
-    }
+    # #19241: no URLs or client id from the client — the registry supplies them.
+    return {"provider_name": "acme", "redirect_uri": _REDIRECT, "scope": "system"}
 
 
 def test_initiate_stores_state_and_verifier_keyed_to_admin(ctx):
@@ -68,34 +88,44 @@ def test_initiate_stores_state_and_verifier_keyed_to_admin(ctx):
     assert data["state"]
     assert data["authorize_url"].startswith("https://auth.example.com/authorize?")
     assert "code_challenge=" in data["authorize_url"] and "state=%s" % data["state"] in data["authorize_url"]
-    # Server-side state carries the verifier + initiating admin; verifier never leaves the server.
+    assert "client_id=cid-123" in data["authorize_url"]
+    # Server-side state carries the verifier + initiating admin + scope/subject; verifier never leaves the server.
     (stored_raw,) = fake_redis.store.values()
     stored = json.loads(stored_raw)
-    assert stored["admin_id"] == "admin-1"
+    assert stored["initiator_id"] == "admin-1"
     assert stored["verifier"] and stored["verifier"] not in data["authorize_url"]
-    assert stored["token_url"] == "https://token.example.com/token"
-    assert stored["client_id"] == "cid-123"
+    assert stored["provider_name"] == "acme"
+    assert stored["scope"] == "system" and stored["subject"] == "global"
+    assert stored["redirect_uri"] == _REDIRECT
 
 
-def test_initiate_rejects_ssrf_token_url(ctx):
-    tc, _, _ = ctx
-    body = _valid_initiate_body()
-    body["token_url"] = "https://evil.example.net/token"  # not allow-listed
-    resp = tc.post(_INITIATE, json=body)
+def test_initiate_rejects_ssrf_token_url(ctx, monkeypatch):
+    """A registry endpoint off the SSRF allowlist is still refused (400) before any state is minted."""
+    tc, fake_redis, _ = ctx
+    monkeypatch.setattr(mod, "get_oauth_allowed_hosts", lambda: {"auth.example.com"})  # token host not allowed
+    resp = tc.post(_INITIATE, json=_valid_initiate_body())
     assert resp.status_code == 400
+    assert not fake_redis.store
 
 
-def _prestore_state(fake_redis, state="st-1", admin_id="admin-1"):
+def _prestore_state(fake_redis, state="st-1", admin_id="admin-1", scope="system", subject="global"):
     fake_redis.store[mod._state_key(state)] = json.dumps(
         {
             "verifier": "server-verifier",
-            "admin_id": admin_id,
+            "initiator_id": admin_id,
             "provider_name": "acme",
-            "token_url": "https://token.example.com/token",
-            "client_id": "cid-123",
+            "scope": scope,
+            "subject": subject,
+            "redirect_uri": _REDIRECT,
         }
     )
     return state
+
+
+def _initiate_state(tc, fake_redis) -> str:
+    resp = tc.post(_INITIATE, json=_valid_initiate_body())
+    assert resp.status_code == 200, resp.text
+    return resp.json()["state"]
 
 
 def test_callback_happy_path_uses_stored_verifier(ctx, monkeypatch):
@@ -109,7 +139,7 @@ def test_callback_happy_path_uses_stored_verifier(ctx, monkeypatch):
     monkeypatch.setattr(oauth_flow, "exchange_code", fake_exchange)
     state = _prestore_state(fake_redis)
 
-    resp = tc.post(_CALLBACK, json={"state": state, "code": "auth-code", "redirect_uri": "https://app.local/cb"})
+    resp = tc.post(_CALLBACK, json={"state": state, "code": "auth-code", "redirect_uri": _REDIRECT})
     assert resp.status_code == 200, resp.text
     assert resp.json()["stored"] is True
     # Exchange used the SERVER-STORED verifier + client_id, and a PKCE public-client (no secret).
@@ -122,7 +152,7 @@ def test_callback_happy_path_uses_stored_verifier(ctx, monkeypatch):
 
 def test_callback_missing_state_400(ctx):
     tc, _, _ = ctx
-    resp = tc.post(_CALLBACK, json={"state": "nope", "code": "c", "redirect_uri": "https://app.local/cb"})
+    resp = tc.post(_CALLBACK, json={"state": "nope", "code": "c", "redirect_uri": _REDIRECT})
     assert resp.status_code == 400
 
 
@@ -134,10 +164,10 @@ def test_callback_replayed_state_400(ctx, monkeypatch):
 
     monkeypatch.setattr(oauth_flow, "exchange_code", fake_exchange)
     state = _prestore_state(fake_redis)
-    first = tc.post(_CALLBACK, json={"state": state, "code": "c", "redirect_uri": "https://app.local/cb"})
+    first = tc.post(_CALLBACK, json={"state": state, "code": "c", "redirect_uri": _REDIRECT})
     assert first.status_code == 200
     # Replay the same (now-consumed) state → rejected.
-    replay = tc.post(_CALLBACK, json={"state": state, "code": "c", "redirect_uri": "https://app.local/cb"})
+    replay = tc.post(_CALLBACK, json={"state": state, "code": "c", "redirect_uri": _REDIRECT})
     assert replay.status_code == 400
 
 
@@ -152,12 +182,11 @@ def test_callback_persists_under_org_subject(ctx, monkeypatch):
 
     monkeypatch.setattr(oauth_flow, "exchange_code", fake_exchange)
     # Principal carrying an org claim. get_current_user yields a dict; the admin
-    # binding compares _current_user_id(user), which now reads the dict's
-    # ``user_id`` (#11849), so the prestored state's admin_id must be that real id.
+    # binding compares _current_user_id(user), which reads the dict's ``user_id`` (#11849).
     app.dependency_overrides[get_current_user] = lambda: {"user_id": "admin-1", "org_id": "acme-42"}
-    state = _prestore_state(fake_redis, admin_id="admin-1")
+    state = _initiate_state(tc, fake_redis)  # the subject is fixed when the flow starts (#19241)
 
-    resp = tc.post(_CALLBACK, json={"state": state, "code": "c", "redirect_uri": "https://app.local/cb"})
+    resp = tc.post(_CALLBACK, json={"state": state, "code": "c", "redirect_uri": _REDIRECT})
     assert resp.status_code == 200, resp.text
     assert write.await_args.kwargs["subject"] == "org:acme-42"
 
@@ -173,9 +202,9 @@ def test_callback_no_org_uses_legacy_global_subject(ctx, monkeypatch):
 
     monkeypatch.setattr(oauth_flow, "exchange_code", fake_exchange)
     app.dependency_overrides[get_current_user] = lambda: {"user_id": "admin-1"}  # no org_id
-    state = _prestore_state(fake_redis, admin_id="admin-1")
+    state = _initiate_state(tc, fake_redis)
 
-    resp = tc.post(_CALLBACK, json={"state": state, "code": "c", "redirect_uri": "https://app.local/cb"})
+    resp = tc.post(_CALLBACK, json={"state": state, "code": "c", "redirect_uri": _REDIRECT})
     assert resp.status_code == 200, resp.text
     assert write.await_args.kwargs["subject"] == "global"
 
@@ -184,10 +213,10 @@ def test_callback_admin_mismatch_403(ctx):
     tc, fake_redis, _ = ctx
     # State minted by a DIFFERENT admin than the caller (_ADMIN = admin-1).
     state = _prestore_state(fake_redis, admin_id="admin-999")
-    resp = tc.post(_CALLBACK, json={"state": state, "code": "c", "redirect_uri": "https://app.local/cb"})
+    resp = tc.post(_CALLBACK, json={"state": state, "code": "c", "redirect_uri": _REDIRECT})
     assert resp.status_code == 403
-    # A rejected mismatch still consumed the single-use state (no reuse window).
-    assert mod._state_key(state) not in fake_redis.store
+    # #19241 L3: a non-initiator cannot burn the state -- it stays for its owner, still single-use.
+    assert mod._state_key(state) in fake_redis.store
 
 
 def test_callback_dict_admin_mismatch_rejected(ctx):
@@ -207,10 +236,10 @@ def test_callback_dict_admin_mismatch_rejected(ctx):
     tc, fake_redis, app = ctx
     app.dependency_overrides[get_current_user] = lambda: {"user_id": "admin-B"}
     state = _prestore_state(fake_redis, admin_id="00000000-0000-0000-0000-000000000000")
-    resp = tc.post(_CALLBACK, json={"state": state, "code": "c", "redirect_uri": "https://app.local/cb"})
+    resp = tc.post(_CALLBACK, json={"state": state, "code": "c", "redirect_uri": _REDIRECT})
     assert resp.status_code == 403, resp.text
-    # The rejected single-use state is still consumed (no reuse window).
-    assert mod._state_key(state) not in fake_redis.store
+    # #19241 L3: the rejected caller did not consume the state.
+    assert mod._state_key(state) in fake_redis.store
 
 
 def test_callback_persists_real_created_by(ctx, monkeypatch):
@@ -234,7 +263,7 @@ def test_callback_persists_real_created_by(ctx, monkeypatch):
     app.dependency_overrides[get_current_user] = lambda: {"user_id": "admin-1"}
     state = _prestore_state(fake_redis, admin_id="admin-1")
 
-    resp = tc.post(_CALLBACK, json={"state": state, "code": "c", "redirect_uri": "https://app.local/cb"})
+    resp = tc.post(_CALLBACK, json={"state": state, "code": "c", "redirect_uri": _REDIRECT})
     assert resp.status_code == 200, resp.text
     assert captured_created_by["v"] == "admin-1"
     assert write.await_args.kwargs["created_by_id"] == "admin-1"
