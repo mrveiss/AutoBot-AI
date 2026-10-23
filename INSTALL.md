@@ -149,7 +149,7 @@ Environment variables skip the matching interactive prompt:
 | Variable | Effect |
 |----------|--------|
 | `AUTOBOT_INSTALL_BRANCH=<branch>` | Same as `--branch=` |
-| `AUTOBOT_SLM_ADMIN_PASSWORD=<pass>` | The admin password itself, not a file path (unlike `--admin-pass-file=`, which names a file) |
+| `SLM_ADMIN_PASSWORD=<pass>` | The admin password itself, not a file path (unlike `--admin-pass-file=`, which names a file). `AUTOBOT_SLM_ADMIN_PASSWORD` still works but is a deprecated alias (#19318) |
 | `AUTOBOT_INSTALL_INTERFACE=<iface>` | Pick the network interface by name instead of the menu |
 | `OVERRIDE_IP=<ip>` | Skip IP detection and use this address |
 | `NETWORK_SUBNET=<cidr>` / `NETWORK_GATEWAY=<ip>` | Use this network instead of detecting it. The subnet is the source the firewall rules allow, so if it cannot be detected the installer stops and asks for these instead of guessing |

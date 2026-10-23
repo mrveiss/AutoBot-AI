@@ -19,8 +19,9 @@
 #   echo -n "your-jwt-secret"          > secrets/slm_jwt_secret.txt
 #   chmod 600 secrets/*.txt
 #
-# The SLM service reads SLM_ADMIN_PASSWORD_FILE and SLM_JWT_SECRET_FILE
-# via autobot_shared.secret_file_utils (see docs/developer/secrets.md).
+# The SLM reads SLM_ADMIN_PASSWORD_FILE through services/admin_seed_password.py:
+# it seeds a FRESH install only; an existing admin keeps its stored password (#19368).
+# SLM_JWT_SECRET_FILE is not read yet (#19368): the SLM uses its generated key.
 # Note: Postgres credentials are inherited from the base compose so
 # SLM_DATABASE_URL remains consistent with the Postgres user password.
 #
@@ -153,7 +154,7 @@ services:
       - slm_jwt_secret
     environment:
       # Map-style environment merges with base (list-style would replace)
-      # The SLM service reads *_FILE variants via autobot_shared.secret_file_utils.
+      # SLM_ADMIN_PASSWORD_FILE: read by services/admin_seed_password.py (fresh install only, #19368).
       # SLM_DATA_DIR inherited from base compose (set to /app/data)
       SLM_ADMIN_PASSWORD_FILE: /run/secrets/slm_admin_password
       SLM_JWT_SECRET_FILE: /run/secrets/slm_jwt_secret
