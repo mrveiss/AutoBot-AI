@@ -359,12 +359,12 @@
       block:
         - name: Check if venv exists
           stat:
-            path: "/opt/autobot/venv"
+            path: "{{ autobot.base_dir }}/venv"
           register: venv_stat
 
         - name: Validate venv activated for pip check
           shell: |
-            . /opt/autobot/venv/bin/activate 2>/dev/null && \
+            . {{ autobot.base_dir }}/venv/bin/activate 2>/dev/null && \
             pip list --format=json | jq 'length'
           args:
             executable: /bin/bash
@@ -376,7 +376,7 @@
         - name: Alert if venv missing (will be created during deploy)
           debug:
             msg: |
-              Python venv not found at /opt/autobot/venv
+              Python venv not found at {{ autobot.base_dir }}/venv
               It will be created during the deployment phase.
           when: not venv_stat.stat.exists
 
@@ -391,12 +391,12 @@
       block:
         - name: Check if package.json exists
           stat:
-            path: "/opt/autobot/autobot-frontend/package.json"
+            path: "{{ autobot.base_dir }}/autobot-frontend/package.json"
           register: package_json_stat
 
         - name: Run npm audit if dependencies installed
           shell: |
-            cd /opt/autobot/autobot-frontend && \
+            cd {{ autobot.base_dir }}/autobot-frontend && \
             npm audit --audit-level=moderate 2>&1
           register: npm_audit_result
           changed_when: false
@@ -423,7 +423,7 @@
         - name: Alert if package.json missing (will be deployed)
           debug:
             msg: |
-              package.json not found at /opt/autobot/autobot-frontend/
+              package.json not found at {{ autobot.base_dir }}/autobot-frontend/
               It will be deployed during the deployment phase.
           when: not package_json_stat.stat.exists
 

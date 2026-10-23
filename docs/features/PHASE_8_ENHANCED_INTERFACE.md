@@ -625,7 +625,7 @@ curl -H "Origin: http://localhost:5173" \
 
 - **LDAP Integration**: Enterprise authentication
 - **Role-Based Access**: Granular permission controls
-- **Audit Compliance**: SOX/HIPAA logging standards
+- **Audit Logging**: audit trails designed to help with SOX/HIPAA-style logging needs (no compliance claimed; see [Compliance Targets](../compliance/COMPLIANCE_TARGETS.md))
 - **High Availability**: Multi-node takeover coordination
 
 ## Conclusion

@@ -748,7 +748,7 @@ git commit -m "refactor(scripts): Use SSOT config in VM management scripts (#694
 ## Task 11: Migrate Remaining Shell Scripts (Batch)
 
 **Files to migrate** (following the same pattern as Task 10):
-- `scripts/utilities/sync-all-vms.sh`
+- `scripts/utilities/sync-all-vms.sh` (removed in #14873; code sync is the builtin updater's job)
 - `scripts/utilities/sync-to-vm.sh`
 - `scripts/utilities/setup-ssh-keys.sh`
 - `scripts/utilities/check-time-sync.sh`

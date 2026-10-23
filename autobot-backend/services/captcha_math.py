@@ -15,7 +15,7 @@ from typing import Callable
 
 #: Matches "3 + 4", "12 - 5", "7 x 2", "8 / 2". ``x``/``X`` is multiplication. Both cases are
 #: needed: ``clean_math_expression`` upper-cases, while a detector may apply it to lower-cased HTML.
-MATH_EXPR_RE = re.compile(r"(\d+)\s*([+\-*/×÷xX])\s*(\d+)")
+MATH_EXPR_RE = re.compile(r"(?<!\d)(\d{1,9})\s*([+\-*/×÷xX])\s*(\d{1,9})(?!\d)")
 _TRAILING_EQUALS_RE = re.compile(r"\s*[=?]+\s*$")
 
 _OPERATORS: dict[str, Callable[[int, int], int | None]] = {

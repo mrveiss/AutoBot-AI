@@ -42,14 +42,14 @@
     - name: Copy frontend source files from deployment directory
       copy:
         src: "{{ lookup('env', 'SOURCE_DIR') | default('/tmp/autobot-deployment') }}/autobot-vue/"
-        dest: /opt/autobot/src/autobot-vue/
+        dest: "{{ autobot.base_dir }}/src/autobot-vue/"
         owner: autobot-service
         group: autobot-service
         mode: preserve
 
     - name: Install frontend dependencies
       shell: |
-        cd /opt/autobot/src/autobot-vue
+        cd {{ autobot.base_dir }}/src/autobot-vue
         npm install
       become_user: autobot-service
 
@@ -68,7 +68,7 @@
           VITE_NPU_WORKER_HOST={{ npu_worker_host }}
           DEBUG_PROXY=false
           LOG_LEVEL=info
-        dest: /opt/autobot/config/frontend-dev.env
+        dest: "{{ autobot.base_dir }}/config/frontend-dev.env"
         owner: autobot-service
         group: autobot-service
         mode: '0644'
@@ -85,9 +85,9 @@
           Type=simple
           User=autobot-service
           Group=autobot-service
-          WorkingDirectory=/opt/autobot/src/autobot-vue
+          WorkingDirectory={{ autobot.base_dir }}/src/autobot-vue
           Environment="NODE_ENV=development"
-          EnvironmentFile=/opt/autobot/config/frontend-dev.env
+          EnvironmentFile={{ autobot.base_dir }}/config/frontend-dev.env
           ExecStart=/usr/bin/npm run dev -- --host 0.0.0.0 --port 5173
           Restart=always
           RestartSec=5
@@ -144,7 +144,7 @@
           - Status: {{ frontend_test.status }}
           - Service: autobot-frontend-dev
           - Mode: Development (hot reload enabled)
-          - Environment: /opt/autobot/config/frontend-dev.env
+          - Environment: {{ autobot.base_dir }}/config/frontend-dev.env
 
 - name: Verify development services are running
   hosts: backend
@@ -172,7 +172,7 @@
           - URL: http://{{ frontend_host }}:{{ frontend_port }}
           - Service: autobot-frontend-dev (systemd)
           - Hot reload: Enabled
-          - Source: /opt/autobot/src/autobot-vue
+          - Source: {{ autobot.base_dir }}/src/autobot-vue
 
           Backend:
           - URL: http://{{ backend_host }}:{{ backend_port }}
@@ -184,5 +184,5 @@
           - Check status: ansible frontend -i ansible/inventory/production.yml -m shell -a "systemctl status autobot-frontend-dev"
 
           Configuration:
-          - Environment: /opt/autobot/config/frontend-dev.env
+          - Environment: {{ autobot.base_dir }}/config/frontend-dev.env
           - Service: /etc/systemd/system/autobot-frontend-dev.service
