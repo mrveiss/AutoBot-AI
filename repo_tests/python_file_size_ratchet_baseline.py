@@ -205,7 +205,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/events/types.py": 885,
     "autobot-backend/hardware_acceleration.py": 609,
     "autobot-backend/initialization/lifespan.py": 2318,
-    "autobot-backend/initialization/router_registry/feature_routers.py": 762,
+    "autobot-backend/initialization/router_registry/feature_routers.py": 758,
     "autobot-backend/integrations/cloud_integration.py": 616,
     "autobot-backend/integrations/communication_integration.py": 605,
     "autobot-backend/integrations/microsoft365_integration.py": 632,
@@ -483,7 +483,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot_shared/redis_client.py": 674,
     "autobot_shared/redis_management/connection_manager.py": 1387,
     "autobot_shared/security/ssrf_guard_test.py": 633,
-    "autobot_shared/ssot_config.py": 3260,  # #16375: AUTOBOT_PROMETHEUS_SCRAPE_TOKEN
+    "autobot_shared/ssot_config.py": 3242,  # #19319: role-mirrored defaults split to ssot_role_mirrors
     "autobot_shared/ssot_config_test.py": 782,
     "autobot_shared/ssot_constants.py": 896,
     "autobot_shared/user_management/team_service.py": 724,

@@ -54,6 +54,14 @@ from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.paths import project_root
 from autobot_shared.secret_redaction import RedactedReprMixin
 from autobot_shared.ssot_llm_oauth_config import LlmOAuthConfig
+from autobot_shared.ssot_role_mirrors import (  # #19319: SSOT defaults an Ansible role mirrors
+    FEATURE_ROUTERS_STRICT_DEFAULT,
+    SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE_DEFAULT,
+    SERVICE_AUTH_ENFORCEMENT_MODE_DEFAULT,
+    SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES_DEFAULT,
+    SERVICE_AUTH_RATE_LIMIT_WINDOW_DEFAULT,
+    SERVICE_AUTH_TIMESTAMP_WINDOW_DEFAULT,
+)
 from autobot_shared.ssot_tls import TLSConfig, TLSMode
 
 # Determine project root for .env file location.
@@ -122,32 +130,6 @@ PLANNING_CONTEXT_ENABLED: bool = os.environ.get("AUTOBOT_PLANNING_CONTEXT_ENABLE
 SUBAGENT_REFLECTION_ENABLED: bool = (
     os.environ.get("AUTOBOT_SUBAGENT_REFLECTION_ENABLED", "false").lower() in _TRUE_VALUES
 )
-
-
-# Service-auth failure rate limiting (#13326).
-# These mirror the values the service_auth Ansible role has always written to
-# .env; the Pydantic fields previously defaulted to 0, which made
-# ``len(failures) >= max_failures`` true on the very first request and rejected
-# every SERVICE_ONLY_PATHS call on a default install.
-SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES_DEFAULT = 10
-SERVICE_AUTH_RATE_LIMIT_WINDOW_DEFAULT = 300
-
-# Service-auth enforcement gate (#13335) - the third drift in this same block.
-# The Ansible role has always written ``true``/``100``; the Pydantic fields
-# defaulted to ``""``/``0.0``, so every install that did not go through Ansible
-# ran the service-auth middleware in LOGGING MODE with the circuit breaker
-# sampling 0% of requests. Unlike #13326 (which failed closed and was loud),
-# this pair failed OPEN and was silent. ``tests/test_service_auth_default_parity``
-# now pins each of these to the Ansible role default.
-SERVICE_AUTH_ENFORCEMENT_MODE_DEFAULT = "true"
-SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE_DEFAULT = 100.0
-
-# Replay window for HMAC-signed service requests (#13335). The Ansible role and
-# ``export_service_keys.py`` have always written ``AUTH_TIMESTAMP_WINDOW``, but
-# no Pydantic field claimed the alias, so ``ServiceAuthManager`` hard-coded 300
-# and the operator-facing knob did nothing. The default matches the role so
-# wiring it in cannot change behaviour on an existing install.
-SERVICE_AUTH_TIMESTAMP_WINDOW_DEFAULT = 300
 
 
 class RedactedSettings(RedactedReprMixin, BaseSettings):
@@ -1610,7 +1592,7 @@ class MiscConfig(RedactedSettings):
             "See utils/error_metrics.py."
         ),
     )
-    feature_routers_strict: str = Field(default="1", alias="AUTOBOT_FEATURE_ROUTERS_STRICT")
+    feature_routers_strict: str = Field(default=FEATURE_ROUTERS_STRICT_DEFAULT, alias="AUTOBOT_FEATURE_ROUTERS_STRICT")
     gc_threshold_0: int = Field(default=700, alias="AUTOBOT_GC_THRESHOLD_0")  # #13264 batch 3
     gc_threshold_1: int = Field(default=10, alias="AUTOBOT_GC_THRESHOLD_1")  # #13264 batch 3
     gc_threshold_2: int = Field(default=10, alias="AUTOBOT_GC_THRESHOLD_2")  # #13264 batch 3
