@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""install.sh's warn-and-continue handlers must actually run (#15825).
+"""install.sh's error handlers must actually run (#15825) -- now as named stops (#19234).
 
 `install.sh` sets `set -euo pipefail` at line 18. Three call sites captured a
 `curl` result into a variable:
@@ -26,6 +26,13 @@ present the whole time. Any assertion of the form "the warn line exists" or
 "the case has a 400 arm" passed while the defect was live — that is precisely
 the assertion this file must not make. Reachability is a runtime property, so
 these run the real function with `curl` stubbed and assert on its output.
+
+**#19234 changed what the handlers do, not whether they must be reached.** A refused login
+and a failed registration used to warn and continue, and `finalize` then printed "Installation
+Complete!" over a broken install. They now stop the install with a named step and a recovery
+hint (`fatal`), which is a handler too: these tests still prove it is reached, rather than the
+script dying silently at an assignment. The code-source assignment stays a warning, labelled
+optional, and still continues.
 
 **What they do not cover.** They exercise `register_local_node` only, with a
 stubbed curl and jq. They say nothing about whether the API contract is right,
@@ -130,6 +137,7 @@ success() {{ echo "[OK] $*" | tee -a "${{LOG_FILE}}"; }}
 warn()    {{ echo "[WARN] $*" | tee -a "${{LOG_FILE}}"; }}
 phase()   {{ echo "[PHASE] $*" | tee -a "${{LOG_FILE}}"; }}
 log()     {{ echo "[LOG] $*" >> "${{LOG_FILE}}"; }}
+fatal()   {{ echo "[FATAL] $*" | tee -a "${{LOG_FILE}}"; exit 1; }}
 # The health poll runs before the code under test; `curl -sk ... /api/health`
 # sits inside a `while !`, so the stub must succeed there or the function
 # spends 60s in the wait loop and never reaches the handlers being tested.
@@ -142,6 +150,7 @@ CODE_SOURCE=/src
 GIT_BRANCH=main
 {constants}
 {extra}
+{_function_source("wait_for_https")}
 {_function_source(function)}
 {function}
 echo "FUNCTION_RETURNED"
@@ -156,23 +165,19 @@ echo "FUNCTION_RETURNED"
         )
 
 
-def test_a_failed_auth_reaches_the_skip_warning() -> None:
-    """Auth failure must warn and continue, not abort the installer.
+def test_a_failed_auth_reaches_the_named_stop() -> None:
+    """Auth failure must reach its handler -- a named stop since #19234 -- not die silently.
 
-    `curl -f` exits 22 on a 401. Before the fix the assignment aborted the
-    script and neither warn line could run — the installer simply stopped, with
-    no statement of why.
+    `curl -f` exits 22 on a 401. Before #15825 the assignment aborted the script with no
+    statement of why; the handler now says which step failed and what to check.
     """
     result = _run(_curl_stub({"*auth/login*": 401, "*api/nodes*": 201}))
 
-    assert "Could not authenticate with SLM API" in result.stdout, (
+    assert "Step 'admin login' failed" in result.stdout, (
         f"the auth-failure handler did not run; the script aborted at the assignment instead.\n"
         f"stdout={result.stdout!r} stderr={result.stderr!r}"
     )
-    assert "FUNCTION_RETURNED" in result.stdout, (
-        "the function did not return — a warn-and-continue path that does not continue is the "
-        "defect this test exists for"
-    )
+    assert result.returncode != 0 and "FUNCTION_RETURNED" not in result.stdout, "a refused login must stop the install"
 
 
 def test_an_already_registered_node_reaches_the_400_arm() -> None:
@@ -189,14 +194,14 @@ def test_an_already_registered_node_reaches_the_400_arm() -> None:
     assert "FUNCTION_RETURNED" in result.stdout
 
 
-def test_an_unexpected_status_reaches_the_catch_all_warning() -> None:
-    """A 500 must warn and return, leaving the rest of the install to proceed."""
+def test_an_unexpected_status_reaches_the_catch_all_stop() -> None:
+    """A 500 reaches the catch-all arm, which stops the install naming the status (#19234)."""
     result = _run(_curl_stub({"*api/nodes*": 500}))
 
     assert (
-        "Node registration returned HTTP 500" in result.stdout
+        "Step 'node registration' failed: the SLM API returned HTTP 500" in result.stdout
     ), f"the catch-all arm did not run.\nstdout={result.stdout!r} stderr={result.stderr!r}"
-    assert "FUNCTION_RETURNED" in result.stdout
+    assert result.returncode != 0 and "FUNCTION_RETURNED" not in result.stdout
 
 
 def test_a_code_source_failure_warns_without_aborting() -> None:
@@ -204,7 +209,7 @@ def test_a_code_source_failure_warns_without_aborting() -> None:
     result = _run(_curl_stub({"*api/nodes*": 201, "*code-source/assign*": 503}))
 
     assert (
-        "Code source assignment returned HTTP 503" in result.stdout
+        "Optional step 'code source' returned HTTP 503" in result.stdout
     ), f"the code-source handler did not run.\nstdout={result.stdout!r} stderr={result.stderr!r}"
     assert "FUNCTION_RETURNED" in result.stdout
 
@@ -342,13 +347,15 @@ exit 0
 
 
 @pytest.mark.parametrize(
-    "fail_glob,expected_warning",
+    "fail_glob,expected_message,continues",
     [
-        ("*api/nodes*", "register manually via SLM UI"),
-        ("*code-source/assign*", "assign manually via SLM UI"),
+        ("*api/nodes*", "Step 'node registration' failed: the SLM API returned HTTP 000", False),
+        ("*code-source/assign*", "Optional step 'code source' returned HTTP 000", True),
     ],
 )
-def test_a_transport_failure_warns_and_continues_at_runtime(fail_glob: str, expected_warning: str) -> None:
+def test_a_transport_failure_reaches_its_handler_at_runtime(
+    fail_glob: str, expected_message: str, continues: bool
+) -> None:
     """Executed, not scanned.
 
     The static checks above prove the guard is written; only running it proves
@@ -358,9 +365,10 @@ def test_a_transport_failure_warns_and_continues_at_runtime(fail_glob: str, expe
     """
     result = _run(_curl_transport_failure_stub((fail_glob,)))
 
-    assert expected_warning in result.stdout, result.stdout
-    assert "FUNCTION_RETURNED" in result.stdout, (
-        "the installer aborted on a transport failure instead of warning and continuing:\n"
+    assert expected_message in result.stdout, (
+        "a transport failure did not reach its handler (the assignment aborted silently):\n"
         f"stdout={result.stdout}\nstderr={result.stderr}"
     )
-    assert result.returncode == 0
+    # Registration is required (#19234): it stops. The code-source step is optional: it continues.
+    assert ("FUNCTION_RETURNED" in result.stdout) is continues
+    assert (result.returncode == 0) is continues

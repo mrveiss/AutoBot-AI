@@ -2425,19 +2425,6 @@ class SystemValidationResultModel(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class WebResearchSettings(BaseModel):
-    """Web research settings model."""
-
-    enabled: bool
-    require_user_confirmation: bool = True
-    preferred_method: str = "basic"
-    max_results: int = 5
-    timeout_seconds: int = 30
-    auto_research_threshold: float = 0.3
-    rate_limit_requests: int = 5
-    rate_limit_window: int = 60
-
-
 class ResearchPreferences(BaseModel):
     """User research preferences."""
 
@@ -2777,76 +2764,6 @@ class BrowserSessionCleanupData(BaseModel):
     session_id: str | None = None
     conversation_id: str | None = None
     status: str | None = None
-
-
-# ---------------------------------------------------------------------------
-# web_research_settings.py response data schemas (GH #6509)
-# ---------------------------------------------------------------------------
-
-
-class WebResearchStatusData(BaseModel):
-    """Response data for get_research_status."""
-
-    status: str
-    enabled: bool
-    preferred_method: str | None = None
-    health: Dict[str, Any] | None = None
-    circuit_breakers: Dict[str, Any] | None = None
-    cache_stats: Dict[str, Any] | None = None
-    timestamp: str
-    message: str | None = None
-
-
-class WebResearchToggleData(BaseModel):
-    """Response data for enable_web_research and disable_web_research."""
-
-    status: str
-    message: str
-    enabled: bool
-    timestamp: str
-
-
-class WebResearchSettingsData(BaseModel):
-    """Response data for get_research_settings."""
-
-    status: str
-    settings: Dict[str, Any]
-    timestamp: str
-
-
-class WebResearchSettingsUpdateData(BaseModel):
-    """Response data for update_research_settings."""
-
-    status: str
-    message: str
-    settings: Dict[str, Any]
-    timestamp: str
-
-
-class WebResearchTestData(BaseModel):
-    """Response data for test_web_research."""
-
-    status: str
-    test_query: str
-    result: Any | None = None
-    error: str | None = None
-    timestamp: str
-
-
-class WebResearchCacheClearData(BaseModel):
-    """Response data for clear_research_cache and reset_circuit_breakers."""
-
-    status: str
-    message: str
-    timestamp: str
-
-
-class WebResearchUsageStatsData(BaseModel):
-    """Response data for get_usage_stats."""
-
-    status: str
-    stats: Dict[str, Any]
-    timestamp: str
 
 
 # ---------------------------------------------------------------------------

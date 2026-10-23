@@ -24,16 +24,6 @@ BaselineKey = Tuple[str, str, str]
 #: time (see the module docstring).
 SPECIFIC_REASONS: dict[BaselineKey, str] = {
     (
-        "docker/.env.docker",
-        "Secret Keyword",
-        "1ba53c9c3dd2dff0ba71a8b942318082315e6f04",  # pragma: allowlist secret
-    ): (
-        "AUTOBOT_DB_PASSWORD default literal 'autobot' -- the same #16299 "
-        "named default as compose's GRAFANA_ADMIN_PASSWORD fallback. Tracked for "
-        "generate-on-first-run; existing installs deliberately keep their "
-        "current password per the owner's 2026-09-17 ruling."
-    ),
-    (
         "autobot-slm-backend/ansible/roles/backend/defaults/main.yml",
         "Secret Keyword",
         "a5c01e694764bcf09315443c6476e283e6f77906",  # pragma: allowlist secret

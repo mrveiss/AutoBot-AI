@@ -816,26 +816,7 @@ class RedisConnectionManager(PoolParamsMixin):
         - TCP keepalive enabled
         - Exponential backoff retry
         """
-        if database_name in self._configs:
-            config = self._configs[database_name]
-        else:
-            db_number = self._get_database_number(database_name)
-            config = RedisDbConfig(
-                name=database_name,
-                db=db_number,
-                host=self._config["host"],
-                port=self._config["port"],
-                password=self._config.get("password"),
-                username=self._config.get("username"),
-                max_connections=self._pool_config.max_connections,
-                socket_timeout=self._pool_config.socket_timeout,
-                socket_connect_timeout=self._pool_config.socket_connect_timeout,
-                retry_on_timeout=self._pool_config.retry_on_timeout,
-                max_retries=self._pool_config.max_retries,
-            )
-
-        self._validate_config_host(database_name, config)
-        return self._create_sync_pool_with_keepalive(database_name, config, decode_responses)
+        return self.build_sync_pool(database_name, self.resolve_db_config(database_name), decode_responses)
 
     def _validate_config_host(self, database_name: str, config: "RedisDbConfig") -> None:
         """Reject blank Redis hosts before any connect attempt (#11449).
@@ -878,26 +859,7 @@ class RedisConnectionManager(PoolParamsMixin):
 
         Sizing, timeouts, keepalive and retry come from PoolConfig / RedisDbConfig.
         """
-        if database_name in self._configs:
-            config = self._configs[database_name]
-        else:
-            db_number = self._get_database_number(database_name)
-            config = RedisDbConfig(
-                name=database_name,
-                db=db_number,
-                host=self._config["host"],
-                port=self._config["port"],
-                password=self._config.get("password"),
-                username=self._config.get("username"),
-                max_connections=self._pool_config.max_connections,
-                socket_timeout=self._pool_config.socket_timeout,
-                socket_connect_timeout=self._pool_config.socket_connect_timeout,
-                retry_on_timeout=self._pool_config.retry_on_timeout,
-                max_retries=self._pool_config.max_retries,
-                health_check_interval=int(self._pool_config.health_check_interval),
-            )
-
-        self._validate_config_host(database_name, config)
+        config = self.resolve_db_config(database_name)
         return await self._create_async_pool_with_retry(database_name, config, decode_responses)
 
     def _check_sync_client_preconditions(self, database_name: str) -> bool | None:

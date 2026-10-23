@@ -9,7 +9,7 @@ services:
       - DISPLAY=:99
       - HEADLESS=false
       - PLAYWRIGHT_PORT=3000  # the canonical server defaults to 9001; healthcheck and port map expect 3000 (#18549)
-      - VNC_SERVER_PASSWORD=${VNC_PASSWORD:-autobot123}
+      - VNC_SERVER_PASSWORD=${VNC_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets}
       - SCREEN_WIDTH=1920
       - SCREEN_HEIGHT=1080
       - SCREEN_DEPTH=24
@@ -21,9 +21,10 @@ services:
       - ../../../../autobot-browser-worker/session-store.js:/app/session-store.js
       - ../../../../autobot-browser-worker/element-index.js:/app/element-index.js
     ports:
-      - "3000:3000"    # Playwright API
-      - "5901:5901"    # VNC port (avoiding Kali's default 5900)
-      - "6080:6080"    # noVNC web interface
+      # #17500: loopback unless AUTOBOT_PLAYWRIGHT_BIND_ADDRESS opens it on purpose (or SSH-tunnel in).
+      - "${AUTOBOT_PLAYWRIGHT_BIND_ADDRESS:-127.0.0.1}:3000:3000"    # Playwright API
+      - "${AUTOBOT_PLAYWRIGHT_BIND_ADDRESS:-127.0.0.1}:5901:5901"    # VNC port (avoiding Kali's default 5900)
+      - "${AUTOBOT_PLAYWRIGHT_BIND_ADDRESS:-127.0.0.1}:6080:6080"    # noVNC web interface
     command: >
       bash -c "
         set -e

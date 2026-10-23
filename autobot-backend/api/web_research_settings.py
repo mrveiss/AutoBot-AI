@@ -15,10 +15,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse
-from api.schemas_workflows import (
+from api.schemas_web_research import (
     WebResearchCacheClearData,
-    WebResearchSettings,
     WebResearchSettingsData,
+    WebResearchSettingsUpdate,
     WebResearchSettingsUpdateData,
     WebResearchStatusData,
     WebResearchTestData,
@@ -29,6 +29,7 @@ from api.system_health import HEALTH_PROBE_TIMEOUT_S
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from services import web_research_config
 
 logger = get_logger(__name__)
 
@@ -41,6 +42,26 @@ router = APIRouter(prefix="/web-research", tags=["web-research"], dependencies=[
 _RESEARCHER_UNAVAILABLE_DETAIL = (
     "web researcher unavailable — browser/Playwright initialization failed at startup; see logs"
 )
+
+
+def _now() -> str:
+    return datetime.now(tz=timezone.utc).isoformat()
+
+
+def _persist(changes: dict) -> dict:
+    """Save setting changes to the one web research section; returns the full set (#19226)."""
+    from config import config_manager
+    from services.config_service import ConfigService
+
+    settings = web_research_config.save_settings(config_manager, changes)
+    ConfigService.clear_cache()
+    return settings
+
+
+def _saved_method() -> str:
+    from config import config_manager
+
+    return web_research_config.load_settings(config_manager)["preferred_method"]
 
 
 def _require_web_researcher(request: Request):
@@ -84,7 +105,7 @@ async def get_research_status(request: Request):
             content={
                 "status": "success",
                 "enabled": health_status["enabled"],
-                "preferred_method": "advanced",
+                "preferred_method": _saved_method(),
                 "health": health_status,
                 "circuit_breakers": circuit_status,
                 "cache_stats": cache_stats,
@@ -120,6 +141,33 @@ async def get_research_status(request: Request):
         )
 
 
+# A save that reached the config but not the running researcher is not rolled back: the saved
+# value is what the admin asked for, and startup applies it (#19226). The response says so.
+SAVED_NOT_APPLIED = "saved_not_applied"
+_SAVED_NOT_APPLIED_MESSAGE = "{what} saved; the running researcher did not take it and will after a restart"
+
+
+async def _set_enabled(request: Request, enabled: bool) -> JSONResponse:
+    """Save the switch, then flip the live researcher; a failed save changes neither (#19226)."""
+    researcher = _require_web_researcher(request)
+    word = "enabled" if enabled else "disabled"
+    try:
+        _persist({"enabled": enabled})
+    except Exception as e:
+        logger.error("Failed to save web research as %s: %s", word, e)
+        raise HTTPException(status_code=500, detail=f"Failed to switch web research to {word}")
+    try:
+        applied = await (researcher.enable_research(user_confirmed=True) if enabled else researcher.disable_research())
+    except Exception as e:
+        logger.error("Web research saved as %s but not applied live: %s", word, e)
+        applied = False
+    logger.info("Web research %s by an admin (applied live: %s)", word, applied)
+    content = {"status": "success", "message": f"Web research {word}", "enabled": researcher.enabled}
+    if not applied:
+        content.update(status=SAVED_NOT_APPLIED, message=_SAVED_NOT_APPLIED_MESSAGE.format(what=f"Web research {word}"))
+    return JSONResponse(status_code=200, content={**content, "timestamp": _now()})
+
+
 @router.post("/enable", response_model=DataResponse[WebResearchToggleData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -127,48 +175,8 @@ async def get_research_status(request: Request):
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
 async def enable_web_research(request: Request, _: bool = Depends(check_admin_permission)):
-    """Enable web research functionality"""
-    integration = _require_web_researcher(request)
-    try:
-        from unified_unified_config_manager import unified_unified_config_manager
-
-        from services.config_service import ConfigService
-
-        # Enable in integration
-        success = await integration.enable_research(user_confirmed=True)
-
-        if success:
-            # Update configuration
-            unified_unified_config_manager.set_nested("agents.research.enabled", True)
-            unified_unified_config_manager.set_nested("web_research.enabled", True)
-            unified_unified_config_manager.save_settings()
-            ConfigService.clear_cache()
-
-            logger.info("Web research enabled by user")
-
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "status": "success",
-                    "message": "Web research enabled successfully",
-                    "enabled": True,
-                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-                },
-            )
-        else:
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "status": "error",
-                    "message": "Failed to enable web research",
-                    "enabled": False,
-                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-                },
-            )
-
-    except Exception as e:
-        logger.error("Failed to enable web research: %s", e)
-        raise HTTPException(status_code=500, detail="Failed to enable web research")
+    """Enable web research, saved across restarts."""
+    return await _set_enabled(request, True)
 
 
 @router.post("/disable", response_model=DataResponse[WebResearchToggleData])
@@ -178,48 +186,8 @@ async def enable_web_research(request: Request, _: bool = Depends(check_admin_pe
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
 async def disable_web_research(request: Request, _: bool = Depends(check_admin_permission)):
-    """Disable web research functionality"""
-    integration = _require_web_researcher(request)
-    try:
-        from unified_unified_config_manager import unified_unified_config_manager
-
-        from services.config_service import ConfigService
-
-        # Disable in integration
-        success = await integration.disable_research()
-
-        if success:
-            # Update configuration
-            unified_unified_config_manager.set_nested("agents.research.enabled", False)
-            unified_unified_config_manager.set_nested("web_research.enabled", False)
-            unified_unified_config_manager.save_settings()
-            ConfigService.clear_cache()
-
-            logger.info("Web research disabled by user")
-
-            return JSONResponse(
-                status_code=200,
-                content={
-                    "status": "success",
-                    "message": "Web research disabled successfully",
-                    "enabled": False,
-                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-                },
-            )
-        else:
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "status": "error",
-                    "message": "Failed to disable web research",
-                    "enabled": True,
-                    "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-                },
-            )
-
-    except Exception as e:
-        logger.error("Failed to disable web research: %s", e)
-        raise HTTPException(status_code=500, detail="Failed to disable web research")
+    """Disable web research, saved across restarts."""
+    return await _set_enabled(request, False)
 
 
 @router.get("/settings", response_model=DataResponse[WebResearchSettingsData])
@@ -229,43 +197,11 @@ async def disable_web_research(request: Request, _: bool = Depends(check_admin_p
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
 async def get_research_settings():
-    """Get current web research settings"""
-    try:
-        from config.manager import get_config_manager
+    """Every web research setting, read from the one section the researcher uses (#19226)."""
+    from config import config_manager
 
-        # Get settings from config
-        unified_config_manager = get_config_manager()
-        research_config = unified_config_manager.get_nested("agents.research", {})
-        web_research_config = unified_config_manager.get_nested("web_research", {})
-
-        settings = {
-            "enabled": research_config.get("enabled", False),
-            "require_user_confirmation": web_research_config.get("require_user_confirmation", True),
-            "preferred_method": research_config.get("preferred_method", "basic"),
-            "max_results": research_config.get("max_results", 5),
-            "timeout_seconds": research_config.get("timeout_seconds", 30),
-            "auto_research_threshold": web_research_config.get("auto_research_threshold", 0.3),
-            "rate_limit_requests": research_config.get("rate_limit_requests", 5),
-            "rate_limit_window": research_config.get("rate_limit_window", 60),
-            "daily_limit": web_research_config.get("daily_research_limit", 50),
-            "quality_threshold": web_research_config.get("min_result_quality", 0.5),
-            "store_results_in_kb": web_research_config.get("store_results_in_kb", True),
-            "filter_adult_content": web_research_config.get("filter_adult_content", True),
-            "anonymize_requests": web_research_config.get("anonymize_requests", True),
-        }
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "success",
-                "settings": settings,
-                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            },
-        )
-
-    except Exception as e:
-        logger.error("Failed to get research settings: %s", e)
-        raise HTTPException(status_code=500, detail="Failed to get research settings")
+    settings = web_research_config.load_settings(config_manager)
+    return JSONResponse(status_code=200, content={"status": "success", "settings": settings, "timestamp": _now()})
 
 
 @router.put("/settings", response_model=DataResponse[WebResearchSettingsUpdateData])
@@ -274,44 +210,28 @@ async def get_research_settings():
     operation="update_research_settings",
     error_code_prefix="WEB_RESEARCH_SETTINGS",
 )
-async def update_research_settings(settings: WebResearchSettings, _: bool = Depends(check_admin_permission)):
-    """Update web research settings"""
+async def update_research_settings(
+    request: Request, changes: WebResearchSettingsUpdate, _: bool = Depends(check_admin_permission)
+):
+    """Save the sent settings and apply them to the running researcher, no restart (#19226)."""
+    from config import config_manager
+
     try:
-        from config import unified_config_manager
-        from services.config_service import ConfigService
-
-        # Update research agent settings
-        unified_config_manager.set_nested("agents.research.enabled", settings.enabled)
-        unified_config_manager.set_nested("agents.research.preferred_method", settings.preferred_method)
-        unified_config_manager.set_nested("agents.research.max_results", settings.max_results)
-        unified_config_manager.set_nested("agents.research.timeout_seconds", settings.timeout_seconds)
-        unified_config_manager.set_nested("agents.research.rate_limit_requests", settings.rate_limit_requests)
-        unified_config_manager.set_nested("agents.research.rate_limit_window", settings.rate_limit_window)
-
-        # Update web research settings
-        unified_config_manager.set_nested("web_research.enabled", settings.enabled)
-        unified_config_manager.set_nested("web_research.require_user_confirmation", settings.require_user_confirmation)
-        unified_config_manager.set_nested("web_research.auto_research_threshold", settings.auto_research_threshold)
-
-        # Save configuration and clear cache
-        unified_config_manager.save_settings()
-        ConfigService.clear_cache()
-
-        logger.info("Web research settings updated")
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "success",
-                "message": "Web research settings updated successfully",
-                "settings": settings.dict(),
-                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            },
-        )
-
+        settings = _persist(changes.model_dump(exclude_unset=True, exclude_none=True))
     except Exception as e:
         logger.error("Failed to update research settings: %s", e)
         raise HTTPException(status_code=500, detail="Failed to update research settings")
+    content = {"status": "success", "message": "Web research settings updated", "settings": settings}
+    researcher = getattr(request.app.state, "web_researcher", None)
+    try:
+        if researcher is not None:
+            researcher.apply_settings(web_research_config.researcher_config(config_manager))
+    except Exception as e:
+        logger.error("Web research settings saved but not applied live: %s", e)
+        content.update(
+            status=SAVED_NOT_APPLIED, message=_SAVED_NOT_APPLIED_MESSAGE.format(what="Web research settings")
+        )
+    return JSONResponse(status_code=200, content={**content, "timestamp": _now()})
 
 
 @router.post("/test", response_model=DataResponse[WebResearchTestData])
