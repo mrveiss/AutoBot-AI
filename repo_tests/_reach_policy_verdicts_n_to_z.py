@@ -65,6 +65,11 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Tracked .js under three roots is a subset of those trees; the unrelated-script share drifts.",
     ),
+    "one-system-knowledge-template-tree": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Template-schema YAML is a subset of all tracked YAML (whole repo); unrelated YAML drifts (#19310).",
+    ),
     "one-static-data-copy-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
