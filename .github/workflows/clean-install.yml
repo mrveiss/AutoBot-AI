@@ -1,0 +1,94 @@
+name: Clean install
+
+# #19403 (part of #19267): run the one-line installer exactly as INSTALL.md documents it on a
+# fresh Ubuntu runner, then prove the SLM is usable. Two runs:
+#   no-tty -- the piped one-liner with no terminal, the auto-generated-password path (#17929);
+#   tty    -- under a pty, the two prompts answered as a person would.
+# A failure names its step: install, health, login or node.
+#
+# The command is extracted from INSTALL.md (scripts/ci/install_oneliner.py), so it fetches the
+# installer from main, as a reader's copy does -- a dispatch from a branch still installs main.
+
+on:
+  schedule:
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+  # A change to this pipeline runs it once on its PR; workflow_dispatch exists only on main.
+  pull_request:
+    paths:
+      - .github/workflows/clean-install.yml
+      - scripts/ci/install_oneliner.py
+      - scripts/ci/install_oneliner.expected
+      - scripts/ci/clean_install_check.sh
+      - scripts/ci/clean_install_tty.exp
+      - scripts/ci/mask_install_summary.sh
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clean-install-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  install:
+    name: install (${{ matrix.mode }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [no-tty, tty]
+    env:
+      SLM_URL: https://localhost
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Extract the documented one-liner
+        run: |
+          set -euo pipefail
+          cmd=$(python3 scripts/ci/install_oneliner.py INSTALL.md)
+          echo "INSTALL_CMD=${cmd}" >> "${GITHUB_ENV}"
+          echo "running: ${cmd}"
+
+      # The runner image is not a blank host: it ships Docker, whose docker0 bridge is a second
+      # interface a blank Ubuntu does not have, and the installer asks which interface to use.
+      - name: Make the runner a blank host
+        run: |
+          sudo systemctl stop docker.socket docker.service containerd.service || true
+          sudo ip link delete docker0 2>/dev/null || true
+          ip -4 -o addr show | awk '{print $2, $4}'
+
+      # The installer's summary prints a generated credential. The runner is discarded, but the
+      # log is public, so that line is masked on its way to the log.
+      - name: "Step: install (no tty)"
+        if: matrix.mode == 'no-tty'
+        run: |
+          set -euo pipefail
+          setsid bash -c "${INSTALL_CMD}" </dev/null 2>&1 | bash scripts/ci/mask_install_summary.sh \
+            || { echo "::error title=clean install: step 'install' failed::the no-tty one-liner exited non-zero"; exit 1; }
+
+      - name: "Step: install (tty)"
+        if: matrix.mode == 'tty'
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y -qq expect >/dev/null
+          typed="${RUNNER_TEMP}/typed-at-prompt"
+          python3 -c 'import secrets; print(secrets.token_urlsafe(18))' > "${typed}"
+          echo "::add-mask::$(cat "${typed}")"
+          echo "EXPECT_PASSWORD_FILE=${typed}" >> "${GITHUB_ENV}"
+          EXPECT_PASSWORD_FILE="${typed}" expect -f scripts/ci/clean_install_tty.exp 2>&1 \
+            | bash scripts/ci/mask_install_summary.sh \
+            || { echo "::error title=clean install: step 'install' failed::the tty one-liner exited non-zero"; exit 1; }
+
+      - name: "Steps: health, login, node"
+        run: sudo --preserve-env=SLM_URL,EXPECT_PASSWORD_FILE bash scripts/ci/clean_install_check.sh
+
+      - name: Service logs on failure
+        if: failure()
+        run: |
+          for unit in autobot-slm-backend nginx; do
+            echo "== ${unit}"; sudo journalctl -u "${unit}" -n 80 --no-pager || true
+          done

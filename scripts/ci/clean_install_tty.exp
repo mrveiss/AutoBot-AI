@@ -1,0 +1,38 @@
+#!/usr/bin/expect -f
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Run the documented one-liner under a pty and answer its two prompts as a person would
+# (#19403): Enter for the default branch, then the password read from $EXPECT_PASSWORD_FILE.
+#   INSTALL_CMD=<one-liner> EXPECT_PASSWORD_FILE=<file> clean_install_tty.exp
+# Exits with the installer's status; a missing prompt or a timeout exits 2.
+
+set timeout 3600
+set fh [open $env(EXPECT_PASSWORD_FILE) r]
+set typed [string trim [read $fh]]
+close $fh
+log_user 1
+spawn bash -c $env(INSTALL_CMD)
+
+expect {
+    "Git branch to install" {}
+    timeout { puts "\nno branch prompt"; exit 2 }
+    eof { puts "\ninstaller ended before the branch prompt"; exit 2 }
+}
+expect "> " { send "\r" }
+
+expect {
+    "leave blank to auto-generate" {}
+    timeout { puts "\nno password prompt"; exit 2 }
+    eof { puts "\ninstaller ended before the password prompt"; exit 2 }
+}
+log_user 0
+expect "> " { send "$typed\r" }
+log_user 1
+
+expect {
+    timeout { puts "\ninstaller timed out"; exit 2 }
+    eof {}
+}
+lassign [wait] pid spawnid os_error status
+exit $status
