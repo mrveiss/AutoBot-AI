@@ -164,8 +164,11 @@ class AgentOrgService:
             return {}
         from user_management.models.organization import Organization
 
+        # A soft-deleted company is not named (Organization.deleted_at, the canonical soft-delete).
         rows = await self.session.execute(
-            select(Organization.id, Organization.name).where(Organization.id.in_(company_ids))
+            select(Organization.id, Organization.name).where(
+                Organization.id.in_(company_ids), Organization.deleted_at.is_(None)
+            )
         )
         return {company_id: name for company_id, name in rows.all()}
 

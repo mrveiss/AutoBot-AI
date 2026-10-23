@@ -75,7 +75,11 @@ async def factory() -> AsyncIterator[async_sessionmaker[AsyncSession]]:
     await engine.dispose()
 
 
-async def _status(factory) -> list[dict]:  # noqa: ANN001
+ADMIN = AgentVisibility(is_platform_admin=True)
+MEMBER_OF_ACME = AgentVisibility(is_platform_admin=False, company_ids=frozenset({ACME}))
+
+
+async def _status(factory, visibility: AgentVisibility = ADMIN) -> list[dict]:  # noqa: ANN001
     app = FastAPI()
     app.include_router(router, prefix="/agents")
 
@@ -85,7 +89,7 @@ async def _status(factory) -> list[dict]:  # noqa: ANN001
 
     app.dependency_overrides[get_db_session] = _session
     app.dependency_overrides[get_optional_db_session] = _session
-    app.dependency_overrides[get_agent_visibility] = lambda: AgentVisibility(is_platform_admin=True)
+    app.dependency_overrides[get_agent_visibility] = lambda: visibility
     app.dependency_overrides[get_current_user] = lambda: {"user_id": str(uuid.uuid4())}
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         return (await client.get("/agents/status")).json()["agents"]
@@ -114,3 +118,21 @@ async def test_two_ceos_in_different_companies_both_appear_and_are_told_apart(fa
 async def test_a_platform_agent_has_no_company(factory):  # noqa: ANN001
     platform = next(a for a in await _status(factory) if a["id"] == "platform")
     assert platform["companyId"] is None and platform["companyName"] is None
+
+
+@pytest.mark.asyncio
+async def test_a_member_sees_neither_another_companys_agent_nor_its_name(factory):  # noqa: ANN001
+    agents = await _status(factory, MEMBER_OF_ACME)
+    assert {a["id"] for a in agents} == {"ceo-acme", "paused", "platform"}
+    assert "Globex" not in {a["companyName"] for a in agents}
+    assert str(GLOBEX) not in {a["companyId"] for a in agents}
+
+
+@pytest.mark.asyncio
+async def test_a_soft_deleted_company_is_not_named(factory):  # noqa: ANN001
+    async with factory() as session:
+        (await session.get(Organization, GLOBEX)).soft_delete()
+        await session.commit()
+    by_id = {a["id"]: a for a in await _status(factory)}
+    assert by_id["ceo-globex"]["companyName"] is None
+    assert by_id["ceo-acme"]["companyName"] == "Acme"  # contrast: a live company is still named
