@@ -7236,7 +7236,23 @@
       "abstained": "Abstained",
       "viewLogs": "View Logs",
       "loadError": "Unable to load agent activity right now.",
-      "noAgents": "No active agents."
+      "noAgents": "No active agents.",
+      "statusNotReported": "Status not reported",
+      "notReported": "Not reported",
+      "notApplicable": "N/A",
+      "seconds": "{n}s",
+      "minutes": "{n}m",
+      "hours": "{n}h",
+      "secondsAgo": "{n}s ago",
+      "minutesAgo": "{n}m ago",
+      "hoursAgo": "{n}h ago",
+      "types": {
+        "orchestrator": "Orchestrator Agent",
+        "worker": "Worker Agent",
+        "monitor": "Monitor Agent",
+        "analyzer": "Analyzer Agent",
+        "executor": "Executor Agent"
+      }
     },
     "resourceHeatmap": {
       "defaultTitle": "Resource Utilization Heatmap",

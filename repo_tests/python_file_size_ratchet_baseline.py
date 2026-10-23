@@ -128,7 +128,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/playwright.py": 877,
     "autobot-backend/api/provider_auth.py": 608,
     "autobot-backend/api/redis_mcp/tools.py": 658,
-    "autobot-backend/api/schemas_agent.py": 2224,
+    "autobot-backend/api/schemas_agent.py": 2223,
     "autobot-backend/api/schemas_analytics.py": 3533,
     "autobot-backend/api/schemas_chat.py": 702,
     "autobot-backend/api/schemas_code.py": 3265,
