@@ -98,3 +98,18 @@ register_env_var(
         range=(1, 86400),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_EMBEDDING_OVERRIDE_CACHE_SECONDS",
+        type=float,
+        default=5.0,
+        description=(
+            "Seconds each process caches the user's embedding-model override (Redis key "
+            "autobot:kb:embedding_model) before re-reading it, so a switch reaches every reader "
+            "within this window; read by autobot_shared/embedding_model.py (#19377)."
+        ),
+        component="knowledge",
+        range=(0.0, 300.0),
+    )
+)

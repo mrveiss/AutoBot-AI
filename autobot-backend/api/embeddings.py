@@ -24,6 +24,7 @@ from api.schemas_knowledge import (
     EmbeddingUpdateData,
 )
 from auth_middleware import check_admin_permission, get_current_user
+from autobot_shared.embedding_model import active_embedding_model
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
@@ -66,6 +67,12 @@ async def get_embedding_settings(
                     }
                 },
             }
+        # #19377: the model actually in use is the resolver's, never this file's copy, which
+        # no embedding call reads -- reporting the file's value showed a model that was not used.
+        provider = embedding_config.get("provider", "ollama")
+        embedding_config.setdefault("providers", {}).setdefault(provider, {})[
+            "selected_model"
+        ] = active_embedding_model()
 
         return JSONResponse(
             status_code=200,
@@ -95,43 +102,22 @@ async def update_embedding_settings(
 
     Issue #744: Requires admin authentication.
     """
-    try:
-        # Update the embedding configuration
-        unified_config_manager.set_nested("backend.llm.unified.embedding.provider", update.provider)
-        unified_config_manager.set_nested(
-            f"backend.llm.unified.embedding.providers.{update.provider}.selected_model",
-            update.selected_model,
-        )
-
-        if update.endpoint:
-            unified_config_manager.set_nested(
-                f"backend.llm.unified.embedding.providers.{update.provider}.endpoint",
-                update.endpoint,
-            )
-
-        # Save configuration and clear cache
-        unified_config_manager.save_settings()
-        ConfigService.clear_cache()
-
-        logger.info(f"Updated embedding configuration: provider={update.provider}, model={update.selected_model}")
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "success",
-                "message": "Embedding configuration updated successfully",
-                "updated_config": {
-                    "provider": update.provider,
-                    "selected_model": update.selected_model,
-                    "endpoint": update.endpoint,
-                },
-                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            },
-        )
-
-    except Exception as e:
-        logger.error("Failed to update embedding settings: %s", e)
-        raise HTTPException(status_code=500, detail="Failed to update embedding settings")
+    # #19377: this used to write a settings.json block that no embedding call reads, report
+    # success, and change nothing. Changing the model re-indexes the knowledge base, so it goes
+    # through the switch flow (#19379), not through this endpoint.
+    return JSONResponse(
+        status_code=409,
+        content={
+            "status": "error",
+            "message": (
+                f"The embedding model is not changed here. The active model is "
+                f"'{active_embedding_model()}'; switching it rebuilds the knowledge-base index "
+                f"and is done through the embedding-model switch (#19379)."
+            ),
+            "requested": {"provider": update.provider, "selected_model": update.selected_model},
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+        },
+    )
 
 
 @router.get("/models", response_model=DataResponse[EmbeddingModelsData])
@@ -255,7 +241,7 @@ async def get_embedding_status(
         current_provider = embedding_config.get("provider", "ollama")
 
         provider_config = embedding_config.get("providers", {}).get(current_provider, {})
-        selected_model = provider_config.get("selected_model", "")
+        selected_model = active_embedding_model()  # #19377: the model in use, not the file's copy
         endpoint = provider_config.get("endpoint", "")
 
         # Basic status check
