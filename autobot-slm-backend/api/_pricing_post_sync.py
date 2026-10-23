@@ -23,19 +23,14 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import os
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from autobot_shared.env_utils import env_float
+from autobot_shared.logging_manager import get_logger
 
-# Plain stdlib logging, deliberately -- see autobot_shared/user_management/
-# password_epoch.py:50-58: this module is imported by code_sync.py, whose
-# test harness (tests/api/test_collect_outdated_node_ids.py) stubs config as
-# a MagicMock, and autobot_shared.logging_manager.get_logger compares that
-# MagicMock against an int at call time, raising under that harness.
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 #: Seconds the post-sync pricing refresh may run before it is abandoned. The
 #: install/update itself is never blocked past this: on timeout the step is

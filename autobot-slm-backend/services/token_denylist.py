@@ -33,11 +33,12 @@ auth latency is never hostage to a stuck connection.
 """
 
 import asyncio
-import logging
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import SQLAlchemyError
+
+from autobot_shared.logging_manager import get_logger
 
 try:  # asyncpg can raise its own errors at connect time, before SQLAlchemy wraps them
     import asyncpg
@@ -46,7 +47,7 @@ try:  # asyncpg can raise its own errors at connect time, before SQLAlchemy wrap
 except ImportError:  # pragma: no cover - asyncpg is the SLM's driver in deployments
     _DRIVER_FAILURES = ()
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Failures that mean "the store could not answer".
 _STORE_FAILURES = (asyncio.TimeoutError, ConnectionError, OSError, SQLAlchemyError, *_DRIVER_FAILURES)
