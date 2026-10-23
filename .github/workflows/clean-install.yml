@@ -6,16 +6,21 @@ name: Clean install
 #   tty    -- under a pty, the two prompts answered as a person would.
 # A failure names its step: install, health, login or node.
 #
-# The command is extracted from INSTALL.md (scripts/ci/install_oneliner.py), so it fetches the
-# installer from main, as a reader's copy does -- a dispatch from a branch still installs main.
+# Scheduled and dispatched runs execute the command extracted from INSTALL.md
+# (scripts/ci/install_oneliner.py) verbatim, so they install main exactly as a reader's copy does.
+# A pull request BYPASSES that pinned command on purpose: the one-liner fetches main, so it could
+# never test the PR's installer. On a PR the checked-out install.sh is piped to `sudo bash` the
+# same way and installs the PR's branch; the doc test still pins the documented command.
 
 on:
   schedule:
     - cron: '0 4 * * 1'
   workflow_dispatch:
-  # A change to this pipeline runs it once on its PR; workflow_dispatch exists only on main.
+  # An installer, install-doc or pipeline change gets a clean-host run before it merges.
   pull_request:
     paths:
+      - install.sh
+      - INSTALL.md
       - .github/workflows/clean-install.yml
       - scripts/ci/install_oneliner.py
       - scripts/ci/install_oneliner.expected
@@ -33,6 +38,8 @@ concurrency:
 jobs:
   install:
     name: install (${{ matrix.mode }})
+    # A fork's branch is not on this repository, so the installer could not clone it.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     strategy:
@@ -46,10 +53,20 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Extract the documented one-liner
+      - name: Choose the command
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          MODE: ${{ matrix.mode }}
         run: |
           set -euo pipefail
-          cmd=$(python3 scripts/ci/install_oneliner.py INSTALL.md)
+          if [[ "${GITHUB_EVENT_NAME}" != pull_request ]]; then
+            cmd=$(python3 scripts/ci/install_oneliner.py INSTALL.md)
+          elif [[ "${MODE}" == tty ]]; then
+            cmd="cat install.sh | sudo bash"  # the branch is typed at its prompt
+            echo "INSTALL_BRANCH=${HEAD_REF}" >> "${GITHUB_ENV}"
+          else
+            cmd="cat install.sh | sudo bash -s -- --branch=$(printf '%q' "${HEAD_REF}")"
+          fi
           echo "INSTALL_CMD=${cmd}" >> "${GITHUB_ENV}"
           echo "running: ${cmd}"
 
@@ -90,5 +107,5 @@ jobs:
         if: failure()
         run: |
           for unit in autobot-slm-backend nginx; do
-            echo "== ${unit}"; sudo journalctl -u "${unit}" -n 80 --no-pager || true
+            echo "== ${unit}"; sudo journalctl -u "${unit}" -n 80 --no-pager 2>&1 | bash scripts/ci/mask_install_summary.sh || true
           done
