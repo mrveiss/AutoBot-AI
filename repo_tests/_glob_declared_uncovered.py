@@ -147,6 +147,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/nginx_sites_enabled_link_enforced_16979_test.py",
             "repo_tests/no_private_copy_of_a_shared_helper_test.py",
             "repo_tests/pip_relative_editable_needs_chdir_test.py",
+            "repo_tests/postgres_listen_not_wildcard_19239_test.py",
             "repo_tests/pull_request_workflows_cannot_push_15362_test.py",
             "repo_tests/python_interpreter_role_rename_test.py",
             "repo_tests/redis_config_path_is_canonical_17434_test.py",
