@@ -30,12 +30,16 @@ export interface Agent {
   id: string
   name: string
   type: 'orchestrator' | 'worker' | 'monitor' | 'analyzer' | 'executor'
-  // #9724: 'abstained' added — AgentActivityVisualization renders this state
-  status: 'working' | 'idle' | 'error' | 'paused' | 'abstained'
-  currentTask?: string
-  tasksCompleted: number
-  uptime: number
-  successRate: number
+  // #9724: 'abstained' added — AgentActivityVisualization renders this state.
+  // #17514: null = not reported. The server sends null for anything it does not measure,
+  // never a 0 that reads as observed; the widget shows "not reported".
+  status: 'working' | 'idle' | 'error' | 'paused' | 'abstained' | null
+  companyId?: string | null
+  companyName?: string | null
+  currentTask?: string | null
+  tasksCompleted: number | null
+  uptime: number | null
+  successRate: number | null
   recentTasks: Array<{
     id: string
     name: string

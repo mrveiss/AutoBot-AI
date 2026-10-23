@@ -103,7 +103,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/vision/MediaGallery.vue": 843,
     "autobot-frontend/src/components/vision/ScreenCaptureViewer.vue": 836,
     "autobot-frontend/src/components/vision/VideoProcessor.vue": 897,
-    "autobot-frontend/src/components/visualizations/AgentActivityVisualization.vue": 959,
+    "autobot-frontend/src/components/visualizations/AgentActivityVisualization.vue": 936,
     "autobot-frontend/src/components/visualizations/SystemArchitectureDiagram.vue": 1881,
     "autobot-frontend/src/components/visualizations/WorkflowVisualization.vue": 1019,  # #16744: 1020 -> 1019
     "autobot-frontend/src/components/workflow/PhaseProgressionIndicator.vue": 634,

@@ -1107,20 +1107,19 @@ class ChainOfCommandResponse(BaseModel):
 
 
 class AgentStatusItem(BaseModel):
-    """Runtime status for one registered agent (#10502).
-
-    Shape consumed by the Home dashboard "Agent Activity Monitor"
-    (frontend ``useAgentActivityData`` ``Agent`` interface).
-    """
+    """One agent for the Home dashboard "Agent Activity Monitor" (#10502, frontend ``Agent``).
+    A field the server cannot measure is None, never 0: the widget shows "not reported" (#17514)."""
 
     id: str
     name: str
     type: str = "worker"
-    status: str = "idle"
+    status: str | None = None
+    companyId: str | None = None
+    companyName: str | None = None
     currentTask: str | None = None
-    tasksCompleted: int = 0
-    uptime: int = 0
-    successRate: int = 0
+    tasksCompleted: int | None = None
+    uptime: int | None = None
+    successRate: int | None = None
     recentTasks: List[Dict[str, Any]] = Field(default_factory=list)
     activityTimeline: List[Dict[str, Any]] = Field(default_factory=list)
 

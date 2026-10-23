@@ -31,7 +31,8 @@
         <div class="status-summary">
           <span class="active-count">
             <Icon name="circle" class="pulse" />
-            {{ t('visualizations.agentActivity.activeCount', { count: activeAgentCount }) }}
+            <!-- #17514: "0 active" only when statuses were reported; otherwise say they were not -->
+            {{ statusReported ? t('visualizations.agentActivity.activeCount', { count: activeAgentCount }) : t('visualizations.agentActivity.statusNotReported') }}
           </span>
         </div>
       </div>
@@ -61,6 +62,7 @@
         <!-- Agent Info -->
         <div class="agent-info">
           <h4 class="agent-name">{{ agent.name }}</h4>
+          <span v-if="agent.companyName" class="agent-type">{{ agent.companyName }}</span>
           <span class="agent-type">{{ formatAgentType(agent.type) }}</span>
         </div>
 
@@ -78,6 +80,10 @@
             <Icon name="help-circle" />
             <span>{{ t('visualizations.agentActivity.abstained') }}</span>
           </div>
+          <div v-else-if="agent.status == null" class="activity-idle">
+            <Icon name="help-circle" />
+            <span>{{ t('visualizations.agentActivity.statusNotReported') }}</span>
+          </div>
           <div v-else-if="agent.status === 'error'" class="activity-error">
             <div class="error-badge">
               <Icon name="exclamation-triangle" />
@@ -93,16 +99,16 @@
         <!-- Metrics -->
         <div class="agent-metrics">
           <div class="metric">
-            <span class="metric-value">{{ agent.tasksCompleted }}</span>
+            <span class="metric-value">{{ agent.tasksCompleted ?? t('visualizations.agentActivity.notReported') }}</span>
             <span class="metric-label">{{ t('visualizations.agentActivity.tasks') }}</span>
           </div>
           <div class="metric">
-            <span class="metric-value">{{ formatUptime(agent.uptime) }}</span>
+            <span class="metric-value">{{ agent.uptime == null ? t('visualizations.agentActivity.notReported') : formatUptime(agent.uptime) }}</span>
             <span class="metric-label">{{ t('visualizations.agentActivity.uptime') }}</span>
           </div>
           <div class="metric">
-            <!-- TASK 5: success rate is meaningless with zero tasks — show N/A -->
-            <span class="metric-value">{{ agent.tasksCompleted === 0 ? 'N/A' : agent.successRate + '%' }}</span>
+            <!-- TASK 5: meaningless with zero tasks; #17514: unmeasured is "not reported", never 0 -->
+            <span class="metric-value">{{ successText(agent) }}</span>
             <span class="metric-label">{{ t('visualizations.agentActivity.success') }}</span>
           </div>
         </div>
@@ -206,6 +212,7 @@ import { getCssVar } from '@/composables/useCssVars'
 import { useExpansion } from '@/composables/useExpansion'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useAgentActivityData, type Agent } from '@/composables/visualizations/useAgentActivityData'
+import { agentActivityFormat } from '@/composables/visualizations/agentActivityFormat'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -239,6 +246,10 @@ const activeAgentCount = computed(() => {
   return agents.value.filter(a => a.status === 'working').length
 })
 
+// #17514: a status nobody reported is not "idle"; the header says so instead of "0 active".
+const statusReported = computed(() => agents.value.some(a => a.status != null))
+const { successText, getAgentIcon, formatAgentType, formatUptime, formatTimeAgo, truncate } = agentActivityFormat(t)
+
 const timeLabels = computed(() => {
   const now = new Date()
   const labels: string[] = []
@@ -248,40 +259,6 @@ const timeLabels = computed(() => {
   }
   return labels
 })
-
-// Methods
-function getAgentIcon(type: string): string {
-  const icons: Record<string, string> = {
-    orchestrator: '🎭',
-    worker: '⚙️',
-    monitor: '👁️',
-    analyzer: '🔍',
-    executor: '🚀'
-  }
-  return icons[type] || '🤖'
-}
-
-function formatAgentType(type: string): string {
-  return type.charAt(0).toUpperCase() + type.slice(1) + ' Agent'
-}
-
-function formatUptime(seconds: number): string {
-  if (seconds < 60) return `${seconds}s`
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`
-  return `${Math.floor(seconds / 3600)}h`
-}
-
-function formatTimeAgo(timestamp: number): string {
-  const seconds = Math.floor((Date.now() - timestamp) / 1000)
-  if (seconds < 60) return `${seconds}s ago`
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`
-  return `${Math.floor(seconds / 3600)}h ago`
-}
-
-function truncate(text: string, maxLength: number): string {
-  if (text.length <= maxLength) return text
-  return text.slice(0, maxLength - 1) + '…'
-}
 
 function getEventIcon(type: string): string {
   const icons: Record<string, string> = {
