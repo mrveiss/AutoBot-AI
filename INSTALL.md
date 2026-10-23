@@ -11,7 +11,7 @@ full picture, see [The AutoBot Platform Model](docs/architecture/PLATFORM_MODEL.
 Installation uses a two-phase deployment model:
 
 1. **`install.sh`** — a shell script that deploys the **Service Lifecycle Manager (SLM)**
-   and all dependencies onto a blank Debian/Ubuntu host. The SLM is the management layer
+   and all dependencies onto a blank Ubuntu 22.04+ host. The SLM is the management layer
    that then deploys, operates, and scales the rest of the infrastructure.
 2. **Setup Wizard** — a guided web UI that walks you through adding fleet nodes, testing
    connections, enrolling agents, assigning roles, and provisioning.
@@ -25,14 +25,14 @@ ready to run the core and install modules.
 
 | Requirement | Minimum |
 |-------------|---------|
-| OS | Debian 11+ / Ubuntu 22.04+ |
+| OS | Ubuntu 22.04+ (the installer gets Python 3.14 and Ansible from Ubuntu PPAs; on Debian and other systems, use [Docker](#docker-deployment)) |
 | Init system | **systemd running as PID 1** — the installer manages every service as a systemd unit |
 | RAM | 1.5 GB (the installer refuses to run below this; SLM control plane only) |
 | Disk | 5 GB free (the installer refuses to run below this); 20 GB recommended |
 | Access | Root (or sudo) |
 | Network | Internet access for package downloads |
 
-**Supported hosts:** a Debian/Ubuntu VM or bare-metal machine booted with systemd, or
+**Supported hosts:** an Ubuntu 22.04+ VM or bare-metal machine booted with systemd, or
 WSL2 with systemd enabled (`[boot] systemd=true` in `/etc/wsl.conf`). **Not supported by
 `install.sh`:** containers and other hosts where systemd is not PID 1 — use the
 [Docker deployment](#docker-deployment) there instead.
@@ -139,7 +139,7 @@ logged.
 | `--yes`, `-y` | Skip confirmation prompts (use with `--uninstall`) |
 | `--validate` | Verify installation integrity (required service directories present) |
 | `--branch=BRANCH` | Git branch to install (default: `main`) |
-| `--admin-pass=PASS` | SLM admin password (auto-generated if not set) |
+| `--admin-pass-file=PATH` | Read the SLM admin password from the first line of PATH (auto-generated if not set). The file must be non-empty and mode `600` or tighter (`chmod 600 PATH`), or the installer refuses it. `--admin-pass=` is refused: a command-line argument is readable by every local user (#19236). |
 | `--ip=IP` | Override the auto-detected IP address (multi-interface hosts) |
 | `--rotate-secrets` | On reinstall, replace the existing SLM admin password. By default a reinstall keeps the password set in the wizard and ignores `--admin-pass=` |
 | `--help`, `-h` | Show help |
@@ -149,7 +149,7 @@ Environment variables skip the matching interactive prompt:
 | Variable | Effect |
 |----------|--------|
 | `AUTOBOT_INSTALL_BRANCH=<branch>` | Same as `--branch=` |
-| `AUTOBOT_SLM_ADMIN_PASSWORD=<pass>` | Same as `--admin-pass=` |
+| `AUTOBOT_SLM_ADMIN_PASSWORD=<pass>` | The admin password itself, not a file path (unlike `--admin-pass-file=`, which names a file) |
 | `AUTOBOT_INSTALL_INTERFACE=<iface>` | Pick the network interface by name instead of the menu |
 | `OVERRIDE_IP=<ip>` | Skip IP detection and use this address |
 | `NETWORK_SUBNET=<cidr>` / `NETWORK_GATEWAY=<ip>` | Use this network instead of detecting it. The subnet is the source the firewall rules allow, so if it cannot be detected the installer stops and asks for these instead of guessing |
@@ -200,6 +200,20 @@ Log in to the main app at **http://localhost** with `admin` and that password, t
 it. A stack started without the line has no main-app account; add the line with
 `bash docker/generate-secrets.sh` (it keeps every value already in the file) and restart the
 backend.
+
+Every credential compose needs comes from this file; none has a built-in default. If one is
+missing, `docker compose` stops with an error that names it (#17793).
+
+**Upgrading a stack that already has data.** An existing Postgres volume keeps the database
+password it was created with and ignores a new one. So if `docker/.env.secrets` has no
+`AUTOBOT_DB_PASSWORD` line, `generate-secrets.sh` refuses to create one while the Postgres
+volume exists. Add the password the stack already uses (a stack started from the old tracked
+default used `autobot`), then rerun the script to add any other missing line:
+
+```bash
+echo 'AUTOBOT_DB_PASSWORD=<the password this stack already uses>' >> docker/.env.secrets
+bash docker/generate-secrets.sh
+```
 
 ### SLM web GUI first (smallest start)
 
@@ -367,6 +381,31 @@ sudo systemctl status autobot-slm-backend
 sudo systemctl status nginx
 sudo systemctl status postgresql
 ```
+
+### The `autobot` account's root access
+
+The installer creates the `autobot` service account and gives it **unrestricted passwordless
+root**: it writes `autobot ALL=(ALL) NOPASSWD:ALL` to `/etc/sudoers.d/autobot`.
+
+Why it is that broad today:
+- the SLM deploys and updates hosts with Ansible using `become`, and that runs arbitrary
+  module code as root through `sudo /bin/sh -c ...`, which a sudoers command list cannot
+  usefully restrict;
+- the builtin updater and the agent's privileged tasks run commands as root through `sudo -n`.
+
+Treat the `autobot` account as root-equivalent: anyone who can act as it can act as root on
+this host. Narrowing the grant without breaking deploys is designed in #19245.
+
+To audit it:
+
+```bash
+sudo cat /etc/sudoers.d/autobot   # exactly the one line above, mode 0440
+sudo -l -U autobot                # what the account may run
+```
+
+To remove it, run `sudo rm /etc/sudoers.d/autobot`. Fleet deploys, the builtin updater and
+privileged agent tasks then stop working on this host until it is restored. The uninstaller
+removes it along with the account it created (see below).
 
 ---
 

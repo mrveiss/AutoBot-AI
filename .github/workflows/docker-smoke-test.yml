@@ -182,6 +182,19 @@ jobs:
           prefix="$(python3 docker/pick_mgmt_prefix.py)"
           echo "AUTOBOT_DOCKER_MGMT_PREFIX=${prefix}" >> "$GITHUB_ENV"
 
+      - name: Required credentials (#17793)
+        # Compose has no fallback for these and refuses to start without them; for a user,
+        # docker/generate-secrets.sh writes them. Only these are exported: the signing secrets
+        # stay unset, so the GH#9905 auto-provisioning path is still what this run tests.
+        # repo_tests/compose_exposure_and_credentials_17500_test.py keeps this list equal to
+        # the credentials compose requires.
+        run: |
+          for key in AUTOBOT_DB_PASSWORD GRAFANA_ADMIN_PASSWORD AUTOBOT_ADMIN_PASSWORD SLM_ADMIN_PASSWORD; do
+            value="$(openssl rand -hex 16)Aa1"  # the admin schema wants upper, lower and a digit
+            echo "::add-mask::${value}"
+            echo "${key}=${value}" >> "$GITHUB_ENV"
+          done
+
       - name: Start services with Docker Compose
         # GH#9905: no manual secret step — the stack auto-provisions unique
         # signing secrets via the autobot-secrets-init service + shared volume.

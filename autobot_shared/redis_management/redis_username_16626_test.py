@@ -66,12 +66,12 @@ def test_the_async_pool_gets_the_username():
 
 def test_the_sync_pool_gets_the_username():
     config = RedisDbConfig(name="main", db=0, host="127.0.0.1", password=_PW, username="default")
-    pool = _manager()._create_sync_pool_with_keepalive("main", config)
+    pool = _manager().build_sync_pool("main", config)
     assert pool.connection_kwargs["username"] == "default"
 
 
 def test_no_username_keeps_the_password_only_pool():
     config = RedisDbConfig(name="main", db=0, host="127.0.0.1", password=_PW)
-    pool = _manager()._create_sync_pool_with_keepalive("main", config)
+    pool = _manager().build_sync_pool("main", config)
     assert "username" not in pool.connection_kwargs
     assert pool.connection_kwargs["password"] == _PW

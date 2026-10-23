@@ -297,10 +297,6 @@
       "verdict": "variant",
       "why": "identical two-line wrapper that binds each process's own NPU queue singleton (#12656); one per service by design"
     },
-    "query_range": {
-      "verdict": "homonym",
-      "why": "Prometheus MCP tool that renders a time series as text vs the canonical client that returns flattened points"
-    },
     "render": {
       "verdict": "homonym",
       "why": "five unrelated report renderers"

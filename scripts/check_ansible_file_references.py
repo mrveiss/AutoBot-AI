@@ -443,7 +443,7 @@ def _run() -> int:
         return 1
 
     # Vacuity floor (#14896) -- rationale in the comment above main().
-    if enforce_reach(plays_read, 1, hook=HOOK_ID, full_repo=True):
+    if enforce_reach(plays_read, 1, hook=HOOK_ID, full_repo=True, unit="play(s)"):
         return 1
 
     # #15901 review: report the unresolvable count too. Most are legitimately
