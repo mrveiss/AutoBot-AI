@@ -941,8 +941,6 @@
       "noApiKeyRequired": "No se necesita clave de API.",
       "redirecting": "Redirigiendo...",
       "disconnectFailed": "No se pudo desconectar",
-      "redirectNeedsCallback": "El flujo de redirección OAuth en el navegador requiere configurar un callback en el servidor. Usa el código de dispositivo en entornos sin interfaz.",
-      "deviceNotConfigured": "La autenticación por dispositivo no está configurada para este proveedor",
       "deviceInitFailed": "No se pudo iniciar el flujo de dispositivo",
       "stillWaiting": "Aún esperando la aprobación: inténtalo de nuevo en un momento.",
       "pollFailed": "Error al consultar el estado"

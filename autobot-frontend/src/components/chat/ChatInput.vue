@@ -325,26 +325,14 @@
         </BaseButton>
       </div>
 
-      <!-- Input Status Bar -->
-      <div class="input-status-bar">
-        <div class="status-left">
-          <span v-if="isTypingIndicatorVisible" class="typing-indicator">
-            <Icon name="keyboard" />
-            {{ $t('chat.input.typing') }}
-          </span>
-          <span v-if="characterCount > 0" class="character-count" :class="{ 'warning': isNearLimit }">
-            {{ characterCount }}/{{ maxCharacters }}
-          </span>
-        </div>
-
-        <div class="status-right">
-          <span v-if="isVoiceRecording" class="voice-status">
-            <Icon name="circle" class="text-red-500 animate-pulse" />
-            {{ $t('chat.input.recording') }}
-          </span>
-          <span class="keyboard-hint">{{ $t('chat.input.keyboardHint') }}</span>
-        </div>
-      </div>
+      <!-- Input Status Bar, with Stop while a reply streams (#17829) -->
+      <ChatInputStatusBar
+        :typing-visible="isTypingIndicatorVisible"
+        :character-count="characterCount"
+        :max-characters="maxCharacters"
+        :near-limit="isNearLimit"
+        :voice-recording="isVoiceRecording"
+      />
     </div>
 
     <!-- Emoji Picker -->
@@ -468,6 +456,7 @@ import { BaseButton } from '@autobot/ui'
 import VisionAnalysisModal from './VisionAnalysisModal.vue'
 import PresetManagementModal from './PresetManagementModal.vue'
 import TranslationShortcutPanel from './TranslationShortcutPanel.vue'
+import ChatInputStatusBar from './ChatInputStatusBar.vue'
 import SlashCommandDropdown from './SlashCommandDropdown.vue'
 import McpPromptPicker from './McpPromptPicker.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
@@ -1454,39 +1443,6 @@ onUnmounted(() => {
 
 .queue-count {
   @apply absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center text-xs font-bold;
-}
-
-/* Status Bar */
-.input-status-bar {
-  @apply flex items-center justify-between text-xs text-autobot-text-muted;
-}
-
-.status-left {
-  @apply flex items-center gap-3;
-}
-
-.status-right {
-  @apply flex items-center gap-3;
-}
-
-.typing-indicator {
-  @apply flex items-center gap-1 text-autobot-primary;
-}
-
-.character-count {
-  @apply transition-colors;
-}
-
-.character-count.warning {
-  @apply text-orange-600 font-medium;
-}
-
-.voice-status {
-  @apply flex items-center gap-1 text-red-600;
-}
-
-.keyboard-hint {
-  @apply hidden sm:block;
 }
 
 /* Quick Actions */

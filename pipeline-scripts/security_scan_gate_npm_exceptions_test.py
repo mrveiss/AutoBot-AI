@@ -21,13 +21,30 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
+import npm_audit_exceptions as policy  # noqa: E402
+import pytest  # noqa: E402
 import security_scan_gate as gate  # noqa: E402
 
-_EXCUSED = "GHSA-vfj7-8cjw-p6xm"
+#: A SYNTHETIC id, injected by the autouse fixture below. The first real record
+#: (GHSA-vfj7-8cjw-p6xm, braces) was retired on 2026-10-23 when upstream stopped
+#: reporting it; the live table may legitimately be empty, so the mechanism is
+#: tested against a record this file owns.
+_EXCUSED = "GHSA-t3st-t3st-t3st"
+_SYNTHETIC_EXPIRY = "2030-01-01"
 
-#: The recorded exception expires 2026-11-14. Tests that need it LIVE pin a date
-#: before that, or they would start failing on 2026-11-15 for a reason that has
-#: nothing to do with the code under test (CodeRabbit). `recorded_npm_allowances`
+
+@pytest.fixture(autouse=True)
+def synthetic_record(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        policy,
+        "ADVISORY_EXCEPTIONS",
+        {_EXCUSED: policy.AdvisoryException(expires=_SYNTHETIC_EXPIRY, reason="test policy, recorded on #13400")},
+    )
+
+
+#: Tests that need the synthetic exception LIVE pin a date before its expiry,
+#: so they cannot start failing for a reason unrelated to the code under test
+#: (CodeRabbit). `recorded_npm_allowances`
 #: takes `today` precisely so the expiry is testable in both directions.
 _BEFORE_EXPIRY = date(2026, 10, 1)
 
@@ -46,11 +63,9 @@ def _via_package(parent: str, severity: str = "high") -> dict:
 
 def test_the_recorded_exception_is_the_live_record_not_a_copy() -> None:
     """If this drifts, the gate is excusing something the record no longer says."""
-    from npm_audit_exceptions import ADVISORY_EXCEPTIONS
-
     live, _expired = gate.recorded_npm_allowances(today=_BEFORE_EXPIRY)
-    assert live == {k for k, v in ADVISORY_EXCEPTIONS.items() if date.fromisoformat(v.expires) >= _BEFORE_EXPIRY}
-    assert _EXCUSED in ADVISORY_EXCEPTIONS, "the braces exception is this test's subject"
+    assert live == {k for k, v in policy.ADVISORY_EXCEPTIONS.items() if date.fromisoformat(v.expires) >= _BEFORE_EXPIRY}
+    assert _EXCUSED in live, "the synthetic exception is this test's subject"
 
 
 def test_an_expired_exception_is_not_honoured(monkeypatch) -> None:
