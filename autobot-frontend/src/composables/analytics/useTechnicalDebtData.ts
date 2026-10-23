@@ -167,20 +167,29 @@ export function useTechnicalDebtData() {
         return (raw.priorities ?? raw) as DebtItem[]
       },
       onError: (message, err) => {
+        roiFailed = true
         logger.error('Failed to load ROI priorities:', err)
       },
-      fallbackData: () => [],
       label: 'ROI priorities',
     },
   )
 
+  /** The last list the server returned; a failed or empty reload keeps it instead of blanking the panel. */
+  let roiItems: DebtItem[] = []
+  let roiFailed = false
+
   async function fetchRoiPriorities(limit = ROI_PAGE): Promise<DebtItem[]> {
-    roiLimit.value = limit
     isLoading.value = true
     error.value = null
+    roiFailed = false
     try {
       await roiEndpoint.load({ limit: String(limit) })
-      return roiEndpoint.data.value ?? []
+      const items = roiEndpoint.data.value
+      if (roiFailed || !items) return roiItems
+      // #12741: the page size moves only once the server answered, so a failed "show more" retries the same page.
+      roiLimit.value = limit
+      roiItems = items
+      return items
     } finally {
       isLoading.value = false
     }
