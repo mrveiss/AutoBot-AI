@@ -15,7 +15,7 @@
  * useApi for the POST /debt/calculate mutation.
  */
 
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
@@ -65,8 +65,14 @@ interface SummaryRaw {
   [key: string]: unknown
 }
 
+/** ROI list paging (#12741): /api/debt/roi-priorities takes `limit` up to ROI_MAX and reports `total_available`. */
+export const ROI_PAGE = 10
+export const ROI_MAX = 100
+
 interface RoiRaw {
   priorities?: DebtItem[]
+  /** How many ROI-ranked items exist; `priorities` holds at most the requested `limit` of them. */
+  total_available?: number
   [key: string]: unknown
 }
 
@@ -149,10 +155,17 @@ export function useTechnicalDebtData() {
   // ---- ROI priorities -----------------------------------------------------
   // Issue #552: Fixed path - backend returns {status, priorities: [...], total_available: N}
 
+  const roiTotal = ref(0)
+  const roiLimit = ref(ROI_PAGE)
+  /** The server hands out at most ROI_MAX items; past that there is no more to ask for. */
+  const roiAtCap = computed(() => roiLimit.value >= ROI_MAX)
   const roiEndpoint = useFetchEndpoint<RoiRaw, DebtItem[]>(
     {
       path: '/api/debt/roi-priorities',
-      pickData: (raw) => (raw.priorities ?? raw) as DebtItem[],
+      pickData: (raw) => {
+        roiTotal.value = raw.total_available ?? raw.priorities?.length ?? 0
+        return (raw.priorities ?? raw) as DebtItem[]
+      },
       onError: (message, err) => {
         logger.error('Failed to load ROI priorities:', err)
       },
@@ -161,7 +174,8 @@ export function useTechnicalDebtData() {
     },
   )
 
-  async function fetchRoiPriorities(limit = 10): Promise<DebtItem[]> {
+  async function fetchRoiPriorities(limit = ROI_PAGE): Promise<DebtItem[]> {
+    roiLimit.value = limit
     isLoading.value = true
     error.value = null
     try {
@@ -171,6 +185,9 @@ export function useTechnicalDebtData() {
       isLoading.value = false
     }
   }
+
+  /** "Show more": ask the server for the next page (`limit` grows by ROI_PAGE, capped at ROI_MAX). */
+  const loadMoreRoi = () => fetchRoiPriorities(Math.min(roiLimit.value + ROI_PAGE, ROI_MAX))
 
   // ---- Debt items (POST /debt/calculate via useApi) -----------------------
   // Issue #552: Fixed - backend uses POST for /api/debt/calculate
@@ -254,6 +271,9 @@ export function useTechnicalDebtData() {
     fetchSummary,
     fetchCategoryBreakdown,
     fetchRoiPriorities,
+    roiTotal,
+    roiAtCap,
+    loadMoreRoi,
     fetchDebtItems,
     fetchTrends,
     fetchReportBlob,

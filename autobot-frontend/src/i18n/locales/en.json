@@ -1295,7 +1295,8 @@
         "uniquePatterns": "Unique Patterns",
         "recommendation": "Consider consolidating duplicate values into shared configuration files or environment variables.",
         "noDuplicatesFound": "No configuration duplicates found.",
-        "noConfigData": "No configuration duplicate data available."
+        "noConfigData": "No configuration duplicate data available.",
+        "locationsCount": "{count} location | {count} locations"
       },
       "declarations": {
         "title": "Code Declarations",
@@ -1378,7 +1379,9 @@
         "noData": "No environment analysis data available.",
         "modelHint": "Model: {model}",
         "modelLoading": "loading…",
-        "modelServerDefault": "server default"
+        "modelServerDefault": "server default",
+        "use": "Use:",
+        "defaultLabel": "Default:"
       },
       "ownership": {
         "title": "Code Ownership Analysis",
@@ -1570,6 +1573,45 @@
         "noCallersTitle": "No callers found",
         "noCallersBody": "Nothing in the indexed graph calls this node.",
         "skippedHeading": "Show {count} unresolved edge(s)"
+      },
+      "shared": {
+        "lines": "{count} line | {count} lines",
+        "files": "{count} file | {count} files",
+        "commits": "{count} commit | {count} commits",
+        "filesOwned": "{count} file owned | {count} files owned",
+        "points": "{count} pt | {count} pts",
+        "imports": "{count} import | {count} imports",
+        "calls": "{count} call | {count} calls",
+        "filesAffected": "{count} file affected | {count} files affected",
+        "filesNeedAttention": "{count} file needs attention | {count} files need attention",
+        "contributors": "{count} contributor | {count} contributors",
+        "duplicates": "{count} duplicate | {count} duplicates",
+        "patterns": "{count} pattern | {count} patterns",
+        "hardcodedValues": "{count} hardcoded value | {count} hardcoded values",
+        "items": "{count} item | {count} items",
+        "coveragePercent": "{percent}% coverage",
+        "similarPercent": "{percent}% similar",
+        "matchPercent": "{percent}% match",
+        "reducedPercent": "{percent}% reduced",
+        "analysisCompleted": "Analysis completed in {seconds}s",
+        "unknown": "Unknown",
+        "field": "Field:",
+        "impact": "Impact",
+        "recency": "Recency",
+        "complexityReduction": "-{count} complexity",
+        "locReduction": "{count} LOC",
+        "tokens": "~{count} tokens",
+        "filesProgress": "{done} / {total} files",
+        "filterAll": "All ({count})",
+        "filterHigh": "High ({count})",
+        "filterMedium": "Medium ({count})",
+        "filterLow": "Low ({count})",
+        "analyzedFiles": "Analyzed Files",
+        "riskFiles": "{risk} Risk Files",
+        "riskCount": "{name}: {count} file | {name}: {count} files",
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
       }
     },
     "patterns": {
@@ -1590,21 +1632,16 @@
       "duplicateCode": "Duplicate Code",
       "locations": "{count} locations",
       "linesSaveable": "{count} lines saveable",
-      "moreLocations": "+{count} more locations",
-      "showingOfDuplicates": "Showing {shown} of {total} duplicate patterns",
       "regexOpportunities": "Regex Opportunities",
       "current": "Current",
       "suggested": "Suggested",
-      "showingOfOpportunities": "Showing {shown} of {total} opportunities",
       "complexityHotspots": "Complexity Hotspots",
       "location": "Location",
       "cc": "CC",
       "cognitive": "Cognitive",
       "mi": "MI",
       "nesting": "Nesting",
-      "showingOfHotspots": "Showing {shown} of {total} hotspots",
       "refactoringSuggestions": "Refactoring Suggestions",
-      "showingOfSuggestions": "Showing {shown} of {total} suggestions",
       "patternsInChromaDB": "{count} patterns in ChromaDB",
       "clearStoredPatterns": "Clear stored patterns",
       "lastScan": "Last scan",
@@ -2045,7 +2082,8 @@
           "label": "Runtime Risk",
           "description": "Health based on where code actually fails at runtime."
         }
-      }
+      },
+      "codebaseRatedPrefix": "Your codebase is rated"
     },
     "bugPrediction": {
       "title": "Bug Prediction Dashboard",
@@ -2278,14 +2316,12 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total} {type}",
       "emptyMessage": "No code smells detected"
     },
     "declarations": {
       "title": "Declarations",
       "total": "Total",
       "exported": "Exported",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No declarations found",
       "types": {
         "function": "Function",
@@ -2308,7 +2344,6 @@
       "totalLines": "Total Lines",
       "similar": "similar",
       "lines": "lines",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No duplicate code detected",
       "similarityGroups": {
         "high": "High Similarity",
@@ -2329,7 +2364,6 @@
       "variable": "Variable",
       "value": "Value",
       "suggestedEnvVar": "Suggested Env Var",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No hardcoded values detected",
       "severityGroups": {
         "high": "High Severity",
@@ -2344,7 +2378,6 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No problems detected",
       "exportJson": "Export JSON",
       "exportMarkdown": "Export Markdown"
@@ -2656,7 +2689,9 @@
       }
     },
     "truncation": {
-      "showingOf": "Showing {shown} of {total}"
+      "showingOf": "Showing {shown} of {total}",
+      "showMore": "Show {count} more",
+      "serverLimited": "Showing the top {shown} of {total}. The server limits this list, so the rest cannot be loaded here."
     }
   },
   "knowledge": {
