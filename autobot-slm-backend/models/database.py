@@ -174,7 +174,7 @@ class Setting(Base):
     )
 
 
-class EventType(str, enum.Enum):
+class NodeEventType(str, enum.Enum):
     """Node event type enumeration."""
 
     STATE_CHANGE = "state_change"
@@ -471,7 +471,7 @@ class ServiceConflict(Base):
     __table_args__ = (UniqueConstraint("service_name_a", "service_name_b", name="uq_service_conflict"),)
 
 
-class Agent(Base):
+class SlmAgent(Base):
     """AI Agent with LLM configuration (Issue #760 Phase 2).
 
     Each agent can have its own LLM provider configuration.
@@ -743,7 +743,7 @@ class PolicyStatus(str, enum.Enum):
     DRAFT = "draft"
 
 
-class AuditLog(Base):
+class SlmNodeAuditLog(Base):
     """SLM node/system audit log (integer-PK).
 
     Records SLM control-plane actions (node management, service control,
@@ -787,7 +787,7 @@ class AuditLog(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
-class SecurityEvent(Base):
+class SlmSecurityEvent(Base):
     """Security event tracking for threat detection and monitoring."""
 
     __tablename__ = "security_events"
@@ -836,7 +836,7 @@ class SecurityEvent(Base):
     )
 
 
-class SecurityPolicy(Base):
+class SlmSecurityPolicy(Base):
     """Security policy definitions for enforcement across the fleet."""
 
     __tablename__ = "security_policies"
@@ -1005,7 +1005,7 @@ class NodeCodeVersion(Base):
     __table_args__ = (UniqueConstraint("node_id", "role_name", name="uq_node_code_version"),)
 
 
-class CodeSource(Base):
+class NodeCodeSource(Base):
     """Code source node configuration (Issue #779)."""
 
     __tablename__ = "code_sources"

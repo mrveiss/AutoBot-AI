@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 /**
  * NPUWorkersTab - NPU Workers management as a Fleet tab
  *
@@ -41,6 +42,8 @@ const tabs: { key: SubTab; label: string }[] = [
 const loading = ref(false)
 const error = ref<string | null>(null)
 const selectedNpuNode = ref<SLMNode | null>(null)
+// The panel stays mounted once shown, so closing animates it out and returns focus (#14780).
+const detailsOpen = ref(false)
 const showAssignModal = ref(false)
 
 // Computed
@@ -96,10 +99,11 @@ async function refreshAll(): Promise<void> {
 
 function selectNode(node: SLMNode): void {
   selectedNpuNode.value = node
+  detailsOpen.value = true
 }
 
 function closeDetailsPanel(): void {
-  selectedNpuNode.value = null
+  detailsOpen.value = false
 }
 
 async function handleRoleAssigned(): Promise<void> {
@@ -227,9 +231,7 @@ watch(() => fleetStore.nodeList, () => {
     </div>
 
     <!-- Error Message -->
-    <div v-if="error" class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-      {{ error }}
-    </div>
+    <BaseAlert v-if="error" variant="error" class="mb-6" :message="error" />
 
     <!-- Tab Content -->
 
@@ -285,6 +287,7 @@ watch(() => fleetStore.nodeList, () => {
     <!-- Details Panel (shared across tabs) -->
     <NPUDetailsPanel
       v-if="selectedNpuNode"
+      :open="detailsOpen"
       :node="selectedNpuNode"
       :npu-status="fleetStore.getNpuStatus(selectedNpuNode.node_id)"
       @close="closeDetailsPanel"

@@ -153,7 +153,7 @@ class TestCaptionlessMediaRouting:
         # Lazily-imported deps are patched at their source modules.
         monkeypatch.setattr("api.chat.process_chat_message", fake_process)
         monkeypatch.setattr(tg, "send_telegram_response", fake_send)
-        monkeypatch.setattr("utils.chat_utils.get_chat_history_manager", lambda req: object())
+        monkeypatch.setattr(tg, "chat_history_manager_for", lambda state: object())
         monkeypatch.setattr("utils.lazy_singleton.lazy_init_singleton", lambda state, name, cls: object())
 
         # A document with no caption normalizes to an empty message + has_file.
@@ -172,9 +172,9 @@ class TestCaptionlessMediaRouting:
         assert unified.message == ""
         assert unified.metadata.get("has_file") is True
 
-        request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace()))
+        app = SimpleNamespace(state=SimpleNamespace())
         # Without the fix this raises pydantic ValidationError (content min_length=1).
-        await tg._route_to_chat_and_reply(request, unified)
+        await tg._route_to_chat_and_reply(app, unified)
 
         assert captured["message"].content == "[document attachment]"
         assert captured.get("sent") is True

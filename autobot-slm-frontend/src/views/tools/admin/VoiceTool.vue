@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 /**
  * VoiceTool - Voice Interface
  *
@@ -289,9 +290,7 @@ onUnmounted(() => {
         </div>
 
         <!-- Error Message -->
-        <div v-if="error" class="mx-6 mt-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-          {{ error }}
-        </div>
+        <BaseAlert v-if="error" variant="error" class="mx-6 mt-4" :message="error" />
 
         <!-- Voice Control Center -->
         <div class="flex-1 flex flex-col items-center justify-center p-6">

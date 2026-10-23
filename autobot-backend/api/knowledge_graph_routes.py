@@ -70,13 +70,13 @@ async def run_pipeline(
             raise HTTPException(status_code=404, detail="Document has no text")
 
         from knowledge.pipeline.base import PipelineContext
-        from knowledge.pipeline.config import get_default_config, load_pipeline_config
+        from knowledge.pipeline.config import get_default_pipeline_config, load_pipeline_config
         from knowledge.pipeline.runner import PipelineRunner
 
         if request.config:
             config = load_pipeline_config(request.config)
         else:
-            config = get_default_config()
+            config = get_default_pipeline_config()
 
         runner = PipelineRunner(config)
         context = PipelineContext()

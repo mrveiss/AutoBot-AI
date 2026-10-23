@@ -48,3 +48,15 @@ try {
     document.documentElement.setAttribute('data-theme-variant', fallback)
   }
 }
+
+/**
+ * Minimal/Full interface mode (#18240): the pre-mount copy of `data-ui`, the
+ * one sanctioned writer besides composables/useUiMode.ts (which owns it after
+ * mount). Keys and the default mirror UI_MODE_STORAGE_KEY / DEFAULT_MODE there.
+ */
+try {
+  const mode = localStorage.getItem('autobot-ui-mode')
+  document.documentElement.setAttribute('data-ui', mode === 'minimal' ? 'minimal' : 'full')
+} catch {
+  document.documentElement.setAttribute('data-ui', 'full')
+}

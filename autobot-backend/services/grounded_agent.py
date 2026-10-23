@@ -31,6 +31,7 @@ import re
 import time
 from typing import Any, Dict, List
 
+from api.knowledge_grounding_models import Conflict, ConflictResolution
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
@@ -42,15 +43,15 @@ from services.ai_stack_client import get_ai_stack_client
 from services.causal_inference_engine import CausalInferenceEngine
 from services.grounded_agent_models import (
     CausalTrace,
-    Claim,
-    ClaimStatus,
-    Conflict,
-    ConflictResolution,
     GroundedResponse,
-    VerifiedClaim,
 )
 from services.grounding_stats import record_conflict_resolved, record_grounding_stats
-from services.knowledge_grounding_models import VerificationMethod
+from services.knowledge_grounding_models import (
+    Claim,
+    ClaimStatus,
+    VerificationMethod,
+    VerifiedClaim,
+)
 
 logger = get_logger(__name__)
 
@@ -285,22 +286,37 @@ Format as JSON array of objects with fields: claim_text, subject, predicate, obj
 
             claims = []
             for item in claims_data:
-                if isinstance(item, dict):
-                    claims.append(
-                        Claim(
-                            claim_text=item.get("claim_text", ""),
-                            subject=item.get("subject", ""),
-                            predicate=item.get("predicate", ""),
-                            object=item.get("object", ""),
-                            confidence=float(item.get("confidence", 0.0)),
-                        )
-                    )
+                claim = self._build_claim(item)
+                if claim is not None:
+                    claims.append(claim)
 
             return claims
 
         except Exception as e:
             logger.error("Error extracting claims: %s", e)
             return []
+
+    @staticmethod
+    def _build_claim(item) -> "Claim | None":
+        """Build one Claim from raw LLM JSON; a bad item is skipped, never fatal.
+
+        Items with a malformed field (non-numeric or out-of-range confidence) are
+        skipped with a WARNING, matching how a non-dict item is skipped, so one
+        bad item cannot drop the good claims in the same response.
+        """
+        if not isinstance(item, dict):
+            return None
+        try:
+            return Claim(
+                claim_text=item.get("claim_text", ""),
+                subject=item.get("subject", ""),
+                predicate=item.get("predicate", ""),
+                object=item.get("object", ""),
+                confidence=float(item.get("confidence", 0.0)),
+            )
+        except (ValueError, TypeError) as e:
+            logger.warning("Skipping malformed claim item: %s", e)
+            return None
 
     async def _classify_and_verify_claim(self, claim: Claim) -> VerifiedClaim:
         """Classify claim against KB and verify if needed.

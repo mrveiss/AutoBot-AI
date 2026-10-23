@@ -12,7 +12,6 @@ Issue #725: Added mTLS support for Redis connections.
 """
 
 from datetime import timedelta
-from pathlib import Path
 
 from celery import Celery
 from celery.schedules import crontab
@@ -23,10 +22,14 @@ from autobot_shared.logging_manager import get_logger as _get_logger
 from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
+from utils.error_boundaries import register_backend_hooks
 
 # Use singleton config instance for extended config values
 config = get_config_manager()
 logger = _get_logger(__name__)
+
+# #18554: Celery workers never run the app lifespan, so register the boundary hooks here.
+register_backend_hooks()
 
 # Build Redis URLs from SSOT configuration (loads directly from .env)
 # DB numbers come from redis-databases.yaml via DATABASE_MAPPING (#2670)
@@ -42,19 +45,9 @@ _backend_ssl_options = None
 
 if _redis_tls_enabled:
     # #6702: resolve cert paths (explicit env vars first, legacy cert_dir fallback)
-    from autobot_shared.tls import get_internal_tls_context
+    from autobot_shared.tls import get_internal_tls_context, resolve_redis_mtls_paths
 
-    _ca_cert = ssot_config.misc.tls_ca_path
-    _client_cert = ssot_config.misc.tls_cert_path
-    _client_key = ssot_config.misc.tls_key_path
-
-    # Fallback to legacy cert_dir pattern for backwards compatibility
-    if not _ca_cert or not _client_cert or not _client_key:
-        _project_root = Path(__file__).parent.parent
-        _cert_dir = ssot_config.tls.cert_dir
-        _ca_cert = str(_project_root / _cert_dir / "ca" / "ca-cert.pem")
-        _client_cert = str(_project_root / _cert_dir / "main-host" / "server-cert.pem")
-        _client_key = str(_project_root / _cert_dir / "main-host" / "server-key.pem")
+    _ca_cert, _client_cert, _client_key = resolve_redis_mtls_paths()
 
     _ssl_context = get_internal_tls_context(ca_path=_ca_cert, client_cert=_client_cert, client_key=_client_key)
     _broker_ssl_options = {"ssl": _ssl_context}
@@ -424,3 +417,16 @@ def _reset_async_redis_pools_on_worker_init(sender=None, **kwargs):
             "worker_process_init: async Redis pool reset failed (worker will still start)",
             exc_info=True,
         )
+
+
+# #18094: a worker resolves provider keys (knowledge tasks build a KnowledgeBase, whose LLM and
+# embedding providers resolve OPENAI/ANTHROPIC keys). The lifespan never runs here, so read the
+# vault once per forked worker before its first task. Never raises: a failure is classified as a
+# vault outage, which refuses keys rather than serving env.
+@worker_process_init.connect
+def _hydrate_provider_keys_on_worker_init(sender=None, **kwargs):
+    """Hydrate the provider-key vault cache in each worker process."""
+    from services.provider_key_process_init import hydrate_this_process
+
+    hydrated = hydrate_this_process()
+    logger.info("worker_process_init: provider keys hydrated from vault: %d (#18094)", len(hydrated))

@@ -17,7 +17,7 @@
 
     <!-- Status Cards -->
     <div class="status-cards">
-      <BasePanel variant="elevated" size="sm">
+      <BaseCard scrollable variant="elevated" size="sm">
         <div class="status-card-content">
           <div class="status-icon">📚</div>
           <div class="status-content">
@@ -25,9 +25,9 @@
             <p>{{ $t('knowledge.systemKnowledge.totalFacts') }}</p>
           </div>
         </div>
-      </BasePanel>
+      </BaseCard>
 
-      <BasePanel variant="elevated" size="sm">
+      <BaseCard scrollable variant="elevated" size="sm">
         <div class="status-card-content">
           <div class="status-icon">🔍</div>
           <div class="status-content">
@@ -35,9 +35,9 @@
             <p>{{ $t('knowledge.systemKnowledge.searchableVectors') }}</p>
           </div>
         </div>
-      </BasePanel>
+      </BaseCard>
 
-      <BasePanel variant="elevated" size="sm">
+      <BaseCard scrollable variant="elevated" size="sm">
         <div class="status-card-content">
           <div class="status-icon">⚙️</div>
           <div class="status-content">
@@ -45,9 +45,9 @@
             <p>{{ $t('knowledge.systemKnowledge.commandsIndexed') }}</p>
           </div>
         </div>
-      </BasePanel>
+      </BaseCard>
 
-      <BasePanel variant="elevated" size="sm">
+      <BaseCard scrollable variant="elevated" size="sm">
         <div class="status-card-content">
           <div class="status-icon">📄</div>
           <div class="status-content">
@@ -55,7 +55,7 @@
             <p>{{ $t('knowledge.systemKnowledge.docsIndexed') }}</p>
           </div>
         </div>
-      </BasePanel>
+      </BaseCard>
     </div>
 
     <!-- Action Buttons -->
@@ -119,7 +119,7 @@
       </BaseButton>
 
       <BaseButton
-        variant="outline-solid"
+        variant="outline"
         @click="fetchStats"
         :disabled="isLoading"
       >
@@ -156,7 +156,7 @@
     </div>
 
     <!-- Info Section -->
-    <BasePanel variant="bordered" size="md">
+    <BaseCard scrollable variant="bordered" size="md">
       <template #header>
         <h3>ℹ️ {{ $t('knowledge.systemKnowledge.aboutTitle') }}</h3>
       </template>
@@ -168,7 +168,7 @@
         <p v-html="t('knowledge.systemKnowledge.aboutIndexDocs')"></p>
         <p v-html="t('knowledge.systemKnowledge.aboutWhenToUse')"></p>
       </div>
-    </BasePanel>
+    </BaseCard>
 
     <!-- Recent Activity Log -->
     <div v-if="activityLog.length > 0" class="activity-log">
@@ -185,6 +185,7 @@
 </template>
 
 <script>
+import { BaseButton, BaseCard } from '@autobot/ui';
 import { ref, onMounted, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
@@ -196,8 +197,6 @@ import { useLoadingState } from '@/composables/useLoadingState'
 import { usePollingJob } from '@/composables/usePollingJob';
 import { formatCategoryName as formatKey } from '@/utils/formatHelpers';
 import { useHostSelection } from '@/composables/useHostSelection';
-import BaseButton from '@/components/base/BaseButton.vue';
-import BasePanel from '@/components/base/BasePanel.vue';
 import { createLogger } from '@/utils/debugUtils';
 
 // Create scoped logger for SystemKnowledgeManager
@@ -207,7 +206,7 @@ export default {
   name: 'SystemKnowledgeManager',
   components: {
     BaseButton,
-    BasePanel
+    BaseCard
   },
 
   setup() {
@@ -834,7 +833,7 @@ export default {
   margin-bottom: var(--spacing-8);
 }
 
-/* BasePanel handles card container - only content styles remain */
+/* BaseCard handles card container - only content styles remain */
 .status-card-content {
   display: flex;
   align-items: center;
@@ -965,7 +964,7 @@ export default {
   font-size: var(--text-sm);
 }
 
-/* BasePanel handles info section container - only content styles remain */
+/* BaseCard handles info section container - only content styles remain */
 .info-content p {
   margin: var(--spacing-2) 0;
   line-height: var(--leading-relaxed);

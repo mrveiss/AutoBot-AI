@@ -21,11 +21,11 @@ from .prompts import PromptTemplateManager
 from .types import (
     CODE_BLOCK_RE,
     CodeContext,
+    CodeRefactoringRequest,
+    CodeRefactoringType,
     GeneratedCode,
     GenerationStatus,
-    RefactoringRequest,
     RefactoringResult,
-    RefactoringType,
     ValidationResult,
     ValidationStatus,
 )
@@ -107,14 +107,14 @@ class LLMCodeGenerator:
         timestamp = datetime.now(tz=timezone.utc).strftime("%Y%m%d%H%M%S")
         return f"req_{timestamp}_{counter:04d}"
 
-    def _get_cache_key(self, request: RefactoringRequest) -> str:
+    def _get_cache_key(self, request: CodeRefactoringRequest) -> str:
         """Generate a cache key for a request."""
         content = f"{request.refactoring_type.value}:{request.context.code_snippet}"
         return hashlib.md5(content.encode(), usedforsecurity=False).hexdigest()
 
     def _get_cached_result(
         self,
-        request: RefactoringRequest,
+        request: CodeRefactoringRequest,
         request_id: str,
         cache_key: str,
     ) -> RefactoringResult | None:
@@ -142,7 +142,7 @@ class LLMCodeGenerator:
             )
         return None
 
-    def _validate_and_check_behavior(self, code: str, request: RefactoringRequest) -> ValidationResult:
+    def _validate_and_check_behavior(self, code: str, request: CodeRefactoringRequest) -> ValidationResult:
         """
         Validate generated code and check behavior preservation.
 
@@ -173,7 +173,7 @@ class LLMCodeGenerator:
     def _build_generated_code(
         self,
         code: str,
-        request: RefactoringRequest,
+        request: CodeRefactoringRequest,
         validation: ValidationResult,
         generated_text: str,
         generation_time: float,
@@ -215,7 +215,7 @@ class LLMCodeGenerator:
     def _build_success_result(
         self,
         request_id: str,
-        request: RefactoringRequest,
+        request: CodeRefactoringRequest,
         generated_code: GeneratedCode,
         validation: ValidationResult,
         cache_key: str,
@@ -249,7 +249,7 @@ class LLMCodeGenerator:
             suggestions=self._generate_suggestions(validation),
         )
 
-    async def generate(self, request: RefactoringRequest) -> RefactoringResult:
+    async def generate(self, request: CodeRefactoringRequest) -> RefactoringResult:
         """
         Generate refactored code based on the request.
 
@@ -292,7 +292,7 @@ class LLMCodeGenerator:
                 rollback_code=request.context.code_snippet,
             )
 
-    def _format_prompt(self, request: RefactoringRequest) -> Tuple[str, str]:
+    def _format_prompt(self, request: CodeRefactoringRequest) -> Tuple[str, str]:
         """Format the prompt for the request."""
         kwargs = {
             "code": request.context.code_snippet,
@@ -437,7 +437,7 @@ def generate_diff(original: str, modified: str, filename: str = "code.py") -> st
 
 def get_refactoring_types() -> List[str]:
     """Get all available refactoring type names."""
-    return [rt.value for rt in RefactoringType]
+    return [rt.value for rt in CodeRefactoringType]
 
 
 def get_validation_statuses() -> List[str]:
@@ -457,7 +457,7 @@ def list_prompt_templates() -> List[str]:
 
 async def refactor_code(
     code: str,
-    refactoring_type: RefactoringType | str,
+    refactoring_type: CodeRefactoringType | str,
     file_path: str = "code.py",
     description: str = "",
     llm_client: Any | None = None,
@@ -478,14 +478,14 @@ async def refactor_code(
         RefactoringResult with generated code
     """
     if isinstance(refactoring_type, str):
-        refactoring_type = RefactoringType(refactoring_type)
+        refactoring_type = CodeRefactoringType(refactoring_type)
 
     context = CodeContext(
         file_path=file_path,
         code_snippet=code,
     )
 
-    request = RefactoringRequest(
+    request = CodeRefactoringRequest(
         refactoring_type=refactoring_type,
         context=context,
         description=description,

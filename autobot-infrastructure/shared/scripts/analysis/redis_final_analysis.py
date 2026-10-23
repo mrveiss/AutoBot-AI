@@ -10,7 +10,6 @@ Final comprehensive analysis of Redis vector store integration options for AutoB
 import asyncio
 import json
 import logging
-import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
@@ -19,7 +18,8 @@ from autobot_shared.paths import project_root
 
 sys.path.insert(0, str(project_root()))
 from autobot_shared.network_constants import ServiceURLs
-from autobot_shared.network_constants import NetworkConstants
+from autobot_shared.redis_client import require_redis_client
+
 # The sibling helper module lives beside this script; put its directory on the path so the import
 # resolves when the file is imported (pytest, tooling) as well as when it is run.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -34,9 +34,6 @@ from langchain_redis_arm import (  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
-
-# DB number from redis-databases.yaml SSOT (#2806): knowledge = 1
-_DB_KNOWLEDGE = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))
 
 #: Where the final report lands, relative to the project root. One constant so the
 #: writer and the message that tells the operator where to look cannot drift.
@@ -290,14 +287,7 @@ class AutoBotVectorStoreAnalysis:
         logger.info("Deep analysis of existing Redis vector data...")
 
         try:
-            import redis
-
-            client = redis.Redis(
-                host=NetworkConstants.LOCALHOST_NAME,
-                port=NetworkConstants.REDIS_PORT,
-                db=_DB_KNOWLEDGE,
-                decode_responses=True,
-            )
+            client = require_redis_client(database="knowledge", decode_responses=True)
 
             index_info_raw = client.execute_command("FT.INFO", "llama_index")
             index_info = {}

@@ -341,8 +341,8 @@ check_critical_files() {
 
     # Check playwright-server.js
     if [ ! -f "playwright-server.js" ]; then
-        if [ -f "tests/playwright-server.js" ]; then
-            log_warning "playwright-server.js missing from root (exists in tests/)"
+        if [ -f "autobot-browser-worker/playwright-server.js" ]; then
+            log_warning "playwright-server.js missing from root (exists in autobot-browser-worker/)"
             ISSUES_FOUND["playwright_server_missing"]=true
         else
             log_error "playwright-server.js not found anywhere"
@@ -428,7 +428,7 @@ run_repairs() {
         # Special handling for Playwright
         if [ "${ISSUES_FOUND[playwright_server_missing]}" = true ]; then
             log_info "Copying playwright-server.js to root..."
-            cp tests/playwright-server.js ./playwright-server.js
+            cp autobot-browser-worker/playwright-server.js autobot-browser-worker/session-store.js autobot-browser-worker/element-index.js ./
         fi
         repair_container "autobot-playwright" "playwright-service" "docker-compose.playwright.yml"
     fi

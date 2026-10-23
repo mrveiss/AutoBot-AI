@@ -27,11 +27,13 @@ from pydantic import BaseModel
 
 from api.openai_compat import (
     _AUTO_MODEL_NAMES,
+    _enforce_virtual_key,
     _estimate_tokens,
     _oai_limiter,
     _remote_addr,
     _resolve_auth,
     _resolve_auto_model,
+    _select_provider_or_503,
 )
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -252,6 +254,47 @@ async def _stream_generator_anthropic(
 # ---------------------------------------------------------------------------
 
 
+async def _message_json_response(
+    llm_response, *, message_id: str, resolved_model: str, requested_model: str, api_key_record
+) -> JSONResponse:
+    """Build the non-streaming Anthropic Messages reply: usage, cost header, per-key spend."""
+    tokens = llm_response.usage or {}
+    prompt_tokens = tokens.get("prompt_tokens", 0)
+    completion_tokens = tokens.get("completion_tokens", 0)
+
+    tracker = get_cost_tracker()
+    cost_usd = tracker.calculate_cost(resolved_model, prompt_tokens, completion_tokens)
+
+    response = AnthropicResponse(
+        id=message_id,
+        content=[AnthropicTextBlock(text=llm_response.content or "")],
+        model=resolved_model,
+        stop_reason=_map_finish_reason(llm_response.finish_reason),
+        usage=AnthropicUsage(input_tokens=prompt_tokens, output_tokens=completion_tokens),
+    )
+
+    headers: Dict[str, str] = {}
+    if cost_usd > 0:
+        headers["x-llm-cost"] = str(cost_usd)
+    if requested_model in _AUTO_MODEL_NAMES:
+        headers["x-llm-routed-from"] = requested_model
+
+    if api_key_record is not None:
+        svc = get_llm_api_key_service()
+        await svc.record_spend(api_key_record, cost_usd)
+        await svc.publish_usage_event(api_key_record, resolved_model, prompt_tokens, completion_tokens, cost_usd)
+
+    # #16845: priced under resolved_model, so the record must name it too.
+    await record_response_usage(
+        llm_response,
+        endpoint="/v1/messages",
+        model=resolved_model,
+        metadata=dict(MEASURED_TOKENS),
+    )
+
+    return JSONResponse(content=response.model_dump(exclude_none=True), headers=headers)
+
+
 @router.post("/messages", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -271,24 +314,7 @@ async def messages(
     _user, api_key_record = await _resolve_auth(request)
     await _oai_limiter.check_or_429(_remote_addr(request))
 
-    # Virtual key enforcement: model whitelist + budget
-    if api_key_record is not None:
-        from services.llm_api_key_service import LLMApiKeyService
-
-        if body.model not in _AUTO_MODEL_NAMES and body.model != "autobot-default":
-            if not LLMApiKeyService.model_allowed(api_key_record, body.model):
-                raise HTTPException(
-                    status_code=403,
-                    detail="Model not permitted for this API key",
-                    headers={"x-llm-key-allowed-models": ",".join(api_key_record.allowed_models)},
-                )
-        allowed, _remaining = await get_llm_api_key_service().check_budget(api_key_record)
-        if not allowed:
-            raise HTTPException(
-                status_code=429,
-                detail="Monthly budget exhausted",
-                headers={"x-llm-budget-remaining": "0"},
-            )
+    await _enforce_virtual_key(api_key_record, body.model)  # model whitelist + budget (#6590)
 
     # Resolve auto-* model aliases via tiered routing
     if body.model in _AUTO_MODEL_NAMES:
@@ -305,9 +331,7 @@ async def messages(
     registry = get_provider_registry()
     llm_request = _build_llm_request(body, resolved_model=resolved_model)
 
-    provider = await registry.get_provider_for_request(request=llm_request)
-    if provider is None:
-        raise HTTPException(status_code=503, detail="No LLM providers available")
+    provider = await _select_provider_or_503(registry, llm_request)
 
     if not inspect.isasyncgenfunction(provider.stream_completion):
         raise ValueError(f"Provider {provider.provider_name!r} stream_completion must be an async generator function")
@@ -343,38 +367,10 @@ async def messages(
     if llm_response.error:
         raise HTTPException(status_code=502, detail=llm_response.error)
 
-    tokens = llm_response.usage or {}
-    prompt_tokens = tokens.get("prompt_tokens", 0)
-    completion_tokens = tokens.get("completion_tokens", 0)
-
-    tracker = get_cost_tracker()
-    cost_usd = tracker.calculate_cost(resolved_model, prompt_tokens, completion_tokens)
-
-    response = AnthropicResponse(
-        id=message_id,
-        content=[AnthropicTextBlock(text=llm_response.content or "")],
-        model=resolved_model,
-        stop_reason=_map_finish_reason(llm_response.finish_reason),
-        usage=AnthropicUsage(input_tokens=prompt_tokens, output_tokens=completion_tokens),
-    )
-
-    headers: Dict[str, str] = {}
-    if cost_usd > 0:
-        headers["x-llm-cost"] = str(cost_usd)
-    if body.model in _AUTO_MODEL_NAMES:
-        headers["x-llm-routed-from"] = body.model
-
-    if api_key_record is not None:
-        svc = get_llm_api_key_service()
-        await svc.record_spend(api_key_record, cost_usd)
-        await svc.publish_usage_event(api_key_record, resolved_model, prompt_tokens, completion_tokens, cost_usd)
-
-    # #16845: priced under resolved_model, so the record must name it too.
-    await record_response_usage(
+    return await _message_json_response(
         llm_response,
-        endpoint="/v1/messages",
-        model=resolved_model,
-        metadata=dict(MEASURED_TOKENS),
+        message_id=message_id,
+        resolved_model=resolved_model,
+        requested_model=body.model,
+        api_key_record=api_key_record,
     )
-
-    return JSONResponse(content=response.model_dump(exclude_none=True), headers=headers)

@@ -6,6 +6,7 @@ from autobot_shared.trust_enums import TrustLevel
 
 from .activity import ActorType, LLCActivityLog, LLCBase
 from .agent_wiki import LLCAgentWikiEntry
+from .ai_line import LLCAiLine
 from .approval import LLCApproval
 from .board import LLCBoard, LLCBoardColumn
 from .budget import LLCAgentBudget
@@ -17,6 +18,7 @@ from .company import (
     CompanyUpdate,
 )
 from .company_ceo import LLCCompanyCEO
+from .company_os import LLCProcess, LLCRoleSkill, LLCWorkflowNode, LLCWorkflowTransition
 from .company_tool import LLCCompanyTool
 from .contact import LLCContact
 from .enums import (
@@ -73,6 +75,7 @@ __all__ = [
     "ContextMode",
     "CoWorkerType",
     "CompanyAncestor",
+    "LLCAiLine",
     "LLCCompanyTool",
     "LLCContact",
     "FindingProposalStatus",
@@ -106,6 +109,10 @@ __all__ = [
     "LLCRoleCredential",
     "LLCRoleTool",
     "LLCCompanyCEO",
+    "LLCProcess",
+    "LLCRoleSkill",
+    "LLCWorkflowNode",
+    "LLCWorkflowTransition",
     "LLCReportingLine",
     "LLCRoleRate",
     "LLCRoleWorkflow",

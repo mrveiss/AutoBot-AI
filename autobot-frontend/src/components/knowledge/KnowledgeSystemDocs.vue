@@ -24,7 +24,7 @@ import { useRoute } from 'vue-router'
 import { useLoadingState } from '@/composables/useLoadingState'
 import { fetchDocCategories, fetchCategoryDocs, fetchDocContent } from '@/composables/knowledge/useKnowledgeSystemDocs'
 import type { SystemDoc, DocCategory } from '@/composables/knowledge/useKnowledgeSystemDocs'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -300,7 +300,7 @@ onMounted(() => {
           />
         </div>
         <div class="export-dropdown" v-if="selectedCategory">
-          <BaseButton variant="outline-solid" class="export-btn">
+          <BaseButton variant="outline" class="export-btn">
             <Icon name="download" />
             {{ $t('knowledge.systemDocs.exportAll') }}
           </BaseButton>

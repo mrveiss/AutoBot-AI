@@ -21,7 +21,7 @@ from autobot_shared.coordination.branch_stewardship import (
     acquire_aware,
     declare,
     interests,
-    prune,
+    prune_closed_branches,
     release_stewardship,
     transfer,
 )
@@ -228,7 +228,7 @@ async def test_release_ends_the_interest_and_is_idempotent(redis):
 async def test_prune_drops_interests_whose_branch_is_gone(redis):
     await declare("path:a/b.py", branch="open-one", steward="s", intent="live")
     await declare("path:c/d.py", branch="closed-one", steward="s", intent="landed")
-    dropped = await prune({"open-one"})
+    dropped = await prune_closed_branches({"open-one"})
     assert [i.branch for i in dropped] == ["closed-one"]
     assert [i.branch for i in await interests("path:a/b.py")] == ["open-one"]
     assert await interests("path:c/d.py") == []
@@ -246,7 +246,7 @@ async def test_prune_refuses_an_empty_live_set_unless_told_to_expect_it(redis):
     """
     await declare("path:a/b.py", branch="open-one", steward="s", intent="live")
     with pytest.raises(EmptyLiveSet, match="allow_empty"):
-        await prune(set())
+        await prune_closed_branches(set())
     # Nothing was dropped by the refusal.
     assert [i.branch for i in await interests("path:a/b.py")] == ["open-one"]
 
@@ -259,7 +259,7 @@ async def test_an_explicit_empty_live_set_still_drops_everything(redis):
     genuine zero from a failed fetch, which is the distinction that matters.
     """
     await declare("path:a/b.py", branch="gone", steward="s", intent="landed")
-    assert [i.branch for i in await prune(set(), allow_empty=True)] == ["gone"]
+    assert [i.branch for i in await prune_closed_branches(set(), allow_empty=True)] == ["gone"]
     assert await interests("path:a/b.py") == []
 
 
@@ -271,7 +271,7 @@ async def test_declare_refuses_an_empty_branch_or_steward(redis):
 
 
 # ---------------------------------------------------------------------------
-# prune's kind goes through the same check as every other entry point (#15957)
+# prune_closed_branches's kind goes through the same check as every other entry point (#15957)
 #
 # No Redis fixture on purpose: the check runs before any I/O, and a test that
 # depends on fakeredis would be skipped where it is missing -- hiding exactly
@@ -287,11 +287,11 @@ async def test_prune_refuses_a_reserved_kind_instead_of_finding_nothing():
     never asked, since task identity is not a work scope at all.
     """
     with pytest.raises(ScopeError, match="reserved"):
-        await prune({"open-one"}, kind="task")
+        await prune_closed_branches({"open-one"}, kind="task")
 
 
 @pytest.mark.asyncio
 async def test_prune_refuses_an_unknown_kind_instead_of_finding_nothing():
     """The contrast, and the wider defect: a misspelling was an empty result too."""
     with pytest.raises(ScopeError, match="unknown scope kind"):
-        await prune({"open-one"}, kind="pth")
+        await prune_closed_branches({"open-one"}, kind="pth")

@@ -44,7 +44,7 @@ def test_the_sweep_has_a_reach_floor_not_a_findings_floor() -> None:
     findings-based floor cannot tell a clean tree from a broken walk. The floor
     is on files PARSED (CodeRabbit).
     """
-    listed = detector.tracked_python_files()
+    listed = detector.fork_scan_files()
     _clusters, parsed = detector.find_clusters(listed)
     assert detector.MIN_FILES_PARSED >= 1000, "a floor this low would not detect a collapse"
     assert parsed >= detector.MIN_FILES_PARSED, (
@@ -59,7 +59,7 @@ def test_the_sweep_has_a_reach_floor_not_a_findings_floor() -> None:
 
 def test_a_collapsed_sweep_refuses_to_give_a_verdict(monkeypatch, capsys) -> None:
     """Contrast control for the floor: it must actually fire, not just exist."""
-    monkeypatch.setattr(detector, "tracked_python_files", lambda: [Path("only.py")])
+    monkeypatch.setattr(detector, "fork_scan_files", lambda: [Path("only.py")])
     assert detector.main([]) == 2, "a collapsed sweep must not return pass or fail"
     assert "sweep collapsed" in capsys.readouterr().err
 
@@ -138,6 +138,22 @@ def test_route_handler_detection_does_not_overreach(source: str, expected: bool)
     assert detector.is_route_handler(ast.parse(source).body[0]) is expected
 
 
+def _subclasses_shared_namesake(cls: ast.ClassDef, origin: dict[str, tuple[str, str]]) -> bool:
+    """Control's own reading of "binds the shared definition": same-named base from autobot_shared."""
+    for base in cls.bases:
+        text = ast.unparse(base)
+        head, _, tail = text.partition(".")
+        module, original = origin.get(head, ("", ""))
+        if not module.startswith("autobot_shared"):
+            continue
+        # `from m import X as Y` then Y; or `from pkg import mod as m` then m.X
+        if (tail == "" and original == cls.name) or (tail == cls.name and original != cls.name):
+            return True
+        if tail == cls.name and original == "":
+            return True
+    return False
+
+
 def _independent_population() -> set[str]:
     """Rule 3-5: a second derivation that replicates the PREDICATE, exemptions included.
 
@@ -167,7 +183,19 @@ def _independent_population() -> set[str]:
     # originally caught were hidden by a hand-written `<root>/**/*.py`
     # pathspec — an enumeration bug. That class is no longer covered here. It
     # is covered by the detector no longer hand-writing a pathspec at all.
-    listed = tracked_paths(_REPO_ROOT, "autobot-backend", "autobot-slm-backend", "autobot_shared")
+    listed = tracked_paths(
+        _REPO_ROOT,
+        "autobot-backend",
+        "autobot-slm-backend",
+        "autobot_shared",
+        "autobot-npu-worker",
+        "autobot-tts-worker",
+        "autobot-browser-worker",
+        "autobot-infrastructure",
+        "scripts",
+        "tools",
+        "pipeline-scripts",
+    )
     out = [rel for rel in listed if rel.endswith(".py")]
 
     seen: dict[str, set[str]] = defaultdict(set)
@@ -180,19 +208,22 @@ def _independent_population() -> set[str]:
         base = parts[-1]
         if banned_dirs & set(parts):
             continue
-        if base.endswith("_test.py") or base.startswith("test_") or "tests" in parts:
-            continue
-        # The mandatory ansible mirror (#16401), spelled independently of the
-        # detector's constant: byte-identical by design and guaranteed so by
-        # `detect_agent_code_drift_test.py`, so its symbols are defined twice and
-        # cannot be consolidated. A control that skipped this exemption would
-        # report a looser population and call the disagreement a detector bug.
-        if parts[:5] == ["autobot-slm-backend", "ansible", "roles", "slm_agent", "files"]:
+        if base.endswith("_test.py") or base.startswith("test_") or base == "conftest.py" or "tests" in parts:
             continue
         try:
-            body = ast.parse((_REPO_ROOT / rel).read_text(encoding="utf-8")).body
+            tree = ast.parse((_REPO_ROOT / rel).read_text(encoding="utf-8"))
         except (SyntaxError, OSError):
             continue
+        body = tree.body
+        # local alias -> (module, original name); `import a.b as c` maps c -> (a.b, "")
+        origin: dict[str, tuple[str, str]] = {}
+        for node in body:
+            if isinstance(node, ast.ImportFrom) and node.module:
+                for a in node.names:
+                    origin[a.asname or a.name] = (node.module, a.name)
+            elif isinstance(node, ast.Import):
+                for a in node.names:
+                    origin[a.asname or a.name] = (a.name, "")
         for stmt in body:
             if not isinstance(stmt, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
@@ -206,13 +237,15 @@ def _independent_population() -> set[str]:
             )
             if decorated:
                 continue
+            if isinstance(stmt, ast.ClassDef) and _subclasses_shared_namesake(stmt, origin):
+                continue
             seen[stmt.name].add(rel)
     return {name for name, files in seen.items() if len(files) > 1}
 
 
 def test_the_population_matches_an_independent_derivation() -> None:
     """Rule 4: compare SETS, not counts — two implementations can agree on a total."""
-    mine = set(detector.find_clusters(detector.tracked_python_files())[0])
+    mine = set(detector.find_clusters(detector.fork_scan_files())[0])
     theirs = _independent_population()
     only_detector = sorted(mine - theirs)
     only_control = sorted(theirs - mine)
@@ -243,9 +276,17 @@ def test_a_single_definition_is_not_a_cluster(tmp_path, monkeypatch) -> None:
     assert detector.find_clusters([Path("only.py")])[0] == {}
 
 
+def _effective_clusters() -> dict:
+    """Live clusters minus those fully covered by the recorded exceptions (#18688)."""
+    raw = detector.find_clusters(detector.fork_scan_files())[0]
+    effective, problems = detector.apply_exceptions(raw, detector.load_exceptions())
+    assert not problems, problems
+    return effective
+
+
 def test_no_new_fork_clusters() -> None:
     """The ratchet itself. A new name here means a new concept fork landed."""
-    current = set(detector.find_clusters(detector.tracked_python_files())[0])
+    current = set(_effective_clusters())
     new = sorted(current - set(BASELINE["clusters"]))
     assert not new, (
         f"{len(new)} new fork cluster(s): {new[:10]}. "
@@ -267,7 +308,7 @@ def test_no_stale_baseline_entries() -> None:
     `require_all_permissions` stayed listed after #18159 removed their second
     definition, tolerating whatever took those names next.
     """
-    current = set(detector.find_clusters(detector.tracked_python_files())[0])
+    current = set(_effective_clusters())
     assert _stale_entries(current, ["ANameNobodyDefinesTwice"]) == [
         "ANameNobodyDefinesTwice"
     ], "contrast: a name that is not a cluster must read as stale, or a pass below proves nothing"
@@ -276,61 +317,4 @@ def test_no_stale_baseline_entries() -> None:
     assert not stale, (
         f"{len(stale)} baseline entry(ies) are no longer fork clusters: {stale[:10]}. "
         "Delete them from repo_tests/symbol_fork_baseline.json — the list only shrinks (#17312)."
-    )
-
-
-def test_the_mandatory_ansible_mirror_is_excluded_and_the_exclusion_is_load_bearing() -> None:
-    """A path nobody may deduplicate must not be in a ratchet's population (#16401).
-
-    Ansible ships `autobot-slm-backend/slm/agent/` to the target host from
-    `.../ansible/roles/slm_agent/files/slm/agent/`, and
-    `ansible/tests/detect_agent_code_drift_test.py` FAILS if the two trees differ.
-    So every symbol there is defined twice by design. Counting them put 16 entries
-    in the baseline that can only be removed by breaking the payload or the drift
-    test — a floor the ratchet could never reach, pointing whoever worked it at a
-    change that must not be made. `duplication-guard.yml` had already excluded the
-    same path for the same reason; this detector had not.
-
-    CONTRAST PAIR: the mirror is out, its SOURCE is in. Excluding both would hide
-    real forks in the agent code itself.
-    """
-    mirror = Path("autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/version.py")
-    source = Path("autobot-slm-backend/slm/agent/version.py")
-
-    assert detector.is_mandatory_mirror(mirror)
-    assert not detector.is_mandatory_mirror(source)
-    assert not detector.in_population(mirror), "the ansible payload copy is still counted"
-    assert detector.in_population(source), "the real agent code must stay in the population"
-
-
-def test_no_baseline_entry_lives_only_in_the_mirror() -> None:
-    """The 16 removed entries must not creep back by someone re-adding them.
-
-    Asserted against the baseline rather than the detector, because the failure
-    mode is a human pasting a name back in after a scan they ran before this
-    exclusion existed.
-    """
-    removed = {
-        "AgentVersion",
-        "HealthCollector",
-        "RoleDefinition",
-        "RoleDetector",
-        "SLMAgent",
-        "append",
-        "build_heartbeat_payload",
-        "build_listening_ports_list",
-        "build_role_report",
-        "get_agent_version",
-        "get_listening_ports",
-        "initialize",
-        "mark_synced",
-        "read_unsynced",
-        "reset_version_instance",
-        "sd_notify",
-    }
-    baseline = set(BASELINE["clusters"])
-    back = sorted(removed & baseline)
-    assert back == [], (
-        f"{back} are defined twice only because of the mandatory ansible mirror; "
-        "they are not forks and cannot be consolidated"
     )

@@ -10,6 +10,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_memory_graph.owner_scope import OwnerScope
+from knowledge.search_filters import SYSTEM_SCOPE
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -184,6 +187,7 @@ class TestLayer2OnDemand:
                     name="AutoBot",
                     observations=["An AI automation platform"],
                     entity_metadata={},
+                    owner=OwnerScope.for_user("user-a"),
                 ),
             ]
         )
@@ -192,6 +196,7 @@ class TestLayer2OnDemand:
             {
                 "user_message": "Tell me about AutoBot",
                 "memory_graph": fake_graph,
+                "owner": OwnerScope.for_user("user-a"),
                 "model_name": "default",
             }
         )
@@ -257,9 +262,12 @@ class TestLayer3DeepSearch:
             {
                 "user_message": "search for Redis config",
                 "knowledge_service": fake_ks,
+                "principal": SYSTEM_SCOPE,
             }
         )
         assert "KNOWLEDGE CONTEXT" in result
+        # #16664: L3 retrieves as the turn's principal, taken from the build context.
+        assert fake_ks.conversation_aware_retrieve.await_args.kwargs["principal"] is SYSTEM_SCOPE
 
     @pytest.mark.asyncio
     async def test_render_swallows_knowledge_service_errors(self):
@@ -350,6 +358,7 @@ class TestTieredContextBuilderFeatureFlag:
                         name="Redis",
                         observations=["In-memory data store"],
                         entity_metadata={},
+                        owner=OwnerScope.for_user("user-a"),
                     )
                 ]
             )
@@ -361,6 +370,7 @@ class TestTieredContextBuilderFeatureFlag:
                     model_name="default",
                     session_id="sess-2",
                     memory_graph=fake_graph,
+                    owner=OwnerScope.for_user("user-a"),
                 )
                 assert "Redis" in result
         finally:
@@ -445,6 +455,7 @@ class TestEntityFacts:
             name="Redis",
             observations=["in-memory store", "used for sessions"],
             entity_metadata={},
+            owner=OwnerScope.for_user("user-a"),
         )
 
         assert _entity_facts(doc) == "in-memory store; used for sessions"
@@ -460,6 +471,7 @@ class TestEntityFacts:
             name="Redis",
             observations=["anything"],
             entity_metadata={},
+            owner=OwnerScope.for_user("user-a"),
         )
 
         assert "description" not in doc
@@ -501,11 +513,14 @@ class TestEntityFacts:
             name="Redis",
             observations=["in-memory store used for sessions"],
             entity_metadata={},
+            owner=OwnerScope.for_user("user-a"),
         )
         graph = MagicMock()
         graph.search_entities = AsyncMock(return_value=[doc])
 
-        out = await Layer2OnDemand().render({"user_message": "How does Redis work?", "memory_graph": graph})
+        out = await Layer2OnDemand().render(
+            {"user_message": "How does Redis work?", "memory_graph": graph, "owner": OwnerScope.for_user("user-a")}
+        )
 
         assert out.startswith("## Related Context")
         assert "**Redis**: in-memory store used for sessions" in out

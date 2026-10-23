@@ -4,11 +4,11 @@
 # Author: mrveiss
 ---
 # Frontend configuration defaults  (#926 Phase 4: service account created, migration in Phase 7)
-network_subnet: "{{ lookup('env', 'NETWORK_SUBNET') or lookup('pipe', 'grep -oP \"NETWORK_SUBNET=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null') or '' }}"
+network_subnet: "{{ (lookup('env', 'NETWORK_SUBNET') | trim) or (lookup('pipe', 'grep -oP \"NETWORK_SUBNET=\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null || true') | trim) or undef(hint='network_subnet is unset: set NETWORK_SUBNET in the environment or in /etc/autobot/slm-secrets.env. It is a firewall source, so it never falls back to an open range (#17642)') }}"
 frontend_service_account: autobot-frontend  # Phase 7: migrate service to run as this account
 frontend_user: autobot
 frontend_group: autobot
-frontend_install_dir: /opt/autobot
+frontend_install_dir: "{{ autobot.base_dir }}"
 frontend_log_dir: /var/log/autobot
 
 # Deployment

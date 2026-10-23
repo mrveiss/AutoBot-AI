@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
+from code_intelligence.python_files import collect_python_files
 from utils.io_executor import get_analytics_executor
 
 from .complexity_analyzer import ComplexityAnalyzer
@@ -23,12 +24,12 @@ from .regex_detector import RegexPatternDetector
 from .storage import store_patterns_batch
 from .types import (
     CodeLocation,
-    CodePattern,
+    CodePatternType,
+    DetectedCodePattern,
     DuplicatePattern,
     ModularizationSuggestion,
     PatternAnalysisReport,
     PatternSeverity,
-    PatternType,
 )
 
 logger = get_logger(__name__)
@@ -215,18 +216,8 @@ class CodePatternAnalyzer:
             self._merge_results(report, result)
 
     def collect_python_files(self, directory: str) -> List[str]:
-        """Collect all Python files excluding configured directories.
-
-        Returns:
-            Sorted list of absolute file paths.
-        """
-        files = []
-        dir_path = Path(directory)
-        for py_file in dir_path.rglob("*.py"):
-            if any(exc in py_file.parts for exc in self.exclude_dirs):
-                continue
-            files.append(str(py_file))
-        return sorted(files)
+        """Sorted Python files in *directory* minus ``exclude_dirs`` (shared collector, #18731)."""
+        return collect_python_files(directory, self.exclude_dirs)
 
     async def _run_batch_regex(self, file_paths: List[str]) -> List:
         """Run regex detection on a batch of files."""
@@ -705,7 +696,7 @@ class CodePatternAnalyzer:
                     if mod_suggestion:
                         modularization.append(mod_suggestion)
                 else:
-                    # Convert to generic CodePattern
+                    # Convert to generic DetectedCodePattern
                     code_pattern = self._anti_pattern_to_code_pattern(pattern)
                     if code_pattern:
                         other_patterns.append(code_pattern)
@@ -786,7 +777,7 @@ class CodePatternAnalyzer:
             canonical = group.instances[0].fragment.source_code or ""
 
         return DuplicatePattern(
-            pattern_type=PatternType.DUPLICATE_CODE,
+            pattern_type=CodePatternType.DUPLICATE_CODE,
             severity=severity,
             description=f"{group.clone_type.value} clone: {len(group.instances)} occurrences",
             locations=locations,
@@ -840,7 +831,7 @@ class CodePatternAnalyzer:
         )
 
         return ModularizationSuggestion(
-            pattern_type=PatternType.MODULARIZATION,
+            pattern_type=CodePatternType.MODULARIZATION,
             severity=severity_map.get(pattern.severity.value.lower(), PatternSeverity.MEDIUM),
             description=pattern.description,
             locations=[location],
@@ -856,14 +847,14 @@ class CodePatternAnalyzer:
             ],
         )
 
-    def _anti_pattern_to_code_pattern(self, pattern) -> CodePattern | None:
-        """Convert anti-pattern to generic CodePattern.
+    def _anti_pattern_to_code_pattern(self, pattern) -> DetectedCodePattern | None:
+        """Convert anti-pattern to generic DetectedCodePattern.
 
         Args:
             pattern: AntiPatternResult
 
         Returns:
-            CodePattern or None
+            DetectedCodePattern or None
         """
         severity_map = {
             "critical": PatternSeverity.CRITICAL,
@@ -875,12 +866,12 @@ class CodePatternAnalyzer:
 
         # Map anti-pattern types to our pattern types
         type_map = {
-            "dead_code": PatternType.DEAD_CODE,
-            "circular_dependency": PatternType.COUPLING_ISSUE,
-            "message_chain": PatternType.COUPLING_ISSUE,
+            "dead_code": CodePatternType.DEAD_CODE,
+            "circular_dependency": CodePatternType.COUPLING_ISSUE,
+            "message_chain": CodePatternType.COUPLING_ISSUE,
         }
 
-        pattern_type = type_map.get(pattern.pattern_type.value.lower(), PatternType.COUPLING_ISSUE)
+        pattern_type = type_map.get(pattern.pattern_type.value.lower(), CodePatternType.COUPLING_ISSUE)
 
         location = CodeLocation(
             file_path=pattern.file_path,
@@ -889,7 +880,7 @@ class CodePatternAnalyzer:
             function_name=pattern.entity_name,
         )
 
-        return CodePattern(
+        return DetectedCodePattern(
             pattern_type=pattern_type,
             severity=severity_map.get(pattern.severity.value.lower(), PatternSeverity.MEDIUM),
             description=pattern.description,

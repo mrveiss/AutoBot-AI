@@ -3,6 +3,8 @@
  "autobot-backend/services/credential_*.py",
  "autobot-backend/services/orphan_repair*.py",
  "autobot-backend/services/provider_key_vault.py",
+ "autobot-backend/services/__init__.py",
+ "autobot-backend/services/approval_gate_service.py",
  "autobot-backend/api/**",
  "autobot_shared/secrets_envelope.py",
  "autobot_shared/status_enums.py",

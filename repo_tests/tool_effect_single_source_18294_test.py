@@ -46,9 +46,10 @@ _NOT_AN_EFFECT_TABLE: dict[str, tuple[int, str]] = {
         "TERMINAL_KEYWORDS are words matched against the USER's message to classify intent; they are not tool names",
     ),
     "autobot-backend/chat_workflow/tool_handler.py": (
-        2,
+        3,
         "WEB_RESEARCH_TOOL_NAMES and the _handlers map route a tool to its web_fetch handler (dispatch), "
-        "which says where a call goes, not what it does",
+        "which says where a call goes, not what it does; _BUILTIN_TOOL_SCHEMAS maps a tool to its argument "
+        "schema (what it accepts, not what it does)",
     ),
 }
 
@@ -122,7 +123,7 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "tool-effect-table-scan",
     discover=_population,
-    floor=2800,
+    floor=3057,
     what="non-test python source",
     roots=("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     growth=300,

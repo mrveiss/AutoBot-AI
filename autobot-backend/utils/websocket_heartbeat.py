@@ -22,7 +22,7 @@ from constants.threshold_constants import TimingConstants
 logger = get_logger(__name__)
 
 
-class ConnectionState(Enum):
+class WebSocketConnectionState(Enum):
     """WebSocket connection states"""
 
     CONNECTING = "connecting"
@@ -35,7 +35,9 @@ class ConnectionState(Enum):
 
 
 # Issue #380: Module-level frozenset for disconnected states
-_DISCONNECTED_STATES: FrozenSet[ConnectionState] = frozenset({ConnectionState.ERROR, ConnectionState.DISCONNECTED})
+_DISCONNECTED_STATES: FrozenSet[WebSocketConnectionState] = frozenset(
+    {WebSocketConnectionState.ERROR, WebSocketConnectionState.DISCONNECTED}
+)
 
 
 @dataclass
@@ -59,7 +61,7 @@ class WebSocketManager:
         """Initialize WebSocket manager with heartbeat configuration."""
         self.config = config or HeartbeatConfig()
         self.active_connections: Dict[str, WebSocket] = {}
-        self.connection_states: Dict[str, ConnectionState] = {}
+        self.connection_states: Dict[str, WebSocketConnectionState] = {}
         self.last_heartbeat_sent: Dict[str, float] = {}
         self.last_heartbeat_received: Dict[str, float] = {}
         self.missed_heartbeats: Dict[str, int] = {}
@@ -118,7 +120,7 @@ class WebSocketManager:
             if not websocket:
                 return
 
-            state = self.connection_states.get(connection_id, ConnectionState.CONNECTED)
+            state = self.connection_states.get(connection_id, WebSocketConnectionState.CONNECTED)
             last_heartbeat_sent = self.last_heartbeat_sent.get(connection_id, 0)
 
         # Check if it's time to send heartbeat (outside lock)
@@ -128,7 +130,7 @@ class WebSocketManager:
             await self._send_heartbeat(connection_id, websocket, current_time)
 
         # Check for missed heartbeats
-        if state == ConnectionState.HEARTBEAT_SENT:
+        if state == WebSocketConnectionState.HEARTBEAT_SENT:
             response_time = current_time - last_heartbeat_sent
             if response_time > self.config.heartbeat_response_window:
                 # Update missed count under lock
@@ -143,7 +145,7 @@ class WebSocketManager:
                 else:
                     # Reset state and try again
                     async with self._lock:
-                        self.connection_states[connection_id] = ConnectionState.CONNECTED
+                        self.connection_states[connection_id] = WebSocketConnectionState.CONNECTED
 
     async def _send_heartbeat(self, connection_id: str, websocket: WebSocket, current_time: float):
         """Send heartbeat ping to connection (thread-safe)"""
@@ -159,7 +161,7 @@ class WebSocketManager:
             # Update state under lock
             async with self._lock:
                 self.last_heartbeat_sent[connection_id] = current_time
-                self.connection_states[connection_id] = ConnectionState.HEARTBEAT_SENT
+                self.connection_states[connection_id] = WebSocketConnectionState.HEARTBEAT_SENT
 
             logger.debug("💓 Heartbeat sent to %s", connection_id)
 
@@ -179,7 +181,7 @@ class WebSocketManager:
         logger.error("🚫 Connection error for %s: %s", connection_id, error)
 
         async with self._lock:
-            self.connection_states[connection_id] = ConnectionState.ERROR
+            self.connection_states[connection_id] = WebSocketConnectionState.ERROR
 
         # Clean up on serious errors
         if isinstance(error, WebSocketDisconnect):
@@ -198,7 +200,7 @@ class WebSocketManager:
             # Register connection under lock
             async with self._lock:
                 self.active_connections[connection_id] = websocket
-                self.connection_states[connection_id] = ConnectionState.CONNECTED
+                self.connection_states[connection_id] = WebSocketConnectionState.CONNECTED
                 self.missed_heartbeats[connection_id] = 0
                 self.last_heartbeat_received[connection_id] = current_time
                 self.last_heartbeat_sent[connection_id] = current_time
@@ -309,7 +311,7 @@ class WebSocketManager:
         # Reset missed heartbeat count and get websocket under lock
         async with self._lock:
             self.missed_heartbeats[connection_id] = 0
-            self.connection_states[connection_id] = ConnectionState.HEARTBEAT_RECEIVED
+            self.connection_states[connection_id] = WebSocketConnectionState.HEARTBEAT_RECEIVED
             websocket = self.active_connections.get(connection_id)
 
         # Send acknowledgment outside lock
@@ -379,7 +381,7 @@ class WebSocketManager:
         }
 
         for connection_id in connection_ids:
-            state = states_copy.get(connection_id, ConnectionState.CONNECTED)
+            state = states_copy.get(connection_id, WebSocketConnectionState.CONNECTED)
             stats["connection_states"][connection_id] = state.value
 
             last_heartbeat = heartbeat_received_copy.get(connection_id, current_time)

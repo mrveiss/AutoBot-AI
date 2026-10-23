@@ -20,7 +20,7 @@ import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton, BaseDrawer } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('SourcePreviewPanel')
@@ -66,6 +66,9 @@ const router = useRouter()
 const panelWidth = ref(400)
 const isResizing = ref(false)
 const copySuccess = ref(false)
+// The "Copied" feedback timer; cleared on unmount and when the document changes (#19145 review).
+let copyTimer: ReturnType<typeof setTimeout> | null = null
+const clearCopyTimer = (): void => { if (copyTimer) clearTimeout(copyTimer); copyTimer = null }
 
 // =============================================================================
 // Computed
@@ -102,8 +105,10 @@ async function copyContent(): Promise<void> {
   try {
     await navigator.clipboard.writeText(props.document.content)
     copySuccess.value = true
-    setTimeout(() => {
+    clearCopyTimer()
+    copyTimer = setTimeout(() => {
       copySuccess.value = false
+      copyTimer = null
     }, 2000)
   } catch (err) {
     logger.error('Failed to copy content:', err)
@@ -159,6 +164,9 @@ function getTypeIcon(type?: string): IconName {
   return icons[type || 'document'] || 'file'
 }
 
+// Another document resets the copy feedback instead of inheriting it.
+watch(() => props.document?.id, () => { clearCopyTimer(); copySuccess.value = false })
+
 // Cleanup on close
 watch(() => props.modelValue, (isOpen) => {
   if (!isOpen) {
@@ -169,138 +177,88 @@ watch(() => props.modelValue, (isOpen) => {
 
 // #2849: Ensure resize listeners are removed if component unmounts mid-resize
 onUnmounted(() => {
+  clearCopyTimer()
   document.removeEventListener('mousemove', handleResize)
   document.removeEventListener('mouseup', stopResize)
 })
 </script>
 
 <template>
-  <Teleport to="body">
-    <Transition name="panel">
-      <div
-        v-if="isOpen"
-        class="source-preview-overlay"
-        @click.self="closePanel"
-      >
-        <aside
-          class="source-preview-panel"
-          :style="{ width: `${panelWidth}px` }"
-        >
-          <!-- Resize Handle -->
-          <div
-            class="resize-handle"
-            @mousedown="startResize"
-          ></div>
+  <!-- Kit BaseDrawer (#14780); the width stays user-resizable through the handle below. -->
+  <BaseDrawer
+    v-model="isOpen"
+    :title="document?.title || $t('knowledge.panels.sourcePreview.defaultTitle')"
+    :width="panelWidth"
+    flush
+    :close-label="$t('knowledge.panels.sourcePreview.closePanel')"
+  >
+    <template #title>
+      <span class="doc-type-icon" aria-hidden="true"><Icon :name="getTypeIcon(document?.type)" /></span>
+      {{ document?.title || $t('knowledge.panels.sourcePreview.defaultTitle') }}
+    </template>
+    <template v-if="document?.path" #subtitle>
+      <span class="panel-path">{{ document.path }}</span>
+    </template>
 
-          <!-- Panel Header -->
-          <header class="panel-header">
-            <div class="header-content">
-              <div class="doc-type-icon">
-                <Icon :name="getTypeIcon(document?.type)" />
-              </div>
-              <div class="header-info">
-                <h3 class="panel-title">{{ document?.title || $t('knowledge.panels.sourcePreview.defaultTitle') }}</h3>
-                <span v-if="document?.path" class="panel-path">{{ document.path }}</span>
-              </div>
-            </div>
-            <button
-              class="close-btn"
-              @click="closePanel"
-              :title="$t('knowledge.panels.sourcePreview.closePanel')"
-            >
-              <Icon name="times" />
-            </button>
-          </header>
-
-          <!-- Panel Content -->
-          <div class="panel-body">
-            <div v-if="!hasDocument" class="empty-state">
-              <Icon name="file-alt" />
-              <p>{{ $t('knowledge.panels.sourcePreview.noDocument') }}</p>
-            </div>
-
-            <template v-else>
-              <!-- Metadata Bar -->
-              <div class="metadata-bar">
-                <span v-if="document?.category" class="meta-item">
-                  <Icon name="folder" />
-                  {{ document.category }}
-                </span>
-                <span class="meta-item">
-                  <Icon name="file-word" />
-                  {{ $t('knowledge.panels.sourcePreview.wordCount', { count: wordCount }) }}
-                </span>
-                <span v-if="relevancePercent !== null" class="meta-item relevance">
-                  <Icon name="bullseye" />
-                  {{ $t('knowledge.panels.sourcePreview.relevance', { percent: relevancePercent }) }}
-                </span>
-              </div>
-
-              <!-- Content -->
-              <div class="content-area">
-                <pre class="source-content">{{ document?.content }}</pre>
-              </div>
-            </template>
-          </div>
-
-          <!-- Panel Footer -->
-          <footer class="panel-footer">
-            <BaseButton
-              variant="outline-solid"
-              size="sm"
-              :class="{ success: copySuccess }"
-              @click="copyContent"
-              :disabled="!hasDocument"
-            >
-              <Icon :name="copySuccess ? 'check' : 'copy'" />
-              {{ copySuccess ? $t('knowledge.panels.sourcePreview.copied') : $t('knowledge.panels.sourcePreview.copy') }}
-            </BaseButton>
-
-            <BaseButton
-              variant="primary"
-              size="sm"
-              @click="openInKnowledgeManager"
-              :disabled="!hasDocument"
-            >
-              <Icon name="external-link-alt" />
-              {{ $t('knowledge.panels.sourcePreview.openInKnowledgeManager') }}
-            </BaseButton>
-          </footer>
-        </aside>
+    <div class="resize-handle" @mousedown="startResize"></div>
+    <div class="panel-body">
+      <div v-if="!hasDocument" class="empty-state">
+        <Icon name="file-alt" />
+        <p>{{ $t('knowledge.panels.sourcePreview.noDocument') }}</p>
       </div>
-    </Transition>
-  </Teleport>
+
+      <template v-else>
+        <!-- Metadata Bar -->
+        <div class="metadata-bar">
+          <span v-if="document?.category" class="meta-item">
+            <Icon name="folder" />
+            {{ document.category }}
+          </span>
+          <span class="meta-item">
+            <Icon name="file-word" />
+            {{ $t('knowledge.panels.sourcePreview.wordCount', { count: wordCount }) }}
+          </span>
+          <span v-if="relevancePercent !== null" class="meta-item relevance">
+            <Icon name="bullseye" />
+            {{ $t('knowledge.panels.sourcePreview.relevance', { percent: relevancePercent }) }}
+          </span>
+        </div>
+
+        <!-- Content -->
+        <div class="content-area">
+          <pre class="source-content">{{ document?.content }}</pre>
+        </div>
+      </template>
+    </div>
+
+    <template #actions>
+      <div class="panel-footer">
+          <BaseButton
+            variant="outline"
+            size="sm"
+            :class="{ success: copySuccess }"
+            @click="copyContent"
+            :disabled="!hasDocument"
+          >
+            <Icon :name="copySuccess ? 'check' : 'copy'" />
+            {{ copySuccess ? $t('knowledge.panels.sourcePreview.copied') : $t('knowledge.panels.sourcePreview.copy') }}
+          </BaseButton>
+
+          <BaseButton
+            variant="primary"
+            size="sm"
+            @click="openInKnowledgeManager"
+            :disabled="!hasDocument"
+          >
+            <Icon name="external-link-alt" />
+            {{ $t('knowledge.panels.sourcePreview.openInKnowledgeManager') }}
+          </BaseButton>
+      </div>
+    </template>
+  </BaseDrawer>
 </template>
 
 <style scoped>
-/* Overlay */
-.source-preview-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.3);
-  z-index: var(--z-modal);
-  display: flex;
-  justify-content: flex-end;
-}
-
-/* Panel */
-.source-preview-panel {
-  height: 100%;
-  /* #14771: the drawer is teleported to body, outside #app's padding, and
-     spans the full height -- clear the top, right and bottom insets */
-  padding-top: var(--safe-top);
-  padding-right: var(--safe-right);
-  padding-bottom: var(--safe-bottom);
-  background: var(--bg-card);
-  box-shadow: var(--shadow-2xl);
-  display: flex;
-  flex-direction: column;
-  position: relative;
-}
-
 /* Resize Handle */
 .resize-handle {
   position: absolute;
@@ -320,26 +278,14 @@ onUnmounted(() => {
 }
 
 /* Header */
-.panel-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  padding: var(--spacing-5) var(--spacing-6);
-  border-bottom: 1px solid var(--border-default);
-  background: var(--bg-secondary);
-}
 
-.header-content {
-  display: flex;
-  gap: var(--spacing-3-5);
-  flex: 1;
-  min-width: 0;
-}
 
 .doc-type-icon {
   width: 2.5rem;
   height: 2.5rem;
-  display: flex;
+  display: inline-flex;
+  vertical-align: middle;
+  margin-right: var(--spacing-3);
   align-items: center;
   justify-content: center;
   background: var(--color-info-bg);
@@ -349,20 +295,7 @@ onUnmounted(() => {
   flex-shrink: 0;
 }
 
-.header-info {
-  flex: 1;
-  min-width: 0;
-}
 
-.panel-title {
-  font-size: var(--text-base);
-  font-weight: 600;
-  color: var(--text-primary);
-  margin-bottom: var(--spacing-1);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 .panel-path {
   display: block;
@@ -374,30 +307,11 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
-.close-btn {
-  width: 2rem;
-  height: 2rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  background: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  border-radius: var(--radius-md);
-  transition: all var(--duration-150);
-  flex-shrink: 0;
-}
 
-.close-btn:hover {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-}
 
 /* Body */
 .panel-body {
-  flex: 1;
-  overflow-y: auto;
+  min-height: 100%;
   display: flex;
   flex-direction: column;
 }
@@ -469,9 +383,7 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   gap: var(--spacing-3);
-  padding: var(--spacing-4) var(--spacing-6);
-  border-top: 1px solid var(--border-default);
-  background: var(--bg-card);
+  width: 100%;
 }
 
 .panel-footer .success {
@@ -479,34 +391,9 @@ onUnmounted(() => {
   border-color: var(--color-success);
 }
 
-/* Transition */
-.panel-enter-active,
-.panel-leave-active {
-  transition: opacity var(--duration-200) var(--ease-out);
-}
-
-.panel-enter-active .source-preview-panel,
-.panel-leave-active .source-preview-panel {
-  transition: transform var(--duration-200) var(--ease-out);
-}
-
-.panel-enter-from,
-.panel-leave-to {
-  opacity: 0;
-}
-
-.panel-enter-from .source-preview-panel,
-.panel-leave-to .source-preview-panel {
-  transform: translateX(100%);
-}
 
 /* Responsive */
 @media (max-width: 768px) {
-  .source-preview-panel {
-    width: 100% !important;
-    max-width: none;
-  }
-
   .resize-handle {
     display: none;
   }

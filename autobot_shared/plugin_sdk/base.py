@@ -20,7 +20,7 @@ import re
 import threading
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -180,6 +180,9 @@ class BasePlugin(ABC):
         self.config = config or {}
         self.status = PluginStatus.UNLOADED
         self._logger = logging.getLogger(f"plugin.{manifest.name}")
+        #: Scoped credential resolver injected by the host before ``initialize()``
+        #: (#18094); ``None`` when the plugin runs standalone.
+        self.credential_resolver: Callable[[str], str] | None = None
 
     @abstractmethod
     async def initialize(self) -> None:

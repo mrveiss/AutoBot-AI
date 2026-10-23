@@ -69,9 +69,9 @@ def test_str_mixin_is_kept():
     assert isinstance(WorkItemPriority.HIGH, str)
     assert WorkItemPriority.HIGH == "high"
     assert json.dumps({"p": WorkItemPriority.HIGH}, default=str) == '{"p": "high"}'
-    # Contrast: the canonical is a plain Enum and does not.
-    assert not isinstance(Priority.HIGH, str)
-    assert json.dumps({"p": Priority.HIGH}, default=str) == '{"p": "Priority.HIGH"}'
+    # The canonical is a str enum too (#14678), so both compare and serialise alike.
+    assert isinstance(Priority.HIGH, str)
+    assert Priority.HIGH == WorkItemPriority.HIGH == "high"
 
 
 def test_identity_survives_pickle_and_naming():

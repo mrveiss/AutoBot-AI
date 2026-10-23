@@ -12,13 +12,13 @@ has persistent top-memories without requiring a RAG retrieval round-trip.
 import asyncio
 import hashlib
 import math
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
 import yaml
 
+from autobot_shared.env_utils import env_flag, env_float
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.token_count import estimate_fast
 from constants.threshold_constants import CategoryDefaults
@@ -41,27 +41,10 @@ _CACHE_KEY = "autobot:essential_story:{model_name}:{fingerprint}"
 # tiebreaker so equal-quality facts no longer flip on Redis SCAN order).
 
 
-def _env_bool(name: str, default: bool) -> bool:
-    return os.environ.get(name, "1" if default else "0").strip().lower() not in ("0", "false", "no")
-
-
-def _env_float(name: str, default: float) -> float:
-    """Parse a float env var, never raising at import — bad values fall back."""
-    raw = os.environ.get(name)
-    if raw is None:
-        return default
-    try:
-        val = float(raw)
-    except (TypeError, ValueError):
-        logger.warning("Invalid %s=%r — using default %s", name, raw, default)
-        return default
-    return val if val == val else default  # reject NaN (NaN != NaN)
-
-
-_REINFORCE_ENABLED: bool = _env_bool("AUTOBOT_ESSENTIAL_STORY_REINFORCE", True)
-_REINFORCE_WEIGHT: float = _env_float("AUTOBOT_ESSENTIAL_STORY_REINFORCE_WEIGHT", 0.3)
-_REINFORCE_RECENCY_HALFLIFE_SECONDS: float = _env_float(
-    "AUTOBOT_ESSENTIAL_STORY_RECENCY_HALFLIFE_SECONDS", float(30 * 24 * 3600)
+_REINFORCE_ENABLED: bool = env_flag("AUTOBOT_ESSENTIAL_STORY_REINFORCE", True)
+_REINFORCE_WEIGHT: float = env_float("AUTOBOT_ESSENTIAL_STORY_REINFORCE_WEIGHT", 0.3, reject_nan=True)
+_REINFORCE_RECENCY_HALFLIFE_SECONDS: float = env_float(
+    "AUTOBOT_ESSENTIAL_STORY_RECENCY_HALFLIFE_SECONDS", float(30 * 24 * 3600), reject_nan=True
 )
 
 

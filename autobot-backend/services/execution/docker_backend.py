@@ -24,6 +24,7 @@ import asyncio
 import os
 from typing import Any, Dict, Optional, Tuple
 
+from autobot_shared.container_hardening import execution_hardening_kwargs
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 
@@ -221,8 +222,7 @@ class DockerBackend(ExecutionBackend):
                 demux=False,
             )
 
-            output = (exec_result.output or b"").decode("utf-8", errors="replace")
-            result.stdout = output
+            result.stdout = (exec_result.output or b"").decode("utf-8", errors="replace")
             result.stderr = ""
             result.return_code = exec_result.exit_code if exec_result.exit_code is not None else -1
             result.status = ExecutionStatus.SUCCESS if result.return_code == 0 else ExecutionStatus.FAILED
@@ -266,19 +266,21 @@ class DockerBackend(ExecutionBackend):
             result.started_at = now_utc()
             result.status = ExecutionStatus.RUNNING
 
-            cmd = self._prepare_command(task)
+            cmd, limits = self._prepare_command(task), task.resource_limits
 
             try:
                 container = self.client.containers.run(
                     image,
                     cmd,
                     detach=True,
-                    mem_limit=f"{task.resource_limits.memory_mb}m",
-                    cpus=task.resource_limits.cpu_cores,
-                    environment=safe_task_env({}, task.env_vars),
-                    stdout=True,
-                    stderr=True,
-                    remove=False,
+                    **execution_hardening_kwargs(
+                        memory_limit=f"{limits.memory_mb}m",
+                        extra=dict(
+                            nano_cpus=int(limits.cpu_cores * 1e9),
+                            environment=safe_task_env({}, task.env_vars),
+                            remove=False,
+                        ),
+                    ),
                 )
 
                 self._container_map[task.task_id] = container.id
@@ -296,9 +298,7 @@ class DockerBackend(ExecutionBackend):
                     return result
 
                 try:
-                    logs = container.logs(stdout=True, stderr=True)
-                    output = logs.decode(encoding="utf-8", errors="replace")
-                    result.stdout = output
+                    result.stdout = container.logs(stdout=True, stderr=True).decode("utf-8", errors="replace")
                     result.stderr = ""
                 except Exception as e:
                     logger.warning("Failed to capture container logs: %s", e)
@@ -488,8 +488,7 @@ class DockerBackend(ExecutionBackend):
                 self.client.containers.run,
                 record.image_name,
                 "sleep infinity",
-                detach=True,
-                remove=False,
+                **execution_hardening_kwargs(extra={"detach": True, "remove": False}),
             )
         except Exception as exc:
             raise RuntimeError(

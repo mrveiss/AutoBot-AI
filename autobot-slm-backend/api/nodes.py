@@ -10,11 +10,9 @@ import asyncio
 import hashlib
 import logging
 import os
-import tempfile
 import time
 import uuid
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import List
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
@@ -38,12 +36,12 @@ from models.database import (
     Deployment,
     DeploymentStatus,
     EventSeverity,
-    EventType,
     Node,
     NodeCodeVersion,
     NodeConfig,
     NodeCredential,
     NodeEvent,
+    NodeEventType,
     NodeRole,
     NodeStatus,
     Role,
@@ -86,6 +84,7 @@ from services.encryption import encrypt_data
 from services.node_events import create_node_event
 from services.reconciler import reconciler_service
 from services.ssh_utils import build_ssh_base_cmd
+from services.temp_inventory import write_linked_inventory
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/nodes", tags=["nodes"])
@@ -145,7 +144,7 @@ async def _handle_enrollment_started(db: AsyncSession, node_id: str, ssh_passwor
     await create_node_event(
         db,
         node_id,
-        EventType.DEPLOYMENT_STARTED,
+        NodeEventType.DEPLOYMENT_STARTED,
         EventSeverity.INFO,
         f"Enrollment started for node {node_id}",
         auth_method_details,
@@ -170,7 +169,7 @@ async def _handle_enrollment_failed(db: AsyncSession, node_id: str, message: str
     await create_node_event(
         db,
         node_id,
-        EventType.DEPLOYMENT_FAILED,
+        NodeEventType.DEPLOYMENT_FAILED,
         EventSeverity.ERROR,
         f"Enrollment failed for node {node_id}: {message}",
         error_details,
@@ -221,7 +220,7 @@ async def _handle_enrollment_completed(db: AsyncSession, node_id: str) -> dict:
     await create_node_event(
         db,
         node_id,
-        EventType.DEPLOYMENT_COMPLETED,
+        NodeEventType.DEPLOYMENT_COMPLETED,
         EventSeverity.INFO,
         f"Enrollment completed for node {node_id}",
         completion_details,
@@ -324,7 +323,7 @@ async def _create_registration_event(
     await create_node_event(
         db,
         node_id,
-        EventType.STATE_CHANGE,
+        NodeEventType.STATE_CHANGE,
         EventSeverity.INFO,
         event_msg,
         {
@@ -527,6 +526,32 @@ async def create_node(
     await db.refresh(node)
 
     return NodeResponse.model_validate(node)
+
+
+@router.get("/a2a-cards", tags=["a2a"])
+async def list_a2a_cards(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[dict, Depends(get_current_user)],
+) -> list:
+    """
+    Return cached A2A Agent Cards for all backend nodes.
+
+    Each entry includes node_id, hostname, ip_address, and the card dict
+    (or null if no card has been fetched yet).
+    """
+    result = await db.execute(select(Node))
+    nodes = result.scalars().all()
+    return [
+        {
+            "node_id": n.node_id,
+            "hostname": n.hostname,
+            "ip_address": n.ip_address,
+            "a2a_card": (n.extra_data or {}).get("a2a_card"),
+            "fetched_at": (n.extra_data or {}).get("a2a_card_fetched_at"),
+        }
+        for n in nodes
+        if "backend" in (n.roles or [])
+    ]
 
 
 @router.get("/{node_id}", response_model=NodeResponse)
@@ -1015,26 +1040,14 @@ async def _execute_provision_playbook(
         "      ansible_python_interpreter: /usr/bin/python3\n"
         "      node_roles:\n" + roles_yaml + ("      node_dependencies:\n" + deps_yaml if deps_yaml else "")
     )
-    tmp_inv = None
+    tmp_inv = write_linked_inventory(inventory_content, "provision_inv_", executor.ansible_dir)  # #19202
     try:
-        tmp_inv = tempfile.NamedTemporaryFile(
-            mode="w",
-            suffix=".yml",
-            prefix="provision_inv_",
-            dir=str(executor.ansible_dir),
-            delete=False,
-        )
-        tmp_inv.write(inventory_content)
-        tmp_inv.flush()
-        tmp_inv.close()
-
         result = await executor.execute_playbook(
             playbook_name="playbooks/provision-fleet-roles.yml",
-            inventory_path=Path(tmp_inv.name),
+            inventory_path=tmp_inv,
         )
     finally:
-        if tmp_inv and os.path.exists(tmp_inv.name):
-            os.unlink(tmp_inv.name)
+        tmp_inv.unlink(missing_ok=True)
 
     for role in roles:
         role.status = "installed" if result["success"] else "failed"
@@ -1235,14 +1248,12 @@ async def _run_role_removal(
         "backup_before_removal": str(backup).lower(),
     }
     if target_path:
-        # Extract directory name from full path
-        # e.g. /opt/autobot/autobot-npu-worker -> autobot-npu-worker
-        extra_vars["role_target_dir"] = os.path.basename(target_path.rstrip("/"))
-    result = await executor.execute_playbook(
-        playbook_name="playbooks/remove-role.yml",
-        limit=[node_id],
-        extra_vars=extra_vars,
-    )
+        extra_vars["role_target_dir"] = os.path.basename(target_path.rstrip("/"))  # /opt/x/y -> y
+    try:
+        result = await executor.execute_playbook("playbooks/remove-role.yml", limit=[node_id], extra_vars=extra_vars)
+    except ValueError:  # #19005: Role.systemd_service is not a unit name; the sink refused before spawning
+        logger.warning("Role removal refused: role=%s systemd_service=%s", role_name, repr(service_name)[:80])
+        return {"success": False, "output": "Role systemd_service is not a valid unit name"}
     # Extract backup path from output if backup was requested
     if backup and result["success"]:
         result["backup_path"] = _parse_backup_path(result.get("output", ""))
@@ -1387,22 +1398,11 @@ async def _run_decommission_playbook(ip_address: str, ssh_user: str, backup: boo
         "      ansible_ssh_private_key_file: ~/.ssh/autobot_key\n"
         "      ansible_python_interpreter: /usr/bin/python3\n"
     )
-    tmp_inv = None
+    tmp_inv = write_linked_inventory(inventory_content, "decommission_inv_", executor.ansible_dir)  # #19202
     try:
-        tmp_inv = tempfile.NamedTemporaryFile(
-            mode="w",
-            suffix=".yml",
-            prefix="decommission_inv_",
-            dir=str(executor.ansible_dir),
-            delete=False,
-        )
-        tmp_inv.write(inventory_content)
-        tmp_inv.flush()
-        tmp_inv.close()
-
         result = await executor.execute_playbook(
             playbook_name="playbooks/decommission-node.yml",
-            inventory_path=Path(tmp_inv.name),
+            inventory_path=tmp_inv,
             extra_vars={
                 "backup_before_decommission": str(backup).lower(),
             },
@@ -1421,8 +1421,7 @@ async def _run_decommission_playbook(ip_address: str, ssh_user: str, backup: boo
             )
         return result
     finally:
-        if tmp_inv and os.path.exists(tmp_inv.name):
-            os.unlink(tmp_inv.name)
+        tmp_inv.unlink(missing_ok=True)
 
 
 async def _cleanup_decommissioned_node(
@@ -1623,7 +1622,7 @@ async def reenroll_node(
     await create_node_event(
         db,
         node_id,
-        EventType.STATUS_CHANGED,
+        NodeEventType.STATE_CHANGE,
         EventSeverity.INFO,
         f"Node reset to pending for re-enrollment by {current_user.get('username', 'unknown')}",
     )
@@ -2145,7 +2144,7 @@ async def _emit_reboot_event(db: AsyncSession, node_id: str, node) -> None:
     await create_node_event(
         db,
         node_id,
-        EventType.MANUAL_ACTION,
+        NodeEventType.MANUAL_ACTION,
         EventSeverity.WARNING,
         f"Reboot initiated for {node.hostname}",
         {"action": "reboot", "initiated_by": "api"},
@@ -2247,7 +2246,7 @@ async def acknowledge_remediation(
     await create_node_event(
         db,
         node_id,
-        EventType.MANUAL_ACTION,
+        NodeEventType.MANUAL_ACTION,
         EventSeverity.INFO,
         f"Remediation tracker reset for {node.hostname}",
         {"action": "acknowledge_remediation"},
@@ -2833,32 +2832,6 @@ async def exec_node_command(
 # ---------------------------------------------------------------------------
 # A2A Agent Card endpoints (Issue #962)
 # ---------------------------------------------------------------------------
-
-
-@router.get("/a2a-cards", tags=["a2a"])
-async def list_a2a_cards(
-    db: Annotated[AsyncSession, Depends(get_db)],
-    _: Annotated[dict, Depends(get_current_user)],
-) -> list:
-    """
-    Return cached A2A Agent Cards for all backend nodes.
-
-    Each entry includes node_id, hostname, ip_address, and the card dict
-    (or null if no card has been fetched yet).
-    """
-    result = await db.execute(select(Node))
-    nodes = result.scalars().all()
-    return [
-        {
-            "node_id": n.node_id,
-            "hostname": n.hostname,
-            "ip_address": n.ip_address,
-            "a2a_card": (n.extra_data or {}).get("a2a_card"),
-            "fetched_at": (n.extra_data or {}).get("a2a_card_fetched_at"),
-        }
-        for n in nodes
-        if "backend" in (n.roles or [])
-    ]
 
 
 @router.get("/{node_id}/a2a-card", tags=["a2a"])

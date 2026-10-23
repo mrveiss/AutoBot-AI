@@ -19,6 +19,7 @@ from croniter import croniter
 from fastapi import HTTPException
 from sqlalchemy import select
 
+from autobot_shared.cron_expression import log_stored_cron_findings
 from models.database import CodeStatus, Node, UpdateSchedule
 from services.code_distributor import get_code_distributor
 from services.database import db_service
@@ -31,21 +32,23 @@ _executor_running = False
 _executor_task: asyncio.Task | None = None
 
 
-def validate_cron_expression(expression: str) -> bool:
-    """
-    Validate a cron expression syntax.
+async def report_stored_schedules() -> int:
+    """Startup scan: WARN once per stored schedule whose cron the shared validator rejects.
 
-    Args:
-        expression: Cron expression string (e.g., "0 2 * * *")
-
-    Returns:
-        True if valid, False otherwise
+    Report-only (#18449): a stored 6-field cron still computes and fires through
+    croniter exactly as before; the warning names the schedule and
+    ``schedule.invalid_cron`` so the state is visible. Returns the count reported.
     """
+    reported = 0
     try:
-        croniter(expression)
-        return True
-    except (ValueError, KeyError):
-        return False
+        async with db_service.session() as db:
+            result = await db.execute(select(UpdateSchedule))
+            for schedule in result.scalars().all():
+                if not log_stored_cron_findings(logger, "Schedule", schedule.id, schedule.cron_expression):
+                    reported += 1
+    except Exception as e:
+        logger.warning("Stored schedule scan failed: %s", e)
+    return reported
 
 
 def calculate_next_run(expression: str, base: datetime = None) -> datetime:
@@ -342,6 +345,7 @@ async def _schedule_executor_loop():
 
     logger.info("Schedule executor started")
     _executor_running = True
+    await report_stored_schedules()
 
     while _executor_running:
         try:

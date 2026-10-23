@@ -3,7 +3,7 @@
     <Transition name="voice-overlay">
       <div
         v-if="voiceConversation.isActive.value"
-        class="voice-overlay"
+        id="chat-overlay-voice" class="voice-overlay"
         @keydown.escape="close"
         tabindex="-1"
         ref="overlayRef"

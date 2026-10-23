@@ -104,7 +104,7 @@ class RedisConnectionManager:
                 self._connection_pool = self._create_connection_pool()
 
             # Create Redis client with connection pool
-            self._client = async_redis.Redis(connection_pool=self._connection_pool)  # noqa: redis
+            self._client = async_redis.Redis(connection_pool=self._connection_pool)
 
             # Test connection
             await self._client.ping()
@@ -275,7 +275,7 @@ async def get_redis_client(config: dict) -> async_redis.Redis | None:
     Get Redis client with connection pooling (canonical pattern, thread-safe)
 
     This is the ONLY approved method for getting a Redis client in the
-    Windows NPU worker. Direct Redis client instantiation is FORBIDDEN.  # noqa: redis
+    Windows NPU worker. Direct Redis client instantiation is FORBIDDEN.
 
     Args:
         config: Configuration dictionary from npu_worker.yaml

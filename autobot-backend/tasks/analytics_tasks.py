@@ -188,21 +188,21 @@ def run_duplicate_analysis(self, source_id: "str | None" = None) -> dict:
     _progress(self, "Running duplicate analysis", 20.0, started)
 
     async def _work():
-        from api.codebase_analytics.endpoints.duplicates import (
-            _build_timeout_response,
-            _process_and_cache_analysis,
-            _run_duplicate_analysis,
-        )
+        from api.codebase_analytics.endpoints.duplicates import _process_and_cache_analysis, _run_duplicate_analysis
 
         root, refusal = await _scan_root_or_refusal(source_id)
         if refusal is not None:
             return refusal
         project_root = str(root)
-        analysis = await _run_duplicate_analysis(project_root, 0.5, False)
-        if analysis is None:
-            return _build_timeout_response()
+        # background=True: bounded by a runaway limit, not the 120 s request
+        # deadline. ScanBusy / ScanTimedOut propagate, so Celery records FAILURE
+        # instead of a "completed" task carrying a partial result (#18067).
+        analysis = await _run_duplicate_analysis(project_root, 0.5, False, background=True)
+        if analysis.files_analyzed == 0:
+            # "Examined nothing" is not "found nothing" (#17982).
+            return {"status": "error", "message": "no source files found under the scan root; nothing scanned"}
         _progress(self, "Processing results", 80.0, started)
-        return _process_and_cache_analysis(analysis, project_root)
+        return _process_and_cache_analysis(analysis, project_root, source_id=source_id)
 
     return _wrap(_run_async(_work()), started)
 

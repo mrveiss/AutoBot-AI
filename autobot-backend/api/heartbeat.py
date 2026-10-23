@@ -41,10 +41,10 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from models.heartbeat import (
     AgentRuntimeState,
-    AgentStatus,
     AgentWakeupRequest,
     HeartbeatRun,
     HeartbeatRunEvent,
+    HeartbeatStatus,
     WakeupTrigger,
 )
 from services.heartbeat_scheduler import HeartbeatScheduler, _get_or_create_state
@@ -103,10 +103,10 @@ async def update_config(
 ) -> HeartbeatConfigResponse:
     """Update heartbeat config for an agent and sync the scheduler (#1407, GH#6476)."""
     state = await _get_or_create_state(session, agent_id)
-    if state.status == AgentStatus.TERMINATED.value:
+    if state.status == HeartbeatStatus.TERMINATED.value:
         raise HTTPException(status_code=409, detail="Agent is terminated and cannot be reconfigured")
     # P0-2: block re-enable via config while PAUSED — use POST /{agent_id}/resume (GH#6476)
-    if state.status == AgentStatus.PAUSED.value:
+    if state.status == HeartbeatStatus.PAUSED.value:
         raise HTTPException(status_code=409, detail="Agent is paused; use POST /{agent_id}/resume to re-enable")
     was_enabled = state.heartbeat_enabled
     state.heartbeat_enabled = body.heartbeat_enabled  # drives status via hybrid setter
@@ -281,11 +281,11 @@ async def pause_agent(
     who paused it and why.  Does not affect TERMINATED agents.
     """
     state = await _get_or_create_state(session, agent_id)
-    if state.status == AgentStatus.TERMINATED.value:
+    if state.status == HeartbeatStatus.TERMINATED.value:
         raise HTTPException(status_code=409, detail="Agent is terminated; cannot pause")
-    if state.status == AgentStatus.PAUSED.value:
+    if state.status == HeartbeatStatus.PAUSED.value:
         return _state_to_response(state)
-    state.status = AgentStatus.PAUSED.value
+    state.status = HeartbeatStatus.PAUSED.value
     state.paused_reason = body.reason
     state.paused_at = now_utc()
     state.paused_by = body.paused_by or "user"
@@ -340,9 +340,9 @@ async def resume_agent(
     from fastapi.responses import JSONResponse
 
     state = await _get_or_create_state(session, agent_id)
-    if state.status == AgentStatus.TERMINATED.value:
+    if state.status == HeartbeatStatus.TERMINATED.value:
         raise HTTPException(status_code=409, detail="Agent is terminated; cannot resume")
-    if state.status != AgentStatus.PAUSED.value:
+    if state.status != HeartbeatStatus.PAUSED.value:
         raise HTTPException(status_code=409, detail=f"Agent is not paused (status={state.status})")
     # System-enforced pauses use the SkillApproval governance workflow (GH#8734).
     # _user is always a Dict with keys "role" (str) and "username" (str).
@@ -360,7 +360,7 @@ async def resume_agent(
                     "message": (f"Agent was paused by {paused_by}; resume request queued for admin approval"),
                 },
             )
-    state.status = AgentStatus.ACTIVE.value
+    state.status = HeartbeatStatus.ACTIVE.value
     state.paused_reason = None
     state.paused_at = None
     state.paused_by = None
@@ -390,9 +390,9 @@ async def terminate_agent(
     reason.  Terminated agents cannot be re-enabled via any endpoint.
     """
     state = await _get_or_create_state(session, agent_id)
-    if state.status == AgentStatus.TERMINATED.value:
+    if state.status == HeartbeatStatus.TERMINATED.value:
         return _state_to_response(state)
-    state.status = AgentStatus.TERMINATED.value
+    state.status = HeartbeatStatus.TERMINATED.value
     state.paused_reason = body.reason
     state.paused_at = now_utc()
     # _user is always a Dict; "id" key does not exist — use "username" (P1)
@@ -426,11 +426,11 @@ async def set_agent_error(
     are not affected.
     """
     state = await _get_or_create_state(session, agent_id)
-    if state.status == AgentStatus.TERMINATED.value:
+    if state.status == HeartbeatStatus.TERMINATED.value:
         raise HTTPException(status_code=409, detail="Agent is terminated; cannot set error state")
-    if state.status == AgentStatus.ERROR.value:
+    if state.status == HeartbeatStatus.ERROR.value:
         return _state_to_response(state)
-    state.status = AgentStatus.ERROR.value
+    state.status = HeartbeatStatus.ERROR.value
     state.error_detail = body.error_detail
     state.error_at = now_utc()
     state.error_code = body.error_code
@@ -460,9 +460,9 @@ async def recover_agent(
     ERROR-state agents; raises 409 for any other status.
     """
     state = await _get_or_create_state(session, agent_id)
-    if state.status != AgentStatus.ERROR.value:
+    if state.status != HeartbeatStatus.ERROR.value:
         raise HTTPException(status_code=409, detail=f"Agent is not in error state (status={state.status})")
-    state.status = AgentStatus.ACTIVE.value
+    state.status = HeartbeatStatus.ACTIVE.value
     state.error_detail = None
     state.error_at = None
     state.error_code = None

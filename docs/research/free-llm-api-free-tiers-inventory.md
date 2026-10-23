@@ -254,3 +254,13 @@ allow-list. It is **not** a duplicate of #17249: its measured population is shar
 plus direct `requests`/`httpx`/`aiohttp` callers, and LLM providers are a third bucket that
 reaches the network through vendor SDKs, so that issue's ruling would not reach them. #13623
 (connector/credential/egress umbrella) is adjacent and deliberately untouched.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #17248 — umbrella(llm-governance): the LLM path cannot answer "may this prompt go to this provider?"
+- #17249 — security(llm-egress): LLM provider calls bypass the egress mechanism entirely — prompts go to an operator-configured host unguarded
+- #17250 — feat(llm): no prompt-sensitivity classification — no call site can declare what a prompt may be exposed to
+- #17251 — feat(llm): provider records carry no data-use or licence policy — routing cannot refuse a train-on-input provider
+- #17252 — feat(llm): provider degradation has no cross-run failure streak — a model dead for days is retried forever

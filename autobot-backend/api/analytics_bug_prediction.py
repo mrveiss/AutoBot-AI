@@ -17,10 +17,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
-from celery.result import AsyncResult
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 
 from api.analytics_shared import no_data_response
+from api.codebase_analytics.task_routes import add_clear_stuck_route
 from api.schemas_analytics import (
     BugPredictionAnalysisResponse,
     BugPredictionAnalyzeResponse,
@@ -34,7 +34,7 @@ from api.schemas_analytics import (
     BugPredictionStatusResponse,
     BugPredictionSummaryResponse,
     BugPredictionTrendsResponse,
-    RiskFactor,
+    BugRiskFactor,
     RiskLevel,
 )
 from auth_middleware import check_admin_permission
@@ -45,7 +45,7 @@ from autobot_shared.redis_client import get_redis_client
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_5_MINUTES
 from tasks.analytics_tasks import run_bug_prediction_analysis
-from utils.celery_task_status import celery_result_to_status, get_latest_task_result, store_latest_task_id
+from utils.celery_task_status import get_latest_task_result, known_task_status_or_404, store_latest_task_id
 
 logger = get_logger(__name__)
 
@@ -152,7 +152,7 @@ def _build_file_risk_dict(
     """
     Build a file risk analysis dict with standardized structure.
 
-    Issue #281: Extracted helper to reduce repetition in analyze_codebase.
+    Issue #281: Extracted helper to reduce repetition in predict_bug_risk_for_codebase.
 
     Args:
         file_path: Relative path to the file
@@ -185,48 +185,48 @@ def _build_file_risk_dict(
 
 
 RISK_WEIGHTS = {
-    RiskFactor.COMPLEXITY: 0.20,
-    RiskFactor.CHANGE_FREQUENCY: 0.20,
-    RiskFactor.BUG_HISTORY: 0.25,
-    RiskFactor.TEST_COVERAGE: 0.15,
-    RiskFactor.CODE_AGE: 0.05,
-    RiskFactor.AUTHOR_EXPERIENCE: 0.05,
-    RiskFactor.FILE_SIZE: 0.05,
-    RiskFactor.DEPENDENCY_COUNT: 0.05,
+    BugRiskFactor.COMPLEXITY: 0.20,
+    BugRiskFactor.CHANGE_FREQUENCY: 0.20,
+    BugRiskFactor.BUG_HISTORY: 0.25,
+    BugRiskFactor.TEST_COVERAGE: 0.15,
+    BugRiskFactor.CODE_AGE: 0.05,
+    BugRiskFactor.AUTHOR_EXPERIENCE: 0.05,
+    BugRiskFactor.FILE_SIZE: 0.05,
+    BugRiskFactor.DEPENDENCY_COUNT: 0.05,
 }
 
 
 PREVENTION_TIPS = {
-    RiskFactor.COMPLEXITY: [
+    BugRiskFactor.COMPLEXITY: [
         "Break down complex functions into smaller, testable units",
         "Add inline comments explaining complex logic",
         "Consider extracting helper functions",
         "Use design patterns to reduce cyclomatic complexity",
     ],
-    RiskFactor.CHANGE_FREQUENCY: [
+    BugRiskFactor.CHANGE_FREQUENCY: [
         "Stabilize the module before adding new features",
         "Review recent changes thoroughly",
         "Add regression tests for frequently changed code",
         "Consider refactoring to reduce change coupling",
     ],
-    RiskFactor.BUG_HISTORY: [
+    BugRiskFactor.BUG_HISTORY: [
         "Review all bug fix commits in this file",
         "Add defensive programming patterns",
         "Increase test coverage significantly",
         "Consider a comprehensive code review",
     ],
-    RiskFactor.TEST_COVERAGE: [
+    BugRiskFactor.TEST_COVERAGE: [
         "Add unit tests for untested functions",
         "Create integration tests for critical paths",
         "Add edge case tests",
         "Consider mutation testing to improve test quality",
     ],
-    RiskFactor.FILE_SIZE: [
+    BugRiskFactor.FILE_SIZE: [
         "Split large file into smaller modules",
         "Extract reusable components",
         "Apply single responsibility principle",
     ],
-    RiskFactor.DEPENDENCY_COUNT: [
+    BugRiskFactor.DEPENDENCY_COUNT: [
         "Reduce coupling by using dependency injection",
         "Consider facade pattern to simplify dependencies",
         "Review if all dependencies are necessary",
@@ -260,7 +260,7 @@ def get_prevention_tips(factors: dict[str, float]) -> list[str]:
     for factor_name, score in sorted_factors[:3]:
         if score > 50:
             try:
-                factor = RiskFactor(factor_name)
+                factor = BugRiskFactor(factor_name)
                 tips.extend(PREVENTION_TIPS.get(factor, [])[:2])
             except ValueError:
                 continue
@@ -772,8 +772,8 @@ async def _safe_store_prediction_history(
 async def _run_bug_analysis(path: str, include_pattern: str, limit: int) -> dict[str, Any]:
     """Run full bug prediction analysis pipeline.
 
-    Issue #1341: Extracted from analyze_codebase to keep endpoint under
-    65-line limit. Ref: analyze_codebase.
+    Issue #1341: Extracted from predict_bug_risk_for_codebase to keep endpoint under
+    65-line limit. Ref: predict_bug_risk_for_codebase.
     """
     bug_history, change_freq, files_to_analyze = await asyncio.gather(
         get_git_bug_history(),
@@ -819,7 +819,7 @@ async def _run_bug_analysis(path: str, include_pattern: str, limit: int) -> dict
     operation="analyze_codebase",
     error_code_prefix="ANALYTICS_BUG_PREDICTION",
 )
-async def analyze_codebase(
+async def predict_bug_risk_for_codebase(
     admin_check: bool = Depends(check_admin_permission),
     path: str = Query(".", description="Path to analyze"),
     include_pattern: str = Query("*.py", description="File pattern to include"),
@@ -922,24 +922,16 @@ async def get_bug_prediction_status(
     admin_check: bool = Depends(check_admin_permission),
 ):
     """Get bug prediction task status."""
-    status = celery_result_to_status(AsyncResult(task_id))
-    if status is None or status["status"] == "pending":
-        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-    return status
+    return known_task_status_or_404(task_id)
 
 
-@router.post("/tasks/clear-stuck", response_model=BugPredictionClearStuckResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="clear_stuck_bug_tasks",
-    error_code_prefix="ANALYTICS_BUG_PREDICTION",
+add_clear_stuck_route(
+    router,
+    "/tasks/clear-stuck",
+    name="clear_stuck_bug_tasks",
+    error_prefix="ANALYTICS_BUG_PREDICTION",
+    response_model=BugPredictionClearStuckResponse,
 )
-async def clear_stuck_bug_tasks(
-    force: bool = Query(default=False, description="Force clear ALL running tasks"),
-    admin_check: bool = Depends(check_admin_permission),
-):
-    """No-op: Celery handles stuck-task recovery automatically (GH#6505)."""
-    return {"cleared_count": 0, "message": "Celery handles task recovery automatically"}
 
 
 @router.get("/high-risk", response_model=BugPredictionHighRiskResponse)
@@ -1371,17 +1363,17 @@ async def get_risk_factors(
     }
 
 
-def _get_factor_description(factor: RiskFactor) -> str:
+def _get_factor_description(factor: BugRiskFactor) -> str:
     """Get human-readable description for a risk factor."""
     descriptions = {
-        RiskFactor.COMPLEXITY: "Code complexity measured by nesting depth, conditionals, and function count",
-        RiskFactor.CHANGE_FREQUENCY: "How often the file has been modified in the last 90 days",
-        RiskFactor.BUG_HISTORY: "Number of bug fixes historically associated with this file",
-        RiskFactor.TEST_COVERAGE: "Inverse of test coverage - higher score means less coverage",
-        RiskFactor.CODE_AGE: "Age of the code since last major refactor",
-        RiskFactor.AUTHOR_EXPERIENCE: "Experience level of recent contributors",
-        RiskFactor.FILE_SIZE: "File size in lines of code",
-        RiskFactor.DEPENDENCY_COUNT: "Number of imports and dependencies",
+        BugRiskFactor.COMPLEXITY: "Code complexity measured by nesting depth, conditionals, and function count",
+        BugRiskFactor.CHANGE_FREQUENCY: "How often the file has been modified in the last 90 days",
+        BugRiskFactor.BUG_HISTORY: "Number of bug fixes historically associated with this file",
+        BugRiskFactor.TEST_COVERAGE: "Inverse of test coverage - higher score means less coverage",
+        BugRiskFactor.CODE_AGE: "Age of the code since last major refactor",
+        BugRiskFactor.AUTHOR_EXPERIENCE: "Experience level of recent contributors",
+        BugRiskFactor.FILE_SIZE: "File size in lines of code",
+        BugRiskFactor.DEPENDENCY_COUNT: "Number of imports and dependencies",
     }
     return descriptions.get(factor, "Unknown factor")
 

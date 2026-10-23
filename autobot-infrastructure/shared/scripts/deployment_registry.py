@@ -57,7 +57,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 # The repo root goes on sys.path so autobot_shared is importable from this
 # standalone-script directory -- same bootstrap deployment_rollback.py already uses for
@@ -66,6 +66,7 @@ _REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from autobot_shared.logging_manager import get_logger  # noqa: E402
 from autobot_shared.service_registry_core import (  # noqa: E402 - follows the sys.path setup
     SERVICE_DEFINITIONS,
     DeploymentMode,
@@ -74,7 +75,6 @@ from autobot_shared.service_registry_core import (  # noqa: E402 - follows the s
     join_service_path,
     parse_deployment_mode,
 )
-from autobot_shared.logging_manager import get_logger  # noqa: E402
 from autobot_shared.status_enums import HealthStatus  # noqa: E402
 
 logger = get_logger(__name__)
@@ -82,7 +82,14 @@ logger = get_logger(__name__)
 #: #6973: the canonical ladder, aliased rather than re-declared.
 ServiceStatus = HealthStatus
 
-__all__ = ["SERVICE_DEFINITIONS", "DeploymentMode", "ServiceHealth", "ServiceRegistry", "ServiceStatus"]
+__all__ = [
+    "SERVICE_DEFINITIONS",
+    "DeploymentMode",
+    "ServiceHealth",
+    "ServiceRegistry",
+    "ServiceStatus",
+    "get_deployment_registry",
+]
 
 
 class ServiceRegistry:
@@ -102,7 +109,9 @@ class ServiceRegistry:
     @staticmethod
     def _detect_deployment_mode() -> DeploymentMode:
         """Detect deployment mode from env, falling back to container heuristic."""
-        explicit = parse_deployment_mode(os.environ.get("AUTOBOT_DEPLOYMENT_MODE", ""), logger, "AUTOBOT_DEPLOYMENT_MODE")
+        # Unset means "detect from /.dockerenv", not the backend's "distributed" (#18094).
+        raw = os.environ.get("AUTOBOT_DEPLOYMENT_MODE", "")  # ssot-config-exempt: unset -> container detection
+        explicit = parse_deployment_mode(raw, logger, "AUTOBOT_DEPLOYMENT_MODE")
         return detect_deployment_mode(
             explicit, in_container=os.path.exists("/.dockerenv"), kubernetes=False, distributed=False
         )
@@ -166,3 +175,19 @@ class ServiceRegistry:
         the canonical registry lives in autobot-backend/utils/service_registry.py.
         """
         self.services[name] = url
+
+
+_registries: Dict[Tuple[Optional[str], bool], ServiceRegistry] = {}
+
+
+def get_deployment_registry(config_file: Optional[str] = None, *, populate_services: bool = True) -> ServiceRegistry:
+    """Get the process-wide ServiceRegistry for these arguments (#18964).
+
+    One instance per ``(config_file, populate_services)`` pair, so the script that fills
+    the map itself (``populate_services=False``) never shares an instance with one that
+    expects the eager default, even when both run in the same process.
+    """
+    key = (config_file, populate_services)
+    if key not in _registries:
+        _registries[key] = ServiceRegistry(config_file, populate_services=populate_services)
+    return _registries[key]

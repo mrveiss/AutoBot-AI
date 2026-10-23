@@ -46,7 +46,7 @@ _SYNC_REDIS_CALL_RE = re.compile(r"(?<!await\s)redis\.(get|set|hget|hset)\(")
 OptimizationSeverity = Severity
 
 
-class OptimizationType(Enum):
+class RedisOptimizationType(Enum):
     """Types of Redis optimizations detected."""
 
     # Pipeline opportunities
@@ -91,10 +91,10 @@ class RedisOperation:
 
 
 @dataclass
-class OptimizationResult:
+class RedisOptimizationResult:
     """Result of Redis optimization analysis for a single finding."""
 
-    optimization_type: OptimizationType
+    optimization_type: RedisOptimizationType
     severity: OptimizationSeverity
     file_path: str
     line_start: int
@@ -371,7 +371,7 @@ class RedisOptimizer:
             project_root: Root directory of the project to analyze
         """
         self.project_root = Path(project_root) if project_root else Path.cwd()
-        self.results: List[OptimizationResult] = []
+        self.results: List[RedisOptimizationResult] = []
         self.total_files_scanned: int = 0  # Issue #686: Track total files analyzed
 
     def _run_all_detectors(
@@ -380,9 +380,9 @@ class RedisOptimizer:
         operations: List[RedisOperation],
         source: str,
         source_lines: List[str],
-    ) -> List[OptimizationResult]:
+    ) -> List[RedisOptimizationResult]:
         """Run all optimization detectors on the parsed file."""
-        results: List[OptimizationResult] = []
+        results: List[RedisOptimizationResult] = []
         results.extend(self._detect_pipeline_opportunities(file_path, operations, source_lines))
         results.extend(self._detect_lua_script_candidates(file_path, operations, source_lines))
         results.extend(self._detect_loop_operations(file_path, operations, source_lines))
@@ -391,7 +391,7 @@ class RedisOptimizer:
         results.extend(self._detect_cache_patterns(file_path, operations, source_lines))
         return results
 
-    def analyze_file(self, file_path: str) -> List[OptimizationResult]:
+    def analyze_file(self, file_path: str) -> List[RedisOptimizationResult]:
         """
         Analyze a single Python file for Redis optimizations.
 
@@ -449,7 +449,7 @@ class RedisOptimizer:
         directory: str | None = None,
         exclude_patterns: List[str] | None = None,
         max_files: int = 500,
-    ) -> List[OptimizationResult]:
+    ) -> List[RedisOptimizationResult]:
         """
         Analyze Python files in a directory for Redis optimizations.
 
@@ -508,11 +508,11 @@ class RedisOptimizer:
         ops: List[RedisOperation],
         source_lines: List[str],
         op_type: str,
-        opt_type: OptimizationType,
-    ) -> OptimizationResult:
+        opt_type: RedisOptimizationType,
+    ) -> RedisOptimizationResult:
         """Create optimization result for sequential operations."""
         op_label = "GET" if op_type == "get" else "SET"
-        return OptimizationResult(
+        return RedisOptimizationResult(
             optimization_type=opt_type,
             severity=OptimizationSeverity.MEDIUM,
             file_path=file_path,
@@ -537,7 +537,7 @@ class RedisOptimizer:
         file_path: str,
         operations: List[RedisOperation],
         source_lines: List[str],
-    ) -> List[OptimizationResult]:
+    ) -> List[RedisOptimizationResult]:
         """Detect sequential Redis operations that can be pipelined."""
         results = []
         groups = self._group_consecutive_operations(operations)
@@ -554,7 +554,7 @@ class RedisOptimizer:
                         gets,
                         source_lines,
                         "get",
-                        OptimizationType.SEQUENTIAL_GETS,
+                        RedisOptimizationType.SEQUENTIAL_GETS,
                     )
                 )
 
@@ -566,7 +566,7 @@ class RedisOptimizer:
                         sets,
                         source_lines,
                         "set",
-                        OptimizationType.SEQUENTIAL_SETS,
+                        RedisOptimizationType.SEQUENTIAL_SETS,
                     )
                 )
 
@@ -577,7 +577,7 @@ class RedisOptimizer:
         file_path: str,
         operations: List[RedisOperation],
         source_lines: List[str],
-    ) -> List[OptimizationResult]:
+    ) -> List[RedisOptimizationResult]:
         """Detect Redis operations inside loops that should use pipeline."""
         results = []
 
@@ -595,8 +595,8 @@ class RedisOptimizer:
         for op_type, ops in by_type.items():
             if len(ops) >= 1:  # Even single operation in loop is worth optimizing
                 results.append(
-                    OptimizationResult(
-                        optimization_type=OptimizationType.LOOP_OPERATIONS,
+                    RedisOptimizationResult(
+                        optimization_type=RedisOptimizationType.LOOP_OPERATIONS,
                         severity=OptimizationSeverity.HIGH,
                         file_path=file_path,
                         line_start=ops[0].line_number,
@@ -637,10 +637,10 @@ class RedisOptimizer:
         read_op: RedisOperation,
         write_op: RedisOperation,
         source_lines: List[str],
-    ) -> OptimizationResult:
+    ) -> RedisOptimizationResult:
         """Create optimization result for Lua candidate (Issue #335 - extracted helper)."""
-        return OptimizationResult(
-            optimization_type=OptimizationType.READ_MODIFY_WRITE,
+        return RedisOptimizationResult(
+            optimization_type=RedisOptimizationType.READ_MODIFY_WRITE,
             severity=OptimizationSeverity.MEDIUM,
             file_path=file_path,
             line_start=read_op.line_number,
@@ -667,7 +667,7 @@ class RedisOptimizer:
         file_path: str,
         operations: List[RedisOperation],
         source_lines: List[str],
-    ) -> List[OptimizationResult]:
+    ) -> List[RedisOptimizationResult]:
         """Detect patterns that would benefit from Lua scripting."""
         results = []
 
@@ -684,7 +684,7 @@ class RedisOptimizer:
 
     def _detect_string_to_hash_opportunities(
         self, file_path: str, operations: List[RedisOperation]
-    ) -> List[OptimizationResult]:
+    ) -> List[RedisOptimizationResult]:
         """Detect string keys that could be consolidated into hashes."""
         results = []
         key_prefixes: Dict[str, List[RedisOperation]] = {}
@@ -698,8 +698,8 @@ class RedisOptimizer:
         for prefix, ops in key_prefixes.items():
             if len(ops) >= 3:
                 results.append(
-                    OptimizationResult(
-                        optimization_type=OptimizationType.STRING_TO_HASH,
+                    RedisOptimizationResult(
+                        optimization_type=RedisOptimizationType.STRING_TO_HASH,
                         severity=OptimizationSeverity.LOW,
                         file_path=file_path,
                         line_start=ops[0].line_number,
@@ -715,14 +715,14 @@ class RedisOptimizer:
 
     def _detect_inefficient_keys_usage(
         self, file_path: str, operations: List[RedisOperation]
-    ) -> List[OptimizationResult]:
+    ) -> List[RedisOptimizationResult]:
         """Detect KEYS command usage that should use SCAN instead."""
         results = []
         for op in operations:
             if op.operation == "keys":
                 results.append(
-                    OptimizationResult(
-                        optimization_type=OptimizationType.INEFFICIENT_SCAN,
+                    RedisOptimizationResult(
+                        optimization_type=RedisOptimizationType.INEFFICIENT_SCAN,
                         severity=OptimizationSeverity.HIGH,
                         file_path=file_path,
                         line_start=op.line_number,
@@ -738,7 +738,7 @@ class RedisOptimizer:
                 )
         return results
 
-    def _detect_missing_expiry(self, file_path: str, operations: List[RedisOperation]) -> List[OptimizationResult]:
+    def _detect_missing_expiry(self, file_path: str, operations: List[RedisOperation]) -> List[RedisOptimizationResult]:
         """Detect SET operations without TTL/expiry."""
         results = []
         for op in operations:
@@ -746,8 +746,8 @@ class RedisOptimizer:
                 continue
             if "ex=" not in op.context.lower() and "expire" not in op.context.lower():
                 results.append(
-                    OptimizationResult(
-                        optimization_type=OptimizationType.MISSING_EXPIRY,
+                    RedisOptimizationResult(
+                        optimization_type=RedisOptimizationType.MISSING_EXPIRY,
                         severity=OptimizationSeverity.INFO,
                         file_path=file_path,
                         line_start=op.line_number,
@@ -767,7 +767,7 @@ class RedisOptimizer:
         file_path: str,
         operations: List[RedisOperation],
         source_lines: List[str],
-    ) -> List[OptimizationResult]:
+    ) -> List[RedisOptimizationResult]:
         """Detect suboptimal data structure usage."""
         results = []
         results.extend(self._detect_string_to_hash_opportunities(file_path, operations))
@@ -777,7 +777,7 @@ class RedisOptimizer:
 
     def _detect_direct_redis_instantiation(
         self, file_path: str, source: str, source_lines: List[str]
-    ) -> List[OptimizationResult]:
+    ) -> List[RedisOptimizationResult]:
         """Detect direct redis.Redis() instantiation that violates canonical pattern."""
         if "redis_client.py" in file_path:
             return []
@@ -787,13 +787,13 @@ class RedisOptimizer:
         for match in re.finditer(pattern, source):
             line_number = source[: match.start()].count("\n") + 1
             results.append(
-                OptimizationResult(
-                    optimization_type=OptimizationType.CONNECTION_PER_REQUEST,
+                RedisOptimizationResult(
+                    optimization_type=RedisOptimizationType.CONNECTION_PER_REQUEST,
                     severity=OptimizationSeverity.HIGH,
                     file_path=file_path,
                     line_start=line_number,
                     line_end=line_number,
-                    description="Direct redis.Redis() instantiation - violates canonical pattern",  # noqa: redis
+                    description="Direct redis.Redis() instantiation - violates canonical pattern",
                     suggestion=(
                         "Use get_redis_client() from autobot_shared.redis_client." " Provides pooling and monitoring."
                     ),
@@ -808,7 +808,7 @@ class RedisOptimizer:
             )
         return results
 
-    def _detect_blocking_in_async(self, file_path: str, source: str) -> List[OptimizationResult]:
+    def _detect_blocking_in_async(self, file_path: str, source: str) -> List[RedisOptimizationResult]:
         """Detect blocking Redis calls in async functions."""
         results = []
         # Issue #380: Use pre-compiled patterns for async blocking detection
@@ -818,8 +818,8 @@ class RedisOptimizer:
             sync_calls = _SYNC_REDIS_CALL_RE.findall(block)
             if sync_calls:
                 results.append(
-                    OptimizationResult(
-                        optimization_type=OptimizationType.BLOCKING_IN_ASYNC,
+                    RedisOptimizationResult(
+                        optimization_type=RedisOptimizationType.BLOCKING_IN_ASYNC,
                         severity=OptimizationSeverity.HIGH,
                         file_path=file_path,
                         line_start=block_start,
@@ -837,7 +837,7 @@ class RedisOptimizer:
         file_path: str,
         source: str,
         source_lines: List[str],
-    ) -> List[OptimizationResult]:
+    ) -> List[RedisOptimizationResult]:
         """Detect connection management anti-patterns."""
         results = []
         results.extend(self._detect_direct_redis_instantiation(file_path, source, source_lines))
@@ -859,7 +859,7 @@ class RedisOptimizer:
         get_op: RedisOperation,
         set_op: RedisOperation,
         source_lines: List[str],
-    ) -> OptimizationResult | None:
+    ) -> RedisOptimizationResult | None:
         """Check GET/SET pair for stampede risk (Issue #335 - extracted helper)."""
         line_diff = set_op.line_number - get_op.line_number
         if not (0 < line_diff <= 20):
@@ -869,8 +869,8 @@ class RedisOptimizer:
         if not self._is_stampede_risk(context):
             return None
 
-        return OptimizationResult(
-            optimization_type=OptimizationType.CACHE_STAMPEDE_RISK,
+        return RedisOptimizationResult(
+            optimization_type=RedisOptimizationType.CACHE_STAMPEDE_RISK,
             severity=OptimizationSeverity.MEDIUM,
             file_path=file_path,
             line_start=get_op.line_number,
@@ -892,7 +892,7 @@ class RedisOptimizer:
         file_path: str,
         operations: List[RedisOperation],
         source_lines: List[str],
-    ) -> List[OptimizationResult]:
+    ) -> List[RedisOptimizationResult]:
         """Detect cache-related optimization opportunities."""
         results = []
 

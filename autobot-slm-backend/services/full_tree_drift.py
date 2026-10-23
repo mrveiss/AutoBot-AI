@@ -54,7 +54,7 @@ from services.deploy_artifacts import (
 )
 from services.deployed_dir_resolver import get_live_dir
 from services.drift_checker import VISIBILITY_COMPONENTS, deploy_only_entries, get_default_source_dir, owned_subtrees
-from services.git_subprocess import component_pathspec, last_commit_for_path, run_git
+from services.git_subprocess import component_pathspec, last_commit_for_path, run_git_capture
 from services.git_tracker import DEFAULT_REPO_PATH
 from services.host_state_filter import kept_reason
 
@@ -277,7 +277,9 @@ async def _source_ignored_paths(repo_root: str, pathspec_prefix: str) -> set[str
     of an already-successful comparison.
     """
     pathspec = f"{pathspec_prefix}/" if pathspec_prefix else "."
-    output, rc = await run_git(repo_root, "ls-files", "--others", "--ignored", "--exclude-standard", "--", pathspec)
+    output, rc = await run_git_capture(
+        repo_root, "ls-files", "--others", "--ignored", "--exclude-standard", "--", pathspec
+    )
     if rc != 0:
         logger.warning("full_tree_drift: git ls-files --ignored failed for %r (rc=%d)", pathspec, rc)
         return set()

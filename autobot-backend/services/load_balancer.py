@@ -33,6 +33,7 @@ from typing import Dict, List
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import RetryConfig, TimingConstants
 from events.bus import PersistStrategy, publish_event
+from models.npu_models import WorkerStatus
 from npu_integration import NPUWorkerClient
 from type_defs.common import Metadata
 
@@ -42,15 +43,6 @@ logger = get_logger(__name__)
 # ==============================================
 # MODELS AND ENUMS
 # ==============================================
-
-
-class WorkerStatus(str, Enum):
-    """Worker operational status"""
-
-    ONLINE = "online"
-    OFFLINE = "offline"
-    BUSY = "busy"
-    ERROR = "error"
 
 
 class CircuitBreakerState(str, Enum):
@@ -227,7 +219,7 @@ class Worker:
 # ==============================================
 
 
-class LoadBalancingStrategy(ABC):
+class WorkerSelectionStrategy(ABC):
     """Abstract base class for load balancing strategies"""
 
     @abstractmethod
@@ -243,7 +235,7 @@ class LoadBalancingStrategy(ABC):
         """
 
 
-class RoundRobinStrategy(LoadBalancingStrategy):
+class RoundRobinStrategy(WorkerSelectionStrategy):
     """Round-robin load balancing strategy"""
 
     def __init__(self) -> None:
@@ -265,7 +257,7 @@ class RoundRobinStrategy(LoadBalancingStrategy):
         return available[self._last_index]
 
 
-class LeastLoadedStrategy(LoadBalancingStrategy):
+class LeastLoadedStrategy(WorkerSelectionStrategy):
     """Least-loaded load balancing strategy"""
 
     def select_worker(self, workers: List[Worker]) -> Worker | None:
@@ -282,7 +274,7 @@ class LeastLoadedStrategy(LoadBalancingStrategy):
         return min(available, key=lambda w: w.current_load)
 
 
-class WeightedStrategy(LoadBalancingStrategy):
+class WeightedStrategy(WorkerSelectionStrategy):
     """Weighted load balancing based on worker priority"""
 
     def select_worker(self, workers: List[Worker]) -> Worker | None:
@@ -300,7 +292,7 @@ class WeightedStrategy(LoadBalancingStrategy):
         return sorted_workers[0]
 
 
-class PriorityFailoverStrategy(LoadBalancingStrategy):
+class PriorityFailoverStrategy(WorkerSelectionStrategy):
     """Priority-based failover strategy"""
 
     def select_worker(self, workers: List[Worker]) -> Worker | None:
@@ -361,7 +353,7 @@ class NPULoadBalancer:
             f"NPU Load Balancer initialized with {strategy} strategy, " f"health check every {health_check_interval}s"
         )
 
-    def _create_strategy(self, strategy_name: str) -> LoadBalancingStrategy:
+    def _create_strategy(self, strategy_name: str) -> WorkerSelectionStrategy:
         """Create load balancing strategy instance"""
         strategies = {
             "round_robin": RoundRobinStrategy,

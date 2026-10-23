@@ -154,6 +154,21 @@ STORE_AUTHORITY: dict[str, Concept] = {
         "run rows; the checkout keys are NX locks with a TTL and the H2A brief is a TTL cache. "
         "GoalService.upsert re-embeds a goal row, so the collection is rebuildable from Postgres.",
     ),
+    "company_os_model": Concept(
+        name="company_os_model",
+        system_of_record=Store.POSTGRES,
+        projections=(),
+        write_sites=(
+            "autobot-backend/llc/services/company_os/processes.py",
+            "autobot-backend/llc/services/company_os/workflows.py",
+            "autobot-backend/llc/services/company_os/graphs.py",
+            "autobot-backend/llc/services/company_os/role_skills.py",
+        ),
+        rebuilt_by="Postgres is the only copy: roles -> workflows -> processes live in the workflows "
+        "table (the existing Automation store, extended with kind, owner role and trigger) and the "
+        "llc_processes, llc_workflow_nodes, llc_workflow_transitions and llc_role_skills tables. "
+        "There is no projection to rebuild (#18390).",
+    ),
     "device_credentials": Concept(
         name="device_credentials",
         system_of_record=Store.POSTGRES,
@@ -200,6 +215,21 @@ STORE_AUTHORITY: dict[str, Concept] = {
         "reads them either) -- only desktop_activities receives real rows today. The other "
         "four tables stay, empty, for the cascade-delete-safety reason #16464 fixed, "
         "independent of whether anything writes to them.",
+    ),
+    "audit_trail": Concept(
+        name="audit_trail",
+        system_of_record=Store.POSTGRES,
+        projections=(Store.REDIS,),
+        write_sites=(
+            "autobot-backend/services/audit/store.py",
+            "autobot-backend/services/audit/projection.py",
+            "autobot_shared/user_management/audit_rows.py",
+        ),
+        rebuilt_by="services.audit.audit.rebuild_projection() replays audit_logs rows into the "
+        "audit:unified and audit:category:* sorted sets; nothing reads those keys as an answer.",
+        note="#17225 D1: the owner chose to extend the existing audit_logs table rather than add "
+        "a second Postgres audit table. Every audit_logs row is built by audit_rows.audit_row, "
+        "whether the canonical service or a shared RBAC/org/team writer records it.",
     ),
     "verbatim_memory": Concept(
         name="verbatim_memory",
@@ -308,6 +338,24 @@ STORE_AUTHORITY: dict[str, Concept] = {
         "claims exist to prevent. Every claim carries a TTL and is renewed by its holder, so the "
         "durable record of the work is the a2a Task, never the claim.",
     ),
+    "approval": Concept(
+        name="approval",
+        system_of_record=Store.POSTGRES,
+        projections=(),
+        write_sites=(
+            "autobot-backend/services/approval_gate_service.py",
+            "autobot-backend/llc/services/approval.py",
+        ),
+        rebuilt_by="Nothing yet rebuilds a copy: no projection is declared (see note).",
+        note="One approval record for every surface (#13421): the `approvals` row is the decision; "
+        "any Redis state a surface keeps is a live projection of a PENDING row, never the record of "
+        "a decision. Owner decision 2026-10-12: terminal approvals stay live in Redis (hot path, TTL) "
+        "and write a mirror row resolved on decide. That Redis state exists today as "
+        "`command_approval_manager` and is NOT yet declared a projection here, because its rebuild "
+        "from the row does not exist -- slice S2a (#13421) must add it, or this entry is wrong. "
+        "`autoresearch_proposal` below is a separate Redis-authoritative concept until S2e/S4 "
+        "migrates it.",
+    ),
     "autoresearch_proposal": Concept(
         name="autoresearch_proposal",
         system_of_record=Store.REDIS,
@@ -330,6 +378,21 @@ STORE_AUTHORITY: dict[str, Concept] = {
         "here rather than a projection, which this registry requires justifying (#17450). "
         "It is single-store, so the dual-store guard was never going to surface it: it "
         "belongs by judgement, not because a detector found it.",
+    ),
+    "agent_live_state": Concept(
+        name="agent_live_state",
+        system_of_record=Store.PROCESS,
+        projections=(Store.REDIS,),
+        write_sites=("autobot_shared/coordination/ledger_projection.py",),
+        rebuilt_by="initialization.agent_presence_sync._sync_once republishes the whole snapshot "
+        "(ledger_projection.publish) every presence sweep; the Redis copy expires after "
+        "AUTOBOT_LEDGER_PROJECTION_TTL_S, so a restart or a stopped backend leaves nothing "
+        "stale behind. What a process exit loses is the live state itself: presence, "
+        "unread peer messages and idle waits are rebuilt only as agents report again.",
+        note="Agent presence (incl. AI-stack agents and live sessions), pending peer-message "
+        "metadata and idle subscriptions (#18632). Process-local by design (#16947 section 6); "
+        "the Redis projection exists only so the SLM admin ledger can read them, per the owner "
+        "ruling on #18632. Peer-message content is never projected.",
     ),
     "pre_auth_lockout": Concept(
         name="pre_auth_lockout",

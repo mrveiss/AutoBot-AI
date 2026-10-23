@@ -103,6 +103,9 @@ class OpenAICompatibleProvider(BaseProvider):
         base_url = self._resolve_base_url()
         if base_url:
             kwargs["base_url"] = base_url
+        http_client = self._headroom_http_client(getattr(openai, "DefaultAsyncHttpxClient", None))
+        if http_client is not None:
+            kwargs["http_client"] = http_client  # #15026: harvest rate-limit headers
         return openai.AsyncOpenAI(**kwargs)
 
     def _fallback_model_list(self) -> List[str]:

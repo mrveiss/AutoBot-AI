@@ -17,7 +17,7 @@ from autobot_shared.logging_manager import get_logger
 
 from .cohesion_calculator import CohesionCalculator
 from .complexity_calculator import ComplexityCalculator
-from .dependency_analyzer import DependencyAnalyzer
+from .dependency_analyzer import ComponentDependencyAnalyzer
 from .pattern_detector import PatternDetector
 from .types import ArchitecturalComponent
 
@@ -52,7 +52,7 @@ class ComponentDiscovery:
         skip_patterns: List[str] = None,
         cohesion_calculator: CohesionCalculator = None,
         complexity_calculator: ComplexityCalculator = None,
-        dependency_analyzer: DependencyAnalyzer = None,
+        dependency_analyzer: ComponentDependencyAnalyzer = None,
         pattern_detector: PatternDetector = None,
     ):
         """
@@ -68,7 +68,7 @@ class ComponentDiscovery:
         self.skip_patterns = skip_patterns or self.DEFAULT_SKIP_PATTERNS
         self._cohesion = cohesion_calculator or CohesionCalculator()
         self._complexity = complexity_calculator or ComplexityCalculator()
-        self._deps = dependency_analyzer or DependencyAnalyzer()
+        self._deps = dependency_analyzer or ComponentDependencyAnalyzer()
         self._patterns = pattern_detector or PatternDetector()
 
     async def discover_components(self, root_path: str, patterns: List[str]) -> List[ArchitecturalComponent]:

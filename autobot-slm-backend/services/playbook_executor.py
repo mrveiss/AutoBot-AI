@@ -33,6 +33,7 @@ from services.inventory_builder import (
 )
 from services.playbook_output_stream import PIPE_LINE_LIMIT, iter_pipe_lines
 from services.provision_progress import TaskProgressTracker
+from services.unit_names import validate_unit_extra_vars
 
 logger = logging.getLogger(__name__)
 
@@ -457,7 +458,7 @@ class PlaybookExecutor:
 
         Helper for execute_playbook (Issue #880).
 
-        extra_vars are passed as ``-e @<file>`` (a 0600 temp JSON written by
+        extra_vars are passed as ``-e @<file>`` (a 0600 temp YAML written by
         write_temp_extra_vars), never as ``-e key=value`` argv: extra_vars
         always include the stored SLM secrets (#3519), and argv is readable
         by every local user via /proc/<pid>/cmdline for the whole run
@@ -540,13 +541,9 @@ class PlaybookExecutor:
 
     @staticmethod
     async def _iter_log_file_lines(log_path: Path, process: asyncio.subprocess.Process):
-        """Tail a log file for a detached run's output (#11492).
+        """Tail a detached run's log while ``process`` (the systemd-run waiter) lives (#11492).
 
-        Polls for newly appended lines while ``process`` (the detaching
-        wrapper) is still running; stops once it has exited and no further
-        lines are pending. The detached ansible-playbook process itself keeps
-        writing to this same file independently after this backend restarts —
-        this generator simply stops watching, it never stops the write side.
+        Stopping here never stops the writer: the detached ansible-playbook keeps writing after a restart.
         """
         with open(log_path, "r", encoding="utf-8", errors="replace") as fh:
             while True:
@@ -982,16 +979,17 @@ class PlaybookExecutor:
             await process.wait()
             return lines
 
-        if timeout_s is None:
-            output_lines = await _collect()
-            return {"output": "\n".join(output_lines), "returncode": process.returncode, "timed_out": False}
-
-        try:
+        try:  # timeout=None waits without a deadline -- the one path for both
             output_lines = await asyncio.wait_for(_collect(), timeout=timeout_s)
         except asyncio.TimeoutError:
             return await self._handle_playbook_timeout(process, effective_cmd, timeout_s)
 
-        return {"output": "\n".join(output_lines), "returncode": process.returncode, "timed_out": False}
+        return self._run_result(output_lines, process.returncode, detached=log_path is not None)
+
+    @staticmethod
+    def _run_result(output_lines: List[str], returncode: int | None, detached: bool) -> dict:
+        """#19139: ``detached`` says a -SIGTERM hit the systemd-run waiter, not ansible itself."""
+        return {"output": "\n".join(output_lines), "returncode": returncode, "timed_out": False, "detached": detached}
 
     async def _handle_playbook_timeout(
         self, process: asyncio.subprocess.Process, cmd: List[str], timeout_s: float
@@ -1231,6 +1229,32 @@ class PlaybookExecutor:
         )
         return None
 
+    async def _select_inventory(self, inventory_path: Path | None, stage_dir: str | None) -> tuple[Path, Path | None]:
+        """Pick the inventory for a run: ``(effective, dynamic)`` where ``dynamic`` is the temp file to remove.
+
+        Helper for execute_playbook. A caller-supplied path (wizard) is used as-is; otherwise one is
+        generated from the DB node registry (#10109, #10095), falling back to the static file.
+        """
+        if inventory_path is not None:
+            if not inventory_path.exists():
+                raise FileNotFoundError(f"Inventory not found: {inventory_path}")
+            return inventory_path, None
+        try:
+            dynamic_inv_path = await self._build_dynamic_inventory(stage_dir)
+            return dynamic_inv_path, dynamic_inv_path
+        except Exception as exc:
+            logger.warning("execute_playbook: dynamic inventory failed (%s); falling back to static slm-nodes.yml", exc)
+            if not self.inventory_path.exists():
+                raise FileNotFoundError(f"Inventory not found: {self.inventory_path}") from exc
+            return self.inventory_path, None
+
+    @staticmethod
+    def _stage_extra_vars(merged: Dict[str, str], stage_dir: str | None, unsafe_keys: tuple) -> Path | None:
+        """Write *merged* to a 0600 temp file for ``-e @file``, never argv (#11735). Helper for execute_playbook."""
+        if not merged:
+            return None
+        return write_temp_extra_vars(merged, stage_dir, unsafe_keys=unsafe_keys)
+
     async def execute_playbook(
         self,
         playbook_name: str,
@@ -1276,9 +1300,8 @@ class PlaybookExecutor:
             Dict with keys: success (bool), output (str), returncode (int),
             timed_out (bool) -- True only when ``timeout_s`` was exceeded.
         """
-        # #17150: re-detect before syncing, not just before reading the playbook path --
-        # _update_code_source derives ITS OWN sync target from self.ansible_dir, so
-        # syncing first against a stale fallback would target the wrong directory too.
+        validate_unit_extra_vars(extra_vars)  # #19005: ValueError before anything is spawned
+        # #17150: re-detect before syncing, as _update_code_source derives its sync target from self.ansible_dir.
         self._refresh_ansible_dir()
         code_source_synced = await self._update_code_source()
         sync_failure = self._code_source_sync_failure_result(playbook_name, detach, code_source_synced)
@@ -1289,42 +1312,15 @@ class PlaybookExecutor:
         if not playbook_path.exists():
             raise FileNotFoundError(f"Playbook not found: {playbook_path}")
 
-        # Determine which inventory to use.
-        # Explicit caller-supplied path (wizard) → use as-is.
-        # No path provided → generate from DB node registry (#10109, #10095).
-        # #12803: a detached payload cannot see this process's PrivateTmp /tmp,
-        # so its inventory/extra-vars must be staged somewhere both namespaces
-        # share. None => default ANSIBLE_LOCAL_TMP (attached runs).
+        # #12803: a detached payload cannot see this process's PrivateTmp /tmp, so its staged files
+        # go somewhere both namespaces share. None => default ANSIBLE_LOCAL_TMP (attached runs).
         stage_dir = self._stage_dir_for_run(detach)
+        effective_inventory, dynamic_inv_path = await self._select_inventory(inventory_path, stage_dir)
 
-        dynamic_inv_path: Path | None = None
-        if inventory_path is not None:
-            effective_inventory = inventory_path
-            if not effective_inventory.exists():
-                raise FileNotFoundError(f"Inventory not found: {effective_inventory}")
-        else:
-            try:
-                dynamic_inv_path = await self._build_dynamic_inventory(stage_dir)
-                effective_inventory = dynamic_inv_path
-            except Exception as exc:
-                logger.warning(
-                    "execute_playbook: dynamic inventory failed (%s); " "falling back to static slm-nodes.yml",
-                    exc,
-                )
-                effective_inventory = self.inventory_path
-                if not effective_inventory.exists():
-                    raise FileNotFoundError(f"Inventory not found: {effective_inventory}") from exc
-
-        # Merge stored SLM secrets into extra_vars so standalone re-deploys
-        # receive the same secrets as the full wizard provisioning flow (#3519).
-        deploy_secrets = await fetch_deploy_secrets()
-        merged_extra_vars: Dict[str, str] = {**deploy_secrets, **(extra_vars or {})}
-
-        # Secrets ride along in extra_vars — hand them to ansible via a 0600
-        # temp file (-e @file), never argv (#11735).
-        extra_vars_file: Path | None = None
-        if merged_extra_vars:
-            extra_vars_file = write_temp_extra_vars(merged_extra_vars, uid_tmp_dir=stage_dir)
+        # Merge stored SLM secrets so standalone re-deploys get the wizard's secrets (#3519); the caller's
+        # keys are written !unsafe, the secrets are not (#19005).
+        merged_extra_vars: Dict[str, str] = {**await fetch_deploy_secrets(), **(extra_vars or {})}
+        extra_vars_file = self._stage_extra_vars(merged_extra_vars, stage_dir, tuple(extra_vars or ()))
 
         cmd = self._build_ansible_command(
             playbook_path,
@@ -1354,6 +1350,7 @@ class PlaybookExecutor:
                 "output": proc_result["output"],
                 "returncode": proc_result["returncode"],
                 "timed_out": proc_result.get("timed_out", False),
+                "detached": proc_result.get("detached", False),
             }
 
         except Exception as e:

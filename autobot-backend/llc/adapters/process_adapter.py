@@ -98,7 +98,7 @@ def _build_minimal_env(env_extra: dict, context: dict) -> dict:
     return env
 
 
-class ProcessAdapter:
+class LLCProcessAdapter:
     """Adapter that manages agent runs as OS subprocesses."""
 
     async def invoke(self, agent_config: dict, context: dict) -> str:

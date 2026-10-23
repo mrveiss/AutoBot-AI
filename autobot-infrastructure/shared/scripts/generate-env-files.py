@@ -8,16 +8,26 @@ AutoBot Environment File Generator
 Generates standardized .env files from complete.yaml configuration
 """
 
+import sys
 from pathlib import Path
 
-import yaml
+# autobot_shared is the repo-root package; this script runs standalone from
+# autobot-infrastructure/shared/scripts.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
+from autobot_shared.ssot_config import TimeoutConfig  # noqa: E402
 
-def load_config():
-    """Load the complete.yaml configuration"""
-    config_path = Path(__file__).parent.parent / "config" / "complete.yaml"
-    with open(config_path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+# Sibling helper module: the importing script may have been loaded by file path.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from env_files_config import load_config  # noqa: E402
+
+#: Frontend API timeout in ms, from the SSOT field default (#17856 row 6).
+#: complete.yaml's http.standard is seconds as a float, and appending "000" to
+#: it wrote "30.0000" -- a 30 ms timeout.
+API_TIMEOUT_MS = TimeoutConfig.model_fields["api"].default
 
 
 def resolve_template_value(value, config):
@@ -332,7 +342,7 @@ def generate_frontend_env(config):
         f"VITE_WS_BASE_URL=ws://"
         f"{config['infrastructure']['hosts']['backend']}:"
         f"{config['infrastructure']['ports']['backend']}/ws",
-        f"VITE_API_TIMEOUT={config['timeouts']['http']['standard']}000",
+        f"VITE_API_TIMEOUT={API_TIMEOUT_MS}",
         "",
         "# Service Host Configuration",
         f"VITE_BACKEND_HOST={config['infrastructure']['hosts']['backend']}",
@@ -555,6 +565,27 @@ def generate_docker_production_env(config):
     return "\n".join(content)
 
 
+#: Native overlays on .env.base (#18555): written holding only what differs from the base.
+NATIVE_OVERLAYS = {".env.localhost", ".env.native-vm", ".env.network"}
+
+
+def strip_base_keys(content: str, base_text: str) -> str:
+    """Drop every KEY=value line that repeats .env.base exactly, so a generated overlay passes the
+    base/overlay guard (repo_tests/env_file_family_18555_test.py)."""
+    base = {}
+    for line in base_text.splitlines():
+        key, sep, value = line.strip().partition("=")
+        if sep and not key.startswith("#"):
+            base[key] = value
+    kept = []
+    for line in content.splitlines():
+        key, sep, value = line.strip().partition("=")
+        if sep and not key.startswith("#") and base.get(key) == value:
+            continue
+        kept.append(line)
+    return "\n".join(kept) + "\n"
+
+
 def main():
     """Main function to generate all environment files"""
     print("AutoBot Environment File Generator")
@@ -591,6 +622,9 @@ def main():
 
             # Generate content
             content = generator_func(config)
+            base_path = full_path.parent / ".env.base"
+            if file_path in NATIVE_OVERLAYS and base_path.exists():
+                content = strip_base_keys(content, base_path.read_text(encoding="utf-8"))
 
             # Write file
             with open(full_path, "w", encoding="utf-8") as f:

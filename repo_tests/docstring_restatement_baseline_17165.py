@@ -73,11 +73,9 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
     ),
     "autobot-backend/api/schemas_workflows.py": frozenset(
         {
-            "ApprovalGateResponse",
             "BatchJobStatus",
             "BatchJobType",
             "SystemValidationRequestModel",
-            "TaskApprovalLinkResponse",
         }
     ),
     "autobot-backend/api/sequential_thinking_mcp.py": frozenset({"clear_thinking_session"}),
@@ -89,7 +87,7 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
         {"delete_team", "list_team_members", "update_member_role"}
     ),
     "autobot-backend/chat_workflow/session_handler.py": frozenset({"get_active_sessions_count"}),
-    "autobot-backend/circuit_breaker.py": frozenset({"reset_all_circuit_breakers"}),
+    "autobot_shared/circuit_breaker.py": frozenset({"reset_all_circuit_breakers"}),
     "autobot-backend/code_intelligence/code_review_engine.py": frozenset({"DiffFile"}),
     "autobot-backend/code_intelligence/doc_generation/models.py": frozenset({"add_base_class"}),
     "autobot-backend/code_intelligence/precommit_analyzer.py": frozenset({"add_custom_check"}),
@@ -98,7 +96,7 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
     "autobot-backend/knowledge/metadata.py": frozenset({"delete_metadata_template"}),
     "autobot-backend/knowledge/rag_benchmarks.py": frozenset({"test_vector_similarity_computation_benchmark"}),
     "autobot-backend/knowledge/relations.py": frozenset({"get_fact_relations"}),
-    "autobot-backend/knowledge_categories.py": frozenset({"get_category_color"}),
+    "autobot_shared/knowledge_categories.py": frozenset({"get_category_color"}),
     "autobot-backend/knowledge_sync_incremental.py": frozenset({"start_background_sync_daemon"}),
     "autobot-backend/memory/compat.py": frozenset({"cleanup_old_memories"}),
     "autobot-backend/modern_ai_integration.py": frozenset({"AnthropicClaudeProvider", "GoogleGeminiProvider"}),
@@ -109,7 +107,7 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
     "autobot-backend/security/enterprise/sso_integration.py": frozenset({"invalidate_sso_session"}),
     "autobot-backend/security/enterprise/threat_detection/models.py": frozenset({"count_recent_api_requests"}),
     "autobot-backend/security/input_validator.py": frozenset(
-        {"sanitize_web_content", "validate_research_query", "validate_url"}
+        {"sanitize_web_content", "validate_research_query", "validate_url_report"}
     ),
     "autobot-backend/security/secure_web_research.py": frozenset({"reset_security_statistics"}),
     "autobot-backend/services/agent_analytics.py": frozenset({"get_all_agents_metrics"}),
@@ -216,7 +214,9 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
             "update_node_roles",
         }
     ),
-    "autobot-slm-backend/api/orchestration.py": frozenset({"ServiceActionResponse", "ServiceDefinitionResponse"}),
+    "autobot-slm-backend/api/orchestration.py": frozenset(
+        {"OrchestrationServiceActionResponse", "ServiceDefinitionResponse"}
+    ),
     "autobot-slm-backend/api/performance.py": frozenset(
         {"AlertRuleModel", "AlertRuleUpdateRequest", "delete_alert_rule"}
     ),
@@ -283,7 +283,7 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
     "autobot-slm-backend/user_management/schemas/mfa.py": frozenset({"MFASetupResponse"}),
     "autobot-slm-backend/user_management/services/sso_service.py": frozenset({"SSOProviderNotFoundError"}),
     "autobot_shared/logging_manager.py": frozenset(
-        {"get_audit_logger", "get_backend_logger", "get_debug_logger", "get_frontend_logger", "get_llm_logger"}
+        {"get_backend_logger", "get_debug_logger", "get_frontend_logger", "get_llm_logger"}
     ),
     "autobot_shared/monitoring/metrics/claude_api.py": frozenset({"ClaudeAPIMetricsRecorder"}),
     "autobot_shared/monitoring/metrics/frontend.py": frozenset(

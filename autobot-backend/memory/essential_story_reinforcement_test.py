@@ -16,6 +16,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 import memory.essential_story as es
+from autobot_shared.env_utils import env_float
 from memory.essential_story import (
     EssentialStoryGenerator,
     _compute_facts_fingerprint,
@@ -182,8 +183,8 @@ async def test_fetch_top_facts_ties_are_deterministic(monkeypatch):
 
 def test_env_float_falls_back_on_garbage(monkeypatch):
     monkeypatch.setenv("AUTOBOT_TEST_FLOAT", "not-a-float")
-    assert es._env_float("AUTOBOT_TEST_FLOAT", 0.3) == 0.3
+    assert env_float("AUTOBOT_TEST_FLOAT", 0.3, reject_nan=True) == 0.3
     monkeypatch.setenv("AUTOBOT_TEST_FLOAT", "nan")
-    assert es._env_float("AUTOBOT_TEST_FLOAT", 0.3) == 0.3
+    assert env_float("AUTOBOT_TEST_FLOAT", 0.3, reject_nan=True) == 0.3
     monkeypatch.setenv("AUTOBOT_TEST_FLOAT", "0.7")
-    assert es._env_float("AUTOBOT_TEST_FLOAT", 0.3) == 0.7
+    assert env_float("AUTOBOT_TEST_FLOAT", 0.3, reject_nan=True) == 0.7

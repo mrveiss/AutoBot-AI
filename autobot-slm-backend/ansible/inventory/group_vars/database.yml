@@ -280,7 +280,7 @@ backup:
   # Backup destinations
   destinations:
     local:
-      path: "/opt/autobot/backups/database"
+      path: "{{ autobot.base_dir }}/backups/database"
       enabled: true
 
     network:
@@ -322,7 +322,7 @@ systemd_services:
     user: "{{ autobot.user }}"
     group: "{{ autobot.group }}"
     working_directory: "{{ model_storage.directories.base_dir }}"
-    exec_start: "/opt/autobot/scripts/model-manager.py"
+    exec_start: "{{ autobot.base_dir }}/scripts/model-manager.py"
     restart: "always"
     restart_sec: 30
 
@@ -340,7 +340,7 @@ systemd_services:
     type: "oneshot"
     user: "{{ autobot.user }}"
     group: "{{ autobot.group }}"
-    exec_start: "/opt/autobot/scripts/backup-database.sh"
+    exec_start: "{{ autobot.base_dir }}/scripts/backup-database.sh"
 
     # Timer configuration (runs via systemd timer)
     timer:
@@ -483,7 +483,7 @@ cleanup:
     # Model cache cleanup
     - name: "cleanup-model-cache"
       schedule: "0 3 * * *"  # daily at 3 AM
-      command: "/opt/autobot/scripts/cleanup-model-cache.sh"
+      command: "{{ autobot.base_dir }}/scripts/cleanup-model-cache.sh"
 
   # Retention policies
   retention:

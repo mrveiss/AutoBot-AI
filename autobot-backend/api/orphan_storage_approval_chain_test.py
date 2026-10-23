@@ -23,46 +23,14 @@ import pytest
 
 import api.admin_orphan_storage as admin_route
 from api.schemas_orphan_storage import OrphanStorageDeletionRequest
-from models.approval import Approval, ApprovalComment
+from models.approval import ApprovalComment
 from services import approval_execution, orphan_storage, orphan_storage_cleanup_action
 from services.approval_gate_service import ApprovalGateService
+from testkit.fake_approval_session import ApprovalClaimSession
 
 pytestmark = pytest.mark.asyncio
 
 _ADMIN = {"username": "admin", "role": "admin", "user_id": "admin-1"}
-
-
-class _FakeSession:
-    """add/flush/commit/refresh, plus the one select ``_get_or_raise`` runs."""
-
-    def __init__(self):
-        self.added = []
-        self.approval = None
-
-    def add(self, obj):
-        if getattr(obj, "id", None) is None:
-            obj.id = uuid.uuid4()
-        if isinstance(obj, Approval):
-            self.approval = obj
-        self.added.append(obj)
-
-    async def flush(self):
-        return None
-
-    async def commit(self):
-        return None
-
-    async def refresh(self, obj):
-        return None
-
-    async def execute(self, _stmt):
-        approval = self.approval
-
-        class _Result:
-            def scalar_one_or_none(self):
-                return approval
-
-        return _Result()
 
 
 @pytest.fixture
@@ -104,7 +72,7 @@ async def _noop():
 
 
 async def test_proposing_then_approving_deletes_the_named_candidate(chain):
-    session = _FakeSession()
+    session = ApprovalClaimSession()
 
     proposal = await admin_route.propose_orphan_storage_deletion(
         OrphanStorageDeletionRequest(provider="code_source_clone", candidate_id="abc"),
@@ -136,7 +104,7 @@ async def test_proposing_then_approving_deletes_the_named_candidate(chain):
 
 async def test_rejecting_deletes_nothing(chain):
     """The other half of the rule: a human saying no is the end of it."""
-    session = _FakeSession()
+    session = ApprovalClaimSession()
 
     proposal = await admin_route.propose_orphan_storage_deletion(
         OrphanStorageDeletionRequest(provider="code_source_clone", candidate_id="abc"),

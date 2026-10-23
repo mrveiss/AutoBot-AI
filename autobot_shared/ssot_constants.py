@@ -558,8 +558,8 @@ class VoiceRecognitionConfig:
     PHRASE_THRESHOLD = 0.3
 
 
-class CacheConfig:
-    """Cache configuration constants."""
+class CacheSizeDefaults:
+    """Embedding/database cache size and TTL defaults (not the SSOT settings model ssot_config.CacheConfig)."""
 
     EMBEDDING_CACHE_MAX_SIZE = 1000
     EMBEDDING_CACHE_TTL_SECONDS = 3600
@@ -766,7 +766,7 @@ class QueryDefaults:
     DEFAULT_OFFSET: int = 0
     DEFAULT_PAGE_SIZE: int = 50
     MAX_PAGE_SIZE: int = 500
-    RAG_DEFAULT_RESULTS: int = 5
+    RAG_DEFAULT_RESULTS: int = ModelConfig.RAG_DEFAULT_MAX_RESULTS  # alias of the canonical (#18094)
     RAG_MAX_RESULTS: int = 20
     KNOWLEDGE_DEFAULT_LIMIT: int = 100
 

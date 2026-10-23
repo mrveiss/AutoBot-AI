@@ -20,9 +20,9 @@ from agents.overseer.types import (
     CommandBreakdownPart,
     CommandExplanation,
     OutputExplanation,
-    StepResult,
-    StepStatus,
-    StreamChunk,
+    OverseerStepStatus,
+    StepChunk,
+    StepRunResult,
 )
 from tests.helpers.fake_pty_shell import FakeManager, FakeShell
 
@@ -68,7 +68,7 @@ class TestBuildNoCommandResult:
     def test_returns_completed(self):
         task = AgentTask(task_id="t1", step_number=1, total_steps=1, description="No-op step")
         result = _build_no_command_result(task, 0.1)
-        assert result.status == StepStatus.COMPLETED
+        assert result.status == OverseerStepStatus.COMPLETED
         assert result.command is None
         assert "No command" in result.output
 
@@ -90,7 +90,7 @@ class TestBuildBlockedCommandResult:
             command="rm -rf /",
         )
         result = _build_blocked_command_result(task, "Dangerous operation", 0.05)
-        assert result.status == StepStatus.FAILED
+        assert result.status == OverseerStepStatus.FAILED
         assert result.return_code == -1
         assert "Dangerous operation" in result.error
 
@@ -119,7 +119,7 @@ class TestBuildExecutionErrorResult:
         )
         error = RuntimeError("command not found")
         result = _build_execution_error_result(task, error, 0.5)
-        assert result.status == StepStatus.FAILED
+        assert result.status == OverseerStepStatus.FAILED
         assert result.error == "command not found"
         assert result.return_code == -1
 
@@ -175,7 +175,7 @@ class TestExtractReturnCode:
     """Tests for return code extraction from chunks."""
 
     def test_extracts_from_final_chunk(self, executor):
-        chunk = StreamChunk(
+        chunk = StepChunk(
             task_id="t1",
             step_number=1,
             chunk_type="return_code",
@@ -185,7 +185,7 @@ class TestExtractReturnCode:
         assert executor._extract_return_code_from_chunk(chunk, 0) == 42
 
     def test_ignores_non_final(self, executor):
-        chunk = StreamChunk(
+        chunk = StepChunk(
             task_id="t1",
             step_number=1,
             chunk_type="return_code",
@@ -195,7 +195,7 @@ class TestExtractReturnCode:
         assert executor._extract_return_code_from_chunk(chunk, 0) == 0
 
     def test_handles_invalid_content(self, executor):
-        chunk = StreamChunk(
+        chunk = StepChunk(
             task_id="t1",
             step_number=1,
             chunk_type="return_code",
@@ -222,8 +222,8 @@ class TestExecuteStep:
             results.append(update)
 
         assert len(results) == 1
-        assert isinstance(results[0], StepResult)
-        assert results[0].status == StepStatus.COMPLETED
+        assert isinstance(results[0], StepRunResult)
+        assert results[0].status == OverseerStepStatus.COMPLETED
 
     @pytest.mark.asyncio
     @patch(
@@ -243,21 +243,21 @@ class TestExecuteStep:
         async for update in executor.execute_step(task):
             results.append(update)
 
-        assert any(isinstance(r, StepResult) and r.status == StepStatus.FAILED for r in results)
+        assert any(isinstance(r, StepRunResult) and r.status == OverseerStepStatus.FAILED for r in results)
 
     @pytest.mark.asyncio
     @patch("agents.overseer.step_executor_agent.check_dangerous_patterns", return_value=[])
     @patch("agents.overseer.step_executor_agent.is_safe_command", return_value=True)
     async def test_successful_execution(self, mock_safe, mock_dangerous, executor, sample_task):
         async def mock_stream(task):
-            yield StreamChunk(
+            yield StepChunk(
                 task_id=task.task_id,
                 step_number=task.step_number,
                 chunk_type="stdout",
                 content="file1.txt\n",
                 is_final=False,
             )
-            yield StreamChunk(
+            yield StepChunk(
                 task_id=task.task_id,
                 step_number=task.step_number,
                 chunk_type="return_code",
@@ -271,9 +271,9 @@ class TestExecuteStep:
         async for update in executor.execute_step(sample_task):
             results.append(update)
 
-        step_results = [r for r in results if isinstance(r, StepResult)]
+        step_results = [r for r in results if isinstance(r, StepRunResult)]
         assert len(step_results) == 1
-        assert step_results[0].status == StepStatus.COMPLETED
+        assert step_results[0].status == OverseerStepStatus.COMPLETED
         assert step_results[0].command_explanation is not None
         assert step_results[0].output_explanation is not None
 
@@ -352,7 +352,7 @@ class TestPtyExecution:
 
         async def _subprocess(command, task_id):
             fallback(command)
-            yield StreamChunk(task_id, 0, "return_code", "0", True)
+            yield StepChunk(task_id, 0, "return_code", "0", True)
 
         monkeypatch.setattr(executor, "_execute_subprocess_streaming", _subprocess)
 

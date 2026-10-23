@@ -50,7 +50,7 @@ class ProtocolType(str, Enum):
     UNIX = "unix"
 
 
-class ConflictSeverity(str, Enum):
+class PortConflictSeverity(str, Enum):
     """Port/resource conflict severity."""
 
     HARD = "hard"  # SLM blocks assignment

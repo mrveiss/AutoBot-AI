@@ -181,17 +181,6 @@ const hasChanges = computed(() => {
   return JSON.stringify(currentAccess.value) !== JSON.stringify(originalAccess.value)
 })
 
-// Initialize access list from props
-watch(
-  () => [props.currentUsers, props.currentGroups, props.isOpen],
-  () => {
-    if (props.isOpen) {
-      initializeAccessList()
-    }
-  },
-  { immediate: true }
-)
-
 // Methods
 const fetchEntityName = async (id: string, type: 'user' | 'group'): Promise<string> => {
   const cacheKey = `${type}:${id}`
@@ -253,6 +242,19 @@ const initializeAccessList = async () => {
   currentAccess.value = accessList
   originalAccess.value = JSON.parse(JSON.stringify(accessList))
 }
+
+// Initialize access list from props. Declared AFTER initializeAccessList: `immediate`
+// runs the callback during setup, and a dialog mounted open used to reach the const
+// before its initialisation (ReferenceError, #18694).
+watch(
+  () => [props.currentUsers, props.currentGroups, props.isOpen],
+  () => {
+    if (props.isOpen) {
+      initializeAccessList()
+    }
+  },
+  { immediate: true }
+)
 
 const handleSearch = async () => {
   const query = searchQuery.value

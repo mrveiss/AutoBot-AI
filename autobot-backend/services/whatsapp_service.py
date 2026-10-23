@@ -20,8 +20,6 @@ Security: access token and app secret are encrypted at rest (see
 ``autobot_shared.field_encryption``).
 """
 
-import hashlib
-import hmac
 from typing import Any, Dict, List, Optional, Tuple
 
 from autobot_shared.field_encryption import decrypt_field, encrypt_field
@@ -132,22 +130,6 @@ async def build_integration() -> Optional[WhatsAppIntegration]:
         },
     )
     return WhatsAppIntegration(config)
-
-
-def verify_webhook_signature(payload: bytes, signature_header: Optional[str], app_secret: str) -> bool:
-    """Verify Meta's ``X-Hub-Signature-256`` HMAC over the raw request body.
-
-    Meta signs every webhook delivery with ``sha256=<hex>`` computed using the
-    app secret. Fails closed: a missing/malformed header or absent secret yields
-    False.
-    """
-    if not app_secret or not signature_header:
-        return False
-    if not signature_header.startswith("sha256="):
-        return False
-    provided = signature_header[len("sha256=") :]
-    expected = hmac.new(app_secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(provided, expected)
 
 
 async def download_whatsapp_media(media_id: str) -> Tuple[Optional[bytes], Optional[str]]:

@@ -25,6 +25,11 @@ vi.mock('@/composables/usePollingJob', () => ({
 }))
 
 import { useSystemStatus } from '../useSystemStatus'
+import i18n from '@/i18n'
+import en from '@/i18n/locales/en.json'
+
+// The app loads locale messages at startup; rows render through them (#18353).
+i18n.global.setLocaleMessage('en', en)
 
 const STALLED = new Error('timeout of 5000ms exceeded')
 

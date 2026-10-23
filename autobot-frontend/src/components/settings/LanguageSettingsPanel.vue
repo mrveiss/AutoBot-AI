@@ -44,11 +44,6 @@ Issue #1330: Language switcher component in Settings
         </div>
       </fieldset>
     </div>
-
-    <!-- Screen reader announcements -->
-    <div role="status" aria-live="polite" aria-atomic="true" class="sr-only">
-      {{ announcement }}
-    </div>
   </form>
 </template>
 
@@ -60,6 +55,7 @@ import { usePreferences } from '@/composables/usePreferences'
 import { useAvailableLanguages } from '@/composables/useAvailableLanguages'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 import { createLogger } from '@/utils/debugUtils'
+import { useAnnounce } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('LanguageSettingsPanel')
@@ -73,7 +69,7 @@ const selectedLanguage = ref(language.value)
 const languages = computed<Record<string, string>>(() =>
   Object.fromEntries(availableLanguages.value.map(l => [l.code, l.name]))
 )
-const announcement = ref('')
+const { announce } = useAnnounce()
 
 async function handleLanguageChange() {
   const locale = selectedLanguage.value
@@ -82,7 +78,7 @@ async function handleLanguageChange() {
     await setLanguage(locale)
 
     showToast(t('settings.languageChanged'), 'success')
-    announceChange(t('settings.languageChanged'))
+    announce(t('settings.languageChanged'))
     logger.debug(`Language changed to: ${locale}`)
   } catch (error) {
     logger.error('Failed to change language', error)
@@ -90,12 +86,6 @@ async function handleLanguageChange() {
   }
 }
 
-function announceChange(message: string): void {
-  announcement.value = message
-  setTimeout(() => {
-    announcement.value = ''
-  }, 1000)
-}
 </script>
 
 <style scoped>
@@ -104,18 +94,6 @@ function announceChange(message: string): void {
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-color);
   overflow: hidden;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: var(--spacing-0);
-  margin: var(--spacing-neg-px);
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
 }
 
 .panel-header {

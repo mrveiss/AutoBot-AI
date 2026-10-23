@@ -35,8 +35,12 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.user_management.dependencies import _parse_uuid_safe, get_current_user, require_org_context
-from autobot_shared.auth.permissions import is_admin_role
+from api.user_management.dependencies import (
+    _is_platform_admin_claim,
+    _parse_uuid_safe,
+    get_current_user,
+    require_org_context,
+)
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import QueryDefaults
 from autobot_shared.user_management.models.user import resolve_display_name
@@ -147,17 +151,6 @@ def _get_service(session: AsyncSession = Depends(get_async_session)) -> CompanyS
     return CompanyService(session=session)
 
 
-def _is_platform_admin(current_user: dict) -> bool:
-    """Platform-admin detection mirroring ``get_tenant_context`` (#12233).
-
-    The collection routes (list/create) carry no ``company_id`` path param, so
-    they authenticate with ``get_current_user`` (not ``require_org_context``)
-    and derive admin status from the JWT the same way the tenant-context
-    dependency does: an explicit ``is_platform_admin`` flag or ``role == "admin"``.
-    """
-    return bool(current_user.get("is_platform_admin")) or is_admin_role(current_user.get("role"))
-
-
 def _current_user_id(current_user: dict) -> str:
     """Return the caller's user id, or raise 401 when absent/malformed (#12233).
 
@@ -196,7 +189,7 @@ async def list_companies(
     companies while leaving them recoverable via the "show archived" toggle.
     """
     companies = await svc.list_root_companies(include_archived=include_archived)
-    if _is_platform_admin(current_user):
+    if _is_platform_admin_claim(current_user):
         return [_to_read(c) for c in companies]
     user_id = _current_user_id(current_user)
     # #12325: one membership query for the caller, then an in-memory filter —
@@ -226,7 +219,7 @@ async def create_company(
     surfaces in their tenant-scoped ``list_companies``.
     """
     user_id = _current_user_id(current_user)
-    if body.parent_org_id is not None and not _is_platform_admin(current_user):
+    if body.parent_org_id is not None and not _is_platform_admin_claim(current_user):
         if not await membership_svc.is_member(svc.session, str(body.parent_org_id), user_id):
             # 404 (not 403): a cross-tenant caller must not distinguish "not my
             # company" from "doesn't exist" — identical semantics to

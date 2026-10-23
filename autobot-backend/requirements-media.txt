@@ -26,13 +26,13 @@ librosa>=1.0.0
 # media/audio/decode.py resamples decoded uploads with scipy.signal.resample_poly.
 # librosa pulls scipy in transitively, but this is a direct import, so it is declared
 # (no constraints file pins it; one version, declared once -- here).
-scipy>=1.13.0
+scipy>=1.18.1
 
 # Same guarded block in voice.py (Whisper + Wav2Vec2), and the vision processor
 # multimodal_processor/processors/vision.py raises on its own flag too. Kept in
 # step with the other pinned sites (autobot-tts-worker/requirements.txt:3,
 # autobot-infrastructure/shared/docker/ai-stack/requirements-ai.txt:19).
-transformers>=5.18.0
+transformers>=5.20.0
 
 # Frame extraction for the video pipeline. Import name is cv2.
 opencv-python>=5.0.0.93

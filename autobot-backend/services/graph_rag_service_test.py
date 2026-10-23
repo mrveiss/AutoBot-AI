@@ -26,7 +26,9 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from advanced_rag_optimizer import RAGMetrics, RankedResult
-from services.graph_rag_service import EntityMatch, GraphRAGMetrics, GraphRAGService
+from knowledge.search_filters import SYSTEM_SCOPE
+from services.graph_rag_service import EntityMatch, GraphRAGMetrics
+from tests.memory_graph._unscoped_service import UNSCOPED_ALL_USERS, GraphRAGService
 
 # ============================================================================
 # Fixtures
@@ -162,8 +164,7 @@ def test_graph_rag_service_initialization(mock_rag_service, mock_memory_graph) -
 async def test_graph_aware_search_basic(graph_rag_service, mock_rag_service) -> None:
     """Test basic graph-aware search delegates to RAGService."""
     results, metrics = await graph_rag_service.graph_aware_search(
-        query="Redis configuration",
-        max_results=5,
+        query="Redis configuration", max_results=5, principal=SYSTEM_SCOPE
     )
 
     # Verify RAGService was called (composition, not duplication)
@@ -171,7 +172,8 @@ async def test_graph_aware_search_basic(graph_rag_service, mock_rag_service) -> 
         query="Redis configuration",
         max_results=10,  # 2x for filtering
         enable_reranking=True,
-        timeout=None,
+        timeout=10.0,  # RAGConfig.graph_timeout_seconds default
+        principal=SYSTEM_SCOPE,  # the KB leg is searched as the caller (#16664)
     )
 
     # Verify results returned
@@ -188,10 +190,7 @@ async def test_graph_aware_search_basic(graph_rag_service, mock_rag_service) -> 
 async def test_graph_aware_search_with_entity_expansion(graph_rag_service, mock_rag_service, mock_memory_graph) -> None:
     """Test graph expansion adds related entity content."""
     results, metrics = await graph_rag_service.graph_aware_search(
-        query="Redis issues",
-        start_entity="Redis Config",
-        max_depth=2,
-        max_results=5,
+        query="Redis issues", start_entity="Redis Config", max_depth=2, max_results=5, principal=SYSTEM_SCOPE
     )
 
     # Issue #12389: start_entity="Redis Config" and every extracted entity
@@ -295,6 +294,7 @@ async def test_graph_aware_search_no_expansion_without_entities(
         start_entity=None,  # No start entity
         max_depth=2,
         max_results=5,
+        principal=SYSTEM_SCOPE,
     )
 
     # Verify graph traversal NOT called
@@ -314,8 +314,7 @@ async def test_graph_aware_search_timeout_handling(graph_rag_service, mock_rag_s
     mock_rag_service.advanced_search.side_effect = asyncio.TimeoutError()
 
     results, metrics = await graph_rag_service.graph_aware_search(
-        query="Redis issues",
-        timeout=1.0,
+        query="Redis issues", timeout=1.0, principal=SYSTEM_SCOPE
     )
 
     # Verify graceful handling
@@ -541,10 +540,7 @@ async def test_end_to_end_composition(graph_rag_service, mock_rag_service, mock_
     """Test end-to-end flow verifies proper composition."""
     # Execute full search
     results, metrics = await graph_rag_service.graph_aware_search(
-        query="Redis configuration",
-        start_entity="Redis Config",
-        max_depth=2,
-        max_results=5,
+        query="Redis configuration", start_entity="Redis Config", max_depth=2, max_results=5, principal=SYSTEM_SCOPE
     )
 
     # Verify RAGService called (composition)
@@ -832,9 +828,9 @@ async def test_find_connection_path_delegates_to_memory_graph(graph_rag_service,
         relation="CAUSED",
         max_depth=4,
         direction="outgoing",
+        owner=UNSCOPED_ALL_USERS,
     )
-    assert result["found"] is True
-    assert result["hops"] == 1
+    assert (result["found"], result["hops"]) == (True, 1)
 
 
 @pytest.mark.asyncio
@@ -845,8 +841,7 @@ async def test_find_connection_path_records_traversal_time(graph_rag_service, mo
 
     result = await graph_rag_service.find_connection_path("A", "B")
 
-    assert result["traversal_time"] >= 0.0
-    assert result["found"] is False
+    assert result["traversal_time"] >= 0.0 and result["found"] is False
 
 
 @pytest.mark.asyncio

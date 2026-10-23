@@ -2,23 +2,22 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Unit tests for NPUClient.partial_forward (MVA-1098)."""
+"""Unit tests for NPUPipelineWorkerClient.partial_forward (MVA-1098)."""
 
 from __future__ import annotations
 
 import json
-from typing import Any, Dict
-from unittest.mock import AsyncMock, MagicMock, patch
-
 import sys
 from pathlib import Path
+from typing import Any, Dict
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 _repo_root = Path(__file__).resolve().parent.parent.parent
 _npu_pipeline_path = _repo_root / "autobot-backend" / "services" / "npu_pipeline"
 sys.path.insert(0, str(_npu_pipeline_path))
-from npu_client import NPUClient, NPUWorkerError
+from npu_client import NPUPipelineWorkerClient, NPUWorkerError
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -45,7 +44,7 @@ def _make_mock_session(response: MagicMock) -> MagicMock:
 
 
 # ---------------------------------------------------------------------------
-# NPUClient.partial_forward
+# NPUPipelineWorkerClient.partial_forward
 # ---------------------------------------------------------------------------
 
 
@@ -56,7 +55,7 @@ class TestNPUClientPartialForward:
         resp = _make_mock_response(200, body)
         session = _make_mock_session(resp)
 
-        client = NPUClient("http://worker:8080", session=session)
+        client = NPUPipelineWorkerClient("http://worker:8080", session=session)
         result = await client.partial_forward(
             model_id="llama-7b",
             layer_range=(0, 1),
@@ -78,7 +77,7 @@ class TestNPUClientPartialForward:
         resp = _make_mock_response(200, body)
         session = _make_mock_session(resp)
 
-        client = NPUClient("http://worker:8080", session=session)
+        client = NPUPipelineWorkerClient("http://worker:8080", session=session)
         result = await client.partial_forward(
             model_id="llama-7b",
             layer_range=(16, 31),
@@ -91,7 +90,7 @@ class TestNPUClientPartialForward:
         resp = _make_mock_response(500, {"error": "internal"})
         session = _make_mock_session(resp)
 
-        client = NPUClient("http://worker:8080", session=session)
+        client = NPUPipelineWorkerClient("http://worker:8080", session=session)
         with pytest.raises(NPUWorkerError, match="HTTP 500"):
             await client.partial_forward(
                 model_id="llama-7b",
@@ -109,7 +108,7 @@ class TestNPUClientPartialForward:
         err_resp.__aexit__ = AsyncMock(return_value=False)
         session.post = MagicMock(return_value=err_resp)
 
-        client = NPUClient("http://worker:8080", session=session)
+        client = NPUPipelineWorkerClient("http://worker:8080", session=session)
         with pytest.raises(NPUWorkerError, match="Network error"):
             await client.partial_forward(
                 model_id="llama-7b",
@@ -119,7 +118,7 @@ class TestNPUClientPartialForward:
 
 
 # ---------------------------------------------------------------------------
-# NPUClient.get_capabilities
+# NPUPipelineWorkerClient.get_capabilities
 # ---------------------------------------------------------------------------
 
 
@@ -130,7 +129,7 @@ class TestNPUClientGetCapabilities:
         resp = _make_mock_response(200, caps)
         session = _make_mock_session(resp)
 
-        client = NPUClient("http://worker:8080", session=session)
+        client = NPUPipelineWorkerClient("http://worker:8080", session=session)
         result = await client.get_capabilities()
 
         session.get.assert_called_once()
@@ -143,7 +142,7 @@ class TestNPUClientGetCapabilities:
         resp = _make_mock_response(503, {"error": "unavailable"})
         session = _make_mock_session(resp)
 
-        client = NPUClient("http://worker:8080", session=session)
+        client = NPUPipelineWorkerClient("http://worker:8080", session=session)
         with pytest.raises(NPUWorkerError, match="HTTP 503"):
             await client.get_capabilities()
 
@@ -156,6 +155,6 @@ class TestNPUClientGetCapabilities:
 class TestNPUClientContextGuard:
     @pytest.mark.asyncio
     async def test_raises_when_used_outside_context(self):
-        client = NPUClient("http://worker:8080")
+        client = NPUPipelineWorkerClient("http://worker:8080")
         with pytest.raises(RuntimeError, match="async context manager"):
             await client.partial_forward("m", (0, 0), {})

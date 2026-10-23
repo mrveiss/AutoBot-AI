@@ -18,6 +18,7 @@ import logging
 from typing import Tuple
 
 from services.service_restart import run_systemctl_over_ssh, systemctl_remote_command
+from services.ssh_utils import ssh_destination
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +37,8 @@ def ssh_base_cmd(ssh_user: str, ssh_key, host: str) -> list:
         "BatchMode=yes",
         "-i",
         str(ssh_key),
-        f"{ssh_user}@{host}",
+        "--",
+        ssh_destination(ssh_user, host),
     ]
 
 

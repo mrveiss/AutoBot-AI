@@ -28,7 +28,7 @@ from llc.adapters.subprocess_support import is_rate_limit_output
 from llc.exceptions import AdapterRunFailed, ProviderRateLimited
 from llc.models.enums import LLCRunStatus
 from llc.scheduler.heartbeat_scheduler import (
-    HeartbeatScheduler,
+    LLCHeartbeatScheduler,
     _dispatch_registry_adapter,
 )
 
@@ -385,7 +385,7 @@ async def test_run_adapter_applies_backoff_for_registry_rate_limit():
     """_run_adapter must apply the GH#8204 backoff path when a registry adapter
     signals RATE_LIMITED (i.e. when _dispatch_registry_adapter raises ProviderRateLimited).
     """
-    scheduler = HeartbeatScheduler()
+    scheduler = LLCHeartbeatScheduler()
     agent = _make_agent()
     redis = _make_redis()
 

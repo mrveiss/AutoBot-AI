@@ -59,7 +59,6 @@ HARDCODED_COLOUR_LITERALS: dict[str, int] = {
     "#10b981": 2,
     "#1a1b26": 1,
     "#1e1e1e": 2,
-    "#1f2937": 1,
     "#264f78": 1,
     "#2ecc71": 1,
     "#313244": 1,
@@ -88,11 +87,11 @@ HARDCODED_COLOUR_LITERALS: dict[str, int] = {
     "#ffeaa7": 1,
     "#fff": 5,
     "#fff3cd": 1,
-    "#ffffff": 4,
+    "#ffffff": 3,
 }
 
 #: Frozen total, asserted separately so a per-literal edit cannot drift it unseen.
-TOTAL_OCCURRENCES = 55
+TOTAL_OCCURRENCES = 53
 
 
 #: ``path under autobot-frontend/src -> `!important` declarations in its <style>``.
@@ -122,7 +121,6 @@ IMPORTANT_DECLARATIONS: dict[str, int] = {
     "components/charts/FunctionCallGraph.vue": 12,
     "components/chat/ChatInterface.vue": 5,
     "components/knowledge/KnowledgeGraph.vue": 10,
-    "components/knowledge/panels/SourcePreviewPanel.vue": 1,
     "components/knowledge/pipeline/PipelineRunner.vue": 1,
     "components/operations/OperationsList.vue": 1,
     "components/security/SecretsManager.vue": 2,
@@ -130,7 +128,6 @@ IMPORTANT_DECLARATIONS: dict[str, int] = {
     "components/ui/ProgressBar.vue": 2,
     "components/visualizations/ServiceMessageTimeline.vue": 1,
     "views/AdminUsersView.vue": 1,
-    "views/CustomDashboard.vue": 1,
     # The control plane (#17567). Prefixed so its paths cannot collide with the
     # user frontend's. Keyed like the rest; no per-file reason is claimed.
     "slm:components/agents/OrgChartTab.vue": 1,
@@ -139,4 +136,4 @@ IMPORTANT_DECLARATIONS: dict[str, int] = {
 }
 
 #: Frozen total, asserted separately.
-TOTAL_IMPORTANT = 62
+TOTAL_IMPORTANT = 60  # #14780: 61 -> 60, SourcePreviewPanel onto BaseDrawer; #18242: 62 -> 61 (DashboardGrid)

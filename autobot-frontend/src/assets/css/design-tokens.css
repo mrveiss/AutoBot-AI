@@ -1170,43 +1170,25 @@
   --kanban-wip-exceeded-text: #991b1b;  /* WIP-limit exceeded column-header text */
 
   /* ============================================
-   * SYNTAX HIGHLIGHTING TOKENS (#14770, #14853, umbrella #11515)
-   * Shared by canvas/CodeCell.vue and artifact-cells/CodeCell.vue's
-   * highlight.js themes -- the one token set both components read (#14853's
-   * AC2), not one theme per file.
-   *
-   * The comment on the Kanban block above records the earlier call that this
-   * palette is "DATA, preserved literal in the component" (#12048). That held
-   * only while the file went untouched: `color-no-hex` lints CHANGED files, so
-   * the first edit to it — a one-line composable migration here — surfaced all
-   * fourteen. The decision and the linter disagreed, and the disagreement was
-   * invisible rather than resolved.
-   *
-   * Tokenised rather than suppressed: this repo has no `stylelint-disable`
-   * anywhere, and adding the first one to get a gate green is not a fix.
-   *
-   * Deliberately NOT themeable, despite living here. These are the One Dark /
-   * One Light code palettes and both sets must be available at once — the
-   * component picks between them by class, not by theme — so they carry no
-   * OKLCH override and must not be folded into the semantic --color-* scale.
+   * CODE-CELL SYNTAX PALETTE (#14853, #18497)
+   * Both CodeCells read these and nothing else. Each one is the active
+   * theme's own syntax colour -- the --code-* palette every theme file
+   * defines (light.css, dark.css, contrast.css, mono.css) -- so the cells
+   * follow the selected theme instead of choosing a fixed One Dark / One
+   * Light set by the OS colour scheme. An installed variant that sets
+   * --code-* recolours them; one that does not inherits its base theme's.
+   * No literal colours here: CodeCell.sharedPalette.test.ts fails on one.
    * ============================================ */
-  --codecell-syntax-attr-dark: #88bbff;      /* attr / attribute */
-  --codecell-syntax-number-dark: #d19a66;    /* literal / number */
-  --codecell-syntax-string-dark: #98c379;    /* string */
-  --codecell-syntax-callable-dark: #61afef;  /* built_in / title / function */
-  --codecell-syntax-keyword-dark: #c678dd;   /* keyword */
-  --codecell-syntax-comment-dark: #5c6370;   /* comment */
-  /* #14853: artifact-cells/CodeCell.vue's only category with no match above.
-     Pinned to that file's own prior rendered value -- not a themed color,
-     since nothing here measured what a "correct" tag color should be. */
-  --codecell-syntax-tag-dark: #f97583;       /* tag (HTML/XML element name) */
-  --codecell-syntax-attr-light: #0184bc;
-  --codecell-syntax-number-light: #986801;
-  --codecell-syntax-string-light: #50a14f;
-  --codecell-syntax-callable-light: #4078f2;
-  --codecell-syntax-keyword-light: #a626a4;
-  --codecell-syntax-comment-light: #a0a1a7;
-  --codecell-syntax-tag-light: #800000;      /* #14853, see the dark entry above */
+  --codecell-syntax-attr: var(--code-attribute);
+  --codecell-syntax-number: var(--code-number);
+  --codecell-syntax-string: var(--code-string);
+  --codecell-syntax-callable: var(--code-function);
+  --codecell-syntax-keyword: var(--code-keyword);
+  --codecell-syntax-comment: var(--code-comment);
+  --codecell-syntax-tag: var(--code-tag);
+  /* Weight and style carry the distinction where hue cannot (Monochrome). */
+  --codecell-syntax-keyword-weight: var(--code-keyword-weight, 400);
+  --codecell-syntax-comment-style: var(--code-comment-style, italic);
 
   /* ============================================
    * THEME PRESET PICKER SWATCH TOKENS (#14785, umbrella #11515)

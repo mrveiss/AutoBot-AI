@@ -11,6 +11,41 @@ so a change to ``AUTOBOT_EMBEDDING_MODEL`` moves them together.
 
 from __future__ import annotations
 
+import re
+
+# Lower-case name prefixes of known embedding-model families, matched after an optional
+# ``org/`` namespace. The one list: ``is_embedding_model_id`` and the literal guard
+# (repo_tests/embedding_model_literal_guard_18143_test.py) both read it (#18328).
+KNOWN_EMBEDDING_MODEL_PREFIXES: tuple[str, ...] = (
+    "nomic-embed",
+    "mxbai-embed",
+    "snowflake-arctic-embed",
+    "all-minilm",
+    "all-mpnet",
+    "paraphrase-",
+    "multi-qa-",
+    "bge-",
+    "e5-",
+    "multilingual-e5-",
+    "gte-",
+    "jina-embeddings",
+    "text-embedding",
+    "codebert",
+)
+_MODEL_ID_TAIL = re.compile(r"[\w.\-]*(:[\w.\-]+)?")
+_NAMESPACE = re.compile(r"[\w.\-]+/")
+
+
+def is_embedding_model_id(value: str) -> bool:
+    """True when ``value`` is a bare (optionally ``org/``-namespaced) known embedding-model id."""
+    name = value.strip().lower()
+    namespace = _NAMESPACE.match(name)
+    if namespace:
+        name = name[namespace.end() :]
+    if not name.startswith(KNOWN_EMBEDDING_MODEL_PREFIXES) or "rerank" in name:
+        return False  # a cross-encoder reranker (bge-reranker-*) shares the family prefix, not the role
+    return _MODEL_ID_TAIL.fullmatch(name) is not None
+
 
 class EmbeddingUnavailableError(RuntimeError):
     """The active embedding model could not produce a vector.

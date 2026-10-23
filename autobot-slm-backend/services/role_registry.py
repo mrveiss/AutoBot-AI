@@ -410,7 +410,7 @@ _OPTIONAL_ROLES = [
         # guard (which checks only target_path) and activate path-existence + systemd
         # checks — mirrors the postgres fix in #9853 (#9965).
         "target_path": "/usr/bin/Xtigervnc",
-        "systemd_service": "tigervncserver",
+        "systemd_service": "vnc-server",  # #19076 review: the unit roles/vnc installs (vnc_service_name)
         "auto_restart": False,
         "required": False,
         "degraded_without": ["Remote desktop access — headed browser mode unavailable"],
@@ -470,7 +470,7 @@ _INFRA_ROLES = [
         ),
         "required": True,
         "degraded_without": [],
-        "ansible_playbook": "deploy-slm-agent.yml",
+        "ansible_playbook": "playbooks/deploy-slm-agent.yml",
     },
 ]
 
@@ -485,7 +485,7 @@ DEFAULT_ROLES: List[Dict] = default_roles_for(  # #16025: manifest-augmented, se
 # in setup_wizard.py to build role-based host groups.
 #
 # #14460: a value here is only useful if the ansible layer CONSULTS that
-# group -- a `groups.get(...)` clause in playbooks/vars/role_active_facts.yml,
+# group -- a `groups.get(...)` clause in inventory/group_vars/all.yml,
 # a play's `hosts:`, or a `groups[...]` lookup. Two values were consulted
 # nowhere: "databases" (plural) and "browser_automation". The inventory
 # builder created those groups and no play, fact or group_vars file ever

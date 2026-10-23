@@ -19,13 +19,13 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from context_aware_decision_system import DecisionType, context_aware_decision_system
+from context_aware_decision import DecisionType, context_aware_decision_system
 
 # Import multi-modal components
 from multimodal_processor import (
     ModalInput,
     ModalityType,
-    ProcessingIntent,
+    MultimodalProcessingIntent,
 )
 from multimodal_processor import processor as multimodal_processor
 from voice_processing_system import AudioInput, get_voice_processing_system
@@ -109,7 +109,7 @@ class TestMultiModalWorkflowIntegration:
         text_input = ModalInput(
             input_id="text_workflow_1",
             modality_type=ModalityType.TEXT,
-            intent=ProcessingIntent.AUTOMATION_TASK,
+            intent=MultimodalProcessingIntent.AUTOMATION_TASK,
             data=user_request,
             metadata={"source": "user", "workflow_step": 1},
             timestamp=time.time(),
@@ -139,7 +139,7 @@ class TestMultiModalWorkflowIntegration:
         screenshot_input = ModalInput(
             input_id="screenshot_workflow_1",
             modality_type=ModalityType.IMAGE,
-            intent=ProcessingIntent.SCREEN_ANALYSIS,
+            intent=MultimodalProcessingIntent.SCREEN_ANALYSIS,
             data=test_screenshot,
             metadata={"source": "screenshot", "workflow_step": 2},
             timestamp=time.time(),
@@ -200,7 +200,7 @@ class TestMultiModalWorkflowIntegration:
         combined_input = ModalInput(
             input_id="combined_workflow_1",
             modality_type=ModalityType.COMBINED,
-            intent=ProcessingIntent.DECISION_MAKING,
+            intent=MultimodalProcessingIntent.DECISION_MAKING,
             data={
                 "image": base64.b64encode(test_image).decode("utf-8"),
                 "audio": base64.b64encode(test_audio).decode("utf-8"),
@@ -252,7 +252,7 @@ class TestMultiModalWorkflowIntegration:
                 input_data = ModalInput(
                     input_id=f"stream_{i}",
                     modality_type=ModalityType.TEXT,
-                    intent=ProcessingIntent.DECISION_MAKING,
+                    intent=MultimodalProcessingIntent.DECISION_MAKING,
                     data=f"Step {i}: Check current status",
                     metadata={"stream_index": i, "timestamp": time.time()},
                     timestamp=time.time(),
@@ -264,7 +264,7 @@ class TestMultiModalWorkflowIntegration:
                 input_data = ModalInput(
                     input_id=f"stream_{i}",
                     modality_type=ModalityType.IMAGE,
-                    intent=ProcessingIntent.DECISION_MAKING,
+                    intent=MultimodalProcessingIntent.DECISION_MAKING,
                     data=test_image,
                     metadata={"stream_index": i, "timestamp": time.time()},
                     timestamp=time.time(),
@@ -347,7 +347,7 @@ class TestMultiModalWorkflowIntegration:
         initial_context = ModalInput(
             input_id=f"{session_id}_1",
             modality_type=ModalityType.TEXT,
-            intent=ProcessingIntent.CONTENT_GENERATION,
+            intent=MultimodalProcessingIntent.CONTENT_GENERATION,
             data="I'm working on automating a web form submission process",
             metadata={"session_id": session_id, "step": 1},
             timestamp=time.time(),
@@ -373,7 +373,7 @@ class TestMultiModalWorkflowIntegration:
         visual_context = ModalInput(
             input_id=f"{session_id}_2",
             modality_type=ModalityType.IMAGE,
-            intent=ProcessingIntent.VISUAL_QA,
+            intent=MultimodalProcessingIntent.VISUAL_QA,
             data=form_image,
             metadata={"session_id": session_id, "step": 2},
             timestamp=time.time(),
@@ -448,7 +448,7 @@ class TestMultiModalWorkflowIntegration:
         text_input = ModalInput(
             input_id="error_recovery_1",
             modality_type=ModalityType.TEXT,
-            intent=ProcessingIntent.DECISION_MAKING,
+            intent=MultimodalProcessingIntent.DECISION_MAKING,
             data="Deliberately malformed input with \x00 null bytes \xff",
             metadata={"test_scenario": "text_error"},
             timestamp=time.time(),
@@ -475,7 +475,7 @@ class TestMultiModalWorkflowIntegration:
         image_input = ModalInput(
             input_id="error_recovery_2",
             modality_type=ModalityType.IMAGE,
-            intent=ProcessingIntent.DECISION_MAKING,
+            intent=MultimodalProcessingIntent.DECISION_MAKING,
             data=corrupted_image,
             metadata={"test_scenario": "image_error"},
             timestamp=time.time(),
@@ -548,7 +548,7 @@ class TestMultiModalWorkflowIntegration:
                 input_data = ModalInput(
                     input_id=f"load_{request_id}",
                     modality_type=modality,
-                    intent=ProcessingIntent.AUTOMATION_TASK,
+                    intent=MultimodalProcessingIntent.AUTOMATION_TASK,
                     data=content,
                     metadata={"load_test": True, "request_id": request_id},
                     timestamp=time.time(),
@@ -568,7 +568,7 @@ class TestMultiModalWorkflowIntegration:
                 input_data = ModalInput(
                     input_id=f"load_{request_id}",
                     modality_type=modality,
-                    intent=ProcessingIntent.AUTOMATION_TASK,
+                    intent=MultimodalProcessingIntent.AUTOMATION_TASK,
                     data=content,
                     metadata={"load_test": True, "request_id": request_id},
                     timestamp=time.time(),

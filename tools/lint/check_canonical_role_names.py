@@ -18,7 +18,7 @@ Blocked patterns:
     when: "'frontend' in node_roles"
     # ... etc. for all deprecated aliases
 
-Allowlist: group_vars/all.yml and vars/role_active_facts.yml must maintain
+Allowlist: group_vars/all.yml must maintain
 the OR-chains for backward compat with existing hosts — those files are
 excluded from this check.
 
@@ -59,27 +59,13 @@ ALLOWLIST: frozenset[str] = frozenset(
     {
         # The facts themselves must check both forms for backward compat.
         "autobot-slm-backend/ansible/inventory/group_vars/all.yml",
-        "autobot-slm-backend/ansible/playbooks/vars/role_active_facts.yml",
-        # #14181: the test inventory carries the same role_*_active OR-chains,
-        # kept in sync by `tests/check_role_facts_synced.py`, which extracts the
-        # `role_*_active:` blocks (plus chromadb_service_owner) from all three
-        # files and compares them. "Fixing" the OR-chains here would break that
-        # check against the two files already allowlisted above.
-        #
-        # #14201: this file's own header used to claim it was kept
-        # byte-identical to a sibling copy -- it never was (three different
-        # files with different line counts and hashes; only the extracted
-        # fact fragment above is compared, by
-        # tests/check_role_facts_synced.py, which now also fails CI if any
-        # of the three headers makes that claim again). The header has
-        # since been corrected to describe what is actually kept in sync.
-        # It is a real file rather than a symlink because
-        # `core.symlinks=false` materializes symlinks as plain text
-        # (#14149) -- that part of the header is correct.
-        #
-        # `tests/check_test_inventory_group_vars.py` is NOT the enforcer: it only
-        # runs `ansible-inventory --list` and asserts one key resolves. Naming it
-        # here would point a future reader at the wrong guard.
+        # #14678: the CI test inventory's group_vars/ is GENERATED from
+        # inventory/group_vars/ (never tracked), so it carries the same
+        # OR-chains. `tools/lint/check_test_inventory_is_generated.py` asserts the
+        # copy is fresh and a real file (not a symlink, #14149), and
+        # `tools/lint/check_role_facts_single_source.py` asserts no tracked second
+        # definition exists. "Fixing" the OR-chains in the copy would only be
+        # overwritten at the next CI run.
         "autobot-slm-backend/ansible/tests/inventory/group_vars/all.yml",
         # This file and its test.
         "tools/lint/check_canonical_role_names.py",

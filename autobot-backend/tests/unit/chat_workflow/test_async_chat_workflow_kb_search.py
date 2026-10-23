@@ -53,7 +53,7 @@ class TestExecuteKbSearch:
         mock_kb = MagicMock()
         mock_kb.search = AsyncMock(return_value=[_make_kb_result("doc A", 0.95)])
 
-        with patch(f"{_MODULE}.get_knowledge_base", AsyncMock(return_value=mock_kb)):
+        with patch(f"{_MODULE}.get_knowledge_base_or_none", AsyncMock(return_value=mock_kb)):
             status, results = await workflow._execute_kb_search("what is autobot")
 
         assert status is KnowledgeStatus.FOUND
@@ -69,7 +69,7 @@ class TestExecuteKbSearch:
         mock_kb = MagicMock()
         mock_kb.search = AsyncMock(return_value=[])
 
-        with patch(f"{_MODULE}.get_knowledge_base", AsyncMock(return_value=mock_kb)):
+        with patch(f"{_MODULE}.get_knowledge_base_or_none", AsyncMock(return_value=mock_kb)):
             status, results = await workflow._execute_kb_search("unknown query")
 
         assert status is KnowledgeStatus.MISSING
@@ -82,17 +82,17 @@ class TestExecuteKbSearch:
         mock_kb = MagicMock()
         mock_kb.search = AsyncMock(side_effect=RuntimeError("chroma unreachable"))
 
-        with patch(f"{_MODULE}.get_knowledge_base", AsyncMock(return_value=mock_kb)):
+        with patch(f"{_MODULE}.get_knowledge_base_or_none", AsyncMock(return_value=mock_kb)):
             status, results = await workflow._execute_kb_search("any query")
 
         assert status is KnowledgeStatus.MISSING
         assert results == []
 
     async def test_missing_when_kb_unavailable(self, workflow):
-        """get_knowledge_base returning None yields MISSING."""
+        """get_knowledge_base_or_none returning None yields MISSING."""
         from async_chat_workflow import KnowledgeStatus
 
-        with patch(f"{_MODULE}.get_knowledge_base", AsyncMock(return_value=None)):
+        with patch(f"{_MODULE}.get_knowledge_base_or_none", AsyncMock(return_value=None)):
             status, results = await workflow._execute_kb_search("any query")
 
         assert status is KnowledgeStatus.MISSING
@@ -104,17 +104,18 @@ class TestExecuteKbSearch:
         Web-research facts are tagged metadata.collection="research" until
         Phase 1's promotion gate reviews them; general chat search must never
         surface them, so every call passes the quarantine exclusion filter.
+        #18820: the same filter carries the serving predicate's trust clause.
         """
         mock_kb = MagicMock()
         mock_kb.search = AsyncMock(return_value=[])
 
-        with patch(f"{_MODULE}.get_knowledge_base", AsyncMock(return_value=mock_kb)):
+        with patch(f"{_MODULE}.get_knowledge_base_or_none", AsyncMock(return_value=mock_kb)):
             await workflow._execute_kb_search("what is autobot")
 
         mock_kb.search.assert_awaited_once_with(
             query="what is autobot",
             top_k=5,
-            filters={"collection": {"$ne": "research"}},
+            filters={"$and": [{"collection": {"$ne": "research"}}, {"verification_status": {"$ne": "rejected"}}]},
         )
 
     async def test_multiple_results_mapped_correctly(self, workflow):
@@ -125,7 +126,7 @@ class TestExecuteKbSearch:
         mock_kb = MagicMock()
         mock_kb.search = AsyncMock(return_value=raw)
 
-        with patch(f"{_MODULE}.get_knowledge_base", AsyncMock(return_value=mock_kb)):
+        with patch(f"{_MODULE}.get_knowledge_base_or_none", AsyncMock(return_value=mock_kb)):
             status, results = await workflow._execute_kb_search("query")
 
         assert status is KnowledgeStatus.FOUND
@@ -158,7 +159,7 @@ class TestWorkflowKnowledgeSearch:
         mock_kb = MagicMock()
         mock_kb.search = AsyncMock(return_value=[_make_kb_result()])
 
-        with patch(f"{_MODULE}.get_knowledge_base", AsyncMock(return_value=mock_kb)):
+        with patch(f"{_MODULE}.get_knowledge_base_or_none", AsyncMock(return_value=mock_kb)):
             status, results = await workflow._workflow_knowledge_search("hello")
 
         assert status is KnowledgeStatus.FOUND
@@ -171,7 +172,7 @@ class TestWorkflowKnowledgeSearch:
         mock_kb = MagicMock()
         mock_kb.search = AsyncMock(return_value=[])
 
-        with patch(f"{_MODULE}.get_knowledge_base", AsyncMock(return_value=mock_kb)):
+        with patch(f"{_MODULE}.get_knowledge_base_or_none", AsyncMock(return_value=mock_kb)):
             status, results = await workflow._workflow_knowledge_search("unknown")
 
         assert status is KnowledgeStatus.MISSING
@@ -184,7 +185,7 @@ class TestWorkflowKnowledgeSearch:
         mock_kb = MagicMock()
         mock_kb.search = AsyncMock(side_effect=Exception("boom"))
 
-        with patch(f"{_MODULE}.get_knowledge_base", AsyncMock(return_value=mock_kb)):
+        with patch(f"{_MODULE}.get_knowledge_base_or_none", AsyncMock(return_value=mock_kb)):
             status, results = await workflow._workflow_knowledge_search("query")
 
         assert status is KnowledgeStatus.MISSING

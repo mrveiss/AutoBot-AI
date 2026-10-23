@@ -92,10 +92,11 @@ from typing import Any, Dict, List, NamedTuple, Optional, Sequence, Tuple
 # a transport failure is turned into a status code instead of a traceback.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from ci_dispatch_watchdog import (  # noqa: E402
+from github_api import (  # noqa: E402
     NO_RESPONSE_STATUS,
     GitHubApi,
     WatchdogConfigError,
+    build_api,
 )
 
 # The grouping rules live in one place (#16120). Reading `/check-runs` without
@@ -169,7 +170,6 @@ DEFAULT_PROVISIONING_MARKERS = (
 )
 
 DEFAULT_TIMEOUT_SECONDS = 30
-DEFAULT_API_ROOT = "https://api.github.com"
 #: Aliases onto the shared vocabulary (#16120). The page size and the page
 #: ceiling belong with the walk they bound, and a second copy here is a number
 #: that drifts silently: nothing fails when the two disagree, the walk just
@@ -516,17 +516,6 @@ def resolve_exit_code(report: Report, exit_zero: bool) -> int:
     return 0
 
 
-def build_api() -> GitHubApi:
-    token = os.environ.get("GITHUB_TOKEN", "").strip()
-    repository = os.environ.get("GITHUB_REPOSITORY", "").strip()
-    if not token:
-        raise WatchdogConfigError("GITHUB_TOKEN is required")
-    if "/" not in repository:
-        raise WatchdogConfigError("GITHUB_REPOSITORY must be 'owner/repo'")
-    api_root = os.environ.get("GITHUB_API_URL", DEFAULT_API_ROOT).strip() or DEFAULT_API_ROOT
-    return GitHubApi(token, repository, api_root, request_timeout())
-
-
 def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="Classify why a commit's checks are red.")
     target = parser.add_mutually_exclusive_group(required=True)
@@ -540,7 +529,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     args = parser.parse_args(argv)
     try:
-        api = build_api()
+        api = build_api(request_timeout())
         sha = args.sha.strip() if args.sha else head_sha_for_pr(api, args.pr)
         report = classify_commit(api, sha)
     except WatchdogConfigError as exc:

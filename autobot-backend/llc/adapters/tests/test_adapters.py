@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Tests for LLC adapter protocol, ProcessAdapter, HttpAdapter, and registry (GH#8226)."""
+"""Tests for LLC adapter protocol, LLCProcessAdapter, HttpAdapter, and registry (GH#8226)."""
 
 import signal
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -10,9 +10,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from llc.adapters import AdapterRunStatus, get_adapter, register_adapter
-from llc.adapters.base import LLCAdapter
+from llc.adapters.base import LLCAdapter, _registry
 from llc.adapters.http_adapter import HttpAdapter
-from llc.adapters.process_adapter import ProcessAdapter
+from llc.adapters.process_adapter import LLCProcessAdapter
 from llc.models.enums import LLCRunStatus
 
 _PSUTIL_PROCESS = "llc.adapters.subprocess_support.psutil.Process"
@@ -24,7 +24,7 @@ _PSUTIL_PROCESS = "llc.adapters.subprocess_support.psutil.Process"
 
 class TestLLCAdapterProtocol:
     def test_process_adapter_satisfies_protocol(self) -> None:
-        assert isinstance(ProcessAdapter(), LLCAdapter)
+        assert isinstance(LLCProcessAdapter(), LLCAdapter)
 
     def test_http_adapter_satisfies_protocol(self) -> None:
         assert isinstance(HttpAdapter(), LLCAdapter)
@@ -55,15 +55,15 @@ class TestAdapterRunStatus:
 
 
 # ---------------------------------------------------------------------------
-# ProcessAdapter
+# LLCProcessAdapter
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 class TestProcessAdapter:
     async def test_invoke_disabled_by_default_raises(self) -> None:
-        """GH#11059: ProcessAdapter is fail-closed — invoke raises unless an operator enables it."""
-        adapter = ProcessAdapter()
+        """GH#11059: LLCProcessAdapter is fail-closed — invoke raises unless an operator enables it."""
+        adapter = LLCProcessAdapter()
         with patch("asyncio.create_subprocess_exec", new_callable=AsyncMock) as spawn:
             with pytest.raises(PermissionError):
                 await adapter.invoke({"command": "echo hello"}, {})
@@ -72,7 +72,7 @@ class TestProcessAdapter:
     async def test_invoke_returns_encoded_run_id(self) -> None:
         """PR#16284 review: run_id packs pid + psutil create_time for later
         PID-reuse-safe identity verification."""
-        adapter = ProcessAdapter()
+        adapter = LLCProcessAdapter()
         fake_proc = MagicMock()
         fake_proc.pid = 12345
 
@@ -88,7 +88,7 @@ class TestProcessAdapter:
 
     async def test_invoke_uses_exec_with_split_argv_not_shell(self) -> None:
         """GH#11059: command runs via exec on shlex-split argv — no shell metacharacter RCE."""
-        adapter = ProcessAdapter()
+        adapter = LLCProcessAdapter()
         fake_proc = MagicMock()
         fake_proc.pid = 7
 
@@ -113,7 +113,7 @@ class TestProcessAdapter:
         assert captured_kwargs["start_new_session"] is True
 
     async def test_invoke_passes_context_as_env(self) -> None:
-        adapter = ProcessAdapter()
+        adapter = LLCProcessAdapter()
         fake_proc = MagicMock()
         fake_proc.pid = 99
 
@@ -138,7 +138,7 @@ class TestProcessAdapter:
         """GH#11059: the subprocess must NOT inherit backend secrets from os.environ."""
         monkeypatch.setenv("DATABASE_URL", "postgres://secret")
         monkeypatch.setenv("PATH", "/usr/bin")
-        adapter = ProcessAdapter()
+        adapter = LLCProcessAdapter()
         fake_proc = MagicMock()
         fake_proc.pid = 1
 
@@ -158,13 +158,13 @@ class TestProcessAdapter:
         assert captured_env.get("PATH") == "/usr/bin"  # safe var passes through
 
     async def test_status_running_when_pid_alive(self) -> None:
-        adapter = ProcessAdapter()
+        adapter = LLCProcessAdapter()
         with patch("os.kill", return_value=None):  # signal 0 succeeds → process alive
             result = await adapter.status({}, "12345")
         assert result.status is LLCRunStatus.RUNNING
 
     async def test_status_completed_when_pid_gone(self) -> None:
-        adapter = ProcessAdapter()
+        adapter = LLCProcessAdapter()
 
         def _raise(*_):
             raise ProcessLookupError
@@ -174,20 +174,20 @@ class TestProcessAdapter:
         assert result.status is LLCRunStatus.COMPLETED
 
     async def test_status_failed_on_oserror(self) -> None:
-        adapter = ProcessAdapter()
+        adapter = LLCProcessAdapter()
         with patch("os.kill", side_effect=OSError("bad")):
             result = await adapter.status({}, "12345")
         assert result.status is LLCRunStatus.FAILED
         assert "bad" in (result.error or "")
 
     async def test_status_failed_on_invalid_pid(self) -> None:
-        adapter = ProcessAdapter()
+        adapter = LLCProcessAdapter()
         result = await adapter.status({}, "abc")
         assert result.status is LLCRunStatus.FAILED
         assert result.error is not None
 
     async def test_cancel_sends_sigterm(self) -> None:
-        adapter = ProcessAdapter()
+        adapter = LLCProcessAdapter()
         killed = []
 
         sent_sigterm = [False]
@@ -218,7 +218,7 @@ class TestProcessAdapter:
     async def test_cancel_without_recorded_identity_never_signals(self) -> None:
         """PR#16284 review: a bare-pid run_id (no create_time) means cancel()
         can only probe -- it never signals, and never raises."""
-        adapter = ProcessAdapter()
+        adapter = LLCProcessAdapter()
         with patch("os.kill") as mock_kill:
             await adapter.cancel({}, "99999")
         mock_kill.assert_not_called()
@@ -365,6 +365,9 @@ class TestAdapterRegistry:
             async def cancel(self, agent_config: dict, run_id: str) -> None:
                 pass
 
-        register_adapter("fake_test", FakeAdapter())
-        retrieved = get_adapter("fake_test")
-        assert isinstance(retrieved, FakeAdapter)
+        # patch.dict restores the registry so "fake_test" cannot leak into
+        # tests that enumerate registered adapters.
+        with patch.dict(_registry):
+            register_adapter("fake_test", FakeAdapter())
+            retrieved = get_adapter("fake_test")
+            assert isinstance(retrieved, FakeAdapter)

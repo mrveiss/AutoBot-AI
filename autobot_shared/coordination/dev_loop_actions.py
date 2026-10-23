@@ -127,7 +127,7 @@ def build_action(
     )
 
 
-async def record(action: DevLoopAction) -> bool:
+async def record_dev_loop_action(action: DevLoopAction) -> bool:
     """Append *action* to its issue's history. ``False`` means not recorded.
 
     Never raises: the caller has already claimed the issue and may already have
@@ -144,7 +144,7 @@ async def record(action: DevLoopAction) -> bool:
         # One transaction, not three round-trips (review finding on #17380).
         # If `LPUSH` succeeded and `EXPIRE` then failed, the history key was
         # left with no TTL and unbounded by anything but `LTRIM` -- and
-        # `record` returns False while neither caller repairs the partial
+        # `record_dev_loop_action` returns False while neither caller repairs the partial
         # write, so the bounded-history contract broke silently. Same shape,
         # and the same fix, as `token_budget._increment` in this PR: before
         # EXEC none of the three has applied, after EXEC all of them have.
@@ -179,6 +179,24 @@ async def recent(issue: int, *, limit: int = DEFAULT_RECENT_LIMIT) -> list[DevLo
         # type and slips past that check (review).
         raise RuntimeError("dev-loop actions: this issue's history cannot be read") from exc
     return [_decode(entry) for entry in raw]
+
+
+async def issues_with_history() -> list[int]:
+    """Every issue that has a recorded action history, ascending (#18391).
+
+    Raises ``RuntimeError`` when Redis is unreachable, like :func:`recent`: an
+    empty list means no issue was ever acted on, not that nobody could look.
+    """
+    client = await get_async_redis_client(database="main")
+    if client is None:
+        raise RuntimeError("dev-loop actions: Redis client unavailable; the issue list cannot be read")
+    prefix = _ACTIONS_KEY.format(issue="")
+    try:
+        keys = [k async for k in client.scan_iter(match=f"{prefix}*")]
+    except Exception as exc:  # noqa: BLE001 -- re-raised as the contract's type, see `recent`
+        raise RuntimeError("dev-loop actions: the issue list cannot be read") from exc
+    numbers = (k.decode() if isinstance(k, bytes) else k for k in keys)
+    return sorted(int(n[len(prefix) :]) for n in numbers if n[len(prefix) :].isdigit())
 
 
 def _decode(raw: Any) -> DevLoopAction:
@@ -218,7 +236,8 @@ __all__ = [
     "OUTCOME_SKIPPED_CLAIMED",
     "action_payload",
     "build_action",
+    "issues_with_history",
     "last_refusal",
     "recent",
-    "record",
+    "record_dev_loop_action",
 ]

@@ -28,7 +28,7 @@ class KBAddFileHandler(TaskHandler):
         file_type = ctx.require_payload_value("file_type")
         metadata = ctx.get_payload_value("metadata")
 
-        result = await ctx.worker.knowledge_base.add_file(file_path, file_type, metadata)
+        result = await (await ctx.worker.resolve_knowledge_base()).add_file(file_path, file_type, metadata)
 
         ctx.audit_log(
             "kb_add_file",
@@ -47,7 +47,8 @@ class KBSearchHandler(TaskHandler):
         query = ctx.require_payload_value("query")
         n_results = ctx.get_payload_value("n_results", 5)
 
-        kb_results = await ctx.worker.knowledge_base.search(query, n_results)
+        kb = await ctx.worker.resolve_knowledge_base()
+        kb_results = await kb.search(query, n_results)
 
         result = task_success("KB search successful.", data={"results": kb_results})
 
@@ -68,7 +69,7 @@ class KBStoreFactHandler(TaskHandler):
         content = ctx.require_payload_value("content")
         metadata = ctx.get_payload_value("metadata")
 
-        result = await ctx.worker.knowledge_base.store_fact(content, metadata)
+        result = await (await ctx.worker.resolve_knowledge_base()).store_fact(content, metadata)
 
         ctx.audit_log(
             "kb_store_fact",

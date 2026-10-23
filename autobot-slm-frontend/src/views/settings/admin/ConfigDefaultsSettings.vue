@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -156,10 +157,7 @@ onMounted(() => { fetchDefaults() })
     </div>
 
     <!-- Alerts -->
-    <div v-if="errorMessage" class="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-      {{ errorMessage }}
-      <button @click="errorMessage = null" class="ml-2 underline">{{ $t('settings.admin.configDefaultsSettings.dismiss') }}</button>
-    </div>
+    <BaseAlert v-if="errorMessage" variant="error" :message="errorMessage" dismissible :dismiss-label="$t('settings.admin.configDefaultsSettings.dismiss')" @dismiss="errorMessage = null" />
     <div v-if="successMessage" class="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
       {{ successMessage }}
     </div>

@@ -286,21 +286,12 @@ class TestRevokeTtlFromToken:
         exp = int(claims["exp"])
         expected_ttl = max(1, exp - int(time.time()))
 
-        redis_mock = AsyncMock()
-        redis_mock.set = AsyncMock(return_value=True)
-        get_client = AsyncMock(return_value=redis_mock)
-
-        # #12807/#12827 migrated token_denylist.py off the sync-returning
-        # get_redis_client(async_client=True) footgun onto get_async_redis_client()
-        # (autobot_shared/redis_client.py) but this test's patch target was never
-        # updated (#13312): patch.object(_dl_mod, "get_redis_client", ...) raised
-        # AttributeError because that name no longer exists on the module, so this
-        # test collected as a failure with zero real-defect signal in the control
-        # it claims to verify — revoke_jti was already using the safe helper.
-        with patch.object(_dl_mod, "get_async_redis_client", get_client):
+        # #18663: the denylist is the SLM's own PostgreSQL now; spy on the store
+        # write (its SQL is tested in tests/services/test_auth_revocation_store_18663.py).
+        store_write = AsyncMock(return_value=None)
+        with patch.object(_dl_mod, "_revoke", store_write):
             await _dl_mod.revoke_jti(jti, ttl_seconds=expected_ttl)
 
-        get_client.assert_called_once_with()
-        redis_mock.set.assert_awaited_once()
-        _, kwargs = redis_mock.set.call_args
-        assert kwargs["ex"] >= 1
+        store_write.assert_awaited_once()
+        written_jti, written_ttl = store_write.call_args.args
+        assert written_jti == jti and written_ttl >= 1

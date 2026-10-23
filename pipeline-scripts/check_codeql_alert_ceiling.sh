@@ -111,8 +111,11 @@ if [ -n "$ALERT_REF" ]; then
     # would rest the whole discrimination on a platform-chosen name; matching only the
     # workflow's would miss a run that reported the status check and nothing else. Any
     # of the three means CodeQL ran here.
-    codeql_checks=$(gh api "repos/${REPO}/commits/${GITHUB_SHA:-${ALERT_REF}}/check-runs?per_page=100" \
-      --jq '[.check_runs[] | select(.name | test("codeql|^Analyze \\(|Detect changed languages"; "i"))] | length' 2>/dev/null) || codeql_checks=""
+    # Every page, via the ONE check-runs helper (#16120): one unpaginated page made a
+    # CodeQL run sitting past run 100 read as "did not run" (#19085). The helper
+    # also exits nonzero when the API's total_count is not the runs read.
+    codeql_checks=$(python3 "$(dirname "${BASH_SOURCE[0]}")/../scripts/lib/check_run_status.py" count-named \
+      "${REPO}" "${GITHUB_SHA:-${ALERT_REF}}" 'codeql|^Analyze \(|Detect changed languages' 2>/dev/null) || codeql_checks=""
     if [ -z "$codeql_checks" ] || ! [[ "$codeql_checks" =~ ^[0-9]+$ ]]; then
       fail "could not determine whether CodeQL ran for ${ALERT_REF} (the check-runs API errored) — an undetermined answer is not a pass"
     elif [ "$codeql_checks" -eq 0 ]; then

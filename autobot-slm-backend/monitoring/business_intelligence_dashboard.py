@@ -18,7 +18,6 @@ Issue #10720: Replaced fabricated usage constants and hardcoded component costs 
 import asyncio
 import json
 import logging
-import os
 import statistics
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -318,7 +317,8 @@ class BusinessIntelligenceDashboard:
         self.redis_host = redis_host
         self.redis_port = redis_port
         self.redis_client = None
-        _base = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
+        # #18094: base dir comes from ssot_config, not a private /opt/autobot fallback.
+        _base = get_config().path.base_dir
         self.dashboard_data_path = Path(_base) / "reports" / "performance"
         self.dashboard_data_path.mkdir(parents=True, exist_ok=True)
 

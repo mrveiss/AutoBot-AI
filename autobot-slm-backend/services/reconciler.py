@@ -29,9 +29,9 @@ from models.database import (
     Deployment,
     DeploymentStatus,
     EventSeverity,
-    EventType,
     Node,
     NodeEvent,
+    NodeEventType,
     NodeStatus,
     Service,
     ServiceCategory,
@@ -40,7 +40,6 @@ from models.database import (
 )
 from services.db_transaction_errors import is_connection_level_db_error
 from services.node_capability import apply_capability_profile
-from services.service_categorizer import categorize_service
 from services.service_extra_data import engine_degraded_fields, is_managed_autobot_service
 from services.service_remediation_tracker import (
     clear_service_remediation,
@@ -48,6 +47,8 @@ from services.service_remediation_tracker import (
     read_service_remediation,
     write_service_remediation,
 )
+from services.service_upsert import upsert_service
+from services.unit_names import discovered_unit_name_ok
 
 logger = logging.getLogger(__name__)
 
@@ -537,7 +538,7 @@ class ReconcilerService:
         event = NodeEvent(
             event_id=str(uuid.uuid4())[:16],
             node_id=node.node_id,
-            event_type=EventType.HEALTH_CHECK.value,
+            event_type=NodeEventType.HEALTH_CHECK.value,
             severity=EventSeverity.WARNING.value,
             message=f"Node {node.hostname} reachable but agent not responding",
             details={"old_status": old_status, "reason": "no_heartbeat"},
@@ -559,7 +560,7 @@ class ReconcilerService:
         event = NodeEvent(
             event_id=str(uuid.uuid4())[:16],
             node_id=node.node_id,
-            event_type=EventType.HEALTH_CHECK.value,
+            event_type=NodeEventType.HEALTH_CHECK.value,
             severity=EventSeverity.ERROR.value,
             message=f"Node {node.hostname} is unreachable",
             details={"old_status": old_status, "reason": "unreachable"},
@@ -774,7 +775,7 @@ class ReconcilerService:
         event = NodeEvent(
             event_id=str(uuid.uuid4())[:16],
             node_id=node.node_id,
-            event_type=EventType.REMEDIATION_COMPLETED.value,
+            event_type=NodeEventType.REMEDIATION_COMPLETED.value,
             severity=EventSeverity.WARNING.value,
             message=(
                 f"Node {node.hostname} requires human intervention after "
@@ -821,7 +822,7 @@ class ReconcilerService:
         - Persists a throttled `NodeEvent` (`_create_still_exhausted_event`)
           so the DB-backed timeline shows the node is STILL stuck, not just
           the one original exhaustion event -- reusing the same generic,
-          already-rendered `EventType.REMEDIATION_COMPLETED` shape rather
+          already-rendered `NodeEventType.REMEDIATION_COMPLETED` shape rather
           than inventing a new one, so this needs no new frontend work.
         - Broadcasts over the websocket for anyone watching live, with
           `event_type="still_exhausted"` -- deliberately NOT `"completed"`:
@@ -869,7 +870,7 @@ class ReconcilerService:
         event = NodeEvent(
             event_id=str(uuid.uuid4())[:16],
             node_id=node.node_id,
-            event_type=EventType.REMEDIATION_COMPLETED.value,
+            event_type=NodeEventType.REMEDIATION_COMPLETED.value,
             severity=EventSeverity.WARNING.value,
             message=(
                 f"Node {node.hostname} still requires human intervention "
@@ -903,7 +904,7 @@ class ReconcilerService:
             event = NodeEvent(
                 event_id=str(uuid.uuid4())[:16],
                 node_id=node_id,
-                event_type=EventType.REMEDIATION_COMPLETED.value,
+                event_type=NodeEventType.REMEDIATION_COMPLETED.value,
                 severity=EventSeverity.INFO.value,
                 message=f"SLM agent on {node.hostname} restarted and resumed heartbeating",
                 details={"action": "restart_agent", "success": True, "verified_by": "heartbeat"},
@@ -928,7 +929,7 @@ class ReconcilerService:
             event = NodeEvent(
                 event_id=str(uuid.uuid4())[:16],
                 node_id=node_id,
-                event_type=EventType.REMEDIATION_COMPLETED.value,
+                event_type=NodeEventType.REMEDIATION_COMPLETED.value,
                 severity=EventSeverity.WARNING.value,
                 message=failure_message,
                 details={
@@ -1003,7 +1004,7 @@ class ReconcilerService:
         event = NodeEvent(
             event_id=str(uuid.uuid4())[:16],
             node_id=node_id,
-            event_type=EventType.REMEDIATION_STARTED.value,
+            event_type=NodeEventType.REMEDIATION_STARTED.value,
             severity=EventSeverity.INFO.value,
             message=f"Starting auto-remediation for {node.hostname}",
             details={"attempt": tracker["count"] + 1, "action": "restart_agent"},
@@ -1149,14 +1150,12 @@ class ReconcilerService:
         from services.database import db_service
 
         async with db_service.session() as db:
-            # Check if auto-restart services is enabled
             auto_restart = await db.execute(select(Setting).where(Setting.key == "auto_restart_services"))
             setting = auto_restart.scalar_one_or_none()
 
             if not setting or setting.value != "true":
                 return
 
-            # Get failed services that are enabled (should be running)
             result = await db.execute(
                 select(Service).where(
                     Service.status == SystemdState.FAILED.value,
@@ -1167,6 +1166,8 @@ class ReconcilerService:
             failed_services = result.scalars().all()
 
             for service in failed_services:
+                if not discovered_unit_name_ok(service.node_id, service.service_name):
+                    continue  # #19005: a row stored before the ingest check; never handed to Ansible
                 # Check if node is in maintenance window
                 if await self._is_remediation_suppressed(db, service.node_id):
                     logger.debug(
@@ -1234,7 +1235,7 @@ class ReconcilerService:
         event = NodeEvent(
             event_id=str(uuid.uuid4())[:16],
             node_id=node.node_id,
-            event_type=EventType.REMEDIATION_COMPLETED.value,
+            event_type=NodeEventType.REMEDIATION_COMPLETED.value,
             severity=EventSeverity.WARNING.value,
             message=(
                 f"Service {service.service_name} on {node.hostname} requires "
@@ -1460,7 +1461,7 @@ class ReconcilerService:
         event = NodeEvent(
             event_id=str(uuid.uuid4())[:16],
             node_id=node.node_id,
-            event_type=EventType.ROLLBACK_STARTED.value,
+            event_type=NodeEventType.ROLLBACK_STARTED.value,
             severity=EventSeverity.WARNING.value,
             message=f"Auto-rollback triggered for deployment {deployment.deployment_id}",
             details={
@@ -1490,7 +1491,7 @@ class ReconcilerService:
             event = NodeEvent(
                 event_id=str(uuid.uuid4())[:16],
                 node_id=node.node_id,
-                event_type=EventType.ROLLBACK_COMPLETED.value,
+                event_type=NodeEventType.ROLLBACK_COMPLETED.value,
                 severity=EventSeverity.INFO.value,
                 message=f"Auto-rollback completed for deployment {deployment.deployment_id}",
                 details={
@@ -1510,7 +1511,7 @@ class ReconcilerService:
             event = NodeEvent(
                 event_id=str(uuid.uuid4())[:16],
                 node_id=node.node_id,
-                event_type=EventType.ROLLBACK_COMPLETED.value,
+                event_type=NodeEventType.ROLLBACK_COMPLETED.value,
                 severity=EventSeverity.ERROR.value,
                 message=f"Auto-rollback failed for deployment {deployment.deployment_id}",
                 details={
@@ -1724,7 +1725,7 @@ class ReconcilerService:
         event = NodeEvent(
             event_id=str(uuid.uuid4())[:16],
             node_id=node.node_id,
-            event_type=EventType.HEALTH_CHECK.value,
+            event_type=NodeEventType.HEALTH_CHECK.value,
             severity=severity.value,
             message=f"Node status changed from {old_status} to {new_status}",
             details={
@@ -1866,6 +1867,8 @@ class ReconcilerService:
         status: str,
         svc_extra: dict,
         now: datetime,
+        *,
+        category: str,
     ) -> Service:
         """Construct a new Service ORM object from heartbeat data.
 
@@ -1875,9 +1878,9 @@ class ReconcilerService:
         against (#14465) -- a first observation genuinely has no rate
         information yet, so `n_restarts_increased_at` is deliberately left
         unset here rather than backfilled; the next observed increase arms
-        the churn window (see `_restart_churn_active`).
+        the churn window (see `_restart_churn_active`). `category` comes from
+        the shared upsert (#19021).
         """
-        category = categorize_service(service_name)
         if "n_restarts" in svc_data:
             svc_extra = {**svc_extra, "n_restarts": svc_data["n_restarts"]}
         return Service(
@@ -1916,28 +1919,22 @@ class ReconcilerService:
 
         try:
             async with db.begin_nested():
-                result = await db.execute(
-                    select(Service).where(
-                        Service.node_id == node_id,
-                        Service.service_name == service_name,
-                    )
-                )
-                service = result.scalar_one_or_none()
-
                 status = svc_data.get("status", "unknown")
                 if status not in [s.value for s in SystemdState]:
                     status = SystemdState.UNKNOWN.value
-
-                # Issue #1019: Capture error context for failed services
-                error_msg = svc_data.get("error_message", "")
+                error_msg = svc_data.get("error_message", "")  # #1019: error context for failed services
                 svc_extra = {"error_message": error_msg} if error_msg else {}
                 svc_extra.update(engine_degraded_fields(svc_data))
-
-                if service:
-                    return self._update_existing_service(service, svc_data, status, error_msg, now)
-                service = self._create_new_service(node_id, service_name, svc_data, status, svc_extra, now)
-                db.add(service)
-                return False
+                outcome = await upsert_service(  # unit-name guard + lookup + categorise live in the core (#19021)
+                    db,
+                    node_id,
+                    service_name,
+                    update=lambda row: self._update_existing_service(row, svc_data, status, error_msg, now),
+                    create=lambda category: self._create_new_service(
+                        node_id, service_name, svc_data, status, svc_extra, now, category=category
+                    ),
+                )
+                return bool(outcome and outcome.update_result)
         except Exception as exc:
             if is_connection_level_db_error(exc):
                 raise

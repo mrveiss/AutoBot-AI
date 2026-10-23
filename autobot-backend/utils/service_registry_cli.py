@@ -22,14 +22,8 @@ import json
 import sys
 import time
 
+from .script_utils import print_header
 from .service_registry import RegistryServiceStatus, get_service_registry, get_service_url
-
-
-def print_header(title: str):
-    """Print a formatted header"""
-    print(f"\n{'=' * len(title)}")  # noqa: print  # canonical: ignore py-print-smoke
-    print(title)  # noqa: print  # canonical: ignore py-print-smoke
-    print("=" * len(title))  # noqa: print  # canonical: ignore py-print-smoke
 
 
 def print_status(status: str, message: str):

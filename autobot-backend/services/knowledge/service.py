@@ -15,6 +15,8 @@ from typing import Any, Dict, List, Tuple
 from advanced_rag_optimizer import RankedResult
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.ssot_config import config
+from knowledge.search_filters import KbPrincipal, require_kb_principal
+from knowledge.serving import servable
 from security.content_firewall import inspect_rag_context
 from services.rag_service import RAGService
 
@@ -248,6 +250,7 @@ class ChatKnowledgeService(DocumentationRetrievalMixin):
         score_threshold: float,
         categories: List[str] | None,
         start_time: float,
+        principal: KbPrincipal,
     ) -> Tuple[str, List[Dict]]:
         """Helper for retrieve_relevant_knowledge. Ref: #1088.
 
@@ -260,19 +263,18 @@ class ChatKnowledgeService(DocumentationRetrievalMixin):
             score_threshold: Minimum relevance score to keep
             categories: Optional category filter list
             start_time: Monotonic start time for elapsed logging
+            principal: Who is asking, or SYSTEM_SCOPE (#16664)
 
         Returns:
             Tuple of (formatted_context_string, citation_list)
         """
         # Issue #382: metrics unused; Issue #556: pass categories
         results, _ = await self.rag_service.advanced_search(
-            query=query,
-            max_results=top_k,
-            enable_reranking=True,
-            categories=categories,
+            query=query, max_results=top_k, enable_reranking=True, categories=categories, principal=principal
         )
 
-        filtered_results = self._filter_by_score(results, score_threshold)
+        # #18820: the serving predicate's final check -- RAG caches and fallbacks bypass the store.
+        filtered_results = self._filter_by_score(servable(results), score_threshold)
         context_string = self.format_knowledge_context(filtered_results)
         citations = self.format_citations(filtered_results)
 
@@ -292,9 +294,14 @@ class ChatKnowledgeService(DocumentationRetrievalMixin):
         top_k: int = 5,
         score_threshold: float = 0.3,
         categories: List[str] | None = None,
+        *,
+        principal: KbPrincipal,
     ) -> Tuple[str, List[Dict]]:
         """
         Retrieve relevant knowledge facts for a chat query.
+
+        Issue #16664: ``principal`` (a ``Principal`` or ``SYSTEM_SCOPE``) is required; the facts
+        returned are only those it may read. None raises instead of degrading to an unscoped read.
 
         Issue #556: Added categories parameter for category-based filtering.
 
@@ -319,9 +326,12 @@ class ChatKnowledgeService(DocumentationRetrievalMixin):
             )
         """
         start_time = time.time()
+        principal = require_kb_principal(principal)  # outside the try: a missing principal must not read as "no facts"
 
         try:
-            return await self._search_filter_and_format(query, top_k, score_threshold, categories, start_time)
+            return await self._search_filter_and_format(
+                query, top_k, score_threshold, categories, start_time, principal
+            )
 
         except Exception as e:
             # Graceful degradation - don't break chat flow
@@ -533,6 +543,8 @@ class ChatKnowledgeService(DocumentationRetrievalMixin):
         force_retrieval: bool = False,
         categories: List[str] | None = None,
         enable_smart_categories: bool = True,
+        *,
+        principal: KbPrincipal,
     ) -> Tuple[str, List[Dict], QueryIntentResult]:
         """Smart knowledge retrieval with intent detection.
 
@@ -564,6 +576,7 @@ class ChatKnowledgeService(DocumentationRetrievalMixin):
             top_k=top_k,
             score_threshold=score_threshold,
             categories=effective_categories,
+            principal=principal,
         )
 
         # #16771 AC5: second RAG entry point sharing conversation_aware_retrieve's
@@ -689,6 +702,8 @@ class ChatKnowledgeService(DocumentationRetrievalMixin):
         force_retrieval: bool = False,
         categories: List[str] | None = None,
         enable_smart_categories: bool = True,
+        *,
+        principal: KbPrincipal,
     ) -> Tuple[str, List[Dict], QueryIntentResult, Query | None]:
         """Conversation-aware knowledge retrieval with context enhancement.
 
@@ -713,35 +728,15 @@ class ChatKnowledgeService(DocumentationRetrievalMixin):
             top_k=top_k,
             score_threshold=score_threshold,
             categories=effective_categories,
+            principal=principal,
         )
 
         # Issue #1261, #10658: Search indexed documentation (autobot_docs) and
         # label each chunk as [Source N] continuing from KB source numbering so
         # citation indices are contiguous and the frontend can resolve them.
-        doc_results = self._retrieve_raw_doc_results(query)
+        doc_results = await self._retrieve_raw_doc_results(query, principal=principal)
         if doc_results:
-            kb_count = len(citations)
-            doc_lines: List[str] = []
-            for offset, result in enumerate(doc_results, 1):
-                source_n = kb_count + offset
-                content = result.get("content", "").strip()
-                doc_lines.append(f"[Source {source_n}] {content}")
-                citations.append(
-                    {
-                        "id": f"doc_{offset}",
-                        "content": content,
-                        "score": result.get("score", 0.0),
-                        "source": result.get("file_path", ""),
-                        "title": result.get("section", ""),
-                        "rank": source_n,
-                        "metadata": {
-                            "doc_type": result.get("doc_type", "documentation"),
-                            "section": result.get("section", ""),
-                            "subsection": result.get("subsection", ""),
-                        },
-                    }
-                )
-            doc_block = "AUTOBOT DOCUMENTATION CONTEXT:\n" + "\n".join(doc_lines)
+            doc_block = self._label_doc_sources(doc_results, citations)
             context_string = doc_block + "\n\n" + context_string if context_string else doc_block
 
         # #16771: chat is a RAG path too; see rag_firewall.inspect_and_quarantine's
@@ -770,6 +765,8 @@ class ChatKnowledgeService(DocumentationRetrievalMixin):
         score_threshold: float = 0.3,
         doc_threshold: float = 0.6,
         categories: List[str] | None = None,
+        *,
+        principal: KbPrincipal,
     ) -> Tuple[str, List[Dict], List[Dict[str, Any]]]:
         """
         Retrieve combined knowledge from RAG and documentation sources.
@@ -802,6 +799,7 @@ class ChatKnowledgeService(DocumentationRetrievalMixin):
             top_k=top_k,
             score_threshold=score_threshold,
             categories=categories,
+            principal=principal,
         )
 
         combined_parts = []

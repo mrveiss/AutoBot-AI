@@ -64,66 +64,64 @@
     </table>
 
     <!-- Add Repo Modal -->
-    <div
-      v-if="showAddModal"
-      class="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
-      @click.self="showAddModal = false"
+    <BaseModal
+      v-model="showAddModal"
+      :title="$t('skills.reposTab.addSkillRepository')"
+      size="sm"
+      :close-label="$t('ui.modal.closeDialog')"
     >
-      <div class="bg-gray-800 rounded-xl border border-gray-700 w-full max-w-md p-6">
-        <h3 class="text-lg font-bold text-white mb-4">{{ $t('skills.reposTab.addSkillRepository') }}</h3>
-        <div class="space-y-3">
-          <label class="block">
-            <span class="text-sm text-gray-400">{{ $t('skills.reposTab.name') }}</span>
-            <input
-              v-model="newRepo.name"
-              type="text"
-              :placeholder="$t('skills.reposTab.mySkills')"
-              class="mt-1 w-full bg-gray-900 border border-gray-700 rounded px-3 py-2
-                     text-white text-sm focus:outline-hidden focus:border-blue-500"
-            />
-          </label>
-          <label class="block">
-            <span class="text-sm text-gray-400">{{ $t('skills.reposTab.uRL') }}</span>
-            <input
-              v-model="newRepo.url"
-              type="text"
-              :placeholder="$t('skills.reposTab.httpsOrPathToDir')"
-              class="mt-1 w-full bg-gray-900 border border-gray-700 rounded px-3 py-2
-                     text-white text-sm focus:outline-hidden focus:border-blue-500"
-            />
-          </label>
-          <label class="block">
-            <span class="text-sm text-gray-400">{{ $t('skills.reposTab.type') }}</span>
-            <select
-              v-model="newRepo.repo_type"
-              class="mt-1 w-full bg-gray-900 border border-gray-700 rounded px-3 py-2
-                     text-white text-sm focus:outline-hidden focus:border-blue-500"
-            >
-              <option value="git">{{ $t('skills.reposTab.git') }}</option>
-              <option value="local">{{ $t('skills.reposTab.local') }}</option>
-              <option value="http">{{ $t('skills.reposTab.hTTP') }}</option>
-              <option value="mcp">{{ $t('skills.reposTab.mCP') }}</option>
-            </select>
-          </label>
-        </div>
-        <div class="flex gap-3 mt-5">
-          <button
-            class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm
-                   text-white transition-colors"
-            @click="submitAdd"
+      <div class="space-y-3">
+        <label class="block">
+          <span class="text-sm text-gray-400">{{ $t('skills.reposTab.name') }}</span>
+          <input
+            v-model="newRepo.name"
+            type="text"
+            :placeholder="$t('skills.reposTab.mySkills')"
+            class="mt-1 w-full bg-gray-900 border border-gray-700 rounded px-3 py-2
+                   text-white text-sm focus:outline-hidden focus:border-blue-500"
+          />
+        </label>
+        <label class="block">
+          <span class="text-sm text-gray-400">{{ $t('skills.reposTab.uRL') }}</span>
+          <input
+            v-model="newRepo.url"
+            type="text"
+            :placeholder="$t('skills.reposTab.httpsOrPathToDir')"
+            class="mt-1 w-full bg-gray-900 border border-gray-700 rounded px-3 py-2
+                   text-white text-sm focus:outline-hidden focus:border-blue-500"
+          />
+        </label>
+        <label class="block">
+          <span class="text-sm text-gray-400">{{ $t('skills.reposTab.type') }}</span>
+          <select
+            v-model="newRepo.repo_type"
+            class="mt-1 w-full bg-gray-900 border border-gray-700 rounded px-3 py-2
+                   text-white text-sm focus:outline-hidden focus:border-blue-500"
           >
-            {{ $t('skills.reposTab.add') }}
-          </button>
-          <button
-            class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm
-                   text-gray-300 transition-colors"
-            @click="showAddModal = false"
-          >
-            {{ $t('skills.reposTab.cancel') }}
-          </button>
-        </div>
+            <option value="git">{{ $t('skills.reposTab.git') }}</option>
+            <option value="local">{{ $t('skills.reposTab.local') }}</option>
+            <option value="http">{{ $t('skills.reposTab.hTTP') }}</option>
+            <option value="mcp">{{ $t('skills.reposTab.mCP') }}</option>
+          </select>
+        </label>
       </div>
-    </div>
+      <template #actions>
+        <button
+          class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded text-sm
+                 text-white transition-colors"
+          @click="submitAdd"
+        >
+          {{ $t('skills.reposTab.add') }}
+        </button>
+        <button
+          class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm
+                 text-gray-300 transition-colors"
+          @click="showAddModal = false"
+        >
+          {{ $t('skills.reposTab.cancel') }}
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 
@@ -131,6 +129,7 @@
 import { ref } from 'vue'
 import type { SkillRepo } from '@/composables/useSkills'
 import { formatDateTime } from '@/composables/useTimezone'
+import { BaseModal } from '@autobot/ui'
 
 defineProps<{ repos: readonly SkillRepo[] }>()
 const emit = defineEmits<{

@@ -83,7 +83,11 @@ class GroqProvider(OpenAICompatibleProvider):
         api_key = self._resolve_api_key()
         if not api_key:
             raise ValueError(self.missing_key_error)
-        return groq.AsyncGroq(api_key=api_key)
+        kwargs = {"api_key": api_key}
+        http_client = self._headroom_http_client(getattr(groq, "DefaultAsyncHttpxClient", None))
+        if http_client is not None:
+            kwargs["http_client"] = http_client  # #15026: harvest rate-limit headers
+        return groq.AsyncGroq(**kwargs)
 
 
 __all__ = ["GroqProvider", "GROQ_MODELS"]

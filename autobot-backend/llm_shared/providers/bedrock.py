@@ -29,6 +29,7 @@ from llm_shared.models import LLMRequest, LLMResponse, ToolCall
 from llm_shared.types import ProviderType
 
 from ..base_provider import BaseProvider
+from .anthropic_format import split_system_and_chat
 from .bedrock_credentials import (
     build_boto3_client,
     load_credentials_from_vault,
@@ -188,14 +189,7 @@ class BedrockProvider(BaseProvider):
 
     def _build_claude_request(self, request: LLMRequest) -> Dict[str, Any]:
         """Build request body for Claude models on Bedrock."""
-        # Separate system message from chat messages
-        system_content = ""
-        chat_messages = []
-        for msg in request.messages:
-            if msg.get("role") == "system":
-                system_content = msg.get("content", "")
-            else:
-                chat_messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
+        system_content, chat_messages = split_system_and_chat(request.messages)
 
         body: Dict[str, Any] = {
             "anthropic_version": "bedrock-2023-05-31",

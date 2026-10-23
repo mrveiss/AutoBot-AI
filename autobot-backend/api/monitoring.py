@@ -1176,7 +1176,7 @@ async def realtime_monitoring_websocket(websocket: WebSocket):
 # Helper functions
 # Performance monitoring decorator endpoint
 @router.post("/test/performance", response_model=TestPerformanceResponse)
-@monitor_performance("api_test")
+@monitor_performance("api_test", client_provider=lambda: performance_monitor.redis_client)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="test_performance_monitoring",
@@ -1200,7 +1200,7 @@ async def test_performance_monitoring(
 
 
 # Issue #1288: Prometheus metrics endpoints removed — consolidated into
-# api/prometheus_endpoint.py at /api/metrics/prometheus (no auth, for scraping).
+# api/prometheus_endpoint.py at /api/metrics/prometheus (scrape-token gated, #16375).
 # The auth-protected duplicates here were unusable by Prometheus server.
 
 

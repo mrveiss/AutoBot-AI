@@ -168,10 +168,11 @@ async def add_documentation_to_kb():
     # Imported here rather than at module scope: ``knowledge/__init__`` loads
     # the composed class lazily (#1514), so a module-scope import would pull
     # redis, chromadb and llama_index in merely to inspect this script.
-    from knowledge import KnowledgeBase
+    from knowledge_factory import get_knowledge_base_async
 
-    kb = KnowledgeBase()
-    await kb.ainit()
+    kb = await get_knowledge_base_async()
+    if kb is None:
+        raise RuntimeError("Knowledge base unavailable: initialization failed or retry cooldown active")
 
     root = project_root()
     filtered_files = collect_documentation_files(root)

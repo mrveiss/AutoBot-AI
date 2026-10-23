@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from models.database import Service
+from models.fleet_schemas import FleetServiceActionResponse
 from models.schemas import ServiceActionResponse, ServiceLogsResponse
 from services.auth import require_service_management
 from services.database import get_db
@@ -63,9 +64,13 @@ NODE_SERVICE_ACTION_ROUTE = {
     "response_model": ServiceActionResponse,
     "dependencies": [Depends(require_service_management), Depends(known_node_service_or_404)],
 }
+# The gate for a route that takes only ``service_name`` (no node-record check): fleet routes, and the
+# orchestration per-service routes whose ``node_id`` rides in the body (#19005).
+SERVICE_NAME_ACTION_DEPS = [Depends(require_service_management), Depends(valid_service_name_or_422)]
 FLEET_SERVICE_ACTION_ROUTE = {
-    "response_model": ServiceActionResponse,
-    "dependencies": [Depends(require_service_management), Depends(valid_service_name_or_422)],
+    # The fleet model: with the base one, FastAPI would strip ``diagnostics`` on the wire (#18714).
+    "response_model": FleetServiceActionResponse,
+    "dependencies": SERVICE_NAME_ACTION_DEPS,
 }
 
 

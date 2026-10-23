@@ -44,10 +44,12 @@ register_env_var(
         type=bool,
         default=False,
         description=(
-            "Set to 1 to let `git push` proceed when the pre-push pytest gate COULD NOT RUN on the "
-            "local interpreter -- llc/scheduler/base.py refuses to import below Python 3.11, which "
-            "takes whole pytest groups down at collect time on a sub-floor machine (the platform "
-            "floor and CI are 3.14). Distinct from AUTOBOT_PREPUSH_ALLOW_TIMEOUT, which covers a "
+            "Set to 1 to let `git push` proceed when any pre-push gate COULD NOT RUN, i.e. cannot "
+            "produce a verdict here. Examples: pytest on a sub-floor interpreter "
+            "(llc/scheduler/base.py refuses to import below Python 3.11, taking whole pytest groups "
+            "down at collect time; the platform floor and CI are 3.14), or vitest handed a file it "
+            "does not collect, such as a Playwright spec under tests/ before #18694's root filter "
+            "is installed. Distinct from AUTOBOT_PREPUSH_ALLOW_TIMEOUT, which covers a "
             "check that started and ran out of time. Neither is a substitute for --no-verify: both "
             "switch off exactly the one check that could not produce a verdict and leave every "
             "other hook blocking (#16230)."
@@ -66,6 +68,67 @@ register_env_var(
             "out. Predates the registry requirement and was never registered, which is how the "
             "same omission reached AUTOBOT_PREPUSH_ALLOW_UNRUNNABLE above -- registered here "
             "alongside it rather than left as the next reviewer's finding (#7081, #16230)."
+        ),
+        component="testing",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PREPUSH_TYPE_CHECK_TIMEOUT",
+        type=int,
+        default=450,
+        description=(
+            "Seconds the pre-push gate allows vue-tsc per frontend project. vue-tsc checks the "
+            "whole project whatever the changeset (111 s idle, ~294 s under load measured), so "
+            "the budget is project-sized, not changeset-scaled. A non-integer or zero value falls "
+            "back to 450 with a warning; capped at the hook's MAX_BUDGET (#18578)."
+        ),
+        component="testing",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_PREPUSH_PYTEST_WORKERS",
+        type=int,
+        default=4,
+        description=(
+            "Number of pytest-xdist workers the pre-push gate runs the selected tests with "
+            "(`-n N --dist loadscope`). 0 runs serially. A non-integer or negative value falls "
+            "back to 4 with a warning. Capped (never `-n auto`) because the dev box runs many "
+            "parallel sessions at load 20-30; the budget uses the per-file cost of the mode "
+            "actually chosen (#17451)."
+        ),
+        component="testing",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_UPSERT_COMMENT_TIMEOUT",
+        type=float,
+        default=30.0,
+        description=(
+            "Seconds each GitHub API call made by the shared sticky-PR-comment action waits before "
+            "giving up (.github/actions/upsert-pr-comment/upsert_pr_comment.py, #12984). A value "
+            "that is not a finite number above zero is rejected with a warning and the default is "
+            "used, since 0, NaN and a negative would mean no timer or an expired one."
+        ),
+        component="tooling",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_REQUIRE_REAL_TORCH",
+        type=bool,
+        default=False,
+        description=(
+            "Set to 1 to make the real-torch oracle tests under "
+            "autobot-backend/llm_shared/optimization fail, instead of skip, when torch is "
+            "a stub (meta_eviction_equivalence_test.py, #13049). Set by the "
+            "llm-optimization-real-torch CI job so a broken torch install cannot pass silently."
         ),
         component="testing",
     )

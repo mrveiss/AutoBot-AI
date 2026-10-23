@@ -29,8 +29,8 @@ from llm_shared.decisions import (
     ScoreQuestion,
     decide,
     get_backend,
-    register_backend,
-    registered_backends,
+    register_decision_backend,
+    registered_decision_backends,
 )
 from llm_shared.validated_llm import Completer, ValidatedLLMError
 
@@ -240,7 +240,7 @@ def test_the_local_backend_declares_self_reported_calibration():
 
 
 def test_the_local_model_path_is_the_default_backend():
-    assert LocalModelBackend.name in registered_backends()
+    assert LocalModelBackend.name in registered_decision_backends()
     assert isinstance(get_backend(LocalModelBackend.name), LocalModelBackend)
 
 
@@ -256,7 +256,7 @@ def test_a_registered_backend_is_selectable_but_not_default():
         def completer(self, schema: dict) -> Completer:  # pragma: no cover - not called
             raise NotImplementedError
 
-    register_backend(_Hosted())
+    register_decision_backend(_Hosted())
     try:
         assert get_backend("hosted_example").name == "hosted_example"
         # Registration alone must not displace the local default.

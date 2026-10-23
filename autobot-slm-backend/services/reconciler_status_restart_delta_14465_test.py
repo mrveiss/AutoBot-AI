@@ -62,6 +62,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+from testkit.fake_async_session import FakeAsyncSession
+
 _SLM_ROOT = Path(__file__).resolve().parent.parent
 if str(_SLM_ROOT) not in sys.path:
     sys.path.insert(0, str(_SLM_ROOT))
@@ -364,17 +366,7 @@ class _ServiceRow:
         self.extra_data = extra_data or {}
 
 
-class _NoOpNestedTransaction:
-    """Stand-in for `session.begin_nested()` (#17070): never suppresses an exception."""
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, exc_type, exc, tb):
-        return False
-
-
-class _SeededServiceHeartbeatSession:
+def _seeded_service_heartbeat_session(node, seeded_service: _ServiceRow) -> FakeAsyncSession:
     """Drives `update_node_heartbeat` with ONE pre-seeded existing `Service` row.
 
     The FIRST `execute()` is `_find_node_by_id_or_hostname`'s node lookup.
@@ -383,31 +375,7 @@ class _SeededServiceHeartbeatSession:
     Every later call (`_remove_stale_services`'s stale-service scan) resolves
     to "nothing found".
     """
-
-    def __init__(self, node, seeded_service: _ServiceRow):
-        self._node = node
-        self._seeded_service = seeded_service
-        self._reads = 0
-
-    def begin_nested(self):
-        return _NoOpNestedTransaction()
-
-    async def execute(self, _query):
-        self._reads += 1
-        if self._reads == 1:
-            return SimpleNamespace(scalar_one_or_none=lambda: self._node)
-        if self._reads == 2:
-            return SimpleNamespace(scalar_one_or_none=lambda: self._seeded_service)
-        return SimpleNamespace(scalar_one_or_none=lambda: None, scalars=lambda: SimpleNamespace(all=lambda: []))
-
-    def add(self, _obj):
-        pass
-
-    async def commit(self):
-        pass
-
-    async def refresh(self, _obj):
-        pass
+    return FakeAsyncSession(results=[[node], [seeded_service]])
 
 
 def test_a_churning_service_degrades_across_a_real_heartbeat_against_its_prior_row():
@@ -437,7 +405,7 @@ def test_a_churning_service_degrades_across_a_real_heartbeat_against_its_prior_r
         os_info=None,
     )
     seeded_service = _ServiceRow(extra_data={"n_restarts": 44})
-    session = _SeededServiceHeartbeatSession(node, seeded_service)
+    session = _seeded_service_heartbeat_session(node, seeded_service)
     service = reconciler.ReconcilerService()
 
     this_beat = {

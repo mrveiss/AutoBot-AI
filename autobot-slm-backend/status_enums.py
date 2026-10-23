@@ -108,6 +108,8 @@ class BackupServiceType(str, enum.Enum):
 
     REDIS = "redis"
     POSTGRES = "postgres"
+    #: Ciphertext-only snapshot of the backend's secrets store (#18281).
+    SECRETS = "secrets"  # pragma: allowlist secret
 
     @classmethod
     def _missing_(cls, value: object) -> "BackupServiceType | None":

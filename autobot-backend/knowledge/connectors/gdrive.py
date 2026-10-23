@@ -31,14 +31,14 @@ from typing import Any, Dict, List, Optional
 
 import aiohttp
 
-from autobot_shared.auth import BearerAuth
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secret_redaction import redact_content
 from autobot_shared.time_utils import now_utc, parse_utc_iso
-from knowledge.connectors.base import VENDOR_API_EGRESS, AbstractConnector
+from knowledge.connectors.base import VENDOR_API_EGRESS
 from knowledge.connectors.content_extraction import extract_pdf_document as _extract_pdf_document
 from knowledge.connectors.content_extraction import extract_text_from_docx as _extract_text_from_docx
+from knowledge.connectors.drive_base import DriveConnector
 from knowledge.connectors.models import (
     ChangeInfo,
     ConnectorConfig,
@@ -68,7 +68,7 @@ _GSHEET_MIME = "application/vnd.google-apps.spreadsheet"
 
 
 @ConnectorRegistry.register("gdrive")
-class GoogleDriveConnector(AbstractConnector):
+class GoogleDriveConnector(DriveConnector):
     """Knowledge connector for Google Drive personal and shared drives.
 
     Indexes documents from Google Drive into the AutoBot knowledge base.
@@ -80,47 +80,15 @@ class GoogleDriveConnector(AbstractConnector):
     connector_type = "gdrive"
     # Issue #4421: needs OAuth2 access token (tier 2 = credentials/OAuth)
     tier = 2
-
-    @classmethod
-    def auth_schema(cls) -> type:
-        """Google Drive requires a bearer token (OAuth2 access token)."""
-        return BearerAuth
-
-    @classmethod
-    def output_schema(cls) -> Dict[str, Any]:
-        """Return JSONSchema for ContentResult.metadata."""
-        return {
-            "type": "object",
-            "required": ["file_id", "file_name", "file_extension", "last_modified"],
-            "properties": {
-                "file_id": {"type": "string", "description": "Google Drive file ID"},
-                "file_name": {"type": "string", "description": "File name with extension"},
-                "file_extension": {"type": "string", "description": "File extension (e.g., .docx)"},
-                "file_path": {"type": "string", "description": "Full path in drive"},
-                "file_size": {"type": "integer", "description": "File size in bytes"},
-                "last_modified": {"type": "string", "description": "ISO-8601 last modified datetime"},
-                "web_url": {"type": "string", "description": "Web URL to view file"},
-                "drive_id": {"type": "string", "description": "Drive ID"},
-                "mime_type": {"type": "string", "description": "MIME type"},
-            },
-        }
-
-    @property
-    def max_concurrency(self) -> int:
-        """Max parallel file fetches. Default 4 for Google Drive."""
-        cfg_val = self.config.max_concurrency
-        return cfg_val if cfg_val is not None else 4
+    drive_label = "Google Drive"
+    _default_extensions = _DEFAULT_EXTENSIONS
+    _extra_output_properties = {"mime_type": {"type": "string", "description": "MIME type"}}
 
     def __init__(self, config: ConnectorConfig) -> None:
         super().__init__(config)
         cfg = config.config
-        self._token: str = cfg.get("token", "")
         self._source_type: str = cfg.get("source_type", "mydrive")  # "mydrive" or "shared"
-        self._drive_id: Optional[str] = cfg.get("drive_id")
         self._folder_id: Optional[str] = cfg.get("folder_id")
-        self._sync_subfolders: bool = cfg.get("sync_subfolders", True)
-        self._max_file_size: int = cfg.get("max_file_size_mb", 100) * 1024 * 1024
-        self._supported_extensions: List[str] = cfg.get("supported_extensions", _DEFAULT_EXTENSIONS)
         self._api_base: str = cfg.get("api_base", _DRIVE_API_BASE).rstrip("/")
 
     # ------------------------------------------------------------------
@@ -143,16 +111,6 @@ class GoogleDriveConnector(AbstractConnector):
         except Exception as exc:
             self.logger.error("Google Drive test_connection raised: %s", exc)
             return False
-
-    async def discover_sources(self) -> List[SourceInfo]:
-        """Return a SourceInfo for every supported file in the configured drive/folder."""
-        files = await self._list_all_files()
-        sources: List[SourceInfo] = []
-        for file_item in files:
-            source_info = self._file_to_source_info(file_item)
-            if source_info:
-                sources.append(source_info)
-        return sources
 
     async def fetch_content(self, source_id: str) -> ContentResult | None:
         """Fetch and extract text content for a Google Drive file by ID."""

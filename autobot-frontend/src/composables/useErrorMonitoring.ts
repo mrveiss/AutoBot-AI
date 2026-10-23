@@ -190,6 +190,8 @@ export function useErrorMonitoring(options: UseErrorMonitoringOptions = {}): Use
 
   const api = useApiClient()
   const base = `${getApiBase()}/errors`
+  /** Dashboard polling fails fast while the errors API is down (#12363). */
+  const polled = { circuitBreaker: 'error-monitoring' } as const
 
   // ── State ──────────────────────────────────────────────────────────────────
   const statistics = ref<ErrorStatistics | null>(null)
@@ -243,7 +245,7 @@ export function useErrorMonitoring(options: UseErrorMonitoringOptions = {}): Use
 
   async function fetchStatistics(): Promise<void> {
     try {
-      const res = await api.get<DataResponse<ErrorStatistics>>(`${base}/statistics`)
+      const res = await api.get<DataResponse<ErrorStatistics>>(`${base}/statistics`, polled)
       statistics.value = res.data ?? null
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch error statistics'
@@ -256,6 +258,7 @@ export function useErrorMonitoring(options: UseErrorMonitoringOptions = {}): Use
     try {
       const res = await api.get<DataResponse<{ errors: RecentError[]; total_count: number }>>(
         `${base}/recent?limit=${limit}`,
+        polled,
       )
       recentErrors.value = res.data?.errors ?? []
     } catch (err) {
@@ -267,7 +270,7 @@ export function useErrorMonitoring(options: UseErrorMonitoringOptions = {}): Use
 
   async function fetchCategories(): Promise<void> {
     try {
-      const res = await api.get<DataResponse<CategoryBreakdown>>(`${base}/categories`)
+      const res = await api.get<DataResponse<CategoryBreakdown>>(`${base}/categories`, polled)
       categories.value = res.data ?? null
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch error categories'
@@ -278,7 +281,7 @@ export function useErrorMonitoring(options: UseErrorMonitoringOptions = {}): Use
 
   async function fetchComponents(): Promise<void> {
     try {
-      const res = await api.get<DataResponse<ComponentBreakdown>>(`${base}/components`)
+      const res = await api.get<DataResponse<ComponentBreakdown>>(`${base}/components`, polled)
       components.value = res.data ?? null
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch component errors'
@@ -291,7 +294,7 @@ export function useErrorMonitoring(options: UseErrorMonitoringOptions = {}): Use
 
   async function fetchSummary(): Promise<void> {
     try {
-      const res = await api.get<DataResponse<MetricsSummary>>(`${base}/metrics/summary`)
+      const res = await api.get<DataResponse<MetricsSummary>>(`${base}/metrics/summary`, polled)
       summary.value = res.data ?? null
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch error metrics summary'
@@ -304,7 +307,7 @@ export function useErrorMonitoring(options: UseErrorMonitoringOptions = {}): Use
     try {
       const params = new URLSearchParams({ hours: String(hours) })
       if (component) params.set('component', component)
-      const res = await api.get<DataResponse<TimelineData>>(`${base}/metrics/timeline?${params.toString()}`)
+      const res = await api.get<DataResponse<TimelineData>>(`${base}/metrics/timeline?${params.toString()}`, polled)
       timeline.value = res.data?.timeline ?? []
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch error timeline'
@@ -315,7 +318,7 @@ export function useErrorMonitoring(options: UseErrorMonitoringOptions = {}): Use
 
   async function fetchTopErrors(limit = defaultTopErrorsLimit): Promise<void> {
     try {
-      const res = await api.get<DataResponse<TopErrorsData>>(`${base}/metrics/top-errors?limit=${limit}`)
+      const res = await api.get<DataResponse<TopErrorsData>>(`${base}/metrics/top-errors?limit=${limit}`, polled)
       topErrors.value = res.data?.top_errors ?? []
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch top errors'

@@ -661,9 +661,8 @@ def _make_role(name: str, org_id: uuid.UUID | None = None) -> MagicMock:
 
 
 def _make_user(uid: uuid.UUID | None = None) -> MagicMock:
-    u = MagicMock()
-    u.id = uid or uuid.uuid4()
-    return u
+    """An account SSO may sign in to (#18338): active and not deleted."""
+    return MagicMock(id=uid or uuid.uuid4(), deleted_at=None, is_active=True)
 
 
 def _make_sso_provider(group_mapping: dict, org_id: uuid.UUID | None = None) -> MagicMock:

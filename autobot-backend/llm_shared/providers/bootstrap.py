@@ -74,6 +74,27 @@ def _register_local(registry: "ProviderRegistry", fallback: List[str]) -> None:
         logger.debug("Ollama provider not registered: %s", exc)
 
 
+def _register_keyed(registry: "ProviderRegistry", fallback: List[str], label: str, resolve, build) -> str:
+    """Register ``build(key)`` when ``resolve()`` yields a key (vault first; env as a logged fallback, #10088 Task 7).
+
+    A vault refusal (the vault holds the key but could not read it, #18094) skips
+    this provider with the reason logged at ERROR; the siblings still register.
+    Returns the resolved key, or ``""`` when absent or refused.
+    """
+    from services.provider_key_vault import registration_refusal
+
+    key = ""
+    with registration_refusal(f"{label} provider"):
+        key = resolve()
+    if not key:
+        logger.debug("%s not set — provider not registered", label)
+        return ""
+    provider = build(key)
+    registry.register(provider)
+    fallback.append(provider.provider_name)
+    return key
+
+
 def _register_api_key_providers(registry: "ProviderRegistry", fallback: List[str]) -> str:
     """The providers gated on nothing but an API key.
 
@@ -82,52 +103,45 @@ def _register_api_key_providers(registry: "ProviderRegistry", fallback: List[str
     """
     from services.provider_key_vault import resolve_provider_key
 
-    # OpenAI — registered when API key is present (env wins; else System vault, #10088 Task 7)
-    openai_key = resolve_provider_key("OPENAI_API_KEY", config.openai_api_key)
-    if openai_key:
-        openai_provider = OpenAIProvider(settings={"api_key": openai_key})
-        registry.register(openai_provider)
-        fallback.append(openai_provider.provider_name)
-    else:
-        logger.debug("OPENAI_API_KEY not set — OpenAI provider not registered")
+    def _openai():
+        return resolve_provider_key("OPENAI_API_KEY", config.openai_api_key)
 
-    # Anthropic — registered when API key is present (env wins; else System vault, #10088 Task 7)
-    anthropic_key = resolve_provider_key("ANTHROPIC_API_KEY", config.anthropic_api_key)
-    if anthropic_key:
-        anthropic_provider = AnthropicProvider(settings={"api_key": anthropic_key})
-        registry.register(anthropic_provider)
-        fallback.append(anthropic_provider.provider_name)
-    else:
-        logger.debug("ANTHROPIC_API_KEY not set — Anthropic provider not registered")
+    def _anthropic():
+        return resolve_provider_key("ANTHROPIC_API_KEY", config.anthropic_api_key)
 
-    # Groq — registered when API key is present (env wins; else System vault, #10088 Task 7)
-    groq_key = resolve_provider_key("GROQ_API_KEY", config.groq_api_key)
-    if groq_key:
-        groq_provider = GroqProvider(settings={"api_key": groq_key})
-        registry.register(groq_provider)
-        fallback.append(groq_provider.provider_name)
-    else:
-        logger.debug("GROQ_API_KEY not set — Groq provider not registered")
+    def _groq():
+        return resolve_provider_key("GROQ_API_KEY", config.groq_api_key)
 
-    # Mistral — registered when API key is present (Issue #10549; env wins else vault, #10088 Task 7)
-    mistral_key = resolve_provider_key("MISTRAL_API_KEY", config.mistral_api_key)
-    if mistral_key:
-        mistral_provider = MistralProvider(
-            settings={
-                "api_key": mistral_key,
-                "base_url": config.mistral_api_base_url or None,
-                "default_model": config.mistral_default_model or None,
-            }
-        )
-        registry.register(mistral_provider)
-        fallback.append(mistral_provider.provider_name)
-    else:
-        logger.debug("MISTRAL_API_KEY not set — Mistral provider not registered")
+    def _mistral():  # Issue #10549
+        return resolve_provider_key("MISTRAL_API_KEY", config.mistral_api_key)
 
-    # HuggingFace — HF token, reused below as the Nous Portal fallback (env wins; else vault, #15268).
-    hf_token = resolve_provider_key("HF_TOKEN", config.hf_token) or resolve_provider_key(
-        "HUGGINGFACE_API_TOKEN", config.huggingface_api_token
+    def _mistral_provider(k: str):
+        base_url, model = config.mistral_api_base_url or None, config.mistral_default_model or None
+        return MistralProvider(settings={"api_key": k, "base_url": base_url, "default_model": model})
+
+    _register_keyed(registry, fallback, "OPENAI_API_KEY", _openai, lambda k: OpenAIProvider(settings={"api_key": k}))
+    _register_keyed(
+        registry, fallback, "ANTHROPIC_API_KEY", _anthropic, lambda k: AnthropicProvider(settings={"api_key": k})
     )
+    _register_keyed(registry, fallback, "GROQ_API_KEY", _groq, lambda k: GroqProvider(settings={"api_key": k}))
+    _register_keyed(registry, fallback, "MISTRAL_API_KEY", _mistral, _mistral_provider)
+    return _register_huggingface(registry, fallback)
+
+
+def _resolve_hf_token() -> str:
+    """HF_TOKEN, then HUGGINGFACE_API_TOKEN; a vault refusal of either yields no token, logged (#18094)."""
+    from services.provider_key_vault import registration_refusal, resolve_provider_key
+
+    with registration_refusal("HuggingFace provider"):
+        return resolve_provider_key("HF_TOKEN", config.hf_token) or resolve_provider_key(
+            "HUGGINGFACE_API_TOKEN", config.huggingface_api_token
+        )
+    return ""
+
+
+def _register_huggingface(registry: "ProviderRegistry", fallback: List[str]) -> str:
+    """HF token, reused by Nous Portal as its fallback (#15268); HF_TOKEN first, then HUGGINGFACE_API_TOKEN."""
+    hf_token = _resolve_hf_token()
     if hf_token:
         hf_provider = HuggingFaceProvider(settings={"api_token": hf_token})
         registry.register(hf_provider)
@@ -139,48 +153,48 @@ def _register_api_key_providers(registry: "ProviderRegistry", fallback: List[str
 
 def _register_openai_compatible(registry: "ProviderRegistry", fallback: List[str]) -> None:
     """Endpoints speaking the OpenAI dialect, gated on a URL or a key."""
-    from services.provider_key_vault import resolve_provider_key
+    from services.provider_key_vault import registration_refusal, resolve_provider_key
 
-    # Custom OpenAI-compatible endpoint — registered when base URL is configured
+    # Custom OpenAI-compatible endpoint — registered when base URL is configured; a vault
+    # refusal of its key skips it with the reason logged (#18094).
     custom_url = config.custom_openai_base_url
     if custom_url:
-        custom_provider = CustomOpenAIProvider(
-            settings={
-                "base_url": custom_url,
-                # env wins; else System vault (#10088 Task 7)
-                "api_key": resolve_provider_key("CUSTOM_OPENAI_API_KEY", config.custom_openai_api_key),
-                "default_model": config.custom_openai_default_model,
-            }
-        )
-        registry.register(custom_provider)
-        fallback.append(custom_provider.provider_name)
+        with registration_refusal("CUSTOM_OPENAI_API_KEY provider"):
+            custom_provider = CustomOpenAIProvider(
+                settings={
+                    "base_url": custom_url,
+                    # vault first; env as a logged fallback (#10088 Task 7)
+                    "api_key": resolve_provider_key("CUSTOM_OPENAI_API_KEY", config.custom_openai_api_key),
+                    "default_model": config.custom_openai_default_model,
+                }
+            )
+            registry.register(custom_provider)
+            fallback.append(custom_provider.provider_name)
     else:
         logger.debug("CUSTOM_OPENAI_BASE_URL not set — custom OpenAI provider not registered")
 
-    # OpenRouter — registered when API key is present (Issue #4341; env wins else vault, #10088 Task 7)
-    openrouter_key = resolve_provider_key("OPENROUTER_API_KEY", config.openrouter_api_key)
-    if openrouter_key:
-        try:
-            openrouter_provider = OpenRouterProvider(
-                settings={
-                    "api_key": openrouter_key,
-                    "default_model": config.openrouter_default_model,
-                }
-            )
-            registry.register(openrouter_provider)
-            fallback.append(openrouter_provider.provider_name)
-        except Exception as exc:
-            logger.debug("OpenRouter provider not registered: %s", exc)
-    else:
-        logger.debug("OPENROUTER_API_KEY not set — OpenRouter provider not registered")
+    # OpenRouter — Issue #4341; construction errors stay debug-logged as before.
+    def _openrouter(key: str):
+        return OpenRouterProvider(settings={"api_key": key, "default_model": config.openrouter_default_model})
+
+    def _openrouter_key():
+        return resolve_provider_key("OPENROUTER_API_KEY", config.openrouter_api_key)
+
+    try:
+        _register_keyed(registry, fallback, "OPENROUTER_API_KEY", _openrouter_key, _openrouter)
+    except Exception as exc:
+        logger.debug("OpenRouter provider not registered: %s", exc)
 
 
 def _register_hosted_inference(registry: "ProviderRegistry", fallback: List[str], hf_token: str) -> None:
     """Nous Portal and vLLM: a curated gateway and a self-hosted engine."""
-    from services.provider_key_vault import resolve_provider_key
+    from services.provider_key_vault import registration_refusal, resolve_provider_key
 
-    # Nous Portal — registered when API key is present (Issue #4341; env wins else vault, #10088 Task 7).
-    nous_key = resolve_provider_key("NOUS_API_KEY", config.nous_api_key) or hf_token
+    # Nous Portal — registered when API key is present (Issue #4341; vault first, env fallback, #10088 Task 7).
+    # A vault refusal of NOUS_API_KEY skips Nous rather than borrowing the HF token (#18094).
+    nous_key = ""
+    with registration_refusal("NOUS_API_KEY provider"):
+        nous_key = resolve_provider_key("NOUS_API_KEY", config.nous_api_key) or hf_token
     if nous_key:
         try:
             nous_provider = NousPortalProvider(

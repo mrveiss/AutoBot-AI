@@ -14,7 +14,7 @@
     "availableRolesAria": "Available roles",
     "cancel": "Anuluj",
     "closeDialogAria": "Close dialog",
-    "connectionFailed": "Connection Failed",
+    "connectionFailed": "Połączenie nieudane",
     "connectionInformation": "Connection Information",
     "connectionSuccessful": "Connection Successful",
     "deployPKICertificatesAfter": "Deploy PKI certificates after update",
@@ -162,7 +162,7 @@
       "noProcessesFoundForAgentValue0": "No processes found for agent \"{value0}\"",
       "processValue0Logs": "Process {value0}... Logs",
       "queued": "Queued",
-      "running": "Działanie",
+      "running": "Running",
       "scriptPyFlag": "script.py --flag",
       "spawn": "Spawn",
       "spawnNewProcess": "Spawn New Process",
@@ -344,7 +344,7 @@
     "runRsyncFromTo": "Run rsync from {source} to {dest}",
     "running": "Uruchomiono...",
     "sLMManagerRestarting": "SLM Manager Restarting",
-    "schedule": "Schedule",
+    "schedule": "Harmonogram",
     "scheduledUpdates": "Scheduled Updates",
     "showDetails": "Show details",
     "slmSelfUpdateStage": "SLM server",
@@ -714,6 +714,7 @@
       "memory": "Memory",
       "modelsCount": "Models ({count})",
       "noModelsDetected": "No models detected",
+      "notAvailable": "N/A",
       "pending": "Pending",
       "priority110": "Priority (1-10)",
       "queueDepthValue0Requests": "Queue Depth: {value0} requests",
@@ -907,7 +908,7 @@
     "closeServicesPanelAria": "Close services panel",
     "confirmReboot": "Reboot node \"{hostname}\"? The node will go offline temporarily.",
     "confirmReenroll": "Re-enroll node \"{hostname}\"? This will reset it to pending status for fresh enrollment.",
-    "connectionFailed": "Connection Failed",
+    "connectionFailed": "Połączenie nieudane",
     "connectionSuccessful": "Connection Successful",
     "connectionTestResultAria": "Connection test result",
     "cpu": "CPU",
@@ -932,8 +933,6 @@
     "nPUWorkersAria": "NPU workers",
     "noNodesRegistered": "No nodes registered",
     "nodeDetails": "Node Details",
-    "nodeDetailsPanelAria": "Node details panel",
-    "nodeServicesPanelAria": "Node services panel",
     "nodes": "Nodes",
     "nodesOverviewAria": "Nodes overview",
     "realTimeHealthStatus": "Real-time health status of all managed nodes",
@@ -1182,7 +1181,8 @@
       "trend": "Trend",
       "type": "Typ",
       "unresolved": "Unresolved",
-      "resolvedByAt": "By {by} at {at}"
+      "resolvedByAt": "By {by} at {at}",
+      "paginationAria": "Error list pages"
     },
     "fleetMetricsCard": {
       "acrossValue0Nodes": "Across {value0} nodes",
@@ -1326,6 +1326,107 @@
       "services": "Services",
       "systemHealth": "System Health",
       "systemMonitoring": "Monitorowanie systemu"
+    },
+    "agentLedger": {
+      "title": "Rejestr agentów",
+      "subtitle": "Every company's agent coordination: shared resources, claims, conflicts and dev-loop history.",
+      "refresh": "Odśwież",
+      "tabsAria": "Widoki rejestru",
+      "tabs": {
+        "now": "Teraz pracuje",
+        "contention": "Rywalizacja",
+        "claims": "Rezerwacje",
+        "conflicts": "Konflikty",
+        "devLoop": "Dev loop",
+        "activity": "Aktywność"
+      },
+      "col": {
+        "scope": "Zakres",
+        "agent": "Agent",
+        "company": "Company",
+        "mode": "Tryb",
+        "intent": "Zamiar",
+        "expires": "Wygasa",
+        "renewals": "Odnowienia",
+        "kind": "Rodzaj",
+        "status": "Stan",
+        "task": "Bieżące zadanie",
+        "detail": "Szczegóły"
+      },
+      "installWide": "Install-wide",
+      "heldBy": "Held by {agent} ({company})",
+      "waiting": "{n} waiting",
+      "waitlistAria": "Kolejka w kolejności",
+      "silenceMeansHold": "Prośba to nie zwolnienie: milczenie oznacza trzymanie, a nieodnowiona rezerwacja wygasa sama.",
+      "ask": "Poproś właściciela o zwolnienie",
+      "askAria": "Poproś właściciela {scope} o zwolnienie",
+      "askState": {
+        "sending": "Wysyłanie…",
+        "sent": "Prośba wysłana — decyduje właściciel; milczenie oznacza trzymanie.",
+        "tooSoon": "Pytałeś o tę rezerwację przed chwilą; spróbuj ponownie za minutę.",
+        "notFound": "To zadanie nie trzyma już tej rezerwacji — odśwież, aby zobaczyć, kto ją trzyma.",
+        "unavailable": "Nie można połączyć się z rejestrem; nic nie wysłano.",
+        "error": "Coś poszło nie tak i nie udało się potwierdzić doręczenia. Odśwież, aby sprawdzić, czy blokada jest nadal utrzymywana."
+      },
+      "conflict": {
+        "release_refused": "Odmówiono zwolnienia",
+        "claim_expired": "Rezerwacja wygasła w trakcie trzymania",
+        "yield_unanswered": "Prośba o ustąpienie pozostała bez odpowiedzi",
+        "claim_lapsed_during_action": "Rezerwacja wygasła w trakcie działania"
+      },
+      "devLoop": {
+        "issue": "Issue",
+        "choose": "Choose an issue",
+        "col": {
+          "at": "When",
+          "intent": "Zamiar",
+          "outcome": "Outcome",
+          "tokens": "Estimated tokens",
+          "reason": "Powód"
+        }
+      },
+      "empty": {
+        "contention": "Nic nie jest przedmiotem rywalizacji",
+        "claims": "Brak rezerwacji",
+        "conflicts": "Brak konfliktów",
+        "activity": "Brak ostatniej aktywności",
+        "devLoop": "No dev-loop history",
+        "devLoopActions": "No actions recorded for this issue",
+        "presence": "Żaden agent się nie zgłosił",
+        "peerMessages": "Brak oczekujących wiadomości",
+        "idleSubscribers": "Brak subskrypcji bezczynności"
+      },
+      "notes": {
+        "title": "What this view cannot see",
+        "storeDown": "Couldn't read the {source} store just now. Its entries are missing here, not empty.",
+        "sourcesUnknown": "Couldn't check which ledger sources are readable.",
+        "peerIdentity": "Agents have no per-peer identity yet: an agent that is refused an action can ask another agent to do it (#16950).",
+        "busAuth": "Messages between agents are not authenticated yet, so this view cannot prove who sent one (#16962)."
+      },
+      "source": {
+        "presence": "agent presence",
+        "ai_stack_agents": "AI-stack agents",
+        "live_sessions": "live sessions",
+        "peer_messages": "pending peer messages",
+        "idle_subscribers": "idle subscriptions",
+        "claims": "claims",
+        "waitlists": "waitlists",
+        "events": "ledger activity",
+        "dev_loop": "dev-loop history"
+      },
+      "state": {
+        "loading": "Odczytywanie rejestru…",
+        "unavailableTitle": "Nie udało się odczytać rejestru",
+        "unavailableBody": "Magazyn {source} nie odpowiedział. To nie to samo co brak wpisów.",
+        "errorTitle": "Podczas ładowania tej sekcji wystąpił błąd"
+      },
+      "busy": "Zajęty",
+      "idle": "Idle",
+      "peerMessages": "Oczekujące wiadomości",
+      "idleSubscribers": "Subskrypcje bezczynności",
+      "pendingFor": "{n} oczekuje na {name}",
+      "sentBy": "od {names}",
+      "waitsForIdle": "{who} czeka, aż {target} będzie bezczynny"
     }
   },
   "monitoringView": {
@@ -1334,7 +1435,17 @@
     "monitoring": "Monitorowanie",
     "monitoringSections": "Monitoring sections",
     "systemHealthStatusAria": "System health: {status}",
-    "value0AlertPlural": "{value0} Alert{plural}"
+    "value0AlertPlural": "{value0} Alert{plural}",
+    "tabs": {
+      "system": "Systemowa",
+      "logs": "Logs",
+      "dashboards": "Dashboards",
+      "alerts": "Alerts",
+      "errors": "Błędy",
+      "backendHealth": "Backend Health",
+      "performance": "Wydajność",
+      "agentLedger": "Rejestr agentów"
+    }
   },
   "orchestration": {
     "nodeHealthCard": {
@@ -1400,7 +1511,7 @@
     "fleetNodes": "Fleet Nodes",
     "fleetServices": "Fleet Services",
     "fleetWideActions": "Fleet-Wide Actions",
-    "full": "Full",
+    "full": "Pełny",
     "full2": "full",
     "gPUInferenceOffloadingBackendFallsBack": "GPU inference offloading — backend falls back to local Ollama",
     "healthy": "✓ Healthy",
@@ -1452,7 +1563,7 @@
     "roles2": "Role",
     "runAnsiblePlaybook": "Run Ansible Playbook",
     "runAnsiblePlaybookForFullRole": "Run Ansible playbook for full role installation",
-    "running": "Działanie",
+    "running": "Running",
     "searchServices": "Search services...",
     "selectANode": "Select a node...",
     "selectANodeAboveToManage": "Select a node above to manage its roles.",
@@ -1499,7 +1610,8 @@
     "value0AnsibleMigrationOf": "{value0} Ansible migration of",
     "value0Nodes": "({value0} nodes)",
     "value0OnlineValue1Offline": "{value0} online, {value1} offline",
-    "value0Required": "{value0} (required)"
+    "value0Required": "{value0} (required)",
+    "serviceCount": "{count} service | {count} services"
   },
   "performance": {
     "alertRulesView": {
@@ -1605,7 +1717,8 @@
       "status1": "Stan",
       "time": "Time:",
       "time1": "Time",
-      "value0TracePlural": "{value0} trace{plural}"
+      "value0TracePlural": "{value0} trace{plural}",
+      "paginationAria": "Trace list pages"
     }
   },
   "performanceView": {
@@ -1751,7 +1864,6 @@
     "syncRoleAria": "Sync {roleName}",
     "thisRoleMayContain": "This role may contain data. You can back it up before removal.",
     "thisWillStopAnd": "This will stop and remove the service from the node.",
-    "times": "×",
     "version": "Version"
   },
   "rolesView": {
@@ -1771,7 +1883,7 @@
     "displayName": "Nazwa wyświetlana",
     "edit": "Edit",
     "editRoleTitle": "Edit Role: {name}",
-    "full": "Full",
+    "full": "Pełny",
     "health": "Kondycja",
     "healthCheckPath": "Health Check Path",
     "healthCheckPort": "Health Check Port",
@@ -1902,7 +2014,7 @@
     "enableTlsForAria": "Enable TLS for {service}",
     "enablingTLS": "Enabling TLS...",
     "enterNodeID": "Enter node ID",
-    "expires": "Expires",
+    "expires": "Wygasa",
     "expiringSoon30d": "Expiring Soon (30d)",
     "expiry": "Expiry",
     "failed": "Failed",
@@ -1991,13 +2103,14 @@
     "uploadTLSCertificate": "Upload TLS Certificate",
     "user": "Użytkownik",
     "value0Violations": "{value0} violations",
-    "whatHappensWhenYouEnableTLS": "What happens when you enable TLS?"
+    "whatHappensWhenYouEnableTLS": "What happens when you enable TLS?",
+    "paginationAria": "Security list pages"
   },
   "settings": {
     "aPISettings": {
       "aPIEndpoints": "Punkty końcowe interfejsu API",
       "autoBotBackendProxied": "AutoBot Backend (Proxied)",
-      "backendAPI": "Backend API",
+      "backendAPI": "API backendu",
       "configurationReference": "Configuration Reference",
       "connectionStatus": "Connection Status",
       "copyToClipboard": "Kopiuj do schowka",
@@ -2202,12 +2315,31 @@
         "username": "Nazwa użytkownika",
         "varLogAutobotForwardedLog": "/var/log/autobot-forwarded.log",
         "warning": "Ostrzeżenie",
-        "statusUnknown": "Nieznany"
+        "statusUnknown": "Nieznany",
+        "leaveBlankToKeep": "Leave blank to keep the current value",
+        "loadFailed": "Failed to load destinations",
+        "toggleFailed": "Failed to toggle service",
+        "autoStartEnabled": "Auto-start enabled",
+        "autoStartDisabled": "Auto-start disabled",
+        "autoStartFailed": "Failed to update auto-start",
+        "destinationCreated": "Destination created successfully",
+        "destinationUpdated": "Destination updated successfully",
+        "saveFailed": "Failed to save destination",
+        "testSucceeded": "Connection test successful",
+        "testFailed": "Connection test failed",
+        "testAllSummary": "{healthy}/{total} destinations healthy",
+        "testAllFailed": "Failed to test destinations",
+        "destinationDeleted": "Destination deleted successfully",
+        "deleteFailed": "Failed to delete destination",
+        "removeStoredValue": "Remove the stored value",
+        "urlPlaceholderSyslog": "syslog.example.com:514",
+        "urlPlaceholderWebhook": "https://logs.example.com/ingest",
+        "urlPlaceholderElasticsearch": "http://elasticsearch.example.com:{port}"
       },
       "nPUWorkersSettings": {
         "actions": "Actions",
         "areYouSureYou": "Are you sure you want to remove",
-        "busy": "Busy",
+        "busy": "Zajęty",
         "cancel": "Anuluj",
         "capabilities": "Capabilities",
         "close": "Close",
@@ -2256,7 +2388,9 @@
         "weighted": "Weighted",
         "windows": "Windows",
         "worker": "Pracownik",
-        "workerName": "Worker Name *"
+        "workerName": "Worker Name *",
+        "connectionTestFailed": "Connection test failed",
+        "loadBalancingLoadFailed": "Failed to load load-balancing configuration"
       },
       "personalitySettings": {
         "active": "Active",
@@ -2558,7 +2692,8 @@
         "userPreferences": "User Preferences",
         "username": "Nazwa użytkownika",
         "usersWhoAccessAutoBot": "Users who access AutoBot chat, workflows, and tools",
-        "usersWhoManageThe": "Users who manage the AutoBot fleet via the SLM admin dashboard"
+        "usersWhoManageThe": "Users who manage the AutoBot fleet via the SLM admin dashboard",
+        "resetPasswordFor": "Reset Password for {username}"
       }
     },
     "backendSettings": {
@@ -2576,7 +2711,7 @@
       "bindAddress": "Bind address",
       "checking": "Checking...",
       "connectedToBackend": "Connected to Backend",
-      "connectionFailed": "Connection Failed",
+      "connectionFailed": "Połączenie nieudane",
       "currentBackendAPIURL": "Current backend API URL",
       "debug": "Odpluskwić",
       "error": "Błąd",
@@ -2757,7 +2892,7 @@
       "enterYourPassword": "Wprowadź hasło",
       "enterYourPasswordTo": "Enter your password to confirm disabling two-factor authentication.",
       "expiration": "Expiration",
-      "expires": "Expires",
+      "expires": "Wygasa",
       "keyPrefix": "Key Prefix",
       "lastVerifiedValue0": "Last verified: {value0}",
       "mFAIsEnabled": "MFA is enabled",
@@ -3097,7 +3232,7 @@
         "refresh": "Odśwież",
         "reportGeneration": "Report Generation",
         "retry": "Retry",
-        "running": "Działanie",
+        "running": "Running",
         "started": "Rozpoczęto",
         "totalJobs": "Total Jobs",
         "value0Value1ItemsValue2": "{value0} / {value1} items ({value2}%)"
@@ -3366,7 +3501,7 @@
   },
   "sharedLinksView": {
     "colCreated": "Created",
-    "colExpires": "Expires",
+    "colExpires": "Wygasa",
     "colOwner": "Owner",
     "colPassword": "Hasło",
     "colSession": "Sesja",
@@ -3467,5 +3602,10 @@
     "subtitle": "Preview unreferenced storage, repair unreachable resources, and review the audit trail — every deletion is proposed through the approval queue, never applied directly.",
     "tabName": "Data Hygiene",
     "title": "Data Hygiene"
+  },
+  "ui": {
+    "modal": {
+      "closeDialog": "Close dialog"
+    }
   }
 }

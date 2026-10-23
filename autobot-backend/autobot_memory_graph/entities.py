@@ -19,7 +19,16 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 
+from . import entity_upsert
 from .core import ENTITY_TYPES, AutoBotMemoryGraphCore
+from .owner_scope import (
+    UNSCOPED_ALL_USERS,
+    OwnerScope,
+    entity_visible,
+    owner_fields,
+    require_scope,
+    require_writer,
+)
 
 logger = get_logger(__name__)
 
@@ -36,6 +45,7 @@ class EntityOperationsMixin:
         self: AutoBotMemoryGraphCore,
         metadata: Dict[str, Any] | None,
         tags: List[str] | None,
+        owner: OwnerScope,
     ) -> Dict[str, Any]:
         """
         Prepare enriched metadata for a new entity.
@@ -45,6 +55,7 @@ class EntityOperationsMixin:
         Args:
             metadata: Optional base metadata dictionary
             tags: Optional list of tags
+            owner: Who the entity belongs to (#18825); recorded as ``created_by``
 
         Returns:
             Enriched metadata dictionary
@@ -54,7 +65,7 @@ class EntityOperationsMixin:
             {
                 "created_at": datetime.now(tz=timezone.utc).isoformat(),
                 "updated_at": datetime.now(tz=timezone.utc).isoformat(),
-                "created_by": "autobot",
+                "created_by": owner.user_id,
                 "tags": tags or [],
                 "priority": entity_metadata.get("priority", "medium"),
                 "status": entity_metadata.get("status", "active"),
@@ -72,6 +83,7 @@ class EntityOperationsMixin:
         name: str,
         observations: List[str],
         entity_metadata: Dict[str, Any],
+        owner: OwnerScope,
     ) -> Dict[str, Any]:
         """
         Build the complete entity document for storage.
@@ -84,6 +96,8 @@ class EntityOperationsMixin:
             name: Human-readable name
             observations: List of observation strings
             entity_metadata: Enriched metadata
+            owner: Required owner stamp (#18825), written as top-level
+                ``owner_user_id`` / ``owner_org_id`` (indexed as TAGs)
 
         Returns:
             Complete entity document dictionary
@@ -96,6 +110,7 @@ class EntityOperationsMixin:
             "updated_at": int(datetime.now(tz=timezone.utc).timestamp() * 1000),
             "observations": observations,
             "metadata": entity_metadata,
+            **owner_fields(owner),
         }
 
     async def _store_entity_in_redis(
@@ -137,6 +152,8 @@ class EntityOperationsMixin:
         observations: List[str],
         metadata: Dict[str, Any] | None = None,
         tags: List[str] | None = None,
+        *,
+        owner: OwnerScope,
     ) -> Dict[str, Any]:
         """
         Create a new entity in the memory graph.
@@ -149,34 +166,68 @@ class EntityOperationsMixin:
             observations: List of observation strings
             metadata: Optional additional metadata
             tags: Optional classification tags
+            owner: REQUIRED (#18825) -- the principal's OwnerScope, or
+                ``OwnerScope.shared()`` / ``OwnerScope.system()`` for platform data
 
         Returns:
             Created entity with entity_id and metadata
 
         Raises:
+            OwnerScopeRequired: No concrete owner supplied
             ValueError: Invalid entity_type or empty name
             RuntimeError: Memory Graph not initialized
         """
         self.ensure_initialized()
+        require_writer(owner)
         self._validate_entity_inputs(entity_type, name)
 
         try:
-            entity_id = str(uuid.uuid4())
-            entity_metadata = self._prepare_entity_metadata(metadata, tags)
-            entity = self._build_entity_document(entity_id, entity_type, name, observations, entity_metadata)
-
-            await self._store_entity_in_redis(entity_id, entity)
-            logger.info(
-                "Created entity: %s (%s) with ID %s",
-                name,
-                entity_type,
-                entity_id[:8] + "...",
+            return await self._write_new_entity(
+                str(uuid.uuid4()), entity_type, name, observations, metadata, tags, owner
             )
-            return entity
-
         except Exception as e:
             logger.error("Failed to create entity: %s", e)
             raise RuntimeError("Entity creation failed") from e
+
+    async def _write_new_entity(
+        self: AutoBotMemoryGraphCore,
+        entity_id: str,
+        entity_type: str,
+        name: str,
+        observations: List[str],
+        metadata: Dict[str, Any] | None,
+        tags: List[str] | None,
+        owner: OwnerScope,
+    ) -> Dict[str, Any]:
+        """Build and store one entity document under a caller-chosen id (#18417)."""
+        entity_metadata = self._prepare_entity_metadata(metadata, tags, owner)
+        entity = self._build_entity_document(entity_id, entity_type, name, observations, entity_metadata, owner)
+        await self._store_entity_in_redis(entity_id, entity)
+        # The name can be anything a caller stored, a credential included; the type and id identify the row.
+        logger.info("Created entity of type %s with ID %s", entity_type, entity_id[:8] + "...")
+        return entity
+
+    async def get_or_create_entity(
+        self: AutoBotMemoryGraphCore,
+        entity_type: str,
+        name: str,
+        observations: List[str],
+        metadata: Dict[str, Any] | None = None,
+        tags: List[str] | None = None,
+        *,
+        owner: OwnerScope,
+    ) -> tuple[Dict[str, Any], bool]:
+        """Atomically return the entity called ``name``, creating it if absent (#18417).
+
+        Claiming the name and writing the document are one Lua script
+        (``entity_upsert``), so concurrent callers cannot both create and no claim
+        is visible without its document. Redis errors propagate; an unreadable
+        lookup is never 'not found'. Entities that predate the name index are
+        adopted into it. Returns ``(entity, created)``.
+        """
+        self.ensure_initialized()
+        require_writer(owner)
+        return await entity_upsert.get_or_create(self, entity_type, name, observations, metadata, tags, owner)
 
     # How many relevance hits to scan for an exact name before giving up (#13761).
     # The query *is* the name, so an exact match ranks at or near the top; this is
@@ -187,6 +238,9 @@ class EntityOperationsMixin:
     async def _resolve_entity_by_name(
         self: AutoBotMemoryGraphCore,
         entity_name: str,
+        strict: bool = False,
+        *,
+        owner: Any,
     ) -> Dict[str, Any] | None:
         """Resolve a name to an entity, preferring an exact match (#13761).
 
@@ -202,7 +256,12 @@ class EntityOperationsMixin:
         result carries ``_resolution`` so callers can tell the difference and warn
         rather than render it silently.
         """
-        results = await self.search_entities(query=entity_name, limit=self._NAME_RESOLUTION_CANDIDATES)
+        if strict:
+            results = await entity_upsert.strict_search_by_name(
+                self, entity_name, self._NAME_RESOLUTION_CANDIDATES, owner=owner
+            )
+        else:
+            results = await self.search_entities(query=entity_name, limit=self._NAME_RESOLUTION_CANDIDATES, owner=owner)
         if not results:
             return None
 
@@ -227,50 +286,64 @@ class EntityOperationsMixin:
         entity_id: str | None = None,
         entity_name: str | None = None,
         include_relations: bool = False,
+        strict: bool = False,
+        *,
+        owner: Any,
     ) -> Dict[str, Any] | None:
-        """
-        Retrieve entity by ID or name.
+        """Retrieve an entity by ID or name, as ``owner``.
 
-        Args:
-            entity_id: UUID of entity to retrieve
-            entity_name: Name of entity to retrieve (alternative to ID)
-            include_relations: Include related entities in response
-
-        Returns:
-            Entity data or None if not found. When resolved by name the dict
-            carries ``_resolution`` — ``"exact"`` or ``"fuzzy"`` (#13761).
+        ``owner`` (#18825) is REQUIRED, keyword-only, for id and name lookups alike: an OwnerScope or
+        UNSCOPED_ALL_USERS; omitting it raises OwnerScopeRequired. An entity it may not read is absent.
+        ``strict`` raises on a read error (#18417). A name lookup carries ``_resolution`` (#13761).
         """
         self.ensure_initialized()
+        require_scope(owner)  # before the try: a missing scope must raise, not read as "not found"
 
         try:
-            # Find entity by ID or name
-            if entity_id:
-                entity_key = f"memory:entity:{entity_id}"
-                entity = await self.redis_client.json().get(entity_key)
-            elif entity_name:
-                entity = await self._resolve_entity_by_name(entity_name)
-                if entity is None:
-                    return None
-                entity_id = entity["id"]
-            else:
-                raise ValueError("Either entity_id or entity_name must be provided")
-
+            entity = await self._load_entity(entity_id, entity_name, strict, owner)
             if not entity:
                 return None
-
-            # Include relations if requested - fetch in parallel
-            if include_relations and entity_id:
-                outgoing, incoming = await asyncio.gather(
-                    self._get_outgoing_relations(entity_id),
-                    self._get_incoming_relations(entity_id),
-                )
-                entity["relations"] = {"outgoing": outgoing, "incoming": incoming}
-
+            if include_relations:
+                await self._attach_relations(entity, entity_id or entity["id"], owner)
             return entity
-
         except Exception as e:
             logger.error("Failed to get entity: %s", e)
+            if strict:
+                raise
             return None
+
+    async def _load_entity(
+        self: AutoBotMemoryGraphCore,
+        entity_id: str | None,
+        entity_name: str | None,
+        strict: bool,
+        owner: Any,
+    ) -> Dict[str, Any] | None:
+        """The entity ``owner`` may read for an id or a name; None when absent or not visible."""
+        if entity_id:
+            entity = await self.redis_client.json().get(f"memory:entity:{entity_id}")
+            return entity if entity_visible(entity, owner) else None
+        if entity_name:
+            return await self._resolve_entity_by_name(entity_name, strict=strict, owner=owner)
+        raise ValueError("Either entity_id or entity_name must be provided")
+
+    async def _attach_relations(
+        self: AutoBotMemoryGraphCore, entity: Dict[str, Any], entity_id: str, owner: Any
+    ) -> None:
+        """Fetch outgoing and incoming relations in parallel onto ``entity``, as ``owner`` (#18825).
+
+        A relation whose OTHER endpoint ``owner`` cannot read is dropped (id and type both).
+        """
+        outgoing, incoming = await asyncio.gather(
+            self._get_outgoing_relations(entity_id),
+            self._get_incoming_relations(entity_id),
+        )
+        out_ok = await self._readable_relation_ends(entity_id, outgoing, "to", owner)
+        in_ok = await self._readable_relation_ends(entity_id, incoming, "from", owner)
+        entity["relations"] = {
+            "outgoing": [r for r in outgoing if out_ok is None or r.get("to") in out_ok],
+            "incoming": [r for r in incoming if in_ok is None or r.get("from") in in_ok],
+        }
 
     async def _append_observations_to_entity(
         self: AutoBotMemoryGraphCore,
@@ -324,7 +397,9 @@ class EntityOperationsMixin:
         self.ensure_initialized()
 
         try:
-            entity = await self.get_entity(entity_name=entity_name)
+            # Mutation-by-name is not owner-scoped by #18825 (reads and ownership stamping are);
+            # it resolves globally, so the sentinel is explicit here.
+            entity = await self.get_entity(entity_name=entity_name, owner=UNSCOPED_ALL_USERS)
             if not entity:
                 raise ValueError(f"Entity not found: {entity_name}")
             if entity.get("_resolution") == "fuzzy":
@@ -401,7 +476,8 @@ class EntityOperationsMixin:
         self.ensure_initialized()
 
         try:
-            entity = await self.get_entity(entity_name=entity_name)
+            # Mutation-by-name is not owner-scoped by #18825; sentinel is explicit (see add_observations).
+            entity = await self.get_entity(entity_name=entity_name, owner=UNSCOPED_ALL_USERS)
             if not entity:
                 return False
             if entity.get("_resolution") == "fuzzy":
@@ -423,6 +499,7 @@ class EntityOperationsMixin:
             # Delete entity
             entity_key = f"memory:entity:{entity_id}"
             deleted = await self.redis_client.delete(entity_key)
+            await entity_upsert.release_name(self, entity["name"], entity_id)
 
             # Clear cache
             self.search_cache.clear()
@@ -459,75 +536,3 @@ class EntityOperationsMixin:
         except Exception as e:
             # CodeQL: false positive — entity_id is a UUID, not sensitive
             logger.warning("Failed to generate embedding for entity %s: %s", entity_id, e)
-
-    def _prepare_conversation_data(
-        self: AutoBotMemoryGraphCore,
-        session_id: str,
-        metadata: Dict[str, Any] | None,
-        observations: List[str] | None,
-    ) -> tuple[List[str], List[str], Dict[str, Any]]:
-        """
-        Prepare observations, tags, and metadata for conversation entity.
-
-        Issue #620.
-
-        Returns:
-            Tuple of (entity_observations, tags, conv_metadata)
-        """
-        entity_observations = []
-        tags = []
-
-        if observations:
-            entity_observations = observations
-        elif self.chat_history_manager:
-            entity_observations = [f"Conversation session: {session_id}"]
-            tags = ["conversation"]
-
-        conv_metadata = metadata or {}
-        conv_metadata.update(
-            {
-                "session_id": session_id,
-                "priority": "low",
-                "status": "active",
-            }
-        )
-        return entity_observations, tags, conv_metadata
-
-    async def create_conversation_entity(
-        self: AutoBotMemoryGraphCore,
-        session_id: str,
-        metadata: Dict[str, Any] | None = None,
-        observations: List[str] | None = None,
-    ) -> Dict[str, Any]:
-        """
-        Automatically create entity from chat session.
-
-        Args:
-            session_id: Chat session identifier
-            metadata: Optional additional metadata
-            observations: Optional list of observations to add immediately
-
-        Returns:
-            Created conversation entity
-        """
-        self.ensure_initialized()
-
-        try:
-            entity_observations, tags, conv_metadata = self._prepare_conversation_data(
-                session_id, metadata, observations
-            )
-
-            entity = await self.create_entity(
-                entity_type="conversation",
-                name=f"Conversation {session_id[:8]}",
-                observations=entity_observations,
-                metadata=conv_metadata,
-                tags=tags,
-            )
-
-            logger.info("Created conversation entity for session %s", session_id)
-            return entity
-
-        except Exception as e:
-            logger.error("Failed to create conversation entity: %s", e)
-            raise

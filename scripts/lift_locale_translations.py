@@ -64,6 +64,10 @@ from collections import Counter
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from autobot_shared.locale_tree import flatten  # noqa: E402
+
 #: The app whose locales are the translation source.
 SOURCE_LOCALES = Path("autobot-frontend") / "src" / "i18n" / "locales"
 
@@ -81,32 +85,6 @@ MAJORITY_THRESHOLD = 0.8
 #: in the app, so an app cannot disagree with its own locale about which way its
 #: text runs (#1812).
 RTL_LOCALES = frozenset({"ar", "fa", "he", "ur"})
-
-
-def flatten(node: dict, prefix: str = "") -> dict[str, Any]:
-    """Key every message in a locale tree by its dotted path to the root.
-
-    Recurses only into dict values; anything else is a leaf, so a list of
-    strings stays one entry rather than becoming indexed children. That matters
-    for the lifting rule below, which matches a message by its exact English
-    text -- a list flattened into `k.0`, `k.1` would compare fragments against
-    whole strings and find nothing.
-
-    The dotted path is what lets two apps' locale files be compared at all:
-    `en.json` nests by feature, so only a path-keyed view can ask "does this
-    app's `addNodeModal.cancel` have the same English text as some key in the
-    main app's bundle".
-
-        {"addNodeModal": {"cancel": "Cancel"}}  ->  {"addNodeModal.cancel": "Cancel"}
-    """
-    out: dict[str, Any] = {}
-    for key, value in node.items():
-        path = f"{prefix}.{key}" if prefix else key
-        if isinstance(value, dict):
-            out.update(flatten(value, path))
-        else:
-            out[path] = value
-    return out
 
 
 def _placeholders(text: str) -> tuple[str, ...]:

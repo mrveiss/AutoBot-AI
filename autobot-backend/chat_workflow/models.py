@@ -398,6 +398,11 @@ class LLMIterationContext:
     # key that slipped through. Defaults to the same "user" every downstream
     # seam already defaulted to.
     auth_role: str = "user"
+    # #18430: HMAC fingerprints of the exact calls a person was SHOWN and said yes to in the chat interrupt
+    # (set only by the graph's execute_tools path, from a decision that request_approval bound). Its own
+    # field, not a `context` key, for the reason auth_role is: `context` is copied from the request.
+    # A call whose fingerprint is absent is still held; nothing in here ever lifts line 3.
+    approved_fingerprints: frozenset = frozenset()
     # #16950: authority inherited from the principals this run acts for -- a delegating
     # parent's gates, boundary and grants. Met with the run's own at every seam that
     # enforces one, so no hop can widen it. None: nothing inherited.
@@ -464,3 +469,13 @@ class WorkflowSession:
     message_count: int = 0
     metadata: Dict[str, Any] = field(default_factory=dict)
     conversation_history: List[Dict[str, str]] = field(default_factory=list)  # Track conversation context
+
+    def kb_principal(self):
+        """The principal chat grounding reads the KB as (#16664).
+
+        Built from the stamped ``metadata["user_id"]`` / ``["org_id"]``. A turn with no user id
+        reads as ``SYSTEM_SCOPE`` -- non-private facts only -- never as an unscoped read.
+        """
+        from knowledge.search_filters import principal_for_identity
+
+        return principal_for_identity(self.metadata.get("user_id"), self.metadata.get("org_id"))

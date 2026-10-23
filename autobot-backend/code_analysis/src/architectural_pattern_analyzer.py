@@ -10,7 +10,7 @@ Analyzes codebase for architectural patterns, design issues, and structural impr
 Refactoring History:
 - Issue #394: Extracted to architectural_analysis package
   Reduced from 46 methods to 7 methods (85% reduction)
-  Extracted: ComponentDiscovery, DependencyAnalyzer, CohesionCalculator,
+  Extracted: ComponentDiscovery, ComponentDependencyAnalyzer, CohesionCalculator,
   ComplexityCalculator, PatternDetector, IssueDetector
 """
 
@@ -28,8 +28,8 @@ from architectural_analysis import (
     ArchitecturalComponent,
     ArchitecturalIssue,
     ArchitecturalMetrics,
+    ComponentDependencyAnalyzer,
     ComponentDiscovery,
-    DependencyAnalyzer,
     IssueDetector,
     PatternDetector,
 )
@@ -46,7 +46,7 @@ class ArchitecturalPatternAnalyzer:
     Analyzes architectural patterns and design quality.
 
     Issue #394: This class was refactored from 46 methods to 7 methods (85%
-    reduction) by extracting ComponentDiscovery, DependencyAnalyzer,
+    reduction) by extracting ComponentDiscovery, ComponentDependencyAnalyzer,
     CohesionCalculator, ComplexityCalculator, PatternDetector, and
     IssueDetector into separate classes in the architectural_analysis package.
 
@@ -77,7 +77,7 @@ class ArchitecturalPatternAnalyzer:
 
         # Issue #394: Delegate to extracted classes
         self._component_discovery = ComponentDiscovery()
-        self._dependency_analyzer = DependencyAnalyzer()
+        self._dependency_analyzer = ComponentDependencyAnalyzer()
         self._pattern_detector = PatternDetector()
         self._issue_detector = IssueDetector(self._dependency_analyzer)
 

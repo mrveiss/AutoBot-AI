@@ -11,7 +11,11 @@
 // bugs that do not exist, so flags are read one character at a time here.
 
 import { describe, expect, it } from 'vitest'
-import { navItems } from '../navItems'
+import { navIconItems, navItems } from '../navItems'
+import { ICONS } from '@/components/ui/Icon.vue'
+
+// The header icon cluster (#18240) renders the same way, so it is checked too.
+const ALL_ITEMS = [...navItems, ...navIconItems]
 
 const ARGC: Record<string, number> = { M: 2, L: 2, T: 2, H: 1, V: 1, C: 6, S: 4, Q: 4, A: 7, Z: 0 }
 
@@ -87,7 +91,7 @@ describe('nav icon viewBox (GH#12729)', () => {
 
   it('no icon path escapes the viewBox it is rendered in', () => {
     const offenders: string[] = []
-    for (const item of navItems) {
+    for (const item of ALL_ITEMS) {
       const paths = item.iconPaths ?? (item.icon ? [item.icon] : [])
       const box = boxOf(item)
       for (const d of paths) {
@@ -102,7 +106,7 @@ describe('nav icon viewBox (GH#12729)', () => {
   })
 
   it('24-grid paths are tagged so they are not rendered in a 20 box', () => {
-    for (const item of navItems) {
+    for (const item of ALL_ITEMS) {
       const paths = item.iconPaths ?? (item.icon ? [item.icon] : [])
       const extent = Math.max(
         0,
@@ -112,5 +116,12 @@ describe('nav icon viewBox (GH#12729)', () => {
         expect(item.iconViewBox, `${item.labelKey} is a 24-grid path`).toBe('0 0 24 24')
       }
     }
+  })
+
+  it('Preferences draws the one settings cog, on its 24 grid (#18240)', () => {
+    const prefs = navIconItems.find((item) => item.to === '/preferences')
+    expect(prefs?.iconPaths).toEqual([ICONS.cog])
+    expect(prefs?.iconViewBox).toBe('0 0 24 24')
+    expect(prefs?.iconStroke).toBe(true)
   })
 })

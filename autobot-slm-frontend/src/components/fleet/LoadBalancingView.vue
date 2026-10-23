@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { BaseAlert, BaseSwitch } from '@autobot/ui'
 /**
  * LoadBalancingView - NPU Worker Load Balancing Visualization
  *
@@ -288,12 +289,7 @@ onBeforeUnmount(() => {
     </Transition>
 
     <!-- Error Banner -->
-    <div
-      v-if="error"
-      class="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm"
-    >
-      {{ error }}
-    </div>
+    <BaseAlert v-if="error" variant="error" :message="error" />
 
     <!-- ============================================================ -->
     <!-- Strategy Configuration                                        -->
@@ -486,15 +482,7 @@ onBeforeUnmount(() => {
 
         <!-- Auto-rebalance toggle -->
         <label class="flex items-center gap-2 cursor-pointer select-none">
-          <div class="relative">
-            <input
-              type="checkbox"
-              v-model="autoRebalance"
-              class="sr-only peer"
-            />
-            <div class="w-9 h-5 bg-gray-200 peer-focus:ring-2 peer-focus:ring-primary-300 rounded-full peer peer-checked:bg-primary-600 transition-colors" />
-            <div class="absolute left-0.5 top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform peer-checked:translate-x-4" />
-          </div>
+          <BaseSwitch v-model="autoRebalance" size="sm" :label="$t('fleet.loadBalancingView.autoRebalance')" />
           <span class="text-sm text-gray-700">{{ $t('fleet.loadBalancingView.autoRebalance') }}</span>
         </label>
       </div>

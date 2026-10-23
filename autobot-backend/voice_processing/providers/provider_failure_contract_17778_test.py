@@ -19,8 +19,8 @@ import pytest
 from autobot_shared.http_client import get_http_client
 from voice_processing.providers import (
     ProviderFailed,
-    ProviderRegistry,
     ProviderUnavailable,
+    SpeechProviderRegistry,
     TranscriptionUnavailableError,
 )
 from voice_processing.providers.cloud.assemblyai_provider import AssemblyAIProvider
@@ -343,7 +343,7 @@ async def test_generic_unreadable_wav_raises_not_silence(generic, audio):
 
 
 def _latvian_chain(late, tilde, generic):
-    registry = ProviderRegistry()
+    registry = SpeechProviderRegistry()
     registry.register("lv", late, priority=10)
     registry.register("lv", tilde, priority=5)
     registry.register("lv", generic, priority=-10)
@@ -375,7 +375,7 @@ async def test_latvian_without_late_and_with_tilde_failing_is_a_failure_not_empt
 
 @pytest.mark.asyncio
 async def test_a_failed_selected_cloud_is_a_failure_and_never_reaches_a_second_cloud(deepgram, assemblyai, audio):
-    registry = ProviderRegistry()
+    registry = SpeechProviderRegistry()
     registry.register("en", deepgram, priority=20)
     registry.register("en", assemblyai, priority=15)
     with patch.object(assemblyai, "_upload", AsyncMock()) as upload, _http(status=500, text="x"):
@@ -392,7 +392,7 @@ async def test_english_cloud_failure_then_whisper_missing_never_reaches_generic(
     from voice_processing.providers.whisper_provider import WhisperProvider
 
     whisper, generic = WhisperProvider(), GenericProvider()
-    registry = ProviderRegistry()
+    registry = SpeechProviderRegistry()
     registry.register("en", deepgram, priority=20)
     registry.register("en", whisper, priority=5)
     registry.register("en", generic, priority=0)
@@ -415,7 +415,7 @@ async def test_latvian_cloud_failure_then_late_missing_never_reaches_tilde(tilde
     monkeypatch.setattr(gmod, "_google_available", True)
     monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", audio)
     google = GoogleSpeechProvider()
-    registry = ProviderRegistry()
+    registry = SpeechProviderRegistry()
     registry.register("lv", google, priority=20)
     registry.register("lv", LateProvider(late_binary_path="/nonexistent/late-binary"), priority=10)
     registry.register("lv", tilde, priority=5)
@@ -438,7 +438,7 @@ async def test_the_opt_in_lifts_the_one_external_limit(tilde, audio, monkeypatch
     monkeypatch.setattr(gmod, "_google_available", True)
     monkeypatch.setenv("GOOGLE_APPLICATION_CREDENTIALS", audio)
     google = GoogleSpeechProvider()
-    registry = ProviderRegistry()
+    registry = SpeechProviderRegistry()
     registry.register("lv", google, priority=20)
     registry.register("lv", LateProvider(late_binary_path="/nonexistent/late-binary"), priority=10)
     registry.register("lv", tilde, priority=5)

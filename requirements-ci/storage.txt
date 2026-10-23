@@ -29,7 +29,7 @@ psycopg2-binary>=2.9.13,<3.0.0  # production dep (autobot-slm-backend/requiremen
 # packages rather than constrain existing ones. -proto-common and
 # -semantic-conventions are left to chromadb: the root plane does not name them,
 # so pinning them here would invent a constraint no other plane states.
-opentelemetry-api==1.44.0
-opentelemetry-sdk==1.44.0
-opentelemetry-exporter-otlp-proto-grpc==1.44.0
-opentelemetry-proto==1.44.0
+opentelemetry-api==1.45.1
+opentelemetry-sdk==1.45.1
+opentelemetry-exporter-otlp-proto-grpc==1.45.1
+opentelemetry-proto==1.45.1

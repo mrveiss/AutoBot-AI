@@ -227,7 +227,7 @@ async def get_llm(request: Request = None):
     return await ResourceFactory.get_llm_interface(request)
 
 
-async def get_orchestrator(request: Request = None):
+async def get_shared_orchestrator(request: Request = None):
     """Shorthand for getting the Orchestrator singleton."""
     return await ResourceFactory.get_orchestrator(request)
 

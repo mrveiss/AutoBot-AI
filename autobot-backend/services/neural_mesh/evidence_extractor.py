@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from autobot_shared.logging_manager import get_logger
+from knowledge.chunk_identity import resolve_chunk_id
 
 logger = get_logger(__name__)
 
@@ -132,7 +133,7 @@ class EvidenceExtractor:
         """
         sentences: list[tuple[str, str]] = []
         for chunk in chunks:
-            chunk_id = chunk.get("chunk_id") or chunk.get("metadata", {}).get("chunk_id", "")
+            chunk_id = resolve_chunk_id(chunk)
             content = chunk.get("content", "")
             for sent in self._split_sentences(content):
                 stripped = sent.strip()

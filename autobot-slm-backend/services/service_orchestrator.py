@@ -27,6 +27,9 @@ from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
 from models.database import Node, Service, SystemdState
 from services.orchestrator_ssh import report_ssh, spawn_ssh, ssh_base_cmd, systemctl_sudo_call, systemctl_user_cmd
+from services.service_upsert import upsert_service
+from services.ssh_utils import ssh_destination_args, ssh_options
+from services.unit_names import loggable_unit_name
 
 logger = logging.getLogger(__name__)
 
@@ -316,7 +319,7 @@ _SERVICE_DEFINITIONS = {
 }
 
 
-class ServiceRegistry:
+class ServiceDefinitionRegistry:
     """
     Registry of known AutoBot services with their configurations.
 
@@ -387,7 +390,7 @@ class ServiceOrchestrator:
     _SSH_MAX_CONCURRENT = 10
 
     def __init__(self):
-        self.registry = ServiceRegistry()
+        self.registry = ServiceDefinitionRegistry()
         self.ssh_key = Path(config.path.ssh_key_path)  # canonical inter-node key (#12429)
         self.ssh_user = "autobot"
         self._ssh_semaphore = asyncio.Semaphore(self._SSH_MAX_CONCURRENT)
@@ -780,27 +783,23 @@ class ServiceOrchestrator:
         return result.scalar_one_or_none()
 
     async def _update_service_record(self, db: AsyncSession, node_id: str, service_name: str, status: str) -> None:
-        """Update or create service record in database."""
-        result = await db.execute(
-            select(Service).where(
-                Service.node_id == node_id,
-                Service.service_name == service_name,
-            )
-        )
-        service = result.scalar_one_or_none()
+        """Update or create service record in database via the shared upsert core (#19059)."""
+        now = datetime.now(timezone.utc)
 
-        if service:
-            service.status = status
-            service.last_checked = datetime.now(timezone.utc)
-        else:
-            service = Service(
-                node_id=node_id,
-                service_name=service_name,
-                status=status,
-                last_checked=datetime.now(timezone.utc),
-            )
-            db.add(service)
+        def _update(row: Service) -> None:
+            row.status = status
+            row.last_checked = now
 
+        def _create(category: str) -> Service:
+            return Service(
+                node_id=node_id, service_name=service_name, status=status, last_checked=now, category=category
+            )
+
+        outcome = await upsert_service(db, node_id, service_name, update=_update, create=_create)
+        if outcome is None:
+            logger.warning(
+                "record not written, unit name refused: node=%s name=%s", node_id, loggable_unit_name(service_name)
+            )
         await db.commit()
 
     async def _run_ssh_command(self, host: str, command: str, requires_sudo: bool = False) -> Tuple[bool, str]:
@@ -882,15 +881,10 @@ class ServiceOrchestrator:
         """Check if SSH connection is possible."""
         cmd = [
             "ssh",
-            "-o",
-            "StrictHostKeyChecking=accept-new",
-            "-o",
-            "ConnectTimeout=3",
-            "-o",
-            "BatchMode=yes",
+            *ssh_options("StrictHostKeyChecking=accept-new", "ConnectTimeout=3", "BatchMode=yes"),
             "-i",
             str(self.ssh_key),
-            f"{self.ssh_user}@{host}",
+            *ssh_destination_args(self.ssh_user, host),
             "echo ok",
         ]
         process = await asyncio.create_subprocess_exec(

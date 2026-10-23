@@ -11,18 +11,18 @@ implemented as part of Issue #228 under EPIC #217.
 
 import pytest
 
-from code_intelligence.llm_code_generator import (
+from code_intelligence.code_generation import (
     CodeContext,
+    CodeRefactoringRequest,
+    CodeRefactoringType,
     CodeValidator,
     DiffGenerator,
     GeneratedCode,
     GenerationStatus,
     LLMCodeGenerator,
-    PromptTemplate,
     PromptTemplateManager,
-    RefactoringRequest,
+    RefactoringPromptTemplate,
     RefactoringResult,
-    RefactoringType,
     ValidationResult,
     ValidationStatus,
     generate_diff,
@@ -132,36 +132,36 @@ def process_data(data):
 
 
 # =============================================================================
-# RefactoringType Enum Tests
+# CodeRefactoringType Enum Tests
 # =============================================================================
 
 
 class TestRefactoringType:
-    """Tests for RefactoringType enum."""
+    """Tests for CodeRefactoringType enum."""
 
     def test_extract_function_value(self):
         """Test EXTRACT_FUNCTION enum value."""
-        assert RefactoringType.EXTRACT_FUNCTION.value == "extract_function"
+        assert CodeRefactoringType.EXTRACT_FUNCTION.value == "extract_function"
 
     def test_add_type_hints_value(self):
         """Test ADD_TYPE_HINTS enum value."""
-        assert RefactoringType.ADD_TYPE_HINTS.value == "add_type_hints"
+        assert CodeRefactoringType.ADD_TYPE_HINTS.value == "add_type_hints"
 
     def test_add_docstring_value(self):
         """Test ADD_DOCSTRING enum value."""
-        assert RefactoringType.ADD_DOCSTRING.value == "add_docstring"
+        assert CodeRefactoringType.ADD_DOCSTRING.value == "add_docstring"
 
     def test_add_error_handling_value(self):
         """Test ADD_ERROR_HANDLING enum value."""
-        assert RefactoringType.ADD_ERROR_HANDLING.value == "add_error_handling"
+        assert CodeRefactoringType.ADD_ERROR_HANDLING.value == "add_error_handling"
 
     def test_simplify_conditional_value(self):
         """Test SIMPLIFY_CONDITIONAL enum value."""
-        assert RefactoringType.SIMPLIFY_CONDITIONAL.value == "simplify_conditional"
+        assert CodeRefactoringType.SIMPLIFY_CONDITIONAL.value == "simplify_conditional"
 
     def test_convert_to_async_value(self):
         """Test CONVERT_TO_ASYNC enum value."""
-        assert RefactoringType.CONVERT_TO_ASYNC.value == "convert_to_async"
+        assert CodeRefactoringType.CONVERT_TO_ASYNC.value == "convert_to_async"
 
     def test_all_refactoring_types_exist(self):
         """Test that all expected refactoring types exist."""
@@ -183,7 +183,7 @@ class TestRefactoringType:
             "CUSTOM",
         ]
         for name in expected:
-            assert hasattr(RefactoringType, name)
+            assert hasattr(CodeRefactoringType, name)
 
 
 # =============================================================================
@@ -269,31 +269,31 @@ class TestCodeContext:
 
 
 class TestRefactoringRequest:
-    """Tests for RefactoringRequest dataclass."""
+    """Tests for CodeRefactoringRequest dataclass."""
 
     def test_refactoring_request_creation(self):
-        """Test creating a RefactoringRequest."""
+        """Test creating a CodeRefactoringRequest."""
         context = CodeContext(
             file_path="/test/file.py",
             code_snippet="def foo(): pass",
         )
-        request = RefactoringRequest(
-            refactoring_type=RefactoringType.ADD_DOCSTRING,
+        request = CodeRefactoringRequest(
+            refactoring_type=CodeRefactoringType.ADD_DOCSTRING,
             context=context,
         )
         assert request.context.code_snippet == "def foo(): pass"
-        assert request.refactoring_type == RefactoringType.ADD_DOCSTRING
+        assert request.refactoring_type == CodeRefactoringType.ADD_DOCSTRING
         assert request.preserve_behavior is True  # default
         assert request.target_name is None
 
     def test_refactoring_request_with_target(self):
-        """Test RefactoringRequest with target function."""
+        """Test CodeRefactoringRequest with target function."""
         context = CodeContext(
             file_path="/test/file.py",
             code_snippet="def foo(): pass\ndef bar(): pass",
         )
-        request = RefactoringRequest(
-            refactoring_type=RefactoringType.ADD_TYPE_HINTS,
+        request = CodeRefactoringRequest(
+            refactoring_type=CodeRefactoringType.ADD_TYPE_HINTS,
             context=context,
             target_name="bar",
         )
@@ -334,11 +334,11 @@ class TestGeneratedCode:
         )
         code = GeneratedCode(
             code="def foo(): return 42",
-            refactoring_type=RefactoringType.SIMPLIFY_CONDITIONAL,
+            refactoring_type=CodeRefactoringType.SIMPLIFY_CONDITIONAL,
             validation=validation,
         )
         assert code.code == "def foo(): return 42"
-        assert code.refactoring_type == RefactoringType.SIMPLIFY_CONDITIONAL
+        assert code.refactoring_type == CodeRefactoringType.SIMPLIFY_CONDITIONAL
         assert code.validation is not None
 
     def test_generated_code_with_validation(self):
@@ -349,7 +349,7 @@ class TestGeneratedCode:
         )
         code = GeneratedCode(
             code="def foo(): return 42",
-            refactoring_type=RefactoringType.SIMPLIFY_CONDITIONAL,
+            refactoring_type=CodeRefactoringType.SIMPLIFY_CONDITIONAL,
             validation=validation,
             explanation="Simplified the logic",
         )
@@ -367,8 +367,8 @@ class TestRefactoringResult:
             file_path="/test/file.py",
             code_snippet="def foo(): pass",
         )
-        request = RefactoringRequest(
-            refactoring_type=RefactoringType.ADD_DOCSTRING,
+        request = CodeRefactoringRequest(
+            refactoring_type=CodeRefactoringType.ADD_DOCSTRING,
             context=context,
         )
         result = RefactoringResult(
@@ -385,8 +385,8 @@ class TestRefactoringResult:
             file_path="/test/file.py",
             code_snippet="def foo(): pass",
         )
-        request = RefactoringRequest(
-            refactoring_type=RefactoringType.ADD_DOCSTRING,
+        request = CodeRefactoringRequest(
+            refactoring_type=CodeRefactoringType.ADD_DOCSTRING,
             context=context,
         )
         result = RefactoringResult(
@@ -568,21 +568,21 @@ class TestPromptTemplateManager:
 
     def test_get_template_for_add_docstring(self):
         """Test getting ADD_DOCSTRING template."""
-        template = PromptTemplateManager.get_template(RefactoringType.ADD_DOCSTRING)
+        template = PromptTemplateManager.get_template(CodeRefactoringType.ADD_DOCSTRING)
         assert template is not None
-        assert isinstance(template, PromptTemplate)
+        assert isinstance(template, RefactoringPromptTemplate)
         assert template.name == "add_docstring"
 
     def test_get_template_for_add_type_hints(self):
         """Test getting ADD_TYPE_HINTS template."""
-        template = PromptTemplateManager.get_template(RefactoringType.ADD_TYPE_HINTS)
+        template = PromptTemplateManager.get_template(CodeRefactoringType.ADD_TYPE_HINTS)
         assert template is not None
         assert "type" in template.user_prompt_template.lower() or template.name == "add_type_hints"
 
     def test_format_prompt(self):
         """Test formatting a prompt template."""
         system_prompt, user_prompt = PromptTemplateManager.format_prompt(
-            RefactoringType.ADD_DOCSTRING,
+            CodeRefactoringType.ADD_DOCSTRING,
             code="def foo(): pass",
         )
         assert "def foo(): pass" in user_prompt
@@ -590,17 +590,17 @@ class TestPromptTemplateManager:
 
     def test_template_for_extract_function(self):
         """Test getting EXTRACT_FUNCTION template."""
-        template = PromptTemplateManager.get_template(RefactoringType.EXTRACT_FUNCTION)
+        template = PromptTemplateManager.get_template(CodeRefactoringType.EXTRACT_FUNCTION)
         assert template is not None
 
     def test_template_for_add_error_handling(self):
         """Test getting ADD_ERROR_HANDLING template."""
-        template = PromptTemplateManager.get_template(RefactoringType.ADD_ERROR_HANDLING)
+        template = PromptTemplateManager.get_template(CodeRefactoringType.ADD_ERROR_HANDLING)
         assert template is not None
 
     def test_template_for_custom(self):
         """Test getting CUSTOM template."""
-        template = PromptTemplateManager.get_template(RefactoringType.CUSTOM)
+        template = PromptTemplateManager.get_template(CodeRefactoringType.CUSTOM)
         assert template is not None
         assert template.name == "custom"
 
@@ -626,8 +626,8 @@ class TestLLMCodeGenerator:
             file_path="/test/file.py",
             code_snippet="def add(a, b):\n    return a + b",
         )
-        request = RefactoringRequest(
-            refactoring_type=RefactoringType.ADD_DOCSTRING,
+        request = CodeRefactoringRequest(
+            refactoring_type=CodeRefactoringType.ADD_DOCSTRING,
             context=context,
         )
         result = await llm_generator.generate(request)
@@ -643,8 +643,8 @@ class TestLLMCodeGenerator:
             file_path="/test/file.py",
             code_snippet="def multiply(x, y):\n    return x * y",
         )
-        request = RefactoringRequest(
-            refactoring_type=RefactoringType.ADD_TYPE_HINTS,
+        request = CodeRefactoringRequest(
+            refactoring_type=CodeRefactoringType.ADD_TYPE_HINTS,
             context=context,
         )
         result = await llm_generator.generate(request)
@@ -658,8 +658,8 @@ class TestLLMCodeGenerator:
             file_path="/test/file.py",
             code_snippet="def foo():\n    pass",
         )
-        request = RefactoringRequest(
-            refactoring_type=RefactoringType.ADD_DOCSTRING,
+        request = CodeRefactoringRequest(
+            refactoring_type=CodeRefactoringType.ADD_DOCSTRING,
             context=context,
         )
         result = await working_generator.generate(request)
@@ -679,8 +679,8 @@ class TestLLMCodeGenerator:
             file_path="/test/file.py",
             code_snippet="def test_cache():\n    pass",
         )
-        request = RefactoringRequest(
-            refactoring_type=RefactoringType.ADD_DOCSTRING,
+        request = CodeRefactoringRequest(
+            refactoring_type=CodeRefactoringType.ADD_DOCSTRING,
             context=context,
         )
         result1 = await working_generator.generate(request)
@@ -705,8 +705,8 @@ class TestLLMCodeGenerator:
         of the seven tests that passed even while the whole module was a mock.
         """
         context = CodeContext(file_path="/test/file.py", code_snippet="def c():\n    pass")
-        request = RefactoringRequest(
-            refactoring_type=RefactoringType.ADD_DOCSTRING,
+        request = CodeRefactoringRequest(
+            refactoring_type=CodeRefactoringType.ADD_DOCSTRING,
             context=context,
         )
         await working_generator.generate(request)
@@ -776,7 +776,7 @@ class TestConvenienceFunctions:
         """Test refactor_code convenience function."""
         result = await refactor_code(
             code="def foo(): pass",
-            refactoring_type=RefactoringType.ADD_DOCSTRING,
+            refactoring_type=CodeRefactoringType.ADD_DOCSTRING,
         )
         assert result is not None
         assert isinstance(result, RefactoringResult)
@@ -802,8 +802,8 @@ class TestIntegration:
             file_path="/test/file.py",
             code_snippet=complex_python_code,
         )
-        request = RefactoringRequest(
-            refactoring_type=RefactoringType.ADD_TYPE_HINTS,
+        request = CodeRefactoringRequest(
+            refactoring_type=CodeRefactoringType.ADD_TYPE_HINTS,
             context=context,
         )
 
@@ -824,8 +824,8 @@ class TestIntegration:
         generator = LLMCodeGenerator()
 
         types_to_test = [
-            RefactoringType.ADD_DOCSTRING,
-            RefactoringType.ADD_TYPE_HINTS,
+            CodeRefactoringType.ADD_DOCSTRING,
+            CodeRefactoringType.ADD_TYPE_HINTS,
         ]
 
         for ref_type in types_to_test:
@@ -833,7 +833,7 @@ class TestIntegration:
                 file_path="/test/file.py",
                 code_snippet=code,
             )
-            request = RefactoringRequest(
+            request = CodeRefactoringRequest(
                 refactoring_type=ref_type,
                 context=context,
             )
@@ -911,8 +911,8 @@ multiline string
             file_path="/test/file.py",
             code_snippet="",
         )
-        request = RefactoringRequest(
-            refactoring_type=RefactoringType.ADD_DOCSTRING,
+        request = CodeRefactoringRequest(
+            refactoring_type=CodeRefactoringType.ADD_DOCSTRING,
             context=context,
         )
         result = await llm_generator.generate(request)
@@ -944,10 +944,10 @@ class TestModuleImports:
 
     def test_import_from_code_intelligence(self):
         """Test importing from code_intelligence package."""
-        from code_intelligence import CodeValidator, LLMCodeGenerator, RefactoringType
+        from code_intelligence import CodeRefactoringType, CodeValidator, LLMCodeGenerator
 
         assert LLMCodeGenerator is not None
-        assert RefactoringType is not None
+        assert CodeRefactoringType is not None
         assert CodeValidator is not None
 
     def test_all_exports_accessible(self):

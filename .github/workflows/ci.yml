@@ -160,7 +160,54 @@ jobs:
     steps:
     - uses: actions/checkout@v7
 
+    # #18102: the runner's apt mirror can be too slow to fetch the ~63 MB ffmpeg/tesseract set
+    # inside the per-attempt bound, and a failed provision skips every shard. The archive cache,
+    # including the partial downloads apt resumes from, is carried between runs: a hit installs
+    # offline, and a slow run still saves what it fetched (if: always()), so the next run resumes
+    # instead of starting from zero. Keys are per run (caches are immutable); restore takes the
+    # newest for this image, then any image -- debs a newer image no longer wants are ignored.
+    - name: "Restore the apt archive cache (#18102)"
+      uses: actions/cache/restore@v6
+      with:
+        path: ${{ runner.temp }}/apt-archive-cache
+        key: ci-apt-archives-${{ runner.os }}-${{ env.ImageVersion }}-${{ github.run_id }}-${{ github.run_attempt }}
+        restore-keys: |
+          ci-apt-archives-${{ runner.os }}-${{ env.ImageVersion }}-
+          ci-apt-archives-${{ runner.os }}-
+
+    - name: "Seed apt's archive directory from the cache (#18102)"
+      shell: bash
+      run: |
+        set -euo pipefail
+        src="${RUNNER_TEMP}/apt-archive-cache"
+        if [ -d "$src" ] && [ -n "$(ls -A "$src" 2>/dev/null)" ]; then
+          sudo mkdir -p /var/cache/apt/archives/partial
+          sudo cp -a "$src"/. /var/cache/apt/archives/
+          echo "seeded $(find "$src" -maxdepth 1 -name '*.deb' | wc -l) .deb(s) and $(find "$src/partial" -type f 2>/dev/null | wc -l) partial file(s)"
+        else
+          echo "no apt archive cache for this image yet; downloading from the mirror"
+        fi
+
     - uses: ./.github/actions/setup-python-suite
+
+    - name: "Stage the apt archive for the cache, complete or partial (#18102)"
+      if: always()
+      shell: bash
+      run: |
+        set -euo pipefail
+        dst="${RUNNER_TEMP}/apt-archive-cache"
+        rm -rf "$dst" && mkdir -p "$dst/partial"
+        sudo cp /var/cache/apt/archives/*.deb "$dst"/ 2>/dev/null || true
+        sudo cp /var/cache/apt/archives/partial/* "$dst/partial"/ 2>/dev/null || true
+        sudo chown -R "$(id -u):$(id -g)" "$dst"
+        echo "staged $(find "$dst" -maxdepth 1 -name '*.deb' | wc -l) .deb(s), $(du -sb "$dst" | cut -f1) bytes"
+
+    - name: "Save the apt archive cache (#18102)"
+      if: always()
+      uses: actions/cache/save@v6
+      with:
+        path: ${{ runner.temp }}/apt-archive-cache
+        key: ci-apt-archives-${{ runner.os }}-${{ env.ImageVersion }}-${{ github.run_id }}-${{ github.run_attempt }}
 
     - name: "Collect the downloaded .debs for the shards (#18102)"
       shell: bash
@@ -176,7 +223,7 @@ jobs:
         sudo chown -R "$(id -u):$(id -g)" "$dest"
         echo "collected $(find "$dest" -maxdepth 1 -name '*.deb' | wc -l) .deb(s)"
 
-    - uses: actions/upload-artifact@v7.0.1
+    - uses: actions/upload-artifact@v7.0.2
       with:
         name: ci-apt-debs
         path: ${{ runner.temp }}/apt-debs
@@ -349,25 +396,33 @@ jobs:
     # against 0.15 and could never fire. Every Python test passed, because they
     # asserted substrings of the expr strings. The promtool suite catches it.
     #
-    # Version pinned to match install-prometheus-stack.sh, so CI validates rules
-    # with the same binary the hosts run.
+    # Version: read from the monitoring role's prometheus_version, the one
+    # declaration of the Prometheus version (#18556), so CI and hosts cannot drift.
     # Cached: the tarball is ~95.7 MB and this job runs 12 shards, so an
     # uncached download is ~1.15 GB per run of which ~1.05 GB is waste — the
     # promtool tests collect into exactly one shard. Not gated on the shard
     # number: which shard they land in is a function of .test_durations and
     # moves silently.
+    - name: Resolve the Prometheus version from the monitoring role (#18556)
+      id: promver
+      run: |
+        set -euo pipefail
+        V=$(sed -nE 's/^prometheus_version:[[:space:]]*"?([0-9][0-9.]*)"?.*/\1/p' autobot-slm-backend/ansible/roles/monitoring/defaults/main.yml)
+        test -n "$V"
+        echo "version=$V" >> "$GITHUB_OUTPUT"
+
     - name: Cache promtool
       id: promtool-cache
       uses: actions/cache@v6
       with:
         path: /usr/local/bin/promtool
-        key: promtool-${{ runner.os }}-2.47.0
+        key: promtool-${{ runner.os }}-${{ steps.promver.outputs.version }}
 
     - name: Install promtool (Prometheus rule validation, #13927)
       if: steps.promtool-cache.outputs.cache-hit != 'true'
       run: |
         set -euo pipefail
-        PROM_VERSION=2.47.0
+        PROM_VERSION="${{ steps.promver.outputs.version }}"
         TARBALL="prometheus-${PROM_VERSION}.linux-amd64"
         # --retry: this step sits in front of the entire Python suite. One
         # transient CDN 5xx would redden python-shard -> python-suite ->
@@ -683,7 +738,8 @@ jobs:
     - name: Run frontend unit tests with coverage gate
       run: |
         cd autobot-frontend
-        # test:coverage enforces 70% threshold via vitest.config.ts thresholds (#3285)
+        # test:coverage enforces the floors in autobot-frontend/vitest.config.ts
+        # (source of truth, #17324); 70% is the long-term target, not the enforced value.
         npm run test:coverage
 
     - name: Cleanup
@@ -806,7 +862,7 @@ jobs:
         cat DEPLOYMENT_SUMMARY.md
 
     - name: Upload deployment artifact
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@v7.0.2
       with:
         name: deployment-summary
         path: DEPLOYMENT_SUMMARY.md

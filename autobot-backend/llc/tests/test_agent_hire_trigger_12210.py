@@ -8,7 +8,7 @@ Repro: ``POST /companies/{id}/agent-hires`` never sets ``heartbeat_enabled``
 (``AgentHireRequest.heartbeat_enabled`` defaults False, see
 ``llc/api/agent_hires.py``), then ``POST /agents/{agent_id}/heartbeat/trigger``
 raised ``ValueError: Agent '<id>' not found or not configured`` from
-``HeartbeatScheduler._get_agent_config`` — it filtered on
+``LLCHeartbeatScheduler._get_agent_config`` — it filtered on
 ``heartbeat_enabled = true`` unconditionally, so a freshly hired agent that
 never opted into the periodic cron was invisible to a manual trigger.
 
@@ -35,7 +35,7 @@ import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from llc.models.enums import LLCRunStatus
-from llc.scheduler.heartbeat_scheduler import HeartbeatScheduler
+from llc.scheduler.heartbeat_scheduler import LLCHeartbeatScheduler
 
 # Importing the harness registers the SQLite compile shims and loop models
 # (including AgentOrgNode) on Base.metadata before create_all runs.
@@ -93,7 +93,7 @@ async def test_hired_agent_can_be_manually_triggered(session_factory) -> None:  
     """Hire (heartbeat_enabled defaults False) then trigger_manual must resolve it."""
     agent_id = await _hire_agent(session_factory)
 
-    scheduler = HeartbeatScheduler()
+    scheduler = LLCHeartbeatScheduler()
     async with session_factory() as session:
         run, agent_cfg = await scheduler.trigger_manual(session, agent_id)
         await session.commit()
@@ -106,7 +106,7 @@ async def test_hired_agent_can_be_manually_triggered(session_factory) -> None:  
 @pytest.mark.asyncio
 async def test_unhired_agent_still_raises_not_found(session_factory) -> None:  # noqa: ANN001
     """No org node at all still fails fast — the fix must not open a blanket bypass."""
-    scheduler = HeartbeatScheduler()
+    scheduler = LLCHeartbeatScheduler()
     async with session_factory() as session:
         with pytest.raises(ValueError, match="not found"):
             await scheduler.trigger_manual(session, "agent-does-not-exist")

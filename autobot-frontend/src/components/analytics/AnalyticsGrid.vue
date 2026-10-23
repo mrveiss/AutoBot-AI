@@ -1,7 +1,7 @@
 <template>
   <div class="analytics-grid">
     <!-- System Overview -->
-    <BasePanel variant="dark" size="md">
+    <BaseCard scrollable variant="dark" size="md">
       <template #header>
         <div class="card-header-content">
           <h3><Icon name="tachometer-alt" /> {{ $t('analytics.grid.systemOverview') }}</h3>
@@ -40,10 +40,10 @@
           <button @click="$emit('load-system-overview')" class="btn-link">{{ $t('analytics.grid.loadMetrics') }}</button>
         </template>
       </EmptyState>
-    </BasePanel>
+    </BaseCard>
 
     <!-- Communication Patterns -->
-    <BasePanel variant="dark" size="md">
+    <BaseCard scrollable variant="dark" size="md">
       <template #header>
         <div class="card-header-content">
           <h3><Icon name="network-wired" /> {{ $t('analytics.grid.communicationPatterns') }}</h3>
@@ -71,10 +71,10 @@
         icon="wifi"
         :message="$t('analytics.grid.noCommunicationData')"
       />
-    </BasePanel>
+    </BaseCard>
 
     <!-- Code Quality -->
-    <BasePanel variant="dark" size="md">
+    <BaseCard scrollable variant="dark" size="md">
       <template #header>
         <div class="card-header-content">
           <h3><Icon name="code-branch" /> {{ $t('analytics.grid.codeQuality') }}</h3>
@@ -108,10 +108,10 @@
         icon="star"
         :message="$t('analytics.grid.noQualityMetrics')"
       />
-    </BasePanel>
+    </BaseCard>
 
     <!-- Performance Metrics -->
-    <BasePanel variant="dark" size="md">
+    <BaseCard scrollable variant="dark" size="md">
       <template #header>
         <div class="card-header-content">
           <h3><Icon name="bolt" /> {{ $t('analytics.grid.performanceMetrics') }}</h3>
@@ -145,11 +145,12 @@
         icon="rocket"
         :message="$t('analytics.grid.noPerformanceData')"
       />
-    </BasePanel>
+    </BaseCard>
   </div>
 </template>
 
 <script setup lang="ts">
+import { BaseCard } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -163,7 +164,6 @@
  */
 
 import Icon from '@/components/ui/Icon.vue'
-import BasePanel from '@/components/base/BasePanel.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 
 interface SystemOverview {

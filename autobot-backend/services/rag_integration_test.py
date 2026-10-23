@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from advanced_rag_optimizer import RAGMetrics, RankedResult
+from knowledge.search_filters import SYSTEM_SCOPE
 from services.knowledge_base_adapter import KnowledgeBaseAdapter
 from services.rag_config import (
     RAGConfig,
@@ -249,12 +250,15 @@ class TestRAGService:
         """Test fallback to basic search when RAG disabled."""
         mock_kb = AsyncMock()
         mock_kb.__class__.__name__ = "KnowledgeBase"
-        mock_kb.search.return_value = [{"content": "fallback result", "metadata": {}, "score": 0.8}]
+        # A system-visible fact: the SYSTEM_SCOPE principal below reads non-private facts only (#16664).
+        mock_kb.search.return_value = [
+            {"content": "fallback result", "metadata": {"visibility": "system"}, "score": 0.8}
+        ]
 
         config = RAGConfig(enable_advanced_rag=False)
         service = RAGService(mock_kb, config=config)
 
-        results, metrics = await service.advanced_search("test query")
+        results, metrics = await service.advanced_search("test query", principal=SYSTEM_SCOPE)
 
         # Should use fallback
         assert len(results) == 1
@@ -462,8 +466,8 @@ class TestKBSynthesisSchemaCache:
             ),
         ):
             service = RAGService.__new__(RAGService)
-            await service._get_kb_synthesis_context("query one")
-            await service._get_kb_synthesis_context("query two")
+            await service._get_kb_synthesis_context("query one", SYSTEM_SCOPE)
+            await service._get_kb_synthesis_context("query two", SYSTEM_SCOPE)
 
         mock_loader.assert_called_once()
 

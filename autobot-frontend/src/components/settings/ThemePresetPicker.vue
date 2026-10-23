@@ -95,19 +95,18 @@
       </div>
     </details>
 
-    <!-- Screen reader announcements -->
-    <div role="status" aria-live="polite" aria-atomic="true" class="sr-only">
-      {{ announcement }}
-    </div>
+    <!-- Deployed (SLM) themes, #18240 -->
+    <div class="px-6 pb-6"><AdditionalThemesGroup /></div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { getThemeIcon } from '@/composables/themeIcons'
-import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useTheme, type Theme, type ThemePreset, type AccentColor } from '@/composables/useTheme'
 import Icon from '@/components/ui/Icon.vue'
+import AdditionalThemesGroup from '@/components/settings/AdditionalThemesGroup.vue'
+import { useAnnounce } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('ThemePresetPicker')
@@ -128,18 +127,8 @@ const {
   THEME_PRESETS,
 } = useTheme()
 
-// Screen reader announcements
-const announcement = ref('')
-
-/**
- * Helper function to announce changes to screen readers
- */
-function announceChange(message: string): void {
-  announcement.value = message
-  setTimeout(() => {
-    announcement.value = ''
-  }, 1000)
-}
+// Screen reader announcements: the kit's one live region (#18240)
+const { announce: announceChange } = useAnnounce()
 
 /**
  * Handle preset selection
@@ -180,19 +169,6 @@ function handleSetAccent(colorOption: AccentColor): void {
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-default);
   overflow: hidden;
-}
-
-/* Screen reader only */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border-width: 0;
 }
 
 /* ============================================

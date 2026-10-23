@@ -19,6 +19,7 @@ from autobot_shared.logging_manager import get_logger
 from utils.chromadb_client import get_all_paginated
 
 from ..storage import get_code_collection, get_redis_connection
+from ..type_coverage import problem_type_coverage
 
 logger = get_logger(__name__)
 
@@ -121,6 +122,8 @@ def _build_chart_response(
                 "unique_problem_types": len(problem_types),
                 "files_with_problems": len(file_problems),
                 "race_condition_count": sum(race_conditions.values()),
+                # #18067: which DECLARED types emitted nothing, as numbers.
+                "type_coverage": problem_type_coverage(problem_types).as_dict(),
             },
         },
         "storage_type": storage_type,

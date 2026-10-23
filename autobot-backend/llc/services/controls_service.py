@@ -24,6 +24,7 @@ from autobot_shared.redis_client import get_async_redis_client
 
 from ..models.enums import ActivityEventType, LLCAgentStatus
 from .activity_log import LLCActivityLogService
+from .company import CompanyNotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -36,10 +37,6 @@ class AgentNotFoundError(Exception):
 
 
 class SprintNotFoundError(Exception):
-    pass
-
-
-class CompanyNotFoundError(Exception):
     pass
 
 

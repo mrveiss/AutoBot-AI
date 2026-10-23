@@ -19,6 +19,7 @@ import json
 import os
 from typing import List, Optional
 
+from autobot_shared.ai_lines import VERIFIED_COMPANY_KEY, VERIFIED_USER_KEY
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
@@ -61,7 +62,7 @@ AUTH_ROLE_CONTEXT_KEY = "auth_role"
 DEFAULT_AUTH_ROLE = "user"
 
 
-def apply_auth_role(context: "dict | None", role: Optional[str]) -> "dict | None":
+def apply_auth_role(context: "dict | None", role: Optional[str], scope: "dict | None" = None) -> "dict | None":
     """Overlay the trusted authenticated *role* onto *context* (#13821).
 
     Unlike ``apply_role``, a falsy *role* **strips** the key rather than leaving
@@ -71,13 +72,37 @@ def apply_auth_role(context: "dict | None", role: Optional[str]) -> "dict | None
     would let exactly that value survive into the tool seam and grant the
     privileges it names. Every path therefore writes or removes the key — the
     caller's value is never the one that reaches ``dispatch()``.
+
+    #18430: *scope* (``{"org_id", "user_id"}`` of the AUTHENTICATED principal) is overlaid the same way as
+    ``verified_company_id`` / ``verified_user_id``, the scope the AI lines are decided for. The request's own
+    ``company_id`` and ``user_id`` are client claims and never scope a decision.
     """
     merged = {**(context or {})}
+    for key, value in (
+        (VERIFIED_COMPANY_KEY, (scope or {}).get("org_id")),
+        (VERIFIED_USER_KEY, (scope or {}).get("user_id")),
+    ):
+        if value:
+            merged[key] = str(value)
+        else:
+            merged.pop(key, None)
     if role:
         merged[AUTH_ROLE_CONTEXT_KEY] = role
     else:
         merged.pop(AUTH_ROLE_CONTEXT_KEY, None)
     return merged
+
+
+def stamp_verified_identity(metadata: dict, context: "dict | None") -> None:
+    """Record the AUTHENTICATED principal on session *metadata*, replacing whatever a prior turn left (#18825).
+
+    ``metadata["user_id"]`` / ``["org_id"]`` bound the memory-graph owner scope (L2 context, trajectory reads), so
+    they come from the verified keys ``apply_auth_role`` overlaid -- never the request's own ``user_id`` /
+    ``org_id``. A turn with no verified principal (or no context) writes ``""``: the scope fails closed rather
+    than inheriting the previous turn's identity.
+    """
+    metadata["user_id"] = (context or {}).get(VERIFIED_USER_KEY) or ""
+    metadata["org_id"] = (context or {}).get(VERIFIED_COMPANY_KEY) or ""
 
 
 def resolve_auth_role(context: "dict | None") -> str:

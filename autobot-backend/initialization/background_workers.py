@@ -72,16 +72,51 @@ async def start_vector_reconciler(app: FastAPI) -> None:
         logger.warning("KB vector reconciler failed to start: %s", e)
 
 
+def wire_llm_service(app: FastAPI) -> None:
+    """Point ``app.state.llm_service`` at the process-wide LLMService (#18689).
+
+    One instance per process: chat, the autonomous loop and every other
+    ``app.state`` reader share the singleton's counters, active provider and
+    tier router. Runs before any worker or request handler reads the attribute.
+    """
+    try:
+        from services.llm_service import get_llm_service
+
+        app.state.llm_service = get_llm_service()
+    except Exception as e:  # noqa: BLE001 - a failed LLM service must not skip the other workers
+        # Surfaced as 'degraded' by the chat health check; chat retries construction per request.
+        app.state.llm_service_error = type(e).__name__
+        logger.exception("LLM service NOT wired onto app.state; chat resolves it per request (#18689)")
+
+
 async def start_background_workers(app: FastAPI) -> None:
-    """Start every lifetime worker, in one call from the lifespan.
+    """Wire the shared LLM service, then start every lifetime worker, in one call from the lifespan.
 
     One entry point rather than one line per worker: ``initialize_background_services``
     is at its length limit, so each new worker would otherwise have to buy its line by
     shortening something else — a pressure that eventually gets paid by not adding the
     worker at all, which is how #17548 happened.
     """
+    wire_llm_service(app)
     await start_doc_sync_queue_worker(app)
     await start_vector_reconciler(app)
+    await start_telegram_poller(app)
 
 
-__all__ = ["start_background_workers", "start_doc_sync_queue_worker", "start_vector_reconciler"]
+async def start_telegram_poller(app: FastAPI) -> None:
+    """Start the Telegram polling ingest (#19010); it idles unless polling mode is selected."""
+    try:
+        from services import telegram_polling
+
+        await telegram_polling.start_polling(app)
+    except Exception:
+        logger.exception("Telegram poller NOT started; polling ingest mode will receive nothing")
+
+
+__all__ = [
+    "start_background_workers",
+    "start_doc_sync_queue_worker",
+    "start_telegram_poller",
+    "start_vector_reconciler",
+    "wire_llm_service",
+]

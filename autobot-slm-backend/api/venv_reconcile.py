@@ -103,7 +103,7 @@ _TOML_PROJECT_NAME_RE = re.compile(r'(?m)^\s*name\s*=\s*["\']([^"\']+)["\']')
 
 
 @dataclass(frozen=True)
-class ReconcileReport:
+class VenvReconcileReport:
     """Outcome of one `reconcile_component` run, for tests and callers."""
 
     component: str
@@ -359,14 +359,16 @@ async def uninstall_packages(pip_bin: Path, names: List[str]) -> Tuple[List[str]
 
 def _report(
     component: str, status: str, reason: str, steps: List[str], *, declared: Optional[Set[str]] = None
-) -> ReconcileReport:
+) -> VenvReconcileReport:
     msg = f"venv-reconcile[{component}]: {status} — {reason}" if reason else f"venv-reconcile[{component}]: {status}"
     steps.append(msg)
     (logger.warning if status == "refused" else logger.info)(msg)
-    return ReconcileReport(component=component, status=status, reason=reason, declared=tuple(sorted(declared or ())))
+    return VenvReconcileReport(
+        component=component, status=status, reason=reason, declared=tuple(sorted(declared or ()))
+    )
 
 
-def refuse_explicit_list(component: str, steps: List[str]) -> ReconcileReport:
+def refuse_explicit_list(component: str, steps: List[str]) -> VenvReconcileReport:
     """Report — not silently skip — a component with no requirements file
     to reconcile against (#15063 AC4)."""
     reason = (
@@ -394,7 +396,7 @@ async def _apply_removals(
     lock_path: Path,
     pip: Path,
     steps: List[str],
-) -> ReconcileReport:
+) -> VenvReconcileReport:
     candidates = previous - declared
     closure = transitive_closure(declared, graph)
     kept = candidates & closure
@@ -421,7 +423,7 @@ async def _apply_removals(
         steps.append(kept_msg)
         logger.info(kept_msg)
     write_lock(lock_path, declared | set(failed) | skipped)
-    return ReconcileReport(
+    return VenvReconcileReport(
         component=component,
         status="ok",
         reason="",
@@ -433,7 +435,7 @@ async def _apply_removals(
     )
 
 
-async def reconcile_component(component: str, req_path: str, pip_bin: str, steps: List[str]) -> ReconcileReport:
+async def reconcile_component(component: str, req_path: str, pip_bin: str, steps: List[str]) -> VenvReconcileReport:
     """Bring *component*'s venv to its declared dependency set, including
     removals — or refuse and report exactly what could not be reconciled
     (#15063). Never removes and discovers: every branch that cannot establish

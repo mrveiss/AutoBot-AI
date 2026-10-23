@@ -33,9 +33,9 @@ from worker_node import WorkerNode
 from .base_agent import AgentRequest
 from .npu_code_search_patterns import (
     LANGUAGE_PATTERNS,
-    detect_language,
     extract_code_elements,
     extract_element_code,
+    language_name_for_extension,
 )
 from .standardized_agent import ActionHandler, StandardizedAgent
 
@@ -49,7 +49,7 @@ _IGNORED_DIRS = frozenset({"node_modules", "__pycache__", ".git", "dist", "build
 
 
 @dataclass
-class CodeSearchResult:
+class NpuCodeSearchResult:
     """Result of code search operation"""
 
     file_path: str
@@ -549,7 +549,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 return
 
             file_ext = os.path.splitext(file_path)[1]
-            language = detect_language(file_ext)
+            language = language_name_for_extension(file_ext)
             elements = extract_code_elements(content, language, self.language_patterns)
 
             embedding_count = await self._generate_and_store_embeddings(content, relative_path, language, elements)
@@ -582,7 +582,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         cache_input = query + search_type + str(language)
         return f"{self.search_cache_prefix}{hashlib.md5(cache_input.encode(), usedforsecurity=False).hexdigest()}"
 
-    def _serialize_results(self, results: List[CodeSearchResult]) -> List[Dict[str, Any]]:
+    def _serialize_results(self, results: List[NpuCodeSearchResult]) -> List[Dict[str, Any]]:
         """Serialize results for caching (Issue #398: extracted)."""
         return [
             {
@@ -598,8 +598,8 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
     def _merge_semantic_result(
         self,
-        result: CodeSearchResult,
-        merged: Dict[tuple, CodeSearchResult],
+        result: NpuCodeSearchResult,
+        merged: Dict[tuple, NpuCodeSearchResult],
         semantic_weight: float,
     ) -> None:
         """Merge a semantic result into the combined results dict. Issue #620.
@@ -611,7 +611,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         """
         key = (result.file_path, result.line_number)
         weighted_score = result.confidence * semantic_weight
-        merged[key] = CodeSearchResult(
+        merged[key] = NpuCodeSearchResult(
             file_path=result.file_path,
             content=result.content,
             line_number=result.line_number,
@@ -626,8 +626,8 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
     def _merge_keyword_result(
         self,
-        result: CodeSearchResult,
-        merged: Dict[tuple, CodeSearchResult],
+        result: NpuCodeSearchResult,
+        merged: Dict[tuple, NpuCodeSearchResult],
         keyword_weight: float,
     ) -> None:
         """Merge a keyword result into the combined results dict. Issue #620.
@@ -645,7 +645,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             merged[key].metadata["keyword_score"] = result.confidence
             merged[key].metadata["combined"] = True
         else:
-            merged[key] = CodeSearchResult(
+            merged[key] = NpuCodeSearchResult(
                 file_path=result.file_path,
                 content=result.content,
                 line_number=result.line_number,
@@ -664,7 +664,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         language: str | None,
         max_results: int,
         semantic_weight: float = 0.7,
-    ) -> List[CodeSearchResult]:
+    ) -> List[NpuCodeSearchResult]:
         """Combine semantic and keyword matches (``semantic_weight`` in 0-1), ranked. Issue #207, #620."""
         keyword_weight = 1.0 - semantic_weight
         semantic_results = []
@@ -682,7 +682,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         except Exception as e:
             self.logger.warning("Hybrid: keyword search failed: %s", e)
 
-        merged: Dict[tuple, CodeSearchResult] = {}
+        merged: Dict[tuple, NpuCodeSearchResult] = {}
         for result in semantic_results:
             self._merge_semantic_result(result, merged, semantic_weight)
         for result in keyword_results:
@@ -699,7 +699,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
     async def _execute_search_by_type(
         self, query: str, search_type: str, language: str | None, max_results: int
-    ) -> List[CodeSearchResult]:
+    ) -> List[NpuCodeSearchResult]:
         """Execute search based on type (Issue #207, #398: extracted)."""
         if search_type == "element":
             return await self._search_elements(query, language, max_results)
@@ -711,13 +711,13 @@ class NPUCodeSearchAgent(StandardizedAgent):
             return await self._search_hybrid(query, language, max_results)
         return await self._search_semantic(query, language, max_results)
 
-    async def _cached_results(self, cache_key: str, start_time: float) -> List[CodeSearchResult] | None:
+    async def _cached_results(self, cache_key: str, start_time: float) -> List[NpuCodeSearchResult] | None:
         """Results cached under ``cache_key``, recording the hit in stats; None on a miss."""
         cached_result = await asyncio.to_thread(self.redis_client.get, cache_key)
         if not cached_result:
             return None
         self.stats.redis_cache_hit = True
-        results = [CodeSearchResult(**r) for r in json.loads(cached_result)]
+        results = [NpuCodeSearchResult(**r) for r in json.loads(cached_result)]
         self.stats.search_time_ms = (time.time() - start_time) * 1000
         self.stats.results_count = len(results)
         return results
@@ -728,7 +728,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         search_type: str = "semantic",
         language: str | None = None,
         max_results: int = 20,
-    ) -> List[CodeSearchResult]:
+    ) -> List[NpuCodeSearchResult]:
         """Search through indexed code (Issue #398: refactored)."""
         start_time = time.time()
 
@@ -761,7 +761,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             self.logger.error("Code search failed: %s", e)
             return []
 
-    async def _search_elements(self, query: str, language: str | None, max_results: int) -> List[CodeSearchResult]:
+    async def _search_elements(self, query: str, language: str | None, max_results: int) -> List[NpuCodeSearchResult]:
         """Search for specific code elements (functions, classes, etc.)"""
         results = []
 
@@ -783,7 +783,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
                     # Load file content for context
                     content_lines = await self._get_file_context(file_path, element["line_number"])
 
-                    result = CodeSearchResult(
+                    result = NpuCodeSearchResult(
                         file_path=file_path,
                         content=element.get("context", ""),
                         line_number=element["line_number"],
@@ -804,14 +804,14 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
     def _search_lines_for_query(
         self, lines: List[str], query: str, file_path: str, language: str
-    ) -> List[CodeSearchResult]:
+    ) -> List[NpuCodeSearchResult]:
         """Search lines for exact query match (Issue #334 - extracted helper)."""
         results = []
         for i, line in enumerate(lines):
             if query not in line:
                 continue
             context_lines = self._get_context_lines(lines, i, 2)
-            result = CodeSearchResult(
+            result = NpuCodeSearchResult(
                 file_path=file_path,
                 content=line.strip(),
                 line_number=i + 1,
@@ -824,7 +824,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
     async def _search_file_exact(
         self, file_data: Dict[str, Any], query: str, language: str | None
-    ) -> List[CodeSearchResult]:
+    ) -> List[NpuCodeSearchResult]:
         """Search single file for exact matches (Issue #334 - extracted helper)."""
         file_path = file_data["file_path"]
         file_language = file_data["language"]
@@ -844,7 +844,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             self.logger.error("Error processing file %s: %s", file_path, e)
         return []
 
-    async def _search_exact(self, query: str, language: str | None, max_results: int) -> List[CodeSearchResult]:
+    async def _search_exact(self, query: str, language: str | None, max_results: int) -> List[NpuCodeSearchResult]:
         """Perform exact string search"""
         results = []
         pattern = f"{self.index_prefix}file:*"
@@ -867,7 +867,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
     def _search_lines_regex(
         self, lines: List[str], pattern, query: str, file_path: str, language: str
-    ) -> List[CodeSearchResult]:
+    ) -> List[NpuCodeSearchResult]:
         """Search lines with regex pattern (Issue #334 - extracted helper)."""
         results = []
         for i, line in enumerate(lines):
@@ -877,7 +877,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             context_lines = self._get_context_lines(lines, i, 2)
             # Create one result per match
             for match in matches:
-                result = CodeSearchResult(
+                result = NpuCodeSearchResult(
                     file_path=file_path,
                     content=line.strip(),
                     line_number=i + 1,
@@ -895,7 +895,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
     async def _search_file_regex(
         self, file_data: Dict[str, Any], pattern, query: str, language: str | None
-    ) -> List[CodeSearchResult]:
+    ) -> List[NpuCodeSearchResult]:
         """Search single file with regex (Issue #334 - extracted helper)."""
         file_path = file_data["file_path"]
         file_language = file_data["language"]
@@ -915,7 +915,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
             self.logger.error("Error processing file %s: %s", file_path, e)
         return []
 
-    async def _search_regex(self, query: str, language: str | None, max_results: int) -> List[CodeSearchResult]:
+    async def _search_regex(self, query: str, language: str | None, max_results: int) -> List[NpuCodeSearchResult]:
         """Perform regex search"""
         import re
 
@@ -963,7 +963,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         query_words: List[str],
         file_path: str,
         language: str,
-    ) -> List[CodeSearchResult]:
+    ) -> List[NpuCodeSearchResult]:
         """Search lines with semantic matching (Issue #334 - extracted helper)."""
         results = []
         for i, line in enumerate(lines):
@@ -972,7 +972,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
                 continue
             matches, confidence = match_info
             context_lines = self._get_context_lines(lines, i, 2)
-            result = CodeSearchResult(
+            result = NpuCodeSearchResult(
                 file_path=file_path,
                 content=line.strip(),
                 line_number=i + 1,
@@ -994,7 +994,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         query: str,
         query_words: List[str],
         language: str | None,
-    ) -> List[CodeSearchResult]:
+    ) -> List[NpuCodeSearchResult]:
         """Search single file semantically (Issue #334 - extracted helper)."""
         file_path = file_data["file_path"]
         file_language = file_data["language"]
@@ -1014,12 +1014,12 @@ class NPUCodeSearchAgent(StandardizedAgent):
             self.logger.error("Error processing file %s: %s", file_path, e)
         return []
 
-    async def _convert_npu_result(self, result: Any) -> CodeSearchResult:
-        """Convert NPU search result to CodeSearchResult (Issue #398: extracted)."""
+    async def _convert_npu_result(self, result: Any) -> NpuCodeSearchResult:
+        """Convert NPU search result to NpuCodeSearchResult (Issue #398: extracted)."""
         file_path = result.metadata.get("file_path", "unknown")
         line_number = result.metadata.get("line_number", 0)
         context_lines = await self._get_file_context(file_path, line_number, context_size=3)
-        return CodeSearchResult(
+        return NpuCodeSearchResult(
             file_path=file_path,
             content=result.content,
             line_number=line_number,
@@ -1035,7 +1035,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
     async def _run_npu_semantic_search(
         self, query: str, language: str | None, max_results: int
-    ) -> List[CodeSearchResult]:
+    ) -> List[NpuCodeSearchResult]:
         """Run NPU-accelerated semantic search (Issue #398: extracted)."""
         await self._ensure_search_engine_initialized()
         search_results, metrics = await self.npu_search_engine.search(
@@ -1063,14 +1063,14 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
     async def _convert_embedding_search_result(
         self, sr: Dict[str, Any], query: str, device_used: str
-    ) -> CodeSearchResult:
-        """Convert a single embedding search result dict to CodeSearchResult. Issue #620."""
+    ) -> NpuCodeSearchResult:
+        """Convert a single embedding search result dict to NpuCodeSearchResult. Issue #620."""
         metadata = sr["metadata"]
         file_path = metadata.get("file_path", "unknown")
         line_number = metadata.get("line_number", 0)
         context_lines = await self._get_file_context(file_path, line_number)
 
-        return CodeSearchResult(
+        return NpuCodeSearchResult(
             file_path=file_path,
             content=sr["content"][:500],
             line_number=line_number,
@@ -1087,7 +1087,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         )
 
     def _update_embedding_search_stats(
-        self, results: List[CodeSearchResult], search_time: float, query_result: Any
+        self, results: List[NpuCodeSearchResult], search_time: float, query_result: Any
     ) -> None:
         """Update search statistics after embedding search (``search_time`` in ms). Issue #620."""
         self.stats = SearchStats(
@@ -1100,7 +1100,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
     async def _search_code_embeddings(
         self, query: str, language: str | None, max_results: int
-    ) -> List[CodeSearchResult]:
+    ) -> List[NpuCodeSearchResult]:
         """Search the code index with a CodeBERT query, the model that built it. Issue #207, #620, #18185."""
         start_time = time.time()
 
@@ -1144,7 +1144,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
 
     async def _fallback_word_matching(
         self, query: str, language: str | None, max_results: int
-    ) -> List[CodeSearchResult]:
+    ) -> List[NpuCodeSearchResult]:
         """Fallback word-matching when embedding search unavailable.
 
         Issue #207: Deprecated fallback, prefer semantic search.
@@ -1170,7 +1170,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
         self.stats.npu_acceleration_used = False
         return results[:max_results]
 
-    async def _search_semantic(self, query: str, language: str | None, max_results: int) -> List[CodeSearchResult]:
+    async def _search_semantic(self, query: str, language: str | None, max_results: int) -> List[NpuCodeSearchResult]:
         """
         Perform semantic search using code embeddings.
 
@@ -1200,7 +1200,7 @@ class NPUCodeSearchAgent(StandardizedAgent):
     def _file_matches_language(self, file_path: str, language: str) -> bool:
         """Check if file matches the specified language"""
         file_ext = os.path.splitext(file_path)[1]
-        detected_language = detect_language(file_ext)
+        detected_language = language_name_for_extension(file_ext)
         return detected_language == language
 
     async def _get_file_context(self, file_path: str, line_number: int, context_size: int = 3) -> List[str]:
@@ -1304,7 +1304,7 @@ async def search_codebase(
     search_type: str = "semantic",
     language: str | None = None,
     max_results: int = 20,
-) -> List[CodeSearchResult]:
+) -> List[NpuCodeSearchResult]:
     """
     Convenience function for code searching.
 

@@ -33,6 +33,7 @@ from integrations.rate_limiter import (
     IntegrationRateLimiter,
 )
 from integrations.rate_limiter import integration_rate_limiter as _shared_rate_limiter
+from knowledge.connectors.egress import instance_host_egress
 
 logger = get_logger(__name__)
 
@@ -305,89 +306,65 @@ class GitHubIntegration(BaseIntegration):
         last_result: Dict[str, Any] = {}
         for attempt in range(self._MAX_RETRIES + 1):
             try:
-                timeout = aiohttp.ClientTimeout(total=30.0)
-                async with get_http_client().tracked_request(
-                    method,
-                    url,
-                    headers=self._auth_headers,
-                    params=query_params,
-                    json=json_data,
-                    timeout=timeout,
-                ) as resp:
+                async with self._open_request(method, url, query_params, json_data) as resp:
                     resp_headers = dict(resp.headers)
                     body = await resp.json(content_type=None)
-                    last_result = {
-                        "status_code": resp.status,
-                        "body": body,
-                        "headers": resp_headers,
-                    }
+                    last_result = {"status_code": resp.status, "body": body, "headers": resp_headers}
 
                     # Always update rate limit state from headers
                     self._rate_limiter.apply_response_headers(self._token_key, resp_headers, service="github")
-
-                    if resp.status == 403:
-                        retry_after = resp_headers.get("Retry-After") or resp_headers.get("retry-after")
-                        if retry_after:
-                            self._rate_limiter.apply_response_headers(
-                                self._token_key,
-                                {"Retry-After": retry_after},
-                                service="github",
-                            )
-                        msg = body.get("message", "")
-                        logger.warning("GitHub 403 for %s %s: %s", method, path, msg)
+                    delay = self._retry_delay(resp.status, resp_headers, body, attempt, f"{method} {path}")
+                    if delay is None:
                         return last_result
-
-                    if resp.status == 429:
-                        retry_after = resp_headers.get("Retry-After") or resp_headers.get("retry-after", "60")
-                        wait = float(retry_after)
-                        logger.warning("GitHub 429 for %s %s — waiting %.1fs", method, path, wait)
-                        self._rate_limiter.apply_response_headers(
-                            self._token_key,
-                            {"Retry-After": str(wait)},
-                            service="github",
-                        )
-                        if attempt < self._MAX_RETRIES:
-                            await asyncio.sleep(min(wait, 120.0))
-                            continue
-                        return last_result
-
-                    if resp.status in self._RETRY_STATUS_CODES:
-                        if attempt < self._MAX_RETRIES:
-                            backoff = 2.0**attempt
-                            logger.warning(
-                                "GitHub %d for %s %s — retrying in %.1fs (attempt %d/%d)",
-                                resp.status,
-                                method,
-                                path,
-                                backoff,
-                                attempt + 1,
-                                self._MAX_RETRIES,
-                            )
-                            await asyncio.sleep(backoff)
-                            continue
-
-                    return last_result
-
+                await asyncio.sleep(delay)
             except asyncio.TimeoutError:
                 logger.warning("GitHub request timed out: %s %s", method, path)
-                return {
-                    "status_code": 0,
-                    "body": {"message": "Request timed out"},
-                    "error": "timeout",
-                }
+                return {"status_code": 0, "body": {"message": "Request timed out"}, "error": "timeout"}
             except aiohttp.ClientConnectionError as exc:
                 logger.warning("GitHub connection error for %s %s: %s", method, path, exc)
-                return {
-                    "status_code": 0,
-                    "body": {"message": "integration_error"},
-                    "error": "connection_error",
-                }
+                return {"status_code": 0, "body": {"message": "integration_error"}, "error": "connection_error"}
             except aiohttp.ClientError as exc:
                 logger.warning("GitHub request error for %s %s: %s", method, path, exc)
-                return {
-                    "status_code": 0,
-                    "body": {"message": "integration_error"},
-                    "error": "client_error",
-                }
+                return {"status_code": 0, "body": {"message": "integration_error"}, "error": "client_error"}
 
         return last_result
+
+    def _open_request(self, method: str, url: str, query_params: Dict[str, Any] | None, json_data):
+        """Request context for the API. The base URL may be a self-hosted GHE: instance-host egress (#17576)."""
+        return get_http_client().tracked_request(
+            method,
+            url,
+            headers=self._auth_headers,
+            params=query_params,
+            json=json_data,
+            timeout=aiohttp.ClientTimeout(total=30.0),
+            guard_egress=instance_host_egress(),
+        )
+
+    def _retry_delay(self, status: int, headers: Dict[str, str], body: Any, attempt: int, what: str) -> float | None:
+        """Seconds to wait before another attempt, or ``None`` when this response is final."""
+        retry_after = headers.get("Retry-After") or headers.get("retry-after")
+        if status == 403:
+            if retry_after:
+                self._rate_limiter.apply_response_headers(
+                    self._token_key, {"Retry-After": retry_after}, service="github"
+                )
+            logger.warning("GitHub 403 for %s: %s", what, body.get("message", ""))
+            return None
+        if status == 429:
+            wait = float(retry_after or "60")
+            logger.warning("GitHub 429 for %s — waiting %.1fs", what, wait)
+            self._rate_limiter.apply_response_headers(self._token_key, {"Retry-After": str(wait)}, service="github")
+            return min(wait, 120.0) if attempt < self._MAX_RETRIES else None
+        if status in self._RETRY_STATUS_CODES and attempt < self._MAX_RETRIES:
+            backoff = 2.0**attempt
+            logger.warning(
+                "GitHub %d for %s — retrying in %.1fs (attempt %d/%d)",
+                status,
+                what,
+                backoff,
+                attempt + 1,
+                self._MAX_RETRIES,
+            )
+            return backoff
+        return None

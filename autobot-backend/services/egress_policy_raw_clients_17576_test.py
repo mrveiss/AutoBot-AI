@@ -328,6 +328,6 @@ async def test_slm_websocket_handshake_is_guarded(base, reached, monkeypatch):
         al.reset_internal_origin_state()
         monkeypatch.setattr(al, "_ssot_service_urls", lambda: ["ws://127.0.0.1:8001"])
     connect = MagicMock(side_effect=RuntimeError("stop"))
-    monkeypatch.setattr(slm_client.websockets, "connect", connect)
+    monkeypatch.setattr(slm_client, "connect_no_redirect", connect)
     await _slm_ws(base)
     assert connect.called is reached

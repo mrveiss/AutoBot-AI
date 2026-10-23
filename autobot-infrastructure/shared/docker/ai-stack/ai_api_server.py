@@ -22,7 +22,7 @@ from fastapi.responses import JSONResponse
 # Add src to path for imports (works in Docker /app and native /opt/autobot/...)
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
 
-from agents.base_agent import AgentResponse, deserialize_agent_request
+from agents.base_agent import StandardizedAgentResponse, deserialize_agent_request
 from agents.chat_agent import ChatAgent
 from agents.classification_agent import ClassificationAgent
 from agents.rag_agent import get_rag_agent
@@ -221,7 +221,7 @@ async def process_agent_request(agent_type: str, request: Request):
             response = await agent.process_request(agent_request)
         else:
             # Fallback for legacy agents
-            response = AgentResponse(
+            response = StandardizedAgentResponse(
                 request_id=agent_request.request_id,
                 agent_type=agent_type,
                 status="error",
@@ -236,7 +236,7 @@ async def process_agent_request(agent_type: str, request: Request):
         logger.error(traceback.format_exc())
 
         req_id = getattr(agent_request, "request_id", "unknown") if agent_request else "unknown"
-        error_response = AgentResponse(
+        error_response = StandardizedAgentResponse(
             request_id=req_id,
             agent_type=agent_type,
             status="error",

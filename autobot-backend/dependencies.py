@@ -46,7 +46,7 @@ def get_diagnostics(config: ConfigManager = Depends(provide_config_manager)):
     return Diagnostics(config_manager=config)
 
 
-async def get_knowledge_base(request: Request):
+async def provide_knowledge_base(request: Request):
     """Dependency injection provider for the knowledge base.
 
     Returns the app-wide *initialized* instance — the same object every
@@ -95,7 +95,7 @@ def get_llm_interface(config: ConfigManager = Depends(provide_config_manager)):
     return get_llm_service()
 
 
-def get_orchestrator(
+def provide_orchestrator(
     config: ConfigManager = Depends(provide_config_manager),
 ):
     """
@@ -117,7 +117,7 @@ def get_orchestrator(
     return Orchestrator(config_manager=config)
 
 
-def get_security_layer(config: ConfigManager = Depends(provide_config_manager)):
+def provide_security_layer(config: ConfigManager = Depends(provide_config_manager)):
     """
     Dependency injection provider for security layer.
 
@@ -171,13 +171,13 @@ dependency_cache = DependencyCache()
 async def get_cached_knowledge_base(request: Request):
     """Cached knowledge base dependency.
 
-    #18121: delegates to :func:`get_knowledge_base`. ``app.state.knowledge_base`` already
+    #18121: delegates to :func:`provide_knowledge_base`. ``app.state.knowledge_base`` already
     is the cache — ``get_or_create_knowledge_base`` returns the existing instance when one
     is initialized — so a second ``dependency_cache`` entry only created a second
     uninitialized instance to go stale. Kept as a wired name so
     ``CachedKnowledgeBaseDep`` cannot reintroduce the defect.
     """
-    return await get_knowledge_base(request)
+    return await provide_knowledge_base(request)
 
 
 def get_cached_orchestrator(config: ConfigManager = Depends(provide_config_manager)):
@@ -204,30 +204,13 @@ def get_cached_orchestrator(config: ConfigManager = Depends(provide_config_manag
     return dependency_cache.get_or_create("orchestrator", _create_orchestrator)
 
 
-async def get_async_redis_client(database: str = "main"):
-    """
-    Dependency injection provider for async Redis client.
-
-    Issue #666: Added async version to avoid blocking I/O in async contexts.
-
-    Args:
-        database: Named database for logical separation. Default: "main"
-
-    Returns:
-        Async Redis client instance
-    """
-    from autobot_shared.redis_client import get_async_redis_client as _get_async_redis_client
-
-    return await _get_async_redis_client(database=database)
-
-
 # Type aliases for cleaner dependency annotations
 ConfigDep = Depends(provide_config_manager)
 DiagnosticsDep = Depends(get_diagnostics)
-KnowledgeBaseDep = Depends(get_knowledge_base)
+KnowledgeBaseDep = Depends(provide_knowledge_base)
 LLMInterfaceDep = Depends(get_llm_interface)
-OrchestratorDep = Depends(get_orchestrator)
-SecurityLayerDep = Depends(get_security_layer)
+OrchestratorDep = Depends(provide_orchestrator)
+SecurityLayerDep = Depends(provide_security_layer)
 
 # Cached versions
 CachedKnowledgeBaseDep = Depends(get_cached_knowledge_base)

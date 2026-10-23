@@ -1,0 +1,349 @@
+{
+  "_contract": "Triage of the clusters #18559 added when FORK_ROOTS widened. Each is real (issue), variant (intentional per-deploy-target or per-platform copy) or homonym (same name, different concept). Entries leave with their cluster.",
+  "clusters": {
+    "AddResult": {
+      "verdict": "homonym",
+      "why": "embedded KB document result (document_id) vs populate-script result (rel_path)"
+    },
+    "AgentType": {
+      "verdict": "real",
+      "issue": 12771
+    },
+    "Alert": {
+      "verdict": "homonym",
+      "why": "configuration of an alert rule (infra metrics script) vs an active alert instance (backend)"
+    },
+    "AnalysisResult": {
+      "verdict": "homonym",
+      "why": "frontend-analysis result (console logs) vs conversation-analysis result (conversation counts)"
+    },
+    "AutoBotMonitor": {
+      "verdict": "homonym",
+      "why": "codebase-health dashboard (analysis freshness, API perf, security status) vs host/hardware monitor (GPU, NPU, services, models)"
+    },
+    "Block": {
+      "verdict": "homonym",
+      "why": "media document content unit vs Markdown block (start line + lines) in a docs lint"
+    },
+    "ChatSecretScope": {
+      "verdict": "real",
+      "issue": 10088
+    },
+    "CheckResult": {
+      "verdict": "homonym",
+      "why": "analytics schema for one check vs SSH verification outcome"
+    },
+    "ConfigManager": {
+      "verdict": "homonym",
+      "why": "mixin-composed backend config manager vs the NPU worker GUI YAML controller"
+    },
+    "ConfigMigrator": {
+      "verdict": "homonym",
+      "why": "two one-off migrations to different targets (unified_config.py vs consolidated config)"
+    },
+    "DeploymentStatus": {
+      "verdict": "real",
+      "issue": 12771
+    },
+    "DeploymentStrategy": {
+      "verdict": "real",
+      "issue": 12771
+    },
+    "Diagnostic": {
+      "verdict": "homonym",
+      "why": "LSP diagnostic schema vs canonical lint rule diagnostic"
+    },
+    "FileDestination": {
+      "verdict": "homonym",
+      "why": "file-transfer destination enum vs file-based log destination class"
+    },
+    "Finding": {
+      "verdict": "homonym",
+      "why": "five unrelated finding records: tracker audit, scanner advisory, key material line, scope-box drift, docs addressing line"
+    },
+    "FrontendIssue": {
+      "verdict": "real",
+      "issue": 12771
+    },
+    "HealthResponse": {
+      "verdict": "homonym",
+      "why": "NPU inference server health payload vs SLM backend health payload (different fields)"
+    },
+    "HealthStatus": {
+      "verdict": "real",
+      "issue": 12771
+    },
+    "IssueType": {
+      "verdict": "homonym",
+      "why": "control-flow issue types vs frontend issue types"
+    },
+    "LogEntry": {
+      "verdict": "homonym",
+      "why": "forwarder log record vs SLM node-event model"
+    },
+    "LogLevel": {
+      "verdict": "real",
+      "issue": 12771
+    },
+    "ModelIntegrityError": {
+      "verdict": "variant",
+      "why": "Windows NPU worker copy; its docstring states the package cannot import autobot_shared (same constraint as #5438, ARCHITECTURE_EXCEPTIONS)"
+    },
+    "NPUTaskRequest": {
+      "verdict": "real",
+      "issue": 12771
+    },
+    "NPUTaskResponse": {
+      "verdict": "real",
+      "issue": 12771
+    },
+    "Outcome": {
+      "verdict": "homonym",
+      "why": "backend run/hold/refuse enum vs npm audit gate result record"
+    },
+    "ProcessingResult": {
+      "verdict": "homonym",
+      "why": "media processing result vs report-processing result"
+    },
+    "RedisConnectionManager": {
+      "verdict": "variant",
+      "why": "documented Windows NPU worker exception: docs/developer/ARCHITECTURE_EXCEPTIONS.md (#5438); the packaged worker cannot import autobot_shared"
+    },
+    "SearchRequest": {
+      "verdict": "real",
+      "issue": 12771
+    },
+    "SearchResult": {
+      "verdict": "homonym",
+      "why": "normalised web-search hit vs embedded KB search hit"
+    },
+    "SecretType": {
+      "verdict": "real",
+      "issue": 10088
+    },
+    "SecretsManager": {
+      "verdict": "real",
+      "issue": 10088
+    },
+    "ServiceRegistry": {
+      "verdict": "real",
+      "issue": 12771
+    },
+    "ServiceStatus": {
+      "verdict": "homonym",
+      "why": "pydantic model vs health enum in a native-deployment validator"
+    },
+    "ShardPlan": {
+      "verdict": "homonym",
+      "why": "immutable layer-to-worker assignment vs ordered list of shards"
+    },
+    "TaskComplexity": {
+      "verdict": "real",
+      "issue": 12771
+    },
+    "TaskType": {
+      "verdict": "homonym",
+      "why": "execution-tracking categories vs NPU task suitability categories"
+    },
+    "TimingConstants": {
+      "verdict": "real",
+      "issue": 12771
+    },
+    "UploadResult": {
+      "verdict": "homonym",
+      "why": "two infra upload scripts with different result fields (rel_path vs file_path)"
+    },
+    "Verdict": {
+      "verdict": "homonym",
+      "why": "AC verifier enum vs npm audit attempt record"
+    },
+    "WorkflowStatus": {
+      "verdict": "real",
+      "issue": 12771
+    },
+    "WorkflowStep": {
+      "verdict": "real",
+      "issue": 12771
+    },
+    "analyze_file": {
+      "verdict": "homonym",
+      "why": "error-handling analyzer vs function-length checker"
+    },
+    "analyze_frontend_issue": {
+      "verdict": "variant",
+      "why": "visual (headed, DevTools) and headless entry points of one debug script, differing only in the launch mode"
+    },
+    "audit": {
+      "verdict": "homonym",
+      "why": "eight guards' own full-tree audit entry points with different signatures and logic"
+    },
+    "build_arg_parser": {
+      "verdict": "homonym",
+      "why": "four unrelated CLIs"
+    },
+    "check": {
+      "verdict": "homonym",
+      "why": "per-guard check entry points with unrelated signatures"
+    },
+    "check_file": {
+      "verdict": "homonym",
+      "why": "per-linter file checks with different violation types"
+    },
+    "classify": {
+      "verdict": "homonym",
+      "why": "session backfill, npm audit and umbrella label drift classifiers"
+    },
+    "compute_drift": {
+      "verdict": "homonym",
+      "why": "SLM deployed-vs-source checksum drift vs requirements CI drift"
+    },
+    "configure_logging": {
+      "verdict": "homonym",
+      "why": "backend lifespan log level, monitoring start, lint stderr handler"
+    },
+    "conflicts": {
+      "verdict": "homonym",
+      "why": "coordination ledger conflicts endpoint vs requirement pin conflicts"
+    },
+    "decide": {
+      "verdict": "homonym",
+      "why": "LLM decision backend call vs release sync create/update choice"
+    },
+    "emit": {
+      "verdict": "homonym",
+      "why": "audit event scheduling vs step-summary printer"
+    },
+    "enforce_reach": {
+      "verdict": "homonym",
+      "why": "scope-box sweep floors vs lint-hook full-repo floor"
+    },
+    "exemption_problems": {
+      "verdict": "homonym",
+      "why": "key-material exemptions vs placeholder-path exemptions"
+    },
+    "find_violations": {
+      "verdict": "homonym",
+      "why": "four unrelated lint rules"
+    },
+    "fire_and_forget": {
+      "verdict": "variant",
+      "why": "documented Windows NPU worker exception: docs/developer/ARCHITECTURE_EXCEPTIONS.md (#5438); the packaged worker cannot import autobot_shared"
+    },
+    "fix_file": {
+      "verdict": "homonym",
+      "why": "flake8 critical-issue fixer vs bare-except fixer"
+    },
+    "get_local_ip": {
+      "verdict": "variant",
+      "why": "Windows NPU worker bootstrap copy; same packaging constraint as the documented exception (#5438, ARCHITECTURE_EXCEPTIONS). The backend one takes no argument and reports 'unknown'; the worker one resolves the route to a given backend host"
+    },
+    "get_npu_client": {
+      "verdict": "homonym",
+      "why": "backend sync NPUClient accessor vs worker-side async NPUWorkerClient accessor"
+    },
+    "get_redis_client": {
+      "verdict": "variant",
+      "why": "documented Windows NPU worker exception: docs/developer/ARCHITECTURE_EXCEPTIONS.md (#5438); the packaged worker cannot import autobot_shared"
+    },
+    "get_redis_config": {
+      "verdict": "variant",
+      "why": "Windows NPU worker copy under the same PyInstaller packaging constraint as the documented exception (#5438, ARCHITECTURE_EXCEPTIONS); the other definition is the backend config accessor, so the copy is per-deploy-target, not listed in the doc itself"
+    },
+    "in_scope": {
+      "verdict": "homonym",
+      "why": "blocking-IO test-path split vs SPDX target filter"
+    },
+    "is_test_path": {
+      "verdict": "homonym",
+      "why": "route-order parser skip predicate (tests/venv/migrations dirs) vs unwired-tracker audit predicate (_test./.test./__tests__ fragments); different sets by design"
+    },
+    "lifespan": {
+      "verdict": "homonym",
+      "why": "three different services' FastAPI lifespans"
+    },
+    "load_baseline": {
+      "verdict": "homonym",
+      "why": "audit_api_wiring path baseline vs symbol-fork cluster baseline"
+    },
+    "load_config": {
+      "verdict": "homonym",
+      "why": "complete.yaml reader (#18964 one home now) vs the worker and watchdog config loaders, which read different files"
+    },
+    "matches": {
+      "verdict": "homonym",
+      "why": "api path matching vs benchmark answer matching"
+    },
+    "migrate_file": {
+      "verdict": "homonym",
+      "why": "Vue spacing token migration vs test file migration"
+    },
+    "parse_args": {
+      "verdict": "homonym",
+      "why": "three unrelated CLIs"
+    },
+    "parse_declarations": {
+      "verdict": "homonym",
+      "why": "requirement lower bounds vs inline CSS declarations"
+    },
+    "pending_background_tasks": {
+      "verdict": "variant",
+      "why": "documented Windows NPU worker exception: docs/developer/ARCHITECTURE_EXCEPTIONS.md (#5438); the packaged worker cannot import autobot_shared"
+    },
+    "process_file": {
+      "verdict": "homonym",
+      "why": "f-string logging fixer vs tuple-syntax fixer"
+    },
+    "process_with_npu_fallback": {
+      "verdict": "variant",
+      "why": "identical two-line wrapper that binds each process's own NPU queue singleton (#12656); one per service by design"
+    },
+    "render": {
+      "verdict": "homonym",
+      "why": "five unrelated report renderers"
+    },
+    "report": {
+      "verdict": "homonym",
+      "why": "SSH verification, benchmark and PR template reports"
+    },
+    "report_lines": {
+      "verdict": "homonym",
+      "why": "dead-surface report vs scope-box drift report"
+    },
+    "reset_knowledge_base": {
+      "verdict": "homonym",
+      "why": "backend singleton reset vs one-off dimension-reset script"
+    },
+    "run": {
+      "verdict": "homonym",
+      "why": "unrelated runners (A/B script, CI retry sweep, lint runner)"
+    },
+    "run_duplicate_analysis": {
+      "verdict": "homonym",
+      "why": "script runner wrapper vs Celery task"
+    },
+    "scan": {
+      "verdict": "homonym",
+      "why": "five unrelated scanners"
+    },
+    "scan_directory": {
+      "verdict": "homonym",
+      "why": "multi-language scanner vs feature-envy and bare-except scanners"
+    },
+    "scan_file": {
+      "verdict": "homonym",
+      "why": "feature envy candidates vs multi-language result"
+    },
+    "setup_logging": {
+      "verdict": "homonym",
+      "why": "NPU docker worker logging vs shared back-compat shim"
+    },
+    "test_api_endpoints": {
+      "verdict": "homonym",
+      "why": "performance profiling vs endpoint definition test"
+    },
+    "violations": {
+      "verdict": "homonym",
+      "why": "three unrelated lint rules"
+    }
+  }
+}

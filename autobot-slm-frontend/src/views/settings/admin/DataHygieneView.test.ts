@@ -108,13 +108,14 @@ const EMPTY_AUDIT_RESPONSE = { success: true, total_returned: 0, has_more: false
 function defaultGetImplementation(url: string) {
   if (url.startsWith('/admin/orphan-storage')) return Promise.resolve({ data: STORAGE_RESPONSE })
   if (url.startsWith('/admin/orphans')) return Promise.resolve({ data: ORPHANS_RESPONSE })
-  if (url === '/users') return Promise.resolve({ data: USERS_RESPONSE })
+  if (url === '/user-management/users') return Promise.resolve({ data: USERS_RESPONSE })
   if (url.startsWith('/audit/logs')) return Promise.resolve({ data: EMPTY_AUDIT_RESPONSE })
   return Promise.reject(new Error(`unexpected GET ${url}`))
 }
 
 function mountView(): VueWrapper {
-  return mount(DataHygieneView, { global: { plugins: [i18n] } })
+  // BaseModal teleports to body; stub the teleport so the dialog renders inline (#14777)
+  return mount(DataHygieneView, { global: { plugins: [i18n], stubs: { teleport: true } } })
 }
 
 /** Settle the four concurrent on-mount fetches (storage, users, orphans, audit x3). */

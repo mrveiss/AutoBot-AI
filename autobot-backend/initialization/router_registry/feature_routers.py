@@ -671,19 +671,20 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     # Issue #5071: per-agent diary with background append and runtime discovery
     ("api.agent_diary", "/agent-diary", ["agents"], "agent_diary"),
     # Partially wired or legacy feature routers
-    ("api.chat_sessions", "", ["chat-sessions"], "chat_sessions"),
+    # NOTE (#17325): chat_sessions removed -- api/chat.py includes it into the core chat router, so
+    # /api/chat/sessions* and /api/sessions/* are served from there; this second mount was unreachable.
     # GH#8993: thinking mode preferences for conversations
     ("api.chat_sessions_thinking", "", ["chat-thinking"], "chat_sessions_thinking"),
     # GH#8996: public shared chat links with optional password protection
     ("api.chat_shared_links", "", ["chat-shared-links"], "chat_shared_links"),
-    # GH#9047: embed widget unauthenticated chat endpoint
-    ("api.chat_embed", "", ["chat", "embed"], "chat_embed"),
+    # NOTE (#17325): chat_embed removed -- core_routers.py mounts it before chat (#18720); the copy here
+    # was unreachable.
     # GH#8987: conversation folders and collections
     ("api.chat_folders", "", ["chat-folders"], "chat_folders"),
+    ("api.chat_turn", "", ["chat"], "chat_turn"),  # #17273: cancel the current turn
     # Issue #5061: First-run onboarding presets + doctor
     ("api.onboarding", "/onboarding", ["onboarding"], "onboarding"),
-    # NOTE (#4203): api.diagnostics removed — already registered in monitoring_routers.py
-    # at prefix "" (routes define their own /diagnostics path prefix internally).
+    # NOTE (#4203): api.diagnostics lives in monitoring_routers.py (routes carry their own /diagnostics prefix).
     (
         "api.presence_ws",
         "",
@@ -699,27 +700,9 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["voice", "realtime", "webrtc"],
         "realtime_session",
     ),
-    # GH#8995: data-hygiene retention policy CRUD + settings/stats
-    (
-        "api.admin_retention_policies",
-        "",
-        ["admin", "retention", "data-hygiene"],
-        "admin_retention_policies",
-    ),
-    # GH#8605: Per-user voice bundle assignment (admin + user endpoints)
-    (
-        "api.voice_bundle_admin",
-        "",
-        ["voice", "rbac", "admin"],
-        "voice_bundle_admin",
-    ),
-    # GH#8605: Voice bundle management (user-facing endpoints)
-    (
-        "api.voice_bundle_user",
-        "/voice",
-        ["voice", "rbac"],
-        "voice_bundle_user",
-    ),
+    # NOTE (#17325): admin_retention_policies (GH#8995), voice_bundle_admin and voice_bundle_user
+    # (GH#8605) removed -- all three are mounted by core_routers.py, which registers first; the copies
+    # here were unreachable duplicates.
     # NOTE (MVA-3022): mobile_devices removed — already registered in core_routers.py
     # as a system router. Duplicate registration caused routes to appear twice.
     # GH#4459: Web push notification endpoints (subscribe/unsubscribe/vapid-key)

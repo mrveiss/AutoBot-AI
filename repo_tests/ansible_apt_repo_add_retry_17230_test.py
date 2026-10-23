@@ -207,12 +207,12 @@ def _var_files(root: Path) -> list[Path]:
 
 
 #: The override sweep's reach (#15826): an empty or broken walk must fail here rather than
-#: report "no overrides". 342 variable files measured under the Ansible tree at declaration.
+#: report "no overrides". 342 variable files measured at declaration; 341 after #18556 removed the role-file copies of error_messages.yaml and permission_rules.yaml.
 #: ``growth=40`` (~12%) because ordinary provisioning work adds role task files steadily.
 REACH = declare(
     "ansible-apt-repo-budget-override-sweep",
     discover=_var_files,
-    floor=342,
+    floor=341,
     growth=40,
     skips=0,
     what="Ansible variable files",

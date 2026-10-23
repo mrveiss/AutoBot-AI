@@ -27,16 +27,21 @@ All HTTP is async and goes through the shared pooled client
 from __future__ import annotations
 
 import logging
-import os
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
 from autobot_shared.generation_http_timeouts import poll_timeout
 from autobot_shared.http_client import get_http_client
+from autobot_shared.plugin_sdk.credential_binding import CredentialSlot, CredentialUnavailableError
 
 logger = logging.getLogger(__name__)
 
 # Runway developer API base + version header (stable public API surface).
+#: Host-injected, name-scoped key resolver (#18094); standalone, keys come from the environment.
+_slot = CredentialSlot()
+set_credential_resolver = _slot.set
+read_provider_key = _slot.read
+
 RUNWAY_API_BASE = "https://api.dev.runwayml.com/v1"
 RUNWAY_API_VERSION = "2024-11-06"
 
@@ -76,14 +81,28 @@ class BaseVideoProvider:
     env_var: str = ""
 
     def __init__(self, api_key: Optional[str] = None) -> None:
-        self._api_key = api_key if api_key is not None else os.environ.get(self.env_var, "")
+        self._refusal = ""
+        if api_key is not None:
+            self._api_key = api_key
+            return
+        try:
+            self._api_key = read_provider_key(self.env_var)
+        except CredentialUnavailableError as exc:  # #18094: unavailable with the reason, never from env
+            self._api_key, self._refusal = "", str(exc)
 
     @property
     def available(self) -> bool:
         """True when an API key is configured (empty key == disabled)."""
         return bool(self._api_key)
 
+    @property
+    def unavailable_reason(self) -> str:
+        """Why this provider is unavailable: a host refusal's reason, else the missing variable (never a value)."""
+        return self._refusal or f"{self.env_var} not configured"
+
     def _require_key(self) -> str:
+        if self._refusal:
+            raise ProviderError(self._refusal)
         if not self._api_key:
             raise ProviderError(f"{self.env_var} not configured")
         return self._api_key

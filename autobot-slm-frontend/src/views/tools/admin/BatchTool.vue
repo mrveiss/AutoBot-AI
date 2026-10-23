@@ -16,6 +16,7 @@ const logger = createLogger('BatchTool')
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useAutobotApi } from '@/composables/useAutobotApi'
 import { formatDateTime } from '@/composables/useTimezone'
+import { BaseAlert, BaseModal } from '@autobot/ui'
 
 const api = useAutobotApi()
 
@@ -355,9 +356,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Error Message -->
-    <div v-if="error && backendAvailable" class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-      {{ error }}
-    </div>
+    <BaseAlert v-if="error && backendAvailable" variant="error" class="mb-6" :message="error" />
 
     <!-- Jobs List -->
     <div v-if="loading && !jobs.length" class="text-center py-12">
@@ -454,65 +453,58 @@ onUnmounted(() => {
         </div>
 
         <!-- Error Message -->
-        <div v-if="job.error" class="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-          <p class="text-sm text-red-700">{{ job.error }}</p>
-        </div>
+        <BaseAlert v-if="job.error" variant="error" class="mt-4" :message="job.error" />
       </div>
     </div>
 
     <!-- Create Job Modal -->
-    <div v-if="showCreateModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 p-6">
-        <div class="flex items-center justify-between mb-6">
-          <h3 class="text-lg font-semibold text-gray-900">{{ $t('tools.admin.batchTool.createBatchJob') }}</h3>
-          <button @click="showCreateModal = false" class="text-gray-400 hover:text-gray-600" :aria-label="$t('tools.admin.batchTool.close')">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <BaseModal
+      :close-on-esc="!loading"
+      v-model="showCreateModal"
+      :title="$t('tools.admin.batchTool.createBatchJob')"
+      width="32rem"
+      :close-on-overlay="false"
+      :close-label="$t('tools.admin.batchTool.close')"
+    >
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('tools.admin.batchTool.jobName') }}</label>
+          <input
+            v-model="newJob.name"
+            type="text"
+            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            :placeholder="$t('tools.admin.batchTool.enterJobName')"
+          />
         </div>
 
-        <div class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('tools.admin.batchTool.jobName') }}</label>
-            <input
-              v-model="newJob.name"
-              type="text"
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              :placeholder="$t('tools.admin.batchTool.enterJobName')"
-            />
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('tools.admin.batchTool.jobType') }}</label>
-            <select
-              v-model="newJob.type"
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-            >
-              <option value="file_processing">{{ $t('tools.admin.batchTool.fileProcessing') }}</option>
-              <option value="data_export">{{ $t('tools.admin.batchTool.dataExport') }}</option>
-              <option value="report_generation">{{ $t('tools.admin.batchTool.reportGeneration') }}</option>
-              <option value="cleanup">{{ $t('tools.admin.batchTool.cleanup') }}</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="flex justify-end gap-3 mt-6">
-          <button
-            @click="showCreateModal = false"
-            class="px-4 py-2 text-gray-700 hover:text-gray-900"
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('tools.admin.batchTool.jobType') }}</label>
+          <select
+            v-model="newJob.type"
+            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
           >
-            {{ $t('tools.admin.batchTool.cancel') }}
-          </button>
-          <button
-            @click="createJob"
-            :disabled="loading || !newJob.name"
-            class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
-          >
-            {{ loading ? $t('tools.admin.batchTool.creating') : $t('tools.admin.batchTool.createJob') }}
-          </button>
+            <option value="file_processing">{{ $t('tools.admin.batchTool.fileProcessing') }}</option>
+            <option value="data_export">{{ $t('tools.admin.batchTool.dataExport') }}</option>
+            <option value="report_generation">{{ $t('tools.admin.batchTool.reportGeneration') }}</option>
+            <option value="cleanup">{{ $t('tools.admin.batchTool.cleanup') }}</option>
+          </select>
         </div>
       </div>
-    </div>
+      <template #actions>
+        <button
+          @click="showCreateModal = false"
+          class="px-4 py-2 text-gray-700 hover:text-gray-900"
+        >
+          {{ $t('tools.admin.batchTool.cancel') }}
+        </button>
+        <button
+          @click="createJob"
+          :disabled="loading || !newJob.name"
+          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
+        >
+          {{ loading ? $t('tools.admin.batchTool.creating') : $t('tools.admin.batchTool.createJob') }}
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>

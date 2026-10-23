@@ -161,8 +161,8 @@ jobs:
         if: steps.key.outputs.configured == 'true' && steps.review.outputs.ok == 'true'
         run: cat /tmp/comment.md >> "$GITHUB_STEP_SUMMARY"
 
-      # Upsert by marker so repeated pushes update one comment instead of
-      # appending a new one per run.
+      # Upsert by marker (#12984: the one shared action, every page of comments)
+      # so repeated pushes update one comment instead of appending a new one.
       # #14153: same fork-hostile shape as ssot-coverage.yml — GITHUB_TOKEN
       # is read-only on pull_request events from a fork, so this call 403s
       # and would otherwise mark the (already advisory, never-required) job
@@ -170,28 +170,7 @@ jobs:
       - name: Post or update PR comment
         if: steps.key.outputs.configured == 'true' && steps.review.outputs.ok == 'true'
         continue-on-error: true
-        uses: actions/github-script@v9
+        uses: ./.github/actions/upsert-pr-comment
         with:
-          script: |
-            const fs = require('fs');
-            const body = fs.readFileSync('/tmp/comment.md', 'utf8');
-            const marker = '<!-- ai-security-review -->';
-            const { owner, repo } = context.repo;
-            const issue_number = context.payload.pull_request.number;
-
-            const comments = await github.paginate(
-              github.rest.issues.listComments, { owner, repo, issue_number }
-            );
-            const existing = comments.find(
-              c => c.user.type === 'Bot' && c.body.includes(marker)
-            );
-
-            if (existing) {
-              await github.rest.issues.updateComment(
-                { owner, repo, comment_id: existing.id, body }
-              );
-            } else {
-              await github.rest.issues.createComment(
-                { owner, repo, issue_number, body }
-              );
-            }
+          marker: '<!-- ai-security-review -->'
+          body-file: /tmp/comment.md

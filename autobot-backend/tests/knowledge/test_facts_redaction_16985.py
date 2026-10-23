@@ -18,6 +18,7 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 import knowledge.facts as facts_module
+from testkit.fake_async_session import FakeAsyncSession
 from tests.helpers.fake_kb import FactsFakeKB
 
 _SECRET = "sk-" + "abcdefghijklmnopqrstuvwxyz123456"
@@ -266,26 +267,12 @@ async def test_two_different_secrets_get_different_durable_content_hashes():
     """
     import knowledge.fact_store as fact_store_module
 
-    written_rows = []
-
-    class _FakeSession:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *_exc):
-            return False
-
-        async def get(self, _model, _fact_id):
-            return None
-
-        def add(self, row):
-            written_rows.append(row)
-
-        async def commit(self):
-            pass
+    sessions = []
 
     def _factory():
-        return _FakeSession()
+        session = FakeAsyncSession()
+        sessions.append(session)
+        return session
 
     kb = FactsFakeKB()
     secret_a = "sk-" + "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
@@ -300,6 +287,7 @@ async def test_two_different_secrets_get_different_durable_content_hashes():
         await kb.store_fact(f"your API key is {secret_a}", {}, fact_id="fact-a")
         await kb.store_fact(f"your API key is {secret_b}", {}, fact_id="fact-b")
 
+    written_rows = [row for session in sessions for row in session.added]
     assert len(written_rows) == 2
     hash_a, hash_b = written_rows[0].content_hash, written_rows[1].content_hash
     assert hash_a != hash_b, "two different secrets must not collide into the same durable content_hash"

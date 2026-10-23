@@ -124,7 +124,6 @@
     "agentActivity": "ایجنٹ کی سرگرمی",
     "mainNavigation": "مرکزی نیویگیشن",
     "plugins": "Plugins",
-    "switchLanguage": "Switch language",
     "automation": "Automation",
     "secrets": "Secrets",
     "skipToContent": "مرکزی مواد پر جائیں",
@@ -211,7 +210,21 @@
       "budgetPolicies": "لاگت اخراجات حدود رقم",
       "systemHealth": "حالت دستیابی تشخیص نگرانی",
       "vault": "اسناد کلیدیں پاس ورڈز ٹوکن والٹ"
-    }
+    },
+    "homeAria": "AutoBot کا ہوم",
+    "vaultTip": "رازدارانہ معلومات — محفوظ کردہ کلیدیں اور اسناد",
+    "preferencesTip": "ترجیحات",
+    "platformAdmin": "پلیٹ فارم ایڈمن",
+    "platformAdminAria": "پلیٹ فارم ایڈمن، SLM کنسول نئی ٹیب میں کھولتا ہے",
+    "platformAdminTip": "پلیٹ فارم ایڈمن — SLM کنسول کھولتا ہے ↗",
+    "profileMenu": "پروفائل مینو",
+    "uiMode": {
+      "label": "کم سے کم",
+      "tip": "کم سے کم انٹرفیس — جدید خصوصیات چھپائیں",
+      "announceMinimal": "کم سے کم انٹرفیس آن ہے۔ جدید خصوصیات چھپی ہوئی ہیں۔",
+      "announceFull": "مکمل انٹرفیس آن ہے۔ تمام خصوصیات دکھائی جا رہی ہیں۔"
+    },
+    "llcLedger": "ایجنٹ لیجر"
   },
   "llcCompanyStatus": {
     "showArchived": "محفوظ شدہ دکھائیں",
@@ -4214,7 +4227,7 @@
     "cursorBlink": "Cursor Blink",
     "keyboardHint": "Press Enter to send, Shift+Enter for new line, ↑/↓ for history",
     "reconnect": "Reconnect",
-    "dark": "Dark",
+    "dark": "گہرا",
     "underline": "Underline",
     "settings": "Terminal Settings",
     "lines": "Lines:",
@@ -4222,7 +4235,7 @@
     "fontSize": "Font Size",
     "session": "Session:",
     "autobotVMs": "AutoBot VMs",
-    "light": "Light",
+    "light": "ہلکا",
     "closeWindow": "Close Window",
     "cursorStyle": "Cursor Style",
     "saveLog": "Save Log",
@@ -4791,7 +4804,6 @@
   "profile": {
     "confirmNewPassword": "Confirm new password",
     "newPassword": "New password",
-    "themeDark": "Dark",
     "changing": "Changing...",
     "tabGeneral": "General",
     "enableAnimations": "Enable animations",
@@ -4799,7 +4811,6 @@
     "soundNotifications": "Sound notifications",
     "tabSecurity": "Security",
     "voiceProfiles": "Voice Profiles",
-    "theme": "Theme",
     "pwFillAll": "Please fill in all password fields",
     "lastLogin": "Last Login:",
     "tabAppearance": "Appearance & Voice",
@@ -4807,7 +4818,6 @@
     "notifications": "Notifications",
     "emailNotifications": "Email notifications",
     "accountInfo": "Account Information",
-    "appearance": "Appearance",
     "savePreferences": "Save Preferences",
     "role": "Role:",
     "changePassword": "Change Password",
@@ -4817,7 +4827,6 @@
     "preferencesSaved": "Preferences saved!",
     "pwMismatch": "Passwords do not match",
     "fullScreen": "Full-screen",
-    "themeLight": "Light",
     "email": "Email:",
     "interface": "Interface",
     "pwTooShort": "Password must be at least 8 characters",
@@ -4827,7 +4836,6 @@
     "compactMode": "Compact mode",
     "voiceChatDisplay": "Voice Chat Display",
     "closeAria": "Close profile",
-    "themeAuto": "Auto",
     "pwChanged": "Password changed successfully!",
     "username": "Username:",
     "tabDevices": "Tab devices"
@@ -4841,8 +4849,8 @@
       "baseThemeChanged": "بنیادی تھیم {name} میں تبدیل کر دی گئی",
       "accentChanged": "ایکسنٹ رنگ {name} میں تبدیل کر دیا گیا",
       "presetChanged": "تھیم پری سیٹ {name} میں تبدیل کر دیا گیا",
-      "dark": "Dark",
-      "light": "Light",
+      "dark": "گہرا",
+      "light": "ہلکا",
       "switchToDark": "Switch to dark mode",
       "theme": "Theme",
       "switchToLight": "Switch to light mode",
@@ -4909,11 +4917,6 @@
       "title": "Command Permission Required",
       "comment": "Comment"
     },
-    "darkModeToggle": {
-      "toggleDarkMode": "Toggle dark mode",
-      "switchToLight": "Switch to light mode",
-      "switchToDark": "Switch to dark mode"
-    },
     "messageStatus": {
       "sending": "Sending",
       "queued": "Queued",
@@ -4945,18 +4948,6 @@
       "failedToConnect": "Failed to connect to host",
       "cancel": "Cancel",
       "commandToExecute": "Command to Execute"
-    },
-    "dataTable": {
-      "noDataAvailable": "No data available",
-      "noItemsToDisplay": "No items to display",
-      "actions": "Actions",
-      "pageOf": "Page {current} of {total}",
-      "sortBy": "Sort by {column}",
-      "pagination": "Table pagination",
-      "previousPage": "Previous page",
-      "nextPage": "Next page",
-      "dataTable": "Data table",
-      "loading": "Loading data..."
     },
     "systemStatus": {
       "lastCheck": "Last Check:",
@@ -5012,7 +5003,9 @@
     },
     "loadingSpinner": {
       "loading": "Loading…"
-    }
+    },
+    "minimalNote": "ضروری چیزیں دکھائی جا رہی ہیں · تکنیکی ویجٹس چھپے ہوئے ہیں",
+    "minimalNoteAction": "تمام خصوصیات دکھائیں"
   },
   "collaboration": {
     "participantList": {
@@ -5825,7 +5818,8 @@
       "files": "فائلیں",
       "terminal": "ٹرمینل",
       "browser": "براؤزر",
-      "novnc": "ریموٹ ڈیسک ٹاپ"
+      "novnc": "ریموٹ ڈیسک ٹاپ",
+      "ariaLabel": "چیٹ کے حصے"
     }
   },
   "serviceMessages": {
@@ -6450,7 +6444,6 @@
       "template": "Template",
       "defaultTitle": "Custom Dashboard",
       "widgetArchitectureDesc": "Interactive system architecture diagram",
-      "shrink": "Shrink",
       "save": "Save",
       "subtitle": "Customizable dashboard with drag-and-drop widgets",
       "widgetWorkflowDesc": "Interactive workflow execution flowcharts",
@@ -6472,7 +6465,6 @@
       "addWidgetTitle": "Add Widget",
       "widgetHeatmap": "Resource Heatmap",
       "saveChanges": "Save Changes",
-      "expand": "Expand",
       "refreshInterval": "Refresh Interval (seconds)",
       "configureWidget": "Configure Widget",
       "metric": "Metric",
@@ -7028,6 +7020,32 @@
       "deviceInitFailed": "ڈیوائس فلو شروع کرنا ناکام رہا",
       "stillWaiting": "ابھی منظوری کا انتظار ہے — تھوڑی دیر بعد دوبارہ کوشش کریں۔",
       "pollFailed": "جانچ ناکام رہی"
+    },
+    "preferredMode": {
+      "title": "پسندیدہ موڈ",
+      "subtitle": "منتخب کریں کہ آپ AutoBot کا کتنا حصہ دیکھنا چاہتے ہیں۔ آپ اوپر والی پٹی میں «کم سے کم» بٹن سے کسی بھی وقت تبدیل کر سکتے ہیں۔",
+      "group": "انٹرفیس موڈ",
+      "minimal": "کم سے کم",
+      "minimalDesc": "صرف ضروری چیزیں — روزمرہ چیٹ، علم اور منظوریوں کے لیے۔",
+      "full": "مکمل",
+      "fullDesc": "سب کچھ، بشمول تجزیات، آٹومیشن، ایڈمن اور ڈیولپر ٹولز۔",
+      "selected": "منتخب",
+      "startIn": "اس میں شروع کریں",
+      "startInDesc": "سائن اِن کرنے پر AutoBot کس موڈ میں کھلے",
+      "startLast": "آخری استعمال شدہ",
+      "startMinimal": "کم سے کم",
+      "startFull": "مکمل",
+      "noteSynced": "آپ کے اکاؤنٹ اور اس ڈیوائس پر محفوظ",
+      "noteDirectLinks": "چھپے ہوئے صفحات براہِ راست لنکس سے اب بھی کھلتے ہیں",
+      "noteNeverHidden": "منظوریاں، خرابیاں اور سکیورٹی نوٹسز کبھی نہیں چھپائے جاتے"
+    },
+    "additionalThemes": {
+      "title": "اضافی تھیمز",
+      "subtitle": "آپ کے ایڈمنسٹریٹر کی جانب سے SLM کے ذریعے تعینات",
+      "deployed": "SLM کے ذریعے تعینات · v{version}",
+      "empty": "کوئی اضافی تھیم تعینات نہیں ہے۔",
+      "info": "ایڈمنسٹریٹرز SLM کنسول میں تھیمز انسٹال اور تعینات کرتے ہیں۔",
+      "slmLink": "SLM › ترتیبات › تھیمز ↗"
     }
   },
   "visualizations": {
@@ -7512,6 +7530,16 @@
       "detected": "CAPTCHA Detected",
       "openVnc": "Open VNC Desktop",
       "skipSource": "Skip Source",
+      "types": {
+        "recaptcha": "reCAPTCHA",
+        "hcaptcha": "hCaptcha",
+        "cloudflare": "Cloudflare چیلنج",
+        "slider": "سلائیڈر کیپچا",
+        "imageSelect": "تصویر منتخب کرنے والا کیپچا",
+        "text": "متنی کیپچا",
+        "math": "ریاضی کیپچا",
+        "unknown": "نامعلوم کیپچا"
+      },
       "solved": "I've Solved It"
     }
   },
@@ -7527,10 +7555,6 @@
     },
     "input": {
       "clearInput": "Clear input"
-    },
-    "panel": {
-      "collapse": "Collapse panel",
-      "expand": "Expand panel"
     }
   },
   "voice": {
@@ -8879,6 +8903,72 @@
       "retry": "دوبارہ کوشش کریں",
       "loadingItem": "ورک آئٹم لوڈ ہو رہا ہے…",
       "itemLoadFailed": "یہ ورک آئٹم لوڈ نہیں ہو سکا"
+    },
+    "ledger": {
+      "title": "ایجنٹ لیجر",
+      "subtitle": "اس کمپنی میں کون کس کام پر ہے، اور کون انتظار میں ہے۔",
+      "tabsAria": "لیجر کے منظر",
+      "tabs": {
+        "now": "ابھی کام کر رہے ہیں",
+        "claims": "دعوے",
+        "contention": "مسابقت",
+        "activity": "سرگرمی"
+      },
+      "col": {
+        "agent": "ایجنٹ",
+        "kind": "قسم",
+        "status": "حالت",
+        "task": "موجودہ کام",
+        "detail": "تفصیل",
+        "scope": "دائرہ",
+        "mode": "طریقہ",
+        "intent": "ارادہ",
+        "expires": "میعاد ختم",
+        "renewals": "تجدیدات"
+      },
+      "busy": "مصروف",
+      "idle": "فارغ",
+      "peerMessages": "زیر التوا پیئر پیغامات",
+      "idleSubscribers": "فراغت کی رکنیتیں",
+      "pendingFor": "{name} کے لیے {n} زیر التوا",
+      "sentBy": "{names} کی طرف سے",
+      "waitsForIdle": "{who} انتظار میں ہے کہ {target} فارغ ہو",
+      "heldBy": "{agent} کے پاس",
+      "waitlistAria": "ترتیب سے انتظار کی فہرست",
+      "silenceMeansHold": "درخواست رہائی نہیں ہے: خاموشی کا مطلب روکے رکھنا ہے، اور غیر تجدید شدہ دعویٰ خود ختم ہو جاتا ہے۔",
+      "ask": "مالک سے رہائی کی درخواست کریں",
+      "askAria": "{scope} کے مالک سے اسے چھوڑنے کی درخواست کریں",
+      "conflicts": "تنازعات",
+      "recent": "حالیہ سرگرمی",
+      "conflict": {
+        "release_refused": "ایک رہائی مسترد ہوئی",
+        "claim_expired": "ایک دعویٰ رکھے جانے کے دوران ختم ہو گیا",
+        "yield_unanswered": "ایک دستبرداری کی درخواست کا جواب نہیں ملا",
+        "claim_lapsed_during_action": "ایک دعویٰ کارروائی کے دوران ختم ہو گیا"
+      },
+      "empty": {
+        "presence": "کسی ایجنٹ نے اطلاع نہیں دی",
+        "peerMessages": "کوئی زیر التوا پیغام نہیں",
+        "idleSubscribers": "کوئی فراغت کی رکنیت نہیں",
+        "claims": "کوئی دعویٰ نہیں",
+        "contention": "کوئی مسابقت نہیں",
+        "conflicts": "کوئی تنازع نہیں",
+        "activity": "کوئی حالیہ سرگرمی نہیں"
+      },
+      "state": {
+        "loading": "لیجر پڑھا جا رہا ہے…",
+        "unavailableTitle": "لیجر نہیں پڑھا جا سکا",
+        "unavailableBody": "اسٹور {source} نے جواب نہیں دیا۔ یہ اندراجات نہ ہونے جیسا نہیں ہے۔",
+        "errorTitle": "یہ حصہ لوڈ کرتے وقت کچھ غلط ہو گیا"
+      },
+      "askState": {
+        "sending": "بھیجا جا رہا ہے…",
+        "sent": "درخواست بھیج دی گئی — فیصلہ مالک کا ہے؛ خاموشی کا مطلب روکے رکھنا ہے۔",
+        "tooSoon": "آپ نے ابھی اس دعوے کے بارے میں پوچھا تھا؛ ایک منٹ بعد دوبارہ کوشش کریں۔",
+        "notFound": "یہ کام اب اس دعوے کو نہیں رکھتا — یہ دیکھنے کے لیے ریفریش کریں کہ اب اسے کون رکھتا ہے۔",
+        "unavailable": "لیجر تک رسائی نہیں ہو سکی؛ کچھ نہیں بھیجا گیا۔",
+        "error": "کچھ غلط ہو گیا اور ترسیل کی تصدیق نہیں ہو سکی۔ یہ دیکھنے کے لیے ریفریش کریں کہ آیا دعویٰ اب بھی برقرار ہے۔"
+      }
     }
   },
   "code": {
@@ -9636,5 +9726,161 @@
       "pushFailed": "اس ریکارڈنگ کو نالج بیس میں شامل نہیں کیا جا سکا۔ براہ کرم دوبارہ کوشش کریں۔",
       "collectionNotJoined": "محفوظ ہو گیا، لیکن آپ کی بتائی ہوئی کولیکشن نہیں ملی — ٹرانسکرپٹ نالج بیس میں ہے مگر اس کولیکشن میں نہیں۔"
     }
+  },
+  "systemStatus": {
+    "summary": {
+      "issues": "سسٹم کے مسائل کا پتہ چلا",
+      "warnings": "سسٹم کی انتباہات",
+      "ok": "تمام سسٹم فعال ہیں"
+    },
+    "tooltip": {
+      "issues": "سسٹم کے مسائل دیکھنے کے لیے کلک کریں",
+      "warnings": "سسٹم کی انتباہات دیکھنے کے لیے کلک کریں",
+      "ok": "سسٹم کی حالت دیکھنے کے لیے کلک کریں - تمام سروسز فعال ہیں"
+    },
+    "aria": {
+      "issues": "سسٹم کی حالت: مسائل کا پتہ چلا",
+      "warnings": "سسٹم کی حالت: انتباہات موجود ہیں",
+      "ok": "سسٹم کی حالت: تمام سروسز فعال ہیں"
+    },
+    "description": {
+      "servicesDown": "{n} سروس بند ہے | {n} سروسز بند ہیں",
+      "warnings": "{n} انتباہ | {n} انتباہات",
+      "withWarnings": "{n} سروس میں انتباہات | {n} سروسز میں انتباہات",
+      "downAndWarnings": "{down} اور {warnings}",
+      "ok": "تمام سروسز معمول کے مطابق چل رہی ہیں"
+    },
+    "service": {
+      "backend": "بیک اینڈ API",
+      "frontend": "فرنٹ اینڈ",
+      "websocket": "WebSocket",
+      "redis": "Redis",
+      "ollama": "Ollama",
+      "npu_worker": "NPU ورکر",
+      "browser": "براؤزر سروس",
+      "chromadb": "AI اسٹیک (ChromaDB)",
+      "other": "دیگر سروسز"
+    },
+    "state": {
+      "running": "چل رہا ہے",
+      "connected": "منسلک",
+      "statusUnknown": "حالت نامعلوم",
+      "connectionFailed": "کنکشن ناکام",
+      "timeout": "وقت ختم",
+      "connectionRefused": "کنکشن مسترد",
+      "unreachable": "ناقابل رسائی",
+      "unhealthy": "غیر صحت مند",
+      "warning": "انتباہ",
+      "pending": "زیر التوا",
+      "available": "دستیاب",
+      "unavailable": "دستیاب نہیں",
+      "http": "HTTP {code}"
+    },
+    "probe": {
+      "degraded": "متاثر — حالت کی جانچ کا وقت ختم ہو گیا، بیک اینڈ جواب دے رہا ہے",
+      "degradedAsOf": "متاثر — حالت کی جانچ کا وقت ختم ہو گیا، بیک اینڈ جواب دے رہا ہے — حالت بوقت {time}",
+      "unreachable": "ناقابل رسائی — سروسز کی حالت نامعلوم",
+      "unreachableAsOf": "ناقابل رسائی — سروسز کی حالت نامعلوم — حالت بوقت {time}"
+    },
+    "lastKnown": "{text} (آخری معلوم)"
+  },
+  "schedule": {
+    "title": "شیڈول",
+    "repeats": "دہراؤ",
+    "repeat": {
+      "minutes": "ہر چند منٹ بعد",
+      "hourly": "ہر گھنٹے",
+      "daily": "روزانہ",
+      "weekly": "ہفتہ وار",
+      "monthly": "ماہانہ",
+      "once": "ایک بار"
+    },
+    "every": "ہر",
+    "minutesUnit": "منٹ",
+    "onlyBetween": "صرف اس کے درمیان",
+    "windowFrom": "از",
+    "windowTo": "تا",
+    "and": "اور",
+    "onDays": "دنوں میں (اختیاری)",
+    "daysHintAny": "کچھ منتخب نہ ہو تو ہر دن مراد ہے۔",
+    "onDaysRequired": "دنوں میں",
+    "atMinute": "منٹ پر",
+    "at": "وقت",
+    "hour": "گھنٹہ",
+    "minute": "منٹ",
+    "weekdaysOnly": "صرف کام کے دن",
+    "monthly": {
+      "which": "مہینے کا کون سا دن",
+      "day": "مہینے کا دن",
+      "lastDay": "آخری دن",
+      "nth": "مہینے میں ہفتے کا دن",
+      "onDay": "دن",
+      "onThe": "مہینے کے"
+    },
+    "nth": {
+      "1": "پہلے",
+      "2": "دوسرے",
+      "3": "تیسرے",
+      "4": "چوتھے",
+      "last": "آخری"
+    },
+    "weekday": "ہفتے کا دن",
+    "shortMonths": "جن مہینوں میں یہ دن نہیں ہوتا ان میں شیڈول مہینے کے آخری دن چلتا ہے۔",
+    "date": "تاریخ",
+    "timezone": "ٹائم زون",
+    "zone": {
+      "company": "کمپنی کا وقت",
+      "usesCompany": "کمپنی کا ٹائم زون استعمال کرتا ہے۔"
+    },
+    "summary": {
+      "minutes": "ہر {every} منٹ بعد",
+      "minutesWeekdays": "ہر {every} منٹ بعد، کام کے دنوں میں",
+      "minutesDays": "ہر {every} منٹ بعد، دنوں میں: {days}",
+      "minutesWindow": "ہر {every} منٹ بعد، {from} اور {to} کے درمیان",
+      "minutesWindowWeekdays": "ہر {every} منٹ بعد، {from} اور {to} کے درمیان، کام کے دنوں میں",
+      "minutesWindowDays": "ہر {every} منٹ بعد، {from} اور {to} کے درمیان، دنوں میں: {days}",
+      "hourly": "ہر گھنٹے {minute} منٹ پر",
+      "daily": "ہر روز {time} بجے",
+      "dailyWeekdays": "ہر کام کے دن {time} بجے",
+      "weekly": "ہر ہفتے {days} کو {time} بجے",
+      "monthlyDay": "ہر مہینے کی {day} تاریخ کو {time} بجے",
+      "monthlyLastDay": "ہر مہینے کے آخری دن {time} بجے",
+      "monthlyNth1": "ہر مہینے {weekday} (نمبر 1) کو {time} بجے",
+      "monthlyNth2": "ہر مہینے {weekday} (نمبر 2) کو {time} بجے",
+      "monthlyNth3": "ہر مہینے {weekday} (نمبر 3) کو {time} بجے",
+      "monthlyNth4": "ہر مہینے {weekday} (نمبر 4) کو {time} بجے",
+      "monthlyNthLast": "ہر مہینے آخری {weekday} کو {time} بجے",
+      "once": "ایک بار {date} کو {time} بجے",
+      "withZone": "{summary}، {zone}",
+      "custom": "حسبِ ضرورت شیڈول"
+    },
+    "customNote": "اس شیڈول کو کلکس سے نہیں دکھایا جا سکتا۔",
+    "editCron": "cron کے طور پر ترمیم کریں",
+    "doneEditing": "ترمیم مکمل کریں",
+    "nextRuns": "اگلی کارروائیاں",
+    "noRuns": "کوئی آئندہ کارروائی نہیں۔",
+    "previewLoading": "سرور سے تصدیق ہو رہی ہے...",
+    "previewApprox": "تخمینی: محفوظ کرتے وقت سرور درست اوقات کی تصدیق کرے گا۔",
+    "previewUnavailable": "اس شیڈول کا پیش منظر ممکن نہیں۔",
+    "advanced": "ایڈوانسڈ: بطور محفوظ",
+    "saved": {
+      "cron": "معیاری cron",
+      "calendar": "کیلنڈر اصول",
+      "once": "ایک بار کی کارروائی"
+    },
+    "savedAs": "محفوظ شدہ شیڈول",
+    "savedNote": {
+      "once": "ایک بار چلتا ہے۔ کوئی بار بار چلنے والا cron محفوظ نہیں ہوتا۔"
+    },
+    "cronLabel": "cron عبارت",
+    "cronHint": "صرف پانچ خانوں والا معیاری cron: منٹ، گھنٹہ، مہینے کا دن، مہینہ، ہفتے کا دن۔ سلیکٹر اور یہ خانہ ہم آہنگ رہتے ہیں۔",
+    "cron_extension_unsupported": "{token} معیاری cron نہیں ہے۔ مہینے کے آخری جمعہ جیسے شیڈول کے لیے سلیکٹر استعمال کریں۔",
+    "invalid_timezone": "یہ ٹائم زون پہچانا نہیں گیا۔",
+    "once_in_past": "وہ تاریخ اور وقت گزر چکے ہیں۔",
+    "invalid_rrule": "یہ کیلنڈر اصول درست نہیں ہے۔",
+    "invalid_cron": "پانچ خانوں والا معیاری cron درج کریں، مثلاً 0 9 * * 1-5۔",
+    "invalid_generic": "یہ شیڈول درست نہیں ہے۔",
+    "conflicting_fields": "شیڈول یا تو cron کے طور پر محفوظ ہوتا ہے یا کیلنڈر اصول یا ایک بار کی کارروائی کے طور پر، دونوں نہیں۔",
+    "gatedNote": "آخری دن، مہینے میں ہفتے کا دن، 29 تا 31 تاریخیں اور ایک بار کی کارروائیاں شیڈیولر کی اپ ڈیٹ کے بعد دستیاب ہوں گی۔"
   }
 }

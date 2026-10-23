@@ -714,6 +714,7 @@
       "memory": "Memory",
       "modelsCount": "Models ({count})",
       "noModelsDetected": "No models detected",
+      "notAvailable": "N/A",
       "pending": "Pending",
       "priority110": "Priority (1-10)",
       "queueDepthValue0Requests": "Queue Depth: {value0} requests",
@@ -932,8 +933,6 @@
     "nPUWorkersAria": "NPU workers",
     "noNodesRegistered": "No nodes registered",
     "nodeDetails": "Node Details",
-    "nodeDetailsPanelAria": "Node details panel",
-    "nodeServicesPanelAria": "Node services panel",
     "nodes": "Nodes",
     "nodesOverviewAria": "Nodes overview",
     "realTimeHealthStatus": "Real-time health status of all managed nodes",
@@ -1182,7 +1181,8 @@
       "trend": "Trend",
       "type": "Type",
       "unresolved": "Unresolved",
-      "resolvedByAt": "By {by} at {at}"
+      "resolvedByAt": "By {by} at {at}",
+      "paginationAria": "Error list pages"
     },
     "fleetMetricsCard": {
       "acrossValue0Nodes": "Across {value0} nodes",
@@ -1326,6 +1326,107 @@
       "services": "Services",
       "systemHealth": "System Health",
       "systemMonitoring": "System Monitoring"
+    },
+    "agentLedger": {
+      "title": "Agent ledger",
+      "subtitle": "Every company's agent coordination: shared resources, claims, conflicts and dev-loop history.",
+      "refresh": "Refresh",
+      "tabsAria": "Ledger views",
+      "tabs": {
+        "now": "Now working",
+        "contention": "Contention",
+        "claims": "Claims",
+        "conflicts": "Conflicts",
+        "devLoop": "Dev loop",
+        "activity": "Activity"
+      },
+      "col": {
+        "scope": "Scope",
+        "agent": "Agent",
+        "company": "Company",
+        "mode": "Mode",
+        "intent": "Intent",
+        "expires": "Expires",
+        "renewals": "Renewals",
+        "kind": "Kind",
+        "status": "Status",
+        "task": "Current task",
+        "detail": "Detail"
+      },
+      "installWide": "Install-wide",
+      "heldBy": "Held by {agent} ({company})",
+      "waiting": "{n} waiting",
+      "waitlistAria": "Waitlist in order",
+      "silenceMeansHold": "Asking is a request, not a release: silence means hold, and an unrenewed claim expires on its own.",
+      "ask": "Ask holder to release",
+      "askAria": "Ask the holder of {scope} to release it",
+      "askState": {
+        "sending": "Sending…",
+        "sent": "Request sent — the holder decides; silence means hold.",
+        "tooSoon": "You asked about this claim a moment ago; try again in a minute.",
+        "notFound": "That claim is no longer held by this task — refresh to see who holds it now.",
+        "unavailable": "Couldn't reach the ledger; nothing was sent.",
+        "error": "Something went wrong and delivery could not be confirmed. Refresh to see whether the claim is still held."
+      },
+      "conflict": {
+        "release_refused": "A release was refused",
+        "claim_expired": "A claim expired while held",
+        "yield_unanswered": "A yield request went unanswered",
+        "claim_lapsed_during_action": "A claim lapsed during an action"
+      },
+      "devLoop": {
+        "issue": "Issue",
+        "choose": "Choose an issue",
+        "col": {
+          "at": "When",
+          "intent": "Intent",
+          "outcome": "Outcome",
+          "tokens": "Estimated tokens",
+          "reason": "Reason"
+        }
+      },
+      "empty": {
+        "contention": "Nothing is contended",
+        "claims": "No claims",
+        "conflicts": "No conflicts",
+        "activity": "No recent activity",
+        "devLoop": "No dev-loop history",
+        "devLoopActions": "No actions recorded for this issue",
+        "presence": "No agents have reported in",
+        "peerMessages": "No pending messages",
+        "idleSubscribers": "No idle subscriptions"
+      },
+      "notes": {
+        "title": "What this view cannot see",
+        "storeDown": "Couldn't read the {source} store just now. Its entries are missing here, not empty.",
+        "sourcesUnknown": "Couldn't check which ledger sources are readable.",
+        "peerIdentity": "Agents have no per-peer identity yet: an agent that is refused an action can ask another agent to do it (#16950).",
+        "busAuth": "Messages between agents are not authenticated yet, so this view cannot prove who sent one (#16962)."
+      },
+      "source": {
+        "presence": "agent presence",
+        "ai_stack_agents": "AI-stack agents",
+        "live_sessions": "live sessions",
+        "peer_messages": "pending peer messages",
+        "idle_subscribers": "idle subscriptions",
+        "claims": "claims",
+        "waitlists": "waitlists",
+        "events": "ledger activity",
+        "dev_loop": "dev-loop history"
+      },
+      "state": {
+        "loading": "Reading the ledger…",
+        "unavailableTitle": "Couldn't read the ledger",
+        "unavailableBody": "The {source} store did not answer. This is not the same as having no entries.",
+        "errorTitle": "Something went wrong loading this section"
+      },
+      "busy": "Busy",
+      "idle": "Idle",
+      "peerMessages": "Pending peer messages",
+      "idleSubscribers": "Idle subscriptions",
+      "pendingFor": "{n} pending for {name}",
+      "sentBy": "from {names}",
+      "waitsForIdle": "{who} waits for {target} to go idle"
     }
   },
   "monitoringView": {
@@ -1334,7 +1435,17 @@
     "monitoring": "Monitoring",
     "monitoringSections": "Monitoring sections",
     "systemHealthStatusAria": "System health: {status}",
-    "value0AlertPlural": "{value0} Alert{plural}"
+    "value0AlertPlural": "{value0} Alert{plural}",
+    "tabs": {
+      "system": "System",
+      "logs": "Logs",
+      "dashboards": "Dashboards",
+      "alerts": "Alerts",
+      "errors": "Errors",
+      "backendHealth": "Backend Health",
+      "performance": "Performance",
+      "agentLedger": "Agent ledger"
+    }
   },
   "orchestration": {
     "nodeHealthCard": {
@@ -1499,7 +1610,8 @@
     "value0AnsibleMigrationOf": "{value0} Ansible migration of",
     "value0Nodes": "({value0} nodes)",
     "value0OnlineValue1Offline": "{value0} online, {value1} offline",
-    "value0Required": "{value0} (required)"
+    "value0Required": "{value0} (required)",
+    "serviceCount": "{count} service | {count} services"
   },
   "performance": {
     "alertRulesView": {
@@ -1605,7 +1717,8 @@
       "status1": "Status",
       "time": "Time:",
       "time1": "Time",
-      "value0TracePlural": "{value0} trace{plural}"
+      "value0TracePlural": "{value0} trace{plural}",
+      "paginationAria": "Trace list pages"
     }
   },
   "performanceView": {
@@ -1751,7 +1864,6 @@
     "syncRoleAria": "Sync {roleName}",
     "thisRoleMayContain": "This role may contain data. You can back it up before removal.",
     "thisWillStopAnd": "This will stop and remove the service from the node.",
-    "times": "×",
     "version": "Version"
   },
   "rolesView": {
@@ -1991,7 +2103,8 @@
     "uploadTLSCertificate": "Upload TLS Certificate",
     "user": "User",
     "value0Violations": "{value0} violations",
-    "whatHappensWhenYouEnableTLS": "What happens when you enable TLS?"
+    "whatHappensWhenYouEnableTLS": "What happens when you enable TLS?",
+    "paginationAria": "Security list pages"
   },
   "settings": {
     "aPISettings": {
@@ -2202,7 +2315,26 @@
         "username": "Username",
         "varLogAutobotForwardedLog": "/var/log/autobot-forwarded.log",
         "warning": "Warning",
-        "statusUnknown": "Unknown"
+        "statusUnknown": "Unknown",
+        "leaveBlankToKeep": "Leave blank to keep the current value",
+        "loadFailed": "Failed to load destinations",
+        "toggleFailed": "Failed to toggle service",
+        "autoStartEnabled": "Auto-start enabled",
+        "autoStartDisabled": "Auto-start disabled",
+        "autoStartFailed": "Failed to update auto-start",
+        "destinationCreated": "Destination created successfully",
+        "destinationUpdated": "Destination updated successfully",
+        "saveFailed": "Failed to save destination",
+        "testSucceeded": "Connection test successful",
+        "testFailed": "Connection test failed",
+        "testAllSummary": "{healthy}/{total} destinations healthy",
+        "testAllFailed": "Failed to test destinations",
+        "destinationDeleted": "Destination deleted successfully",
+        "deleteFailed": "Failed to delete destination",
+        "removeStoredValue": "Remove the stored value",
+        "urlPlaceholderSyslog": "syslog.example.com:514",
+        "urlPlaceholderWebhook": "https://logs.example.com/ingest",
+        "urlPlaceholderElasticsearch": "http://elasticsearch.example.com:{port}"
       },
       "nPUWorkersSettings": {
         "actions": "Actions",
@@ -2256,7 +2388,9 @@
         "weighted": "Weighted",
         "windows": "Windows",
         "worker": "Worker",
-        "workerName": "Worker Name *"
+        "workerName": "Worker Name *",
+        "connectionTestFailed": "Connection test failed",
+        "loadBalancingLoadFailed": "Failed to load load-balancing configuration"
       },
       "personalitySettings": {
         "active": "Active",
@@ -2558,7 +2692,8 @@
         "userPreferences": "User Preferences",
         "username": "Username",
         "usersWhoAccessAutoBot": "Users who access AutoBot chat, workflows, and tools",
-        "usersWhoManageThe": "Users who manage the AutoBot fleet via the SLM admin dashboard"
+        "usersWhoManageThe": "Users who manage the AutoBot fleet via the SLM admin dashboard",
+        "resetPasswordFor": "Reset Password for {username}"
       }
     },
     "backendSettings": {
@@ -3467,5 +3602,10 @@
     "subtitle": "Preview unreferenced storage, repair unreachable resources, and review the audit trail — every deletion is proposed through the approval queue, never applied directly.",
     "tabName": "Data Hygiene",
     "title": "Data Hygiene"
+  },
+  "ui": {
+    "modal": {
+      "closeDialog": "Close dialog"
+    }
   }
 }

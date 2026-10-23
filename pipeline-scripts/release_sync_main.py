@@ -95,12 +95,12 @@ from typing import AbstractSet, Any, Dict, List, NamedTuple, Optional, Sequence,
 # one transport, one place where a transport failure becomes a status code.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from ci_dispatch_watchdog import (  # noqa: E402
-    DEFAULT_API_ROOT,
+from github_api import (  # noqa: E402,F401
     GitHubApi,
     WatchdogApiError,
     WatchdogConfigError,
     WatchdogError,
+    build_api,
 )
 
 # The one definition of "the release-sync PR", shared with the watchdog (#16272).
@@ -547,17 +547,6 @@ def _extras_exit(decision: SyncDecision) -> int:
     listed = ", ".join(f"#{number}" for number in decision.extras)
     _emit(f"release-sync: duplicate sync PRs open, close by hand: {listed}", err=True)
     return 1
-
-
-def build_api() -> GitHubApi:
-    token = os.environ.get("GITHUB_TOKEN", "").strip()
-    repository = os.environ.get("GITHUB_REPOSITORY", "").strip()
-    if not token:
-        raise WatchdogConfigError("GITHUB_TOKEN is required")
-    if "/" not in repository:
-        raise WatchdogConfigError("GITHUB_REPOSITORY must be 'owner/repo'")
-    api_root = os.environ.get("GITHUB_API_URL", DEFAULT_API_ROOT).strip() or DEFAULT_API_ROOT
-    return GitHubApi(token, repository, api_root)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:

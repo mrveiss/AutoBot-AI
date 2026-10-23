@@ -18,8 +18,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
 
 from agents.base_agent import (
     AgentRequest,
-    AgentResponse,
     LocalAgent,
+    StandardizedAgentResponse,
     create_agent_request,
 )
 
@@ -36,24 +36,24 @@ class TestAgent(LocalAgent):
         super().__init__("test")
         self.capabilities = ["test_action", "ping"]
 
-    async def process_request(self, request: AgentRequest) -> AgentResponse:
+    async def process_request(self, request: AgentRequest) -> StandardizedAgentResponse:
         """Process test request"""
         if request.action == "test_action":
-            return AgentResponse(
+            return StandardizedAgentResponse(
                 request_id=request.request_id,
                 agent_type=self.agent_type,
                 status="success",
                 result={"message": "Test successful", "payload": request.payload},
             )
         elif request.action == "ping":
-            return AgentResponse(
+            return StandardizedAgentResponse(
                 request_id=request.request_id,
                 agent_type=self.agent_type,
                 status="success",
                 result={"pong": True},
             )
         else:
-            return AgentResponse(
+            return StandardizedAgentResponse(
                 request_id=request.request_id,
                 agent_type=self.agent_type,
                 status="error",

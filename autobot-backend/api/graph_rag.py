@@ -39,10 +39,14 @@ from api.schemas_knowledge import (
     GraphRAGSearchResponse,
 )
 from api.system_health import register_app_state_probe
+from api.user_management.dependencies import get_tenant_context
 from auth_middleware import get_current_user
+from autobot_memory_graph.owner_scope import OwnerScope, OwnerScopeRequired
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
+from autobot_shared.user_management.base_service import TenantContext
+from knowledge.search_filters import kb_principal_from_tenant
 from services.graph_rag_service import GraphRAGService
 from type_defs.common import Metadata
 from utils.request_utils import generate_request_id
@@ -169,7 +173,7 @@ def _determine_overall_status(components: Dict[str, str]) -> str:
 async def graph_rag_search(
     search_request: GraphRAGSearchRequest = Body(...),
     service: GraphRAGService = Depends(get_graph_rag_service),
-    current_user: dict = Depends(get_current_user),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> JSONResponse:
     """
     Perform graph-aware RAG search combining semantic search with graph traversal.
@@ -178,6 +182,8 @@ async def graph_rag_search(
     Issue #744: Requires authenticated user.
     """
     request_id = generate_request_id()
+    owner = _owner_scope(tenant)  # outside the try: a 403 must not become a 500 (#18825)
+    principal = kb_principal_from_tenant(tenant)  # #16664: the KB leg returns what the caller may read
 
     try:
         logger.info(
@@ -192,6 +198,8 @@ async def graph_rag_search(
             max_results=search_request.max_results,
             enable_reranking=search_request.enable_reranking,
             timeout=search_request.timeout,
+            principal=principal,
+            owner=owner,
         )
 
         results_data = _serialize_search_results(results)
@@ -230,7 +238,7 @@ async def graph_rag_search(
 async def graph_rag_path(
     path_request: GraphRAGPathRequest = Body(...),
     service: GraphRAGService = Depends(get_graph_rag_service),
-    current_user: dict = Depends(get_current_user),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> JSONResponse:
     """
     Return the shortest relationship path between two memory-graph entities.
@@ -246,6 +254,7 @@ async def graph_rag_path(
     Issue #744: Requires authenticated user.
     """
     request_id = generate_request_id()
+    owner = _owner_scope(tenant)  # outside the try: a 403 must not become a 500 (#18825)
 
     try:
         result = await service.find_connection_path(
@@ -255,6 +264,7 @@ async def graph_rag_path(
             max_depth=path_request.max_depth,
             direction=path_request.direction,
             timeout=path_request.timeout,
+            owner=owner,
         )
     except asyncio.TimeoutError:
         logger.warning("[%s] Graph-RAG path timed out after %ss", request_id, path_request.timeout)
@@ -349,8 +359,9 @@ async def graph_rag_metrics(
             "entity_extraction_enabled": true,
             "rag_service": {
                 "enable_advanced_rag": true,
-                "timeout_seconds": 10.0
+                "timeout_seconds": "<RAGConfig.timeout_seconds>"
             },
+            "graph_timeout_seconds": "<RAGConfig.graph_timeout_seconds>",
             "graph_initialized": true
         }
         ```
@@ -374,6 +385,20 @@ async def graph_rag_metrics(
 # ====================================================================
 
 
+def _owner_scope(tenant: TenantContext) -> OwnerScope:
+    """The caller's memory-graph scope; a context with no user is refused (403), never unscoped. #18825.
+
+    ADMIN RULE: ``is_platform_admin`` is deliberately ignored. An admin reads exactly what their own
+    scope reads -- the safe default -- and there is no cross-user path through these routes. A
+    cross-user read would need its own explicit, audited entry point that passes
+    ``UNSCOPED_ALL_USERS``; none exists here.
+    """
+    try:
+        return OwnerScope.from_tenant(tenant)
+    except OwnerScopeRequired:
+        raise HTTPException(status_code=403, detail="Authenticated user required")
+
+
 def _serialize_graph_nodes(entities: List[Metadata]) -> List[Metadata]:
     """Convert graph entities to explorer node dicts. Read-only; #9018 Phase 2."""
     return [
@@ -388,19 +413,23 @@ def _serialize_graph_nodes(entities: List[Metadata]) -> List[Metadata]:
     ]
 
 
-async def _collect_collection_edges(service: GraphRAGService, node_ids: List[str]) -> List[Metadata]:
-    """Gather outgoing relations for the given node ids, deduped. #9018 Phase 2."""
-    edges: List[Metadata] = []
+async def _collect_collection_edges(service: GraphRAGService, node_ids: List[str], owner: OwnerScope) -> List[Metadata]:
+    """Gather outgoing relations for the given node ids, deduped. #9018 Phase 2.
+
+    #18825: ``get_relations`` takes the owner and drops an edge whose target the caller may not
+    read, so neither the target's id nor the relation type to it leaves the owner's scope.
+    """
+    candidates: List[Metadata] = []
     seen: set = set()
     for entity_id in node_ids:
-        relations = await service.graph.get_relations(entity_id=entity_id, direction="outgoing")
+        relations = await service.graph.get_relations(entity_id=entity_id, direction="outgoing", owner=owner)
         for rel in relations.get("relations", []):
             key = (rel.get("from"), rel.get("to"), rel.get("type"))
             if key in seen:
                 continue
             seen.add(key)
-            edges.append(rel)
-    return edges
+            candidates.append(rel)
+    return candidates
 
 
 @router.get("/collections/{collection_id}/graph")
@@ -412,7 +441,7 @@ async def _collect_collection_edges(service: GraphRAGService, node_ids: List[str
 async def collection_graph(
     collection_id: str,
     service: GraphRAGService = Depends(get_graph_rag_service),
-    current_user: dict = Depends(get_current_user),
+    tenant: TenantContext = Depends(get_tenant_context),
 ) -> JSONResponse:
     """Return a collection's knowledge-graph subgraph (nodes + edges).
 
@@ -424,9 +453,10 @@ async def collection_graph(
     request_id = generate_request_id()
     logger.info("[%s] Collection graph request: collection_id=%s", request_id, collection_id)
 
-    entities = await service.graph.search_entities(query=collection_id, tags=[collection_id], limit=500)
+    owner = _owner_scope(tenant)
+    entities = await service.graph.search_entities(query=collection_id, tags=[collection_id], limit=500, owner=owner)
     nodes = _serialize_graph_nodes(entities)
-    edges = await _collect_collection_edges(service, [n["id"] for n in nodes])
+    edges = await _collect_collection_edges(service, [n["id"] for n in nodes], owner)
 
     return JSONResponse(
         status_code=200,

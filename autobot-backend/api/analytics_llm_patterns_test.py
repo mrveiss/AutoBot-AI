@@ -9,43 +9,29 @@ from datetime import datetime, timezone
 
 import pytest
 
-from api.analytics_llm_patterns import LLMPatternAnalyzer
+from api.analytics_llm_patterns import LLMUsagePatternAnalyzer
 from constants.threshold_constants import CategoryDefaults
+from testkit.fake_redis_pipeline import FakeAsyncPipeline
 
 
 def _todays_usage_key() -> str:
     today = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d")
-    return f"{LLMPatternAnalyzer()._usage_key}:{today}"
-
-
-class _FakePipe:
-    def __init__(self, records_by_key):
-        self._records_by_key = records_by_key
-        self._calls = []
-
-    async def lrange(self, key, start, end):
-        self._calls.append(key)
-
-    async def execute(self):
-        return [self._records_by_key.get(k, []) for k in self._calls]
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *args):
-        return False
+    return f"{LLMUsagePatternAnalyzer()._usage_key}:{today}"
 
 
 class _FakeRedis:
     def __init__(self, records_by_key):
         self._records_by_key = records_by_key
 
+    async def lrange(self, key, start, end):
+        return self._records_by_key.get(key, [])
+
     def pipeline(self):
-        return _FakePipe(self._records_by_key)
+        return FakeAsyncPipeline(self)
 
 
 def _analyzer_with_records(records_by_key):
-    analyzer = LLMPatternAnalyzer()
+    analyzer = LLMUsagePatternAnalyzer()
 
     async def _fake_get_redis():
         return _FakeRedis(records_by_key)

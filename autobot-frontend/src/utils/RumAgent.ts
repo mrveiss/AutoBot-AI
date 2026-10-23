@@ -210,6 +210,7 @@ class RumAgent {
   private pendingWsEvents: PrometheusWebSocketMetric[]
   private pendingResources: PrometheusResourceMetric[]
   private pendingCriticalIssues: PrometheusCriticalIssueMetric[]
+  private intervals: ReturnType<typeof setInterval>[] = [] // periodic timers, ended by stop() (#18254)
 
   constructor() {
     this.isEnabled = import.meta.env.DEV || localStorage.getItem('rum_enabled') === 'true'
@@ -252,7 +253,6 @@ class RumAgent {
   }
 
   private initialize(): void {
-
     this.monitorPagePerformance()
     this.monitorResourceTimings()
     this.monitorErrors()
@@ -620,17 +620,12 @@ class RumAgent {
 
   // Periodic reporting
   private setupPeriodicReporting(): void {
-    setInterval(() => {
-      this.generateReport()
-    }, 30000) // Every 30 seconds
+    this.intervals.push(setInterval(() => this.generateReport(), 30000)) // Every 30 seconds
   }
 
   // Issue #476: Setup Prometheus metrics reporting
   private setupPrometheusReporting(): void {
-    // Send metrics periodically
-    setInterval(() => {
-      this.flushPrometheusMetrics()
-    }, this.prometheusReportInterval)
+    this.intervals.push(setInterval(() => this.flushPrometheusMetrics(), this.prometheusReportInterval))
 
     // Send session end metrics on page unload
     window.addEventListener('beforeunload', () => {
@@ -767,6 +762,11 @@ class RumAgent {
   disablePrometheusReporting(): void {
     this.prometheusEnabled = false
     localStorage.setItem('rum_prometheus_enabled', 'false')
+  }
+
+  /** End the periodic timers (#18254): this singleton otherwise outlives its loader -- in tests, jsdom. */
+  stop(): void {
+    this.intervals.splice(0).forEach((id) => clearInterval(id))
   }
 
   generateReport(): RumReport {

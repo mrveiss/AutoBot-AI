@@ -1,5 +1,5 @@
 <template>
-  <BasePanel v-if="show" variant="bordered" size="md">
+  <BaseCard scrollable v-if="show" variant="bordered" size="md">
     <template #header>
       <h3><Icon name="search" /> {{ $t('manpage.searchPanel.title') }}</h3>
     </template>
@@ -46,10 +46,11 @@
         </div>
       </div>
     </div>
-  </BasePanel>
+  </BaseCard>
 </template>
 
 <script setup lang="ts">
+import { BaseButton, BaseCard } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -63,8 +64,6 @@
  */
 
 import Icon from '@/components/ui/Icon.vue'
-import BasePanel from '@/components/base/BasePanel.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 
 interface SearchResult {
@@ -106,7 +105,7 @@ defineEmits<Emits>()
 .form-input {
   flex: 1;
   padding: var(--spacing-3) var(--spacing-4);
-  border: 2px solid var(--border-light, #ecf0f1);
+  border: 2px solid var(--border-light);
   border-radius: var(--radius-md);
   font-size: var(--text-base);
   background: var(--bg-primary);

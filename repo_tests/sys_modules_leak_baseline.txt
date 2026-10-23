@@ -52,7 +52,6 @@
 # (integration/slow/distributed/performance) run on a schedule instead and can
 # surface owners this list does not have.
 
-autobot-backend/code_intelligence/conftest.py
 autobot-backend/conftest.py
 autobot-backend/llm_shared/npu_pipeline_routing_test.py
 autobot-backend/tests/orchestration/test_causal_error_recovery.py

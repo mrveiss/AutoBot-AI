@@ -12,6 +12,7 @@
  * Issue #754: Added ARIA attributes, keyboard navigation, high contrast toggle.
  */
 
+import { BrandMark } from '@autobot/ui'
 import { computed, onMounted, onUnmounted } from 'vue'
 import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
 import { useI18n } from 'vue-i18n'
@@ -45,7 +46,7 @@ const hasCombinedUpdates = computed(() => combinedUpdateCount.value > 0)
 
 // Badge color: orange when system updates present, amber when only code sync
 const badgeColor = computed(() =>
-  systemUpdates.updateCount.value > 0 ? '#f97316' : '#f59e0b',
+  systemUpdates.updateCount.value > 0 ? 'var(--slm-orange-500)' : 'var(--slm-amber-500)',
 )
 
 interface NavItem {
@@ -198,12 +199,7 @@ onUnmounted(() => {
     <!-- Logo & Title -->
     <div class="p-4 border-b border-gray-800">
       <div class="flex items-center gap-3">
-        <div
-          class="w-10 h-10 bg-primary-600 rounded-lg flex items-center justify-center"
-          aria-hidden="true"
-        >
-          <span class="text-xl font-bold">S</span>
-        </div>
+        <BrandMark :size="40" />
         <div>
           <h1 class="font-bold text-lg">{{ $t('common.sidebar.sLMAdmin') }}</h1>
           <p class="text-xs text-gray-400">{{ $t('common.sidebar.serviceLifecycleManager') }}</p>

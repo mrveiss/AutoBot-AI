@@ -37,11 +37,12 @@ sys.path.insert(0, str(backend_root))
 
 
 # #16483: both moved to testkit/module_stubs.py — reusable, not conftest-specific
-# (78 call sites across this file alone), and it keeps this file under the
-# file-size ratchet without a raised ceiling every time a new module needs
-# real-loading before its dependent imports it.
+# (78 call sites across this file alone); keeps this file under the file-size
+# ratchet without a raised ceiling every time a new module needs real-loading.
 from testkit.module_stubs import make_pkg_stub as _make_pkg_stub
 from testkit.module_stubs import real_load_and_bind as _real_load_and_bind
+from testkit.provider_key_vault_state import empty_reachable_provider_key_vault  # noqa: F401 -- autouse
+from testkit.singleton_state import reset_feature_flags_singleton  # noqa: F401 -- autouse
 
 # Stub chromadb before it is imported. chromadb hangs at import time on
 # machines without a local Chroma server (it fires gRPC keep-alive probes via
@@ -478,7 +479,7 @@ if "llm_shared" not in sys.modules:
     _llm_stub.LLMResponseCache = MagicMock()  # type: ignore[attr-defined]
     _llm_stub.get_llm_cache = MagicMock()  # type: ignore[attr-defined]
     _llm_stub.TORCH_AVAILABLE = False  # type: ignore[attr-defined]
-    _llm_stub.HardwareDetector = MagicMock()  # type: ignore[attr-defined]
+    _llm_stub.AccelerationDetector = MagicMock()  # type: ignore[attr-defined]
     _llm_stub.LLMType = MagicMock()  # type: ignore[attr-defined]
     _llm_stub.ProviderType = MagicMock()  # type: ignore[attr-defined]
     _llm_stub.StreamingManager = MagicMock()  # type: ignore[attr-defined]
@@ -552,9 +553,15 @@ if "llm_shared" not in sys.modules:
     _real_load_and_bind("llm_shared.structured_ops", _llm_root / "structured_ops.py")
     _real_load_and_bind("llm_shared.optimization.rate_limiter", _llm_root / "optimization" / "rate_limiter.py")
     _real_load_and_bind("llm_shared.fallback_chain", _llm_root / "fallback_chain.py")
+    # #10551/#15022: provider_auth first -- provider_degradation imports its error base
+    # (ProviderAuthError); light deps only.
+    _real_load_and_bind("llm_shared.provider_auth", _llm_root / "provider_auth.py")
     # #11519: provider degradation store — load real BEFORE model_fallback_coordinator
     # and provider_registry which import it at module level.
     _real_load_and_bind("llm_shared.provider_degradation", _llm_root / "provider_degradation.py")
+    # #15026/#15028: headroom store + reads, imported at module level by the coordinator.
+    _real_load_and_bind("llm_shared.quota_headroom", _llm_root / "quota_headroom.py")
+    _real_load_and_bind("llm_shared.headroom_routing", _llm_root / "headroom_routing.py")
     # #11995: PROVIDER_FALLBACK event emission helper — load real BEFORE
     # model_fallback_coordinator, which imports it at module level. events.bus
     # / events.event_types are unstubbed lightweight modules, safe to import here.
@@ -570,9 +577,6 @@ if "llm_shared" not in sys.modules:
     # in the lightweight run_credentials module; load it real so tests importing
     # them don't hit the llm_shared MagicMock stub.
     _real_load_and_bind("llm_shared.run_credentials", _llm_root / "run_credentials.py")
-    # #10551: provider auth abstraction — load real so tests can import the
-    # strategy classes without hitting the llm_shared MagicMock stub.
-    _real_load_and_bind("llm_shared.provider_auth", _llm_root / "provider_auth.py")
     # #11762: credential redaction — was never real-loaded, so its co-located
     # tests silently failed collection and a redaction bug went unnoticed.
     _real_load_and_bind("llm_shared.credential_redaction", _llm_root / "credential_redaction.py")
@@ -586,12 +590,9 @@ if "llm_shared" not in sys.modules:
     # so base_provider (and then provider_registry) load real.
     _real_load_and_bind("llm_shared.cross_worker_rate_limiter", _llm_root / "cross_worker_rate_limiter.py")
     _real_load_and_bind("llm_shared.observability", _llm_root / "observability" / "__init__.py")
-    # #15026: quota headroom store — rate_limit_backoff imports it at module
-    # level (`from .quota_headroom import get_quota_headroom_store`) to persist
-    # what it already parses; light dep (autobot_shared.env_utils/
-    # logging_manager/singleton_factory only), load real before rate_limit_backoff.
-    _real_load_and_bind("llm_shared.quota_headroom", _llm_root / "quota_headroom.py")
     _real_load_and_bind("llm_shared.rate_limit_backoff", _llm_root / "rate_limit_backoff.py")
+    # #15026: header -> headroom-window mapping, imported at module level by base_provider.
+    _real_load_and_bind("llm_shared.rate_limit_headers", _llm_root / "rate_limit_headers.py")
     # #11541: pre-request cumulative token budget gate — base_provider imports it
     # at module level (`from .token_budget import get_token_budget_gate`); light
     # dep (autobot_shared.env_utils/logging_manager/singleton_factory + .models),
@@ -659,8 +660,8 @@ if "llm_shared" not in sys.modules:
         # Parent bind (so patch("llm_shared.hardware.X") targets the real
         # module) now happens inside _real_load_and_bind (#11661); only the
         # top-level re-exports remain here.
-        if hasattr(_hw_mod, "HardwareDetector"):
-            _llm_stub.HardwareDetector = _hw_mod.HardwareDetector  # type: ignore[attr-defined]
+        if hasattr(_hw_mod, "AccelerationDetector"):
+            _llm_stub.AccelerationDetector = _hw_mod.AccelerationDetector  # type: ignore[attr-defined]
         if hasattr(_hw_mod, "TORCH_AVAILABLE"):
             _llm_stub.TORCH_AVAILABLE = _hw_mod.TORCH_AVAILABLE  # type: ignore[attr-defined]
 
@@ -972,11 +973,9 @@ for _ci_sub in [
     "code_intelligence.typescript_analyzer",
     "code_intelligence.vue_analyzer",
     "code_intelligence.doc_generator",
-    "code_intelligence.llm_code_generator",
     "code_intelligence.code_fingerprinting",
     "code_intelligence.code_review_engine",
     "code_intelligence.base_analyzer",
-    "code_intelligence.conversation_flow_analyzer",
 ]:
     if _ci_sub not in sys.modules:
         sys.modules[_ci_sub] = _make_pkg_stub(_ci_sub)
@@ -1264,10 +1263,7 @@ def single_use_fake_redis():
 
 @pytest.fixture(autouse=True)
 def set_test_environment():
-    """
-    Set TEST environment variables for all tests.
-    Prevents tests from affecting production data.
-    """
+    """Set TEST environment variables for all tests, so they cannot affect production data."""
     original_env = dict(os.environ)
 
     config.test_mode = "true"

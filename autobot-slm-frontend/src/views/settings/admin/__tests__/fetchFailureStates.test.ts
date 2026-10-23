@@ -14,6 +14,7 @@ import NPUWorkersSettings from '../NPUWorkersSettings.vue'
 
 const api = {
   getLogForwardingStatus: vi.fn(),
+  getLogForwardingAutoStart: vi.fn(),
   getLogForwardingDestinations: vi.fn(),
   startLogForwarding: vi.fn(),
   stopLogForwarding: vi.fn(),
@@ -72,6 +73,8 @@ describe('NPU Workers with a failed load-balancing fetch', () => {
     await flushPromises()
 
     expect(saveButton(wrapper).attributes('disabled')).toBeDefined()
+    // The route is served (#15536), so a failure is shown, not swallowed.
+    expect(wrapper.text()).toContain('down')
   })
 
   it('allows saving once the configuration has loaded', async () => {

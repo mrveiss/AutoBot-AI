@@ -838,7 +838,7 @@ class OwnershipAnalyzer:
 
         #13602: this matched _SKIP_DIRECTORIES against the ABSOLUTE path. Once
         `.worktrees` joined that list, a scan rooted inside one — which is where
-        `resolve_project_root()` lands on any dev checkout — skipped every file
+        `resolve_git_repo_root()` lands on any dev checkout — skipped every file
         below it and returned 200 with zero contributors and no error. Adding
         the name without this is how a loud 400 becomes a silent empty 200.
         """

@@ -36,11 +36,11 @@ from sqlalchemy.orm import selectinload
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
+from autobot_shared.user_management.audit_rows import audit_row
 from autobot_shared.user_management.base_service import BaseService, TenantContext
 from autobot_shared.user_management.models.audit import (
-    AuditAction,
-    AuditLog,
     AuditResourceType,
+    IdentityAuditAction,
 )
 from autobot_shared.user_management.models.team import Team, TeamMembership
 
@@ -118,7 +118,7 @@ class TeamService(BaseService):
     ) -> None:
         """Log audit entry for team creation. Issue #620."""
         await self._audit_log(
-            action=AuditAction.TEAM_CREATED,
+            action=IdentityAuditAction.TEAM_CREATED,
             resource_type=AuditResourceType.TEAM,
             resource_id=team.id,
             details={
@@ -320,7 +320,7 @@ class TeamService(BaseService):
 
         if changes:
             await self._audit_log(
-                action=AuditAction.TEAM_UPDATED,
+                action=IdentityAuditAction.TEAM_UPDATED,
                 resource_type=AuditResourceType.TEAM,
                 resource_id=team_id,
                 details={"changes": changes},
@@ -353,7 +353,7 @@ class TeamService(BaseService):
         await self.session.flush()
 
         await self._audit_log(
-            action=AuditAction.TEAM_DELETED,
+            action=IdentityAuditAction.TEAM_DELETED,
             resource_type=AuditResourceType.TEAM,
             resource_id=team_id,
             details={"hard_delete": hard_delete, "name": team.name},
@@ -457,7 +457,7 @@ class TeamService(BaseService):
         await self.session.flush()
 
         await self._audit_log(
-            action=AuditAction.TEAM_MEMBER_ADDED,
+            action=IdentityAuditAction.TEAM_MEMBER_ADDED,
             resource_type=AuditResourceType.TEAM,
             resource_id=team_id,
             details={"user_id": str(user_id), "role": role},
@@ -494,7 +494,7 @@ class TeamService(BaseService):
         await self.session.flush()
 
         await self._audit_log(
-            action=AuditAction.TEAM_MEMBER_REMOVED,
+            action=IdentityAuditAction.TEAM_MEMBER_REMOVED,
             resource_type=AuditResourceType.TEAM,
             resource_id=team_id,
             details={"user_id": str(user_id), "previous_role": membership.role},
@@ -532,7 +532,7 @@ class TeamService(BaseService):
         Issue #620.
         """
         await self._audit_log(
-            action=AuditAction.TEAM_MEMBER_ROLE_CHANGED,
+            action=IdentityAuditAction.TEAM_MEMBER_ROLE_CHANGED,
             resource_type=AuditResourceType.TEAM,
             resource_id=team_id,
             details={
@@ -712,13 +712,12 @@ class TeamService(BaseService):
         outcome: str = "success",
     ) -> None:
         """Create audit log entry."""
-        audit_entry = AuditLog(
-            id=uuid.uuid4(),
+        audit_entry = audit_row(
             org_id=self.context.org_id,
             user_id=self.context.user_id,
             action=action,
             resource_type=resource_type,
-            resource_id=resource_id,
+            resource=resource_id,
             outcome=outcome,
             details=details,
         )

@@ -42,6 +42,8 @@ import yaml
 # the shared vacuity floor is importable when this runs as a bare script.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
+from repo_tests.ansible_inventory_scope import inventory_globals  # noqa: E402
+
 from tools.lint._scan_helpers import enforce_reach  # noqa: E402
 
 # The deploy syncs the repo to this prefix, so what follows it is a repo path.
@@ -95,18 +97,43 @@ def _ansible_files(root: pathlib.Path) -> list[pathlib.Path]:
     return sorted(found)
 
 
-#: A ``vars:`` entry whose value is an absolute path, e.g.
+#: A ``vars:`` entry whose value is an absolute path (or a quoted template rendering to one), e.g.
 #: ``deployed_src_root: /opt/autobot/src``. Only these are substituted -- a map
 #: built from every ``key: value`` in the file would let an unrelated task key
 #: shadow a variable name.
 _VARS_BLOCK = re.compile(r"^(?P<indent>\s*)vars:\s*$")
-_VAR_DEFINITION = re.compile(r"^(?P<indent>\s+)(?P<name>\w+)\s*:\s*(?P<value>/\S+)\s*$")
+_VAR_DEFINITION = re.compile(r"^(?P<indent>\s+)(?P<name>\w+)\s*:\s*(?P<value>/\S+|\"\{\{[^\"]*\"|'\{\{[^']*')\s*$")
 
-#: One ``{{ name }}`` reference, with or without inner spacing.
-_TEMPLATE_REF = re.compile(r"\{\{\s*(?P<name>\w+)\s*\}\}")
+#: One ``{{ name }}`` reference, with or without inner spacing. Dotted names
+#: (``{{ autobot.base_dir }}``) are inventory vars, rendered by `inventory_vars`.
+_TEMPLATE_REF = re.compile(r"\{\{\s*(?P<name>\w+(?:\.\w+)*)\s*\}\}")
 
 
-def _var_definitions(text: str) -> dict[str, str]:
+def inventory_vars(root: pathlib.Path) -> dict[str, str]:
+    """Every ``inventory/group_vars/all.yml`` var under *root*, as the dotted names a template writes.
+
+    #19147 moved the deploy root behind ``{{ autobot.base_dir }}`` (the #15632
+    SSOT), so ``deployed_src_root`` is no longer a literal. Ansible renders
+    group_vars/all for every play; without the same rendering here every
+    deployed-src reference left this guard's population. Flattening is
+    `inventory_globals`, the one the manifest resolver uses -- not a second copy.
+    """
+    flat: dict[str, str] = {}
+    for path in sorted(root.rglob("inventory/group_vars/all.y*ml")):
+        rel = path.relative_to(root)
+        if any(part in _EXCLUDE_DIRS for part in rel.parts):
+            continue
+        try:
+            document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except (OSError, yaml.YAMLError):
+            continue
+        rendered = inventory_globals(((rel.as_posix(), document),), rel.parent.parent.as_posix())
+        for name, value in rendered.items():
+            flat.setdefault(name, value)
+    return flat
+
+
+def _var_definitions(text: str, inventory: dict[str, str] | None = None) -> dict[str, str]:
     """Absolute-path variables declared in this file's ``vars:`` blocks.
 
     Scoped to ``vars:`` deliberately. #15687 moves twenty literal deploy-root
@@ -133,8 +160,10 @@ def _var_definitions(text: str) -> dict[str, str]:
             if not isinstance(play_vars, dict):
                 continue
             for name, value in play_vars.items():
-                if isinstance(value, str) and value.startswith("/"):
-                    resolved[str(name)] = value
+                # `"{{ autobot.base_dir }}/src"` is as absolute as the literal it replaced (#19147).
+                rendered = _resolve(value, inventory or {}) if isinstance(value, str) else None
+                if rendered and rendered.startswith("/"):
+                    resolved[str(name)] = rendered
         if resolved:
             return resolved
 
@@ -151,7 +180,9 @@ def _var_definitions(text: str) -> dict[str, str]:
             continue
         definition = _VAR_DEFINITION.match(line)
         if definition and len(definition.group("indent")) > block_indent:
-            definitions[definition.group("name")] = definition.group("value")
+            rendered = _resolve(definition.group("value").strip("\"'"), inventory or {})
+            if rendered and rendered.startswith("/"):
+                definitions[definition.group("name")] = rendered
             continue
         # Any line at or left of the `vars:` indent ends the block.
         if len(line) - len(line.lstrip()) <= block_indent:
@@ -169,15 +200,17 @@ def _resolve(value: str, variables: dict[str, str]) -> str | None:
 
 def _referenced_repo_paths(
     text: str,
+    inventory: dict[str, str] | None = None,
 ) -> tuple[list[tuple[int, str, str]], list[tuple[int, str, str]]]:
     """Return ``(resolved, unresolvable)`` deployed-src references.
 
     ``resolved`` is ``(line_no, key, repo_relative_path)``. ``unresolvable`` is
     every file-key assignment whose template could not be resolved -- returned
     rather than skipped, because a reference silently leaving the population is
-    indistinguishable from one that was never there.
+    indistinguishable from one that was never there. *inventory* is
+    `inventory_vars(root)`; a play's own vars take precedence over it, as in Ansible.
     """
-    variables = _var_definitions(text)
+    variables = {**(inventory or {}), **_var_definitions(text, inventory)}
     hits: list[tuple[int, str, str]] = []
     unresolvable: list[tuple[int, str, str]] = []
     for line_no, line in enumerate(text.splitlines(), 1):
@@ -371,6 +404,7 @@ def _run() -> int:
     root = pathlib.Path(".").resolve()
     inventories = inventory_groups(root)
     all_groups = set().union(*inventories.values()) if inventories else set()
+    inventory = inventory_vars(root)
 
     path_violations, host_violations, unresolvable_refs = [], [], []
     paths_checked = hosts_checked = plays_read = 0
@@ -382,7 +416,7 @@ def _run() -> int:
             continue
         plays_read += 1
         rel_play = play.relative_to(root)
-        resolved_refs, unresolved_here = _referenced_repo_paths(text)
+        resolved_refs, unresolved_here = _referenced_repo_paths(text, inventory)
         for line_no, key, rel in resolved_refs:
             paths_checked += 1
             if not (root / rel).exists():
@@ -409,7 +443,7 @@ def _run() -> int:
         return 1
 
     # Vacuity floor (#14896) -- rationale in the comment above main().
-    if enforce_reach(plays_read, 1, hook=HOOK_ID, full_repo=True):
+    if enforce_reach(plays_read, 1, hook=HOOK_ID, full_repo=True, unit="play(s)"):
         return 1
 
     # #15901 review: report the unresolvable count too. Most are legitimately

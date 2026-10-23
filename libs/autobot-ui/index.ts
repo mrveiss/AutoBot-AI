@@ -23,17 +23,49 @@ export type { GetPath, JsonOf, GetResponse } from './src/types/contract'
 export { default as BaseButton } from './src/components/BaseButton.vue'
 export type { ButtonVariant, ButtonSize } from './src/components/BaseButton.vue'
 
+export { default as BaseInput } from './src/components/BaseInput.vue'
+export type { InputSize, InputType } from './src/components/BaseInput.vue'
+
 export { default as BaseBadge } from './src/components/BaseBadge.vue'
 export type { BadgeVariant, BadgeSize } from './src/components/BaseBadge.vue'
 
+// The one inline alert/banner for both apps (#18819).
+export { default as BaseAlert } from './src/components/BaseAlert.vue'
+export type { AlertVariant, AlertSize, BaseAlertProps } from './src/components/BaseAlert.vue'
+
 export { default as BaseCard } from './src/components/BaseCard.vue'
+
+// The one data table (#14778) -- retires the main app's BaseTable and DataTable forks.
+export { default as BaseTable } from './src/components/BaseTable.vue'
+export type { BaseTableColumn, TableRow, TableRowKey, TableSize, SortOrder } from './src/components/BaseTable.vue'
 
 export { default as EmptyState } from './src/components/EmptyState.vue'
 
 export { default as SkipLink } from './src/components/SkipLink.vue'
+// One language picker for both apps (#18354); endonym labels live with it.
+export { default as LanguageSwitcher } from './src/components/LanguageSwitcher.vue'
+export { LOCALE_ENDONYMS, localeOptions } from './src/utils/locales'
+export type { LocaleOption } from './src/utils/locales'
 
 export { default as BaseModal } from './src/components/BaseModal.vue'
 export type { ModalSize } from './src/components/BaseModal.vue'
+
+export { default as BaseDrawer } from './src/components/BaseDrawer.vue'
+
+export { default as BaseSwitch } from './src/components/BaseSwitch.vue'
+export type { SwitchSize } from './src/components/BaseSwitch.vue'
+
+export { default as BasePagination } from './src/components/BasePagination.vue'
+export type { PaginationLabels } from './src/components/BasePagination.vue'
+
+export { default as BrandMark } from './src/components/BrandMark.vue'
+
+export { default as BaseTooltip } from './src/components/BaseTooltip.vue'
+export type { TooltipPlacement } from './src/components/BaseTooltip.vue'
+
+// Screen-reader announcer (#18240) — promoted from the SLM useAccessibility.
+export { useAnnounce, LIVE_REGION_ID } from './src/composables/useAnnounce'
+export type { AnnouncePriority } from './src/composables/useAnnounce'
 
 // Dialog-a11y composables — the focus-trap / scroll-lock / focus-restore /
 // initial-focus primitives shared by every dialog and modal consumer.
@@ -94,3 +126,23 @@ export type { DurationStyle } from './src/utils/duration'
 // apps' utils/debugUtils.ts re-export these rather than re-declaring them.
 export { log, createLogger } from './src/utils/logger'
 export type { LogLevel } from './src/utils/logger'
+
+// The one exponential-backoff formula for reconnects and retries (#15402).
+export { backoffDelay, RETRY_BACKOFF } from './src/utils/backoff'
+export type { BackoffOptions } from './src/utils/backoff'
+
+export { default as SchedulePicker } from './src/components/SchedulePicker.vue'
+export * from './src/schedule'
+
+// Agent-ledger answers and their section states (#18391) — one reading of the
+// shared response shapes for the Company OS and SLM ledger views.
+export {
+  loadingLedgerSection,
+  ledgerSectionFrom,
+  readLedgerSection,
+  ledgerAskOutcomeFrom,
+  sendLedgerAsk,
+} from './src/utils/ledger'
+export type { LedgerSection, LedgerSectionStatus, LedgerAskOutcome } from './src/utils/ledger'
+export { default as LedgerSectionState } from './src/components/LedgerSectionState.vue'
+export type { LedgerStateLabels } from './src/components/LedgerSectionState.vue'

@@ -156,6 +156,19 @@ function loadThemeVariant(): ThemeVariant {
 }
 
 /**
+ * True when this device holds an explicit variant choice. Account sync uses it
+ * to tell "the user picked Default" from "the user never picked" (#18240): the
+ * account's `default` only overrides a device that has chosen something.
+ */
+export function hasStoredThemeVariant(): boolean {
+  try {
+    return localStorage.getItem(THEME_VARIANT_STORAGE_KEY) !== null
+  } catch {
+    return false
+  }
+}
+
+/**
  * Fetch installed themes and merge their ids into the available variants.
  * Safe to call repeatedly; degrades to built-ins only on failure.
  */

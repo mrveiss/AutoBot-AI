@@ -8,6 +8,7 @@ SLM API Package
 FastAPI routers for the SLM backend.
 """
 
+from .agent_ledger import router as agent_ledger_router
 from .agents import router as agents_router
 from .api_keys import router as api_keys_router
 from .auth import router as auth_router
@@ -31,6 +32,8 @@ from .llm_config import router as llm_config_router
 from .maintenance import router as maintenance_router
 from .mfa import router as mfa_router
 from .monitoring import router as monitoring_router
+from .node_post_sync import router as node_post_sync_router
+from .node_post_sync import runs_router as post_sync_runs_router
 from .nodes import router as nodes_router
 from .nodes_execution import router as nodes_execution_router
 from .npu import router as npu_router
@@ -39,6 +42,7 @@ from .rdp import node_rdp_router, rdp_router
 from .redis_service import router as redis_service_router
 from .scim import router as scim_router
 from .secrets import router as secrets_router
+from .secrets_backup_status import router as secrets_backup_status_router
 from .security import router as security_router
 from .services import fleet_router as fleet_services_router
 from .services import router as services_router
@@ -62,11 +66,25 @@ from .websocket import router as websocket_router
 # api/monitoring.py and main.py are both at their file-size ceilings.
 monitoring_router.include_router(gpu_router)
 
+# #18391: the agent ledger is install-wide monitoring, so it is served as
+# /api/monitoring/agent-ledger/*. Guard = main.py's include-level `_SM` on
+# monitoring_router, plus the router's own admin-only `ADMIN_SYSTEM` dependency
+# on every route. Mounted here because main.py is at its file-size ceiling.
+monitoring_router.include_router(agent_ledger_router)
+
 # #15495: a node's capability profile belongs on the node resource itself, so
 # it is served as /api/nodes/{node_id}/capability-profile, inheriting
 # nodes_router's own include-level auth from main.py. Mounted here rather
 # than added to api/nodes.py because that file is at its file-size ceiling.
 nodes_router.include_router(capability_profile_router)
+
+# #17455: node-level post-sync (POST /api/nodes/{node_id}/sync) and the recorded-run
+# read (GET /api/code-sync/post-sync-runs/{run_id}) are mounted on the routers that
+# carry POST /api/code-sync/roles/{role_name}/sync's include-level auth (main.py:
+# _SM_OR_AGENT on both). Mounted here, not added to api/nodes.py or api/code_sync.py,
+# which sit at their file-size ceilings.
+nodes_router.include_router(node_post_sync_router)
+code_sync_router.include_router(post_sync_runs_router)
 
 __all__ = [
     "agents_router",
@@ -82,6 +100,7 @@ __all__ = [
     "external_agents_router",
     "health_router",
     "llm_config_router",
+    "secrets_backup_status_router",
     "stateful_router",
     "updates_router",
     "websocket_router",

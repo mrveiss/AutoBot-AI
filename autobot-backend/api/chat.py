@@ -31,6 +31,7 @@ import uuid
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from api.chat_streaming import _stream_chat_workflow_messages, _stream_direct_response, principal_scope
 from api.schemas_chat import (
     ChatCapabilitiesData,
     ChatData,
@@ -54,8 +55,8 @@ from api.user_management.dependencies import require_org_context
 from api.websockets import NON_CONVERSATIONAL_WEBSOCKET_MESSAGE_TYPES
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
-from autobot_shared.error_utils import safe_http_detail
-from autobot_shared.time_utils import parse_utc_iso, utc_timestamp
+from autobot_shared.time_utils import utc_timestamp
+from chat_history.deduplication import parse_message_timestamp
 from chat_history.message_schema import llm_role, message_text, message_type
 
 # Import context overflow protection (#9043)
@@ -64,28 +65,30 @@ from chat_workflow.session_work_item import SessionWorkItemService
 from constants.threshold_constants import TimingConstants
 
 # Import dependencies and utilities - Using available dependencies
-from dependencies import get_knowledge_base, provide_config_manager
+from dependencies import provide_config_manager, provide_knowledge_base
 
 # Import shared exception classes (Issue #292 - Eliminate duplicate code)
 from exceptions import get_exceptions_lazy
+from knowledge.chunk_identity import resolve_chunk_id
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 
 # CRITICAL SECURITY FIX: Import session ownership validation
 from security.chat_message_safety import scan_chat_message
 from security.session_ownership import build_owner_metadata, validate_session_ownership
 from services.ai_stack_client import AIStackError, get_ai_stack_client
+from services.llm_service import get_llm_service  # process-wide singleton (#18689)
 from type_defs.common import STREAMING_MESSAGE_TYPES, Metadata
 
 # Import reusable chat utilities - Phase 1 Utility Extraction
 from utils.chat_utils import (
     create_chat_response,
-    create_error_response,
     generate_message_id,
     generate_request_id,
     get_chat_history_manager,
     log_chat_event,
     validate_chat_session_id,
 )
+from utils.response_helpers import create_error_response
 
 # Import models - DISABLED: Models don't exist yet
 # from backend.models.conversation import ConversationModel
@@ -118,14 +121,6 @@ def get_memory_interface(request: Request) -> Any | None:
     return getattr(request.app.state, "memory_interface", None)
 
 
-def get_llm_service(request: Request) -> Any:
-    """Get LLM service from app state, with lazy initialization"""
-    from services.llm_service import LLMService
-    from utils.lazy_singleton import lazy_init_singleton
-
-    return lazy_init_singleton(request.app.state, "llm_service", LLMService)
-
-
 async def get_chat_workflow_manager(request: Request) -> Any:
     """Get ChatWorkflowManager from app state, with async lazy initialization"""
     from chat_workflow import ChatWorkflowManager
@@ -152,26 +147,9 @@ def handle_api_error(error: Exception, request_id: str = "unknown") -> Dict[str,
     return {"error": "An internal error occurred"}
 
 
-def log_request_context(request: Request, endpoint: str, request_id: str) -> None:
-    """Log request context for debugging"""
-    logger.info("[%s] %s - %s %s", request_id, endpoint, request.method, request.url.path)
-
-
 # ====================================================================
 # Message Merge Helpers (Issue #315 - Reduced nesting)
 # ====================================================================
-
-
-def _parse_message_timestamp(msg_ts_str: str) -> datetime | None:
-    """Parse message timestamp from various formats (Issue #315)."""
-    if not isinstance(msg_ts_str, str) or not msg_ts_str:
-        return None
-    try:
-        if "T" in msg_ts_str:
-            return parse_utc_iso(msg_ts_str)
-        return datetime.strptime(msg_ts_str, "%Y-%m-%d %H:%M:%S")
-    except (ValueError, TypeError):
-        return None
 
 
 def _should_start_new_streaming_group(current_ts: datetime, last_streaming_ts: datetime | None) -> bool:
@@ -288,7 +266,7 @@ def _process_streaming_groups(merged: List[Dict]) -> List[Dict]:
     for msg in merged:
         if _is_streaming_response(msg):
             msg_ts_str = msg.get("timestamp", "")
-            current_ts = _parse_message_timestamp(msg_ts_str)
+            current_ts = parse_message_timestamp(msg_ts_str)
 
             if current_ts and _should_start_new_streaming_group(current_ts, last_streaming_ts):
                 if current_group:
@@ -335,6 +313,7 @@ logger.info(
 
 # Include session management router
 from api.chat_sessions import delete_session as _canonical_delete_session
+from api.chat_sessions import log_request_context
 from api.chat_sessions import router as sessions_router
 
 router.include_router(sessions_router)
@@ -666,17 +645,12 @@ def _build_citations_from_kb_results(kb_results: List[Dict[str, Any]]) -> List[C
     citations: List[Citation] = []
     for idx, result in enumerate(kb_results[:5]):
         raw_meta = result.get("metadata") or {}
-        chunk_id = raw_meta.get("chunk_id") or raw_meta.get("id") or f"chunk-{idx}"
+        chunk_id = resolve_chunk_id({"metadata": raw_meta}) or raw_meta.get("id") or f"chunk-{idx}"
         source_path = result.get("source") or raw_meta.get("source_path") or ""
         title = raw_meta.get("title") or (source_path.split("/")[-1] if source_path else f"Source {idx + 1}")
+        score = float(result.get("score") or 0.0)
         citations.append(
-            Citation(
-                id=str(chunk_id),
-                source_type="chunk",
-                title=title,
-                uri=source_path or None,
-                score=float(result.get("score") or 0.0),
-            )
+            Citation(id=str(chunk_id), source_type="chunk", title=title, uri=source_path or None, score=score)
         )
     return citations
 
@@ -1043,7 +1017,7 @@ async def send_message(
     message: ChatMessage = None,
     request: Request = None,
     config=Depends(provide_config_manager),
-    knowledge_base=Depends(get_knowledge_base),
+    knowledge_base=Depends(provide_knowledge_base),
 ):
     """
     Send a chat message and get AI response.
@@ -1066,7 +1040,7 @@ async def send_message(
 
     # Get dependencies from request state
     chat_history_manager = get_chat_history_manager(request)
-    llm_service = get_llm_service(request)
+    llm_service = get_llm_service()
     memory_interface = get_memory_interface(request)
 
     # Issue #3282: Carry author identity for shared-session message attribution
@@ -1148,7 +1122,7 @@ async def stream_message(
 
     # Get dependencies from request state
     chat_history_manager = get_chat_history_manager(request)
-    llm_service, message.content = get_llm_service(request), scan_chat_message(message.content, message.session_id)
+    llm_service, message.content = get_llm_service(), scan_chat_message(message.content, message.session_id)
 
     # Return streaming response
     return await stream_chat_response(message, chat_history_manager, llm_service, request_id)
@@ -1385,9 +1359,9 @@ async def chat_health_check(
     """
     Health check for chat service.
 
-    Note: llm_service is lazily initialized on first chat request, so we report
-    it as 'available' (can be initialized) rather than requiring it to exist.
-    Only chat_history_manager is critical for the health check.
+    llm_service: 'healthy' once startup wired the singleton, 'degraded' when that
+    wiring failed (#18689), 'available' before startup ran. Only
+    chat_history_manager is critical for the health check.
 
     Issue #744: Requires authenticated user.
     """
@@ -1397,8 +1371,8 @@ async def chat_health_check(
     # chat_history_manager is critical - must be present
     chat_history_status = "healthy" if chat_history_manager else "unavailable"
 
-    # llm_service is lazily initialized - report as "available" if not yet created
-    llm_status = "healthy" if llm_service else "available"
+    wiring_failed = getattr(request.app.state, "llm_service_error", None)  # startup wiring, #18689
+    llm_status = "healthy" if llm_service else "degraded" if wiring_failed else "available"
 
     health_status = {
         "status": "healthy",
@@ -1497,38 +1471,6 @@ def _validate_chat_services(chat_history_manager, chat_workflow_manager) -> None
         )
 
 
-async def _stream_chat_workflow_messages(
-    chat_workflow_manager,
-    chat_id: str,
-    message: str,
-    context: dict,
-    request_id: str,
-    auth_role: str | None = None,
-):
-    """Stream chat workflow messages as SSE events (Issue #398: extracted)."""
-    try:
-        logger.debug("[%s] Starting stream for chat_id=%s", request_id, chat_id)
-        evt = {"type": "start", "session_id": chat_id, "request_id": request_id}
-        yield f"data: {json.dumps(evt)}\n\n"
-
-        logger.debug("[%s] Processing message: %s...", request_id, message[:50])
-        message_count = 0
-        async for msg in chat_workflow_manager.process_message_stream(
-            session_id=chat_id, message=message, context=context, auth_role=auth_role
-        ):
-            message_count += 1
-            msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
-            yield f"data: {json.dumps(msg_data)}\n\n"
-
-        logger.info("[%s] Stream complete: %d messages", request_id, message_count)
-        yield f"data: {json.dumps({'type': 'end', 'request_id': request_id})}\n\n"
-
-    except Exception as e:
-        logger.error("[%s] Streaming error: %s", request_id, e, exc_info=True)
-        evt = {"type": "error", "content": safe_http_detail(e, "stream_error"), "request_id": request_id}
-        yield f"data: {json.dumps(evt)}\n\n"
-
-
 def _create_streaming_response(generator):
     """Create a StreamingResponse with SSE headers (Issue #398: extracted)."""
     return StreamingResponse(
@@ -1540,40 +1482,6 @@ def _create_streaming_response(generator):
             "X-Accel-Buffering": "no",
         },
     )
-
-
-async def _stream_direct_response(
-    chat_workflow_manager,
-    chat_id: str,
-    message: str,
-    remember_choice: bool,
-    request_id: str,
-    auth_role: str | None = None,
-):
-    """Stream direct response for approvals/denials (Issue #398: extracted)."""
-    try:
-        start_evt = {"type": "start", "session_id": chat_id, "request_id": request_id}
-        yield f"data: {json.dumps(start_evt)}\n\n"
-
-        async for msg in chat_workflow_manager.process_message_stream(
-            session_id=chat_id,
-            message=message,
-            context={"remember_choice": remember_choice},
-            auth_role=auth_role,
-        ):
-            msg_data = msg.to_dict() if hasattr(msg, "to_dict") else msg
-            yield f"data: {json.dumps(msg_data)}\n\n"
-
-        yield f"data: {json.dumps({'type': 'end', 'request_id': request_id})}\n\n"
-
-    except Exception as e:
-        logger.error("[%s] Direct response streaming error: %s", request_id, e, exc_info=True)
-        error_data = {
-            "type": "error",
-            "content": "Error processing command approval",
-            "request_id": request_id,
-        }
-        yield f"data: {json.dumps(error_data)}\n\n"
 
 
 def _validate_workflow_manager(chat_workflow_manager) -> None:
@@ -1658,6 +1566,7 @@ async def send_chat_message_by_id(
             # request_data — `context` above is the caller's own bag and is
             # explicitly not trusted for this.
             auth_role=(current_user or {}).get("role"),
+            auth_scope=principal_scope(current_user),  # #18430: the AI lines' scope, server-verified
         )
     )
 
@@ -1995,6 +1904,7 @@ async def send_direct_chat_response(
             request_id,
             # #13821: server-side identity, same as the message endpoint.
             auth_role=(current_user or {}).get("role"),
+            auth_scope=principal_scope(current_user),
         )
     )
 
@@ -2435,7 +2345,7 @@ async def chat_ai_stack(
     request: Request = None,
     preferences: ChatPreferences | None = None,
     config=Depends(provide_config_manager),
-    knowledge_base=Depends(get_knowledge_base),
+    knowledge_base=Depends(provide_knowledge_base),
 ):
     """
     AI Stack chat endpoint with knowledge base integration.
@@ -2665,13 +2575,13 @@ async def translate_text(
     return JSONResponse(content=result, media_type="application/json; charset=utf-8")
 
 
-@router.post("/detect-language", response_model=DetectLanguageData)
+@router.post("/detect-language", response_model=DetectLanguageData, name="detect_language")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="detect_language",
     error_code_prefix="TRANSLATE",
 )
-async def detect_language(
+async def detect_text_language(
     body: DetectLanguageRequest,
     current_user: dict = Depends(get_current_user),
 ):
@@ -2742,7 +2652,7 @@ Conversation:
 Summary:"""
 
     # Get LLM service and generate summary
-    llm_service = get_llm_service(request)
+    llm_service = get_llm_service()
 
     try:
         summary_response = await llm_service.generate_response(

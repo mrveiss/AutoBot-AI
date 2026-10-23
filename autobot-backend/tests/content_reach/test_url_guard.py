@@ -9,7 +9,7 @@ Structure:
   2. ensure_robots_allowed direct unit tests
   3. TrafilaturaBackend SSRF block (no underlying fetch)
   4. JinaReaderBackend SSRF block
-  5. BrowserBackend SSRF block
+  5. BrowserContentBackend SSRF block
   6. RedditJsonBackend url-mode SSRF block
   7. YtDlpCaptionBackend: SSRF on request.url + caption_url
   8. BrowserSearchBackend SSRF on built DDG url
@@ -228,15 +228,15 @@ async def test_jina_reader_ssrf_block_no_fetch(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# 5. BrowserBackend — SSRF block
+# 5. BrowserContentBackend — SSRF block
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_browser_backend_ssrf_block_no_manager_call(monkeypatch, stub_browser_manager):
-    """BrowserBackend.fetch raises BackendError on private URL and never calls manager."""
+    """BrowserContentBackend.fetch raises BackendError on private URL and never calls manager."""
     import content_reach._url_guard as guard_mod
-    from content_reach.backends.browser import BrowserBackend
+    from content_reach.backends.browser import BrowserContentBackend
     from content_reach.base import BackendError, ContentRequest
     from source_attribution import SourceKind
 
@@ -254,7 +254,7 @@ async def test_browser_backend_ssrf_block_no_manager_call(monkeypatch, stub_brow
 
     stub_browser_manager(_StubManager())
 
-    backend = BrowserBackend(source_type=SourceKind.WEB_PAGE)
+    backend = BrowserContentBackend(source_type=SourceKind.WEB_PAGE)
     request = ContentRequest(url="http://192.168.1.1/internal")
 
     with pytest.raises(BackendError):

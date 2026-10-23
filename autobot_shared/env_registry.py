@@ -61,27 +61,30 @@ def env(name: str, default: Any = None) -> Any:
 # ---------------------------------------------------------------------------
 # Registered variables — grouped by component
 # ---------------------------------------------------------------------------
-
-# Split into per-component sibling modules as this file reaches its
-# grandfathered file-size ceiling (#14236) with no slack left inline: ai
-# (#14856), terminal/testing (#14961), slm (#15620), and agent_runtime /
-# backend_services (#15710, the os.environ.get sweep the registry checker
-# had never seen either). Importing each here -- after
-# EnvVarSpec/register_env_var/REGISTRY are defined above, and before
-# anything below can observe the registry -- is a side effect that fully
-# populates that module's entries; see each sibling's own docstring for why
-# its variables live there instead of inline.
+# Per-component siblings split off at the size ceiling (#14236; ledger #18391). Imported after
+# REGISTRY/register_env_var exist and before anything below reads the registry.
 
 from autobot_shared import env_registry_agent_runtime  # noqa: E402,F401
 from autobot_shared import env_registry_ai  # noqa: E402,F401
 from autobot_shared import env_registry_backend  # noqa: E402,F401
 from autobot_shared import env_registry_backend_services  # noqa: E402,F401
+from autobot_shared import env_registry_knowledge  # noqa: E402,F401
 from autobot_shared import env_registry_llc  # noqa: E402,F401
 from autobot_shared import env_registry_logging  # noqa: E402,F401
+from autobot_shared import env_registry_memory  # noqa: E402,F401
+from autobot_shared import env_registry_npu  # noqa: E402,F401
 from autobot_shared import env_registry_security  # noqa: E402,F401
 from autobot_shared import env_registry_slm  # noqa: E402,F401
-from autobot_shared import env_registry_terminal  # noqa: E402,F401
-from autobot_shared import env_registry_testing  # noqa: E402,F401
+from autobot_shared import env_registry_tls  # noqa: E402,F401
+from autobot_shared import (  # noqa: E402,F401
+    env_registry_analytics,
+    env_registry_batch,
+    env_registry_gateway,
+    env_registry_ledger,
+    env_registry_rag,
+    env_registry_terminal,
+    env_registry_testing,
+)
 
 # --- events (#14817, #14818) -------------------------------------------------
 
@@ -190,7 +193,7 @@ register_env_var(
         name="AUTOBOT_DEPLOYMENT_MODE",
         type=str,
         default="distributed",
-        description="Deployment topology: 'distributed' or 'standalone'.",
+        description="Topology. Unset: the backend assumes 'distributed'; deploy scripts detect it from /.dockerenv.",
         component="system",
     )
 )
@@ -496,62 +499,9 @@ register_env_var(
     )
 )
 
-# --- tls --------------------------------------------------------------------
+# --- tls: env_registry_tls.py ------------------------------------------
 
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_TLS_CA_PATH",
-        type=str,
-        default=None,
-        description="Path to the CA certificate file for TLS verification.",
-        component="tls",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_TLS_CERT_DIR",
-        type=str,
-        default="/etc/autobot/certs",
-        description="Directory containing TLS certificate and key files.",
-        component="tls",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_TLS_CERT_PATH",
-        type=str,
-        default=None,
-        description="Path to the TLS client/server certificate file.",
-        component="tls",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_TLS_KEY_PATH",
-        type=str,
-        default=None,
-        description="Path to the TLS private key file.",
-        component="tls",
-    )
-)
-
-# --- network ----------------------------------------------------------------
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_TRUSTED_PROXIES",
-        type=str,
-        default="",
-        description=(
-            "Comma-separated list of trusted reverse-proxy IP addresses or CIDR ranges "
-            "for X-Forwarded-For header trust."
-        ),
-        component="network",
-    )
-)
+# --- network: env_registry_tls.py (#18765, to make room for a sibling import) ---
 
 # --- voice / speech-to-text -------------------------------------------------
 
@@ -725,47 +675,7 @@ register_env_var(
     )
 )
 
-# --- gateway connectors (#14223) ---------------------------------------------
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_IMESSAGE_ENABLED",
-        type=bool,
-        default=False,
-        description=(
-            "Opt in to the iMessage gateway adapter. Off by default: it is "
-            "macOS-only and needs Full Disk Access to the Messages database."
-        ),
-        component="gateway",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_SIGNAL_ENABLED",
-        type=bool,
-        default=False,
-        description=(
-            "Opt in to the Signal gateway adapter. Off by default: it needs a "
-            "running signal-cli daemon and a registered number."
-        ),
-        component="gateway",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_MATRIX_E2EE",
-        type=bool,
-        default=False,
-        description=(
-            "Opt in to end-to-end encryption for the Matrix adapter. Off by "
-            "default because E2EE needs the optional olm dependency and a "
-            "persisted device store."
-        ),
-        component="gateway",
-    )
-)
+# --- gateway connectors: env_registry_gateway.py (#19010) ---
 
 # --- execution sandbox and snapshots (#14223) --------------------------------
 

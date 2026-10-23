@@ -6,6 +6,7 @@
  */
 
 import { createLogger } from '@/utils/debugUtils';
+import { fetchWithAuth } from '@/utils/fetchWithAuth';
 
 // Create scoped logger for ApiEndpointMapper
 const logger = createLogger('ApiEndpointMapper');
@@ -44,7 +45,7 @@ class ApiEndpointMapper {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), timeout)
 
-      const response = await fetch(url, {
+      const response = await fetchWithAuth(url, {
         ...fetchOptions,
         signal: controller.signal
       })

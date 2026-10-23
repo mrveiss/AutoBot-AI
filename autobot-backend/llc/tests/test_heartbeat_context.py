@@ -263,7 +263,7 @@ async def test_build_fat_rag_failure_graceful(builder: HeartbeatContextBuilder) 
         company_id="co1",
     )
 
-    assert result["company_context"] == {"chunks": [], "sources": []}
+    assert result["company_context"] == {"chunks": [], "sources": [], "document_sources": []}
 
 
 @pytest.mark.asyncio

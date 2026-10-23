@@ -9,22 +9,22 @@ Issue #7371: each repair is a discrete idempotent function with a unit test.
 
 from autobot_shared.paths import project_root
 from cli.doctor import (
-    CheckResult,
+    DoctorCheckResult,
     check_env_file,
     check_redis_schemas,
-    run_doctor,
+    run_environment_doctor,
 )
 
 
 def test_check_result_ok():
-    r = CheckResult(name="test", ok=True, message="OK")
+    r = DoctorCheckResult(name="test", ok=True, message="OK")
     assert r.ok
     assert not r.fixable
 
 
 def test_check_result_fixable():
     fixed = []
-    r = CheckResult(name="test", ok=False, message="broken", fixable=True, fix=lambda: fixed.append(1))
+    r = DoctorCheckResult(name="test", ok=False, message="broken", fixable=True, fix=lambda: fixed.append(1))
     assert r.fixable
     r.fix()
     assert fixed == [1]
@@ -102,10 +102,10 @@ def test_check_env_file_missing_var(tmp_path):
 
 def test_run_doctor_all_pass(capsys, monkeypatch):
     def fake_check():
-        return CheckResult(name="fake", ok=True, message="fake: OK")
+        return DoctorCheckResult(name="fake", ok=True, message="fake: OK")
 
     monkeypatch.setattr("cli.doctor.ALL_CHECKS", [fake_check])
-    rc = run_doctor(fix=False)
+    rc = run_environment_doctor(fix=False)
     assert rc == 0
     out = capsys.readouterr().out
     assert "All checks passed" in out
@@ -113,10 +113,10 @@ def test_run_doctor_all_pass(capsys, monkeypatch):
 
 def test_run_doctor_failure_no_fix(capsys, monkeypatch):
     def fake_check():
-        return CheckResult(name="fake", ok=False, message="fake: broken", fixable=False)
+        return DoctorCheckResult(name="fake", ok=False, message="fake: broken", fixable=False)
 
     monkeypatch.setattr("cli.doctor.ALL_CHECKS", [fake_check])
-    rc = run_doctor(fix=False)
+    rc = run_environment_doctor(fix=False)
     assert rc == 1
 
 
@@ -124,7 +124,7 @@ def test_run_doctor_fix_fixable(capsys, monkeypatch):
     fixed = []
 
     def fake_check():
-        return CheckResult(
+        return DoctorCheckResult(
             name="fake",
             ok=False,
             message="broken",
@@ -133,7 +133,7 @@ def test_run_doctor_fix_fixable(capsys, monkeypatch):
         )
 
     monkeypatch.setattr("cli.doctor.ALL_CHECKS", [fake_check])
-    rc = run_doctor(fix=True)
+    rc = run_environment_doctor(fix=True)
     assert fixed == [1]
     assert rc == 0
 
@@ -142,10 +142,10 @@ def test_run_doctor_fix_manual_items_return_1(capsys, monkeypatch):
     """--fix should still return 1 when non-fixable failures remain."""
 
     def fake_check():
-        return CheckResult(name="manual", ok=False, message="manual fix needed", fixable=False)
+        return DoctorCheckResult(name="manual", ok=False, message="manual fix needed", fixable=False)
 
     monkeypatch.setattr("cli.doctor.ALL_CHECKS", [fake_check])
-    rc = run_doctor(fix=True)
+    rc = run_environment_doctor(fix=True)
     assert rc == 1
 
 
@@ -164,3 +164,70 @@ def test_check_redis_schemas_import_error(monkeypatch):
     result = check_redis_schemas()
     assert not result.ok
     assert "Redis unreachable" in result.message
+
+
+def _captured_npu_url(monkeypatch):
+    """Run check_npu_worker_registry with urlopen stubbed; return the URL it probed."""
+    import urllib.request
+
+    from cli.doctor import check_npu_worker_registry
+
+    seen = []
+
+    def _fake_urlopen(url, timeout=None):
+        seen.append(url)
+        raise OSError("stubbed")
+
+    monkeypatch.setattr(urllib.request, "urlopen", _fake_urlopen)
+    check_npu_worker_registry()
+    return seen[0]
+
+
+def test_npu_doctor_default_port_is_the_ssot_value(monkeypatch):
+    """#18094: the default was a literal 8080 while the worker serves the ssot port."""
+    from autobot_shared.ssot_config import config as ssot_config
+
+    monkeypatch.delenv("NPU_WORKER_PORT", raising=False)
+    monkeypatch.delenv("AUTOBOT_NPU_WORKER_PORT", raising=False)
+
+    assert _captured_npu_url(monkeypatch).endswith(f":{ssot_config.port.npu}/health")
+
+
+def test_npu_doctor_still_honours_legacy_port_env(monkeypatch):
+    monkeypatch.delenv("AUTOBOT_NPU_WORKER_PORT", raising=False)
+    monkeypatch.setenv("NPU_WORKER_PORT", "9123")
+
+    assert _captured_npu_url(monkeypatch).endswith(":9123/health")
+
+
+def test_npu_doctor_maps_a_wildcard_legacy_host_to_loopback(monkeypatch):
+    """#18094: NPU_WORKER_HOST=0.0.0.0 is the worker's bind address, not dialable."""
+    monkeypatch.delenv("AUTOBOT_NPU_WORKER_HOST", raising=False)
+    monkeypatch.setenv("NPU_WORKER_HOST", "0.0.0.0")
+
+    assert _captured_npu_url(monkeypatch).startswith("http://127.0.0.1:")
+
+
+def test_npu_doctor_still_honours_a_legacy_connect_host(monkeypatch):
+    monkeypatch.delenv("AUTOBOT_NPU_WORKER_HOST", raising=False)
+    monkeypatch.setenv("NPU_WORKER_HOST", "npu-box.internal")
+
+    assert _captured_npu_url(monkeypatch).startswith("http://npu-box.internal:")
+
+
+def test_npu_doctor_ssot_host_wins_over_the_legacy_name(monkeypatch):
+    from autobot_shared.ssot_config import config as ssot_config
+
+    monkeypatch.setenv("AUTOBOT_NPU_WORKER_HOST", "ignored-by-the-cached-singleton")
+    monkeypatch.setenv("NPU_WORKER_HOST", "npu-box.internal")
+
+    assert _captured_npu_url(monkeypatch).startswith(f"http://{ssot_config.vm.npu}:")
+
+
+def test_npu_doctor_default_host_is_the_ssot_value(monkeypatch):
+    from autobot_shared.ssot_config import config as ssot_config
+
+    monkeypatch.delenv("AUTOBOT_NPU_WORKER_HOST", raising=False)
+    monkeypatch.delenv("NPU_WORKER_HOST", raising=False)
+
+    assert _captured_npu_url(monkeypatch).startswith(f"http://{ssot_config.vm.npu}:")

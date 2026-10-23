@@ -31,13 +31,11 @@ absent one.
 
 from __future__ import annotations
 
-import argparse
 import json
 import logging
-import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Set, Tuple
 
 # `pipeline-scripts` is not an importable package name, so the sibling module is
 # reached by path -- the idiom ci_red_cause.py documents. The HTTP client is
@@ -46,9 +44,9 @@ from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "pipeline-scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from ci_dispatch_watchdog import GitHubApi  # noqa: E402
-
 from child_ref import blockers, child_ref  # noqa: E402
+from ci_dispatch_watchdog import GitHubApi  # noqa: E402
+from drift_cli import base_parser, configure_cli_logging, resolve_credentials  # noqa: E402
 
 # Plain stdlib logging, deliberately (#1082): this runs as a bare script, where
 # autobot_shared.logging_manager would pull in config a CLI does not have.
@@ -227,9 +225,7 @@ def apply(api: GitHubApi, umbrellas: Sequence[int], manifest: Manifest) -> List[
     return done
 
 
-def reconcile(
-    api: GitHubApi, umbrellas: Sequence[int], manifest: Manifest, remove: bool
-) -> List[str]:
+def reconcile(api: GitHubApi, umbrellas: Sequence[int], manifest: Manifest, remove: bool) -> List[str]:
     """Diff live state against the checklists in both directions.
 
     Deletion is gated on provenance: an edge absent from the manifest was made
@@ -245,9 +241,7 @@ def reconcile(
         claimed, _ = claimed_edges(issue.get("body") or "")
         for child in sorted(set(sub_issues(api, number)) - set(claimed)):
             if not manifest.created_child(number, child):
-                lines.append(
-                    f"#{number} -> #{child}  KEPT (not in manifest -- made by hand)"
-                )
+                lines.append(f"#{number} -> #{child}  KEPT (not in manifest -- made by hand)")
                 continue
             if not remove:
                 lines.append(f"#{number} -> #{child}  would remove (manifest-owned)")
@@ -276,9 +270,8 @@ def _umbrella_numbers(api: GitHubApi, explicit: Sequence[int]) -> List[int]:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = base_parser(__doc__, with_json=False)
     parser.add_argument("mode", choices=("plan", "apply", "reconcile"))
-    parser.add_argument("--repo", default=os.environ.get("GITHUB_REPOSITORY", ""))
     parser.add_argument("--issue", type=int, action="append", default=[])
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument(
@@ -287,11 +280,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         help="reconcile only: actually delete manifest-owned edges the checklist dropped",
     )
     args = parser.parse_args(argv)
-    logging.basicConfig(level=logging.INFO, format="%(message)s", stream=sys.stderr)
+    configure_cli_logging()
 
-    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or ""
-    if not token or not args.repo:
-        logger.error("GH_TOKEN and --repo (or GITHUB_REPOSITORY) are required")
+    token = resolve_credentials(args.repo)
+    if token is None:
         return 2
 
     api = GitHubApi(token=token, repository=args.repo)

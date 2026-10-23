@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 /**
  * FileBrowserTool - File Browser Interface
  *
@@ -239,9 +240,7 @@ onMounted(() => {
         </div>
 
         <!-- Error Message -->
-        <div v-if="error" class="m-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-          {{ error }}
-        </div>
+        <BaseAlert v-if="error" variant="error" class="m-4" :message="error" />
 
         <!-- Loading -->
         <div v-if="loading && !files.length" class="flex-1 flex items-center justify-center">

@@ -17,6 +17,7 @@ import time
 from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_llm_logger
+from knowledge.search_filters import KbPrincipal, filter_for_principal, require_kb_principal
 
 from .doc_searcher import DocumentationSearcher
 
@@ -76,14 +77,18 @@ class DocumentationRetrievalMixin:
             logger.warning("[Doc Search] Failed: %s", e)
             return ""
 
-    def _retrieve_raw_doc_results(
-        self, query: str, n_results: int = 3, score_threshold: float = 0.3
+    async def _retrieve_raw_doc_results(
+        self, query: str, n_results: int = 3, score_threshold: float = 0.3, *, principal: KbPrincipal
     ) -> List[Dict[str, Any]]:
         """Return raw doc-search results without pre-formatting (#10658).
+
+        Issue #18944: only the chunks *principal* may read, through ``filter_for_principal``. Doc chunks
+        carry the platform-docs grant, so any signed-in user keeps them. Needs ``self.rag_service``.
 
         Used by ``conversation_aware_retrieve`` to build [Source N] labels that
         continue from the KB citation count, keeping citation indices contiguous.
         """
+        principal = require_kb_principal(principal)
         if not self.doc_searcher:
             return []
         try:
@@ -94,6 +99,7 @@ class DocumentationRetrievalMixin:
                 n_results=n_results,
                 score_threshold=score_threshold,
             )
+            results = await filter_for_principal(results, principal, self.rag_service._ownership_manager())
             if results:
                 logger.info(
                     "[Doc Search] Retrieved %d raw documentation chunks for: '%s...'",
@@ -104,6 +110,37 @@ class DocumentationRetrievalMixin:
         except Exception as e:
             logger.warning("[Doc Search] Raw retrieval failed: %s", e)
             return []
+
+    @staticmethod
+    def _label_doc_sources(doc_results: List[Dict[str, Any]], citations: List[Dict]) -> str:
+        """Label raw doc chunks ``[Source N]``, continuing the KB numbering; append their citations.
+
+        Issue #1261, #10658: the citation indices stay contiguous so the frontend can resolve
+        them. Returns the "AUTOBOT DOCUMENTATION CONTEXT" block. A move out of
+        ``conversation_aware_retrieve`` (to keep service.py under its ceiling), not a behaviour change.
+        """
+        kb_count = len(citations)
+        doc_lines: List[str] = []
+        for offset, result in enumerate(doc_results, 1):
+            source_n = kb_count + offset
+            content = result.get("content", "").strip()
+            doc_lines.append(f"[Source {source_n}] {content}")
+            citations.append(
+                {
+                    "id": f"doc_{offset}",
+                    "content": content,
+                    "score": result.get("score", 0.0),
+                    "source": result.get("file_path", ""),
+                    "title": result.get("section", ""),
+                    "rank": source_n,
+                    "metadata": {
+                        "doc_type": result.get("doc_type", "documentation"),
+                        "section": result.get("section", ""),
+                        "subsection": result.get("subsection", ""),
+                    },
+                }
+            )
+        return "AUTOBOT DOCUMENTATION CONTEXT:\n" + "\n".join(doc_lines)
 
     def _search_and_format_documentation(
         self,

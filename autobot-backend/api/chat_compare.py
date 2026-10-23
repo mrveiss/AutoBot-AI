@@ -28,6 +28,7 @@ from api.schemas_chat import CompareRequest
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from llm_shared.provider_degradation import AllCredentialsNeedReauthError
 from llm_shared.types import LLMType
 
 logger = get_logger(__name__)
@@ -91,10 +92,14 @@ async def _stream_single_model(
             model_name=model_name or None,
             stream=True,
         )
-        provider = await registry.get_provider_for_request(
-            provider_name=provider_name or None,
-            request=llm_request,
-        )
+        try:
+            provider = await registry.get_provider_for_request(
+                provider_name=provider_name or None,
+                request=llm_request,
+            )
+        except AllCredentialsNeedReauthError as exc:
+            yield _sse({"model": model_spec, "error": str(exc), "done": True})
+            return
         if provider is None:
             yield _sse(
                 {

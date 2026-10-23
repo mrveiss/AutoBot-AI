@@ -24,7 +24,7 @@ from pathlib import Path
 
 import pytest
 
-from constants.threshold_constants import CategoryDefaults
+from autobot_shared.ssot_constants import CategoryDefaults
 
 _MODULE_PATH = Path(__file__).parent / "start_monitoring.py"
 

@@ -68,7 +68,7 @@ from api.schemas_chat import (
     TerminalCleanupResult,
     TranscriptCleanupResult,
 )
-from api.schemas_chat_rows import SessionListData, SessionMessage, SessionMessagesData, SessionSummary
+from api.schemas_chat_rows import ChatSessionSummary, SessionListData, SessionMessage, SessionMessagesData
 from knowledge.schemas.entries import KnowledgeEntriesResponse
 from knowledge.schemas.entries import KnowledgeEntry as BackendKnowledgeEntry
 from knowledge.schemas.ingestion import AddTextResponse
@@ -103,7 +103,7 @@ CONTRACT: tuple[Pair, ...] = (
     Pair(sdk.SessionMessages, SessionMessagesData, "GET /chat/sessions/{id}"),
     # #15138: both rows are now described by a model instead of List[Any], so
     # they move out of UNPAIRED and are compared like every other pair.
-    Pair(sdk.Session, SessionSummary, "GET /chat/sessions[].sessions"),
+    Pair(sdk.Session, ChatSessionSummary, "GET /chat/sessions[].sessions"),
     Pair(sdk.ChatMessage, SessionMessage, "GET /chat/sessions/{id}[].messages"),
     Pair(sdk.SessionCreate, SessionCreateData, "POST /chat/sessions"),
     Pair(sdk.SessionUpdate, SessionUpdateData, "PUT /chat/sessions/{id}"),

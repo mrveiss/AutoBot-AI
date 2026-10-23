@@ -12,10 +12,14 @@ Route group: /llc/secrets/{company_id}
 
 Access control: the caller must present a valid authenticated session whose
 tenant (`TenantContext.org_id`) matches the {company_id} path parameter
-(GH#12147); platform admins are exempt. Values are NEVER returned in list
-responses.
+(GH#12147); platform admins are exempt. Listing names is open to any member of
+the company; setting, reading a value and revoking need an owner or admin
+membership of that company (``llc.services.authz.require_company_admin``),
+since a plain member could otherwise read, overwrite or revoke every company
+secret. Values are NEVER returned in list responses.
 """
 
+import uuid
 from datetime import datetime
 from typing import List, Optional
 
@@ -26,9 +30,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from llc.models.secret import LLCSecret
+from llc.services.authz import NotAuthorisedError, require_company_admin
 from llc.services.secret import SecretNotFound, SecretService
 from user_management.database import get_async_session
 from user_management.services import TenantContext
+
+from ._common import actor_id
 
 router = APIRouter(prefix="/secrets", tags=["llc-secrets"])
 
@@ -95,6 +102,27 @@ def _check_company_access(
     return company_id
 
 
+async def _require_secret_admin(
+    company_id: str = Depends(_check_company_access),
+    current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+    session: AsyncSession = Depends(get_async_session),
+) -> str:
+    """Owner or admin of this company, or a platform admin; else 403.
+
+    A tenant match alone let any member read, overwrite or revoke every company
+    secret. The membership check is the company-wide gate (``require_company_admin``),
+    with the actor taken from the session, never from the request.
+    """
+    if ctx.is_platform_admin:
+        return company_id
+    try:
+        await require_company_admin(session, uuid.UUID(str(company_id)), actor_id(current_user))
+    except NotAuthorisedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Company owner or admin required") from exc
+    return company_id
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
@@ -118,7 +146,7 @@ async def list_secrets(
 )
 async def set_secret(
     body: SecretSetRequest,
-    company_id: str = Depends(_check_company_access),
+    company_id: str = Depends(_require_secret_admin),
     session: AsyncSession = Depends(get_async_session),
     svc: SecretService = Depends(_get_service),
 ) -> SecretSetResponse:
@@ -141,7 +169,7 @@ async def set_secret(
 @router.get("/{company_id}/{name}", response_model=SecretValueResponse)
 async def get_secret(
     name: str,
-    company_id: str = Depends(_check_company_access),
+    company_id: str = Depends(_require_secret_admin),
     session: AsyncSession = Depends(get_async_session),
     svc: SecretService = Depends(_get_service),
 ) -> SecretValueResponse:
@@ -165,7 +193,7 @@ async def get_secret(
 async def revoke_secret(
     name: str,
     actor: str,
-    company_id: str = Depends(_check_company_access),
+    company_id: str = Depends(_require_secret_admin),
     session: AsyncSession = Depends(get_async_session),
     svc: SecretService = Depends(_get_service),
 ) -> None:

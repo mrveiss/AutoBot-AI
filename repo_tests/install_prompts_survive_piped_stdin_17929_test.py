@@ -159,16 +159,27 @@ def test_the_uninstall_confirmation_fails_CLOSED_not_open() -> None:
     it continues. A missing terminal at the uninstall confirmation would cost an
     unconfirmed destructive wipe, so it refuses. Pinned because the obvious
     tidying -- making both branches behave "consistently" -- turns the second
-    into a silent `rm` of every service, database and directory the banner lists.
-    """
-    source = _source()
-    start = source.index("Type 'UNINSTALL' to confirm")
-    block = source[start : start + 900]
+    into a silent `rm` of every service, database and directory the plan lists.
 
-    assert "prompt_from_tty confirmation" in block, "the confirmation must read the tty, not stdin"
-    assert "exit 1" in block, (
-        "a missing terminal here must ABORT. Falling through would run an uninstall nobody "
-        "confirmed; today's `set -e` abort is accidentally fail-safe and this keeps that "
-        "outcome deliberately."
+    Since #18653 the confirmation lives in scripts/uninstall.sh. This runs its real
+    `confirm()` with no controlling terminal and asserts the refusal, rather than
+    reading the text.
+    """
+    source = (repo_root() / "scripts" / "uninstall.sh").read_text(encoding="utf-8")
+    match = re.search(r"^confirm\(\) \{.*?^\}", source, re.S | re.M)
+    assert match, "confirm() not found in scripts/uninstall.sh"
+    script = (
+        "set -euo pipefail\n"
+        "LOG_FILE=$(mktemp)\n"
+        'log() { echo "$*"; }\n'
+        "CONFIRM_YES=false\n"
+        f"{match.group(0)}\n"
+        "confirm\n"
+        'echo "PROCEEDED"\n'
     )
-    assert "--yes" in block, "refusing without naming the non-interactive flag strands the operator"
+    done = subprocess.run(
+        ["setsid", "bash", "-c", script], stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=30
+    )
+    assert done.returncode == 1, f"a missing terminal must ABORT the uninstall: rc={done.returncode} {done.stdout!r}"
+    assert "PROCEEDED" not in done.stdout, "the uninstall went ahead with nobody confirming it"
+    assert "--yes" in done.stdout, "refusing without naming the non-interactive flag strands the operator"

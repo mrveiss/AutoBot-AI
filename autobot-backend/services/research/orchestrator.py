@@ -8,7 +8,7 @@ Composes existing modules (never recreates them, design §6):
   * ``services.research.router`` — topic-based source routing over the
     shared ``agent_loop.search.registry`` (#12625)
   * ``web_fetch.WebFetcher`` — fast-HTTP page fetch
-  * ``knowledge_base_factory.get_knowledge_base`` — the canonical KB facade
+  * ``knowledge_base_factory.get_knowledge_base_or_none`` — the canonical KB facade
   * ``services.research.extractor`` / ``synthesizer`` — the two new LLM steps
   * ``services.research.planner`` — sub-question decomposition, pruning,
     skip-known filtering (#12624)
@@ -31,7 +31,7 @@ from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
-from knowledge_base_factory import get_knowledge_base
+from knowledge_base_factory import get_knowledge_base_or_none
 from services.claim_verifier import ClaimVerifier, CorroborationResult
 from services.knowledge_grounding_models import KBSource
 from services.llm_service import get_llm_service
@@ -326,7 +326,7 @@ class ResearchOrchestrator:
     async def research(self, question: str, options: dict | None = None) -> ResearchResponse:
         """Run the bounded planner-driven pipeline and return the full #12622 contract."""
         budget = _resolve_budget(options or {})
-        kb = await get_knowledge_base()
+        kb = await get_knowledge_base_or_none()
         if kb is None:
             return ResearchResponse(answer="Knowledge base unavailable; cannot perform research.", confidence=0.0)
 

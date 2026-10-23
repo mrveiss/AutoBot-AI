@@ -25,7 +25,10 @@ if _REPO_ROOT not in sys.path:
 # declared here because the rootdir conftest is the only legal home, and it is
 # the one file that runs before every local pytest invocation, including the
 # bare `pytest` runs that never touch scripts/pr-preflight.sh.
+# Empty HuggingFace cache per session (#16994): first, so it is set before any
+# plugin or test module imports huggingface_hub.
 pytest_plugins = [
+    "repo_tests.hermetic_model_cache",
     "repo_tests.sys_modules_leak_guard",
     "repo_tests.dependency_floor_banner",
 ]

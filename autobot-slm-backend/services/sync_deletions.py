@@ -55,7 +55,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from services.deploy_artifacts import ARTIFACT_DIR_SUFFIXES, ARTIFACT_DIRS
-from services.git_subprocess import ShallowCheck, component_pathspec, is_shallow_repository, run_git
+from services.git_subprocess import ShallowCheck, component_pathspec, is_shallow_repository, run_git_capture
 from services.host_state_filter import kept_reason
 
 # Plain stdlib logging, deliberately -- see services/git_subprocess.py's
@@ -90,7 +90,7 @@ async def _commit_known(repo_root: str, commit: str) -> bool:
     tree" failure a `git diff`/`git log` against an unknown commit would
     otherwise surface as an indistinguishable, permanent planner error.
     """
-    _output, rc = await run_git(repo_root, "cat-file", "-e", f"{commit}^{{commit}}")
+    _output, rc = await run_git_capture(repo_root, "cat-file", "-e", f"{commit}^{{commit}}")
     return rc == 0
 
 
@@ -166,7 +166,7 @@ async def compute_deletion_plan(source_dir: str, repo_root: str, previous_commit
         return DeletionPlan(bootstrap_required=True)
 
     pathspec = component_pathspec(repo_root, source_dir)
-    diff_output, rc = await run_git(
+    diff_output, rc = await run_git_capture(
         repo_root, "diff", "-M", "--name-status", "--diff-filter=DR", f"{previous_commit}..{new_commit}", "--", pathspec
     )
     if rc != 0:
@@ -184,7 +184,7 @@ def _strip_prefix(paths: list[str], pathspec: str) -> set[str]:
 
 async def _tracked_paths_at_commit(repo_root: str, commit: str, pathspec: str) -> set[str] | None:
     """Every component-relative path git tracks at *commit*. None on git error."""
-    output, rc = await run_git(repo_root, "ls-tree", "-r", "--name-only", commit, "--", pathspec)
+    output, rc = await run_git_capture(repo_root, "ls-tree", "-r", "--name-only", commit, "--", pathspec)
     if rc != 0:
         return None
     return _strip_prefix(output.splitlines(), pathspec)
@@ -202,7 +202,9 @@ async def _ever_added_paths(repo_root: str, pathspec: str) -> set[str] | None:
     would otherwise never appear in "ever tracked", and its stale copy would
     survive on every host forever, exactly what AC5 is about.
     """
-    output, rc = await run_git(repo_root, "log", "-M", "--name-status", "--diff-filter=AR", "--format=", "--", pathspec)
+    output, rc = await run_git_capture(
+        repo_root, "log", "-M", "--name-status", "--diff-filter=AR", "--format=", "--", pathspec
+    )
     if rc != 0:
         return None
     return set(_name_status_paths(output, pathspec, take_new=True))

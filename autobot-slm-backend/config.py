@@ -18,10 +18,11 @@ from functools import cached_property
 from pathlib import Path
 from typing import Optional
 
-from pydantic import ConfigDict
+from pydantic import ConfigDict, field_validator
 from pydantic_settings import BaseSettings
 
 from autobot_shared.secret_redaction import RedactedReprMixin
+from user_management.config import get_autobot_db_config, get_slm_db_config
 
 logger = logging.getLogger(__name__)
 
@@ -185,6 +186,22 @@ class Settings(RedactedReprMixin, BaseSettings):
     data_dir: Path = Path(os.getenv("SLM_DATA_DIR", str(Path(__file__).parent / "data")))
     config_dir: Path = Path(os.getenv("SLM_CONFIG_DIR", str(Path(__file__).parent / "config")))
     ansible_dir: Path = Path(__file__).parent / "ansible"
+    # #18892: where the SLM SPA is served (vite `base: '/slm/'`). Browser redirects
+    # the backend issues -- the SSO callback -- must carry it: a bare `/sso-callback`
+    # is served by the USER frontend on the shared vhost. Read from SLM_FRONTEND_BASE_PATH
+    # (env_prefix) and normalised below: one leading slash, no trailing slash.
+    frontend_base_path: str = "/slm"
+
+    @field_validator("frontend_base_path")
+    @classmethod
+    def _normalise_frontend_base_path(cls, raw: str) -> str:
+        """`slm`, `/slm/` and `/slm` all mean `/slm`; `/` or blank is the root (#18892).
+
+        Without the leading slash the SSO redirect would be relative and resolve under `/api/auth/sso/`.
+        """
+        trimmed = raw.strip().strip("/")
+        return f"/{trimmed}" if trimmed else ""
+
     # #13307: was `Path.home() / "slm-backups"`, which put every backup in the
     # service account's home directory — on the root filesystem, in a place
     # nobody thinks to look, chosen by a fallback rather than a decision. It also
@@ -209,16 +226,12 @@ class Settings(RedactedReprMixin, BaseSettings):
     )
 
     # SLM admin users database (fleet administrators)
-    slm_users_database_url: str = os.getenv(
-        "SLM_USERS_DATABASE_URL",
-        "postgresql+asyncpg://slm_app@127.0.0.1:5432/slm_users",
-    )
+    # #18094: the one resolver (SLM_USERS_DATABASE_URL, else the SLM_POSTGRES_* parts)
+    # lives in user_management.config; a literal DSN here was a second default for it.
+    slm_users_database_url: str = get_slm_db_config().url
 
     # AutoBot application users database (colocated on SLM server)
-    autobot_users_database_url: str = os.getenv(
-        "AUTOBOT_USERS_DATABASE_URL",
-        "postgresql+asyncpg://slm_app@127.0.0.1:5432/autobot_users",
-    )
+    autobot_users_database_url: str = get_autobot_db_config().url
 
     # Database connection pool settings (#2860) — SSOT-coordinated defaults.
     # SLM_DB_POOL_* env vars still override for per-service tuning.

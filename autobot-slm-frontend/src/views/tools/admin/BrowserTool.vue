@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('BrowserTool')
@@ -268,9 +269,7 @@ onMounted(() => {
       </div>
 
       <!-- Error Message -->
-      <div v-if="error" class="m-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-        {{ error }}
-      </div>
+      <BaseAlert v-if="error" variant="error" class="m-4" :message="error" />
 
       <!-- Browser Viewport -->
       <div class="flex-1 bg-gray-900 overflow-auto flex items-center justify-center">

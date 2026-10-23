@@ -78,10 +78,10 @@ adding fleet nodes, enrolling agents, assigning roles, and provisioning.
 ```bash
 git clone https://github.com/mrveiss/AutoBot-AI.git
 cd AutoBot-AI
-cp .env.example .env
-docker compose up -d
+bash docker/generate-secrets.sh   # per-host secrets + a free network range
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d
 ```
-User UI at **http://localhost**, SLM admin at **http://localhost/slm**.
+User UI at **http://localhost**, SLM admin at **http://localhost/slm/**.
 
 → Full install options and the two-phase deployment flow: [INSTALL.md](INSTALL.md).
 
@@ -107,11 +107,13 @@ control:
 - **Complete Data Privacy** — full data control, no external dependencies, runs entirely
   on your hardware, no vendor lock-in
 - **Governance-Ready Architecture** — audit logging, MFA, a secrets vault, retention
-  policies, and RBAC built for GDPR/SOC2/ISO27001 today, on an architecture (self-hosted
-  data, a provider-agnostic LLM gateway, human-oversight-capable governance) that maps
-  cleanly onto EU AI Act, NIS2, and ISO/IEC 42001 (AI management systems) obligations. See
-  [EU AI Act, NIS2 & Governance Fit](docs/architecture/EU_AI_GOVERNANCE.md) for
-  what's covered and what's still a gap — no compliance certification is claimed.
+  policies, and RBAC, on an architecture (self-hosted data, a provider-agnostic LLM
+  gateway, human-oversight-capable governance) designed to help with EU AI Act, NIS2 and
+  data-protection obligations. The standards and regulations we are **working towards**,
+  with their status and open work, are listed in
+  [Compliance Targets](docs/compliance/COMPLIANCE_TARGETS.md); see also
+  [EU AI Act, NIS2 & Governance Fit](docs/architecture/EU_AI_GOVERNANCE.md). No
+  compliance or certification is claimed.
 
 → Browse everything in the [Capability Catalog](docs/features/CATALOG.md).
 
@@ -126,7 +128,7 @@ stores the SLM provisions onto them.
 | Component | SLM node (min) | Platform node (min) | Platform node (rec.) |
 |-----------|----------------|---------------------|----------------------|
 | **CPU** | 2 cores | 4 cores | 8+ cores |
-| **RAM** | 1.5 GB | 8 GB | 16+ GB |
+| **RAM** | 1.5 GB (native install; the installer checks it) | 8 GB | 16+ GB |
 | **Storage** | 20 GB SSD | 20 GB SSD | 50+ GB SSD |
 | **GPU** | None (CPU-only mode) | NVIDIA GPU for faster inference |
 | **OS** | Ubuntu 20.04+ / Debian 11+ | Ubuntu 22.04 LTS |
@@ -157,7 +159,7 @@ inference, and workers — across one or more machines:
 | **Operate** | Upgrades, health monitoring, recovery, certificate rotation, configuration |
 | **Scale** | Add fleet nodes, add NPU workers, assign roles, provision new capacity |
 
-The SLM dashboard lives at **http://localhost/slm**. See
+The SLM dashboard lives at **http://localhost/slm/**. See
 [SLM deployment](docs/guides/slm-docker-ansible-deployment.md).
 
 ## Modules
@@ -183,8 +185,8 @@ what they deliver.
 
 AutoBot keeps your AI and your data on infrastructure you control:
 
-- **Data privacy & compliance** — your data never leaves your hardware; supports HIPAA,
-  GDPR, and SOC2 requirements
+- **Data privacy** — your data never leaves your hardware, which helps you meet your own
+  data-protection obligations ([what we are working towards](docs/compliance/COMPLIANCE_TARGETS.md))
 - **Predictable cost** — local inference runs at zero marginal cost per request; no
   per-request fees
 - **Full control** — run custom models, modify the code, no vendor lock-in
@@ -249,7 +251,8 @@ graph TB
 Fastest way to get started. Includes all services pre-configured.
 
 ```bash
-docker compose up -d
+bash docker/generate-secrets.sh
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d
 ```
 
 ### Native Installation
@@ -258,7 +261,8 @@ For development or custom setups. See [INSTALL.md](INSTALL.md).
 ### Development Mode
 For contributing to AutoBot:
 ```bash
-docker compose -f docker-compose.dev.yml up -d
+cp docker-compose.override.example.yml docker-compose.override.yml
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d
 ```
 
 ---
@@ -293,7 +297,7 @@ Once running, navigate to **http://localhost** to access:
 
 The **Service Lifecycle Manager (SLM)** — AutoBot's management layer for deploying,
 operating, and scaling your AI infrastructure (vector DB, cache, database, inference, and
-workers) — lives at **http://localhost/slm**.
+workers) — lives at **http://localhost/slm/**.
 
 ### Example: Managing a Fleet
 ```bash
@@ -312,7 +316,11 @@ workers) — lives at **http://localhost/slm**.
 
 ## Configuration
 
-All configuration uses environment variables in `.env`. See `.env.example` for all options.
+Configuration is environment variables, read from these files (#18555):
+
+- **Native install:** the installer writes each service's env file under `/etc/autobot/`; `.env.example` documents every option.
+- **Docker:** `docker/.env.docker` plus the generated `docker/.env.secrets`, passed with `--env-file` (compose reads no root `.env` then).
+- **Development tooling:** `.env.base` (shared keys) and one overlay, `.env.localhost`, `.env.native-vm` or `.env.network`, loaded in that order.
 
 Key settings:
 - `AUTOBOT_DEPLOYMENT_MODE` — `hybrid` or `distributed`

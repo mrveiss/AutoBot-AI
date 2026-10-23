@@ -191,6 +191,16 @@ class MCPDispatcher:
         """Return the cached tool entry for tool_name, or None if not found."""
         return self._tool_cache.get(tool_name)
 
+    async def ensure_loaded(self) -> None:
+        """Load the tool cache once if it never has been (#18430: one public way, not ``_cache_loaded``)."""
+        if not self._cache_loaded:
+            await self.refresh_tool_cache()
+
+    async def has_tool(self, tool_name: str) -> bool:
+        """Whether *tool_name* is in the registry, loading the cache first if needed."""
+        await self.ensure_loaded()
+        return self.find_tool(tool_name) is not None
+
     # ------------------------------------------------------------------
     # Dispatch
     # ------------------------------------------------------------------
@@ -228,12 +238,11 @@ class MCPDispatcher:
         # existed because ``superadmin`` was not a ``Role`` member, so resolving
         # it through ``Role()`` raised and reported the most privileged role in
         # the system as denied on every tool. It is a Role member now, so the
-        # canonical mapping answers for it like any other role — and what that
-        # mapping says is that superadmin holds no granular permission, so an
-        # MCP tool requiring one is refused. That is the deliberate reading of
-        # an empty ROLE_PERMISSIONS entry, not an accident of resolution: the
-        # short-circuit was the last place where being in ``ADMIN_ROLES``
-        # granted access that ``ROLE_PERMISSIONS`` never wrote down.
+        # canonical mapping answers for it like any other role — and since #19125
+        # (owner decision 2026-10-21) that mapping gives superadmin admin's
+        # permissions, so an MCP tool requiring one is admitted for it exactly
+        # as for admin, through the written-down grant and not through
+        # ``ADMIN_ROLES`` membership.
         try:
             # role_value(), not str(): a ``Role`` member stringifies to
             # "Role.ADMIN" and would be reported as unknown-role (#14944).

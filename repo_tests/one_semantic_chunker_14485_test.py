@@ -115,7 +115,7 @@ REACH = declare(
     "semantic-chunker-fork-scan",
     discover=_source_population,
     # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=2580,
+    floor=2702,
     what="non-test python source",
     roots=("autobot-backend", "autobot_shared"),
     growth=300,

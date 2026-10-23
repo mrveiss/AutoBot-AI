@@ -33,6 +33,45 @@ python:
   # bypassed: a PR touching only this workflow computes `python != true`,
   # python-suite reports green, and the test guarding it never runs.
   - '.github/workflows/duplication-guard.yml'
+  # #17856: frontend_api_timeout_ssot_17856_test.py reads both files' API
+  # timeout and holds them equal to TimeoutConfig.api; an edit confined to one
+  # must run it.
+  - '.env.example'
+  - 'autobot-frontend/.env.example'
+  # #18555: env_file_family_18555_test.py reads every tracked env file -- one
+  # host-key format across the family, one Docker env file; an edit confined to
+  # any of them, or a new one, must run it.
+  - '**/.env*'
+  # #18555: root-level env files (.env.base and the overlays) -- `**/` alone does not match the root here.
+  - '.env*'
+  - '**/*.env'
+  # #18922: locale_completeness_allow_missing_18922_test.py reads the SLM app's check:locales script.
+  - 'autobot-slm-frontend/package.json'
+  # #18653: uninstall_covers_role_packages_18653_test.py reads the interpreter
+  # version the python_interpreter role installs (python{{ version }} packages).
+  - '.python-version'
+  # #18729: docker_admin_seed_18729_test.py reads every Docker entrypoint's user-mode default.
+  - 'docker/*/*entrypoint*.sh'
+  # #18592: install_preflight_and_source_18581_test.py reads INSTALL.md; compose_slm_gui_profile_18585_test.py reads the root compose file and the frontend Dockerfile.
+  - 'INSTALL.md'
+  - 'docker-compose.yml'
+  - 'docker/frontend/Dockerfile'
+  # #18556: one_static_data_copy_18556_test.py reads the canonical static data files.
+  - 'autobot-backend/config/permission_rules.yaml'
+  - 'autobot-backend/static/error_messages.yaml'
+  - 'autobot-monitoring/prometheus.yml'
+  - 'autobot-monitoring/grafana/provisioning/datasources/prometheus.yml'
+  - 'autobot-backend/config/llm_models.yaml'
+  - 'autobot-infrastructure/shared/config/permission_rules.yaml'
+  # The guard scans the whole repo by basename (pathspec *<name>), so an unallowed copy can
+  # land anywhere: one glob per guarded basename, not just the listed trees.
+  - '**/error_messages.yaml'
+  - '**/prometheus.yml'
+  - '**/permission_rules.yaml'
+  - '**/llm_models.yaml'
+  # #18549: one_playwright_server_18549_test.py reads the canonical server and its store.
+  - 'autobot-browser-worker/playwright-server.js'
+  - 'autobot-browser-worker/session-store.js'
   # #17329: frontend_path_filter_mirror_test.py PARSES this file and compares it
   # to frontend-test.yml's push paths, so its verdict depends on the content --
   # a real dependency, covered here rather than recorded as a bypass.
@@ -77,6 +116,8 @@ python:
   # import. Editing the workflow without running that guard is how the filter drifted
   # in the first place -- the gate skipped on the code under test and merged green.
   - '.github/workflows/migration-gate.yml'
+  # #18467: pr_comment_upsert_12984_test reads it by concrete literal -- the sticky PR-comment helper's caller.
+  - '.github/workflows/ai-security-review.yml'
   # #14544/#14575: repo_tests/deployment_declares_project_root_14544_test.py
   # asserts each of these five non-.py deployment sources still declares
   # AUTOBOT_PROJECT_ROOT. Without an explicit entry here, editing only one of
@@ -133,6 +174,17 @@ python:
   - 'autobot-slm-backend/ansible/**'
   - 'tools/git-hooks/**'
   - 'scripts/install-git-hooks.sh'
+
+  # #18553: redis_direct_constructor_baseline_18553.py names this shell script, which embeds a
+  # direct Redis client. A change confined to it touches no `**/*.py`, so python-suite would
+  # report green while the guard that counts its constructor never ran. (The two deploy scripts
+  # it also names sit under the ansible tree above.)
+  - 'autobot-backend/code_analysis/install.sh'
+  # #15469: one_brand_mark_and_announcer_18240_test.py pins these icons to the kit mark (byte
+  # identity / a sha256 pair). A change confined to one touches no `**/*.py`, so the guard must still run.
+  - 'autobot-frontend/public/favicon.ico'
+  - 'autobot-frontend/public/favicon.svg'
+  - 'autobot-slm-frontend/public/favicon.svg'
 
   # #16249: the CI wrappers under pipeline-scripts/ and the one library they
   # source. Each has a python-suite test that runs the script, so a change
@@ -219,6 +271,10 @@ python:
   - '.github/workflows/no-commit-trailers.yml'
   - '.github/workflows/pr-issue-validation.yml'
   - '.github/workflows/release.yml'
+  # #18666: install_release_signed_18666_test.py checks release.yml's cosign pin against image-sign.yml.
+  - '.github/workflows/image-sign.yml'
+  # #18666: the same test runs the signing-key gate against the real cosign.pub.
+  - 'cosign.pub'
   # #15495: `by_path_loaded_modules_are_package_free_test.py` derives its targets
   # from this workflow's `spec_from_file_location` calls. Without an entry here,
   # adding a fourth by-path load is exactly the change that skips the guard
@@ -299,6 +355,10 @@ python:
   # here, a change confined to this file -- the only change that could add
   # `install-git-hooks.sh` back in -- skips the guard.
   - '.github/workflows/auto-fix-generated-types.yml'
+  # #18500: the autofix steps moved into a composite action with a dispatch-only
+  # caller; the guards above (and autofix_types_dispatch_18500_test.py) read both.
+  - '.github/actions/generated-types-autofix/action.yml'
+  - '.github/workflows/dispatch-generated-types.yml'
   # #17173: `repo_tests/secrets_baseline_reason_entries.py`'s `SPECIFIC_REASONS`
   # table names files under this tree by concrete literal (baseline keys are
   # (filename, type, hashed_secret) triples) -- the same filter-gap shape as

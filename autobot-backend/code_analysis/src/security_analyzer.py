@@ -7,7 +7,7 @@ This module used to contain a full, independent regex/AST scanning engine
 that duplicated (and had diverged from) the canonical implementation at
 ``code_intelligence.security``. It is kept as an import-compatible shim —
 per the "never delete code" policy — for any caller that still imports
-``SecurityAnalyzer``/``SecurityVulnerability`` from this path.
+``LegacySecurityAnalyzer``/``SecurityVulnerability`` from this path.
 
 The detection engine is now delegated entirely to the canonical
 ``code_intelligence.security.SecurityAnalyzer``. This class adapts the
@@ -44,7 +44,7 @@ class SecurityVulnerability:
     (``line_number``, ``vulnerability_type: str``) intentionally differ from
     the canonical ``code_intelligence.security.finding.SecurityFinding``
     (``line_start``/``line_end``, ``VulnerabilityType`` enum) — see
-    ``SecurityAnalyzer._adapt_finding`` below for the field mapping.
+    ``LegacySecurityAnalyzer._adapt_finding`` below for the field mapping.
     """
 
     file_path: str
@@ -141,7 +141,7 @@ _LEGACY_BUCKET_BY_VULN_TYPE: Dict[_ModernVulnerabilityType, str] = {
 }
 
 
-class SecurityAnalyzer:
+class LegacySecurityAnalyzer:
     """Analyzes code for security vulnerabilities.
 
     Issue #12362: Legacy-shaped facade. Detection is delegated to the

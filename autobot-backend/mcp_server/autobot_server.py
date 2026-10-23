@@ -39,6 +39,7 @@ Observability:
 """
 
 import asyncio
+import hashlib
 import json
 import secrets
 import time
@@ -46,13 +47,18 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import ValidationError as PydanticValidationError
 
+from autobot_memory_graph.owner_scope import OwnerScopeRequired
 from autobot_shared.auth.jwt_core import JWTDecodeError, JWTExpiredError
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.rate_limiter import RateLimiter
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
 from autobot_shared.ssot_constants import QueryDefaults
 from knowledge.search_filters import filter_non_private_results, is_non_private, non_private_where
 from mcp_server.auth_throttle import UNKNOWN_IP, get_pre_auth_throttle
+from mcp_server.memory_tools import MemoryToolsMixin
+from mcp_server.principal import STDIO_CLIENT, bind_owner, mcp_owner_scope, unbind_owner
 from services.run_jwt import validate_run_jwt
 
 logger = get_logger(__name__)
@@ -61,8 +67,8 @@ logger = get_logger(__name__)
 # Constants
 # ---------------------------------------------------------------------------
 
-_RATE_LIMIT = 50  # requests per 60-second window per token
-_WINDOW_SECONDS = 60.0
+_RATE_LIMIT = env_int_clamped("AUTOBOT_MCP_SERVER_RATE_LIMIT", 50, min_v=1, max_v=1_000_000)  # per window, per token
+_WINDOW_SECONDS = 60
 
 # Legacy scope → tool prefix (simple token format "secret:kb,memory,agents")
 _SCOPE_MAP: Dict[str, str] = {
@@ -141,24 +147,9 @@ def _stdio_bearer_token() -> str:
 # ---------------------------------------------------------------------------
 
 
-class _TokenBucket:
-    """Per-token sliding-window request counter."""
-
-    __slots__ = ("_tokens", "_window_start")
-
-    def __init__(self) -> None:
-        self._tokens = 0
-        self._window_start = time.monotonic()
-
-    def allow(self) -> bool:
-        now = time.monotonic()
-        if now - self._window_start >= _WINDOW_SECONDS:
-            self._tokens = 0
-            self._window_start = now
-        if self._tokens >= _RATE_LIMIT:
-            return False
-        self._tokens += 1
-        return True
+# One global Redis-backed count per token prefix, shared by every worker (#18087);
+# fails open when Redis is down. The key is hashed so no token material reaches Redis.
+_post_auth_limiter = RateLimiter("mcp:server", log_label="mcp:server")
 
 
 # ---------------------------------------------------------------------------
@@ -336,7 +327,7 @@ _AGENT_REGISTRY: List[Dict[str, str]] = [
 # ---------------------------------------------------------------------------
 
 
-class AutoBotMCPServer:
+class AutoBotMCPServer(MemoryToolsMixin):
     """MCP server that exposes AutoBot KB, memory graph, and agents.
 
     All tool implementations are thin delegation layers — they call existing
@@ -347,9 +338,6 @@ class AutoBotMCPServer:
     """
 
     TOOLS: Dict[str, Dict[str, Any]] = _TOOLS
-
-    def __init__(self) -> None:
-        self._buckets: Dict[str, _TokenBucket] = {}
 
     # ------------------------------------------------------------------
     # Auth helpers
@@ -366,23 +354,23 @@ class AutoBotMCPServer:
         return granted
 
     @staticmethod
-    async def _resolve_run_jwt(token: str) -> Tuple[List[str] | None, str | None]:
-        """Validate a run JWT and return (tool_prefixes, error_message).
+    async def _resolve_run_jwt(token: str) -> Tuple[List[str] | None, str | None, Dict[str, Any] | None]:
+        """Validate a run JWT and return (tool_prefixes, error_message, claims).
 
-        Returns (prefixes, None) on success, (None, error) on failure.
+        Returns (prefixes, None, claims) on success, (None, error, None) on failure.
         Callers should map None prefixes to a -32001 auth error.
         """
         try:
             claims = await validate_run_jwt(token)
         except JWTExpiredError:
-            return None, "Forbidden: run JWT has expired"
+            return None, "Forbidden: run JWT has expired", None
         except JWTDecodeError as exc:
-            return None, f"Forbidden: {exc}"
+            return None, f"Forbidden: {exc}", None
         jwt_scopes = claims.get("scope") or []
         if not isinstance(jwt_scopes, list):
             jwt_scopes = []
         prefixes = AutoBotMCPServer._map_run_jwt_scopes([str(s) for s in jwt_scopes])
-        return prefixes, None
+        return prefixes, None, claims
 
     @staticmethod
     def _validate_token(token: str) -> List[str] | None:
@@ -486,33 +474,34 @@ class AutoBotMCPServer:
         auth_token: str,
         req_id: Any,
         client_ip: str,
-    ) -> Tuple[List[str] | None, bool, Dict[str, Any] | None]:
+    ) -> Tuple[List[str] | None, bool, Dict[str, Any] | None, Any]:
         """Resolve granted scopes, metering failures against the pre-auth throttle.
 
         SEC-2 Phase 2 (#6473): a run JWT in ``params`` takes precedence over the
         legacy static token. Agents pass it as a top-level JSON-RPC param; the
         scheduler also exposes it via AUTOBOT_RUN_JWT for in-process callers.
 
-        Returns ``(scopes, using_run_jwt, error_response)`` — exactly one of
-        *scopes* and *error_response* is non-None.
+        Returns ``(scopes, using_run_jwt, error_response, owner)`` -- exactly one of
+        *scopes* and *error_response* is non-None. *owner* is the authenticated
+        principal as an OwnerScope (None when the caller has no identity, #18825).
         """
         run_jwt_token = params.pop("run_jwt", None) if isinstance(params, dict) else None
 
         if run_jwt_token:
-            scopes, error = await self._resolve_run_jwt(run_jwt_token)
+            scopes, error, claims = await self._resolve_run_jwt(run_jwt_token)
             if error:
-                return None, False, self._reject_auth(client_ip, error, req_id)
+                return None, False, self._reject_auth(client_ip, error, req_id), None
             get_pre_auth_throttle().record_success(client_ip)
-            return scopes, True, None
+            return scopes, True, None, mcp_owner_scope(claims, auth_token, client_ip)
 
         scopes = self._validate_token(auth_token)
         if scopes is None:
             # Fallback: check Redis-issued tokens (Issue #6453)
             scopes = await self._validate_redis_token(auth_token)
         if scopes is None:
-            return None, False, self._reject_auth(client_ip, "Unauthorized: invalid or missing token", req_id)
+            return None, False, self._reject_auth(client_ip, "Unauthorized: invalid or missing token", req_id), None
         get_pre_auth_throttle().record_success(client_ip)
-        return scopes, False, None
+        return scopes, False, None, mcp_owner_scope(None, auth_token, client_ip)
 
     @staticmethod
     def _reject_auth(client_ip: str, message: str, req_id: Any) -> Dict[str, Any]:
@@ -533,10 +522,9 @@ class AutoBotMCPServer:
     # Rate limiting
     # ------------------------------------------------------------------
 
-    def _is_rate_limited(self, token_key: str) -> bool:
-        if token_key not in self._buckets:
-            self._buckets[token_key] = _TokenBucket()
-        return not self._buckets[token_key].allow()
+    async def _is_rate_limited(self, token_key: str) -> bool:
+        digest = hashlib.sha256(token_key.encode("utf-8")).hexdigest()
+        return not await _post_auth_limiter.acquire_window(digest, _RATE_LIMIT, _WINDOW_SECONDS)
 
     # ------------------------------------------------------------------
     # Public dispatch
@@ -576,16 +564,16 @@ class AutoBotMCPServer:
 
         # Bucket key is captured before _authenticate pops run_jwt out of params.
         run_jwt_preview = params.get("run_jwt") if isinstance(params, dict) else None
-        rate_key = (run_jwt_preview or auth_token or "")[:16]
+        rate_key = run_jwt_preview or auth_token or ""
 
-        scopes, using_run_jwt, auth_error = await self._authenticate(params, auth_token, req_id, ip)
+        scopes, using_run_jwt, auth_error, owner = await self._authenticate(params, auth_token, req_id, ip)
         if auth_error is not None:
             return auth_error
 
-        # Post-auth bucket stays keyed on the token prefix: it is only reachable
+        # Post-auth bucket is keyed on the whole token (hashed in _is_rate_limited): it is only reachable
         # by an authenticated caller, so the key space cannot be grown by an
         # anonymous attacker (#13268).
-        if self._is_rate_limited(rate_key):
+        if await self._is_rate_limited(rate_key):
             logger.warning("mcp_auth: post-auth rate limit exceeded for method=%s", method or "<none>")
             return _err(-32029, f"Rate limit exceeded ({_RATE_LIMIT} req/{int(_WINDOW_SECONDS)}s)", req_id)
 
@@ -604,7 +592,11 @@ class AutoBotMCPServer:
         if method == "tools/call":
             tool_name = params.get("name", "")
             arguments = params.get("arguments", {})
-            return await self._dispatch_tool(tool_name, arguments, scopes, req_id, using_run_jwt=using_run_jwt)
+            bound = bind_owner(owner)  # memory tools read under the authenticated principal (#18825)
+            try:
+                return await self._dispatch_tool(tool_name, arguments, scopes, req_id, using_run_jwt=using_run_jwt)
+            finally:
+                unbind_owner(bound)
 
         return _err(-32601, f"Method not found: {method}", req_id)
 
@@ -644,6 +636,10 @@ class AutoBotMCPServer:
             # read to the caller as a server fault.
             logger.warning("mcp bad_arguments tool=%s error=%s", tool_name, exc)
             return _err(-32602, f"Invalid arguments: {exc}", req_id)
+        except OwnerScopeRequired as exc:
+            # #18825: no authenticated principal (stdio) -> memory tools fail closed
+            logger.warning("mcp owner_scope_required tool=%s", tool_name)
+            return _err(-32003, f"Forbidden: {exc}", req_id)
         except Exception as exc:
             logger.error("mcp tool_error tool=%s error=%s", tool_name, exc, exc_info=True)
             return _err(-32603, "Internal error executing tool", req_id)
@@ -683,161 +679,7 @@ class AutoBotMCPServer:
         from knowledge._composed import get_knowledge_base
 
         kb = await get_knowledge_base()
-        result = await kb.list_all_tags()
-        return result
-
-    # ------------------------------------------------------------------
-    # Memory graph tool implementations
-    # ------------------------------------------------------------------
-
-    async def _memory_entity_lookup(self, name: str) -> Any:
-        from api.schemas_knowledge import MemoryEntityLookupRequest
-        from autobot_memory_graph import AutoBotMemoryGraph
-
-        name = MemoryEntityLookupRequest(name=name).name
-        graph = AutoBotMemoryGraph()
-        await graph.initialize()
-        entity = await graph.get_entity(entity_name=name, include_relations=True)
-        if entity is None:
-            return {"error": "Entity not found", "name": name}
-        return entity
-
-    async def _memory_timeline(self, entity: str, range: str | None = None) -> Any:
-        from api.schemas_knowledge import MemoryTimelineRequest
-        from autobot_memory_graph import AutoBotMemoryGraph
-
-        args = MemoryTimelineRequest(entity=entity, range=range)
-        entity, range = args.entity, args.range
-        graph = AutoBotMemoryGraph()
-        await graph.initialize()
-        base = await graph.get_entity(entity_name=entity, include_relations=True)
-        if base is None:
-            return {"error": "Entity not found", "entity": entity}
-
-        entity_id = base.get("id", "")
-        relations_data = await graph.get_relations(entity_id, direction="both")
-        relations = relations_data.get("relations", [])
-
-        # Gather linked entity IDs and their details
-        neighbour_ids = {r.get("from_entity") for r in relations} | {r.get("to_entity") for r in relations}
-        neighbour_ids.discard(entity_id)
-
-        neighbours = []
-        for nid in list(neighbour_ids)[:50]:
-            ent = await graph.get_entity(entity_id=nid)
-            if ent:
-                neighbours.append(ent)
-
-        # Sort by created_at ascending (timeline order)
-        neighbours.sort(key=lambda e: (e.get("metadata") or {}).get("created_at", ""), reverse=False)
-        if range:
-            # range is "start/end"; filter by created_at string prefix comparison
-            parts = range.split("/", 1)
-            start, end = (parts[0], parts[1]) if len(parts) == 2 else (parts[0], None)
-            neighbours = [
-                e
-                for e in neighbours
-                if (e.get("metadata") or {}).get("created_at", "") >= start
-                and (end is None or (e.get("metadata") or {}).get("created_at", "") <= end)
-            ]
-
-        return {"entity": base, "timeline": neighbours, "count": len(neighbours)}
-
-    async def _memory_related(self, entity: str, depth: int = 2) -> Any:
-        from api.schemas_knowledge import MemoryRelatedRequest
-        from autobot_memory_graph import AutoBotMemoryGraph
-
-        # #13762: the entity name was unbounded. ``depth`` keeps its existing
-        # clamp rather than becoming a rejection, so the model's ge/le is the
-        # declared contract and the clamp is what enforces it.
-        args = MemoryRelatedRequest(entity=entity, depth=max(1, min(depth, 5)))
-        entity, depth = args.entity, args.depth
-        graph = AutoBotMemoryGraph()
-        await graph.initialize()
-
-        root = await graph.get_entity(entity_name=entity, include_relations=True)
-        if root is None:
-            return {"error": "Entity not found", "entity": entity}
-
-        visited: Dict[str, Any] = {}
-        frontier = [root.get("id", "")]
-
-        for _ in range(depth):
-            next_frontier = []
-            for eid in frontier:
-                if eid in visited:
-                    continue
-                ent = await graph.get_entity(entity_id=eid)
-                if not ent:
-                    continue
-                visited[eid] = ent
-                rels = await graph.get_relations(eid, direction="both")
-                for rel in rels.get("relations", []):
-                    cand = rel.get("to_entity") or rel.get("from_entity")
-                    if cand and cand not in visited:
-                        next_frontier.append(cand)
-            frontier = next_frontier
-            if not frontier:
-                break
-
-        return {
-            "root": root,
-            "related": list(visited.values()),
-            "count": len(visited),
-        }
-
-    async def _memory_path(
-        self,
-        from_entity: str,
-        to_entity: str,
-        relation: str | None = None,
-        max_depth: int = 6,
-        direction: str = "both",
-    ) -> Any:
-        """Shortest relationship path between two entities (#13474).
-
-        Delegates to AutoBotMemoryGraph.find_path so name resolution and path
-        serialisation are not duplicated against the Graph-RAG ``/path``
-        endpoint. #13762 extends that to the input contract: the arguments go
-        through ``GraphRAGPathRequest``, the same model the REST route binds, so
-        the two surfaces cannot drift on what a valid request is. ``max_depth``
-        stays clamped rather than rejected — an untrusted caller must not be
-        able to request an unbounded traversal, but asking for too much is not
-        an error the way an unbounded entity name is.
-        """
-        from api.schemas_knowledge import GraphRAGPathRequest
-        from autobot_memory_graph import AutoBotMemoryGraph
-
-        allowed_directions = ("outgoing", "incoming", "both")
-        if direction not in allowed_directions:
-            return {"error": "Invalid direction", "direction": direction, "allowed": list(allowed_directions)}
-
-        args = GraphRAGPathRequest(
-            from_entity=from_entity,
-            to_entity=to_entity,
-            relation=relation,
-            max_depth=max(1, min(max_depth, 10)),
-            direction=direction,
-        )
-
-        graph = AutoBotMemoryGraph()
-        await graph.initialize()
-        return await graph.find_path(
-            from_entity=args.from_entity,
-            to_entity=args.to_entity,
-            relation=args.relation,
-            max_depth=args.max_depth,
-            direction=args.direction,
-        )
-
-    async def _memory_verbatim_search(self, query: str, session_filter: str | None = None) -> Any:
-        from api.schemas_knowledge import MemoryVerbatimSearchRequest
-        from memory.verbatim_store import UNSCOPED_ALL_USERS, VerbatimStore
-
-        args = MemoryVerbatimSearchRequest(query=query, session_filter=session_filter)
-        store = VerbatimStore()
-        results = await store.search(args.query, user_id=UNSCOPED_ALL_USERS, session_filter=args.session_filter)
-        return {"results": results, "count": len(results)}
+        return await kb.list_all_tags()
 
     # ------------------------------------------------------------------
     # Agent tool implementations
@@ -890,7 +732,7 @@ class AutoBotMCPServer:
                 method = msg.get("method", "")
                 params = msg.get("params") or {}
                 req_id = msg.get("id")
-                response = await self.handle_request(method, params, token, req_id, client_ip="stdio")
+                response = await self.handle_request(method, params, token, req_id, client_ip=STDIO_CLIENT)
             out = json.dumps(response, default=str) + "\n"
             writer_transport.write(out.encode("utf-8"))
 

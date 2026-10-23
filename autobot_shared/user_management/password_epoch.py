@@ -45,6 +45,7 @@ at their own ``exp``; #12924's window closes as soon as they do.
 import asyncio
 import logging
 import time
+from collections.abc import Awaitable, Callable
 
 from redis.exceptions import RedisError
 
@@ -87,6 +88,14 @@ class RevocationCheckUnavailable(ConnectionError):
     """
 
 
+class MalformedTokenClaims(ValueError):
+    """The token's own ``iat`` cannot be read: a bad CREDENTIAL, not an unavailable store (#18892).
+
+    Retrying can never fix it, so callers answer 401 (invalid token) -- never the
+    retryable 503 that :class:`RevocationCheckUnavailable` maps to.
+    """
+
+
 def _epoch_key(subject: str) -> str:
     """Redis key holding the password-change epoch for *subject*."""
     return f"{PASSWORD_EPOCH_PREFIX}{subject}"
@@ -103,6 +112,28 @@ async def _epoch_store():
     return redis
 
 
+# #18663: a process may keep the epoch in its own durable store instead of Redis. The SLM
+# does (services/password_epoch_store.py): it deploys Redis, so it must not need it. The
+# rule below and its fail-closed handling are the same whichever store answers; the
+# override must keep the contract -- get raises RevocationCheckUnavailable when it cannot
+# answer, set returns None (logged) when it could not record. Default: Redis.
+_store_override: tuple[Callable[[str], Awaitable[int | None]], Callable[..., Awaitable[int | None]]] | None = None
+
+
+def use_epoch_store(
+    *, get_epoch: Callable[[str], Awaitable[int | None]], set_epoch: Callable[..., Awaitable[int | None]]
+) -> None:
+    """Route this process's epoch reads and writes to another store (#18663)."""
+    global _store_override
+    _store_override = (get_epoch, set_epoch)
+
+
+def reset_epoch_store() -> None:
+    """Back to the default (Redis) store -- for tests and teardown (#18663)."""
+    global _store_override
+    _store_override = None
+
+
 async def set_password_epoch(subject: str, *, now: int | None = None) -> int | None:
     """Mark *subject*'s password as changed now, revoking older tokens.
 
@@ -114,6 +145,8 @@ async def set_password_epoch(subject: str, *, now: int | None = None) -> int | N
         subject: The token subject (``sub`` claim) whose sessions to revoke.
         now: Override for the epoch timestamp, for tests.
     """
+    if _store_override is not None:
+        return await _store_override[1](subject, now=now)
     epoch = int(time.time()) if now is None else now
 
     redis = await get_async_redis_client()
@@ -147,6 +180,8 @@ async def get_password_epoch(subject: str) -> int | None:
         RevocationCheckUnavailable: Redis could not answer (#16411), or the
             stored marker is not an integer (#16422).
     """
+    if _store_override is not None:
+        return await _store_override[0](subject)
     redis = await _epoch_store()
     try:
         raw = await redis.get(_epoch_key(subject))
@@ -170,10 +205,12 @@ async def is_token_revoked_by_password_change(claims: dict) -> bool:
 
     Raises:
         RevocationCheckUnavailable: Redis could not answer (#16411), or the
-            marker or the token's ``iat`` is not an integer (#16422). The token
-            may be revoked, so every caller must deny it.
+            marker is not an integer (#16422). The token may be revoked, so
+            every caller must deny it (503, #18892).
+        MalformedTokenClaims: the token's ``iat`` is not an integer; deny with 401.
     """
-    subject = claims.get("sub")
+    # Backend login tokens carry the username in ``username`` and no ``sub``; SLM tokens use ``sub`` (#19061).
+    subject = claims.get("sub") or claims.get("username")
     if not subject:
         return False
 
@@ -186,8 +223,9 @@ async def is_token_revoked_by_password_change(claims: dict) -> bool:
         issued_at = int(issued_at)
     except (TypeError, ValueError) as exc:
         # An unreadable iat cannot be placed against any epoch, so the token is
-        # denied whether or not its subject has a marker (#16422).
-        raise RevocationCheckUnavailable("token iat is not an integer") from exc
+        # denied whether or not its subject has a marker (#16422). It is checked
+        # before any store lookup, and is a 401 (#18892), not a store outage.
+        raise MalformedTokenClaims("token iat is not an integer") from exc
 
     epoch = await get_password_epoch(str(subject))
     if epoch is None:

@@ -18,7 +18,6 @@ from typing import Any, Dict, List, Tuple
 import httpx
 
 # Import root cause analyzer for causal failure analysis
-from celery.result import AsyncResult
 from fastapi import (
     APIRouter,
     Depends,
@@ -32,6 +31,9 @@ from api.analytics_controller import (
     analytics_controller,
     analytics_state,
 )
+
+# Import controller class (extracted from this file - Issue #212)
+from api.codebase_analytics.task_routes import add_clear_stuck_route
 from api.schemas_analytics import (
     AnalyticsClearStuckTasksResponse,
     AnalyticsCollectionStartResponse,
@@ -49,8 +51,6 @@ from api.schemas_analytics import (
     RealTimeEvent,
 )
 from api.schemas_analytics_collector import AnalyticsPerformanceMetricsResponse, AnalyticsUsageStatisticsResponse
-
-# Import controller class (extracted from this file - Issue #212)
 from api.ws_security import open_authenticated_ws
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -63,7 +63,7 @@ from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import TimingConstants
 from services.root_cause_analyzer import RootCauseAnalyzer
 from tasks.analytics_tasks import run_dashboard_analysis
-from utils.celery_task_status import celery_result_to_status, store_latest_task_id
+from utils.celery_task_status import known_task_status_or_404, store_latest_task_id
 
 # Import existing monitoring infrastructure (extracted to monitoring_hardware.py - Issue #213)
 from .monitoring_hardware import local_hardware_monitor
@@ -1262,22 +1262,16 @@ async def start_dashboard_analysis(
     operation="get_dashboard_status",
     error_code_prefix="ANALYTICS",
 )
-async def get_dashboard_status(task_id: str):
+async def get_dashboard_status(task_id: str, _user: Dict = Depends(get_current_user)):
     """Get dashboard overview task status (#1304, GH#8433)."""
-    status = celery_result_to_status(AsyncResult(task_id))
-    if status is None or status["status"] == "pending":
-        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-    return status
+    return known_task_status_or_404(task_id)
 
 
-@router.post("/dashboard/overview/tasks/clear-stuck", response_model=AnalyticsClearStuckTasksResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="clear_stuck_dashboard_tasks",
-    error_code_prefix="ANALYTICS",
+add_clear_stuck_route(
+    router,
+    "/dashboard/overview/tasks/clear-stuck",
+    name="clear_stuck_dashboard_tasks",
+    error_prefix="ANALYTICS",
+    response_model=AnalyticsClearStuckTasksResponse,
+    description="Clear stuck dashboard overview tasks — no-op, Celery handles recovery (GH#8433).",
 )
-async def clear_stuck_dashboard_tasks(
-    force: bool = Query(default=False, description="Force clear ALL running tasks"),
-):
-    """Clear stuck dashboard overview tasks — no-op, Celery handles recovery (GH#8433)."""
-    return {"cleared_count": 0, "message": "Celery handles task recovery automatically"}

@@ -13,8 +13,17 @@ import { ref, computed } from 'vue'
 import { useDevSpeedup } from '@/composables/useDevSpeedup'
 import { createLogger } from '@/utils/debugUtils'
 import Icon from '@/components/ui/Icon.vue'
+import { runCodeAction } from './devSpeedupCodeAction'
 
 const logger = createLogger('DevSpeedupView')
+
+// Each flag returns with its route (#18749); the dev-speedup routes below are not served.
+// Quick search: POST /dev-speedup/quick-search.
+const QUICK_SEARCH_ENABLED = false
+// Snippet generation: POST /dev-speedup/snippet-generate.
+const SNIPPET_GENERATE_ENABLED = false
+// Code actions (refactor, tests, optimize, format, lint-fix): POST /dev-speedup/{refactor-suggest,test-generate,optimize,format,lint-fix}.
+const CODE_ACTIONS_ENABLED = false
 
 const {
   searchResults,
@@ -35,7 +44,9 @@ const {
   lintFix,
 } = useDevSpeedup({ autoFetch: true })
 
-const activeTab = ref<'search' | 'snippets' | 'templates' | 'actions'>('search')
+const activeTab = ref<'search' | 'snippets' | 'templates' | 'actions'>(
+  QUICK_SEARCH_ENABLED ? 'search' : 'templates',
+)
 const searchQuery = ref('')
 const searchType = ref<'file' | 'code' | 'symbol' | undefined>(undefined)
 
@@ -70,35 +81,10 @@ async function handleFetchTemplates() {
 
 async function handleCodeAction() {
   if (!codeInput.value.trim()) return
-
-  switch (actionType.value) {
-    case 'refactor':
-      await suggestRefactor(codeInput.value, actionLanguage.value)
-      break
-    case 'optimize':
-      const optimized = await optimizeCode(codeInput.value, actionLanguage.value)
-      if (optimized) {
-        alert(`Optimized code:\n\n${optimized}`)
-      }
-      break
-    case 'format':
-      const formatted = await formatCode(codeInput.value, actionLanguage.value)
-      if (formatted) {
-        codeInput.value = formatted
-        logger.debug('Code formatted')
-      }
-      break
-    case 'lint':
-      const fixed = await lintFix(codeInput.value, actionLanguage.value)
-      if (fixed) {
-        codeInput.value = fixed
-        logger.debug('Linting fixed')
-      }
-      break
-    case 'test':
-      await generateTests(codeInput.value, actionLanguage.value)
-      break
-  }
+  const replacement = await runCodeAction(actionType.value, codeInput.value, actionLanguage.value, {
+    suggestRefactor, optimizeCode, formatCode, lintFix, generateTests,
+  })
+  if (replacement) codeInput.value = replacement
 }
 
 function copyToClipboard(text: string) {
@@ -138,16 +124,16 @@ const templateCategories = computed(() => {
 
     <!-- Tabs -->
     <nav class="tab-nav">
-      <button @click="activeTab = 'search'" :class="['tab-btn', { active: activeTab === 'search' }]">
+      <button v-if="QUICK_SEARCH_ENABLED" @click="activeTab = 'search'" :class="['tab-btn', { active: activeTab === 'search' }]">
         <Icon name="search" /> {{ $t('views.devSpeedup.quickSearch') }}
       </button>
-      <button @click="activeTab = 'snippets'" :class="['tab-btn', { active: activeTab === 'snippets' }]">
+      <button v-if="SNIPPET_GENERATE_ENABLED" @click="activeTab = 'snippets'" :class="['tab-btn', { active: activeTab === 'snippets' }]">
         <Icon name="puzzle-piece" /> {{ $t('views.devSpeedup.snippetsTab', { count: snippets.length }) }}
       </button>
       <button @click="activeTab = 'templates'" :class="['tab-btn', { active: activeTab === 'templates' }]">
         <Icon name="file-code" /> {{ $t('views.devSpeedup.templatesTab', { count: templates.length }) }}
       </button>
-      <button @click="activeTab = 'actions'" :class="['tab-btn', { active: activeTab === 'actions' }]">
+      <button v-if="CODE_ACTIONS_ENABLED" @click="activeTab = 'actions'" :class="['tab-btn', { active: activeTab === 'actions' }]">
         <Icon name="bolt" /> {{ $t('views.devSpeedup.quickActions') }}
       </button>
     </nav>
@@ -155,7 +141,7 @@ const templateCategories = computed(() => {
     <!-- Tab Content -->
     <div class="tab-content">
       <!-- Search Tab -->
-      <div v-show="activeTab === 'search'" class="tab-panel">
+      <div v-if="QUICK_SEARCH_ENABLED" v-show="activeTab === 'search'" class="tab-panel">
         <div class="card">
           <div class="card-header"><span class="card-title">{{ $t('views.devSpeedup.quickCodeSearch') }}</span></div>
           <div class="card-body">
@@ -199,7 +185,7 @@ const templateCategories = computed(() => {
       </div>
 
       <!-- Snippets Tab -->
-      <div v-show="activeTab === 'snippets'" class="tab-panel">
+      <div v-if="SNIPPET_GENERATE_ENABLED" v-show="activeTab === 'snippets'" class="tab-panel">
         <div class="card">
           <div class="card-header"><span class="card-title">{{ $t('views.devSpeedup.generateCodeSnippet') }}</span></div>
           <div class="card-body">
@@ -285,7 +271,7 @@ const templateCategories = computed(() => {
       </div>
 
       <!-- Actions Tab -->
-      <div v-show="activeTab === 'actions'" class="tab-panel">
+      <div v-if="CODE_ACTIONS_ENABLED" v-show="activeTab === 'actions'" class="tab-panel">
         <div class="card">
           <div class="card-header"><span class="card-title">{{ $t('views.devSpeedup.quickCodeActions') }}</span></div>
           <div class="card-body">

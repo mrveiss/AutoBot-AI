@@ -254,6 +254,7 @@
   --slm-gray-300: #d1d5db;
   --slm-gray-500: #6b7280;
   --slm-gray-700: #374151;
+  --slm-gray-800: #1f2937;
   --slm-red-100: #fee2e2;
   --slm-red-700: #b91c1c;
   --slm-blue-100: #dbeafe;
@@ -268,6 +269,8 @@
   --slm-emerald-500: #10b981;
   --slm-emerald-600: #059669;
   --slm-orange-100: #ffedd5;
+  /* Sidebar update badge: system updates pending (amber-500 is code sync only). */
+  --slm-orange-500: #f97316;
   --slm-orange-600: #ea580c;
   /* Amber action shades + slate terminal-panel shades (ProcessMonitorTab #11899, ConfigHistoryTab #11900). */
   --slm-amber-500: #f59e0b;

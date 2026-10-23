@@ -407,7 +407,7 @@ def service_unavailable_response(
 # ============================================================================
 
 
-def raise_not_found(message: str = "Resource not found") -> None:
+def raise_not_found_with_message(message: str = "Resource not found") -> None:
     """Raise HTTPException for 404 Not Found."""
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=message)
 
@@ -427,7 +427,7 @@ def raise_forbidden(message: str = "Forbidden") -> None:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=message)
 
 
-def raise_internal_error(message: str = "Internal server error") -> None:
+def raise_internal_error_with_message(message: str = "Internal server error") -> None:
     """Raise HTTPException for 500 Internal Server Error."""
     raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=message)
 

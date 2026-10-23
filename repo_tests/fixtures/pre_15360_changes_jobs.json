@@ -98,7 +98,7 @@
    ]
   },
   "other_jobs_sha256": {
-   "review": "a894af95-8045782b-00b933e3-6599a0de-7c04c8f2-38cc9fe4-212e647a-f07439b9"
+   "review": "c4da5772-74ac3142-f2f51e84-da110e40-11b691c5-426b56ce-9bbba9c8-4742495c"
   },
   "outputs": [
    "reviewable"
@@ -369,7 +369,6 @@
      "pipeline-scripts/**",
      "tools/lint/**",
      "autobot-infrastructure/shared/scripts/**",
-     "autobot-slm-backend/ansible/roles/slm_agent/files/**",
      "autobot-slm-backend/ansible/roles/backend/files/**",
      "autobot-backend/config/permission_rules.yaml",
      "autobot-backend/static/error_messages.yaml",
@@ -387,9 +386,9 @@
     ]
    },
    "file": ".github/filters/code-quality-paths.yml",
-   "sha256": "510ea95c-df2d88cf-736421c4-38b2065a-654721c1-bacbdd63-4010eb4b-96f2f992"
+   "sha256": "83ac730c-745162c5-e32f6573-c5f40561-fe25f4f4-d55e69d5-de2748cc-1362af3e"
   },
-  "header_sha256": "09836f9e-d91a04a1-1347aadd-9686eee8-b16f35c7-1282cd7b-b23628ca-5396ac5d",
+  "header_sha256": "5038f297-5490d82c-e53d78c7-b13d9f9a-44d5ece5-70782fbe-346d8ec4-5f6496fd",
   "job_level_extras": [],
   "on": {
    "merge_group": null,
@@ -429,7 +428,6 @@
      "pipeline-scripts/**",
      "tools/lint/**",
      "autobot-infrastructure/shared/scripts/**",
-     "autobot-slm-backend/ansible/roles/slm_agent/files/**",
      "autobot-slm-backend/ansible/roles/backend/files/**",
      "autobot-backend/config/permission_rules.yaml",
      "autobot-backend/static/error_messages.yaml",
@@ -454,7 +452,7 @@
    ]
   },
   "other_jobs_sha256": {
-   "code-quality": "6370ad2f-9ced1aa9-3a9cf6ee-d7647683-f9d4d607-3cf52227-48bf1df6-2484b545"
+   "code-quality": "5e896dba-2adbd3c9-e09ab9ae-8d851a42-afe587a4-c4c048ab-7b67a84c-31619405"
   },
   "outputs": [
    "backend"
@@ -493,7 +491,6 @@
      "pipeline-scripts/**",
      "tools/lint/**",
      "autobot-infrastructure/shared/scripts/**",
-     "autobot-slm-backend/ansible/roles/slm_agent/files/**",
      "autobot-slm-backend/ansible/roles/backend/files/**",
      "autobot-backend/config/permission_rules.yaml",
      "autobot-backend/static/error_messages.yaml",
@@ -511,7 +508,7 @@
     ]
    },
    "file": ".github/filters/code-quality-paths.yml",
-   "sha256": "510ea95c-df2d88cf-736421c4-38b2065a-654721c1-bacbdd63-4010eb4b-96f2f992"
+   "sha256": "83ac730c-745162c5-e32f6573-c5f40561-fe25f4f4-d55e69d5-de2748cc-1362af3e"
   },
   "header_sha256": "cad81a4c-5ce99eec-c4f17ee4-2194a963-a7672eb9-d6251c56-2b4a1602-c65966fd",
   "job_level_extras": [],
@@ -692,7 +689,7 @@
    ]
   },
   "other_jobs_sha256": {
-   "smoke-test": "6ddd11b0-5645807b-d737bb26-b9f3b3e6-ae12c556-9bc541da-630ffd2a-98e1dc05"
+   "smoke-test": "463e73b4-f2af6256-388a3595-ee5f9b4a-056b5e48-f3edfdcd-da16e080-d84c1db5"
   },
   "outputs": [
    "docker"
@@ -845,9 +842,9 @@
   },
   "other_jobs_sha256": {
    "build-test": "3fd7f4c0-63a0a145-c290bd2a-75ab472b-ef4f429a-e73fd899-852ae7aa-2916e273",
-   "security-scan": "6347ec9e-c7fc25ef-642f96ec-1c621272-2759cce1-72e9ba04-04bd40ca-7c538807",
+   "security-scan": "5c95d26a-60d1831b-44e429b6-e40209b6-cba46566-f482ec3f-cd5b247b-92ccf9a4",
    "test-summary": "21a0a14e-3456bf36-0f235718-4be0366f-847644c5-f152cd13-cade046a-6f015388",
-   "unit-tests": "a6f75458-279d67f9-0c2b95d8-503ff163-5285aff6-8e93680b-1650d4ce-a85b5753"
+   "unit-tests": "489cce94-94409927-bbe4d011-63b3d406-08a14e32-90d346f2-1767ca4a-71cb4306"
   },
   "outputs": [
    "frontend"
@@ -939,7 +936,7 @@
   },
   "other_jobs_sha256": {
    "migration-matrix": "56f77551-31073ea2-fcbedcc1-084d04d6-dd858fed-912ec86e-7b364952-d0a5fac8",
-   "migration-tests": "29c97688-aaf66f87-4b9a401f-c5ca8259-83c0dbf9-042450de-eb6c8059-eaa3e461"
+   "migration-tests": "e8afa7e8-d3449785-d179ae56-32d553e1-afd5337b-f18ceb42-f225b4f8-bbdf11fe"
   },
   "outputs": [
    "migrations"
@@ -1300,10 +1297,10 @@
   },
   "other_jobs_sha256": {
    "compliance-check": "123899e0-fd587e01-b14084dd-0e8759c8-fe7288b4-9ffd527b-46a3f255-e6168d12",
-   "dependency-security": "811296db-235ee056-4ea5b248-db3f573a-d2a98278-08e91fcc-33a3a5cc-f3e51a6c",
+   "dependency-security": "df69eea4-4640e723-3d0139e1-7cf03735-35c2af86-2d36366e-098371e6-9fa5cff5",
    "secret-detection": "1a70dd4d-b07dda90-8885db96-e999d7fa-2ebac94b-4549aee2-a00815ba-ad431d1d",
-   "security-summary": "75add4e0-6fa942ab-958cc4fc-a2714089-47a9bf76-c01f04bb-1dc39ed0-85eeb8d8",
-   "static-analysis": "d41ed129-f869d439-cb89e832-8a2f6ee7-efb810df-cbf809c2-30657d00-5485b517"
+   "security-summary": "d7ada57f-e7d14e7d-4559749f-a7e4e3e6-44b5e914-96e7e4aa-fb0a26fc-7de2aaa9",
+   "static-analysis": "f27cd020-be74dfdc-a50d1946-f1e0d1c6-bdef6255-f121145c-5dcbd146-02398fee"
   },
   "outputs": [
    "deps",

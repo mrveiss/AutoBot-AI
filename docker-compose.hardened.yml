@@ -172,6 +172,13 @@ services:
         limits:
           pids: 64
 
+  autobot-slm-gui:
+    # read_only + tmpfs already set in base compose (#18585)
+    deploy:
+      resources:
+        limits:
+          pids: 64
+
   # ── Optional services ─────────────────────────────────────────────────────
 
   autobot-prometheus:

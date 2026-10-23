@@ -497,13 +497,6 @@ class TerminalInputRequest(BaseModel):
     is_password: bool | None = False
 
 
-class WorkflowControlRequest(BaseModel):
-    action: str  # pause, resume, approve_step, cancel
-    workflow_id: str | None = None
-    step_id: str | None = None
-    data: Dict | None = None
-
-
 class ToolInstallRequest(BaseModel):
     tool_name: str
     package_name: str | None = None

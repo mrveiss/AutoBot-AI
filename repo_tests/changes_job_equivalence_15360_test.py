@@ -81,7 +81,11 @@ ISSUE_17822_ENTRIES = tuple(
         (Path(__file__).parent / "fixtures" / "issue_17822_migration_gate_entries.json").read_text(encoding="utf-8")
     )
 )
-assert len(ISSUE_17822_ENTRIES) == 11, "the pinned #17822 set is eleven entries; an emptied fixture would pin nothing"
+# 13 = the eleven #17822 entries plus `services/__init__.py` and `services/approval_gate_service.py`,
+# which the migration tests import.
+assert (
+    len(ISSUE_17822_ENTRIES) == 13
+), "the pinned migration-gate set is 13 entries; an emptied fixture would pin nothing"
 ISSUE_17822_WORKFLOW = "migration-gate"
 EVENTS = ("push", "pull_request", "merge_group", "schedule", "workflow_dispatch")
 MG_SHA = "merge-group-base-sha"  # a stand-in value; only its presence or absence is compared
@@ -147,7 +151,57 @@ def filter_source(raw: str, read: ReadFile) -> dict:
 #: `_changes.yml`; so editing it now runs the suite. Nothing else about any path set moves.
 ALLOWED_ADDITIONS = {
     #  + #17822: the migration-gate guard reads migration-gate.yml, so editing it must run the suite.
-    ".github/filters/python-paths.yml": {"python": [f"{WORKFLOWS}/_changes.yml", f"{WORKFLOWS}/migration-gate.yml"]},
+    ".github/filters/python-paths.yml": {
+        "python": [
+            f"{WORKFLOWS}/_changes.yml",
+            f"{WORKFLOWS}/migration-gate.yml",
+            f"{WORKFLOWS}/ai-security-review.yml",
+            # #17856: frontend_api_timeout_ssot_17856_test reads both .env.example files.
+            ".env.example",
+            "autobot-frontend/.env.example",
+            # #18592: install_preflight_and_source_18581_test.py reads INSTALL.md; compose_slm_gui_profile_18585_test.py reads the root compose file and the frontend Dockerfile.
+            "INSTALL.md",
+            "docker-compose.yml",
+            "docker/frontend/Dockerfile",
+            # #18556: one_static_data_copy_18556_test.py reads the canonical static data files.
+            "autobot-backend/config/permission_rules.yaml",
+            "autobot-backend/static/error_messages.yaml",
+            "autobot-monitoring/prometheus.yml",
+            "autobot-monitoring/grafana/provisioning/datasources/prometheus.yml",
+            "autobot-backend/config/llm_models.yaml",
+            "autobot-infrastructure/shared/config/permission_rules.yaml",
+            "**/error_messages.yaml",
+            "**/prometheus.yml",
+            "**/permission_rules.yaml",
+            "**/llm_models.yaml",
+            # #18549: one_playwright_server_18549_test.py reads the canonical server and its store.
+            "autobot-browser-worker/playwright-server.js",
+            "autobot-browser-worker/session-store.js",
+            # #18553: redis_direct_constructor_18553_test.py scans this installer for direct redis constructors.
+            "autobot-backend/code_analysis/install.sh",
+            # #15469: one_brand_mark_and_announcer_18240_test.py pins these icons to the kit mark.
+            "autobot-frontend/public/favicon.ico",
+            "autobot-frontend/public/favicon.svg",
+            "autobot-slm-frontend/public/favicon.svg",
+            # #18500: the autofix steps moved into a composite action with a dispatch-only caller; its guards read both.
+            ".github/actions/generated-types-autofix/action.yml",
+            f"{WORKFLOWS}/dispatch-generated-types.yml",
+            # #18555: env_file_family_18555_test.py reads every tracked env file.
+            "**/.env*",
+            # #18555: root-level env files; `**/` alone does not match the root.
+            ".env*",
+            "autobot-slm-frontend/package.json",
+            "**/*.env",
+            # #18653: uninstall_covers_role_packages_18653_test.py reads .python-version.
+            ".python-version",
+            # #18729: docker_admin_seed_18729_test.py reads every Docker entrypoint.
+            "docker/*/*entrypoint*.sh",
+            # #18666: install_release_signed_18666_test.py compares release.yml's cosign pin with this one.
+            f"{WORKFLOWS}/image-sign.yml",
+            # #18666: the same test runs the signing-key gate against the real cosign.pub.
+            "cosign.pub",
+        ]
+    },
     # frontend_path_filter_mirror_test pins frontend-test.yml's on.push.paths to this file, so the
     # `_changes.yml` entry the workflow gained has to be here too.
     ".github/filters/frontend-paths.yml": {"frontend": [f"{WORKFLOWS}/_changes.yml"]},

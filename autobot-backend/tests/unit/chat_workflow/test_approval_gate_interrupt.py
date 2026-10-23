@@ -269,7 +269,7 @@ async def test_deny_skips_execution_entirely(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_execute_tools_clears_requires_approval_before_to_avoid_double_block(monkeypatch):
-    """The seam gate (_enforce_work_item_approval) must not re-fire in execute_tools
+    """The seam gate (_enforce_ai_line) must not re-fire in execute_tools
     on the graph path — the interrupt already decided. Verified by asserting the
     ctx handed to _process_tool_calls carries an empty requires_approval_before."""
     graph = _graph_module()
@@ -346,15 +346,29 @@ async def test_manager_plan_only_never_calls_process_tool_calls(monkeypatch):
 # --- _tool_call_needs_approval: combined gate reuses _approval_category_for -
 
 
-def test_tool_call_needs_approval_combined_gate():
-    graph = _graph_module()
+@pytest.mark.asyncio
+async def test_tool_call_needs_approval_asks_the_single_resolver():
+    """The plan-time interrupt asks the same resolver the seam enforces (#18430): any line above 1."""
     from types import SimpleNamespace
 
-    gated_ctx = SimpleNamespace(requires_approval_before=["destructive operations"])
-    ungated_ctx = SimpleNamespace(requires_approval_before=[])
-    non_matching_ctx = SimpleNamespace(requires_approval_before=["publishing"])
+    from autobot_shared.ai_lines import AiLine
+    from tests.unit.chat_workflow.test_ai_line_support import VERIFIED_COMPANY, ai_line_world
 
-    assert graph._tool_call_needs_approval({"name": "bash"}, gated_ctx) is True
-    assert graph._tool_call_needs_approval({"name": "bash"}, ungated_ctx) is False
-    assert graph._tool_call_needs_approval({"name": "bash"}, non_matching_ctx) is False
-    assert graph._tool_call_needs_approval({"name": "web_search"}, gated_ctx) is False
+    graph = _graph_module()
+    ctx = SimpleNamespace(requires_approval_before=[], context={"verified_company_id": VERIFIED_COMPANY})
+    relaxed = ["destructive operations", "executing code"]
+
+    with ai_line_world():
+        # Unset mutating action: line 2 by default -- and the baseline gates its category anyway.
+        assert await graph._tool_call_needs_approval({"name": "bash"}, ctx) is True
+        # A read changes nothing and is not managed.
+        assert await graph._tool_call_needs_approval({"name": "web_search"}, ctx) is False
+    # Contrast: a company set line 1 and the administrator relaxed the category -> no interrupt.
+    with ai_line_world(stored=AiLine.AUTONOMOUS, slm_relaxed=relaxed):
+        assert await graph._tool_call_needs_approval({"name": "bash"}, ctx) is False
+    # ... but the baseline alone holds it back again if the category is not relaxed.
+    with ai_line_world(stored=AiLine.AUTONOMOUS):
+        assert await graph._tool_call_needs_approval({"name": "bash"}, ctx) is True
+    # Line 3 always interrupts (the seam then refuses).
+    with ai_line_world(stored=AiLine.NEVER, slm_relaxed=relaxed):
+        assert await graph._tool_call_needs_approval({"name": "bash"}, ctx) is True

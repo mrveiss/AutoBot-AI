@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 /**
  * SecretsSettings - System Secrets Management (#1417)
  *
@@ -181,25 +182,7 @@ onMounted(() => {
 <template>
   <div class="p-6 space-y-6">
     <!-- Messages -->
-    <div
-      v-if="error"
-      class="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-3"
-    >
-      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-        />
-      </svg>
-      {{ error }}
-      <button class="ml-auto text-red-500 hover:text-red-700" @click="error = null" :aria-label="$t('settings.admin.secretsSettings.dismissError')">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-    </div>
+    <BaseAlert v-if="error" variant="error" :message="error" dismissible :dismiss-label="$t('settings.admin.secretsSettings.dismissError')" @dismiss="error = null" />
 
     <div
       v-if="success"

@@ -9,7 +9,7 @@ Issue #381: Extracted from workflow_templates.py god class refactoring.
 Provides pre-configured workflow templates for common use cases.
 
 Package Structure:
-- types.py: Core data classes (WorkflowStep, WorkflowTemplate, TemplateCategory)
+- types.py: Core data classes (WorkflowStep, WorkflowTemplate, WorkflowTemplateCategory)
 - security.py: Security workflow templates
 - research.py: Research workflow templates
 - sysadmin.py: System administration workflow templates
@@ -62,14 +62,14 @@ from .sysadmin import (
 )
 
 # Re-export all public types for backward compatibility
-from .types import TemplateCategory, WorkflowStep, WorkflowTemplate
+from .types import WorkflowStep, WorkflowTemplate, WorkflowTemplateCategory
 
 # Global template manager instance for backward compatibility
 workflow_template_manager = WorkflowTemplateManager()
 
 __all__ = [
     # Core types
-    "TemplateCategory",
+    "WorkflowTemplateCategory",
     "WorkflowStep",
     "WorkflowTemplate",
     # Manager

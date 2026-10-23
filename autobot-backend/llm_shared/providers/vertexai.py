@@ -36,6 +36,7 @@ from llm_shared.types import ProviderType
 
 from ..base_provider import BaseProvider
 from .anthropic import _route_sampling_kwargs
+from .anthropic_format import split_system_and_chat
 from .cache_utils import sorted_for_cache
 
 logger = get_logger(__name__)
@@ -297,16 +298,24 @@ class VertexAIProvider(BaseProvider):
     # Claude-on-Vertex completion helpers
     # ------------------------------------------------------------------
 
-    def _split_messages_for_anthropic(self, messages: list) -> tuple[str, list]:
-        """Separate system message from conversational messages."""
-        system_content = ""
-        chat_messages = []
-        for msg in messages:
-            if msg.get("role") == "system":
-                system_content = msg.get("content", "")
-            else:
-                chat_messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
-        return system_content, chat_messages
+    @staticmethod
+    def _parse_claude_blocks(blocks: Any) -> tuple[str, List[ToolCall]]:
+        """Concatenate the text blocks and collect the tool_use blocks of a Claude response."""
+        content = ""
+        tool_calls: List[ToolCall] = []
+        for block in blocks:
+            block_type = getattr(block, "type", None)
+            if block_type == "text":
+                content += getattr(block, "text", "")
+            elif block_type == "tool_use":
+                tool_calls.append(
+                    ToolCall(
+                        id=block.id,
+                        name=block.name,
+                        arguments=block.input if isinstance(block.input, dict) else {},
+                    )
+                )
+        return content, tool_calls
 
     async def _claude_chat_completion(self, request: LLMRequest) -> LLMResponse:
         """Non-streaming Claude-on-Vertex completion via AnthropicVertex."""
@@ -314,7 +323,7 @@ class VertexAIProvider(BaseProvider):
         start = time.time()
         try:
             client = self._ensure_anthropic_vertex_client()
-            system_content, chat_messages = self._split_messages_for_anthropic(request.messages)
+            system_content, chat_messages = split_system_and_chat(request.messages)
 
             kwargs: Dict[str, Any] = {
                 "model": model_name,
@@ -336,20 +345,7 @@ class VertexAIProvider(BaseProvider):
             call_kwargs = sorted_for_cache(kwargs)
             response = await client.messages.create(**call_kwargs)
 
-            content = ""
-            tool_calls: List[ToolCall] = []
-            for block in response.content:
-                block_type = getattr(block, "type", None)
-                if block_type == "text":
-                    content += getattr(block, "text", "")
-                elif block_type == "tool_use":
-                    tool_calls.append(
-                        ToolCall(
-                            id=block.id,
-                            name=block.name,
-                            arguments=block.input if isinstance(block.input, dict) else {},
-                        )
-                    )
+            content, tool_calls = self._parse_claude_blocks(response.content)
 
             total_tokens = response.usage.input_tokens + response.usage.output_tokens
             finish_reason = "tool_calls" if tool_calls else response.stop_reason
@@ -389,7 +385,7 @@ class VertexAIProvider(BaseProvider):
         """Streaming Claude-on-Vertex completion via AnthropicVertex."""
         model_name = request.model_name or self._get_setting("default_model", _DEFAULT_MODEL)
         client = self._ensure_anthropic_vertex_client()
-        system_content, chat_messages = self._split_messages_for_anthropic(request.messages)
+        system_content, chat_messages = split_system_and_chat(request.messages)
 
         kwargs: Dict[str, Any] = {
             "model": model_name,

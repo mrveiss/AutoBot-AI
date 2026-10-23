@@ -17,7 +17,7 @@ from .models import WorkflowStep
 logger = get_logger(__name__)
 
 
-class WorkflowTemplateManager:
+class AutomationStepTemplateManager:
     """Manages workflow templates for common automation tasks"""
 
     def __init__(self) -> None:

@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 from typing import TYPE_CHECKING, Any, Dict, List
 
 from autobot_shared.content_digest import fact_dedup_key
+from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
 from knowledge.fact_projection import FactProjectionMixin
 from knowledge.fact_sharing import FactSharingMixin
@@ -266,44 +267,20 @@ _ACCESS_BUMP_LUA = (
 )
 
 
-def _env_int(name: str, default: int) -> int:
-    """Parse an int env var, never raising at import — bad values fall back."""
-    raw = os.environ.get(name)
-    if raw is None:
-        return default
-    try:
-        return int(raw)
-    except (TypeError, ValueError):
-        logger.warning("Invalid %s=%r — using default %s", name, raw, default)
-        return default
-
-
-def _env_float_safe(name: str, default: float) -> float:
-    raw = os.environ.get(name)
-    if raw is None:
-        return default
-    try:
-        val = float(raw)
-    except (TypeError, ValueError):
-        logger.warning("Invalid %s=%r — using default %s", name, raw, default)
-        return default
-    return val if val == val else default  # reject NaN
-
-
 # A3 (#12554): fact-lane consolidation thresholds. Conservative by design — see consolidate_facts for the full no-
 # data-loss reasoning. A fact is prunable only if it is UNPROTECTED, low-quality, never recalled since instrumentation
 # began (access_count == 0, A1 #12552), created AFTER the instrumentation epoch (so a 0 count is meaningful, not
 # "predates A1"), and aged past the floor.
-_FACTS_PRUNE_QUALITY_FLOOR: float = _env_float_safe("AUTOBOT_FACTS_PRUNE_QUALITY_FLOOR", 0.1)
-_FACTS_PRUNE_MAX_AGE_DAYS: int = _env_int("AUTOBOT_FACTS_PRUNE_MAX_AGE_DAYS", 180)
-_FACTS_PRUNE_SCAN_LIMIT: int = _env_int("AUTOBOT_FACTS_PRUNE_SCAN_LIMIT", 5000)
+_FACTS_PRUNE_QUALITY_FLOOR: float = env_float("AUTOBOT_FACTS_PRUNE_QUALITY_FLOOR", 0.1, reject_nan=True)
+_FACTS_PRUNE_MAX_AGE_DAYS: int = env_int("AUTOBOT_FACTS_PRUNE_MAX_AGE_DAYS", 180)
+_FACTS_PRUNE_SCAN_LIMIT: int = env_int("AUTOBOT_FACTS_PRUNE_SCAN_LIMIT", 5000)
 # Instrumentation epoch: ISO date A1 access-tracking began for THIS deployment.
 # Facts created before it have unknown recall history → never pruned. UNSET =
 # feature inert (no candidates) so an un-configured deploy can never mass-delete.
 _FACTS_PRUNE_EPOCH: str = os.environ.get("AUTOBOT_FACTS_PRUNE_EPOCH", "").strip()
 # Circuit breaker: if a single run would prune more than this many facts, refuse
 # and log loudly — a healthy decay pass sheds a trickle, not thousands.
-_FACTS_PRUNE_MAX_PER_RUN: int = _env_int("AUTOBOT_FACTS_PRUNE_MAX_PER_RUN", 100)
+_FACTS_PRUNE_MAX_PER_RUN: int = env_int("AUTOBOT_FACTS_PRUNE_MAX_PER_RUN", 100)
 
 
 def _fact_is_protected(metadata: Dict[str, Any]) -> bool:

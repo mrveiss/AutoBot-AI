@@ -39,9 +39,9 @@ def initialize_providers():
 
     # ── Cloud providers (Issue #10147) ────────────────────────────────────────
     # Import selection module to discover which provider (if any) is active.
-    from voice_processing.providers.selection import _PROVIDER_MAP, get_active_provider_id
+    from voice_processing.providers.selection import _PROVIDER_MAP, get_active_asr_provider_id
 
-    active_cloud_id = get_active_provider_id()
+    active_cloud_id = get_active_asr_provider_id()
 
     for provider_id, provider_cls in _PROVIDER_MAP.items():
         try:

@@ -17,8 +17,10 @@ from fastapi import HTTPException
 
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.scoping import Principal
 from autobot_shared.ssot_config import config
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
+from knowledge.where_combine import and_where
 
 logger = get_logger(__name__)
 
@@ -376,7 +378,7 @@ def non_private_where(caller_where: Dict | None = None) -> Dict:
             {"access_level": {"$in": list(NON_PRIVATE_ACCESS)}},
         ]
     }
-    return {"$and": [platform_wide, RESEARCH_QUARANTINE_FILTER, *([caller_where] if caller_where else [])]}
+    return and_where(platform_wide, RESEARCH_QUARANTINE_FILTER, caller_where)  # type: ignore[return-value]
 
 
 def is_non_private(metadata: Dict | None) -> bool:
@@ -395,3 +397,91 @@ def filter_non_private_results(results: List[Dict] | None) -> List[Dict]:
     the enhanced path, and this post-filter holds whatever the pre-filter did.
     """
     return [r for r in results or [] if is_non_private(r.get("metadata"))]
+
+
+class _SystemScopeSentinel:
+    """Type of :data:`SYSTEM_SCOPE` -- deliberately not ``str`` (#16664).
+
+    A plain string sentinel would equal a username that spells it. A non-``str``
+    singleton compared with ``is`` can never equal anything a caller supplies
+    (the same shape as ``memory.verbatim_store.UNSCOPED_ALL_USERS``).
+    """
+
+    def __repr__(self) -> str:
+        return "SYSTEM_SCOPE"
+
+
+#: The one explicit way to read the KB with no user (background, system, MCP stdio): it sees
+#: non-private facts only, via :func:`filter_non_private_results`. A missing principal is
+#: never read as this -- it raises (:func:`require_kb_principal`).
+SYSTEM_SCOPE = _SystemScopeSentinel()
+
+KbPrincipal = Principal | _SystemScopeSentinel
+
+
+def kb_principal(current_user) -> Principal:
+    """The visibility principal of an authenticated caller (#16664).
+
+    Built from :func:`extract_user_context_from_request`, so the user, org and groups are the
+    ones every other KB read path resolves. There is deliberately no admin flag: RAG and chat
+    grounding never bypass visibility.
+    """
+    user_id, org_id, group_ids = extract_user_context_from_request(current_user)
+    return _authenticated_principal(user_id, org_id, group_ids)
+
+
+def _authenticated_principal(user_id, org_id, group_ids) -> Principal:
+    """The one place a KB ``Principal`` is constructed; no user id is refused (#16664)."""
+    if not user_id:
+        raise ValueError("kb_principal needs an authenticated user; use SYSTEM_SCOPE for a no-user read")
+    return Principal(user_id=user_id, company_id=org_id, group_ids=frozenset(group_ids), is_authenticated=True)
+
+
+def kb_principal_from_tenant(tenant) -> Principal:
+    """The visibility principal of a verified ``TenantContext`` (#16664, #18825).
+
+    For routes that take ``get_tenant_context`` and no user dict. Same ``Principal`` as
+    :func:`kb_principal`: user and org come from the verified context; a tenant context carries
+    no team memberships, so ``group_ids`` is empty (as for dict-based auth). No admin bypass.
+    """
+    user_id = str(tenant.user_id) if getattr(tenant, "user_id", None) else None
+    org_id = str(tenant.org_id) if getattr(tenant, "org_id", None) else None
+    return _authenticated_principal(user_id, org_id, [])
+
+
+def principal_for_identity(user_id: str | None, org_id: str | None = None) -> KbPrincipal:
+    """The principal for a verified identity; no user id reads as :data:`SYSTEM_SCOPE` (#16664).
+
+    For callers that hold ids, not a user object (a chat session). The fallback is the
+    non-private-only scope, never a wider one.
+    """
+    if not user_id:
+        return SYSTEM_SCOPE
+    return kb_principal({"user_id": user_id, "org_id": org_id})
+
+
+def require_kb_principal(principal) -> KbPrincipal:
+    """Return *principal* if it is a real one: ``None`` -> ValueError, any other type -> TypeError (#16664)."""
+    if principal is None:
+        raise ValueError("a KB read needs a principal; pass SYSTEM_SCOPE explicitly for a no-user read")
+    if principal is SYSTEM_SCOPE or isinstance(principal, Principal):
+        return principal
+    raise TypeError(f"principal must be a Principal or SYSTEM_SCOPE, not {type(principal).__name__}")
+
+
+async def filter_for_principal(results: List[Dict], principal: KbPrincipal, ownership_manager) -> List[Dict]:
+    """*results* the principal may read: the one result filter for RAG and chat grounding (#16664).
+
+    ``SYSTEM_SCOPE`` keeps non-private facts only; a ``Principal`` goes through
+    :func:`filter_search_results_by_permission` with no admin bypass.
+    """
+    principal = require_kb_principal(principal)
+    if principal is SYSTEM_SCOPE:
+        return filter_non_private_results(results)
+    return await filter_search_results_by_permission(
+        results,
+        principal.user_id,
+        principal.company_id,
+        list(principal.group_ids),
+        ownership_manager=ownership_manager,
+    )

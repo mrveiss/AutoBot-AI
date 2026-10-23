@@ -10,7 +10,7 @@
  * Accessibility theme: 2px borders, bordered pills, black on white, 4px active-nav underline.
  * Activated via [data-theme="contrast"] on document root (useTheme.ts).
  * Light-based: themes/light.css supplies the non-colour-name tokens (charts,
- * code syntax, badges, scrollbars) for this theme too. Surfaces, text and
+ * badges, scrollbars) for this theme too; code syntax is this theme's own. Surfaces, text and
  * borders reach the existing names through themes/refined-map.css.
  */
 
@@ -75,6 +75,22 @@
 
   /* Light supplies a slate strong border; here every border is already black. */
   --border-strong: var(--border);
+  /* Code syntax (#18497): this theme's own ink, link and danger colours, every
+     one AA or better on the white code surface (the guard computes it);
+     keywords also carry weight. Replaces light.css's GitHub palette here. */
+  --code-bg: #FFFFFF;
+  --code-text: #000000;
+  --code-keyword: #B00020;
+  --code-operator: #B00020;
+  --code-string: #001A66;
+  --code-number: #0033CC;
+  --code-comment: #1A1A1A;
+  --code-function: #0033CC;
+  --code-variable: #000000;
+  --code-class: #B00020;
+  --code-tag: #B00020;
+  --code-attribute: #001A66;
+  --code-keyword-weight: 700;
 }
 
 /* The Refined contrast theme owns the primary colour: an accent preset

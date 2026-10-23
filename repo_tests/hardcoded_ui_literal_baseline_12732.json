@@ -1,0 +1,1288 @@
+{
+ "autobot-frontend/src/components/admin/NpuWorkerPairConfirmDialog.vue": [
+  "11dfc023",
+  "6b92e019",
+  "869af794",
+  "8d61de85",
+  "b890f9bd",
+  "d61dbf63",
+  "f111403f",
+  "f2e8bd6c",
+  "f9752a06"
+ ],
+ "autobot-frontend/src/components/agents/AgentTaskDetail.vue": [
+  "11948950",
+  "1b8456f8",
+  "33b17059",
+  "3ee7b9cd",
+  "4a58cea2",
+  "5d0b9b8b",
+  "6c2e24cb",
+  "70c4808d",
+  "84ee2423",
+  "971cb344",
+  "9c731fce",
+  "9fe4a3d0",
+  "be68e1e6",
+  "c3696a63",
+  "cb0e36fb"
+ ],
+ "autobot-frontend/src/components/agents/HeartbeatPanel.vue": [
+  "1b71e194",
+  "1c29d3fe",
+  "1dc0ee95",
+  "27ff8fee",
+  "32264654",
+  "3257225f",
+  "3257225f",
+  "42c2b2de",
+  "477c52f3",
+  "51266460",
+  "540a4df7",
+  "579be6a9",
+  "625da2b8",
+  "67749379",
+  "692f3905",
+  "692f3905",
+  "73763dec",
+  "79dd72b3",
+  "7aaf90a1",
+  "7eac686b",
+  "8449c023",
+  "a0f3cf93",
+  "a26e908c",
+  "b4af72f3",
+  "b6daa2d3",
+  "baf36741",
+  "c114b8ec",
+  "c37a913a",
+  "c8453c6a",
+  "f97a9f99",
+  "fc3fe9f3"
+ ],
+ "autobot-frontend/src/components/analytics/AddSourceModal.vue": [
+  "62faf5af",
+  "95750f7b"
+ ],
+ "autobot-frontend/src/components/analytics/AgentCostPanel.vue": [
+  "95f264ee"
+ ],
+ "autobot-frontend/src/components/analytics/AnalyticsGrid.vue": [
+  "485afeef"
+ ],
+ "autobot-frontend/src/components/analytics/CodeEvolutionTimeline.vue": [
+  "1184e1f9",
+  "57210fcc"
+ ],
+ "autobot-frontend/src/components/analytics/CodeGenerationDashboard.vue": [
+  "750034f6",
+  "750034f6",
+  "750034f6"
+ ],
+ "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": [
+  "4feeda39"
+ ],
+ "autobot-frontend/src/components/analytics/CodebaseAnalytics.vue": [
+  "1f992944"
+ ],
+ "autobot-frontend/src/components/analytics/CodebaseDependenciesPanel.vue": [
+  "260038dc",
+  "4f0ad41b"
+ ],
+ "autobot-frontend/src/components/analytics/CodebaseOverviewPanel.vue": [
+  "485afeef"
+ ],
+ "autobot-frontend/src/components/analytics/CodebaseSecurityPanel.vue": [
+  "7a606b5b"
+ ],
+ "autobot-frontend/src/components/analytics/LLMPatternDashboard.vue": [
+  "0b34ceaf",
+  "5a8cdae8",
+  "a1a5d08f",
+  "d573da1d",
+  "f1c7bd09",
+  "fac4e750"
+ ],
+ "autobot-frontend/src/components/analytics/LogPatternDashboard.vue": [
+  "bb0c1794"
+ ],
+ "autobot-frontend/src/components/analytics/PatternAnalysis.vue": [
+  "a8f0c866",
+  "f4b40050"
+ ],
+ "autobot-frontend/src/components/analytics/PrecommitHookDashboard.vue": [
+  "2b0f75f9",
+  "4e76e699",
+  "88c1f758",
+  "ab154f71"
+ ],
+ "autobot-frontend/src/components/analytics/ShareSourceModal.vue": [
+  "0ecfef28",
+  "21af7011"
+ ],
+ "autobot-frontend/src/components/analytics/SourceManager.vue": [
+  "ef7eaada"
+ ],
+ "autobot-frontend/src/components/analytics/UnwiredTrackerTile.vue": [
+  "7c508842",
+  "dcd8b8ad"
+ ],
+ "autobot-frontend/src/components/analytics/panels/CodebaseApiEndpointsPanel.vue": [
+  "147c16b4",
+  "37b3bd2d",
+  "5f541dc2",
+  "829e0344",
+  "c51f5185"
+ ],
+ "autobot-frontend/src/components/analytics/panels/CodebaseBugPredictionPanel.vue": [
+  "13f99239",
+  "2fe03eec",
+  "45f8bb12",
+  "4c722e37",
+  "555ac7c9",
+  "5d58058a",
+  "bbf9bc0b",
+  "caafd6c1",
+  "eedab620",
+  "f0bc38df"
+ ],
+ "autobot-frontend/src/components/analytics/panels/CodebaseConfigDuplicatesPanel.vue": [
+  "0c498e1a",
+  "7b1e2dee",
+  "f9ab2c97",
+  "fe0d914a"
+ ],
+ "autobot-frontend/src/components/analytics/panels/CodebaseCrossLanguagePanel.vue": [
+  "12891ccd",
+  "33d3e44f",
+  "707d255f",
+  "750034f6",
+  "77790874",
+  "dc5579ed",
+  "e9813d8d",
+  "f4b40050",
+  "fd9a3253"
+ ],
+ "autobot-frontend/src/components/analytics/panels/CodebaseEnvironmentPanel.vue": [
+  "006957f0",
+  "0079f356",
+  "03a919c2",
+  "435ecc6f",
+  "5d69a5aa",
+  "c97a62d5",
+  "cbf65645",
+  "cf3997d5"
+ ],
+ "autobot-frontend/src/components/analytics/panels/CodebaseIntelligenceScoresPanel.vue": [
+  "0dcc9bf3",
+  "216f6640",
+  "216f6640",
+  "24b0a425",
+  "29fb2b68",
+  "29fb2b68",
+  "3f2c30e2",
+  "4e76e699",
+  "4e76e699",
+  "4e76e699",
+  "8ae12753",
+  "8b0d9ee0",
+  "a07fb30c",
+  "ab154f71",
+  "ab154f71",
+  "ab154f71",
+  "ab154f71",
+  "bc280a30",
+  "caba3e1d",
+  "d3d24eb3",
+  "fbede0e4"
+ ],
+ "autobot-frontend/src/components/analytics/panels/CodebaseOwnershipPanel.vue": [
+  "006957f0",
+  "4e174cc5",
+  "5fddfcda",
+  "6fb01fbb",
+  "85f9cc7e",
+  "a508267f",
+  "c22fc6dc",
+  "c22fc6dc",
+  "c22fc6dc",
+  "c22fc6dc",
+  "c22fc6dc",
+  "c6f5367c"
+ ],
+ "autobot-frontend/src/components/artifact-cells/ChartCell.vue": [
+  "14901835",
+  "31b78f20",
+  "5fc9a8ea",
+  "5fc9a8ea"
+ ],
+ "autobot-frontend/src/components/artifact-cells/CodeCell.vue": [
+  "4d0a9576",
+  "fd168f9a"
+ ],
+ "autobot-frontend/src/components/async/AsyncComponentWrapper.vue": [
+  "60827ab2"
+ ],
+ "autobot-frontend/src/components/async/AsyncErrorFallback.vue": [
+  "13a4efcf",
+  "29b011ea",
+  "370c2295",
+  "4c2a3884",
+  "a085608a",
+  "e227f5b0",
+  "e31ab34f"
+ ],
+ "autobot-frontend/src/components/autoresearch/ApprovalCard.vue": [
+  "16e5b309",
+  "8a65cfab",
+  "9dfea2a7",
+  "c6436122",
+  "eb3aec1f",
+  "eb57794d"
+ ],
+ "autobot-frontend/src/components/autoresearch/ExperimentTimeline.vue": [
+  "02d410a2",
+  "16f4358c",
+  "6e428a71"
+ ],
+ "autobot-frontend/src/components/autoresearch/InsightsPanel.vue": [
+  "0946d035",
+  "11afb476",
+  "9bfab8dd",
+  "bb0c1794",
+  "f084eb6d",
+  "f9a44517"
+ ],
+ "autobot-frontend/src/components/autoresearch/PromptOptimizerPanel.vue": [
+  "1c03978a",
+  "2095f003",
+  "22adad12",
+  "4b81b8d1",
+  "74093667",
+  "7bf29291",
+  "7d6e50a2",
+  "8d61de85",
+  "b13a5b15",
+  "d296a5e8",
+  "d8a51868",
+  "fe447f5d"
+ ],
+ "autobot-frontend/src/components/browser/InteractiveScreenshot.vue": [
+  "52f7fb51",
+  "8d61de85",
+  "c6c1a239"
+ ],
+ "autobot-frontend/src/components/canvas/CanvasCell.vue": [
+  "00d3c617",
+  "04927b88",
+  "12bfd741",
+  "22061c8a",
+  "240a02f6",
+  "2ba707ec",
+  "479463b0",
+  "52ebe074",
+  "5ae63d74",
+  "5e345721",
+  "64811bdc",
+  "69bd36c1",
+  "8c38429c",
+  "8d61de85",
+  "924f80d9",
+  "ce8600dc",
+  "d4f0e1db",
+  "e3098a3b",
+  "e4d4ea54"
+ ],
+ "autobot-frontend/src/components/canvas/CanvasCellToolbar.vue": [
+  "43331bc2",
+  "8d90ea50",
+  "d1a91251",
+  "d8c0f37d",
+  "e219265b"
+ ],
+ "autobot-frontend/src/components/canvas/CanvasConflictBanner.vue": [
+  "5832b96b",
+  "64e0fdc2",
+  "b27490e9",
+  "bddbe481",
+  "d9a5851e",
+  "eed64c0b"
+ ],
+ "autobot-frontend/src/components/canvas/CanvasEdgeStates.vue": [
+  "12bfd741",
+  "1aca2a6d",
+  "22061c8a",
+  "240a02f6",
+  "2ba707ec",
+  "2ba707ec",
+  "36305686",
+  "5b2d3c10",
+  "69bd36c1",
+  "6a92dd25",
+  "8251abfe",
+  "ac58c479",
+  "f0f06612",
+  "fa52d740"
+ ],
+ "autobot-frontend/src/components/canvas/CanvasExportSheet.vue": [
+  "4d29ad26",
+  "628a4680",
+  "8d61de85",
+  "b13e9b3e",
+  "b903d587",
+  "b903d587",
+  "ba039162",
+  "ea0b350a"
+ ],
+ "autobot-frontend/src/components/canvas/CanvasPanel.vue": [
+  "2bbb0233"
+ ],
+ "autobot-frontend/src/components/canvas/CanvasSplitLayout.vue": [
+  "17c168d8"
+ ],
+ "autobot-frontend/src/components/canvas/CanvasToolPalette.vue": [
+  "28f4d145",
+  "2ba707ec",
+  "43855b30",
+  "4d29ad26",
+  "5ef78ea9",
+  "992381af",
+  "a93fb195",
+  "b8e031d0",
+  "fbe60eec"
+ ],
+ "autobot-frontend/src/components/canvas/CanvasView.vue": [
+  "95465d52"
+ ],
+ "autobot-frontend/src/components/canvas/CodeCell.vue": [
+  "217a8f56",
+  "51fec116",
+  "b7bb0db3",
+  "f1c1e5a5",
+  "ff0ae84e"
+ ],
+ "autobot-frontend/src/components/charts/FunctionCallGraph.vue": [
+  "4bf302ec",
+  "86cb4698",
+  "86cb4698",
+  "86cb4698",
+  "9b04619a"
+ ],
+ "autobot-frontend/src/components/charts/ImportTreeChart.vue": [
+  "605c9515",
+  "f930f805"
+ ],
+ "autobot-frontend/src/components/chat/ChatBrowser.vue": [
+  "e99a4961"
+ ],
+ "autobot-frontend/src/components/chat/ChatFilePanel.vue": [
+  "605c9515"
+ ],
+ "autobot-frontend/src/components/chat/ChatInput.vue": [
+  "11f7ab8c",
+  "1d33149c",
+  "56797029",
+  "58626ccc",
+  "64bbaf1e",
+  "afc2986b",
+  "b16d7296"
+ ],
+ "autobot-frontend/src/components/chat/ChatInterface.vue": [
+  "0486524d",
+  "9439e749",
+  "bc15f868"
+ ],
+ "autobot-frontend/src/components/chat/ChatMessages.vue": [
+  "a80dd66e"
+ ],
+ "autobot-frontend/src/components/chat/DeleteConversationDialog.vue": [
+  "040192b7",
+  "0a99a953"
+ ],
+ "autobot-frontend/src/components/chat/MCPPromptTemplatePicker.vue": [
+  "5ba49200",
+  "8198a23b",
+  "8d61de85",
+  "a9673fc9",
+  "b4218162"
+ ],
+ "autobot-frontend/src/components/chat/McpPromptPicker.vue": [
+  "07421717",
+  "2ba707ec",
+  "470e6c46",
+  "4d5d013c",
+  "50d87ce0",
+  "5cbf61ab",
+  "79904ccc",
+  "8198a23b",
+  "82bb251f",
+  "8d61de85",
+  "98f96d1e",
+  "9bdc93dc",
+  "9fadfece",
+  "b4218162",
+  "bf0d6d8c"
+ ],
+ "autobot-frontend/src/components/chat/MessageItem.vue": [
+  "3c9d733f",
+  "3c9d733f"
+ ],
+ "autobot-frontend/src/components/chat/OverseerStepMessage.vue": [
+  "94d5d8b7",
+  "e73288fc"
+ ],
+ "autobot-frontend/src/components/chat/SlashCommandDropdown.vue": [
+  "508a851f"
+ ],
+ "autobot-frontend/src/components/desktop/DesktopContextPanel.vue": [
+  "9a47f891"
+ ],
+ "autobot-frontend/src/components/desktop/DesktopInterface.vue": [
+  "35ffa0dc",
+  "35ffa0dc",
+  "3761a704",
+  "3d953418",
+  "3d953418",
+  "3d953418",
+  "777d0657",
+  "d35e4e4d",
+  "d35e4e4d",
+  "d35e4e4d",
+  "d9737cd5",
+  "daf325fd",
+  "daf325fd"
+ ],
+ "autobot-frontend/src/components/desktop/PopoutChromiumBrowser.vue": [
+  "1d3591ec",
+  "1d3591ec",
+  "90188fc5",
+  "bcaba128"
+ ],
+ "autobot-frontend/src/components/documents/AIDocumentEditor.vue": [
+  "09291a7d",
+  "2d06b3b5",
+  "44cd160c",
+  "45eb596d",
+  "4e201f34",
+  "6e926fec",
+  "8d61de85",
+  "91464cc8",
+  "a184b6d6",
+  "abcb4551",
+  "f9078a90"
+ ],
+ "autobot-frontend/src/components/examples/ThemingPatternExample.vue": [
+  "0151c1ce",
+  "0e46f202",
+  "177a2bd5",
+  "21ea2c02",
+  "243f3bc2",
+  "2a3eb146",
+  "2a9a02a4",
+  "2b743e84",
+  "39c7fc6e",
+  "41ab97d8",
+  "442ea5b3",
+  "4529a5dc",
+  "4a50881d",
+  "51ebb7a8",
+  "558d2b41",
+  "55dcaac4",
+  "5c3fd7ab",
+  "633d90e4",
+  "64de6390",
+  "6e6884e9",
+  "7a914feb",
+  "7ad518bd",
+  "8549b7bb",
+  "85c68d1c",
+  "9426cb96",
+  "9564b039",
+  "9b2a9c2a",
+  "9bea5304",
+  "a016b32a",
+  "a19766ec",
+  "acdf92c2",
+  "b04f6c1c",
+  "b3959e81",
+  "b71b9b96",
+  "b8b5ca44",
+  "bc004792",
+  "bc966c1c",
+  "c08e9c2c",
+  "c56625e7",
+  "ca508db5",
+  "cbc58743",
+  "cde313f0",
+  "d337d861",
+  "e3f6b489",
+  "f756bf93",
+  "fc78e0b2"
+ ],
+ "autobot-frontend/src/components/file-browser/SandboxFileBrowser.vue": [
+  "0513a32a",
+  "22d061b9",
+  "24b6bc69",
+  "3b578dcb",
+  "4dcc6993",
+  "54ad4a62",
+  "557e5473",
+  "65a9945d",
+  "81f7258d",
+  "ab154f71",
+  "c9310b63",
+  "ec6f302b"
+ ],
+ "autobot-frontend/src/components/knowledge/ChromaDBExplorer.vue": [
+  "01ae7c3d",
+  "07421717",
+  "0849bcc9",
+  "11afb476",
+  "17bc051a",
+  "1de9f35d",
+  "41f8c40a",
+  "4690f715",
+  "551d69f8",
+  "551d69f8",
+  "64223461",
+  "6b86daef",
+  "81e80105",
+  "8f38fc0c",
+  "8f5a9eb3",
+  "9400a8f3",
+  "b1c900cc",
+  "bc56b659",
+  "c603a96b",
+  "d72b7fb1",
+  "e27d8a20",
+  "e2fd6b38",
+  "e2fd6b38",
+  "e831ea7a"
+ ],
+ "autobot-frontend/src/components/knowledge/DeduplicationManager.vue": [
+  "209021d1",
+  "22889243",
+  "8be5e181",
+  "8cc15918",
+  "bad770d6",
+  "d8b5c43f",
+  "e31fb3b3"
+ ],
+ "autobot-frontend/src/components/knowledge/GraphRAGQuery.vue": [
+  "ca160449"
+ ],
+ "autobot-frontend/src/components/knowledge/KBSearchResultPanel.vue": [
+  "0910e9cc",
+  "1a8ff6a9",
+  "2ed6872a",
+  "4f07d0fd",
+  "5033f5a4",
+  "56289275",
+  "69e83d1f",
+  "6d1525cf",
+  "84a613fc",
+  "89ac0de4",
+  "d88b3004",
+  "dba59897",
+  "dc5579ed",
+  "e8180e46",
+  "fbd91534"
+ ],
+ "autobot-frontend/src/components/knowledge/KnowledgeGraph.vue": [
+  "3495e788"
+ ],
+ "autobot-frontend/src/components/knowledge/KnowledgeHealth.vue": [
+  "b5676616",
+  "f668ac5a"
+ ],
+ "autobot-frontend/src/components/knowledge/KnowledgeSystemDocs.vue": [
+  "0f22c973"
+ ],
+ "autobot-frontend/src/components/knowledge/KnowledgeUpload.vue": [
+  "0742c708",
+  "277b9f44",
+  "46a08ca4",
+  "9cb56f41"
+ ],
+ "autobot-frontend/src/components/knowledge/McpResourceBrowser.vue": [
+  "2ba707ec",
+  "391ef8c2",
+  "3b6559d6",
+  "4ec675a7",
+  "848a55a8",
+  "90e997d6",
+  "c3c73fc9",
+  "e0a86782",
+  "e801dfc8",
+  "f01115d3"
+ ],
+ "autobot-frontend/src/components/knowledge/MemoryOrphanManager.vue": [
+  "bb6bcef3"
+ ],
+ "autobot-frontend/src/components/knowledge/SessionOrphanManager.vue": [
+  "b7260870"
+ ],
+ "autobot-frontend/src/components/knowledge/SystemKnowledgeManager.vue": [
+  "0fcc85bb",
+  "1023b318",
+  "3c58e4ae",
+  "41a4df11",
+  "44b5caf2",
+  "5300979e",
+  "55896a17",
+  "70e2ee3d",
+  "7310b98c",
+  "75fab567",
+  "7c0a66f2",
+  "b2a95986",
+  "b3018bfe",
+  "c7e1db8a",
+  "d4aabaa3",
+  "de0d5140",
+  "e596012a",
+  "f210201e",
+  "f3b97a99"
+ ],
+ "autobot-frontend/src/components/knowledge/WebResearchSettings.vue": [
+  "0513a32a",
+  "111669b1",
+  "17e40c0d",
+  "1946bb5e",
+  "22573777",
+  "26f47455",
+  "28a9fce4",
+  "2990aa0f",
+  "33763d86",
+  "43e0c913",
+  "46287f77",
+  "4a3c4ef8",
+  "594b35c1",
+  "62c92992",
+  "669e287b",
+  "670c00bf",
+  "6eedef65",
+  "74879660",
+  "78d42847",
+  "7e573964",
+  "8276cb9c",
+  "984ab65e",
+  "9c1c4d8f",
+  "a56ef13b",
+  "b64b8b96",
+  "b6cf3b15",
+  "b714f49c",
+  "bc0d5fda",
+  "be848833",
+  "c0c1668d",
+  "c2c8225f",
+  "c7d6ab68",
+  "ce50bf86",
+  "da5265b8",
+  "dd92d96e",
+  "e2cc87f5",
+  "e65f789c",
+  "ece8151d",
+  "ede04b08",
+  "ede04b08",
+  "eef83e13",
+  "effeac15",
+  "f28e4ded",
+  "f8b8a7b5",
+  "fab7141e",
+  "fbb15802"
+ ],
+ "autobot-frontend/src/components/knowledge/connectors/ConnectorConfigModal.vue": [
+  "0ed2b751",
+  "37813624",
+  "7b360139",
+  "7ced0344",
+  "7f00c745",
+  "9a76a63e",
+  "a914af1e",
+  "c6dce563",
+  "c7997e24",
+  "e15d156d",
+  "ff48445e"
+ ],
+ "autobot-frontend/src/components/knowledge/connectors/ConnectorHistoryPanel.vue": [
+  "3b2fb91c",
+  "4dcc6993",
+  "61888893",
+  "6f7507e0",
+  "8fbdb817",
+  "ab9a13f3"
+ ],
+ "autobot-frontend/src/components/knowledge/web-research/CrawlTab.vue": [
+  "dcd8b8ad"
+ ],
+ "autobot-frontend/src/components/knowledge/web-research/ExtractTab.vue": [
+  "dcd8b8ad"
+ ],
+ "autobot-frontend/src/components/knowledge/web-research/ScrapeTab.vue": [
+  "0f22c973",
+  "dcd8b8ad"
+ ],
+ "autobot-frontend/src/components/knowledge/web-research/SiteMapTab.vue": [
+  "dcd8b8ad"
+ ],
+ "autobot-frontend/src/components/llc/LlcBreadcrumb.vue": [
+  "20937a73"
+ ],
+ "autobot-frontend/src/components/llc/TemplateBrowser.vue": [
+  "064fb25b",
+  "064fb25b",
+  "5c869296",
+  "64ed7d69",
+  "73ad6586",
+  "759af247",
+  "78df42c1",
+  "7b806a3e",
+  "eab57e55"
+ ],
+ "autobot-frontend/src/components/manpage/ManPageManager.vue": [
+  "0525b4a6",
+  "c02b785c",
+  "ccbf750b"
+ ],
+ "autobot-frontend/src/components/plugins/CapabilityApprovalDialog.vue": [
+  "70eb95f0",
+  "70eb95f0",
+  "b2408a92"
+ ],
+ "autobot-frontend/src/components/plugins/PluginInstallModal.vue": [
+  "9bad67ad"
+ ],
+ "autobot-frontend/src/components/security/SecretsManager.vue": [
+  "87cdfb2e",
+  "9d4ebd1c"
+ ],
+ "autobot-frontend/src/components/security/ThreatIntelligenceDashboard.vue": [
+  "9ada260e",
+  "fb31e383"
+ ],
+ "autobot-frontend/src/components/settings/PushNotificationSettingsPanel.vue": [
+  "17cb7791",
+  "2990aa0f",
+  "43bb08b2",
+  "62601d71",
+  "a32a3729",
+  "b59bb0c0",
+  "c9f96d47",
+  "e0147233",
+  "e3be5d84",
+  "e806316c",
+  "e9d6d3d5"
+ ],
+ "autobot-frontend/src/components/settings/SettingsPanel.vue": [
+  "39f92f56",
+  "fc10feaf"
+ ],
+ "autobot-frontend/src/components/settings/TelegramSettingsPanel.vue": [
+  "a9d9ae21"
+ ],
+ "autobot-frontend/src/components/settings/ThemePresetPicker.vue": [
+  "23cbc8bb",
+  "796a9747",
+  "bc9f7f09",
+  "bd6e538b",
+  "def030fd"
+ ],
+ "autobot-frontend/src/components/terminal/CompletionSuggestions.vue": [
+  "83b0e066"
+ ],
+ "autobot-frontend/src/components/terminal/SSHTerminal.vue": [
+  "725b0d2d",
+  "8c9062cc",
+  "cf68ac57"
+ ],
+ "autobot-frontend/src/components/terminal/TerminalHeader.vue": [
+  "22a5cfdc",
+  "c1eb5ece"
+ ],
+ "autobot-frontend/src/components/terminal/TerminalModals.vue": [
+  "29387b99"
+ ],
+ "autobot-frontend/src/components/terminal/TerminalOutput.vue": [
+  "a204e488"
+ ],
+ "autobot-frontend/src/components/terminal/TerminalStatusBar.vue": [
+  "dc74facd"
+ ],
+ "autobot-frontend/src/components/terminal/TerminalWindow.vue": [
+  "21bb664d",
+  "a1c16083"
+ ],
+ "autobot-frontend/src/components/theme/EmberThemeToggle.vue": [
+  "447f10c7",
+  "adcaad74",
+  "b038cc60",
+  "fd678690"
+ ],
+ "autobot-frontend/src/components/transcriber/AiAnalysisPanel.vue": [
+  "22eae779",
+  "3127427a",
+  "6543eb0e",
+  "6c224ed3",
+  "8db0e9e9",
+  "ce6c5ba6"
+ ],
+ "autobot-frontend/src/components/transcriber/AsrProviderSelector.vue": [
+  "00f090ad",
+  "21d32e0c",
+  "2b7c7aaa",
+  "2ba707ec",
+  "2e499689",
+  "320f7cc3",
+  "32aba378",
+  "3cdae58b",
+  "71873814",
+  "73a8c697",
+  "86402bb7",
+  "b06b6725",
+  "bdc27412",
+  "c553bfc5"
+ ],
+ "autobot-frontend/src/components/transcriber/UploadModal.vue": [
+  "1d4ef8aa",
+  "bb7a1e2b"
+ ],
+ "autobot-frontend/src/components/ui/ConfirmDialog.vue": [
+  "33d4b48f",
+  "8d61de85"
+ ],
+ "autobot-frontend/src/components/ui/PreferencesPanel.vue": [
+  "fd678690"
+ ],
+ "autobot-frontend/src/components/visualizations/ServiceMessageTimeline.vue": [
+  "60bf428e",
+  "9c27a1b0"
+ ],
+ "autobot-frontend/src/components/workflow/NotificationConfigModal.vue": [
+  "9b686dff",
+  "eb4ef51f"
+ ],
+ "autobot-frontend/src/components/workflow/PhaseProgressionIndicator.vue": [
+  "109e39f2"
+ ],
+ "autobot-frontend/src/components/workflow/WorkflowTemplateGallery.vue": [
+  "03c4b3ae"
+ ],
+ "autobot-frontend/src/views/AdminMcpServersView.vue": [
+  "dde944a5"
+ ],
+ "autobot-frontend/src/views/AdminSandboxView.vue": [
+  "75a381eb",
+  "b63aeec7"
+ ],
+ "autobot-frontend/src/views/AgentActivity.vue": [
+  "2cfa65f9",
+  "3e6953cc",
+  "4dcc6993",
+  "5be770cc",
+  "73f02816",
+  "80c02779",
+  "96888d0a",
+  "b984c1cd",
+  "f4353b87"
+ ],
+ "autobot-frontend/src/views/BusinessIntelligenceView.vue": [
+  "3c322532",
+  "506b0bb5"
+ ],
+ "autobot-frontend/src/views/CanvasView.vue": [
+  "d98afe51"
+ ],
+ "autobot-frontend/src/views/ComponentShowcaseView.vue": [
+  "1dac7b1a",
+  "1dc48714",
+  "246909a1",
+  "341cef9a",
+  "54b2cf8c",
+  "6a7dfdcf",
+  "a18795f7",
+  "cf915868",
+  "f518739b"
+ ],
+ "autobot-frontend/src/views/ExperimentDashboard.vue": [
+  "299b5ff2",
+  "2e07cc7a",
+  "33df38b3",
+  "38aa1a77",
+  "38bbcd1c",
+  "40fe7bbf",
+  "dc3bc87a"
+ ],
+ "autobot-frontend/src/views/OnboardingWizard.vue": [
+  "0001fa62",
+  "020e099d",
+  "07421717",
+  "0efb833b",
+  "14964275",
+  "18a266f0",
+  "2001fed1",
+  "22728f56",
+  "2617c680",
+  "27b4b628",
+  "2990aa0f",
+  "3103b57d",
+  "35f0baec",
+  "4cb9e053",
+  "59e4e982",
+  "6325fcc5",
+  "6b04f892",
+  "75a0d053",
+  "7b7ecf63",
+  "850dcd95",
+  "8b7b7a86",
+  "a527ec27",
+  "c666ef19",
+  "d49f1946",
+  "db1e79d3",
+  "f3d5dbe6",
+  "f3d5dbe6",
+  "f89c3349"
+ ],
+ "autobot-frontend/src/views/SettingsView.vue": [
+  "1ee0d243",
+  "298ed4d9",
+  "72f85b02",
+  "7707bc47",
+  "940d8905",
+  "c60cfb44",
+  "f2ded862",
+  "f7a93e65"
+ ],
+ "autobot-frontend/src/views/UsageView.vue": [
+  "0513a32a",
+  "0811351c",
+  "0d425383",
+  "0d425383",
+  "10e02dcb",
+  "17c09439",
+  "17c09439",
+  "1b71e194",
+  "2521c74c",
+  "2a63e6d1",
+  "2daf720a",
+  "304c977e",
+  "39036142",
+  "39036142",
+  "3a16fc2f",
+  "3e9b7eed",
+  "420d912c",
+  "4a54e7a6",
+  "4ccbbaec",
+  "4e1f3d2e",
+  "5b4c5a98",
+  "5cbd7d59",
+  "68e176f0",
+  "6c4f127d",
+  "7051f717",
+  "71b27f36",
+  "73763dec",
+  "845380f1",
+  "85cc5519",
+  "8dd8d11a",
+  "95bfa103",
+  "a0320fb1",
+  "a4eb6814",
+  "a75f128f",
+  "a96ab2f5",
+  "a96ab2f5",
+  "ae494a46",
+  "ae6922c0",
+  "ae6922c0",
+  "b2a19040",
+  "b2a92614",
+  "b3fa5c6a",
+  "ba3f016b",
+  "c0d6de01",
+  "c6d296e1",
+  "c80404d8",
+  "c80404d8",
+  "c80404d8",
+  "cab2bc37",
+  "d66f3c79",
+  "d66f3c79",
+  "dada93df",
+  "e14963a2",
+  "e391a0c5",
+  "e753d078",
+  "e9e60d04",
+  "e9e60d04",
+  "f0d37c72",
+  "f1ad3407",
+  "fc056ae5"
+ ],
+ "autobot-frontend/src/views/secrets/LlmApiKeysView.vue": [
+  "20069636"
+ ],
+ "autobot-frontend/src/views/slm/ThemeManagerView.vue": [
+  "8f691e60",
+  "b24ff30d",
+  "e7b1b5e5"
+ ],
+ "autobot-frontend/src/views/transcriber/ProjectDetailView.vue": [
+  "0195095a",
+  "2ba707ec",
+  "3e3428d8",
+  "55fb96d6",
+  "7ffbe057",
+  "813c6abe",
+  "860f74e8",
+  "aa1d578b",
+  "c788a8fd",
+  "e2bb8e80"
+ ],
+ "autobot-frontend/src/views/transcriber/ProjectsView.vue": [
+  "03da0d71",
+  "20b701fa",
+  "2770e6ec",
+  "2b62263f",
+  "2ba707ec",
+  "2f8fb615",
+  "30398754",
+  "4ad1cbb5",
+  "579be6a9",
+  "7da96d36",
+  "7e520b02",
+  "a6c700d2",
+  "c4c064da",
+  "c8de9f17",
+  "cb30a465",
+  "fda59fe4"
+ ],
+ "autobot-frontend/src/views/transcriber/TranscriptView.vue": [
+  "19f13de0",
+  "58c0748e",
+  "5e9e134b",
+  "c6b7286d",
+  "dd7300be"
+ ],
+ "autobot-frontend/src/views/voice/VoiceBundleInfo.vue": [
+  "0f0caa5d",
+  "903bf18c",
+  "98f96d1e",
+  "e40acfb0",
+  "f3647375"
+ ],
+ "autobot-slm-frontend/src/components/DeploymentLogViewer.vue": [
+  "08e693e1",
+  "25f75b59",
+  "dd6380e3",
+  "ea5155f2"
+ ],
+ "autobot-slm-frontend/src/components/RoleManagementModal.vue": [
+  "751623be"
+ ],
+ "autobot-slm-frontend/src/components/agents/ProcessMonitorTab.vue": [
+  "b7a9fea0"
+ ],
+ "autobot-slm-frontend/src/components/fleet/AssignNPURoleModal.vue": [
+  "b88fec58"
+ ],
+ "autobot-slm-frontend/src/components/fleet/DecommissionModal.vue": [
+  "126cfd30"
+ ],
+ "autobot-slm-frontend/src/components/fleet/NPUDetailsPanel.vue": [
+  "7b33fc7e",
+  "cf0055b0"
+ ],
+ "autobot-slm-frontend/src/components/fleet/NodeServicesPanel.vue": [
+  "ebf2ee40"
+ ],
+ "autobot-slm-frontend/src/components/monitoring/GrafanaDashboard.vue": [
+  "640d369f",
+  "9942d16f"
+ ],
+ "autobot-slm-frontend/src/components/orchestration/RestartConfirmDialog.vue": [
+  "dd2f7d75"
+ ],
+ "autobot-slm-frontend/src/views/CodeSyncView.vue": [
+  "024a1719",
+  "1dc353ad",
+  "63d9135c",
+  "ae439fd3",
+  "b31fa4f7"
+ ],
+ "autobot-slm-frontend/src/views/DeploymentsView.vue": [
+  "0964bf9e",
+  "0b9b8a6f",
+  "0df7dcad",
+  "1d505184",
+  "1f7790ca",
+  "2bea5468",
+  "2bea5468",
+  "2eae3164",
+  "35ec5dc9",
+  "4b718812",
+  "53b2cb93",
+  "571eabdb",
+  "754fc196",
+  "7f6ce019",
+  "86a034e5",
+  "8d7c5cef",
+  "8d7c5cef",
+  "a064a9be",
+  "b9c4d49a",
+  "c1efad70",
+  "fff66357"
+ ],
+ "autobot-slm-frontend/src/views/ExternalAgentsView.vue": [
+  "a0fae4ce"
+ ],
+ "autobot-slm-frontend/src/views/MaintenanceView.vue": [
+  "0e60ef7d",
+  "5430c541",
+  "84f431d9",
+  "94ff0825",
+  "a107393e",
+  "ac093d35",
+  "ac8c3243",
+  "c678d6fe",
+  "e8f55a31"
+ ],
+ "autobot-slm-frontend/src/views/OrchestrationView.vue": [
+  "0b167b80",
+  "9657932e"
+ ],
+ "autobot-slm-frontend/src/views/ReplicationView.vue": [
+  "8851e29c",
+  "c479f08b"
+ ],
+ "autobot-slm-frontend/src/views/SecurityView.vue": [
+  "09929d79",
+  "204a388c",
+  "36b407c7",
+  "3d318cfd",
+  "48d12903",
+  "510ae5a1",
+  "59ef89d0",
+  "6121cca5",
+  "6194c09f",
+  "68a4d337",
+  "6cbf7046",
+  "76a54917",
+  "8037ffaf",
+  "b88fec58",
+  "cea20e09",
+  "d217b774",
+  "d4407138",
+  "ddf1d38e",
+  "e08023a2",
+  "f1e0d472",
+  "f440b379"
+ ],
+ "autobot-slm-frontend/src/views/SetupWizardView.vue": [
+  "8298e52f",
+  "8dae3e12",
+  "efbd2d46"
+ ],
+ "autobot-slm-frontend/src/views/SystemUpdatesTab.vue": [
+  "5efbc653",
+  "68f32bac",
+  "7d5f448a",
+  "afa93d13",
+  "c5c7f0b4"
+ ],
+ "autobot-slm-frontend/src/views/monitoring/AlertsMonitor.vue": [
+  "ee2d5e5c"
+ ],
+ "autobot-slm-frontend/src/views/monitoring/ErrorMonitor.vue": [
+  "0c2ba639"
+ ],
+ "autobot-slm-frontend/src/views/settings/APISettings.vue": [
+  "0fd796ca"
+ ],
+ "autobot-slm-frontend/src/views/settings/BackendSettings.vue": [
+  "150ec424",
+  "79284540"
+ ],
+ "autobot-slm-frontend/src/views/settings/DisposalPolicySettings.vue": [
+  "0f2731b5"
+ ],
+ "autobot-slm-frontend/src/views/settings/GeneralSettings.vue": [
+  "36c13cd3",
+  "4538fb76",
+  "7c7fa060"
+ ],
+ "autobot-slm-frontend/src/views/settings/MonitoringSettings.vue": [
+  "150ec424"
+ ],
+ "autobot-slm-frontend/src/views/settings/NotificationsSettings.vue": [
+  "0ddb3176",
+  "4538fb76"
+ ],
+ "autobot-slm-frontend/src/views/settings/SecuritySettings.vue": [
+  "2aab7377",
+  "48e580ed",
+  "5776482c",
+  "772da6cd",
+  "a0907179",
+  "a0907179"
+ ],
+ "autobot-slm-frontend/src/views/settings/admin/CacheSettings.vue": [
+  "37590268",
+  "5ff5c3ee",
+  "6d1aaac3",
+  "7edb30a4",
+  "ecad5063"
+ ],
+ "autobot-slm-frontend/src/views/settings/admin/ConfigDefaultsSettings.vue": [
+  "24941acf",
+  "701007cd",
+  "b24891de",
+  "e0490ed1"
+ ],
+ "autobot-slm-frontend/src/views/settings/admin/DataHygieneView.vue": [
+  "b714aea6"
+ ],
+ "autobot-slm-frontend/src/views/settings/admin/LLMSettings.vue": [
+  "37d6ab93",
+  "9006193d"
+ ],
+ "autobot-slm-frontend/src/views/settings/admin/NPUWorkersSettings.vue": [
+  "0c24aa3b",
+  "28f14146",
+  "5b43388a",
+  "e78581fb"
+ ],
+ "autobot-slm-frontend/src/views/settings/admin/PromptsSettings.vue": [
+  "28a29b1b",
+  "2f911003",
+  "51b818b4",
+  "df956f7a"
+ ],
+ "autobot-slm-frontend/src/views/settings/admin/SSOSettings.vue": [
+  "3ee16ddf",
+  "b8af3171"
+ ],
+ "autobot-slm-frontend/src/views/settings/admin/UserManagementSettings.vue": [
+  "6e57bc3b",
+  "96b18a5b",
+  "cab5a137",
+  "cf8fd361",
+  "ed433e7a",
+  "f8fa0eeb"
+ ],
+ "autobot-slm-frontend/src/views/tools/admin/BatchTool.vue": [
+  "0cc5cc88",
+  "375d6f32",
+  "8717ffe7"
+ ],
+ "autobot-slm-frontend/src/views/tools/admin/MCPTool.vue": [
+  "742ddc50"
+ ],
+ "autobot-slm-frontend/src/views/tools/admin/NoVNCTool.vue": [
+  "aa443191"
+ ],
+ "autobot-slm-frontend/src/views/tools/admin/VisionTool.vue": [
+  "b62d951c"
+ ],
+ "autobot-slm-frontend/src/views/tools/admin/VoiceTool.vue": [
+  "169f850b",
+  "d3e0a8de",
+  "e4d8c733",
+  "ec992044"
+ ]
+}

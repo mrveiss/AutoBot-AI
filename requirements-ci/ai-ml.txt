@@ -5,13 +5,13 @@ openai==2.54.0
 # only ever exercised a mocked client that accepts any kwarg — never the real
 # SDK signature, which is exactly how the 1.x temperature/top_p/top_k removal
 # reached CI green. Pinned to the floor of the production range (>=1.0.0,<2.0.0).
-anthropic==1.11.0
+anthropic==1.15.0
 tiktoken==0.14.0   # >=0.13 ships cp314 wheels (0.11 builds pyo3-ffi from source, caps at py3.13) — #9825
-transformers==5.18.0
+transformers==5.19.0
 sentence-transformers==6.1.0
 -c ../constraints/shared.txt  # single source of truth for shared versions (#10524)
 numpy  # version from constraints/shared.txt
-pillow==12.3.0
+pillow==13.0.0
 # Mirrors autobot-backend/requirements.txt:42. training/evaluator.py imports it at
 # module level, so without it completion_trainer_test.py's 17 tests never run —
 # including the torch.load weights_only=True RCE regression test (#13086).

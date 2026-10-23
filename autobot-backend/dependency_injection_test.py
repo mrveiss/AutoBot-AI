@@ -14,9 +14,9 @@ import pytest
 from config import ConfigManager
 from dependencies import (
     get_diagnostics,
-    get_knowledge_base,
-    get_orchestrator,
     provide_config_manager,
+    provide_knowledge_base,
+    provide_orchestrator,
 )
 from diagnostics import Diagnostics
 from knowledge_base import KnowledgeBase
@@ -81,7 +81,8 @@ class TestDependencyInjection:
         # Verify that default dependencies are created
         assert orchestrator.config_manager is not None
         assert orchestrator.llm_service is not None
-        assert orchestrator.knowledge_base is not None
+        # #18122: no private KnowledgeBase at construction; the canonical one is resolved at first use
+        assert orchestrator.knowledge_base is None
         assert orchestrator.diagnostics is not None
 
         # Verify they are the expected types
@@ -161,8 +162,8 @@ class TestDependencyInjection:
 
         # Test that the provider functions exist and are callable
         assert callable(get_diagnostics)
-        assert callable(get_knowledge_base)
-        assert callable(get_orchestrator)
+        assert callable(provide_knowledge_base)
+        assert callable(provide_orchestrator)
 
         # Test manual dependency creation (simulates FastAPI behavior)
         config = provide_config_manager()

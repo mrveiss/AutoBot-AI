@@ -33,43 +33,57 @@ _SCANNED = (
     "autobot-slm-backend/services/service_orchestrator.py",
     "autobot-slm-backend/services/code_distributor.py",
     "autobot-slm-backend/api/services.py",
+    "autobot-slm-backend/services/secrets_store_snapshot.py",
 )
 _REMOTE_WORDS = re.compile(r"\b(?:sudo|systemctl|journalctl|ssh|bash\s+-c|sh\s+-c)\b")
 _LOG_METHODS = frozenset({"debug", "info", "warning", "error", "exception", "critical", "log"})
 
-#: (file, interpolated expression source) -> why it is safe. A new entry needs a reason a reviewer accepts.
-_ALLOWED: dict[tuple[str, str], str] = {
+#: (file, enclosing function, interpolated expression source) -> why it is safe. A new entry needs a reason a reviewer accepts.
+_ALLOWED: dict[tuple[str, str, str], str] = {
     (
         "autobot-slm-backend/services/code_distributor.py",
+        "_build_ssh_opts",
         "ssh_port",
     ): "an int port from the node row, typed `int` on every caller; reaches the LOCAL ssh argv option string",
     (
         "autobot-slm-backend/services/journal_fetch.py",
+        "build_journal_command",
         "bounded",
     ): "`max(1, min(int(lines), JOURNAL_MAX_LINES))`, computed one line above: an int",
     (
         "autobot-slm-backend/services/service_orchestrator.py",
+        "_execute_ssh",
         "command",
     ): "only ServiceDefinition.start_command/stop_command (static module-level definitions) and "
     "systemctl_remote_command() results reach _execute_ssh; none is request input",
     (
         "autobot-slm-backend/api/services.py",
+        "_kill_orphan_on_port",
         "port",
     ): "an int taken from SERVICE_PORT_MAP, never from the request",
     (
         "autobot-slm-backend/services/service_restart.py",
+        "systemctl_remote_command",
         "sudo",
     ): "`sudo -n` or `sudo`, selected from a bool two lines above",
     (
         "autobot-slm-backend/services/service_restart.py",
+        "systemctl_remote_command",
         "action",
     ): "checked against ALLOWED_SYSTEMCTL_ACTIONS before the f-string is reached",
     (
         "autobot-slm-backend/services/service_restart.py",
+        "systemctl_remote_command",
         "tail",
     ): "` || true` or empty, selected from a bool",
     (
         "autobot-slm-backend/services/service_restart.py",
+        "systemctl_remote_command",
+        "flags",
+    ): "` --no-pager` or empty, selected from a bool (#18714 diagnostics)",
+    (
+        "autobot-slm-backend/services/service_restart.py",
+        "systemctl_remote_command",
         "quoted",
     ): "built from shlex.quote(validate_unit_name(u)) in the line above",
 }
@@ -123,18 +137,28 @@ def _interpolations(node: ast.AST) -> tuple[str, list[ast.AST]] | None:
     return None
 
 
+def _scoped_nodes(tree: ast.AST):
+    """(node, enclosing function name) for every node; ``<module>`` outside a function (#18352 LOW)."""
+    stack = [(tree, "<module>")]
+    while stack:
+        node, scope = stack.pop()
+        yield node, scope
+        inner = node.name if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) else scope
+        stack.extend((child, inner) for child in ast.iter_child_nodes(node))
+
+
 def unsafe_interpolations(source: str, rel: str) -> list[str]:
     """Every interpolation into a remote-command string that is neither safe nor allowed."""
     tree = ast.parse(source)
     skipped = _skipped_ids(tree)
     bad: list[str] = []
-    for node in ast.walk(tree):
+    for node, scope in _scoped_nodes(tree):
         found = None if id(node) in skipped else _interpolations(node)
         if found is None or not _REMOTE_WORDS.search(found[0]):
             continue
         for expr in found[1]:
             text = ast.unparse(expr)
-            if not _is_safe(expr) and (rel, text) not in _ALLOWED:
+            if not _is_safe(expr) and (rel, scope, text) not in _ALLOWED:
                 bad.append(f"{rel}:{node.lineno}: {{{text}}}")
     return bad
 
@@ -148,14 +172,14 @@ def test_remote_command_strings_interpolate_only_quoted_ints_and_constants(rel: 
 
 def test_every_allowance_is_still_needed() -> None:
     """An allowance with no matching site is dead and hides the next one that reuses its spelling."""
-    used: set[tuple[str, str]] = set()
+    used: set[tuple[str, str, str]] = set()
     for rel in _SCANNED:
         tree = ast.parse((repo_root() / rel).read_text(encoding="utf-8"))
         skipped = _skipped_ids(tree)
-        for node in ast.walk(tree):
+        for node, scope in _scoped_nodes(tree):
             found = None if id(node) in skipped else _interpolations(node)
             if found and _REMOTE_WORDS.search(found[0]):
-                used.update((rel, ast.unparse(e)) for e in found[1])
+                used.update((rel, scope, ast.unparse(e)) for e in found[1])
     assert set(_ALLOWED) <= used, sorted(set(_ALLOWED) - used)
 
 
@@ -177,3 +201,86 @@ def test_every_allowance_is_still_needed() -> None:
 )
 def test_the_detector_has_contrast_fixtures(label: str, source: str, expected_bad: int) -> None:
     assert len(unsafe_interpolations(source, "fixture.py")) == expected_bad, label
+
+
+def test_an_allowance_is_keyed_to_its_enclosing_function() -> None:
+    """The same spelling in another function is not covered by the allowance (#18352 LOW)."""
+    rel = "autobot-slm-backend/services/service_restart.py"
+    allowed_fn = 'def systemctl_remote_command():\n    cmd = f"sudo systemctl {action}"\n'
+    other_fn = 'def somewhere_else():\n    cmd = f"sudo systemctl {action}"\n'
+    assert unsafe_interpolations(allowed_fn, rel) == []
+    assert len(unsafe_interpolations(other_fn, rel)) == 1
+
+
+# --- #18366: an ssh destination is built by the one validator, never inline ----------------------
+
+_DESTINATION_OWNER = ("autobot-slm-backend/services/ssh_utils.py", "ssh_destination")
+_SLM_ROOT = "autobot-slm-backend"
+
+
+def _slm_production_python() -> list[str]:
+    """Every non-test .py under the SLM backend, as repo-relative paths."""
+    root = repo_root()
+    found = [
+        p.relative_to(root).as_posix()
+        for p in (root / _SLM_ROOT).rglob("*.py")
+        if "tests" not in p.parts and not p.name.endswith("_test.py") and not p.name.startswith("test_")
+    ]
+    return sorted(found)
+
+
+def inline_destinations(source: str, rel: str) -> list[str]:
+    """Every ``f"{user}@{host}"`` / ``f"user@{host}"`` outside ``ssh_utils.ssh_destination``.
+
+    Such a destination is unvalidated and a leading ``-`` is read as an ssh option. A URL-shaped
+    f-string (``scheme://...``) is a connection string, not an ssh destination.
+    """
+    bad: list[str] = []
+    for node, scope in _scoped_nodes(ast.parse(source)):
+        if not isinstance(node, ast.JoinedStr) or (rel, scope) == _DESTINATION_OWNER:
+            continue
+        parts = node.values
+        if any(isinstance(p, ast.Constant) and "://" in str(p.value) for p in parts):
+            continue
+        for prev, part, after in zip([None, *parts], parts, [*parts[1:], None]):
+            at_end = isinstance(part, ast.Constant) and isinstance(part.value, str) and part.value.endswith("@")
+            joined = isinstance(prev, ast.FormattedValue) and getattr(part, "value", None) == "@"
+            if (at_end or joined) and isinstance(after, ast.FormattedValue) and (len(str(part.value)) > 1 or joined):
+                bad.append(f"{rel}:{node.lineno}")
+                break
+    return bad
+
+
+def test_the_destination_scan_reaches_the_production_files() -> None:
+    files = _slm_production_python()
+    assert _DESTINATION_OWNER[0] in files and len(files) > 100, len(files)
+
+
+def test_no_slm_production_code_builds_an_ssh_destination_inline() -> None:
+    bad = [
+        hit
+        for rel in _slm_production_python()
+        for hit in inline_destinations((repo_root() / rel).read_text(encoding="utf-8"), rel)
+    ]
+    assert bad == []
+
+
+@pytest.mark.parametrize(
+    ("label", "source", "expected_bad"),
+    [
+        ("the old inline destination", 'def b(u, h):\n    return [f"{u}@{h}"]\n', 1),
+        ("a literal user and a variable host", 'def b(h):\n    return [f"autobot@{h}"]\n', 1),
+        ("a remote path operand", 'def b(u, h, p):\n    return [f"{u}@{h}:{p}"]\n', 1),
+        ("a connection string", 'def b(u, pw, h):\n    return f"postgresql://{u}:{pw}@{h}/db"\n', 0),
+        ("a user-only prefix", 'def b(u):\n    return f"{u}@"\n', 0),
+        ("the validator call", "def b(u, h):\n    return [ssh_destination(u, h)]\n", 0),
+    ],
+)
+def test_the_destination_detector_has_contrast_fixtures(label: str, source: str, expected_bad: int) -> None:
+    assert len(inline_destinations(source, "fixture.py")) == expected_bad, label
+
+
+def test_the_validator_module_builds_the_destination_inside_ssh_destination() -> None:
+    rel, scope = _DESTINATION_OWNER
+    source = (repo_root() / rel).read_text(encoding="utf-8")
+    assert any(isinstance(n, ast.JoinedStr) and s == scope for n, s in _scoped_nodes(ast.parse(source)))

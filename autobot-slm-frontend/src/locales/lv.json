@@ -14,7 +14,7 @@
     "availableRolesAria": "Available roles",
     "cancel": "Atcelt",
     "closeDialogAria": "Close dialog",
-    "connectionFailed": "Connection Failed",
+    "connectionFailed": "Savienojums neizdevās",
     "connectionInformation": "Connection Information",
     "connectionSuccessful": "Connection Successful",
     "deployPKICertificatesAfter": "Deploy PKI certificates after update",
@@ -162,7 +162,7 @@
       "noProcessesFoundForAgentValue0": "No processes found for agent \"{value0}\"",
       "processValue0Logs": "Process {value0}... Logs",
       "queued": "Queued",
-      "running": "Skriešana",
+      "running": "Running",
       "scriptPyFlag": "script.py --flag",
       "spawn": "Spawn",
       "spawnNewProcess": "Spawn New Process",
@@ -344,7 +344,7 @@
     "runRsyncFromTo": "Run rsync from {source} to {dest}",
     "running": "Darbojas...",
     "sLMManagerRestarting": "SLM Manager Restarting",
-    "schedule": "Schedule",
+    "schedule": "Grafiks",
     "scheduledUpdates": "Scheduled Updates",
     "showDetails": "Show details",
     "slmSelfUpdateStage": "SLM server",
@@ -714,7 +714,8 @@
       "memory": "Memory",
       "modelsCount": "Models ({count})",
       "noModelsDetected": "No models detected",
-      "pending": "Pending",
+      "notAvailable": "N/A",
+      "pending": "Gaida",
       "priority110": "Priority (1-10)",
       "queueDepthValue0Requests": "Queue Depth: {value0} requests",
       "refreshStatus": "Refresh Status",
@@ -907,7 +908,7 @@
     "closeServicesPanelAria": "Close services panel",
     "confirmReboot": "Reboot node \"{hostname}\"? The node will go offline temporarily.",
     "confirmReenroll": "Re-enroll node \"{hostname}\"? This will reset it to pending status for fresh enrollment.",
-    "connectionFailed": "Connection Failed",
+    "connectionFailed": "Savienojums neizdevās",
     "connectionSuccessful": "Connection Successful",
     "connectionTestResultAria": "Connection test result",
     "cpu": "CPU",
@@ -932,8 +933,6 @@
     "nPUWorkersAria": "NPU workers",
     "noNodesRegistered": "No nodes registered",
     "nodeDetails": "Node Details",
-    "nodeDetailsPanelAria": "Node details panel",
-    "nodeServicesPanelAria": "Node services panel",
     "nodes": "Nodes",
     "nodesOverviewAria": "Nodes overview",
     "realTimeHealthStatus": "Real-time health status of all managed nodes",
@@ -1182,7 +1181,8 @@
       "trend": "Trend",
       "type": "Type",
       "unresolved": "Unresolved",
-      "resolvedByAt": "By {by} at {at}"
+      "resolvedByAt": "By {by} at {at}",
+      "paginationAria": "Error list pages"
     },
     "fleetMetricsCard": {
       "acrossValue0Nodes": "Across {value0} nodes",
@@ -1326,6 +1326,107 @@
       "services": "Services",
       "systemHealth": "System Health",
       "systemMonitoring": "Sistēmas pārraudzība"
+    },
+    "agentLedger": {
+      "title": "Aģentu žurnāls",
+      "subtitle": "Every company's agent coordination: shared resources, claims, conflicts and dev-loop history.",
+      "refresh": "Refresh",
+      "tabsAria": "Žurnāla skati",
+      "tabs": {
+        "now": "Pašlaik strādā",
+        "contention": "Konkurence",
+        "claims": "Pieprasījumi",
+        "conflicts": "Konflikti",
+        "devLoop": "Dev loop",
+        "activity": "Activity"
+      },
+      "col": {
+        "scope": "Tvērums",
+        "agent": "Aģents",
+        "company": "Company",
+        "mode": "Režīms",
+        "intent": "Nolūks",
+        "expires": "Beidzas",
+        "renewals": "Atjaunojumi",
+        "kind": "Veids",
+        "status": "Statuss",
+        "task": "Pašreizējais uzdevums",
+        "detail": "Sīkāk"
+      },
+      "installWide": "Install-wide",
+      "heldBy": "Held by {agent} ({company})",
+      "waiting": "{n} waiting",
+      "waitlistAria": "Gaidīšanas rinda secībā",
+      "silenceMeansHold": "Lūgums nav atbrīvošana: klusēšana nozīmē turēšanu, un neatjaunots pieprasījums beidzas pats.",
+      "ask": "Lūgt turētāju atbrīvot",
+      "askAria": "Lūgt {scope} turētāju to atbrīvot",
+      "askState": {
+        "sending": "Sūta…",
+        "sent": "Lūgums nosūtīts — lemj turētājs; klusēšana nozīmē turēšanu.",
+        "tooSoon": "Jūs tikko jau lūdzāt par šo pieprasījumu; mēģiniet vēlreiz pēc minūtes.",
+        "notFound": "Šis uzdevums vairs netur šo pieprasījumu — atsvaidziniet, lai redzētu, kurš to tur tagad.",
+        "unavailable": "Neizdevās sasniegt žurnālu; nekas netika nosūtīts.",
+        "error": "Radās kļūda, un piegādi nevarēja apstiprināt. Atsvaidziniet, lai redzētu, vai rezervācija joprojām ir spēkā."
+      },
+      "conflict": {
+        "release_refused": "Atbrīvošana tika atteikta",
+        "claim_expired": "Pieprasījums beidzās, kamēr tika turēts",
+        "yield_unanswered": "Lūgums atbrīvot palika bez atbildes",
+        "claim_lapsed_during_action": "Pieprasījums beidzās darbības laikā"
+      },
+      "devLoop": {
+        "issue": "Issue",
+        "choose": "Choose an issue",
+        "col": {
+          "at": "When",
+          "intent": "Nolūks",
+          "outcome": "Outcome",
+          "tokens": "Estimated tokens",
+          "reason": "Iemesls"
+        }
+      },
+      "empty": {
+        "contention": "Nekas netiek konkurēts",
+        "claims": "Nav pieprasījumu",
+        "conflicts": "Nav konfliktu",
+        "activity": "No recent activity",
+        "devLoop": "No dev-loop history",
+        "devLoopActions": "No actions recorded for this issue",
+        "presence": "Neviens aģents nav pieteicies",
+        "peerMessages": "Nav neizlasītu ziņu",
+        "idleSubscribers": "Nav dīkstāves abonementu"
+      },
+      "notes": {
+        "title": "What this view cannot see",
+        "storeDown": "Couldn't read the {source} store just now. Its entries are missing here, not empty.",
+        "sourcesUnknown": "Couldn't check which ledger sources are readable.",
+        "peerIdentity": "Agents have no per-peer identity yet: an agent that is refused an action can ask another agent to do it (#16950).",
+        "busAuth": "Messages between agents are not authenticated yet, so this view cannot prove who sent one (#16962)."
+      },
+      "source": {
+        "presence": "agent presence",
+        "ai_stack_agents": "AI-stack agents",
+        "live_sessions": "live sessions",
+        "peer_messages": "pending peer messages",
+        "idle_subscribers": "idle subscriptions",
+        "claims": "claims",
+        "waitlists": "waitlists",
+        "events": "ledger activity",
+        "dev_loop": "dev-loop history"
+      },
+      "state": {
+        "loading": "Lasa žurnālu…",
+        "unavailableTitle": "Neizdevās nolasīt žurnālu",
+        "unavailableBody": "Krātuve {source} neatbildēja. Tas nav tas pats, kas tukšs saraksts.",
+        "errorTitle": "Ielādējot šo sadaļu, radās kļūda"
+      },
+      "busy": "Aizņemts",
+      "idle": "Idle",
+      "peerMessages": "Neizlasītās ziņas",
+      "idleSubscribers": "Dīkstāves abonementi",
+      "pendingFor": "{n} gaida lietotāju {name}",
+      "sentBy": "no {names}",
+      "waitsForIdle": "{who} gaida, kamēr {target} būs dīkstāvē"
     }
   },
   "monitoringView": {
@@ -1334,7 +1435,17 @@
     "monitoring": "Pārraudzība",
     "monitoringSections": "Monitoring sections",
     "systemHealthStatusAria": "System health: {status}",
-    "value0AlertPlural": "{value0} Alert{plural}"
+    "value0AlertPlural": "{value0} Alert{plural}",
+    "tabs": {
+      "system": "Sistēma",
+      "logs": "Logs",
+      "dashboards": "Dashboards",
+      "alerts": "Alerts",
+      "errors": "Kļūdas",
+      "backendHealth": "Backend Health",
+      "performance": "Veiktspēja",
+      "agentLedger": "Aģentu žurnāls"
+    }
   },
   "orchestration": {
     "nodeHealthCard": {
@@ -1400,7 +1511,7 @@
     "fleetNodes": "Fleet Nodes",
     "fleetServices": "Fleet Services",
     "fleetWideActions": "Fleet-Wide Actions",
-    "full": "Full",
+    "full": "Pilns",
     "full2": "full",
     "gPUInferenceOffloadingBackendFallsBack": "GPU inference offloading — backend falls back to local Ollama",
     "healthy": "✓ Healthy",
@@ -1452,7 +1563,7 @@
     "roles2": "Lomas",
     "runAnsiblePlaybook": "Run Ansible Playbook",
     "runAnsiblePlaybookForFullRole": "Run Ansible playbook for full role installation",
-    "running": "Skriešana",
+    "running": "Running",
     "searchServices": "Search services...",
     "selectANode": "Select a node...",
     "selectANodeAboveToManage": "Select a node above to manage its roles.",
@@ -1499,7 +1610,8 @@
     "value0AnsibleMigrationOf": "{value0} Ansible migration of",
     "value0Nodes": "({value0} nodes)",
     "value0OnlineValue1Offline": "{value0} online, {value1} offline",
-    "value0Required": "{value0} (required)"
+    "value0Required": "{value0} (required)",
+    "serviceCount": "{count} service | {count} services"
   },
   "performance": {
     "alertRulesView": {
@@ -1605,7 +1717,8 @@
       "status1": "Statuss",
       "time": "Time:",
       "time1": "Time",
-      "value0TracePlural": "{value0} trace{plural}"
+      "value0TracePlural": "{value0} trace{plural}",
+      "paginationAria": "Trace list pages"
     }
   },
   "performanceView": {
@@ -1682,7 +1795,7 @@
     "manageRedisMasterReplica": "Manage Redis master-replica replication with Ansible orchestration",
     "newReplication": "New Replication",
     "noReplicationsConfiguredYet": "No replications configured yet. Click \"New Replication\" to set up master-replica replication.",
-    "pending": "Pending",
+    "pending": "Gaida",
     "primary": "Primary",
     "promoteToPrimary": "Promote to Primary",
     "promoteToPrimary2": "Promote to primary",
@@ -1751,7 +1864,6 @@
     "syncRoleAria": "Sync {roleName}",
     "thisRoleMayContain": "This role may contain data. You can back it up before removal.",
     "thisWillStopAnd": "This will stop and remove the service from the node.",
-    "times": "×",
     "version": "Version"
   },
   "rolesView": {
@@ -1771,7 +1883,7 @@
     "displayName": "Attēlojamais vārds",
     "edit": "Rediģēt",
     "editRoleTitle": "Edit Role: {name}",
-    "full": "Full",
+    "full": "Pilns",
     "health": "Veselība",
     "healthCheckPath": "Health Check Path",
     "healthCheckPort": "Health Check Port",
@@ -1788,7 +1900,7 @@
     "offline": "Bezsaistē",
     "online": "Tiešsaistē",
     "optionalRoleWithout": "⚠ Optional role. Without it: {detail}",
-    "pending": "Pending",
+    "pending": "Gaida",
     "placeholderAnsiblePlaybook": "deploy-backend.yml",
     "placeholderDisplayName": "e.g. Redis Server",
     "placeholderHealthCheckPath": "/health",
@@ -1902,7 +2014,7 @@
     "enableTlsForAria": "Enable TLS for {service}",
     "enablingTLS": "Enabling TLS...",
     "enterNodeID": "Enter node ID",
-    "expires": "Expires",
+    "expires": "Beidzas",
     "expiringSoon30d": "Expiring Soon (30d)",
     "expiry": "Expiry",
     "failed": "Neizdevās",
@@ -1991,13 +2103,14 @@
     "uploadTLSCertificate": "Upload TLS Certificate",
     "user": "Lietotājs",
     "value0Violations": "{value0} violations",
-    "whatHappensWhenYouEnableTLS": "What happens when you enable TLS?"
+    "whatHappensWhenYouEnableTLS": "What happens when you enable TLS?",
+    "paginationAria": "Security list pages"
   },
   "settings": {
     "aPISettings": {
       "aPIEndpoints": "API galapunkti",
       "autoBotBackendProxied": "AutoBot Backend (Proxied)",
-      "backendAPI": "Backend API",
+      "backendAPI": "Aizmugursistēmas API",
       "configurationReference": "Configuration Reference",
       "connectionStatus": "Connection Status",
       "copyToClipboard": "Kopēt starpliktuvē",
@@ -2202,12 +2315,31 @@
         "username": "Lietotājvārds",
         "varLogAutobotForwardedLog": "/var/log/autobot-forwarded.log",
         "warning": "Brīdinājums",
-        "statusUnknown": "Nezināms"
+        "statusUnknown": "Nezināms",
+        "leaveBlankToKeep": "Leave blank to keep the current value",
+        "loadFailed": "Failed to load destinations",
+        "toggleFailed": "Failed to toggle service",
+        "autoStartEnabled": "Auto-start enabled",
+        "autoStartDisabled": "Auto-start disabled",
+        "autoStartFailed": "Failed to update auto-start",
+        "destinationCreated": "Destination created successfully",
+        "destinationUpdated": "Destination updated successfully",
+        "saveFailed": "Failed to save destination",
+        "testSucceeded": "Connection test successful",
+        "testFailed": "Connection test failed",
+        "testAllSummary": "{healthy}/{total} destinations healthy",
+        "testAllFailed": "Failed to test destinations",
+        "destinationDeleted": "Destination deleted successfully",
+        "deleteFailed": "Failed to delete destination",
+        "removeStoredValue": "Remove the stored value",
+        "urlPlaceholderSyslog": "syslog.example.com:514",
+        "urlPlaceholderWebhook": "https://logs.example.com/ingest",
+        "urlPlaceholderElasticsearch": "http://elasticsearch.example.com:{port}"
       },
       "nPUWorkersSettings": {
         "actions": "Darbības",
         "areYouSureYou": "Are you sure you want to remove",
-        "busy": "Busy",
+        "busy": "Aizņemts",
         "cancel": "Atcelt",
         "capabilities": "Capabilities",
         "close": "Aizvērt",
@@ -2256,7 +2388,9 @@
         "weighted": "Weighted",
         "windows": "Windows",
         "worker": "Darbinieks",
-        "workerName": "Worker Name *"
+        "workerName": "Worker Name *",
+        "connectionTestFailed": "Connection test failed",
+        "loadBalancingLoadFailed": "Failed to load load-balancing configuration"
       },
       "personalitySettings": {
         "active": "Active",
@@ -2558,7 +2692,8 @@
         "userPreferences": "User Preferences",
         "username": "Lietotājvārds",
         "usersWhoAccessAutoBot": "Users who access AutoBot chat, workflows, and tools",
-        "usersWhoManageThe": "Users who manage the AutoBot fleet via the SLM admin dashboard"
+        "usersWhoManageThe": "Users who manage the AutoBot fleet via the SLM admin dashboard",
+        "resetPasswordFor": "Reset Password for {username}"
       }
     },
     "backendSettings": {
@@ -2576,7 +2711,7 @@
       "bindAddress": "Bind address",
       "checking": "Checking...",
       "connectedToBackend": "Connected to Backend",
-      "connectionFailed": "Connection Failed",
+      "connectionFailed": "Savienojums neizdevās",
       "currentBackendAPIURL": "Current backend API URL",
       "debug": "Atkļūdošana",
       "error": "Kļūda",
@@ -2757,7 +2892,7 @@
       "enterYourPassword": "Ievadiet savu paroli",
       "enterYourPasswordTo": "Enter your password to confirm disabling two-factor authentication.",
       "expiration": "Expiration",
-      "expires": "Expires",
+      "expires": "Beidzas",
       "keyPrefix": "Key Prefix",
       "lastVerifiedValue0": "Last verified: {value0}",
       "mFAIsEnabled": "MFA is enabled",
@@ -2934,7 +3069,7 @@
     "missing": "Trūkst",
     "noSkillsFound": "No skills found",
     "noSkillsFoundForQuery": "No skills found for \"{query}\"",
-    "pending": "Pending",
+    "pending": "Gaida",
     "refresh": "Refresh",
     "repos": "Repos",
     "review": "Review",
@@ -3092,12 +3227,12 @@
         "jobType": "Job Type",
         "loadingJobs": "Loading jobs...",
         "noBatchJobsFound": "No batch jobs found",
-        "pending": "Pending",
+        "pending": "Gaida",
         "progress": "Progress",
         "refresh": "Refresh",
         "reportGeneration": "Report Generation",
         "retry": "Retry",
-        "running": "Skriešana",
+        "running": "Running",
         "started": "Started",
         "totalJobs": "Total Jobs",
         "value0Value1ItemsValue2": "{value0} / {value1} items ({value2}%)"
@@ -3366,7 +3501,7 @@
   },
   "sharedLinksView": {
     "colCreated": "Created",
-    "colExpires": "Expires",
+    "colExpires": "Beidzas",
     "colOwner": "Owner",
     "colPassword": "Parole",
     "colSession": "Sesija",
@@ -3467,5 +3602,10 @@
     "subtitle": "Preview unreferenced storage, repair unreachable resources, and review the audit trail — every deletion is proposed through the approval queue, never applied directly.",
     "tabName": "Data Hygiene",
     "title": "Data Hygiene"
+  },
+  "ui": {
+    "modal": {
+      "closeDialog": "Close dialog"
+    }
   }
 }

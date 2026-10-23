@@ -34,7 +34,6 @@ from autobot_shared.ssot_config import config
 from config import cfg
 
 # Import existing AutoBot components
-from constants.threshold_constants import TimingConstants
 from knowledge.backends import get_default_client
 from knowledge.embedding_cache import EmbeddingCache, get_embedding_cache
 from knowledge.index_embedding_space import (
@@ -43,7 +42,8 @@ from knowledge.index_embedding_space import (
     index_embedding_space,
     require_query_dim,
 )
-from knowledge_base import KnowledgeBase
+from knowledge.serving import servable_response
+from knowledge_factory import get_knowledge_base_async
 
 # Issue #387: GPU-accelerated vector search
 from utils.gpu_vector_search import (
@@ -249,14 +249,10 @@ class NPUSemanticSearch:
 
         # Initialize dependencies
         self.ai_accelerator = await get_ai_accelerator()
-        self.knowledge_base = KnowledgeBase()
-
-        # Wait for knowledge base initialization
-        max_wait = TimingConstants.SHORT_TIMEOUT  # seconds
-        wait_time = 0
-        while not self.knowledge_base.vector_store and wait_time < max_wait:
-            await asyncio.sleep(TimingConstants.STANDARD_DELAY)
-            wait_time += 1
+        # #18122: the canonical, already-initialised instance (no private KB, no init wait)
+        self.knowledge_base = await get_knowledge_base_async()
+        if self.knowledge_base is None:
+            raise RuntimeError("Knowledge base unavailable (init failed or cooling down)")
 
         if self.knowledge_base.vector_store:
             logger.info("✅ Knowledge base vector store ready")
@@ -366,7 +362,7 @@ class NPUSemanticSearch:
         hits, hybrid_metrics = await self.hybrid_search.search(
             query_embedding=embedding, top_k=top_k, metadata_filter=filters, include_documents=True
         )
-        return self._convert_hybrid_results(hits, hybrid_metrics, device), device
+        return servable_response(self._convert_hybrid_results(hits, hybrid_metrics, device)), device
 
     async def _create_search_metrics(
         self,
@@ -575,20 +571,19 @@ class NPUSemanticSearch:
         query_engine = self.knowledge_base.vector_index.as_query_engine(similarity_top_k=top_k, response_mode="no_text")
         response = await asyncio.to_thread(query_engine.query, query)
 
-        results = []
-        if hasattr(response, "source_nodes"):
-            for node in response.source_nodes:
-                result = NpuSearchResult(
-                    content=node.node.text,
-                    metadata=node.node.metadata or {},
-                    score=getattr(node, "score", 0.0),
-                    doc_id=node.node.id_ or str(uuid.uuid4()),
-                    device_used="knowledge_base",
-                    processing_time_ms=0,
-                    embedding_model="enhanced_model",
-                )
-                results.append(result)
-        return results
+        results = [
+            NpuSearchResult(
+                content=node.node.text,
+                metadata=node.node.metadata or {},
+                score=getattr(node, "score", 0.0),
+                doc_id=node.node.id_ or str(uuid.uuid4()),
+                device_used="knowledge_base",
+                processing_time_ms=0,
+                embedding_model="enhanced_model",
+            )
+            for node in getattr(response, "source_nodes", None) or []
+        ]
+        return servable_response(results)  # #18820: source_nodes bypass KB.search
 
     async def _get_hardware_utilization(self) -> Dict[str, float]:
         """Get current hardware utilization metrics."""
@@ -622,16 +617,12 @@ class NPUSemanticSearch:
         return hashlib.md5(cache_string.encode(), usedforsecurity=False).hexdigest()
 
     def _get_cached_result(self, cache_key: str) -> Tuple[List[NpuSearchResult], SearchMetrics] | None:
-        """Get cached search result if available and not expired."""
+        """Cached result if unexpired, re-filtered: serving validity depends on the read time (#18820)."""
         if cache_key in self.search_results_cache:
-            cached_data, timestamp = self.search_results_cache[cache_key]
-
+            (results, metrics), timestamp = self.search_results_cache[cache_key]
             if time.time() - timestamp < self.cache_ttl_seconds:
-                return cached_data
-            else:
-                # Remove expired cache entry
-                del self.search_results_cache[cache_key]
-
+                return servable_response(results), metrics
+            del self.search_results_cache[cache_key]  # expired cache entry
         return None
 
     def _cache_result(self, cache_key: str, result: Tuple[List[NpuSearchResult], SearchMetrics]):
@@ -735,7 +726,7 @@ class NPUSemanticSearch:
                 device_used=embedding_device,
                 hardware_utilization={},
             )
-            out[orig_idx] = (results, metrics)
+            out[orig_idx] = (servable_response(results), metrics)  # #18820: bypasses KB.search
 
         return out
 
@@ -1390,7 +1381,7 @@ class NPUSemanticSearch:
                 n_results=limit,
                 include=["metadatas", "documents", "distances"],
             )
-            modality_results = _convert_chroma_results(search_results, modality, threshold)
+            modality_results = servable_response(_convert_chroma_results(search_results, modality, threshold))
             logger.info(f"Found {len(modality_results)} results in {modality} collection")
             return modality_results
         except Exception as e:
@@ -1514,10 +1505,10 @@ async def get_npu_search_engine() -> NPUSemanticSearch:
     global _npu_search_engine
     if _npu_search_engine is None:
         async with _npu_search_engine_lock:
-            # Double-check after acquiring lock
-            if _npu_search_engine is None:
-                _npu_search_engine = NPUSemanticSearch()
-                await _npu_search_engine.initialize()
+            if _npu_search_engine is None:  # double-check under the lock
+                engine = NPUSemanticSearch()
+                await engine.initialize()  # a failure leaves nothing cached: next call retries (#19156)
+                _npu_search_engine = engine
     return _npu_search_engine
 
 

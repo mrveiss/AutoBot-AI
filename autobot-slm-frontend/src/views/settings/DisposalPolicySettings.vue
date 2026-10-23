@@ -1,6 +1,7 @@
 <!-- Copyright 2025-2026 mrveiss -->
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <script setup lang="ts">
+import { BaseAlert, BaseSwitch } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 
@@ -63,9 +64,7 @@ onMounted(load)
       <h2 class="text-lg font-semibold text-gray-900 mb-2">{{ $t('settings.disposalPolicySettings.projectDisposalPolicy') }}</h2>
       <p class="text-sm text-gray-500 mb-6">{{ $t('settings.disposalPolicySettings.controlsHowCompanyOSProjectsAre') }}</p>
 
-      <div v-if="error" class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-        {{ error }}
-      </div>
+      <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
       <div v-if="saved" class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">{{ $t('settings.disposalPolicySettings.policySavedSuccessfully') }}</div>
 
       <div class="space-y-6">
@@ -89,10 +88,7 @@ onMounted(load)
             <label class="block text-sm font-medium text-gray-900">{{ $t('settings.disposalPolicySettings.requireSecondPairOfEyesApproval') }}</label>
             <p class="text-xs text-gray-500 mt-1">{{ $t('settings.disposalPolicySettings.whenEnabledDisposalCreatesAnApproval') }}</p>
           </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" v-model="policy.require_approval" class="sr-only peer" />
-            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-          </label>
+          <BaseSwitch v-model="policy.require_approval" :label="$t('settings.disposalPolicySettings.requireSecondPairOfEyesApproval')" />
         </div>
       </div>
 

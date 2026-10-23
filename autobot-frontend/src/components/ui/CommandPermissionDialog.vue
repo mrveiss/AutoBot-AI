@@ -130,10 +130,9 @@
 import { ref, watch, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { useModal } from '@/composables/useModal'
-import { useFocusTrap, useFocusRestore } from '@autobot/ui'
+import { useFocusTrap, useFocusRestore, BaseButton } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { useCommandPermissions } from '@/composables/useCommandPermissions'
 

@@ -1,7 +1,7 @@
 <template>
   <div
     class="voice-panel h-full flex flex-col bg-autobot-bg-card border-l border-autobot-border"
-    tabindex="-1"
+    tabindex="-1" role="complementary" :aria-label="$t('chat.voice.title')"
     ref="panelRef"
     @keydown.escape="close"
   >

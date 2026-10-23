@@ -28,7 +28,6 @@ from __future__ import annotations
 
 import argparse
 import re
-import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 import sys
 from pathlib import Path
 
@@ -41,8 +40,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from autobot_shared.paths import (  # noqa: E402
     GitRepoRootUnavailable,
     git_repo_root,
-    scrubbed_git_env,
 )
+
+# tools/lint/ is not a package; this file lives there, so its siblings import bare.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from _scan_helpers import EmptyEnumeration, GitEnumerationFailed, tracked_paths  # noqa: E402
 
 _FALLBACK = re.compile(r"\$\{(AUTOBOT_[A-Z0-9_]*PORT):-([0-9]+)\}")
 _SSOT_FIELD = re.compile(r'Field\(\s*default=(\d+)[^)]*alias="(AUTOBOT_[A-Z0-9_]*PORT)"')
@@ -62,6 +65,7 @@ _ALLOWLIST = frozenset(
 )
 
 
+# Not project_root: this resolves the git toplevel with a scrubbed git environment (#15176), and dies when it cannot.
 def _repo_root() -> Path:
     """Absolute repo root, or die — every path below is resolved against it.
 
@@ -113,22 +117,12 @@ def _ssot_ports(root: Path) -> dict[str, str]:
 
 def _shell_files(root: Path) -> list[str]:
     """Tracked shell scripts, or die rather than scan nothing."""
-    result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "ls-files", "*.sh"],
-        cwd=str(root),
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        # Same scrub as the root: an inherited GIT_DIR would enumerate one
-        # checkout's index while *root* names another (#15176).
-        env=scrubbed_git_env(),
-    )
-    if result.returncode != 0:
-        sys.exit(f"FATAL: git ls-files failed: {result.stderr.strip()}")
-    files = result.stdout.split()
-    if not files:
+    try:
+        return tracked_paths(root, "*.sh")
+    except EmptyEnumeration:
         sys.exit("FATAL: git ls-files listed no shell scripts — refusing to report clean on an empty scope")
-    return files
+    except GitEnumerationFailed as exc:
+        sys.exit(f"FATAL: git ls-files failed: {exc}")
 
 
 def main(argv: list[str] | None = None) -> int:

@@ -46,7 +46,7 @@ from autobot_shared.browser.base import (
     ScreenshotRequest,
     SessionHandle,
     UnsafeUrlError,
-    UnsupportedFormatError,
+    UnsupportedContentFormatError,
 )
 from autobot_shared.url_safety import is_public_url_async
 
@@ -162,7 +162,7 @@ class Browser:
 
         needed = FORMAT_CAPABILITY[request.format]
         if needed not in self._backend.capabilities:
-            raise UnsupportedFormatError(
+            raise UnsupportedContentFormatError(
                 f"backend {self._backend.name!r} cannot produce "
                 f"{request.format.value!r} (needs {needed.value!r}); "
                 f"require it in get_browser() so dispatch picks a backend that can"

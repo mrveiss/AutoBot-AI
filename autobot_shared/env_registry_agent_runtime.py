@@ -409,7 +409,7 @@ register_env_var(
             "how long the interest is meant to last: an interest ends when its branch merges or "
             "closes, which is a fact someone looks up, not a timer. The TTL exists only so a "
             "record nobody pruned cannot outlive the repository, and a record reaching it means "
-            "prune() was never called rather than that the work was abandoned. Two weeks by "
+            "prune_closed_branches() was never called rather than that the work was abandoned. Two weeks by "
             "default, which no healthy branch should reach."
         ),
         component="orchestration",
@@ -593,3 +593,5 @@ register_env_var(
         component="voice",
     )
 )
+
+from autobot_shared import env_registry_ledger  # noqa: E402,F401 -- registers #18391 vars; see its docstring

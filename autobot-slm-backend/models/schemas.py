@@ -2,11 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""
-SLM Pydantic Schemas
-
-Request and response models for the SLM API.
-"""
+"""SLM Pydantic Schemas: request and response models for the SLM API."""
 
 from datetime import datetime
 from enum import Enum
@@ -14,7 +10,9 @@ from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from .database import BackupServiceType, NodeStatus
+from services.ssh_utils import SshHost, SshPassword, SshUser
+
+from .database import BackupServiceType, NodeStatus, ScheduleTargetType  # noqa: F401  (re-exported)
 
 # =============================================================================
 # Authentication Schemas
@@ -52,7 +50,7 @@ class MfaChallengeResponse(BaseModel):
     temp_token: str
 
 
-class UserCreate(BaseModel):
+class SlmAdminUserCreate(BaseModel):
     """User creation request."""
 
     username: str = Field(..., min_length=3, max_length=64)
@@ -60,7 +58,7 @@ class UserCreate(BaseModel):
     is_admin: bool = False
 
 
-class UserResponse(BaseModel):
+class SlmAdminUserResponse(BaseModel):
     """User response (excludes password)."""
 
     id: Any
@@ -165,12 +163,12 @@ class NodeCreate(BaseModel):
 
     hostname: str
     ansible_name: str | None = Field(None, min_length=1)  # Ansible inventory name (#1814, #2011)
-    ip_address: str
+    ip_address: SshHost
     node_id: str | None = None  # Custom node_id; if not provided, derived from hostname
     roles: List[str] = Field(default_factory=list)
-    ssh_user: str | None = "autobot"
+    ssh_user: SshUser | None = "autobot"
     ssh_port: int | None = 22
-    ssh_password: str | None = None
+    ssh_password: SshPassword | None = None
     auth_method: str | None = "password"
     import_existing: bool = False
     auto_enroll: bool = False
@@ -181,7 +179,7 @@ class NodeUpdate(BaseModel):
 
     hostname: str | None = None
     ansible_name: str | None = Field(None, min_length=1)  # Ansible inventory name (#1814, #2011)
-    ip_address: str | None = None
+    ip_address: SshHost | None = None
     status: NodeStatus | None = None
     roles: List[str] | None = None
 
@@ -271,7 +269,7 @@ class HeartbeatResponse(BaseModel):
 class EnrollRequest(BaseModel):
     """Node enrollment request with SSH credentials."""
 
-    ssh_password: str | None = None
+    ssh_password: SshPassword | None = None
 
 
 # =============================================================================
@@ -476,8 +474,8 @@ class SystemMetrics(BaseModel):
 class ConnectionTestRequest(BaseModel):
     """SSH connection test request."""
 
-    ip_address: str
-    ssh_user: str = "autobot"
+    ip_address: SshHost
+    ssh_user: SshUser = "autobot"
     ssh_port: int = 22
     auth_method: str = "password"
     password: str | None = None
@@ -1838,14 +1836,6 @@ class CodeVersionNotificationResponse(BaseModel):
 # =============================================================================
 # Schedule Schemas (Issue #741 - Phase 7)
 # =============================================================================
-
-
-class ScheduleTargetType(str, Enum):
-    """Schedule target type enumeration."""
-
-    ALL = "all"
-    SPECIFIC = "specific"
-    TAG = "tag"
 
 
 class ScheduleCreate(BaseModel):

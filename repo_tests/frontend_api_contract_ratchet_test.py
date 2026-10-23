@@ -72,7 +72,9 @@ _SLM_SRC = _REPO_ROOT / "autobot-slm-frontend" / "src"
 _BASELINES = {
     "autobot-frontend": {
         "clients": 8,
-        "raw_fetch": 17,
+        # #12363: counts only raw-fetch files NOT recorded in `_RAW_FETCH_EXCEPTIONS`;
+        # 17 -> 0. Every remaining site is a named exception with a reason.
+        "raw_fetch": 0,
         "axios": 0,
         # #16460: three duplicates from the +9 were dropped, then the remaining
         # six hand-typed invitation list/respond and activity/notification history
@@ -85,7 +87,8 @@ _BASELINES = {
         # #16245: SettingsPanel.vue's unrendered /system/health/detailed loader was
         # removed with its two `apiClient.get<...>` calls; recounted at the rebased
         # tree, combined with the other cuts already on main.
-        "inline_generics": 562,
+        # train-35: useBackgroundTask clear-stuck drops its `apiClient.post<unknown>` (-1).
+        "inline_generics": 561,
     },
     "autobot-slm-frontend": {
         "clients": 1,
@@ -104,9 +107,33 @@ _BASELINES = {
         # OrphanListResponse, OrphanRepairResponse, AuditQueryResponse) for the
         # Data Hygiene page's new orphan-storage/orphan-repair/audit calls
         # (#17157). None has a generated contract yet to derive from.
-        "responses": 34,
+        # #18739: 34 -> 33. `interface UserResponse` left useAutobotApi.ts with
+        # the stale /users calls it typed.
+        "responses": 33,
         "inline_generics": 87,
     },
+}
+
+# Raw `fetch(` sites that legitimately bypass the transport client (#12363),
+# keyed by repo-relative path. A new raw fetch must either route through
+# `ApiClient` / `fetchWithAuth` or be added here WITH a reason; the guard also
+# fails when an entry no longer contains a raw fetch, so the list cannot rot.
+_RAW_FETCH_EXCEPTIONS: dict[str, str] = {
+    "autobot-frontend/src/utils/ApiClient.ts": "the canonical transport client itself",
+    "autobot-frontend/src/utils/fetchWithAuth.ts": "the canonical auth-injecting fetch helper",
+    "autobot-frontend/src/utils/slmClient.ts": "SLM-origin transport client with its own bearer token; the main-app JWT must not be sent",
+    "autobot-frontend/src/config/AppConfig.js": "bootstrap config fetch; ApiClient derives its base URL from AppConfig, so it cannot depend on it",
+    "autobot-frontend/src/config/ssot-config.ts": "SLM service discovery during config bootstrap, before any client exists; imported by the client",
+    "autobot-frontend/src/config/ServiceDiscovery.js": "probes candidate hosts for reachability; not a call to the configured backend",
+    "autobot-frontend/src/components/desktop/DesktopInterface.vue": "probes the VNC server (a different origin and service) for vnc.html",
+    "autobot-frontend/src/embed/AutobotWidget.ts": "embeddable widget on third-party pages; no AutoBot session, auth, or shared client bundle",
+    "autobot-frontend/src/utils/RumAgent.ts": "telemetry beacons that must never throw, log-spam, or trigger the 401 logout path",
+    "autobot-frontend/src/workers/thumbnailWorker.ts": "Web Worker context; fetches arbitrary media URLs and cannot import the main-thread client",
+    "autobot-frontend/src/components/vision/VideoProcessor.vue": "converts a data: URL to a Blob; no network request",
+    "autobot-frontend/src/composables/useConnectionTester.ts": "tests a user-supplied endpoint; sending the app token to it would leak the credential",
+    "autobot-frontend/src/components/artifact-cells/CodeCell.stories.ts": "false positive: `fetch(` inside a sample-code string in a story",
+    "autobot-frontend/src/components/canvas/CodeCell.stories.ts": "false positive: `fetch(` inside a sample-code string in a story",
+    "autobot-frontend/src/composables/useTimeout.ts": "false positive: `fetch(` inside a JSDoc example",
 }
 
 _APP_SRC = {
@@ -115,6 +142,9 @@ _APP_SRC = {
 }
 
 _SOURCE_SUFFIXES = (".ts", ".vue")
+# Raw fetch is also checked in `.js` (AppConfig, ServiceDiscovery live there); the
+# other dimensions stay `.ts`/`.vue` so their counts are unchanged.
+_RAW_FETCH_SUFFIXES = _SOURCE_SUFFIXES + (".js",)
 
 # Floors, not censuses: a walk that stops matching must fail loudly rather than
 # pass by reaching nothing.
@@ -150,11 +180,11 @@ def _is_test(path: Path) -> bool:
     return "__tests__" in path.parts or ".test." in path.name or ".spec." in path.name
 
 
-def _source_files(root: Path) -> list[Path]:
+def _source_files(root: Path, suffixes: tuple[str, ...] = _SOURCE_SUFFIXES) -> list[Path]:
     return [
         path
         for path in sorted(root.rglob("*"))
-        if path.suffix in _SOURCE_SUFFIXES
+        if path.suffix in suffixes
         and path.is_file()
         and "node_modules" not in path.relative_to(root).parts  # #15510
         and "generated" not in path.parts
@@ -176,10 +206,17 @@ def _client_class_names(root: Path) -> set[str]:
     return names
 
 
-def _raw_fetch_files(root: Path) -> list[str]:
+def _raw_fetch_files(root: Path, base: Path = _REPO_ROOT) -> list[str]:
     return [
-        path.relative_to(_REPO_ROOT).as_posix() for path in _source_files(root) if _RAW_FETCH_RE.search(_read(path))
+        path.relative_to(base).as_posix()
+        for path in _source_files(root, _RAW_FETCH_SUFFIXES)
+        if _RAW_FETCH_RE.search(_read(path))
     ]
+
+
+def _unlisted_raw_fetch_files(root: Path, base: Path = _REPO_ROOT) -> list[str]:
+    """Raw-fetch files with no recorded reason: the only ones the ratchet counts."""
+    return [rel for rel in _raw_fetch_files(root, base) if rel not in _RAW_FETCH_EXCEPTIONS]
 
 
 def _axios_importers(root: Path) -> list[str]:
@@ -201,7 +238,7 @@ def _measure(app: str) -> dict[str, int]:
     root = _APP_SRC[app]
     return {
         "clients": len(_client_class_names(root)),
-        "raw_fetch": len(_raw_fetch_files(root)),
+        "raw_fetch": len(_unlisted_raw_fetch_files(root)),
         "axios": len(_axios_importers(root)),
         "responses": _hand_typed_response_count(root),
         "inline_generics": _inline_generic_count(root),
@@ -252,3 +289,27 @@ def test_contract_sprawl_only_shrinks(app: str, dimension: str) -> None:
         f"{app}: {dimension} is down to {actual} but the baseline still says {baseline} — "
         "lower it in the commit that did the work, so the number stays a deliberate claim"
     )
+
+
+def test_every_raw_fetch_exception_is_still_a_raw_fetch_with_a_reason() -> None:
+    """A stale or reasonless entry would silently license a future raw fetch."""
+    present = set(_raw_fetch_files(_MAIN_SRC))
+    for rel, reason in _RAW_FETCH_EXCEPTIONS.items():
+        assert reason.strip(), f"{rel}: an exception needs a one-line reason"
+        assert rel in present, f"{rel} no longer contains a raw fetch — drop it from _RAW_FETCH_EXCEPTIONS"
+
+
+def test_the_exception_list_separates_listed_from_unlisted_raw_fetch(tmp_path: Path) -> None:
+    """Contrast pair: an unlisted raw fetch is counted; a listed one is not (#12363)."""
+    src = tmp_path / "src"
+    src.mkdir()
+    (src / "rogue.ts").write_text("await fetch('/api/x')\n", encoding="utf-8")
+    (src / "blessed.ts").write_text("await fetch('/api/y')\n", encoding="utf-8")
+    (src / "clean.ts").write_text("await client.get('/api/z')\n", encoding="utf-8")
+    assert _raw_fetch_files(src, tmp_path) == ["src/blessed.ts", "src/rogue.ts"]
+    assert _unlisted_raw_fetch_files(src, tmp_path) == ["src/blessed.ts", "src/rogue.ts"]
+    _RAW_FETCH_EXCEPTIONS["src/blessed.ts"] = "test fixture"
+    try:
+        assert _unlisted_raw_fetch_files(src, tmp_path) == ["src/rogue.ts"]
+    finally:
+        del _RAW_FETCH_EXCEPTIONS["src/blessed.ts"]

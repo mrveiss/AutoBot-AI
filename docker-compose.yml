@@ -2,10 +2,10 @@
 # All core services on one machine. Frontend at /, SLM at /slm.
 # Requires Docker Compose v2+ for resource limits (deploy.resources).
 #
-# Usage (works out of the box — no manual secret step):
-#   docker compose up -d --build                       # Start all core services
-#   docker compose --profile monitoring up -d
-#   docker compose --profile ollama up -d
+# Usage — first `bash docker/generate-secrets.sh` once per host: it picks the
+# management network range (AUTOBOT_DOCKER_MGMT_PREFIX, no default, #16833):
+#   docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d --build
+#   ... --profile monitoring up -d   /   ... --profile ollama up -d
 #
 # SECRETS (GH#9775, GH#9905): AUTOBOT_JWT_SECRET / SECRET_KEY have NO committed
 # fallback — a shared committed signing secret allows token forgery. On first
@@ -76,7 +76,7 @@ services:
       - no-new-privileges:true
     networks:
       autobot-mgmt:
-        ipv4_address: 172.30.0.10
+        ipv4_address: ${AUTOBOT_DOCKER_MGMT_PREFIX}.10
       autobot-data:
 
   autobot-postgres:
@@ -118,7 +118,7 @@ services:
       - no-new-privileges:true
     networks:
       autobot-mgmt:
-        ipv4_address: 172.30.0.11
+        ipv4_address: ${AUTOBOT_DOCKER_MGMT_PREFIX}.11
       autobot-data:
 
   autobot-chromadb:
@@ -175,7 +175,7 @@ services:
       - no-new-privileges:true
     networks:
       autobot-mgmt:
-        ipv4_address: 172.30.0.12
+        ipv4_address: ${AUTOBOT_DOCKER_MGMT_PREFIX}.12
       autobot-data:
 
   # ---- Application Layer ----
@@ -262,11 +262,15 @@ services:
       - AUTOBOT_LLAMAINDEX_LLM_ENDPOINT=http://${AUTOBOT_OLLAMA_HOST:-autobot-ollama}:11434
       - AUTOBOT_LLAMAINDEX_EMBEDDING_ENDPOINT=http://${AUTOBOT_OLLAMA_HOST:-autobot-ollama}:11434
       - AUTOBOT_AUDIT_LOG_FILE=/app/logs/audit.log
-      # User mode defaults to single_user (no Postgres schema bootstrap needed).
-      # RBAC (single_company → first user becomes admin) is wired and ready —
-      # setting AUTOBOT_USER_MODE=single_company is now a single-var flip: the
-      # entrypoint bootstraps the schema via `alembic upgrade head` (#9759).
-      - AUTOBOT_USER_MODE=${AUTOBOT_USER_MODE:-single_user}
+      # single_user mode is retired (#10636): AutoBot always runs Postgres-backed user
+      # management, and the entrypoint bootstraps the schema via `alembic upgrade head`
+      # (#9759). single_company is the default the backend falls back to anyway; naming
+      # it here keeps the retired value from logging an "invalid mode" warning (#18729).
+      - AUTOBOT_USER_MODE=${AUTOBOT_USER_MODE:-single_company}
+      # The first platform admin is seeded on startup from this (#10199). generate-secrets.sh
+      # writes it to docker/.env.secrets; unset, no admin is created and nobody can log in.
+      - AUTOBOT_ADMIN_PASSWORD=${AUTOBOT_ADMIN_PASSWORD:-}
+      - AUTOBOT_ADMIN_USERNAME=${AUTOBOT_ADMIN_USERNAME:-admin}
       - AUTOBOT_POSTGRES_HOST=autobot-postgres
       - AUTOBOT_POSTGRES_PORT=5432
       - AUTOBOT_POSTGRES_DB=${AUTOBOT_USERS_DB_NAME:-autobot_users}
@@ -330,7 +334,7 @@ services:
       - no-new-privileges:true
     networks:
       autobot-mgmt:
-        ipv4_address: 172.30.0.13
+        ipv4_address: ${AUTOBOT_DOCKER_MGMT_PREFIX}.13
       autobot-data:
       autobot-app:
 
@@ -401,9 +405,9 @@ services:
       - AUTOBOT_CHROMADB_AUTH_TOKEN=${AUTOBOT_CHROMADB_AUTH_TOKEN:-}
       - AUTOBOT_AUDIT_LOG_FILE=/app/logs/audit.log
       # User-mgmt/RBAC tasks need the same Postgres + mode wiring as the backend.
-      # Defaults to single_user; the backend entrypoint bootstraps the schema
-      # on flip (#9759), so no manual migration step is needed here.
-      - AUTOBOT_USER_MODE=${AUTOBOT_USER_MODE:-single_user}
+      # single_user is retired (#10636); single_company matches the backend's
+      # default, and the backend entrypoint bootstraps the schema (#9759) (#18729).
+      - AUTOBOT_USER_MODE=${AUTOBOT_USER_MODE:-single_company}
       - AUTOBOT_POSTGRES_HOST=autobot-postgres
       - AUTOBOT_POSTGRES_PORT=5432
       - AUTOBOT_POSTGRES_DB=${AUTOBOT_USERS_DB_NAME:-autobot_users}
@@ -461,18 +465,28 @@ services:
       - no-new-privileges:true
     networks:
       autobot-mgmt:
-        ipv4_address: 172.30.0.14
+        ipv4_address: ${AUTOBOT_DOCKER_MGMT_PREFIX}.14
       autobot-data:
       autobot-app:
 
   autobot-celery-beat:
+    # #18584: builds the shared backend image itself, like autobot-worker. With
+    # only `image:`, a first run (or `up autobot-celery-beat` alone) found no
+    # local autobot/backend and tried to pull it from a registry where it does
+    # not exist ("pull access denied").
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
     image: autobot/backend:latest
     container_name: autobot-celery-beat
     restart: unless-stopped
-    # NB: inherits the image ENTRYPOINT (/app/entrypoint.sh, #9759). Migrations
-    # stay skipped here because AUTOBOT_USER_MODE is deliberately NOT set for
-    # beat — do not add it, or beat and the backend would run
-    # `alembic upgrade head` concurrently (alembic takes no advisory lock).
+    # #18910: no image ENTRYPOINT. /app/entrypoint.sh always migrates since #18729, and
+    # beat used to skip it only because AUTOBOT_USER_MODE was unset. Beat has no Postgres
+    # settings, so it migrated against localhost, exited and crash-looped. The backend
+    # alone runs `alembic upgrade head`; beat must not, since alembic takes no advisory
+    # lock and two would race. With no entrypoint celery is PID 1, which the procfs
+    # healthcheck below expects.
+    entrypoint: []
     command: >
       python3.14 -m celery -A celery_app beat
       --loglevel=info
@@ -542,7 +556,7 @@ services:
       - no-new-privileges:true
     networks:
       autobot-mgmt:
-        ipv4_address: 172.30.0.15
+        ipv4_address: ${AUTOBOT_DOCKER_MGMT_PREFIX}.15
       autobot-data:
 
   autobot-slm:
@@ -580,6 +594,7 @@ services:
       # Surface each compose service container as a fleet node (#9761). Off by
       # default so production/Ansible VM fleets are unaffected; on for compose.
       - SLM_COMPOSE_NODES=${SLM_COMPOSE_NODES:-true}
+      - AUTOBOT_DOCKER_MGMT_PREFIX=${AUTOBOT_DOCKER_MGMT_PREFIX}  # compose_fleet node IPs (#16833)
       # Shared signing secrets so the backend node's JWT verifies on SLM —
       # without a shared secret each service generates its own and SLM rejects
       # the node WS with 401, leaving the host shown offline (#9715). CHANGE in
@@ -627,7 +642,7 @@ services:
       - no-new-privileges:true
     networks:
       autobot-mgmt:
-        ipv4_address: 172.30.0.16
+        ipv4_address: ${AUTOBOT_DOCKER_MGMT_PREFIX}.16
       autobot-data:
       autobot-app:
 
@@ -647,7 +662,11 @@ services:
       # Uses AUTOBOT_DOCKER_* prefix to avoid conflict with fleet .env vars (#2458)
       - ${AUTOBOT_DOCKER_NGINX_CONF:-./docker/nginx/nginx.conf}:/etc/nginx/nginx.conf:ro
       - ./docker/nginx/nginx-common.conf:/etc/nginx/nginx-common.conf:ro
+      - ./docker/nginx/nginx-backend-upstream.conf:/etc/nginx/nginx-backend-upstream.conf:ro
       - ./docker/nginx/nginx-locations.conf:/etc/nginx/nginx-locations.conf:ro
+      - ./docker/nginx/nginx-slm-locations.conf:/etc/nginx/nginx-slm-locations.conf:ro
+      - ./docker/nginx/nginx-tls.conf:/etc/nginx/nginx-tls.conf:ro
+      - ./docker/nginx/nginx-tls-redirect.conf:/etc/nginx/nginx-tls-redirect.conf:ro
       # TLS certificates directory (mounted read-only)
       # Generate dev certs: bash docker/certs/generate-self-signed.sh
       - ./docker/certs:/etc/nginx/certs:ro
@@ -687,7 +706,70 @@ services:
       - no-new-privileges:true
     networks:
       autobot-mgmt:
-        ipv4_address: 172.30.0.17
+        ipv4_address: ${AUTOBOT_DOCKER_MGMT_PREFIX}.17
+      autobot-app:
+
+  # ---- Optional: SLM web GUI only (#18585) ----
+  # `docker compose --profile slm up -d autobot-slm-gui` brings up the SLM web
+  # GUI with only what it needs (secrets-init, redis, postgres, autobot-slm) —
+  # not the full platform. It binds port 80 like autobot-frontend: run one or
+  # the other. Add the rest of the fleet from the GUI afterwards.
+  autobot-slm-gui:
+    profiles: ["slm"]
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+      target: slm-gui
+    image: autobot/slm-gui:latest
+    container_name: autobot-slm-gui
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      # Host port for HTTPS; change it when host port 443 is taken (#18593).
+      - "${AUTOBOT_DOCKER_SLM_HTTPS_PORT:-443}:443"
+    volumes:
+      # nginx config: HTTP-only by default, like autobot-frontend.
+      # For TLS: set AUTOBOT_DOCKER_SLM_NGINX_CONF=./docker/nginx/nginx-slm-ssl.conf (#18593)
+      - ${AUTOBOT_DOCKER_SLM_NGINX_CONF:-./docker/nginx/nginx-slm.conf}:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/nginx-common.conf:/etc/nginx/nginx-common.conf:ro
+      - ./docker/nginx/nginx-slm-locations.conf:/etc/nginx/nginx-slm-locations.conf:ro
+      - ./docker/nginx/nginx-tls.conf:/etc/nginx/nginx-tls.conf:ro
+      - ./docker/nginx/nginx-tls-redirect.conf:/etc/nginx/nginx-tls-redirect.conf:ro
+      # TLS certificates directory (mounted read-only); generate dev certs with
+      # bash docker/certs/generate-self-signed.sh
+      - ./docker/certs:/etc/nginx/certs:ro
+    depends_on:
+      autobot-slm:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.5'
+    logging: *default-logging
+    read_only: true
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETUID
+      - SETGID
+      - NET_BIND_SERVICE
+    tmpfs:
+      - /tmp
+      - /var/run
+      - /var/cache/nginx
+      - /var/lib/nginx
+      - /var/log/nginx
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      autobot-mgmt:
       autobot-app:
 
   # ---- Optional: Local LLM ----
@@ -743,6 +825,12 @@ services:
       # Whole directory, not just prometheus.yml: the alerts-*.yml rule files
       # sit beside it and were otherwise absent from the container (#12460).
       - ./autobot-monitoring:/etc/prometheus:ro
+      # #16375: the backend scrape token file (prometheus_scrape_token). The
+      # volume's autobot.env is 0640 999:999, unreadable to this container.
+      - autobot_secrets:/run/autobot-secrets:ro
+    depends_on:
+      autobot-secrets-init:
+        condition: service_completed_successfully
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
@@ -835,8 +923,11 @@ networks:
     driver: bridge
   # Shared management network: every service joins this single subnet so all
   # fleet nodes report IPs from one range, regardless of app/data tier (#9761).
+  # No default range (#16833): a fixed one took over the host's route on a LAN
+  # using the same /24. docker/generate-secrets.sh picks a free private /24 per
+  # host and writes AUTOBOT_DOCKER_MGMT_PREFIX (its first three octets).
   autobot-mgmt:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.30.0.0/24
+        - subnet: "${AUTOBOT_DOCKER_MGMT_PREFIX:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}.0/24"

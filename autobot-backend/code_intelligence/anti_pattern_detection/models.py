@@ -101,7 +101,7 @@ class AnalysisReport:
 
 
 @dataclass
-class ClassInfo:
+class AnalyzedClassInfo:
     """Information about an analyzed class."""
 
     name: str

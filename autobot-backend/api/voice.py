@@ -30,7 +30,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from services.personality_service import resolve_voice_id
 from services.realtime_mcp_bridge import get_realtime_bridge
-from services.tts_client import get_tts_client
+from services.tts_client import TTSReferenceAudioRejected, get_tts_client
 
 router = APIRouter(
     dependencies=[Depends(check_admin_permission)],
@@ -118,6 +118,7 @@ async def voice_realtime_call_tool(
         body.arguments,
         user_id=user_id,
         session_id=session_id,
+        company_id=current_user.get("org_id"),  # #18430: the authenticated company, never the model's
     )
     return {"is_error": result.is_error, "content": result.content}
 
@@ -399,12 +400,17 @@ async def voice_create_api(
 ):
     """Create a voice profile from reference audio."""
     # Function-local: the media package import chain is not inert (see _whisper_sync).
+    from media.audio.reference_wav import UNSUPPORTED_AUDIO_CODE, to_reference_wav  # noqa: PLC0415
     from media.audio.upload_limits import read_capped_audio  # noqa: PLC0415
 
-    audio_bytes = await read_capped_audio(audio)
-    tts = get_tts_client()
-    result = await tts.create_voice(name, audio_bytes, audio.filename or "ref.wav")
-    return result
+    audio_bytes = await to_reference_wav(await read_capped_audio(audio), audio.filename)  # #18477: WAV for libsndfile
+    try:
+        return await get_tts_client().create_voice(name, audio_bytes, "ref.wav")
+    except TTSReferenceAudioRejected as exc:  # the worker could not decode it either: the client's file, not a 500
+        logger.warning("TTS worker rejected the reference audio: %s", exc)
+        raise HTTPException(
+            status_code=422, detail={"code": UNSUPPORTED_AUDIO_CODE, "message": "The audio could not be decoded"}
+        ) from exc
 
 
 @router.delete("/voices/{voice_id}", response_model=VoiceDeleteResponse)
@@ -548,7 +554,7 @@ async def voice_transcribe_api(
     # Function-local: the media package import chain is not inert (see _whisper_sync).
     from media.audio.upload_limits import read_capped_audio  # noqa: PLC0415
 
-    audio_bytes = await read_capped_audio(audio)
+    audio_bytes = await read_capped_audio(audio, name_from_mime=audio.content_type or "audio/webm")
     if not audio_bytes:
         return JSONResponse(
             status_code=400,

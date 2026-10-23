@@ -147,6 +147,14 @@ from _scan_helpers import (  # noqa: E402
     iter_shell_files,
     scan_python_files,
 )
+from _subprocess_ast import (  # noqa: E402
+    _ASYNC_SUBPROCESS_CALLS,
+    _SUBPROCESS_CALLS,
+    _command_arguments,
+    _is_async_subprocess_call,
+    _is_git_argv,
+    _is_subprocess_call,
+)
 
 #: The canonical scrubbing helper, ``autobot_shared.paths.scrubbed_git_env``.
 SCRUB_HELPER = "scrubbed_git_env"
@@ -157,8 +165,12 @@ SCRUB_HELPER = "scrubbed_git_env"
 #: strictly safer than one passing ``scrubbed_git_env``.
 STRICT_SCRUB_HELPER = "strict_git_env"
 
-#: Both spellings a call may pass, and both a local wrapper may be built from.
-SCRUB_HELPERS = frozenset({SCRUB_HELPER, STRICT_SCRUB_HELPER})
+#: ``autobot_shared.isolated_git.isolated_git_env`` -- the scrub plus the global/system config cut-off
+#: for throwaway-repo fixtures (#18940). Built on :func:`scrubbed_git_env`, so accepted equally.
+ISOLATED_SCRUB_HELPER = "isolated_git_env"
+
+#: Every spelling a call may pass, and every one a local wrapper may be built from.
+SCRUB_HELPERS = frozenset({SCRUB_HELPER, STRICT_SCRUB_HELPER, ISOLATED_SCRUB_HELPER})
 
 #: The shell-side equivalent, ``scripts/lib/git-root.sh``'s function of the
 #: same shape (#15245). A ``.sh`` line naming this is read as scrubbed even
@@ -207,16 +219,6 @@ GATED_TOKENS = {
         "`env=scrubbed_git_env()` (#14896)."
     ),
 }
-
-#: ``subprocess`` entry points that start a process.
-_SUBPROCESS_CALLS = frozenset({"run", "Popen", "call", "check_call", "check_output"})
-
-#: ``asyncio``'s process starters. Added by #15783 after the fourth recurrence
-#: landed in one: a delete guard's ``asyncio.create_subprocess_exec("git",
-#: "status", ...)`` inherited ``GIT_DIR`` and reported another repository's
-#: 9890 uncommitted changes. An async call site carries the identical defect
-#: and was invisible to a scanner that only knew ``subprocess``.
-_ASYNC_SUBPROCESS_CALLS = frozenset({"create_subprocess_exec", "create_subprocess_shell"})
 
 #: Message for the widened gate: any git subprocess in production code that
 #: does not say what environment it wants.
@@ -281,49 +283,6 @@ def asyncio_names(tree: ast.AST) -> Tuple[Set[str], Set[str]]:
     return modules, functions
 
 
-def _is_subprocess_call(node: ast.Call, modules: Set[str], functions: Set[str]) -> bool:
-    func = node.func
-    if isinstance(func, ast.Attribute) and func.attr in _SUBPROCESS_CALLS:
-        return isinstance(func.value, ast.Name) and func.value.id in modules
-    if isinstance(func, ast.Name):
-        return func.id in functions
-    return False
-
-
-def _is_async_subprocess_call(node: ast.Call, modules: Set[str], functions: Set[str]) -> bool:
-    func = node.func
-    if isinstance(func, ast.Attribute) and func.attr in _ASYNC_SUBPROCESS_CALLS:
-        return isinstance(func.value, ast.Name) and func.value.id in modules
-    if isinstance(func, ast.Name):
-        return func.id in functions
-    return False
-
-
-def _is_git_argv(node: ast.Call) -> bool:
-    """True when the call's first argument names ``git`` as argv[0].
-
-    Covers the three spellings that reach a process: a list/tuple
-    (``subprocess.run(["git", ...])``), a bare positional
-    (``asyncio.create_subprocess_exec("git", ...)``), and a command string
-    (``subprocess.run("git status", shell=True)``). Argv built through a
-    variable stays invisible -- the same documented gap as the token scan.
-    """
-    arguments = _command_arguments(node)
-    if not arguments:
-        return False
-    first = arguments[0]
-    if isinstance(first, (ast.List, ast.Tuple)) and first.elts:
-        head = first.elts[0]
-        return isinstance(head, ast.Constant) and isinstance(head.value, str) and _names_git(head.value)
-    if isinstance(first, ast.Constant) and isinstance(first.value, str):
-        return _names_git(first.value.split()[0] if first.value.split() else "")
-    return False
-
-
-def _names_git(argv0: str) -> bool:
-    return argv0 == "git" or argv0.endswith("/git")
-
-
 def is_production_path(rel: str) -> bool:
     """True for a path that is neither a test module nor a test directory.
 
@@ -337,18 +296,6 @@ def is_production_path(rel: str) -> bool:
     if name.endswith("_test.py") or name.startswith("test_"):
         return rel == "scripts/test_first_remediation.py"  # real tool, no fixture (#16179)
     return "/tests/" not in f"/{rel}"
-
-
-def _command_arguments(node: ast.Call) -> list[ast.expr]:
-    """Positional arguments plus a literal ``args=`` keyword.
-
-    ``subprocess.run(args=["git", "status"])`` is an ordinary spelling, and
-    reading only ``node.args`` meant such a call was neither gated nor counted
-    toward the discovery floor -- a blind spot in the matcher rather than in the
-    enumeration, which the reach floor cannot detect (#15783 review).
-    """
-    keyword_args = [kw.value for kw in node.keywords if kw.arg == "args"]
-    return list(node.args) + keyword_args
 
 
 def _gated_token(node: ast.Call) -> str | None:

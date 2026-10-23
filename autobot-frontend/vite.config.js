@@ -11,6 +11,7 @@ import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import pkg from './package.json'
+import { autobotUiResolve } from '../libs/autobot-ui/vite-resolve.ts'
 
 /**
  * Copy VAD static assets (ONNX runtime WASM + Silero model + worklet bundle)
@@ -68,7 +69,13 @@ export default defineConfig(({ mode }) => {
       // (node_modules/@autobot/terminal) not the real path (../../autobot-plugins/…).
       // Required for file: workspace packages — see #8482 / MVA-893.
       preserveSymlinks: true,
-      alias: { '@': fileURLToPath(new URL('./src', import.meta.url)), 'vue': 'vue/dist/vue.esm-bundler.js' }
+      // #17959: pin @autobot/ui to the in-tree kit and dedupe its bare imports.
+      dedupe: autobotUiResolve().dedupe,
+      alias: [
+        ...autobotUiResolve().alias,
+        { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
+        { find: 'vue', replacement: 'vue/dist/vue.esm-bundler.js' },
+      ]
     },
     server: {
       port: 5173,

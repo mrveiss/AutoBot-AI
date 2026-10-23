@@ -1,10 +1,10 @@
 <template>
-  <BasePanel variant="bordered" size="md">
+  <BaseCard scrollable variant="bordered" size="md">
     <template #header>
       <h3><Icon name="chart-bar" /> {{ $t('manpage.integrationStatus.title') }}</h3>
       <BaseButton
         size="sm"
-        variant="outline-solid"
+        variant="outline"
         @click="$emit('refresh')"
         :disabled="loading"
       >
@@ -74,10 +74,11 @@
       <Icon name="spinner" class="animate-spin" />
       {{ $t('manpage.integrationStatus.loadingStatus') }}
     </div>
-  </BasePanel>
+  </BaseCard>
 </template>
 
 <script setup lang="ts">
+import { BaseButton, BaseCard } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -91,8 +92,6 @@
  */
 
 import Icon from '@/components/ui/Icon.vue'
-import BasePanel from '@/components/base/BasePanel.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
 import { formatDate } from '@/utils/formatHelpers'
 
 interface IntegrationStatus {

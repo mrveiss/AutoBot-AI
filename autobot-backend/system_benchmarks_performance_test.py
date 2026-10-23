@@ -23,8 +23,8 @@ from memory import MemoryManager, TaskPriority
 from multimodal_processor import (
     ModalityType,
     MultiModalInput,
+    MultimodalProcessingIntent,
     MultiModalProcessor,
-    ProcessingIntent,
 )
 from services.config_service import ConfigService
 
@@ -67,7 +67,7 @@ def _blocked_sockets():
 
 
 def _mock_processed_result(processing_time: float) -> Mock:
-    """A Mock shaped like a completed ProcessingResult, shared by the three
+    """A Mock shaped like a completed MultimodalResult, shared by the three
     processor.process() benchmarks below. #16990: metadata={} is required --
     processor.py writes result.metadata["persisted"] = ... (#15234), and a
     plain Mock's auto-generated `.metadata` has no __setitem__.
@@ -83,7 +83,7 @@ def _mock_processed_result(processing_time: float) -> Mock:
         processing_time=processing_time,
         result_data={"decision": "test"},
         modality_type=ModalityType.TEXT,
-        intent=ProcessingIntent.DECISION_MAKING,
+        intent=MultimodalProcessingIntent.DECISION_MAKING,
         result_id="test",
         metadata={},
     )
@@ -192,7 +192,7 @@ class TestSystemPerformanceBenchmarks:
         test_input = MultiModalInput(
             input_id="perf_test_001",
             modality_type=ModalityType.TEXT,
-            intent=ProcessingIntent.DECISION_MAKING,
+            intent=MultimodalProcessingIntent.DECISION_MAKING,
             data="Test processing performance",
         )
 
@@ -227,7 +227,7 @@ class TestSystemPerformanceBenchmarks:
             MultiModalInput(
                 input_id=f"concurrent_test_{i}",
                 modality_type=ModalityType.TEXT,
-                intent=ProcessingIntent.DECISION_MAKING,
+                intent=MultimodalProcessingIntent.DECISION_MAKING,
                 data=f"Concurrent test {i}",
             )
             for i in range(10)
@@ -526,7 +526,7 @@ class TestScalabilityBenchmarks:
             MultiModalInput(
                 input_id=f"scale_test_{i}",
                 modality_type=ModalityType.TEXT,
-                intent=ProcessingIntent.DECISION_MAKING,
+                intent=MultimodalProcessingIntent.DECISION_MAKING,
                 data=f"Scale test {i}",
             )
             for i in range(num_inputs)

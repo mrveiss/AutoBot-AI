@@ -5,7 +5,7 @@
       <BaseButton
         v-for="cat in categories"
         :key="cat.value ?? 'all'"
-        :variant="selectedCategory === cat.value ? 'primary' : 'outline-solid'"
+        :variant="selectedCategory === cat.value ? 'primary' : 'outline'"
         size="sm"
         @click="$emit('select-category', cat.value)"
         class="category-tab"
@@ -55,7 +55,7 @@
 
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 
 interface CategoryOption {
   value: string | null

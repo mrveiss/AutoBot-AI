@@ -8,6 +8,7 @@
 
 import { cacheBuster } from './CacheBuster.js';
 import { createLogger } from '@/utils/debugUtils';
+import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import { getApiBase } from '@/config/ssot-config';
 
 // Create scoped logger for HealthMonitor
@@ -277,7 +278,7 @@ class HealthMonitor {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 second timeout
 
-            const response = await fetch(`${getApiBase()}/system/health`, {
+            const response = await fetchWithAuth(`${getApiBase()}/system/health`, {
                 signal: controller.signal,
                 headers: cacheBuster.getBustHeaders()
             });

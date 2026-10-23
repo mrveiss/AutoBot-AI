@@ -38,7 +38,7 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class DeploymentStatus(str, enum.Enum):
+class BridgeDeploymentStatus(str, enum.Enum):
     """Lifecycle states for an in-process deployment."""
 
     QUEUED = "queued"
@@ -86,7 +86,7 @@ class DeploymentContext:
     role_name: str
     target_nodes: list[str]
     playbook_path: str | None = None
-    status: DeploymentStatus = DeploymentStatus.QUEUED
+    status: BridgeDeploymentStatus = BridgeDeploymentStatus.QUEUED
     steps: list[DeploymentStep] = field(default_factory=list)
     started_at: datetime | None = None
     completed_at: datetime | None = None
@@ -200,7 +200,7 @@ class DeploymentCoordinator:
             role_name=role_name,
             target_nodes=target_nodes,
             playbook_path=playbook_path,
-            status=DeploymentStatus.QUEUED,
+            status=BridgeDeploymentStatus.QUEUED,
         )
         self.active_deployments.append(ctx)
         logger.info(
@@ -225,19 +225,19 @@ class DeploymentCoordinator:
         Returns False if the deployment is not found or not QUEUED.
         """
         ctx = self.get_deployment(deployment_id)
-        if ctx is None or ctx.status != DeploymentStatus.QUEUED:
+        if ctx is None or ctx.status != BridgeDeploymentStatus.QUEUED:
             return False
-        ctx.status = DeploymentStatus.RUNNING
+        ctx.status = BridgeDeploymentStatus.RUNNING
         try:
             for node_id in ctx.target_nodes:
                 extra: dict = {}
                 if ctx.playbook_path:
                     extra["playbook"] = ctx.playbook_path
                 await self._client.create_deployment(node_id=node_id, roles=[ctx.role_name], extra_data=extra)
-            ctx.status = DeploymentStatus.COMPLETED
+            ctx.status = BridgeDeploymentStatus.COMPLETED
             logger.info("Deployment completed: %s", deployment_id)
         except Exception as exc:
-            ctx.status = DeploymentStatus.FAILED
+            ctx.status = BridgeDeploymentStatus.FAILED
             logger.error("Deployment %s failed: %s", deployment_id, exc)
         return True
 
@@ -250,9 +250,9 @@ class DeploymentCoordinator:
         ctx = self.get_deployment(deployment_id)
         if ctx is None:
             return False
-        if ctx.status not in (DeploymentStatus.QUEUED, DeploymentStatus.RUNNING):
+        if ctx.status not in (BridgeDeploymentStatus.QUEUED, BridgeDeploymentStatus.RUNNING):
             return False
-        ctx.status = DeploymentStatus.CANCELLED
+        ctx.status = BridgeDeploymentStatus.CANCELLED
         logger.info("Deployment cancelled: %s", deployment_id)
         return True
 
@@ -278,7 +278,7 @@ class DeploymentCoordinator:
                     description=f"Rolling back {node_id}",
                 )
             )
-        ctx.status = DeploymentStatus.ROLLED_BACK
+        ctx.status = BridgeDeploymentStatus.ROLLED_BACK
         logger.info("Rollback triggered for deployment %s", deployment_id)
         return True
 
@@ -290,7 +290,7 @@ class DeploymentCoordinator:
 _orchestrator: DeploymentCoordinator | None = None
 
 
-def get_orchestrator() -> DeploymentCoordinator | None:
+def get_deployment_coordinator() -> DeploymentCoordinator | None:
     """Return the module-level DeploymentCoordinator singleton, or None."""
     return _orchestrator
 

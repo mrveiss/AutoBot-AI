@@ -42,7 +42,16 @@ UNPARSED = "(UNPARSED)"
 BASELINE_FILE = Path(__file__).with_name("egress_unguarded_baseline_17576.json")
 
 #: Implementations of the guard itself -- they construct and drive the session on purpose.
-EXEMPT = frozenset({"autobot_shared/http_client_manager.py", "autobot_shared/security/ssrf_guard.py"})
+#: The sticky-comment composite action (#12984) is exempt too: it runs on a bare runner with the standard
+#: library only (so it cannot import the guard, and ``urlopen`` can never be marked guarded), and it talks
+#: only to the runner's own GitHub API root with the job token -- never a user-, LLM- or document-supplied URL.
+EXEMPT = frozenset(
+    {
+        "autobot_shared/http_client_manager.py",
+        "autobot_shared/security/ssrf_guard.py",
+        ".github/actions/upsert-pr-comment/upsert_pr_comment.py",
+    }
+)
 _SKIP_DIRS = frozenset({"tests", "test", "fixtures", "node_modules", "__pycache__"})
 _SKIP_PREFIXES = ("docs/", "repo_tests/")
 
@@ -201,6 +210,23 @@ _FIXTURES_UNGUARDED = {
         "    return urllib.request.urlopen(u)\n"
     ),
     "websocket": "import websockets\nasync def f(u):\n    return websockets.connect(u)\n",
+    "ws-no-redirect": (
+        "from autobot_shared.ws_no_redirect import connect_no_redirect\nasync def f(u):\n    return connect_no_redirect(u)\n"
+    ),
+    "ws-no-redirect-alias": (
+        "from autobot_shared.ws_no_redirect import connect_no_redirect as c\nasync def f(u):\n    return c(u)\n"
+    ),
+    "ws-no-redirect-class-attr": (
+        "from autobot_shared import ws_no_redirect as w\nasync def f(u):\n    return w.NoRedirectConnect(u)\n"
+    ),
+    "websocket-asserted-but-follows-redirects": (
+        _POLICY_IMPORT + "import websockets\nasync def f(u):\n    await assert_egress_policy(u)\n"
+        "    return websockets.connect(u)\n"
+    ),
+    "conditional-policy-with-a-bool-arm": (
+        "from knowledge.connectors.egress import instance_host_egress\n"
+        "async def f(u, a):\n    return await http_client.get_json(u, guard_egress=instance_host_egress() if a else True)\n"
+    ),
     "websocket-alias": "from websockets.asyncio.client import connect as wsc\nasync def f(u):\n    return wsc(u)\n",
     "websocket-client-attr": "import websockets.client\nasync def f(u):\n    return websockets.client.connect(u)\n",
     "attr-policy-from-base-module": (
@@ -271,9 +297,19 @@ _FIXTURES_GUARDED = {
         "async def f(u):\n    await assert_public_egress(u)\n"
         "    async with aiohttp.ClientSession() as s:\n        return await s.get(u, allow_redirects=False)\n"
     ),
-    "websocket": (
-        _POLICY_IMPORT + "import websockets\nasync def f(u):\n    await assert_egress_policy(u)\n"
-        "    return websockets.connect(u)\n"
+    "ws-no-redirect": (
+        _POLICY_IMPORT + "from autobot_shared.ws_no_redirect import connect_no_redirect\n"
+        "async def f(u):\n    await assert_egress_policy(u)\n    return connect_no_redirect(u)\n"
+    ),
+    "conditional-policy-both-arms-canonical": (
+        "from knowledge.connectors.egress import CONTENT_URL_EGRESS, instance_host_egress\n"
+        "async def f(u, a):\n    return await http_client.get_json(\n"
+        "        u, guard_egress=instance_host_egress() if a else CONTENT_URL_EGRESS\n    )\n"
+    ),
+    "wrapper-inner-call-literal-policy": (
+        "from knowledge.connectors.egress import VENDOR_API_EGRESS\n"
+        "def _vendor_request(method, url, **kw):\n"
+        "    return get_http_client().tracked_request(method, url, guard_egress=VENDOR_API_EGRESS, **kw)\n"
     ),
     "attr-policy-from-egress-module": (
         "from autobot_shared import http_egress_guard as g\n"
@@ -294,6 +330,42 @@ def test_guarded_forms_count_as_guarded(name: str) -> None:
     assert len(sites) == 1 and sites[0].guarded, f"{name}: {sites}"
 
 
+_IN_PROCESS = (
+    "import httpx\nasync def f(app, p):\n"
+    "    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://t') as c:\n"
+    "        return await c.get(p)\n"
+)
+
+
+def test_an_in_process_asgi_client_is_not_an_outbound_call() -> None:
+    """#18765: ``ASGITransport`` opens no socket; the same client over the network is still flagged."""
+    assert outbound_sites(_IN_PROCESS) == ()
+    network = _IN_PROCESS.replace("transport=httpx.ASGITransport(app=app), ", "")
+    sites = outbound_sites(network)
+    assert len(sites) == 1 and not sites[0].guarded, "contrast: a network httpx client must still be detected"
+
+
+@pytest.mark.parametrize("name", ["client", "http_client"])
+def test_an_in_process_client_is_not_flagged_by_its_receiver_name(name: str) -> None:
+    """The binding is honoured before the name fallbacks (``client``) and the manager-name match (``http_client``)."""
+    named = _IN_PROCESS.replace(" as c:", f" as {name}:").replace("c.get(p)", f"{name}.get(p)")
+    assert named != _IN_PROCESS
+    assert outbound_sites(named) == ()
+    network = named.replace("transport=httpx.ASGITransport(app=app), ", "")
+    assert len(outbound_sites(network)) == 1, "contrast: the same name over the network is still detected"
+
+
+def test_an_asgi_client_with_network_mounts_is_still_an_outbound_call() -> None:
+    """``mounts=`` sends matching URLs to a network transport, so the exemption does not apply."""
+    mounted = _IN_PROCESS.replace(
+        "transport=httpx.ASGITransport(app=app), ",
+        "transport=httpx.ASGITransport(app=app), mounts={'https://': httpx.AsyncHTTPTransport()}, ",
+    )
+    assert mounted != _IN_PROCESS
+    sites = outbound_sites(mounted)
+    assert len(sites) == 1 and not sites[0].guarded
+
+
 def test_known_live_misses_are_now_found() -> None:
     """The review's three live misses: an aliased session under ``with`` and an httpx client."""
     found = scan_paths(repo_root(), ["autobot-backend/api/provider_auth.py", "autobot-backend/content_reach/_http.py"])
@@ -311,8 +383,12 @@ def test_declared_registry_is_part_of_the_census() -> None:
 
 def test_the_sweep_reaches_a_known_outbound_caller() -> None:
     """A known positive, so an empty sweep cannot read as a clean tree."""
-    found = scan_paths(repo_root(), ["autobot-backend/knowledge/connectors/jira.py"])
-    assert found, "jira.py makes tracked_request calls; the detector found nothing"
+    rel = "autobot-backend/knowledge/connectors/atlassian_base.py"
+    found = scan_paths(repo_root(), [rel])
+    # The exact key: an `(UNPARSED)` entry is a non-empty dict too, and must not satisfy this.
+    assert rel in found and any(
+        s.kind == "manager" for s in found[rel]
+    ), "atlassian_base.py makes tracked_request calls; the detector found no site under its own key"
 
 
 def test_the_sweep_population_floors() -> None:

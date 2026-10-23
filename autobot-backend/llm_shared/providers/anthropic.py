@@ -97,6 +97,7 @@ from llm_shared.types import ProviderType
 from services.provider_key_vault import resolve_provider_key
 
 from ..base_provider import BaseProvider
+from .anthropic_format import split_system_and_chat
 
 # Re-exported: the request-shaping unit moved to anthropic_request.py when this
 # file hit its size ceiling (#17305). `_thinking_budget_to_effort` is unused here
@@ -236,19 +237,12 @@ class AnthropicProvider(BaseProvider):
             raise ValueError(
                 "Anthropic API key not configured. " "Set ANTHROPIC_API_KEY or provide api_key in provider settings."
             )
-        self._client = anthropic.AsyncAnthropic(api_key=api_key)
+        kwargs: Dict[str, Any] = {"api_key": api_key}
+        http_client = self._headroom_http_client(getattr(anthropic, "DefaultAsyncHttpxClient", None))
+        if http_client is not None:
+            kwargs["http_client"] = http_client  # #15026: harvest rate-limit headers
+        self._client = anthropic.AsyncAnthropic(**kwargs)
         return self._client
-
-    def _split_messages(self, messages: list) -> tuple[str, list]:
-        """Separate the optional system message from conversational messages."""
-        system_content = ""
-        chat_messages = []
-        for msg in messages:
-            if msg.get("role") == "system":
-                system_content = msg.get("content", "")
-            else:
-                chat_messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
-        return system_content, chat_messages
 
     def _apply_system_content(self, kwargs: Dict[str, Any], request: LLMRequest, system_content: str) -> None:
         """Set ``kwargs["system"]``, in place. Prompt caching (#8171, #10597):
@@ -278,7 +272,7 @@ class AnthropicProvider(BaseProvider):
 
     def _build_request_kwargs(self, model: str, request: LLMRequest) -> tuple[Dict[str, Any], Dict[str, Any], bool]:
         """Build kwargs and extra_headers for an Anthropic SDK call."""
-        system_content, chat_messages = self._split_messages(request.messages)
+        system_content, chat_messages = split_system_and_chat(request.messages)
         kwargs: Dict[str, Any] = {
             "model": model,
             "max_tokens": request.max_tokens or 4096,

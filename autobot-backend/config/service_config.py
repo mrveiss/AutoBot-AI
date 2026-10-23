@@ -169,18 +169,14 @@ class ServiceConfigMixin:
     def get_backend_config(self) -> Dict[str, Any]:
         """Get backend configuration with fallback defaults.
 
-        #15051: `service_discovery.py`'s `_register_backend_service` reads
-        `backend_config.get("host")` and `.get("port")` -- the "host"/"port"
-        convention every sibling accessor here uses (`get_redis_config()`,
-        `get_distributed_services_config()`) -- and logs an error on every
-        process start when they come back None, silently falling back to
-        `system_defaults`. This dict never set them: "server_host"/"server_port"
-        are the BIND address (0.0.0.0 by default), not the DIAL address a
-        caller would connect to, and nothing populated the latter. `get_host()`
-        / `get_port()` are the canonical resolvers for exactly that (env var,
-        `infrastructure.hosts.backend`, then the fallback map), so this wires
-        them in rather than leaving every caller to reimplement the fallback
-        `service_discovery.py` already carries.
+        #15051: callers read `host` and `port` -- the convention every sibling
+        accessor here uses (`get_redis_config()`,
+        `get_distributed_services_config()`). "server_host"/"server_port" are the
+        BIND address (0.0.0.0 by default), not the DIAL address a caller would
+        connect to. `get_host()` / `get_port()` are the canonical resolvers for
+        the DIAL address (env var, `infrastructure.hosts.backend`, then the
+        fallback map), so this wires them in rather than leaving every caller to
+        reimplement the fallback.
         """
         backend_config = self.get_nested("backend", {})
 
@@ -211,9 +207,8 @@ class ServiceConfigMixin:
 
         Issue #12748: CANONICAL core Redis connection config. Reached via
         ConfigManager (unified_config_manager / global_config_manager /
-        config_manager), config.get_redis_config() (config/__init__.py, pure
-        delegate), and config.compat.get_redis_config(manager) (pure
-        delegate). config.__init__._ConfigStub.get_redis_config() mirrors
+        config_manager) and config.get_redis_config() (config/__init__.py,
+        pure delegate). config.__init__._ConfigStub.get_redis_config() mirrors
         this shape for the circular-import re-entry path only.
 
         NOT the same concern as services.config_service.ConfigService.

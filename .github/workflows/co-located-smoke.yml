@@ -167,6 +167,13 @@ jobs:
           rm -rf /tmp/.buildx-cache
           mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
+      - name: Pick the management network range (#16833)
+        # docker-compose.yml has no default autobot-mgmt range; this is the pick
+        # docker/generate-secrets.sh makes for a user, exported for every compose step.
+        run: |
+          prefix="$(python3 docker/pick_mgmt_prefix.py)"
+          echo "AUTOBOT_DOCKER_MGMT_PREFIX=${prefix}" >> "$GITHUB_ENV"
+
       - name: Start co-located stack
         run: docker compose --env-file docker/.env.docker up -d
 
@@ -239,7 +246,7 @@ jobs:
 
       - name: Upload failure logs
         if: failure()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: colocated-smoke-logs
           path: colocated-failure-logs.txt

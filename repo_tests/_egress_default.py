@@ -9,7 +9,8 @@ matcher and the data it is judged against live in different files.
 
 **What counts as an outbound call** (kind in brackets): manager methods on the shared client
 (``manager``), session verbs on an aiohttp session (``session``), and the call surface of ``httpx``,
-``requests`` and ``urllib.request.urlopen``. Receivers are recognised by name heuristics **and** by
+``requests``, ``urllib.request.urlopen`` and ``websockets`` (incl. ``ws_no_redirect.connect_no_redirect``).
+Receivers are recognised by name heuristics **and** by
 binding: a name bound by ``with ... as X`` or ``X = aiohttp.ClientSession(...)`` /
 ``httpx.AsyncClient(...)`` / ``requests.Session()`` / ``get_http_client()`` is a client of that kind.
 Import aliases resolve (``import requests as r``, ``from urllib.request import urlopen as uo``).
@@ -27,12 +28,14 @@ file, under-matching is the confident zero this guard exists to prevent.
   where ``<expr>`` is the same expression as the request's URL argument. A module-level policy call
   never counts. It also needs redirects refused: a literal ``allow_redirects=False`` (aiohttp,
   requests) or no ``follow_redirects`` opt-in (httpx, whose default is off). ``urlopen`` can never
-  be guarded this way; a websocket handshake is not redirected.
+  be guarded this way; a websocket counts only through ``ws_no_redirect.connect_no_redirect`` (websockets follows
+  handshake redirects).
 """
 
 from __future__ import annotations
 
 import ast
+import functools
 import re
 from pathlib import Path
 from typing import Iterable, Iterator, NamedTuple
@@ -63,6 +66,8 @@ _POLICY_VALUES = {"EGRESS_POLICY", "VENDOR_API_EGRESS", "CONTENT_URL_EGRESS", "i
 _POLICY_MODULES = {"base", "egress", "http_egress_guard"}
 _EGRESS_MODULES = {"egress", "http_egress_guard"}
 _URL_AT_1 = {"request", "tracked_request", "stream"}
+#: The ``websockets`` connect wrapper that refuses handshake redirects: still a websocket outbound call.
+_NO_REDIRECT_CONNECTS = frozenset({"connect_no_redirect", "NoRedirectConnect"})
 
 
 class Site(NamedTuple):
@@ -115,13 +120,35 @@ def _import_maps(tree: ast.AST) -> tuple[dict[str, str], frozenset[str]]:
     return aliases, frozenset(policies)
 
 
+#: httpx transports that call an application object in this process and open no socket (#18765).
+_IN_PROCESS_TRANSPORTS = frozenset({"httpx.ASGITransport", "httpx.WSGITransport"})
+#: The binding kind of such a client: recorded, so a receiver-name fallback (``client``) never re-flags it.
+_IN_PROCESS_KIND = "in-process"
+
+
+def _in_process(ctor: ast.Call, aliases: dict[str, str]) -> bool:
+    """True when an httpx client is built with ``transport=ASGITransport(...)`` and no ``mounts=``.
+
+    ``mounts`` routes chosen URL patterns to other (network) transports, so a client that has
+    them is not in-process however its default transport is set.
+    """
+    keywords = {kw.arg: kw.value for kw in ctor.keywords}
+    transport = keywords.get("transport")
+    return (
+        "mounts" not in keywords
+        and None not in keywords  # a **kwargs splat could carry mounts
+        and isinstance(transport, ast.Call)
+        and _canon(transport.func, aliases) in _IN_PROCESS_TRANSPORTS
+    )
+
+
 def _ctor_kind(expr: ast.expr | None, aliases: dict[str, str]) -> str | None:
     """Client kind produced by constructing/obtaining *expr*, if it is a known client factory."""
     if not isinstance(expr, ast.Call):
         return None
     canon = _canon(expr.func, aliases)
     if canon in _CTORS:
-        return _CTORS[canon]
+        return _IN_PROCESS_KIND if _in_process(expr, aliases) else _CTORS[canon]
     if canon.endswith(".tracked_session") or canon.endswith("get_http_client.tracked_session"):
         return "session"
     return "manager" if canon.split(".")[-1] == "get_http_client" else None
@@ -192,20 +219,26 @@ def _request(call: ast.Call, ctx: _Ctx) -> _Req | None:
     return None
 
 
+def _is_no_redirect_connect(canon: str) -> bool:
+    """``autobot_shared.ws_no_redirect``'s connect wrapper (or its class), however it was imported (#17576)."""
+    return canon.startswith("autobot_shared.ws_no_redirect.") and canon.rsplit(".", 1)[-1] in _NO_REDIRECT_CONNECTS
+
+
 def _kind(call: ast.Call, req: _Req | None, ctx: _Ctx) -> str | None:
     """Client kind of an outbound call, or ``None`` when *call* is not one."""
     canon = _canon(call.func, ctx.aliases)
     head, _, verb = canon.rpartition(".")
     if canon == "urllib.request.urlopen":
         return "urllib"
-    if canon.startswith("websockets.") and verb == "connect":
+    if (canon.startswith("websockets.") and verb == "connect") or _is_no_redirect_connect(canon):
         return "websocket"
     if head in ("requests", "httpx") and verb in _VERBS:
         return head
     if req is None or (req.verb not in _VERBS and req.verb not in _MANAGER_ONLY):
         return None
     chained = isinstance(call.func, ast.Attribute) and _ctor_kind(call.func.value, ctx.aliases)
-    return chained or _receiver_kind(req, ctx)
+    kind = chained or _receiver_kind(req, ctx)
+    return None if kind == _IN_PROCESS_KIND else kind
 
 
 def _receiver_kind(req: _Req, ctx: _Ctx) -> str | None:
@@ -214,6 +247,8 @@ def _receiver_kind(req: _Req, ctx: _Ctx) -> str | None:
     if not req.args and not req.keywords:
         return None  # ``x.get()`` -- a getter, not a request
     bound = ctx.bound.get(req.recv)
+    if bound == _IN_PROCESS_KIND:
+        return _IN_PROCESS_KIND  # before the name checks: an ASGI client named `http_client` is still in-process
     if bound == "manager" or _MANAGER_RECV.search(req.recv):
         return "manager"
     if bound:
@@ -238,6 +273,10 @@ def _url_arg(call: ast.Call, req: _Req | None) -> ast.expr | None:
 
 def _accepted_policy(value: ast.expr, ctx: _Ctx) -> bool:
     """``False``, ``EGRESS_POLICY`` or a canonical policy value imported from the egress modules."""
+    if isinstance(
+        value, ast.IfExp
+    ):  # ``instance_host_egress() if self.admin else CONTENT_URL_EGRESS``: both arms canonical
+        return _accepted_policy(value.body, ctx) and _accepted_policy(value.orelse, ctx)
     if isinstance(value, ast.Constant):
         return value.value is False
     if isinstance(value, ast.Call):
@@ -275,10 +314,11 @@ def _redirects_refused(kind: str, call: ast.Call, req: _Req | None, ctx: _Ctx) -
 
     aiohttp and requests follow redirects by default, so only a literal ``allow_redirects=False``
     counts. httpx does not follow by default: refused unless the call or its client opts in.
-    ``urlopen`` has no switch at all. A websocket handshake is not followed.
+    ``urlopen`` has no switch at all. A websocket handshake is followed by ``websockets.connect``;
+    only the ``ws_no_redirect`` wrapper refuses it.
     """
-    if kind == "websocket":
-        return True
+    if kind == "websocket":  # ``websockets.connect`` follows handshake redirects; only the wrapper refuses them
+        return _is_no_redirect_connect(_canon(call.func, ctx.aliases))
     if kind == "httpx":
         opted_in = any(kw.arg == "follow_redirects" for kw in call.keywords)
         if opted_in:
@@ -327,6 +367,14 @@ def outbound_sites(source: str) -> tuple[Site, ...]:
     return tuple(sorted(sites))
 
 
+@functools.lru_cache(maxsize=None)
+def _outbound_sites_cached(source: str) -> tuple[Site, ...]:
+    """``outbound_sites`` memoised on the file TEXT: several tests sweep the same tree, and keying
+    on content (not path) means an edited file is re-parsed, never served stale. A SyntaxError is
+    not cached, so an unparsable file is re-reported every sweep."""
+    return outbound_sites(source)
+
+
 def scan_paths(root: Path, relative_paths: Iterable[str]) -> dict[str, tuple[Site, ...]]:
     """Map each path with outbound calls to them; an unparsable file gets an ``(UNPARSED)`` key."""
     found: dict[str, tuple[Site, ...]] = {}
@@ -335,7 +383,7 @@ def scan_paths(root: Path, relative_paths: Iterable[str]) -> dict[str, tuple[Sit
         if not _QUICK.search(text):
             continue  # speed gate on vocabulary, not a matcher
         try:
-            sites = outbound_sites(text)
+            sites = _outbound_sites_cached(text)
         except SyntaxError:
             found[f"{rel} (UNPARSED)"] = ()
             continue

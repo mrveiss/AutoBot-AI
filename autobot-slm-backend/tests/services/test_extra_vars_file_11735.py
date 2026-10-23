@@ -7,7 +7,7 @@
 PlaybookExecutor auto-merges stored SLM secrets into extra_vars (#3519);
 passing them as ``-e key=value`` exposed the values in /proc/<pid>/cmdline
 to every local user for the whole playbook run.  They now travel via a
-0600 temp JSON file passed as ``-e @<file>``.
+0600 temp YAML file passed as ``-e @<file>``.
 
 Loads the modules under test directly from their file paths via importlib
 (same approach as tests/api/test_apply_secrets.py): the shared conftest
@@ -18,11 +18,12 @@ resolve to stubs when this file runs standalone (#11248).
 from __future__ import annotations
 
 import importlib.util
-import json
 import stat
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock
+
+import yaml
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
@@ -54,6 +55,7 @@ def _load_playbook_executor():
         "services.ansible_secrets": MagicMock(),
         "services.inventory_builder": MagicMock(),
         "services.provision_progress": MagicMock(),
+        "services.unit_names": MagicMock(),
     }
     return _load_from_file("_pe_11735", "services/playbook_executor.py", extra_stubs=stubs)
 
@@ -70,7 +72,7 @@ def test_written_file_is_0600_and_round_trips(tmp_path):
     try:
         mode = stat.S_IMODE(path.stat().st_mode)
         assert mode == 0o600, f"expected 0600, got {oct(mode)}"
-        assert json.loads(path.read_text(encoding="utf-8")) == vars_in
+        assert yaml.safe_load(path.read_text(encoding="utf-8")) == vars_in
         assert path.parent == tmp_path
     finally:
         path.unlink(missing_ok=True)

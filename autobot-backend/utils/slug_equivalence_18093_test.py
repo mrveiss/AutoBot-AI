@@ -153,11 +153,6 @@ SITES = {
         _old_tag,
         {"allowed": '"a-zA-Z0-9_-"', "replacement": '""', "case": '"lower"'},
     ),
-    "index_documentation_tag": (
-        "autobot-infrastructure/shared/tools/index_documentation.py",
-        _old_tag,
-        {"allowed": '"a-zA-Z0-9_-"', "replacement": '""', "case": '"lower"'},
-    ),
     "tool_output_tee": (
         "autobot-backend/services/tool_output_filter.py",
         _old_tee,

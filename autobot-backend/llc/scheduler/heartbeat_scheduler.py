@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""HeartbeatScheduler — Redis sorted-set dispatch engine (GH#8225).
+"""LLCHeartbeatScheduler — Redis sorted-set dispatch engine (GH#8225).
 
 Architecture:
   - On startup: loads all heartbeat-enabled agents from DB, computes next fire
@@ -101,7 +101,7 @@ _IDLE_WAKE_KEY_PREFIX = "llc:heartbeat:idle:"
 _IDLE_WAKE_TTL_SECONDS = env_float_clamped("AUTOBOT_LLC_HEARTBEAT_IDLE_WAKE_TTL_SECONDS", 604800.0, min_v=60.0)
 
 
-class HeartbeatScheduler:
+class LLCHeartbeatScheduler:
     """Cron-driven heartbeat dispatcher backed by a Redis sorted set.
 
     Instantiate once and call ``start()`` inside the application lifespan.
@@ -131,7 +131,7 @@ class HeartbeatScheduler:
         # GH#8494: assign to self._poll_task so the reference is held and GC cannot
         # collect the task while the scheduler is running.
         self._poll_task = asyncio.create_task(self._poll_loop(), name="heartbeat-scheduler")
-        logger.info("HeartbeatScheduler started")
+        logger.info("LLCHeartbeatScheduler started")
 
     async def stop(self) -> None:
         """Cancel polling loop, drain in-flight adapter tasks, and exit cleanly."""
@@ -144,7 +144,7 @@ class HeartbeatScheduler:
                 pass
         if self._tasks:
             await asyncio.gather(*list(self._tasks), return_exceptions=True)
-        logger.info("HeartbeatScheduler stopped")
+        logger.info("LLCHeartbeatScheduler stopped")
 
     # ------------------------------------------------------------------
     # Schedule population (restart-safe)
@@ -776,13 +776,13 @@ class HeartbeatScheduler:
 # ------------------------------------------------------------------
 
 # One lazy_singleton call at module level so every import site gets the same instance.
-# Do NOT call lazy_singleton(HeartbeatScheduler) at individual call sites — each call
+# Do NOT call lazy_singleton(LLCHeartbeatScheduler) at individual call sites — each call
 # produces an independent closure with its own instance variable.
-_get_scheduler = lazy_singleton(HeartbeatScheduler)
+_get_scheduler = lazy_singleton(LLCHeartbeatScheduler)
 
 
-def get_heartbeat_scheduler() -> HeartbeatScheduler:
-    """Return the process-wide HeartbeatScheduler singleton."""
+def get_heartbeat_scheduler() -> LLCHeartbeatScheduler:
+    """Return the process-wide LLCHeartbeatScheduler singleton."""
     return _get_scheduler()
 
 

@@ -600,3 +600,20 @@ linked as native GitHub sub-issues.
 
 Related defects, filed separately and not children: **#16025** (role shape has two sources of truth),
 **#16026** (`manifest_loader` hardcoded cache TTL, no dev bypass).
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #16025 — SLM role shape has two sources of truth: role_registry.DEFAULT_ROLES vs autobot-infrastructure/*/manifest.yml
+- #16026 — manifest_loader hardcodes its cache TTL and offers no dev-mode bypass (closed)
+- #16028 — Adopt external host-lifecycle methods into the SLM layer (umbrella)
+- #16029 — Gate role manifests on a minimum SLM version (requires_slm)
+- #16030 — Self-suppressing manifest conditions with an explicit skipped(reason) role state
+- #16031 — Declare per-role backup in the manifest; drive BackupService from it
+- #16032 — Pin drift detection to a per-commit checksum manifest instead of the local checkout
+- #16033 — Record the on-disk delta of a deploy against its audit entry
+- #16034 — Generate the operator CLI from the OpenAPI schema over the Unix-socket listener
+- #16035 — Runtime invariant registry — a fix leaves a tripwire, not only a regression test
+- #16036 — System updates drain borrowable roles; make reboot_strategy live declaration
+- #16037 — Per-node advisory exposure inventory instead of an upgradable-package count

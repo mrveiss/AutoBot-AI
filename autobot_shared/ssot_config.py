@@ -53,6 +53,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.paths import project_root
 from autobot_shared.secret_redaction import RedactedReprMixin
+from autobot_shared.ssot_tls import TLSConfig, TLSMode
 
 # Determine project root for .env file location.
 #
@@ -207,14 +208,9 @@ class PortConfig(RedactedSettings):
     redis: int = Field(default=6379, alias="AUTOBOT_REDIS_PORT")
     ollama: int = Field(default=11434, alias="AUTOBOT_OLLAMA_PORT")
     vnc: int = Field(default=6080, alias="AUTOBOT_VNC_PORT")
-    # Raw VNC protocol port (x11vnc via vncserver), NOT the noVNC web port
-    # above (#14173). autobot-slm-backend/ansible/roles/vnc/defaults/main.yml
-    # computes this as 5900 + vnc_display, and vnc_display defaults to 1 ->
-    # 5901; vm-management/status-all-vms.sh independently hardcodes the same
-    # "VNC Client: localhost:5901" line. network/network-config.sh's own
-    # AUTOBOT_VNC_SERVER_PORT literal was 5902 -- one off from every other
-    # source of truth in the repo -- so 5901 here is a correction, not a
-    # preserved literal.
+    # Raw VNC protocol port (x11vnc), NOT the noVNC web port above (#14173):
+    # roles/vnc/defaults/main.yml computes 5900 + vnc_display (default 1 -> 5901),
+    # as does status-all-vms.sh. network-config.sh's old 5902 was the outlier.
     vnc_server: int = Field(default=5901, alias="AUTOBOT_VNC_SERVER_PORT")
     browser: int = Field(default=9001, alias="AUTOBOT_BROWSER_SERVICE_PORT")  # Issue #4052: 9001; 3000 is Grafana
     aistack: int = Field(default=8080, alias="AUTOBOT_AI_STACK_PORT")
@@ -696,8 +692,8 @@ class TimeoutConfig(RedactedSettings):
     # Legacy / frontend aliases (milliseconds)                             #
     # ------------------------------------------------------------------ #
 
-    # Kept for backward compat — frontend reads this as ms
-    api: int = Field(default=10000, alias="AUTOBOT_API_TIMEOUT")
+    # Frontend API timeout (ms): the SSOT VITE_API_TIMEOUT derives from (#17856)
+    api: int = Field(default=60000, alias="AUTOBOT_API_TIMEOUT")
     api_retry_attempts: int = Field(default=3, alias="AUTOBOT_API_RETRY_ATTEMPTS")
     api_retry_delay: int = Field(default=1000, alias="AUTOBOT_API_RETRY_DELAY")
 
@@ -1201,57 +1197,6 @@ class PermissionConfig(RedactedSettings):
         return [m for m in PermissionMode if m not in self.ADMIN_ONLY_MODES]
 
 
-class TLSMode(str, Enum):
-    """TLS operation modes."""
-
-    DISABLED = "disabled"
-    OPTIONAL = "optional"
-    REQUIRED = "required"
-
-
-class TLSConfig(RedactedSettings):
-    """TLS/PKI Configuration for secure communications.
-
-    Issue #164: Added frontend TLS support for HTTPS on the frontend VM.
-    TLS certificates are managed and deployed via SLM (AUTOBOT_SLM_HOST).
-    """
-
-    # Path to a public CA certificate — not key material.
-    NON_CREDENTIAL_FIELDS: ClassVar[FrozenSet[str]] = frozenset({"ca_cert"})
-
-    model_config = SettingsConfigDict(
-        env_file=str(PROJECT_ROOT / ".env"),
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
-
-    mode: TLSMode = Field(default=TLSMode.DISABLED, alias="AUTOBOT_TLS_MODE")
-    cert_dir: str = Field(default="certs", alias="AUTOBOT_TLS_CERT_DIR")
-    ca_cert: str = Field(default="certs/ca/ca-cert.pem", alias="AUTOBOT_TLS_CA_CERT")
-    remote_cert_dir: str = Field(default="/etc/autobot/certs", alias="AUTOBOT_TLS_REMOTE_CERT_DIR")
-    # Service-specific TLS settings
-    redis_tls_enabled: bool = Field(default=False, alias="AUTOBOT_REDIS_TLS_ENABLED")
-    redis_tls_port: int = Field(default=6380, alias="AUTOBOT_REDIS_TLS_PORT")
-    backend_tls_enabled: bool = Field(default=False, alias="AUTOBOT_BACKEND_TLS_ENABLED")
-    backend_tls_port: int = Field(default=8443, alias="AUTOBOT_BACKEND_TLS_PORT")
-    # Issue #164: Frontend TLS (HTTPS) support
-    frontend_tls_enabled: bool = Field(default=False, alias="AUTOBOT_FRONTEND_TLS_ENABLED")
-    frontend_tls_port: int = Field(default=443, alias="AUTOBOT_FRONTEND_TLS_PORT")
-    # SLM TLS settings (admin server)
-    slm_tls_enabled: bool = Field(default=False, alias="AUTOBOT_SLM_TLS_ENABLED")
-    slm_tls_port: int = Field(default=443, alias="AUTOBOT_SLM_TLS_PORT")
-
-    @property
-    def is_enabled(self) -> bool:
-        """Check if TLS is enabled."""
-        return self.mode != TLSMode.DISABLED
-
-    @property
-    def any_service_tls_enabled(self) -> bool:
-        """Check if any service has TLS enabled."""
-        return self.redis_tls_enabled or self.backend_tls_enabled or self.frontend_tls_enabled or self.slm_tls_enabled
-
-
 class DatabasePoolConfig(RedactedSettings):
     """Database connection pool configuration (#2860).
 
@@ -1692,6 +1637,7 @@ class MiscConfig(RedactedSettings):
     inference_profiling: str = Field(default="", alias="AUTOBOT_INFERENCE_PROFILING")
     input_timeout: int = Field(default=0, alias="AUTOBOT_INPUT_TIMEOUT")
     internal_api_key: str = Field(default="", alias="AUTOBOT_INTERNAL_API_KEY")
+    prometheus_scrape_token: str = Field(default="", alias="AUTOBOT_PROMETHEUS_SCRAPE_TOKEN")  # #16375
     jaeger_endpoint: str = Field(default="", alias="AUTOBOT_JAEGER_ENDPOINT")
     jwt_secret: str = Field(default="", alias="AUTOBOT_JWT_SECRET")
     jwt_private_key: str = Field(
@@ -2652,6 +2598,11 @@ class AutoBotConfig(RedactedSettings):
         return f"http://{self.vm.main}:{self.port.vnc}/vnc.html"
 
     @property
+    def browser_vnc_url(self) -> str:
+        """Browser VM noVNC (browser-vnc-websockify); not ``vnc_url``, the backend desktop VNC (#18094)."""
+        return f"http://{self.vm.browser}:{self.port.vnc}/vnc.html"
+
+    @property
     def slm_url(self) -> str:
         """Get the SLM Admin server URL (Issue #768).
 
@@ -3240,6 +3191,8 @@ __all__ = [
     "LLMConfig",
     "TimeoutConfig",
     "RedisConfig",
+    "TLSConfig",
+    "TLSMode",
     "CacheConfig",
     "CacheCoordinatorConfig",
     "CacheRedisConfig",

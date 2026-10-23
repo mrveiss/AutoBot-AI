@@ -24,25 +24,12 @@ BaselineKey = Tuple[str, str, str]
 #: time (see the module docstring).
 SPECIFIC_REASONS: dict[BaselineKey, str] = {
     (
-        ".env.docker",
-        "Secret Keyword",
-        "1ba53c9c3dd2dff0ba71a8b942318082315e6f04",  # pragma: allowlist secret
-    ): (
-        "GRAFANA_ADMIN_PASSWORD default literal 'autobot' -- one of #16299's "
-        "named guessable defaults, tracked there for a generate-on-first-run "
-        "fix (owner ruling 2026-09-17). Not silently allowed: baselined here "
-        "only because the pre-commit hook blocks every .env* edit and the "
-        "fix needs the owner to apply Decision 2's protect-files.sh patch "
-        "first (see #16299)."
-    ),
-    (
         "docker/.env.docker",
         "Secret Keyword",
         "1ba53c9c3dd2dff0ba71a8b942318082315e6f04",  # pragma: allowlist secret
     ): (
         "AUTOBOT_DB_PASSWORD default literal 'autobot' -- the same #16299 "
-        "named default as .env.docker's GRAFANA_ADMIN_PASSWORD (identical "
-        "literal, hence identical hashed_secret). Tracked for "
+        "named default as compose's GRAFANA_ADMIN_PASSWORD fallback. Tracked for "
         "generate-on-first-run; existing installs deliberately keep their "
         "current password per the owner's 2026-09-17 ruling."
     ),
@@ -586,4 +573,15 @@ SPECIFIC_REASONS.update(
         )
         for loc, digest, kind, label in _SECRETS_CATEGORY_LABELS
     }
+)
+SPECIFIC_REASONS[
+    (
+        "autobot-slm-frontend/src/locales/en.json",
+        "Secret Keyword",
+        "2f4e787013273291c4660e4215db88b21423f8df",  # pragma: allowlist secret
+    )
+] = (
+    "the i18n display label `Reset Password for {username}` (the SLM user dialog title #14777 moved "
+    "into i18n), not a credential; `Password` in the key trips the Secret Keyword denylist. Plain SHA1 "
+    "of the literal label reproduces this hash."
 )

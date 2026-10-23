@@ -1116,16 +1116,7 @@ async def get_populate_status(task_id: str):
     """
     from services.knowledge.task_status_manager import TaskStatusManager
 
-    task_status = await TaskStatusManager.get_task(task_id)
-
-    if not task_status:
-        return {
-            "status": "not_found",
-            "message": f"Task {task_id} not found",
-            "task_id": task_id,
-        }
-
-    return task_status.to_response_dict()
+    return await TaskStatusManager.get_task_response(task_id)
 
 
 # =========================================================================
@@ -1196,16 +1187,7 @@ async def get_index_code_status(task_id: str):
     """
     from services.knowledge.task_status_manager import TaskStatusManager
 
-    task_status = await TaskStatusManager.get_task(task_id)
-
-    if not task_status:
-        return {
-            "status": "not_found",
-            "message": f"Task {task_id} not found",
-            "task_id": task_id,
-        }
-
-    return task_status.to_response_dict()
+    return await TaskStatusManager.get_task_response(task_id)
 
 
 # =========================================================================

@@ -67,12 +67,11 @@ declares `EXCLUDED_PREFIXES` **and** pins it with
 scope and the hook's `exclude:` diverge. That pairing is what makes the exclusion
 a decision rather than an accident.
 
-`duplication-guard.yml`'s SLM scope is the same shape (#16401): it excludes
-`autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/`, the Ansible
-mirror that `ansible/tests/detect_agent_code_drift_test.py` already forces
-byte-identical to its source, so jscpd stopped counting the mandatory copy as a
-clone of the original. `duplication_guard_excludes_agent_mirror_test.py` fails
-if that ignore entry disappears or widens past the one path.
+`duplication-guard.yml`'s SLM scope once carried the same shape (#16401), an
+exclusion for the Ansible mirror of `slm/agent/`. The mirror is gone (#18548: the
+`slm_agent` role deploys `autobot-slm-backend/slm/agent/` itself), the exclusion
+with it, and `ansible/tests/slm_agent_deploys_source_tree_18548_test.py` fails if
+a copy is ever tracked under `roles/` again.
 
 ### 3. Derive the population a second way before freezing it
 
@@ -439,6 +438,46 @@ has it too, via a different mechanism: `detect-hardcoded-values.sh
 on a baseline entry that no longer matches anything in a fresh scan. Neither
 needed new work here — this section exists so the next guard author checks
 rather than assumes.
+
+## Direct Redis constructors (#18553)
+
+`repo_tests/redis_direct_constructor_18553_test.py` fails on a NEW direct Redis client
+construction (`redis.Redis(`, `redis.asyncio.Redis(`, `StrictRedis(`, `from_url(`, a Redis
+`ConnectionPool(`, `Sentinel(`, `RedisCluster(`, `from_pool(`) outside `autobot_shared/redis*`; `repo_tests/redis_direct_constructor_baseline_18553.py`
+freezes today's sites with a verdict each (EXCEPTION + reason, or MIGRATE + slice).
+
+- **Boundary:** tracked `.py` and `.sh` under the guard's `SCAN_ROOTS`, tests excluded. Not seen: a
+  client a library builds from a URI (LangGraph checkpointer, Celery) and Python embedded in other
+  file types. Declared in the guard docstring and the baseline header, pinned by the reach floor.
+- **Matcher:** AST with the file's own `redis` imports resolved (so SQLite/Ollama pools do not match);
+  shell scripts through `tools.lint._comment_syntax`. A comment or string mentioning a constructor is not a site.
+- **Population derived a second way** (`git grep` over the same roots, sets compared): 32 files by grep, 28 by
+  the AST; the 4-file difference is files that only MENTION `redis.Redis(` in a string or docstring.
+- **Shrink:** counts are exact, so a removed site is stale until its entry is lowered; `FROZEN_TOTAL` may only
+  go down.
+- **One matcher, one baseline:** the matcher lives in `tools/lint/check_no_direct_redis.py`. This guard, the
+  `no-direct-redis` pre-commit hook and the code-quality CI step all run it against the same baseline (the
+  hook and the step on the changed files only). The earlier regex hook and its `# noqa: redis` opt-out are
+  retired; a site is frozen here with a reason or it fails. The CI wrapper hands hooks `.py` (not `.sh`),
+  so a shell-only change is caught at commit time and by this tree guard.
+
+## Recorded exceptions to a shrink-only ratchet: the symbol-fork record (#18688)
+
+A baseline that only shrinks cannot hold a fork that is correct: a separate service with its own
+auth stack binds `get_current_user` on purpose, and listing it as debt means it never reaches zero.
+`repo_tests/symbol_fork_exceptions.json` records those, so the baseline holds only real debt.
+
+Each entry names `symbol`, `canonical` (the one site that needs no excuse), `sites` (every excepted
+binding, exact `path:qualname`; a module-level binding's qualname is its name), `reason` and `issue`
+(a full issue URL or `#N`). Rules, enforced by `tools/lint/check_symbol_forks.py` and
+`repo_tests/symbol_fork_exceptions_18688_test.py`:
+
+- A cluster whose every binding is the canonical site or a recorded site is not a fork. Any other
+  binding keeps it, so a new third `get_current_user` still fails.
+- An entry missing a field, or with an issue that is not a link, is rejected and exempts nothing.
+- A recorded site that no longer exists is reported STALE. The record shrinks with the tree.
+- `--freeze` writes the baseline from the clusters left after exceptions, so an excepted name
+  leaves the baseline in a removals-only diff.
 
 ## Checklist for a new ratchet
 

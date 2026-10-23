@@ -122,7 +122,7 @@ def _important_scanned_files(root: Path) -> list[str]:
 REACH_COLOUR_FILES = declare(
     "hardcoded-colour-scan",
     discover=_colour_scanned_files,
-    floor=820,
+    floor=857,
     growth=60,
     skips=0,
     what="frontend source files scanned for colour literals",
@@ -130,7 +130,7 @@ REACH_COLOUR_FILES = declare(
 REACH_IMPORTANT_FILES = declare(
     "important-declaration-sweep",
     discover=_important_scanned_files,
-    floor=550,
+    floor=567,  # train 22b: re-pinned mid-window [547, 587] on a population of 587 (#18633 SLM views)
     growth=40,
     skips=0,
     what="component files scanned for !important, in both frontends (570 read; the SLM joined in #17567)",

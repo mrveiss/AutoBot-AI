@@ -255,7 +255,7 @@ textarea.inp{height:auto;padding:8px 10px;line-height:1.55;resize:vertical}
             </nav>
             <div style="padding: 10px 12px; border-top: var(--bw) solid var(--line); display: flex; align-items: center; gap: 8px">
               <span class="dot d-ok" aria-hidden="true"></span>
-              <span class="sub2" style="font-size: 11.5px" tabindex="0" data-tip="Inbound mail is checked every 2 minutes" data-tip-pos="right">Synced 10:54 · <span class="mono">autobot-labs.example</span></span>
+              <span class="sub2" style="font-size: 11.5px" tabindex="0" data-tip="Inbound mail is checked every 2 minutes" data-tip-pos="right">Synced 10:54 · <span class="mono">example-org.example</span></span>
             </div>
           </div>
 
@@ -275,7 +275,7 @@ textarea.inp{height:auto;padding:8px 10px;line-height:1.55;resize:vertical}
                     <span class="fr">
                       <sc-if value="{{r.unread}}" hint-placeholder-val="{{ true }}"><span class="udot"></span><span class="sr">Unread. </span></sc-if>
                       <b>{{r.from}}</b>
-                      <sc-if value="{{r.ext}}" hint-placeholder-val="{{ false }}"><span class="agt" data-tip="Sender is outside autobot-labs.example" data-tip-pos="right">external</span></sc-if>
+                      <sc-if value="{{r.ext}}" hint-placeholder-val="{{ false }}"><span class="agt" data-tip="Sender is outside example-org.example" data-tip-pos="right">external</span></sc-if>
                       <span class="tm mono">{{r.time}}</span>
                     </span>
                     <span class="sj">{{r.subject}}</span>
@@ -429,14 +429,14 @@ textarea.inp{height:auto;padding:8px 10px;line-height:1.55;resize:vertical}
             </tbody>
           </table>
         </div>
-        <p class="hint" style="padding: 10px 16px 14px; border-top: var(--bw) solid var(--line)">Internal means an address at <span class="mono">autobot-labs.example</span>. Mailbox credentials live in <a href="CompanySecrets.dc.html">Secrets</a>; approvals land in <a href="Approvals.dc.html">Approvals</a> like any other agent action.</p>
+        <p class="hint" style="padding: 10px 16px 14px; border-top: var(--bw) solid var(--line)">Internal means an address at <span class="mono">example-org.example</span>. Mailbox credentials live in <a href="CompanySecrets.dc.html">Secrets</a>; approvals land in <a href="Approvals.dc.html">Approvals</a> like any other agent action.</p>
       </section>
     </main>
   </div>
 </div>
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"ui":{"editor":"enum","options":["full","minimal"],"default":"full"},"$preview":{"width":1440,"height":1400}}'>
-const DOMAIN = '@autobot-labs.example';
+const DOMAIN = '@example-org.example';
 const ADDRS = [
   { id: 'hello', who: 'research-agent' },
   { id: 'ops', who: 'devops-engineer' },
@@ -452,9 +452,9 @@ const HANDLER = {
   ceo: ['Jane Doe', 'Person', 'ok', 'Only a person writes from this address']
 };
 const GATE = {
-  ext: ['Needs approval: external recipient', 'warn', 'The recipient is outside autobot-labs.example, so the reply waits for a person to approve it'],
+  ext: ['Needs approval: external recipient', 'warn', 'The recipient is outside example-org.example, so the reply waits for a person to approve it'],
   every: ['Needs approval: every reply', 'warn', 'Replies from security@ always wait for Alex Smith'],
-  int: ['Auto-send allowed: internal', 'ok', 'The recipient is inside autobot-labs.example, so the agent may send without approval']
+  int: ['Auto-send allowed: internal', 'ok', 'The recipient is inside example-org.example, so the agent may send without approval']
 };
 const TIER_CLS = { SAFE: 'ok', MODERATE: 'warn', HIGH: 'bad' };
 const THREADS = [
@@ -593,7 +593,7 @@ class Component extends DCLogic {
       to: cTo, subject: st.cSubj || '', body: st.cBody || '',
       cls: !rcpts.length ? 'idle' : anyExt ? 'warn' : 'ok',
       tag: !rcpts.length ? 'No recipient yet' : anyExt ? 'External recipient' : 'Internal only',
-      text: !rcpts.length ? 'Add who this goes to.' : anyExt ? 'Leaves autobot-labs.example. Check the recipient before you send.' : 'Stays inside autobot-labs.example.',
+      text: !rcpts.length ? 'Add who this goes to.' : anyExt ? 'Leaves example-org.example. Check the recipient before you send.' : 'Stays inside example-org.example.',
       hasErr: !!st.cErr, err: st.cErr || '',
       onTo: (e) => this.setState({ cTo: e.target.value, cErr: '' }),
       onSubject: (e) => this.setState({ cSubj: e.target.value }),

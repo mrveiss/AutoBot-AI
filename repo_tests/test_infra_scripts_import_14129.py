@@ -170,3 +170,36 @@ def test_operator_script_imports_in_a_realistic_subprocess(relative_path: str):
         check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+# Scripts that import ``autobot_shared`` (and, for monitoring_system, backend
+# packages) must bootstrap their own path: nothing puts the repo root on it when
+# they are run standalone (#18094). Run WITHOUT PYTHONPATH, with the network
+# probes some of them issue at import time stubbed out.
+_STANDALONE_BOOTSTRAP_SCRIPTS = (
+    "diagnose_backend.py",
+    "monitoring_system.py",
+    "profile_api_endpoints.py",
+    "automated_testing_procedure.py",
+    "test_configuration.py",
+    "validate_configuration.py",
+)
+
+
+@pytest.mark.parametrize("name", _STANDALONE_BOOTSTRAP_SCRIPTS)
+def test_script_imports_without_pythonpath(name: str, tmp_path: Path):
+    script = _SCRIPTS_DIR / name
+    code = (
+        "import runpy, requests\n"
+        "def _blocked(*a, **k):\n"
+        "    raise OSError('network blocked by the import probe')\n"
+        "requests.get = requests.post = _blocked\n"
+        f"runpy.run_path({str(script)!r}, run_name='import_probe')\n"
+    )
+    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
+
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, text=True, cwd=tmp_path, env=env, check=False
+    )
+
+    assert result.returncode == 0, result.stderr[-2000:]

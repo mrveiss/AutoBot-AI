@@ -13,10 +13,10 @@ Issue #68: NPU worker configuration bootstrap
 
 import asyncio
 import logging
-import socket
 from typing import Any, Dict
 
 from utils.http_retry import aiohttp_with_backoff
+from utils.local_ip import get_local_ip
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,6 @@ logger = logging.getLogger(__name__)
 DEFAULT_WORKER_PORT = 8082
 DEFAULT_BOOTSTRAP_TIMEOUT = 10
 DEFAULT_BOOTSTRAP_RETRIES = 3
-LOCAL_IP_FALLBACK = "127.0.0.1"
 
 # =============================================================================
 # Thread-safe global state (Issue #68 - Race condition fix)
@@ -35,44 +34,6 @@ LOCAL_IP_FALLBACK = "127.0.0.1"
 _bootstrap_lock = asyncio.Lock()
 _bootstrap_config: Dict[str, Any] | None = None
 _worker_id: str | None = None
-_local_ip_cache: str | None = None  # Cache to avoid repeated socket calls
-
-
-def get_local_ip(backend_host: str) -> str:
-    """
-    Get the local IP address that can reach the backend.
-
-    Uses caching to avoid repeated socket operations (efficiency fix).
-
-    Args:
-        backend_host: Backend server hostname/IP
-
-    Returns:
-        Local IP address string
-    """
-    global _local_ip_cache
-
-    # Return cached value if available (efficiency improvement)
-    if _local_ip_cache is not None:
-        return _local_ip_cache
-
-    sock = None
-    try:
-        # Create UDP socket (doesn't actually send data)
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.connect((backend_host, 80))
-        local_ip = sock.getsockname()[0]
-        _local_ip_cache = local_ip  # Cache the result
-        return local_ip
-    except Exception:
-        return LOCAL_IP_FALLBACK
-    finally:
-        # Proper socket cleanup (Issue #68 - unclosed socket fix)
-        if sock is not None:
-            try:
-                sock.close()
-            except Exception:
-                logger.debug("Suppressed exception in try block", exc_info=True)
 
 
 async def fetch_bootstrap_config(

@@ -17,6 +17,7 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import type { ScheduleCreateRequest, UpdateSchedule } from '@/composables/useCodeSync'
 import { useRoles } from '@/composables/useRoles'
+import { BaseModal } from '@autobot/ui'
 
 interface Props {
   show: boolean
@@ -181,237 +182,188 @@ const isFormValid = computed(() => {
 </script>
 
 <template>
-  <Teleport to="body">
-    <Transition name="modal">
-      <div
-        v-if="show"
-        class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50"
-        @click.self="handleClose"
-        @keydown.escape="handleClose"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="schedule-modal-title"
+  <BaseModal
+    :model-value="show"
+    :title="modalTitle"
+    width="32rem"
+    :close-label="$t('ui.modal.closeDialog')"
+    @close="handleClose"
+  >
+    <!-- Schedule Name -->
+    <div class="mb-4">
+      <label for="schedule-name" class="block text-sm font-medium text-gray-700 mb-1">
+        {{ $t('scheduleModal.scheduleName') }}
+      </label>
+      <input
+        id="schedule-name"
+        v-model="name"
+        type="text"
+        :placeholder="$t('scheduleModal.eGNightlyUpdates')"
+        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+      />
+    </div>
+
+    <!-- Cron Expression -->
+    <div class="mb-4">
+      <label for="cron-expression" class="block text-sm font-medium text-gray-700 mb-1">
+        {{ $t('scheduleModal.scheduleCronExpression') }}
+      </label>
+      <input
+        id="cron-expression"
+        v-model="cronExpression"
+        type="text"
+        placeholder="0 2 * * *"
+        class="w-full px-3 py-2 border border-gray-300 rounded-md font-mono focus:ring-primary-500 focus:border-primary-500"
+      />
+      <p class="mt-1 text-sm text-gray-500" aria-live="polite">{{ cronDescription }}</p>
+
+      <!-- Presets -->
+      <div class="mt-2 flex flex-wrap gap-2" role="group" :aria-label="$t('scheduleModal.cronSchedulePresets')">
+        <button
+          v-for="preset in cronPresets"
+          :key="preset.value"
+          @click="selectPreset(preset)"
+          :class="[
+            'px-2 py-1 text-xs rounded-full transition-colors',
+            cronExpression === preset.value
+              ? 'bg-primary-100 text-primary-700 border border-primary-300'
+              : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
+          ]"
+          :aria-pressed="cronExpression === preset.value"
+        >
+          {{ preset.label }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Target Type -->
+    <div class="mb-4">
+      <label for="target-type" class="block text-sm font-medium text-gray-700 mb-1">
+        {{ $t('scheduleModal.targetNodes') }}
+      </label>
+      <select
+        id="target-type"
+        v-model="targetType"
+        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
       >
-        <div class="bg-white rounded-lg shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden">
-          <!-- Header -->
-          <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-            <h2 id="schedule-modal-title" class="text-lg font-semibold text-gray-900">{{ modalTitle }}</h2>
-            <button
-              @click="handleClose"
-              class="text-gray-400 hover:text-gray-600 transition-colors"
-              :aria-label="$t('scheduleModal.closeScheduleDialog')"
-            >
-              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          </div>
+        <option value="all">{{ $t('scheduleModal.allOutdatedNodes') }}</option>
+        <option value="specific">{{ $t('scheduleModal.specificNodes') }}</option>
+        <option value="roles">{{ $t('scheduleModal.byRole') }}</option>
+      </select>
+    </div>
 
-          <!-- Body -->
-          <div class="px-6 py-4 overflow-y-auto max-h-[60vh]">
-            <!-- Schedule Name -->
-            <div class="mb-4">
-              <label for="schedule-name" class="block text-sm font-medium text-gray-700 mb-1">
-                {{ $t('scheduleModal.scheduleName') }}
-              </label>
-              <input
-                id="schedule-name"
-                v-model="name"
-                type="text"
-                :placeholder="$t('scheduleModal.eGNightlyUpdates')"
-                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-              />
-            </div>
-
-            <!-- Cron Expression -->
-            <div class="mb-4">
-              <label for="cron-expression" class="block text-sm font-medium text-gray-700 mb-1">
-                {{ $t('scheduleModal.scheduleCronExpression') }}
-              </label>
-              <input
-                id="cron-expression"
-                v-model="cronExpression"
-                type="text"
-                placeholder="0 2 * * *"
-                class="w-full px-3 py-2 border border-gray-300 rounded-md font-mono focus:ring-primary-500 focus:border-primary-500"
-              />
-              <p class="mt-1 text-sm text-gray-500" aria-live="polite">{{ cronDescription }}</p>
-
-              <!-- Presets -->
-              <div class="mt-2 flex flex-wrap gap-2" role="group" :aria-label="$t('scheduleModal.cronSchedulePresets')">
-                <button
-                  v-for="preset in cronPresets"
-                  :key="preset.value"
-                  @click="selectPreset(preset)"
-                  :class="[
-                    'px-2 py-1 text-xs rounded-full transition-colors',
-                    cronExpression === preset.value
-                      ? 'bg-primary-100 text-primary-700 border border-primary-300'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200',
-                  ]"
-                  :aria-pressed="cronExpression === preset.value"
-                >
-                  {{ preset.label }}
-                </button>
-              </div>
-            </div>
-
-            <!-- Target Type -->
-            <div class="mb-4">
-              <label for="target-type" class="block text-sm font-medium text-gray-700 mb-1">
-                {{ $t('scheduleModal.targetNodes') }}
-              </label>
-              <select
-                id="target-type"
-                v-model="targetType"
-                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-              >
-                <option value="all">{{ $t('scheduleModal.allOutdatedNodes') }}</option>
-                <option value="specific">{{ $t('scheduleModal.specificNodes') }}</option>
-                <option value="roles">{{ $t('scheduleModal.byRole') }}</option>
-              </select>
-            </div>
-
-            <!-- Node Selection (when specific) -->
-            <div v-if="targetType === 'specific' && nodes.length > 0" class="mb-4">
-              <label class="block text-sm font-medium text-gray-700 mb-1">
-                {{ $t('scheduleModal.selectNodes') }}
-              </label>
-              <div class="border border-gray-200 rounded-md max-h-40 overflow-y-auto" role="group" :aria-label="$t('scheduleModal.nodeSelection')">
-                <div
-                  v-for="node in nodes"
-                  :key="node.node_id"
-                  @click="toggleNodeSelection(node.node_id)"
-                  :class="[
-                    'px-3 py-2 cursor-pointer flex items-center gap-2 hover:bg-gray-50',
-                    targetNodes.includes(node.node_id) ? 'bg-primary-50' : '',
-                  ]"
-                >
-                  <input
-                    type="checkbox"
-                    :checked="targetNodes.includes(node.node_id)"
-                    class="w-4 h-4 text-primary-600 rounded-sm"
-                    :aria-label="$t('scheduleModal.selectNodeAria', { hostname: node.hostname })"
-                    @click.stop
-                    @change="toggleNodeSelection(node.node_id)"
-                  />
-                  <span class="text-sm text-gray-900">{{ node.hostname }}</span>
-                </div>
-              </div>
-              <p v-if="targetNodes.length > 0" class="mt-1 text-sm text-gray-500" role="status">{{ $t('scheduleModal.countNodeSSelected', { count: targetNodes.length }) }}</p>
-            </div>
-
-            <!-- Role Selection (when roles) - Issue #779 -->
-            <div v-if="targetType === 'roles'" class="mb-4">
-              <label class="block text-sm font-medium text-gray-700 mb-2">
-                {{ $t('scheduleModal.targetRoles') }}
-              </label>
-              <div v-if="availableRoles.length > 0" class="border border-gray-200 rounded-md max-h-40 overflow-y-auto" role="group" :aria-label="$t('scheduleModal.roleSelection')">
-                <div
-                  v-for="role in availableRoles"
-                  :key="role.name"
-                  @click="toggleRoleSelection(role.name)"
-                  :class="[
-                    'px-3 py-2 cursor-pointer flex items-center gap-2 hover:bg-gray-50',
-                    targetRoles.includes(role.name) ? 'bg-primary-50' : '',
-                  ]"
-                >
-                  <input
-                    type="checkbox"
-                    :checked="targetRoles.includes(role.name)"
-                    :value="role.name"
-                    class="w-4 h-4 text-primary-600 rounded-sm border-gray-300"
-                    :aria-label="$t('scheduleModal.selectRoleAria', { name: role.display_name || role.name })"
-                    @click.stop
-                    @change="toggleRoleSelection(role.name)"
-                  />
-                  <span class="text-sm text-gray-900">{{ role.display_name || role.name }}</span>
-                </div>
-              </div>
-              <div v-else class="text-sm text-gray-500 italic">
-                {{ $t('scheduleModal.noRolesAvailablePlease') }}
-              </div>
-              <p v-if="targetRoles.length > 0" class="mt-1 text-sm text-gray-500" role="status">{{ $t('scheduleModal.countRoleSSelected', { count: targetRoles.length }) }}</p>
-            </div>
-
-            <!-- Restart Strategy -->
-            <div class="mb-4">
-              <label for="restart-strategy" class="block text-sm font-medium text-gray-700 mb-1">
-                {{ $t('scheduleModal.restartStrategy') }}
-              </label>
-              <select
-                id="restart-strategy"
-                v-model="restartStrategy"
-                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-              >
-                <option value="graceful">{{ $t('scheduleModal.gracefulWaitForTasks') }}</option>
-                <option value="immediate">{{ $t('scheduleModal.immediate') }}</option>
-                <option value="manual">{{ $t('scheduleModal.manualNoRestart') }}</option>
-              </select>
-            </div>
-
-            <!-- Options -->
-            <div class="mb-4 space-y-3">
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  v-model="restartAfterSync"
-                  class="w-4 h-4 text-primary-600 rounded-sm focus:ring-primary-500"
-                />
-                <span class="text-sm text-gray-700">{{ $t('scheduleModal.restartServiceAfterSync') }}</span>
-              </label>
-
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  v-model="enabled"
-                  class="w-4 h-4 text-primary-600 rounded-sm focus:ring-primary-500"
-                />
-                <span class="text-sm text-gray-700">{{ $t('scheduleModal.scheduleEnabled') }}</span>
-              </label>
-            </div>
-          </div>
-
-          <!-- Footer -->
-          <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-            <button
-              @click="handleClose"
-              class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-            >
-              {{ $t('scheduleModal.cancel') }}
-            </button>
-            <button
-              @click="handleSave"
-              :disabled="!isFormValid"
-              class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {{ isEditing ? $t('scheduleModal.saveChanges') : $t('scheduleModal.createSchedule') }}
-            </button>
-          </div>
+    <!-- Node Selection (when specific) -->
+    <div v-if="targetType === 'specific' && nodes.length > 0" class="mb-4">
+      <label class="block text-sm font-medium text-gray-700 mb-1">
+        {{ $t('scheduleModal.selectNodes') }}
+      </label>
+      <div class="border border-gray-200 rounded-md max-h-40 overflow-y-auto" role="group" :aria-label="$t('scheduleModal.nodeSelection')">
+        <div
+          v-for="node in nodes"
+          :key="node.node_id"
+          @click="toggleNodeSelection(node.node_id)"
+          :class="[
+            'px-3 py-2 cursor-pointer flex items-center gap-2 hover:bg-gray-50',
+            targetNodes.includes(node.node_id) ? 'bg-primary-50' : '',
+          ]"
+        >
+          <input
+            type="checkbox"
+            :checked="targetNodes.includes(node.node_id)"
+            class="w-4 h-4 text-primary-600 rounded-sm"
+            :aria-label="$t('scheduleModal.selectNodeAria', { hostname: node.hostname })"
+            @click.stop
+            @change="toggleNodeSelection(node.node_id)"
+          />
+          <span class="text-sm text-gray-900">{{ node.hostname }}</span>
         </div>
       </div>
-    </Transition>
-  </Teleport>
+      <p v-if="targetNodes.length > 0" class="mt-1 text-sm text-gray-500" role="status">{{ $t('scheduleModal.countNodeSSelected', { count: targetNodes.length }) }}</p>
+    </div>
+
+    <!-- Role Selection (when roles) - Issue #779 -->
+    <div v-if="targetType === 'roles'" class="mb-4">
+      <label class="block text-sm font-medium text-gray-700 mb-2">
+        {{ $t('scheduleModal.targetRoles') }}
+      </label>
+      <div v-if="availableRoles.length > 0" class="border border-gray-200 rounded-md max-h-40 overflow-y-auto" role="group" :aria-label="$t('scheduleModal.roleSelection')">
+        <div
+          v-for="role in availableRoles"
+          :key="role.name"
+          @click="toggleRoleSelection(role.name)"
+          :class="[
+            'px-3 py-2 cursor-pointer flex items-center gap-2 hover:bg-gray-50',
+            targetRoles.includes(role.name) ? 'bg-primary-50' : '',
+          ]"
+        >
+          <input
+            type="checkbox"
+            :checked="targetRoles.includes(role.name)"
+            :value="role.name"
+            class="w-4 h-4 text-primary-600 rounded-sm border-gray-300"
+            :aria-label="$t('scheduleModal.selectRoleAria', { name: role.display_name || role.name })"
+            @click.stop
+            @change="toggleRoleSelection(role.name)"
+          />
+          <span class="text-sm text-gray-900">{{ role.display_name || role.name }}</span>
+        </div>
+      </div>
+      <div v-else class="text-sm text-gray-500 italic">
+        {{ $t('scheduleModal.noRolesAvailablePlease') }}
+      </div>
+      <p v-if="targetRoles.length > 0" class="mt-1 text-sm text-gray-500" role="status">{{ $t('scheduleModal.countRoleSSelected', { count: targetRoles.length }) }}</p>
+    </div>
+
+    <!-- Restart Strategy -->
+    <div class="mb-4">
+      <label for="restart-strategy" class="block text-sm font-medium text-gray-700 mb-1">
+        {{ $t('scheduleModal.restartStrategy') }}
+      </label>
+      <select
+        id="restart-strategy"
+        v-model="restartStrategy"
+        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+      >
+        <option value="graceful">{{ $t('scheduleModal.gracefulWaitForTasks') }}</option>
+        <option value="immediate">{{ $t('scheduleModal.immediate') }}</option>
+        <option value="manual">{{ $t('scheduleModal.manualNoRestart') }}</option>
+      </select>
+    </div>
+
+    <!-- Options -->
+    <div class="mb-4 space-y-3">
+      <label class="flex items-center gap-2 cursor-pointer">
+        <input
+          type="checkbox"
+          v-model="restartAfterSync"
+          class="w-4 h-4 text-primary-600 rounded-sm focus:ring-primary-500"
+        />
+        <span class="text-sm text-gray-700">{{ $t('scheduleModal.restartServiceAfterSync') }}</span>
+      </label>
+
+      <label class="flex items-center gap-2 cursor-pointer">
+        <input
+          type="checkbox"
+          v-model="enabled"
+          class="w-4 h-4 text-primary-600 rounded-sm focus:ring-primary-500"
+        />
+        <span class="text-sm text-gray-700">{{ $t('scheduleModal.scheduleEnabled') }}</span>
+      </label>
+    </div>
+    <template #actions>
+      <button
+        @click="handleClose"
+        class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+      >
+        {{ $t('scheduleModal.cancel') }}
+      </button>
+      <button
+        @click="handleSave"
+        :disabled="!isFormValid"
+        class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {{ isEditing ? $t('scheduleModal.saveChanges') : $t('scheduleModal.createSchedule') }}
+      </button>
+    </template>
+  </BaseModal>
 </template>
-
-<style scoped>
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.modal-enter-from,
-.modal-leave-to {
-  opacity: 0;
-}
-
-.modal-enter-active .bg-white,
-.modal-leave-active .bg-white {
-  transition: transform 0.2s ease;
-}
-
-.modal-enter-from .bg-white,
-.modal-leave-to .bg-white {
-  transform: scale(0.95);
-}
-</style>

@@ -39,6 +39,8 @@ on:
       - 'autobot-backend/services/credential_*.py'
       - 'autobot-backend/services/orphan_repair*.py'
       - 'autobot-backend/services/provider_key_vault.py'
+      - 'autobot-backend/services/__init__.py'
+      - 'autobot-backend/services/approval_gate_service.py'
       - 'autobot-backend/api/**'
       - 'autobot_shared/secrets_envelope.py'
       - 'autobot_shared/status_enums.py'
@@ -116,6 +118,8 @@ jobs:
           - 'autobot-backend/services/credential_*.py'
           - 'autobot-backend/services/orphan_repair*.py'
           - 'autobot-backend/services/provider_key_vault.py'
+          - 'autobot-backend/services/__init__.py'
+          - 'autobot-backend/services/approval_gate_service.py'
           - 'autobot-backend/api/**'
           - 'autobot_shared/secrets_envelope.py'
           - 'autobot_shared/status_enums.py'
@@ -221,9 +225,12 @@ jobs:
           # sqlalchemy 2.1.0 over the declared ==2.0.54 and this gate ran on a
           # version no other job uses. The names stay listed here because this
           # job installs a hand-picked subset, not the whole file.
-          python -m pip install -c requirements-ci/storage.txt \
-            "alembic>=1.13" "sqlalchemy[asyncio]>=2.0" asyncpg aiosqlite \
-            pydantic pydantic-settings \
+          # croniter: services/trigger_service.py imports it at module level since #18469, and the
+          # migration tests import that module through api.schemas_workflows; without it the
+          # backend conftest stubs the module and TriggerType becomes a MagicMock. Version: constraints.
+          python -m pip install -c requirements-ci/storage.txt -c constraints/shared.txt \
+            "alembic>=1.13" "sqlalchemy[asyncio]>=2.0" asyncpg aiosqlite croniter \
+            pydantic pydantic-settings "email-validator>=2.3.0" \
             bcrypt pyjwt redis httpx aiofiles python-dotenv pyyaml \
             cryptography fastapi structlog aiohttp prometheus_client cachetools \
             pytest pytest-asyncio

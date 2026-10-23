@@ -29,7 +29,7 @@ from autobot_shared.browser.base import (
     ScreenshotRequest,
     SessionHandle,
     UnsafeUrlError,
-    UnsupportedFormatError,
+    UnsupportedContentFormatError,
 )
 from autobot_shared.browser.registry import (
     clear_backends,
@@ -360,7 +360,7 @@ async def test_requesting_a_format_the_backend_cannot_produce_raises():
     register_backend(backend)
 
     browser = await get_browser(requires={BrowserCapability.EXTRACT_TEXT})
-    with pytest.raises(UnsupportedFormatError, match="extract_html"):
+    with pytest.raises(UnsupportedContentFormatError, match="extract_html"):
         await browser.extract(ExtractRequest(format=ContentFormat.HTML))
 
     assert backend.calls == [], "backend was reached with a format it cannot serve"

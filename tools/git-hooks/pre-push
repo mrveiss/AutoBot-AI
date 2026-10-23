@@ -21,10 +21,81 @@ set -uo pipefail  # NOT -e: we want to capture exit codes and report
 # `unset GIT_DIR` (#15246). Same resolution as the commit-msg hook (#17032).
 REPO_ROOT="$PWD"
 
-# Time-box each check. Frontend type-check on the whole project takes ~60s;
-# we'd rather warn than block forever.
-TYPE_CHECK_TIMEOUT=90
+# #18578: git_tracked_files (scripts/lib/git-root.sh) -- `git ls-files` with the
+# ambient GIT_DIR & co. unset; inside a hook git exports GIT_DIR, which outranks
+# `-C` (#14896, #15506). Located from the HOOK's own path, not $REPO_ROOT: two
+# levels up is the repository both for tools/git-hooks/pre-push and for the
+# installed .git/hooks/pre-push, while a push from a fixture repo has no
+# scripts/lib of its own.
+_HOOK_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." 2>/dev/null && pwd)/scripts/lib/git-root.sh"
+# shellcheck source=../../scripts/lib/git-root.sh
+if ! . "$_HOOK_LIB"; then
+    echo "[pre-push FAIL] cannot load $_HOOK_LIB" >&2
+    exit 1
+fi
+
+# Time-box each check; we'd rather warn than block forever.
 TEST_TIMEOUT=120
+
+# #18694: PROJECT_DIR's vitest `include` roots as an ERE over project-relative paths, read
+# from its own vitest.config.ts (the first `include: [...]`, the test include): per project,
+# not a union, so autobot-frontend's scripts/ root never selects autobot-slm-frontend's
+# scripts/*.spec.ts, which its src/-only config would not collect. An unreadable config
+# selects nothing (every spec is then named as not run) rather than guessing a root.
+# repo_tests/prepush_vitest_include_roots_18694_test.py holds it equal to the configs.
+vitest_include_roots() {
+    local roots
+    roots=$(sed -n '/include: *\[/,/\]/{p;/\]/q}' "$1/vitest.config.ts" 2>/dev/null \
+        | grep -oE "'[^'/]+/" | tr -d "'/" | sort -u | paste -sd'|' -)
+    if [ -n "$roots" ]; then echo "^(${roots})/"; else echo '^$'; fi
+}
+
+# #17451: pytest budget model, defined once. The two per-file costs are measured, not
+# guessed: K=3 s/file parallel from 117.84 s over 46 files under `-n auto`; K=6 s/file
+# serial from the 6-8 s per file seen under `-xvs`. MAX_BUDGET caps every timeout the
+# hook computes (vitest at the changeset, pytest at the selection).
+MAX_BUDGET=600
+PYTEST_COST_SERIAL=6
+PYTEST_COST_PARALLEL=3
+
+# #18578: the other two budgets follow their work too. vue-tsc type-checks the WHOLE
+# project whatever the changeset: measured 111 s idle (load ~5) and ~294 s under load on
+# autobot-frontend, so a changeset-scaled budget (99 s for 3 files) could never pass a
+# small PR. A project-sized budget, AUTOBOT_PREPUSH_TYPE_CHECK_TIMEOUT (default 450),
+# validated like the workers knob and capped at MAX_BUDGET.
+type_check_timeout() {
+    local t="${AUTOBOT_PREPUSH_TYPE_CHECK_TIMEOUT:-450}"
+    # Read as base 10 (no octal from a leading 0) and reject <= 0: `timeout 0` (or 00)
+    # means NO timeout to GNU timeout, which would silently drop the budget.
+    case "$t" in
+        ''|*[!0-9]*) t=0 ;;
+        *) t=$((10#$t)) ;;
+    esac
+    if [ "$t" -le 0 ]; then
+        warn "AUTOBOT_PREPUSH_TYPE_CHECK_TIMEOUT='${AUTOBOT_PREPUSH_TYPE_CHECK_TIMEOUT}' is not a positive integer -- using 450"
+        t=450
+    fi
+    [ "$t" -gt "$MAX_BUDGET" ] && t=$MAX_BUDGET
+    printf '%s' "$t"
+}
+# A libs/autobot-ui change runs `vitest related` over every test that reaches the kit;
+# a barrel change reaches nearly all of them. vitest 4 has no cheap related count
+# (`vitest list` takes no --related), so the selection bound is the project's tracked
+# test files. Per file: measured 212 s / 262 files idle (0.8 s) and 492 s / 259 at
+# load ~45 (1.9 s) -> 2 s.
+VITEST_COST_PER_FILE=2
+
+# #18578: budget for `vitest related` in <project-dir>: its tracked test files x
+# VITEST_COST_PER_FILE, at least TEST_TIMEOUT, capped at MAX_BUDGET.
+kit_related_budget() {
+    local files budget
+    files=$(git_tracked_files "$1" -- '*.test.ts' '*.spec.ts' '*.test.tsx' '*.spec.tsx' '*.test.mts' '*.spec.mts' \
+        '*.test.js' '*.spec.js' 2>/dev/null | grep -c .)
+    budget=$(( files * VITEST_COST_PER_FILE ))
+    [ "$budget" -lt "$TEST_TIMEOUT" ] && budget=$TEST_TIMEOUT
+    [ "$budget" -gt "$MAX_BUDGET" ] && budget=$MAX_BUDGET
+    printf '%s' "$budget"
+}
 
 # Color helpers (no-op when not a tty)
 if [ -t 1 ]; then
@@ -121,6 +192,42 @@ pick_python() {
 }
 PYTEST_PYTHON="$(pick_python)"
 
+# #17451: the pytest budget follows the SELECTED work, not the changeset. A hub file
+# changes one path and selects dozens of guards, so the changed-file count under-sizes
+# exactly the pushes with the widest fan-out. Args: <budget-so-far> <selected> <parallel 0|1>.
+# Per selected file: PYTEST_COST_SERIAL or PYTEST_COST_PARALLEL (the mode actually chosen);
+# capped at MAX_BUDGET.
+pytest_budget() {
+    local per_file=$PYTEST_COST_SERIAL
+    [ "$3" = "1" ] && per_file=$PYTEST_COST_PARALLEL
+    local budget=$(( $1 + ($2 * per_file) ))
+    [ "$budget" -gt "$MAX_BUDGET" ] && budget=$MAX_BUDGET
+    printf '%s' "$budget"
+}
+# Parallel only when xdist is importable by the interpreter that runs pytest; else serial.
+pytest_xdist_available() {
+    "$PYTEST_PYTHON" -c 'import xdist' 2>/dev/null
+}
+# xdist worker count from AUTOBOT_PREPUSH_PYTEST_WORKERS (default 4; 0 = serial). The box runs
+# many sessions at load 20-30, so `-n auto` is never used. Non-integer or negative -> 4 + warning.
+pytest_workers() {
+    local w="${AUTOBOT_PREPUSH_PYTEST_WORKERS:-4}"
+    case "$w" in
+        ''|*[!0-9]*) warn "AUTOBOT_PREPUSH_PYTEST_WORKERS='${w}' is not a non-negative integer -- using 4"; w=4 ;;
+        *) w=$((10#$w)) ;;  # base 10: "08" is 8, not an octal error
+    esac
+    printf '%s' "$w"
+}
+# Prints the xdist args, or nothing when the run must be serial (workers=0 or xdist missing).
+# loadscope keeps a module's tests on one worker (the suite is proven stable with it, #10398).
+pytest_xdist_args() {
+    local w
+    w="$(pytest_workers)"
+    if [ "$w" -gt 0 ] && pytest_xdist_available; then
+        printf -- '-n %s --dist loadscope' "$w"
+    fi
+}
+
 
 # A dependency root is usable only if it can be TRAVERSED. A directory that is
 # present but carries no execute bit answers `-d` yes and denies everything
@@ -130,6 +237,94 @@ PYTEST_PYTHON="$(pick_python)"
 # read as one that found nothing.
 node_modules_usable() {
   [ -d "$1/node_modules" ] && [ -x "$1/node_modules" ]
+}
+# #18406: vitest prints a "Test Files" summary whenever it ran at least one test file,
+# pass or fail. A non-zero exit WITHOUT it means vitest died before collecting
+# anything (a package missing from an emptied node_modules, an unloadable config), so
+# no test ran -- that is COULD NOT RUN, exactly as vue-tsc's "no error TS line" rule.
+# A " FAIL " line also counts as having run: a crash after some tests failed (OOM, a
+# killed worker) can lose the summary, and that must stay a failure, not become allowable.
+vitest_ran_nothing() {
+  ! printf '%s\n' "$1" | grep -qE "Test Files| FAIL "
+}
+
+# #19130: a changeset that ADDS a JS dependency cannot have it in the linked node_modules
+# (#16912), so vitest fails on exactly that import until CI's `npm ci` installs it. The
+# names come from the package.json diff (never the lockfile: it lists transitive packages) (added_js_deps.py: head minus base),
+# checked against the install -- never from vitest's own output.
+# Args: <diff-range base> <head> <project-dir>. Prints the added names absent from both
+# the project's and the declaring manifest's node_modules, one per line.
+absent_added_deps() {
+  local name dir rel="${3#"$REPO_ROOT"/}"
+  "$PYTEST_PYTHON" -I "$REPO_ROOT/tools/git-hooks/added_js_deps.py" "$1" "$2" 2>/dev/null \
+    | while IFS=$'\t' read -r name dir; do
+        # Only manifests this project resolves through: its own, the workspace root, the kit.
+        case "$dir" in "$rel"|.|"$KIT_TREE") ;; *) continue ;; esac
+        [ -f "$3/node_modules/$name/package.json" ] && continue
+        [ -f "$REPO_ROOT/$dir/node_modules/$name/package.json" ] && continue
+        printf '%s\n' "$name"
+      done
+}
+# Per FAILED TEST FILE, not per run (#19130): 0 only when every failed file in vitest's
+# output ($1) is a collection error -- vitest's `FAIL <file> [ <file> ]` header, a file that
+# never loaded -- whose only unresolved import is an added-and-absent dependency ($2,
+# newline-separated). A `FAIL <file> > <test>` header (a file that loaded and failed), an
+# unhandled error, or a collection error naming anything else blocks as before.
+vitest_failed_on_new_dep_only() {
+  printf '%s\n' "$1" | sed 's/\x1b\[[0-9;]*m//g' | awk -v absent="$(echo $2)" '
+    function close_block() { if (inblock && !ok) bad = 1; inblock = 0; ok = 0 }
+    BEGIN { split(absent, names, " "); for (i in names) isabsent[names[i]] = 1 }
+    /Unhandled (Errors|Rejection)/ { bad = 1 }
+    # A block ends at the vitest separator or summary; an error line after it is no part of an
+    # accepted collection failure (a coverage-threshold error, a crash) and blocks.
+    /⎯⎯|Test Files/ { close_block(); next }
+    /^ *FAIL +/ {
+      close_block(); nfail++
+      if ($0 ~ / > / || $0 !~ /\[ .* \] *$/) bad = 1; else inblock = 1
+      next
+    }
+    !inblock && nfail > 0 && /^ *([A-Za-z]*Error|ERROR)[: ]/ { bad = 1 }
+    inblock && match($0, /(Failed to resolve import|Cannot find (package|module)) ["\x27][^"\x27]+["\x27]/) {
+      pkg = substr($0, RSTART, RLENGTH); sub(/^[^"\x27]*["\x27]/, "", pkg); sub(/["\x27]$/, "", pkg)
+      n = split(pkg, part, "/"); name = (pkg ~ /^@/) ? part[1] "/" part[2] : part[1]
+      if (pkg ~ /^[.\/]/ || !(name in isabsent)) bad = 1; else ok = 1
+    }
+    END { close_block(); exit (nfail > 0 && !bad) ? 0 : 1 }'
+}
+
+# #17961: what a blocked push shows is the failing tests, not the last 25
+# lines. vitest prints failures BEFORE its summary, and the dependency-floor
+# report follows the summary, so a fixed tail showed only "Start at" and
+# "Duration". This keeps the failing test lines (vitest FAIL/x, pytest
+# FAILED/ERROR), assertions, timeouts, a short window after each unhandled
+# error (vitest exits 1 on those even when every test passed), and the
+# summary counts. An output in no shape it knows falls back to the tail, so a
+# failure is never reported with nothing under it.
+failure_excerpt() {
+  local clean excerpt summary
+  clean=$(printf '%s\n' "$1" | sed 's/\x1b\[[0-9;]*m//g')
+  # Summary counts are collected apart and always appended, so a long failure
+  # list cannot crowd them out of the cap.
+  summary=$(printf '%s\n' "$clean" | grep -E '^ +(Test Files|Tests|Errors) |^=+ .*(failed|error)' | tail -4)
+  # #18579: two tiers. Failing-test lines and unhandled-error windows come first and
+  # are never displaced; assertion/`Error:` context fills what the cap leaves. The
+  # app's own log lines (`[<ISO time>] [ERROR] ...`, provoked on purpose by tests)
+  # are not context -- 53 of them once filled the cap and cut both test names.
+  excerpt=$(printf '%s\n' "$clean" | awk -v cap="${FAILURE_EXCERPT_LINES:-60}" '
+    /Unhandled (Error|Rejection)/ { ctx = 8 }
+    seen[$0]++ { if (ctx > 0) ctx--; next }
+    ctx > 0 || /^ *(FAIL |× |✗ |FAILED |ERROR )/ || /^E   / { first[++a] = $0; if (ctx > 0) ctx--; next }
+    /^\[[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[^]]*\] \[[A-Z]+\]/ { next }
+    /AssertionError|Error: |Test timed out/ { rest[++b] = $0 }
+    END {
+      for (i = 1; i <= a && n < cap; i++) { print first[i]; n++ }
+      for (i = 1; i <= b && n < cap; i++) { print rest[i]; n++ }
+    }')
+  if [ -n "$excerpt$summary" ]; then
+    printf '%s\n' "$excerpt" "$summary" | grep -v '^$'
+  else
+    printf '%s\n' "$1" | tail -25
+  fi
 }
 ok()    { printf "${GRN}[pre-push OK]${CLR} %s\n" "$*" >&2; }
 
@@ -374,10 +569,9 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   # and large ones timed out, so the pushes most worth verifying went unverified.
   changed_count=$(printf '%s\n' "$changed" | grep -c . || true)
   TEST_TIMEOUT=$(( TEST_TIMEOUT + (changed_count * 4) ))
-  [ "$TEST_TIMEOUT" -gt 600 ] && TEST_TIMEOUT=600
-  TYPE_CHECK_TIMEOUT=$(( TYPE_CHECK_TIMEOUT + (changed_count * 3) ))
-  [ "$TYPE_CHECK_TIMEOUT" -gt 450 ] && TYPE_CHECK_TIMEOUT=450
-  log "changeset ${changed_count} file(s) -> pytest/vitest budget ${TEST_TIMEOUT}s, vue-tsc ${TYPE_CHECK_TIMEOUT}s"
+  [ "$TEST_TIMEOUT" -gt "$MAX_BUDGET" ] && TEST_TIMEOUT=$MAX_BUDGET
+  TYPE_CHECK_TIMEOUT=$(type_check_timeout)
+  log "changeset ${changed_count} file(s) -> vitest budget ${TEST_TIMEOUT}s (pytest is sized after selection, #17451), vue-tsc ${TYPE_CHECK_TIMEOUT}s"
   if [ -z "$changed" ]; then
     log "no changed files in range — skipping Phase 0c"
     continue
@@ -413,12 +607,20 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   # third appears, so a new frontend cannot silently fall into the first one.
   FRONTEND_PROJECTS="autobot-frontend autobot-slm-frontend"
 
+  # #17959: the shared kit carries no install of its own, but both apps resolve
+  # `@autobot/ui` to this in-tree directory (vite/vitest alias, tsconfig paths),
+  # so their vue-tsc and vitest exercise it. A kit change is therefore CLAIMED
+  # through every consuming app, instead of being reported as unrunnable.
+  KIT_TREE="libs/autobot-ui"
+
   frontend_changed=$(echo "$changed" | grep -E '\.(ts|vue)$' || true)
   frontend_unclaimed="$frontend_changed"
+  kit_changed=$(echo "$frontend_changed" | grep -E "^${KIT_TREE}/" || true)
+  frontend_unclaimed=$(echo "$frontend_unclaimed" | grep -vE "^${KIT_TREE}/" || true)
 
   for project in $FRONTEND_PROJECTS; do
     project_changed=$(echo "$frontend_changed" | grep -E "^${project}/" || true)
-    [ -n "$project_changed" ] || continue
+    [ -n "$project_changed" ] || [ -n "$kit_changed" ] || continue
     frontend_unclaimed=$(echo "$frontend_unclaimed" | grep -vE "^${project}/" || true)
 
     # Reset per iteration: a leaked exit code from the previous project would be
@@ -444,7 +646,10 @@ while read -r local_ref local_sha remote_ref remote_sha; do
           "exited ${tsc_exit} without a single 'error TS' line: $(echo "$tsc_output" | tail -1)"
       elif [ "$tsc_exit" != "0" ]; then
         # Distinguish errors in changed files (block) vs pre-existing (warn)
-        changed_ts_files=$(echo "$project_changed" | sed "s|^${project}/||" || true)
+        # Kit paths are not project-prefixed, so the sed leaves them intact and
+        # they match tsc's `../libs/autobot-ui/...(` diagnostics by substring.
+        changed_ts_files=$(printf '%s\n%s\n' "$project_changed" "$kit_changed" \
+          | grep -v '^$' | sed "s|^${project}/||" || true)
         if [ -n "$changed_ts_files" ]; then
           # Show only errors that mention any of the changed files
           # #17579 review: each changed path was an UNBOUNDED fixed-string
@@ -497,11 +702,21 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     # expand `$REPO_ROOT` inside a single-quoted `sh -c`, where that variable is
     # unset -- nothing in this file exports it -- so the selector matched nothing
     # for every input, and its absence was indistinguishable from success.
-    test_files=$(echo "$project_changed" \
+    # #18694: only paths under THIS project's vitest include roots. Every app's vitest.config.ts
+    # collects src/ (autobot-frontend also scripts/) and excludes tests/ and e2e/,
+    # so a changed Playwright spec (tests/visual/*.spec.ts) handed to `vitest run`
+    # collected nothing and blocked the push as COULD NOT RUN.
+    vitest_roots=$(vitest_include_roots "$project_dir")
+    spec_files=$(echo "$project_changed" \
       | grep -E '\.(test|spec)\.ts$' \
       | sed "s|^${project}/||" \
-      | while IFS= read -r rel; do [ -f "$project_dir/$rel" ] && echo "$rel"; done \
-      | head -10 || true)
+      | while IFS= read -r rel; do [ -f "$project_dir/$rel" ] && echo "$rel"; done || true)
+    not_vitest=$(echo "$spec_files" | grep -vE "$vitest_roots" | grep -v '^$' || true)
+    if [ -n "$not_vitest" ]; then
+      log "${project}: not vitest files (outside its vitest.config.ts include roots ${vitest_roots}), not run here:"
+      echo "$not_vitest" | sed 's/^/    /' >&2
+    fi
+    test_files=$(echo "$spec_files" | grep -E "$vitest_roots" | head -10 || true)
     # Also test corresponding __tests__/ for any composable changes
     composable_tests=$(echo "$project_changed" \
       | grep -E 'composables/.*\.ts$' \
@@ -522,9 +737,16 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 
       if [ "$vitest_exit" = "124" ]; then
         did_not_run "vitest (${project})" "${TEST_TIMEOUT}"
+      elif [ "$vitest_exit" != "0" ] && vitest_ran_nothing "$vitest_output"; then
+        could_not_run "vitest (${project})" \
+          "exited ${vitest_exit} before running a single test: $(printf '%s\n' "$vitest_output" | grep -m1 -E 'Error|error' || printf '%s\n' "$vitest_output" | tail -1)"
+      elif [ "$vitest_exit" != "0" ] && new_dep_absent=$(absent_added_deps "${base:-$remote_sha}" "$local_sha" "$project_dir") \
+           && vitest_failed_on_new_dep_only "$vitest_output" "$new_dep_absent"; then
+        could_not_run "vitest (${project})" \
+          "could not run (new dependency; CI's npm ci verifies): $(echo $new_dep_absent)"
       elif [ "$vitest_exit" != "0" ]; then
         fail "vitest failures (${project}, #5142):"
-        echo "$vitest_output" | tail -25 >&2
+        failure_excerpt "$vitest_output" >&2
         EXIT_CODE=1
       else
         ok "vitest (${project}): all relevant tests pass"
@@ -536,11 +758,41 @@ while read -r local_ref local_sha remote_ref remote_sha; do
       could_not_run "vitest (${project})" \
         "${project}/node_modules is missing or cannot be traversed, so the $(echo "$all_tests" | grep -c .) selected test file(s) did not run"
     fi
+
+    # #17959: kit change -> this app's tests that depend on it. `vitest related`
+    # walks the module graph, which reaches the kit through the in-tree alias, so
+    # the selection is exactly the tests that import a changed kit file.
+    if [ -n "$kit_changed" ] && node_modules_usable "$project_dir"; then
+      kit_rel=$(echo "$kit_changed" | sed 's|^|../|')
+      kit_timeout=$(kit_related_budget "$project_dir")
+      log "${project}: ${KIT_TREE} changed — running vitest related (timeout ${kit_timeout}s, #18578)"
+      kit_exit=0
+      kit_output=$(
+        cd "$project_dir" \
+        && timeout "$kit_timeout" npx vitest related --run --passWithNoTests $(echo "$kit_rel") 2>&1
+      ) || kit_exit=$?
+      if [ "$kit_exit" = "124" ]; then
+        did_not_run "vitest related (${project})" "${kit_timeout}"
+      elif [ "$kit_exit" != "0" ] && new_dep_absent=$(absent_added_deps "${base:-$remote_sha}" "$local_sha" "$project_dir") \
+           && vitest_failed_on_new_dep_only "$kit_output" "$new_dep_absent"; then
+        could_not_run "vitest related (${project})" \
+          "could not run (new dependency; CI's npm ci verifies): $(echo $new_dep_absent)"
+      elif [ "$kit_exit" != "0" ]; then
+        fail "vitest failures after a ${KIT_TREE} change (${project}, #17959):"
+        failure_excerpt "$kit_output" >&2
+        EXIT_CODE=1
+      else
+        ok "vitest related (${project}): tests depending on ${KIT_TREE} pass"
+      fi
+    elif [ -n "$kit_changed" ]; then
+      could_not_run "vitest related (${project})" \
+        "${project}/node_modules is missing or cannot be traversed, so tests depending on ${KIT_TREE} did not run"
+    fi
   done
 
   # #17574: `.ts`/`.vue` outside a project that declares a `type-check` script --
-  # libs/autobot-ui, libs/autobot-sdk-ts, the MCP tools. None carries an install
-  # or that script, so nothing here can check them; they used to be handed to
+  # libs/autobot-sdk-ts, the MCP tools (libs/autobot-ui is claimed through the
+  # apps above, #17959). None carries an install or that script, so nothing here can check them; they used to be handed to
   # autobot-frontend's invocation, which is how a foreign path reached a vitest
   # that could not see it. Recorded rather than dropped: not checking is a fact
   # about this push, and a silent skip is the failure mode #16912 describes.
@@ -570,8 +822,11 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   if [ -n "$all_py_tests" ]; then
     # The selection can outgrow the changeset, so the budget follows it too (#15985).
     selected_count=$(printf '%s\n' "$all_py_tests" | grep -c . || true)
-    TEST_TIMEOUT=$(( TEST_TIMEOUT + (selected_count * 2) ))
-    [ "$TEST_TIMEOUT" -gt 600 ] && TEST_TIMEOUT=600
+    PYTEST_XDIST_ARGS="$(pytest_xdist_args)"
+    pytest_parallel=0
+    [ -n "$PYTEST_XDIST_ARGS" ] && pytest_parallel=1
+    PYTEST_TIMEOUT=$(pytest_budget "$TEST_TIMEOUT" "$selected_count" "$pytest_parallel")
+    log "pytest selected ${selected_count} file(s) -> budget ${PYTEST_TIMEOUT}s ($([ "$pytest_parallel" = 1 ] && echo "parallel, ${PYTEST_XDIST_ARGS%% --dist*}" || echo 'serial (AUTOBOT_PREPUSH_PYTEST_WORKERS=0 or no xdist for '"$PYTEST_PYTHON)"))"
 
     # #16069: autobot-slm-backend must be a SEPARATE pytest invocation.
     # pytest.ini says so in as many words: the two backends define top-level
@@ -613,7 +868,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
           # no marker and still runs here; the floor-versus-population half is a ratchet and
           # runs in CI. `reach_declarations_test` asserts BOTH ends of that split, so the
           # marker cannot quietly become a way of running the check nowhere.
-          timeout "$TEST_TIMEOUT" "$PYTEST_PYTHON" -m pytest -xvs -m "not reach_floor" $group 2>&1
+          timeout "$PYTEST_TIMEOUT" "$PYTEST_PYTHON" -m pytest -xvs $PYTEST_XDIST_ARGS -m "not reach_floor" $group 2>&1
         ) || group_exit=$?
         if [ "$group_exit" = "124" ]; then
           pytest_timed_out=1
@@ -639,7 +894,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
           else
             pytest_failed=1
             fail "pytest failures (#5142):"
-            echo "$group_output" | tail -25 >&2
+            failure_excerpt "$group_output" >&2
           fi
         fi
       done
@@ -647,7 +902,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
       if [ "$pytest_failed" != "0" ]; then
         EXIT_CODE=1
       elif [ "$pytest_timed_out" != "0" ]; then
-        did_not_run "pytest" "${TEST_TIMEOUT}"
+        did_not_run "pytest" "${PYTEST_TIMEOUT}"
       elif [ -n "$pytest_unrunnable" ]; then
         could_not_run "pytest" "$pytest_unrunnable"
       else

@@ -35,11 +35,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.slug import url_slug
 from autobot_shared.time_utils import now_utc
+from autobot_shared.user_management.audit_rows import audit_row
 from autobot_shared.user_management.base_service import BaseService, TenantContext
 from autobot_shared.user_management.models.audit import (
-    AuditAction,
-    AuditLog,
     AuditResourceType,
+    IdentityAuditAction,
 )
 from autobot_shared.user_management.models.organization import OrganizationCore
 from autobot_shared.user_management.models.team import Team
@@ -145,7 +145,7 @@ class OrganizationService(BaseService):
         await self.session.flush()
 
         await self._audit_log(
-            action=AuditAction.ORG_CREATED,
+            action=IdentityAuditAction.ORG_CREATED,
             resource_type=AuditResourceType.ORGANIZATION,
             resource_id=org.id,
             org_id=org.id,
@@ -276,7 +276,7 @@ class OrganizationService(BaseService):
 
         if changes:
             await self._audit_log(
-                action=AuditAction.ORG_UPDATED,
+                action=IdentityAuditAction.ORG_UPDATED,
                 resource_type=AuditResourceType.ORGANIZATION,
                 resource_id=org_id,
                 org_id=org_id,
@@ -306,7 +306,7 @@ class OrganizationService(BaseService):
         await self.session.flush()
 
         await self._audit_log(
-            action=AuditAction.ORG_UPDATED,
+            action=IdentityAuditAction.ORG_UPDATED,
             resource_type=AuditResourceType.ORGANIZATION,
             resource_id=org_id,
             org_id=org_id,
@@ -342,7 +342,7 @@ class OrganizationService(BaseService):
         await self.session.flush()
 
         await self._audit_log(
-            action=AuditAction.ORG_DELETED,
+            action=IdentityAuditAction.ORG_DELETED,
             resource_type=AuditResourceType.ORGANIZATION,
             resource_id=org_id,
             org_id=org_id,
@@ -586,13 +586,12 @@ class OrganizationService(BaseService):
         outcome: str = "success",
     ) -> None:
         """Create audit log entry."""
-        audit_entry = AuditLog(
-            id=uuid.uuid4(),
+        audit_entry = audit_row(
             org_id=org_id,
             user_id=self.context.user_id,
             action=action,
             resource_type=resource_type,
-            resource_id=resource_id,
+            resource=resource_id,
             outcome=outcome,
             details=details,
         )

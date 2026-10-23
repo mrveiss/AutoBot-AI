@@ -12,7 +12,7 @@
   <div class="workflow-visualization">
     <div class="workflow-header">
       <div class="header-info">
-        <h3>{{ workflow?.name || t('visualizations.workflowViz.defaultTitle') }}</h3>
+        <h3 v-if="!embedded">{{ workflow?.name || t('visualizations.workflowViz.defaultTitle') }}</h3>
         <span class="workflow-id" v-if="workflow?.id">ID: {{ workflow.id }}</span>
       </div>
       <div class="header-actions">
@@ -304,11 +304,10 @@ interface Workflow {
 interface Props {
   workflow?: Workflow
   layoutMode?: 'horizontal' | 'vertical'
+  embedded?: boolean // in a dashboard frame that shows the title: hide this one's own (#16744)
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  layoutMode: 'horizontal'
-})
+const props = withDefaults(defineProps<Props>(), { layoutMode: 'horizontal' })
 
 // Emit
 const emit = defineEmits<{

@@ -32,8 +32,15 @@ from integrations.rate_limiter import (
     IntegrationRateLimiter,
 )
 from integrations.rate_limiter import integration_rate_limiter as _shared_rate_limiter
+from knowledge.connectors.egress import VENDOR_API_EGRESS
 
 logger = get_logger(__name__)
+
+
+def _vendor_request(method: str, url: str, **kwargs):
+    """Request context for a vendor API or webhook: public-only egress, redirects refused (#17576)."""
+    return get_http_client().tracked_request(method, url, guard_egress=VENDOR_API_EGRESS, **kwargs)
+
 
 # In-memory limiter retained solely for apply_response_headers() (Retry-After
 # header parsing on HTTP 429).  Distributed acquire() uses _shared_rate_limiter
@@ -158,9 +165,7 @@ class SlackIntegration(BaseIntegration):
 
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
-            async with get_http_client().tracked_request(
-                "POST", url, headers=headers, data=form_data, timeout=timeout
-            ) as resp:
+            async with _vendor_request("POST", url, headers=headers, data=form_data, timeout=timeout) as resp:
                 result = await resp.json()
                 self._check_slack_response(url, resp.status, result)
                 return result
@@ -252,15 +257,10 @@ class SlackIntegration(BaseIntegration):
 
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
-            client = get_http_client()
-            if method == "GET":
-                async with client.tracked_request("GET", url, headers=headers, params=data, timeout=timeout) as resp:
-                    result = await resp.json()
-                    self._check_slack_response(url, resp.status, result)
-                    if resp.status == 429:
-                        self._rate_limiter.apply_response_headers(self._token_key, dict(resp.headers))
-                    return result
-            async with client.tracked_request("POST", url, headers=headers, json=data, timeout=timeout) as resp:
+            body = {"params": data} if method == "GET" else {"json": data}
+            async with _vendor_request(
+                "GET" if method == "GET" else "POST", url, headers=headers, timeout=timeout, **body
+            ) as resp:
                 result = await resp.json()
                 self._check_slack_response(url, resp.status, result)
                 if resp.status == 429:
@@ -403,7 +403,7 @@ class TeamsIntegration(BaseIntegration):
     async def _post_webhook(self, payload: Dict[str, Any]) -> Dict[str, Any]:
         """Post message to Teams webhook."""
         try:
-            async with get_http_client().tracked_request("POST", self.webhook_url, json=payload) as resp:
+            async with _vendor_request("POST", self.webhook_url, json=payload) as resp:
                 status = resp.status
                 return {"success": status == 200, "status_code": status}
         except aiohttp.ClientError as exc:
@@ -419,7 +419,7 @@ class TeamsIntegration(BaseIntegration):
         """Make HTTP request to Microsoft Graph API."""
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
-            async with get_http_client().tracked_request(method, url, headers=headers, timeout=timeout) as resp:
+            async with _vendor_request(method, url, headers=headers, timeout=timeout) as resp:
                 body = await resp.json()
                 return {"status_code": resp.status, "body": body}
         except aiohttp.ClientError as exc:
@@ -571,7 +571,7 @@ class DiscordIntegration(BaseIntegration):
         """
         try:
             timeout = aiohttp.ClientTimeout(total=30.0)
-            async with get_http_client().tracked_request(
+            async with _vendor_request(
                 method, url, headers=headers, json=data, params=query_params, timeout=timeout
             ) as resp:
                 body = await resp.json()

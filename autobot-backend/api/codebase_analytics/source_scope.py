@@ -30,7 +30,11 @@ from __future__ import annotations
 import re
 from typing import Annotated
 
-from fastapi import Query
+from fastapi import HTTPException, Query
+
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 #: A source id is a UUID string (``source_models.py:48``). This is deliberately
 #: wider than a UUID pattern -- a legacy or seeded id need not be one -- and
@@ -134,6 +138,16 @@ async def cached_task_result(prefix: str, source_id: str) -> dict:
     from utils.celery_task_status import get_latest_task_result
 
     cached = await get_latest_task_result(source_scoped_prefix(prefix, source_id))
+    if cached and cached.get("error"):
+        # #17982: HTTP 200 with an error payload is what let a consumer that
+        # checks only the status code render a refused scan as "no duplicates".
+        # The reason is logged and served by ``*/status/{task_id}``; it is not
+        # echoed here, because a task's exception text is not safe to return (CWE-209).
+        logger.warning("latest %s task failed for source %s: %s", prefix, source_id, cached["error"])
+        raise HTTPException(
+            status_code=409,
+            detail={"status": "error", "message": "the latest scan failed; see the task status for its reason"},
+        )
     if cached and cached.get("result"):
         return {
             "status": "success",

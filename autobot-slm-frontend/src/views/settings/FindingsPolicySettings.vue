@@ -1,6 +1,7 @@
 <!-- Copyright 2025-2026 mrveiss -->
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 <script setup lang="ts">
+import { BaseAlert, BaseSwitch } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 
@@ -86,9 +87,7 @@ onMounted(load)
         {{ $t('settings.findingsPolicySettings.controlsHowCompanyOS') }}
       </p>
 
-      <div v-if="error" class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-        {{ error }}
-      </div>
+      <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
       <div v-if="saved" class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
         {{ $t('settings.findingsPolicySettings.policySavedSuccessfully') }}
       </div>
@@ -102,10 +101,7 @@ onMounted(load)
               {{ $t('settings.findingsPolicySettings.whenDisabledNoFindings') }}
             </p>
           </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" v-model="policy.enabled" class="sr-only peer" data-test="toggle-enabled" />
-            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-          </label>
+          <BaseSwitch v-model="policy.enabled" :label="$t('settings.findingsPolicySettings.enableFindingsPolicy')" data-test="toggle-enabled" />
         </div>
 
         <!-- Minimum severity -->
@@ -135,10 +131,7 @@ onMounted(load)
               {{ $t('settings.findingsPolicySettings.whenEnabledFindingsRequire') }}
             </p>
           </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" v-model="policy.require_approval_to_promote" class="sr-only peer" data-test="toggle-require-approval" />
-            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-          </label>
+          <BaseSwitch v-model="policy.require_approval_to_promote" :label="$t('settings.findingsPolicySettings.requireApprovalToPromote')" data-test="toggle-require-approval" />
         </div>
 
         <!-- Run on index -->
@@ -149,10 +142,7 @@ onMounted(load)
               {{ $t('settings.findingsPolicySettings.automaticallyTriggerFindings') }}
             </p>
           </div>
-          <label class="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" v-model="policy.run_on_index" class="sr-only peer" data-test="toggle-run-on-index" />
-            <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-          </label>
+          <BaseSwitch v-model="policy.run_on_index" :label="$t('settings.findingsPolicySettings.runOnIndex')" data-test="toggle-run-on-index" />
         </div>
 
         <!-- Verify batch size -->

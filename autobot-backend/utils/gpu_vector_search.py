@@ -30,6 +30,7 @@ import numpy as np
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.missing_dep import MissingDep as _MissingDep
 from knowledge.backends import BaseClient, BaseCollection
+from knowledge.backends.where_filter import matches_where
 from knowledge.hnsw_prefetch import attach_prefetcher
 from utils.async_initializable import AsyncInitializable
 
@@ -126,7 +127,7 @@ class GpuSearchResult:
 
 
 @dataclass
-class SearchMetrics:
+class GpuSearchMetrics:
     """Performance metrics for search operation."""
 
     query_time_ms: float
@@ -456,7 +457,7 @@ class GPUVectorIndex:
         query_embedding: np.ndarray,
         top_k: int = 10,
         normalize: bool = True,
-    ) -> Tuple[List[GpuSearchResult], SearchMetrics]:
+    ) -> Tuple[List[GpuSearchResult], GpuSearchMetrics]:
         """
         Search for similar vectors.
 
@@ -499,7 +500,7 @@ class GPUVectorIndex:
 
         query_time = (time.perf_counter() - start_time) * 1000
 
-        metrics = SearchMetrics(
+        metrics = GpuSearchMetrics(
             query_time_ms=query_time,
             total_vectors_searched=self.index.ntotal if self.index else 0,
             results_returned=len(results),
@@ -569,7 +570,7 @@ class GPUVectorIndex:
         query_embeddings: np.ndarray,
         top_k: int = 10,
         normalize: bool = True,
-    ) -> Tuple[List[List[GpuSearchResult]], SearchMetrics]:
+    ) -> Tuple[List[List[GpuSearchResult]], GpuSearchMetrics]:
         """
         Batch search for multiple query vectors.
 
@@ -604,7 +605,7 @@ class GPUVectorIndex:
 
         query_time = (time.perf_counter() - start_time) * 1000
 
-        metrics = SearchMetrics(
+        metrics = GpuSearchMetrics(
             query_time_ms=query_time,
             total_vectors_searched=self.index.ntotal * len(queries),
             results_returned=sum(len(r) for r in all_results),
@@ -937,7 +938,7 @@ class HybridVectorSearch(AsyncInitializable):
         collection_name: str = "default",
         metadata_filter: Dict[str, Any] | None = None,
         include_documents: bool = True,
-    ) -> Tuple[List[GpuSearchResult], SearchMetrics]:
+    ) -> Tuple[List[GpuSearchResult], GpuSearchMetrics]:
         """
         Hybrid search using FAISS for speed and ChromaDB for documents.
 
@@ -966,7 +967,7 @@ class HybridVectorSearch(AsyncInitializable):
             return await self._chromadb_search(query_embedding, top_k, collection_name, metadata_filter)
 
         # No backend available
-        return [], SearchMetrics(
+        return [], GpuSearchMetrics(
             query_time_ms=0,
             total_vectors_searched=0,
             results_returned=0,
@@ -1057,14 +1058,14 @@ class HybridVectorSearch(AsyncInitializable):
 
         return results
 
-    def _create_error_metrics(self) -> SearchMetrics:
+    def _create_error_metrics(self) -> GpuSearchMetrics:
         """
-        Create SearchMetrics for error cases.
+        Create GpuSearchMetrics for error cases.
 
         Returns:
-            SearchMetrics with zero values for error state. Issue #620.
+            GpuSearchMetrics with zero values for error state. Issue #620.
         """
-        return SearchMetrics(
+        return GpuSearchMetrics(
             query_time_ms=0,
             total_vectors_searched=0,
             results_returned=0,
@@ -1079,7 +1080,7 @@ class HybridVectorSearch(AsyncInitializable):
         top_k: int,
         collection_name: str,
         metadata_filter: Dict[str, Any] | None = None,
-    ) -> Tuple[List[GpuSearchResult], SearchMetrics]:
+    ) -> Tuple[List[GpuSearchResult], GpuSearchMetrics]:
         """Fallback search using ChromaDB."""
         start_time = time.perf_counter()
 
@@ -1100,7 +1101,7 @@ class HybridVectorSearch(AsyncInitializable):
             query_time = (time.perf_counter() - start_time) * 1000
             total_vectors_searched = await asyncio.to_thread(collection.count)
 
-            metrics = SearchMetrics(
+            metrics = GpuSearchMetrics(
                 query_time_ms=query_time,
                 total_vectors_searched=total_vectors_searched,
                 results_returned=len(results),
@@ -1116,13 +1117,8 @@ class HybridVectorSearch(AsyncInitializable):
             return [], self._create_error_metrics()
 
     def _matches_filter(self, metadata: Dict[str, Any], filter_dict: Dict[str, Any]) -> bool:
-        """Check if metadata matches filter."""
-        for key, value in filter_dict.items():
-            if key not in metadata:
-                return False
-            if metadata[key] != value:
-                return False
-        return True
+        """Check metadata against a ChromaDB ``where`` filter (shared evaluator, #18874)."""
+        return matches_where(metadata, filter_dict)
 
     async def sync_from_chromadb(self, collection_name: str = "default") -> int:
         """
@@ -1213,7 +1209,7 @@ __all__ = [
     "HybridVectorSearch",
     "VectorSearchConfig",
     "GpuSearchResult",
-    "SearchMetrics",
+    "GpuSearchMetrics",
     "IndexType",
     "SearchBackend",
     "get_hybrid_vector_search",

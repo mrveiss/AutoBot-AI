@@ -156,6 +156,9 @@ async def test_unshare_fact_reverts_to_private():
         def srem(self, *a):
             return 1
 
+        def incr(self, *a):
+            return 1
+
     mgr.redis_client = _FakeRedis()
     meta = await mgr.unshare_fact("f", user_ids=["u2"], fact_metadata={"visibility": "shared", "shared_with": ["u2"]})
     assert meta["visibility"] == "private"

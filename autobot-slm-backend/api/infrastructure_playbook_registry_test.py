@@ -91,7 +91,7 @@ def test_the_agent_names_the_playbook_this_registry_exposes():
     fails rather than leaving the registry exposing something nobody is told to
     run.
     """
-    agent = (_ANSIBLE_DIR / "roles" / "slm_agent" / "files" / "slm" / "agent" / "agent.py").read_text(encoding="utf-8")
+    agent = (_ANSIBLE_DIR.parent / "slm" / "agent" / "agent.py").read_text(encoding="utf-8")
 
     assert (
         "deploy-slm-agent.yml" in agent

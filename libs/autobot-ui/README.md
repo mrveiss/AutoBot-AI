@@ -74,6 +74,32 @@ app kept its own copy of the adapter and mapped the contract onto names only it 
 Because the kit is Tailwind-v4-independent (scoped CSS + tokens), an app only needs to
 provide these values — no Tailwind config wiring for the package is required.
 
+## Brand mark, tooltip, announcer (#18240)
+
+```vue
+<script setup lang="ts">
+import { BrandMark, BaseTooltip, useAnnounce } from '@autobot/ui'
+const { announce } = useAnnounce()
+</script>
+<template>
+  <!-- decorative next to a visible name; pass `label` (translated by the app) to make it a labelled img -->
+  <BrandMark :size="32" />
+  <BrandMark :label="t('nav.home')" />
+
+  <BaseTooltip :text="t('nav.secrets')" placement="bottom">
+    <template #default="{ describedby }">
+      <button type="button" :aria-describedby="describedby">...</button>
+    </template>
+  </BaseTooltip>
+</template>
+```
+
+- `BrandMark` reads `--aui-brand-bg` / `--aui-brand-fg` (adapter: `--brand-bg` / `--brand-fg`).
+  `src/assets/brand/mark.svg` is the standalone copy of the same geometry for favicons.
+- `BaseTooltip` reads `--aui-tooltip-delay|hide-delay|offset|max` and `--aui-z-tooltip`
+  (adapter: `--tooltip-*`, `--z-tooltip`). The kit holds no strings; pass `text` or the `content` slot.
+- `useAnnounce()` is the single screen-reader announcer (body-level `aria-live` region).
+
 ## Token contract
 
 See [`src/tokens/contract.css`](./src/tokens/contract.css) for the authoritative list.

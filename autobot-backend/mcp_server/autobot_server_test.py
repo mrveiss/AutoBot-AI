@@ -8,7 +8,7 @@ Unit tests for AutoBotMCPServer (Issue #5072).
 Covers:
 - tools/list returns tool manifest for valid token
 - kb.list_categories delegates to KB and returns result
-- Rate limiting rejects the 51st request in the same window
+- (rate limiting: see autobot_server_rate_limit_18087_test.py)
 - Unknown tool returns JSON-RPC error -32602
 - Invalid / missing token returns JSON-RPC error -32001
 """
@@ -17,8 +17,10 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from autobot_memory_graph.owner_scope import OwnerScope
 from autobot_shared.ssot_config import config
 from mcp_server.autobot_server import AutoBotMCPServer, _stdio_bearer_token
+from mcp_server.principal import bind_owner, unbind_owner
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -37,6 +39,19 @@ def _configure_mcp_secret():
     """Give every test in this module a configured secret to authenticate against."""
     with patch.object(config.misc, "mcp_token", TEST_SECRET):
         yield
+
+
+#: The principal the direct-handler tests run as; the end-to-end principal tests live in
+#: tests/memory_graph/test_owner_scope_followup_18825.py.
+TEST_OWNER = OwnerScope.for_user("mcp-test-principal")
+
+
+@pytest.fixture(autouse=True)
+def _bound_principal():
+    """memory.* handlers read under the request's principal (#18825); bind one for direct calls."""
+    token = bind_owner(TEST_OWNER)
+    yield
+    unbind_owner(token)
 
 
 def make_server() -> AutoBotMCPServer:
@@ -104,25 +119,6 @@ async def test_kb_list_categories():
 
     content = json.loads(resp["result"]["content"][0]["text"])
     assert "tree" in content
-
-
-# ---------------------------------------------------------------------------
-# Rate limiting
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.asyncio
-async def test_rate_limit_after_50_requests():
-    server = make_server()
-    # Exhaust the 50-request window
-    for _ in range(50):
-        r = await server.handle_request("tools/list", {}, VALID_TOKEN)
-        assert "result" in r, "should succeed within limit"
-
-    # 51st request should be rate-limited
-    r = await server.handle_request("tools/list", {}, VALID_TOKEN)
-    assert "error" in r
-    assert r["error"]["code"] == -32029
 
 
 # ---------------------------------------------------------------------------
@@ -428,6 +424,7 @@ async def test_memory_path_delegates_to_find_path():
         relation="CAUSED",
         max_depth=6,
         direction="both",
+        owner=TEST_OWNER,
     )
 
 
@@ -569,4 +566,4 @@ async def test_valid_arguments_still_reach_the_graph():
         result = await server._memory_entity_lookup("  Redis Config  ")
 
     assert result["name"] == "Redis Config"
-    fake_graph.get_entity.assert_awaited_once_with(entity_name="Redis Config", include_relations=True)
+    fake_graph.get_entity.assert_awaited_once_with(entity_name="Redis Config", include_relations=True, owner=TEST_OWNER)

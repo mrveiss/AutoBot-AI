@@ -28,6 +28,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from knowledge.connectors.base import instance_host_egress
@@ -38,6 +39,16 @@ from services.mcp_server_credentials import resolve_extra_headers_for_server
 from type_defs.mcp import MCPToolDefinition
 
 logger = get_logger(__name__)
+
+
+def _role_allowed(role: str, allowed_roles: list[str]) -> bool:
+    """True when *role* is on *allowed_roles*; an ``"admin"`` entry admits the whole admin family.
+
+    Superadmin is the highest form of admin (#19125), so an ``"admin"`` entry --
+    the default for every external server -- admits it too, via the canonical
+    ``is_admin_role`` predicate rather than a literal comparison.
+    """
+    return role in allowed_roles or (is_admin_role(role) and "admin" in allowed_roles)
 
 
 @dataclass
@@ -189,7 +200,7 @@ class MCPExternalBridge:
         if entry is None:
             return ExternalToolCallResult(success=False, error=f"Unknown external MCP tool '{name}'")
 
-        if role not in entry.allowed_roles:
+        if not _role_allowed(role, entry.allowed_roles):
             logger.warning("mcp_external_bridge.call_tool role=%s denied for tool=%s", role, name)
             await _audit_log(
                 "mcp.external_server.tool_call",

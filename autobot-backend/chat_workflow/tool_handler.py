@@ -14,17 +14,19 @@ from __future__ import annotations
 import ast
 import asyncio
 import html
+import inspect
 import json
 import re
 import uuid
 from typing import TYPE_CHECKING, Any, AsyncIterator
 
 from async_chat_workflow import WorkflowMessage
+from autobot_shared.ai_lines import VERIFIED_COMPANY_KEY, VERIFIED_USER_KEY
 from autobot_shared.auth.mcp_tool_permissions import required_permission
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.env_utils import env_flag, env_int
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, match_tool_name
+from autobot_shared.tool_catalogue import APPROVAL_CATEGORY_TOOLS, BROWSER_TOOLS, approval_category_for
 from chat_workflow.browser_tool_handler import (
     extract_browser_image,
     format_browser_action_text,
@@ -49,13 +51,16 @@ from chat_workflow.compose_tool_handler import (
 )
 from chat_workflow.tool_call_grammar import TOOL_CALL_PATTERN
 from chat_workflow.tool_dispatch_guards import (
+    enforce_ai_line,
     enforce_config_protection,
     enforce_fact_forcing,
     enforce_forbidden_work,
     enforce_peer_messages,
     enforce_pre_action_verifier,
     enforce_repetition,
-    enforce_work_item_approval,
+    is_registered_tool,
+    llc_scope_error,
+    unknown_tool_error,
 )
 from chat_workflow.tool_permission_gate import permission_denial
 from llc.agent_tools import LLC_TOOL_NAMES, LLC_TOOL_SCHEMAS, LLCToolError, dispatch_llc_tool
@@ -635,26 +640,7 @@ def _validate_builtin_tool_arguments(tool_name: str, tool_call: dict[str, Any]) 
 # Issue #1368: Browser tool names that route to browser_mcp handlers.
 # Exported (no leading underscore) so ToolRegistry can derive its list from this
 # single source of truth rather than maintaining a duplicate. Issue #2609.
-BROWSER_TOOL_NAMES: frozenset[str] = frozenset(
-    {
-        "navigate",
-        "click",
-        "fill",
-        "select",
-        "hover",
-        "screenshot",
-        "evaluate",
-        "get_text",
-        "get_attribute",
-        "wait_for_selector",
-        # Issue #11537: indexed interactive-element actions.
-        "click_index",
-        "fill_index",
-        "select_index",
-        "hover_index",
-        "browser_state",
-    }
-)
+BROWSER_TOOL_NAMES: frozenset[str] = frozenset(BROWSER_TOOLS)
 
 # Issue #7509: web research tools — direct internal dispatch via web_fetch.
 WEB_RESEARCH_TOOL_NAMES: frozenset[str] = frozenset({"scrape_url", "crawl_site", "map_site", "extract_structured_data"})
@@ -693,6 +679,24 @@ _UNIFORM_BUILTIN_TOOLS: frozenset[str] = (
 _APPROVAL_CATEGORY_TOOLS: dict[str, tuple[str, ...]] = APPROVAL_CATEGORY_TOOLS
 
 
+def _schema_error_message(tool_name: str, tool_call: dict[str, Any], execution_results: list[dict[str, Any]]):
+    """Validate a builtin tool's arguments; on failure record the schema error and return its message (#4529).
+
+    Shared by the LLC and the uniform-builtin branches of ``_dispatch_tool_call``, which spelled this out twice.
+    """
+    validation_msg = _validate_builtin_tool_arguments(tool_name, tool_call)
+    if validation_msg is not None:
+        execution_results.append(
+            {
+                "tool": tool_name,
+                "status": "schema_error",
+                "error": validation_msg.content,
+                "schema_validation_failed": True,
+            }
+        )
+    return validation_msg
+
+
 def _approval_category_for(tool_name: str, declared: list[str]) -> str | None:
     """Return the declared category that gates *tool_name*, else None (GH#11160).
 
@@ -700,10 +704,7 @@ def _approval_category_for(tool_name: str, declared: list[str]) -> str | None:
     (so ``deploy`` gates ``deploy_service`` but not ``deployment_status``). A false
     positive only ever adds an approval hold — the fail-safe direction — never a bypass.
     """
-    for category in declared:
-        if match_tool_name(tool_name, _APPROVAL_CATEGORY_TOOLS.get(category, ()), word_boundary=True):
-            return category
-    return None
+    return approval_category_for(tool_name, declared)
 
 
 # Issue #11693: the tool-call grammar (parse pattern + close-variant
@@ -1095,8 +1096,12 @@ async def _try_mcp_dispatch(
     role: str = "user",
     session_id: str = "",
     max_schema_retries: int = _DEFAULT_SCHEMA_RETRIES,
+    ctx: "LLMIterationContext | None" = None,
 ) -> WorkflowMessage | None:
     """Attempt to dispatch tool_name via the MCP registry. Issue #2513.
+
+    #18430: a tool FOUND here is resolved against its AI line again, so one that registered after the seam looked
+    can never run unlined.
 
     Issue #4482: Validates arguments against the tool's input_schema before
     dispatch.  On failure the error is returned as a structured WorkflowMessage
@@ -1117,12 +1122,13 @@ async def _try_mcp_dispatch(
     from services.mcp_dispatch import get_mcp_dispatcher
 
     dispatcher = get_mcp_dispatcher()
-    if not dispatcher._cache_loaded:
-        await dispatcher.refresh_tool_cache()
+    await dispatcher.ensure_loaded()
 
     tool = dispatcher.find_tool(tool_name)
     if tool is None:
         return None
+    if (held := await enforce_ai_line({**tool_call, "name": tool_name}, ctx, execution_results)) is not None:
+        return held
 
     arguments = tool_call.get("arguments", {})
 
@@ -2660,33 +2666,31 @@ class ToolHandlerMixin:
     ):
         """Dispatch an LLC work-object tool company-scoped (#11501).
 
-        company_id comes from the chat request context (set by the CEO-chat
-        endpoint, T2). A missing/invalid context surfaces as a tool error the
-        LLM can react to, rather than a crash.
+        company_id is the AUTHENTICATED company (``verified_company_id``), never the request context's own
+        ``company_id`` claim; without one the tool is refused (#18430). A missing/invalid context surfaces as a
+        tool error the LLM can react to, rather than a crash.
 
-        #14491: every LLC tool mutates company-scoped work objects
-        (``dispatch_llc_tool`` has no RBAC check of its own — only the
-        company/tenant scoping above and the cross-tenant IDOR guard inside
-        ``_update_goal``) and this was the highest-risk of the seven branches
-        never reaching ``BEFORE_TOOL_EXECUTE`` at all. ``Permission.WORKFLOW_CREATE``
-        is the closest existing declaration: it is the permission this system
-        already uses for "create/mutate a unit of work", held by
-        admin/operator/editor and withheld from analyst/user/readonly — the
-        same tier a company board operation should require. Denial returns
-        before ``dispatch_llc_tool`` is ever awaited.
+        #14491: every LLC tool mutates company-scoped work objects (``dispatch_llc_tool`` has no RBAC check of
+        its own), so ``Permission.WORKFLOW_CREATE`` -- the permission this system already uses for "create/mutate
+        a unit of work", held by admin/operator/editor, withheld from analyst/user/readonly -- is declared at
+        BEFORE_TOOL_EXECUTE. Denial returns before ``dispatch_llc_tool`` is ever awaited.
         """
         params = tool_call.get("params", {}) or {}
         _cctx = ctx.context if ctx is not None and ctx.context else {}
-        company_id = _cctx.get("company_id")
+        company_id = _cctx.get(VERIFIED_COMPANY_KEY)
         # #11501 review: actor for audit/authz comes from the authenticated chat
-        # context, never from LLM-supplied params.
-        user_id = _cctx.get("user_id")
+        # context, never from LLM-supplied params or the request's own claim.
+        user_id = _cctx.get(VERIFIED_USER_KEY)
 
         denial = await permission_denial(
             tool_name, params, session_id, Permission.WORKFLOW_CREATE.value, role, execution_results
         )
         if denial is not None:
             yield denial
+            return
+
+        if (scope_msg := llc_scope_error(tool_name, company_id, execution_results)) is not None:
+            yield scope_msg
             return
 
         try:
@@ -2990,7 +2994,7 @@ class ToolHandlerMixin:
         Orchestrates the two halves above: capture the live DOM snapshot,
         then run the goal-directed LLM sub-extraction over it.
         """
-        from web_fetch.extractors import extract_markdown
+        from web_fetch.profile import IngestProfile, extract_page
 
         goal = (params.get("goal") or "").strip()
         if not goal:
@@ -3000,8 +3004,8 @@ class ToolHandlerMixin:
         if not html_content:
             return "extract_content: no live page content — navigate to a page first."
 
-        _title, markdown = extract_markdown(html_content)
-        return await self._answer_goal_from_markdown(markdown, url, goal)
+        text = extract_page(html_content, IngestProfile.DOCUMENT, base_url=url or "").text
+        return await self._answer_goal_from_markdown(text, url, goal)
 
     async def _execute_web_search(self, query: str, max_pages: int = 5, session_id: str = "") -> str:
         """Run a web search and return formatted results. Issue #2306.
@@ -3173,24 +3177,8 @@ class ToolHandlerMixin:
         ctx: "LLMIterationContext" | None,
         execution_results: list[dict[str, Any]],
     ) -> WorkflowMessage:
-        """Build error message for an unknown tool call (#2305, #2310)."""
-        # GH#11489: derive from the routing SSOT so the hint never drifts.
-        known_tools = sorted({"respond", "delegate"} | _UNIFORM_BUILTIN_TOOLS)
-        if ctx is not None:
-            ctx.consecutive_invalid_tool_calls += 1
-        consecutive = ctx.consecutive_invalid_tool_calls if ctx is not None else 0
-        error_msg = f'Error: Tool "{tool_name}" not found. Available tools: {", ".join(known_tools)}'
-        logger.warning(
-            "[Issue #2305] Unknown tool call reported to agent: %s (consecutive_invalid=%d)",
-            tool_name,
-            consecutive,
-        )
-        execution_results.append({"tool": tool_name, "status": "error", "error": error_msg})
-        return WorkflowMessage(
-            type="error",
-            content=error_msg,
-            metadata={"message_type": "unknown_tool", "tool_name": tool_name},
-        )
+        """Build error message for an unknown tool call (#2305, #2310); see ``unknown_tool_error``."""
+        return unknown_tool_error(tool_name, ctx, execution_results, _UNIFORM_BUILTIN_TOOLS)
 
     # #14495: the six seam enforcers below moved to tool_dispatch_guards.py to
     # bring this file under its file-size ceiling (see that module's docstring
@@ -3257,21 +3245,61 @@ class ToolHandlerMixin:
         """
         return enforce_repetition(tool_call, ctx, execution_results)
 
-    def _enforce_work_item_approval(
+    async def _enforce_ai_line(
         self,
         tool_call: dict[str, Any],
         ctx: "LLMIterationContext" | None,
         execution_results: list[dict[str, Any]],
     ) -> WorkflowMessage | None:
-        """Hold a tool the work item declared as approval-gated (GH#11160).
-
-        See ``tool_dispatch_guards.enforce_work_item_approval`` for the full behavior.
-        """
-        return enforce_work_item_approval(tool_call, ctx, execution_results)
+        """Resolve the action's AI line (#18430); a name registered nowhere gets the unknown_tool error here."""
+        name, builtin = tool_call.get("name", ""), _BUILTIN_TOOL_SCHEMAS.keys() | _UNIFORM_BUILTIN_TOOLS
+        if not await is_registered_tool(name, builtin):
+            return self._build_unknown_tool_error(name, ctx, execution_results)  # explicit: never reaches MCP dispatch
+        return await enforce_ai_line(tool_call, ctx, execution_results)
 
     def _enforce_peer_messages(self, ctx: "LLMIterationContext" | None) -> None:
         """Drain queued peer messages into ctx.context (#16948) -- never blocks."""
         return enforce_peer_messages(ctx)
+
+    async def _seam_guard_message(
+        self,
+        tool_call: dict[str, Any],
+        ctx: "LLMIterationContext" | None,
+        execution_results: list[dict[str, Any]],
+    ) -> WorkflowMessage | None:
+        """Run the production seam's guards in order; the first message wins, ``None`` lets the call run.
+
+        Extracted from ``_dispatch_tool_call`` unchanged in order and in behaviour (#18430) so the dispatcher
+        stays inside the function-length limit.
+        """
+        # #16948: peer messages are context, drained at this same live seam.
+        self._enforce_peer_messages(ctx)
+
+        # GH#11145: enforce the acting agent's forbidden_work manifest at the single production dispatch seam
+        # — before any tool-specific branch. No-ops for the plain chat agent (no profile → empty manifest);
+        # bites profile-bound agents (e.g. a delegated research_agent cannot run bash).
+        # GH#11177: block writes that would weaken a linter/formatter config — steer the agent to fix the code.
+        # GH#11178: fact-forcing — block the first edit to an existing file not yet investigated this turn.
+        # #14031: adversarial pre-action verifier — runs before the approval hold below so a HARD_BLOCK
+        # verdict short-circuits without reaching the human approval step (AgentLoop._check_approvals order).
+        # #18430: the three AI lines — ONE decision for the line store, the approval baseline (#18294) and the
+        # work item's requires_approval_before (GH#11160).
+        # #13590: halt a stagnating agent. Placed last so a call blocked for a *policy* reason above is not
+        # also counted as repetition; those blocks are the agent being stopped, not the agent looping.
+        for guard in (
+            lambda: self._enforce_forbidden_work(tool_call, ctx, execution_results),
+            lambda: self._enforce_config_protection(tool_call, execution_results),
+            lambda: self._enforce_fact_forcing(tool_call, ctx, execution_results),
+            lambda: self._enforce_pre_action_verifier(tool_call, ctx, execution_results),
+            lambda: self._enforce_ai_line(tool_call, ctx, execution_results),
+            lambda: self._enforce_repetition(tool_call, ctx, execution_results),
+        ):
+            message = guard()
+            if inspect.isawaitable(message):
+                message = await message
+            if message is not None:
+                return message
+        return None
 
     async def _dispatch_tool_call(
         self,
@@ -3294,58 +3322,10 @@ class ToolHandlerMixin:
         """
         tool_name = tool_call["name"]
 
-        # #16948: peer messages are context, drained at this same live seam.
-        self._enforce_peer_messages(ctx)
-
-        # GH#11145: enforce the acting agent's forbidden_work manifest at the single
-        # production dispatch seam — before any tool-specific branch. Every tool call
-        # funnels through here, so this is the one place the capability boundary is
-        # applied. No-ops for the plain chat agent (no profile → empty manifest);
-        # bites profile-bound agents (e.g. a delegated research_agent cannot run bash).
-        forbidden_msg = self._enforce_forbidden_work(tool_call, ctx, execution_results)
-        if forbidden_msg is not None:
-            yield forbidden_msg
-            return
-
-        # GH#11177: block writes that would weaken a linter/formatter config at the
-        # same production seam — steer the agent to fix the code, not the gate.
-        config_msg = self._enforce_config_protection(tool_call, execution_results)
-        if config_msg is not None:
-            yield config_msg
-            return
-
-        # GH#11178: fact-forcing — record reads/greps and block the first edit to
-        # an existing file not yet investigated this turn, at the same seam.
-        fact_msg = self._enforce_fact_forcing(tool_call, ctx, execution_results)
-        if fact_msg is not None:
-            yield fact_msg
-            return
-
-        # #14031: adversarial pre-action verifier — an independent, differently
-        # prompted model tries to REFUTE a sensitive action before it executes.
-        # Runs before the approval hold below so a HARD_BLOCK verdict short-circuits
-        # without ever reaching the human approval step, matching the original
-        # AgentLoop._check_approvals ordering.
-        verifier_msg = await self._enforce_pre_action_verifier(tool_call, ctx, execution_results)
-        if verifier_msg is not None:
-            yield verifier_msg
-            return
-
-        # GH#11160: hold a tool the work item declared as approval-gated
-        # (requires_approval_before) pending approval, at the same seam.
-        approval_msg = self._enforce_work_item_approval(tool_call, ctx, execution_results)
-        if approval_msg is not None:
-            yield approval_msg
-            return
-
-        # #13590: halt a stagnating agent — same tool, same args, same result —
-        # at the profile's max_identical_tool_calls. Placed last of the
-        # enforcers so a call blocked for a *policy* reason above is not also
-        # counted as repetition; those blocks are the agent being stopped, not
-        # the agent looping.
-        repetition_msg = self._enforce_repetition(tool_call, ctx, execution_results)
-        if repetition_msg is not None:
-            yield repetition_msg
+        # Every seam guard, in order (GH#11145/#11177/#11178/#14031/#18430/#13590): see _seam_guard_message.
+        guard_msg = await self._seam_guard_message(tool_call, ctx, execution_results)
+        if guard_msg is not None:
+            yield guard_msg
             return
 
         # GH#11568: sandboxed Python composition tool (main-chat only).
@@ -3380,16 +3360,8 @@ class ToolHandlerMixin:
         if tool_name in LLC_TOOL_NAMES:
             if ctx is not None:
                 ctx.consecutive_invalid_tool_calls = 0
-            validation_msg = _validate_builtin_tool_arguments(tool_name, tool_call)
+            validation_msg = _schema_error_message(tool_name, tool_call, execution_results)
             if validation_msg is not None:
-                execution_results.append(
-                    {
-                        "tool": tool_name,
-                        "status": "schema_error",
-                        "error": validation_msg.content,
-                        "schema_validation_failed": True,
-                    }
-                )
                 yield validation_msg
                 return
             # #14491: forward session_id/role so _handle_llc_tool can declare
@@ -3405,16 +3377,8 @@ class ToolHandlerMixin:
         if tool_name in _UNIFORM_BUILTIN_TOOLS:
             if ctx is not None:
                 ctx.consecutive_invalid_tool_calls = 0
-            validation_msg = _validate_builtin_tool_arguments(tool_name, tool_call)
+            validation_msg = _schema_error_message(tool_name, tool_call, execution_results)
             if validation_msg is not None:
-                execution_results.append(
-                    {
-                        "tool": tool_name,
-                        "status": "schema_error",
-                        "error": validation_msg.content,
-                        "schema_validation_failed": True,
-                    }
-                )
                 yield validation_msg
                 return
             async for msg in self._builtin_route(
@@ -3499,7 +3463,9 @@ class ToolHandlerMixin:
         """
         # Issue #2513: Check MCP registry before reporting unknown tool.
         # Issue #2629: Forward RBAC role so admin-only tools are enforced.
-        mcp_result = await _try_mcp_dispatch(tool_name, tool_call, execution_results, role=role, session_id=session_id)
+        mcp_result = await _try_mcp_dispatch(
+            tool_name, tool_call, execution_results, role=role, session_id=session_id, ctx=ctx
+        )
         if mcp_result is not None:
             yield mcp_result
             return

@@ -39,7 +39,7 @@ async def test_the_system_configuration_document_is_written_system():
     from api import knowledge_population as pop
 
     kb = MagicMock()
-    kb.store_fact = AsyncMock(return_value={"fact_id": "f1"})
+    kb.store_fact = AsyncMock(return_value={"status": "success", "fact_id": "f1"})
     with patch.object(pop, "_build_system_config_info", return_value="config"):
         assert await pop._store_system_config(kb)
     assert _is_system_document(kb.store_fact.await_args.kwargs["metadata"], "documentation")
@@ -107,17 +107,16 @@ async def test_an_admin_file_upload_is_written_system():
     req = MagicMock()
     req.form = AsyncMock(return_value={"file": upload, "title": "Guide"})
     kb = MagicMock()
-    kb.store_fact = AsyncMock(return_value={"fact_id": "f1"})
+    kb.add_document = AsyncMock(return_value={"status": "success", "fact_id": "f1"})
     with (
         patch.object(mod, "get_or_create_knowledge_base", AsyncMock(return_value=kb)),
         patch.object(mod, "_extract_file_content", return_value=("hello world", None)),
         patch.object(mod, "_has_usable_content", return_value=True),
-        patch.object(mod, "_page_provenance_metadata", return_value={}),
         patch.object(mod, "get_auth_middleware", MagicMock()),
         patch.object(mod, "audit_record", MagicMock()),
     ):
         await mod.upload_file_to_knowledge(admin_check=True, req=req)
-    assert _is_system_document(kb.store_fact.await_args.kwargs["metadata"], "file_upload")
+    assert _is_system_document(kb.add_document.await_args.args[1], "file_upload")
 
 
 @pytest.mark.asyncio
@@ -126,7 +125,7 @@ async def test_only_an_upload_is_stamped_by_the_shared_store_helper():
     from api import knowledge as mod
 
     kb = MagicMock()
-    kb.store_fact = AsyncMock(return_value={"fact_id": "f1"})
+    kb.add_document = AsyncMock(return_value={"status": "success", "fact_id": "f1"})
     for metadata in ({"source": "autobot_docs_population"}, {"type": "url", "source": "https://example.invalid"}):
         await mod._store_fact_in_kb(kb, "text", dict(metadata))
-        assert "visibility" not in kb.store_fact.await_args.kwargs["metadata"]
+        assert "visibility" not in kb.add_document.await_args.args[1]

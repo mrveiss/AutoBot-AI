@@ -313,6 +313,40 @@ echo "Backup completed: $BACKUP_DIR"
 
 ---
 
+### Secrets-store backup and restore (#18281)
+
+The secrets store (`secrets.db` in the backend's data directory) is backed up by the SLM backup
+service as service type `secrets`: a consistent SQLite online-backup snapshot, copied to SLM backup
+storage with a recorded sha256. Create it with `POST /api/stateful/backups`
+with `service_type: "secrets"` for the node that carries the backend role; with no such node the
+backup is refused and its row is `failed` with the reason.
+Old secrets backups are never pruned automatically (no agent deletes stored credential data, #17038).
+The snapshot runs on that node as the backend service user (`sudo -n -u`, no password prompt, skipped when the
+ssh user already is that user), because the data directory is `0750` to its group. The SLM learns the data
+directory and user from `SLM_BACKEND_DATA_DIR` / `SLM_BACKEND_SERVICE_USER`, rendered into its unit from the
+backend role's `backend_data_dir` / `backend_user`.
+
+**Only `encrypted_value` is ciphertext.** Secret values stay Fernet-encrypted exactly as stored, but secret
+names, descriptions, scopes, metadata and the audit table travel as plaintext in the artifact, so treat the
+backup file as sensitive; the key
+(`AUTOBOT_SECRETS_KEY`, `security.secrets_key` or `<data_dir>/secrets.key`) is never copied. A restore
+therefore works only on a host that holds the **same key**. Without it the snapshot is unreadable.
+Key escrow is a separate decision, tracked in #16406.
+
+Restore (operator, on the backend host, with the backend stopped):
+
+1. Confirm the artifact: the backup row must be `completed`, and its sha256 must equal the checksum
+   recorded on the row (`verify_backup_integrity`).
+2. Keep the current `secrets.db` aside (do not delete it), then place the snapshot at
+   `<data_dir>/secrets.db`, owned by the backend service account, mode `0600`.
+3. Make sure the same key is in force (the env var, or `<data_dir>/secrets.key`).
+4. Start the backend and read one known secret through the secrets API. A decrypt error means the
+   key differs from the one that wrote the snapshot.
+
+The OAuth bundle strip (#13630) and any later destructive secrets proposal call one verifier,
+`verify_backup`, which accepts a `backup_reference` only for a completed, intact secrets backup newer
+than `AUTOBOT_SECRETS_BACKUP_MAX_AGE_S` (default one day), and refuses otherwise.
+
 ## Health Monitoring
 
 ### Automated Health Checks

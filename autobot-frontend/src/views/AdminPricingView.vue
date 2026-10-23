@@ -11,7 +11,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import BaseBadge from '@/components/base/BaseBadge.vue'
+import { BaseBadge } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import {
   useAdminPricingApi,

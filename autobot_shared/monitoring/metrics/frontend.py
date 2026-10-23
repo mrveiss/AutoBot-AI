@@ -21,6 +21,7 @@ from prometheus_client import Counter, Gauge, Histogram
 from autobot_shared.endpoint_normalization import collapse_dynamic_segments
 
 from .base import BaseMetricsRecorder
+from .label_bounds import BoundedLabels
 
 
 class FrontendMetricsRecorder(BaseMetricsRecorder):
@@ -30,9 +31,13 @@ class FrontendMetricsRecorder(BaseMetricsRecorder):
         """
         Initialize frontend metrics.
 
+        #18368: every label value comes from the open RUM ingest, so each passes
+        through ``self._labels`` (``label_bounds``) before it reaches a series.
+
         Issue #665: Refactored to use helper methods per category to reduce
         function length from 191 lines to under 50 lines.
         """
+        self._labels = BoundedLabels()
         self._init_page_performance_metrics()
         self._init_api_call_metrics()
         self._init_javascript_error_metrics()
@@ -262,23 +267,23 @@ class FrontendMetricsRecorder(BaseMetricsRecorder):
 
     def record_page_load(self, page: str, load_time_seconds: float) -> None:
         """Record page load time."""
-        self.page_load_seconds.labels(page=page).observe(load_time_seconds)
+        self.page_load_seconds.labels(page=self._page(page)).observe(load_time_seconds)
 
     def record_first_contentful_paint(self, page: str, fcp_seconds: float) -> None:
         """Record First Contentful Paint time."""
-        self.first_contentful_paint_seconds.labels(page=page).observe(fcp_seconds)
+        self.first_contentful_paint_seconds.labels(page=self._page(page)).observe(fcp_seconds)
 
     def record_largest_contentful_paint(self, page: str, lcp_seconds: float) -> None:
         """Record Largest Contentful Paint time."""
-        self.largest_contentful_paint_seconds.labels(page=page).observe(lcp_seconds)
+        self.largest_contentful_paint_seconds.labels(page=self._page(page)).observe(lcp_seconds)
 
     def record_time_to_interactive(self, page: str, tti_seconds: float) -> None:
         """Record Time to Interactive."""
-        self.time_to_interactive_seconds.labels(page=page).observe(tti_seconds)
+        self.time_to_interactive_seconds.labels(page=self._page(page)).observe(tti_seconds)
 
     def record_dom_content_loaded(self, page: str, dcl_seconds: float) -> None:
         """Record DOM Content Loaded time."""
-        self.dom_content_loaded_seconds.labels(page=page).observe(dcl_seconds)
+        self.dom_content_loaded_seconds.labels(page=self._page(page)).observe(dcl_seconds)
 
     # =========================================================================
     # API Call Methods
@@ -296,6 +301,8 @@ class FrontendMetricsRecorder(BaseMetricsRecorder):
         """Record a frontend API request."""
         # Normalize endpoint to prevent high cardinality
         normalized_endpoint = self._normalize_endpoint(endpoint)
+        method = self._labels.bound("method", method)
+        status = self._labels.bound("status", status)
 
         self.api_requests_total.labels(endpoint=normalized_endpoint, method=method, status=status).inc()
         self.api_latency_seconds.labels(endpoint=normalized_endpoint, method=method).observe(latency_seconds)
@@ -308,11 +315,22 @@ class FrontendMetricsRecorder(BaseMetricsRecorder):
 
     def record_api_error(self, endpoint: str, method: str, error_type: str) -> None:
         """Record a frontend API error."""
-        normalized_endpoint = self._normalize_endpoint(endpoint)
-        self.api_errors_total.labels(endpoint=normalized_endpoint, method=method, error_type=error_type).inc()
+        self.api_errors_total.labels(
+            endpoint=self._normalize_endpoint(endpoint),
+            method=self._labels.bound("method", method),
+            error_type=self._labels.bound("error_type", error_type),
+        ).inc()
+
+    def _page(self, page: str) -> str:
+        """A page label: query dropped, dynamic segments collapsed, then bounded (#18368)."""
+        return self._labels.bound("page", collapse_dynamic_segments(str(page or "").split("?")[0]))
 
     def _normalize_endpoint(self, endpoint: str) -> str:
-        """Normalize endpoint to prevent high cardinality from dynamic IDs."""
+        """Normalize endpoint to prevent high cardinality from dynamic IDs, then bound it (#18368)."""
+        return self._labels.bound("endpoint", self._collapse_endpoint(endpoint))
+
+    def _collapse_endpoint(self, endpoint: str) -> str:
+        """Drop the query and collapse dynamic path segments."""
         # Remove query parameters
         if "?" in endpoint:
             endpoint = endpoint.split("?")[0]
@@ -330,15 +348,20 @@ class FrontendMetricsRecorder(BaseMetricsRecorder):
 
     def record_js_error(self, error_type: str, page: str) -> None:
         """Record a JavaScript error."""
-        self.js_errors_total.labels(error_type=error_type, page=page).inc()
+        self.js_errors_total.labels(
+            error_type=self._labels.bound("error_type", error_type), page=self._page(page)
+        ).inc()
 
     def record_unhandled_rejection(self, page: str) -> None:
         """Record an unhandled Promise rejection."""
-        self.unhandled_rejections_total.labels(page=page).inc()
+        self.unhandled_rejections_total.labels(page=self._page(page)).inc()
 
     def record_component_error(self, component: str, error_type: str) -> None:
         """Record a Vue component error."""
-        self.errors_by_component_total.labels(component=component, error_type=error_type).inc()
+        self.errors_by_component_total.labels(
+            component=self._labels.bound("component", component),
+            error_type=self._labels.bound("error_type", error_type),
+        ).inc()
 
     # =========================================================================
     # User Interaction Methods
@@ -346,11 +369,16 @@ class FrontendMetricsRecorder(BaseMetricsRecorder):
 
     def record_user_action(self, action_type: str, page: str) -> None:
         """Record a user action/interaction."""
-        self.user_actions_total.labels(action_type=action_type, page=page).inc()
+        self.user_actions_total.labels(
+            action_type=self._labels.bound("action_type", action_type), page=self._page(page)
+        ).inc()
 
     def record_form_submission(self, form_name: str, status: str) -> None:
         """Record a form submission."""
-        self.form_submissions_total.labels(form_name=form_name, status=status).inc()
+        self.form_submissions_total.labels(
+            form_name=self._labels.bound("form_name", form_name),
+            status=self._labels.bound("form_status", status),
+        ).inc()
 
     # =========================================================================
     # Session Methods
@@ -374,11 +402,14 @@ class FrontendMetricsRecorder(BaseMetricsRecorder):
 
     def record_ws_connection_event(self, event: str) -> None:
         """Record a WebSocket connection event."""
-        self.ws_connection_events_total.labels(event=event).inc()
+        self.ws_connection_events_total.labels(event=self._labels.bound("ws_event", event)).inc()
 
     def record_ws_message(self, direction: str, event_type: str) -> None:
         """Record a WebSocket message."""
-        self.ws_messages_total.labels(direction=direction, event_type=event_type).inc()
+        self.ws_messages_total.labels(
+            direction=self._labels.bound("direction", direction),
+            event_type=self._labels.bound("ws_event_type", event_type),
+        ).inc()
 
     # =========================================================================
     # Resource Timing Methods
@@ -386,11 +417,13 @@ class FrontendMetricsRecorder(BaseMetricsRecorder):
 
     def record_slow_resource(self, resource_type: str) -> None:
         """Record a slow resource load."""
-        self.slow_resources_total.labels(resource_type=resource_type).inc()
+        self.slow_resources_total.labels(resource_type=self._labels.bound("resource_type", resource_type)).inc()
 
     def record_resource_load(self, resource_type: str, load_time_seconds: float) -> None:
         """Record resource load time."""
-        self.resource_load_seconds.labels(resource_type=resource_type).observe(load_time_seconds)
+        self.resource_load_seconds.labels(resource_type=self._labels.bound("resource_type", resource_type)).observe(
+            load_time_seconds
+        )
 
     # =========================================================================
     # Critical Issue Methods
@@ -398,7 +431,7 @@ class FrontendMetricsRecorder(BaseMetricsRecorder):
 
     def record_critical_issue(self, issue_type: str) -> None:
         """Record a critical issue from frontend."""
-        self.critical_issues_total.labels(issue_type=issue_type).inc()
+        self.critical_issues_total.labels(issue_type=self._labels.bound("issue_type", issue_type)).inc()
 
 
 __all__ = ["FrontendMetricsRecorder"]

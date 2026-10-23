@@ -88,13 +88,9 @@ _DPKG_STATUS_TRUTH = {
 #: Lines where "does dpkg KNOW this package" is the correct question. Keyed by
 #: exact text rather than line number, so the exemption travels with the line and
 #: dies when the line changes -- see `test_every_exemption_still_exists`.
-_KNOWLEDGE_IS_THE_RIGHT_QUESTION = {
-    'if dpkg -l "${pkg}" &>/dev/null 2>&1; then': (
-        "install.sh's purge loop: `apt-get purge` SHOULD run for a package in `rc` state, "
-        "so dpkg's knowledge is the right test and anchoring on `^ii` would skip exactly "
-        "the packages the loop exists to clean up"
-    ),
-}
+#: Empty since #18653: install.sh's purge loop (the one entry) moved to
+#: scripts/uninstall.sh, which asks dpkg-query for ` installed$` state instead.
+_KNOWLEDGE_IS_THE_RIGHT_QUESTION: dict[str, str] = {}
 
 
 #: Memoized by root (#17411). Widening to `.py` made these enumerations rglob

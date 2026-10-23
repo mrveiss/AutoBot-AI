@@ -417,27 +417,19 @@ async def _init_database() -> None:
 
 
 async def _hydrate_llm_provider_keys() -> None:
-    """Hydrate LLM provider keys from the System vault (#10088 Task 7).
+    """Hydrate provider keys from the System vault (#10088 Task 7) in Phase 1, before any key resolves.
 
-    Runs once, synchronously, in Phase 1 (after the DB is initialised) so
-    ``llm_shared.provider_registry``'s lazy first population -- which can be
-    triggered by the very first request -- always sees a key captured only
-    via the setup wizard (never set as an env var). Env vars always win
-    (skipped entirely when set), so an Ansible-provisioned deployment is
-    unaffected. Best-effort: no root key configured (dev/test) or a DB error
-    must never block startup.
+    The vault wins (#18094). ``hydrate_at_startup`` classifies the vault and never raises: no root
+    key means no vault (keys from env, WARNING); a configured vault that cannot be reached leaves
+    every key refused, never silently from env (ERROR). Only "reachable, key absent" allows env.
     """
     logger.info("[ 17%] Provider Keys: hydrating from System vault...")
-    try:
-        from services.provider_key_vault import hydrate_provider_keys_from_vault
-        from user_management.database import get_async_session_factory
+    from services.provider_key_vault import hydrate_at_startup
+    from user_management.database import get_async_session_factory
 
-        async with get_async_session_factory()() as session:
-            hydrated = await hydrate_provider_keys_from_vault(session)
-        if hydrated:
-            logger.info("[ 17%] Provider Keys: hydrated %d key(s) from vault: %s", len(hydrated), hydrated)
-    except Exception as exc:
-        logger.debug("Provider-key vault hydration skipped (non-critical): %s", exc)
+    hydrated = await hydrate_at_startup(get_async_session_factory)
+    if hydrated:
+        logger.info("[ 17%] Provider Keys: hydrated %d key(s) from vault: %s", len(hydrated), hydrated)
 
 
 async def _init_telemetry_and_redis() -> None:
@@ -560,7 +552,7 @@ async def _init_transcriber_db(app: FastAPI) -> None:
     Skipped entirely when TRANSCRIBER_ENABLED != true.
     Sets ``app.state.transcriber_db``, ``app.state.transcriber_upload_dir``,
     and ``app.state.transcriber_export_dir`` for use by the dependency
-    injection layer (``transcriber.deps.get_db``).
+    injection layer (``transcriber.deps.get_transcriber_db_from_request``).
     """
     import os
     from pathlib import Path as _Path
@@ -870,10 +862,10 @@ async def _run_background_doc_indexing():
 
         # Fix HNSW pickle format after indexing (#1390)
         from autobot_shared.paths import chromadb_data_dir
-        from utils.chromadb_client import _fix_hnsw_pickle_format
+        from utils.chromadb_store_repairs import repair_hnsw_pickles_locked
 
         chroma_path = chromadb_data_dir()
-        _fix_hnsw_pickle_format(chroma_path)
+        await asyncio.to_thread(repair_hnsw_pickles_locked, chroma_path)  # flock wait + fsync: off the loop
     except Exception as e:
         logger.warning("Background doc indexing failed (non-critical): %s", e)
 
@@ -1156,12 +1148,11 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
     logger.info("✅ [ 87%] Graph-RAG: Initializing graph-aware RAG service...")
     try:
         from services.graph_rag_service import GraphRAGService
-        from services.rag_config import RAGConfig
         from services.rag_service import RAGService, register_shared_mesh_components
 
         if app.state.knowledge_base:
-            rag_config = RAGConfig(enable_advanced_rag=True, timeout_seconds=10.0)
-            rag_service = RAGService(knowledge_base=app.state.knowledge_base, config=rag_config)
+            # #18141: the shared RAGConfig -- graph-RAG no longer runs on its own 10 s budget.
+            rag_service = RAGService(knowledge_base=app.state.knowledge_base)
             await rag_service.initialize()
 
             # Build mesh brain components and register them so every RAGService.initialize()
@@ -1172,7 +1163,6 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
             graph_rag_service = GraphRAGService(
                 rag_service=rag_service,
                 memory_graph=memory_graph,
-                graph_weight=0.3,
                 enable_entity_extraction=True,
             )
             app.state.graph_rag_service = graph_rag_service
@@ -1391,7 +1381,7 @@ async def _init_llm_adapters() -> None:
             OpenAIAdapter,
         )
         from llm_shared.adapters.registry import get_adapter_registry
-        from services.provider_key_vault import resolve_provider_key
+        from services.provider_key_vault import registration_refusal, resolve_provider_key
 
         registry = get_adapter_registry()
 
@@ -1405,17 +1395,16 @@ async def _init_llm_adapters() -> None:
         except Exception as exc:
             logger.debug("Ollama adapter registration skipped: %s", exc)
 
-        # OpenAI — registered when API key is set (env wins; else vault, #15276)
-        if resolve_provider_key("OPENAI_API_KEY", getattr(_cfg, "openai_api_key", "") or ""):
-            registry.register(OpenAIAdapter())
-
-        # Anthropic — registered when API key is set (env wins; else vault, #15276)
-        if resolve_provider_key("ANTHROPIC_API_KEY", getattr(_cfg, "anthropic_api_key", "") or ""):
-            registry.register(AnthropicAdapter())
-
-        # Groq — registered when API key is set (env wins; else vault, #15276)
-        if resolve_provider_key("GROQ_API_KEY", getattr(_cfg, "groq_api_key", "") or ""):
-            registry.register(GroqAdapter())
+        # OpenAI, Anthropic, Groq — registered when the key resolves (vault first; env fallback, #15276);
+        # a vault refusal skips that adapter with the reason logged, never the others (#18094).
+        for name, field, adapter_cls in (
+            ("OPENAI_API_KEY", "openai_api_key", OpenAIAdapter),
+            ("ANTHROPIC_API_KEY", "anthropic_api_key", AnthropicAdapter),
+            ("GROQ_API_KEY", "groq_api_key", GroqAdapter),
+        ):
+            with registration_refusal(f"{name} adapter"):
+                if resolve_provider_key(name, getattr(_cfg, field, "") or ""):
+                    registry.register(adapter_cls())
 
         count = len(registry.list_adapters())
         logger.info("[ 97%%] LLM Adapters: %d adapter(s) registered", count)
@@ -1570,9 +1559,9 @@ async def _init_orchestrator(app: FastAPI) -> None:
 
 
 async def _wire_npu_task_queue() -> None:
-    """Wire NPUWorkerManager into the global TaskQueue for per-worker task tracking (#2985).
+    """Wire NPUWorkerManager into the global RedisTaskQueue for per-worker task tracking (#2985).
 
-    TaskQueue._worker_loop already calls assign_task_to_worker / release_worker_task
+    RedisTaskQueue._worker_loop already calls assign_task_to_worker / release_worker_task
     behind an ``if self.npu_worker_manager is not None:`` guard, but the attribute was
     never set to an actual instance — making all tracking code dead (#2944).  This helper
     runs during Phase 2 (non-critical) so that startup is never blocked by NPU issues.
@@ -1939,21 +1928,12 @@ async def _init_plugin_manager(app: FastAPI) -> None:
     Non-critical: failures are logged and do not block startup.
     """
     try:
-        from pathlib import Path
-
         from autobot_shared.plugin_sdk import PluginManager
-        from autobot_shared.ssot_config import config as ssot_config
+        from plugin_paths import plugin_search_dirs, trusted_plugin_roots
+        from services.provider_key_vault import plugin_credential_resolvers
 
-        plugins_root = ssot_config.path.plugins_path
-        plugin_dirs = [
-            plugins_root / "core-plugins",
-            plugins_root / "community-plugins",
-            # Development fallback
-            Path("plugins/core-plugins"),
-            Path("plugins/community-plugins"),
-        ]
-
-        plugin_manager = PluginManager(plugin_dirs)
+        # #18094: the instance that actually runs the plugins gets the origin-bound resolvers too.
+        plugin_manager = PluginManager(plugin_search_dirs(), plugin_credential_resolvers(), trusted_plugin_roots())
         # #13677: stored BEFORE startup. `completed=False` distinguishes exactly
         # one thing — a crashed discovery from an empty tree — and on a crash the
         # manager was discarded before it ever reached app.state, so the only

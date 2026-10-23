@@ -43,11 +43,9 @@ _UNCONVERTED = {
     "autobot-backend/agents/npu_code_search_agent.py": _CEILING,
     "autobot-backend/agents/scope_enforcement.py": "x- prefixed id, unconverted",
     "autobot-backend/api/analytics_continuous_learning.py": _CEILING,
-    "autobot-backend/api/codebase_analytics/duplicate_detector.py": _QUEUED,
     "autobot-backend/code_analysis/auto-tools/playwright_sanitizer.py": _TOOL,
     "autobot-backend/code_analysis/auto-tools/security_deep_sanitizer.py": _TOOL,
     "autobot-backend/code_analysis/auto-tools/security_sanitizer.py": _TOOL,
-    "autobot-backend/code_intelligence/analytics_infrastructure.py": _QUEUED,
     "autobot-backend/services/claim_verifier.py": "claim-text digest, unconverted",
     "autobot-backend/services/npu_client.py": "encodes with errors=replace, a different input form",
 }
@@ -113,7 +111,7 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "one-content-digest-scan",
     discover=_source_population,
-    floor=2580,
+    floor=2702,
     # Mid-window, from REACH.window(): 2730 measured, growth 300 -> 150 of headroom each way.,
     what="non-test python source",
     roots=_ROOTS,

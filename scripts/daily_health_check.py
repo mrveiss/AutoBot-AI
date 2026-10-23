@@ -6,7 +6,6 @@ AutoBot Daily Health Check
 Runs 7-point checklist and posts findings to MVA-12
 """
 
-import json
 import logging
 import os
 import subprocess
@@ -16,7 +15,9 @@ from pathlib import Path
 
 import requests
 
+from autobot_shared.redis_client import require_redis_client
 from autobot_shared.slm_rest_url import rest_url
+from autobot_shared.ssot_config import config as ssot_config
 
 # #14039: the report path is the handoff between this producer and
 # scripts/post_health_check.py, which reads it. Defined once here and imported
@@ -33,9 +34,12 @@ class HealthCheck:
     def __init__(self):
         self.results = {}
         self.issues = []
-        self.backend_url = os.getenv("AUTOBOT_BACKEND_URL", "http://10.255.255.254:8001")
-        self.chromadb_url = os.getenv("CHROMADB_URL", "http://localhost:8100")
-        self.slm_url = os.getenv("SLM_URL", "http://localhost:8000")
+        self.backend_url = os.getenv("AUTOBOT_BACKEND_URL") or ssot_config.backend_url
+        self.chromadb_url = os.getenv("CHROMADB_URL") or (
+            f"http://{ssot_config.vm.chromadb}:{ssot_config.port.chromadb}"
+        )
+        # ssot_config.slm_url already honours an explicit SLM_URL (#9768).
+        self.slm_url = ssot_config.slm_url
 
     def check_service_status(self):
         """Check 1: Services up"""
@@ -220,9 +224,7 @@ class HealthCheck:
         """Check 7: Redis connectivity"""
         logger.info("Checking Redis connectivity...")
         try:
-            import redis
-
-            r = redis.Redis(host="localhost", port=6379, db=0, socket_connect_timeout=5)  # noqa: redis
+            r = require_redis_client(database="main", decode_responses=False)
             r.ping()
             self.results["redis"] = {"status": "OK", "timestamp": datetime.now().isoformat()}
             return True

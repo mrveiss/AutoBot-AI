@@ -122,6 +122,9 @@ export interface TimeoutConfig {
   retryDelay: number;
   /** WebSocket timeout (ms) */
   websocket: number;
+  /** ApiClient circuit breaker: failures before it opens, then the fail-fast window (ms) */
+  circuitFailureThreshold: number;
+  circuitRecoveryMs: number;
 }
 
 /**
@@ -433,6 +436,8 @@ function buildConfig(): AutoBotConfig {
     retryAttempts: getEnvNumber('VITE_API_RETRY_ATTEMPTS', 3),
     retryDelay: getEnvNumber('VITE_API_RETRY_DELAY', 1000),
     websocket: getEnvNumber('VITE_WEBSOCKET_TIMEOUT', 30000),
+    circuitFailureThreshold: getEnvNumber('VITE_CIRCUIT_FAILURE_THRESHOLD', 3),
+    circuitRecoveryMs: getEnvNumber('VITE_CIRCUIT_RECOVERY_MS', 30000),
   };
 
   // DORMANT: VNC browser path replaced by screenshot panel (#1130). Preserved for #5136 re-integration.
@@ -739,9 +744,7 @@ export function getBackendWsUrl(): string {
   return backendUrl.replace(/^http/, 'ws');
 }
 
-/**
- * Get API timeout in milliseconds (backward compatibility).
- */
+/** Get API timeout in milliseconds (backward compatibility). */
 export function getApiTimeout(): number {
   return getConfig().timeout.api;
 }
@@ -830,10 +833,7 @@ export async function discoverService(
   throw new Error(`Service '${serviceName}' not configured in SLM or environment`);
 }
 
-/**
- * Clear the service discovery cache.
- * Useful when services are known to have changed.
- */
+/** Clear the service discovery cache (use when services are known to have changed). */
 export function clearDiscoveryCache(): void {
   discoveryCache.clear();
 }

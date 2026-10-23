@@ -181,3 +181,21 @@
     name: grafana-server
     state: started
     enabled: true
+
+# #18556: ported from install-prometheus-stack.sh verify_installation, which
+# asked Grafana /api/health after starting it. A started unit is not a serving
+# Grafana; flush the pending restart first so the answer is about the new config.
+- name: "Grafana | Apply the pending restart before checking health (#18556)"
+  ansible.builtin.meta: flush_handlers
+  when: monitoring_install_grafana | bool
+
+- name: "Grafana | Ask the running server whether it is healthy (#18556)"
+  ansible.builtin.uri:
+    url: "http://{{ monitoring_local_host }}:{{ grafana_port }}/api/health"
+    return_content: true
+  register: _grafana_health
+  retries: "{{ grafana_health_check_retries }}"
+  delay: "{{ grafana_health_check_delay }}"
+  until: _grafana_health.status | default(0) == 200
+  changed_when: false
+  when: monitoring_install_grafana | bool

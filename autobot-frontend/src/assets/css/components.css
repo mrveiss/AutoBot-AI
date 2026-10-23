@@ -1047,3 +1047,22 @@
 .detail-fetch-error {
   color: var(--color-error);
 }
+
+/* ============================================================
+ * UI MODE (#18240) — Minimal hides advanced-only chrome
+ * ============================================================
+ * `data-ui` on <html> is written only by composables/useUiMode.ts. `.adv`
+ * marks advanced-only chrome; `.only-min` marks the "Showing essentials" note
+ * that is visible in Minimal only. Specificity (0,2,1) beats a bare display
+ * utility on the same element, so no !important is needed. Hidden pages still
+ * open from direct links: this hides chrome, it never gates a route.
+ */
+html[data-ui="minimal"] .adv {
+  display: none;
+}
+.only-min {
+  display: none;
+}
+html[data-ui="minimal"] .only-min {
+  display: flex;
+}

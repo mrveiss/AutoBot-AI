@@ -31,6 +31,8 @@ from dataclasses import dataclass, field
 from typing import Any, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
+from knowledge.provenance import document_origin
+from knowledge.search_filters import KbPrincipal
 from services.context_sufficiency import (
     SufficiencyVerdict,
     get_context_sufficiency_evaluator,
@@ -140,6 +142,7 @@ class AgenticSearchTool:
         max_results: int = 5,
         context: str | None = None,
         categories: List[str] | None = None,
+        principal: KbPrincipal,
     ) -> str:
         """Search the knowledge base and return plain-text context.
 
@@ -152,13 +155,14 @@ class AgenticSearchTool:
             max_results:  Maximum results to retrieve per search pass.
             context:      Optional conversation context for query rewriting.
             categories:   Optional knowledge-base category filter list.
+            principal:    Who is asking, or SYSTEM_SCOPE; results are limited to what it may read (#16664).
 
         Returns:
             Plain-text string of assembled context passages, or an empty
             string when no relevant content is found.
         """
         if not self.config.enable_agentic_search:
-            return await self._simple_search(query, max_results, categories)
+            return await self._simple_search(query, max_results, categories, principal)
 
         effective_query = query
         if self.config.rewrite_enabled:
@@ -168,6 +172,7 @@ class AgenticSearchTool:
             effective_query,
             max_results=max_results,
             categories=categories,
+            principal=principal,
         )
         return self._format_results(results)
 
@@ -219,6 +224,7 @@ class AgenticSearchTool:
         *,
         max_results: int = 5,
         categories: List[str] | None = None,
+        principal: KbPrincipal,
     ) -> Tuple[list, dict]:
         """Run up to max_search_iterations search rounds with sufficiency checking.
 
@@ -231,6 +237,7 @@ class AgenticSearchTool:
             query:       Starting query (possibly already rewritten).
             max_results: Maximum results to retrieve per pass.
             categories:  Optional knowledge-base category filter.
+            principal:   Who is asking, or SYSTEM_SCOPE (#16664).
 
         Returns:
             Tuple of (final_results_list, metrics_dict).  Metrics contains:
@@ -249,6 +256,7 @@ class AgenticSearchTool:
                 current_query,
                 max_results=max_results,
                 categories=categories,
+                principal=principal,
             )
 
             logger.debug(
@@ -301,12 +309,14 @@ class AgenticSearchTool:
         query: str,
         max_results: int,
         categories: List[str] | None,
+        principal: KbPrincipal,
     ) -> str:
         """Direct pass-through to RAGService when agentic search is disabled."""
         results, _ = await self.rag_service.advanced_search(
             query,
             max_results=max_results,
             categories=categories,
+            principal=principal,
         )
         return self._format_results(results)
 
@@ -389,7 +399,14 @@ class AgenticSearchTool:
             if hasattr(r, "source_path") and r.source_path:
                 source = f" [{r.source_path}]"
             elif hasattr(r, "metadata") and isinstance(r.metadata, dict):
-                source = f" [{r.metadata.get('source', r.metadata.get('source_path', ''))}]"
+                # The writer's own `source` is the label users already see in citations;
+                # the accessor only fills the gap where a leg wrote none (a connector).
+                label = (
+                    r.metadata.get("source")
+                    or document_origin(r.metadata).reference
+                    or r.metadata.get("source_path", "")
+                )
+                source = f" [{label}]"
             content = r.content if hasattr(r, "content") else str(r)
             parts.append(f"[{i}]{source}\n{content}")
 
@@ -443,6 +460,7 @@ async def knowledge_search_tool(
     context: str | None = None,
     categories: List[str] | None = None,
     config: AgenticSearchConfig | None = None,
+    principal: KbPrincipal,
 ) -> str:
     """Module-level callable for registering as an LLM tool in the chat graph.
 
@@ -457,6 +475,7 @@ async def knowledge_search_tool(
         context:     Optional conversation context for query rewriting.
         categories:  Optional knowledge-base category filter.
         config:      Optional AgenticSearchConfig override.
+        principal:   Who is asking, or SYSTEM_SCOPE (#16664). Required: the tool is a shared singleton.
 
     Returns:
         Plain-text context string from the knowledge base.
@@ -467,4 +486,5 @@ async def knowledge_search_tool(
         max_results=max_results,
         context=context,
         categories=categories,
+        principal=principal,
     )

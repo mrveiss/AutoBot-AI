@@ -20,7 +20,7 @@ from auth_middleware import get_current_user
 from auth_rbac import require_role
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
-from services.event_log import EventType, emit
+from services.audit.audit import ComplianceEventType, emit_compliance
 
 logger = get_logger(__name__)
 
@@ -30,7 +30,8 @@ bundle_me_router = APIRouter(tags=["voice", "rbac"])
 # Router for admin operations
 bundle_admin_router = APIRouter(prefix="/admin", tags=["admin", "voice", "rbac"])
 
-# Combined router for feature_routers.py discovery (GH#8605)
+# Combined router (GH#8605). NOT mounted: core_routers.py mounts bundle_me_router and
+# bundle_admin_router directly (#17325); mounting this too would register every route twice.
 router = APIRouter()
 router.include_router(bundle_me_router, prefix="/voice")
 router.include_router(bundle_admin_router)
@@ -164,9 +165,9 @@ async def set_user_bundle(
         raise HTTPException(status_code=500, detail="Database error") from exc
 
     # Audit log
-    emit(
-        EventType.CONFIG_CHANGED,
-        user_id=str(admin_id),
+    emit_compliance(
+        ComplianceEventType.CONFIG_CHANGED,
+        str(admin_id),
         resource_type="user_voice_bundle",
         resource_id=user_id,
         metadata={

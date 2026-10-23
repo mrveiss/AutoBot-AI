@@ -699,7 +699,7 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
                 conversation_history=session.conversation_history or [],
                 top_k=5,
                 score_threshold=0.3,  # Issue #1526: lowered from 0.7
-                force_retrieval=False,
+                principal=session.kb_principal(),  # #16664: retrieve as the turn's user
             )
             if knowledge_context:
                 logger.info(
@@ -884,51 +884,9 @@ NEVER teach commands - ALWAYS execute them.""" + lang_instruction
         # When false the pre-existing unconditional EssentialStory path is used.
         # Issue MVA-1992: Skip memory graph lookup when lightweight_mode=True.
         if not lightweight_mode:
-            try:
-                from chat_history.layers import TIERED_CONTEXT_ENABLED, TieredContextBuilder
+            from chat_workflow import tiered_context_sources as tcs
 
-                if TIERED_CONTEXT_ENABLED:
-                    # #13686: the memory graph was read off an object that never
-                    # had it, so L2 returned "" on every turn. #13687/#13704: the
-                    # goal ancestry comes from the *server-side* session binding,
-                    # never the request body, and both hops are company-scoped.
-                    # Both resolvers degrade to None rather than failing the turn.
-                    from chat_workflow.tiered_context_sources import (
-                        resolve_goal_ancestry,
-                        resolve_memory_graph,
-                    )
-
-                    tiered_ctx = await TieredContextBuilder().build(
-                        user_message=message,
-                        model_name=selected_model,
-                        session_id=session.session_id,
-                        memory_graph=await resolve_memory_graph(),
-                        # #13742: deliberately NOT self.knowledge_service. The RAG
-                        # path below (:914) retrieves for every use_knowledge turn
-                        # via the same conversation_aware_retrieve L3 would call,
-                        # then applies budget_grounded_context for trimming and
-                        # citation rebinding (#3770/#10837). Handing L3 the service
-                        # here bought a second identical vector search and the same
-                        # chunks twice in the prompt — with the copy inside the
-                        # tiered block escaping that budgeting entirely.
-                        #
-                        # L3 keeps its retrieval path for callers that have no
-                        # separate RAG stage; at this call site the main path owns
-                        # retrieval, so L3 correctly stays silent.
-                        knowledge_service=None,
-                        goal_ancestry=await resolve_goal_ancestry(session.session_id),
-                    )
-                    if tiered_ctx:
-                        system_prompt = tiered_ctx + "\n\n" + system_prompt
-                else:
-                    # Issue #3787: legacy always-loaded compact memory summary.
-                    from memory.essential_story import EssentialStoryGenerator
-
-                    story = await EssentialStoryGenerator().generate(model_name=selected_model)
-                    if story:
-                        system_prompt = story + "\n\n" + system_prompt
-            except Exception as _ctx_exc:
-                logger.warning("Context injection failed: %s", _ctx_exc)
+            system_prompt = await tcs.prepend_memory_context(system_prompt, session, message, selected_model)
         system_prompt = await _emit_system_prompt_ready(system_prompt, session)
         conversation_context = self._build_conversation_context(session)
 

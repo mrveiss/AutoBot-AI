@@ -12,7 +12,7 @@
 
     <div class="file-actions">
       <BaseButton
-        variant="outline-solid"
+        variant="outline"
         size="sm"
         @click="$emit('new-folder')"
         :aria-label="$t('fileBrowser.header.newFolder')"
@@ -20,7 +20,7 @@
         <Icon name="folder" /> {{ $t('fileBrowser.header.newFolder') }}
       </BaseButton>
       <BaseButton
-        variant="outline-solid"
+        variant="outline"
         size="sm"
         @click="$emit('upload')"
         :aria-label="$t('fileBrowser.header.uploadFile')"
@@ -33,7 +33,7 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 import FilePathNavigation from './FilePathNavigation.vue'
 
 interface Props {

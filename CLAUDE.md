@@ -1,9 +1,8 @@
 # AutoBot Development Instructions
 
 Index plus the rules that are catastrophic to miss. Everything else is in `docs/developer/` —
-read a doc when its trigger fires, not before. Universal rules (worktree mandate, issue
-decomposition, evidence, model tiers, never-idle) live in the global instructions and are not
-repeated here; where the two disagree, **this file wins**.
+read a doc when its trigger fires, not before. Universal rules (worktree mandate, evidence, never-idle) live in the
+global instructions and are not repeated here; where the two disagree, **this file wins**.
 
 ## Read when triggered
 
@@ -12,7 +11,7 @@ repeated here; where the two disagree, **this file wins**.
 | Starting a task — the 8 core rules in full | [`CLAUDE_RULES.md`](docs/developer/CLAUDE_RULES.md) |
 | Branching, worktree collisions, stashing, force-push, push recovery | [`CLAUDE_GIT.md`](docs/developer/CLAUDE_GIT.md) |
 | Labels, `gh` workarounds, deployment, pre-merge gates | [`CLAUDE_WORKFLOW.md`](docs/developer/CLAUDE_WORKFLOW.md) |
-| Opening, reviewing, or merging a PR (incl. the required body headings) | [`CLAUDE_REVIEW.md`](docs/developer/CLAUDE_REVIEW.md) |
+| Batching issues, or opening, pushing, reviewing or merging a PR (incl. the required body headings) | [`CLAUDE_REVIEW.md`](docs/developer/CLAUDE_REVIEW.md) |
 | Closing an issue | [`CLAUDE_CLOSURE.md`](docs/developer/CLAUDE_CLOSURE.md) |
 | Running parallel agents or a batch | [`CLAUDE_BATCH.md`](docs/developer/CLAUDE_BATCH.md) |
 | Need a service, port, or architecture fact | [`AUTOBOT_REFERENCE.md`](docs/developer/AUTOBOT_REFERENCE.md) |
@@ -40,15 +39,10 @@ symbol, on extraction PRs · 8 Outbound HTTP goes through the guarded fetch (egr
 
 ## Never violate
 
-- **Before acting on a measurement, name what it is about.** Which environment, which path, which
-  symbol, which question. `MEASUREMENT_DISCIPLINE.md` family **F** — *correct, complete, and about
-  a different question* — is the one that reads as a clean answer, so the doc does not fire unless
-  you already suspect it. Discriminator: **would more data change the answer?** If no, it is F. A
-  version is not a fact until the venv is named; a symbol is not absent until the concept is
-  searched; a `0` from a failed command is not a measurement.
-- **Say "I don't know" — never fabricate.** But an admission is not a closure — it is an opening: it means *"I need help, let's find this together"*, so **ask right then** in an interactive session, and where there is nobody to ask leave the criterion unticked, file it, and never drop it. A *stated* gap is a finding; an *unstated* one is the defect. A guessed cause, count or verdict is the one error treated as serious — for an agent a wrong answer is not an opinion, it executes. "I could not determine X" is a contribution. Guards and reports distinguish *nothing found* from *did not look*. See [`MEASUREMENT_DISCIPLINE.md`](docs/developer/MEASUREMENT_DISCIPLINE.md).
+- **Before acting on a measurement, name what it is about** — environment, path, symbol, question. Family **F** (*correct, complete, about a different question*) reads as a clean answer: if more data would not change it, it is F → `MEASUREMENT_DISCIPLINE.md`.
+- **Say "I don't know" — never fabricate.** A guessed cause, count or verdict is the one error treated as serious; an admission is an opening, not a closure → [`MEASUREMENT_DISCIPLINE.md`](docs/developer/MEASUREMENT_DISCIPLINE.md#a-stated-gap-is-a-finding-never-a-closure).
 - **PRs target `main`; `release` is the release branch.** `release`/`master` are blocked by the pre-commit hook — use `issue-*` or `hotfix-*`.
-- **Never work from a stale base** — and the half that bites is the judgement, not the freshness. Answer "is this already done?" against current `origin/main` and the issue's acceptance criteria, **never against an old branch**: a stale answer points toward doing *more* work, so nothing pushes back on it, and reviving such a branch can regress newer code. `git fetch origin` and branch from (or rebase onto) current base before the first edit — the auto-update bot only refreshes branches that already have a PR, so the window this covers is everything before the first push.
+- **Never work from a stale base.** `git fetch origin` and branch from current base before the first edit; answer "is this already done?" against current `origin/main` and the issue's ACs, **never an old branch** → `CLAUDE_GIT.md`.
 - **Commit format:** `<type>(scope): <description> (#issue-number)`. Never `--no-verify` — a PostToolUse hook auto-formats `.py`.
 - **Never hardcode.** Config via SSOT, TTLs via env-var-backed module constants, no IPs or ports in code.
 - **The codebase is the source of truth** — never edit `/opt/autobot/` or `/var/log/autobot/`.
@@ -57,10 +51,7 @@ symbol, on extraction PRs · 8 Outbound HTTP goes through the guarded fetch (egr
 - **Security reviews are findings-first** — one-line verdict, then a severity/`file:line`/issue/fix table, within 3 tool calls. Verify *after*; never explore before the verdict lands. Skill: `secreview`.
 - **Nothing internal in outward artifacts** — no IPs, hostnames, secrets, tokens, or internal filesystem paths in issues, PRs, comments or logs. Redact to a generic role or node reference.
 - **Open-PR cap:** `AUTOBOT_OPEN_PR_CAP` (default 40), enforced at pre-push for new branches — at the cap, finish, merge, or close before starting new work; every PR still gets a `code-reviewer` pass before merge.
-- **Batch same-scope issues into one PR by default** — one CI suite per batch, not per issue. Each issue must still be *fully* delivered; partial delivery never closes. Independent or different-risk changes get separate PRs, as does anything too large for one honest review pass. Write **one `Closes #N` per line** — `Closes #A, #B` links only #A.
-- **Finish what you started — append before you open** (owner rule 2026-09-19). Before opening a new PR, check for an open PR the change can be appended to (same scope, risk, owner) and append; fix and land existing PRs before opening new ones; finish started issues before starting new ones.
-- **Issues touching the same file go in ONE PR, solved by ONE agent** (owner rule 2026-09-18). Hub files — registries, ratchet baselines, `.secrets.baseline`, `.github/`, `CLAUDE.md` — are exempt; one agent may split sequentially, the next PR opening after the previous merges. Check the open PRs touching a file before editing it.
-- **A pushed PR ends the tick — never wait on its CI.** Pushing is the sweep point: check every *other* in-flight PR once (approval gate, CI verdict, behind-ness), act on what is green or red, then start the next non-colliding scoped issue immediately. The PR just pushed is re-checked at the next sweep, never polled.
+- **Same file ⇒ ONE PR, ONE agent** — check the open PRs touching a file before editing it; batching, append-before-open and the sweep point → [`CLAUDE_REVIEW.md`](docs/developer/CLAUDE_REVIEW.md#pr-granularity).
 
 ## When rules conflict
 
@@ -79,15 +70,7 @@ Rules here accumulate; some pull against each other. **Precedence, highest first
    a thing the process wants closed.
 4. **Everything else**, in the order it appears.
 
-**The PR-granularity rules agree on "fewer PRs" and disagree on the unit.** Resolve in this order:
-
-    same file      -> ONE PR, ONE agent        (strongest: avoids conflicts, not just CI cost)
-    same scope     -> batch into one PR
-    same issue     -> one branch, never split
-    already open   -> append rather than open a new one
-
-When two apply, the **earlier line wins**. Hub files — registries, ratchet baselines,
-`.secrets.baseline`, `.github/`, `CLAUDE.md` — are exempt from the file rule, as stated below.
+**PR-granularity conflicts** (same file vs same scope vs append) → [`CLAUDE_REVIEW.md`](docs/developer/CLAUDE_REVIEW.md#pr-granularity).
 
 **Known conflict, unresolved by design:** *finish everything* and *one PR's CI at a time* cannot
 both hold at a queue depth above one. Serialization wins while it is in force; the completion goal
@@ -98,12 +81,11 @@ and will read as permanent failure.
 ## Git/PR Workflow
 
 ### Pre-Push Checklist (non-negotiable)
-1. Commit subject includes the issue reference — see commit format under **Never violate**.
-2. No file exceeds `MAX_LINES` (600, enforced by `check_python_file_size.py`) — split, don't
+1. No file exceeds `MAX_LINES` (600, enforced by `check_python_file_size.py`) — split, don't
    raise the ceiling; see [`RATCHET_BASELINES.md`](docs/developer/RATCHET_BASELINES.md).
-3. Run the repo's lint/type-check locally before pushing — don't rely on `/pre-merge-validate`
+2. Run the repo's lint/type-check locally before pushing — don't rely on `/pre-merge-validate`
    at review time to catch it first.
-4. Never bypass pre-commit hooks via `core.hooksPath` or `--no-verify` — see **Never violate**.
+3. Never bypass pre-commit hooks via `core.hooksPath` (`--no-verify` is under **Never violate**).
 
 ## Verification
 

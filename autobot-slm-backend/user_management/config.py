@@ -15,12 +15,18 @@ Credentials are injected via /etc/autobot/db-credentials.env (Ansible-managed).
 import os
 from dataclasses import dataclass
 
+from autobot_shared.secret_redaction import redact_value
 
-@dataclass
+
+@dataclass(repr=False)
 class DatabaseConfig:
     """Database connection configuration."""
 
     url: str
+
+    def __repr__(self) -> str:
+        """Mask the DSN password via the shared redactor (``RedactedReprMixin`` is pydantic-only)."""
+        return f"{type(self).__name__}(url={redact_value('url', self.url)!r})"
 
     @property
     def sync_url(self) -> str:
@@ -70,16 +76,17 @@ def get_autobot_db_config() -> DatabaseConfig:
 
 def _build_url(host: str, port: str, database: str, user: str, password: str) -> str:
     """Build async PostgreSQL connection URL from components."""
-    return f"postgresql+asyncpg://{user}:{password}" f"@{host}:{port}/{database}"
+    credentials = f"{user}:{password}" if password else user
+    return f"postgresql+asyncpg://{credentials}@{host}:{port}/{database}"
 
 
 @dataclass
-class DeploymentConfig:
+class RbacDeploymentConfig:
     """Deployment configuration for RBAC middleware."""
 
     postgres_enabled: bool = True
 
 
-def get_deployment_config() -> DeploymentConfig:
+def get_rbac_deployment_config() -> RbacDeploymentConfig:
     """Get deployment configuration. SLM always uses PostgreSQL."""
-    return DeploymentConfig(postgres_enabled=True)
+    return RbacDeploymentConfig(postgres_enabled=True)

@@ -242,8 +242,7 @@
 import { onBeforeUnmount, ref, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { withTimeout } from '@/utils/withTimeout'
-import BaseButton from '@/components/base/BaseButton.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 
 const logger = createLogger('TerminalModals')

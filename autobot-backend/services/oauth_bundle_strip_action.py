@@ -26,6 +26,7 @@ from models.approval import ApprovalComment
 from services import oauth_bundle_strip
 from services.approval_execution import register_post_approval_action
 from services.audit_logger import audit_log
+from services.secrets_backup_verifier import verify_backup
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -48,17 +49,6 @@ def _comment_body(report: oauth_bundle_strip.StripReport, *, completed: bool) ->
 
 
 NO_VERIFIABLE_BACKUP = "no verifiable secrets-store backup (#18281)"
-
-
-def verify_backup(reference: str) -> bool:
-    """Whether *reference* names a real, existing backup of the secrets store.
-
-    There is no secrets-store backup mechanism to check against yet (#18281), so
-    this verifies nothing and returns False: the strip fails closed and cannot
-    execute on unverified text. When #18281 lands, this is the one seam to wire
-    to it. There is deliberately no flag or setting that skips this check.
-    """
-    return False
 
 
 async def _write_refusal(approval: "Approval", session: "AsyncSession", reason: str) -> None:
@@ -115,7 +105,7 @@ async def execute_oauth_bundle_strip(approval: "Approval", session: "AsyncSessio
     context = approval.context or {}
     if not str(context.get("backup_reference") or "").strip():
         raise ValueError(f"approval {approval.id} names no backup_reference -- refusing to rewrite credentials")
-    if not verify_backup(str(context["backup_reference"]).strip()):
+    if not await verify_backup(str(context["backup_reference"]).strip()):
         await _write_refusal(approval, session, NO_VERIFIABLE_BACKUP)
         raise ValueError(f"approval {approval.id}: {NO_VERIFIABLE_BACKUP} -- refusing to rewrite credentials")
     report = oauth_bundle_strip.StripReport()

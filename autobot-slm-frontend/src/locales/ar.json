@@ -14,7 +14,7 @@
     "availableRolesAria": "Available roles",
     "cancel": "إلغاء",
     "closeDialogAria": "إغلاق مربع الحوار",
-    "connectionFailed": "Connection Failed",
+    "connectionFailed": "فشل الاتصال",
     "connectionInformation": "Connection Information",
     "connectionSuccessful": "Connection Successful",
     "deployPKICertificatesAfter": "Deploy PKI certificates after update",
@@ -344,7 +344,7 @@
     "runRsyncFromTo": "Run rsync from {source} to {dest}",
     "running": "Running...",
     "sLMManagerRestarting": "SLM Manager Restarting",
-    "schedule": "Schedule",
+    "schedule": "الجدولة",
     "scheduledUpdates": "Scheduled Updates",
     "showDetails": "Show details",
     "slmSelfUpdateStage": "SLM server",
@@ -693,7 +693,7 @@
     },
     "nPUDetailsPanel": {
       "alertOnly": "Alert Only",
-      "available": "Available",
+      "available": "متاح",
       "avgLatency": "Avg Latency",
       "close": "إغلاق",
       "currentUtilization": "Current Utilization",
@@ -714,7 +714,8 @@
       "memory": "Memory",
       "modelsCount": "Models ({count})",
       "noModelsDetected": "No models detected",
-      "pending": "في الانتظار",
+      "notAvailable": "N/A",
+      "pending": "Pending",
       "priority110": "Priority (1-10)",
       "queueDepthValue0Requests": "Queue Depth: {value0} requests",
       "refreshStatus": "Refresh Status",
@@ -907,7 +908,7 @@
     "closeServicesPanelAria": "Close services panel",
     "confirmReboot": "Reboot node \"{hostname}\"? The node will go offline temporarily.",
     "confirmReenroll": "Re-enroll node \"{hostname}\"? This will reset it to pending status for fresh enrollment.",
-    "connectionFailed": "Connection Failed",
+    "connectionFailed": "فشل الاتصال",
     "connectionSuccessful": "Connection Successful",
     "connectionTestResultAria": "Connection test result",
     "cpu": "CPU",
@@ -932,8 +933,6 @@
     "nPUWorkersAria": "NPU workers",
     "noNodesRegistered": "No nodes registered",
     "nodeDetails": "Node Details",
-    "nodeDetailsPanelAria": "Node details panel",
-    "nodeServicesPanelAria": "Node services panel",
     "nodes": "Nodes",
     "nodesOverviewAria": "Nodes overview",
     "realTimeHealthStatus": "Real-time health status of all managed nodes",
@@ -1144,7 +1143,7 @@
       "recommendationsValue0": "Recommendations ({value0})",
       "refresh": "تحديث",
       "totalAlerts": "Total Alerts",
-      "warning": "Warning",
+      "warning": "تحذير",
       "recommendationsUnavailable": "Recommendations are not available yet: the SLM has no source for them."
     },
     "errorMonitor": {
@@ -1182,7 +1181,8 @@
       "trend": "Trend",
       "type": "النوع",
       "unresolved": "Unresolved",
-      "resolvedByAt": "By {by} at {at}"
+      "resolvedByAt": "By {by} at {at}",
+      "paginationAria": "Error list pages"
     },
     "fleetMetricsCard": {
       "acrossValue0Nodes": "Across {value0} nodes",
@@ -1250,7 +1250,7 @@
         "severityDebug": "Debug",
         "severityError": "خطأ",
         "severityInfo": "معلومات",
-        "severityWarning": "Warning",
+        "severityWarning": "تحذير",
         "showingCountOfTotalEntries": "Showing {count} of {total} entries",
         "time": "Time"
       },
@@ -1326,6 +1326,107 @@
       "services": "Services",
       "systemHealth": "System Health",
       "systemMonitoring": "مراقبة النظام"
+    },
+    "agentLedger": {
+      "title": "سجل الوكلاء",
+      "subtitle": "Every company's agent coordination: shared resources, claims, conflicts and dev-loop history.",
+      "refresh": "تحديث",
+      "tabsAria": "طرق عرض السجل",
+      "tabs": {
+        "now": "يعمل الآن",
+        "contention": "التنافس",
+        "claims": "الحجوزات",
+        "conflicts": "التعارضات",
+        "devLoop": "Dev loop",
+        "activity": "النشاط"
+      },
+      "col": {
+        "scope": "النطاق",
+        "agent": "Agent",
+        "company": "Company",
+        "mode": "الوضع",
+        "intent": "الغرض",
+        "expires": "ينتهي",
+        "renewals": "التجديدات",
+        "kind": "النوع",
+        "status": "الحالة",
+        "task": "المهمة الحالية",
+        "detail": "التفاصيل"
+      },
+      "installWide": "Install-wide",
+      "heldBy": "Held by {agent} ({company})",
+      "waiting": "{n} waiting",
+      "waitlistAria": "قائمة الانتظار بالترتيب",
+      "silenceMeansHold": "الطلب ليس إفراجاً: الصمت يعني الاحتفاظ، والحجز غير المجدد ينتهي من تلقاء نفسه.",
+      "ask": "اطلب من المالك الإفراج",
+      "askAria": "اطلب من مالك {scope} الإفراج عنه",
+      "askState": {
+        "sending": "جارٍ الإرسال…",
+        "sent": "أُرسل الطلب — القرار للمالك؛ الصمت يعني الاحتفاظ.",
+        "tooSoon": "سألت عن هذا الحجز للتو؛ حاول مرة أخرى بعد دقيقة.",
+        "notFound": "لم تعد هذه المهمة تحتفظ بالحجز — حدّث الصفحة لترى من يحتفظ به الآن.",
+        "unavailable": "تعذّر الوصول إلى السجل؛ لم يُرسل شيء.",
+        "error": "حدث خطأ ولم يمكن تأكيد التسليم. حدّث الصفحة لمعرفة ما إذا كانت المطالبة لا تزال محجوزة."
+      },
+      "conflict": {
+        "release_refused": "رُفض إفراج",
+        "claim_expired": "انتهى حجز أثناء الاحتفاظ به",
+        "yield_unanswered": "بقي طلب تنازل بلا رد",
+        "claim_lapsed_during_action": "انتهى حجز أثناء إجراء"
+      },
+      "devLoop": {
+        "issue": "Issue",
+        "choose": "Choose an issue",
+        "col": {
+          "at": "When",
+          "intent": "الغرض",
+          "outcome": "Outcome",
+          "tokens": "Estimated tokens",
+          "reason": "السبب"
+        }
+      },
+      "empty": {
+        "contention": "لا يوجد تنافس",
+        "claims": "لا توجد حجوزات",
+        "conflicts": "لا توجد تعارضات",
+        "activity": "لا يوجد نشاط حديث",
+        "devLoop": "No dev-loop history",
+        "devLoopActions": "No actions recorded for this issue",
+        "presence": "لم يبلّغ أي وكيل",
+        "peerMessages": "لا توجد رسائل معلقة",
+        "idleSubscribers": "لا توجد اشتراكات خمول"
+      },
+      "notes": {
+        "title": "What this view cannot see",
+        "storeDown": "Couldn't read the {source} store just now. Its entries are missing here, not empty.",
+        "sourcesUnknown": "Couldn't check which ledger sources are readable.",
+        "peerIdentity": "Agents have no per-peer identity yet: an agent that is refused an action can ask another agent to do it (#16950).",
+        "busAuth": "Messages between agents are not authenticated yet, so this view cannot prove who sent one (#16962)."
+      },
+      "source": {
+        "presence": "agent presence",
+        "ai_stack_agents": "AI-stack agents",
+        "live_sessions": "live sessions",
+        "peer_messages": "pending peer messages",
+        "idle_subscribers": "idle subscriptions",
+        "claims": "claims",
+        "waitlists": "waitlists",
+        "events": "ledger activity",
+        "dev_loop": "dev-loop history"
+      },
+      "state": {
+        "loading": "جارٍ قراءة السجل…",
+        "unavailableTitle": "تعذّرت قراءة السجل",
+        "unavailableBody": "لم يستجب مخزن {source}. هذا ليس مثل عدم وجود إدخالات.",
+        "errorTitle": "حدث خطأ أثناء تحميل هذا القسم"
+      },
+      "busy": "مشغول",
+      "idle": "خامل",
+      "peerMessages": "رسائل الأقران المعلقة",
+      "idleSubscribers": "اشتراكات الخمول",
+      "pendingFor": "{n} معلقة لـ {name}",
+      "sentBy": "من {names}",
+      "waitsForIdle": "{who} ينتظر حتى يصبح {target} خاملاً"
     }
   },
   "monitoringView": {
@@ -1334,7 +1435,17 @@
     "monitoring": "المراقبة",
     "monitoringSections": "Monitoring sections",
     "systemHealthStatusAria": "System health: {status}",
-    "value0AlertPlural": "{value0} Alert{plural}"
+    "value0AlertPlural": "{value0} Alert{plural}",
+    "tabs": {
+      "system": "النظام",
+      "logs": "Logs",
+      "dashboards": "Dashboards",
+      "alerts": "Alerts",
+      "errors": "الأخطاء",
+      "backendHealth": "Backend Health",
+      "performance": "الأداء",
+      "agentLedger": "سجل الوكلاء"
+    }
   },
   "orchestration": {
     "nodeHealthCard": {
@@ -1400,7 +1511,7 @@
     "fleetNodes": "Fleet Nodes",
     "fleetServices": "Fleet Services",
     "fleetWideActions": "Fleet-Wide Actions",
-    "full": "Full",
+    "full": "كامل",
     "full2": "full",
     "gPUInferenceOffloadingBackendFallsBack": "GPU inference offloading — backend falls back to local Ollama",
     "healthy": "✓ Healthy",
@@ -1499,7 +1610,8 @@
     "value0AnsibleMigrationOf": "{value0} Ansible migration of",
     "value0Nodes": "({value0} nodes)",
     "value0OnlineValue1Offline": "{value0} online, {value1} offline",
-    "value0Required": "{value0} (required)"
+    "value0Required": "{value0} (required)",
+    "serviceCount": "{count} service | {count} services"
   },
   "performance": {
     "alertRulesView": {
@@ -1605,7 +1717,8 @@
       "status1": "الحالة",
       "time": "Time:",
       "time1": "Time",
-      "value0TracePlural": "{value0} trace{plural}"
+      "value0TracePlural": "{value0} trace{plural}",
+      "paginationAria": "Trace list pages"
     }
   },
   "performanceView": {
@@ -1682,7 +1795,7 @@
     "manageRedisMasterReplica": "Manage Redis master-replica replication with Ansible orchestration",
     "newReplication": "New Replication",
     "noReplicationsConfiguredYet": "No replications configured yet. Click \"New Replication\" to set up master-replica replication.",
-    "pending": "في الانتظار",
+    "pending": "Pending",
     "primary": "Primary",
     "promoteToPrimary": "Promote to Primary",
     "promoteToPrimary2": "Promote to primary",
@@ -1751,7 +1864,6 @@
     "syncRoleAria": "Sync {roleName}",
     "thisRoleMayContain": "This role may contain data. You can back it up before removal.",
     "thisWillStopAnd": "This will stop and remove the service from the node.",
-    "times": "×",
     "version": "Version"
   },
   "rolesView": {
@@ -1771,7 +1883,7 @@
     "displayName": "Display Name",
     "edit": "تعديل",
     "editRoleTitle": "Edit Role: {name}",
-    "full": "Full",
+    "full": "كامل",
     "health": "صحة المعرفة",
     "healthCheckPath": "Health Check Path",
     "healthCheckPort": "Health Check Port",
@@ -1788,7 +1900,7 @@
     "offline": "Offline",
     "online": "Online",
     "optionalRoleWithout": "⚠ Optional role. Without it: {detail}",
-    "pending": "في الانتظار",
+    "pending": "Pending",
     "placeholderAnsiblePlaybook": "deploy-backend.yml",
     "placeholderDisplayName": "e.g. Redis Server",
     "placeholderHealthCheckPath": "/health",
@@ -1902,7 +2014,7 @@
     "enableTlsForAria": "Enable TLS for {service}",
     "enablingTLS": "Enabling TLS...",
     "enterNodeID": "Enter node ID",
-    "expires": "Expires",
+    "expires": "ينتهي",
     "expiringSoon30d": "Expiring Soon (30d)",
     "expiry": "Expiry",
     "failed": "فشل",
@@ -1991,13 +2103,14 @@
     "uploadTLSCertificate": "Upload TLS Certificate",
     "user": "User",
     "value0Violations": "{value0} violations",
-    "whatHappensWhenYouEnableTLS": "What happens when you enable TLS?"
+    "whatHappensWhenYouEnableTLS": "What happens when you enable TLS?",
+    "paginationAria": "Security list pages"
   },
   "settings": {
     "aPISettings": {
       "aPIEndpoints": "API Endpoints",
       "autoBotBackendProxied": "AutoBot Backend (Proxied)",
-      "backendAPI": "Backend API",
+      "backendAPI": "واجهة برمجة الخادم",
       "configurationReference": "Configuration Reference",
       "connectionStatus": "Connection Status",
       "copyToClipboard": "Copy to clipboard",
@@ -2201,13 +2314,32 @@
         "update": "Update",
         "username": "اسم المستخدم",
         "varLogAutobotForwardedLog": "/var/log/autobot-forwarded.log",
-        "warning": "Warning",
-        "statusUnknown": "غير معروف"
+        "warning": "تحذير",
+        "statusUnknown": "غير معروف",
+        "leaveBlankToKeep": "Leave blank to keep the current value",
+        "loadFailed": "Failed to load destinations",
+        "toggleFailed": "Failed to toggle service",
+        "autoStartEnabled": "Auto-start enabled",
+        "autoStartDisabled": "Auto-start disabled",
+        "autoStartFailed": "Failed to update auto-start",
+        "destinationCreated": "Destination created successfully",
+        "destinationUpdated": "Destination updated successfully",
+        "saveFailed": "Failed to save destination",
+        "testSucceeded": "Connection test successful",
+        "testFailed": "Connection test failed",
+        "testAllSummary": "{healthy}/{total} destinations healthy",
+        "testAllFailed": "Failed to test destinations",
+        "destinationDeleted": "Destination deleted successfully",
+        "deleteFailed": "Failed to delete destination",
+        "removeStoredValue": "Remove the stored value",
+        "urlPlaceholderSyslog": "syslog.example.com:514",
+        "urlPlaceholderWebhook": "https://logs.example.com/ingest",
+        "urlPlaceholderElasticsearch": "http://elasticsearch.example.com:{port}"
       },
       "nPUWorkersSettings": {
         "actions": "Actions",
         "areYouSureYou": "Are you sure you want to remove",
-        "busy": "Busy",
+        "busy": "مشغول",
         "cancel": "إلغاء",
         "capabilities": "Capabilities",
         "close": "إغلاق",
@@ -2256,7 +2388,9 @@
         "weighted": "Weighted",
         "windows": "Windows",
         "worker": "Worker",
-        "workerName": "Worker Name *"
+        "workerName": "Worker Name *",
+        "connectionTestFailed": "Connection test failed",
+        "loadBalancingLoadFailed": "Failed to load load-balancing configuration"
       },
       "personalitySettings": {
         "active": "Active",
@@ -2387,7 +2521,7 @@
         "sPEntityID": "SP Entity ID",
         "sSOOIDCConfiguration": "SSO / OIDC Configuration",
         "saving": "جارٍ الحفظ...",
-        "scope": "Scope",
+        "scope": "النطاق",
         "searchFilter": "Search Filter",
         "searchFilterExample": "(uid={username})",
         "serverURI": "Server URI",
@@ -2486,7 +2620,7 @@
         "createSLMAdministrator": "Create SLM Administrator",
         "createTeam": "Create Team",
         "created": "Created",
-        "dark": "Dark",
+        "dark": "داكن",
         "deleteProvider": "Delete provider",
         "deleteTeam": "Delete team",
         "deleteUser": "Delete user",
@@ -2513,7 +2647,7 @@
         "language": "اللغة",
         "lastLogin": "Last Login",
         "lastSync": "Last Sync",
-        "light": "Light",
+        "light": "فاتح",
         "logout": "Logout",
         "lowercaseLettersNumbersUnderscores": "Lowercase, letters, numbers, underscores",
         "microsoftEntraID": "Microsoft Entra ID",
@@ -2558,7 +2692,8 @@
         "userPreferences": "User Preferences",
         "username": "اسم المستخدم",
         "usersWhoAccessAutoBot": "Users who access AutoBot chat, workflows, and tools",
-        "usersWhoManageThe": "Users who manage the AutoBot fleet via the SLM admin dashboard"
+        "usersWhoManageThe": "Users who manage the AutoBot fleet via the SLM admin dashboard",
+        "resetPasswordFor": "Reset Password for {username}"
       }
     },
     "backendSettings": {
@@ -2576,7 +2711,7 @@
       "bindAddress": "Bind address",
       "checking": "جارٍ التحقق...",
       "connectedToBackend": "Connected to Backend",
-      "connectionFailed": "Connection Failed",
+      "connectionFailed": "فشل الاتصال",
       "currentBackendAPIURL": "Current backend API URL",
       "debug": "Debug",
       "error": "خطأ",
@@ -2593,7 +2728,7 @@
       "test": "Test",
       "theseSettingsAreRead": "These settings are read-only and configured in the backend.",
       "timeBeforeANode": "Time before a node is marked offline (seconds)",
-      "warning": "Warning"
+      "warning": "تحذير"
     },
     "disposalPolicySettings": {
       "controlsHowCompanyOSProjectsAre": "Controls how Company OS projects are disposed after archiving. Default: immediate, no approval.",
@@ -2757,7 +2892,7 @@
       "enterYourPassword": "Enter your password",
       "enterYourPasswordTo": "Enter your password to confirm disabling two-factor authentication.",
       "expiration": "Expiration",
-      "expires": "Expires",
+      "expires": "ينتهي",
       "keyPrefix": "Key Prefix",
       "lastVerifiedValue0": "Last verified: {value0}",
       "mFAIsEnabled": "MFA is enabled",
@@ -2934,7 +3069,7 @@
     "missing": "Missing",
     "noSkillsFound": "No skills found",
     "noSkillsFoundForQuery": "No skills found for \"{query}\"",
-    "pending": "في الانتظار",
+    "pending": "Pending",
     "refresh": "تحديث",
     "repos": "Repos",
     "review": "Review",
@@ -3092,7 +3227,7 @@
         "jobType": "Job Type",
         "loadingJobs": "Loading jobs...",
         "noBatchJobsFound": "No batch jobs found",
-        "pending": "في الانتظار",
+        "pending": "Pending",
         "progress": "Progress",
         "refresh": "تحديث",
         "reportGeneration": "Report Generation",
@@ -3366,7 +3501,7 @@
   },
   "sharedLinksView": {
     "colCreated": "Created",
-    "colExpires": "Expires",
+    "colExpires": "ينتهي",
     "colOwner": "المالك",
     "colPassword": "كلمة المرور",
     "colSession": "Session",
@@ -3394,7 +3529,7 @@
     "period": "Period",
     "readOnlyNotice": "Audit view only. Budget policies are created and managed by users in the user app; this console does not modify them.",
     "refresh": "تحديث",
-    "scope": "Scope",
+    "scope": "النطاق",
     "scopeId": "Scope ID",
     "status": "الحالة",
     "subtitle": "Read-only oversight of all agent, project, task, and tenant budget policies and their hard-stop auto-pause configuration.",
@@ -3467,5 +3602,10 @@
     "subtitle": "Preview unreferenced storage, repair unreachable resources, and review the audit trail — every deletion is proposed through the approval queue, never applied directly.",
     "tabName": "Data Hygiene",
     "title": "Data Hygiene"
+  },
+  "ui": {
+    "modal": {
+      "closeDialog": "إغلاق مربع الحوار"
+    }
   }
 }

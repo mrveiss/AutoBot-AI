@@ -46,60 +46,9 @@ NC='\033[0m'
 # Create log directory
 mkdir -p "$LOG_DIR"
 
-# Logging
-log() {
-    local level="$1"
-    shift
-    local message="$*"
-    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
-
-    case "$level" in
-        INFO)  echo -e "${BLUE}ℹ️ ${message}${NC}" | tee -a "$LOG_FILE" ;;
-        WARN)  echo -e "${YELLOW}⚠️ ${message}${NC}" | tee -a "$LOG_FILE" ;;
-        ERROR) echo -e "${RED}❌ ${message}${NC}" | tee -a "$LOG_FILE" ;;
-        SUCCESS) echo -e "${GREEN}✅ ${message}${NC}" | tee -a "$LOG_FILE" ;;
-        DEBUG) echo -e "${timestamp} [DEBUG] ${message}" >> "$LOG_FILE" ;;
-    esac
-}
-
-error_exit() {
-    log "ERROR" "$1"
-    exit 1
-}
-
-success() {
-    log "SUCCESS" "$1"
-}
-
-# Check prerequisites
-check_prerequisites() {
-    log "INFO" "Checking prerequisites..."
-
-    if ! command -v ansible-playbook &> /dev/null; then
-        error_exit "Ansible is not installed. Please install ansible first."
-    fi
-
-    if [[ ! -f "$INVENTORY_FILE" ]]; then
-        error_exit "Inventory file not found: $INVENTORY_FILE"
-    fi
-
-    if [[ ! -f "$PLAYBOOK_FILE" ]]; then
-        error_exit "Playbook file not found: $PLAYBOOK_FILE"
-    fi
-
-    success "Prerequisites checked"
-}
-
-# Test VM connectivity
-test_connectivity() {
-    log "INFO" "Testing connectivity to all VMs..."
-
-    if ansible all -i "$INVENTORY_FILE" -m ping --ask-pass; then
-        success "All VMs are accessible"
-    else
-        error_exit "Some VMs are not accessible. Please check network connectivity."
-    fi
-}
+# Logging + preflight helpers (log, error_exit, success, check_prerequisites, test_connectivity)
+# shellcheck source=scripts/lib/deploy-common.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../../scripts/lib/deploy-common.sh"
 
 # Show deployment plan
 show_deployment_plan() {

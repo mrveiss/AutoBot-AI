@@ -61,17 +61,18 @@ from api.venv_reconcile import (
     refuse_explicit_list,
 )
 from autobot_shared.async_compat import fire_and_forget
+from autobot_shared.cron_expression import INVALID_CRON_ERROR_CODE, validate_cron_expression
 from autobot_shared.db_url import assemble_postgres_url
 from autobot_shared.env_utils import env_float, env_int, env_int_clamped
 from autobot_shared.secret_redaction import redact_mapping
 from autobot_shared.ssot_config import config
 from autobot_shared.time_utils import utc_timestamp
 from config import settings
-from models.database import CodeSource, CodeStatus
+from models.database import CodeStatus
 from models.database import ComponentSyncJob as ComponentSyncJobModel
 from models.database import FleetSyncJob as FleetSyncJobModel
 from models.database import FleetSyncNodeState as FleetSyncNodeStateModel
-from models.database import Node, NodeRole, RoleStatus, Setting, UpdateSchedule
+from models.database import Node, NodeCodeSource, NodeRole, RoleStatus, Setting, UpdateSchedule
 from models.schemas import (
     CodeSyncRefreshResponse,
     CodeSyncStatusResponse,
@@ -115,7 +116,7 @@ from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_trac
 from services.playbook_executor import get_playbook_executor
 from services.slm_frontend_build import build_slm_frontend as _build_slm_frontend
 from services.slm_frontend_build import write_slm_deployed_commit_marker as _write_slm_deployed_commit_marker
-from services.ssh_utils import _ssh_key_usable
+from services.ssh_utils import _ssh_key_usable, ssh_remote_path
 from services.sync_orchestrator import get_sync_orchestrator
 
 logger = logging.getLogger(__name__)
@@ -139,7 +140,7 @@ class NodeSyncState:
 
 
 @dataclass
-class FleetSyncJob:
+class FleetSyncJobState:
     """Fleet sync job state (Issue #741 Phase 8)."""
 
     job_id: str
@@ -433,7 +434,7 @@ async def _run_component_resolve_job(job_id: str, component: str, force: bool = 
 
 
 async def _persist_fleet_sync_job(
-    job: FleetSyncJob,
+    job: FleetSyncJobState,
 ) -> None:
     """Persist a fleet sync job and its node states to DB (#1707)."""
     from services.database import db_service
@@ -619,12 +620,12 @@ async def _list_jobs_from_db(limit: int = 10) -> List[FleetSyncJobStatus]:
 
 
 async def _get_tracker_for_db(db: AsyncSession):
-    """Return a GitTracker configured from the active CodeSource DB record.
+    """Return a GitTracker configured from the active NodeCodeSource DB record.
 
     Falls back to DEFAULT_REPO_PATH / DEFAULT_BRANCH when no active
     source is configured.  Issue #1185.
     """
-    result = await db.execute(select(CodeSource).where(CodeSource.is_active.is_(True)))
+    result = await db.execute(select(NodeCodeSource).where(NodeCodeSource.is_active.is_(True)))
     source = result.scalar_one_or_none()
     repo_path = source.repo_path if source else DEFAULT_REPO_PATH
     branch = source.branch if source else DEFAULT_BRANCH
@@ -1399,8 +1400,8 @@ async def _rsync_component(
         "--rsync-path=sudo rsync",  # source may need root to read e.g. /home/${USER:-autobot}/  # noqa
     ]
     cmd.extend(_rsync_exclude_args(excludes, component))
-    cmd.append(f"{source_user}@{source_ip}:{source_path}/{component}/")
-    cmd.append(f"/opt/autobot/{component}/")
+    remote_source = ssh_remote_path(source_user, source_ip, f"{source_path}/{component}/")
+    cmd.extend(["--", remote_source, f"/opt/autobot/{component}/"])
 
     try:
         proc = await asyncio.create_subprocess_exec(
@@ -2912,11 +2913,11 @@ async def _fetch_code_source_connection_info(
         Tuple of (source_ip, source_user, repo_path)
         or None if the required records are missing.
     """
-    from models.database import CodeSource, Node  # avoid circular import
+    from models.database import Node, NodeCodeSource  # avoid circular import
 
     try:
         async with db_service.session() as db:
-            source_result = await db.execute(select(CodeSource).where(CodeSource.is_active.is_(True)))
+            source_result = await db.execute(select(NodeCodeSource).where(NodeCodeSource.is_active.is_(True)))
             source = source_result.scalar_one_or_none()
             if not source:
                 logger.error("SLM self-sync failed: no active code source")
@@ -2943,7 +2944,7 @@ async def _mark_slm_node_up_to_date(db_service, node_id: str) -> None:
 
     Persist UP_TO_DATE status for the SLM node after a successful rsync.
     Uses git_tracker.get_local_commit() for the actual code_source HEAD
-    instead of the potentially-stale CodeSource.last_known_commit.
+    instead of the potentially-stale NodeCodeSource.last_known_commit.
     """
     from models.database import Node  # avoid circular import
 
@@ -3210,17 +3211,15 @@ async def _colocated_node_ids(slm_node_id: str) -> List[str]:
 async def _ansible_self_update(node_id: str, on_failure: Optional[Callable[[str], None]] = None) -> None:
     """Run update-all-nodes.yml against this machine to update all deployed roles (#9073).
 
-    Covers every role Ansible knows about (backend, frontend, shared, agent,
-    plugins, npu-worker, browser-worker, etc.) — not just the SLM components.
+    Covers every role Ansible knows about, not just the SLM components.
     Fire-and-forget: the SLM service restarts mid-run so this coroutine dies.
     ``detach=True`` runs the ansible-playbook process in its own systemd
     transient scope (#11492) so it — unlike this coroutine — survives that
     restart and completes Play 1's tail plus Play 2/3; callers must poll
     health rather than await a result.
 
-    Issue #9224: Update node version in DB after successful sync.
-    C2-a: Clear the resume plan on playbook failure (before restart) so stale
-          plans do not auto-fire forever.
+    Issue #9224: Update node version in DB after successful sync. C2-a: a real failure
+    clears the resume plan; a wait cut by this SLM's own restart keeps it (#19139).
     Issue #15475: ``--limit`` includes every Node row co-located on this same
     physical machine, not just the SLM's own node_id, so a co-located
     frontend (or any other co-located role) is refreshed by the same run.
@@ -3231,12 +3230,13 @@ async def _ansible_self_update(node_id: str, on_failure: Optional[Callable[[str]
     limit = ["localhost", *await _colocated_node_ids(node_id)]
     try:
         result = await executor.execute_playbook(playbook_name="update-all-nodes.yml", limit=limit, detach=True)
+        if restart_cut_the_wait(result, node_id):  # #19139: the restarted process owns the plan now
+            return
         failure = None if result["success"] else summarize_playbook_failure(result["output"])
     except Exception as exc:
         failure = f"Ansible full-machine update error: {exc}"
     if failure is not None:
         logger.error("Ansible full-machine update failed for %s: %s", node_id, failure)
-        # C2-a: failed before the restart — clear the plan so it never auto-fires
         await _clear_resume_plan()
         if on_failure is not None:
             on_failure(failure)
@@ -3304,7 +3304,7 @@ async def self_update(
     return await resolve_and_queue_self_update(db)
 
 
-async def _sync_regular_nodes(executor, job: FleetSyncJob, regular_nodes: list) -> None:
+async def _sync_regular_nodes(executor, job: FleetSyncJobState, regular_nodes: list) -> None:
     """Phase 1: sync all regular nodes via Ansible batches.
 
     Helper for _run_fleet_sync_job (#1707 refactor).
@@ -3333,7 +3333,7 @@ async def _sync_regular_nodes(executor, job: FleetSyncJob, regular_nodes: list) 
             await asyncio.sleep(5)
 
 
-async def _sync_slm_self_node(executor, job: FleetSyncJob, slm_self_node: NodeSyncState) -> None:
+async def _sync_slm_self_node(executor, job: FleetSyncJobState, slm_self_node: NodeSyncState) -> None:
     """Phase 2: sync SLM self-node LAST (#1209).
 
     Helper for _run_fleet_sync_job. Persists final status to DB before
@@ -3390,7 +3390,7 @@ async def _sync_slm_self_node(executor, job: FleetSyncJob, slm_self_node: NodeSy
         await _sync_single_node(executor, slm_self_node, restart=False, job_id=job.job_id)
 
 
-async def _run_fleet_sync_job(job: FleetSyncJob) -> None:
+async def _run_fleet_sync_job(job: FleetSyncJobState) -> None:
     """Background task to execute fleet sync job using Ansible playbooks.
 
     Processes nodes according to the specified strategy and batch size.
@@ -3639,13 +3639,13 @@ async def mark_node_synced(
     return MarkSyncedResponse(success=True, node_id=node_id, version=version)
 
 
-def _build_fleet_sync_job_from_nodes(nodes: List[Node], request: FleetSyncRequest) -> FleetSyncJob:
+def _build_fleet_sync_job_from_nodes(nodes: List[Node], request: FleetSyncRequest) -> FleetSyncJobState:
     """Helper for sync_fleet. Ref: #1088.
 
-    Construct a FleetSyncJob with one NodeSyncState per node.
+    Construct a FleetSyncJobState with one NodeSyncState per node.
     """
     job_id = str(uuid.uuid4())[:16]
-    job = FleetSyncJob(
+    job = FleetSyncJobState(
         job_id=job_id,
         strategy=request.strategy,
         batch_size=request.batch_size,
@@ -3918,17 +3918,6 @@ async def notify_code_version(
 # =============================================================================
 
 
-def _validate_cron_expression(expression: str) -> bool:
-    """Validate a cron expression using croniter."""
-    try:
-        from croniter import croniter
-
-        croniter(expression)
-        return True
-    except (ValueError, KeyError):
-        return False
-
-
 def _calculate_next_run(expression: str, base: datetime = None) -> datetime:
     """Calculate next run time from cron expression."""
     from croniter import croniter
@@ -3964,10 +3953,10 @@ async def create_schedule(
     Requires admin role.
     """
     # Validate cron expression
-    if not _validate_cron_expression(schedule.cron_expression):
+    if not validate_cron_expression(schedule.cron_expression):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid cron expression",
+            detail=f"Invalid cron expression ({INVALID_CRON_ERROR_CODE})",
         )
 
     # Calculate initial next_run
@@ -4043,10 +4032,10 @@ async def update_schedule(
 
     # Validate cron expression if provided
     if update.cron_expression is not None:
-        if not _validate_cron_expression(update.cron_expression):
+        if not validate_cron_expression(update.cron_expression):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid cron expression",
+                detail=f"Invalid cron expression ({INVALID_CRON_ERROR_CODE})",
             )
         schedule.cron_expression = update.cron_expression
         schedule.next_run = _calculate_next_run(update.cron_expression)
@@ -4118,7 +4107,7 @@ async def _get_schedule_target_nodes(db: AsyncSession, schedule: UpdateSchedule)
     return nodes_result.scalars().all()
 
 
-def _create_fleet_sync_job(nodes: List[Node], schedule: UpdateSchedule) -> FleetSyncJob:
+def _create_fleet_sync_job(nodes: List[Node], schedule: UpdateSchedule) -> FleetSyncJobState:
     """
     Create a fleet sync job with target nodes.
 
@@ -4126,7 +4115,7 @@ def _create_fleet_sync_job(nodes: List[Node], schedule: UpdateSchedule) -> Fleet
     """
     job_id = str(uuid.uuid4())[:16]
 
-    job = FleetSyncJob(
+    job = FleetSyncJobState(
         job_id=job_id,
         strategy="rolling",
         batch_size=1,
@@ -4253,7 +4242,7 @@ async def _get_active_commit(db: AsyncSession) -> str:
     Raises:
         HTTPException: If no active code source or commit is available
     """
-    result = await db.execute(select(CodeSource).where(CodeSource.is_active == True))  # noqa: E712
+    result = await db.execute(select(NodeCodeSource).where(NodeCodeSource.is_active == True))  # noqa: E712
     source = result.scalar_one_or_none()
 
     if not source or not source.last_known_commit:
@@ -4291,40 +4280,6 @@ async def _get_role_nodes(db: AsyncSession, role_name: str, node_ids: List[str] 
     return role_result.scalars().all()
 
 
-async def _sync_nodes_for_role(
-    orchestrator, node_roles: List[NodeRole], role_name: str, commit: str, restart: bool
-) -> tuple[List[dict], int]:
-    """Sync each node and return results with success count.
-
-    Helper for sync_role (Issue #665).
-
-    Args:
-        orchestrator: Sync orchestrator instance
-        node_roles: List of NodeRole records to sync
-        role_name: Role being synced
-        commit: Commit hash to sync
-        restart: Whether to restart services after sync
-
-    Returns:
-        Tuple of (results list, success count)
-    """
-    results = []
-    success_count = 0
-
-    for nr in node_roles:
-        ok, msg = await orchestrator.sync_node_role(
-            node_id=nr.node_id,
-            role_name=role_name,
-            commit=commit,
-            restart=restart,
-        )
-        results.append({"node_id": nr.node_id, "success": ok, "message": msg})
-        if ok:
-            success_count += 1
-
-    return results, success_count
-
-
 @router.post("/roles/{role_name}/sync")
 async def sync_role(
     role_name: str,
@@ -4354,9 +4309,10 @@ async def sync_role(
             "nodes_synced": 0,
         }
 
-    # Sync each node
-    orchestrator = get_sync_orchestrator()
-    results, success_count = await _sync_nodes_for_role(orchestrator, node_roles, role_name, commit, restart)
+    # Sync each node through the same plan path as POST /nodes/{node_id}/sync (#17455)
+    from api.node_post_sync import sync_role_on_nodes
+
+    results, success_count, run_id, actions = await sync_role_on_nodes(node_roles, role_name, commit, restart)
 
     logger.info(
         "Role sync complete: %s - %d/%d successful",
@@ -4372,6 +4328,8 @@ async def sync_role(
         "commit": commit,
         "nodes_synced": success_count,
         "results": results,
+        "run_id": run_id,
+        "actions": actions,
     }
 
 
@@ -4591,8 +4549,10 @@ from api._resume_plan import (  # noqa: E402,F401 - re-exported; module-level im
     _clear_resume_plan,
     _persist_resume_plan,
     plan_version_is_supported,
+    restart_cut_the_wait,
     restored_stage,
 )
+from api._resume_wait import resolve_completion_time, wait_for_detached_self_update  # noqa: E402
 
 
 async def _get_slm_deployed_commit() -> Optional[str]:
@@ -5360,34 +5320,14 @@ async def _await_self_update_completion(job: "UpdateAllJob", since: Optional[str
         if job.status == "failed":  # #16610: the fired run failed before the restart; nothing will complete
             return None
         activity = await read_deploy_activity()
-        # #14703 interaction: waiting IS progress. This loop runs up to
-        # _SELF_UPDATE_WATCH_TIMEOUT_SECONDS (3600s default) and the staleness
-        # rule retires a job after _UPDATE_ALL_STALE_SECONDS (1800s default) of
-        # silence -- exactly half. Without a stamp per poll, a healthy
-        # self-update that takes longer than 1800s is retired as stale at the
-        # halfway point of its own permitted wait. The reconcile path is the
-        # no-restart case, so it deliberately persists no resume plan, and the
-        # resume plan is the only other thing that stays the staleness rule.
+        # #14703: waiting IS progress. The wait (3600s) outlives the staleness rule
+        # (1800s), so stamp every poll or a healthy long self-update is retired as stale.
         _mark_progress(job)
         # in_progress is None means the unit could not be queried — unknown is
         # not "finished", so keep waiting rather than resolving on a guess.
-        if activity.in_progress is False and _completion_is_newer_than(activity.last_completed_play_at, since):
-            rotated_at = _rotated_completion_time()
-            if rotated_at is None:
-                return activity.last_completed_play_at
-            # #14804: the reading came from the rotated log, so the live mtime
-            # above dates a truncation rather than a play. Resolve on the
-            # rotated file's own mtime when that post-dates our firing -- it is
-            # the one timestamp here that describes a real completion. Waiting
-            # instead made this condition permanent and turned a successful
-            # self-update into a FAILED job an hour later.
-            if _completion_is_newer_than(rotated_at, since):
-                logger.warning(
-                    "update-all: self-update recap landed in the rotated log; resolving on its rotation time %s",
-                    rotated_at,
-                )
-                return rotated_at
-            logger.warning("update-all: rotated-log verdict pre-dates this run — still waiting")
+        completed_at = resolve_completion_time(activity, since)
+        if completed_at is not None:
+            return completed_at
         # Checked after polling, never before: a misconfigured timeout must not
         # produce a verdict from zero observations.
         if time.monotonic() >= deadline:
@@ -5595,6 +5535,10 @@ async def _execute_resume(
     """
     global _resume_task
     try:
+        if not await wait_for_detached_self_update(
+            job, _mark_progress, _SELF_UPDATE_WATCH_TIMEOUT_SECONDS, _SELF_UPDATE_WATCH_POLL_SECONDS
+        ):
+            return
         if not await _resume_verify_slm_stage(job, target_commit):
             return
 

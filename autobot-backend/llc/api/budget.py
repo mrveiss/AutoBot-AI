@@ -74,7 +74,7 @@ class UpdateLimitRequest(BaseModel):
     alert_threshold: Optional[float] = None
 
 
-class ProvisionRequest(BaseModel):
+class ProvisionBudgetRequest(BaseModel):
     """Request body for POST /budget/{agent_id} (GH#9901).
 
     budget_limit is optional — omitting it uses LLC_DEFAULT_BUDGET_LIMIT (default $10).
@@ -147,7 +147,7 @@ def _company_uuid(company_id: str):
 @router.post("/{agent_id}", response_model=BudgetResponse, status_code=status.HTTP_201_CREATED)
 async def provision_budget(
     agent_id: str,
-    body: ProvisionRequest,
+    body: ProvisionBudgetRequest,
     session: AsyncSession = Depends(get_async_session),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(get_tenant_context),

@@ -15,12 +15,12 @@ from typing import Dict, List
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from api.schemas_system import (
+    CacheClearAllResponse,
     CacheClearTypeResponse,
     CacheConfigResponse,
     CacheStatsResponse,
     CacheWarmingRequest,
     CacheWarmupResponse,
-    ClearAllResponse,
     InvalidateCacheResponse,
     RedisClearResponse,
     RedisStatsResponse,
@@ -61,7 +61,7 @@ REDIS_DATABASES = {
 }
 
 
-def get_redis_connection(database: str = "main"):
+def get_cache_redis_connection(database: str = "main"):
     """Get Redis connection for specified database using canonical client."""
     try:
         client = get_redis_client(async_client=False, database=database)
@@ -76,7 +76,7 @@ def get_redis_connection(database: str = "main"):
 def _clear_single_redis_database(db_name: str, db_number: int) -> dict:
     """Clear a single Redis database and return result."""
     try:
-        redis_conn = get_redis_connection(db_name)
+        redis_conn = get_cache_redis_connection(db_name)
         keys_before = redis_conn.dbsize()
         redis_conn.flushdb()
         logger.info(
@@ -140,7 +140,7 @@ async def get_cache_stats():
     total_keys = 0
     for db_name, db_number in REDIS_DATABASES.items():
         try:
-            redis_conn = get_redis_connection(db_name)
+            redis_conn = get_cache_redis_connection(db_name)
             db_info = await asyncio.to_thread(redis_conn.info)
             key_count = await asyncio.to_thread(redis_conn.dbsize)
             stats["redis_databases"][db_name] = {
@@ -190,7 +190,7 @@ async def clear_redis_cache(database: str):
                 detail=(f"Unknown database '{database}'. " f"Available: {list(REDIS_DATABASES.keys())}"),
             )
         db_number = REDIS_DATABASES[database]
-        redis_conn = get_redis_connection(database)
+        redis_conn = get_cache_redis_connection(database)
         keys_before = await asyncio.to_thread(redis_conn.dbsize)
         await asyncio.to_thread(redis_conn.flushdb)
         cleared_databases.append({"name": database, "database": db_number, "keys_cleared": keys_before})
@@ -256,7 +256,7 @@ async def save_cache_config(config_data: Metadata):
             raise HTTPException(status_code=400, detail=f"Missing required field: {field}")
 
     try:
-        redis_conn = get_redis_connection("config")
+        redis_conn = get_cache_redis_connection("config")
         await asyncio.to_thread(redis_conn.set, "cache_config", json.dumps(config_data))
         logger.info("Cache configuration saved to Redis")
     except Exception as e:
@@ -278,7 +278,7 @@ async def save_cache_config(config_data: Metadata):
 async def get_cache_config():
     """Get current cache configuration."""
     try:
-        redis_conn = get_redis_connection("config")
+        redis_conn = get_cache_redis_connection("config")
         config_data = await asyncio.to_thread(redis_conn.get, "cache_config")
         if config_data:
             return {
@@ -441,7 +441,7 @@ async def invalidate_cache(
         raise HTTPException(status_code=500, detail="Error invalidating cache")
 
 
-@router.post("/clear-all", response_model=ClearAllResponse)
+@router.post("/clear-all", response_model=CacheClearAllResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="clear_all_cache",

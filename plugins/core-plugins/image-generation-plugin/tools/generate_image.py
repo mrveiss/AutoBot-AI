@@ -12,15 +12,21 @@ Provider is chosen per-call; API keys are read from environment variables.
 from __future__ import annotations
 
 import logging
-import os
 from typing import Any, Dict
 
 # Fully-qualified (#14373) — see plugins/core-plugins/image-generation-plugin/main.py.
 from autobot_shared.generation_http_timeouts import generation_timeout, poll_timeout
 from autobot_shared.http_client import get_http_client
+from autobot_shared.plugin_sdk.credential_binding import CredentialSlot
 from autobot_shared.tool_sdk.base import BaseTool, ToolMetadata, ToolPermission, ToolResult
 
 logger = logging.getLogger(__name__)
+
+#: Scoped resolver injected by the host plugin loader (#18094); standalone, keys come from the
+#: environment. The slot is the SDK's one implementation, shared with the video plugin.
+_slot = CredentialSlot()
+set_credential_resolver = _slot.set
+read_provider_key = _slot.read
 
 
 class GenerateImageTool(BaseTool):
@@ -107,7 +113,7 @@ class GenerateImageTool(BaseTool):
     # ------------------------------------------------------------------
 
     async def _generate_dalle(self, prompt: str, size: str, quality: str, n: int) -> ToolResult:
-        api_key = os.environ.get("OPENAI_API_KEY", "")
+        api_key = read_provider_key("OPENAI_API_KEY")
         if not api_key:
             return ToolResult(success=False, error="OPENAI_API_KEY not configured")
 
@@ -158,7 +164,7 @@ class GenerateImageTool(BaseTool):
     # ------------------------------------------------------------------
 
     async def _generate_flux(self, prompt: str, size: str, negative_prompt: str) -> ToolResult:
-        api_key = os.environ.get("FLUX_API_KEY", "")
+        api_key = read_provider_key("FLUX_API_KEY")
         if not api_key:
             return ToolResult(success=False, error="FLUX_API_KEY not configured")
 
@@ -228,7 +234,7 @@ class GenerateImageTool(BaseTool):
     # ------------------------------------------------------------------
 
     async def _generate_sd(self, prompt: str, size: str, negative_prompt: str, n: int) -> ToolResult:
-        api_key = os.environ.get("STABILITY_API_KEY", "")
+        api_key = read_provider_key("STABILITY_API_KEY")
         if not api_key:
             return ToolResult(success=False, error="STABILITY_API_KEY not configured")
 

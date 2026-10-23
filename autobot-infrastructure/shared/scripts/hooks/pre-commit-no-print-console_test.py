@@ -20,7 +20,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.isolated_git import isolated_git_env
 
 HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-print-console"
 
@@ -144,23 +144,11 @@ HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-print-console"
 # is SKIPPED on any PR that touches no python path, and reports `success` when it
 # does (#16087) -- the same bypass that let a fixture path become a real file on
 # `bf6ee5583`. Pinned to the measured number, not to the arithmetic.
-_KNOWN_REPO_VIOLATIONS = 297  # #17576: npu_pipeline/dispatcher.py's usage example no longer prints; #12771: web_fetch/fetcher.py's docstring example now logs instead
-
-
-def _test_git_env() -> dict[str, str]:
-    """#15246: env for every git subprocess this suite spawns.
-
-    Scrubbed rather than os.environ: the pre-push hook runs this suite with
-    GIT_DIR pointing at the worktree it is pushing (every checkout here is
-    one), and an unscrubbed `git init`/`git add`/`git commit` in a
-    fixture then operates on THAT repository instead of tmp_path's. See
-    autobot_shared/paths_test.py and #15246 for the reproduced incident.
-    """
-    return {**scrubbed_git_env(), "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_CONFIG_SYSTEM": "/dev/null"}
+_KNOWN_REPO_VIOLATIONS = 282  # train-43: -3, measured on the merged tree; train-9c: -12, the tools/lint scripts #18470 moved onto the shared reporter (scanner unchanged); #17576: npu_pipeline/dispatcher.py's usage example no longer prints; #12771: web_fetch/fetcher.py's docstring example now logs instead
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:
-    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True, env=_test_git_env())
+    return subprocess.run(["git", *args], cwd=repo, capture_output=True, text=True, check=True, env=isolated_git_env())
 
 
 def _init_repo(tmp_path: Path) -> Path:
@@ -174,7 +162,7 @@ def test_blocks_print_call(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     (repo / "bad.py").write_text('print("hi")\n', encoding="utf-8")
     _git(repo, "add", "bad.py")
-    result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
+    result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=isolated_git_env())
     assert result.returncode != 0, result.stdout + result.stderr
     assert "print(" in result.stdout
 
@@ -192,14 +180,18 @@ class TestStringStrippingSemantics:
         repo = _init_repo(tmp_path)
         (repo / "mention.py").write_text('msg = "call print( ) if you must"\n', encoding="utf-8")
         _git(repo, "add", "mention.py")
-        result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
+        result = subprocess.run(
+            ["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=isolated_git_env()
+        )
         assert result.returncode == 0, result.stdout + result.stderr
 
     def test_a_noqa_comment_suppresses_a_real_call(self, tmp_path: Path) -> None:
         repo = _init_repo(tmp_path)
         (repo / "noqa.py").write_text('print("allowed")  # noqa\n', encoding="utf-8")
         _git(repo, "add", "noqa.py")
-        result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
+        result = subprocess.run(
+            ["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=isolated_git_env()
+        )
         assert result.returncode == 0, result.stdout + result.stderr
 
     def test_a_real_call_beside_a_string_mention_still_fails(self, tmp_path: Path) -> None:
@@ -207,7 +199,9 @@ class TestStringStrippingSemantics:
         repo = _init_repo(tmp_path)
         (repo / "both.py").write_text('msg = "mentions print( ) here"\nprint("real")\n', encoding="utf-8")
         _git(repo, "add", "both.py")
-        result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
+        result = subprocess.run(
+            ["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=isolated_git_env()
+        )
         assert result.returncode != 0, result.stdout + result.stderr
 
 
@@ -215,7 +209,7 @@ def test_allows_clean_file(tmp_path: Path) -> None:
     repo = _init_repo(tmp_path)
     (repo / "ok.py").write_text("x = 1\n", encoding="utf-8")
     _git(repo, "add", "ok.py")
-    result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
+    result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=isolated_git_env())
     assert result.returncode == 0, result.stdout + result.stderr
 
 
@@ -231,7 +225,9 @@ class TestFailsClosedOnGitFailure:
         # Corrupt the index so git errors rather than returning an empty answer.
         (repo / ".git" / "index").write_text("garbage", encoding="utf-8")
 
-        result = subprocess.run(["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=_test_git_env())
+        result = subprocess.run(
+            ["bash", str(HOOK_PATH)], cwd=repo, capture_output=True, text=True, env=isolated_git_env()
+        )
         assert result.returncode != 0, "a git failure was indistinguishable from 'no violation'"
 
 
@@ -313,7 +309,7 @@ class TestScanCostAndRepoWideResult:
             capture_output=True,
             text=True,
             check=True,
-            env=_test_git_env(),
+            env=isolated_git_env(),
         ).stdout.split()
 
         result = subprocess.run(
@@ -321,7 +317,7 @@ class TestScanCostAndRepoWideResult:
             cwd=repo_root,
             capture_output=True,
             text=True,
-            env=_test_git_env(),
+            env=isolated_git_env(),
         )
 
         found = result.stdout.count("VIOLATION")

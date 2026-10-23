@@ -282,7 +282,7 @@ export function usePrometheusMetrics(
 
   async function fetchDashboard(): Promise<void> {
     try {
-      dashboard.value = await api.get<DashboardOverview>(`${getApiBase()}/monitoring/dashboard/overview`)
+      dashboard.value = await api.get<DashboardOverview>(`${getApiBase()}/monitoring/dashboard/overview`, { circuitBreaker: 'monitoring' })
       lastUpdate.value = new Date()
       error.value = null
     } catch (err) {
@@ -294,7 +294,7 @@ export function usePrometheusMetrics(
 
   async function fetchServices(): Promise<void> {
     try {
-      services.value = await api.get<ServicesSummary>(`${getApiBase()}/monitoring/services/health`)
+      services.value = await api.get<ServicesSummary>(`${getApiBase()}/monitoring/services/health`, { circuitBreaker: 'monitoring' })
       error.value = null
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch services'
@@ -305,7 +305,7 @@ export function usePrometheusMetrics(
 
   async function fetchAlerts(): Promise<void> {
     try {
-      alerts.value = await api.get<AlertsSummary>(`${getApiBase()}/monitoring/alerts/check`)
+      alerts.value = await api.get<AlertsSummary>(`${getApiBase()}/monitoring/alerts/check`, { circuitBreaker: 'monitoring' })
       error.value = null
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch alerts'
@@ -461,10 +461,10 @@ export function useSystemMetrics(pollInterval = 10000) {
   const { isLoading, wrap } = useLoadingState()
   const error = ref<string | null>(null)
 
-  async function fetch() {
+  async function refresh() {
     return wrap(async () => {
       try {
-        const data = await api.get<{ metrics?: { system?: SystemMetrics } }>(`${getApiBase()}/monitoring/metrics/current`)
+        const data = await api.get<{ metrics?: { system?: SystemMetrics } }>(`${getApiBase()}/monitoring/metrics/current`, { circuitBreaker: 'monitoring' })
         metrics.value = data.metrics?.system || null
         error.value = null
       } catch (err) {
@@ -474,7 +474,7 @@ export function useSystemMetrics(pollInterval = 10000) {
   }
 
   const { start: startPolling, stop: stopPolling } = usePollingJob<void>(
-    async () => { await fetch() },
+    async () => { await refresh() },
     { intervalMs: pollInterval }
   )
 
@@ -488,7 +488,7 @@ export function useSystemMetrics(pollInterval = 10000) {
     metrics,
     isLoading,
     error,
-    fetch,
+    fetch: refresh,
     startPolling: () => startPolling(''),
     stopPolling
   }
@@ -506,10 +506,10 @@ export function useServiceHealth(pollInterval = 15000) {
   const { isLoading, wrap } = useLoadingState()
   const error = ref<string | null>(null)
 
-  async function fetch() {
+  async function refresh() {
     return wrap(async () => {
       try {
-        const data = await api.get<ServicesSummary>(`${getApiBase()}/monitoring/services/health`)
+        const data = await api.get<ServicesSummary>(`${getApiBase()}/monitoring/services/health`, { circuitBreaker: 'monitoring' })
         services.value = data.services || []
         summary.value = {
           total_services: data.total_services,
@@ -532,7 +532,7 @@ export function useServiceHealth(pollInterval = 15000) {
   const overallStatus = computed(() => summary.value?.overall_status ?? 'unknown')
 
   const { start: startPolling, stop: stopPolling } = usePollingJob<void>(
-    async () => { await fetch() },
+    async () => { await refresh() },
     { intervalMs: pollInterval }
   )
 
@@ -551,7 +551,7 @@ export function useServiceHealth(pollInterval = 15000) {
     overallStatus,
     isLoading,
     error,
-    fetch,
+    fetch: refresh,
     startPolling: () => startPolling(''),
     stopPolling
   }
@@ -580,10 +580,10 @@ export function useAlerts(pollInterval = 30000) {
     autobot_monitor: 0
   })
 
-  async function fetch() {
+  async function refresh() {
     return wrap(async () => {
       try {
-        const data = await api.get<AlertsSummary>(`${getApiBase()}/monitoring/alerts/check`)
+        const data = await api.get<AlertsSummary>(`${getApiBase()}/monitoring/alerts/check`, { circuitBreaker: 'monitoring' })
         alerts.value = data.alerts || []
         criticalCount.value = data.critical_count
         warningCount.value = data.warning_count
@@ -610,7 +610,7 @@ export function useAlerts(pollInterval = 30000) {
   )
 
   const { start: startPolling, stop: stopPolling } = usePollingJob<void>(
-    async () => { await fetch() },
+    async () => { await refresh() },
     { intervalMs: pollInterval }
   )
 
@@ -634,7 +634,7 @@ export function useAlerts(pollInterval = 30000) {
     sources,  // Issue #474
     isLoading,
     error,
-    fetch,
+    fetch: refresh,
     startPolling: () => startPolling(''),
     stopPolling
   }

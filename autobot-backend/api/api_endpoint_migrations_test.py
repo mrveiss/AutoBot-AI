@@ -4544,7 +4544,7 @@ class TestBatch26UploadFile:
         # Should preserve audit logging
         assert "security_layer = get_security_layer(request)" in source
         assert "security_layer.audit_log(" in source
-        assert '"file_upload"' in source
+        assert '"file.upload"' in source  # #18716
 
 
 class TestBatch26MigrationStats:
@@ -4656,7 +4656,7 @@ class TestBatch27DownloadFile:
 
         source = inspect.getsource(download_file)
         assert "security_layer.audit_log(" in source
-        assert '"file_download"' in source
+        assert '"file.download"' in source  # #18716
 
 
 class TestBatch27ViewFile:
@@ -21393,7 +21393,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         # Check start uses operator permission
         source_start = inspect.getsource(redis_service.start_redis_service)
-        self.assertIn("check_operator_permission", source_start)
+        self.assertIn("require_human_operator", source_start)  # canonical gate (#18688)
 
         # Check stop uses admin permission
         source_stop = inspect.getsource(redis_service.stop_redis_service)
@@ -21401,7 +21401,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
         # Check restart uses operator permission
         source_restart = inspect.getsource(redis_service.restart_redis_service)
-        self.assertIn("check_operator_permission", source_restart)
+        self.assertIn("require_human_operator", source_restart)  # canonical gate (#18688)
 
     def test_batch_127_migration_preserves_service_manager_operations(self):
         """Verify migration preserves RedisServiceManager operations"""
@@ -23251,17 +23251,14 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         source = inspect.getsource(security.get_command_history)
         self.assertIn("user: str = None", source)
         self.assertIn("limit: int = 50", source)
-        self.assertIn("get_command_history(user=user, limit=limit)", source)
+        self.assertIn("await security_layer.get_command_history(user=user, limit=limit)", source)
 
     def test_batch_137_migration_preserves_audit_log_reading(self):
-        """Verify migration preserves audit log file reading"""
+        """Verify the audit log is read from the canonical audit trail (#17225 D6)"""
         from api import security
 
         source = inspect.getsource(security.get_audit_log)
-        self.assertIn("audit_log_file", source)
-        self.assertIn("json.loads", source)
-        self.assertIn("FileNotFoundError", source)
-        self.assertIn("JSONDecodeError", source)
+        self.assertIn("get_audit_entries(limit=limit)", source)
 
     # ==============================================
     # BATCH 138: voice.py - COMPLETE (100%)
@@ -25608,9 +25605,9 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         """Verify migration preserves admin authentication dependency"""
         from api import feature_flags
 
-        # Verify require_admin is used in endpoints
+        # Verify require_admin_role is used in endpoints
         status_source = inspect.getsource(feature_flags.get_feature_flags_status)
-        self.assertIn("require_admin", status_source)
+        self.assertIn("require_admin_role", status_source)
         self.assertIn("admin", status_source)
 
     def test_batch_152_migration_preserves_feature_flags_service(self):
@@ -27272,15 +27269,15 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         from api import npu_workers
 
         # Verify models are imported
-        self.assertTrue(hasattr(npu_workers, "NPUWorkerConfig"))
+        self.assertTrue(hasattr(npu_workers, "NPUWorkerDefinition"))
         self.assertTrue(hasattr(npu_workers, "NPUWorkerDetails"))
-        self.assertTrue(hasattr(npu_workers, "NPUWorkerMetrics"))
+        self.assertTrue(hasattr(npu_workers, "NPUWorkerLoadMetrics"))
         self.assertTrue(hasattr(npu_workers, "LoadBalancingConfig"))
         self.assertTrue(hasattr(npu_workers, "WorkerTestResult"))
 
         # Verify models are used in endpoints
         add_source = inspect.getsource(npu_workers.add_worker)
-        self.assertIn("NPUWorkerConfig", add_source)
+        self.assertIn("NPUWorkerDefinition", add_source)
 
         test_source = inspect.getsource(npu_workers.test_worker)
         self.assertIn("WorkerTestResult", test_source)
@@ -27559,18 +27556,18 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("workflow_template_manager.get_template", details_source)
 
     def test_batch_160_migration_preserves_template_category_enum(self):
-        """Verify migration preserves TemplateCategory enum usage"""
+        """Verify migration preserves WorkflowTemplateCategory enum usage"""
         from api import templates
 
-        # Verify TemplateCategory is imported
-        self.assertTrue(hasattr(templates, "TemplateCategory"))
+        # Verify WorkflowTemplateCategory is imported
+        self.assertTrue(hasattr(templates, "WorkflowTemplateCategory"))
 
         # Verify it's used in endpoints
         list_source = inspect.getsource(templates.list_workflow_templates)
-        self.assertIn("TemplateCategory", list_source)
+        self.assertIn("WorkflowTemplateCategory", list_source)
 
         categories_source = inspect.getsource(templates.list_template_categories)
-        self.assertIn("TemplateCategory", categories_source)
+        self.assertIn("WorkflowTemplateCategory", categories_source)
 
     def test_batch_160_migration_preserves_task_complexity_enum(self):
         """Verify migration preserves TaskComplexity enum usage"""
@@ -29170,7 +29167,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_create_workflow_simple_pattern(self):
         """Verify create_workflow endpoint uses Simple Pattern"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         source = inspect.getsource(workflow_automation.create_workflow)
         self.assertIn("@with_error_handling", source)
@@ -29180,7 +29177,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_start_workflow_simple_pattern(self):
         """Verify start_workflow endpoint uses Simple Pattern"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         source = inspect.getsource(workflow_automation.start_workflow)
         self.assertIn("@with_error_handling", source)
@@ -29190,7 +29187,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_control_workflow_simple_pattern(self):
         """Verify control_workflow endpoint uses Simple Pattern"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         source = inspect.getsource(workflow_automation.control_workflow)
         self.assertIn("@with_error_handling", source)
@@ -29200,7 +29197,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_get_workflow_status_simple_pattern(self):
         """Verify get_workflow_status endpoint uses Simple Pattern"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         source = inspect.getsource(workflow_automation.get_workflow_status)
         self.assertIn("@with_error_handling", source)
@@ -29210,7 +29207,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_get_active_workflows_simple_pattern(self):
         """Verify get_active_workflows endpoint uses Simple Pattern"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         source = inspect.getsource(workflow_automation.get_active_workflows)
         self.assertIn("@with_error_handling", source)
@@ -29220,7 +29217,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_create_workflow_from_chat_simple_pattern(self):
         """Verify create_workflow_from_chat endpoint uses Simple Pattern"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         source = inspect.getsource(workflow_automation.create_workflow_from_chat)
         self.assertIn("@with_error_handling", source)
@@ -29230,7 +29227,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_workflow_websocket_simple_pattern(self):
         """Verify workflow_websocket endpoint uses Simple Pattern"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         source = inspect.getsource(workflow_automation.workflow_websocket)
         self.assertIn("@with_error_handling", source)
@@ -29240,7 +29237,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_all_workflow_automation_endpoints_have_decorator(self):
         """Verify all workflow_automation endpoints have @with_error_handling decorator"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         endpoint_functions = [
             workflow_automation.create_workflow,
@@ -29262,7 +29259,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_workflow_automation_100_percent_milestone(self):
         """Verify workflow_automation.py has reached 100% migration"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         endpoint_functions = [
             workflow_automation.create_workflow,
@@ -29287,7 +29284,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_migration_preserves_pydantic_models(self):
         """Verify migration preserves Pydantic request models"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         # Verify models are defined
         self.assertTrue(hasattr(workflow_automation, "WorkflowStepRequest"))
@@ -29304,7 +29301,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_migration_preserves_enums(self):
         """Verify migration preserves WorkflowStepStatus and AutomationMode enums"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         # Verify enums are defined
         self.assertTrue(hasattr(workflow_automation, "WorkflowStepStatus"))
@@ -29316,7 +29313,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_migration_preserves_llm_judges_integration(self):
         """Verify migration preserves LLM judges integration for workflow evaluation"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         # Issue #10880: JUDGES_AVAILABLE was removed; judge availability now
         # lives in services.workflow_automation.step_evaluator via a try/except
@@ -29344,7 +29341,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_migration_preserves_workflow_templates(self):
         """Verify migration preserves workflow template functionality"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         # Verify WorkflowAutomationManager has workflow template methods
         manager_class = workflow_automation.WorkflowAutomationManager
@@ -29362,7 +29359,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_migration_preserves_websocket_functionality(self):
         """Verify migration preserves WebSocket workflow communication"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         # Verify WebSocket endpoint exists
         source = inspect.getsource(workflow_automation.workflow_websocket)
@@ -29401,7 +29398,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
 
     def test_batch_168_migration_preserves_dataclasses(self):
         """Verify migration preserves WorkflowStep and ActiveWorkflow dataclasses"""
-        from api import workflow_automation
+        from services.workflow_automation import routes as workflow_automation
 
         # Verify dataclasses are defined
         self.assertTrue(hasattr(workflow_automation, "WorkflowStep"))
@@ -30258,11 +30255,11 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("ModalityType.COMBINED", combine_source)
 
     def test_batch_171_migration_preserves_processing_intent(self):
-        """Verify migration preserves ProcessingIntent usage"""
+        """Verify migration preserves MultimodalProcessingIntent usage"""
         from api import multimodal
 
-        # Verify ProcessingIntent is imported
-        self.assertTrue(hasattr(multimodal, "ProcessingIntent"))
+        # Verify MultimodalProcessingIntent is imported
+        self.assertTrue(hasattr(multimodal, "MultimodalProcessingIntent"))
 
         # Verify _get_processing_intent helper exists
         self.assertTrue(hasattr(multimodal, "_get_processing_intent"))

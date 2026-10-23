@@ -30,7 +30,6 @@ All I/O is async-first; no blocking operations.
 import time
 
 from api.knowledge_grounding_models import (
-    Claim,
     Conflict,
     ConflictResolution,
     KBFact,
@@ -43,6 +42,7 @@ from api.knowledge_grounding_models import (
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.ssot_constants import TTL_30_DAYS, TTL_90_DAYS
+from services.knowledge_grounding_models import Claim
 
 logger = get_logger(__name__)
 
@@ -398,7 +398,7 @@ class ConflictResolver(AsyncRedisClientMixin):
 
         # Create ticket
         ticket = ReviewTicket.create_from_conflict(conflict, priority)
-        logger.debug(f"Created review ticket: {ticket.ticket_id} (priority={priority})")
+        logger.debug(f"Created review ticket: {ticket.ticket_id} (priority={priority.value})")
 
         try:
             redis = await self._get_redis()
@@ -409,8 +409,8 @@ class ConflictResolver(AsyncRedisClientMixin):
                 "conflict_id": conflict.conflict_id,
                 "priority": priority.value,
                 "status": ReviewTicketStatus.PENDING.value,
-                "kb_says": conflict.kb_says.fact_text,
-                "agent_says": conflict.agent_says.claim_text,
+                "kb_says": conflict.kb_says.fact_text if conflict.kb_says else None,
+                "agent_says": conflict.agent_says.claim_text if conflict.agent_says else None,
                 "kb_confidence": conflict.kb_confidence,
                 "agent_confidence": conflict.agent_confidence,
                 "research_confidence": conflict.research_confidence,

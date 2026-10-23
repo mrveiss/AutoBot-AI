@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Every backend name the ``shared/scripts/analysis`` tools import still exists (#18289).
+"""Every backend name the #18289 infrastructure tools import still exists (#18289).
 
 Five of those tools imported names the backend had since removed (``circuit_breaker_manager``,
 ``conversation_manager``, ``chat_workflow.process_chat_message``, the ``development_speedup`` and
@@ -26,9 +26,10 @@ import pytest
 from repo_tests._infra_backend_names import backend_only_names
 from repo_tests._paths import repo_root
 
-ANALYSIS = "autobot-infrastructure/shared/scripts/analysis"
-#: The tools #18289 repaired or classified as backend tools in this folder.
-TOOLS = (
+SCRIPTS = "autobot-infrastructure/shared/scripts"
+ANALYSIS = f"{SCRIPTS}/analysis"
+#: The tools #18289 repaired or classified as backend tools in the analysis folder.
+_ANALYSIS_TOOLS = (
     "debug_circuit_breaker",
     "demo_secure_web_research",
     "main",
@@ -48,6 +49,31 @@ TOOLS = (
     "test_research_disabled",
     "test_web_research_security",
 )
+#: Batch 2: the validators repaired against today's APIs, and the tools that now bootstrap their own path.
+#: Several import lazily (inside a function), so a removed name fails only when the tool is RUN.
+_BATCH2_TOOLS = (
+    f"{SCRIPTS}/validate_configuration.py",
+    f"{SCRIPTS}/validate_timeout_config.py",
+    f"{SCRIPTS}/utilities/validate-security-config.py",
+    f"{SCRIPTS}/utilities/validate_chat_knowledge.py",
+    f"{SCRIPTS}/utilities/manage_classification.py",
+    f"{SCRIPTS}/utilities/migrate_encryption.py",
+    f"{SCRIPTS}/automated_testing_procedure.py",
+    f"{SCRIPTS}/demo/demo_codebase_indexing.py",
+    f"{SCRIPTS}/migrations/migrate_config_users.py",
+    f"{SCRIPTS}/migrations/migrate_sessions_608.py",
+    f"{SCRIPTS}/profile_backend.py",
+    f"{SCRIPTS}/startup_timing_analysis.py",
+    f"{SCRIPTS}/test_configuration.py",
+    f"{SCRIPTS}/test_llm_awareness.py",
+    f"{SCRIPTS}/test_phase2_migration.py",
+    f"{SCRIPTS}/trace_backend.py",
+    f"{SCRIPTS}/security/backfill_session_ownership.py",
+    f"{SCRIPTS}/security/mtls-migrate.py",
+    f"{SCRIPTS}/setup/knowledge/fresh_kb_setup.py",
+    "autobot-infrastructure/autobot-backend/scripts/migrations/migrate_secrets_ownership.py",
+)
+TOOLS = tuple(f"{ANALYSIS}/{name}.py" for name in _ANALYSIS_TOOLS) + _BATCH2_TOOLS
 
 _RESOLVE = textwrap.dedent("""
     import importlib, json, sys
@@ -102,7 +128,7 @@ def unresolved(wanted: dict[str, dict[str, list[str]]], root: Path) -> dict[str,
 
 
 def _imports(tool: str) -> dict[str, list[str]]:
-    source = (repo_root() / ANALYSIS / f"{tool}.py").read_text(encoding="utf-8")
+    source = (repo_root() / tool).read_text(encoding="utf-8")
     return backend_from_imports(source, backend_only_names())
 
 
@@ -111,7 +137,7 @@ def _report() -> dict[str, list[str]]:
     return unresolved({tool: _imports(tool) for tool in TOOLS}, repo_root())
 
 
-@pytest.mark.parametrize("tool", TOOLS)
+@pytest.mark.parametrize("tool", TOOLS, ids=[Path(t).stem for t in TOOLS])
 def test_every_backend_name_a_tool_imports_exists(tool: str) -> None:
     assert _imports(tool), f"{tool} imports nothing from the backend: it no longer belongs in this list"
     assert _report()[tool] == []

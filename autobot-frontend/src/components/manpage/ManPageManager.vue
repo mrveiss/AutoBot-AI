@@ -2,12 +2,12 @@
   <div class="man-page-manager">
 
     <!-- Machine Profile Section -->
-    <BasePanel variant="bordered" size="md">
+    <BaseCard scrollable variant="bordered" size="md">
       <template #header>
         <h3><Icon name="desktop" /> {{ $t('manpage.manager.title') }}</h3>
         <BaseButton
           size="sm"
-          variant="outline-solid"
+          variant="outline"
           @click="refreshMachineProfile"
           :disabled="loading?.profile"
         >
@@ -56,15 +56,15 @@
         <Icon name="spinner" class="animate-spin" />
         {{ $t('manpage.manager.detectingProfile') }}
       </div>
-    </BasePanel>
+    </BaseCard>
 
     <!-- Integration Status Section -->
-    <BasePanel variant="bordered" size="md">
+    <BaseCard scrollable variant="bordered" size="md">
       <template #header>
         <h3><Icon name="chart-bar" /> {{ $t('manpage.manager.integrationStatus') }}</h3>
         <BaseButton
           size="sm"
-          variant="outline-solid"
+          variant="outline"
           @click="refreshIntegrationStatus"
           :disabled="loading?.status"
         >
@@ -134,7 +134,7 @@
         <Icon name="spinner" class="animate-spin" />
         {{ $t('manpage.manager.loadingStatus') }}
       </div>
-    </BasePanel>
+    </BaseCard>
 
     <!-- Integration Actions -->
     <div class="integration-actions">
@@ -175,12 +175,12 @@
       </div>
 
       <!-- Real-time Progress Tracking -->
-      <BasePanel v-if="showProgressTracking" variant="bordered" size="md">
+      <BaseCard scrollable v-if="showProgressTracking" variant="bordered" size="md">
         <template #header>
           <h3><Icon name="tasks" /> {{ $t('manpage.manager.progressTitle') }}</h3>
           <BaseButton
             size="sm"
-            variant="outline-solid"
+            variant="outline"
             @click="showProgressTracking = false"
           >
             <Icon name="times" />
@@ -240,7 +240,7 @@
             </span>
           </div>
         </div>
-      </BasePanel>
+      </BaseCard>
 
       <div class="action-info">
         <div class="info-item">
@@ -259,7 +259,7 @@
     </div>
 
     <!-- Search Section -->
-    <BasePanel v-if="showSearch" variant="bordered" size="md">
+    <BaseCard scrollable v-if="showSearch" variant="bordered" size="md">
       <template #header>
         <h3><Icon name="search" /> {{ $t('manpage.manager.searchTitle') }}</h3>
       </template>
@@ -305,7 +305,7 @@
           </div>
         </div>
       </div>
-    </BasePanel>
+    </BaseCard>
 
     <!-- Progress Messages -->
     <div v-if="progressMessage" class="progress-message" :class="progressMessageType">
@@ -316,6 +316,7 @@
 </template>
 
 <script>
+import { BaseButton, BaseCard } from '@autobot/ui'
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
@@ -328,8 +329,6 @@ import { useKnowledgeIcons } from '@/composables/knowledge/useKnowledgeIcons'
 import { formatDate } from '@/utils/formatHelpers'
 import { useLoadingState } from '@/composables/useLoadingState'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
-import BasePanel from '@/components/base/BasePanel.vue'
 import Icon from '@/components/ui/Icon.vue'
 
 export default {
@@ -337,7 +336,7 @@ export default {
   components: {
     EmptyState,
     BaseButton,
-    BasePanel,
+    BaseCard,
     Icon,
   },
   setup() {
@@ -744,7 +743,7 @@ export default {
   font-size: var(--text-lg);
 }
 
-/* BasePanel handles section containers - only .integration-actions remains as non-migrated */
+/* BaseCard handles section containers - only .integration-actions remains as non-migrated */
 .integration-actions {
   background: var(--bg-secondary);
   border-radius: var(--radius-xl);
@@ -1079,7 +1078,7 @@ export default {
   }
 }
 
-/* BasePanel handles progress-section container - only content styles remain */
+/* BaseCard handles progress-section container - only content styles remain */
 .progress-container {
   margin-top: var(--spacing-4);
 }

@@ -35,7 +35,7 @@ from acp.protocol import (
     StopReason,
     agent_capabilities,
 )
-from acp.transport import StdioTransport
+from acp.transport import AcpStdioTransport
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -58,9 +58,9 @@ class AcpSession:
 class AcpServer:
     """JSON-RPC dispatch for the ACP agent surface."""
 
-    def __init__(self, runner: TurnRunner, transport: StdioTransport | None = None):
+    def __init__(self, runner: TurnRunner, transport: AcpStdioTransport | None = None):
         self._runner = runner
-        self._transport = transport or StdioTransport()
+        self._transport = transport or AcpStdioTransport()
         self._sessions: Dict[str, AcpSession] = {}
         self._initialized = False
         self._pending_client_calls: Dict[str, asyncio.Future] = {}

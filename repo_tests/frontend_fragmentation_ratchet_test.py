@@ -87,7 +87,8 @@ BASELINE = {
     # `.vue` components carrying their own <style> rules. Target is a small
     # number of shared stylesheets, not 381 components each with a private
     # copy of the design system.
-    "components_declaring_styles": 379,  # #17020: Terminal.vue removed (dead, zero live callers)
+    "components_declaring_styles": 366,  # #14780 OrgChart drawer: 367 -> 366 (the slide transition CSS left for BaseDrawer); #14778: -1, the local BaseInput fork retired into the kit (on main's 368); #18849: -1, the local BaseButton fork retired into the kit; #18819: -2 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-2);  #14776: the local BaseBadge fork left for the kit (376 -> 375), then the local BaseCard + BasePanel (375 -> 373); #18240: App.vue's scoped <style> went with the header split (lowered from 379).; #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit
+    # Earlier #17020: Terminal.vue removed (dead, zero live callers)
     # Distinct class names declared anywhere in the frontend.
     #
     # #16972/#15455: OWNER-APPROVED, ONE-OFF EXCEPTION -- for this counter and
@@ -98,31 +99,32 @@ BASELINE = {
     # cross-referencing sibling admin views) -- this pair is documented above
     # as measuring page SIZE, not duplication, and is interim until #15455
     # replaces them with a real duplication measure.
-    "distinct_class_names": 5613,  # #17565: App.vue's hand-rolled .skip-links/.skip-link
+    "distinct_class_names": 5484,  # #14780 drawer adoption: 5492 -> 5484 (SourcePreviewPanel, WorkItemDetail on BaseDrawer); #14778: -10, the local BaseInput fork retired into the kit (on main's 5502); #18242: -1 on main's 5503 (CustomDashboard onto DashboardGrid); #18849: -14, the local BaseButton fork retired into the kit; #18819: -14 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-26);  #14776: local BaseBadge retired (5594 -> 5585), then local BaseCard + BasePanel (5585 -> 5557); #17565: App.vue's hand-rolled .skip-links/.skip-link
     # replaced by the shared kit SkipLink (lowered from 5615). Earlier: #17020,
     # Terminal.vue removed -- pure deletion of dead code, lowered, not held.
+    # #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit (5611 -> 5594).
     # Total CSS rule declarations.
     #
     # #16972/#15455: same owner-approved, one-off exception as distinct_class_names
     # directly above -- see that comment.
-    "css_rule_declarations": 9378,  # #14785: density reuses the existing
+    "css_rule_declarations": 9150,  # train-74 on main: drawer adoption (-16) on train 77 OrgChart drawer (-2), 9168 -> 9150; #14780 drawer adoption: 9168 -> 9152 (SourcePreviewPanel, WorkItemDetail on BaseDrawer); #14780: -1, AuditLogTable's pager layout left for the kit BasePagination; #14778: -16, the local BaseInput fork retired into the kit (on main's 9185); #18242: -3 on main's 9188 (CustomDashboard onto DashboardGrid); #18849: -30, the local BaseButton fork retired into the kit; #18819: -25 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-46);  #14776: local BaseBadge retired (9354 -> 9337), then local BaseCard + BasePanel (9337 -> 9289); #14785: density reuses the existing
     # [data-layout-density] attribute (no .density-* classes), and the dead
     # assets/main.css .sr-only rule went with that file (lowered from 9379).
+    # #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit (9371 -> 9354).
     # #17565: the App.vue skip-link rules moved to the kit (lowered from 9381);
+    # #18240: App.vue scoped style + ThemePresetPicker .sr-only + LoginForm .logo-mark (lowered from 9378);
     # earlier #17020, same reason as distinct_class_names
     # Files declaring at least one `.btn-*` CSS rule. Target is 1 — a single
     # shared stylesheet.
-    "button_definition_files": 101,
-    # Distinct `.btn-*` class names declared anywhere.
-    "button_class_names": 115,
-    # Distinct notification entry points. Target is 1 canonical API, the rest
+    "button_definition_files": 100,  # #18849: 101 -> 100, the local BaseButton fork retired into the kit; Distinct `.btn-*` class names declared anywhere.
+    "button_class_names": 103,  # #18849: 115 -> 103, the local BaseButton fork retired into the kit; Distinct notification entry points. Target is 1 canonical API, the rest
     # thin shims or removed.
     "notification_entry_points": 4,
     # Distinct date-formatting approaches in use.
     "date_format_approaches": 4,
     # Hardcoded `z-index: <number>` declarations, i.e. stacking order decided
     # per file rather than by a scale.
-    "hardcoded_zindex_declarations": 51,
+    "hardcoded_zindex_declarations": 47,  # #14780 drawer adoption: 48 -> 47 (SourcePreviewPanel, WorkItemDetail on BaseDrawer); #14778: BaseTable and DataTable forks left for the kit (-1);  #14776: the retired BasePanel's z-index went with it (50 -> 49); #18240: App.vue #mobile-nav z-index: 50 became a utility class (lowered from 51)
 }
 
 # Families worth pinning individually, so a regression in one cannot hide
@@ -132,44 +134,44 @@ BASELINE = {
 # system shape as `btn` versus `btn-action`, and consolidating them should show
 # up as one number falling to zero rather than as noise in the total.
 FAMILY_BASELINE = {
-    "btn": 116,
+    "btn": 104,  # #18849: 116 -> 104, the local BaseButton fork retired into the kit
     "status": 114,
-    "header": 24,
-    "card": 67,
-    "badge": 58,
+    "header": 23,  # #14776: local BaseCard + BasePanel merged into the kit card (24 -> 23)
+    "card": 57,  # #14776: local BaseCard + BasePanel merged into the kit card (67 -> 57)
+    "badge": 50,  # #14776: the local BaseBadge fork left for the kit (58 -> 50)
     "result": 56,
     "progress": 47,
     "stat": 38,
-    "panel": 34,
+    "panel": 19,  # #14780 drawer adoption: 23 -> 19 (SourcePreviewPanel, WorkItemDetail on BaseDrawer); #14776: local BaseCard + BasePanel merged into the kit card (34 -> 23)
     "form": 27,
     "action": 27,
     "modal": 25,
-    "empty": 23,
-    "error": 35,
+    "empty": 22,  # #14778: DataTable empty-cell left (23 -> 22)
+    "error": 30,  # #18819: -5 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);
     "section": 23,
     "summary": 27,
     "text": 28,
     "toggle": 24,
     "field": 20,
-    "icon": 16,
+    "icon": 12,  # #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit (16 -> 12)
     "checkbox": 9,
     "sidebar": 9,
     "dropdown": 9,
     "nav": 7,
     "breadcrumb": 7,
     "chip": 5,
-    "pagination": 4,
+    "pagination": 2,  # #14778: DataTable pagination left (4 -> 2)
     # Three vocabularies for "the user is waiting": 60 distinct names across
     # 105 files. #12731 records this as "inconsistent loading"; this is the
     # measurement of it. They should collapse to one.
-    "loading": 30,
+    "loading": 29,  # #14778: DataTable loading-cell left (30 -> 29)
     "skeleton": 26,
     "spinner": 4,
-    "table": 18,
-    "input": 18,
+    "table": 12,  # #14778: BaseTable and DataTable table-* left (18 -> 12)
+    "input": 15,  # #14778: 18 -> 15, the local BaseInput fork retired into the kit;
     "dialog": 11,
     "tab": 11,
-    "label": 8,
+    "label": 7,  # #14778: 8 -> 7, the local BaseInput fork retired into the kit;
     "grid": 4,
     "title": 4,
     "subtitle": 1,
@@ -179,7 +181,7 @@ FAMILY_BASELINE = {
     # these four should collapse together with it.
     "toast": 15,
     "message": 15,
-    "alert": 13,
+    "alert": 5,  # #18819: 13 -> 5, ui/BaseAlert and ErrorBanner retired into the kit BaseAlert
     "notification": 5,
     "tooltip": 4,
     "hint": 2,

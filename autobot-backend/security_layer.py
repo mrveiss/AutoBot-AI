@@ -14,8 +14,6 @@ and audit logging (command executor, approval workflow — folded in per #10666 
 
 import asyncio
 import datetime
-import json
-import os
 from datetime import timezone
 from functools import lru_cache
 from typing import Any, Dict, List
@@ -24,67 +22,41 @@ from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Permission, Role, role_value
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.monitoring.metrics.audit import record_audit_write_failure_safely
-from autobot_shared.ssot_config import config, default_audit_log_file
 from autobot_shared.status_enums import CommandRisk
 from config import get_config_manager
-from secure_command_executor import SecureCommandExecutor, SecurityPolicy
+from secure_command_executor import CommandSecurityPolicy, SecureCommandExecutor
+from services.audit.audit import emit_security, query_filtered
+from services.audit.taxonomy import AuditCategory, AuditFilter
 
 logger = get_logger(__name__)
 
-# Audit log file path resolved from AUTOBOT_AUDIT_LOG_FILE env var at import time.
-# Set AUTOBOT_AUDIT_LOG_FILE to override the default path.
-
-
-def _resolve_audit_log_file() -> str:
-    """Return audit log file path from AUTOBOT_AUDIT_LOG_FILE env var with logged fallback.
-
-    #14070: the fallback calls ``ssot_config.default_audit_log_file()``, not the
-    removed copy ``_AUDIT_LOG_FILE_DEFAULT``. Still reachable via an empty env var.
-    """
-    value = config.audit_log_file
-    if not value:
-        fallback = default_audit_log_file()
-        logger.warning(
-            "AUTOBOT_AUDIT_LOG_FILE is set but empty; falling back to %s",
-            fallback,
-        )
-        return fallback
-    return value
-
-
-_AUDIT_LOG_FILE = _resolve_audit_log_file()
+#: ``resource_type`` of every audit event this layer records, so its own view
+#: (``get_audit_entries``) reads back exactly what it wrote (#17225 D6).
+SECURITY_LAYER_SOURCE = "security_layer"
 
 # Performance optimization: O(1) lookup for deprecated privileged roles (Issue #326)
 DEPRECATED_PRIVILEGED_ROLES = {"god", "superuser", "root"}
 
 # Performance optimization: O(1) lookup for security checks (Issue #326)
 HIGH_RISK_COMMAND_RISKS = {CommandRisk.HIGH, CommandRisk.MODERATE}
-COMMAND_EXECUTION_ACTIONS = {"command_execution_attempt", "command_execution_complete"}
+COMMAND_EXECUTION_ACTIONS = frozenset({"command_execution_attempt", "command_execution_complete"})
 
 
-def _parse_audit_log_entry(line: str, user: str | None = None) -> Dict[str, Any] | None:
-    """Parse a single audit log line and filter by user (Issue #315: extracted).
+def _to_layer_entry(event: Dict[str, Any]) -> Dict[str, Any]:
+    """A canonical event in the shape this layer's readers have always returned."""
+    ts = datetime.datetime.fromtimestamp(event.get("occurred_at", 0), tz=timezone.utc)
+    return {
+        "timestamp": ts.isoformat(),
+        "user": event.get("actor_id"),
+        "action": event.get("action"),
+        "outcome": event.get("outcome"),
+        "details": event.get("metadata") or {},
+    }
 
-    Args:
-        line: JSON line from audit log
-        user: Optional user filter
 
-    Returns:
-        Parsed entry dict if valid command execution, None otherwise
-    """
-    try:
-        entry = json.loads(line)
-    except json.JSONDecodeError:
-        return None
-
-    if "action" not in entry:
-        return None
-    if entry["action"] not in COMMAND_EXECUTION_ACTIONS:
-        return None
-    if user is not None and entry.get("user") != user:
-        return None
-
-    return entry
+async def _layer_entries(flt: AuditFilter, limit: int) -> List[Dict[str, Any]]:
+    """Newest-first entries matching *flt*, in the layer's entry shape."""
+    return [_to_layer_entry(e) for e in await query_filtered(flt, limit=limit)]
 
 
 def _normalise_role(user_role: str) -> str:
@@ -117,15 +89,9 @@ def canonical_role_permissions(user_role: str) -> List[str]:
     lookups always agree on who a role is — a normalisation applied to one source
     of three creates a second identity that holds some grants and not others.
 
-    ``superadmin`` resolves to ``[]`` here, and since #13854 it does so for a
-    stated reason rather than by accident. It is now a first-class ``Role``
-    member whose ``ROLE_PERMISSIONS`` entry is explicitly empty: administrative
-    as a predicate (``require_role``, ``is_admin_role``), holder of no granular
-    permission. Before #13854 this ``[]`` came from ``Role("superadmin")``
-    *raising* — the same answer, but indistinguishable from an unrecognised
-    role, and contradicted by ``role_has_permission``, which granted superadmin
-    everything. Both paths now agree, and they agree because one mapping says
-    so.
+    ``superadmin`` (#13854) resolves to admin's grants: its ``ROLE_PERMISSIONS``
+    entry is derived from admin's (#19125, owner decision 2026-10-21), and every
+    path agrees because one mapping says so.
 
     An unrecognised role yields ``[]`` — no grant, and no exception either.
 
@@ -165,7 +131,6 @@ class SecurityLayer:
         self.enable_auth = self.security_config.get("enable_auth", True)
         logger.info("Authentication enabled: %s", self.enable_auth)
 
-        self.audit_log_file = self.security_config.get("audit_log_file") or _AUDIT_LOG_FILE
         self.roles = self.security_config.get("roles", {})
         self.allowed_users = self.security_config.get("allowed_users", {})
 
@@ -196,22 +161,17 @@ class SecurityLayer:
         self.pending_approvals: Dict[str, asyncio.Event] = {}
         self.approval_results: Dict[str, bool] = {}
 
-        if self.audit_log_file:
-            log_dir = os.path.dirname(self.audit_log_file)
-            if log_dir:
-                os.makedirs(log_dir, exist_ok=True)
         logger.info("SecurityLayer initialized. Authentication enabled: %s", self.enable_auth)
         logger.debug("Command security enabled: %s", self.enable_command_security)
         logger.debug("Docker sandbox: %s", self.use_docker_sandbox)
-        logger.debug("Audit log file: %s", self.audit_log_file)
 
     # =========================================================================
     # Security Policy
     # =========================================================================
 
-    def _create_security_policy(self) -> SecurityPolicy:
+    def _create_security_policy(self) -> CommandSecurityPolicy:
         """Create security policy from configuration."""
-        policy = SecurityPolicy()
+        policy = CommandSecurityPolicy()
 
         # Load custom policies from config if available
         custom_policies = self.security_config.get("command_policies", {})
@@ -589,10 +549,14 @@ class SecurityLayer:
         # "superadmin" could clear the permission gate and arrive here with an
         # empty permission list, so no approval branch could fire and a HIGH-risk
         # command ran unapproved.
+        canonical = canonical_role_permissions(user_role)
         user_role = _normalise_role(user_role)
         role_permissions = self.roles.get(user_role, {}).get("permissions", [])
         if not role_permissions:
             role_permissions = self._get_default_role_permissions(user_role)
+        # #19125: superadmin has canonical grants but no configured/default entry;
+        # without this it clears the permission gate unapproved (#13820 hazard).
+        role_permissions = role_permissions or canonical
 
         if "allow_all" in role_permissions:
             return False
@@ -667,55 +631,39 @@ class SecurityLayer:
     # =========================================================================
 
     def audit_log(self, action: str, user: str, outcome: str, details: Dict[str, Any]) -> None:
-        """Log an action to a tamper-resistant audit log file (append-only)."""
-        log_entry = {
-            "timestamp": datetime.datetime.now(tz=timezone.utc).isoformat(),
-            "user": user,
-            "action": action,
-            "outcome": outcome,
-            "details": details,
-        }
+        """Record an auth/RBAC/command action in the canonical audit trail (#17225 D6).
 
-        try:
-            with open(self.audit_log_file, "a", encoding="utf-8") as f:
-                f.write(json.dumps(log_entry) + "\n")
-            logger.debug("Audit log: %s by %s - %s", action, user, outcome)
-        except Exception as e:
-            # #14843: the swallow stays -- an audit problem must not turn a
-            # correct 403 into a 500 -- but on its own it made a lost record
-            # indistinguishable from a written one. #14750 instrumented the
-            # RBAC middleware's DB-backed denial audit; this file-backed path is
-            # reached through a different decorator and was left silent, so a
-            # full disk, a permissions change or a rotated-away directory
-            # dropped every record here while requests kept answering correctly.
-            # Same counter as the middleware, deliberately: a second one would
-            # let the two drift exactly as the two handlers did.
-            record_audit_write_failure_safely(action, type(e).__name__)
-            logger.error("Failed to write to audit log file %s: %s", self.audit_log_file, e)
-
-    def get_command_history(self, user: str | None = None, limit: int = 100) -> List[Dict[str, Any]]:
-        """Get command execution history from audit log.
-
-        Args:
-            user: Filter by specific user (optional)
-            limit: Maximum number of entries to return
-
-        Returns:
-            List of command execution entries
+        This used to append to a JSONL file and call it tamper-resistant; the
+        only mechanism was append mode. The record now goes through
+        ``services.audit.audit`` like every other audit event, so there is one
+        store and one tamper mechanism, not a second one here. Never raises: an
+        audit problem must not turn a correct 403 into a 500 (#14843), and a
+        record that could not even be scheduled is counted (#14750).
         """
-        command_history = []
+        scheduled = emit_security(
+            action,
+            user or "unknown",
+            resource_type=SECURITY_LAYER_SOURCE,
+            metadata=details or {},
+            outcome=outcome,
+        )
+        if not scheduled:
+            record_audit_write_failure_safely(action, "NotScheduled")
 
-        try:
-            with open(self.audit_log_file, "r", encoding="utf-8") as f:
-                for line in f:
-                    entry = _parse_audit_log_entry(line, user)
-                    if entry:
-                        command_history.append(entry)
-        except FileNotFoundError:
-            return []
+    async def get_audit_entries(self, limit: int = 100) -> List[Dict[str, Any]]:
+        """The most recent entries this layer recorded, newest first."""
+        flt = AuditFilter(category=AuditCategory.SECURITY, resource_type=SECURITY_LAYER_SOURCE)
+        return await _layer_entries(flt, limit)
 
-        # Return most recent entries
-        return command_history[-limit:]
+    async def get_command_history(self, user: str | None = None, limit: int = 100) -> List[Dict[str, Any]]:
+        """Command execution attempts and completions, newest first, optionally for one user."""
+        flt = AuditFilter(
+            category=AuditCategory.SECURITY,
+            resource_type=SECURITY_LAYER_SOURCE,
+            actions=COMMAND_EXECUTION_ACTIONS,
+            actor_id=user,
+        )
+        return await _layer_entries(flt, limit)
 
     # =========================================================================
     # Authentication

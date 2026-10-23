@@ -50,7 +50,7 @@ assertions):
   for ``MemoryPool``, ``WeakCache`` and the ``memory_efficient_cache``
   decorator in the same module. 0 collapses each to zero capacity.
   Pre-#7437: 100 / 128 / 128.
-- ``memory_threshold_mb``/``memory_log_threshold_mb``: ``MemoryMonitor``'s
+- ``memory_threshold_mb``/``memory_log_threshold_mb``: ``ProcessMemoryMonitor``'s
   warning threshold, same module. 0 makes ``abs(diff) > threshold`` true for
   almost every allocation. Pre-#7437: 500 / 1.
 - ``chat_timeout``: ``api/chat.py`` reads it unguarded; 0 timed out every
@@ -128,7 +128,6 @@ commit's pre-image), not carried over from the issue table unchecked; see
 from __future__ import annotations
 
 import ast
-import logging
 import pathlib
 import sys
 from pathlib import Path
@@ -145,16 +144,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 # case and fails the first with ModuleNotFoundError.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
+from _check_harness import VacuousScan, run_anchored  # noqa: E402
 from _scan_helpers import (  # noqa: E402
     EXCLUDED_DIR_NAMES,
     PY_FLOOR,
     enforce_reach,
     scan_python_files,
 )
-
-# Plain stdlib logging (#1082): a bare hook script must not drag config loading
-# onto every commit -- same trade as ``scripts/check_python_file_size.py``.
-logger = logging.getLogger(__name__)
 
 #: Name this guard reports under, in messages and in its floor failures.
 HOOK_ID = "getenv-ssot-drift"
@@ -180,6 +176,11 @@ FIELD_DEFAULT_FLOOR = 300
 #: An empty offender list from a sweep that matched zero pairs asserts
 #: nothing.
 GETENV_CALL_FLOOR = 8
+
+#: SSOT settings modules split out of ``ssot_config.py`` for its size ceiling; their
+#: ``Field`` aliases are SSOT config exactly like ``ssot_config.py``'s (#17312: ``TLSConfig``
+#: moved to ``ssot_tls.py``, which took the TLS getenv-pair sites out of the sweep).
+SSOT_FIELD_SOURCES = ("ssot_config.py", "ssot_tls.py")
 
 
 def _call_name(node: ast.Call) -> str | None:
@@ -309,7 +310,7 @@ def _in_scope(path: Path, repo_root: Path) -> bool:
         return False
     if "tests" in parts:
         return False
-    if path.name in ("ssot_config.py",) or path.name.endswith("_test.py"):
+    if path.name in SSOT_FIELD_SOURCES or path.name.endswith("_test.py"):
         return False
     return True
 
@@ -320,22 +321,24 @@ def _swept_files(repo_root: Path) -> list[Path]:
     The floor is checked against the **whole** tracked enumeration, not the
     governed-root subset: the subset is legitimately a few hundred files, so a
     floor there would have to be set so low it could not detect a lost sweep.
-    Raises rather than returning a short list — a sweep under the floor must
-    not be able to answer "no offenders" (#14896).
+    Raises :class:`VacuousScan` (a ``RuntimeError``) rather than returning a
+    short list -- a sweep under the floor must not be able to answer "no
+    offenders" (#14896); the harness turns it into exit ``2``.
     """
     files, full_repo = scan_python_files([], repo_root)
     if enforce_reach(len(files), PY_FLOOR, hook=HOOK_ID, full_repo=full_repo):
-        raise RuntimeError(f"{HOOK_ID}: full-repo sweep reached only {len(files)} file(s); floor is {PY_FLOOR}")
+        raise VacuousScan(f"{HOOK_ID}: full-repo sweep reached only {len(files)} file(s); floor is {PY_FLOOR}")
     return sorted(path for path in files if _in_scope(path, repo_root))
 
 
 def find_drift(repo_root: Path) -> tuple[list[str], int]:
     """Offender strings, and the number of in-scope call sites examined."""
-    ssot_source = (repo_root / "autobot_shared" / "ssot_config.py").read_text(encoding="utf-8")
-    field_defaults = extract_field_defaults(ssot_source)
-    assert (
-        len(field_defaults) >= FIELD_DEFAULT_FLOOR
-    ), f"only {len(field_defaults)} ssot_config field defaults reached — the sweep broke"
+    field_defaults: dict[str, Any] = {}
+    for name in SSOT_FIELD_SOURCES:
+        source = (repo_root / "autobot_shared" / name).read_text(encoding="utf-8")
+        field_defaults.update(extract_field_defaults(source))
+    if len(field_defaults) < FIELD_DEFAULT_FLOOR:
+        raise VacuousScan(f"only {len(field_defaults)} ssot_config field defaults reached — the sweep broke")
 
     offenders: list[str] = []
     calls_examined = 0
@@ -358,30 +361,37 @@ def find_drift(repo_root: Path) -> tuple[list[str], int]:
     return offenders, calls_examined
 
 
+def _summary(n: int) -> str:
+    return (
+        f"[{HOOK_ID}] {n} call-site default(s) disagree with ssot_config. Read the value "
+        "through ssot_config instead of re-stating it (#13264)."
+    )
+
+
+def _collect(argv: list[str], repo_root: Path) -> tuple[int, list[str]]:
+    """``(comparable getenv/ssot_config pairs examined, finding lines)``; *argv* is unused."""
+    del argv  # full-repo only, by construction
+    for name in SSOT_FIELD_SOURCES:
+        # Every SSOT field source must be present: a missing one is a refusal (exit 2), never a skip.
+        if not (repo_root / "autobot_shared" / name).is_file():
+            raise VacuousScan(f"autobot_shared/{name} is not in {repo_root} -- there are no defaults to compare")
+    offenders, calls_examined = find_drift(repo_root)
+    return calls_examined, [f"[{HOOK_ID}] {offender}" for offender in offenders]
+
+
 def main(argv: list[str] | None = None) -> int:
     """Full-repo drift check. Always sweeps the whole tree: a call-site default
     and the ``ssot_config`` field it contradicts are in two different files, so
     a changed-files-only run would miss exactly the pairs this exists to find.
+
+    Two floors, and they are different ones: :data:`PY_FLOOR` (inside
+    ``_swept_files``) proves the file sweep had reach; :data:`GETENV_CALL_FLOOR`
+    proves the sweep actually *matched* getenv/ssot_config pairs. An empty
+    offender list from zero comparable pairs asserts nothing (#14896). Either
+    shortfall exits ``2``.
     """
-    del argv  # full-repo only, by construction
-    repo_root = Path(__file__).resolve().parents[2]
-    offenders, calls_examined = find_drift(repo_root)
-    # The second floor, and a different one: PY_FLOOR proves the file sweep had
-    # reach, this proves the sweep actually *matched* getenv/ssot_config pairs.
-    # An empty offender list from zero comparable pairs asserts nothing (#14896).
-    if enforce_reach(calls_examined, GETENV_CALL_FLOOR, hook=HOOK_ID, full_repo=True):
-        return 1
-    for offender in offenders:
-        logger.error("[%s] %s", HOOK_ID, offender)
-    if offenders:
-        logger.error(
-            "[%s] %d call-site default(s) disagree with ssot_config. Read the value "
-            "through ssot_config instead of re-stating it (#13264).",
-            HOOK_ID,
-            len(offenders),
-        )
-        return 1
-    return 0
+    del argv
+    return run_anchored(HOOK_ID, _collect, [], anchor=Path(__file__), floor=GETENV_CALL_FLOOR, summary=_summary)
 
 
 if __name__ == "__main__":

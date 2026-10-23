@@ -44,7 +44,7 @@ from chromadb.config import Settings as ChromaSettings
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from knowledge_base import KnowledgeBase
+from knowledge_factory import get_knowledge_base_async
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -99,9 +99,8 @@ class RedisToChromaDBMigration:
 
         # Initialize Redis knowledge base (source)
         logger.info("Connecting to Redis...")
-        self.redis_kb = KnowledgeBase()
-        success = await self.redis_kb.initialize()
-        if not success:
+        self.redis_kb = await get_knowledge_base_async()
+        if self.redis_kb is None:
             raise RuntimeError("Failed to initialize Redis knowledge base")
         logger.info("✅ Connected to Redis")
 

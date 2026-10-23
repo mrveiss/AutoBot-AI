@@ -16,7 +16,7 @@
   # references stay inside that guard's population rather than silently leaving
   # it (which is how #13744 would become undetectable again).
   vars: &deploy_paths
-    deployed_src_root: /opt/autobot/src
+    deployed_src_root: "{{ autobot.base_dir }}/src"
 
   tasks:
     - name: Install common packages
@@ -42,7 +42,7 @@
         name: autobot-service
         system: true
         shell: /bin/bash
-        home: /opt/autobot
+        home: "{{ autobot.base_dir }}"
         create_home: true
 
     - name: Create service directories
@@ -53,10 +53,10 @@
         group: autobot-service
         mode: '0755'
       loop:
-        - /opt/autobot
-        - /opt/autobot/logs
-        - /opt/autobot/data
-        - /opt/autobot/config
+        - "{{ autobot.base_dir }}"
+        - "{{ autobot.base_dir }}/logs"
+        - "{{ autobot.base_dir }}/data"
+        - "{{ autobot.base_dir }}/config"
         - /var/log/autobot
 
 # Deploy Redis Stack natively on VM3 (Database VM)
@@ -188,7 +188,7 @@
               [Service]
               Type=simple
               User=autobot-service
-              WorkingDirectory=/opt/autobot
+              WorkingDirectory={{ autobot.base_dir }}
               ExecStart=/usr/local/bin/redisinsight --port 8002 --host 0.0.0.0
               Restart=always
               RestartSec=3
@@ -376,7 +376,7 @@
     <<: *deploy_paths
     # Matches roles/npu-worker's npu_install_dir (#13746) so the role-based and
     # playbook-based NPU paths build the same venv rather than two.
-    npu_venv: /opt/autobot/autobot-npu-worker/venv
+    npu_venv: "{{ autobot.base_dir }}/autobot-npu-worker/venv"
 
   tasks:
     # #13747: was pinned to 3.11 on the premise that OpenVINO ships no 3.14
@@ -410,7 +410,7 @@
 
     - name: Copy AutoBot source code for NPU Worker
       synchronize:
-        src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/
+        src: ${AUTOBOT_PROJECT_ROOT:-{{ autobot.base_dir }}/code_source}/
         dest: "{{ deployed_src_root }}/"
         delete: false
         recursive: true
@@ -513,7 +513,7 @@
           openvino_device = AUTO
           npu_priority = high
           gpu_fallback = true
-          device_cache_dir = /opt/autobot/data/device_cache
+          device_cache_dir = {{ autobot.base_dir }}/data/device_cache
 
           [server]
           host = 0.0.0.0
@@ -530,7 +530,7 @@
           log_device_usage = true
           performance_metrics = true
           temperature_monitoring = true
-        dest: /opt/autobot/config/npu-worker.conf
+        dest: "{{ autobot.base_dir }}/config/npu-worker.conf"
         owner: autobot-service
         group: autobot-service
         mode: '0644'
@@ -607,7 +607,7 @@
 
     - name: Copy AutoBot source code
       synchronize:
-        src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/
+        src: ${AUTOBOT_PROJECT_ROOT:-{{ autobot.base_dir }}/code_source}/
         dest: "{{ deployed_src_root }}/"
         delete: false
         recursive: true
@@ -631,17 +631,17 @@
         name: python_interpreter
         tasks_from: ensure_venv_version
       vars:
-        venv_path: /opt/autobot/venv
+        venv_path: "{{ autobot.base_dir }}/venv"
         venv_python: python3.14
 
     - name: Create Python virtual environment
       shell: |
-        cd /opt/autobot
+        cd {{ autobot.base_dir }}
         python3.14 -m venv venv
         source venv/bin/activate
         pip install --upgrade pip setuptools wheel
       args:
-        creates: /opt/autobot/venv/bin/activate
+        creates: "{{ autobot.base_dir }}/venv/bin/activate"
       become_user: autobot-service
       environment:
         PIP_DEFAULT_TIMEOUT: "120"
@@ -649,7 +649,7 @@
 
     - name: Install Python dependencies
       shell: |
-        cd /opt/autobot
+        cd {{ autobot.base_dir }}
         source venv/bin/activate
         pip install --timeout 120 -r src/requirements.txt
       become_user: autobot-service
@@ -678,10 +678,10 @@
               [Service]
               Type=simple
               User=autobot-service
-              WorkingDirectory=/opt/autobot
+              WorkingDirectory={{ autobot.base_dir }}
               ExecStart=/usr/local/bin/ollama serve
               Environment="OLLAMA_HOST=0.0.0.0:11434"
-              Environment="OLLAMA_MODELS=/opt/autobot/models"
+              Environment="OLLAMA_MODELS={{ autobot.base_dir }}/models"
               Restart=always
               RestartSec=3
 
@@ -724,7 +724,7 @@
           Type=simple
           User=autobot-service
           WorkingDirectory={{ deployed_src_root }}
-          ExecStart=/opt/autobot/venv/bin/python -m docker.ai-stack.ai_server
+          ExecStart={{ autobot.base_dir }}/venv/bin/python -m docker.ai-stack.ai_server
           Environment="AI_SERVER_HOST=0.0.0.0"
           Environment="AI_SERVER_PORT=8080"
           Environment="REDIS_HOST={{ redis_host }}"
@@ -750,7 +750,7 @@
           Type=simple
           User=autobot-service
           WorkingDirectory={{ deployed_src_root }}
-          ExecStart=/opt/autobot/venv/bin/python -m docker.npu-worker.npu_worker
+          ExecStart={{ autobot.base_dir }}/venv/bin/python -m docker.npu-worker.npu_worker
           Environment="NPU_SERVER_HOST=0.0.0.0"
           Environment="NPU_SERVER_PORT=8081"
           Environment="REDIS_HOST={{ redis_host }}"
@@ -815,7 +815,7 @@
 
     - name: Copy AutoBot source code
       synchronize:
-        src: ${AUTOBOT_PROJECT_ROOT:-/opt/autobot/code_source}/
+        src: ${AUTOBOT_PROJECT_ROOT:-{{ autobot.base_dir }}/code_source}/
         dest: "{{ deployed_src_root }}/"
         delete: false
         recursive: true
@@ -842,9 +842,10 @@
           User=autobot-service
           WorkingDirectory={{ deployed_src_root }}
           ExecStartPre=/usr/bin/Xvfb :99 -screen 0 1920x1080x24 &
-          ExecStart=/usr/bin/node playwright-server.js
+          ExecStart=/usr/bin/node {{ deployed_src_root }}/autobot-browser-worker/playwright-server.js
+          Environment="PLAYWRIGHT_PORT={{ browser_port }}"
           Environment="DISPLAY=:99"
-          Environment="PLAYWRIGHT_SERVER_PORT=3000"
+          Environment="PLAYWRIGHT_SERVER_PORT={{ browser_port }}"
           Environment="REDIS_HOST={{ redis_host }}"
           Environment="REDIS_PORT={{ redis_port }}"
           Environment="REDIS_PASSWORD={{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"

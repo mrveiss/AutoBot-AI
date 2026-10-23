@@ -14,6 +14,22 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import { getBackendUrl } from '@/config/ssot-config'
+import type { SlmUserResponse } from '@/composables/useSlmUserApi'
+import type { components } from '@/types/generated/api'
+import {
+  toNPUWorker,
+  type NPUWorker,
+  type NPUWorkerDefinition,
+  type NPUWorkerDetails,
+  type NPUWorkerTestResult,
+} from '@/composables/npuWorkerModel'
+
+export { toNPUWorker }
+export type { NPUWorker, NPUWorkerDefinition, NPUWorkerTestResult }
+import type * as LF from '@/composables/autobotAdminModels'
+import type { AgentConfigSummary, MCPServer, PermissionRule } from '@/composables/autobotAdminModels'
+export type { AgentConfigSummary, MCPServer, PermissionRule }
+export type { LogForwardingDestination } from '@/composables/autobotAdminModels'
 
 // Type definitions for AutoBot API responses
 
@@ -22,14 +38,13 @@ export interface SettingsResponse {
   last_modified: string
 }
 
-export interface UserResponse {
-  id: string
-  username: string
-  email?: string
-  roles: string[]
-  created_at: string
-  last_login?: string
-}
+/**
+ * The main backend's /api/user-management/users item. It is the same shared
+ * autobot_shared UserResponse the SLM backend serves, so the generated type is reused (#15536).
+ */
+export type UserResponse = SlmUserResponse
+export type UserCreate = components['schemas']['UserCreate']
+export type UserUpdate = components['schemas']['UserUpdate']
 
 export interface CacheConfig {
   enabled: boolean
@@ -43,32 +58,6 @@ export interface CacheStats {
   misses: number
   size_mb: number
   entries: number
-}
-
-export interface LogForwardingDestination {
-  id: string
-  name: string
-  type: 'syslog' | 'http' | 'file' | 'elasticsearch'
-  enabled: boolean
-  config: Record<string, unknown>
-}
-
-export interface NPUWorker {
-  id: string
-  hostname: string
-  ip_address: string
-  status: 'online' | 'offline' | 'busy' | 'error'
-  capabilities: string[]
-  current_load: number
-  last_heartbeat: string
-}
-
-export interface PermissionRule {
-  id: string
-  pattern: string
-  action: 'allow' | 'deny' | 'ask'
-  scope: string
-  enabled: boolean
 }
 
 export interface PromptTemplate {
@@ -87,14 +76,6 @@ export interface FileItem {
   size?: number
   modified?: string
   permissions?: string
-}
-
-export interface MCPServer {
-  id: string
-  name: string
-  type: string
-  status: 'running' | 'stopped' | 'error'
-  config: Record<string, unknown>
 }
 
 export interface Agent {
@@ -669,25 +650,14 @@ export function useAutobotApi() {
 
   // Add auth token to all requests
   client.interceptors.request.use((config) => {
-    // Try SLM token first, fallback to AutoBot token
-    const token = authStore.token || localStorage.getItem('autobot_access_token')
+    // The SLM session token; nothing writes `autobot_access_token`, so the old
+    // fallback to it is gone (#17856 row 8)
+    const token = authStore.token
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
     return config
   })
-
-  // Response interceptor for error handling
-  client.interceptors.response.use(
-    (response) => response,
-    (error) => {
-      if (error.response?.status === 401) {
-        // Token expired or invalid
-        localStorage.removeItem('autobot_access_token')
-      }
-      return Promise.reject(error)
-    }
-  )
 
   // =============================================================================
   // Settings API
@@ -699,7 +669,7 @@ export function useAutobotApi() {
   }
 
   async function updateSettings(settings: Record<string, unknown>): Promise<SettingsResponse> {
-    const response = await client.put<SettingsResponse>('/settings', settings)
+    const response = await client.post<SettingsResponse>('/settings/', settings)
     return response.data
   }
 
@@ -712,7 +682,7 @@ export function useAutobotApi() {
     section: string,
     data: Record<string, unknown>
   ): Promise<Record<string, unknown>> {
-    const response = await client.put(`/settings/${section}`, data)
+    const response = await client.post(`/settings/${section}`, data)
     return response.data
   }
 
@@ -721,30 +691,22 @@ export function useAutobotApi() {
   // =============================================================================
 
   async function getUsers(): Promise<UserResponse[]> {
-    const response = await client.get<{ users: UserResponse[] }>('/users')
+    const response = await client.get<{ users: UserResponse[] }>('/user-management/users')
     return response.data.users
   }
 
-  async function createUser(userData: {
-    username: string
-    password: string
-    email?: string
-    roles?: string[]
-  }): Promise<UserResponse> {
-    const response = await client.post<UserResponse>('/users', userData)
-    return response.data
+  async function createUser(userData: UserCreate): Promise<UserResponse> {
+    const response = await client.post<{ user: UserResponse }>('/user-management/users', userData)
+    return response.data.user
   }
 
-  async function updateUser(
-    userId: string,
-    data: Partial<UserResponse & { password?: string }>
-  ): Promise<UserResponse> {
-    const response = await client.patch<UserResponse>(`/users/${userId}`, data)
+  async function updateUser(userId: string, data: UserUpdate): Promise<UserResponse> {
+    const response = await client.patch<UserResponse>(`/user-management/users/${userId}`, data)
     return response.data
   }
 
   async function deleteUser(userId: string): Promise<void> {
-    await client.delete(`/users/${userId}`)
+    await client.delete(`/user-management/users/${userId}`)
   }
 
   // =============================================================================
@@ -757,7 +719,7 @@ export function useAutobotApi() {
   }
 
   async function updateCacheConfig(config: Partial<CacheConfig>): Promise<CacheConfig> {
-    const response = await client.put<CacheConfig>('/cache/config', config)
+    const response = await client.post<CacheConfig>('/cache/config', config)
     return response.data
   }
 
@@ -781,17 +743,22 @@ export function useAutobotApi() {
   // Log Forwarding API
   // =============================================================================
 
-  async function getLogForwardingDestinations(): Promise<LogForwardingDestination[]> {
-    const response = await client.get<{ destinations: LogForwardingDestination[] }>(
-      '/log-forwarding/destinations'
-    )
-    return response.data.destinations
+  // Destinations are keyed by `name`; the list is a bare array (api/log_forwarding.py).
+  const lfDest = (name: string) => `/log-forwarding/destinations/${encodeURIComponent(name)}`
+  async function getLogForwardingDestinations(): Promise<LF.LogForwardingDestination[]> {
+    const response = await client.get<LF.LogForwardingDestination[]>('/log-forwarding/destinations')
+    return response.data
+  }
+
+  async function getLogForwardingDestination(name: string): Promise<LF.LogForwardingDestination> {
+    const response = await client.get<LF.LogForwardingDestination>(lfDest(name))
+    return response.data
   }
 
   async function createLogForwardingDestination(
-    destination: Omit<LogForwardingDestination, 'id'>
-  ): Promise<LogForwardingDestination> {
-    const response = await client.post<LogForwardingDestination>(
+    destination: LF.LogForwardingDestinationCreate
+  ): Promise<LF.LogForwardingMutationResult> {
+    const response = await client.post<LF.LogForwardingMutationResult>(
       '/log-forwarding/destinations',
       destination
     )
@@ -799,26 +766,20 @@ export function useAutobotApi() {
   }
 
   async function updateLogForwardingDestination(
-    id: string,
-    data: Partial<LogForwardingDestination>
-  ): Promise<LogForwardingDestination> {
-    const response = await client.patch<LogForwardingDestination>(
-      `/log-forwarding/destinations/${id}`,
-      data
-    )
+    name: string,
+    data: LF.LogForwardingDestinationUpdate
+  ): Promise<LF.LogForwardingMutationResult> {
+    const response = await client.put<LF.LogForwardingMutationResult>(lfDest(name), data)
     return response.data
   }
 
-  async function deleteLogForwardingDestination(id: string): Promise<void> {
-    await client.delete(`/log-forwarding/destinations/${id}`)
+  async function deleteLogForwardingDestination(name: string): Promise<LF.LogForwardingMessage> {
+    const response = await client.delete<LF.LogForwardingMessage>(lfDest(name))
+    return response.data
   }
 
-  async function testLogForwardingDestination(
-    id: string
-  ): Promise<{ success: boolean; message: string }> {
-    const response = await client.post<{ success: boolean; message: string }>(
-      `/log-forwarding/destinations/${id}/test`
-    )
+  async function testLogForwardingDestination(name: string): Promise<LF.LogForwardingTestResult> {
+    const response = await client.post<LF.LogForwardingTestResult>(`${lfDest(name)}/test`)
     return response.data
   }
 
@@ -826,70 +787,74 @@ export function useAutobotApi() {
   // NPU Workers API
   // =============================================================================
 
+  // The main backend serves workers at /api/npu/... (api/npu_workers.py), as
+  // NPUWorkerDetails; toNPUWorker() flattens each one for the settings table (#15536).
   async function getNPUWorkers(): Promise<NPUWorker[]> {
-    const response = await client.get<{ workers: NPUWorker[] }>('/npu-workers')
-    return response.data.workers
+    const response = await client.get<NPUWorkerDetails[]>('/npu/workers')
+    return response.data.map(toNPUWorker)
   }
 
   async function getNPUWorker(workerId: string): Promise<NPUWorker> {
-    const response = await client.get<NPUWorker>(`/npu-workers/${workerId}`)
-    return response.data
+    const response = await client.get<NPUWorkerDetails>(`/npu/workers/${workerId}`)
+    return toNPUWorker(response.data)
   }
 
+  /** PUT replaces the whole definition, so the change goes over a fresh read, not the table's copy. */
   async function updateNPUWorker(
     workerId: string,
-    data: Partial<NPUWorker>
-  ): Promise<NPUWorker> {
-    const response = await client.patch<NPUWorker>(`/npu-workers/${workerId}`, data)
-    return response.data
+    changes: Partial<NPUWorkerDefinition>
+  ): Promise<void> {
+    const current = await getNPUWorker(workerId)
+    await client.put(`/npu/workers/${workerId}`, { ...current.definition, ...changes })
   }
 
+  // No route serves this yet: #18725 builds it, and the settings page hides its button until then.
   async function restartNPUWorker(workerId: string): Promise<{ status: string }> {
     const response = await client.post<{ status: string }>(`/npu-workers/${workerId}/restart`)
     return response.data
   }
 
-  // Missing NPU Worker methods (Issue #729)
   async function getNPULoadBalancingConfig(): Promise<Record<string, unknown>> {
-    const response = await client.get('/npu-workers/load-balancing/config')
+    const response = await client.get('/npu/load-balancing')
     return response.data
   }
 
   async function updateNPULoadBalancingConfig(config: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await client.put('/npu-workers/load-balancing/config', config)
+    const response = await client.put('/npu/load-balancing', config)
     return response.data
   }
 
-  async function pairNPUWorker(workerId: string, data: { hostname: string; ip_address: string }): Promise<NPUWorker> {
-    const response = await client.post<NPUWorker>(`/npu-workers/${workerId}/pair`, data)
-    return response.data
+  /** The main host contacts the worker at `url`, gives it an id and registers it. */
+  async function pairNPUWorker(data: { url: string; name?: string; enabled?: boolean }): Promise<void> {
+    await client.post('/npu/workers/pair', data)
   }
 
-  async function testNPUWorker(workerId: string): Promise<{ success: boolean; latency_ms: number; message: string }> {
-    const response = await client.post<{ success: boolean; latency_ms: number; message: string }>(`/npu-workers/${workerId}/test`)
+  async function testNPUWorker(workerId: string): Promise<NPUWorkerTestResult> {
+    const response = await client.post<NPUWorkerTestResult>(`/npu/workers/${workerId}/test`)
     return response.data
   }
 
   async function removeNPUWorker(workerId: string): Promise<void> {
-    await client.delete(`/npu-workers/${workerId}`)
+    await client.delete(`/npu/workers/${workerId}`)
   }
 
   // =============================================================================
   // Permission API
   // =============================================================================
 
+  // Rules are grouped by action and have no id: tool + pattern identify one (api/permissions.py).
   async function getPermissionRules(): Promise<PermissionRule[]> {
-    const response = await client.get<{ rules: PermissionRule[] }>('/permissions/rules')
-    return response.data.rules
+    const response = await client.get<Record<PermissionRule['action'], PermissionRule[]>>('/permissions/rules')
+    const { allow = [], ask = [], deny = [] } = response.data
+    return [...allow, ...ask, ...deny]
   }
 
-  async function createPermissionRule(
-    rule: Omit<PermissionRule, 'id'>
-  ): Promise<PermissionRule> {
-    const response = await client.post<PermissionRule>('/permissions/rules', rule)
+  async function createPermissionRule(rule: PermissionRule): Promise<{ status: string; message: string }> {
+    const response = await client.post<{ status: string; message: string }>('/permissions/rules', rule)
     return response.data
   }
 
+  // No route updates a rule (#18736 decides): delete and re-create it instead.
   async function updatePermissionRule(
     id: string,
     data: Partial<PermissionRule>
@@ -898,8 +863,8 @@ export function useAutobotApi() {
     return response.data
   }
 
-  async function deletePermissionRule(id: string): Promise<void> {
-    await client.delete(`/permissions/rules/${id}`)
+  async function deletePermissionRule(rule: Pick<PermissionRule, 'tool' | 'pattern'>): Promise<void> {
+    await client.delete('/permissions/rules', { data: rule })
   }
 
   // =============================================================================
@@ -972,14 +937,15 @@ export function useAutobotApi() {
     return response.data.content
   }
 
-  async function writeFile(path: string, content: string, host?: string): Promise<void> {
-    await client.post('/files/write', { path, content, host })
+  /** Admin only; the main backend writes on its own host, so there is no host parameter. */
+  async function writeFile(path: string, content: string): Promise<void> {
+    await client.post('/filesystem/mcp/write_file', { path, content })
   }
 
   async function deleteFile(path: string, host?: string): Promise<void> {
     const params = new URLSearchParams({ path })
     if (host) params.append('host', host)
-    await client.delete(`/files?${params}`)
+    await client.delete(`/files/delete?${params}`)
   }
 
   async function uploadFile(
@@ -1013,15 +979,16 @@ export function useAutobotApi() {
   // =============================================================================
 
   async function getMCPServers(): Promise<MCPServer[]> {
-    const response = await client.get<{ servers: MCPServer[] }>('/mcp/servers')
+    const response = await client.get<{ servers: MCPServer[] }>('/mcp/external_servers')
     return response.data.servers
   }
 
   async function getMCPServer(id: string): Promise<MCPServer> {
-    const response = await client.get<MCPServer>(`/mcp/servers/${id}`)
+    const response = await client.get<MCPServer>(`/mcp/external_servers/${id}`)
     return response.data
   }
 
+  // start/stop/restart: no route serves these (#18736 decides).
   async function startMCPServer(id: string): Promise<{ status: string }> {
     const response = await client.post<{ status: string }>(`/mcp/servers/${id}/start`)
     return response.data
@@ -1061,8 +1028,8 @@ export function useAutobotApi() {
   // Agents API
   // =============================================================================
 
-  async function getAgents(): Promise<Agent[]> {
-    const response = await client.get<{ agents: Agent[] }>('/agents')
+  async function getAgents(): Promise<AgentConfigSummary[]> {
+    const response = await client.get<{ agents: AgentConfigSummary[] }>('/agent_config/agents')
     return response.data.agents
   }
 
@@ -1122,6 +1089,7 @@ export function useAutobotApi() {
   // Voice API
   // =============================================================================
 
+  // No route serves voice config (#18736 decides).
   async function getVoiceConfig(): Promise<Record<string, unknown>> {
     const response = await client.get('/voice/config')
     return response.data
@@ -1160,7 +1128,7 @@ export function useAutobotApi() {
   }
 
   async function updateLLMConfig(config: Record<string, unknown>): Promise<void> {
-    await client.put('/llm/config', config)
+    await client.post('/llm/config', config)
   }
 
   async function getLLMModels(): Promise<Array<{ id: string; name: string; provider: string }>> {
@@ -1174,10 +1142,11 @@ export function useAutobotApi() {
    * Get LLM fallback monitoring status (GH#8998 / #10488).
    * Backend returns a flat payload (no create_success_response envelope):
    * { configured_chains: [...], active_fallbacks: [...] }.
-   * The /autobot-api proxy strips its prefix -> backend /api/llm-providers/fallback-status.
+   * The /autobot-api proxy maps to the main backend's /api, where the llm_providers
+   * router is mounted at /llm (#15536) -> backend /api/llm/fallback-status.
    */
   async function getLLMFallbackStatus(): Promise<LLMFallbackStatus> {
-    const response = await client.get<LLMFallbackStatus>('/llm-providers/fallback-status')
+    const response = await client.get<LLMFallbackStatus>('/llm/fallback-status')
     return {
       configured_chains: response.data.configured_chains || [],
       active_fallbacks: response.data.active_fallbacks || [],
@@ -1280,10 +1249,11 @@ export function useAutobotApi() {
   // =============================================================================
 
   async function getSystemMetrics(): Promise<Record<string, unknown>> {
-    const response = await client.get('/monitoring/system')
+    const response = await client.get('/system/metrics')
     return response.data
   }
 
+  // No combined hardware route: /monitoring/hardware/{gpu,npu,system} are separate (#18736 decides).
   async function getHardwareInfo(): Promise<Record<string, unknown>> {
     const response = await client.get('/monitoring/hardware')
     return response.data
@@ -1493,7 +1463,7 @@ export function useAutobotApi() {
   }
 
   async function getBatchStatus(): Promise<Record<string, unknown>> {
-    const response = await client.get('/batch/status')
+    const response = await client.get('/batch-jobs/status')
     return response.data
   }
 
@@ -1516,36 +1486,35 @@ export function useAutobotApi() {
   // Log Forwarding Status/Control (Issue #729)
   // =============================================================================
 
-  async function getLogForwardingStatus(): Promise<{
-    running: boolean
-    total_destinations: number
-    enabled_destinations: number
-    healthy_destinations: number
-    total_sent: number
-    total_failed: number
-    auto_start: boolean
-  }> {
-    const response = await client.get('/log-forwarding/status')
+  async function getLogForwardingStatus(): Promise<LF.LogForwardingStatus> {
+    const response = await client.get<LF.LogForwardingStatus>('/log-forwarding/status')
     return response.data
   }
 
-  async function startLogForwarding(): Promise<{ status: string }> {
-    const response = await client.post<{ status: string }>('/log-forwarding/start')
+  async function startLogForwarding(): Promise<LF.LogForwardingMessage> {
+    const response = await client.post<LF.LogForwardingMessage>('/log-forwarding/start')
     return response.data
   }
 
-  async function stopLogForwarding(): Promise<{ status: string }> {
-    const response = await client.post<{ status: string }>('/log-forwarding/stop')
+  async function stopLogForwarding(): Promise<LF.LogForwardingMessage> {
+    const response = await client.post<LF.LogForwardingMessage>('/log-forwarding/stop')
     return response.data
   }
 
-  async function setLogForwardingAutoStart(enabled: boolean): Promise<{ status: string }> {
-    const response = await client.post<{ status: string }>('/log-forwarding/auto-start', { enabled })
+  async function getLogForwardingAutoStart(): Promise<LF.LogForwardingAutoStart> {
+    const response = await client.get<LF.LogForwardingAutoStart>('/log-forwarding/auto-start')
     return response.data
   }
 
-  async function testAllLogForwardingDestinations(): Promise<{ results: Array<{ id: string; success: boolean; message: string }> }> {
-    const response = await client.post<{ results: Array<{ id: string; success: boolean; message: string }> }>('/log-forwarding/test-all')
+  async function setLogForwardingAutoStart(enabled: boolean): Promise<LF.LogForwardingAutoStart> {
+    const response = await client.put<LF.LogForwardingAutoStart>('/log-forwarding/auto-start', null, {
+      params: { enabled },
+    })
+    return response.data
+  }
+
+  async function testAllLogForwardingDestinations(): Promise<LF.LogForwardingTestAllResult> {
+    const response = await client.post<LF.LogForwardingTestAllResult>('/log-forwarding/test-all')
     return response.data
   }
 
@@ -1766,9 +1735,8 @@ export function useAutobotApi() {
    * Reachability probe behind the "Test connection" control (#13079).
    *
    * `validateStatus` accepts every status code so the probe reports
-   * "reachable but rejected" rather than throwing, and — critically — never
-   * trips the response interceptor that clears `autobot_access_token`: a
-   * connectivity diagnostic must not be able to log the operator out.
+   * "reachable but rejected" rather than throwing: a connectivity diagnostic
+   * reports the status, it does not raise on a 4xx/5xx.
    */
   async function probeBackendHealth(): Promise<BackendHealthProbe> {
     const response = await client.get('/health', { validateStatus: () => true })
@@ -1945,20 +1913,21 @@ export function useAutobotApi() {
     warmupCache,
     // Log Forwarding
     getLogForwardingDestinations,
+    getLogForwardingDestination,
     createLogForwardingDestination,
     updateLogForwardingDestination,
     deleteLogForwardingDestination,
     testLogForwardingDestination,
     // NPU Workers
     getNPUWorkers,
-    getNPUWorker,
     updateNPUWorker,
-    restartNPUWorker,
     getNPULoadBalancingConfig,
     updateNPULoadBalancingConfig,
     pairNPUWorker,
     testNPUWorker,
     removeNPUWorker,
+    getNPUWorker,
+    restartNPUWorker,
     // Permissions
     getPermissionRules,
     createPermissionRule,
@@ -1978,18 +1947,18 @@ export function useAutobotApi() {
     deleteFile,
     uploadFile,
     // MCP Registry (Issue #835)
+    getMCPBridges,
     getMCPServers,
     getMCPServer,
     startMCPServer,
     stopMCPServer,
     restartMCPServer,
-    getMCPBridges,
     getMCPTools,
     getMCPHealth,
     getMCPStats,
     // Agents (Issue #835)
-    getAgents,
     getAgent,
+    getAgents,
     updateAgent,
     getAvailableAgents,
     getAgentsStatus,
@@ -2001,9 +1970,9 @@ export function useAutobotApi() {
     // Shared Chat Links (GH#8996)
     getSharedLinksAdmin,
     // Voice (Issue #835)
+    voiceListen,
     getVoiceConfig,
     updateVoiceConfig,
-    voiceListen,
     voiceSpeak,
     // LLM
     getLLMConfig,
@@ -2021,9 +1990,9 @@ export function useAutobotApi() {
     // Logs
     getLogs,
     // System
+    getSystemHealth,
     getSystemMetrics,
     getHardwareInfo,
-    getSystemHealth,
     getErrorStatistics,
     getRecentErrors,
     getMetricsSummary,
@@ -2084,6 +2053,7 @@ export function useAutobotApi() {
     probeBackendHealth,
     // Log Forwarding Control (Issue #729)
     getLogForwardingStatus,
+    getLogForwardingAutoStart,
     startLogForwarding,
     stopLogForwarding,
     setLogForwardingAutoStart,

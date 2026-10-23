@@ -48,6 +48,7 @@ import {
 import { formatFileSize } from '@/utils/formatHelpers'
 import { formatRelativeTime } from '@/utils/dateUtils'
 import { createLogger } from '@/utils/debugUtils'
+import { BaseAlert, BaseModal } from '@autobot/ui'
 
 const logger = createLogger('DataHygieneView')
 const api = useAutobotApi()
@@ -368,9 +369,7 @@ onMounted(() => {
       </div>
       <p class="text-sm text-gray-500 mb-4">{{ $t('dataHygiene.storage.subtitle') }}</p>
 
-      <div v-if="storageError" class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700" role="alert">
-        {{ storageError }}
-      </div>
+      <BaseAlert v-if="storageError" variant="error" class="mb-4" :message="storageError" />
       <div
         v-for="status in unavailableProviders"
         :key="status.provider"
@@ -475,43 +474,39 @@ onMounted(() => {
       </div>
 
       <!-- Preview modal -->
-      <div v-if="previewOpen" class="fixed inset-0 z-50 flex items-center justify-center" data-testid="storage-preview-modal">
-        <div class="absolute inset-0 bg-black/50" @click="cancelPreview"></div>
-        <div class="relative bg-white rounded-lg shadow-xl w-full max-w-lg p-6">
-          <h3 class="text-lg font-semibold text-gray-900 mb-2">{{ $t('dataHygiene.storage.previewTitle') }}</h3>
-          <p class="text-sm text-gray-600 mb-4">
-            {{ $t('dataHygiene.storage.previewBody', { count: selectedCandidates.length }) }}
-          </p>
-          <ul class="space-y-2 max-h-64 overflow-y-auto mb-4">
-            <li
-              v-for="c in selectedCandidates"
-              :key="candidateKey(c)"
-              class="text-sm p-2 bg-gray-50 rounded-lg"
-              data-testid="preview-candidate"
-            >
-              <span class="font-medium">{{ c.provider }}:{{ c.location }}</span>
-              <span class="text-gray-500"> — {{ formatFileSize(c.size_bytes) }}, {{ c.reason }}</span>
-            </li>
-          </ul>
-          <div class="flex justify-end gap-3">
-            <button
-              class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
-              data-testid="storage-preview-cancel"
-              @click="cancelPreview"
-            >
-              {{ $t('dataHygiene.storage.previewCancel') }}
-            </button>
-            <button
-              class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
-              :disabled="proposing"
-              data-testid="storage-preview-confirm"
-              @click="confirmPreview"
-            >
-              {{ proposing ? $t('dataHygiene.storage.proposing') : $t('dataHygiene.storage.previewConfirm') }}
-            </button>
-          </div>
-        </div>
-      </div>
+      <BaseModal v-model="previewOpen" :title="$t('dataHygiene.storage.previewTitle')" size="md" :close-label="$t('ui.modal.closeDialog')">
+        <p class="text-sm text-gray-600 mb-4" data-testid="storage-preview-modal">
+          {{ $t('dataHygiene.storage.previewBody', { count: selectedCandidates.length }) }}
+        </p>
+        <ul class="space-y-2 max-h-64 overflow-y-auto">
+          <li
+            v-for="c in selectedCandidates"
+            :key="candidateKey(c)"
+            class="text-sm p-2 bg-gray-50 rounded-lg"
+            data-testid="preview-candidate"
+          >
+            <span class="font-medium">{{ c.provider }}:{{ c.location }}</span>
+            <span class="text-gray-500"> — {{ formatFileSize(c.size_bytes) }}, {{ c.reason }}</span>
+          </li>
+        </ul>
+        <template #actions>
+          <button
+            class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+            data-testid="storage-preview-cancel"
+            @click="cancelPreview"
+          >
+            {{ $t('dataHygiene.storage.previewCancel') }}
+          </button>
+          <button
+            class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+            :disabled="proposing"
+            data-testid="storage-preview-confirm"
+            @click="confirmPreview"
+          >
+            {{ proposing ? $t('dataHygiene.storage.proposing') : $t('dataHygiene.storage.previewConfirm') }}
+          </button>
+        </template>
+      </BaseModal>
     </section>
 
     <!-- ============================= Unreachable resources ============================= -->
@@ -523,9 +518,7 @@ onMounted(() => {
       </div>
       <p class="text-sm text-gray-500 mb-4">{{ $t('dataHygiene.resources.subtitle') }}</p>
 
-      <div v-if="orphansError" class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700" role="alert">
-        {{ orphansError }}
-      </div>
+      <BaseAlert v-if="orphansError" variant="error" class="mb-4" :message="orphansError" />
 
       <div class="flex items-end gap-3 mb-4">
         <div>

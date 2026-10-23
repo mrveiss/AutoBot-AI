@@ -70,20 +70,22 @@ PENDING_REASONS: dict[str, str] = {}
 #: ladder. Only enums the probe actually flags belong here: an entry it does not flag is
 #: exempting nothing, and `test_every_distinct_entry_is_still_flagged` fails on it.
 DISTINCT_VOCABULARIES = {
+    "autobot_shared/risk_tier.py::RiskTier": (
+        "grades how much scrutiny an approval request needs (low..critical, no info rung); it ranks "
+        "a requested action's blast radius, not a finding someone detected"
+    ),
     "autobot-backend/secure_sandbox_executor.py::SandboxSecurityLevel": (
         "configures how strictly a sandbox isolates a run (low/medium/high); it grades a "
         "setting the caller picks, not a finding someone detected"
     ),
 }
 
-#: Flagged by the value probe and NOT aliased, each with the concrete reason. `KnowledgePriority`
-#: and `MaintenancePriority` were aliased to the canonical `Priority`, and `WorkItemPriority` is
-#: derived from it (pinned in `llc/tests/test_work_item_priority_derived_18098.py`); they left this list.
-UNCLASSIFIED_VALUE_MATCHES = {
-    "autobot-backend/api/knowledge_grounding_models.py::ReviewTicketPriority": (
-        "file owned by issue-18086-claim-models (#18098); analysed SAFE to alias to Priority"
-    ),
-}
+#: Flagged by the value probe and NOT aliased, each with the concrete reason. `KnowledgePriority`,
+#: `MaintenancePriority` and `ReviewTicketPriority` were aliased to the canonical `Priority`
+#: (the last pinned in `autobot-backend/review_ticket_priority_alias_18086_test.py`), and
+#: `WorkItemPriority` is derived from it (pinned in `llc/tests/test_work_item_priority_derived_18098.py`);
+#: they left this list. Empty now: a new match is a fork to alias, not an entry to add.
+UNCLASSIFIED_VALUE_MATCHES: dict[str, str] = {}
 
 #: Named non-forks that overlap the canonical with a non-canonical tail, so the value probe
 #: must NOT flag them. Canonical has no `success` or `suggestion` rung. Asserted unflagged
@@ -121,7 +123,7 @@ def _discover(root: Path) -> list[str]:
 REACH = declare(
     "severity-enum-fork-scan",
     discover=_discover,
-    floor=4_818,
+    floor=5268,
     growth=500,
     roots=SCANNED_ROOTS,
     what="tracked Python files scanned for a re-declared severity ladder",

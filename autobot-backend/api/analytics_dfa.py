@@ -35,12 +35,12 @@ from api.schemas_analytics import (
     DfaSinksResponse,
     DfaSourcesResponse,
     DfaVulnerabilitiesResponse,
+    DFAVulnerabilityType,
     SinkType,
     TaintLevel,
     TaintSummary,
     VariableDefResponse,
     VulnerabilityResponse,
-    VulnerabilityType,
 )
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -120,10 +120,10 @@ class TaintedPath:
 
 
 @dataclass
-class SecurityVulnerability:
+class DFATaintVulnerability:
     """Detected security vulnerability."""
 
-    vulnerability_type: VulnerabilityType
+    vulnerability_type: DFAVulnerabilityType
     severity: DFASeverity
     line: int
     column: int
@@ -144,7 +144,7 @@ class DataFlowGraph:
     def_use_chains: List[DefUseChain] = field(default_factory=list)
     edges: List[DataFlowEdge] = field(default_factory=list)
     tainted_paths: List[TaintedPath] = field(default_factory=list)
-    vulnerabilities: List[SecurityVulnerability] = field(default_factory=list)
+    vulnerabilities: List[DFATaintVulnerability] = field(default_factory=list)
 
 
 # =============================================================================
@@ -184,81 +184,81 @@ TAINT_SOURCES: Dict[str, Tuple[AnalyticsSourceType, TaintLevel]] = {
 }
 
 # Functions that are security-sensitive sinks
-TAINT_SINKS: Dict[str, Tuple[SinkType, VulnerabilityType, DFASeverity]] = {
+TAINT_SINKS: Dict[str, Tuple[SinkType, DFAVulnerabilityType, DFASeverity]] = {
     # SQL injection risks
     "execute": (
         SinkType.DATABASE_QUERY,
-        VulnerabilityType.SQL_INJECTION,
+        DFAVulnerabilityType.SQL_INJECTION,
         DFASeverity.CRITICAL,
     ),
     "executemany": (
         SinkType.DATABASE_QUERY,
-        VulnerabilityType.SQL_INJECTION,
+        DFAVulnerabilityType.SQL_INJECTION,
         DFASeverity.CRITICAL,
     ),
     "raw": (
         SinkType.DATABASE_QUERY,
-        VulnerabilityType.SQL_INJECTION,
+        DFAVulnerabilityType.SQL_INJECTION,
         DFASeverity.CRITICAL,
     ),
     # Command injection risks
     "os.system": (
         SinkType.SUBPROCESS,
-        VulnerabilityType.COMMAND_INJECTION,
+        DFAVulnerabilityType.COMMAND_INJECTION,
         DFASeverity.CRITICAL,
     ),
     "os.popen": (
         SinkType.SUBPROCESS,
-        VulnerabilityType.COMMAND_INJECTION,
+        DFAVulnerabilityType.COMMAND_INJECTION,
         DFASeverity.CRITICAL,
     ),
     "subprocess.call": (
         SinkType.SUBPROCESS,
-        VulnerabilityType.COMMAND_INJECTION,
+        DFAVulnerabilityType.COMMAND_INJECTION,
         DFASeverity.HIGH,
     ),
     "subprocess.run": (
         SinkType.SUBPROCESS,
-        VulnerabilityType.COMMAND_INJECTION,
+        DFAVulnerabilityType.COMMAND_INJECTION,
         DFASeverity.HIGH,
     ),
     "subprocess.Popen": (
         SinkType.SUBPROCESS,
-        VulnerabilityType.COMMAND_INJECTION,
+        DFAVulnerabilityType.COMMAND_INJECTION,
         DFASeverity.HIGH,
     ),
     # Code injection risks
-    "eval": (SinkType.EVAL, VulnerabilityType.CODE_INJECTION, DFASeverity.CRITICAL),
-    "exec": (SinkType.EVAL, VulnerabilityType.CODE_INJECTION, DFASeverity.CRITICAL),
-    "compile": (SinkType.EVAL, VulnerabilityType.CODE_INJECTION, DFASeverity.HIGH),
+    "eval": (SinkType.EVAL, DFAVulnerabilityType.CODE_INJECTION, DFASeverity.CRITICAL),
+    "exec": (SinkType.EVAL, DFAVulnerabilityType.CODE_INJECTION, DFASeverity.CRITICAL),
+    "compile": (SinkType.EVAL, DFAVulnerabilityType.CODE_INJECTION, DFASeverity.HIGH),
     # Path traversal risks
-    "open": (SinkType.FILE_WRITE, VulnerabilityType.PATH_TRAVERSAL, DFASeverity.HIGH),
+    "open": (SinkType.FILE_WRITE, DFAVulnerabilityType.PATH_TRAVERSAL, DFASeverity.HIGH),
     "os.path.join": (
         SinkType.FILE_WRITE,
-        VulnerabilityType.PATH_TRAVERSAL,
+        DFAVulnerabilityType.PATH_TRAVERSAL,
         DFASeverity.MEDIUM,
     ),
     # XSS risks (web frameworks)
     "render_template_string": (
         SinkType.HTML_OUTPUT,
-        VulnerabilityType.XSS,
+        DFAVulnerabilityType.XSS,
         DFASeverity.HIGH,
     ),
-    "Markup": (SinkType.HTML_OUTPUT, VulnerabilityType.XSS, DFASeverity.MEDIUM),
+    "Markup": (SinkType.HTML_OUTPUT, DFAVulnerabilityType.XSS, DFASeverity.MEDIUM),
     # Deserialization risks
     "pickle.loads": (
         SinkType.EVAL,
-        VulnerabilityType.INSECURE_DESERIALIZATION,
+        DFAVulnerabilityType.INSECURE_DESERIALIZATION,
         DFASeverity.CRITICAL,
     ),
     "yaml.load": (
         SinkType.EVAL,
-        VulnerabilityType.INSECURE_DESERIALIZATION,
+        DFAVulnerabilityType.INSECURE_DESERIALIZATION,
         DFASeverity.HIGH,
     ),
     "marshal.loads": (
         SinkType.EVAL,
-        VulnerabilityType.INSECURE_DESERIALIZATION,
+        DFAVulnerabilityType.INSECURE_DESERIALIZATION,
         DFASeverity.HIGH,
     ),
 }
@@ -310,7 +310,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
         # Data flow tracking
         self.edges: List[DataFlowEdge] = []
         self.tainted_paths: List[TaintedPath] = []
-        self.vulnerabilities: List[SecurityVulnerability] = []
+        self.vulnerabilities: List[DFATaintVulnerability] = []
 
     def analyze(self) -> List[DataFlowGraph]:
         """Analyze the source code and return data flow graphs."""
@@ -469,7 +469,7 @@ class DataFlowAnalyzer(ast.NodeVisitor):
 
         return None
 
-    def _check_taint_sink(self, node: ast.Call) -> Tuple[SinkType, VulnerabilityType, DFASeverity] | None:
+    def _check_taint_sink(self, node: ast.Call) -> Tuple[SinkType, DFAVulnerabilityType, DFASeverity] | None:
         """Check if a call is a taint sink."""
         call_name = self._get_call_name(node)
 
@@ -593,27 +593,27 @@ class DataFlowAnalyzer(ast.NodeVisitor):
 
     def _create_vulnerability(
         self,
-        vuln_type: VulnerabilityType,
+        vuln_type: DFAVulnerabilityType,
         severity: DFASeverity,
         line: int,
         column: int,
         variable: str,
         sink_function: str,
         taint_level: TaintLevel,
-    ) -> SecurityVulnerability:
+    ) -> DFATaintVulnerability:
         """Create a security vulnerability record."""
         recommendations = {
-            VulnerabilityType.SQL_INJECTION: "Use parameterized queries or an ORM",
-            VulnerabilityType.XSS: "Escape output or use a templating engine with auto-escaping",
-            VulnerabilityType.COMMAND_INJECTION: "Use subprocess with list arguments, avoid shell=True",
-            VulnerabilityType.PATH_TRAVERSAL: "Validate and sanitize file paths, use os.path.basename",
-            VulnerabilityType.CODE_INJECTION: "Never use eval/exec with user input",
-            VulnerabilityType.DATA_EXPOSURE: "Sanitize data before logging or exposing",
-            VulnerabilityType.INSECURE_DESERIALIZATION: "Use safe serialization formats like JSON",
-            VulnerabilityType.HARDCODED_SECRET: "Use environment variables or a secrets manager",
+            DFAVulnerabilityType.SQL_INJECTION: "Use parameterized queries or an ORM",
+            DFAVulnerabilityType.XSS: "Escape output or use a templating engine with auto-escaping",
+            DFAVulnerabilityType.COMMAND_INJECTION: "Use subprocess with list arguments, avoid shell=True",
+            DFAVulnerabilityType.PATH_TRAVERSAL: "Validate and sanitize file paths, use os.path.basename",
+            DFAVulnerabilityType.CODE_INJECTION: "Never use eval/exec with user input",
+            DFAVulnerabilityType.DATA_EXPOSURE: "Sanitize data before logging or exposing",
+            DFAVulnerabilityType.INSECURE_DESERIALIZATION: "Use safe serialization formats like JSON",
+            DFAVulnerabilityType.HARDCODED_SECRET: "Use environment variables or a secrets manager",
         }
 
-        vuln = SecurityVulnerability(
+        vuln = DFATaintVulnerability(
             vulnerability_type=vuln_type,
             severity=severity,
             line=line,

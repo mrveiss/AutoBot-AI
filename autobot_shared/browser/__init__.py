@@ -42,7 +42,7 @@ _LAZY_IMPORTS = {
     "ScreenshotRequest": (".base", "ScreenshotRequest"),
     "SessionHandle": (".base", "SessionHandle"),
     "UnsafeUrlError": (".base", "UnsafeUrlError"),
-    "UnsupportedFormatError": (".base", "UnsupportedFormatError"),
+    "UnsupportedContentFormatError": (".base", "UnsupportedContentFormatError"),
     "Browser": (".registry", "Browser"),
     "clear_backends": (".registry", "clear_backends"),
     "get_browser": (".registry", "get_browser"),

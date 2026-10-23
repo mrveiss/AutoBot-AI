@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # the backend happened to already be on sys.path some other way).
 sys.path.insert(0, str(project_root() / "autobot-backend"))
 
-from knowledge_base import KnowledgeBase
+from knowledge_factory import get_knowledge_base_async
 from knowledge_sync_incremental import run_incremental_sync
 
 
@@ -163,8 +163,9 @@ async def sync_docs():
     logger.info("=== Knowledge Base Documentation Sync ===")
 
     # Initialize KB
-    kb = KnowledgeBase()
-    await kb.ainit()
+    kb = await get_knowledge_base_async()
+    if kb is None:
+        raise RuntimeError("Knowledge base unavailable: initialization failed or retry cooldown active")
 
     # Remove outdated entries
     all_facts = await kb.get_all_facts()
@@ -238,8 +239,9 @@ async def incremental_sync():
             logger.info("\\n=== Testing Updated Search Functionality ===")
 
             # Initialize knowledge base for testing
-            kb = KnowledgeBase()
-            await kb.ainit()
+            kb = await get_knowledge_base_async()
+            if kb is None:
+                raise RuntimeError("Knowledge base unavailable: initialization failed or retry cooldown active")
 
             test_queries = ["autobot", "configuration", "installation", "troubleshoot"]
 

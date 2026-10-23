@@ -53,7 +53,7 @@ plan = [
 
 | Field          | Type         | Description                                      |
 |----------------|--------------|--------------------------------------------------|
-| `worker_id`    | `str`        | ID matching `NPUWorkerConfig.id` in the registry |
+| `worker_id`    | `str`        | ID matching `NPUWorkerDefinition.id` in the registry |
 | `layer_start`  | `int`        | First layer index owned by this worker (inclusive) |
 | `layer_end`    | `int`        | Last layer index (exclusive, Python-slice style) |
 

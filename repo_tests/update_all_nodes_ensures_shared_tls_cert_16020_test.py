@@ -148,3 +148,66 @@ def test_vnc_has_no_group_names_route_so_the_fact_gate_is_load_bearing():
         "update-all-nodes.yml's TLS-ensure gate still needs role_vnc_active "
         "specifically, or whether a group_names gate would now also work"
     )
+
+
+# ---------------------------------------------------------------------------
+# Coverage across ALL consumers, with a contrast case (#16020 AC6).
+#
+# The tests above pin vnc and redis one by one. Nothing tied the playbook to
+# the role-level consumer set, so a seventh role that reads /etc/autobot/certs/
+# would pass the role guard (it includes the shared task in its own role) while
+# the update path -- which runs no roles for most of these -- never ensured it.
+# ---------------------------------------------------------------------------
+
+# role -> the update-all task that ensures the keypair for a node carrying it.
+_UPDATE_PATH_TASK = {
+    "slm_manager": "[PLAY 1] SLM | Ensure the shared node TLS cert",
+    "backend": "[PLAY 2] Backend | Ensure the shared node TLS cert",
+    "frontend": "[PLAY 2] Frontend | Ensure the shared node TLS cert",
+    "vnc": "[PLAY 2] VNC | Ensure the shared node TLS cert",
+    "redis": "[PLAY 2b] Database | Ensure the shared node TLS cert",
+}
+# A consumer with no node_roles token of its own: only reachable as a
+# dependency of another role, so it has no update-all task to point at.
+_NO_OWN_UPDATE_TASK = {"nginx"}
+
+
+def _tasks_including_shared_task(playbook_text: str) -> set[str]:
+    """Names of the tasks in `playbook_text` whose own block includes the shared task."""
+    names: set[str] = set()
+    for match in re.finditer(r'\n    - name: "([^"]+)"', playbook_text):
+        tail = playbook_text[match.end() :]
+        nxt = _TASK_HEADER.search(tail)
+        block = tail[: nxt.start()] if nxt else tail
+        if _INCLUDE_LINE in block:
+            names.add(match.group(1))
+    return names
+
+
+def test_every_shared_cert_consumer_role_is_ensured_on_the_update_path():
+    from repo_tests.tls_cert_consumers_provision_it_16020_test import _classify
+
+    consumers, _ = _classify()
+    assert len(consumers) >= 4, "the consumer sweep collapsed; this check would be vacuous"
+    unmapped = sorted(consumers - set(_UPDATE_PATH_TASK) - _NO_OWN_UPDATE_TASK)
+    assert not unmapped, (
+        f"these roles read /etc/autobot/certs/ but have no update-all-nodes.yml task "
+        f"recorded in _UPDATE_PATH_TASK: {unmapped}. A node maintained only through "
+        "the builtin updater would never get the keypair (#16020)."
+    )
+    present = _tasks_including_shared_task(_PLAYBOOK.read_text(encoding="utf-8"))
+    missing = sorted(name for name in _UPDATE_PATH_TASK.values() if name not in present)
+    assert not missing, f"update-all-nodes.yml no longer includes the shared task in: {missing}"
+
+
+def test_contrast_a_play_without_the_include_is_reported_missing():
+    """The detector must see the defect, not only the fixed tree."""
+    broken = (
+        '\n    - name: "[PLAY 2] VNC | Ensure the shared node TLS cert"\n'
+        "      debug:\n        msg: not the include\n"
+        '\n    - name: "[PLAY 2] Frontend | Ensure the shared node TLS cert"\n'
+        f"      {_INCLUDE_LINE}\n"
+    )
+    found = _tasks_including_shared_task(broken)
+    assert found == {"[PLAY 2] Frontend | Ensure the shared node TLS cert"}
+    assert _UPDATE_PATH_TASK["vnc"] not in found

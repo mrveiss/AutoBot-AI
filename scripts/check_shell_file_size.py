@@ -46,7 +46,6 @@ from __future__ import annotations
 import argparse
 import logging
 import pathlib
-import subprocess  # nosec B404  # fixed argv, no shell, no caller input
 import sys
 
 # Plain stdlib logging, deliberately (#1082). This runs as a bare script on
@@ -58,7 +57,15 @@ logger = logging.getLogger(__name__)
 # git-env scrub is importable when this runs as a bare hook.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
-from autobot_shared.paths import scrubbed_git_env  # noqa: E402
+from autobot_shared.paths import project_root as repo_root  # noqa: E402, F401  # read via GUARD (live namespace)
+from tools.lint._file_size_guard import (  # noqa: E402, F401  # names read via GUARD (live namespace)
+    FileSizeGuard,
+    count_lines,
+    git_tracked,
+    load_known_large,
+    normalise,
+    unmeasured,
+)
 from tools.lint._scan_helpers import configure_logging  # noqa: E402
 
 MAX_LINES = 600
@@ -102,242 +109,33 @@ KNOWN_LARGE: dict[str, int] = {
     # aborted silently at the password prompt -- stdin is the script pipe, `read`
     # got EOF, `set -e` killed it. The file is delivered BY curl, so it cannot
     # source a helper and cannot be split; the exemption's own reason still holds.
-    "install.sh": 1321,  # #17875: +12 for three first-run fixes; single-file installer cannot be split
+    "install.sh": 1172,  # #18653: the uninstaller moved to scripts/uninstall.sh; single-file installer cannot be split
     "scripts/lib/hardcoded-value-rules.sh": 842,
     "scripts/pr-preflight.sh": 818,
 }
 
 
-def repo_root() -> pathlib.Path:
-    """Repo root derived from this file, never from the caller's cwd."""
-    return pathlib.Path(__file__).resolve().parents[1]
-
-
-def normalise(path: str) -> str:
-    """Forward-slash repo-relative form used as the KNOWN_LARGE key."""
-    return str(path).replace("\\", "/")
-
-
-def count_lines(path: pathlib.Path) -> int | None:
-    """Line count for *path*, or None when it cannot be read.
-
-    ``UnicodeDecodeError`` is not an ``OSError`` and is raised lazily as the
-    generator is consumed — still inside this ``try``, so one undecodable file
-    cannot abort the whole audit.
-    """
-    try:
-        with path.open(encoding="utf-8") as handle:
-            return sum(1 for _ in handle)
-    except (OSError, UnicodeDecodeError):
-        return None
-
-
+#: In-scope, git-tracked ``*.sh`` paths under *root*, relative to it.
 def tracked_shell_files(root: pathlib.Path) -> list[str]:
-    """In-scope, git-tracked ``*.sh`` paths under *root*, relative to it.
-
-    Git-tracked so the walk can only see what pre-commit could have staged; a
-    stray local script cannot masquerade as a repo file.
-    """
-    out = subprocess.run(  # nosec B603 B607  # fixed argv, no shell, no caller input
-        ["git", "ls-files", "*.sh"],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        check=True,
-        # An inherited GIT_DIR outranks `cwd=` and would enumerate another
-        # checkout's index while *root* names this one (#14896).
-        env=scrubbed_git_env(),
-    )
-    return [line for line in out.stdout.splitlines() if line.strip() and not line.startswith(EXCLUDED_PREFIXES)]
+    """In-scope tracked paths under *root*; EXCLUDED_PREFIXES is read at call time, not bound at import."""
+    return git_tracked(root, ("*.sh",), EXCLUDED_PREFIXES)
 
 
-def _grandfathered_verdict(rel: str, line_count: int, ceiling: int) -> str | None:
-    """Violation message for a KNOWN_LARGE file, or None when it is at ceiling."""
-    if line_count <= MAX_LINES:
-        return (
-            f"{rel}: {line_count} lines — now within the {MAX_LINES}-line limit. "
-            f"Delete its KNOWN_LARGE entry in {SELF_REL} and its RATCHET_BASELINE "
-            f"entry in {RATCHET_REL}: an entry naming a compliant file exempts "
-            "nothing while looking authoritative."
-        )
-    if line_count > ceiling:
-        return (
-            f"{rel}: {line_count} lines, over its recorded ceiling of {ceiling}. "
-            "A grandfathered file may not grow — the exemption freezes the size "
-            "it was granted for, it does not license more."
-        )
-    if line_count < ceiling:
-        return (
-            f"{rel}: {line_count} lines, under its recorded ceiling of {ceiling}. "
-            f"Lower the ceiling to {line_count} in {SELF_REL} and the matching "
-            f"RATCHET_BASELINE entry in {RATCHET_REL} — the ratchet only turns "
-            "down, and an unlowered ceiling re-licenses the lines just cut."
-        )
-    return None
-
-
-def verdict(rel: str, line_count: int) -> str | None:
-    """Violation message for *rel* at *line_count* lines, or None if acceptable."""
-    ceiling = KNOWN_LARGE.get(normalise(rel))
-    if ceiling is not None:
-        return _grandfathered_verdict(rel, line_count, ceiling)
-    if line_count > MAX_LINES:
-        return (
-            f"{rel}: {line_count} lines (max {MAX_LINES}). Split it — do not add "
-            f"a KNOWN_LARGE entry in {SELF_REL}, which grandfathers what already "
-            "existed and is not a way in for new files."
-        )
-    return None
-
-
-def unmeasured(rel: str) -> str:
-    """Violation message for an argument that could not be read at all.
-
-    ``count_lines`` returns None for "missing", "unreadable", "not a file" and
-    "not UTF-8" alike, and ``audit_ceilings`` already treats that None as a
-    finding -- the walk skips such a file rather than counting it toward its
-    reach floor, for the same reason. This is the same verdict on the commit
-    path, which used to skip past it: exit 0 is only entitled to mean *within
-    the limit*, and a file that was never opened has not earned that (#14975).
-    """
-    return (
-        f"{rel}: could not be read, so its size was never measured. This is not "
-        "a size violation — check the path, its permissions, whether it is a "
-        "broken symlink, and whether it decodes as UTF-8. An unmeasured file "
-        "is not a passing one."
-    )
-
-
-def _vanished_entry_problem(rel: str, root: pathlib.Path) -> str:
-    """Message for a KNOWN_LARGE entry the tree walk never reached."""
-    return (
-        f"{rel}: not found by the tracked-file walk under {root} — this entry "
-        f"(ceiling {KNOWN_LARGE[rel]}) names a file that moved or was deleted. "
-        f"Remove it from {SELF_REL} and its RATCHET_BASELINE entry in {RATCHET_REL}."
-    )
-
-
-def _report_unmeasured(rel: str, seen: set[str], problems: list[str]) -> None:
-    """Report a file that could not be read, and record it as SEEN but not REACHED.
-
-    NOT a skip (#14975). ``unmeasured`` states the contract -- exit 0 is only entitled to
-    mean *within the limit*, and a file that was never opened has not earned that -- and
-    ``main`` has honoured it since. The scan path did not, so ``--audit-ceilings`` could
-    report "all live and at size" having never read a broken symlink, a bad mode or a
-    non-UTF-8 file.
-
-    ``seen`` and ``reached`` mean different things here, which is why this records one and
-    not the other. ``seen`` answers "did the walk find this path", which it did, so the
-    ``KNOWN_LARGE - seen`` pass in ``audit_ceilings`` must not ALSO call it
-    moved-or-deleted -- that message is wrong for a file that exists and cannot be read,
-    and reporting both tells the developer two stories about one file. ``reached`` stays
-    exclusive, so an unmeasured file cannot prop up the floor check in ``run_audit``
-    without having been ruled on.
-
-    Extracted (#17377) because inlining both rationales took the caller past the 30-line
-    standard; the concept is "classify a file we could not measure", which is one idea.
-    """
-    problems.append(unmeasured(rel))
-    seen.add(normalise(rel))
-
-
-def _scan_tracked_files(root: pathlib.Path, tracked: list[str]) -> tuple[int, set[str], list[str]]:
-    """Rule on every readable file in *tracked*. Returns (reached, seen, problems).
-
-    ``reached`` counts files actually read off disk, not ``len(tracked)``: a
-    file this hook could not open must not inflate the floor check in
-    ``run_audit`` without ever having been ruled on.
-    """
-    seen: set[str] = set()
-    problems: list[str] = []
-    reached = 0
-    for rel in sorted(tracked):
-        line_count = count_lines(root / rel)
-        if line_count is None:
-            _report_unmeasured(rel, seen, problems)
-            continue
-        reached += 1
-        seen.add(normalise(rel))
-        message = verdict(rel, line_count)
-        if message is not None:
-            problems.append(message)
-    return reached, seen, problems
-
-
-def audit_ceilings() -> tuple[int, list[str]]:
-    """Rule on every in-scope tracked shell file, not just KNOWN_LARGE's keys.
-
-    Walking the tree rather than ``KNOWN_LARGE.items()`` is the point: a
-    dict-only scan can only re-check a file someone already added, so a file
-    that grows past MAX_LINES without ever being added stays invisible to
-    every run forever. Entries the walk never reaches are still reported.
-    """
-    root = repo_root()
-    reached, seen, problems = _scan_tracked_files(root, tracked_shell_files(root))
-    for rel in sorted(set(KNOWN_LARGE) - seen):
-        problems.append(_vanished_entry_problem(rel, root))
-    return reached, problems
-
-
-def _reach_breach_problem(reached: int) -> str:
-    """The reach-breach finding, worded identically in both gates (#17377).
-
-    Extracted so the two gates' wording can be compared by a test instead of by a
-    reader. The actionable half -- which knob to check -- was in the shell gate only;
-    a Python developer got "covers almost nothing" and no next step.
-    """
-    return (
-        f"reach check: the tree walk reached {reached} tracked file(s), under the "
-        f"{MIN_TRACKED_SH_FILES}-file floor — it stopped covering the tree, so this "
-        f"run's verdict covers almost nothing. Check EXCLUDED_PREFIXES in {SELF_REL} "
-        "and that `git ls-files` works from the repo root."
-    )
-
-
-def run_audit() -> int:
-    """``--audit-ceilings``: walk the tree, and assert the walk actually reached it."""
-    reached, problems = audit_ceilings()
-    if reached < MIN_TRACKED_SH_FILES:
-        # Collected, not returned on. A run that is BOTH under-reaching and carrying
-        # violations used to report only the reach -- and the reach breach is the more
-        # alarming of the two precisely because it explains the other, so suppressing
-        # the violations hid the evidence of what the short walk missed.
-        problems.append(_reach_breach_problem(reached))
-    if problems:
-        logger.error("%s", "\n".join(problems))
-        return 1
-    logger.info(
-        "shell-file-size ceilings: %d file(s) scanned, %d grandfathered, all live and at size.",
-        reached,
-        len(KNOWN_LARGE),
-    )
-    return 0
-
-
-def check_paths(paths: list[str]) -> int:
-    """The commit path: rule on the staged files pre-commit passed in."""
-    root = repo_root()
-    problems: list[str] = []
-    for raw in paths:
-        rel = normalise(raw)
-        if rel.startswith(EXCLUDED_PREFIXES):
-            continue
-        line_count = count_lines(root / rel)
-        if line_count is None:
-            problems.append(unmeasured(rel))
-            continue
-        message = verdict(rel, line_count)
-        if message is not None:
-            problems.append(message)
-    if problems:
-        # ERROR, not INFO: this is the COMMIT path, so a finding here blocks a push.
-        # Logged below `lastResort`'s WARNING threshold it would vanish on any path
-        # that never called `configure_logging`, leaving a hook that refuses the push
-        # and says nothing about why.
-        logger.error("%s", "\n".join(problems))
-        return 1
-    return 0
+GUARD = FileSizeGuard(
+    globals(),
+    floor_name="MIN_TRACKED_SH_FILES",
+    tracked_name="tracked_shell_files",
+    summary="shell-file-size ceilings: %d file(s) scanned, %d grandfathered, all live and at size.",
+)
+_grandfathered_verdict = GUARD.grandfathered_verdict
+verdict = GUARD.verdict
+_vanished_entry_problem = GUARD.vanished_entry_problem
+_report_unmeasured = GUARD.report_unmeasured
+_scan_tracked_files = GUARD.scan_tracked_files
+audit_ceilings = GUARD.audit_ceilings
+_reach_breach_problem = GUARD.reach_breach_problem
+run_audit = GUARD.run_audit
+check_paths = GUARD.check_paths
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -349,7 +147,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.audit_ceilings:
         return run_audit()
-    return check_paths(args.paths)
+    return GUARD.check_paths(args.paths)
 
 
 if __name__ == "__main__":

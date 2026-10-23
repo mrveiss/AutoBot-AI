@@ -26,7 +26,7 @@ from typing import Any, Dict
 
 import pytest
 
-from api.schemas_chat_rows import SessionListData, SessionMessage, SessionMessagesData, SessionSummary
+from api.schemas_chat_rows import ChatSessionSummary, SessionListData, SessionMessage, SessionMessagesData
 
 
 def _session_row(**overrides: Any) -> Dict[str, Any]:
@@ -142,5 +142,5 @@ def test_the_models_are_not_vacuously_permissive() -> None:
     If the declarations were empty, every test above would pass while the
     contract still described nothing — which is the state this issue is about.
     """
-    assert {"id", "title", "messageCount", "sessionKind"} <= set(SessionSummary.model_fields)
+    assert {"id", "title", "messageCount", "sessionKind"} <= set(ChatSessionSummary.model_fields)
     assert {"id", "sender", "text", "timestamp"} <= set(SessionMessage.model_fields)

@@ -28,6 +28,10 @@
   --aui-color-primary-active: #3730a3;
   --aui-color-primary-contrast: #ffffff; /* text/icon on a primary surface   */
 
+  /* ---- Color: brand mark (tile + stroke of BrandMark) ---------------- */
+  --aui-brand-bg: #1e2a44;
+  --aui-brand-fg: #ffffff;
+
   /* ---- Color: neutrals / chrome -------------------------------------- */
   --aui-color-surface: #ffffff;          /* component background              */
   --aui-color-surface-raised: #f8fafc;   /* hover / elevated rows            */
@@ -86,8 +90,45 @@
   --aui-space-5: 1.25rem;
   --aui-space-6: 1.5rem;
 
+  /* ---- Form controls (BaseInput) ------------------------------------- */
+  --aui-input-bg: #ffffff;
+  --aui-input-border: #cbd5e1;
+  --aui-input-height-sm: 32px;
+  --aui-input-height-md: 40px;
+  --aui-input-height-lg: 48px;
+  --aui-input-padding-x: 0.75rem;
+
   /* ---- Layering ------------------------------------------------------ */
+  --aui-z-dropdown: 100;
   --aui-z-modal: 1000;
+  --aui-z-tooltip: 1200;
+
+  /* ---- Tooltip (BaseTooltip) ----------------------------------------- */
+  --aui-tooltip-delay: 500ms;
+  --aui-tooltip-hide-delay: 100ms;
+  --aui-tooltip-offset: 8px;
+  --aui-tooltip-max: 280px;
+
+  /* ---- Table (BaseTable; spec 4.6) ------------------------------------ */
+  --aui-table-font-size: 13px;
+  --aui-table-row-h: 44px;
+  --aui-table-cell-px: 16px;
+  --aui-table-cell-py: 10px;
+  --aui-table-head-h: 36px;
+  --aui-table-head-bg: var(--aui-color-surface-raised);
+  --aui-table-head-fg: var(--aui-color-text-muted);
+  --aui-table-head-font: 600 11.5px/1.2 var(--aui-font-sans);
+  --aui-table-head-case: uppercase;
+  --aui-table-head-ls: 0.05em;
+  --aui-table-head-border: 1px solid var(--aui-color-border);
+  --aui-table-border: 1px solid var(--aui-color-border);
+  --aui-table-row-hover: var(--aui-color-surface-raised);
+  --aui-table-row-selected: var(--aui-color-surface-raised);
+  --aui-table-row-selected-edge: 3px solid var(--aui-color-primary);
+  --aui-table-zebra-bg: var(--aui-color-surface-raised);
+  --aui-table-check-w: 44px;
+  --aui-table-min-col: 96px;
+  --aui-table-num: tabular-nums;
 
   /* ---- Motion (components must honor prefers-reduced-motion) ---------- */
   --aui-transition-fast: 120ms ease;

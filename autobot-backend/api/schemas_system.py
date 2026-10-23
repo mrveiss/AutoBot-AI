@@ -35,7 +35,7 @@ class SystemFrontendConfigResponse(BaseModel):
     timestamp: str
 
 
-class SystemHealthResponse(BaseModel):
+class ProbeHealthResponse(BaseModel):
     """Response for GET /health and GET /system/health.
 
     Issue #6909: status uses probe vocabulary ("ok"/"degraded"/"down") — the
@@ -125,7 +125,7 @@ class SystemMetricsResponse(BaseModel):
 
 
 class SystemCacheCoordinatorStatsResponse(BaseModel):
-    """Response for GET /api/cache/stats.
+    """Response for GET /api/system/cache/coordinator/stats.
 
     Shape is defined by CacheCoordinator.get_cache_stats() — opaque.
     """
@@ -134,7 +134,7 @@ class SystemCacheCoordinatorStatsResponse(BaseModel):
 
 
 class SystemCacheEvictResponse(BaseModel):
-    """Response for POST /api/cache/evict."""
+    """Response for POST /api/system/cache/evict."""
 
     status: str
     evicted: int
@@ -142,7 +142,7 @@ class SystemCacheEvictResponse(BaseModel):
 
 
 class SystemCacheClearResponse(BaseModel):
-    """Response for POST /api/cache/clear/{cache_name}."""
+    """Response for POST /api/system/cache/clear/{cache_name}."""
 
     status: str
     cache: str
@@ -343,32 +343,6 @@ class SecretsStatusResponse(BaseModel):
     encryption_enabled: bool | None = None
     error: str | None = None
     timestamp: str
-
-
-# ---------------------------------------------------------------------------
-# log_forwarding.py schemas  (Issue #5912)
-# ---------------------------------------------------------------------------
-
-
-class LogForwardingDestinationItem(BaseModel):
-    """Single destination entry in list/detail responses.
-
-    Shape from dest.config.to_dict_sanitized() + extra health fields.
-    Extra fields allowed to handle dynamic config dict.
-    """
-
-    model_config = {"extra": "allow"}
-
-    healthy: bool
-    last_error: str | None = None
-    sent_count: int
-    failed_count: int
-
-
-class LogForwardingDestinationsListResponse(BaseModel):
-    """Response for GET /log-forwarding/destinations — returns a list directly."""
-
-    model_config = {"extra": "allow"}
 
 
 # ---------------------------------------------------------------------------
@@ -1766,7 +1740,7 @@ class InvalidateCacheResponse(BaseModel):
     deleted_count: int
 
 
-class ClearAllResponse(BaseModel):
+class CacheClearAllResponse(BaseModel):
     success: bool
     message: str
     total_deleted: int
@@ -2204,149 +2178,6 @@ class HardwarePriorityResponse(BaseModel):
     status: str
     priority_order: List[str]
     changed: dict
-
-
-# ---------------------------------------------------------------------------
-# log_forwarding.py remaining schemas (#6042)
-# ---------------------------------------------------------------------------
-
-
-class LogFwdDestinationCreate(BaseModel):
-    name: str = Field(..., description="Unique name for the destination")
-    type: str = Field(
-        ...,
-        description="Destination type: seq, elasticsearch, loki, syslog, webhook, file",
-    )
-    enabled: bool = Field(True, description="Whether the destination is enabled")
-    url: str | None = Field(None, description="URL/host for the destination")
-    api_key: str | None = Field(None, description="API key for authentication")
-    username: str | None = Field(None, description="Username for authentication")
-    password: str | None = Field(None, description="Password for authentication")
-    index: str | None = Field("autobot-logs", description="Index name (Elasticsearch)")
-    file_path: str | None = Field(None, description="File path (file destination)")
-    min_level: str = Field("Information", description="Minimum log level to forward")
-    batch_size: int = Field(10, ge=1, le=1000, description="Batch size for sending")
-    batch_timeout: float = Field(5.0, ge=0.1, le=60.0, description="Batch timeout in seconds")
-    retry_count: int = Field(3, ge=0, le=10, description="Number of retries on failure")
-    retry_delay: float = Field(1.0, ge=0.1, le=30.0, description="Delay between retries")
-    scope: str = Field("global", description="Scope: global (all hosts) or per_host")
-    target_hosts: List[str] = Field(default_factory=list, description="Target hosts for per_host scope")
-    syslog_protocol: str = Field("udp", description="Syslog protocol: udp, tcp, tcp_tls")
-    ssl_verify: bool = Field(True, description="Verify SSL certificates for TLS")
-    ssl_ca_cert: str | None = Field(None, description="Path to CA certificate")
-    ssl_client_cert: str | None = Field(None, description="Path to client certificate")
-    ssl_client_key: str | None = Field(None, description="Path to client key")
-
-
-class LogFwdDestinationUpdate(BaseModel):
-    enabled: bool | None = None
-    url: str | None = None
-    api_key: str | None = None
-    username: str | None = None
-    password: str | None = None
-    index: str | None = None
-    file_path: str | None = None
-    min_level: str | None = None
-    batch_size: int | None = None
-    batch_timeout: float | None = None
-    retry_count: int | None = None
-    retry_delay: float | None = None
-    scope: str | None = None
-    target_hosts: List[str] | None = None
-    syslog_protocol: str | None = None
-    ssl_verify: bool | None = None
-    ssl_ca_cert: str | None = None
-    ssl_client_cert: str | None = None
-    ssl_client_key: str | None = None
-
-
-class LogFwdDestinationResponse(BaseModel):
-    name: str
-    type: str
-    enabled: bool
-    url: str | None
-    index: str | None
-    file_path: str | None
-    min_level: str
-    batch_size: int
-    batch_timeout: float
-    scope: str
-    target_hosts: List[str]
-    syslog_protocol: str
-    ssl_verify: bool
-    healthy: bool
-    last_error: str | None
-    sent_count: int
-    failed_count: int
-
-
-class LogFwdMessageResponse(BaseModel):
-    message: str
-
-
-class LogFwdCreateUpdateResponse(BaseModel):
-    message: str
-    destination: Dict[str, Any]
-
-
-class LogFwdTestResponse(BaseModel):
-    name: str
-    healthy: bool
-    last_error: str | None = None
-    message: str
-
-
-class LogFwdTestAllResponse(BaseModel):
-    results: Dict[str, Any]
-    total: int
-    healthy: int
-    unhealthy: int
-
-
-class LogFwdDestinationStatusItem(BaseModel):
-    name: str
-    type: str
-    enabled: bool
-    healthy: bool
-    last_error: str | None = None
-    sent_count: int
-    failed_count: int
-    scope: str
-
-
-class LogFwdStatusResponse(BaseModel):
-    running: bool
-    hostname: str
-    queue_size: int
-    destinations: List[LogFwdDestinationStatusItem]
-    total_destinations: int
-    enabled_destinations: int
-    healthy_destinations: int
-    total_sent: int
-    total_failed: int
-
-
-class LogFwdDestinationTypesResponse(BaseModel):
-    types: List[Any]
-    scopes: List[Any]
-    log_levels: List[str]
-    syslog_protocols: List[Any]
-
-
-class LogFwdKnownHostItem(BaseModel):
-    hostname: str
-    ip: str | None = None
-    description: str
-
-
-class LogFwdKnownHostsResponse(BaseModel):
-    hosts: List[LogFwdKnownHostItem]
-    current_hostname: str
-
-
-class LogFwdAutoStartResponse(BaseModel):
-    auto_start: bool
-    message: str
 
 
 # security_assessment.py schemas (#6042)
@@ -3788,10 +3619,8 @@ class GPUConfigUpdateRequest(BaseModel):
 # startup.py schemas
 # ---------------------------------------------------------------------------
 
-from enum import Enum as _StartupEnum
 
-
-class StartupPhase(str, _StartupEnum):
+class StartupPhase(str, Enum):
     """Lifecycle phase the backend reports during boot."""
 
     INITIALIZING = "initializing"
@@ -4244,21 +4073,6 @@ class TelegramWebhookUpdate(BaseModel):
     channel_post: Optional[Dict[str, Any]] = None
     edited_channel_post: Optional[Dict[str, Any]] = None
     callback_query: Optional[Dict[str, Any]] = None
-
-
-class TelegramBotConfigRequest(BaseModel):
-    """Request to configure Telegram bot."""
-
-    bot_token: str = Field(..., description="Telegram Bot API token")
-    webhook_url: Optional[str] = Field(None, description="Webhook URL (optional)")
-
-
-class TelegramBotConfigResponse(BaseModel):
-    """Response for Telegram bot configuration."""
-
-    status: str
-    message: str
-    webhook_url: Optional[str] = None
 
 
 class WhatsAppConfigRequest(BaseModel):

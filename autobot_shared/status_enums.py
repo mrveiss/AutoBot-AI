@@ -359,7 +359,7 @@ class SecretType(str, Enum):
         return frozenset(wanted)
 
 
-class Priority(Enum):
+class Priority(str, Enum):
     """
     Priority level enumeration.
 
@@ -459,6 +459,9 @@ class LLMProvider(Enum):
     # (llm_shared/providers/openrouter.py had a defensive hasattr() guard
     # against ProviderType.OPENROUTER not existing — a real symptom of the
     # triplication bug this consolidation fixes)
+    # -- registered providers that were bare strings outside the enum (#17504) --
+    CUSTOM_OPENAI = "custom_openai"  # llm_shared/providers/custom_openai.py
+    NOUS = "nous"  # llm_shared/providers/nous_portal.py
 
     @classmethod
     def supports_streaming(cls, provider: "LLMProvider") -> bool:

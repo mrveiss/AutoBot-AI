@@ -24,9 +24,15 @@ class ChannelType(str, Enum):
     WEBSOCKET = "websocket"
     REST_API = "rest_api"
     CLI = "cli"
-    TELEGRAM = "telegram"  # Future
-    DISCORD = "discord"  # Future
-    SLACK = "slack"  # Future
+    TELEGRAM = "telegram"
+    DISCORD = "discord"
+    SLACK = "slack"
+    WHATSAPP = "whatsapp"
+    TEAMS = "teams"
+    WEB = "web"
+    SIGNAL = "signal"
+    MATRIX = "matrix"
+    IMESSAGE = "imessage"
 
 
 class GatewayMessageType(str, Enum):
@@ -55,7 +61,7 @@ class GatewayMessageType(str, Enum):
     SESSION_HEARTBEAT = "session_heartbeat"
 
 
-class SessionStatus(str, Enum):
+class GatewaySessionStatus(str, Enum):
     """Session lifecycle status."""
 
     ACTIVE = "active"
@@ -135,7 +141,7 @@ class GatewaySession:
     session_id: str = field(default_factory=lambda: str(uuid4()))
     user_id: str = ""
     channel: ChannelType = ChannelType.WEBSOCKET
-    status: SessionStatus = SessionStatus.ACTIVE
+    status: GatewaySessionStatus = GatewaySessionStatus.ACTIVE
     context: Dict[str, Any] = field(default_factory=dict)
     message_history: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)

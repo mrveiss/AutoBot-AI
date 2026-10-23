@@ -36,6 +36,7 @@ from services.purge_playbook import PURGE_PLAYBOOK_TEMPLATE as _PURGE_PLAYBOOK_T
 # The purge playbook lives in its own module because this file is at its
 # grandfathered size ceiling (#14236) and may not grow (#16071).
 from services.service_restart import run_systemctl_over_ssh
+from services.ssh_utils import ssh_destination_args, ssh_options
 
 logger = logging.getLogger(__name__)
 
@@ -1135,20 +1136,15 @@ class BlueGreenService:
         try:
             ssh_base_cmd = [
                 "ssh",
-                "-o",
-                "StrictHostKeyChecking=accept-new",
-                "-o",
-                "ConnectTimeout=10",
-                "-o",
-                "BatchMode=yes",
+                *ssh_options("StrictHostKeyChecking=accept-new", "ConnectTimeout=10", "BatchMode=yes"),
                 "-p",
                 str(ssh_port),
-                f"{ssh_user}@{ip_address}",
+                *ssh_destination_args(ssh_user, ip_address),
             ]
             done = await run_systemctl_over_ssh(
                 ssh_base_cmd,
                 "stop",
-                [shlex.quote(service)],
+                [service],  # the executor validates and quotes each unit; quoting here double-quoted it (#18352)
                 use_noninteractive_sudo=False,
                 timeout=30.0,
             )

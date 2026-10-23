@@ -70,29 +70,12 @@ from deployment_registry import (  # noqa: E402
     ServiceStatus,
     DeploymentMode,
     ServiceHealth,
-    ServiceRegistry,
+    get_deployment_registry,
 )
-
-
-
-
 
 
 # Port env aliases + defaults mirror autobot_shared/ssot_config.py;
 # health paths mirror autobot_shared/ssot_constants.py.
-
-
-
-
-_registry: Optional[ServiceRegistry] = None
-
-
-def get_service_registry() -> ServiceRegistry:
-    """Get the process-wide ServiceRegistry instance."""
-    global _registry
-    if _registry is None:
-        _registry = ServiceRegistry()
-    return _registry
 
 
 # --- end standalone replacements (#11761) -----------------------------------
@@ -150,7 +133,7 @@ class MetricsCollector:
         self.storage_dir = self.project_root / storage_dir
         self.storage_dir.mkdir(parents=True, exist_ok=True)
 
-        self.service_registry = get_service_registry()
+        self.service_registry = get_deployment_registry()
         self.retention_days = retention_days
 
         # In-memory metrics storage (last 1 hour)

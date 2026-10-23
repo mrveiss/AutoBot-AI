@@ -13,7 +13,7 @@ at `COMPLEXITY_SECURITY_SCAN` and the #376 tuning never applied.
 The direction was an owner decision, taken on #13806 (2026-09-06): collapse,
 because nothing in the tree ever distinguished the three and the thing they
 stood in for -- *what kind of workflow is this* -- is carried by
-`TemplateCategory`, whose members do not collide. These tests hold that:
+`WorkflowTemplateCategory`, whose members do not collide. These tests hold that:
 
 * no two names in the enum resolve to one member, so re-laying the trap fails
   here first rather than silently retuning the scheduler;

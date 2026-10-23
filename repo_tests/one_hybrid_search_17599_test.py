@@ -66,7 +66,7 @@ REACH = declare(
     "one-hybrid-search",
     discover=_source_population,
     # Mid-window, from REACH.window().
-    floor=2579,
+    floor=2702,
     what="non-test python source",
     roots=("autobot-backend", "autobot_shared"),
     growth=300,

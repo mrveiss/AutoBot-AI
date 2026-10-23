@@ -532,3 +532,30 @@ class TestWebhookSignatureValidation:
         # No Redis mock — no secret stored
         result = await svc.validate_webhook_signature("nonexistent", b"body", "sha256=abc")
         assert result is False
+
+    @pytest.mark.asyncio
+    async def test_empty_secret_fails_closed_even_with_matching_hmac(self) -> None:
+        """An empty per-trigger secret must refuse, not sign with an empty key (#18452)."""
+        svc = TriggerService()
+        body = b"payload"
+        sig = "sha256=" + hmac.new(b"", body, hashlib.sha256).hexdigest()
+        with patch.object(svc, "_get_webhook_secret", return_value=""):
+            assert await svc.validate_webhook_signature("t1", body, sig) is False
+
+    @pytest.mark.asyncio
+    async def test_missing_or_malformed_header_rejected(self) -> None:
+        svc = TriggerService()
+        with patch.object(svc, "_get_webhook_secret", return_value="s3cret"):
+            for header in (None, "", "deadbeef", "md5=abc"):
+                assert await svc.validate_webhook_signature("t1", b"x", header) is False
+
+    @pytest.mark.asyncio
+    async def test_wrapper_delegates_to_shared_verifier(self) -> None:
+        """The async wrapper serves the shared verifier, not its own HMAC (#18452)."""
+        svc = TriggerService()
+        with (
+            patch.object(svc, "_get_webhook_secret", return_value="s3cret"),
+            patch("services.trigger_service.verify_webhook_signature", return_value=True) as shared,
+        ):
+            assert await svc.validate_webhook_signature("t1", b"body", "sha256=ab") is True
+        shared.assert_called_once_with(b"body", "sha256=ab", "s3cret")

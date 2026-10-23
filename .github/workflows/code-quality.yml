@@ -35,12 +35,8 @@ on:
       - 'pipeline-scripts/**'
       - 'tools/lint/**'
       - 'autobot-infrastructure/shared/scripts/**'
-      # #14584: was 'autobot-infrastructure/ansible/roles/slm_agent/files/**',
-      # a path that never existed (autobot-infrastructure/ has no ansible/
-      # tree at all) -- a stranded entry that matched nothing since it was
-      # added. Corrected to the real mirror path, and widened to the second
-      # canonical/mirror pair detect-agent-code-drift.sh now also checks.
-      - 'autobot-slm-backend/ansible/roles/slm_agent/files/**'
+      # #18548: the slm_agent role no longer carries a files/ mirror of the agent;
+      # it deploys autobot-slm-backend/slm/agent/ directly.
       - 'autobot-slm-backend/ansible/roles/backend/files/**'
       - 'autobot-backend/config/permission_rules.yaml'
       - 'autobot-backend/static/error_messages.yaml'
@@ -329,8 +325,12 @@ jobs:
         # one from copying the pattern forward.
         bash pipeline-scripts/check-pre-commit-hook-pr.sh --python tools/lint/check_no_live_install_sys_path_default.py --ext py
 
-    - name: Block direct redis client regressions (#1086, #6785)
-      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-no-direct-redis
+    - name: Block direct redis client regressions (#1086, #6785, #18553)
+      # The hook runs tools/lint/check_no_direct_redis.py against the frozen baseline: the same
+      # matcher and baseline as repo_tests/redis_direct_constructor_18553_test.py (one guard).
+      # --ext py,sh: the matcher reads .sh too; the wrapper's default pathspec has no .sh, so a
+      # shell-only change would otherwise never reach it.
+      run: bash pipeline-scripts/check-pre-commit-hook-pr.sh pre-commit-no-direct-redis --ext py,sh
 
     - name: Block print/console regressions (#1082, #6785)
       # --changed-lines-only (#14051, same treatment #13950 gave the
@@ -511,21 +511,6 @@ jobs:
           echo "⚠️ Security issues detected - review bandit output"
           exit 1
         }
-
-    - name: Check canonical/Ansible-mirror file pairs stay in sync (#1629, #14584)
-      run: |
-        # Byte-diffs every canonical source file (SLM agent modules incl.
-        # their test-file mirrors, backend permission/error-message config)
-        # against its ansible/roles/*/files/ deployment copy. #14584: this
-        # used to blanket-exclude *_test.py, which is exactly how the
-        # health_collector_state_change_test.py mirror silently drifted and
-        # failed 2 tests on base for a full CI cycle before anyone traced it.
-        bash pipeline-scripts/detect-agent-code-drift.sh || {
-          echo "A canonical source file and its Ansible-role mirror have drifted"
-          echo "See Issue #1629 and #14584 for details"
-          exit 1
-        }
-
 
     - name: Check developer docs reference existing files (#3425)
       run: |

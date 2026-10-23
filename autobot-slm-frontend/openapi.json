@@ -324,6 +324,83 @@
         "title": "ActiveProviderResponse",
         "type": "object"
       },
+      "ActivityResponse": {
+        "properties": {
+          "activity": {
+            "items": {
+              "$ref": "#/components/schemas/ActivityRow"
+            },
+            "title": "Activity",
+            "type": "array"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "activity",
+          "count"
+        ],
+        "title": "ActivityResponse",
+        "type": "object"
+      },
+      "ActivityRow": {
+        "properties": {
+          "agent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
+          "at": {
+            "title": "At",
+            "type": "string"
+          },
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "at",
+          "type"
+        ],
+        "title": "ActivityRow",
+        "type": "object"
+      },
       "AgentCreateRequest": {
         "description": "Request to create an agent.",
         "properties": {
@@ -1544,6 +1621,163 @@
         "title": "AuditLogResponse",
         "type": "object"
       },
+      "AutobotTeamCreate": {
+        "description": "Schema for creating a team.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "organization_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organization Id"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "AutobotTeamCreate",
+        "type": "object"
+      },
+      "AutobotTeamListResponse": {
+        "description": "Schema for paginated team list response.",
+        "properties": {
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "offset": {
+            "title": "Offset",
+            "type": "integer"
+          },
+          "teams": {
+            "items": {
+              "$ref": "#/components/schemas/AutobotTeamResponse"
+            },
+            "title": "Teams",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "teams",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "AutobotTeamListResponse",
+        "type": "object"
+      },
+      "AutobotTeamResponse": {
+        "description": "Schema for team response.",
+        "properties": {
+          "created_at": {
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "organization_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Organization Id"
+          },
+          "updated_at": {
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "organization_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "AutobotTeamResponse",
+        "type": "object"
+      },
+      "AutobotTeamUpdate": {
+        "description": "Schema for updating a team.",
+        "properties": {
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "title": "AutobotTeamUpdate",
+        "type": "object"
+      },
       "BackupCodesResponse": {
         "description": "Response containing backup codes.",
         "properties": {
@@ -1737,7 +1971,8 @@
         "description": "Data service a backup, replication or verification targets (#13578).\n\n``service_type`` was the outlier among the eight sibling enums in this\nmodule: a bare ``String(32)`` with no constraint anywhere. The cost landed\nthe moment a second engine arrived — the dispatch table in\n``api/stateful.py`` had to accept two spellings of the same engine, and an\nunknown value was not rejected at the API boundary at all. It reached\n``_run_backup``, wrote a ``Backup`` row, and only then failed, leaving a\n``BackupStatus.FAILED`` row for a typo that is indistinguishable from one\nfor a real failure.\n\nThe column stays a string at rest (#13578: existing rows keep working);\nthis enum is the boundary that decides what may enter.",
         "enum": [
           "redis",
-          "postgres"
+          "postgres",
+          "secrets"
         ],
         "title": "BackupServiceType",
         "type": "string"
@@ -2118,6 +2353,21 @@
           "updated_at"
         ],
         "title": "BlueGreenResponse",
+        "type": "object"
+      },
+      "Body_exchange_sso_code_api_auth_sso_exchange_post": {
+        "properties": {
+          "code": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "Body_exchange_sso_code_api_auth_sso_exchange_post",
         "type": "object"
       },
       "Body_saml_callback_api_auth_sso_saml_callback_post": {
@@ -2588,6 +2838,93 @@
           "updated_at"
         ],
         "title": "CertificateResponse",
+        "type": "object"
+      },
+      "ClaimRow": {
+        "properties": {
+          "acquired_at": {
+            "title": "Acquired At",
+            "type": "string"
+          },
+          "agent_id": {
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "company_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stamped at write time; null = install-wide or legacy",
+            "title": "Company Id"
+          },
+          "expires_at": {
+            "title": "Expires At",
+            "type": "string"
+          },
+          "intent": {
+            "title": "Intent",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "renewals": {
+            "default": 0,
+            "description": "Explicit renewals since the claim was acquired",
+            "title": "Renewals",
+            "type": "integer"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "task_id": {
+            "title": "Task Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "kind",
+          "agent_id",
+          "task_id",
+          "mode",
+          "intent",
+          "acquired_at",
+          "expires_at"
+        ],
+        "title": "ClaimRow",
+        "type": "object"
+      },
+      "ClaimsResponse": {
+        "properties": {
+          "claims": {
+            "items": {
+              "$ref": "#/components/schemas/ClaimRow"
+            },
+            "title": "Claims",
+            "type": "array"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "claims",
+          "count"
+        ],
+        "title": "ClaimsResponse",
         "type": "object"
       },
       "CleanupResponse": {
@@ -3208,6 +3545,101 @@
         "title": "ComponentsResponse",
         "type": "object"
       },
+      "ConflictRow": {
+        "properties": {
+          "agent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
+          "at": {
+            "title": "At",
+            "type": "string"
+          },
+          "detail": {
+            "default": "",
+            "title": "Detail",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "release_refused",
+              "claim_expired",
+              "yield_unanswered",
+              "claim_lapsed_during_action"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "other_agent_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The holder, for a refused release",
+            "title": "Other Agent Id"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Id"
+          }
+        },
+        "required": [
+          "at",
+          "kind"
+        ],
+        "title": "ConflictRow",
+        "type": "object"
+      },
+      "ConflictsResponse": {
+        "properties": {
+          "conflicts": {
+            "items": {
+              "$ref": "#/components/schemas/ConflictRow"
+            },
+            "title": "Conflicts",
+            "type": "array"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "conflicts",
+          "count"
+        ],
+        "title": "ConflictsResponse",
+        "type": "object"
+      },
       "ConnectionTestRequest": {
         "description": "SSH connection test request.",
         "properties": {
@@ -3298,6 +3730,68 @@
           "message"
         ],
         "title": "ConnectionTestResponse",
+        "type": "object"
+      },
+      "ContentionResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "resources": {
+            "items": {
+              "$ref": "#/components/schemas/ContentionRow"
+            },
+            "title": "Resources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "resources",
+          "count"
+        ],
+        "title": "ContentionResponse",
+        "type": "object"
+      },
+      "ContentionRow": {
+        "properties": {
+          "contended": {
+            "description": "True when anyone is queued behind this resource",
+            "title": "Contended",
+            "type": "boolean"
+          },
+          "holders": {
+            "items": {
+              "$ref": "#/components/schemas/ClaimRow"
+            },
+            "title": "Holders",
+            "type": "array"
+          },
+          "kind": {
+            "description": "provider, cpu or queue",
+            "title": "Kind",
+            "type": "string"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "waiters": {
+            "items": {
+              "$ref": "#/components/schemas/WaiterRow"
+            },
+            "title": "Waiters",
+            "type": "array"
+          }
+        },
+        "required": [
+          "scope",
+          "kind",
+          "holders",
+          "waiters",
+          "contended"
+        ],
+        "title": "ContentionRow",
         "type": "object"
       },
       "DashboardOverview": {
@@ -3643,6 +4137,91 @@
           "updated_at"
         ],
         "title": "DeploymentResponse",
+        "type": "object"
+      },
+      "DevLoopActionRow": {
+        "properties": {
+          "at": {
+            "title": "At",
+            "type": "string"
+          },
+          "estimated_tokens": {
+            "title": "Estimated Tokens",
+            "type": "integer"
+          },
+          "intent": {
+            "title": "Intent",
+            "type": "string"
+          },
+          "issue": {
+            "title": "Issue",
+            "type": "integer"
+          },
+          "outcome": {
+            "title": "Outcome",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "issue",
+          "intent",
+          "outcome",
+          "estimated_tokens",
+          "reason",
+          "at"
+        ],
+        "title": "DevLoopActionRow",
+        "type": "object"
+      },
+      "DevLoopHistoryResponse": {
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/DevLoopActionRow"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "issue": {
+            "title": "Issue",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "issue",
+          "actions",
+          "count"
+        ],
+        "title": "DevLoopHistoryResponse",
+        "type": "object"
+      },
+      "DevLoopIssuesResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "issues": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Issues",
+            "type": "array"
+          }
+        },
+        "required": [
+          "issues",
+          "count"
+        ],
+        "title": "DevLoopIssuesResponse",
         "type": "object"
       },
       "DriftResolveJobResponse": {
@@ -4401,6 +4980,65 @@
           "nodes"
         ],
         "title": "FleetMetricsResponse",
+        "type": "object"
+      },
+      "FleetServiceActionResponse": {
+        "description": "``ServiceActionResponse`` for an action applied across the fleet.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "diagnostics": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diagnostics"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "service_name": {
+            "title": "Service Name",
+            "type": "string"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "action",
+          "service_name",
+          "node_id",
+          "success",
+          "message"
+        ],
+        "title": "FleetServiceActionResponse",
         "type": "object"
       },
       "FleetServiceNodeStatus": {
@@ -5180,6 +5818,72 @@
         "title": "HeartbeatResponse",
         "type": "object"
       },
+      "IdleSubscriberRow": {
+        "properties": {
+          "expires_at": {
+            "title": "Expires At",
+            "type": "number"
+          },
+          "since": {
+            "title": "Since",
+            "type": "number"
+          },
+          "subscriber": {
+            "title": "Subscriber",
+            "type": "string"
+          },
+          "target_kind": {
+            "title": "Target Kind",
+            "type": "string"
+          },
+          "target_name": {
+            "title": "Target Name",
+            "type": "string"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The owning company; set in the install-wide (SLM) view, null in a company's own",
+            "title": "Tenant Id"
+          }
+        },
+        "required": [
+          "subscriber",
+          "target_kind",
+          "target_name",
+          "since",
+          "expires_at"
+        ],
+        "title": "IdleSubscriberRow",
+        "type": "object"
+      },
+      "IdleSubscribersResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "subscribers": {
+            "items": {
+              "$ref": "#/components/schemas/IdleSubscriberRow"
+            },
+            "title": "Subscribers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "subscribers",
+          "count"
+        ],
+        "title": "IdleSubscribersResponse",
+        "type": "object"
+      },
       "LDAPLoginRequest": {
         "description": "Request model for LDAP login.",
         "properties": {
@@ -5264,95 +5968,6 @@
           "node_count"
         ],
         "title": "LLMApplyResponse",
-        "type": "object"
-      },
-      "LLMConfig": {
-        "description": "Full LLM configuration stored in SLM settings.",
-        "properties": {
-          "active_provider": {
-            "default": "ollama",
-            "title": "Active Provider",
-            "type": "string"
-          },
-          "cpu_models": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Cpu Models",
-            "type": "array"
-          },
-          "flash_attention": {
-            "default": true,
-            "title": "Flash Attention",
-            "type": "boolean"
-          },
-          "gpu_models": {
-            "default": [],
-            "items": {
-              "type": "string"
-            },
-            "title": "Gpu Models",
-            "type": "array"
-          },
-          "keep_alive": {
-            "default": "10m",
-            "title": "Keep Alive",
-            "type": "string"
-          },
-          "kv_cache_type": {
-            "default": "q8_0",
-            "title": "Kv Cache Type",
-            "type": "string"
-          },
-          "max_loaded_models": {
-            "default": 5,
-            "title": "Max Loaded Models",
-            "type": "integer"
-          },
-          "num_parallel": {
-            "default": 4,
-            "title": "Num Parallel",
-            "type": "integer"
-          },
-          "ollama_host": {
-            "default": "0.0.0.0",
-            "title": "Ollama Host",
-            "type": "string"
-          },
-          "ollama_port": {
-            "default": 11434,
-            "title": "Ollama Port",
-            "type": "integer"
-          },
-          "providers": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/LLMProviderConfig"
-            },
-            "title": "Providers",
-            "type": "array"
-          }
-        },
-        "title": "LLMConfig",
-        "type": "object"
-      },
-      "LLMConfigResponse": {
-        "description": "Response wrapper for LLM config.",
-        "properties": {
-          "config": {
-            "$ref": "#/components/schemas/LLMConfig"
-          },
-          "message": {
-            "default": "OK",
-            "title": "Message",
-            "type": "string"
-          }
-        },
-        "required": [
-          "config"
-        ],
-        "title": "LLMConfigResponse",
         "type": "object"
       },
       "LLMProviderConfig": {
@@ -5465,6 +6080,72 @@
           "provider"
         ],
         "title": "LLMTestResponse",
+        "type": "object"
+      },
+      "LedgerSourceStatus": {
+        "description": "What the SLM can and cannot read, so a screen never shows a gap as 'none'.",
+        "properties": {
+          "reachable": {
+            "title": "Reachable",
+            "type": "boolean"
+          },
+          "reason": {
+            "default": "",
+            "title": "Reason",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "reachable"
+        ],
+        "title": "LedgerSourceStatus",
+        "type": "object"
+      },
+      "LedgerSourcesResponse": {
+        "properties": {
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/LedgerSourceStatus"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "sources"
+        ],
+        "title": "LedgerSourcesResponse",
+        "type": "object"
+      },
+      "LedgerUnavailable": {
+        "description": "The typed 503 body: the source could not be read, which is not 'nothing there'.",
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "error": {
+            "const": "ledger_unavailable",
+            "default": "ledger_unavailable",
+            "title": "Error",
+            "type": "string"
+          },
+          "source": {
+            "description": "Which store could not be read (claims, waitlists, dev_loop, events)",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "detail"
+        ],
+        "title": "LedgerUnavailable",
         "type": "object"
       },
       "LogEntry": {
@@ -6490,7 +7171,7 @@
         "title": "NPUWorkerMetrics",
         "type": "object"
       },
-      "NavigateRequest": {
+      "NavigateBrowserRequest": {
         "properties": {
           "url": {
             "title": "Url",
@@ -6500,7 +7181,7 @@
         "required": [
           "url"
         ],
-        "title": "NavigateRequest",
+        "title": "NavigateBrowserRequest",
         "type": "object"
       },
       "NodeActionsResponse": {
@@ -7283,6 +7964,75 @@
         "title": "NodeMetricsResponse",
         "type": "object"
       },
+      "NodePostSyncResponse": {
+        "description": "Result of syncing every ACTIVE role on a node as one ordered plan.",
+        "properties": {
+          "aborted": {
+            "default": false,
+            "title": "Aborted",
+            "type": "boolean"
+          },
+          "actions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PostSyncActionRunResponse"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
+          "commit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commit"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "roles": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/NodeRoleSyncResult"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "skipped": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Skipped",
+            "type": "array"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "success",
+          "message",
+          "node_id",
+          "run_id"
+        ],
+        "title": "NodePostSyncResponse",
+        "type": "object"
+      },
       "NodeResponse": {
         "description": "Node response.",
         "properties": {
@@ -7586,6 +8336,30 @@
         "title": "NodeRoleResponse",
         "type": "object"
       },
+      "NodeRoleSyncResult": {
+        "description": "File-sync outcome for one role on the node.",
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "role_name": {
+            "title": "Role Name",
+            "type": "string"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "role_name",
+          "success",
+          "message"
+        ],
+        "title": "NodeRoleSyncResult",
+        "type": "object"
+      },
       "NodeRolesResponse": {
         "description": "All roles for a node (Issue #779).",
         "properties": {
@@ -7822,6 +8596,57 @@
         "title": "NodeUpdateSummary",
         "type": "object"
       },
+      "OrchestrationServiceActionResponse": {
+        "description": "Response for a service action.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Host"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Node Id"
+          },
+          "service_name": {
+            "title": "Service Name",
+            "type": "string"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "service_name",
+          "action",
+          "success",
+          "message"
+        ],
+        "title": "OrchestrationServiceActionResponse",
+        "type": "object"
+      },
       "PackageUploadResponse": {
         "description": "Response after uploading a role package.",
         "properties": {
@@ -7883,6 +8708,76 @@
           "new_password"
         ],
         "title": "PasswordChange",
+        "type": "object"
+      },
+      "PeerMessageRow": {
+        "description": "Pending peer messages for one recipient. Metadata only -- never the content.",
+        "properties": {
+          "oldest_at": {
+            "title": "Oldest At",
+            "type": "number"
+          },
+          "pending": {
+            "title": "Pending",
+            "type": "integer"
+          },
+          "recipient_kind": {
+            "title": "Recipient Kind",
+            "type": "string"
+          },
+          "recipient_name": {
+            "title": "Recipient Name",
+            "type": "string"
+          },
+          "senders": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Senders",
+            "type": "array"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The owning company; set in the install-wide (SLM) view, null in a company's own",
+            "title": "Tenant Id"
+          }
+        },
+        "required": [
+          "recipient_kind",
+          "recipient_name",
+          "pending",
+          "senders",
+          "oldest_at"
+        ],
+        "title": "PeerMessageRow",
+        "type": "object"
+      },
+      "PeerMessagesResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "recipients": {
+            "items": {
+              "$ref": "#/components/schemas/PeerMessageRow"
+            },
+            "title": "Recipients",
+            "type": "array"
+          }
+        },
+        "required": [
+          "recipients",
+          "count"
+        ],
+        "title": "PeerMessagesResponse",
         "type": "object"
       },
       "PendingNodeResponse": {
@@ -8363,6 +9258,134 @@
         "title": "PostSyncAction",
         "type": "object"
       },
+      "PostSyncActionRunResponse": {
+        "description": "One recorded post-sync action. `success` is None when the action was only issued.",
+        "properties": {
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "command": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Command"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "exit_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exit Code"
+          },
+          "finished_at": {
+            "format": "date-time",
+            "title": "Finished At",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "output_tail": {
+            "default": "",
+            "title": "Output Tail",
+            "type": "string"
+          },
+          "role_name": {
+            "title": "Role Name",
+            "type": "string"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "success": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Success"
+          },
+          "units": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Units"
+          }
+        },
+        "required": [
+          "run_id",
+          "node_id",
+          "role_name",
+          "category",
+          "label",
+          "started_at",
+          "finished_at"
+        ],
+        "title": "PostSyncActionRunResponse",
+        "type": "object"
+      },
+      "PostSyncRunResponse": {
+        "description": "Every recorded action of one run, in execution order.",
+        "properties": {
+          "actions": {
+            "items": {
+              "$ref": "#/components/schemas/PostSyncActionRunResponse"
+            },
+            "title": "Actions",
+            "type": "array"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "actions"
+        ],
+        "title": "PostSyncRunResponse",
+        "type": "object"
+      },
       "PreflightConflict": {
         "description": "A single conflict found during role assignment pre-flight.",
         "properties": {
@@ -8428,6 +9451,108 @@
           "node_id"
         ],
         "title": "PreflightResult",
+        "type": "object"
+      },
+      "PresenceResponse": {
+        "properties": {
+          "agents": {
+            "items": {
+              "$ref": "#/components/schemas/PresenceRow"
+            },
+            "title": "Agents",
+            "type": "array"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "agents",
+          "count"
+        ],
+        "title": "PresenceResponse",
+        "type": "object"
+      },
+      "PresenceRow": {
+        "properties": {
+          "busy": {
+            "title": "Busy",
+            "type": "boolean"
+          },
+          "current_task": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PresenceTaskRow"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when idle, or when the agent's kind has no notion of a task"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "last_seen": {
+            "title": "Last Seen",
+            "type": "number"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "tenant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tenant Id"
+          }
+        },
+        "required": [
+          "kind",
+          "tenant_id",
+          "name",
+          "busy",
+          "last_seen"
+        ],
+        "title": "PresenceRow",
+        "type": "object"
+      },
+      "PresenceTaskRow": {
+        "description": "What a busy agent is working on (#18391): for a Company OS agent, its running run's work item.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "PresenceTaskRow",
         "type": "object"
       },
       "ProvisionRequest": {
@@ -9118,7 +10243,7 @@
         "title": "RestartAllServicesResponse",
         "type": "object"
       },
-      "RoleCreate": {
+      "RoleDefinitionCreate": {
         "description": "Role creation schema.",
         "properties": {
           "ansible_playbook": {
@@ -9242,7 +10367,293 @@
           "name",
           "target_path"
         ],
-        "title": "RoleCreate",
+        "title": "RoleDefinitionCreate",
+        "type": "object"
+      },
+      "RoleDefinitionResponse": {
+        "description": "Role response schema.",
+        "properties": {
+          "ansible_playbook": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ansible Playbook"
+          },
+          "auto_restart": {
+            "title": "Auto Restart",
+            "type": "boolean"
+          },
+          "degraded_without": {
+            "items": {},
+            "title": "Degraded Without",
+            "type": "array"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "health_check_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Check Path"
+          },
+          "health_check_port": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Check Port"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "post_sync_cmd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Post Sync Cmd"
+          },
+          "pre_sync_cmd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pre Sync Cmd"
+          },
+          "required": {
+            "default": false,
+            "title": "Required",
+            "type": "boolean"
+          },
+          "source_paths": {
+            "items": {},
+            "title": "Source Paths",
+            "type": "array"
+          },
+          "sync_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Type"
+          },
+          "systemd_service": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Systemd Service"
+          },
+          "target_path": {
+            "title": "Target Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "source_paths",
+          "target_path",
+          "auto_restart"
+        ],
+        "title": "RoleDefinitionResponse",
+        "type": "object"
+      },
+      "RoleDefinitionUpdate": {
+        "description": "Role update schema.",
+        "properties": {
+          "ansible_playbook": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ansible Playbook"
+          },
+          "auto_restart": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auto Restart"
+          },
+          "degraded_without": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Degraded Without"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "health_check_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Check Path"
+          },
+          "health_check_port": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Check Port"
+          },
+          "post_sync_cmd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Post Sync Cmd"
+          },
+          "pre_sync_cmd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pre Sync Cmd"
+          },
+          "required": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Required"
+          },
+          "source_paths": {
+            "anyOf": [
+              {
+                "items": {},
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Paths"
+          },
+          "sync_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sync Type"
+          },
+          "systemd_service": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Systemd Service"
+          },
+          "target_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Path"
+          }
+        },
+        "title": "RoleDefinitionUpdate",
         "type": "object"
       },
       "RoleInfo": {
@@ -9450,10 +10861,10 @@
         "title": "RoleReportItem",
         "type": "object"
       },
-      "RoleUpdate": {
-        "description": "Role update schema.",
+      "RoleResponse": {
+        "description": "Role information in responses.",
         "properties": {
-          "ansible_playbook": {
+          "description": {
             "anyOf": [
               {
                 "type": "string"
@@ -9462,147 +10873,28 @@
                 "type": "null"
               }
             ],
-            "title": "Ansible Playbook"
+            "title": "Description"
           },
-          "auto_restart": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Auto Restart"
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
           },
-          "degraded_without": {
-            "anyOf": [
-              {
-                "items": {},
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Degraded Without"
+          "is_system": {
+            "default": false,
+            "title": "Is System",
+            "type": "boolean"
           },
-          "display_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Display Name"
-          },
-          "health_check_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Health Check Path"
-          },
-          "health_check_port": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Health Check Port"
-          },
-          "post_sync_cmd": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Post Sync Cmd"
-          },
-          "pre_sync_cmd": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pre Sync Cmd"
-          },
-          "required": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Required"
-          },
-          "source_paths": {
-            "anyOf": [
-              {
-                "items": {},
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Paths"
-          },
-          "sync_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sync Type"
-          },
-          "systemd_service": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Systemd Service"
-          },
-          "target_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Target Path"
+          "name": {
+            "title": "Name",
+            "type": "string"
           }
         },
-        "title": "RoleUpdate",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "RoleResponse",
         "type": "object"
       },
       "RolesUpdateRequest": {
@@ -10735,6 +12027,56 @@
         "title": "SecretUpdate",
         "type": "object"
       },
+      "SecretsBackupStatus": {
+        "description": "What the verifier needs to decide, and nothing else (no path, no checksum).",
+        "properties": {
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "integrity_ok": {
+            "title": "Integrity Ok",
+            "type": "boolean"
+          },
+          "service_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Service Type"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "required": [
+          "status",
+          "service_type",
+          "completed_at",
+          "integrity_ok"
+        ],
+        "title": "SecretsBackupStatus",
+        "type": "object"
+      },
       "SecurityEventAcknowledge": {
         "description": "Acknowledge security event.",
         "properties": {
@@ -11609,6 +12951,51 @@
         "title": "ServiceActionRequest",
         "type": "object"
       },
+      "ServiceActionResponse": {
+        "description": "Service action response.",
+        "properties": {
+          "action": {
+            "title": "Action",
+            "type": "string"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "node_id": {
+            "title": "Node Id",
+            "type": "string"
+          },
+          "service_name": {
+            "title": "Service Name",
+            "type": "string"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "action",
+          "service_name",
+          "node_id",
+          "success",
+          "message"
+        ],
+        "title": "ServiceActionResponse",
+        "type": "object"
+      },
       "ServiceCategoryUpdate": {
         "description": "Request to update service category.",
         "properties": {
@@ -12236,6 +13623,168 @@
         "title": "SettingUpdate",
         "type": "object"
       },
+      "SlmAdminUserCreate": {
+        "description": "User creation request.",
+        "properties": {
+          "is_admin": {
+            "default": false,
+            "title": "Is Admin",
+            "type": "boolean"
+          },
+          "password": {
+            "minLength": 8,
+            "title": "Password",
+            "type": "string"
+          },
+          "username": {
+            "maxLength": 64,
+            "minLength": 3,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "SlmAdminUserCreate",
+        "type": "object"
+      },
+      "SlmAdminUserResponse": {
+        "description": "User response (excludes password).",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id"
+          },
+          "is_active": {
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "is_admin": {
+            "default": false,
+            "title": "Is Admin",
+            "type": "boolean"
+          },
+          "last_login": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "is_active",
+          "created_at"
+        ],
+        "title": "SlmAdminUserResponse",
+        "type": "object"
+      },
+      "SlmLLMConfig": {
+        "description": "Full LLM configuration stored in SLM settings.",
+        "properties": {
+          "active_provider": {
+            "default": "ollama",
+            "title": "Active Provider",
+            "type": "string"
+          },
+          "cpu_models": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Cpu Models",
+            "type": "array"
+          },
+          "flash_attention": {
+            "default": true,
+            "title": "Flash Attention",
+            "type": "boolean"
+          },
+          "gpu_models": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Gpu Models",
+            "type": "array"
+          },
+          "keep_alive": {
+            "default": "10m",
+            "title": "Keep Alive",
+            "type": "string"
+          },
+          "kv_cache_type": {
+            "default": "q8_0",
+            "title": "Kv Cache Type",
+            "type": "string"
+          },
+          "max_loaded_models": {
+            "default": 5,
+            "title": "Max Loaded Models",
+            "type": "integer"
+          },
+          "num_parallel": {
+            "default": 4,
+            "title": "Num Parallel",
+            "type": "integer"
+          },
+          "ollama_host": {
+            "default": "0.0.0.0",
+            "title": "Ollama Host",
+            "type": "string"
+          },
+          "ollama_port": {
+            "default": 11434,
+            "title": "Ollama Port",
+            "type": "integer"
+          },
+          "providers": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/LLMProviderConfig"
+            },
+            "title": "Providers",
+            "type": "array"
+          }
+        },
+        "title": "SlmLLMConfig",
+        "type": "object"
+      },
+      "SlmLLMConfigResponse": {
+        "description": "Response wrapper for LLM config.",
+        "properties": {
+          "config": {
+            "$ref": "#/components/schemas/SlmLLMConfig"
+          },
+          "message": {
+            "default": "OK",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "title": "SlmLLMConfigResponse",
+        "type": "object"
+      },
       "StepCompleteRequest": {
         "description": "Request to mark a wizard step as completed.",
         "properties": {
@@ -12695,77 +14244,6 @@
         "title": "TLSEndpointsResponse",
         "type": "object"
       },
-      "TeamCreate": {
-        "description": "Schema for creating a team.",
-        "properties": {
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "name": {
-            "maxLength": 100,
-            "minLength": 1,
-            "title": "Name",
-            "type": "string"
-          },
-          "organization_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Organization Id"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "title": "TeamCreate",
-        "type": "object"
-      },
-      "TeamListResponse": {
-        "description": "Schema for paginated team list response.",
-        "properties": {
-          "limit": {
-            "title": "Limit",
-            "type": "integer"
-          },
-          "offset": {
-            "title": "Offset",
-            "type": "integer"
-          },
-          "teams": {
-            "items": {
-              "$ref": "#/components/schemas/TeamResponse"
-            },
-            "title": "Teams",
-            "type": "array"
-          },
-          "total": {
-            "title": "Total",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "teams",
-          "total",
-          "limit",
-          "offset"
-        ],
-        "title": "TeamListResponse",
-        "type": "object"
-      },
       "TeamMemberAdd": {
         "description": "Schema for adding a member to a team.",
         "properties": {
@@ -12784,92 +14262,6 @@
           "user_id"
         ],
         "title": "TeamMemberAdd",
-        "type": "object"
-      },
-      "TeamResponse": {
-        "description": "Schema for team response.",
-        "properties": {
-          "created_at": {
-            "title": "Created At",
-            "type": "string"
-          },
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "organization_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Organization Id"
-          },
-          "updated_at": {
-            "title": "Updated At",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "description",
-          "organization_id",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "TeamResponse",
-        "type": "object"
-      },
-      "TeamUpdate": {
-        "description": "Schema for updating a team.",
-        "properties": {
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "name": {
-            "anyOf": [
-              {
-                "maxLength": 100,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Name"
-          }
-        },
-        "title": "TeamUpdate",
         "type": "object"
       },
       "TestErrorResponse": {
@@ -14087,6 +15479,86 @@
         "title": "UpdateSummaryResponse",
         "type": "object"
       },
+      "UserCreate": {
+        "description": "Request model for creating a user.",
+        "properties": {
+          "display_name": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Display name",
+            "title": "Display Name"
+          },
+          "email": {
+            "description": "User email address",
+            "format": "email",
+            "title": "Email",
+            "type": "string"
+          },
+          "org_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Organization ID (uses current context if not provided)",
+            "title": "Org Id"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 8,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Password (8-128 characters, optional for SSO users)",
+            "title": "Password"
+          },
+          "role_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "List of role IDs to assign",
+            "title": "Role Ids"
+          },
+          "username": {
+            "description": "Username (3-100 characters, alphanumeric and underscores)",
+            "maxLength": 100,
+            "minLength": 3,
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "username"
+        ],
+        "title": "UserCreate",
+        "type": "object"
+      },
       "UserListResponse": {
         "description": "Response model for paginated user list.",
         "properties": {
@@ -14104,7 +15576,7 @@
           },
           "users": {
             "items": {
-              "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserResponse"
+              "$ref": "#/components/schemas/UserResponse"
             },
             "title": "Users",
             "type": "array"
@@ -14117,6 +15589,132 @@
           "offset"
         ],
         "title": "UserListResponse",
+        "type": "object"
+      },
+      "UserResponse": {
+        "description": "Response model for a single user.",
+        "properties": {
+          "avatar_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Url"
+          },
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "email": {
+            "title": "Email",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_active": {
+            "default": true,
+            "title": "Is Active",
+            "type": "boolean"
+          },
+          "is_platform_admin": {
+            "default": false,
+            "title": "Is Platform Admin",
+            "type": "boolean"
+          },
+          "is_verified": {
+            "default": false,
+            "title": "Is Verified",
+            "type": "boolean"
+          },
+          "last_login_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Login At"
+          },
+          "mfa_enabled": {
+            "default": false,
+            "title": "Mfa Enabled",
+            "type": "boolean"
+          },
+          "org_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Org Id"
+          },
+          "preferences": {
+            "additionalProperties": true,
+            "title": "Preferences",
+            "type": "object"
+          },
+          "roles": {
+            "items": {
+              "$ref": "#/components/schemas/RoleResponse"
+            },
+            "title": "Roles",
+            "type": "array"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "username",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "UserResponse",
         "type": "object"
       },
       "UserUpdate": {
@@ -14720,6 +16318,93 @@
         "title": "ValidationError",
         "type": "object"
       },
+      "WaiterRow": {
+        "properties": {
+          "agent_id": {
+            "title": "Agent Id",
+            "type": "string"
+          },
+          "company_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stamped at write time; null = install-wide or legacy",
+            "title": "Company Id"
+          },
+          "expires_at": {
+            "title": "Expires At",
+            "type": "string"
+          },
+          "intent": {
+            "title": "Intent",
+            "type": "string"
+          },
+          "joined_at": {
+            "title": "Joined At",
+            "type": "string"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "position": {
+            "description": "1-based position in the scope's queue",
+            "title": "Position",
+            "type": "integer"
+          },
+          "priority": {
+            "title": "Priority",
+            "type": "integer"
+          },
+          "scope": {
+            "title": "Scope",
+            "type": "string"
+          },
+          "task_id": {
+            "title": "Task Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "scope",
+          "position",
+          "agent_id",
+          "task_id",
+          "mode",
+          "intent",
+          "priority",
+          "joined_at",
+          "expires_at"
+        ],
+        "title": "WaiterRow",
+        "type": "object"
+      },
+      "WaitlistsResponse": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "waiters": {
+            "items": {
+              "$ref": "#/components/schemas/WaiterRow"
+            },
+            "title": "Waiters",
+            "type": "array"
+          }
+        },
+        "required": [
+          "waiters",
+          "count"
+        ],
+        "title": "WaitlistsResponse",
+        "type": "object"
+      },
       "WizardStatus": {
         "description": "Current state of the setup wizard.",
         "properties": {
@@ -14758,546 +16443,50 @@
         "title": "WizardStatus",
         "type": "object"
       },
-      "api__orchestration__ServiceActionResponse": {
-        "description": "Response for a service action.",
+      "YieldRequestBody": {
+        "description": "A person asks the holder of a claim to release it (#18599). Asking never releases anything.",
         "properties": {
-          "action": {
-            "title": "Action",
+          "holder_task_id": {
+            "description": "The task that holds the claim, as the claims screen shows it",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Holder Task Id",
             "type": "string"
           },
-          "host": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Host"
-          },
-          "message": {
-            "title": "Message",
+          "reason": {
+            "default": "",
+            "description": "Why; at most the ledger's free-text cap",
+            "maxLength": 280,
+            "title": "Reason",
             "type": "string"
           },
-          "node_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Node Id"
-          },
-          "service_name": {
-            "title": "Service Name",
+          "scope": {
+            "description": "The claimed scope, e.g. `path:src/app.py`",
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Scope",
             "type": "string"
-          },
-          "success": {
-            "title": "Success",
-            "type": "boolean"
           }
         },
         "required": [
-          "service_name",
-          "action",
-          "success",
-          "message"
+          "scope",
+          "holder_task_id"
         ],
-        "title": "ServiceActionResponse",
+        "title": "YieldRequestBody",
         "type": "object"
       },
-      "api__roles__RoleResponse": {
-        "description": "Role response schema.",
+      "YieldRequestResponse": {
         "properties": {
-          "ansible_playbook": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Ansible Playbook"
-          },
-          "auto_restart": {
-            "title": "Auto Restart",
-            "type": "boolean"
-          },
-          "degraded_without": {
-            "items": {},
-            "title": "Degraded Without",
-            "type": "array"
-          },
-          "display_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Display Name"
-          },
-          "health_check_path": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Health Check Path"
-          },
-          "health_check_port": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Health Check Port"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "post_sync_cmd": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Post Sync Cmd"
-          },
-          "pre_sync_cmd": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pre Sync Cmd"
-          },
-          "required": {
-            "default": false,
-            "title": "Required",
-            "type": "boolean"
-          },
-          "source_paths": {
-            "items": {},
-            "title": "Source Paths",
-            "type": "array"
-          },
-          "sync_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Sync Type"
-          },
-          "systemd_service": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Systemd Service"
-          },
-          "target_path": {
-            "title": "Target Path",
+          "token": {
+            "description": "Identifies the request; the holder's answer is recorded under it",
+            "title": "Token",
             "type": "string"
           }
         },
         "required": [
-          "name",
-          "source_paths",
-          "target_path",
-          "auto_restart"
+          "token"
         ],
-        "title": "RoleResponse",
-        "type": "object"
-      },
-      "autobot_shared__user_management__schemas__user__RoleResponse": {
-        "description": "Role information in responses.",
-        "properties": {
-          "description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Description"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
-          "is_system": {
-            "default": false,
-            "title": "Is System",
-            "type": "boolean"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "name"
-        ],
-        "title": "RoleResponse",
-        "type": "object"
-      },
-      "autobot_shared__user_management__schemas__user__UserCreate": {
-        "description": "Request model for creating a user.",
-        "properties": {
-          "display_name": {
-            "anyOf": [
-              {
-                "maxLength": 255,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Display name",
-            "title": "Display Name"
-          },
-          "email": {
-            "description": "User email address",
-            "format": "email",
-            "title": "Email",
-            "type": "string"
-          },
-          "org_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Organization ID (uses current context if not provided)",
-            "title": "Org Id"
-          },
-          "password": {
-            "anyOf": [
-              {
-                "maxLength": 128,
-                "minLength": 8,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Password (8-128 characters, optional for SSO users)",
-            "title": "Password"
-          },
-          "role_ids": {
-            "anyOf": [
-              {
-                "items": {
-                  "format": "uuid",
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "List of role IDs to assign",
-            "title": "Role Ids"
-          },
-          "username": {
-            "description": "Username (3-100 characters, alphanumeric and underscores)",
-            "maxLength": 100,
-            "minLength": 3,
-            "title": "Username",
-            "type": "string"
-          }
-        },
-        "required": [
-          "email",
-          "username"
-        ],
-        "title": "UserCreate",
-        "type": "object"
-      },
-      "autobot_shared__user_management__schemas__user__UserResponse": {
-        "description": "Response model for a single user.",
-        "properties": {
-          "avatar_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Avatar Url"
-          },
-          "bio": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Bio"
-          },
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "display_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Display Name"
-          },
-          "email": {
-            "title": "Email",
-            "type": "string"
-          },
-          "id": {
-            "format": "uuid",
-            "title": "Id",
-            "type": "string"
-          },
-          "is_active": {
-            "default": true,
-            "title": "Is Active",
-            "type": "boolean"
-          },
-          "is_platform_admin": {
-            "default": false,
-            "title": "Is Platform Admin",
-            "type": "boolean"
-          },
-          "is_verified": {
-            "default": false,
-            "title": "Is Verified",
-            "type": "boolean"
-          },
-          "last_login_at": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Login At"
-          },
-          "mfa_enabled": {
-            "default": false,
-            "title": "Mfa Enabled",
-            "type": "boolean"
-          },
-          "org_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Org Id"
-          },
-          "preferences": {
-            "additionalProperties": true,
-            "title": "Preferences",
-            "type": "object"
-          },
-          "roles": {
-            "items": {
-              "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__RoleResponse"
-            },
-            "title": "Roles",
-            "type": "array"
-          },
-          "updated_at": {
-            "format": "date-time",
-            "title": "Updated At",
-            "type": "string"
-          },
-          "username": {
-            "title": "Username",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "email",
-          "username",
-          "created_at",
-          "updated_at"
-        ],
-        "title": "UserResponse",
-        "type": "object"
-      },
-      "models__schemas__ServiceActionResponse": {
-        "description": "Service action response.",
-        "properties": {
-          "action": {
-            "title": "Action",
-            "type": "string"
-          },
-          "job_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Job Id"
-          },
-          "message": {
-            "title": "Message",
-            "type": "string"
-          },
-          "node_id": {
-            "title": "Node Id",
-            "type": "string"
-          },
-          "service_name": {
-            "title": "Service Name",
-            "type": "string"
-          },
-          "success": {
-            "title": "Success",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "action",
-          "service_name",
-          "node_id",
-          "success",
-          "message"
-        ],
-        "title": "ServiceActionResponse",
-        "type": "object"
-      },
-      "models__schemas__UserCreate": {
-        "description": "User creation request.",
-        "properties": {
-          "is_admin": {
-            "default": false,
-            "title": "Is Admin",
-            "type": "boolean"
-          },
-          "password": {
-            "minLength": 8,
-            "title": "Password",
-            "type": "string"
-          },
-          "username": {
-            "maxLength": 64,
-            "minLength": 3,
-            "title": "Username",
-            "type": "string"
-          }
-        },
-        "required": [
-          "username",
-          "password"
-        ],
-        "title": "UserCreate",
-        "type": "object"
-      },
-      "models__schemas__UserResponse": {
-        "description": "User response (excludes password).",
-        "properties": {
-          "created_at": {
-            "format": "date-time",
-            "title": "Created At",
-            "type": "string"
-          },
-          "id": {
-            "title": "Id"
-          },
-          "is_active": {
-            "title": "Is Active",
-            "type": "boolean"
-          },
-          "is_admin": {
-            "default": false,
-            "title": "Is Admin",
-            "type": "boolean"
-          },
-          "last_login": {
-            "anyOf": [
-              {
-                "format": "date-time",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Last Login"
-          },
-          "username": {
-            "title": "Username",
-            "type": "string"
-          }
-        },
-        "required": [
-          "id",
-          "username",
-          "is_active",
-          "created_at"
-        ],
-        "title": "UserResponse",
+        "title": "YieldRequestResponse",
         "type": "object"
       }
     },
@@ -15986,7 +17175,7 @@
     },
     "/api/auth/logout": {
       "post": {
-        "description": "Revoke the presented token and return IdP logout URL if applicable.\n\n- Denylists the token's ``jti`` in Redis (HS256 tokens only).\n- Queries the user's SSO link for an ``end_session_endpoint``.\n- Returns ``{\"logout_url\": \"<url>\"}`` (url may be null when not SSO-linked).",
+        "description": "Revoke the presented token and return IdP logout URL if applicable.\n\n- Denylists the token's ``jti`` in the SLM's PostgreSQL (HS256 tokens only, #18663).\n- Queries the user's SSO link for an ``end_session_endpoint``.\n- Returns ``{\"logout_url\": \"<url>\"}`` (url may be null when not SSO-linked).",
         "operationId": "logout_api_auth_logout_post",
         "responses": {
           "200": {
@@ -16044,7 +17233,7 @@
     },
     "/api/auth/proxy-check": {
       "get": {
-        "description": "nginx auth_request target for the /autobot-api/ internal-key gate (#16374).\n\nA side-effect-free membership check, deliberately separate from ``/me``:\n``/me`` answers \"is this a live SLM session?\", which any backend login\ntoken satisfies by design (epic #10193) -- every read-only or non-admin\nuser therefore passed the old gate too, and nginx then attached the\ntrusted internal key that ``autobot-backend/auth_middleware.py`` treats\nas full admin. This answers \"does this session hold the role the key\nactually confers?\": 204 for a session whose role grants\n``Permission.ADMIN_SYSTEM``, 403 for anyone authenticated but without it\n-- including SUPERADMIN, which holds no granular permissions (#13854)\nand is refused here as on every other permission-gated SLM admin route\n-- and an unknown role resolves to USER, so it also fails closed. 401\ncovers a missing Authorization header (the upstream ``HTTPBearer``'s\n``auto_error=True`` raises it before this dependency runs) or an\ninvalid/expired token (``get_current_user`` raises it). Returns no body\neither way -- an ``auth_request`` subrequest's body is discarded, only\nthe status code is read.",
+        "description": "nginx auth_request target for the /autobot-api/ internal-key gate (#16374).\n\nA side-effect-free membership check, deliberately separate from ``/me``:\n``/me`` answers \"is this a live SLM session?\", which any backend login\ntoken satisfies by design (epic #10193) -- every read-only or non-admin\nuser therefore passed the old gate too, and nginx then attached the\ntrusted internal key that ``autobot-backend/auth_middleware.py`` treats\nas full admin. This answers \"does this session hold the role the key\nactually confers?\": 204 for a session whose role grants\n``Permission.ADMIN_SYSTEM``, 403 for anyone authenticated but without it\n-- SUPERADMIN is admitted, since it holds admin's permissions (#19125),\nincluding ``ADMIN_SYSTEM`` -- and an unknown role resolves to USER, so it also fails closed. 401\ncovers a missing Authorization header (the upstream ``HTTPBearer``'s\n``auto_error=True`` raises it before this dependency runs) or an\ninvalid/expired token (``get_current_user`` raises it). Returns no body\neither way -- an ``auth_request`` subrequest's body is discarded, only\nthe status code is read.",
         "operationId": "proxy_check_api_auth_proxy_check_get",
         "responses": {
           "204": {
@@ -16134,6 +17323,48 @@
           }
         },
         "summary": "Oauth Callback",
+        "tags": [
+          "sso-auth"
+        ]
+      }
+    },
+    "/api/auth/sso/exchange": {
+      "post": {
+        "description": "Exchange a single-use SSO code for the session token (#18394).",
+        "operationId": "exchange_sso_code_api_auth_sso_exchange_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_exchange_sso_code_api_auth_sso_exchange_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Exchange Sso Code",
         "tags": [
           "sso-auth"
         ]
@@ -16443,7 +17674,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/models__schemas__UserCreate"
+                "$ref": "#/components/schemas/SlmAdminUserCreate"
               }
             }
           },
@@ -16454,7 +17685,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models__schemas__UserResponse"
+                  "$ref": "#/components/schemas/SlmAdminUserResponse"
                 }
               }
             },
@@ -16525,7 +17756,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TeamListResponse"
+                  "$ref": "#/components/schemas/AutobotTeamListResponse"
                 }
               }
             },
@@ -16559,7 +17790,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TeamCreate"
+                "$ref": "#/components/schemas/AutobotTeamCreate"
               }
             }
           },
@@ -16570,7 +17801,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TeamResponse"
+                  "$ref": "#/components/schemas/AutobotTeamResponse"
                 }
               }
             },
@@ -16659,7 +17890,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TeamResponse"
+                  "$ref": "#/components/schemas/AutobotTeamResponse"
                 }
               }
             },
@@ -16705,7 +17936,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TeamUpdate"
+                "$ref": "#/components/schemas/AutobotTeamUpdate"
               }
             }
           },
@@ -16716,7 +17947,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TeamResponse"
+                  "$ref": "#/components/schemas/AutobotTeamResponse"
                 }
               }
             },
@@ -16934,7 +18165,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserCreate"
+                "$ref": "#/components/schemas/UserCreate"
               }
             }
           },
@@ -16945,7 +18176,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserResponse"
+                  "$ref": "#/components/schemas/UserResponse"
                 }
               }
             },
@@ -17034,7 +18265,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserResponse"
+                  "$ref": "#/components/schemas/UserResponse"
                 }
               }
             },
@@ -17091,7 +18322,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserResponse"
+                  "$ref": "#/components/schemas/UserResponse"
                 }
               }
             },
@@ -17732,7 +18963,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/NavigateRequest"
+                "$ref": "#/components/schemas/NavigateBrowserRequest"
               }
             }
           },
@@ -18949,6 +20180,71 @@
         ],
         "summary": "Get Pending Nodes",
         "tags": [
+          "code-sync"
+        ]
+      }
+    },
+    "/api/code-sync/post-sync-runs/{run_id}": {
+      "get": {
+        "description": "The rows a sync run recorded, in execution order; 404 when no row carries *run_id*.",
+        "operationId": "get_post_sync_run_api_code_sync_post_sync_runs__run_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "run_id",
+            "required": true,
+            "schema": {
+              "title": "Run Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PostSyncRunResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Post Sync Run",
+        "tags": [
+          "code-sync",
           "code-sync"
         ]
       }
@@ -21603,7 +22899,7 @@
     "/api/fleet/services": {
       "get": {
         "description": "Deprecated alias of ``GET /orchestration/fleet/services`` (#17856).\n\nOne implementation lives in ``api.orchestration``; this route only delegates so the SLM\nfrontend keeps working until it calls the public path, after which this returns 410.",
-        "operationId": "get_fleet_services_api_fleet_services_get",
+        "operationId": "legacy_fleet_services_api_fleet_services_get",
         "responses": {
           "200": {
             "content": {
@@ -21621,7 +22917,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Get Fleet Services",
+        "summary": "Legacy Fleet Services",
         "tags": [
           "fleet-services"
         ]
@@ -21707,7 +23003,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models__schemas__ServiceActionResponse"
+                  "$ref": "#/components/schemas/FleetServiceActionResponse"
                 }
               }
             },
@@ -21755,7 +23051,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models__schemas__ServiceActionResponse"
+                  "$ref": "#/components/schemas/FleetServiceActionResponse"
                 }
               }
             },
@@ -21803,7 +23099,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models__schemas__ServiceActionResponse"
+                  "$ref": "#/components/schemas/FleetServiceActionResponse"
                 }
               }
             },
@@ -22922,6 +24218,576 @@
         "summary": "Verify Mfa Setup",
         "tags": [
           "mfa"
+        ]
+      }
+    },
+    "/api/monitoring/agent-ledger/activity": {
+      "get": {
+        "description": "Recent coordination activity across the install, newest first.",
+        "operationId": "ledger_activity_api_monitoring_agent_ledger_activity_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActivityResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerUnavailable"
+                }
+              }
+            },
+            "description": "The ledger could not be read (not the same as empty)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ledger Activity",
+        "tags": [
+          "monitoring",
+          "agent-ledger"
+        ]
+      }
+    },
+    "/api/monitoring/agent-ledger/claims": {
+      "get": {
+        "description": "Every held claim across the install: scope, mode, intent, expiry, renewals.",
+        "operationId": "ledger_claims_api_monitoring_agent_ledger_claims_get",
+        "parameters": [
+          {
+            "description": "Only claims of this scope kind",
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only claims of this scope kind",
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ClaimsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerUnavailable"
+                }
+              }
+            },
+            "description": "The ledger could not be read (not the same as empty)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ledger Claims",
+        "tags": [
+          "monitoring",
+          "agent-ledger"
+        ]
+      }
+    },
+    "/api/monitoring/agent-ledger/claims/yield-request": {
+      "post": {
+        "description": "Ask the holder of any claim to release it. Publishes a request; releases nothing.\n\nThe asker is the token's ``sub``; a token without one is a 401, never the shared\nidentity ``\"None\"`` (#18607). The per-person rate limit (``RateLimiter.acquire_window``)\nfails OPEN if ITS store is unreachable -- the limiter's class policy. With Redis down the\nask never gets that far: the claim lookup before the limiter answers the typed 503. Only\na limiter store failing on its own lets an ask through unlimited; it is still published\nonce per request, never as a release.",
+        "operationId": "ledger_yield_request_api_monitoring_agent_ledger_claims_yield_request_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/YieldRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/YieldRequestResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "No such claim"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "description": "Asked too recently"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerUnavailable"
+                }
+              }
+            },
+            "description": "The ledger could not be read (not the same as empty)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ledger Yield Request",
+        "tags": [
+          "monitoring",
+          "agent-ledger"
+        ]
+      }
+    },
+    "/api/monitoring/agent-ledger/conflicts": {
+      "get": {
+        "description": "Refused releases, claims expired while held, unanswered yields, lapsed dev-loop actions.",
+        "operationId": "ledger_conflicts_api_monitoring_agent_ledger_conflicts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConflictsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerUnavailable"
+                }
+              }
+            },
+            "description": "The ledger could not be read (not the same as empty)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ledger Conflicts",
+        "tags": [
+          "monitoring",
+          "agent-ledger"
+        ]
+      }
+    },
+    "/api/monitoring/agent-ledger/contention": {
+      "get": {
+        "description": "Shared-resource scopes (provider, cpu, queue): holders and who waits.",
+        "operationId": "ledger_contention_api_monitoring_agent_ledger_contention_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ContentionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerUnavailable"
+                }
+              }
+            },
+            "description": "The ledger could not be read (not the same as empty)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ledger Contention",
+        "tags": [
+          "monitoring",
+          "agent-ledger"
+        ]
+      }
+    },
+    "/api/monitoring/agent-ledger/dev-loop": {
+      "get": {
+        "description": "Issues the dev loop has a recorded action history for.",
+        "operationId": "ledger_dev_loop_issues_api_monitoring_agent_ledger_dev_loop_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevLoopIssuesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerUnavailable"
+                }
+              }
+            },
+            "description": "The ledger could not be read (not the same as empty)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ledger Dev Loop Issues",
+        "tags": [
+          "monitoring",
+          "agent-ledger"
+        ]
+      }
+    },
+    "/api/monitoring/agent-ledger/dev-loop/{issue}": {
+      "get": {
+        "description": "One issue's dev-loop action history, newest first, including refused and skipped attempts.",
+        "operationId": "ledger_dev_loop_history_api_monitoring_agent_ledger_dev_loop__issue__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "issue",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Issue",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DevLoopHistoryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerUnavailable"
+                }
+              }
+            },
+            "description": "The ledger could not be read (not the same as empty)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ledger Dev Loop History",
+        "tags": [
+          "monitoring",
+          "agent-ledger"
+        ]
+      }
+    },
+    "/api/monitoring/agent-ledger/idle-subscribers": {
+      "get": {
+        "description": "Every agent waiting to be told a peer next goes idle.",
+        "operationId": "ledger_idle_subscribers_api_monitoring_agent_ledger_idle_subscribers_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IdleSubscribersResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerUnavailable"
+                }
+              }
+            },
+            "description": "The ledger could not be read (not the same as empty)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ledger Idle Subscribers",
+        "tags": [
+          "monitoring",
+          "agent-ledger"
+        ]
+      }
+    },
+    "/api/monitoring/agent-ledger/peer-messages": {
+      "get": {
+        "description": "Messages waiting for any agent's next turn. Counts and senders, never content.",
+        "operationId": "ledger_peer_messages_api_monitoring_agent_ledger_peer_messages_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PeerMessagesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerUnavailable"
+                }
+              }
+            },
+            "description": "The ledger could not be read (not the same as empty)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ledger Peer Messages",
+        "tags": [
+          "monitoring",
+          "agent-ledger"
+        ]
+      }
+    },
+    "/api/monitoring/agent-ledger/presence": {
+      "get": {
+        "description": "Every company's live agents, AI-stack agents and live sessions, from the user backend's snapshot.",
+        "operationId": "ledger_presence_api_monitoring_agent_ledger_presence_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PresenceResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerUnavailable"
+                }
+              }
+            },
+            "description": "The ledger could not be read (not the same as empty)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ledger Presence",
+        "tags": [
+          "monitoring",
+          "agent-ledger"
+        ]
+      }
+    },
+    "/api/monitoring/agent-ledger/sources": {
+      "get": {
+        "description": "Which coordination stores and live-state snapshots this view can read right now.",
+        "operationId": "ledger_sources_api_monitoring_agent_ledger_sources_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerSourcesResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerUnavailable"
+                }
+              }
+            },
+            "description": "The ledger could not be read (not the same as empty)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ledger Sources",
+        "tags": [
+          "monitoring",
+          "agent-ledger"
+        ]
+      }
+    },
+    "/api/monitoring/agent-ledger/waitlists": {
+      "get": {
+        "description": "Every queued agent behind a held scope, in position order.",
+        "operationId": "ledger_waitlists_api_monitoring_agent_ledger_waitlists_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WaitlistsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerUnavailable"
+                }
+              }
+            },
+            "description": "The ledger could not be read (not the same as empty)"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Ledger Waitlists",
+        "tags": [
+          "monitoring",
+          "agent-ledger"
         ]
       }
     },
@@ -26796,7 +28662,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models__schemas__ServiceActionResponse"
+                  "$ref": "#/components/schemas/ServiceActionResponse"
                 }
               }
             },
@@ -26853,7 +28719,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models__schemas__ServiceActionResponse"
+                  "$ref": "#/components/schemas/ServiceActionResponse"
                 }
               }
             },
@@ -26910,7 +28776,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/models__schemas__ServiceActionResponse"
+                  "$ref": "#/components/schemas/ServiceActionResponse"
                 }
               }
             },
@@ -26935,6 +28801,81 @@
         "summary": "Stop Service",
         "tags": [
           "services"
+        ]
+      }
+    },
+    "/api/nodes/{node_id}/sync": {
+      "post": {
+        "description": "Sync every ACTIVE role on a node and run ONE ordered post-sync plan (#17455).\n\nA failed install/schema/build aborts the plan (no restarts, no role marked synced); a\nfailed restart is recorded and reported in ``actions[*].success`` without failing the sync.",
+        "operationId": "sync_node_post_sync_plan_api_nodes__node_id__sync_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "node_id",
+            "required": true,
+            "schema": {
+              "title": "Node Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "restart",
+            "required": false,
+            "schema": {
+              "default": true,
+              "title": "Restart",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NodePostSyncResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Sync Node Post Sync Plan",
+        "tags": [
+          "nodes",
+          "nodes"
         ]
       }
     },
@@ -27996,8 +29937,8 @@
     },
     "/api/orchestration/fleet/services/{service_name}/restart": {
       "post": {
-        "description": "Restart a service on all nodes that have it.\n\nIssue #850: Moved from /fleet/services/{name}/restart to /orchestration/fleet/services/{name}/restart.",
-        "operationId": "restart_fleet_service_api_orchestration_fleet_services__service_name__restart_post",
+        "description": "Restart a service on all nodes that have it: delegates to ``api.services`` (#18714).",
+        "operationId": "orchestration_restart_fleet_service_api_orchestration_fleet_services__service_name__restart_post",
         "parameters": [
           {
             "in": "path",
@@ -28014,7 +29955,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/api__orchestration__ServiceActionResponse"
+                  "$ref": "#/components/schemas/FleetServiceActionResponse"
                 }
               }
             },
@@ -28036,7 +29977,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Restart Fleet Service",
+        "summary": "Orchestration Restart Fleet Service",
         "tags": [
           "orchestration",
           "orchestration-fleet"
@@ -28045,8 +29986,8 @@
     },
     "/api/orchestration/fleet/services/{service_name}/start": {
       "post": {
-        "description": "Start a service on all nodes that have it.\n\nIssue #850: Moved from /fleet/services/{name}/start to /orchestration/fleet/services/{name}/start.",
-        "operationId": "start_fleet_service_api_orchestration_fleet_services__service_name__start_post",
+        "description": "Start a service on all nodes that have it: delegates to ``api.services`` (#18714).\n\nThe route dependencies (``FLEET_SERVICE_ACTION_ROUTE``) are the ones the canonical route\ncarries, so the unit-name validation (422) and the service-management gate come with it.",
+        "operationId": "orchestration_start_fleet_service_api_orchestration_fleet_services__service_name__start_post",
         "parameters": [
           {
             "in": "path",
@@ -28063,7 +30004,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/api__orchestration__ServiceActionResponse"
+                  "$ref": "#/components/schemas/FleetServiceActionResponse"
                 }
               }
             },
@@ -28085,7 +30026,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Start Fleet Service",
+        "summary": "Orchestration Start Fleet Service",
         "tags": [
           "orchestration",
           "orchestration-fleet"
@@ -28094,8 +30035,8 @@
     },
     "/api/orchestration/fleet/services/{service_name}/stop": {
       "post": {
-        "description": "Stop a service on all nodes.\n\nIssue #850: Moved from /fleet/services/{name}/stop to /orchestration/fleet/services/{name}/stop.",
-        "operationId": "stop_fleet_service_api_orchestration_fleet_services__service_name__stop_post",
+        "description": "Stop a service on all nodes: delegates to ``api.services`` (#18714).",
+        "operationId": "orchestration_stop_fleet_service_api_orchestration_fleet_services__service_name__stop_post",
         "parameters": [
           {
             "in": "path",
@@ -28112,7 +30053,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/api__orchestration__ServiceActionResponse"
+                  "$ref": "#/components/schemas/FleetServiceActionResponse"
                 }
               }
             },
@@ -28134,7 +30075,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Stop Fleet Service",
+        "summary": "Orchestration Stop Fleet Service",
         "tags": [
           "orchestration",
           "orchestration-fleet"
@@ -28304,7 +30245,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/api__orchestration__ServiceActionResponse"
+                  "$ref": "#/components/schemas/OrchestrationServiceActionResponse"
                 }
               }
             },
@@ -28369,7 +30310,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/api__orchestration__ServiceActionResponse"
+                  "$ref": "#/components/schemas/OrchestrationServiceActionResponse"
                 }
               }
             },
@@ -28434,7 +30375,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/api__orchestration__ServiceActionResponse"
+                  "$ref": "#/components/schemas/OrchestrationServiceActionResponse"
                 }
               }
             },
@@ -28499,7 +30440,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/api__orchestration__ServiceActionResponse"
+                  "$ref": "#/components/schemas/OrchestrationServiceActionResponse"
                 }
               }
             },
@@ -29560,7 +31501,7 @@
               "application/json": {
                 "schema": {
                   "items": {
-                    "$ref": "#/components/schemas/api__roles__RoleResponse"
+                    "$ref": "#/components/schemas/RoleDefinitionResponse"
                   },
                   "title": "Response Get Roles Api Roles Get",
                   "type": "array"
@@ -29615,7 +31556,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RoleCreate"
+                "$ref": "#/components/schemas/RoleDefinitionCreate"
               }
             }
           },
@@ -29626,7 +31567,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/api__roles__RoleResponse"
+                  "$ref": "#/components/schemas/RoleDefinitionResponse"
                 }
               }
             },
@@ -30066,7 +32007,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/api__roles__RoleResponse"
+                  "$ref": "#/components/schemas/RoleDefinitionResponse"
                 }
               }
             },
@@ -30127,7 +32068,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RoleUpdate"
+                "$ref": "#/components/schemas/RoleDefinitionUpdate"
               }
             }
           },
@@ -30138,7 +32079,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/api__roles__RoleResponse"
+                  "$ref": "#/components/schemas/RoleDefinitionResponse"
                 }
               }
             },
@@ -31913,7 +33854,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LLMConfigResponse"
+                  "$ref": "#/components/schemas/SlmLLMConfigResponse"
                 }
               }
             },
@@ -31937,7 +33878,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/LLMConfig"
+                "$ref": "#/components/schemas/SlmLLMConfig"
               }
             }
           },
@@ -31948,7 +33889,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LLMConfigResponse"
+                  "$ref": "#/components/schemas/SlmLLMConfigResponse"
                 }
               }
             },
@@ -32704,7 +34645,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserCreate"
+                "$ref": "#/components/schemas/UserCreate"
               }
             }
           },
@@ -32715,7 +34656,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserResponse"
+                  "$ref": "#/components/schemas/UserResponse"
                 }
               }
             },
@@ -32804,7 +34745,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserResponse"
+                  "$ref": "#/components/schemas/UserResponse"
                 }
               }
             },
@@ -32861,7 +34802,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/autobot_shared__user_management__schemas__user__UserResponse"
+                  "$ref": "#/components/schemas/UserResponse"
                 }
               }
             },
@@ -34099,6 +36040,70 @@
           }
         ],
         "summary": "Verify Replication Sync",
+        "tags": [
+          "stateful"
+        ]
+      }
+    },
+    "/api/stateful/secrets-backups/{backup_id}": {
+      "get": {
+        "description": "Facts about one backup: its status, type, completion time and on-disk integrity.",
+        "operationId": "get_secrets_backup_status_api_stateful_secrets_backups__backup_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "backup_id",
+            "required": true,
+            "schema": {
+              "title": "Backup Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SecretsBackupStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Secrets Backup Status",
         "tags": [
           "stateful"
         ]

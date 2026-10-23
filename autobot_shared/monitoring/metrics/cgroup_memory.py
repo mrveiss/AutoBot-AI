@@ -75,7 +75,7 @@ DEFAULT_CGROUP_ROOT = Path("/sys/fs/cgroup")
 # ONLY the set-property trees. `/etc/systemd/system/<unit>.d/` was added here in
 # an earlier pass on the reasoning that a hand-written override is equally
 # undeclared — but that tree is also where ANSIBLE renders drop-ins, and the
-# redis role puts `MemoryLimit=` in exactly
+# redis role puts `MemoryHigh=`/`MemoryMax=` (#19124) in exactly
 # `/etc/systemd/system/redis-stack-server.service.d/override.conf`
 # (roles/redis/tasks/code_only.yml + redis-stack-override.conf.j2). Including it
 # made ServiceMemoryLimitsOutOfBand fire permanently on every host, for a limit

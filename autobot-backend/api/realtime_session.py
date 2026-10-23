@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
+from api.schemas_realtime_session import RealtimeSessionSummary
 from api.user_management.dependencies import get_current_user
 from auth_middleware import check_admin_permission
 from autobot_shared.logging_manager import get_logger
@@ -64,22 +65,6 @@ class ToolCallRequest(BaseModel):
     name: str
     arguments: dict[str, Any] = Field(default_factory=dict)
     session_id: str | None = None
-
-
-class SessionSummary(BaseModel):
-    session_id: str
-    user_id: str | None
-    model: str
-    started_at: str
-    ended_at: str | None
-    duration_s: float
-    audio_in_s: float
-    audio_out_s: float
-    input_tokens: int
-    output_tokens: int
-    tool_calls: int
-    estimated_cost_usd: float
-    disconnect_reason: str
 
 
 # ── Provider selection models (Issue #9025) ───────────────────────────────────
@@ -230,24 +215,30 @@ async def ingest_response_done(session_id: str, body: ResponseDoneRequest) -> di
 
 
 @router.post("/tools/call")
-async def call_realtime_tool(body: ToolCallRequest) -> dict:
-    """Route a Realtime tool call through the MCP bridge (#7343)."""
+async def call_realtime_tool(body: ToolCallRequest, current_user: dict = Depends(get_current_user)) -> dict:
+    """Route a Realtime tool call through the MCP bridge (#7343); its AI line is resolved first (#18430)."""
     from services.realtime_mcp_bridge import get_realtime_bridge
 
     bridge = await get_realtime_bridge()
-    result = await bridge.call_tool(name=body.name, arguments=body.arguments, session_id=body.session_id)
+    result = await bridge.call_tool(
+        name=body.name,
+        arguments=body.arguments,
+        session_id=body.session_id,
+        user_id=current_user.get("id") or current_user.get("sub"),
+        company_id=current_user.get("org_id"),
+    )
     return {"call_id": body.call_id, "content": result.content, "is_error": result.is_error}
 
 
-@router.get("/sessions", response_model=list[SessionSummary])
-async def list_realtime_sessions(user_id: str | None = None, limit: int = 20) -> list[SessionSummary]:
+@router.get("/sessions", response_model=list[RealtimeSessionSummary])
+async def list_realtime_sessions(user_id: str | None = None, limit: int = 20) -> list[RealtimeSessionSummary]:
     """Return recent Realtime sessions for the UsageView (#7421)."""
     from services.voice_realtime_telemetry import get_voice_realtime_telemetry
 
     telemetry = get_voice_realtime_telemetry()
     records = await telemetry.list_recent_sessions(user_id=user_id, limit=limit)
     return [
-        SessionSummary(
+        RealtimeSessionSummary(
             session_id=r.session_id,
             user_id=r.user_id,
             model=r.model,

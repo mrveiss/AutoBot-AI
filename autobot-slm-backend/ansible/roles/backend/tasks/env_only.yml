@@ -45,6 +45,12 @@
     deployed_embedding_env_files: ["{{ backend_env_dest }}"]
   tags: ['backend', 'env']
 
+- name: "Backend | Keep the deployed Prometheus scrape token (#16375)"
+  ansible.builtin.include_tasks: ../../../_shared/tasks/keep_prometheus_scrape_token.yml
+  vars:
+    scrape_token_env_files: ["{{ backend_env_dest }}", "{{ autobot_backend_env_file }}"]
+  tags: ['backend', 'env']
+
 - name: "Backend | Render .env from template (#12871)"
   ansible.builtin.template:
     src: backend.env.j2

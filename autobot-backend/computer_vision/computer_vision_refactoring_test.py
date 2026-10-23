@@ -13,9 +13,9 @@ import numpy as np
 import pytest
 
 from computer_vision_system import (
-    ContextAnalyzer,
     ElementType,
     InteractionType,
+    ScreenContextAnalyzer,
     UIElement,
     UIElementCollection,
 )
@@ -194,7 +194,7 @@ class TestUIElementCollection:
 
 
 class TestContextAnalyzer:
-    """Test ContextAnalyzer using Tell Don't Ask pattern"""
+    """Test ScreenContextAnalyzer using Tell Don't Ask pattern"""
 
     @pytest.fixture
     def sample_elements(self):
@@ -228,7 +228,7 @@ class TestContextAnalyzer:
     @pytest.mark.asyncio
     async def test_analyze_context_structure(self, sample_elements):
         """Test context analysis returns correct structure"""
-        analyzer = ContextAnalyzer()
+        analyzer = ScreenContextAnalyzer()
         screenshot = np.zeros((100, 400, 3), dtype=np.uint8)
 
         context = await analyzer.analyze_context(screenshot, sample_elements)
@@ -249,7 +249,7 @@ class TestContextAnalyzer:
     @pytest.mark.asyncio
     async def test_analyze_context_backward_compatibility(self, sample_elements):
         """Test backward compatibility of context analysis"""
-        analyzer = ContextAnalyzer()
+        analyzer = ScreenContextAnalyzer()
         screenshot = np.zeros((100, 400, 3), dtype=np.uint8)
 
         context = await analyzer.analyze_context(screenshot, sample_elements)
@@ -322,11 +322,13 @@ class TestFeatureEnvyElimination:
 
         sentinel = f"sentinel-for-{method}"
         with patch.object(classifiers_mod.UIElementCollection, method, return_value=sentinel):
-            context = await ContextAnalyzer().analyze_context(np.zeros((100, 400, 3), dtype=np.uint8), context_elements)
+            context = await ScreenContextAnalyzer().analyze_context(
+                np.zeros((100, 400, 3), dtype=np.uint8), context_elements
+            )
 
         assert context[context_key] == sentinel, (
             f"context['{context_key}'] did not come from "
-            f"UIElementCollection.{method} — ContextAnalyzer computed it itself (Feature Envy)"
+            f"UIElementCollection.{method} — ScreenContextAnalyzer computed it itself (Feature Envy)"
         )
 
     @pytest.mark.asyncio
@@ -343,7 +345,7 @@ class TestFeatureEnvyElimination:
             return original(elements)
 
         with patch.object(classifiers_mod, "UIElementCollection", _record):
-            await ContextAnalyzer().analyze_context(np.zeros((100, 400, 3), dtype=np.uint8), context_elements)
+            await ScreenContextAnalyzer().analyze_context(np.zeros((100, 400, 3), dtype=np.uint8), context_elements)
 
         assert seen == [list(context_elements)]
 
@@ -361,9 +363,9 @@ class TestFeatureEnvyElimination:
         assert "find_interactive_elements" in collection_methods
 
     def test_no_thin_wrapper_methods(self):
-        """Verify ContextAnalyzer has no thin wrapper methods"""
+        """Verify ScreenContextAnalyzer has no thin wrapper methods"""
 
-        analyzer_methods = [method for method in dir(ContextAnalyzer) if not method.startswith("__")]
+        analyzer_methods = [method for method in dir(ScreenContextAnalyzer) if not method.startswith("__")]
 
         # Should NOT have thin wrapper private methods
         assert (

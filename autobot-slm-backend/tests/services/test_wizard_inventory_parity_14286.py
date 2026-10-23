@@ -84,6 +84,11 @@ def _load():
         "services.playbook_executor",
         "services.provision_progress",
         "services.role_registry",
+        "services.ansible_extra_vars",
+        "services.unit_names",
+        "services.role_manifest_shape",
+        "services.playbook_output_stream",
+        "services.ssh_utils",
     )
     saved = {name: sys.modules.get(name) for name in touched}
     try:
@@ -360,29 +365,33 @@ def _wizard_writer_ast() -> ast.AST:
     function was decomposed, and a rule hard-coded to either name would have
     silently stopped checking anything the moment it moved again.
     """
-    source = (_BACKEND_ROOT / "api" / "setup_wizard.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    functions = {
-        node.name: node for node in ast.walk(tree) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-    }
+    # #19202: the write lives in services/temp_inventory.py, shared with api/nodes.py; the
+    # walk follows calls into it rather than stopping at this file's edge.
+    functions: dict = {}
+    for rel in ("api/setup_wizard.py", "services/temp_inventory.py"):
+        tree = ast.parse((_BACKEND_ROOT / rel).read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                functions.setdefault(node.name, node)
     generator = functions.get("_generate_dynamic_inventory")
     assert generator is not None, "_generate_dynamic_inventory not found"
 
-    # the generator either writes inline, or delegates to exactly one helper
-    for node in ast.walk(generator):
-        if isinstance(node, ast.Call) and getattr(node.func, "attr", None) == "mkstemp":
-            return generator
-    called = [
-        functions[node.func.id]
-        for node in ast.walk(generator)
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in functions
-    ]
-    for candidate in called:
-        if any(
-            isinstance(inner, ast.Call) and getattr(inner.func, "attr", None) == "mkstemp"
-            for inner in ast.walk(candidate)
-        ):
-            return candidate
+    def writes(fn) -> bool:
+        return any(isinstance(n, ast.Call) and getattr(n.func, "attr", None) == "mkstemp" for n in ast.walk(fn))
+
+    frontier, seen = [generator], set()
+    while frontier:  # breadth-first over direct calls to known functions
+        fn = frontier.pop(0)
+        if fn.name in seen:
+            continue
+        seen.add(fn.name)
+        if writes(fn):
+            return fn
+        frontier += [
+            functions[n.func.id]
+            for n in ast.walk(fn)
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id in functions
+        ]
     raise AssertionError("nothing reachable from _generate_dynamic_inventory calls mkstemp")
 
 

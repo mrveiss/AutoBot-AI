@@ -38,11 +38,11 @@ from models.infrastructure import (
     DockerDeploymentStatus,
 )
 from services.slm.deployment_bridge import (
+    BridgeDeploymentStatus,
     DeploymentContext,
     DeploymentCoordinator,
-    DeploymentStatus,
     SLMDeploymentBridge,
-    get_orchestrator,
+    get_deployment_coordinator,
 )
 from services.slm_client import get_slm_client
 
@@ -64,7 +64,7 @@ _VALID_STRATEGIES = {s.value for s in DeploymentStrategy}
 
 def _require_orchestrator() -> DeploymentCoordinator:
     """Return the global orchestrator or raise 503 if not initialised."""
-    orch = get_orchestrator()
+    orch = get_deployment_coordinator()
     if orch is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -213,7 +213,7 @@ async def execute_deployment(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Deployment not found",
         )
-    if ctx.status != DeploymentStatus.QUEUED:
+    if ctx.status != BridgeDeploymentStatus.QUEUED:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Deployment is not queued (current status: {ctx.status})",

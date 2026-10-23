@@ -20,12 +20,11 @@ interface Card {
 }
 
 const baseCards: Card[] = [
-  { name: 'BaseButton', description: 'Interactive button component with variants and states', href: '?path=/docs/components-base-basebutton--docs' },
-  { name: 'BaseInput', description: 'Form input component with validation and helpers', href: '?path=/docs/components-base-baseinput--docs' },
-  { name: 'BaseCard', description: 'Card container with multiple styling variants', href: '?path=/docs/components-base-basecard--docs' },
-  { name: 'BaseBadge', description: 'Badge component for labels and status indicators', href: '?path=/docs/components-base-basebadge--docs' },
-  { name: 'BaseTable', description: 'Data table component with sorting and filtering', href: '?path=/docs/components-base-basetable--docs' },
-  { name: 'BasePanel', description: 'Collapsible panel component for organizing content', href: '?path=/docs/components-base-basepanel--docs' },
+  { name: 'BaseButton', description: 'Interactive button component with variants and states (shared kit)', href: '?path=/docs/kit-basebutton--docs' },
+  { name: 'BaseInput', description: 'Text input with label, helper and error text (shared kit)', href: '?path=/docs/kit-baseinput--docs' },
+  { name: 'BaseCard', description: 'Card and panel container, variants and sizes (shared kit)', href: '?path=/docs/kit-basecard--docs' },
+  { name: 'BaseBadge', description: 'Badge component for labels and status indicators (shared kit)', href: '?path=/docs/kit-basebadge--docs' },
+  { name: 'BaseTable', description: 'Data table with sorting, selection and numeric columns (shared kit)', href: '?path=/docs/kit-basetable--docs' },
 ];
 
 const commonCards: Card[] = [
@@ -41,14 +40,12 @@ const featureCards: Card[] = [
 const uiCards: Card[] = [
   { name: 'BaseModal', description: 'Modal dialog with backdrop and slot-based body', href: '?path=/docs/components-ui-basemodal--docs' },
   { name: 'ConfirmDialog', description: 'Confirmation dialog with confirm/cancel actions', href: '?path=/docs/components-ui-confirmdialog--docs' },
-  { name: 'DataTable', description: 'Sortable, paginated data table', href: '?path=/docs/components-ui-datatable--docs' },
   { name: 'ProgressBar', description: 'Linear progress indicator with variants', href: '?path=/docs/components-ui-progressbar--docs' },
   { name: 'SkeletonLoader', description: 'Placeholder loading skeleton', href: '?path=/docs/components-ui-skeletonloader--docs' },
   { name: 'StatusBadge', description: 'Compact status indicator badge', href: '?path=/docs/components-ui-statusbadge--docs' },
   { name: 'ThemeToggle', description: 'Theme switcher between light and dark', href: '?path=/docs/components-ui-themetoggle--docs' },
   { name: 'ToastContainer', description: 'Toast notification host container', href: '?path=/docs/components-ui-toastcontainer--docs' },
   { name: 'Icon', description: 'Single-path SVG icon from the ICONS registry', href: '?path=/docs/components-ui-icon--docs' },
-  { name: 'DarkModeToggle', description: 'Dark mode toggle switch', href: '?path=/docs/components-ui-darkmodetoggle--docs' },
   { name: 'OfflineBanner', description: 'Banner shown when network is offline', href: '?path=/docs/components-ui-offlinebanner--docs' },
   { name: 'MessageStatus', description: 'Status indicator for chat messages', href: '?path=/docs/components-ui-messagestatus--docs' },
   { name: 'PreferencesPanel', description: 'User preferences panel', href: '?path=/docs/components-ui-preferencespanel--docs' },
@@ -62,7 +59,7 @@ const uiCards: Card[] = [
 ];
 
 const layoutCards: Card[] = [
-  { name: 'LanguageSwitcher', description: 'Globe icon language switcher for the nav bar', href: '?path=/docs/components-layout-languageswitcher--docs' },
+  { name: 'LanguageSwitcher', description: 'Language picker (select or globe menu), shared with the SLM', href: '?path=/docs/kit-languageswitcher--docs' },
   { name: 'NavOverflowMenu', description: 'Overflow "More" menu for nav items', href: '?path=/docs/components-layout-navoverflowmenu--docs' },
 ];
 
@@ -165,9 +162,9 @@ export const Overview: Story = {
             <h3 class="text-xl font-bold mb-2">For Developers</h3>
             <p class="text-sm text-gray-700 mb-3">Component stories are located alongside component files:</p>
             <code class="block bg-white p-3 rounded text-xs text-gray-800 border border-gray-200">
-              src/components/base/BaseButton.stories.ts<br/>
-              src/components/ui/BaseModal.stories.ts<br/>
-              src/components/layout/LanguageSwitcher.stories.ts<br/>
+              libs/autobot-ui/src/components/BaseButton.stories.ts<br/>
+              libs/autobot-ui/src/components/BaseModal.stories.ts<br/>
+              libs/autobot-ui/src/components/LanguageSwitcher.stories.ts<br/>
               src/stories/IconLibrary.stories.ts<br/>
               src/stories/DesignTokens.stories.ts
             </code>

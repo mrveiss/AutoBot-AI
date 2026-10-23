@@ -491,7 +491,7 @@ def emitted_bare_interpolations(source: str) -> Findings:
     return _examine(source, _emitted_bare_findings_in)
 
 
-def tracked_python_files() -> Tuple[str, ...]:
+def placeholder_sweep_python_files() -> Tuple[str, ...]:
     """Every tracked ``.py`` path, git-enumerated so a stray local file cannot join the sweep."""
     listed = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
         ["git", "ls-files", "*.py"],
@@ -515,7 +515,7 @@ def sweep() -> Tuple[Dict[str, Dict[str, int]], int, int]:
     """
     findings: Dict[str, Dict[str, int]] = {name: {} for name, _ in CATEGORIES}
     parsed = examined = 0
-    for relative in tracked_python_files():
+    for relative in placeholder_sweep_python_files():
         try:
             source = (REPO_ROOT / relative).read_text(encoding="utf-8")
             tree = ast.parse(source)

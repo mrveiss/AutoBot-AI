@@ -49,6 +49,7 @@ from api import (
     rdp_router,
     redis_service_router,
     scim_router,
+    secrets_backup_status_router,
     secrets_router,
     security_router,
     services_router,
@@ -82,15 +83,21 @@ from middleware import install_middleware
 from services.a2a_card_fetcher import start_card_refresh_task
 from services.auth import require_service_management, require_service_management_or_internal
 from services.compose_fleet import (
-    _SLM_MGMT_IP,
     _compose_nodes_enabled,
     seed_compose_nodes,
+    slm_mgmt_ip,
     start_compose_heartbeat,
 )
 from services.database import db_service
+from services.generated_system_secrets import (
+    INTERNAL_API_KEY,
+    PROMETHEUS_SCRAPE_TOKEN,
+    SCIM_BEARER_TOKEN,
+    ensure_generated_secret,
+)
 from services.git_tracker import start_version_checker
 from services.local_admin_socket import start_local_admin_socket
-from services.node_seeder import sync_slm_node_roles
+from services.node_seeder import heal_existing_slm_node_roles
 from services.reconciler import reconciler_service
 from services.schedule_executor import start_schedule_executor, stop_schedule_executor
 from services.security_posture_auditor import (
@@ -172,6 +179,122 @@ async def _run_migrations():
         raise
 
 
+async def _startup_database() -> None:
+    """Lifespan step (#16375 extraction): collision check and DB init; failure is fatal."""
+    # Validate that the two Base MetaData objects share no tablenames (#1878).
+    # Must run before create_all / migrations so conflicts are caught immediately.
+    try:
+        logger.info("Checking for table name collisions")
+        _check_tablename_collisions()
+        logger.info("Table collision check passed")
+    except Exception as e:
+        logger.error("Table collision check failed: %s", e, exc_info=True)
+        raise
+
+    # Create base tables first, then apply incremental migrations
+    try:
+        logger.info("Initializing database connection")
+        await db_service.initialize()
+        logger.info("Database initialized")
+    except Exception as e:
+        logger.error("Database initialization failed: %s (%s)", db_service.describe_failure(e), e, exc_info=True)
+        raise
+
+
+async def _startup_schema() -> None:
+    """Lifespan step (#16375 extraction): user tables, then migrations; failure is fatal."""
+    try:
+        logger.info("Initializing user management tables")
+        await _init_user_management_tables()
+        logger.info("User management tables initialized")
+    except Exception as e:
+        logger.error("User management table initialization failed: %s", e, exc_info=True)
+        raise
+
+    try:
+        await _run_migrations()
+    except Exception:
+        logger.error("Database migrations failed during startup", exc_info=True)
+        raise
+
+
+async def _seed_generated_secrets() -> None:
+    """Seed each SLM-generated service secret (#10263, #10157, #16375); failures are non-fatal."""
+    for seed in (_ensure_internal_api_key, _ensure_scim_bearer_token, _ensure_prometheus_scrape_token):
+        try:
+            await seed()
+        except Exception:
+            logger.exception("%s failed (non-fatal)", seed.__name__)
+
+
+async def _startup_seed() -> None:
+    """Lifespan step (#16375 extraction): fatal data seeding, then non-fatal secrets and nodes."""
+    try:
+        await _ensure_admin_user()
+        await _seed_default_roles()
+        await _seed_default_agents()
+        await _ensure_local_node()
+    except Exception as e:
+        logger.error("Data seeding failed: %s", e, exc_info=True)
+        raise
+
+    # Non-fatal: each consumer degrades (503/401) until its secret exists.
+    await _seed_generated_secrets()
+
+    # Compose fleet-node surfacing is best-effort cosmetic — a seeding failure here
+    # must never abort SLM startup (it previously rode the re-raising block above).
+    try:
+        await seed_compose_nodes()
+    except Exception:
+        logger.exception("Compose fleet node seeding failed (non-fatal)")
+
+
+async def _startup_reconcile() -> None:
+    """Lifespan step (#16375 extraction): reconcile jobs a crash or restart interrupted."""
+    # Reconcile stale fleet sync jobs from prior crash (#1729)
+    try:
+        from api.code_sync import reconcile_stale_fleet_sync_jobs
+
+        reconciled = await reconcile_stale_fleet_sync_jobs()
+        if reconciled:
+            logger.warning("Reconciled %d stale fleet sync job(s)", reconciled)
+    except Exception:
+        logger.exception("Failed to reconcile stale fleet sync jobs")
+
+    await _reconcile_component_sync_jobs()
+
+    # Resume any update-all fleet stage interrupted by SLM self-update restart (#9971)
+    try:
+        from api.code_sync import resume_update_all_orchestration
+
+        await resume_update_all_orchestration()
+    except Exception:
+        logger.exception("Failed to resume update-all orchestration")
+
+
+async def _reconcile_component_sync_jobs() -> None:
+    """Reconcile and re-run component sync jobs a restart interrupted; never fatal."""
+    # Reconcile stale component sync jobs from prior crash (#11303).
+    # #11437: jobs interrupted by a racing restart are re-queued (once) and
+    # re-run here so their post-steps (incl. DB migrations) are not skipped.
+    try:
+        from api.code_sync import _run_component_resolve_job, reconcile_stale_component_sync_jobs
+
+        reconciled_comp, requeued_jobs = await reconcile_stale_component_sync_jobs()
+        if reconciled_comp:
+            logger.warning("Reconciled %d stale component sync job(s)", reconciled_comp)
+        import api.code_sync as _code_sync_mod
+
+        for _job_id, _component in requeued_jobs:
+            logger.warning("Re-running interrupted component sync job %s (%s)", _job_id, _component)
+            _task = asyncio.create_task(_run_component_resolve_job(_job_id, _component))
+            # #11460 review: keep a strong reference (GC) + same #1928 task
+            # tracking the endpoint path uses; the runner's finally pops it.
+            _code_sync_mod._running_tasks[_job_id] = _task
+    except Exception:
+        logger.exception("Failed to reconcile stale component sync jobs")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan manager."""
@@ -194,106 +317,10 @@ async def lifespan(app: FastAPI):
     # AUTOBOT_INTEGRITY_CHECK_ENABLED=1 and AUTOBOT_INTEGRITY_MANIFEST_PATH are set.
     verify_integrity_at_startup()
 
-    # Validate that the two Base MetaData objects share no tablenames (#1878).
-    # Must run before create_all / migrations so conflicts are caught immediately.
-    try:
-        logger.info("Checking for table name collisions")
-        _check_tablename_collisions()
-        logger.info("Table collision check passed")
-    except Exception as e:
-        logger.error("Table collision check failed: %s", e, exc_info=True)
-        raise
-
-    # Create base tables first, then apply incremental migrations
-    try:
-        logger.info("Initializing database connection")
-        await db_service.initialize()
-        logger.info("Database initialized")
-    except Exception as e:
-        logger.error("Database initialization failed: %s", e, exc_info=True)
-        raise
-
-    try:
-        logger.info("Initializing user management tables")
-        await _init_user_management_tables()
-        logger.info("User management tables initialized")
-    except Exception as e:
-        logger.error("User management table initialization failed: %s", e, exc_info=True)
-        raise
-
-    try:
-        await _run_migrations()
-    except Exception:
-        logger.error("Database migrations failed during startup", exc_info=True)
-        raise
-
-    try:
-        await _ensure_admin_user()
-        await _seed_default_roles()
-        await _seed_default_agents()
-        await _ensure_local_node()
-    except Exception as e:
-        logger.error("Data seeding failed: %s", e, exc_info=True)
-        raise
-
-    # Internal API key seeding is an enhancement (enables personality/voice
-    # proxies) — a failure here must never abort SLM startup; the proxies just
-    # degrade to 503 until the key exists, as they did before (#10263).
-    try:
-        await _ensure_internal_api_key()
-    except Exception:
-        logger.exception("Internal API key seeding failed (non-fatal) (#10263)")
-
-    # SCIM bearer token — non-fatal; SCIM simply returns 401 until seeded.
-    try:
-        await _ensure_scim_bearer_token()
-    except Exception:
-        logger.exception("SCIM bearer token seeding failed (non-fatal) (#10157)")
-
-    # Compose fleet-node surfacing is best-effort cosmetic — a seeding failure here
-    # must never abort SLM startup (it previously rode the re-raising block above).
-    try:
-        await seed_compose_nodes()
-    except Exception:
-        logger.exception("Compose fleet node seeding failed (non-fatal)")
-
-    # Reconcile stale fleet sync jobs from prior crash (#1729)
-    try:
-        from api.code_sync import reconcile_stale_fleet_sync_jobs
-
-        reconciled = await reconcile_stale_fleet_sync_jobs()
-        if reconciled:
-            logger.warning("Reconciled %d stale fleet sync job(s)", reconciled)
-    except Exception:
-        logger.exception("Failed to reconcile stale fleet sync jobs")
-
-    # Reconcile stale component sync jobs from prior crash (#11303).
-    # #11437: jobs interrupted by a racing restart are re-queued (once) and
-    # re-run here so their post-steps (incl. DB migrations) are not skipped.
-    try:
-        from api.code_sync import _run_component_resolve_job, reconcile_stale_component_sync_jobs
-
-        reconciled_comp, requeued_jobs = await reconcile_stale_component_sync_jobs()
-        if reconciled_comp:
-            logger.warning("Reconciled %d stale component sync job(s)", reconciled_comp)
-        import api.code_sync as _code_sync_mod
-
-        for _job_id, _component in requeued_jobs:
-            logger.warning("Re-running interrupted component sync job %s (%s)", _job_id, _component)
-            _task = asyncio.create_task(_run_component_resolve_job(_job_id, _component))
-            # #11460 review: keep a strong reference (GC) + same #1928 task
-            # tracking the endpoint path uses; the runner's finally pops it.
-            _code_sync_mod._running_tasks[_job_id] = _task
-    except Exception:
-        logger.exception("Failed to reconcile stale component sync jobs")
-
-    # Resume any update-all fleet stage interrupted by SLM self-update restart (#9971)
-    try:
-        from api.code_sync import resume_update_all_orchestration
-
-        await resume_update_all_orchestration()
-    except Exception:
-        logger.exception("Failed to resume update-all orchestration")
+    await _startup_database()
+    await _startup_schema()
+    await _startup_seed()
+    await _startup_reconcile()
 
     # Initialize manifest loader singleton (Issue #926 Phase 3)
     from services.manifest_loader import init_manifest_loader
@@ -388,7 +415,7 @@ async def _ensure_local_node() -> None:
     if _compose_nodes_enabled():
         # Use the SLM's static address on the shared autobot-mgmt network so the
         # manager matches the other compose nodes' IP range (#9761).
-        local_ip = _SLM_MGMT_IP
+        local_ip = slm_mgmt_ip()
     elif ip_match:
         local_ip = ip_match.group(1)
     else:
@@ -414,11 +441,7 @@ async def _ensure_local_node() -> None:
                     local_ip,
                 )
                 existing.ip_address = local_ip
-            # Heal detected_roles so the fleet role view shows the SLM roles as
-            # running (older rows predate this).
-            if list(existing.detected_roles or []) != _SLM_ROLES:
-                existing.detected_roles = _SLM_ROLES
-            await sync_slm_node_roles(session, _SLM_NODE_ID, list(existing.roles or []), _SLM_ROLES)
+            await heal_existing_slm_node_roles(session, existing, _SLM_NODE_ID, _SLM_ROLES)
             await session.commit()
             return
 
@@ -461,7 +484,7 @@ async def _ensure_admin_user():
     import secrets
 
     from autobot_shared.user_management.user_service_errors import DuplicateUserError
-    from services.auth import auth_service
+    from services.admin_password_sync import sync_admin_password_at_startup
     from user_management.database import get_slm_session
     from user_management.services import TenantContext, UserService
 
@@ -474,10 +497,8 @@ async def _ensure_admin_user():
         existing = await user_service.get_user_by_username("admin")
 
         if existing:
-            if env_password:
-                existing.password_hash = auth_service.hash_password(env_password)
-                await db.flush()
-                logger.info("Admin password synced from SLM_ADMIN_PASSWORD")
+            if env_password:  # rehash + revoke older sessions only on a real change; an epoch outage logs, never aborts
+                await sync_admin_password_at_startup(db, existing, env_password)
             return
 
         password = env_password
@@ -505,71 +526,28 @@ async def _ensure_internal_api_key() -> None:
     X-Internal-API-Key header; the value must match on both sides. It is
     distributed to deploys via fetch_deploy_secrets() -> the
     autobot_internal_api_key extra_var -> slm-secrets.env + backend.env.
-
-    Historically the value was only present if an admin manually created the
-    secret in the SLM UI, so a fresh deployment left it empty and every
-    personality/voice request 503'd. Generate a strong key once and store it;
-    idempotent thereafter (never overwrites an existing value).
+    Generated once, never overwritten (``services.generated_system_secrets``).
     """
-    import secrets as _secrets
-
-    from sqlalchemy import select
-    from sqlalchemy.exc import IntegrityError
-
-    from models.database import SystemSecret
-    from services.encryption import encrypt_data
-
-    key_name = "autobot_internal_api_key"  # nosec B105  # secret-store key name, not a credential
-    async with db_service.session() as db:
-        result = await db.execute(select(SystemSecret).where(SystemSecret.key == key_name))
-        if result.scalar_one_or_none() is not None:
-            return
-        db.add(SystemSecret(key=key_name, encrypted_value=encrypt_data(_secrets.token_hex(32))))
-        try:
-            await db.commit()
-        except IntegrityError:
-            # Concurrent startup seeded it first (unique key) — keep theirs.
-            await db.rollback()
-            logger.info("Internal API key already created concurrently — keeping existing (#10263)")
-            return
-        logger.info("Generated shared internal API key — personality/voice proxies enabled (#10263)")
+    await ensure_generated_secret(INTERNAL_API_KEY)
 
 
 async def _ensure_scim_bearer_token() -> None:
     """Seed the SCIM bearer token into SystemSecret on first startup (#10157).
 
-    The token is generated once; admins retrieve it from the SLM secrets UI
-    to configure their IdP (Okta, Entra, Google Workspace) SCIM provisioning.
-    Idempotent — never overwrites an existing value.
+    Admins retrieve it from the SLM secrets UI to configure their IdP SCIM
+    provisioning. Idempotent — never overwrites an existing value.
     """
-    import secrets as _secrets
+    await ensure_generated_secret(SCIM_BEARER_TOKEN)
 
-    from sqlalchemy.exc import IntegrityError
 
-    from models.database import SystemSecret
-    from services.encryption import encrypt_data
+async def _ensure_prometheus_scrape_token() -> None:
+    """Seed the Prometheus scrape token into SystemSecret on first startup (#16375).
 
-    key_name = "scim_bearer_token"  # nosec B105  # secret-store key name, not a credential
-    async with db_service.session() as db:
-        from sqlalchemy import select
-
-        result = await db.execute(select(SystemSecret).where(SystemSecret.key == key_name))
-        if result.scalar_one_or_none() is not None:
-            return
-        db.add(
-            SystemSecret(
-                key=key_name,
-                encrypted_value=encrypt_data(_secrets.token_hex(32)),
-                description="SCIM 2.0 bearer token — configure in IdP SCIM provisioning settings (#10157)",
-            )
-        )
-        try:
-            await db.commit()
-        except IntegrityError:
-            await db.rollback()
-            logger.info("SCIM bearer token already seeded concurrently — keeping existing (#10157)")
-            return
-        logger.info("Generated SCIM 2.0 bearer token — retrieve from SLM secrets UI (#10157)")
+    Distributed via fetch_deploy_secrets() -> the prometheus_scrape_token
+    extra_var -> backend.env (verified on each scrape) and the monitoring
+    role's bearer_token_file (presented by Prometheus).
+    """
+    await ensure_generated_secret(PROMETHEUS_SCRAPE_TOKEN)
 
 
 async def _seed_default_roles():
@@ -600,12 +578,11 @@ app = FastAPI(
     root_path=os.getenv("SLM_ROOT_PATH", ""),
     docs_url="/api/docs" if settings.debug else None,
     redoc_url="/api/redoc" if settings.debug else None,
-    # Security: MVA-3397 - Trust X-Forwarded-For from nginx proxy for rate limiting
-    proxy_headers=True,
-    forwarded_allow_ips=settings.trusted_proxies,
 )
+# MVA-3397 / #9616: the client IP behind nginx comes from get_client_ip(..., settings.trusted_proxies);
+# proxy-header trust is a uvicorn setting, never a FastAPI() argument (0.145 rejects it).
 # #16428 review: FastAPI's default 422 body echoes the submitted payload --
-# UserCreate.password and VNCCredentialCreate.password have the same
+# SlmAdminUserCreate.password and VNCCredentialCreate.password have the same
 # exposure the audit found on autobot-backend's secrets endpoint.
 register_validation_error_handlers(app)
 
@@ -617,10 +594,8 @@ install_middleware(app, cors_origins=settings.cors_origins)  # the whole stack, 
 #   sso_router      — SSO provider list; accessed before credentials are available
 #   sso_auth_router — OAuth callback; must complete before a token exists
 #   websocket_router — out of scope (#10198); has separate async auth handling
-#   scim_router     — authenticated per route by _require_scim_bearer, not by
-#       this gate; all 11 routes carry it. Declared here because "no
-#       service.management gate" is what this list tracks, and it was already
-#       absent before #14339 added the check below
+#   scim_router     — authenticated per route by _require_scim_bearer (all 11 carry it), not by this gate;
+#       declared here because that is what this list tracks, and it was absent before #14339 added the check below
 #   performance_metrics_router — prometheus scrape surface; a scraper cannot
 #       authenticate, so the gate returned 401 on every scrape (#14339)
 #
@@ -667,14 +642,15 @@ app.include_router(scim_router)
 # --- Service-management–gated routers ---
 app.include_router(browser_router, prefix="/api", dependencies=_SM)
 app.include_router(agents_router, prefix="/api", dependencies=_SM)
+app.include_router(services_router, prefix="/api", dependencies=_SM)
 app.include_router(nodes_router, prefix="/api", dependencies=_SM_OR_AGENT)
 app.include_router(nodes_execution_router, prefix="/api", dependencies=_SM)  # Issue #3406
-app.include_router(services_router, prefix="/api", dependencies=_SM)
 app.include_router(fleet_services_router, prefix="/api", dependencies=_SM)
 app.include_router(deployments_router, prefix="/api", dependencies=_SM)
 app.include_router(blue_green_router, prefix="/api", dependencies=_SM)
 app.include_router(settings_router, prefix="/api", dependencies=_SM)
 app.include_router(stateful_router, prefix="/api", dependencies=_SM)
+app.include_router(secrets_backup_status_router, prefix="/api", dependencies=_SM_OR_AGENT)
 app.include_router(updates_router, prefix="/api", dependencies=_SM)
 app.include_router(maintenance_router, prefix="/api", dependencies=_SM)
 app.include_router(monitoring_router, prefix="/api", dependencies=_SM)

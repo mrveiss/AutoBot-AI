@@ -23,6 +23,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { useSlmApi } from '@/composables/useSlmApi'
 import type { NodeService, ServiceActionResponse } from '@/types/slm'
 import ServiceLogsModal from '@/components/fleet/ServiceLogsModal.vue'
+import { BaseAlert, BaseModal } from '@autobot/ui'
 
 type RedisServiceAction = 'start' | 'stop' | 'restart'
 
@@ -263,14 +264,15 @@ onUnmounted(() => {
         </svg>
       </button>
     </div>
-    <div v-if="errorMessage" class="px-4 py-2 bg-red-50 border-b border-red-100 text-sm text-red-700 flex items-center justify-between">
-      <span>{{ errorMessage }}</span>
-      <button @click="errorMessage = null" class="text-red-500 hover:text-red-700" :aria-label="$t('redisServicePanel.dismiss')">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-    </div>
+    <BaseAlert
+      v-if="errorMessage"
+      variant="error"
+      size="compact"
+      :message="errorMessage"
+      dismissible
+      :dismiss-label="$t('redisServicePanel.dismiss')"
+      @dismiss="errorMessage = null"
+    />
 
     <!-- Metrics grid -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-px bg-gray-100 border-b border-gray-200">
@@ -375,30 +377,29 @@ onUnmounted(() => {
     />
 
     <!-- Stop confirmation dialog -->
-    <teleport to="body">
-      <div v-if="showStopConfirm" class="fixed inset-0 z-50 flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-black/50" @click="cancelStop"></div>
-        <div class="relative bg-white rounded-lg shadow-xl max-w-sm w-full p-6">
-          <h3 class="text-base font-semibold text-gray-900 mb-2">{{ $t('redisServicePanel.stopRedisService') }}</h3>
-          <p class="text-sm text-gray-600 mb-5">
-            {{ $t('redisServicePanel.stoppingRedisWillInterrupt') }}
-          </p>
-          <div class="flex justify-end gap-3">
-            <button
-              @click="cancelStop"
-              class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
-            >
-              {{ $t('redisServicePanel.cancel') }}
-            </button>
-            <button
-              @click="confirmStop"
-              class="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700"
-            >
-              {{ $t('redisServicePanel.stopRedis') }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </teleport>
+    <BaseModal
+      v-model="showStopConfirm"
+      :title="$t('redisServicePanel.stopRedisService')"
+      size="sm"
+      :close-label="$t('ui.modal.closeDialog')"
+    >
+      <p class="text-sm text-gray-600">
+        {{ $t('redisServicePanel.stoppingRedisWillInterrupt') }}
+      </p>
+      <template #actions>
+        <button
+          @click="cancelStop"
+          class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+        >
+          {{ $t('redisServicePanel.cancel') }}
+        </button>
+        <button
+          @click="confirmStop"
+          class="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md hover:bg-red-700"
+        >
+          {{ $t('redisServicePanel.stopRedis') }}
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>

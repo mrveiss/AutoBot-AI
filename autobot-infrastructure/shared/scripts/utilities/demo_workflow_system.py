@@ -10,12 +10,20 @@ Shows the complete transformation from generic responses to intelligent orchestr
 
 import asyncio
 import logging
+import sys
 import time
 from datetime import datetime
+from pathlib import Path
 
 import aiohttp
 
-from constants import ServiceURLs
+# Runs from any directory with no PYTHONPATH: put the repository root on the path for
+# `autobot_shared` (#18289).
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.network_constants import ServiceURLs  # noqa: E402
 
 # Setup logger
 logging.basicConfig(level=logging.INFO)

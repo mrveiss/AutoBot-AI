@@ -50,7 +50,7 @@ class SessionMessage(BaseModel):
     authorId: str | None = None
 
 
-class SessionSummary(BaseModel):
+class ChatSessionSummary(BaseModel):
     """One row of ``SessionListData.sessions`` (#15138).
 
     Keys mirror ``_build_session_entry``. Several are deliberate duplicates
@@ -102,7 +102,7 @@ class SessionListData(BaseModel):
     ``intentional_empty`` is set when the authenticated user has zero sessions.
     """
 
-    sessions: List[SessionSummary]
+    sessions: List[ChatSessionSummary]
     count: int
     scope: str | None = None
     org_id: str | None = None

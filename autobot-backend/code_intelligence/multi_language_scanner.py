@@ -337,7 +337,7 @@ def scan_directory(directory: str, recursive: bool = True) -> MultiLangResult:
     return scanner.scan_directory(Path(directory), recursive=recursive)
 
 
-def scan_codebase(root_path: str | None = None) -> MultiLangResult:
+def scan_multilang_codebase(root_path: str | None = None) -> MultiLangResult:
     """Quick scan the entire codebase.
 
     Args:

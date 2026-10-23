@@ -29,13 +29,13 @@ from dataclasses import dataclass
 from typing import Callable, Dict
 
 import aiohttp
-import websockets
 from websockets.exceptions import ConnectionClosed, WebSocketException
 
 from autobot_shared.auth.jwt_core import encode_jwt
 from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from autobot_shared.ws_no_redirect import connect_no_redirect
 from constants.ttl_constants import TTL_5_MINUTES
 from services.slm_deployments import SLMDeploymentsMixin
 
@@ -149,7 +149,7 @@ ULTIMATE_FALLBACK_CONFIG = {
 
 
 @dataclass
-class CacheEntry:
+class ServiceConfigCacheEntry:
     """Cache entry with expiration tracking."""
 
     config: dict
@@ -170,7 +170,7 @@ class ServiceDiscoveryCache:
         Args:
             ttl_seconds: Time-to-live for cache entries (default: 60)
         """
-        self._cache: Dict[str, CacheEntry] = {}
+        self._cache: Dict[str, ServiceConfigCacheEntry] = {}
         self._ttl = ttl_seconds
 
     def get(self, service_name: str) -> str | None:
@@ -201,7 +201,7 @@ class ServiceDiscoveryCache:
             discovery_data: Dict with url, healthy, etc.
         """
         expires_at = time.time() + self._ttl
-        self._cache[service_name] = CacheEntry(config=discovery_data, expires_at=expires_at)
+        self._cache[service_name] = ServiceConfigCacheEntry(config=discovery_data, expires_at=expires_at)
         logger.debug("Cached service discovery for %s (TTL: %ds)", service_name, self._ttl)
 
     def clear(self) -> None:
@@ -251,7 +251,7 @@ class AgentConfigCache:
         Args:
             ttl_seconds: Time-to-live for cache entries in seconds (default: 300)
         """
-        self._cache: Dict[str, CacheEntry] = {}
+        self._cache: Dict[str, ServiceConfigCacheEntry] = {}
         self._ttl = ttl_seconds
         self._default_config: dict | None = None
         self._lock = asyncio.Lock()
@@ -284,7 +284,7 @@ class AgentConfigCache:
             config: Configuration dictionary
         """
         expires_at = time.time() + self._ttl
-        self._cache[agent_id] = CacheEntry(config=config, expires_at=expires_at)
+        self._cache[agent_id] = ServiceConfigCacheEntry(config=config, expires_at=expires_at)
         logger.debug("Cached config for agent %s (TTL: %ds)", agent_id, self._ttl)
 
     def update(self, agent_id: str, config: dict) -> None:
@@ -665,7 +665,7 @@ class SLMClient(SLMDeploymentsMixin):
             # Token is passed via Sec-WebSocket-Protocol subprotocol header so
             # it never appears in the URL or server access logs (project rule:
             # WebSocket JWT must NOT go in URL).
-            async with websockets.connect(
+            async with connect_no_redirect(
                 ws_url,
                 subprotocols=["bearer", token],
                 ssl=ws_ssl,

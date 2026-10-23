@@ -134,7 +134,7 @@ async def list_triggers(
     """
     service = get_trigger_service()
     triggers: List[TriggerDefinition] = await service.list_triggers(workflow_id=workflow_id)
-    serialised = [t.to_dict() for t in triggers]
+    serialised = service.serialise_triggers(triggers)
     return TriggerListResponse(triggers=serialised, total=len(serialised))
 
 

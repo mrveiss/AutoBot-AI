@@ -29,6 +29,10 @@ on:
       # #15824: the ansible-core the guard runs is part of the guard.
       - 'constraints/ansible-core.txt'
       - 'autobot-slm-backend/ansible/inventory/group_vars/**'
+      # #17642: check_network_refusal.py evaluates every network_subnet/gateway definition
+      - 'autobot-slm-backend/ansible/inventory/*.yml'
+      - 'autobot-slm-backend/services/inventory_builder.py'
+      - 'install.sh'
       - 'autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml'
       - 'autobot-slm-backend/ansible/playbooks/pre-flight-code-sync.yml'
       - 'autobot-slm-backend/ansible/playbooks/update-all-nodes.yml'
@@ -42,6 +46,11 @@ on:
       - 'autobot-slm-backend/ansible/roles/**'
       - 'autobot-slm-backend/ansible/tests/**'
       - 'autobot-slm-backend/ansible/tests/**'
+      - 'autobot-slm-backend/ansible/deploy.yml'
+      - 'tools/lint/check_role_facts_single_source.py'
+      - 'tools/lint/check_test_inventory_is_generated.py'
+      - 'tools/lint/check_group_vars_no_shadow.py'
+      - 'tools/lint/check_network_refusal.py'
       - '.github/workflows/ansible-role-facts-test.yml'
   push:
     branches:
@@ -52,6 +61,10 @@ on:
       # #15824: the ansible-core the guard runs is part of the guard.
       - 'constraints/ansible-core.txt'
       - 'autobot-slm-backend/ansible/inventory/group_vars/**'
+      # #17642: check_network_refusal.py evaluates every network_subnet/gateway definition
+      - 'autobot-slm-backend/ansible/inventory/*.yml'
+      - 'autobot-slm-backend/services/inventory_builder.py'
+      - 'install.sh'
       - 'autobot-slm-backend/ansible/playbooks/provision-fleet-roles.yml'
       - 'autobot-slm-backend/ansible/playbooks/pre-flight-code-sync.yml'
       - 'autobot-slm-backend/ansible/playbooks/update-all-nodes.yml'
@@ -65,6 +78,11 @@ on:
       - 'autobot-slm-backend/ansible/roles/**'
       - 'autobot-slm-backend/ansible/tests/**'
       - 'autobot-slm-backend/ansible/tests/**'
+      - 'autobot-slm-backend/ansible/deploy.yml'
+      - 'tools/lint/check_role_facts_single_source.py'
+      - 'tools/lint/check_test_inventory_is_generated.py'
+      - 'tools/lint/check_group_vars_no_shadow.py'
+      - 'tools/lint/check_network_refusal.py'
 
 # #14434: without this, every push left its predecessors queued. 42 of a 271-run
 # sample were for commits no longer at their branch tip - work nothing would ever
@@ -117,6 +135,14 @@ jobs:
         run: |
           python3 tests/check_ansible_core_pinned.py
 
+      # #17642: network_subnet is a firewall and pg_hba source. Every definition must
+      # stop the play with its hint when unset or blank -- never fall back to an open
+      # range. Evaluated by the fleet's ansible-core, which the python suite lacks.
+      - name: "Every network_subnet/network_gateway definition refuses when unset (#17642)"
+        working-directory: autobot-slm-backend/ansible
+        run: |
+          python3 ../../tools/lint/check_network_refusal.py
+
       # #14678: tests/inventory/group_vars/all.yml is GENERATED, not tracked.
       # It was a third tracked copy of the role-active facts kept byte-equal by
       # a diff guard. Copied rather than symlinked: #14149 -- a tracked symlink
@@ -126,12 +152,17 @@ jobs:
         working-directory: autobot-slm-backend/ansible
         run: |
           mkdir -p tests/inventory/group_vars
-          cp inventory/group_vars/all.yml tests/inventory/group_vars/all.yml
+          cp -r inventory/group_vars/. tests/inventory/group_vars/
 
       - name: "Assert that copy is fresh and is a real file (#14678)"
         working-directory: autobot-slm-backend/ansible
         run: |
-          python3 tests/check_test_inventory_is_generated.py
+          python3 ../../tools/lint/check_test_inventory_is_generated.py
+
+      - name: "Assert no group_vars/<name>.yml is shadowed by a group_vars/<name>/ directory (#18514)"
+        working-directory: autobot-slm-backend/ansible
+        run: |
+          python3 ../../tools/lint/check_group_vars_no_shadow.py
 
       - name: Run role_*_active facts test (group_vars codepath)
         working-directory: autobot-slm-backend/ansible
@@ -155,16 +186,18 @@ jobs:
         # It now stands in for deploy.yml's actual callers (services/deployment.py,
         # services/blue_green.py), which invoke deploy.yml with a bare `-i "<host>,"`
         # string -- not a directory, so no group_vars discovery either (#14678).
-        # tests/inventory_dynamic/ is a copy of tests/inventory/ WITHOUT the
-        # group_vars/all.yml symlink, so the playbook MUST succeed loading facts
-        # via vars_files alone.
+        # The inventory is copied ALONE into a temp dir (no group_vars/ beside it;
+        # there is no second tracked inventory to drift), so the playbook MUST
+        # succeed loading facts via vars_files alone.
         run: |
-          ansible-playbook -i tests/inventory_dynamic/test_role_facts.yml tests/playbooks/test_role_active_facts_no_group_vars.yml
+          nogv="$(mktemp -d)"
+          cp tests/inventory/test_role_facts.yml "$nogv/test_role_facts.yml"
+          ansible-playbook -i "$nogv/test_role_facts.yml" tests/playbooks/test_role_active_facts_no_group_vars.yml
 
-      - name: "Diff guard: the two tracked role_*_active copies stay in sync (#14678)"
+      - name: "Single-source guard: exactly one tracked role_*_active definition (#14678)"
         working-directory: autobot-slm-backend/ansible
         run: |
-          python3 tests/check_role_facts_synced.py
+          python3 ../../tools/lint/check_role_facts_single_source.py
 
       # #13746: three producers built /opt/autobot/venv with two interpreters.
       # Co-location puts them on one host, and the loser's site-packages

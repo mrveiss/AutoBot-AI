@@ -29,7 +29,7 @@ from autobot_shared.singleton_factory import lazy_singleton
 from constants.model_constants import ModelConstants
 from dependencies import provide_config_manager
 from knowledge.ownership_index import drop_ownership_unless_admin, refuses_platform_wide
-from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
+from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER, with_quarantine
 from knowledge.schemas.mcp import (
     DocumentAddRequest,
     KnowledgeSearchRequest,
@@ -62,7 +62,7 @@ logger = get_logger(__name__)
 router = APIRouter(tags=["knowledge_mcp", "mcp", "langchain"])
 
 # Issue #13026: KnowledgeBase.__init__() takes no parameters (config is read
-# internally via SSOT config, same as dependencies.get_knowledge_base()) --
+# internally via SSOT config, same as dependencies.provide_knowledge_base()) --
 # the config_manager= kwarg raised TypeError on every call.
 get_knowledge_base = lazy_singleton(KnowledgeBase)
 
@@ -461,13 +461,11 @@ async def mcp_search_knowledge_base(
     try:
         kb = get_knowledge_base()
 
-        # Perform the search
-        # Issue #13009: exclude quarantined research facts (#12622) when the
-        # caller doesn't request a specific filter of their own.
+        # #13009/#18946: quarantined facts excluded; caller filter AND-ed in. #18820: KB.search withholds the rest.
         results = await kb.search(
             query=request.query,
             top_k=request.top_k,
-            filters=request.filters or RESEARCH_QUARANTINE_FILTER,
+            filters=with_quarantine(request.filters),
         )
 
         # Format results for MCP

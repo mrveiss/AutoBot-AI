@@ -1,10 +1,13 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
+import { RETRY_BACKOFF, backoffDelay } from '@autobot/ui'
 import appConfig from '@/config/AppConfig.js';
 import { createLogger } from '@/utils/debugUtils';
 import { getApiBase } from '@/config/ssot-config';
 import { getSelectedCompanyId } from '@/utils/orgContext';
-import { isRealAuthToken } from '@/utils/authToken';
+import { clearStoredAuth, readStoredAuthToken } from '@/utils/authToken';
+import { CircuitBreakerError, runWithCircuitBreaker } from '@/utils/apiCircuitBreaker';
+import { extractErrorInfo } from '@/utils/apiErrorInfo';
 
 // Create scoped logger for ApiClient
 const logger = createLogger('ApiClient');
@@ -30,6 +33,8 @@ export interface RequestOptions {
    * (optional widgets, health probes) so they don't generate console noise.
    */
   suppressErrorLog?: boolean;
+  /** Opt in to fail-fast circuit breaking, keyed by the dependency name (#11682). */
+  circuitBreaker?: string;
 }
 
 export interface ChatMessageOptions {
@@ -56,7 +61,7 @@ export interface AgentTerminalSessionConfig {
 }
 
 export interface TerminalCommandOptions {
-  timeout?: number;
+  timeout?: number; // ms; omitted, the backend's own default applies
   cwd?: string;
   env?: Record<string, string>;
 }
@@ -79,7 +84,7 @@ export interface ChatMessageResponse {
   data?: Record<string, unknown>;
 }
 
-// Enhanced ApiClient — consolidated from JS and TS implementations (#810)
+// Enhanced ApiClient (#810). Which client to use when: docs/developer/FRONTEND_API_CLIENTS.md (#11682)
 // Issue #598: All timeouts sourced from AppConfig (SINGLE SOURCE OF TRUTH)
 // Convenience methods (get/post/put/delete) return parsed JSON data.
 // Use rawRequest() for raw Response access (streaming, blobs).
@@ -215,24 +220,7 @@ export class ApiClient {
   // ==================================================================================
 
   private _getAuthToken(): string | null {
-    try {
-      const stored = localStorage.getItem('autobot_auth');
-      if (!stored) return null;
-      const auth = JSON.parse(stored);
-      if (isRealAuthToken(auth.token)) {
-        // Check expiry before returning — expired tokens cause widespread 401s (#979)
-        if (auth.expiresAt && new Date(auth.expiresAt) <= new Date()) {
-          logger.warn('Auth token expired, clearing stale localStorage');
-          localStorage.removeItem('autobot_auth');
-          localStorage.removeItem('autobot_user');
-          return null;
-        }
-        return auth.token;
-      }
-      return null;
-    } catch {
-      return null;
-    }
+    return readStoredAuthToken();
   }
 
   // Handle 401 — clear stored auth and redirect to login (#827).
@@ -247,8 +235,7 @@ export class ApiClient {
       return;
     }
     logger.warn('401 Unauthorized, clearing auth:', endpoint);
-    localStorage.removeItem('autobot_auth');
-    localStorage.removeItem('autobot_user');
+    clearStoredAuth();
     // Also clear Pinia store to prevent stale isAuthenticated blocking login redirect (#972)
     import('@/stores/useUserStore').then(({ useUserStore }) => {
       try { useUserStore().logout(); } catch { /* ignore if store unavailable */ }
@@ -272,6 +259,15 @@ export class ApiClient {
     method?: string;
     body?: unknown;
   } = {}): Promise<Response> {
+    const key = options.circuitBreaker;
+    if (!key) return this._send(endpoint, options);
+    return runWithCircuitBreaker(key, () => this._send(endpoint, options));
+  }
+
+  private async _send(endpoint: string, options: RequestOptions & {
+    method?: string;
+    body?: unknown;
+  }): Promise<Response> {
     const {
       method = 'GET',
       headers = {},
@@ -371,27 +367,6 @@ export class ApiClient {
   // CONVENIENCE METHODS — return parsed JSON data (not Response)
   // ==================================================================================
 
-  private async _extractErrorInfo(response: Response): Promise<ErrorInfo> {
-    try {
-      const errorData = await response.json();
-      return {
-        status: response.status,
-        message: (() => {
-          const raw = errorData.error || errorData.message || errorData.detail;
-          if (raw == null) return JSON.stringify(errorData) || 'Unknown error';
-          return typeof raw === 'string' ? raw : JSON.stringify(raw);
-        })(),
-        details: errorData,
-      };
-    } catch {
-      return {
-        status: response.status,
-        message: response.statusText || 'Unknown error',
-        details: null,
-      };
-    }
-  }
-
   // GET with retry logic and exponential backoff
   async get<T = unknown>(endpoint: string, options: RequestOptions = {}): Promise<T> {
     let lastError: Error | undefined;
@@ -406,7 +381,7 @@ export class ApiClient {
         });
 
         if (!response.ok) {
-          const errorData = await this._extractErrorInfo(response);
+          const errorData = await extractErrorInfo(response);
           throw new Error(
             `HTTP ${response.status}: ${errorData.message}`
           );
@@ -422,13 +397,12 @@ export class ApiClient {
         );
 
         // Don't retry 4xx client errors — they won't succeed on retry.
-        if (lastError.message.includes('HTTP 4')) {
+        if (lastError.message.includes('HTTP 4') || lastError instanceof CircuitBreakerError) {
           break;
         }
 
         if (attempt < maxRetries) {
-          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
-          await new Promise(resolve => window.setTimeout(resolve, delay));
+          await new Promise(resolve => window.setTimeout(resolve, backoffDelay(attempt - 1, RETRY_BACKOFF)));
         }
       }
     }
@@ -450,7 +424,7 @@ export class ApiClient {
     });
 
     if (!response.ok) {
-      const errorData = await this._extractErrorInfo(response);
+      const errorData = await extractErrorInfo(response);
       throw new Error(`HTTP ${response.status}: ${errorData.message}`);
     }
 
@@ -469,7 +443,7 @@ export class ApiClient {
     });
 
     if (!response.ok) {
-      const errorData = await this._extractErrorInfo(response);
+      const errorData = await extractErrorInfo(response);
       throw new Error(`HTTP ${response.status}: ${errorData.message}`);
     }
 
@@ -488,7 +462,7 @@ export class ApiClient {
     });
 
     if (!response.ok) {
-      const errorData = await this._extractErrorInfo(response);
+      const errorData = await extractErrorInfo(response);
       throw new Error(`HTTP ${response.status}: ${errorData.message}`);
     }
 
@@ -506,7 +480,7 @@ export class ApiClient {
     });
 
     if (!response.ok) {
-      const errorData = await this._extractErrorInfo(response);
+      const errorData = await extractErrorInfo(response);
       throw new Error(`HTTP ${response.status}: ${errorData.message}`);
     }
 
@@ -590,7 +564,7 @@ export class ApiClient {
     });
 
     if (!response.ok) {
-      const errorData = await this._extractErrorInfo(response);
+      const errorData = await extractErrorInfo(response);
       throw new Error(`HTTP ${response.status}: ${errorData.message}`);
     }
 
@@ -792,9 +766,9 @@ export class ApiClient {
   async executeTerminalCommand(command: string, options: TerminalCommandOptions = {}): Promise<Record<string, unknown>> {
     return await this.post(`${getApiBase()}/terminal/command`, {
       command,
-      timeout: options.timeout || 30000,
-      cwd: options.cwd || null,
-      env: options.env || {},
+      timeout: options.timeout != null ? options.timeout / 1000 : undefined, // CommandRequest: seconds (#17856)
+      working_directory: options.cwd ?? null,
+      environment: options.env ?? null,
     });
   }
 

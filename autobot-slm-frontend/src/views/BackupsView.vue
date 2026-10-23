@@ -22,6 +22,7 @@ import { formatDateTime } from '@/composables/useTimezone'
 import { useToast } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
 import type { Backup, BackupRequest } from '@/types/slm'
+import { BaseModal } from '@autobot/ui'
 
 const { showToast } = useToast()
 // #13307: confirm/error strings go through i18n like the rest of the view;
@@ -251,60 +252,57 @@ function getNodeHostname(nodeId: string): string {
     </div>
 
     <!-- Create Backup Dialog -->
-    <div
-      v-if="showCreateBackupDialog"
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
-      @click.self="showCreateBackupDialog = false"
+    <BaseModal
+      :close-on-esc="!isCreatingBackup"
+      v-model="showCreateBackupDialog"
+      :title="$t('backupsView.createBackup')"
+      size="sm"
+      :close-label="$t('ui.modal.closeDialog')"
     >
-      <div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
-        <div class="px-6 py-4 border-b border-gray-200">
-          <h3 class="text-lg font-semibold text-gray-900">{{ $t('backupsView.createBackup') }}</h3>
+      <div class="space-y-4">
+        <!-- Node Selection -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('backupsView.node') }}</label>
+          <select
+            v-model="newBackup.node_id"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+          >
+            <option value="">{{ $t('backupsView.selectANode') }}</option>
+            <option v-for="opt in nodeOptions" :key="opt.value" :value="opt.value">
+              {{ opt.label }}
+            </option>
+          </select>
         </div>
-        <div class="px-6 py-4 space-y-4">
-          <!-- Node Selection -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('backupsView.node') }}</label>
-            <select
-              v-model="newBackup.node_id"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-            >
-              <option value="">{{ $t('backupsView.selectANode') }}</option>
-              <option v-for="opt in nodeOptions" :key="opt.value" :value="opt.value">
-                {{ opt.label }}
-              </option>
-            </select>
-          </div>
 
-          <!-- Service Type Selection -->
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('backupsView.serviceType') }}</label>
-            <select
-              v-model="newBackup.service_type"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
-            >
-              <option v-for="svc in serviceTypes" :key="svc" :value="svc">
-                {{ svc }}
-              </option>
-            </select>
-          </div>
-        </div>
-        <div class="px-6 py-4 border-t border-gray-200 flex justify-end gap-3">
-          <button
-            @click="showCreateBackupDialog = false"
-            class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+        <!-- Service Type Selection -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('backupsView.serviceType') }}</label>
+          <select
+            v-model="newBackup.service_type"
+            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
           >
-            {{ $t('backupsView.cancel') }}
-          </button>
-          <button
-            @click="handleCreateBackup"
-            :disabled="!newBackup.node_id || isCreatingBackup"
-            class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            <div v-if="isCreatingBackup" class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-            {{ $t('backupsView.createBackup') }}
-          </button>
+            <option v-for="svc in serviceTypes" :key="svc" :value="svc">
+              {{ svc }}
+            </option>
+          </select>
         </div>
       </div>
-    </div>
+      <template #actions>
+        <button
+          @click="showCreateBackupDialog = false"
+          class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+        >
+          {{ $t('backupsView.cancel') }}
+        </button>
+        <button
+          @click="handleCreateBackup"
+          :disabled="!newBackup.node_id || isCreatingBackup"
+          class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-md hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+        >
+          <div v-if="isCreatingBackup" class="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+          {{ $t('backupsView.createBackup') }}
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>

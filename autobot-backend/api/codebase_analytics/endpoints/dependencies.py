@@ -12,15 +12,16 @@ from pathlib import Path
 from typing import Dict, List, Set
 
 import aiofiles
-from celery.result import AsyncResult
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import JSONResponse
 
 from api.codebase_analytics.source_scope import SourceIdQuery, cached_task_result, source_scoped_prefix
+from api.codebase_analytics.task_routes import add_clear_stuck_route
+from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from tasks.analytics_tasks import run_dependency_analysis
-from utils.celery_task_status import celery_result_to_status, store_latest_task_id
+from utils.celery_task_status import known_task_status_or_404, store_latest_task_id
 from utils.chromadb_client import get_all_paginated
 
 from ..storage import get_code_collection
@@ -494,9 +495,9 @@ async def get_dependencies(
     # Issue #12330: Resolve the default source once so both the ChromaDB module
     # load and the filesystem scan below are scoped to the same project.
     if not source_id:
-        from api.codebase_analytics.source_storage import get_default_source_id
+        from api.codebase_analytics.endpoints.shared import default_source_id
 
-        source_id = await get_default_source_id()
+        source_id = await default_source_id()
 
     code_collection = await asyncio.to_thread(get_code_collection)
     modules: Dict[str, Dict] = {}
@@ -543,20 +544,11 @@ async def start_dependency_analysis(source_id: SourceIdQuery):
     return {"task_id": result.id, "status": "pending"}
 
 
-@router.get("/analytics/dependencies/status/{task_id}")
+@router.get("/analytics/dependencies/status/{task_id}", dependencies=[Depends(get_current_user)])
 @bounded(60.0)
 async def get_dependency_status(task_id: str):
     """Get dependency analysis task status."""
-    status = celery_result_to_status(AsyncResult(task_id))
-    if status is None or status["status"] == "pending":
-        raise HTTPException(status_code=404, detail=f"Task {task_id} not found")
-    return status
+    return known_task_status_or_404(task_id)
 
 
-@router.post("/analytics/dependencies/tasks/clear-stuck")
-@bounded(60.0)
-async def clear_stuck_dep_tasks(
-    force: bool = Query(default=False, description="Force clear ALL running tasks"),
-):
-    """No-op: Celery handles stuck-task recovery automatically (GH#6505)."""
-    return {"cleared_count": 0, "message": "Celery handles task recovery automatically"}
+add_clear_stuck_route(router, "/analytics/dependencies/tasks/clear-stuck", name="clear_stuck_dep_tasks", bounded_s=60.0)

@@ -74,7 +74,7 @@ def _connector_module_files(root: Path) -> list[str]:
 REACH = declare(
     "connector-redaction-sweep",
     discover=_connector_module_files,
-    floor=22,
+    floor=24,  # re-pinned mid-window (train 71) (#17844)
     growth=3,
     skips=0,
     what="importable files under knowledge/connectors/",
@@ -194,7 +194,7 @@ def test_the_audio_api_bypass_also_reaches_store_fact():
     same destination (kb.store_fact), verified as a real call chain, not
     just a string both functions happen to contain.
     """
-    from api.knowledge import _ingest_audio_source, _store_fact_in_kb
+    from api.knowledge import _ingest_audio_source
 
     bypass_source = inspect.getsource(_ingest_audio_source)
     assert "_store_fact_in_kb(" in bypass_source, (
@@ -203,11 +203,62 @@ def test_the_audio_api_bypass_also_reaches_store_fact():
         "kb.store_fact through _store_fact_in_kb, which this source no longer calls (#16985)."
     )
 
-    sink_source = inspect.getsource(_store_fact_in_kb)
-    assert "kb.store_fact(" in sink_source, (
-        "_store_fact_in_kb no longer calls kb.store_fact(...) -- the audio bypass's one path "
-        "into the KB chokepoint is gone (#16985)."
-    )
+    for link, needle in _audio_sink_chain():
+        assert needle[1] in needle[0], (
+            f"{link} no longer reaches {needle[1]} -- the audio bypass's path into the redacting "
+            f"store_fact chokepoint is broken (#16985, #18407)."
+        )
+
+
+def _audio_sink_chain() -> list[tuple[str, tuple[str, str]]]:
+    """(link name, (its source, the call the next link needs)) for _store_fact_in_kb -> store_fact.
+
+    _store_fact_in_kb -> ingest_in_kb -> kb.add_document -> ingest_document -> kb._add_document_internal
+    -> kb.store_fact -> sanitize_fact_content (the redaction). Every link is read from source.
+    """
+    from api.knowledge import _store_fact_in_kb
+    from knowledge.document_ingest import ingest_document
+    from knowledge.documents import DocumentsMixin
+    from knowledge.facts import FactsMixin
+    from knowledge.kb_ingest_result import ingest_in_kb
+
+    first = ("_store_fact_in_kb", (inspect.getsource(_store_fact_in_kb), "ingest_in_kb("))
+    return [first] + _chain_links(ingest_in_kb, ingest_document, DocumentsMixin, FactsMixin)
+
+
+def _chain_links(store_fn, ingest_fn, documents_cls, facts_cls):
+    return [
+        ("ingest_in_kb", (inspect.getsource(store_fn), "kb.add_document(")),
+        ("DocumentsMixin.add_document", (inspect.getsource(documents_cls.add_document), "ingest_document(")),
+        ("document_ingest", (inspect.getsource(inspect.getmodule(ingest_fn)), "kb._add_document_internal(")),
+        (
+            "_add_document_internal",
+            (inspect.getsource(documents_cls._add_document_internal), "self.store_fact("),
+        ),
+        ("FactsMixin.store_fact", (inspect.getsource(facts_cls.store_fact), "sanitize_fact_content(")),
+    ]
+
+
+def test_negative_control_a_sink_chain_that_skips_redaction_is_caught():
+    """Contrast: the same link check fails when store_fact never redacts, or add_document skips the chain."""
+
+    class _NoRedactFacts:
+        async def store_fact(self, content, metadata=None, fact_id=None):
+            return {"stored": content}  # no sanitize_fact_content
+
+    class _SkipDocs:
+        async def add_document(self, content, metadata=None, doc_id=None):
+            return {"status": "success"}  # never reaches ingest_document
+
+        async def _add_document_internal(self, content, metadata=None, doc_id=None):
+            return await self.store_fact(content, metadata, doc_id)
+
+    from knowledge.document_ingest import ingest_document
+    from knowledge.kb_ingest_result import ingest_in_kb
+
+    links = dict(_chain_links(ingest_in_kb, ingest_document, _SkipDocs, _NoRedactFacts))
+    broken = [name for name, (src, call) in links.items() if call not in src]
+    assert broken == ["DocumentsMixin.add_document", "FactsMixin.store_fact"]
 
 
 def test_negative_control_a_bypass_helper_that_skips_store_fact_is_caught():

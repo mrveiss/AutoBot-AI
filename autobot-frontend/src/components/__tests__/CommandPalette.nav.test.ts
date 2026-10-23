@@ -11,7 +11,7 @@ import { createI18n } from 'vue-i18n'
 import { createPinia, setActivePinia } from 'pinia'
 import en from '@/i18n/locales/en.json'
 import CommandPalette from '../CommandPalette.vue'
-import { navItems, profileMenuItems, adminMenuItems } from '@/config/navItems'
+import { navItems, navIconItems, profileMenuItems, adminMenuItems } from '@/config/navItems'
 
 const mockPush = vi.fn()
 let isAdmin = false
@@ -54,10 +54,21 @@ describe('CommandPalette navigation section (#17561)', () => {
     vi.stubEnv('VITE_FEATURE_CANVAS', 'true')
     const ids = paletteIds()
 
-    const missing = [...navItems, ...profileMenuItems, ...adminMenuItems]
+    // Icon-cluster entries with a route are palette destinations too; the
+    // external Platform admin entry has no route and is not (#18240).
+    const missing = [...navItems, ...navIconItems.filter((item) => item.to), ...profileMenuItems, ...adminMenuItems]
       .map((item) => `nav:${item.to}`)
       .filter((id) => !ids.includes(id))
     expect(missing).toEqual([])
+  })
+
+  it('offers Secrets and Preferences from the icon cluster, but not Plugins or Platform admin', () => {
+    const ids = paletteIds()
+
+    expect(ids).toContain('nav:/secrets')
+    expect(ids).toContain('nav:/preferences')
+    expect(ids).not.toContain('nav:/plugins')
+    expect(ids.filter((id) => id.startsWith('nav:undefined'))).toEqual([])
   })
 
   it('does not offer admin entries to a non-admin', () => {

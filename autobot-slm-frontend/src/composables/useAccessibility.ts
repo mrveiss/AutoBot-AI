@@ -15,7 +15,7 @@
  * Issue #754: Accessibility audit and improvements.
  */
 
-import { ref, onMounted, onUnmounted, watch, type Ref } from 'vue'
+import { ref, onUnmounted, watch, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('Accessibility')
@@ -314,51 +314,6 @@ export function useKeyboardNav(
 
 // ─── Screen Reader Announcements ──────────────────────────────
 
-/**
- * Announce messages to screen readers via an aria-live region.
- *
- * Issue #754: Accessibility audit and improvements.
- */
-export function useAnnounce() {
-  let liveRegion: HTMLElement | null = null
-
-  function ensureLiveRegion(): HTMLElement {
-    if (liveRegion) return liveRegion
-
-    const existing = document.getElementById('a11y-live-region')
-    if (existing) {
-      liveRegion = existing
-      return liveRegion
-    }
-
-    liveRegion = document.createElement('div')
-    liveRegion.id = 'a11y-live-region'
-    liveRegion.setAttribute('aria-live', 'polite')
-    liveRegion.setAttribute('aria-atomic', 'true')
-    liveRegion.setAttribute('role', 'status')
-    liveRegion.className = 'sr-only'
-    document.body.appendChild(liveRegion)
-    return liveRegion
-  }
-
-  /**
-   * Announce a message to screen readers.
-   *
-   * Helper for useAnnounce (Issue #754).
-   */
-  function announce(message: string, priority: 'polite' | 'assertive' = 'polite'): void {
-    const region = ensureLiveRegion()
-    region.setAttribute('aria-live', priority)
-    // Clear then set to ensure re-announcement
-    region.textContent = ''
-    requestAnimationFrame(() => {
-      region.textContent = message
-    })
-  }
-
-  onMounted(() => {
-    ensureLiveRegion()
-  })
-
-  return { announce }
-}
+// useAnnounce lives in the shared kit (#18240); re-exported so existing
+// importers of this module keep working with ONE implementation.
+export { useAnnounce } from '@autobot/ui'

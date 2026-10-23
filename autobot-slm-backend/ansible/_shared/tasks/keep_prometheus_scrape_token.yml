@@ -1,0 +1,39 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# #16375: keep the backend's deployed Prometheus scrape token when a deploy
+# arrives without one.
+#
+# The token's home is the SLM secret store (`prometheus_scrape_token`, seeded
+# at SLM startup), and every SLM-driven run carries it as an extra var via
+# fetch_deploy_secrets. That fetch degrades to "no secrets" when the SLM DB is
+# unreachable, and a render from an empty value would write an empty token
+# and turn every scrape into a 401. So when no token was supplied, adopt the
+# one already rendered on this host. A supplied token always wins: this task
+# never runs when one is set, so rotation through the SLM still takes effect.
+#
+# Callers pass `scrape_token_env_files` (the env files the backend role renders).
+# Sets `prometheus_scrape_token` only when it was empty and a deployed value exists.
+---
+
+- name: "Read the deployed AUTOBOT_PROMETHEUS_SCRAPE_TOKEN (#16375)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -ohP '^AUTOBOT_PROMETHEUS_SCRAPE_TOKEN=\K.+'
+      {{ scrape_token_env_files | map('quote') | join(' ') }} 2>/dev/null | head -n 1
+  register: _scrape_token_probe
+  changed_when: false
+  failed_when: false
+  become: true
+  no_log: true
+  when: (prometheus_scrape_token | default('') | trim) | length == 0
+
+- name: "Keep the deployed scrape token when the deploy supplied none (#16375)"
+  ansible.builtin.set_fact:
+    prometheus_scrape_token: "{{ _scrape_token_probe.stdout | trim }}"
+  when:
+    - (prometheus_scrape_token | default('') | trim) | length == 0
+    - (_scrape_token_probe.stdout | default('') | trim) | length > 0
+  no_log: true

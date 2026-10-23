@@ -43,6 +43,7 @@ def _make_repo(tmp_path: Path) -> Path:
         (tmp_path / app / "src" / "composables").mkdir(parents=True)
         (tmp_path / app / "src" / "utils").mkdir(parents=True)
         (tmp_path / app / "src" / "types").mkdir(parents=True)
+    _write(tmp_path, f"{guard.KIT_COMPONENTS_DIR}/SkipLink.vue", "<template><a /></template>\n")
     return tmp_path
 
 
@@ -50,6 +51,19 @@ def _write(repo: Path, rel: str, content: str) -> None:
     path = repo / rel
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
+
+
+_FORK_SFC = "<script setup lang=\"ts\">\nconst x = 1\n</script>\n<template><a>{{ x }}</a></template>\n"
+_WRAPPER_SFC = (
+    "<script setup lang=\"ts\">\nimport { SkipLink } from '@autobot/ui'\n</script>\n"
+    "<template><SkipLink /></template>\n"
+)
+SLM_SKIP = "autobot-slm-frontend/src/components/common/SkipLink.vue"
+
+
+@pytest.fixture
+def no_grandfather(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(guard, "KIT_FORK_GRANDFATHER", {})
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +182,102 @@ def test_type_violations_collect_all_not_just_first(tmp_path: Path) -> None:
 # ---------------------------------------------------------------------------
 # End-to-end: the artifact actually invoked by pre-commit
 # ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Kit component forks (#14776)
+# ---------------------------------------------------------------------------
+
+
+def test_kit_component_list_is_derived_and_non_empty_on_the_real_tree() -> None:
+    """Control: the real kit yields names, incl. every grandfathered fork's kit twin."""
+    repo_root = Path(__file__).resolve().parents[4]
+    names = guard.kit_component_names(repo_root)
+    assert names, "derived kit list is empty - the guard would pass vacuously"
+    assert set(guard.KIT_FORK_GRANDFATHER) <= names
+
+
+def test_kit_fork_detected(tmp_path: Path, no_grandfather: None) -> None:
+    repo = _make_repo(tmp_path)
+    _write(repo, SLM_SKIP, _FORK_SFC)
+    violations = guard.collect_kit_fork_violations(repo)
+    assert len(violations) == 1 and "SkipLink.vue" in violations[0]
+
+
+def test_kit_wrapper_passes(tmp_path: Path, no_grandfather: None) -> None:
+    repo = _make_repo(tmp_path)
+    _write(repo, SLM_SKIP, _WRAPPER_SFC)
+    assert guard.collect_kit_fork_violations(repo) == []
+
+
+def test_importing_something_else_from_the_kit_is_still_a_fork(tmp_path: Path, no_grandfather: None) -> None:
+    repo = _make_repo(tmp_path)
+    _write(repo, SLM_SKIP, "<script setup>\nimport { BaseModal } from '@autobot/ui'\n</script>\n")
+    assert len(guard.collect_kit_fork_violations(repo)) == 1
+
+
+def test_non_kit_basename_is_ignored(tmp_path: Path, no_grandfather: None) -> None:
+    repo = _make_repo(tmp_path)
+    _write(repo, "autobot-frontend/src/components/Unrelated.vue", _FORK_SFC)
+    assert guard.collect_kit_fork_violations(repo) == []
+
+
+def test_kit_list_follows_the_kit_directory(tmp_path: Path, no_grandfather: None) -> None:
+    repo = _make_repo(tmp_path)
+    _write(repo, f"{guard.KIT_COMPONENTS_DIR}/BaseNew.vue", "<template><i /></template>\n")
+    _write(repo, "autobot-frontend/src/components/BaseNew.vue", _FORK_SFC)
+    assert any("BaseNew.vue" in v for v in guard.collect_kit_fork_violations(repo))
+
+
+def test_grandfathered_fork_passes_while_it_still_forks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _make_repo(tmp_path)
+    _write(repo, SLM_SKIP, _FORK_SFC)
+    monkeypatch.setattr(guard, "KIT_FORK_GRANDFATHER", {"SkipLink": SLM_SKIP})
+    assert guard.collect_kit_fork_violations(repo) == []
+
+
+def test_grandfather_entry_that_became_a_wrapper_is_stale(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _make_repo(tmp_path)
+    _write(repo, SLM_SKIP, _WRAPPER_SFC)
+    monkeypatch.setattr(guard, "KIT_FORK_GRANDFATHER", {"SkipLink": SLM_SKIP})
+    violations = guard.collect_kit_fork_violations(repo)
+    assert len(violations) == 1 and "stale grandfather entry" in violations[0]
+
+
+def test_grandfather_entry_for_a_missing_file_is_stale(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _make_repo(tmp_path)
+    monkeypatch.setattr(guard, "KIT_FORK_GRANDFATHER", {"SkipLink": SLM_SKIP})
+    assert "stale grandfather entry" in guard.collect_kit_fork_violations(repo)[0]
+
+
+def test_grandfather_is_per_path_not_per_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _make_repo(tmp_path)
+    _write(repo, SLM_SKIP, _FORK_SFC)
+    _write(repo, "autobot-frontend/src/components/SkipLink.vue", _FORK_SFC)
+    monkeypatch.setattr(guard, "KIT_FORK_GRANDFATHER", {"SkipLink": SLM_SKIP})
+    violations = guard.collect_kit_fork_violations(repo)
+    assert len(violations) == 1 and "autobot-frontend/src/components/SkipLink.vue" in violations[0]
+
+
+def test_vacuity_fails_closed_when_the_kit_list_is_empty() -> None:
+    assert guard._check_vacuity(10**6, 10**6, 0) == 1
+
+
+def test_end_to_end_blocks_on_kit_fork(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = _make_repo(tmp_path)
+    for app in guard.APPS:
+        for i in range(guard.MIN_COMPOSABLE_FILES_SCANNED):
+            _write(repo, f"{app}/src/composables/useFiller{i}.ts", "export function f() {}\n")
+        for i in range(guard.MIN_VOCAB_FILES_SCANNED):
+            _write(repo, f"{app}/src/utils/filler{i}.ts", "export const x = 1\n")
+    _write(repo, SLM_SKIP, _FORK_SFC)
+    result = _run_hook(repo)
+    assert result.returncode != 0 and "SkipLink.vue" in result.stdout
+
+
+def test_real_tree_is_clean_with_the_grandfather_list() -> None:
+    repo_root = Path(__file__).resolve().parents[4]
+    assert guard.collect_kit_fork_violations(repo_root) == []
 
 
 def _run_hook(repo: Path) -> subprocess.CompletedProcess:

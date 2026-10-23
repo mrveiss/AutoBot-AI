@@ -27,6 +27,10 @@
   --aui-color-primary-active: var(--color-primary-active);
   --aui-color-primary-contrast: var(--text-on-primary);
 
+  /* ---- Color: brand mark --------------------------------------------- */
+  --aui-brand-bg: var(--brand-bg);
+  --aui-brand-fg: var(--brand-fg);
+
   /* ---- Color: neutrals / chrome -------------------------------------- */
   --aui-color-surface: var(--bg-surface);
   --aui-color-surface-raised: var(--bg-elevated);
@@ -85,8 +89,45 @@
   --aui-space-5: var(--spacing-5);
   --aui-space-6: var(--spacing-6);
 
+  /* ---- Form controls (BaseInput) ------------------------------------- */
+  --aui-input-bg: var(--input-bg);
+  --aui-input-border: var(--input-border);
+  --aui-input-height-sm: var(--input-height-sm);
+  --aui-input-height-md: var(--input-height-md);
+  --aui-input-height-lg: var(--input-height-lg);
+  --aui-input-padding-x: var(--input-padding-x);
+
   /* ---- Z-index ------------------------------------------------------- */
+  --aui-z-dropdown: var(--z-dropdown);
   --aui-z-modal: var(--z-modal);
+  --aui-z-tooltip: var(--z-tooltip);
+
+  /* ---- Tooltip ------------------------------------------------------- */
+  --aui-tooltip-delay: var(--tooltip-delay);
+  --aui-tooltip-hide-delay: var(--tooltip-hide-delay);
+  --aui-tooltip-offset: var(--tooltip-offset);
+  --aui-tooltip-max: var(--tooltip-max);
+
+  /* ---- Table (both apps define --tbl-*; the SLM in slm-scheme.css) ---- */
+  --aui-table-font-size: var(--tbl-font-size);
+  --aui-table-row-h: var(--tbl-row-h);
+  --aui-table-cell-px: var(--tbl-cell-px);
+  --aui-table-cell-py: var(--tbl-cell-py);
+  --aui-table-head-h: var(--tbl-head-h);
+  --aui-table-head-bg: var(--tbl-head-bg);
+  --aui-table-head-fg: var(--tbl-head-fg);
+  --aui-table-head-font: var(--tbl-head-font);
+  --aui-table-head-case: var(--tbl-head-case);
+  --aui-table-head-ls: var(--tbl-head-ls);
+  --aui-table-head-border: var(--tbl-head-border);
+  --aui-table-border: var(--tbl-border);
+  --aui-table-row-hover: var(--tbl-row-hover);
+  --aui-table-row-selected: var(--tbl-row-selected);
+  --aui-table-row-selected-edge: var(--tbl-selected-edge);
+  --aui-table-zebra-bg: var(--tbl-zebra-bg);
+  --aui-table-check-w: var(--tbl-check-col-w);
+  --aui-table-min-col: var(--tbl-min-col);
+  --aui-table-num: var(--tbl-num);
 
   /* ---- Motion -------------------------------------------------------- */
   --aui-transition-fast: var(--duration-200) var(--ease-in-out);

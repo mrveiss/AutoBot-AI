@@ -275,6 +275,26 @@ describe('authStore — canonical-client transport (#13140)', () => {
     expect(sessionStorage.getItem('slm_access_token')).toBe('new-token')
   })
 
+  it('a token written to storage behind the store is invisible to checkAuth (the #17856 defect)', async () => {
+    // LoginView (LDAP/AD) and SSOCallbackView used to do exactly this.
+    const store = useAuthStore()
+    sessionStorage.setItem('slm_access_token', 'ldap-token')
+
+    expect(await store.checkAuth()).toBe(false)
+    expect(mockFetch).not.toHaveBeenCalled()
+  })
+
+  it('adoptToken makes a token issued outside login() visible to checkAuth and persists it', async () => {
+    const store = useAuthStore()
+    mockFetch.mockResolvedValueOnce(jsonResponse({ username: 'admin', is_admin: true }))
+
+    store.adoptToken('ldap-token')
+
+    expect(await store.checkAuth()).toBe(true)
+    expect(authHeaderOf(0)).toBe('Bearer ldap-token')
+    expect(sessionStorage.getItem('slm_access_token')).toBe('ldap-token')
+  })
+
   it('revokes server-side with the bearer still attached, then clears locally', async () => {
     sessionStorage.setItem('slm_access_token', 'live-token')
     sessionStorage.setItem('slm_user', '{"username":"admin","isAdmin":true}')
@@ -310,6 +330,40 @@ describe('authStore — canonical-client transport (#13140)', () => {
 
     expect(sessionStorage.getItem('slm_access_token')).toBeNull()
     expect(localStorage.getItem('slm_access_token')).toBeNull()
+  })
+
+  describe('fetchCurrentUser keeps the session unless the server says 401 (#18892)', () => {
+    function seedSession(): void {
+      sessionStorage.setItem('slm_access_token', 'live-token')
+      localStorage.setItem('slm_access_token', 'live-token')
+    }
+
+    it.each([503, 500, 499])('keeps the session on a %i', async (status) => {
+      seedSession()
+      mockFetch.mockResolvedValueOnce(jsonResponse({ detail: 'x' }, false, status))
+      const store = useAuthStore()
+      await store.fetchCurrentUser()
+      expect(mockFetch).toHaveBeenCalledTimes(1) // no /auth/logout call
+      expect(sessionStorage.getItem('slm_access_token')).toBe('live-token')
+      expect(await store.checkAuth()).toBe(true)
+    })
+
+    it('keeps the session on a network error', async () => {
+      seedSession()
+      mockFetch.mockRejectedValueOnce(new Error('network down'))
+      const store = useAuthStore()
+      await store.fetchCurrentUser()
+      expect(sessionStorage.getItem('slm_access_token')).toBe('live-token')
+    })
+
+    it('logs out on a 401', async () => {
+      seedSession()
+      mockFetch.mockResolvedValueOnce(jsonResponse({ detail: 'expired' }, false, 401))
+      mockFetch.mockResolvedValueOnce(jsonResponse({ logout_url: null })) // /auth/logout
+      const store = useAuthStore()
+      await store.fetchCurrentUser()
+      await vi.waitFor(() => expect(sessionStorage.getItem('slm_access_token')).toBeNull())
+    })
   })
 
   it('does not clear the session or redirect when a login is rejected 401', async () => {

@@ -239,6 +239,21 @@ register_env_var(
     )
 )
 
+# Observed-headroom routing (#15028): the routing floor and the age past which a reading is ignored.
+for _name, _default, _description in (
+    (
+        "AUTOBOT_LLM_HEADROOM_FLOOR",
+        0.05,
+        "Remaining fraction of a rate-limit window at or below which routing moves on.",
+    ),
+    (
+        "AUTOBOT_LLM_HEADROOM_MAX_AGE_SECONDS",
+        120.0,
+        "Age in seconds beyond which an observed rate-limit reading is ignored.",
+    ),
+):
+    register_env_var(EnvVarSpec(name=_name, type=float, default=_default, description=_description, component="ai"))
+
 register_env_var(
     EnvVarSpec(
         name="AUTOBOT_LLM_QUOTA_HEADROOM_TTL_SECONDS",

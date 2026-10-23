@@ -19,6 +19,7 @@ import aiofiles
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
+from api.files import get_security_layer
 from api.schemas_chat import (
     ConvFileInfoData,
     ConvFileOpData,
@@ -46,7 +47,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from security.session_ownership import validate_session_ownership
 from security.session_posture import SessionPosture
-from security_layer import SecurityLayer
+from security.upload_filename_policy import ALLOWED_EXTENSIONS, is_safe_file  # noqa: F401 -- re-exported for tests
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 
 router = APIRouter(
@@ -54,54 +55,14 @@ router = APIRouter(
 )
 logger = get_logger(__name__)
 
-# Issue #380: Module-level frozenset for dangerous filename characters
-_DANGEROUS_FILENAME_CHARS = frozenset({"<", ">", '"', "|", "?", "*", "\0", "\r", "\n"})
 
 # Maximum file size (50MB) - consistent with general file API
 MAX_FILE_SIZE = 50 * 1024 * 1024
 
-# Allowed file extensions - consistent with general file API
-ALLOWED_EXTENSIONS = {
-    ".txt",
-    ".md",
-    ".json",
-    ".yaml",
-    ".yml",
-    ".py",
-    ".js",
-    ".ts",
-    ".html",
-    ".css",
-    ".xml",
-    ".csv",
-    ".log",
-    ".cfg",
-    ".ini",
-    ".sh",
-    ".bat",
-    ".sql",
-    ".pdf",
-    ".png",
-    ".jpg",
-    ".jpeg",
-    ".gif",
-    ".svg",
-    ".ico",
-    ".doc",
-    ".docx",
-    ".xls",
-    ".xlsx",
-}
-
-
-def get_security_layer(request: Request) -> SecurityLayer:
-    """Get security layer from app state"""
-    return request.app.state.security_layer
-
 
 async def _authorize_file_operation(request: Request, session_id: str, operation: str) -> dict:
     """Authorize file operation and return user data (Issue #398: extracted)."""
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, operation)
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, operation)
     if not has_permission:
         raise HTTPException(status_code=403, detail=f"Insufficient permissions for file {operation}")
     request.state.user = user_data
@@ -142,49 +103,6 @@ def get_conversation_file_manager(request: Request):
     Returns None if not yet initialized (startup phase).
     """
     return getattr(request.app.state, "conversation_file_manager", None)
-
-
-def is_safe_file(filename: str) -> bool:
-    """
-    Check if file type is allowed and filename is safe
-    Reuses validation logic from general file API
-    """
-    if not filename:
-        return False
-
-    # Check for dangerous characters (Issue #380: use module-level constant)
-    if any(char in filename for char in _DANGEROUS_FILENAME_CHARS):
-        return False
-
-    # Check filename length
-    if len(filename) > 255:
-        return False
-
-    # Check extension
-    extension = Path(filename).suffix.lower()
-    if extension not in ALLOWED_EXTENSIONS:
-        return False
-
-    # Check for dangerous filenames
-    dangerous_names = {
-        ".htaccess",
-        ".env",
-        "passwd",
-        "shadow",
-        "config",
-        "web.config",
-        "autoexec.bat",
-        "boot.ini",
-        "hosts",
-    }
-    if filename.lower() in dangerous_names:
-        return False
-
-    # Prevent null bytes and control characters
-    if "\0" in filename or any(ord(c) < 32 for c in filename):
-        return False
-
-    return True
 
 
 async def _validate_and_read_upload_file(
@@ -502,7 +420,7 @@ async def preview_conversation_file(request: Request, session_id: str, file_id: 
         500: Server error
     """
     # Authenticate and authorize
-    has_permission, user_data = get_auth_middleware().check_file_permissions(request, "view")
+    has_permission, user_data = await get_auth_middleware().check_file_permissions(request, "view")
     if not has_permission:
         raise HTTPException(status_code=403, detail="Insufficient permissions for file preview")
 
@@ -597,7 +515,7 @@ async def delete_conversation_file(request: Request, session_id: str, file_id: s
 
         _audit_file_operation(
             request,
-            "conversation_file_delete",
+            "file.delete",
             user_data,
             session_id,
             {"file_id": file_id},

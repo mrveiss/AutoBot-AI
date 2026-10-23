@@ -15,6 +15,7 @@
 # Optional variables:
 #   slm_services_to_monitor: List of systemd services to monitor
 #   slm_heartbeat_interval: Heartbeat interval in seconds (default: 30)
+#   slm_agent_run_common: false skips the common role (default: true)
 
 - name: Deploy SLM Agent to managed nodes
   hosts: slm_nodes
@@ -26,10 +27,26 @@
       changed_when: false
 
   roles:
+    # `common` creates the emergency admin user and its sudo, sets SSH keys and resets UFW. The UI
+    # deploy button keeps running it (the default); the role-registry path (Migrate/Redeploy and the
+    # co-located update, api/roles.py run_role_full_procedure) passes slm_agent_run_common=false so it
+    # stays agent-only (#19040).
     - role: common
       tags: ['common']
+      when: slm_agent_run_common | default(true) | bool
 
-    - role: slm_agent
+  tasks:
+    # The agent imports autobot_shared (#18611); the same tasks enrollment runs. Not the
+    # autobot_shared role: its restart backend/celery handlers do not exist on agent-only nodes.
+    - name: Install autobot_shared for the agent
+      # Static import: the path is resolved (and checked by --syntax-check) at parse
+      # time, relative to this playbook, and tags apply to every imported task.
+      ansible.builtin.import_tasks: ../roles/_shared/tasks/install_agent_autobot_shared.yml
+      tags: ['slm_agent', 'autobot_shared']
+
+    - name: Deploy the SLM agent (slm_agent role)
+      ansible.builtin.import_role:
+        name: slm_agent
       tags: ['slm_agent']
 
   post_tasks:

@@ -27,10 +27,16 @@ import aiohttp
 import psutil
 
 # Import centralized Redis client and network constants
-sys.path.append(str(Path(__file__).parent.parent))
-from constants.network_constants import NetworkConstants, ServiceURLs
-from constants.threshold_constants import TimingConstants
-from autobot_shared.redis_client import get_async_redis_client
+
+# Runs from any directory with no PYTHONPATH: put the repository root on the path for
+# `autobot_shared` (#18289).
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.network_constants import NetworkConstants, ServiceURLs  # noqa: E402
+from autobot_shared.redis_client import get_async_redis_client  # noqa: E402
+from autobot_shared.ssot_constants import TimingConstants  # noqa: E402
 
 # Configure logging
 logging.basicConfig(

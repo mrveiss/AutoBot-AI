@@ -54,7 +54,7 @@
       v-if="analyzeError"
       variant="error"
       :message="analyzeError"
-      dismissible
+      dismissible :dismiss-label="t('ui.alert.dismissAlert')"
       @dismiss="analyzeError = null"
     />
 
@@ -208,9 +208,9 @@
 </template>
 
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue';
-import BaseAlert from '@/components/ui/BaseAlert.vue';
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';

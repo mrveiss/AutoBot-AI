@@ -14,14 +14,20 @@ import os
 import sys
 from pathlib import Path
 
-from autobot_shared.paths import project_root
+# Runs from any directory with no PYTHONPATH: put the repository root on the path for
+# `autobot_shared` (#18289).
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.embedding_model import active_embedding_model  # noqa: E402
+from autobot_shared.paths import project_root  # noqa: E402
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
 
 # Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 
 def _find_documentation_files(project_root: Path) -> list:
@@ -132,19 +138,19 @@ async def populate_with_chromadb():
     from llama_index.llms.ollama import Ollama as LlamaIndexOllamaLLM
     from llama_index.vector_stores.chroma import ChromaVectorStore
 
-    from constants import ServiceURLs
+    from autobot_shared.network_constants import ServiceURLs
 
     # Set up LLM and embedding model with configurable URL
     ollama_base_url = os.getenv("AUTOBOT_OLLAMA_BASE_URL", ServiceURLs.OLLAMA_LOCAL)
 
     # Use ModelConstants for centralized model configuration
-    from constants.model_constants import ModelConstants
+    from autobot_shared.ssot_constants import ModelConstants
 
     default_model = ModelConstants.DEFAULT_OLLAMA_MODEL
 
     llm = LlamaIndexOllamaLLM(model=default_model, base_url=ollama_base_url)
 
-    embed_model = OllamaEmbedding(model_name="nomic-embed-text", base_url=ollama_base_url)
+    embed_model = OllamaEmbedding(model_name=active_embedding_model(), base_url=ollama_base_url)
 
     # Configure settings
     Settings.llm = llm

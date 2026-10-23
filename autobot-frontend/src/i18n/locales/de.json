@@ -763,7 +763,8 @@
       "files": "Dateien",
       "terminal": "Terminal",
       "browser": "Browser",
-      "novnc": "Remotedesktop"
+      "novnc": "Remotedesktop",
+      "ariaLabel": "Chat-Bereiche"
     }
   },
   "settings": {
@@ -945,6 +946,32 @@
       "deviceInitFailed": "Der Geräteablauf konnte nicht gestartet werden",
       "stillWaiting": "Die Zustimmung steht noch aus — versuchen Sie es gleich noch einmal.",
       "pollFailed": "Abfrage fehlgeschlagen"
+    },
+    "preferredMode": {
+      "title": "Bevorzugter Modus",
+      "subtitle": "Wählen Sie, wie viel von AutoBot Sie sehen. Sie können jederzeit über die Schaltfläche „Minimal“ in der oberen Leiste wechseln.",
+      "group": "Oberflächenmodus",
+      "minimal": "Minimal",
+      "minimalDesc": "Nur das Wesentliche — für Chat, Wissen und Freigaben im Alltag.",
+      "full": "Vollständig",
+      "fullDesc": "Alles, einschließlich Analysen, Automatisierung, Administration und Entwicklerwerkzeugen.",
+      "selected": "Ausgewählt",
+      "startIn": "Starten in",
+      "startInDesc": "In welchem Modus AutoBot nach der Anmeldung öffnet",
+      "startLast": "Zuletzt verwendet",
+      "startMinimal": "Minimal",
+      "startFull": "Vollständig",
+      "noteSynced": "In Ihrem Konto und auf diesem Gerät gespeichert",
+      "noteDirectLinks": "Ausgeblendete Seiten öffnen sich weiterhin über direkte Links",
+      "noteNeverHidden": "Freigaben, Fehler und Sicherheitshinweise werden nie ausgeblendet"
+    },
+    "additionalThemes": {
+      "title": "Weitere Designs",
+      "subtitle": "Von Ihrer Administration über SLM bereitgestellt",
+      "deployed": "Über SLM bereitgestellt · v{version}",
+      "empty": "Es sind keine weiteren Designs bereitgestellt.",
+      "info": "Administratoren installieren und verteilen Designs in der SLM-Konsole.",
+      "slmLink": "SLM › Einstellungen › Designs ↗"
     }
   },
   "voice": {
@@ -4791,8 +4818,8 @@
     "settings": "Terminal Settings",
     "fontSize": "Font Size",
     "theme": "Theme",
-    "dark": "Dark",
-    "light": "Light",
+    "dark": "Dunkel",
+    "light": "Hell",
     "cursorStyle": "Cursor Style",
     "block": "Block",
     "underline": "Underline",
@@ -5064,7 +5091,6 @@
     "role": "Rolle:",
     "lastLogin": "Letzte Anmeldung:",
     "preferences": "Einstellungen",
-    "theme": "Design",
     "notifications": "Benachrichtigungen",
     "emailNotifications": "E-Mail-Benachrichtigungen",
     "browserNotifications": "Browserbenachrichtigungen",
@@ -5074,7 +5100,6 @@
     "showTooltips": "Tooltips anzeigen",
     "enableAnimations": "Animationen aktivieren",
     "savePreferences": "Einstellungen speichern",
-    "appearance": "Darstellung",
     "voiceChatDisplay": "Sprachchat-Anzeige",
     "fullScreen": "Vollbild",
     "sidePanel": "Seitenleiste",
@@ -5090,9 +5115,6 @@
     "pwTooShort": "Passwort muss mindestens 8 Zeichen lang sein",
     "pwChanged": "Passwort erfolgreich geändert!",
     "never": "Nie",
-    "themeLight": "Hell",
-    "themeDark": "Dunkel",
-    "themeAuto": "Automatisch",
     "tabDevices": "Tab devices"
   },
   "charts": {
@@ -5765,23 +5787,6 @@
       "postExecutionFailed": "Der Befehl wurde ausgeführt, aber ein Folgeschritt ist fehlgeschlagen. Die Ausgabe wird angezeigt; einige Aktualisierungen fehlen möglicherweise.",
       "enterComment": "Please enter a comment before submitting"
     },
-    "darkModeToggle": {
-      "switchToLight": "Switch to light mode",
-      "switchToDark": "Switch to dark mode",
-      "toggleDarkMode": "Toggle dark mode"
-    },
-    "dataTable": {
-      "sortBy": "Sort by {column}",
-      "actions": "Actions",
-      "noDataAvailable": "No data available",
-      "noItemsToDisplay": "No items to display",
-      "pageOf": "Page {current} of {total}",
-      "pagination": "Table pagination",
-      "previousPage": "Previous page",
-      "nextPage": "Next page",
-      "dataTable": "Data table",
-      "loading": "Loading data..."
-    },
     "hostSelection": {
       "title": "Select Host",
       "defaultPurpose": "Select a host for this operation",
@@ -5891,8 +5896,8 @@
       "selectTheme": "Select theme",
       "switchToLight": "Switch to light mode",
       "switchToDark": "Switch to dark mode",
-      "light": "Light",
-      "dark": "Dark"
+      "light": "Hell",
+      "dark": "Dunkel"
     },
     "toastContainer": {
       "notifications": "Notifications",
@@ -5912,7 +5917,9 @@
     },
     "loadingSpinner": {
       "loading": "Loading…"
-    }
+    },
+    "minimalNote": "Nur das Wesentliche wird angezeigt · technische Widgets ausgeblendet",
+    "minimalNoteAction": "Alle Funktionen anzeigen"
   },
   "base": {
     "badge": {
@@ -5926,10 +5933,6 @@
       "actions": "Aktionen",
       "noDataAvailable": "Keine Daten verfügbar",
       "selectRow": "Zeile {row} auswählen"
-    },
-    "panel": {
-      "collapse": "Bereich einklappen",
-      "expand": "Bereich ausklappen"
     }
   },
   "views": {
@@ -6145,8 +6148,6 @@
       "createNewDashboard": "Create new dashboard",
       "availableWidgets": "Available Widgets",
       "configure": "Configure",
-      "expand": "Expand",
-      "shrink": "Shrink",
       "remove": "Remove",
       "noWidgets": "No Widgets Added",
       "noWidgetsHint": "Click \"Edit Layout\" to add widgets to your dashboard",
@@ -6566,7 +6567,17 @@
       "clickToSolve": "Klicken, um im VNC zu lösen",
       "openVnc": "VNC-Desktop öffnen",
       "solved": "Ich habe es gelöst",
-      "skipSource": "Quelle überspringen"
+      "skipSource": "Quelle überspringen",
+      "types": {
+        "recaptcha": "reCAPTCHA",
+        "hcaptcha": "hCaptcha",
+        "cloudflare": "Cloudflare-Prüfung",
+        "slider": "Schieberegler-CAPTCHA",
+        "imageSelect": "Bildauswahl-CAPTCHA",
+        "text": "Text-CAPTCHA",
+        "math": "Rechen-CAPTCHA",
+        "unknown": "Unbekanntes CAPTCHA"
+      }
     }
   },
   "operations": {
@@ -7905,7 +7916,6 @@
     "customDashboard": "Custom Dashboard",
     "agentRegistry": "Agents",
     "agentActivity": "Agent-Aktivität",
-    "switchLanguage": "Switch language",
     "openMainMenu": "Open main menu",
     "skipToContent": "Zum Hauptinhalt springen",
     "services": "Services",
@@ -7991,7 +8001,21 @@
       "budgetPolicies": "Kosten Ausgaben Limits Geld",
       "systemHealth": "Status Verfügbarkeit Diagnose Überwachung",
       "vault": "Zugangsdaten Schlüssel Passwörter Token Tresor"
-    }
+    },
+    "homeAria": "AutoBot Startseite",
+    "vaultTip": "Geheimnisse — gespeicherte Schlüssel und Zugangsdaten",
+    "preferencesTip": "Einstellungen",
+    "platformAdmin": "Plattform-Administration",
+    "platformAdminAria": "Plattform-Administration, öffnet die SLM-Konsole in einem neuen Tab",
+    "platformAdminTip": "Plattform-Administration — öffnet die SLM-Konsole ↗",
+    "profileMenu": "Profilmenü",
+    "uiMode": {
+      "label": "Minimal",
+      "tip": "Minimale Oberfläche — erweiterte Funktionen ausblenden",
+      "announceMinimal": "Minimale Oberfläche aktiv. Erweiterte Funktionen ausgeblendet.",
+      "announceFull": "Vollständige Oberfläche aktiv. Alle Funktionen angezeigt."
+    },
+    "llcLedger": "Agenten-Ledger"
   },
   "llcCompanyStatus": {
     "showArchived": "Archivierte anzeigen",
@@ -8879,6 +8903,72 @@
       "retry": "Erneut versuchen",
       "loadingItem": "Arbeitselement wird geladen…",
       "itemLoadFailed": "Dieses Arbeitselement konnte nicht geladen werden"
+    },
+    "ledger": {
+      "title": "Agenten-Ledger",
+      "subtitle": "Wer in diesem Unternehmen woran arbeitet und wer wartet.",
+      "tabsAria": "Ledger-Ansichten",
+      "tabs": {
+        "now": "Arbeitet gerade",
+        "claims": "Ansprüche",
+        "contention": "Konkurrenz",
+        "activity": "Aktivität"
+      },
+      "col": {
+        "agent": "Agent",
+        "kind": "Art",
+        "status": "Status",
+        "task": "Aktuelle Aufgabe",
+        "detail": "Details",
+        "scope": "Bereich",
+        "mode": "Modus",
+        "intent": "Absicht",
+        "expires": "Läuft ab",
+        "renewals": "Verlängerungen"
+      },
+      "busy": "Beschäftigt",
+      "idle": "Untätig",
+      "peerMessages": "Ausstehende Peer-Nachrichten",
+      "idleSubscribers": "Untätigkeits-Abos",
+      "pendingFor": "{n} ausstehend für {name}",
+      "sentBy": "von {names}",
+      "waitsForIdle": "{who} wartet, bis {target} untätig ist",
+      "heldBy": "Gehalten von {agent}",
+      "waitlistAria": "Warteliste in Reihenfolge",
+      "silenceMeansHold": "Bitten ist keine Freigabe: Schweigen heißt Halten, und ein nicht verlängerter Anspruch läuft von selbst ab.",
+      "ask": "Inhaber um Freigabe bitten",
+      "askAria": "Den Inhaber von {scope} um Freigabe bitten",
+      "conflicts": "Konflikte",
+      "recent": "Letzte Aktivität",
+      "conflict": {
+        "release_refused": "Eine Freigabe wurde verweigert",
+        "claim_expired": "Ein Anspruch lief während des Haltens ab",
+        "yield_unanswered": "Eine Freigabebitte blieb unbeantwortet",
+        "claim_lapsed_during_action": "Ein Anspruch lief während einer Aktion ab"
+      },
+      "empty": {
+        "presence": "Keine Agenten gemeldet",
+        "peerMessages": "Keine ausstehenden Nachrichten",
+        "idleSubscribers": "Keine Untätigkeits-Abos",
+        "claims": "Keine Ansprüche",
+        "contention": "Nichts ist umkämpft",
+        "conflicts": "Keine Konflikte",
+        "activity": "Keine aktuelle Aktivität"
+      },
+      "state": {
+        "loading": "Ledger wird gelesen…",
+        "unavailableTitle": "Ledger konnte nicht gelesen werden",
+        "unavailableBody": "Der Speicher {source} hat nicht geantwortet. Das ist nicht dasselbe wie keine Einträge.",
+        "errorTitle": "Beim Laden dieses Abschnitts ist ein Fehler aufgetreten"
+      },
+      "askState": {
+        "sending": "Wird gesendet…",
+        "sent": "Anfrage gesendet — der Inhaber entscheidet; Schweigen heißt Halten.",
+        "tooSoon": "Sie haben gerade erst nach diesem Anspruch gefragt; versuchen Sie es in einer Minute erneut.",
+        "notFound": "Diese Aufgabe hält den Anspruch nicht mehr — aktualisieren Sie, um den aktuellen Inhaber zu sehen.",
+        "unavailable": "Ledger nicht erreichbar; es wurde nichts gesendet.",
+        "error": "Etwas ist schiefgelaufen, und die Zustellung konnte nicht bestätigt werden. Aktualisieren Sie, um zu sehen, ob der Claim noch gehalten wird."
+      }
     }
   },
   "code": {
@@ -9636,5 +9726,161 @@
       "pushFailed": "Diese Aufnahme konnte nicht zur Wissensdatenbank hinzugefügt werden. Bitte erneut versuchen.",
       "collectionNotJoined": "Gespeichert, aber die angegebene Sammlung wurde nicht gefunden — das Transkript ist in der Wissensdatenbank, aber nicht in dieser Sammlung."
     }
+  },
+  "systemStatus": {
+    "summary": {
+      "issues": "Systemprobleme erkannt",
+      "warnings": "Systemwarnungen",
+      "ok": "Alle Systeme betriebsbereit"
+    },
+    "tooltip": {
+      "issues": "Klicken, um Systemprobleme anzuzeigen",
+      "warnings": "Klicken, um Systemwarnungen anzuzeigen",
+      "ok": "Klicken, um den Systemstatus anzuzeigen – alle Dienste betriebsbereit"
+    },
+    "aria": {
+      "issues": "Systemstatus: Probleme erkannt",
+      "warnings": "Systemstatus: Warnungen vorhanden",
+      "ok": "Systemstatus: alle Dienste betriebsbereit"
+    },
+    "description": {
+      "servicesDown": "{n} Dienst ausgefallen | {n} Dienste ausgefallen",
+      "warnings": "{n} Warnung | {n} Warnungen",
+      "withWarnings": "{n} Dienst mit Warnungen | {n} Dienste mit Warnungen",
+      "downAndWarnings": "{down} und {warnings}",
+      "ok": "Alle Dienste laufen normal"
+    },
+    "service": {
+      "backend": "Backend-API",
+      "frontend": "Frontend",
+      "websocket": "WebSocket",
+      "redis": "Redis",
+      "ollama": "Ollama",
+      "npu_worker": "NPU-Worker",
+      "browser": "Browser-Dienst",
+      "chromadb": "KI-Stack (ChromaDB)",
+      "other": "Weitere Dienste"
+    },
+    "state": {
+      "running": "Läuft",
+      "connected": "Verbunden",
+      "statusUnknown": "Status unbekannt",
+      "connectionFailed": "Verbindung fehlgeschlagen",
+      "timeout": "Zeitüberschreitung",
+      "connectionRefused": "Verbindung abgelehnt",
+      "unreachable": "Nicht erreichbar",
+      "unhealthy": "Fehlerhaft",
+      "warning": "Warnung",
+      "pending": "Ausstehend",
+      "available": "Verfügbar",
+      "unavailable": "Nicht verfügbar",
+      "http": "HTTP {code}"
+    },
+    "probe": {
+      "degraded": "Eingeschränkt – Statusprüfungen überschritten, Backend antwortet",
+      "degradedAsOf": "Eingeschränkt – Statusprüfungen überschritten, Backend antwortet – Stand {time}",
+      "unreachable": "Nicht erreichbar – Dienststatus unbekannt",
+      "unreachableAsOf": "Nicht erreichbar – Dienststatus unbekannt – Stand {time}"
+    },
+    "lastKnown": "{text} (zuletzt bekannt)"
+  },
+  "schedule": {
+    "title": "Zeitplan",
+    "repeats": "Wiederholt sich",
+    "repeat": {
+      "minutes": "Alle paar Minuten",
+      "hourly": "Stündlich",
+      "daily": "Täglich",
+      "weekly": "Wöchentlich",
+      "monthly": "Monatlich",
+      "once": "Einmalig"
+    },
+    "every": "Alle",
+    "minutesUnit": "Minuten",
+    "onlyBetween": "Nur zwischen",
+    "windowFrom": "Von",
+    "windowTo": "Bis",
+    "and": "und",
+    "onDays": "An Tagen (optional)",
+    "daysHintAny": "Ohne Auswahl gilt jeder Tag.",
+    "onDaysRequired": "An Tagen",
+    "atMinute": "In Minute",
+    "at": "Um",
+    "hour": "Stunde",
+    "minute": "Minute",
+    "weekdaysOnly": "Nur werktags",
+    "monthly": {
+      "which": "Welcher Tag des Monats",
+      "day": "Tag des Monats",
+      "lastDay": "Letzter Tag",
+      "nth": "Wochentag im Monat",
+      "onDay": "Am Tag",
+      "onThe": "Am"
+    },
+    "nth": {
+      "1": "ersten",
+      "2": "zweiten",
+      "3": "dritten",
+      "4": "vierten",
+      "last": "letzten"
+    },
+    "weekday": "Wochentag",
+    "shortMonths": "Monate ohne diesen Tag laufen am letzten Tag des Monats.",
+    "date": "Datum",
+    "timezone": "Zeitzone",
+    "zone": {
+      "company": "Firmenzeit",
+      "usesCompany": "Verwendet die Zeitzone des Unternehmens."
+    },
+    "summary": {
+      "minutes": "Alle {every} Minuten",
+      "minutesWeekdays": "Alle {every} Minuten, werktags",
+      "minutesDays": "Alle {every} Minuten, jeweils {days}",
+      "minutesWindow": "Alle {every} Minuten zwischen {from} und {to}",
+      "minutesWindowWeekdays": "Alle {every} Minuten zwischen {from} und {to}, werktags",
+      "minutesWindowDays": "Alle {every} Minuten zwischen {from} und {to}, jeweils {days}",
+      "hourly": "Jede Stunde in Minute {minute}",
+      "daily": "Jeden Tag um {time} Uhr",
+      "dailyWeekdays": "Jeden Werktag um {time} Uhr",
+      "weekly": "Jeden {days} um {time} Uhr",
+      "monthlyDay": "Am {day}. Tag jedes Monats um {time} Uhr",
+      "monthlyLastDay": "Am letzten Tag jedes Monats um {time} Uhr",
+      "monthlyNth1": "Am ersten {weekday} jedes Monats um {time} Uhr",
+      "monthlyNth2": "Am zweiten {weekday} jedes Monats um {time} Uhr",
+      "monthlyNth3": "Am dritten {weekday} jedes Monats um {time} Uhr",
+      "monthlyNth4": "Am vierten {weekday} jedes Monats um {time} Uhr",
+      "monthlyNthLast": "Am letzten {weekday} jedes Monats um {time} Uhr",
+      "once": "Einmal am {date} um {time} Uhr",
+      "withZone": "{summary} ({zone})",
+      "custom": "Benutzerdefinierter Zeitplan"
+    },
+    "customNote": "Dieser Zeitplan lässt sich nicht per Klick darstellen.",
+    "editCron": "Als Cron bearbeiten",
+    "doneEditing": "Bearbeitung beenden",
+    "nextRuns": "Nächste Ausführungen",
+    "noRuns": "Keine anstehenden Ausführungen.",
+    "previewLoading": "Der Server wird gefragt ...",
+    "previewApprox": "Näherungswert: Der Server bestätigt die genauen Zeiten beim Speichern.",
+    "previewUnavailable": "Für diesen Zeitplan ist keine Vorschau möglich.",
+    "advanced": "Erweitert: gespeichert als",
+    "saved": {
+      "cron": "Standard-Cron",
+      "calendar": "Kalenderregel",
+      "once": "Einmalige Ausführung"
+    },
+    "savedAs": "Gespeicherter Zeitplan",
+    "savedNote": {
+      "once": "Läuft einmal. Es wird kein wiederkehrender Cron gespeichert."
+    },
+    "cronLabel": "Cron-Ausdruck",
+    "cronHint": "Nur Standard-Cron mit fünf Feldern: Minute, Stunde, Tag des Monats, Monat, Wochentag. Auswahl und dieses Feld bleiben synchron.",
+    "cron_extension_unsupported": "{token} ist kein Standard-Cron. Nutzen Sie die Auswahl für Zeitpläne wie den letzten Freitag des Monats.",
+    "invalid_timezone": "Diese Zeitzone wird nicht erkannt.",
+    "once_in_past": "Dieser Zeitpunkt liegt bereits in der Vergangenheit.",
+    "invalid_rrule": "Diese Kalenderregel ist ungültig.",
+    "invalid_cron": "Geben Sie Standard-Cron mit fünf Feldern ein, zum Beispiel 0 9 * * 1-5.",
+    "invalid_generic": "Dieser Zeitplan ist ungültig.",
+    "conflicting_fields": "Ein Zeitplan wird entweder als Cron oder als Kalenderregel bzw. einmalige Ausführung gespeichert, nie beides.",
+    "gatedNote": "Letzter Tag, Wochentag im Monat, die Tage 29 bis 31 und einmalige Ausführungen stehen zur Verfügung, sobald der Scheduler aktualisiert ist."
   }
 }

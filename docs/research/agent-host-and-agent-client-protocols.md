@@ -507,3 +507,20 @@ doc) can land in parallel at any point and makes the rest easier to review.
 
 Repository metadata (stars, forks, commit counts, licences, creation dates) read via the GitHub
 API on 2026-08-22.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #14814 — fix(websockets): /api/ws broadcast is a single global callback — multi-client delivery and chat-history persistence both break (closed)
+- #14815 — umbrella: multi-client session synchronization for the event/state layer (AHP-informed)
+- #14816 — fix(events): PersistStrategy.REDIS drops the event instead of writing to the Redis stream (closed)
+- #14817 — fix(events): event_id is an in-process counter — resets on restart, diverges across workers (closed)
+- #14818 — feat(events): reconnect with last_event_id — replay missed events instead of losing them silently (closed)
+- #14819 — feat(events): add session: and chat: to the live-event channel grammar (closed)
+- #14820 — feat(chat): make session state host-authoritative — Pinia + localStorage cannot converge across clients (closed)
+- #14821 — feat(chat): write-ahead reconciliation in the chat store (confirmed/pending/optimistic) (closed)
+- #14822 — refactor(events): retire the duplicate event socket — /api/ws vs /api/ws/live
+- #14823 — docs(events): event/state doctrine — principles, design tests, anti-goals (closed)
+- #14824 — refactor(ws): consolidate the event-shaped subset of 25 WebSocket routes onto channel subscriptions
+- #14825 — feat(acp): expose an Agent Client Protocol server surface so external editors can drive AutoBot agents (closed)

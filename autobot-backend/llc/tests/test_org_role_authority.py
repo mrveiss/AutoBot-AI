@@ -161,10 +161,10 @@ def test_the_flag_defaults_off():
 
 def test_both_dispatch_sources_carry_the_role():
     """A source that drops org_role would have every run refused: pin that both load it."""
-    from llc.scheduler.heartbeat_scheduler import HeartbeatScheduler
+    from llc.scheduler.heartbeat_scheduler import LLCHeartbeatScheduler
     from llc.services.comment_wake_service import CommentWakeService
 
-    assert "aon.org_role" in inspect.getsource(HeartbeatScheduler._load_enabled_agents)
+    assert "aon.org_role" in inspect.getsource(LLCHeartbeatScheduler._load_enabled_agents)
     assert '"org_role": agent_row.get("org_role")' in inspect.getsource(CommentWakeService)
 
 

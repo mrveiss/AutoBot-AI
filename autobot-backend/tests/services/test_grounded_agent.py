@@ -30,8 +30,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from services.grounded_agent import GroundedAgent
-from services.grounded_agent_models import Claim, ClaimStatus, GroundedResponse, VerifiedClaim
-from services.knowledge_grounding_models import VerificationMethod
+from services.grounded_agent_models import GroundedResponse
+from services.knowledge_grounding_models import Claim, ClaimStatus, VerificationMethod, VerifiedClaim
 
 
 @pytest.fixture

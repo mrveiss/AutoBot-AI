@@ -2,22 +2,23 @@
 <!-- Copyright (c) 2025 mrveiss -->
 <!-- Author: mrveiss -->
 <template>
-  <div class="work-item-detail-overlay" @click.self="$emit('close')">
-    <div class="detail-drawer">
-      <!-- Drawer Header -->
-      <div class="drawer-header">
-        <div class="header-left">
-          <span class="item-identifier">{{ item.identifier }}</span>
-          <WorkItemBadge kind="type" :value="item.type" />
-          <WorkItemBadge kind="status" :value="item.status" />
-        </div>
-        <button class="close-btn" @click="$emit('close')" :aria-label="$t('common.close')">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="close-icon">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-
+  <!-- Kit BaseDrawer (#14780); the parent's v-if removes it, and focus returns to the trigger. -->
+  <BaseDrawer
+    :model-value="true"
+    :title="item.identifier"
+    width="640px"
+    flush
+    :close-label="$t('common.close')"
+    @close="$emit('close')"
+  >
+    <template #title>
+      <span class="header-left">
+        <span class="item-identifier">{{ item.identifier }}</span>
+        <WorkItemBadge kind="type" :value="item.type" />
+        <WorkItemBadge kind="status" :value="item.status" />
+      </span>
+    </template>
+    <div class="detail-body">
       <!-- Save-failure banner (#12348): an optimistic edit could not be persisted. -->
       <div v-if="saveError" class="save-error" role="alert">{{ saveError }}</div>
 
@@ -158,11 +159,11 @@
           <div class="comments-list">
             <div v-for="c in comments" :key="c.id" class="comment-item">
               <div class="comment-author">
-                <span class="author-avatar">{{ initials(c.author_name) }}</span>
+                <span class="author-avatar">{{ initials(commentAuthor(c)) }}</span>
                 <div class="author-meta">
-                  <span class="author-name">{{ c.author_name }}</span>
-                  <span class="comment-time">{{ formatTime(c.created_at) }}</span>
-                  <span v-if="c.author_type === 'agent'" class="agent-chip">{{ $t('llc.workItem.agentChip') }}</span>
+                  <span class="author-name">{{ commentAuthor(c) }}</span>
+                  <span class="comment-time">{{ formatTime(c.created_at ?? '') }}</span>
+                  <span v-if="c.author_agent_id" class="agent-chip">{{ $t('llc.workItem.agentChip') }}</span>
                 </div>
               </div>
               <div class="comment-body" v-html="renderMarkdown(c.body)" />
@@ -193,7 +194,7 @@
                 <span class="artifact-name">{{ a.name }}</span>
                 <span class="artifact-type-label">{{ a.type }}</span>
               </div>
-              <a :href="a.url" target="_blank" class="artifact-link" rel="noopener">{{ $t('llc.workItem.viewArtifact') }}</a>
+              <a v-if="a.url" :href="a.url" target="_blank" class="artifact-link" rel="noopener">{{ $t('llc.workItem.viewArtifact') }}</a>
             </div>
             <div v-if="artifacts.length === 0 && !isLoadingArtifacts" class="meta-empty">
               {{ $t('llc.workItem.noArtifacts') }}
@@ -223,21 +224,22 @@
         </template>
       </div>
     </div>
+  </BaseDrawer>
 
-    <HandoffModal
-      v-if="handoffDirection"
-      :work-item-id="props.item.id"
-      :company-id="props.companyId"
-      :direction="handoffDirection"
-      :agent-assignee-id="localItem.assignee_agent_id"
-      @close="handoffDirection = null"
-      @done="onHandoffDone"
-    />
-  </div>
+  <HandoffModal
+    v-if="handoffDirection"
+    :work-item-id="props.item.id"
+    :company-id="props.companyId"
+    :direction="handoffDirection"
+    :agent-assignee-id="localItem.assignee_agent_id"
+    @close="handoffDirection = null"
+    @done="onHandoffDone"
+  />
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { BaseDrawer } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
@@ -246,37 +248,15 @@ import { useCompanyPeople } from '@/composables/llc/useCompanyPeople'
 import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
 
 const logger = createLogger('WorkItemDetail')
+
+// Comments return with their read route (#18750): only POST .../comments is served, no GET.
+const COMMENTS_ENABLED = false
 const api = useApiClient()
 const { t } = useI18n()
 
 import type { WorkItem } from './workItemTypes'
-
-interface Comment {
-  id: string
-  body: string
-  author_name: string
-  author_type: 'human' | 'agent'
-  created_at: string
-}
-
-interface Artifact {
-  id: string
-  name: string
-  type: string
-  url: string
-}
-
-interface ActivityEvent {
-  id: string
-  actor_name: string
-  description: string
-  created_at: string
-}
-
-interface GoalAncestor {
-  id: string
-  title: string
-}
+import { commentAuthor, toArtifact, toActivityEvent } from './workItemDetailTypes'
+import type { Comment, Artifact, ActivityEvent, GoalAncestor, RawWorkProduct, RawActivityEntry } from './workItemDetailTypes'
 
 const props = defineProps<{
   item: WorkItem
@@ -294,7 +274,7 @@ const TABS = computed(() => [
   { key: 'artifacts', label: t('llc.workItem.tabArtifacts') },
   { key: 'activity', label: t('llc.workItem.tabActivity') },
   { key: 'handoff', label: t('llc.workItem.tabHandoff') },
-])
+].filter((tab) => COMMENTS_ENABLED || tab.key !== 'comments'))
 
 const activeTab = ref('details')
 const localItem = ref<WorkItem>({ ...props.item })
@@ -520,10 +500,9 @@ async function fetchComments() {
 async function fetchArtifacts() {
   isLoadingArtifacts.value = true
   try {
-    // GH#9851: backend names these "products" (work products), returned as
-    // {products:[...]}. The api client returns parsed JSON directly.
-    const result = await api.get<{ products: Artifact[] }>(`/api/llc/work-items/${props.item.id}/products`)
-    artifacts.value = result.products ?? []
+    // GH#9851: the backend calls these work "products" and returns {products:[...]}.
+    const result = await api.get<{ products: RawWorkProduct[] }>(`/api/llc/work-items/${props.item.id}/products`)
+    artifacts.value = (result.products ?? []).map(toArtifact)
   } catch (err) {
     logger.error('Failed to load artifacts', err)
   } finally {
@@ -535,8 +514,8 @@ async function fetchActivity() {
   isLoadingActivity.value = true
   try {
     // GH#9851: /activity returns an ActivityLogResponse ({items:[...]}).
-    const result = await api.get<{ items: ActivityEvent[] }>(`/api/llc/work-items/${props.item.id}/activity`)
-    activity.value = result.items ?? []
+    const result = await api.get<{ items: RawActivityEntry[] }>(`/api/llc/work-items/${props.item.id}/activity`)
+    activity.value = (result.items ?? []).map(toActivityEvent)
   } catch (err) {
     logger.error('Failed to load activity', err)
   } finally {
@@ -581,37 +560,18 @@ onMounted(() => {
   font-size: 0.8rem;
 }
 
-.work-item-detail-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.3);
-  display: flex;
-  justify-content: flex-end;
-  z-index: 60;
-}
 
-.detail-drawer {
-  width: 640px;
-  max-width: 90vw;
+/* Fills the kit drawer's body so the sections keep their own scrolling tab area. */
+.detail-body {
   height: 100%;
-  background: var(--bg-surface);
-  border-left: 1px solid var(--border-default);
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-.drawer-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid var(--border-default);
-  flex-shrink: 0;
-}
 
 .header-left {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: 0.5rem;
 }
@@ -622,24 +582,8 @@ onMounted(() => {
   color: var(--text-secondary);
 }
 
-.close-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 0.25rem;
-  color: var(--text-secondary);
-  border-radius: 0.25rem;
-  transition: background 0.15s;
-}
 
-.close-btn:hover {
-  background: var(--bg-hover);
-}
 
-.close-icon {
-  width: 1.25rem;
-  height: 1.25rem;
-}
 
 .goal-breadcrumb {
   display: flex;

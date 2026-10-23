@@ -94,6 +94,20 @@ function applyTheme(theme: Theme): void {
 
   // Also update color-scheme for native elements (scrollbars, form controls)
   document.documentElement.style.colorScheme = colorSchemeFor(effectiveTheme)
+
+  syncMetaThemeColor()
+}
+
+/**
+ * Keeps the mobile browser chrome (<meta name="theme-color">) on the active
+ * theme's surface. It reads the resolved token instead of naming a colour, so
+ * all four themes and any deployed one are covered. Moved here from
+ * useUserStore#applyTheme (#18240): this is the only place the theme is applied.
+ */
+function syncMetaThemeColor(): void {
+  const meta = document.querySelector('meta[name="theme-color"]')
+  const surface = getComputedStyle(document.documentElement).getPropertyValue('--bg-secondary').trim()
+  if (meta && surface) meta.setAttribute('content', surface)
 }
 
 /**

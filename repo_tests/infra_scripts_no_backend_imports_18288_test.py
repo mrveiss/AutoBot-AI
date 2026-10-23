@@ -226,6 +226,7 @@ _IMPORT = textwrap.dedent("""
     spec = importlib.util.spec_from_file_location("backend_tool_under_test", sys.argv[1])
     spec.loader.exec_module(importlib.util.module_from_spec(spec))
     print("IMPORTED")
+    print("SHARED", importlib.util.find_spec("autobot_shared") is not None)
     """)
 
 
@@ -247,6 +248,9 @@ def _clean_import(path: Path, cwd: Path) -> subprocess.CompletedProcess:
 def test_a_backend_tool_puts_the_backend_on_its_own_path(rel: str, tmp_path: Path) -> None:
     done = _clean_import(repo_root() / rel, tmp_path)
     assert done.returncode == 0 and "IMPORTED" in done.stdout, done.stderr[-800:]
+    # The backend itself imports `autobot_shared`, so a tool that only puts autobot-backend/ on its
+    # path imports cleanly here and dies the first time it runs a backend function (#18289).
+    assert "SHARED True" in done.stdout, "the tool does not put the repository root on its path (autobot_shared)"
 
 
 def test_contrast_a_backend_import_without_the_bootstrap_fails_clean(tmp_path: Path) -> None:

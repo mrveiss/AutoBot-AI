@@ -12,7 +12,6 @@ import uuid
 from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
-from knowledge_base import KnowledgeBase
 from orchestrator import get_orchestrator_sync as get_orchestrator
 from services.llm_service import get_llm_service
 from services.workflow_automation import (
@@ -42,7 +41,6 @@ class WorkflowCoordinator:
         self.base_manager = WorkflowAutomationManager()
         self.enhanced_orchestrator = get_orchestrator()
         self.llm_interface = get_llm_service()
-        self.knowledge_base = KnowledgeBase()
 
         # Specialized components (composition pattern)
         self.template_manager = TemplateManager()

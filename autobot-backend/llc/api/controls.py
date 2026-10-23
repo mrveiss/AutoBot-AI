@@ -29,9 +29,9 @@ from autobot_shared.singleton_factory import lazy_singleton
 from llc.deps import get_session, require_board_role
 
 from ..models.enums import MembershipRole
+from ..services.company import CompanyNotFoundError
 from ..services.controls_service import (
     AgentNotFoundError,
-    CompanyNotFoundError,
     ControlsService,
     SprintNotFoundError,
 )

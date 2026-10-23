@@ -191,7 +191,7 @@ import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { formatDate } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { useKnowledgeDeduplication } from '@/composables/knowledge/useKnowledgeDeduplication'
 

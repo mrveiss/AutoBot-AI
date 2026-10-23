@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 /**
  * LLMSettings - LLM Provider Configuration (#2371)
  *
@@ -13,7 +14,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import {
   useLlmConfigApi,
-  type LLMConfig,
+  type SlmLLMConfig,
   type LLMProviderConfig,
   type LLMTestResponse,
 } from '@/composables/useLlmConfigApi'
@@ -30,7 +31,7 @@ const testResult = ref<LLMTestResponse | null>(null)
 
 const activeTab = ref<'providers' | 'server' | 'models'>('providers')
 
-const config = reactive<LLMConfig>({
+const config = reactive<SlmLLMConfig>({
   active_provider: 'ollama',
   providers: [],
   ollama_host: '0.0.0.0',
@@ -195,21 +196,7 @@ onMounted(fetchConfig)
 <template>
   <div class="p-6 space-y-6">
     <!-- Messages -->
-    <div
-      v-if="error"
-      class="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-3"
-    >
-      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      {{ error }}
-      <button class="ml-auto text-red-500 hover:text-red-700" @click="error = null" :aria-label="$t('settings.admin.lLMSettings.dismissError')">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-    </div>
+    <BaseAlert v-if="error" variant="error" :message="error" dismissible :dismiss-label="$t('settings.admin.lLMSettings.dismissError')" @dismiss="error = null" />
 
     <div
       v-if="success"
@@ -223,24 +210,19 @@ onMounted(fetchConfig)
     </div>
 
     <!-- Test Result Banner -->
-    <div
+    <BaseAlert
       v-if="testResult"
-      class="p-4 rounded-lg flex items-center gap-3"
-      :class="testResult.success
-        ? 'bg-green-50 border border-green-200 text-green-700'
-        : 'bg-red-50 border border-red-200 text-red-700'"
+      :variant="testResult.success ? 'success' : 'error'"
+      dismissible
+      :dismiss-label="$t('settings.admin.lLMSettings.dismiss')"
+      @dismiss="testResult = null"
     >
       <span class="font-medium">{{ testResult.provider }}:</span>
       {{ testResult.message }}
       <span v-if="testResult.latency_ms" class="text-sm opacity-75">
         {{ $t('settings.llm.latencyMs', { ms: testResult.latency_ms }) }}
       </span>
-      <button class="ml-auto opacity-60 hover:opacity-100" @click="testResult = null" :aria-label="$t('settings.admin.lLMSettings.dismiss')">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-    </div>
+    </BaseAlert>
 
     <!-- Header -->
     <div class="flex items-center justify-between">

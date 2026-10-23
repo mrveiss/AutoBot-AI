@@ -447,7 +447,7 @@ These conflicts drive the default fleet layout:
 | **Node.js** | — |
 | **System packages** | `python3 python3-venv prometheus-node-exporter` |
 | **External deps** | SLM backend HTTPS (resolved from config, not hardcoded) |
-| **Ansible playbook** | `deploy-slm-agent.yml` |
+| **Ansible playbook** | `playbooks/deploy-slm-agent.yml` |
 | **Source path** | `autobot-slm-backend/slm/agent/` |
 | **Post-sync** | `pip install aiohttp psutil` |
 | **Heartbeat interval** | 30 seconds |

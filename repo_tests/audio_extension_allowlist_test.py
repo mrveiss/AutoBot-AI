@@ -130,6 +130,22 @@ def _tracked_python_files(root: Path = REPO_ROOT) -> list[Path]:
     return [root / line for line in result.stdout.splitlines() if line]
 
 
+def _swept_python_files(root: Path = REPO_ROOT) -> list[Path]:
+    """The files this sweep is MEANT to read: tracked Python minus its two exemptions (#16724).
+
+    The canonical definition and everything under ``repo_tests/`` (guards that name the
+    allowlist on purpose) are out of scope by design. They used to be discovered and then
+    ``continue``d past inside the test loop, so ~658 files were neither completed nor
+    declared skips; the gap blew through ``skips=300`` and left the floor a 2-file legal
+    range. Scoping them out of ``discover`` makes ``population`` the set the guard completes.
+    """
+    return [
+        path
+        for path in _tracked_python_files(root)
+        if path.relative_to(root) != _CANONICAL and path.relative_to(root).parts[0] != "repo_tests"
+    ]
+
+
 #: This sweep read every tracked file and asserted "no offenders" with no floor
 #: at all: a `git ls-files` that returned nothing — wrong cwd, a broken env, a
 #: partial checkout — passed having examined zero files (#15826).
@@ -193,7 +209,7 @@ def _tracked_python_files(root: Path = REPO_ROOT) -> list[Path]:
 # this run reported, which is also the strict (upward) direction for a reach floor.
 REACH = declare(
     "audio-extension-allowlist",
-    discover=_tracked_python_files,
+    discover=_swept_python_files,
     # Re-pinned 5450 -> 5752 (#17317), held at 5757 on the parent branch and at
     # 5764 here (#17305/#17306, #17307/#17308): one re-pin measured on three
     # trees a merge apart. #17317 read 6152 tracked python files, the parent
@@ -208,9 +224,27 @@ REACH = declare(
     # Re-pinned (#18293): REACH.window() gives [5900, 6300] against population 6600, but
     # completed() reaches only 6068 because more files are skipped than the declared 300.
     # 6000 clears the bottom band (>= 5940) and stays under what actually completes.
-    floor=6000,
+    # train-14b: population 6923 -> window [6223, 6623], completed() ~6355 (repo_tests/ skipped); 6309 is the
+    # middle of the legal overlap [6263, 6355].
+    # train-9c: population 6791 -> window [6091, 6491], completed() reaches 6236; 6183 is the middle of
+    # the legal overlap [6131, 6236]. train-8: population 6711 -> window [6011, 6411], completed 6167 (the loop skips
+    # repo_tests/, 544 files, past the declared skips=300). 6110 clears the bottom band (>= 6051) and
+    # stays under what completes; mid-window (6211) would fail every honest run.
+    # train-26: population 6972 -> window [6272, 6672], completed() ~6377 (594 repo_tests/ files skipped);
+    # 6344 is the middle of the legal overlap [6312, 6377].
+    # train-33: population 7017 -> window [6317, 6717], completed() 6408; 6382 is the middle of [6357, 6408].
+    # train-36: population 7045 -> window [6345, 6745], completed() 6434; 6409 is the middle of [6385, 6434].
+    # security train (#18904): population 7093 -> window [6393, 6793], completed() 6472; 6452 is the middle of [6433, 6472].
+    # train-51: population 7163 -> 6517, the middle of [6503, 6532].
+    # #16724: discover() now excludes the canonical file and repo_tests/ (the sweep's by-design
+    # exemptions, 1 + 657 files), so population == what the loop can complete. Measured on this tree:
+    # tracked python 7254 -> population 6596 (6598 on train 76's tree); unreadable 0, unparseable 0
+    # (an unparseable file fails the test outright), so skips=0 and completed() == population.
+    # Window [6196, 6596]; floor=6396 is mid-window: ~200 files of headroom from the bottom and
+    # under completed(), so ordinary growth or shrink no longer forces a re-pin every train.
+    floor=6396,
     growth=400,
-    skips=300,
+    skips=0,
     what="tracked python files",
 )
 
@@ -287,8 +321,6 @@ def test_no_fourth_literal_copy_exists():
     unparsed = []
     for path in REACH.examined(REPO_ROOT):
         rel = path.relative_to(REPO_ROOT)
-        if rel == _CANONICAL or rel.parts[0] == "repo_tests":
-            continue
         try:
             source = path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError):

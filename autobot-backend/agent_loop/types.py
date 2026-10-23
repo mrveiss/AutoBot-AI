@@ -548,8 +548,7 @@ class TaskContext:
         observations only, preventing unbounded saturation on long tasks.
         Issue #6627.
         """
-        from agent_loop.fingerprint import content_hash as _hash
-        from agent_loop.fingerprint import normalize_content, tokenize
+        from agent_loop.fingerprint import normalize_content, normalized_content_hash, tokenize
 
         normalized = normalize_content(content)
         new_tokens = tokenize(normalized)
@@ -564,7 +563,7 @@ class TaskContext:
         self._token_windows.append(frozenset(new_tokens))
         fp = ObservationFingerprint(
             iteration=iteration,
-            content_hash=_hash(content),
+            content_hash=normalized_content_hash(content),
             content_size=len(normalized),
             novel_token_ratio=ratio,
         )

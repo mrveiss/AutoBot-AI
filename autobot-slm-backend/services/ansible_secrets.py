@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 # when injected into a playbook run.
 #
 # "hf_token"               -> tts_hf_token  (HuggingFace token for TTS worker)
+# "prometheus_scrape_token" -> prometheus_scrape_token (#16375)
 # "autobot_internal_api_key" -> autobot_internal_api_key
 #     Internal API key shared between SLM backend and main backend (#1779,
 #     #3512).  Stored via the SLM secrets UI; injected as an Ansible extra_var
@@ -33,6 +34,10 @@ logger = logging.getLogger(__name__)
 _SECRET_TO_ANSIBLE_VAR: dict[str, str] = {
     "hf_token": "tts_hf_token",  # nosec B105  # dict maps secret DB key names to Ansible variable names, not credential
     "autobot_internal_api_key": "autobot_internal_api_key",
+    # #16375: generated once at SLM startup (services.generated_system_secrets);
+    # rendered into backend.env (verifier) and the monitoring role's
+    # bearer_token_file (presenter), so both sides carry one value.
+    "prometheus_scrape_token": "prometheus_scrape_token",  # nosec B105  # key names, not a credential
 }
 
 # Maps a managed secret key to the role name(s) that can receive it via the

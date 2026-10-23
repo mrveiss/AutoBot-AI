@@ -233,6 +233,10 @@ class _SynthesisThroughput:
             logger.debug("TTS first-chunk metrics unavailable", exc_info=True)
 
 
+class TTSReferenceAudioRejected(RuntimeError):
+    """The worker could not decode the reference audio (HTTP 422): the client's file, not a server fault (#18477)."""
+
+
 class TTSStreamUnsupported(RuntimeError):
     """The worker does not serve ``/tts/synthesize/stream`` (#12886).
 
@@ -447,6 +451,8 @@ class TTSClient:
         ) as resp:
             if resp.status != 200:
                 body = await resp.text()
+                if resp.status == 422:
+                    raise TTSReferenceAudioRejected(f"Voice create rejected the reference audio: {body}")
                 raise RuntimeError(f"Voice create error {resp.status}: {body}")
             return await resp.json()
 

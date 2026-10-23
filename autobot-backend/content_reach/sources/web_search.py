@@ -20,7 +20,7 @@ import httpx
 from autobot_shared.logging_manager import get_logger
 from content_reach._http import http_get
 from content_reach.backends.browser import BrowserSearchBackend
-from content_reach.base import BackendError, ContentBackend, ContentRequest, ContentResult
+from content_reach.base import BackendError, ContentBackend, ContentReachResult, ContentRequest
 from content_reach.chain import ContentSourceChain
 from source_attribution import SourceKind, SourceReliability
 
@@ -59,7 +59,7 @@ class DdgsBackend(ContentBackend):
             logger.warning("ddgs not installed; DdgsBackend unavailable")
             return False
 
-    async def fetch(self, request: ContentRequest) -> ContentResult:
+    async def fetch(self, request: ContentRequest) -> ContentReachResult:
         """Fetch web-search results via DDGS.text(); raise BackendError when empty."""
         if DDGS is not None:
             ddgs_cls = DDGS
@@ -81,7 +81,7 @@ class DdgsBackend(ContentBackend):
         text_lines = [f"{r.get('title', '')} — {r.get('href', '')}\n{r.get('body', '')}" for r in raw_results]
         text = "\n\n".join(text_lines)
 
-        return ContentResult(
+        return ContentReachResult(
             success=True,
             source_type=self.source_type,
             backend_used=self.name,
@@ -111,7 +111,7 @@ class JinaSearchBackend(ContentBackend):
         """Return True — Jina search is a plain HTTP endpoint, always available."""
         return True
 
-    async def fetch(self, request: ContentRequest) -> ContentResult:
+    async def fetch(self, request: ContentRequest) -> ContentReachResult:
         """GET https://s.jina.ai/<query>; raise BackendError on non-200 or empty body."""
         encoded_query = quote_plus(request.query)
         url = f"{_JINA_SEARCH_BASE}{encoded_query}"
@@ -129,7 +129,7 @@ class JinaSearchBackend(ContentBackend):
         if not text:
             raise BackendError(f"JinaSearchBackend: empty response for query {request.query!r}")
 
-        return ContentResult(
+        return ContentReachResult(
             success=True,
             source_type=self.source_type,
             backend_used=self.name,

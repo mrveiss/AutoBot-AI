@@ -3,6 +3,22 @@
 > Every claim in this doc (CI status, "done", a check's outcome) follows the
 > **Verification** rule in `CLAUDE.md`: paste the command and its output, never assert.
 
+## PR granularity
+
+- **Batch same-scope issues into one PR by default** — one CI suite per batch, not per issue. Each issue must still be *fully* delivered; partial delivery never closes. Independent or different-risk changes get separate PRs, as does anything too large for one honest review pass. Write **one `Closes #N` per line** — `Closes #A, #B` links only #A.
+- **Finish what you started — append before you open** (owner rule 2026-09-19). Before opening a new PR, check for an open PR the change can be appended to (same scope, risk, owner) and append; fix and land existing PRs before opening new ones; finish started issues before starting new ones.
+- **Issues touching the same file go in ONE PR, solved by ONE agent** (owner rule 2026-09-18). Hub files — registries, ratchet baselines, `.secrets.baseline`, `.github/`, `CLAUDE.md` — are exempt; one agent may split sequentially, the next PR opening after the previous merges. Check the open PRs touching a file before editing it.
+- **A pushed PR ends the tick — never wait on its CI.** Pushing is the sweep point: check every *other* in-flight PR once (approval gate, CI verdict, behind-ness), act on what is green or red, then start the next non-colliding scoped issue immediately. The PR just pushed is re-checked at the next sweep, never polled.
+
+**The PR-granularity rules agree on "fewer PRs" and disagree on the unit.** Resolve in this order:
+
+    same file      -> ONE PR, ONE agent        (strongest: avoids conflicts, not just CI cost)
+    same scope     -> batch into one PR
+    same issue     -> one branch, never split
+    already open   -> append rather than open a new one
+
+When two apply, the **earlier line wins**. Hub files (listed above) are exempt from the file rule.
+
 ## Self-review before pushing: known self-inflicted patterns
 
 Clustered from reviewer-caught defects across the last 20 merged PRs (#16860–#16973). This is
