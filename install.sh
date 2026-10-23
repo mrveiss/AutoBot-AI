@@ -77,7 +77,7 @@ VALIDATE=false
 CONFIRM_YES=false
 ROTATE_SECRETS=false  # #7075: --rotate-secrets opts in to replacing existing SLM_ADMIN_PASSWORD
 INSTALL_TMP="" ADMIN_PASSWORD_GENERATED=false ADMIN_PASSWORD_PRESERVED=false  # #19236: private temp dir; print the password only if generated. PRESERVED: a reinstall kept the stored one
-GIT_BRANCH="${DEFAULT_BRANCH}"
+GIT_BRANCH=""  # empty until --branch=, AUTOBOT_INSTALL_BRANCH, unattended or the prompt sets it -- a default here made the prompt unreachable (#7060, #19403)
 ADMIN_PASSWORD=""
 OVERRIDE_IP=""  # --ip= override for multi-interface hosts (#2832)
 
