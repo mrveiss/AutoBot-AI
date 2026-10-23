@@ -19,6 +19,12 @@ describe('TruncationNotice', () => {
     expect(mountNotice({ shown: 5, total: 5 }).find('.truncation-notice').exists()).toBe(false)
   })
 
+  it('renders nothing exactly at the limit, and the notice appears one item past it', () => {
+    expect(mountNotice({ shown: 20, total: 20, step: 20 }).find('.truncation-notice').exists()).toBe(false)
+    expect(mountNotice({ shown: 20, total: 20, step: 20, serverLimited: true }).find('.truncation-notice').exists()).toBe(false)
+    expect(mountNotice({ shown: 20, total: 21, step: 20 }).get('[data-testid="truncation-show-more"]').text()).toBe('Show 1 more')
+  })
+
   it('is a button that emits show-more, offering at most one step', async () => {
     const w = mountNotice({ shown: 20, total: 25, step: 20 })
     expect(w.get('[data-testid="truncation-count"]').text()).toBe('Showing 20 of 25')
