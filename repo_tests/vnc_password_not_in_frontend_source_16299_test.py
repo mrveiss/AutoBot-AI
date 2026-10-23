@@ -49,7 +49,8 @@ def _frontend_source_files(root) -> list[str]:
 REACH = declare(
     "vnc-password-not-in-frontend-source",
     discover=_frontend_source_files,
-    floor=1411,
+    # train-85b: population 1556 -> window [1406, 1556]; 1411 sat in the bottom band, re-pinned mid-window.
+    floor=1481,
     growth=150,
     skips=0,
     what="frontend .vue/.ts/.js source files",
