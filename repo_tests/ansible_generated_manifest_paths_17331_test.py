@@ -282,7 +282,7 @@ _UNRESOLVED_SITES = {
     "(asserted by test_the_patching_template_declares_no_includes)",
     (
         "backend_services/tasks/main.yml",
-        "/opt/autobot/app/requirements.txt",
+        "{{ autobot.base_dir }}/app/requirements.txt",  # #18882: the site spells the root via autobot.base_dir
     ): "/opt/autobot/app is a synchronize of autobot-slm-backend/, not a repo-mirrored path; its includes resolve "
     "to the staged files (the role stages first). Install-before-copy ordering is #17896",
 }
