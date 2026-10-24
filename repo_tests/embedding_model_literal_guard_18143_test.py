@@ -48,7 +48,6 @@ ALLOWED: dict[str, str] = {
     _SSOT: "ssot default of the active model (DEFAULT_EMBEDDING_MODEL)",
     "autobot-backend/api/analytics_embedding_patterns.py": _PRICING,
     "autobot-backend/api/embeddings.py": _CATALOGUE + " (embedding provider/model listing)",
-    "autobot-backend/api/llm.py": _CATALOGUE + " (llm model list)",
     "autobot-backend/models/npu_models.py": _CATALOGUE + " (loaded_models status payload)",
     "autobot-backend/services/model_manager_service.py": _CATALOGUE + " (capability table by name prefix)",
     "autobot-backend/services/knowledge/doc_indexer.py": _DIMS
