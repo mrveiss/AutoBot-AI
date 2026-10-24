@@ -19,6 +19,7 @@ import aiofiles
 import yaml
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.system_knowledge_paths import system_knowledge_dirs
 from autobot_shared.time_utils import utc_timestamp
 from intelligence.os_detector import get_os_detector
 from utils.command_utils import execute_command
@@ -331,7 +332,7 @@ class ManPageKnowledgeIntegrator:
     def __init__(self):
         """Initialize knowledge integrator (Issue #398: refactored)."""
         self.parser = RenderedManPageParser()
-        self.knowledge_base_dir = Path("data/system_knowledge")
+        self.knowledge_base_dir = system_knowledge_dirs().runtime
         self.man_cache_dir = self.knowledge_base_dir / "man_pages"
         self.man_cache_dir.mkdir(parents=True, exist_ok=True)
         self.priority_commands = self._get_priority_commands()
@@ -546,7 +547,6 @@ class ManPageKnowledgeIntegrator:
 
     async def _save_as_knowledge_yaml(self, man_info: ManPageInfo):
         """Save man page as knowledge YAML file"""
-        # Determine the appropriate knowledge directory
         machine_dir = self.knowledge_base_dir / "machines" / (man_info.machine_id or "default")
         man_knowledge_dir = machine_dir / "man_pages"
         # Issue #358 - avoid blocking

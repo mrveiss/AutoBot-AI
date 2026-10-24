@@ -86,6 +86,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 2  # #19283: down-only ratchets read the base commit (HEAD^1)
 
       - uses: ./.github/actions/setup-python-suite
 

@@ -277,14 +277,9 @@ class KnowledgeBaseCore:
         Returns:
             Resolved embedding model name
         """
-        stored_model = await self._detect_stored_embedding_model()
-        if stored_model:
-            logger.info("Using stored embedding model for consistency: %s", stored_model)
-            return stored_model
+        from knowledge.embedding_model_resolution import resolve_kb_embedding_model
 
-        embed_model_name = ssot_config.llm.embedding_model
-        logger.info("Using embedding model from config: %s", embed_model_name)
-        return embed_model_name
+        return resolve_kb_embedding_model(await self._detect_stored_embedding_model())
 
     async def _configure_llama_index(self):
         """Configure LlamaIndex with explicit SSOT settings.

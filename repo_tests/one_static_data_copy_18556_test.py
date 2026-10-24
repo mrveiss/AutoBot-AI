@@ -21,15 +21,18 @@ points at lands instead of rotting into a licence for a file that is gone.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 from typing import Iterable
 
 import pytest
+import yaml
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 from autobot_shared.paths import scrubbed_git_env
+from autobot_shared.system_knowledge_paths import SYSTEM_KNOWLEDGE_RUNTIME_REL, SYSTEM_KNOWLEDGE_TEMPLATES_REL
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 #: guarded basename -> the ONLY tracked paths allowed to carry it.
@@ -62,10 +65,11 @@ _ALLOWED: dict[str, frozenset[str]] = {
     # loader-incompatible file that overwrote it) is removed.
     "llm_models.yaml": frozenset({"autobot-backend/config/llm_models.yaml"}),
 }
-#: #18577: the system-knowledge templates live ONLY under autobot-backend/resources/knowledge
-#: (``autobot_shared.system_knowledge_paths``). ``data/system_knowledge`` is the managers' RUNTIME
-#: dir (data/* is gitignored), so nothing under it may be tracked: a second template tree.
-_RUNTIME_ONLY_PREFIX = "data/system_knowledge/"
+#: #18577: the system-knowledge templates live ONLY under the template dir of
+#: ``autobot_shared.system_knowledge_paths``. Its runtime dir is where the managers write their
+#: copies (data/* is gitignored), so nothing under it may be tracked: a second template tree.
+_TEMPLATES_PREFIX = f"{SYSTEM_KNOWLEDGE_TEMPLATES_REL.as_posix()}/"
+_RUNTIME_ONLY_PREFIX = f"{SYSTEM_KNOWLEDGE_RUNTIME_REL.as_posix()}/"
 #: Roots that hold an allowed file today: the reach claim (every one must be populated).
 _ROOTS = ("autobot-backend", "autobot-slm-backend", "autobot-infrastructure", "autobot-monitoring")
 #: Whole-repo pathspecs: a copy outside every root above must still be seen.
@@ -85,7 +89,7 @@ def _violations(paths: Iterable[str]) -> list[str]:
     paths = list(paths)
     present = {rel for rel in paths if _name(rel) in _ALLOWED}
     found = [
-        f"{rel}: tracked under the runtime-only {_RUNTIME_ONLY_PREFIX} (templates live in autobot-backend/resources/knowledge)"
+        f"{rel}: tracked under the runtime-only {_RUNTIME_ONLY_PREFIX} (templates live in {_TEMPLATES_PREFIX})"
         for rel in sorted(rel for rel in paths if rel.startswith(_RUNTIME_ONLY_PREFIX))
     ]
     found += [
@@ -209,10 +213,177 @@ def test_a_global_ignore_rule_cannot_untrack_a_file_in_the_throwaway_tree(tmp_pa
 @pytest.mark.parametrize(
     "returned",
     [
-        "data/system_knowledge/tools/file_analysis.yaml",
-        "data/system_knowledge/.imported",
-        "data/system_knowledge/workflows/brand_new_but_drifted.yaml",
+        f"{_RUNTIME_ONLY_PREFIX}tools/file_analysis.yaml",
+        f"{_RUNTIME_ONLY_PREFIX}.imported",
+        f"{_RUNTIME_ONLY_PREFIX}workflows/brand_new_but_drifted.yaml",
     ],
 )
 def test_contrast_a_tracked_runtime_system_knowledge_file_fails(returned: str) -> None:
     assert any(v.startswith(f"{returned}: tracked under the runtime-only") for v in _violations([*_CLEAN, returned]))
+
+
+# --------------------------------------------------------------------------------------------------
+# #19310: ONE template tree, recognised by CONTENT. The basename guard above sees a copy only at a
+# path it already names; a template tree re-added under any other directory passed it.
+# --------------------------------------------------------------------------------------------------
+
+#: The import's template schema (``SystemKnowledgeManager``): a ``metadata`` mapping beside a
+#: ``tools`` list (tool templates) or an ``objective`` (workflow and procedure templates).
+_TEMPLATE_BODY_KEYS = frozenset({"tools", "objective"})
+
+
+def _is_template(text: str) -> bool:
+    """Whether ``text`` parses as one system-knowledge template, whatever its path or name."""
+    if "metadata:" not in text:  # cheap pre-filter; the parse below decides
+        return False
+    try:
+        doc = yaml.safe_load(text)
+    except yaml.YAMLError:  # multi-document or Jinja YAML: not loadable by the import either
+        return False
+    return isinstance(doc, dict) and isinstance(doc.get("metadata"), dict) and bool(_TEMPLATE_BODY_KEYS & doc.keys())
+
+
+def _templates(root: Path) -> list[str]:
+    """Every tracked YAML in the repository whose content is a template."""
+    try:
+        tracked = tracked_paths(root, "*.yaml", "*.yml")
+    except EmptyEnumeration:
+        return []
+    return [rel for rel in tracked if _is_template((root / rel).read_text(encoding="utf-8", errors="replace"))]
+
+
+def _template_violations(templates: Iterable[str]) -> list[str]:
+    return [
+        f"{rel}: a system-knowledge template outside {_TEMPLATES_PREFIX} -- a second template tree"
+        for rel in sorted(templates)
+        if not rel.startswith(_TEMPLATES_PREFIX)
+    ]
+
+
+TEMPLATES = declare(
+    "one-system-knowledge-template-tree",
+    discover=_templates,
+    # Measured 2026-10-23: 14 tracked templates, all under the template dir; window [12, 14].
+    floor=13,
+    what="tracked YAML files whose content is a system-knowledge template",
+    roots=(SYSTEM_KNOWLEDGE_TEMPLATES_REL.parts[0],),
+    growth=2,
+)
+
+
+def test_system_knowledge_templates_live_in_one_tree() -> None:
+    found = _template_violations(TEMPLATES.examined(repo_root()))
+    assert not found, f"#19310: {found}"
+
+
+_TOOL_TEMPLATE = "metadata:\n  category: file_analysis\ntools:\n  - name: file\n"
+_WORKFLOW_TEMPLATE = 'metadata:\n  name: "Incident Response"\nobjective: "Respond"\n'
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        (_TOOL_TEMPLATE, True),
+        (_WORKFLOW_TEMPLATE, True),
+        ("metadata:\n  name: x\nspec:\n  replicas: 1\n", False),  # metadata without a template body
+        ("tools:\n  - name: file\n", False),  # body without metadata
+        ("metadata: {a: 1}\n---\ntools: []\n", False),  # multi-document
+        ("collections:\n  facts: {}\n", False),
+    ],
+)
+def test_contrast_template_recognition(text: str, expected: bool) -> None:
+    assert _is_template(text) is expected
+
+
+def test_contrast_a_template_tree_readded_at_a_new_path_fails(tmp_path: Path) -> None:
+    """End to end: the copy carries no guarded basename and sits outside every guarded prefix."""
+    canonical = {f"{_TEMPLATES_PREFIX}tools/file_analysis.yaml": _TOOL_TEMPLATE.encode()}
+    clean, dirty = tmp_path / "clean", tmp_path / "dirty"
+    _tracked_tree(clean, canonical)
+    copy = "system_knowledge/tools/renamed_drifted.yml"
+    _tracked_tree(dirty, {**canonical, copy: (_TOOL_TEMPLATE + "  - name: binwalk\n").encode()})
+    assert _template_violations(_templates(clean)) == []
+    assert [v for v in _template_violations(_templates(dirty)) if v.startswith(f"{copy}: a system-knowledge template")]
+
+
+# --------------------------------------------------------------------------------------------------
+# #19310: the runtime dir is spelled ONCE, in ``autobot_shared/system_knowledge_paths.py``. A
+# relative literal elsewhere resolves against the working directory instead of the project root.
+# --------------------------------------------------------------------------------------------------
+
+_PATHS_MODULE = "autobot_shared/system_knowledge_paths.py"
+#: The runtime dir (or its ``_backups`` sibling) as one string, or its two segments joined by
+#: ``/`` or ``,``. Written here only through the constant, so this file passes its own scan.
+_DATA, _SK = SYSTEM_KNOWLEDGE_RUNTIME_REL.parts
+_RUNTIME_LITERAL = re.compile(r"""\bdata(?:/|["']\)?\s*[/,]\s*["'])system_knowledge""")
+#: Every tracked text type the literal could be written in.
+_TEXT_PATTERNS = tuple(
+    f"*.{ext}"
+    for ext in (
+        "py", "ts", "js", "mjs", "vue", "md", "sh", "yml", "yaml", "j2",
+        "json", "toml", "txt", "conf", "service", "ini", "cfg", "html",
+    )
+)  # fmt: skip
+
+
+def _text_files(root: Path) -> list[str]:
+    try:
+        return tracked_paths(root, *_TEXT_PATTERNS)
+    except EmptyEnumeration:
+        return []
+
+
+def _all_tracked(root: Path) -> int:
+    try:
+        return len(tracked_paths(root))
+    except EmptyEnumeration:
+        return 0
+
+
+def _literal_hits(rel: str, text: str) -> list[str]:
+    return [
+        f"{rel}:{n}: {line.strip()}" for n, line in enumerate(text.splitlines(), 1) if _RUNTIME_LITERAL.search(line)
+    ]
+
+
+#: Measured 2026-10-23: 12,073 text files of 12,318 tracked (0.980).
+TEXT_FILES = declare(
+    "system-knowledge-runtime-literal-scan",
+    discover=_text_files,
+    reference=_all_tracked,
+    min_fraction=0.9,
+    what="tracked text files scanned for a hand-spelled system-knowledge runtime path",
+)
+
+
+def test_the_runtime_dir_is_spelled_only_in_the_paths_module() -> None:
+    root = repo_root()
+    found = [
+        hit
+        for rel in TEXT_FILES.examined(root)
+        if rel != _PATHS_MODULE
+        for hit in _literal_hits(rel, (root / rel).read_text(encoding="utf-8", errors="replace"))
+    ]
+    assert not found, f"#19310: resolve it through system_knowledge_dirs(): {found}"
+
+
+def test_the_paths_module_still_spells_it() -> None:
+    """Control: the exempt module is the one place the literal is written, so the scan can see it."""
+    assert _literal_hits(_PATHS_MODULE, (repo_root() / _PATHS_MODULE).read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize(
+    ("line", "expected"),
+    [
+        (f'self.knowledge_base_dir = Path("{_DATA}/{_SK}")', True),
+        (f'root / "{_DATA}" / "{_SK}" / "autobot_identity.md"', True),
+        (f"path.join(PROJECT_ROOT, '{_DATA}', '{_SK}')", True),
+        (f'Path("{_DATA}") / "{_SK}"', True),
+        (f'Path("{_DATA}/{_SK}_backups")', True),
+        ("from autobot_shared.system_knowledge_paths import system_knowledge_dirs", False),
+        ('Path("metadata/system_knowledge")', False),
+        ('Path("data") / "conversations"', False),
+    ],
+)
+def test_contrast_runtime_literal_recognition(line: str, expected: bool) -> None:
+    assert bool(_RUNTIME_LITERAL.search(line)) is expected

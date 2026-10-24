@@ -802,6 +802,9 @@ jobs:
     - name: The open CodeQL alert backlog may not grow (#15333, #17300)
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # #18123 review: on pull_request GITHUB_SHA is the MERGE commit, which analyses are
+        # recorded against -- but check runs attach to the PR HEAD. The check-run reads use this.
+        CODEQL_CHECK_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       run: |
         set -euo pipefail
         # BLOCKING, and in this job rather than in codeql.yml on purpose: this is

@@ -20,8 +20,6 @@ from repo_tests._hardcoded_colour_baseline import (
     EXEMPT_BASENAMES,
     HARDCODED_COLOUR_LITERALS,
     IMPORTANT_DECLARATIONS,
-    TOTAL_IMPORTANT,
-    TOTAL_OCCURRENCES,
 )
 from repo_tests._hardcoded_colour_detect import (
     _FRONTEND,
@@ -40,6 +38,7 @@ from repo_tests._hardcoded_colour_detect import (
     _token_redefinitions,
 )
 from repo_tests._paths import repo_root
+from repo_tests._ratchet_base import base_table, raised_entries
 
 
 @pytest.fixture(scope="module")
@@ -52,6 +51,11 @@ def measured() -> dict[str, int]:
 @pytest.fixture(scope="module")
 def measured_important() -> dict[str, int]:
     return _scan_important_all(repo_root())
+
+
+def _base_table(name: str) -> dict:
+    """*name* from the colour baseline at the base commit and the anchor (see base_table)."""
+    return base_table(repo_root(), ("repo_tests/_hardcoded_colour_baseline.py",), name)
 
 
 class TestTheDetectorWorksBeforeItsOutputIsRead:
@@ -132,8 +136,10 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
 
 
 class TestTheBaselineIsInternallyConsistent:
-    def test_the_total_matches_the_entries(self):
-        assert TOTAL_OCCURRENCES == sum(HARDCODED_COLOUR_LITERALS.values())
+    def test_no_entry_rose_against_the_base(self):
+        """#19283: a raised or added entry fails against the base table, not a hand total."""
+        rose = raised_entries(HARDCODED_COLOUR_LITERALS, _base_table("HARDCODED_COLOUR_LITERALS"))
+        assert not rose, f"colour entries raised or added against the base (base, now): {rose}"
 
     def test_no_entry_is_zero(self):
         assert [f for f, n in HARDCODED_COLOUR_LITERALS.items() if n <= 0] == []
@@ -186,14 +192,9 @@ class TestThePopulationOnlyShrinks:
         new = sorted(set(measured) - set(HARDCODED_COLOUR_LITERALS))
         assert not new, f"these colours are written but never resolved from a token: {new}"
 
-    def test_the_total_never_rises(self, measured):
-        assert sum(measured.values()) <= TOTAL_OCCURRENCES
-
     def test_a_tokenised_colour_is_removed_from_the_baseline(self, measured):
         stale = sorted(f for f in HARDCODED_COLOUR_LITERALS if f not in measured)
-        assert (
-            not stale
-        ), f"these colours are fully tokenised now -- delete their entries and lower TOTAL_OCCURRENCES: {stale}"
+        assert not stale, f"these colours are fully tokenised now -- delete their entries: {stale}"
 
 
 class TestTheSharedNotificationSourceStaysShared:
@@ -246,8 +247,10 @@ class TestTheImportantPopulationOnlyShrinks:
             "'nothing was read', not 'nothing was found'"
         )
 
-    def test_the_total_matches_the_entries(self):
-        assert TOTAL_IMPORTANT == sum(IMPORTANT_DECLARATIONS.values())
+    def test_no_entry_rose_against_the_base(self):
+        """#19283: a raised or added entry fails against the base table, not a hand total."""
+        rose = raised_entries(IMPORTANT_DECLARATIONS, _base_table("IMPORTANT_DECLARATIONS"))
+        assert not rose, f"!important entries raised or added against the base (base, now): {rose}"
 
     def test_the_sweep_covers_the_control_plane_too(self, measured_important):
         # #17567: the AC is both frontends. The control plane's keys carry a
@@ -279,12 +282,9 @@ class TestTheImportantPopulationOnlyShrinks:
         new = sorted(set(measured_important) - set(IMPORTANT_DECLARATIONS))
         assert not new, f"new files using !important: {new}"
 
-    def test_the_total_never_rises(self, measured_important):
-        assert sum(measured_important.values()) <= TOTAL_IMPORTANT
-
     def test_a_cleared_file_is_removed_from_the_baseline(self, measured_important):
         stale = sorted(f for f in IMPORTANT_DECLARATIONS if f not in measured_important)
-        assert not stale, f"clean now -- delete their entries and lower TOTAL_IMPORTANT: {stale}"
+        assert not stale, f"clean now -- delete their entries: {stale}"
 
 
 class TestFormTwoStaysAbsent:

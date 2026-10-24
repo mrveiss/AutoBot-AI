@@ -35,5 +35,5 @@ RATCHET_BASELINE: dict[str, int] = {
     # pipeline, so it can neither source a helper nor be split.
     "install.sh": 1169,  # #18653: the uninstaller moved to scripts/uninstall.sh; single-file installer cannot be split
     "scripts/lib/hardcoded-value-rules.sh": 842,
-    "scripts/pr-preflight.sh": 818,
+    "scripts/pr-preflight.sh": 815,
 }

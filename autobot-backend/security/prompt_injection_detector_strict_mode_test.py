@@ -130,7 +130,7 @@ def _strict_mode_calls(source: str) -> list[ast.expr]:
 #:
 #: Worth knowing before trusting a local run of this floor: `declare(...)` here
 #: registers into the shared REGISTRY that `repo_tests/reach_declarations_test.py`
-#: parametrises over, but that file's `_import_every_guard` only imports modules
+#: parametrises over, but the sweep's `import_every_guard` only imports modules
 #: under `repo_tests/`. This declaration therefore reaches the sweep only when
 #: something else in the same pytest session has already imported THIS module --
 #: true in CI's whole-suite run, false when `repo_tests/` is run alone, where the
