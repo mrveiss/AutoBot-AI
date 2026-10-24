@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import base64
 import re
+from pathlib import Path
 
 import jinja2
 import yaml
@@ -40,9 +41,8 @@ def _constrained_installed(constraints_text: str, freeze: list[str]) -> list[str
     """Render the role's own set_fact expressions, with stubs for the Ansible-only filters."""
     task = _task("Name the constrained packages")
     env = jinja2.Environment()
-    # Plain jinja2 unescapes the literal '\1' to "\x01"; Ansible's templating passes "\1" through.
-    # Map it back so this renders the logic; the backreference's spelling is pinned separately below.
-    env.filters["regex_replace"] = lambda v, pattern, repl: re.sub(pattern, repl.replace("\x01", "\\1"), v)
+    env.filters["regex_replace"] = lambda v, pattern, repl: re.sub(pattern, repl, v)
+    env.filters["regex_search"] = lambda v, pattern: (m.group(0) if (m := re.search(pattern, v)) else None)
     env.filters["b64decode"] = lambda v: base64.b64decode(v).decode("utf-8")
     scope = {
         "_constraints_file": {"content": base64.b64encode(constraints_text.encode()).decode()},
@@ -77,14 +77,48 @@ def test_a_constrained_package_the_venv_lacks_is_never_added() -> None:
     assert _constrained_installed(text, freeze) == ["numpy", "file-lock"]
 
 
-def test_the_backreference_is_spelled_the_way_ansible_honours() -> None:
-    """Verified with real ansible-playbook (#19428): in this folded scalar a backreference written
-    with a DOUBLED backslash reaches regex_replace as two backslashes, and every name rendered as a
-    literal backslash-one; a SINGLE backslash captures the name. A jinja2 stub cannot tell the two
-    apart, so the spelling is pinned here."""
+def test_the_name_extraction_uses_no_regex_backreference() -> None:
+    """A backreference's escaping depends on the YAML scalar style and the templating layer (a doubled
+    backslash rendered every name as a literal backslash-one under real Ansible), so the names are
+    taken with regex_search and no replacement string at all."""
     task_vars = _task("Name the constrained packages")["vars"]
     for var in ("_constrained_names", "_installed_names"):
-        assert "'\\1'" in task_vars[var] and "'\\\\1'" not in task_vars[var], task_vars[var]
+        assert "map('regex_search', '^[A-Za-z0-9][A-Za-z0-9._-]*') | select" in task_vars[var], task_vars[var]
+        assert "\\1" not in task_vars[var], task_vars[var]
+
+
+def _passes_constraints(extra_args: str) -> bool:
+    return re.search(r"(^|\s)-c \{\{ constraints_path \}\}(\s|$)", extra_args) is not None
+
+
+def test_the_constraints_flag_detector_refuses_a_missing_or_wrong_flag() -> None:
+    assert _passes_constraints("{{ pip_extra_args }} -c {{ constraints_path }}")
+    for bad in (
+        "{{ pip_extra_args }}",
+        "{{ pip_extra_args }} -c /opt/other/constraints.txt",
+        "{{ pip_extra_args }} -c{{ constraints_path }}",
+        "{{ pip_extra_args }} -r {{ constraints_path }}",
+    ):
+        assert not _passes_constraints(bad), bad
+
+
+def test_a_held_package_under_an_upper_bound_is_included_so_pip_can_move_it_down() -> None:
+    """Documented behaviour: the install moves a held package to what the file allows, an upper bound
+    included (numpy <3.0.0), not only up to a floor."""
+    assert _constrained_installed("numpy>=2.5.4,<3.0.0\n", ["numpy==3.1.0"]) == ["numpy"]
+
+
+def test_the_role_stages_the_ssot_before_reading_it() -> None:
+    """patch-dependencies.yml can reach a node update-all-nodes.yml never staged the file on."""
+    names = [t.get("name", "") for t in _tasks()]
+    stage = next(i for i, n in enumerate(names) if "Stage the shared constraints SSOT" in n)
+    read = next(i for i, n in enumerate(names) if "Read the shared constraints SSOT" in n)
+    assert stage < read
+    copy = _tasks()[stage]["ansible.builtin.copy"]
+    assert copy == {"src": "{{ constraints_source }}", "dest": "{{ constraints_path }}", "mode": "0644"}
+    defaults = yaml.safe_load((_ROLE / "defaults" / "main.yml").read_text(encoding="utf-8"))
+    rel = defaults["constraints_source"].replace("{{ role_path }}", str(_ROLE))
+    assert Path(rel).resolve() == _CONSTRAINTS.resolve(), rel
 
 
 def test_the_install_constrains_against_the_ssot_read_on_the_node() -> None:
@@ -92,7 +126,7 @@ def test_the_install_constrains_against_the_ssot_read_on_the_node() -> None:
     slurp = _task("Read the shared constraints SSOT")["ansible.builtin.slurp"]
     assert slurp["src"] == "{{ constraints_path }}"
     install = _task("Install security updates")["ansible.builtin.pip"]
-    assert re.search(r"(^|\s)-c \{\{ constraints_path \}\}(\s|$)", install["extra_args"]), install["extra_args"]
+    assert _passes_constraints(install["extra_args"]), install["extra_args"]
     template = (_ROLE / "templates" / "requirements-security-update.txt.j2").read_text(encoding="utf-8")
     assert "{% for package in constrained_installed %}" in template
 
