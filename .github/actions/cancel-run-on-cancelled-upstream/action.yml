@@ -52,6 +52,14 @@ runs:
           *" cancelled "*) ;;
           *) echo "no upstream was cancelled; the gate reads its verdict as usual"; exit 0 ;;
         esac
+        # A job that exceeded its timeout-minutes can also read `cancelled` in needs.<job>.result,
+        # but the jobs API keeps it apart as `timed_out`. A hung upstream is a real defect: fail red.
+        timed_out=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs?per_page=100" --paginate \
+          --jq '.jobs[] | select(.conclusion == "timed_out") | .name')
+        if [ -n "$timed_out" ]; then
+          echo "::error::upstream job(s) timed out, which is a failure, not a parked run: ${timed_out//$'\n'/, } (#17764)"
+          exit 1
+        fi
         echo "::notice::An upstream job was cancelled (the run was parked or superseded), so this gate has no verdict. Cancelling the run: the gate ends cancelled, not failed, and still blocks merge until a real run exists (#17764)."
         gh api -X POST "repos/$REPO/actions/runs/$RUN_ID/force-cancel" >/dev/null
         sleep "$WAIT_SECONDS"
