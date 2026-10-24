@@ -12,7 +12,7 @@ import { BaseAlert } from '@autobot/ui'
  * Values are stored encrypted at rest and never displayed.
  */
 
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   useSecretsApi,
@@ -27,6 +27,7 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 const success = ref<string | null>(null)
 const secrets = ref<SecretResponse[]>([])
+const secretsLoaded = ref(false)
 
 // Apply-secrets propagation (#11719): which keys have a dependent-role
 // mapping, and the outcome of the last "Apply to services" run.
@@ -43,6 +44,33 @@ const newSecret = ref<SecretCreate>({
   description: '',
 })
 
+// Known secrets the SLM expects an operator to set (#19120). A missing one is
+// listed so the operator can add it; a human supplies the value -- this page
+// never generates one.
+const EXPECTED_SECRETS = [
+  {
+    key: 'slm_hmac_api_key_secret',
+    category: 'system',
+    descriptionKey: 'settings.admin.secretsSettings.expectedHashingPepper',
+  },
+]
+
+const missingExpected = computed(() =>
+  secretsLoaded.value
+    ? EXPECTED_SECRETS.filter((e) => !secrets.value.some((s) => s.key === e.key))
+    : []
+)
+
+function setExpected(entry: (typeof EXPECTED_SECRETS)[number]): void {
+  newSecret.value = {
+    key: entry.key,
+    value: '',
+    category: entry.category,
+    description: t(entry.descriptionKey),
+  }
+  showAddForm.value = true
+}
+
 const editingKey = ref<string | null>(null)
 const editValue = ref('')
 
@@ -57,7 +85,9 @@ async function fetchSecrets(): Promise<void> {
   error.value = null
   try {
     secrets.value = await api.listSecrets()
+    secretsLoaded.value = true
   } catch (e: unknown) {
+    secretsLoaded.value = false
     const err = e as { response?: { data?: { detail?: string } } }
     error.value =
       err.response?.data?.detail || t('settings.admin.secretsSettings.failedToLoadSecrets')
@@ -267,6 +297,25 @@ onMounted(() => {
           {{ saving ? $t('settings.admin.secretsSettings.saving') : $t('settings.admin.secretsSettings.createSecret') }}
         </button>
       </div>
+    </div>
+
+    <!-- Known secrets that are not set yet (#19120) -->
+    <div
+      v-for="entry in (loading ? [] : missingExpected)"
+      :key="entry.key"
+      class="p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between gap-4"
+    >
+      <div>
+        <p class="text-sm font-mono font-medium text-amber-900">{{ entry.key }}</p>
+        <p class="text-sm text-amber-800">{{ $t(entry.descriptionKey) }}</p>
+        <p class="text-xs text-amber-700 mt-1">{{ $t('settings.admin.secretsSettings.expectedMissing') }}</p>
+      </div>
+      <button
+        class="px-3 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 text-sm font-medium shrink-0"
+        @click="setExpected(entry)"
+      >
+        {{ $t('settings.admin.secretsSettings.expectedSetValue') }}
+      </button>
     </div>
 
     <!-- Loading -->

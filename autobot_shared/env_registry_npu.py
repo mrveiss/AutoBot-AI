@@ -78,6 +78,24 @@ _register(
     "slm",
 )
 _register(
+    "SLM_AUTH_LOOKUP_CACHE_TTL",
+    float,
+    60.0,
+    "Seconds an SLM process reuses its resolved API-key hashing setting (#19120); other workers follow within it.",
+    "slm",
+)
+_register(
+    "SLM_HMAC_API_KEY_SECRET",
+    str,
+    "",
+    (
+        "One-time import source for the API-key pepper (#16299, #19120). The pepper lives in "
+        "the SLM secrets store (secret slm_hmac_api_key_secret); this value is imported into it "
+        "when the store has none. No default: with neither set, creating a key fails closed."
+    ),
+    "slm",
+)
+_register(
     "SLM_USERS_DATABASE_URL",
     str,
     None,

@@ -436,7 +436,9 @@ appears outside the known overlays.
 | `NPU_WORKER_HOST` | npu | str | `'0.0.0.0'` | Legacy, ambiguous name. In the worker it is the BIND address, used only when NPU_WORKER_BIND_HOST is unset. Connect-side readers use AUTOBOT_NPU_WORKER_HOST (ssot); `autobot doctor` still honours this name as a connect host when that is unset, mapping a 0.0.0.0 bind value to loopback. |
 | `NPU_WORKER_PORT` | npu | int | `8081` | Port the NPU worker listens on (worker) and that `autobot doctor` probes. AUTOBOT_NPU_WORKER_PORT is the ssot alias and wins in doctor; this bare name is still honoured so existing deployments keep working. |
 | `OPENAI_API_KEY` | image_generation | str | *(none)* | OpenAI image API key for the image-generation plugin. Environment fallback only: credentials belong in the secrets service. |
+| `SLM_AUTH_LOOKUP_CACHE_TTL` | slm | float | `60.0` | Seconds an SLM process reuses its resolved API-key hashing setting (#19120); other workers follow within it. |
 | `SLM_ENCRYPTION_KEY` | slm | str | `""` | Key for SLM data-at-rest encryption. Empty and unset are equivalent (not configured). |
+| `SLM_HMAC_API_KEY_SECRET` | slm | str | `""` | One-time import source for the API-key pepper (#16299, #19120). The pepper lives in the SLM secrets store (secret slm_hmac_api_key_secret); this value is imported into it when the store has none. No default: with neither set, creating a key fails closed. |
 | `SLM_NODE_ID` | slm | str | `'00-SLM-Manager'` | Node id. The SLM backend uses it as the manager's own registry id (default shown). slm/agent/agent.py accepts --node-id. The agent refuses to start without one. |
 | `SLM_SECRET_KEY` | slm | str | `""` | SLM JWT signing secret. Empty and unset are equivalent (both mean not configured). |
 | `SLM_USERS_DATABASE_URL` | slm | str | *(none)* | SQLAlchemy DSN of the SLM admin-users database. Unset falls back to the slm_users database on the colocated PostgreSQL. |

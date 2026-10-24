@@ -271,10 +271,10 @@ class Settings(RedactedReprMixin, BaseSettings):
     # HTTP connect+read timeout for JWKS endpoint calls (seconds).
     jwks_fetch_timeout_seconds: float = float(os.getenv("SLM_JWKS_FETCH_TIMEOUT", "10"))
 
-    # HMAC signing key for API key hashing (#2160).
-    # Default preserves backward compatibility with existing hashed keys.
-    # Override in production via SLM_HMAC_API_KEY_SECRET env var.
-    hmac_api_key_secret: str = os.getenv("SLM_HMAC_API_KEY_SECRET", "autobot-api-key-v1")
+    # API-key pepper (#2160, #16299, #19120). The pepper lives in the SLM secrets
+    # store (services/api_key_pepper.py); this env value is only a one-time import
+    # source for installs that already have it. No in-repo default.
+    hmac_api_key_secret: str = os.getenv("SLM_HMAC_API_KEY_SECRET", "")
 
     # Encryption for sensitive data (credentials, etc.)
     encryption_key: str = os.getenv("SLM_ENCRYPTION_KEY", "")
