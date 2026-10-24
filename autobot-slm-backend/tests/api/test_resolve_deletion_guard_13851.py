@@ -483,3 +483,76 @@ def test_slm_frontend_a_genuinely_removed_source_file_is_still_reported(tmp_path
     with real_rsync():
         ok, deletions, _ = _run(_preview_rsync_deletions(cmd))
     assert (ok, deletions) == (True, ["ServicesView.vue"])
+
+
+# ---------------------------------------------------------------------------
+# #19443: host-generated paths are declared ONCE per component
+# (deploy_artifacts.HOST_GENERATED_PATHS) and the delete-style resolve consults
+# that map for every component, not the SLM frontend alone.
+# ---------------------------------------------------------------------------
+
+_RETIRED_DIRS = ("retired_a", "retired_b")
+
+
+def _preview(tmp_path: Path, component: str, dep: Path) -> tuple[bool, list[str]]:
+    src = tmp_path / "src"
+    src.mkdir(exist_ok=True)
+    cmd = _rsync_local_cmd(str(tmp_path), component, [], source_dir=str(src), dest_dir=str(dep))
+    with real_rsync():
+        ok, deletions, _ = _run(_preview_rsync_deletions(cmd))
+    return ok, deletions
+
+
+@_needs_rsync
+def test_user_frontend_staged_release_is_never_deleted(tmp_path, real_deployment_map) -> None:
+    dep = tmp_path / "dep"
+    for build in ("dist-20261024T075022249Z", "dist-20261024T070000000Z"):
+        _write(dep / build / "index.html", b"<html></html>")
+    (dep / "current").symlink_to("dist-20261024T075022249Z")
+    (dep / "previous").symlink_to("dist-20261024T070000000Z")
+    assert _preview(tmp_path, "autobot-frontend", dep) == (True, [])
+
+
+@_needs_rsync
+def test_backend_generated_files_are_kept_and_retired_paths_still_listed(tmp_path, real_deployment_map) -> None:
+    dep = tmp_path / "dep"
+    _write(dep / ".validation_vars", b"A=1")
+    _write(dep / "filtered-requirements.txt", b"x==1")
+    for retired in _RETIRED_DIRS:
+        _write(dep / retired / "mod.py", b"x = 1")
+    ok, deletions = _preview(tmp_path, "autobot-backend", dep)
+    assert ok
+    assert ".validation_vars" not in deletions and "filtered-requirements.txt" not in deletions
+    assert all(any(d == r or d.startswith(f"{r}/") for d in deletions) for r in _RETIRED_DIRS), deletions
+
+
+def test_host_generated_map_lookup() -> None:
+    da = _REAL_DC.deploy_artifacts
+    assert da.is_host_generated("autobot-frontend", "dist-20261024T0/assets/a.js")
+    assert da.is_host_generated("autobot-frontend", "current")
+    assert da.is_host_generated("autobot-slm-frontend", "previous")
+    assert da.is_host_generated("autobot-backend", ".validation_vars")
+    assert da.is_host_generated("autobot-backend", "filtered-requirements.txt")
+    assert not da.is_host_generated("autobot-backend", "current")
+    assert not da.is_host_generated("autobot-backend", "retired_a/mod.py")
+    assert not da.is_host_generated("autobot-frontend", "src/components/base/X.vue")
+
+
+def test_host_generated_map_has_one_definition_and_no_component_predicate() -> None:
+    """A second per-component generated-path predicate fails here (#19443)."""
+    import re
+
+    root = Path(__file__).resolve().parents[2]
+    offenders = []
+    for sub in ("services", "api"):
+        for py in (root / sub).glob("*.py"):
+            if py.name.endswith("_test.py") or py.name.startswith("test_"):
+                continue
+            text = py.read_text(encoding="utf-8")
+            if py.name != "deploy_artifacts.py" and re.search(r"^HOST_GENERATED_PATHS\b", text, re.M):
+                offenders.append(f"{py.name}: second map")
+            if re.search(r"component\s*==\s*[\"']autobot-slm-frontend[\"'].*(startswith|_BUILD_PREFIX|RELEASE)", text):
+                offenders.append(f"{py.name}: component-specific release predicate")
+            if "is_release_artifact" in text or "SLM_FRONTEND_RELEASE_EXCLUDES" in text:
+                offenders.append(f"{py.name}: removed per-component predicate")
+    assert not offenders, offenders
