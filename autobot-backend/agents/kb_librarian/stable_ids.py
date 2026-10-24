@@ -138,36 +138,48 @@ async def store_or_update_fact(
     return _checked(result, f"storing {ref.fact_id}")
 
 
+def _unresolved(ref: Any, dup_id: str, why: str, *args: Any) -> Dict[str, Any]:
+    """Leave the item unlinked: a warning with both ids (never content), not a retry-causing failure."""
+    logger.warning("Item %s matched fact %s " + why + "; left unlinked", ref.stable_id, dup_id, *args)
+    return {"status": "success", "action": "unresolved", "fact_id": dup_id}
+
+
+def _system_writable(found: Any) -> bool:
+    """Whether the matched fact may take a system import's write: read back, and no principal holds it."""
+    from knowledge.ownership_index import is_ownerless_platform_fact  # lazy: pulls the ownership stack
+
+    # A record with no metadata dict is unreadable, not ownerless: the predicate reads None as {} (#19296).
+    meta = found.get("metadata") if isinstance(found, dict) else None
+    return isinstance(meta, dict) and is_ownerless_platform_fact(meta)
+
+
 async def _adopt_duplicate(knowledge_base: Any, result: Dict[str, Any], metadata: Dict[str, Any], ref: Any):
     """The KB matched the new body to an existing fact (exact hash or semantic): link it as the item.
 
-    The fact's text, type and name are never rewritten. If it is already of the item's kind (same
-    ``type``, same or absent name) the link id (and the name, when absent) is merged in, so the next
-    run's ``load()`` finds it and writes nothing. If it is a fact of another kind (a semantic match
-    can be) or cannot be read back, ONLY the link id is merged: it stays invisible to ``load()``, so a
-    later template-changed import re-checks that item once more -- imports run only when the file-state
-    hash changes, so that cost is accepted.
+    Text, type and name are never rewritten. Same kind (same ``type``, same or absent name): the link id
+    (and the name, when absent) is merged in, so the next ``load()`` finds it and writes nothing. Another
+    kind (a semantic match can be): ONLY the link id is merged; ``load()`` does not see it, so a later
+    template-changed import re-checks that item once more -- an accepted cost.
 
-    A duplicate already linked to a DIFFERENT item is not written to: the item is reported ``unresolved``
-    (a warning, not a failure, so nothing retries it).
+    Reported ``unresolved`` and never written (#19296, #19216): a fact a user, org, group or share holds,
+    or one not readable to check that; and one already linked to a DIFFERENT item.
     """
     dup_id = result.get("fact_id")
     if not dup_id or dup_id == "?":
         raise SystemFactStoreError(f"storing {ref.fact_id} reported a duplicate without its id: {result}")
-    name_field = next(f for t, f in _KIND_METADATA.values() if t == metadata["type"])
     found = await asyncio.to_thread(knowledge_base.get_fact, dup_id)
-    held = (found or {}).get("metadata") or {}
-    same_kind = held.get("type") == metadata["type"] and held.get(name_field) in (None, metadata[name_field])
+    if not _system_writable(found):
+        return _unresolved(ref, dup_id, "held by a principal or unreadable")  # a system job never writes it
+    held = found.get("metadata") or {}
     linked_to = held.get(LINK_FIELD)
-    if linked_to and linked_to != ref.stable_id:
-        # Already another item's fact: writing would steal the link and the two items would flip-flop forever.
-        logger.warning("Item %s matched fact %s linked to %s; left unlinked", ref.stable_id, dup_id, linked_to)
-        return {"status": "success", "action": "unresolved", "fact_id": dup_id}
+    if linked_to and linked_to != ref.stable_id:  # stealing the link would flip-flop the two items forever
+        return _unresolved(ref, dup_id, "linked to %s", linked_to)
+    name_field = next(f for t, f in _KIND_METADATA.values() if t == metadata["type"])
     merge: Dict[str, Any] = {LINK_FIELD: ref.stable_id}
-    if same_kind and held.get(name_field) is None:
-        merge[name_field] = metadata[name_field]
-    if not same_kind:
+    if held.get("type") != metadata["type"] or held.get(name_field) not in (None, metadata[name_field]):
         logger.info("Item %s matched fact %s of another kind; linked only", ref.stable_id, dup_id)
+    elif held.get(name_field) is None:
+        merge[name_field] = metadata[name_field]
     return _checked(await knowledge_base.update_fact(dup_id, metadata=merge), f"linking duplicate {dup_id}")
 
 

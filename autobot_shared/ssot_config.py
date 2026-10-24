@@ -51,7 +51,7 @@ from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from autobot_shared.env_utils import env_int_clamped
-from autobot_shared.paths import project_root
+from autobot_shared.paths import install_base_dir, project_root
 from autobot_shared.secret_redaction import RedactedReprMixin
 from autobot_shared.ssot_llm_oauth_config import LlmOAuthConfig
 from autobot_shared.ssot_tls import TLSConfig, TLSMode
@@ -1273,7 +1273,7 @@ class PathConfig(RedactedSettings):
     # ansible/roles/backend/templates/backend.env.j2), so this default only
     # governs the *unset* case — a developer running from a checkout, who must
     # resolve into the checkout rather than into the live install.
-    base_dir: str = Field(default_factory=lambda: str(project_root()), alias="AUTOBOT_BASE_DIR")
+    base_dir: str = Field(default_factory=lambda: str(install_base_dir()), alias="AUTOBOT_BASE_DIR")
 
     # Well-known sub-directories (all relative to base_dir unless absolute).
     # Override individual paths via AUTOBOT_PLUGINS_DIR etc. when needed.

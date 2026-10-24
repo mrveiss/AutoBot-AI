@@ -21,6 +21,7 @@ from typing import Optional
 from pydantic import ConfigDict, field_validator
 from pydantic_settings import BaseSettings
 
+from autobot_shared.fleet_constants import DEFAULT_HEARTBEAT_INTERVAL
 from autobot_shared.secret_redaction import RedactedReprMixin
 from user_management.config import get_autobot_db_config, get_slm_db_config
 
@@ -415,7 +416,7 @@ class Settings(RedactedReprMixin, BaseSettings):
     )
 
     # Health checks
-    heartbeat_interval: int = 30  # seconds
+    heartbeat_interval: int = DEFAULT_HEARTBEAT_INTERVAL  # seconds; the agent's default too (#18094)
     health_check_timeout: int = 10  # seconds
     unhealthy_threshold: int = 3  # missed heartbeats
 

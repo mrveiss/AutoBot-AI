@@ -45739,7 +45739,7 @@ export interface paths {
          *         ```json
          *         {
          *             "service": "GraphRAGService",
-         *             "graph_weight": 0.3,
+         *             "graph_weight": "<RAGConfig.graph_weight>",
          *             "entity_extraction_enabled": true,
          *             "rag_service": {
          *                 "enable_advanced_rag": true,
@@ -77592,10 +77592,9 @@ export interface components {
             start_entity?: string | null;
             /**
              * Max Depth
-             * @description Maximum traversal depth (1-3 hops)
-             * @default 2
+             * @description Hops (1-3); None = RAGConfig.graph_traversal_depth
              */
-            max_depth: number;
+            max_depth?: number | null;
             /**
              * Max Results
              * @description Maximum number of results to return
@@ -77658,10 +77657,7 @@ export interface components {
              * @default
              */
             service: string;
-            /**
-             * Graph Weight
-             * @default 0
-             */
+            /** Graph Weight */
             graph_weight: number;
             /**
              * Entity Extraction Enabled
