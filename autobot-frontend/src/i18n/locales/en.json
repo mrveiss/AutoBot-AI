@@ -8574,6 +8574,7 @@
       "hireAgent": "Hire Agent",
       "loading": "Loading…",
       "empty": "No people or agents found.",
+      "companyUnresolved": "Could not determine which company this org chart belongs to.",
       "retry": "Retry",
       "agentDetail": "Agent Detail",
       "personDetail": "Person Detail",
