@@ -42,7 +42,7 @@ from knowledge.index_embedding_space import (
     index_embedding_space,
     require_query_dim,
 )
-from knowledge.serving import servable_response
+from knowledge.quarantine import servable_unquarantined
 from knowledge_factory import get_knowledge_base_async
 
 # Issue #387: GPU-accelerated vector search
@@ -345,7 +345,7 @@ class NPUSemanticSearch:
             return await self._search_with_llamaindex(query, similarity_top_k), "knowledge_base"
 
         logger.warning("Vector store not available, using basic search fallback")
-        basic_results = await self.knowledge_base.search(query, similarity_top_k, filters, "text")
+        basic_results = await self.knowledge_base.search(query, top_k=similarity_top_k, filters=filters, mode="text")
         return self._convert_basic_results(basic_results, "cpu_fallback"), "cpu_fallback"
 
     def _hybrid_populated(self) -> bool:
@@ -362,7 +362,7 @@ class NPUSemanticSearch:
         hits, hybrid_metrics = await self.hybrid_search.search(
             query_embedding=embedding, top_k=top_k, metadata_filter=filters, include_documents=True
         )
-        return servable_response(self._convert_hybrid_results(hits, hybrid_metrics, device)), device
+        return servable_unquarantined(self._convert_hybrid_results(hits, hybrid_metrics, device)), device
 
     async def _create_search_metrics(
         self,
@@ -392,7 +392,7 @@ class NPUSemanticSearch:
     ) -> Tuple[List[NpuSearchResult], SearchMetrics]:
         """Handle search error with fallback."""
         logger.error("❌ Enhanced search failed: %s", error)
-        basic_results = await self.knowledge_base.search(query, similarity_top_k, filters, "auto")
+        basic_results = await self.knowledge_base.search(query, top_k=similarity_top_k, filters=filters, mode="auto")
         fallback_results = self._convert_basic_results(basic_results, "fallback")
         total_time = (time.time() - start_time) * 1000
 
@@ -583,7 +583,7 @@ class NPUSemanticSearch:
             )
             for node in getattr(response, "source_nodes", None) or []
         ]
-        return servable_response(results)  # #18820: source_nodes bypass KB.search
+        return servable_unquarantined(results)  # #18820: source_nodes bypass KB.search
 
     async def _get_hardware_utilization(self) -> Dict[str, float]:
         """Get current hardware utilization metrics."""
@@ -621,7 +621,7 @@ class NPUSemanticSearch:
         if cache_key in self.search_results_cache:
             (results, metrics), timestamp = self.search_results_cache[cache_key]
             if time.time() - timestamp < self.cache_ttl_seconds:
-                return servable_response(results), metrics
+                return servable_unquarantined(results), metrics
             del self.search_results_cache[cache_key]  # expired cache entry
         return None
 
@@ -726,7 +726,7 @@ class NPUSemanticSearch:
                 device_used=embedding_device,
                 hardware_utilization={},
             )
-            out[orig_idx] = (servable_response(results), metrics)  # #18820: bypasses KB.search
+            out[orig_idx] = (servable_unquarantined(results), metrics)  # #18820: bypasses KB.search
 
         return out
 
@@ -1381,7 +1381,7 @@ class NPUSemanticSearch:
                 n_results=limit,
                 include=["metadatas", "documents", "distances"],
             )
-            modality_results = servable_response(_convert_chroma_results(search_results, modality, threshold))
+            modality_results = servable_unquarantined(_convert_chroma_results(search_results, modality, threshold))
             logger.info(f"Found {len(modality_results)} results in {modality} collection")
             return modality_results
         except Exception as e:

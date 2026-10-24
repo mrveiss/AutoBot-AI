@@ -43,6 +43,10 @@ _RAG_CACHE = (
     "(sha256 of user, org, groups and the kb:acl_epoch), and its hit is post-filtered by RAGService (#16664)"
 )
 _RAW_ADMIN = "ADMIN_ONLY: raw KB-collection read reachable only behind an admin gate"
+_RAW_ADMIN_NO_QUARANTINE = (
+    "ADMIN_ONLY: the reindex job feeds chunk text to an LLM, so it reads through "
+    "knowledge.quarantine.without_quarantine -- a research-quarantined chunk is never enriched (#19163)"
+)
 _ORPHAN_REPAIR = (
     "ADMIN_ONLY: #16927 orphan-repair reads a fact's own metadata to judge/reassign it; "
     "reachable only through api/admin_orphan_repair.py's router-level "
@@ -178,12 +182,13 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ),
     ("autobot-backend/async_chat_workflow.py", "AsyncChatWorkflow._execute_kb_search"): _T2,
     (
-        "autobot-backend/knowledge/adapters/okf_adapter.py",
-        "OKFAdapter.export_from_kb",
+        "autobot-backend/knowledge/quarantine.py",
+        "read_every_fact",
     ): (
-        "NOT_USER_FACING: no caller anywhere in the tree besides its own test and the "
-        "module-level export_to_okf() re-export, which is itself uncalled outside tests "
-        "(#16665) -- not reachable from any route, CLI entry point, or scheduled task"
+        "NOT_USER_FACING: the backup and export serialisers read every fact through the audited "
+        "include_quarantined opt-out (one audit entry per read; the read fails closed if it cannot be "
+        "written) and write operator files or return an admin-gated export; nothing reaches a chat or "
+        "prompt (#19163)"
     ),
     (
         "autobot-backend/knowledge/vector_search_engine.py",
@@ -230,11 +235,14 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     # --- raw ChromaDB reads on KB-content collections (#16667 part 3, classified 2026-09-14) ---
     ("autobot-backend/api/knowledge_chroma.py", "list_documents"): _EXPLORER,
     ("autobot-backend/api/knowledge_chroma.py", "search_collection"): _EXPLORER,
-    ("autobot-backend/knowledge/facts.py", "FactsMixin._find_duplicate"): _IMPL_DEDUP,
+    ("autobot-backend/knowledge/facts.py", "FactsMixin._find_duplicate"): (
+        _IMPL_DEDUP + "; the query uses without_quarantine, so a quarantined fact is neither a duplicate nor "
+        "has its id returned to the store caller (#19163)"
+    ),
     ("autobot-backend/knowledge/search.py", "SearchMixin._query_chromadb"): _IMPL_SEARCH,
-    ("autobot-backend/api/knowledge_maintenance.py", "_fetch_all_chunks._load"): _RAW_ADMIN,
-    ("autobot-backend/api/knowledge_vectorization.py", "_fetch_chunks_by_ids"): _RAW_ADMIN,
-    ("autobot-backend/api/knowledge_vectorization.py", "_fetch_unenriched_ids"): _RAW_ADMIN,
+    ("autobot-backend/api/knowledge_lint_chunks.py", "_fetch_all_chunks._load"): _RAW_ADMIN,
+    ("autobot-backend/api/knowledge_vectorization.py", "_fetch_chunks_by_ids"): _RAW_ADMIN_NO_QUARANTINE,
+    ("autobot-backend/api/knowledge_vectorization.py", "_fetch_unenriched_ids"): _RAW_ADMIN_NO_QUARANTINE,
     ("autobot-backend/knowledge/summary_search.py", "SummarySearchService.search_summaries"): _SUMMARIES,
     ("autobot-backend/knowledge/summary_search.py", "SummarySearchService.get_document_overview"): _SUMMARIES,
     ("autobot-backend/knowledge/summary_search.py", "SummarySearchService.drill_down"): _SUMMARIES,

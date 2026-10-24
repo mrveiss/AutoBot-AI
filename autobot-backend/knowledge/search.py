@@ -31,8 +31,8 @@ from typing import TYPE_CHECKING, Any, Dict, List, Set
 from autobot_shared.error_boundaries import error_boundary
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults
+from knowledge.quarantine import gate_response, require_audit_actor, store_side_where
 
-# Issue #5064: prompt-injection sanitizer applied pre-embedding.
 # Issue #5064: prompt-injection sanitizer applied pre-embedding.
 from knowledge.query_sanitizer import sanitize_query as _sanitize_query
 
@@ -46,6 +46,7 @@ from knowledge.search_components import (
     get_reranker,
 )
 from knowledge.search_components.basic_vector_search import BasicVectorSearchMixin
+from knowledge.search_components.helpers import map_kb_result_to_dict  # noqa: F401 -- re-exported for callers (#10740)
 from knowledge.search_components.helpers import (
     build_search_result,
     decode_redis_hash,
@@ -54,7 +55,6 @@ from knowledge.search_components.helpers import (
     score_fact_by_terms,
 )
 from knowledge.search_components.hybrid_search import HybridSearcher
-from knowledge.serving import servable_response
 
 # Issue #3828: canonical vector search engine — SearchMixin.search() delegates here.
 from models.task_context import SearchContext
@@ -71,20 +71,6 @@ _decode_redis_hash = decode_redis_hash
 _matches_category = matches_category
 _score_fact_by_terms = score_fact_by_terms
 _build_search_result = build_search_result
-
-
-def map_kb_result_to_dict(raw: Dict[str, Any]) -> Dict[str, Any]:
-    """Map one raw KB search row to the canonical result shape. Issue #10740.
-
-    Keys: content, source (node_id with doc_id fallback), score, metadata.
-    Single-item mapper; callers apply it with a list comprehension.
-    """
-    return {
-        "content": raw.get("content", ""),
-        "source": raw.get("node_id", raw.get("doc_id", "")),
-        "score": raw.get("score", 0.0),
-        "metadata": raw.get("metadata", {}),
-    }
 
 
 class SearchMixin(BasicVectorSearchMixin):
@@ -215,21 +201,25 @@ class SearchMixin(BasicVectorSearchMixin):
             return []
         return await self._execute_vector_search(sanitized, top_k, filters=filters)
 
-    async def search(self, *args: Any, include_unservable: bool = False, **kwargs: Any) -> Any:
-        """The one KB read every caller goes through: dispatch, then the serving predicate (#18820).
+    async def search(
+        self,
+        *args: Any,
+        include_unservable: bool = False,
+        include_quarantined: bool = False,
+        audit_actor: str | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """The one KB read every caller goes through: dispatch, then the serving (#18820) and quarantine (#19163) check.
 
-        ``knowledge.serving`` decides which facts may reach chat grounding or LLM context. It is
-        applied here, once, to whatever any mode returned -- basic (a list), enhanced and advanced
-        (a response dict, including its clusters) -- so no caller has to remember a ``where`` clause
-        for it. ``include_unservable=True`` is the explicit opt-out for a reader whose job is to
-        see rejected, expired or not-yet-valid facts; it is never a default. Arguments are those of
-        :meth:`_dispatch_search`.
-
-        A response dict is filtered after its mode paginated, so a page can come back shorter than
-        ``limit`` when a hit was withheld; ``total_count`` is reduced to match.
+        Applied once to what any mode returned (basic list, enhanced/advanced dict); basic also gets the
+        store-side ``where``. ``include_unservable=True`` opts out of the serving predicate;
+        ``include_quarantined=True`` is the ONLY way to receive quarantined facts and needs ``audit_actor``
+        (one audit entry: who, count, ids). Neither is a default; a page may be shorter than ``limit``.
         """
+        require_audit_actor(include_quarantined, audit_actor)
+        kwargs.update(include_unservable=include_unservable, include_quarantined=include_quarantined)
         response = await self._dispatch_search(*args, **kwargs)
-        return response if include_unservable else servable_response(response)
+        return await gate_response(response, include_unservable, include_quarantined, audit_actor)
 
     async def _dispatch_search(  # noqa: PLR0913
         self,
@@ -259,6 +249,8 @@ class SearchMixin(BasicVectorSearchMixin):
         exclude_sources: List[str] | None = None,
         verified_only: bool = False,
         session_id: str | None = None,
+        include_unservable: bool = False,
+        include_quarantined: bool = False,
     ):
         """Canonical KB search — consolidates basic, enhanced, and advanced paths (#10666).
 
@@ -333,7 +325,8 @@ class SearchMixin(BasicVectorSearchMixin):
                 board_id=board_id,
             )
 
-        return await self._search_basic(query, top_k, similarity_top_k, filters)
+        where = store_side_where(filters, include_unservable, include_quarantined)
+        return await self._search_basic(query, top_k, similarity_top_k, where)
 
     async def _get_query_embedding(self, query: str) -> List[float]:
         """Get embedding for query, using cache when available.
