@@ -22,15 +22,14 @@ from pydantic import BaseModel, Field
 from typing_extensions import Annotated
 
 from autobot_shared.async_compat import fire_and_forget
+from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
 from services.ansible_utils import _extract_failure_summary
 from services.auth import get_current_user
 from services.playbook_output_stream import PIPE_LINE_LIMIT, iter_pipe_lines
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/infrastructure", tags=["infrastructure"])
-
-# Directory where infrastructure playbooks are stored
-PLAYBOOKS_DIR = os.getenv("SLM_INFRASTRUCTURE_PLAYBOOKS_DIR", "/opt/autobot/autobot-slm-backend/ansible")
+# Playbooks resolve through _ansible_dir() (the executor's directory, #14351); #18094 retired PLAYBOOKS_DIR.
 
 
 class PlaybookCategory(str, Enum):
@@ -368,7 +367,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         playbook_file="backup-node-data.yml",
         target_hosts=["all"],
         variables={
-            "backup_dir": "/opt/autobot/backups",
+            "backup_dir": f"{FLEET_INSTALL_ROOT}/backups",
             "include_models": True,
         },
         estimated_duration="10-30 minutes (depends on data size)",
@@ -607,8 +606,8 @@ def _get_ansible_environment():
     env.update(
         {
             "ANSIBLE_CONFIG": str(_ansible_dir() / "ansible.cfg"),
-            "ANSIBLE_HOME": "/opt/autobot/.ansible",
-            "ANSIBLE_LOCAL_TEMP": "/opt/autobot/.ansible/tmp",
+            "ANSIBLE_HOME": f"{FLEET_INSTALL_ROOT}/.ansible",
+            "ANSIBLE_LOCAL_TEMP": f"{FLEET_INSTALL_ROOT}/.ansible/tmp",
         }
     )
     return env

@@ -89,11 +89,11 @@
     group: autobot
     mode: '0755'
   loop:
-    - /opt/autobot
-    - /opt/autobot/logs
-    - /opt/autobot/data
-    - /opt/autobot/config
-    - /opt/autobot/scripts
+    - "{{ autobot.base_dir }}"
+    - "{{ autobot.base_dir }}/logs"
+    - "{{ autobot.base_dir }}/data"
+    - "{{ autobot.base_dir }}/config"
+    - "{{ autobot.base_dir }}/scripts"
   become: true
   tags: ['common', 'directories']
 

@@ -143,9 +143,20 @@ jobs:
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip setuptools wheel
-        python -m pip install pip-audit bandit safety
+        # #19426: the scanners live in their OWN venv. pip-audit audits an
+        # installed environment, so installing them beside the project put the
+        # scanners' dependencies in the audited set — safety pins
+        # `filelock<4.0`, which held a vulnerable filelock in place and failed
+        # the audit for a package the project does not choose. The audit below
+        # points pip-audit at the project interpreter via PIPAPI_PYTHON_LOCATION.
+        python -m venv "$RUNNER_TEMP/scanners"
+        "$RUNNER_TEMP/scanners/bin/python" -m pip install --upgrade pip
+        "$RUNNER_TEMP/scanners/bin/python" -m pip install pip-audit safety
+        echo "SCANNER_BIN=$RUNNER_TEMP/scanners/bin" >> "$GITHUB_ENV"
+        echo "PROJECT_PYTHON=$(command -v python)" >> "$GITHUB_ENV"
         # Use CI-safe requirements (excludes vllm and other GPU-dependent packages)
-        python -m pip install -r requirements-ci.txt --prefer-binary || {
+        # -c applies the shared floors (filelock>=4.2.1 among them) to the audited set.
+        python -m pip install -c constraints/shared.txt -r requirements-ci.txt --prefer-binary || {
           echo "::error::Some dependencies failed to install — security tools may be incomplete"
           exit 1
         }
@@ -170,7 +181,13 @@ jobs:
         # `|| true` on the SCANNER only: its non-zero exit merely means
         # "advisories exist", which the gate below is what judges. The report
         # must still be written, and an absent report is a hard failure there.
-        pip-audit --format=json --output=python-audit.json || true
+        # #19426: audit the PROJECT interpreter, never the scanner venv.
+        PIPAPI_PYTHON_LOCATION="$PROJECT_PYTHON" \
+          "$SCANNER_BIN/pip-audit" --format=json --output=python-audit.json || true
+        # Control: the report must describe the project interpreter. If
+        # PIPAPI_PYTHON_LOCATION were ignored, pip-audit would audit the scanner
+        # venv and the gate below would judge the wrong set without an error.
+        python3 -c 'import json,sys; n={d["name"].lower() for d in json.load(open("python-audit.json"))["dependencies"]}; bad=[] if "fastapi" in n and "pip-audit" not in n and "safety" not in n else sorted(n)[:20]; sys.exit("::error::pip-audit did not audit the project interpreter (#19426): %s" % bad if bad else 0)'
         python3 pipeline-scripts/security_scan_gate.py \
           --format pip-audit \
           --report python-audit.json \
@@ -200,8 +217,11 @@ jobs:
           echo "**This step does not gate.** Unauthenticated \`safety check\` is deprecated"
           echo "upstream; the same advisories are gated by pip-audit above (#13543)."
         } >> "$GITHUB_STEP_SUMMARY"
-        safety check --json --output safety-report.json || true
-        safety check || true
+        # #19426: safety runs from the scanner venv, so it is fed the PROJECT's
+        # freeze on stdin — run bare it would report on its own venv instead.
+        set -o pipefail
+        "$PROJECT_PYTHON" -m pip freeze | "$SCANNER_BIN/safety" check --stdin --json --output safety-report.json || true
+        "$PROJECT_PYTHON" -m pip freeze | "$SCANNER_BIN/safety" check --stdin || true
 
     - name: Setup Node.js
       # #13543: `!cancelled()` so an earlier scanner's GATE failing does not skip

@@ -89,14 +89,14 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 756,
     "autobot-backend/api/codebase_analytics/endpoints/environment.py": 698,  # #13602: sanitised traversal log
     "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 817,
-    "autobot-backend/api/codebase_analytics/endpoints/report.py": 2266,
+    "autobot-backend/api/codebase_analytics/endpoints/report.py": 2264,
     "autobot-backend/api/codebase_analytics/endpoints/stats.py": 663,
     "autobot-backend/api/conversation_files.py": 996,
     "autobot-backend/api/database_mcp.py": 1056,
     "autobot-backend/api/development_speedup.py": 611,
     "autobot-backend/api/enterprise_features.py": 700,
     "autobot-backend/api/envelope_secrets.py": 615,
-    "autobot-backend/api/files.py": 1244,
+    "autobot-backend/api/files.py": 1241,
     "autobot-backend/api/filesystem_mcp.py": 1968,
     "autobot-backend/api/git_mcp.py": 1336,
     "autobot-backend/api/http_client_mcp.py": 941,
@@ -158,8 +158,8 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/chat_workflow/tool_handler.py": 3697,  # #11542 dispatch merge + #14068 mirror
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,
-    "autobot-backend/code_intelligence/analytics_infrastructure.py": 805,
-    "autobot-backend/code_intelligence/anti_pattern_detection/analyzer.py": 755,
+    "autobot-backend/code_intelligence/analytics_infrastructure.py": 801,
+    "autobot-backend/code_intelligence/anti_pattern_detection/analyzer.py": 753,
     "autobot-backend/code_intelligence/bug_predictor.py": 1501,
     "autobot-backend/code_intelligence/bug_predictor_test.py": 759,
     "autobot-backend/code_intelligence/co_change_test.py": 705,
@@ -422,12 +422,12 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/workers/audit_tasks_test.py": 1197,
     "autobot-backend/workflow_scheduler.py": 1070,
     "autobot-npu-worker/npu_worker_pool_test.py": 1010,
-    "autobot-slm-backend/api/code_source.py": 708,
-    "autobot-slm-backend/api/code_sync.py": 5804,  # #16644 (was 5818)
+    "autobot-slm-backend/api/code_source.py": 701,
+    "autobot-slm-backend/api/code_sync.py": 5803,  # #16644 (was 5818)
     "autobot-slm-backend/api/errors.py": 866,
-    "autobot-slm-backend/api/infrastructure.py": 724,
+    "autobot-slm-backend/api/infrastructure.py": 723,
     "autobot-slm-backend/api/monitoring.py": 1087,
-    "autobot-slm-backend/api/nodes.py": 2878,
+    "autobot-slm-backend/api/nodes.py": 2877,
     "autobot-slm-backend/api/nodes_execution.py": 699,
     "autobot-slm-backend/api/nodes_execution_test.py": 756,
     "autobot-slm-backend/api/orchestration.py": 769,
@@ -453,7 +453,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/services/drift_checker_test.py": 1351,
     "autobot-slm-backend/services/inventory_builder.py": 710,
     "autobot-slm-backend/services/playbook_executor.py": 1399,  # #17150: ansible_dir self-heal, re-detect before sync
-    "autobot-slm-backend/services/reconciler.py": 2216,
+    "autobot-slm-backend/services/reconciler.py": 2193,
     # Not legacy debt: created after this guard existed (#14465/#14548). Tracked
     # as a live violation, not #5060 backlog -- see #14630.
     "autobot-slm-backend/services/reconciler_remediation_tracker_expiry_14465_test.py": 783,

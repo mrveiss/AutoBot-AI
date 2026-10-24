@@ -217,6 +217,12 @@ def test_a_declared_scope_that_the_sweep_does_not_reach_is_refused() -> None:
 #: Compared as a SET in both directions. Adding a scoped declaration means adding a line here,
 #: and that is the point -- the scope is a decision, so it is written twice on purpose.
 _DECLARED_SCOPES = {
+    "v-html-sanitiser-sinks": (
+        "autobot-frontend/src",
+        "autobot-slm-frontend/src",
+        "libs/autobot-ui/src",
+        "libs/autobot-ui/index.ts",
+    ),
     "audit-writer-single-source": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "container-hardening-inline": ("autobot-backend", "autobot_shared"),
     "brand-mark-announcer-scan": ("libs/autobot-ui", "autobot-frontend/src", "autobot-slm-frontend/src"),
@@ -280,6 +286,14 @@ _DECLARED_SCOPES = {
         "pipeline-scripts/",
     ),
     "ansible-concept-forks-17856-scan": ("autobot-slm-backend/ansible",),
+    "defined-twice-18094-scan": (
+        "autobot-backend",
+        "autobot-slm-backend",
+        "autobot_shared",
+        "autobot-infrastructure",
+        "autobot-npu-worker",
+        "scripts",
+    ),
     "env-fallback-read-sites-18094": (
         "autobot-backend",
         "autobot-slm-backend",

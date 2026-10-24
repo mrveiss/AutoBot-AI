@@ -26,6 +26,7 @@ core → SLM → modules picture.
 
 | Section | Index | Description |
 | --- | --- | --- |
+| Install | [INSTALL.md](../INSTALL.md) | The canonical getting-started guide: requirements, installer, Docker, Setup Wizard |
 | Getting Started | [[getting-started/_index\|Getting Started]] | Installation guides by environment |
 | User Guide | [[user-guide/_index\|User Guide]] | Installation, quickstart, configuration |
 | User Docs | [[user/_index\|User Docs]] | All user documentation |
@@ -38,7 +39,6 @@ core → SLM → modules picture.
 | --- | --- | --- |
 | Architecture | [[architecture/_index\|Architecture]] | System architecture documents |
 | Design | [[design/_index\|Design]] | Technical design documents |
-| Designs | [[designs/_index\|Designs]] | UI mockups and visual assets |
 | ADR | [[adr/_index\|ADR]] | Architecture decision records |
 
 ---

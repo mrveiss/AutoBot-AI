@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="libs/autobot-ui/src/assets/brand/mark.svg" width="96" height="96" alt="AutoBot" />
+
 # Your data. Your AI.
 
 **AutoBot is a self-hosted AI platform you own — not a service you rent.**
@@ -8,7 +10,7 @@ Feed it your docs, your codebase, your business knowledge.
 Plug in any LLM you trust — local or hosted.
 Your data stays on your machines. Your AI stays yours.
 
-[Get Started](#quick-start-3-steps) · [Documentation](docs/) · [Community](https://github.com/mrveiss/AutoBot-AI/discussions) · [Sponsor](https://github.com/sponsors/mrveiss)
+[Get Started](#quick-start) · [Documentation](docs/) · [Community](https://github.com/mrveiss/AutoBot-AI/discussions) · [Sponsor](https://github.com/sponsors/mrveiss)
 
 [![Docker Smoke Test](https://github.com/mrveiss/AutoBot-AI/actions/workflows/docker-smoke-test.yml/badge.svg)](https://github.com/mrveiss/AutoBot-AI/actions/workflows/docker-smoke-test.yml)
 [![codecov](https://codecov.io/gh/mrveiss/AutoBot-AI/branch/main/graph/badge.svg)](https://codecov.io/gh/mrveiss/AutoBot-AI)
@@ -29,7 +31,7 @@ Your data stays on your machines. Your AI stays yours.
 | Chat interface | Your prompts |
 | RAG knowledge base | Your documents |
 | Service lifecycle management (SLM) | Your infrastructure |
-| Module ecosystem | Your data |
+| Modules (Company OS, Codebase Analytics, Transcriber) | Your data |
 
 ## Why, How, What
 
@@ -57,31 +59,64 @@ AutoBot is three layers, bottom to top:
    language model.")*
 3. **Modules** — installable capabilities built on the core's bones. A module inherits
    institutional memory, local inference at zero marginal cost, hooks, and governance,
-   so it stays small relative to what it delivers. Modules include **AutoBot LLC** (an
+   so it stays small relative to what it delivers. Modules include **Company OS** (an
    autonomous *agent-company*), **Codebase Analytics**, and the **Transcriber**.
 
 → Full picture: [The AutoBot Platform Model](docs/architecture/PLATFORM_MODEL.md)
 
 ## Quick Start
 
-**Option A — One-line installer (recommended).** Deploys the **Service Lifecycle
+**Which path?** On a dedicated Ubuntu host, use the one-line installer (Option A). On
+anything else, use Docker (Option B). Hardware and OS requirements are in one table:
+[INSTALL.md#requirements](INSTALL.md#requirements).
+
+**Option A — One-line installer (dedicated Ubuntu host).** Deploys the **Service Lifecycle
 Manager (SLM) control plane** — Postgres, the SLM backend and nginx. The SLM then
 provisions the platform onto your fleet nodes; it is not the platform itself:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/mrveiss/AutoBot-AI/main/install.sh | sudo bash
 ```
-When it finishes, the installer prints your **SLM URL** (`https://<server-ip>/slm/`) and
-admin credentials. Open that URL and log in — the **Setup Wizard** then walks you through
-adding fleet nodes, enrolling agents, assigning roles, and provisioning.
+When it finishes, the installer prints your **SLM URL** (`https://<server>/slm/`) and the
+`admin` password. Open that URL and log in — the **Setup Wizard** then walks you through
+adding fleet nodes, enrolling agents, assigning roles, and provisioning. See
+[First login](#first-login) for the main chat UI.
 
-**Option B — Docker Compose (quick eval / development).**
+**Option B — Docker Compose (everyone else; quick eval / development).** A chat needs a
+language model, and every model tier points at the bundled Ollama container, which only
+starts with `--profile ollama`. Start it, then pull the default chat and embedding models
+(the `AUTOBOT_DEFAULT_LLM_MODEL` and `AUTOBOT_EMBEDDING_MODEL` values in
+`docker/.env.docker`):
 ```bash
 git clone https://github.com/mrveiss/AutoBot-AI.git
 cd AutoBot-AI
 bash docker/generate-secrets.sh   # per-host secrets + a free network range
-docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets --profile ollama up -d --build
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets exec autobot-ollama ollama pull qwen3.5:9b
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets exec autobot-ollama ollama pull nomic-embed-text:latest
 ```
-User UI at **http://localhost**, SLM admin at **http://localhost/slm/**.
+User UI at **http://localhost**, SLM admin at **http://localhost/slm/**. Without
+`--profile ollama` the stack starts but has no model to answer with.
+
+`docker/.env.docker` also names smaller models for some other tiers (for example
+`phi3:mini` and `mistral:7b-instruct`); pull those the same way if you use those tiers.
+To use Anthropic instead of a local model, set `ANTHROPIC_API_KEY` in the environment
+when you run `docker compose` (compose passes it to the backend). Provider settings live
+in **SLM Admin > Settings > LLM** (`http://localhost/slm/`, then Settings, then the
+**LLM** tab).
+
+### First login
+
+- **Docker:** log in to the main app at **http://localhost** as `admin`. The password is the
+  `AUTOBOT_ADMIN_PASSWORD` line in `docker/.env.secrets` (generated per host; read it with
+  `grep '^AUTOBOT_ADMIN_PASSWORD=' docker/.env.secrets`). The SLM admin is at
+  **http://localhost/slm/**.
+- **Native installer:** the printed login is for the SLM at `https://<server>/slm/`. The
+  main app's admin account is seeded from `AUTOBOT_ADMIN_PASSWORD` in
+  `/etc/autobot/slm-secrets.env`, or, when that line is absent, from `SLM_ADMIN_PASSWORD` in
+  the same file -- the SLM admin password (the installer prints it when it generated it). The main app is served by the
+  node you assign the frontend role to.
+- Until onboarding is complete, the main app sends a newly logged-in user to its
+  `/onboarding` page.
 
 → Full install options and the two-phase deployment flow: [INSTALL.md](INSTALL.md).
 
@@ -102,7 +137,7 @@ control:
 - **Vision Processing** — analyze screenshots and diagrams locally to guide decisions
 - **Self-Hosted Fleet Management** — deploy, operate, and scale multi-server stacks with
   the Service Lifecycle Manager (SLM)
-- **Installable Modules** — extend the platform with AutoBot LLC (an autonomous
+- **Installable Modules** — extend the platform with Company OS (an autonomous
   agent-company), Codebase Analytics, the Transcriber, and more
 - **Complete Data Privacy** — full data control, no external dependencies, runs entirely
   on your hardware, no vendor lock-in
@@ -121,18 +156,8 @@ control:
 
 ## System Requirements
 
-Two different machines, two different sizes. The **SLM node** runs the control
-plane you install with Option A; **platform nodes** run the agents, models and
-stores the SLM provisions onto them.
-
-| Component | SLM node (min) | Platform node (min) | Platform node (rec.) |
-|-----------|----------------|---------------------|----------------------|
-| **CPU** | 2 cores | 4 cores | 8+ cores |
-| **RAM** | 1.5 GB (native install; the installer checks it) | 8 GB | 16+ GB |
-| **Storage** | 20 GB SSD | 20 GB SSD | 50+ GB SSD |
-| **GPU** | None (CPU-only mode) | NVIDIA GPU for faster inference |
-| **OS** | Ubuntu 20.04+ / Debian 11+ | Ubuntu 22.04 LTS |
-| **Docker** | 24.0+ | 25.0+ |
+Requirements (OS, RAM, disk, init system) are kept in one place, so they cannot drift:
+see the table in [INSTALL.md#requirements](INSTALL.md#requirements).
 
 ---
 
@@ -168,9 +193,9 @@ Modules are large capabilities you install on the core. Because they inherit the
 institutional memory, local inference, hooks, and governance, they stay small relative to
 what they deliver.
 
-- **AutoBot LLC** — an autonomous *agent-company*: define a company of AI agents (and
-  human co-workers), give them goals and a backlog, schedule them to work autonomously,
-  and govern their spend. See [AutoBot LLC](docs/llc/_index.md).
+- **Company OS** — an autonomous *agent-company*: define a virtual company of AI agents
+  (and human co-workers), give them goals and a backlog, schedule them to work
+  autonomously, and govern their spend. See [Company OS](docs/llc/_index.md).
 - **Codebase Analytics** — understand codebases, extract insights, and identify risks
   entirely on your own hardware: code structure analysis, risk detection, and dependency
   insights, with no source ever leaving your machines.
@@ -247,48 +272,64 @@ graph TB
 
 ## Deployment Options
 
-### Docker (Recommended for Most Users)
-Fastest way to get started. Includes all services pre-configured.
-
-```bash
-bash docker/generate-secrets.sh
-docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d
-```
-
-### Native Installation
-For development or custom setups. See [INSTALL.md](INSTALL.md).
+The one-line installer and Docker are described once, in [Quick Start](#quick-start).
+Full details for both: [INSTALL.md](INSTALL.md).
 
 ### Development Mode
 For contributing to AutoBot:
 ```bash
 cp docker-compose.override.example.yml docker-compose.override.yml
-docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d --build
 ```
+
+---
+
+## Running AutoBot
+
+- **Upgrade:** use the built-in updater in the SLM web UI: **Maintenance > Updates**, then
+  the **Code Sync** tab. See the [Code Update runbook](docs/runbooks/CODE_UPDATE.md).
+- **Backup, restore and disaster recovery:** [Disaster Recovery](docs/operations/disaster-recovery.md).
+- **Hardened Docker deployment** (production overlay). `--profile ollama` starts the bundled
+  model server the default provider settings point at; pull the models as in
+  [Quick Start](#quick-start), or configure a hosted provider and drop the profile:
+  ```bash
+  docker compose -f docker-compose.yml -f docker-compose.hardened.yml --env-file docker/.env.docker --env-file docker/.env.secrets --profile ollama up -d
+  ```
+- **Uninstall and other installer options:** [INSTALL.md](INSTALL.md).
 
 ---
 
 ## Core Services
 
-AutoBot runs as a coordinated set of services:
+AutoBot runs as a coordinated set of services. Ports differ by install mode.
 
-| Service | Role | Port |
-|---------|------|------|
-| **Frontend** | Vue.js UI, TLS termination | 80, 443 |
-| **Backend** | FastAPI API server | 8001 |
-| **SLM** | Service Lifecycle Manager — deploys, operates, and scales AutoBot's own services | (via dashboard `/slm`) |
+**Docker** (host ports from `docker-compose.yml`):
+
+| Service | Role | Host port |
+|---------|------|-----------|
+| **Frontend** | Vue.js UI, serves `/api` and `/slm/` | 80, 443 |
+| **Backend** | FastAPI API server | none published; reach it at `http://localhost/api` |
+| **SLM** | Service Lifecycle Manager | none; at `http://localhost/slm/` |
 | **Redis** | Cache, message queue | 6379 |
-| **PostgreSQL** | Relational database | 5432 |
-| **ChromaDB** | Vector embeddings store | 8100 |
-| **Inference (Ollama)** | Local LLM inference | 11434 (optional) |
-| **Prometheus** | Metrics collection | 9090 (optional) |
-| **Grafana** | Monitoring dashboards | 3000 (optional) |
+| **RedisInsight** | Redis UI | 127.0.0.1:8001 (this is **not** the backend) |
+| **PostgreSQL** | Relational database | 127.0.0.1:5432 |
+| **ChromaDB** | Vector embeddings store | 127.0.0.1:8100 |
+| **Inference (Ollama)** | Local LLM inference | 127.0.0.1:11434 (profile `ollama`) |
+| **Prometheus** | Metrics collection | 127.0.0.1:9090 (profile `monitoring`) |
+| **Grafana** | Monitoring dashboards | 127.0.0.1:3000 (profile `monitoring`) |
+
+**Native install:** nginx serves HTTPS on 443 and proxies the API at `/api`; the SLM is at
+`https://<server>/slm/`. Per-service ports on the fleet nodes are set by the roles you assign.
+
+**Health check:** Docker `curl http://localhost/api/health`; native
+`curl -k https://<server>/api/health` (self-signed certificate).
 
 ---
 
 ## Usage Guide
 
 ### Dashboard Overview
-Once running, navigate to **http://localhost** to access:
+Once running, navigate to **http://localhost** (Docker) or your main app node (native) to access:
 - **Chat Interface** — start conversing with AutoBot about your knowledge and infrastructure
 - **Knowledge Bases** — upload and manage documents, codebases, runbooks
 - **Workflows** — create automated tasks and operations
@@ -323,7 +364,7 @@ Configuration is environment variables, read from these files (#18555):
 - **Development tooling:** `.env.base` (shared keys) and one overlay, `.env.localhost`, `.env.native-vm` or `.env.network`, loaded in that order.
 
 Key settings:
-- `AUTOBOT_DEPLOYMENT_MODE` — `hybrid` or `distributed`
+- `AUTOBOT_DEPLOYMENT_MODE` — `distributed` (default) or `standalone` (defined in `autobot_shared/env_registry.py`)
 - `AUTOBOT_LLM_PROVIDER` — `ollama` (default) or others
 
 ### LLM Providers and Fallback
@@ -438,18 +479,18 @@ the support contact path live in **[FUNDING.md](FUNDING.md)**.
 ## Roadmap
 
 ### Shipped
-- [x] Multi-user authentication and RBAC (single-user mode retired)
+- [x] Multi-user authentication and RBAC (there is one user mode; single-user mode is retired)
 
 ### Upcoming
 - [ ] Kubernetes orchestration support
 - [ ] Advanced analytics dashboards
-- [ ] Module ecosystem and registry
+- [ ] Module registry for discovering and installing third-party modules (the three modules above ship with the platform; no registry exists yet)
 - [ ] Mobile companion app
 
 ### Under Consideration
 - Cloud deployment templates
 - Managed hosting option
-- Enterprise features (SAML, audit logs)
+- Enterprise features (SAML)
 
 ---
 
@@ -476,7 +517,7 @@ the support contact path live in **[FUNDING.md](FUNDING.md)**.
 
 ## Status
 
-**Current Version**: v1.5.0 (Active Development)
+**Current version**: see the [GitHub Releases](https://github.com/mrveiss/AutoBot-AI/releases) page and the [CHANGELOG](CHANGELOG.md) (Active Development)
 
 AutoBot is actively developed and used for self-hosted AI and infrastructure automation.
 It's suitable for:

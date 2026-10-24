@@ -14,12 +14,17 @@ vi.mock('@/composables/useThemeRegistry', () => ({
     Promise.resolve([{ id: 'aqua', name: 'Aqua', author: 'Northwind', version: '1.2', supports: [] }]),
 }))
 
+import Group from './AdditionalThemesGroup.vue'
+import { useThemeVariant } from '@/composables/useThemeVariant'
+
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 
+// #18833: imported statically. `vi.resetModules()` + a dynamic import here made the FIRST
+// test transform and evaluate the component's whole module graph inside its own 10 s
+// budget (4 s idle, past 10 s under parallel load); the second test took 64 ms. Static
+// imports are paid once at collection, outside every test's timeout. Neither test mutates
+// the theme variant, so no per-test module reset is needed.
 async function mountGroup() {
-  vi.resetModules()
-  const { default: Group } = await import('./AdditionalThemesGroup.vue')
-  const { useThemeVariant } = await import('@/composables/useThemeVariant')
   await useThemeVariant().loadInstalledThemes()
   const wrapper = mount(Group, { global: { plugins: [i18n] } })
   await flushPromises()

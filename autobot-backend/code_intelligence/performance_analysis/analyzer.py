@@ -14,7 +14,7 @@ import re
 from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
-from code_intelligence.shared.analysis_base import (
+from code_intelligence.shared.analysis_base import (  # noqa: F401 -- HAS_* re-exported by the package __init__
     HAS_ANALYTICS_INFRASTRUCTURE,
     SIMILARITY_MEDIUM,
     BaseCodeAnalyzer,
@@ -361,7 +361,7 @@ class PerformanceAnalyzer(BaseCodeAnalyzer):
                     "line_start": "line_start",
                     "description": "description",
                 },
-                min_similarity=(SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7),
+                min_similarity=SIMILARITY_MEDIUM,
             )
         except Exception as e:
             logger.warning("Semantic duplicate detection failed: %s", e)
