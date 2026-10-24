@@ -133,7 +133,6 @@ PASSTHROUGH_ROUTES: frozenset[tuple[str, str, str]] = frozenset(
         ("autobot-backend/api/embeddings.py", "GET /settings", "EmbeddingSettingsData"),
         ("autobot-backend/api/embeddings.py", "GET /status", "EmbeddingStatusData"),
         ("autobot-backend/api/embeddings.py", "POST /providers/{provider_name}/refresh-models", "EmbeddingRefreshData"),
-        ("autobot-backend/api/embeddings.py", "PUT /settings", "EmbeddingUpdateData"),
         ("autobot-backend/api/error_resilience.py", "GET /circuit-breakers", "CircuitBreakerStatusResponse"),
         ("autobot-backend/api/error_resilience.py", "GET /error-budgets", "ErrorBudgetStatusResponse"),
         ("autobot-backend/api/integration_cicd.py", "GET /{provider}/pipelines", "CICDPipelinesResponse"),

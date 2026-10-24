@@ -562,7 +562,7 @@ recorded here as witnesses, not refiled.
 **Audit — AutoBot has thirteen ratchets and none is edit-scoped.** Every one is either a frozen
 absolute count checked on a full-repo scan, or a shrink-only allow-list keyed on file path or exact
 string. `scripts/check_python_file_size.py` + `repo_tests/python_file_size_ratchet_baseline.py`
-(per-file ceiling, `MAX_KNOWN_LARGE_ENTRIES = 486`); `repo_tests/frontend_api_contract_ratchet_test.py:200-254`
+(per-file ceiling; the `MAX_KNOWN_LARGE_ENTRIES = 486` total it had then was retired by #19283 for a per-entry base comparison); `repo_tests/frontend_api_contract_ratchet_test.py:200-254`
 (raw regex-match scalars, asserted equal in **both** directions); `i18n_untranslated_ratchet_test.py`;
 `background_task_retention_ratchet_test.py`; `credential_vault_resolution_ratchet_test.py`;
 `.github/workflows/ratchet-base-guard.yml` (re-runs the file-size audit on push to catch "a violation

@@ -82,6 +82,41 @@ catching," not "what breaks CI." Run through before pushing:
    MISSING case, so renaming the variable preserved the hole across two revisions. Write the
    predicate the action means — here, mirroring the add's own condition.
 
+## Pre-handover checklist: before the head goes to the train coordinator (#19285)
+
+About half the PRs handed over on 2026-10-22/23 needed a fix-first round for one of these.
+Check each before sending the PR# and head:
+
+1. **Every guard or test the body claims exists and runs.** Name it by file and test, and
+   confirm it ran in your pre-push or local run (#19257 claimed a smoke-credential guard that
+   did not exist).
+2. **Ceilings are met by splitting, never by trimming.** A file over its size ceiling gets a
+   module or helper extracted; shortening comments, docstrings or log text to fit is a finding
+   (#19208, #19201, and #19360's first head).
+3. **Every cited owner decision is quoted on its issue,** with the date, before the PR cites it
+   (#19216, #19259).
+4. **The whole-tree guards pass on the branch:** symbol forks, isolated-git, file size, reach.
+   Machine-checked: pre-push runs them on every push (`ALWAYS_RUN` in
+   `tools/lint/prepush_selection.py`, #18808), so a green pre-push covers item 4. A new
+   symbol that reuses an existing name (#19205, #19215) is what the symbol-fork ratchet catches.
+
+5. **Local runs respect the shared machine (owner rule, 2026-10-23).** Targeted tests plus the
+   whole-tree set, each run under the `machine:heavy-run` lock with a hold of at most 20
+   minutes; never a full local `repo_tests` suite (CI is the full gate). Train pushes go first,
+   and a hold whose reason says "train push waiting" is released at the next test boundary.
+
+Items 1 and 3 need a reader; 2 is caught when a reviewer diffs the comments; 4 is automatic.
+
+## CodeRabbit and merge trains (#19284)
+
+- **Admission:** a member PR joins a train only once its own CodeRabbit threads are resolved.
+  Its code is reviewed there, once.
+- **Train PRs skip automatic review** (`.coderabbit.yaml` `ignore_title_keywords: ["train("]`).
+  The coordinator reviews the train's own commits (fixes and merge resolutions) and requests
+  `@coderabbitai review` by hand when a fix is substantial. Whole-diff train reviews re-opened
+  approved member code after green CI: train 74 (#19191) took 9 and then 4 threads, each costing
+  a full CI rerun.
+
 ## Code Review Agent Requirements (MANDATORY)
 
 **Every finder and verifier agent prompt MUST contain all three — refuse to dispatch if any missing:**

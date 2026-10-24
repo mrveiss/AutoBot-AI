@@ -48,6 +48,7 @@ from pathlib import Path
 import pytest
 import yaml
 from repo_tests._paths import repo_root
+from repo_tests._ratchet_base import base_table, raised_entries
 
 from tools.lint._scan_helpers import TRACKED_PY_FLOOR, tracked_paths
 
@@ -75,23 +76,6 @@ def _load_baseline_module():
 _BASELINE_MODULE = _load_baseline_module()
 RATCHET_BASELINE = _BASELINE_MODULE.RATCHET_BASELINE
 ANNOTATED_AS_LIVE = _BASELINE_MODULE.ANNOTATED_AS_LIVE
-
-# Cardinality ceiling on KNOWN_LARGE itself (#14547 review). The per-file
-# ratchet stops any ONE entry from regrowing, but nothing stopped a NEW entry
-# appearing in both KNOWN_LARGE and RATCHET_BASELINE together — a two-sided
-# addition passes every other test here, which is how this PR added 509
-# entries in one change. At 3 entries a 4th was visible in a code review
-# diff; at 512 a 513th is not. Lower this by hand whenever KNOWN_LARGE loses
-# an entry; never raise it to let a new one in without that being the point
-# of the diff.
-#
-# 512 was the population the walk measured when this landed, and entries then
-# left without the number following them down: at 499 against 512 the slack
-# was room for thirteen silent additions, which is the slack this guard exists
-# to deny. #15641/#15642 re-pinned it to the measured population. It starts at
-# whatever the walk finds and only falls after, because an unlisted oversized
-# file now fails the audit instead of joining the list.
-MAX_KNOWN_LARGE_ENTRIES = 486
 
 
 # Floor for the tracked-Python enumeration (4958 files at the time of writing).
@@ -255,22 +239,6 @@ def test_no_entry_may_be_added(hook):
     assert added == set(), (
         f"new grandfathered files {sorted(added)} — the exemption list only "
         "shrinks (#14236). Split the file instead of exempting it."
-    )
-
-
-def test_known_large_entry_count_may_not_grow(hook):
-    """Catches a two-sided addition ``test_no_entry_may_be_added`` cannot.
-
-    That test only compares KNOWN_LARGE against RATCHET_BASELINE, so an entry
-    added to both together — the actual shape of how this PR added 509 —
-    passes it. This pins the count itself against a recorded ceiling that
-    only ever moves down.
-    """
-    count = len(hook.KNOWN_LARGE)
-    assert count <= MAX_KNOWN_LARGE_ENTRIES, (
-        f"KNOWN_LARGE grew to {count} entries, over the recorded ceiling of "
-        f"{MAX_KNOWN_LARGE_ENTRIES} — lower MAX_KNOWN_LARGE_ENTRIES when entries "
-        "leave, never raise it to let a new one in."
     )
 
 
@@ -594,4 +562,16 @@ def test_matcher_reaches_every_entry_over_a_tracked_enumeration(hook, tracked_py
     assert sorted(matched) == sorted(hook.KNOWN_LARGE), (
         f"matcher reached {len(matched)} of {len(hook.KNOWN_LARGE)} entries over "
         f"{len(tracked_py_files)} tracked files: {sorted(matched)}"
+    )
+
+
+def test_no_ceiling_rose_against_the_base(hook):
+    """#19283: each KNOWN_LARGE entry is at most what the base commit's table recorded, and an
+    entry the base did not have is a raise. The fixed reference a sum or a mirrored pair could
+    not give: a two-sided raise moves both records together, never the base commit."""
+    base = base_table(repo_root(), ("scripts/python_file_size_known_large.py",), "KNOWN_LARGE")
+    rose = raised_entries(dict(hook.KNOWN_LARGE), base)
+    assert not rose, (
+        f"ceilings raised or added against the base (base, now): {rose}. Split the file instead "
+        "of raising its ceiling; raises are refused, against the base and the last green main."
     )

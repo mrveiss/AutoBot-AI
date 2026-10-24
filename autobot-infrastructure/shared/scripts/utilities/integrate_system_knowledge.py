@@ -14,6 +14,14 @@ import logging
 import sys
 from pathlib import Path
 
+# Runs from any directory with no PYTHONPATH: put the repository root on the path for
+# `autobot_shared` (#19310).
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.system_knowledge_paths import system_knowledge_dirs  # noqa: E402
+
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
@@ -56,10 +64,10 @@ def _build_man_content_parts(man_data: dict, command: str, section: int) -> list
 
 
 async def integrate_cached_man_pages(kb_v2):
-    """Integrate cached man pages from data/system_knowledge/man_pages/"""
+    """Integrate cached man pages from the system-knowledge runtime dir's ``man_pages/``."""
     logger.info("Starting cached man pages integration...")
 
-    cache_dir = Path("data/system_knowledge/man_pages")
+    cache_dir = system_knowledge_dirs().runtime / "man_pages"
     if not cache_dir.exists():
         logger.warning("Man pages cache directory not found: %s", cache_dir)
         return 0

@@ -37,6 +37,7 @@ SHELL_SUITES = [
     ".claude/hooks/block-dangerous-commands_test.sh",
     "scripts/lib/branch-guards_test.sh",
     "scripts/lib/deploy-common_test.sh",
+    "scripts/lib/fleet-ip-rule_test.sh",
     "scripts/lib/git-root_test.sh",
     "scripts/lib/git-scope_test.sh",
     "scripts/lib/project_root_test.sh",
