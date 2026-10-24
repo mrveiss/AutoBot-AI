@@ -73,6 +73,9 @@ def _repo(root: Path, ssot: str | None, *, fillers: int = 0, sites: str | None =
     # ``registry_defaults`` imports the env registry modules, and ``_seed`` copies only paths.py.
     for registry in sorted((_REPO_ROOT / "autobot_shared").glob("env_registry*.py")):
         shutil.copy2(registry, root / "autobot_shared" / registry.name)
+    # #19350 added the fleet constants as a fourth env-fork source; an empty one adds none. Seeded even
+    # when *ssot* is None so the missing-source contrast still names ssot_config.py, the intended file.
+    (root / "autobot_shared" / "fleet_constants.py").write_text("", encoding="utf-8")
     if ssot is not None:
         (root / "autobot_shared" / "ssot_config.py").write_text(ssot, encoding="utf-8")
         # The drift checker also reads the TLS SSOT module (#17312); an empty one adds no defaults.

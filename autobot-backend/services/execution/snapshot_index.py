@@ -18,6 +18,7 @@ from dataclasses import fields as dataclass_fields
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import project_root
 
@@ -44,8 +45,9 @@ def _resolve_storage_path() -> Path:
     if str(path).startswith("/tmp"):  # nosec B108  # intentional check to warn operator about non-persistent tmp path
         logger.warning(
             "Snapshot storage path %s is under /tmp — snapshots will not survive a host restart. "
-            "Set AUTOBOT_SNAPSHOT_STORAGE_PATH to a persistent directory (e.g. /opt/autobot/snapshots).",
+            "Set AUTOBOT_SNAPSHOT_STORAGE_PATH to a persistent directory (e.g. %s/snapshots).",
             path,
+            FLEET_INSTALL_ROOT,
         )
     return path
 

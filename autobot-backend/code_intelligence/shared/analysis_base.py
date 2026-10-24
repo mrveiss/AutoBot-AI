@@ -26,22 +26,19 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from code_intelligence.similarity_thresholds import SIMILARITY_MEDIUM  # noqa: F401 -- re-exported (#18094)
 
 # Issue #554: Import analytics infrastructure for semantic analysis. Guarded
 # once here (was duplicated verbatim in both security/analyzer.py and
 # performance_analysis/analyzer.py); both re-export these names for backward
 # compatibility with existing package __init__ imports.
 try:
-    from code_intelligence.analytics_infrastructure import (
-        SIMILARITY_MEDIUM,
-        SemanticAnalysisMixin,
-    )
+    from code_intelligence.analytics_infrastructure import SemanticAnalysisMixin
 
     HAS_ANALYTICS_INFRASTRUCTURE = True
 except ImportError:
     HAS_ANALYTICS_INFRASTRUCTURE = False
     SemanticAnalysisMixin = object
-    SIMILARITY_MEDIUM = 0.7
 
 # Issue #607: Import shared caches for performance optimization
 try:

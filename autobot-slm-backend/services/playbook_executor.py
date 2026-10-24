@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Callable, Dict, List
 
 from autobot_shared.env_utils import env_float, env_float_clamped, env_int_clamped
+from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
 from autobot_shared.git_probe import start_git
 from services.ansible_secrets import fetch_deploy_secrets
 from services.ansible_utils import _find_ansible_playbook as _resolve_ansible_playbook
@@ -41,8 +42,7 @@ logger = logging.getLogger(__name__)
 # (/tmp/ansible_local_tmp) is created mode 0700 by whichever user runs
 # ansible first, locking out every other user (operator debugging as
 # themselves vs the SLM's autobot-user playbook executor). Under systemd
-# PrivateTmp=true /tmp is namespaced anyway; the uid suffix protects runs
-# outside systemd (dev mode, manual uvicorn).
+# PrivateTmp=true /tmp is namespaced anyway; the uid suffix protects runs outside systemd (dev, manual uvicorn).
 ANSIBLE_LOCAL_TMP = f"/tmp/ansible_local_tmp_{os.getuid()}"  # nosec B108
 
 
@@ -80,7 +80,7 @@ SELF_UPDATE_DETACH_SLICE = os.getenv("SLM_SELF_UPDATE_SLICE", "system.slice")
 # (ProtectSystem=strict blocks the rest), so detached runs stage these two files
 # there instead. Attached runs keep using ANSIBLE_LOCAL_TMP — same namespace, no
 # need to leave /tmp.
-SELF_UPDATE_SHARED_DIR = Path(os.getenv("SLM_SELF_UPDATE_SHARED_DIR", "/opt/autobot/.slm-self-update"))
+SELF_UPDATE_SHARED_DIR = Path(os.getenv("SLM_SELF_UPDATE_SHARED_DIR", f"{FLEET_INSTALL_ROOT}/.slm-self-update"))
 
 # Age after which a stray staged inventory/extra-vars file is pruned. A detached
 # run deliberately outlives this process (Play 1 restarts us), so the caller
@@ -225,8 +225,8 @@ def link_group_vars(inventory_path: Path, ansible_dir: Path) -> None:
 #: exist YET. `SLM_ANSIBLE_DIR` overrides the code_source candidate; if that
 #: override path also does not exist, the fallback still applies unchanged
 #: from the pre-#17150 behavior -- only the re-check-per-call timing changed.
-DEFAULT_CODE_SOURCE_ANSIBLE_DIR = "/opt/autobot/code_source/autobot-slm-backend/ansible"
-FALLBACK_ANSIBLE_DIR = Path("/opt/autobot/autobot-slm-backend/ansible")
+DEFAULT_CODE_SOURCE_ANSIBLE_DIR = f"{FLEET_INSTALL_ROOT}/code_source/autobot-slm-backend/ansible"
+FALLBACK_ANSIBLE_DIR = Path(FLEET_INSTALL_ROOT) / "autobot-slm-backend" / "ansible"
 
 
 class PlaybookExecutor:

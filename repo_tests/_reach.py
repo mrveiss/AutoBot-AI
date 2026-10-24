@@ -34,6 +34,8 @@ that makes the proof automatic rather than a promise.
 from __future__ import annotations
 
 import math
+import os
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Generic, Sequence, TypeVar
@@ -97,6 +99,23 @@ _MEASURED: dict[tuple[str, str], Sequence[Any]] = {}
 #: large enough that a floor pinned at the very bottom is refused on the spot, small enough that
 #: a deliberate mid-window pin is not re-litigated by the next merge.
 _WINDOW_MARGIN = 0.10
+
+#: #19282: a floor the tree has outgrown -- slack past the allowance, or a pin in the bottom band of
+#: its window -- is STALE, not a reach loss. It is enforced where it is fixed: the merge train sets
+#: this, and scripts/repin_reach_floors.py re-pins every stale floor in one command. A PR whose
+#: author did not grow the tree is not failed for it; it gets a ReachFloorStale warning instead.
+#: A real loss -- the floor above what discovery finds now, or completed() below the floor -- fails
+#: everywhere, always.
+REACH_AUDIT_ENV = "AUTOBOT_REACH_AUDIT"
+
+
+def staleness_enforced() -> bool:
+    """True on a merge train (``AUTOBOT_REACH_AUDIT=1``), where stale floors are re-pinned."""
+    return os.environ.get(REACH_AUDIT_ENV) == "1"
+
+
+class ReachFloorStale(UserWarning):
+    """A floor the tree outgrew, reported outside the audit instead of failing (#19282)."""
 
 
 def floor_div_fraction(total: int, fraction: float) -> int:
@@ -303,11 +322,28 @@ class Reach(Generic[T]):
                 f"{count} {self.what}. The guard cannot pass; lower the floor to "
                 f"{count} only if the population genuinely shrank."
             )
+        stale = self.staleness(root)
+        if stale is None:
+            return
+        if staleness_enforced():
+            raise ReachFloorError(stale)
+        warnings.warn(ReachFloorStale(f"{stale}\nRe-pin with: python scripts/repin_reach_floors.py"), stacklevel=2)
+
+    def staleness(self, root: Path) -> str | None:
+        """Why this floor is stale for the live tree, or None (#19282). A floor-based declaration
+        is stale when the tree outgrew its allowance or the floor sits in its window's bottom band;
+        a ``min_fraction`` declaration has no recorded constant to go stale."""
+        if self.min_fraction is not None:
+            return None
+        count = len(self.population(root))
+        slack = count - self.floor
+        if slack < 0:
+            return None  # a loss, not staleness: verify_floor raises it unconditionally
         allowance = self.skips + self.growth
         if allowance and slack <= allowance:
-            self._require_mid_window(count, slack)
+            return self._bottom_band(count, slack)
         if slack > allowance:
-            raise ReachFloorError(
+            return (
                 f"[{self.name}] floor {self.floor} sits {slack} below its live "
                 f"population of {count} {self.what}, which exceeds the declared "
                 f"allowance of {allowance} (skips={self.skips} + growth={self.growth}).\n"
@@ -319,6 +355,7 @@ class Reach(Generic[T]):
                 f"  growth= ordinary growth tolerated before a deliberate ratchet.\n"
                 f"If neither is short, the floor is stale: {self._window_sentence(count)}"
             )
+        return None
 
     def window(self, root: Path) -> tuple[int, int, int]:
         """``(lowest legal floor, highest legal floor, the value to pin)`` -- #17356.
@@ -353,7 +390,7 @@ class Reach(Generic[T]):
             f"can clear (population - skips). Pin MID-window, at {mid}."
         )
 
-    def _require_mid_window(self, count: int, slack: int) -> None:
+    def _bottom_band(self, count: int, slack: int) -> str | None:
         """Refuse a floor pinned at the bottom of its own window (#17356).
 
         A convention was not enough, and that is measured rather than argued: the author who
@@ -367,11 +404,11 @@ class Reach(Generic[T]):
         number, and it has no window to sit in the bottom of.
         """
         if not self.growth:
-            return
+            return None
         margin = max(1, math.ceil(self.growth * _WINDOW_MARGIN))
         if slack <= self.skips + self.growth - margin:
-            return
-        raise ReachFloorError(
+            return None
+        return (
             f"[{self.name}] floor {self.floor} sits in the bottom {margin} of its window, which "
             f"is zero tolerance dressed as an allowance: the next "
             f"{self.skips + self.growth - slack} file(s) of ordinary growth turn it red on a PR "

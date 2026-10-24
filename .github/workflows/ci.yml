@@ -444,6 +444,13 @@ jobs:
         echo "AUTOBOT_REQUIRE_PROMTOOL=1" >> "$GITHUB_ENV"
         promtool --version
 
+    - name: Enforce reach-floor staleness on merge trains (#19282)
+      # A floor the tree outgrew is stale, not lost. It fails where it is fixed -- the merge train,
+      # which re-pins with scripts/repin_reach_floors.py -- and only warns on other PRs, whose
+      # authors did not grow the tree. A real reach loss fails everywhere (repo_tests/_reach.py).
+      if: startsWith(github.head_ref, 'train-')
+      run: echo "AUTOBOT_REACH_AUDIT=1" >> "$GITHUB_ENV"
+
     # Static checks (black / isort / flake8 / bandit) deliberately live in
     # code-quality.yml, NOT here (#13162). They were duplicated across both
     # workflows over the same three trees; code-quality.yml's bandit has no

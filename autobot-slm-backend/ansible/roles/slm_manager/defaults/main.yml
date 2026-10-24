@@ -17,6 +17,9 @@ slm_base_dir: "{{ autobot.base_dir }}"
 slm_backend_data_dir_fallback: /var/lib/autobot
 slm_backend_user_fallback: autobot
 slm_backend_dir: "{{ slm_base_dir }}/autobot-slm-backend"
+# #19051: the backend env on the SLM host -- the root-key back-fill reuses a key
+# found here rather than generating one over it.
+slm_backend_env_file: "{{ slm_base_dir }}/autobot-backend/.env"
 slm_frontend_dir: "{{ slm_base_dir }}/autobot-slm-frontend"
 slm_shared_dir: "{{ slm_base_dir }}/autobot_shared"
 slm_log_dir: "{{ slm_base_dir }}/logs"

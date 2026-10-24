@@ -29,6 +29,7 @@ from api.node_ssh_helpers import (  # noqa: F401  # used by test-connection belo
     _build_ssh_success_response,
     _handle_file_not_found_error,
 )
+from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
 from autobot_shared.ssot_config import config
 from models.database import (
     Certificate,
@@ -1262,12 +1263,10 @@ async def _run_role_removal(
 
 def _parse_backup_path(output: str) -> str | None:
     """Extract backup path from Ansible output."""
+    prefix = f"{FLEET_INSTALL_ROOT}/backups/"  # the remove-role playbook's backup dir on the node
     for line in output.splitlines():
-        if "/opt/autobot/backups/" in line and "Backup:" in line:
-            parts = line.split("/opt/autobot/backups/")
-            if len(parts) > 1:
-                path = "/opt/autobot/backups/" + parts[1].strip().rstrip('"')
-                return path
+        if prefix in line and "Backup:" in line:
+            return prefix + line.split(prefix)[1].strip().rstrip('"')
     return None
 
 

@@ -25,6 +25,7 @@ import aiohttp
 from aiohttp import web
 
 from autobot_shared import async_compat, env_utils, node_proxy, time_utils
+from autobot_shared.fleet_constants import DEFAULT_HEARTBEAT_INTERVAL
 
 from . import event_buffer
 from .health_collector import HealthCollector
@@ -96,7 +97,6 @@ def _get_default_admin_url() -> str:
 
 
 DEFAULT_ADMIN_URL = _get_default_admin_url()
-DEFAULT_HEARTBEAT_INTERVAL = 30  # seconds
 # Buffer database path - use /var/lib/slm-agent for systemd compatibility
 # (systemd service has ProtectHome=read-only and ReadWritePaths=/var/lib/slm-agent)
 DEFAULT_BUFFER_DB = os.getenv("SLM_BUFFER_DB", "/var/lib/slm-agent/events.db")
@@ -281,7 +281,7 @@ class SLMAgent:
         code_version = self.version_manager.get_version()
 
         payload = build_heartbeat_payload(
-            health, os_info, code_version, self.role_detector, self._role_definitions_loaded
+            health, os_info, code_version, self.role_detector, self._role_definitions_loaded, self.heartbeat_interval
         )
         return await self._send_heartbeat_request(payload)
 

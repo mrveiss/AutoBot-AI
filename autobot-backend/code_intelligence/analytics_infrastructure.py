@@ -33,6 +33,7 @@ from autobot_shared.content_digest import content_digest
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.slug import sanitize_token
+from code_intelligence.similarity_thresholds import SIMILARITY_LOW, SIMILARITY_MEDIUM
 from knowledge.index_embedding_space import CollectionEmbeddingSpace
 
 logger = get_logger(__name__)
@@ -46,11 +47,6 @@ DEFAULT_CACHE_TTL = 3600  # 1 hour
 DEFAULT_EMBEDDING_CACHE_SIZE = 500
 DEFAULT_REDIS_DATABASE = "analytics"
 MAX_ERROR_COUNT = 100  # Issue #554: Limit error list growth for memory safety
-
-# Similarity thresholds for semantic matching
-SIMILARITY_HIGH = 0.85
-SIMILARITY_MEDIUM = 0.70
-SIMILARITY_LOW = 0.50
 
 # Issue #554: Security - Allowed collection name pattern (alphanumeric, underscore, hyphen)
 COLLECTION_NAME_PATTERN = re.compile(r"^[a-zA-Z][a-zA-Z0-9_-]{0,63}$")

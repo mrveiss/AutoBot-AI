@@ -65,8 +65,9 @@ _SYSTEM_IMPORT = (
     "NOT_USER_FACING: #19216 system-knowledge import resolving a store 'duplicate' to the fact it matched. "
     "It runs from the import job with no user in context, reads only that fact's metadata (type, name, "
     "link id) to decide whether to merge the link id, and returns a fact id and a status, never content, "
-    "to a caller or a prompt. An owner filter would be WRONG here: the duplicate may be a legacy fact "
-    "with no owner, and a scoped miss would make the import store another copy instead of linking"
+    "to a caller or a prompt. The read is unfiltered so the import can SEE who holds the fact: it writes "
+    "only to an ownerless, platform-wide one (is_ownerless_platform_fact, #19296) and reports any other "
+    "unresolved, never written; a scoped read would hide the owner it must check"
 )
 _SCOPED_ADMIN_ROUTER = (
     "SCOPED: route requires Depends(check_admin_permission) (403 for non-admins), and "
