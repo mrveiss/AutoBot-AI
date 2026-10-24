@@ -44,7 +44,7 @@ cssclasses:
 | [The AutoBot Platform Model](architecture/PLATFORM_MODEL.md) | Core → SLM management layer → modules |
 | [Why Self-Hosted](self-hosted-advantages.md) | The case for owning your AI platform |
 | [Service Lifecycle Manager (SLM)](guides/slm-docker-ansible-deployment.md) | The management layer: deploy, operate, scale your AI infrastructure |
-| [AutoBot LLC](llc/_index.md) | Flagship module: an autonomous agent-company you install |
+| [Company OS](llc/_index.md) | Flagship module: an autonomous agent-company you install |
 | [Demos](DEMOS.md) | Feature walkthroughs and demo recording scripts |
 
 ---

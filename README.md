@@ -321,8 +321,8 @@ AutoBot runs as a coordinated set of services. Ports differ by install mode.
 **Native install:** nginx serves HTTPS on 443 and proxies the API at `/api`; the SLM is at
 `https://<server>/slm/`. Per-service ports on the fleet nodes are set by the roles you assign.
 
-**Health check:** Docker `curl http://localhost/api/health`; native
-`curl -k https://<server>/api/health` (self-signed certificate).
+**Health check:** Docker `curl http://localhost/api/system/health`; native
+`curl -k https://<server>/api/system/health` (self-signed certificate).
 
 ---
 
