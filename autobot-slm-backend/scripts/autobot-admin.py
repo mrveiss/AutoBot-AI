@@ -27,6 +27,11 @@ import time
 # standalone on the host, outside the backend's import path.
 logger = logging.getLogger("autobot-admin")
 
+#: The install root. Ansible copies this file alone to /usr/local/bin and runs it with the system python,
+#: so it cannot import autobot_shared.fleet_constants.FLEET_INSTALL_ROOT; it restates that ONE value
+#: here, and repo_tests/defined_twice_18094_test.py holds the two equal (#18094).
+_INSTALL_ROOT = "/opt/autobot"  # noqa: ssot-path -- the pinned standalone copy described above
+
 
 def load_env_file(path: str) -> dict:
     """Load key=value pairs from an env file, ignoring comments and blanks."""
@@ -66,7 +71,7 @@ _UPSERT_EPOCH_SQL = (
 def _secrets_env() -> dict:
     """Merged secrets files, later file wins per key."""
     env: dict = {}
-    for path in ("/etc/autobot/slm-secrets.env", "/opt/autobot/autobot-slm-backend/.env"):
+    for path in ("/etc/autobot/slm-secrets.env", f"{_INSTALL_ROOT}/autobot-slm-backend/.env"):
         env.update(load_env_file(path))
     return env
 

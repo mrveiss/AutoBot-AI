@@ -12,6 +12,7 @@ which the dispatcher answers with a 403-class error: there is no unscoped graph 
 
 from typing import Any, Dict
 
+from constants.rag_graph_constants import RAG_GRAPH_PATH_DEPTH, RAG_GRAPH_TRAVERSAL_DEPTH
 from mcp_server.principal import current_owner
 
 _PATH_DIRECTIONS = ("outgoing", "incoming", "both")
@@ -115,7 +116,7 @@ class MemoryToolsMixin:
             neighbours = _within_range(neighbours, range)
         return {"entity": base, "timeline": neighbours, "count": len(neighbours)}
 
-    async def _memory_related(self, entity: str, depth: int = 2) -> Any:
+    async def _memory_related(self, entity: str, depth: int = RAG_GRAPH_TRAVERSAL_DEPTH) -> Any:
         from api.schemas_knowledge import MemoryRelatedRequest
         from autobot_memory_graph import AutoBotMemoryGraph
 
@@ -144,7 +145,7 @@ class MemoryToolsMixin:
         from_entity: str,
         to_entity: str,
         relation: str | None = None,
-        max_depth: int = 6,
+        max_depth: int = RAG_GRAPH_PATH_DEPTH,
         direction: str = "both",
     ) -> Any:
         """Shortest relationship path between two entities (#13474).

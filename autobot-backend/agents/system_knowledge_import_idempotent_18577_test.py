@@ -33,6 +33,7 @@ class _FakeKB:
         self.dup_type = None  # type of the fact a duplicate answer points at (default: the item's own)
         self.dup_link = None  # system_fact_id the duplicate target already carries
         self.duplicate = False  # store_fact answers "duplicate" of a pre-existing fact (semantic match)
+        self.dup_meta: dict = {}  # extra metadata (owner, visibility) the duplicate target carries (#19296)
 
     @property
     def writes(self) -> int:
@@ -47,7 +48,7 @@ class _FakeKB:
         if self.duplicate:
             dup_id = f"dup-{len(self.facts)}"
             self.facts[dup_id] = content + " (near copy)"
-            self.meta[dup_id] = {"source": "web_research", "type": self.dup_type or metadata["type"]}
+            self.meta[dup_id] = {"source": "web_research", "type": self.dup_type or metadata["type"], **self.dup_meta}
             if self.dup_link:
                 self.meta[dup_id]["system_fact_id"] = self.dup_link
             return {"status": "duplicate", "fact_id": dup_id, "message": "Near-duplicate fact already exists"}
@@ -308,3 +309,60 @@ async def test_a_duplicate_linked_to_another_item_is_reported_unresolved_and_nev
         assert all(m["system_fact_id"] == "someone-elses-stable-id" for f, m in kb.meta.items() if f.startswith("dup-"))
         assert await manager._import_system_knowledge() == 0
     assert kb.writes == 0, "a second run flip-flopped the link"
+
+
+async def _import_twice_against(dup_meta: dict, tmp_path) -> tuple[_FakeKB, SystemKnowledgeManager, int]:
+    """Two imports whose every store is a semantic duplicate of a fact carrying *dup_meta* (#19296)."""
+    kb = _FakeKB()
+    kb.duplicate = True
+    kb.dup_meta = dup_meta
+    manager = _manager(kb, tmp_path)
+    with patch("agents.kb_librarian.librarian.publish_event", new=AsyncMock()):
+        assert await manager._import_system_knowledge() == 0, "unresolved must not be a retry-causing failure"
+        first = kb.writes
+        assert await manager._import_system_knowledge() == 0
+    return kb, manager, first
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "held_by",
+    [
+        {"owner_id": "u42"},
+        {"user_id": "u42", "visibility": "system"},
+        {"visibility": "private"},
+        {"visibility": " Organization ", "organization_id": "org-7"},
+        {"visibility": "group", "group_ids": ["g1"]},
+        {"shared_with": ["u42"]},
+        # CodeRabbit on #19309: an explicit narrow access level with no visibility is someone's data too.
+        {"access_level": "private"},
+        {"access_level": " Owner "},
+    ],
+)
+async def test_a_duplicate_a_principal_holds_is_never_written_and_reported_unresolved(held_by, tmp_path) -> None:
+    kb, manager, first = await _import_twice_against(held_by, tmp_path)
+    assert first == 0 and kb.writes == 0, "the system import wrote into a fact a principal holds"
+    assert manager._import_unresolved, "the held duplicates were not reported unresolved"
+    assert not any("system_fact_id" in m for f, m in kb.meta.items() if f.startswith("dup-"))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("scope", [{}, {"visibility": "system"}, {"visibility": "PUBLIC"}])
+async def test_an_ownerless_or_system_duplicate_is_still_adopted_and_stable(scope, tmp_path) -> None:
+    kb, manager, first = await _import_twice_against(scope, tmp_path)
+    assert first > 0 and manager._import_unresolved == []
+    assert all(m.get("system_fact_id") for f, m in kb.meta.items() if f.startswith("dup-")), "duplicate not linked"
+    assert kb.writes == first, "the second run wrote again (flip-flop)"
+
+
+@pytest.mark.asyncio
+# None: not read back; a record with no metadata dict is unreadable too, never "ownerless" (CodeRabbit #19364).
+@pytest.mark.parametrize("record", [None, {"id": "x"}, {"id": "x", "metadata": None}, {"id": "x", "metadata": "{}"}])
+async def test_a_duplicate_that_cannot_be_read_back_is_unresolved_not_written(record, tmp_path) -> None:
+    kb = _FakeKB()
+    kb.duplicate = True
+    kb.get_fact = lambda fact_id: record  # owner unknown -> fail closed
+    manager = _manager(kb, tmp_path)
+    with patch("agents.kb_librarian.librarian.publish_event", new=AsyncMock()):
+        assert await manager._import_system_knowledge() == 0
+    assert kb.writes == 0 and manager._import_unresolved

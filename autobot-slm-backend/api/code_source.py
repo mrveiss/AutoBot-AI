@@ -23,17 +23,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing_extensions import Annotated
 
 from api._code_source_paths import _confined_repo_path, _similar_path_parent
+from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
 from autobot_shared.security.upload_filename_policy import TARBALL_EXTENSIONS, is_safe_file
 from autobot_shared.time_utils import utc_timestamp
-from models.database import (
-    CodeStatus,
-    Node,
-    NodeCodeSource,
-    NodeCodeVersion,
-    NodeRole,
-    RoleStatus,
-    Setting,
-)
+from models.database import CodeStatus, Node, NodeCodeSource, NodeCodeVersion, NodeRole, RoleStatus, Setting
 from services.auth import get_current_user
 from services.database import get_db
 from services.ssh_utils import ssh_destination_args
@@ -62,7 +55,7 @@ class CodeSourceAssign(BaseModel):
     """Assign code-source to a node."""
 
     node_id: str
-    repo_path: str = "/opt/autobot"
+    repo_path: str = FLEET_INSTALL_ROOT
     branch: str = "main"
 
 
@@ -550,7 +543,7 @@ async def notify_new_commit(
 # Phase 5 (#926): per-role version tracking + air-gapped upload
 # =============================================================================
 
-_CACHE_BASE = os.environ.get("AUTOBOT_CODE_CACHE_DIR", "/opt/autobot/cache")
+_CACHE_BASE = os.environ.get("AUTOBOT_CODE_CACHE_DIR", f"{FLEET_INSTALL_ROOT}/cache")
 
 
 class NodeCodeVersionResponse(BaseModel):
