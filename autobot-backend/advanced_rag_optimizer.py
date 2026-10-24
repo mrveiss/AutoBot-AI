@@ -33,6 +33,7 @@ from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge.search_components.bm25 import BM25Scorer
 from knowledge.search_components.reranking import (
     RerankWeights,
+    _shared_rerank_weights,
     apply_mmr_reorder_by_content,
     fetch_staleness_scores,
     final_rerank_score,
@@ -135,9 +136,8 @@ class AdvancedRAGOptimizer(OptimizedContextMixin):
         """Initialize RAG optimizer with search configuration. Issue #620.
 
         Args:
-            rerank_weights: Blend weights forwarded to the cross-encoder scoring
-                step. Defaults to RerankWeights() (legacy 0.8/0.2 split).
-                Issue #2034: enables RAGConfig.rerank_weights to flow through.
+            rerank_weights: Blend weights forwarded to the cross-encoder scoring step.
+                None uses the shared RAGConfig.rerank_weights (#2034, #18141).
             bm25_hybrid_enabled: Issue #10600 — route the hybrid keyword half
                 through BM25 Okapi instead of the substring TF scan.  None falls
                 back to model_config.RAG_BM25_HYBRID_ENABLED (default False).
@@ -149,7 +149,7 @@ class AdvancedRAGOptimizer(OptimizedContextMixin):
         """
         self.kb = None
         self.semantic_chunker = None
-        self._rerank_weights: RerankWeights = rerank_weights or RerankWeights()
+        self._rerank_weights: RerankWeights = rerank_weights if rerank_weights is not None else _shared_rerank_weights()
         # Issue #10600: config-gated retrieval-quality knobs (defaults = no-op).
         self._bm25_hybrid_enabled: bool = (
             model_config.RAG_BM25_HYBRID_ENABLED if bm25_hybrid_enabled is None else bm25_hybrid_enabled

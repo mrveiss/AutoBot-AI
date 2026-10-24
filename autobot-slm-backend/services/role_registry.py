@@ -17,11 +17,12 @@ from typing import Dict, List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.fleet_constants import FLEET_AGENT_DIR, FLEET_INSTALL_ROOT
 from models.database import Role, SyncType
 from services.role_manifest_shape import default_roles_for
 
-_BASE_DIR = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
-_SLM_AGENT_DIR = os.environ.get("SLM_AGENT_DIR", "/opt/autobot/autobot-slm-agent")
+_BASE_DIR = os.environ.get("AUTOBOT_BASE_DIR", FLEET_INSTALL_ROOT)
+_SLM_AGENT_DIR = os.environ.get("SLM_AGENT_DIR", FLEET_AGENT_DIR)
 
 
 def _filtered_pip_install(
@@ -674,8 +675,7 @@ async def check_role_uniqueness(
             NodeRole.status.in_(["active", "installed", "not_installed"]),
         )
     )
-    existing = result.scalar_one_or_none()
-    return existing
+    return result.scalar_one_or_none()
 
 
 async def get_role_owners(db: AsyncSession) -> Dict[str, str]:

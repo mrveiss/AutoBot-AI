@@ -227,7 +227,7 @@ _HV_EXCLUDE_RE+='|(^|/)repo_tests/'
 # every exempted file traceable to the reason it exists.
 _HV_EXCLUDE_RE+='|(^|/)tests/fixtures/defect_[0-9]+/'
 _HV_EXCLUDE_RE+='|(ssot_config\.py|ssot-config\.ts|ssot_mappings\.py|registry_defaults\.py|threshold_constants\.py)'
-_HV_EXCLUDE_RE+='|(path_constants\.py|network_constants\.py|security_constants\.py|constants/network\.ts)'
+_HV_EXCLUDE_RE+='|(path_constants\.py|network_constants\.py|security_constants\.py|fleet_constants\.py|constants/network\.ts)'
 _HV_EXCLUDE_RE+='|(/constants/|config\.py$|config\.yaml$|\.env|\.example$|\.lock$)'
 # The detectors themselves: their bodies are literal tables of every SSOT IP,
 # port and model. They are SSOT-definition files exactly like ssot_mappings.py,

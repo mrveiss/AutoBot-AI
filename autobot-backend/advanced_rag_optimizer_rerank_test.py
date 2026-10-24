@@ -56,6 +56,17 @@ class TestAdvancedRAGOptimizerRerankWeights(unittest.IsolatedAsyncioTestCase):
         self.assertAlmostEqual(optimizer._rerank_weights.reranker, 0.8)
         self.assertAlmostEqual(optimizer._rerank_weights.vector, 0.2)
 
+    def test_no_argument_uses_the_shared_rag_config_weights(self):
+        """None reads RAGConfig.rerank_weights, so configured staleness/MMR reach get_rag_optimizer()."""
+        from advanced_rag_optimizer import AdvancedRAGOptimizer
+
+        shared = RerankWeights(reranker=0.5, vector=0.3, staleness=0.2, mmr_lambda=0.7)
+        config = MagicMock(rerank_weights=shared)
+        with patch("services.rag_config.get_rag_config", return_value=config):
+            optimizer = AdvancedRAGOptimizer()
+        self.assertIs(optimizer._rerank_weights, shared)
+        self.assertAlmostEqual(optimizer._mmr_lambda, 0.7)
+
     def test_custom_weights_are_stored(self):
         """Constructor argument is stored as-is on _rerank_weights."""
         from advanced_rag_optimizer import AdvancedRAGOptimizer

@@ -77592,10 +77592,9 @@ export interface components {
             start_entity?: string | null;
             /**
              * Max Depth
-             * @description Maximum traversal depth (1-3 hops)
-             * @default 2
+             * @description Hops (1-3); None = RAGConfig.graph_traversal_depth
              */
-            max_depth: number;
+            max_depth?: number | null;
             /**
              * Max Results
              * @description Maximum number of results to return

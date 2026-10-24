@@ -356,11 +356,9 @@ async def fetch_staleness_scores(chunk_ids: List[str], weights: RerankWeights) -
         from services.mesh_brain.staleness_propagator import get_staleness_score
 
         redis = await get_async_redis_client(database="main")
-        staleness_map: Dict[str, float] = {}
-        for chunk_id in chunk_ids:
-            if chunk_id and chunk_id not in staleness_map:
-                staleness_map[chunk_id] = await get_staleness_score(redis, chunk_id)
-        return staleness_map
+        unique_ids = list(dict.fromkeys(cid for cid in chunk_ids if cid))
+        scores = await asyncio.gather(*(get_staleness_score(redis, cid) for cid in unique_ids))
+        return dict(zip(unique_ids, scores, strict=True))
     except Exception as exc:
         logger.warning("Could not fetch staleness scores: %s", exc)
         return None

@@ -4576,7 +4576,7 @@ class GraphRAGSearchRequest(BaseModel):
 
     query: str = Field(..., min_length=1, max_length=1000, description="Search query string")
     start_entity: str | None = Field(None, max_length=200, description="Optional start entity name for graph traversal")
-    max_depth: int = Field(RAG_GRAPH_TRAVERSAL_DEPTH, ge=1, le=3, description="Maximum traversal depth (1-3 hops)")
+    max_depth: int | None = Field(None, ge=1, le=3, description="Hops (1-3); None = RAGConfig.graph_traversal_depth")
     max_results: int = Field(5, ge=1, le=20, description="Maximum number of results to return")
     enable_reranking: bool = Field(True, description="Whether to apply cross-encoder reranking")
     timeout: float | None = Field(None, ge=1.0, le=30.0, description="Optional timeout in seconds (1-30s)")

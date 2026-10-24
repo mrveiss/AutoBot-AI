@@ -21,6 +21,7 @@ from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from code_intelligence.python_files import collect_python_files
+from code_intelligence.similarity_thresholds import SIMILARITY_MEDIUM
 
 from .detectors import (
     BloaterDetector,
@@ -33,10 +34,7 @@ from .types import DEFAULT_IGNORE_PATTERNS, Thresholds
 
 # Issue #554: Import analytics infrastructure for semantic analysis
 try:
-    from code_intelligence.analytics_infrastructure import (
-        SIMILARITY_MEDIUM,
-        SemanticAnalysisMixin,
-    )
+    from code_intelligence.analytics_infrastructure import SemanticAnalysisMixin
 
     HAS_ANALYTICS_INFRASTRUCTURE = True
 except ImportError:
@@ -624,7 +622,7 @@ class AntiPatternSuiteAnalyzer(SemanticAnalysisMixin):
                     "line_start": "line_start",
                     "description": "description",
                 },
-                min_similarity=(SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7),
+                min_similarity=SIMILARITY_MEDIUM,
             )
         except Exception as e:
             logger.warning("Semantic duplicate detection failed: %s", e)

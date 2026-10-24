@@ -23,16 +23,10 @@ from autobot_shared.logging_manager import get_logger
 from code_intelligence.bug_predictor import BugPredictor, PredictionResult
 
 # Issue #244: Cross-Language Pattern Detection
-from code_intelligence.cross_language_patterns import (
-    CrossLanguageAnalysis,
-    CrossLanguagePatternDetector,
-)
+from code_intelligence.cross_language_patterns import CrossLanguageAnalysis, CrossLanguagePatternDetector
 
 # Issue #208: Code Pattern Detection & Optimization
-from code_intelligence.pattern_analysis import (
-    CodePatternAnalyzer,
-    PatternAnalysisReport,
-)
+from code_intelligence.pattern_analysis import CodePatternAnalyzer, PatternAnalysisReport
 from constants.path_constants import PATH
 from constants.ttl_constants import TIMEOUT_HTTP_LONG
 from utils.cancel_tokens import new_cancel_token, run_cancellable
@@ -52,7 +46,9 @@ from utils.io_executor import get_analytics_executor
 
 from ..api_endpoint_scanner import APIEndpointChecker
 from ..duplicate_detector import (  # noqa: F401
+    HIGH_SIMILARITY_THRESHOLD,
     LOW_SIMILARITY_THRESHOLD,
+    MEDIUM_SIMILARITY_THRESHOLD,
     DuplicateAnalysis,
     DuplicateCodeDetector,
 )
@@ -671,7 +667,7 @@ def _generate_duplicate_overview(analysis: DuplicateAnalysis) -> List[str]:
 
 def _generate_high_similarity_duplicates(analysis: DuplicateAnalysis) -> List[str]:
     """Generate high similarity duplicates section."""
-    high_similarity_dups = [d for d in analysis.duplicates if d.similarity >= 0.90]
+    high_similarity_dups = [d for d in analysis.duplicates if d.similarity >= HIGH_SIMILARITY_THRESHOLD]
     if not high_similarity_dups:
         return []
 
@@ -702,7 +698,9 @@ def _generate_high_similarity_duplicates(analysis: DuplicateAnalysis) -> List[st
 
 def _generate_medium_similarity_duplicates(analysis: DuplicateAnalysis) -> List[str]:
     """Generate medium similarity duplicates section."""
-    medium_similarity_dups = [d for d in analysis.duplicates if 0.70 <= d.similarity < 0.90]
+    medium_similarity_dups = [
+        d for d in analysis.duplicates if MEDIUM_SIMILARITY_THRESHOLD <= d.similarity < HIGH_SIMILARITY_THRESHOLD
+    ]
     if not medium_similarity_dups:
         return []
 
