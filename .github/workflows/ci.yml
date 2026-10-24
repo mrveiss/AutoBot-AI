@@ -60,7 +60,12 @@ on:
     # job doing real work stays gated on `changes` below and self-skips.
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # #19283 review: a push keys on its own commit, so no later merge can cancel it. With one
+  # group per ref, GitHub's `queue: single` cancelled a PENDING push run when the next merge
+  # queued -- and the ratchets' base for a push is the commit before it, so a raise in the
+  # cancelled merge was accepted for good by the next one (`queue: max` cannot be combined
+  # with cancel-in-progress, which PRs need). PRs and merge groups keep the per-ref group.
+  group: ${{ github.workflow }}-${{ github.event_name == 'push' && github.sha || github.ref }}
   # #13432: cancel superseded PR runs, but let a push to a base branch finish.
   #
   # On a pull request a new push makes the previous run obsolete, so cancelling
@@ -70,11 +75,9 @@ concurrency:
   # base branch was effectively never verified, and measuring the #13162 backlog
   # repeatedly meant hunting for a run that happened to survive.
   #
-  # This does not queue unboundedly. This group keeps GitHub's default
-  # `queue: single` (python-shard opts into `queue: max`, #16320): with
-  # cancel-in-progress false, at most one run is in progress and one pending per
-  # group, and a newly queued run cancels the pending one. Base runs serialise and
-  # at most one waits; under a burst you get a verdict for a recent commit.
+  # Base pushes no longer serialise in one group (#19283 review, above): each runs in its
+  # own, so every merge gets a verdict. That is bounded by the merge rate -- trains land a
+  # few times an hour -- not by PR traffic, which keeps the per-ref, cancel-superseded group.
   #
   # Cost is bounded to GitHub-hosted capacity: every job in THIS workflow is
   # ubuntu-latest (the twelve python-suite shards included, see the note above
@@ -166,13 +169,21 @@ jobs:
     # offline, and a slow run still saves what it fetched (if: always()), so the next run resumes
     # instead of starting from zero. Keys are per run (caches are immutable); restore takes the
     # newest for this image, then any image -- debs a newer image no longer wants are ignored.
+    # #19308: `env.ImageVersion` was always empty -- ImageOS/ImageVersion are runner
+    # environment variables, not entries of the `env` context -- so every key read
+    # `ci-apt-archives-Linux--<run>` and debs from any runner image were restored alike.
+    - name: "Runner image for the apt cache key (#19308)"
+      id: image
+      shell: bash
+      run: echo "image=${ImageOS}-${ImageVersion}" >> "$GITHUB_OUTPUT"
+
     - name: "Restore the apt archive cache (#18102)"
       uses: actions/cache/restore@v6
       with:
         path: ${{ runner.temp }}/apt-archive-cache
-        key: ci-apt-archives-${{ runner.os }}-${{ env.ImageVersion }}-${{ github.run_id }}-${{ github.run_attempt }}
+        key: ci-apt-archives-${{ runner.os }}-${{ steps.image.outputs.image }}-${{ github.run_id }}-${{ github.run_attempt }}
         restore-keys: |
-          ci-apt-archives-${{ runner.os }}-${{ env.ImageVersion }}-
+          ci-apt-archives-${{ runner.os }}-${{ steps.image.outputs.image }}-
           ci-apt-archives-${{ runner.os }}-
 
     - name: "Seed apt's archive directory from the cache (#18102)"
@@ -207,7 +218,7 @@ jobs:
       uses: actions/cache/save@v6
       with:
         path: ${{ runner.temp }}/apt-archive-cache
-        key: ci-apt-archives-${{ runner.os }}-${{ env.ImageVersion }}-${{ github.run_id }}-${{ github.run_attempt }}
+        key: ci-apt-archives-${{ runner.os }}-${{ steps.image.outputs.image }}-${{ github.run_id }}-${{ github.run_attempt }}
 
     - name: "Collect the downloaded .debs for the shards (#18102)"
       shell: bash
@@ -325,6 +336,25 @@ jobs:
 
     steps:
     - uses: actions/checkout@v7
+      # #19283: depth 2, so HEAD^1 -- the merge ref's base parent -- is readable. Down-only
+      # ratchets compare each entry with the base commit's table (repo_tests/_ratchet_base.py)
+      # instead of a hand-summed total, and refuse when the base cannot be read.
+      with:
+        fetch-depth: 2
+
+    # #19283 review: the base a ratchet compares with. A merge group names its own base; a push
+    # to main compares with the commit main pointed at before, always an ancestor, so a raise a
+    # cancelled PR run missed turns main red on the push that lands it. A pull_request's
+    # `before` is the previous PR head (orphaned by a rebase), so it is not passed; HEAD^1 of
+    # the merge ref is the base there. The named commit is fetched here.
+    - name: Ratchet base (#19283)
+      env:
+        EVENT_BASE: ${{ github.event.merge_group.base_sha || (github.event_name == 'push' && github.event.before) || '' }}
+      run: |
+        if [ -n "${EVENT_BASE//0/}" ]; then
+          git fetch --no-tags --depth=1 origin "$EVENT_BASE"
+          echo "AUTOBOT_RATCHET_BASE_SHA=${EVENT_BASE}" >> "$GITHUB_ENV"
+        fi
 
     # #18102: the .debs provision-packages already fetched. The setup action installs from
     # this directory with --no-download when it exists, so a shard does no network fetch.

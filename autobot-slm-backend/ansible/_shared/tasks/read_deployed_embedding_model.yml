@@ -33,3 +33,33 @@
   ansible.builtin.set_fact:
     backend_embedding_model: "{{ _embedding_model_probe.stdout | trim }}"
   when: (_embedding_model_probe.stdout | default('') | trim) | length > 0
+
+# #18834: installs from before 2026-10-11 got the LIGHT CHAT model rendered as their embedding
+# model -- the old template wrote one value into both lines -- and the task above keeps it on
+# every update, as #15502 requires. Say so on every run: vectorization fails ("does not support
+# embeddings") until the user picks an embedding model in SLM Settings > LLM (#19373). Kept, not
+# corrected here -- a model change re-indexes. Compared against the light model DEPLOYED in the
+# same file, so no model name is written here.
+- name: "Read the deployed AUTOBOT_LIGHT_PROCESSING_MODEL, if any (#18834)"
+  ansible.builtin.shell:
+    cmd: |
+      for f in {{ deployed_embedding_env_files | join(' ') }}; do
+        v=$(grep -m1 -E '^(export[[:space:]]+)?AUTOBOT_LIGHT_PROCESSING_MODEL=' "$f" 2>/dev/null \
+          | sed -E "s/^(export[[:space:]]+)?AUTOBOT_LIGHT_PROCESSING_MODEL=//; s/\r\$//; s/^[\"']//; s/[\"']\$//")
+        if [ -n "$v" ]; then echo "$v"; break; fi
+      done
+      true
+  register: _light_model_probe
+  changed_when: false
+  failed_when: false
+  become: true
+
+- name: "Warn: the deployed embedding model is the light chat model (#18834)"
+  ansible.builtin.debug:
+    msg: >-
+      WARNING: AUTOBOT_EMBEDDING_MODEL on this host is '{{ backend_embedding_model }}', the same
+      value as its light chat model, not an embedding model. Knowledge vectorization fails until
+      an embedding model is chosen in SLM Settings > LLM (#18834, #19373).
+  when:
+    - (_light_model_probe.stdout | default('') | trim) | length > 0
+    - (_embedding_model_probe.stdout | default('') | trim) == (_light_model_probe.stdout | trim)

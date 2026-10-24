@@ -98,3 +98,48 @@ register_env_var(
         range=(1, 86400),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_EMBEDDING_OVERRIDE_CACHE_SECONDS",
+        type=float,
+        default=5.0,
+        description=(
+            "Seconds each process caches the user's embedding-model override (Redis key "
+            "autobot:kb:embedding_model) before re-reading it, so a switch reaches every reader "
+            "within this window; read by autobot_shared/embedding_model.py (#19377)."
+        ),
+        component="knowledge",
+        range=(0.0, 300.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_EMBEDDING_PROBE_TIMEOUT_SECONDS",
+        type=int,
+        default=60,
+        description=(
+            "Seconds one background test embedding by the embedding_model health probe may run "
+            "before it is abandoned and recorded as 'timed out'; read by "
+            "api/embedding_model_health.py (#18834)."
+        ),
+        component="knowledge",
+        range=(1, 600),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_EMBEDDING_PROBE_TTL_SECONDS",
+        type=int,
+        default=300,
+        description=(
+            "Seconds a background test embedding of the configured embedding model stays valid "
+            "for the embedding_model health probe before it is re-run; read by "
+            "api/embedding_model_health.py (#18834)."
+        ),
+        component="knowledge",
+        range=(10, 86400),
+    )
+)

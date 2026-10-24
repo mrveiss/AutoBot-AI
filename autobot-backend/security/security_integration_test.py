@@ -363,8 +363,15 @@ class TestSecuritySystemResilience:
 
 
 class TestSecurityPerformance:
-    """Test security system performance characteristics"""
+    """Test security system performance characteristics.
 
+    #15055: the wall-clock budgets below fail on runner load, not on a regression -- one red
+    train 78. They are `performance`-marked, so the per-PR suite deselects them and
+    marker-tests.yml runs them; the behaviour they also exercised is asserted unmarked in
+    TestSecurityWorkDone, by counting the work done instead of timing it.
+    """
+
+    @pytest.mark.performance
     def test_risk_assessment_performance(self):
         """Test risk assessment performance"""
         executor = SecureCommandExecutor()
@@ -397,6 +404,7 @@ class TestSecurityPerformance:
         avg_time = duration / len(commands) * 1000
         assert avg_time < 16, f"Average assessment time: {avg_time:.2f}ms"
 
+    @pytest.mark.performance
     @pytest.mark.asyncio
     async def test_audit_logging_performance(self, security_layer):
         """Test audit logging performance"""
@@ -418,6 +426,29 @@ class TestSecurityPerformance:
 
         # Should be fast (< 0.5 seconds for 100 entries)
         assert duration < 0.5, f"Audit logging took {duration:.2f}s for 100 entries"
+
+
+class TestSecurityWorkDone:
+    """What the timed tests above also covered, asserted as work done, not seconds (#15055)."""
+
+    def test_every_batched_command_gets_a_risk_and_a_reason(self):
+        executor = SecureCommandExecutor()
+        commands = ["echo hello", "ls -la", "cat file.txt", "mkdir test", "rm file.txt", "sudo apt update"] * 10
+
+        results = [executor.assess_command_risk(cmd) for cmd in commands]
+
+        assert len(results) == 60
+        assert all(isinstance(risk, CommandRisk) and reasons for risk, reasons in results)
+
+    @pytest.mark.asyncio
+    async def test_a_hundred_audit_writes_are_a_hundred_entries_in_order(self, security_layer, audit_trail):
+        for i in range(100):
+            security_layer.audit_log(action=f"work_{i}", user="perf_user", outcome="success", details={"i": i})
+
+        entries = await security_layer.get_audit_entries(limit=200)
+
+        assert sorted(e["details"]["i"] for e in entries) == list(range(100))
+        assert {e["action"] for e in entries} == {f"work_{i}" for i in range(100)}
 
 
 if __name__ == "__main__":

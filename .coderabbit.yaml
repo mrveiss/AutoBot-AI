@@ -55,6 +55,14 @@ reviews:
     base_branches:
       - main
       - release
+    # #19284 (coordinator decision, 2026-10-23): no automatic review of merge-train PRs. A
+    # train's diff is its members' diffs, each already reviewed on its own PR, and reviewing it
+    # whole re-opened that code after green CI -- train 74 (#19191) took two extra rounds of 9
+    # and 4 threads, each followed by a full CI rerun. The coordinator reviews the train's own
+    # fix commits and asks for `@coderabbitai review` by hand when one is substantial. Trade-off,
+    # accepted: small train fix commits get no bot review.
+    ignore_title_keywords:
+      - "train("
 
   path_filters:
     # Recorders, not code. These are data files whose diffs are counts and
