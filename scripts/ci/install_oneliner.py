@@ -20,7 +20,7 @@ _FENCE = re.compile(r"^```[^\n]*\n(.*?)^```", re.MULTILINE | re.DOTALL)
 _ONELINER = re.compile(r"^curl \S.*/install\.sh \| sudo bash$")
 
 
-def extract(markdown: str) -> str:
+def extract_oneliner(markdown: str) -> str:
     """The first documented one-liner, or SystemExit naming what is missing."""
     for block in _FENCE.findall(markdown):
         for line in block.splitlines():
@@ -31,7 +31,7 @@ def extract(markdown: str) -> str:
 
 def main(argv: list[str]) -> int:
     doc = Path(argv[1]) if len(argv) > 1 else ROOT / "INSTALL.md"
-    sys.stdout.write(extract(doc.read_text(encoding="utf-8")) + "\n")
+    sys.stdout.write(extract_oneliner(doc.read_text(encoding="utf-8")) + "\n")
     return 0
 
 
