@@ -863,7 +863,7 @@
   # runtime (three levels up from services/permission_matcher.py).  The clean
   # task that previously wiped /opt/autobot/config has been removed; this task
   # ensures the directory and file are always present after each deploy.
-  - name: "Backend | Ensure /opt/autobot/config directory exists (#3873)"
+  - name: "Backend | Ensure {{ autobot.base_dir }}/config directory exists (#3873)"
     ansible.builtin.file:
       path: "{{ backend_install_dir | dirname }}/config"
       state: directory

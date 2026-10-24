@@ -938,11 +938,7 @@
 1|ssot|autobot-infrastructure/shared/tests/screenshots/test-wsl2-compatible.js|:5173
 1|ssot|autobot-infrastructure/shared/tests/test_chat_responses.js|:5173
 3|ssot|autobot-infrastructure/shared/tests/test_workflow_api.js|:8001
-1|other|autobot-slm-backend/ansible/_shared/tasks/pre_migration_backup.yml|"/opt/autobot/backups/pre-migration/backend-$(date +%s).dump
-1|other|autobot-slm-backend/ansible/apply-system-updates.yml|"/opt/autobot/backups/system-updates/sources.list-{{ ansible_facts[
 1|other|autobot-slm-backend/ansible/apply-system-updates.yml|300
-1|other|autobot-slm-backend/ansible/backup-node-data.yml|'/opt/autobot/autobot-db-stack/chromadb/data
-1|other|autobot-slm-backend/ansible/backup-node-data.yml|'/opt/autobot/backups
 1|other|autobot-slm-backend/ansible/backup-node-data.yml|30
 1|ssot|autobot-slm-backend/ansible/backup-node-data.yml|:9090
 1|other|autobot-slm-backend/ansible/deploy-autobot-native.sh|"/tmp/autobot-deployment
@@ -1111,14 +1107,8 @@
 1|other|autobot-slm-backend/ansible/playbooks/update-node.yml|60
 1|ssot|autobot-slm-backend/ansible/playbooks/update-node.yml|:8001
 1|ssot|autobot-slm-backend/ansible/playbooks/vars/backend-env.yml|:11434
-1|other|autobot-slm-backend/ansible/pre-migration-check.yml|'/opt/autobot
 1|other|autobot-slm-backend/ansible/reboot-node.yml|300
 1|other|autobot-slm-backend/ansible/requirements.yml|https://github.com/dev-sec/ansible-os-hardening
-1|other|autobot-slm-backend/ansible/roles/_shared/tasks/clean_legacy_dir.yml|"/opt/autobot/{{ _legacy_canonical }}
-3|other|autobot-slm-backend/ansible/roles/_shared/tasks/clean_legacy_dir.yml|"/opt/autobot/{{ _legacy_canonical }}/data
-1|other|autobot-slm-backend/ansible/roles/_shared/tasks/clean_legacy_dir.yml|"/opt/autobot/{{ dir_name }}
-2|other|autobot-slm-backend/ansible/roles/_shared/tasks/clean_legacy_dir.yml|"/opt/autobot/{{ dir_name }}/data
-1|other|autobot-slm-backend/ansible/roles/_shared/tasks/clean_wrong_node_dir.yml|"/opt/autobot/{{ dir_name }}
 1|other|autobot-slm-backend/ansible/roles/access_control/defaults/main.yml|300
 1|other|autobot-slm-backend/ansible/roles/agent_config/defaults/main.yml|"/var/lib/autobot/models
 1|other|autobot-slm-backend/ansible/roles/agent_config/tasks/nodejs.yml|https://deb.nodesource.com/setup_{{
@@ -1199,7 +1189,6 @@
 1|other|autobot-slm-backend/ansible/roles/xrdp/tasks/main.yml|30
 1|other|autobot-slm-backend/ansible/setup-backup-admin.yml|/home/autobot
 1|ssot|autobot-slm-backend/ansible/setup-user-backend.yml|:8001
-1|other|autobot-slm-backend/ansible/utils/backup.sh|"/opt/autobot/backups
 1|other|autobot-slm-backend/ansible/utils/backup.sh|/home/autobot
 1|other|autobot-slm-backend/ansible/verify-backup-restore.yml|"/tmp/autobot-restore-verify-{{ ansible_facts[
 1|other|autobot-slm-backend/api/code_sync.py|100
