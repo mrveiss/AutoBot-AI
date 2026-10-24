@@ -19,6 +19,8 @@ from autobot_shared.paths import project_root
 sys.path.insert(0, str(project_root()))
 from autobot_shared.network_constants import ServiceURLs
 from autobot_shared.redis_client import require_redis_client
+from autobot_shared.redis_management.database_names import database_number
+from autobot_shared.redis_management.endpoint import resolve_redis_endpoint
 
 # The sibling helper module lives beside this script; put its directory on the path so the import
 # resolves when the file is imported (pytest, tooling) as well as when it is run.
@@ -206,8 +208,10 @@ def _configure_llamaindex_settings(fixes_attempted):
     )
     vector_store = RedisVectorStore(
         schema=schema,
-        redis_url=ServiceURLs.REDIS_LOCAL,
-        redis_kwargs={"db": 2},
+        redis_url=resolve_redis_endpoint().url(),
+        # #19232: the existing llama_index lives in "knowledge" (knowledge/base.py); the old
+        # literal 2 is the prompts database.
+        redis_kwargs={"db": database_number("knowledge")},
     )
     fixes_attempted.append("Connected to existing vector store without overwriting")
 
@@ -416,7 +420,7 @@ class AutoBotVectorStoreAnalysis:
             vector_store = RedisVectorStore(
                 embeddings=embeddings,
                 index_name="autobot_langchain_db0",
-                redis_url="%s/0" % ServiceURLs.REDIS_LOCAL,
+                redis_url=resolve_redis_endpoint().url(database_number("main")),
             )
             fixes_attempted.append("Created LangChain vector store on Redis DB 0")
 
@@ -667,7 +671,7 @@ class AutoBotVectorStoreAnalysis:
             vector_store = RedisVectorStore(
                 embeddings=embeddings,
                 index_name="autobot_langchain_test",
-                redis_url="%s/0" % ServiceURLs.REDIS_LOCAL,
+                redis_url=resolve_redis_endpoint().url(database_number("main")),
             )
             fixes_attempted.append("Created vector store on Redis DB 0")
 

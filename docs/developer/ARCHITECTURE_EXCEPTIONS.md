@@ -560,3 +560,28 @@ derived as `{{ autobot.base_dir | dirname }}/<svc>`.
 **Revisit when:** the platform decides to relocate service state under the install root.
 
 **Grep check:** `grep -n "_config_dir\|_data_dir" autobot-slm-backend/ansible/roles/monitoring/defaults/main.yml` -- if no `/etc` or `/var` literal remains, this exception is obsolete.
+
+---
+
+## `autobot-admin` CLI — Own `.env` Reader (not `parse_env_file`)
+
+**File:** `autobot-slm-backend/scripts/autobot-admin.py` (`load_env_file`)
+**Shared authority it does not use:** `autobot_shared/env_file.py` (`parse_env_text` / `parse_env_file`)
+**Issue:** #19232
+
+**Reason:** the `slm_manager` role copies this one file to `/usr/local/bin/autobot-admin`
+(`roles/slm_manager/tasks/main.yml`), and it runs as `#!/usr/bin/env python3` -- the system
+interpreter -- so that a password can be reset while the SLM backend is down. That interpreter
+has the install root on no import path, so `import autobot_shared` fails there even though the
+package is present under the install root. Making it importable means putting the install root
+on the CLI's path, which needs the install root as a shared constant (#19350's
+`FLEET_INSTALL_ROOT`) rather than another literal.
+
+Its parsing differs from `parse_env_text` in one way: it strips quote characters from both
+ends even when they are unmatched, and keeps unquoted ` #` text. The SLM's other `.env` reader
+(`api/_pricing_post_sync._load_env_file`) and the env-file validator use `parse_env_text`.
+
+**Revisit when:** #19350 lands `FLEET_INSTALL_ROOT`; then the CLI should add it to `sys.path`,
+import `parse_env_file`, and this entry should be removed.
+
+**Grep check:** `grep -n "def load_env_file" autobot-slm-backend/scripts/autobot-admin.py` -- if empty, this exception is obsolete.

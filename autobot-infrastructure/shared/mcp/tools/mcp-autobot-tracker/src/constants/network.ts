@@ -9,7 +9,7 @@
  *
  * Usage:
  *   import { NetworkConstants, ServiceURLs } from './constants/network';
- *   const redisUrl = `redis://${NetworkConstants.REDIS_VM_IP}:${NetworkConstants.REDIS_PORT}`;
+ *   const redisHost = NetworkConstants.REDIS_VM_IP;  // the Redis client takes host/port, not a URL
  */
 
 /**
@@ -54,9 +54,8 @@ export const ServiceURLs = {
   FRONTEND_VM: `http://${NetworkConstants.FRONTEND_VM_IP}:${NetworkConstants.FRONTEND_PORT}`,
   FRONTEND_LOCAL: `http://${NetworkConstants.LOCALHOST_NAME}:${NetworkConstants.FRONTEND_PORT}`,
 
-  // Redis URLs
-  REDIS_VM: `redis://${NetworkConstants.REDIS_VM_IP}:${NetworkConstants.REDIS_PORT}`,
-  REDIS_LOCAL: `redis://${NetworkConstants.LOCALHOST_IP}:${NetworkConstants.REDIS_PORT}`,
+  // No Redis URLs (#19232): the monitor's Redis check connects with host/port, and a
+  // second Redis URL builder is what #19232 removed everywhere else.
 
   // Ollama LLM URLs
   OLLAMA_LOCAL: `http://${NetworkConstants.LOCALHOST_NAME}:${NetworkConstants.OLLAMA_PORT}`,
@@ -84,7 +83,7 @@ export const HealthCheckEndpoints = {
   FRONTEND: `${ServiceURLs.FRONTEND_VM}/health`,
   NPU_WORKER: `${ServiceURLs.NPU_WORKER_SERVICE}/health`,
   NPU_WORKER_WINDOWS: `${ServiceURLs.NPU_WORKER_WINDOWS_SERVICE}/health`,
-  REDIS: ServiceURLs.REDIS_VM,
+  REDIS: `${NetworkConstants.REDIS_VM_IP}:${NetworkConstants.REDIS_PORT}`,  // display only: PING over host/port
   AI_STACK: `${ServiceURLs.AI_STACK_SERVICE}/health`,
   BROWSER: `${ServiceURLs.BROWSER_SERVICE}/health`,
   BACKEND: `${ServiceURLs.BACKEND_API}/api/system/health`,

@@ -122,8 +122,87 @@ fi
 
 # RedisConfig
 : "${AUTOBOT_REDIS_PASSWORD:=}"
-: "${AUTOBOT_REDIS_DB_CELERY_BROKER:=14}"
-: "${AUTOBOT_REDIS_DB_CELERY_RESULTS:=15}"
+
+# Redis database numbers: never a literal here (#19232). redis-databases.yaml is the
+# one table (autobot_shared/redis_management/types.py reads the same file), and an
+# AUTOBOT_REDIS_DB_<NAME> already in the environment wins, as it does in Python.
+_AUTOBOT_REDIS_DATABASES_YAML="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../config" 2>/dev/null && pwd)/redis-databases.yaml"
+if [ ! -f "${_AUTOBOT_REDIS_DATABASES_YAML}" ]; then
+    _AUTOBOT_REDIS_DATABASES_YAML="${PROJECT_ROOT}/autobot-infrastructure/shared/config/redis-databases.yaml"
+fi
+
+# _autobot_redis_yaml_table -- "name number" for every database redis-databases.yaml declares.
+_autobot_redis_yaml_table() {
+    awk '
+        /^redis_databases:/ { inside = 1; next }
+        inside && /^[^ #]/ { exit }
+        inside && /^  [a-z_]+:/ { name = $1; sub(":", "", name); next }
+        inside && name != "" && /^    db:/ { print name, $2; name = "" }
+    ' "${_AUTOBOT_REDIS_DATABASES_YAML}" 2>/dev/null
+}
+
+# _autobot_redis_override NAME -- the raw AUTOBOT_REDIS_DB_<NAME> value; workflows also
+# answers to the legacy AUTOBOT_REDIS_DB_TASKS (database_overrides.LEGACY_ENV_NAMES).
+_autobot_redis_override() {
+    local var="AUTOBOT_REDIS_DB_${1^^}"
+    if [ -n "${!var:-}" ]; then
+        echo "${var}=${!var}"
+    elif [ "$1" = "workflows" ] && [ -n "${AUTOBOT_REDIS_DB_TASKS:-}" ]; then
+        echo "AUTOBOT_REDIS_DB_TASKS=${AUTOBOT_REDIS_DB_TASKS}"
+    fi
+}
+
+# Highest Redis index, as database_overrides.MAX_DATABASE_INDEX (pinned equal by a test).
+_AUTOBOT_REDIS_MAX_DB=15
+
+# _autobot_redis_number VALUE -- VALUE trimmed, if it is ASCII digits within 0.._AUTOBOT_REDIS_MAX_DB.
+_autobot_redis_number() {
+    local v="$1"
+    v="${v#"${v%%[![:space:]]*}"}"
+    v="${v%"${v##*[![:space:]]}"}"
+    [[ "$v" =~ ^[0-9]+$ ]] && (( 10#$v <= _AUTOBOT_REDIS_MAX_DB )) && echo $((10#$v))
+}
+
+# autobot_redis_db NAME -- print NAME's database number; non-zero and a message if unknown.
+# Same rules as autobot_shared/redis_management/database_overrides.py: an override that is
+# not a non-negative integer, or that lands two databases on one number, is refused -- said
+# on stderr -- and that database keeps its YAML number.
+autobot_redis_db() {
+    local -A yaml=() accepted=() source=() final=()
+    local name number entry other parsed changed=1
+    while read -r name number; do yaml[$name]=$number; done < <(_autobot_redis_yaml_table)
+    if [ -z "${yaml[$1]:-}" ]; then
+        echo "ssot-config.sh: no Redis database '$1' in ${_AUTOBOT_REDIS_DATABASES_YAML}" >&2
+        return 1
+    fi
+    for name in "${!yaml[@]}"; do
+        entry="$(_autobot_redis_override "$name")"
+        [ -z "${entry}" ] && continue
+        source[$name]="${entry}"
+        if parsed="$(_autobot_redis_number "${entry#*=}")"; then
+            accepted[$name]=$parsed
+        elif [ "$name" = "$1" ]; then
+            echo "ssot-config.sh: refused ${entry}: not a Redis database number (0-${_AUTOBOT_REDIS_MAX_DB}) (keeping redis-databases.yaml)" >&2
+        fi
+    done
+    while [ "${changed}" = 1 ]; do
+        changed=0
+        for name in "${!yaml[@]}"; do final[$name]="${accepted[$name]:-${yaml[$name]}}"; done
+        for name in "${!accepted[@]}"; do
+            for other in "${!final[@]}"; do
+                [ "$other" = "$name" ] || [ "${final[$other]}" != "${final[$name]}" ] && continue
+                [ "$name" = "$1" ] && echo "ssot-config.sh: refused ${source[$name]}: collides with ${other} (keeping redis-databases.yaml)" >&2
+                unset "accepted[$name]"
+                changed=1
+                break
+            done
+        done
+    done
+    echo "${accepted[$1]:-${yaml[$1]}}"
+}
+
+# No AUTOBOT_REDIS_DB_* is exported from here: a script asks autobot_redis_db, and exporting
+# resolved values would turn them into overrides that the next lookup has to vet (#19232).
 
 # TimeoutConfig.api -- frontend API timeout in ms (#17856 row 6)
 : "${AUTOBOT_API_TIMEOUT:=60000}"
@@ -172,7 +251,7 @@ export AUTOBOT_BACKEND_HOST AUTOBOT_FRONTEND_HOST AUTOBOT_NPU_WORKER_HOST \
     AUTOBOT_BACKEND_PORT AUTOBOT_FRONTEND_PORT AUTOBOT_NPU_WORKER_PORT \
     AUTOBOT_REDIS_PORT AUTOBOT_AI_STACK_PORT AUTOBOT_BROWSER_SERVICE_PORT \
     AUTOBOT_OLLAMA_PORT AUTOBOT_VNC_PORT \
-    AUTOBOT_REDIS_PASSWORD AUTOBOT_REDIS_DB_CELERY_BROKER AUTOBOT_REDIS_DB_CELERY_RESULTS \
+    AUTOBOT_REDIS_PASSWORD \
     AUTOBOT_API_TIMEOUT \
     AUTOBOT_NOVNC_PATH NETWORK_SUBNET \
     AUTOBOT_SSH_KEY AUTOBOT_SSH_USER AUTOBOT_SLM_NODE_ID \

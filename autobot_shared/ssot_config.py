@@ -45,7 +45,6 @@ from enum import Enum
 from functools import lru_cache
 from pathlib import Path
 from typing import ClassVar, Dict, FrozenSet, List
-from urllib.parse import quote
 
 from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -725,22 +724,9 @@ class RedisConfig(RedactedSettings):
     # Enable/disable Redis
     enabled: bool = Field(default=True, alias="AUTOBOT_REDIS_ENABLED")
 
-    # Database assignments — defaults match redis-databases.yaml SSOT (#2670)
-    db_main: int = Field(default=0, alias="AUTOBOT_REDIS_DB_MAIN")
-    db_knowledge: int = Field(default=1, alias="AUTOBOT_REDIS_DB_KNOWLEDGE")
-    db_prompts: int = Field(default=2, alias="AUTOBOT_REDIS_DB_PROMPTS")
-    db_agents: int = Field(default=3, alias="AUTOBOT_REDIS_DB_AGENTS")
-    db_metrics: int = Field(default=4, alias="AUTOBOT_REDIS_DB_METRICS")
-    db_cache: int = Field(default=5, alias="AUTOBOT_REDIS_DB_CACHE")
-    db_sessions: int = Field(default=6, alias="AUTOBOT_REDIS_DB_SESSIONS")
-    db_tasks: int = Field(default=7, alias="AUTOBOT_REDIS_DB_TASKS")
-    db_logs: int = Field(default=8, alias="AUTOBOT_REDIS_DB_LOGS")
-    db_temp: int = Field(default=9, alias="AUTOBOT_REDIS_DB_TEMP")
-    db_audit: int = Field(default=10, alias="AUTOBOT_REDIS_DB_AUDIT")
-    db_analytics: int = Field(default=11, alias="AUTOBOT_REDIS_DB_ANALYTICS")
-    db_celery_broker: int = Field(default=14, alias="AUTOBOT_REDIS_DB_CELERY_BROKER")
-    db_celery_results: int = Field(default=15, alias="AUTOBOT_REDIS_DB_CELERY_RESULTS")
-    db_testing: int = Field(default=13, alias="AUTOBOT_REDIS_DB_TESTING")
+    # Database numbers are NOT here (#19232): redis-databases.yaml plus the
+    # AUTOBOT_REDIS_DB_<NAME> overrides form the one table, read through
+    # autobot_shared.redis_management.database_names.database_number.
 
     # LangGraph checkpoint TTL (#1481, #3231)
     checkpoint_ttl_minutes: int = Field(
@@ -1167,12 +1153,9 @@ class PermissionConfig(RedactedSettings):
         description="How long to remember approved commands (seconds)",
     )
 
-    # Redis database for permission storage
-    redis_db: int = Field(
-        default=11,
-        alias="AUTOBOT_REDIS_DB_PERMISSIONS",
-        description="Redis database for permission rules and memory",
-    )
+    # No Redis database number here (#19232): approval memory stores in the "main"
+    # database through the canonical client (services/approval_memory.py). The retired
+    # redis_db=11 field named analytics' DB, and nothing read it.
 
     # Permission rules file path (relative to project root)
     rules_file: str = Field(
@@ -2497,21 +2480,21 @@ class AutoBotConfig(RedactedSettings):
 
     @property
     def redis_url(self) -> str:
-        """Get the full Redis URL (without password)."""
-        if self.tls.redis_tls_enabled:
-            return f"rediss://{self.vm.redis}:{self.tls.redis_tls_port}"
-        return f"redis://{self.vm.redis}:{self.port.redis}"
+        """The Redis URL without credentials, from the one endpoint resolver (#19232)."""
+        from autobot_shared.redis_management.endpoint import resolve_redis_endpoint
+
+        return resolve_redis_endpoint(self).url(with_auth=False)
 
     @property
     def redis_url_with_auth(self) -> str:
-        """Get the full Redis URL with credentials if configured (URL-encoded)."""
-        tls = self.tls.redis_tls_enabled
-        scheme, port = ("rediss", self.tls.redis_tls_port) if tls else ("redis", self.port.redis)
-        if self.redis.password:
-            # #16626: userinfo carries the ACL username when set; unset keeps ":<password>"
-            userinfo = f"{quote(self.redis.username or '', safe='')}:{quote(self.redis.password, safe='')}"
-            return f"{scheme}://{userinfo}@{self.vm.redis}:{port}"
-        return f"{scheme}://{self.vm.redis}:{port}"
+        """The Redis URL with URL-encoded credentials (#16626), from the one endpoint resolver.
+
+        #19232: the canonical client resolves through the same function, so this URL
+        names the host, port and credentials ``get_redis_client`` dials.
+        """
+        from autobot_shared.redis_management.endpoint import resolve_redis_endpoint
+
+        return resolve_redis_endpoint(self).url()
 
     @property
     def ollama_url(self) -> str:
@@ -2618,9 +2601,8 @@ class AutoBotConfig(RedactedSettings):
         return f"http://{self.vm.slm}:{self.port.slm}"
 
     def get_redis_url_for_db(self, db_number: int) -> str:
-        """Get Redis URL for a specific database number."""
-        base = self.redis_url_with_auth
-        return f"{base}/{db_number}"
+        """The authenticated Redis URL for *db_number* (resolve a name with ``database_number``)."""
+        return f"{self.redis_url_with_auth}/{db_number}"
 
     def get_service_url(self, service_name: str) -> str | None:
         """

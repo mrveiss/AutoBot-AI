@@ -33,7 +33,7 @@ from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.redis_client import get_redis_client
+from autobot_shared.redis_client import DATABASE_MAPPING, get_redis_client
 from type_defs.common import Metadata
 from utils.advanced_cache_manager import advanced_cache
 
@@ -44,21 +44,16 @@ router = APIRouter(tags=["cache_management"])
 _ESSENTIAL_CACHE_DATA_TYPES = ("templates", "system_status", "project_status")
 
 
-# Redis database mappings from config
-REDIS_DATABASES = {
-    "main": 0,
-    "knowledge": 1,
-    "prompts": 2,
-    "conversations": 3,
-    "sessions": 4,
-    "cache": 5,
-    "locks": 6,
-    "monitoring": 7,
-    "rate_limiting": 8,
-    "analytics": 9,
-    "websockets": 10,
-    "config": 11,
-}
+# The databases this API reports on and clears. Numbers come from the one name -> number
+# table (#19232); REDIS_DATABASES used to be a hand-kept copy that disagreed with it
+# (sessions 4, analytics 9). A name nothing declares maps to None; get_redis_client refuses it.
+_CACHE_DATABASE_NAMES = ("main", "knowledge", "prompts", "conversations", "sessions", "cache", "locks")
+_CACHE_DATABASE_NAMES += ("monitoring", "rate_limiting", "analytics", "websockets", "config")
+
+
+def redis_databases() -> Dict[str, int | None]:
+    """``{name: number}`` for the databases this API covers, read from the one table at call time."""
+    return {name: DATABASE_MAPPING.get(name) for name in _CACHE_DATABASE_NAMES}
 
 
 def get_cache_redis_connection(database: str = "main"):
@@ -73,7 +68,7 @@ def get_cache_redis_connection(database: str = "main"):
         raise
 
 
-def _clear_single_redis_database(db_name: str, db_number: int) -> dict:
+def _clear_single_redis_database(db_name: str, db_number: int | None) -> dict:
     """Clear a single Redis database and return result."""
     try:
         redis_conn = get_cache_redis_connection(db_name)
@@ -138,7 +133,7 @@ async def get_cache_stats():
     }
 
     total_keys = 0
-    for db_name, db_number in REDIS_DATABASES.items():
+    for db_name, db_number in redis_databases().items():
         try:
             redis_conn = get_cache_redis_connection(db_name)
             db_info = await asyncio.to_thread(redis_conn.info)
@@ -180,16 +175,17 @@ async def clear_redis_cache(database: str):
     cleared_databases = []
 
     if database == "all":
-        for db_name, db_number in REDIS_DATABASES.items():
+        for db_name, db_number in redis_databases().items():
             result = await asyncio.to_thread(_clear_single_redis_database, db_name, db_number)
             cleared_databases.append(result)
     else:
-        if database not in REDIS_DATABASES:
+        databases = redis_databases()
+        if database not in databases:
             raise HTTPException(
                 status_code=400,
-                detail=(f"Unknown database '{database}'. " f"Available: {list(REDIS_DATABASES.keys())}"),
+                detail=(f"Unknown database '{database}'. " f"Available: {list(databases.keys())}"),
             )
-        db_number = REDIS_DATABASES[database]
+        db_number = databases[database]
         redis_conn = get_cache_redis_connection(database)
         keys_before = await asyncio.to_thread(redis_conn.dbsize)
         await asyncio.to_thread(redis_conn.flushdb)

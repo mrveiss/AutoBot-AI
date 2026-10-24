@@ -35,6 +35,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from autobot_shared.network_constants import NetworkConstants, ServiceURLs  # noqa: E402
+from autobot_shared.redis_management.endpoint import resolve_redis_endpoint  # noqa: E402
 from autobot_shared.redis_client import get_async_redis_client  # noqa: E402
 from autobot_shared.ssot_constants import TimingConstants  # noqa: E402
 
@@ -148,8 +149,9 @@ class StartupCoordinator:
         # Core infrastructure (no dependencies)
         self.components["redis"] = ComponentInfo(
             name="redis",
-            port=NetworkConstants.REDIS_PORT,
-            health_url=ServiceURLs.REDIS_LOCAL,
+            # #19232: the endpoint the canonical client dials, not a loopback literal
+            port=resolve_redis_endpoint().port,
+            health_url=resolve_redis_endpoint().url(with_auth=False),
             dependencies=[],
         )
 

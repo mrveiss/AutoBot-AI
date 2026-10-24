@@ -496,6 +496,25 @@ for _fam_var in AUTOBOT_SSH_KEY AUTOBOT_SSH_USER AUTOBOT_SLM_NODE_ID \
     fi
 done
 
+# --- #19232: Redis DB numbers come from redis-databases.yaml, overrides vetted like Python --
+_db() { env -i PATH="$PATH" "$@" bash -c "source '$LIB'; autobot_redis_db \"\$_DB_NAME\"" 2>&1; }
+out=$(_db _DB_NAME=celery_broker)
+check "19232: celery_broker from the YAML, no literal" "$out" "14"
+out=$(_db _DB_NAME=knowledge AUTOBOT_REDIS_DB_MAIN=12 AUTOBOT_REDIS_DB_KNOWLEDGE=0)
+check "19232: a valid override moves the database" "$out" "0"
+out=$(_db _DB_NAME=workflows AUTOBOT_REDIS_DB_TASKS=12)
+check "19232: legacy AUTOBOT_REDIS_DB_TASKS still means workflows" "$out" "12"
+out=$(_db _DB_NAME=main AUTOBOT_REDIS_DB_MAIN=zero)
+check "19232: a non-numeric override is refused, said, and the YAML number kept" "$out" \
+    "ssot-config.sh: refused AUTOBOT_REDIS_DB_MAIN=zero: not a Redis database number (0-15) (keeping redis-databases.yaml)
+0"
+out=$(_db _DB_NAME=testing AUTOBOT_REDIS_DB_TESTING=15)
+check "19232: an override colliding with celery_results is refused, said, and the YAML number kept" "$out" \
+    "ssot-config.sh: refused AUTOBOT_REDIS_DB_TESTING=15: collides with celery_results (keeping redis-databases.yaml)
+13"
+env -i PATH="$PATH" bash -c "source '$LIB'; autobot_redis_db nope" >/dev/null 2>&1
+check "19232: an undeclared database fails rather than defaulting" "$?" "1"
+
 echo
 echo "=== $pass passed, $fail failed ==="
 [ "$fail" -eq 0 ]

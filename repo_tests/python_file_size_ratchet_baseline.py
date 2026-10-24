@@ -77,7 +77,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/auth.py": 684,
     "autobot-backend/api/batch_jobs.py": 916,
     "autobot-backend/api/browser_mcp.py": 1323,
-    "autobot-backend/api/cache_management.py": 779,
+    "autobot-backend/api/cache_management.py": 775,
     "autobot-backend/api/chat.py": 2686,  # #18316: delete delegates to the canonical path
     "autobot-backend/api/chat_sessions.py": 1859,  # #18293: legacy transcripts only ever proposed
     "autobot-backend/api/code_intelligence.py": 2151,
@@ -474,17 +474,17 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot_shared/circuit_breaker.py": 689,
     "autobot_shared/env_registry.py": 1125,  # #13602, #18765: sibling imports; blocks moved to siblings
     "autobot_shared/monitoring/prometheus_metrics.py": 949,
-    "autobot_shared/network_constants.py": 614,
+    "autobot_shared/network_constants.py": 608,
     "autobot_shared/npu/integration.py": 929,
     "autobot_shared/plugin_sdk/loader.py": 690,
     "autobot_shared/plugin_sdk/plugin_load_visibility_test.py": 750,
     "autobot_shared/plugin_sdk/plugin_sdk_test.py": 941,
     "autobot_shared/rate_limiter_test.py": 618,
     "autobot_shared/redis_client.py": 674,
-    "autobot_shared/redis_management/connection_manager.py": 1387,
+    "autobot_shared/redis_management/connection_manager.py": 1290,
     "autobot_shared/security/ssrf_guard_test.py": 633,
-    "autobot_shared/ssot_config.py": 3260,  # #16375: AUTOBOT_PROMETHEUS_SCRAPE_TOKEN
-    "autobot_shared/ssot_config_test.py": 782,
+    "autobot_shared/ssot_config.py": 3242,  # #16375: AUTOBOT_PROMETHEUS_SCRAPE_TOKEN
+    "autobot_shared/ssot_config_test.py": 776,
     "autobot_shared/ssot_constants.py": 896,
     "autobot_shared/user_management/team_service.py": 724,
     "pipeline-scripts/check-pre-commit-hook-pr_test.py": 747,

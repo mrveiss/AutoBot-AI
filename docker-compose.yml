@@ -396,8 +396,8 @@ services:
       - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
       - AUTOBOT_REDIS_HOST=autobot-redis
       - AUTOBOT_REDIS_PORT=6379
-      - CELERY_BROKER_URL=redis://autobot-redis:6379/${AUTOBOT_REDIS_DB_CELERY_BROKER:-14}
-      - CELERY_RESULT_BACKEND=redis://autobot-redis:6379/${AUTOBOT_REDIS_DB_CELERY_RESULTS:-15}
+      # Broker/result URLs: celery_app builds them from AUTOBOT_REDIS_HOST/PORT above and
+      # redis-databases.yaml (+ AUTOBOT_REDIS_DB_CELERY_*), #19232 -- no URL or DB literal here.
       - AUTOBOT_CHROMADB_HOST=autobot-chromadb
       - AUTOBOT_CHROMADB_PORT=8000
       # #12513: shared secret for CHROMA_SERVER_AUTHN_* token auth on the
@@ -517,8 +517,8 @@ services:
       - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
       - AUTOBOT_REDIS_HOST=autobot-redis
       - AUTOBOT_REDIS_PORT=6379
-      - CELERY_BROKER_URL=redis://autobot-redis:6379/${AUTOBOT_REDIS_DB_CELERY_BROKER:-14}
-      - CELERY_RESULT_BACKEND=redis://autobot-redis:6379/${AUTOBOT_REDIS_DB_CELERY_RESULTS:-15}
+      # Broker/result URLs: celery_app builds them from AUTOBOT_REDIS_HOST/PORT above and
+      # redis-databases.yaml (+ AUTOBOT_REDIS_DB_CELERY_*), #19232 -- no URL or DB literal here.
       - AUTOBOT_CHROMADB_HOST=autobot-chromadb
       - AUTOBOT_CHROMADB_PORT=8000
       # #12513: shared secret for CHROMA_SERVER_AUTHN_* token auth on the

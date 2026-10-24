@@ -97,7 +97,11 @@ class ServiceEndpointSpec:
         return str(getattr(ssot_config.vm, self.host_attr))
 
     def base_url(self) -> str:
-        """`scheme://host:port` from SSOT."""
+        """`scheme://host:port` from SSOT; Redis's from the one endpoint resolver (#19232)."""
+        if self.name == "redis":
+            from autobot_shared.redis_management.endpoint import resolve_redis_endpoint
+
+            return resolve_redis_endpoint().url(with_auth=False)
         return build_base_url(self.scheme, self.host, self.port)
 
 
