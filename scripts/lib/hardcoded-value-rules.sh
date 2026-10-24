@@ -642,14 +642,14 @@ hv_scan_tree() {
     # ~790MB tree on the way. Pruning the directory is the same decision made
     # one step earlier.
     for skip in node_modules .venv venv dist build __pycache__; do args+=("--exclude-dir=${skip}"); done
-    [ -d "$root" ] || return 0
+    [ -e "$root" ] || return 0
     while IFS= read -r raw; do
         [ -n "$raw" ] || continue
         file="${raw%%:*}"; raw="${raw#*:}"
         n="${raw%%:*}";   line="${raw#*:}"
         hv_file_in_scope "$file" || continue
         hv_scan_line "$file" "$n" "$line"
-    done < <(grep -rnE "${args[@]}" -e "$(hv_prefilter_pattern)" "$root" 2>/dev/null || true)
+    done < <(grep -rnHE "${args[@]}" -e "$(hv_prefilter_pattern)" "$root" 2>/dev/null || true)
     return 0
 }
 

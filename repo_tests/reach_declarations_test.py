@@ -32,15 +32,14 @@ so the scaling is readable rather than inferred -- re-measure rather than trusti
 
 from __future__ import annotations
 
-import importlib
 import os
 import pkgutil
 import re
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
+from repo_tests._guard_import import import_guards, source_declares
 from repo_tests._reach import REGISTRY, Reach, ReachFloorError, declare
 from repo_tests._reach_policy import ALLOWANCE_VERDICTS
 from repo_tests._reach_unscoped import UNSCOPED
@@ -110,24 +109,16 @@ def _import_every_guard() -> None:
     guard that is not running, and this file exists to notice exactly that class
     of silence.
     """
-    for module in pkgutil.iter_modules([str(_REPO_TESTS)]):
-        if module.name.startswith("_") or module.name == Path(__file__).stem:
-            continue
-        try:
-            importlib.import_module(f"repo_tests.{module.name}")
-        except Exception as exc:  # noqa: BLE001 - recorded, never discarded
-            IMPORT_FAILURES[module.name] = f"{type(exc).__name__}: {exc}"
-
-    # Declarations that live outside this package (#17144, #17298). Same
-    # recording discipline: one that cannot be imported is NAMED in
-    # IMPORT_FAILURES rather than quietly missing from the sweep.
-    for dotted in _declaring_modules_outside_repo_tests():
-        if dotted in sys.modules:
-            continue
-        try:
-            importlib.import_module(dotted)
-        except Exception as exc:  # noqa: BLE001 - recorded, never discarded
-            IMPORT_FAILURES[dotted] = f"{type(exc).__name__}: {exc}"
+    inside = [(m.name, f"repo_tests.{m.name}") for m in pkgutil.iter_modules([str(_REPO_TESTS)])]
+    inside = [(name, dotted) for name, dotted in inside if not name.startswith("_") and name != Path(__file__).stem]
+    # Declarations that live outside this package (#17144, #17298) are listed because they declare.
+    outside = [(dotted, dotted) for dotted in _declaring_modules_outside_repo_tests()]
+    failures, _skipped = import_guards(
+        inside + outside,
+        # An outside module (a dotted key) is listed only because it declares.
+        declares=lambda key: "." in key or source_declares(_REPO_TESTS / f"{key}.py"),
+    )
+    IMPORT_FAILURES.update(failures)
 
 
 _import_every_guard()

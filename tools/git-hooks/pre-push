@@ -57,6 +57,11 @@ vitest_include_roots() {
 MAX_BUDGET=600
 PYTEST_COST_SERIAL=6
 PYTEST_COST_PARALLEL=3
+# #18808 review: the whole-tree guards every push runs (prepush_selection.ALWAYS_RUN) get a
+# budget of their own, added on top -- measured 85 s serial in .test_durations (2026-10-23),
+# so under -n 4 this is ample headroom, and they never eat the per-file budget of the files
+# the change actually selected. Not capped by MAX_BUDGET, which keeps capping that part.
+ALWAYS_RUN_BUDGET_S=150
 
 # #18578: the other two budgets follow their work too. vue-tsc type-checks the WHOLE
 # project whatever the changeset: measured 111 s idle (load ~5) and ~294 s under load on
@@ -334,13 +339,17 @@ failure_excerpt() {
   # are never displaced; assertion/`Error:` context fills what the cap leaves. The
   # app's own log lines (`[<ISO time>] [ERROR] ...`, provoked on purpose by tests)
   # are not context -- 53 of them once filled the cap and cut both test names.
+  # #18808: the failing-test NAMES come before everything else. A long assertion diff's
+  # `E   ` lines precede pytest's short summary, and 60 of them once cut every name.
   excerpt=$(printf '%s\n' "$clean" | awk -v cap="${FAILURE_EXCERPT_LINES:-60}" '
     /Unhandled (Error|Rejection)/ { ctx = 8 }
     seen[$0]++ { if (ctx > 0) ctx--; next }
-    ctx > 0 || /^ *(FAIL |× |✗ |FAILED |ERROR )/ || /^E   / { first[++a] = $0; if (ctx > 0) ctx--; next }
+    /^ *(FAIL |× |✗ |FAILED |ERROR )/ { names[++z] = $0; if (ctx > 0) ctx--; next }
+    ctx > 0 || /^E   / { first[++a] = $0; if (ctx > 0) ctx--; next }
     /^\[[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[^]]*\] \[[A-Z]+\]/ { next }
     /AssertionError|Error: |Test timed out/ { rest[++b] = $0 }
     END {
+      for (i = 1; i <= z && n < cap; i++) { print names[i]; n++ }
       for (i = 1; i <= a && n < cap; i++) { print first[i]; n++ }
       for (i = 1; i <= b && n < cap; i++) { print rest[i]; n++ }
     }')
@@ -586,7 +595,17 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     diff_range="${remote_sha}..${local_sha}"
   fi
 
-  changed=$(git diff --name-only "$diff_range" 2>/dev/null || echo "")
+  # #19312 review: a failed diff used to read as an empty changeset, so nothing ran and the
+  # push passed. It blocks instead -- an unknown changeset is not an empty one.
+  diff_err=$(mktemp)
+  changed=$(git diff --name-only "$diff_range" 2>"$diff_err") || {
+    fail "git diff --name-only ${diff_range} failed, so the changeset is unknown and nothing was checked (#19312):"
+    head -5 "$diff_err" >&2
+    rm -f "$diff_err"
+    EXIT_CODE=1
+    continue
+  }
+  rm -f "$diff_err"
 
   # Scale the budget with the changeset (#15985). A fixed 120s made the gate's
   # coverage inversely proportional to the risk of the push: small changes finished
@@ -831,6 +850,28 @@ while read -r local_ref local_sha remote_ref remote_sha; do
       "$(echo "$frontend_unclaimed" | grep -c .) changed .ts/.vue file(s) are outside ${FRONTEND_PROJECTS// /, }, which are the only trees declaring a type-check script: $(echo "$frontend_unclaimed" | head -3 | tr '\n' ' ')"
   fi
 
+  # ----- Hardcoded-values baseline (#18808) --------------------------------
+  # A change that removes a baselined value leaves its entry over-claiming, which
+  # ssot-coverage.yml's --audit-baseline fails on (trains 30, 32). Audit the changed
+  # files that have entries -- scoped, so it costs under a second, not the
+  # whole-tree scan's minutes.
+  # #19312 review: EVERY changed path, not only those with baseline entries -- a new or
+  # unbaselined file gaining a value is exactly what the scoped verdict exists to catch.
+  # The detector itself drops paths outside its scan directories.
+  hv_baselined=$(printf '%s\n' "$changed" | grep -v '^$' || true)
+  if [ -n "$hv_baselined" ]; then
+    hv_paths=$(mktemp)
+    printf '%s\n' "$hv_baselined" > "$hv_paths"
+    if hv_out=$("$REPO_ROOT/pipeline-scripts/detect-hardcoded-values.sh" --audit-baseline --paths-from="$hv_paths" 2>&1); then
+      ok "hardcoded-values: $(echo "$hv_baselined" | grep -c .) changed file(s): every baseline entry still matches and no new value appeared"
+    else
+      fail "hardcoded-values baseline drifted for the changed files (#18808, #19312):"
+      echo "$hv_out" >&2
+      EXIT_CODE=1
+    fi
+    rm -f "$hv_paths"
+  fi
+
   # ----- Backend (Python) -------------------------------------------------
   # #16711: tools/lint/prepush_selection.py chooses the tests and says why. It
   # picks changed tests under every pytest.ini python_files pattern (test_*.py
@@ -855,8 +896,10 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     PYTEST_XDIST_ARGS="$(pytest_xdist_args)"
     pytest_parallel=0
     [ -n "$PYTEST_XDIST_ARGS" ] && pytest_parallel=1
-    PYTEST_TIMEOUT=$(pytest_budget "$TEST_TIMEOUT" "$selected_count" "$pytest_parallel")
-    log "pytest selected ${selected_count} file(s) -> budget ${PYTEST_TIMEOUT}s ($([ "$pytest_parallel" = 1 ] && echo "parallel, ${PYTEST_XDIST_ARGS%% --dist*}" || echo 'serial (AUTOBOT_PREPUSH_PYTEST_WORKERS=0 or no xdist for '"$PYTEST_PYTHON)"))"
+    always_count=$(printf '%s\n' "$selection" | awk -F'\t' '$2 ~ /^whole-tree:/ {n++} END {print n+0}')
+    PYTEST_TIMEOUT=$(pytest_budget "$TEST_TIMEOUT" "$((selected_count - always_count))" "$pytest_parallel")
+    [ "$always_count" -gt 0 ] && PYTEST_TIMEOUT=$((PYTEST_TIMEOUT + ALWAYS_RUN_BUDGET_S))
+    log "pytest selected ${selected_count} file(s), ${always_count} of them whole-tree guards (+${ALWAYS_RUN_BUDGET_S}s) -> budget ${PYTEST_TIMEOUT}s ($([ "$pytest_parallel" = 1 ] && echo "parallel, ${PYTEST_XDIST_ARGS%% --dist*}" || echo 'serial (AUTOBOT_PREPUSH_PYTEST_WORKERS=0 or no xdist for '"$PYTEST_PYTHON)"))"
 
     # #16069: autobot-slm-backend must be a SEPARATE pytest invocation.
     # pytest.ini says so in as many words: the two backends define top-level
@@ -878,7 +921,16 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     slm_py_tests=$(echo "$all_py_tests" | grep -E '^autobot-slm-backend/' || true)
     other_py_tests=$(echo "$all_py_tests" | grep -vE '^autobot-slm-backend/' || true)
 
-    if [ -n "$all_py_tests" ] && command -v pytest >/dev/null 2>&1; then
+    # #19312 review: this gated on a `pytest` executable on PATH, which the run below never
+    # uses, so a machine without one skipped every selected test with no word said. What
+    # matters is whether the interpreter that runs them can import pytest; when it cannot,
+    # that is reported as not run -- never as a pass.
+    pytest_importable=0
+    "$PYTEST_PYTHON" -c 'import pytest' >/dev/null 2>&1 && pytest_importable=1
+    if [ -n "$all_py_tests" ] && [ "$pytest_importable" = 0 ]; then
+      could_not_run "pytest" "${PYTEST_PYTHON} cannot import pytest, so ${selected_count} selected test file(s) did not run"
+    fi
+    if [ -n "$all_py_tests" ] && [ "$pytest_importable" = 1 ]; then
       log "running pytest on (why each was selected, #16711):"
       printf '%s\n' "$selection" | awk -F'\t' 'NF { printf "    %s  (%s)\n", $1, $2 }' >&2
       [ -n "$slm_py_tests" ] && [ -n "$other_py_tests" ] && \
@@ -928,6 +980,26 @@ while read -r local_ref local_sha remote_ref remote_sha; do
           fi
         fi
       done
+
+      # #18808: the sys.modules leak guard (#13337) sees a stub only at a node OUTSIDE its
+      # owner's directory, and a selection is usually one directory -- so #18785's import-time
+      # leak passed here and failed all 12 CI shards. Collect the selected files again, serially
+      # (xdist would put the probe on another worker), followed by a probe outside every backend
+      # tree. Collection is the phase import-time stubs leak in; a run-phase leak is not covered.
+      # autobot-slm-backend is not probed: its conftest's tree-wide stubs are legal inside that
+      # tree and an outside probe would report them, not the change (see #16069 above).
+      leak_targets=$(echo "$other_py_tests" | grep -v '^repo_tests/' | grep -v '^$' || true)
+      leak_probe="repo_tests/sys_modules_leak_probe_18808_test.py"
+      if [ "$pytest_failed" = "0" ] && [ "$pytest_timed_out" = "0" ] && [ -n "$leak_targets" ] && [ -f "$REPO_ROOT/$leak_probe" ]; then
+        # shellcheck disable=SC2086 # word-splitting the file list is intended
+        if leak_output=$(cd "$REPO_ROOT" && timeout "$PYTEST_TIMEOUT" "$PYTEST_PYTHON" -m pytest --collect-only -q -p no:xdist -p no:cacheprovider -m "not reach_floor" $leak_targets "$leak_probe" 2>&1); then
+          ok "sys.modules leak check: $(echo "$leak_targets" | grep -c .) selected file(s) leave no stub outside their directory"
+        else
+          pytest_failed=1
+          fail "sys.modules leak check failed (#18808, the guard is #13337):"
+          printf '%s\n' "$leak_output" | sed -n '/sys.modules leak guard/,/^=\{5,\} .* in /p' | head -30 >&2
+        fi
+      fi
 
       if [ "$pytest_failed" != "0" ]; then
         EXIT_CODE=1
