@@ -1,16 +1,6 @@
 <template>
-  <div class="file-browser-header">
-    <h2>{{ title || $t('fileBrowser.header.title') }}</h2>
-
-    <!-- Path Navigation -->
-    <div class="path-navigation-inline">
-      <FilePathNavigation
-        :current-path="currentPath"
-        @navigate-to-path="$emit('navigate-to-path', $event)"
-      />
-    </div>
-
-    <div class="file-actions">
+  <PageHeader class="file-browser-header" :title="title || $t('fileBrowser.header.title')" :level="2">
+    <template #actions>
       <BaseButton
         variant="outline"
         size="sm"
@@ -27,13 +17,21 @@
       >
         <Icon name="upload" /> {{ $t('fileBrowser.header.uploadFile') }}
       </BaseButton>
+    </template>
+
+    <!-- Path Navigation -->
+    <div class="path-navigation-inline">
+      <FilePathNavigation
+        :current-path="currentPath"
+        @navigate-to-path="$emit('navigate-to-path', $event)"
+      />
     </div>
-  </div>
+  </PageHeader>
 </template>
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
-import { BaseButton } from '@autobot/ui'
+import { BaseButton, PageHeader } from '@autobot/ui'
 import FilePathNavigation from './FilePathNavigation.vue'
 
 interface Props {
@@ -59,21 +57,10 @@ defineEmits<Emits>()
 <style scoped>
 @reference "../../assets/tailwind.css";
 .file-browser-header {
-  @apply flex flex-wrap items-center gap-4 mb-6 pb-4 border-b border-autobot-border;
-}
-
-.file-browser-header h2 {
-  @apply text-2xl font-bold text-autobot-text-primary flex-shrink-0;
+  @apply mb-6;
 }
 
 .path-navigation-inline {
   @apply flex items-center gap-3 flex-1 min-w-0;
-  flex-basis: 66%;
 }
-
-.file-actions {
-  @apply flex gap-2 shrink-0 ml-auto;
-}
-
-/* Button styling handled by BaseButton component */
 </style>

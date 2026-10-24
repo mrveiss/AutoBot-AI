@@ -60,6 +60,11 @@ export type { PaginationLabels } from './src/components/BasePagination.vue'
 
 export { default as BaseFormField } from './src/components/BaseFormField.vue'
 
+// Page title row and trail (#17563).
+export { default as PageHeader } from './src/components/PageHeader.vue'
+export { default as Breadcrumb } from './src/components/Breadcrumb.vue'
+export type { BreadcrumbItem } from './src/components/Breadcrumb.vue'
+
 export { default as BrandMark } from './src/components/BrandMark.vue'
 
 export { default as BaseTooltip } from './src/components/BaseTooltip.vue'

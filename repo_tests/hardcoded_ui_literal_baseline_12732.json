@@ -725,9 +725,6 @@
  "autobot-frontend/src/components/knowledge/web-research/SiteMapTab.vue": [
   "dcd8b8ad"
  ],
- "autobot-frontend/src/components/llc/LlcBreadcrumb.vue": [
-  "20937a73"
- ],
  "autobot-frontend/src/components/llc/TemplateBrowser.vue": [
   "064fb25b",
   "064fb25b",
@@ -794,10 +791,6 @@
   "725b0d2d",
   "8c9062cc",
   "cf68ac57"
- ],
- "autobot-frontend/src/components/terminal/TerminalHeader.vue": [
-  "22a5cfdc",
-  "c1eb5ece"
  ],
  "autobot-frontend/src/components/terminal/TerminalModals.vue": [
   "29387b99"

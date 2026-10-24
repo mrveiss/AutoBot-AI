@@ -1,10 +1,12 @@
 <template>
-  <div class="window-header">
-    <div class="window-title">
-      <span class="terminal-icon">⬛</span>
+  <PageHeader class="window-header" :level="2">
+    <template #leading>
+      <span class="terminal-icon" aria-hidden="true">⬛</span>
+    </template>
+    <template #title>
       <span data-testid="terminal-title">{{ $t('terminal.window.titlePrefix') }} {{ sessionTitle }}</span>
-    </div>
-    <div class="window-controls">
+    </template>
+    <template #actions>
       <!-- Emergency Kill Button -->
       <button
         class="control-button emergency-kill"
@@ -13,18 +15,20 @@
         :disabled="!hasRunningProcesses"
         :title="$t('terminal.window.emergencyKillTitle')"
       >
-        🛑 KILL
+        <span aria-hidden="true">🛑</span> {{ $t('terminal.window.kill') }}
       </button>
 
       <!-- Session Takeover / Pause Automation -->
       <button
         class="control-button takeover"
+        data-testid="takeover-button"
         @click="$emit('toggle-automation')"
         :class="{ 'active': automationPaused }"
         :disabled="!hasAutomatedWorkflow"
         :title="automationPaused ? $t('terminal.window.resumeAutomation') : $t('terminal.window.pauseAutomation')"
       >
-        {{ automationPaused ? '▶️ RESUME' : '⏸️ PAUSE' }}
+        <span aria-hidden="true">{{ automationPaused ? '▶️' : '⏸️' }}</span>
+        {{ automationPaused ? $t('terminal.window.resume') : $t('terminal.window.pause') }}
       </button>
 
       <!-- Interrupt Current Process -->
@@ -35,7 +39,7 @@
         :disabled="!hasActiveProcess"
         :title="$t('terminal.window.interruptProcess')"
       >
-        ⚡ INT
+        <span aria-hidden="true">⚡</span> {{ $t('terminal.window.interrupt') }}
       </button>
 
       <button
@@ -44,29 +48,34 @@
         @click="$emit('reconnect')"
         :disabled="connecting"
         :title="$t('terminal.window.reconnect')"
+        :aria-label="$t('terminal.window.reconnect')"
       >
-        {{ connecting ? '⟳' : '🔄' }}
+        <span aria-hidden="true">{{ connecting ? '⟳' : '🔄' }}</span>
       </button>
       <button
         class="control-button"
         data-testid="clear-button"
         @click="$emit('clear-terminal')"
         :title="$t('terminal.window.clear')"
+        :aria-label="$t('terminal.window.clear')"
       >
-        🗑️
+        <span aria-hidden="true">🗑️</span>
       </button>
       <button
         class="control-button danger"
         @click="$emit('close-window')"
         :title="$t('terminal.window.closeWindow')"
+        :aria-label="$t('terminal.window.closeWindow')"
       >
-        ✕
+        <span aria-hidden="true">✕</span>
       </button>
-    </div>
-  </div>
+    </template>
+  </PageHeader>
 </template>
 
 <script setup lang="ts">
+import { PageHeader } from '@autobot/ui'
+
 interface Props {
   sessionTitle: string
   hasRunningProcesses: boolean
@@ -91,31 +100,13 @@ defineEmits<Emits>()
 
 <style scoped>
 /* Issue #704: Migrated to CSS design tokens */
+/* Layout, spacing and the bottom border come from the kit PageHeader (#17563). */
 .window-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background-color: var(--bg-secondary);
-  padding: var(--spacing-2) var(--spacing-4);
-  border-bottom: 1px solid var(--border-subtle);
   user-select: none;
-}
-
-.window-title {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  font-size: var(--text-sm);
-  font-weight: var(--font-semibold);
 }
 
 .terminal-icon {
   font-size: var(--text-base);
-}
-
-.window-controls {
-  display: flex;
-  gap: var(--spacing-2);
 }
 
 .control-button {
