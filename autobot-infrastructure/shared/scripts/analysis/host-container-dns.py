@@ -14,6 +14,8 @@ import subprocess
 import time
 from typing import Dict, List
 
+from autobot_shared.ssot_config import config
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - HostDNS - %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -165,7 +167,7 @@ class HostContainerDNS:
             "autobot-frontend": [5173],
             "autobot-ai-stack": [8080],
             "autobot-npu-worker": [8081],
-            "autobot-browser": [3000],
+            "autobot-browser": [config.port.browser],  # #19324
             "autobot-seq": [80],
         }
 

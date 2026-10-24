@@ -371,7 +371,7 @@ run_diagnostics() {
     log_info "Checking container health..."
     check_container_health "autobot-redis" "" "6379"
     check_container_health "autobot-npu-worker" "http://localhost:8081/health" "8081"
-    check_container_health "autobot-playwright" "http://localhost:3000/health" "3000"
+    check_container_health "autobot-playwright" "http://localhost:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}/health" "${AUTOBOT_BROWSER_SERVICE_PORT:-9001}"
 
     # Check environments
     check_python_env
@@ -523,7 +523,7 @@ force_recreate_containers() {
     # Verify health
     check_container_health "autobot-redis" "" "6379"
     check_container_health "autobot-npu-worker" "http://localhost:8081/health" "8081"
-    check_container_health "autobot-playwright" "http://localhost:3000/health" "3000"
+    check_container_health "autobot-playwright" "http://localhost:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}/health" "${AUTOBOT_BROWSER_SERVICE_PORT:-9001}"
 
     log_success "Container recreation completed!"
 }
