@@ -15,7 +15,9 @@ ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
 UPDATER = ANSIBLE / "playbooks" / "update-all-nodes.yml"
 ROLE_MAIN = ANSIBLE / "roles" / "slm_manager" / "tasks" / "main.yml"
 BACKFILL = ANSIBLE / "roles" / "slm_manager" / "tasks" / "secrets_root_key.yml"
-BACKEND_TASKS = ANSIBLE / "roles" / "backend" / "tasks" / "main.yml"
+BACKEND_MAIN = ANSIBLE / "roles" / "backend" / "tasks" / "main.yml"
+BACKEND_ENV_ONLY = ANSIBLE / "roles" / "backend" / "tasks" / "env_only.yml"
+BACKEND_TASKS = ANSIBLE / "roles" / "backend" / "tasks" / "read_secrets_root_key.yml"
 _INCLUDE = re.compile(r"name: slm_manager\s+tasks_from: secrets_root_key\.yml")
 
 
@@ -53,12 +55,33 @@ def test_an_empty_key_from_the_slm_file_fails_the_backend_deploy() -> None:
     text = _read(BACKEND_TASKS)
     align = text.index("Align autobot_secrets_root_key with slm-secrets.env")
     guard = text.index("Fail when the SLM secrets file yields no root key")
-    render = text.index("src: backend.env.j2")
-    assert align < guard < render, "the empty-key failure must sit after the read-back and before the env renders"
-    block = text[guard : text.index("\n- name:", guard)]
+    assert align < guard, "the empty-key failure must sit after the read-back"
+    block = text[guard:]
     assert "ansible.builtin.fail" in block
-    assert "_slm_secrets_stat.stat.exists" in block, "it must fire only where the SLM file is the key's source"
+    assert "_root_key_slm_secrets_stat.stat.exists" in block, "it must fire only where the SLM file is the key's source"
     assert "_backend_slm_root_key | length == 0" in block, "judge the FILE's key; an inventory key must not mask it"
+    assert (
+        "register: _root_key_slm_secrets_stat" in text
+    ), "the file must stat slm-secrets.env itself, not lean on a caller"
+
+
+def test_every_backend_env_render_reads_the_root_key_first() -> None:
+    # Host evidence on #19051: the updater renders through env_only.yml, which had no read, so an
+    # updated install got `AUTOBOT_SECRETS_ROOT_KEY=` while the SLM file held a key.
+    for path in (BACKEND_MAIN, BACKEND_ENV_ONLY):
+        text = _read(path)
+        include = text.find("include_tasks: read_secrets_root_key.yml")
+        render = text.find("src: backend.env.j2")
+        assert include >= 0, f"{path.name} renders the backend env without reading the root key"
+        assert 0 <= include < render, f"{path.name} must read the root key before it renders the env"
+
+
+def test_the_backend_root_key_read_exists_once() -> None:
+    marker = "AUTOBOT_SECRETS_ROOT_KEY=\\K"
+    copies = [p.name for p in (BACKEND_MAIN, BACKEND_ENV_ONLY, UPDATER, BACKEND_TASKS) if marker in _read(p)]
+    assert copies == [
+        BACKEND_TASKS.name
+    ], f"the backend's root-key read must live only in {BACKEND_TASKS.name}; found {copies}"
 
 
 # --- #19294 review F1/F2/F3/F5: never generate over an existing key -------------------------
