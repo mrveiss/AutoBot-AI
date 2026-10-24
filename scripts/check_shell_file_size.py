@@ -111,7 +111,7 @@ KNOWN_LARGE: dict[str, int] = {
     # source a helper and cannot be split; the exemption's own reason still holds.
     "install.sh": 1169,  # #18653: the uninstaller moved to scripts/uninstall.sh; single-file installer cannot be split
     "scripts/lib/hardcoded-value-rules.sh": 842,
-    "scripts/pr-preflight.sh": 818,
+    "scripts/pr-preflight.sh": 815,
 }
 
 

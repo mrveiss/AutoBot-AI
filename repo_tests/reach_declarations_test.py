@@ -32,20 +32,18 @@ so the scaling is readable rather than inferred -- re-measure rather than trusti
 
 from __future__ import annotations
 
-import importlib
-import os
-import pkgutil
 import re
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
+from repo_tests._guard_import import declaring_modules_outside_repo_tests, import_every_guard
 from repo_tests._reach import REGISTRY, Reach, ReachFloorError, declare
 from repo_tests._reach_policy import ALLOWANCE_VERDICTS
 from repo_tests._reach_unscoped import UNSCOPED
 
 from autobot_shared.isolated_git import isolated_git_env
+from autobot_shared.paths import scrubbed_git_env
 
 _REPO_TESTS = Path(__file__).resolve().parent
 _REPO_ROOT = _REPO_TESTS.parent
@@ -58,79 +56,8 @@ _REPO_ROOT = _REPO_TESTS.parent
 MIN_DECLARATIONS = 4
 
 
-def _scrubbed_env() -> dict[str, str]:
-    """`git grep` with the ambient git env removed (#15926 discipline)."""
-    return {k: v for k, v in os.environ.items() if not k.startswith(("GIT_", "GIT_DIR"))}
-
-
 #: Guard modules that could not be imported, recorded rather than discarded.
-IMPORT_FAILURES: dict[str, str] = {}
-
-
-def _declaring_modules_outside_repo_tests() -> list[str]:
-    """Import paths of modules that call `declare(...)` and do not live here.
-
-    Discovered with `git grep`, not enumerated: an enumeration is exactly what
-    this file distrusts everywhere else, and a declaration added under a new
-    path tomorrow must be swept without anyone remembering to edit a list.
-
-    Why this is needed (#17144, #17298): `declare(...)` registers into a shared
-    REGISTRY as an *import side effect*, and the loop below imports only modules
-    under `repo_tests/`. A declaration living elsewhere reached the registry
-    only when some other test in the same pytest session happened to import its
-    module first -- true in CI's whole-suite run, false under
-    `pytest repo_tests/`, where the parametrisation dropped from 36 floors to 35
-    and reported a clean pass over the smaller set. Not a weaker check: a check
-    of a DIFFERENT set, reported identically. It produced a real wrong answer
-    today -- a floor re-pinned against a local run that had never examined it.
-    """
-    out = subprocess.run(
-        ["git", "grep", "-lE", r"(^|\s)declare\(", "--", "*.py"],
-        cwd=_REPO_ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-        env=_scrubbed_env(),
-    )
-    modules = []
-    for rel in out.stdout.splitlines():
-        if not rel:
-            continue
-        path = Path(rel)
-        if path.parts[0] == "repo_tests":
-            continue
-        modules.append(".".join(path.with_suffix("").parts))
-    return sorted(modules)
-
-
-def _import_every_guard() -> None:
-    """Import every guard module so its `declare(...)` runs.
-
-    Import errors are surfaced, not swallowed: a guard that cannot import is a
-    guard that is not running, and this file exists to notice exactly that class
-    of silence.
-    """
-    for module in pkgutil.iter_modules([str(_REPO_TESTS)]):
-        if module.name.startswith("_") or module.name == Path(__file__).stem:
-            continue
-        try:
-            importlib.import_module(f"repo_tests.{module.name}")
-        except Exception as exc:  # noqa: BLE001 - recorded, never discarded
-            IMPORT_FAILURES[module.name] = f"{type(exc).__name__}: {exc}"
-
-    # Declarations that live outside this package (#17144, #17298). Same
-    # recording discipline: one that cannot be imported is NAMED in
-    # IMPORT_FAILURES rather than quietly missing from the sweep.
-    for dotted in _declaring_modules_outside_repo_tests():
-        if dotted in sys.modules:
-            continue
-        try:
-            importlib.import_module(dotted)
-        except Exception as exc:  # noqa: BLE001 - recorded, never discarded
-            IMPORT_FAILURES[dotted] = f"{type(exc).__name__}: {exc}"
-
-
-_import_every_guard()
+IMPORT_FAILURES: dict[str, str] = import_every_guard()
 
 
 #: Declarations this suite's own cases create to prove a rule can fire. Excluded from every
@@ -163,7 +90,7 @@ def test_declarations_outside_this_package_are_swept() -> None:
     satisfied by editing it. What must hold is that each module found outside
     this package actually contributed: discovered, imported, and present.
     """
-    outside = _declaring_modules_outside_repo_tests()
+    outside = declaring_modules_outside_repo_tests()
 
     assert outside, (
         "no declaring module found outside repo_tests/ — either they all moved in here (fine, "
@@ -399,7 +326,7 @@ def test_every_declared_floor_is_pinned_to_its_population(reach: Reach) -> None:
 def test_every_declaration_is_reached_by_this_sweep() -> None:
     """A declaration this file cannot see has an unchecked floor (#15928).
 
-    `_import_every_guard` walks `pkgutil.iter_modules([_REPO_TESTS])`, which
+    `import_every_guard` walks `pkgutil.iter_modules([_REPO_TESTS])`, which
     reaches top-level `repo_tests` modules and nothing else. A `declare()` in a
     subpackage -- or in `tools/`, or anywhere a future guard lands -- registers
     nothing here, so its floor is never verified and its absence looks identical
@@ -416,7 +343,7 @@ def test_every_declaration_is_reached_by_this_sweep() -> None:
         capture_output=True,
         text=True,
         cwd=_REPO_ROOT,
-        env=_scrubbed_env(),
+        env=scrubbed_git_env(),
         check=False,
     )
     declared_names = {

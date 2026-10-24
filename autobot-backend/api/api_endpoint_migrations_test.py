@@ -21162,7 +21162,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="update_embedding_settings"', source)
         self.assertIn('error_code_prefix="EMBEDDINGS"', source)
-        self.assertIn("HTTPException", source)
+        self.assertIn("status_code=409", source)  # #19377: refuses; no unread settings.json write
 
     def test_batch_126_get_available_embedding_models_simple_pattern(self):
         """Verify get_available_embedding_models endpoint uses Simple Pattern"""

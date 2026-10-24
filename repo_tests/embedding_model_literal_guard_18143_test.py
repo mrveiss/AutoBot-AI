@@ -51,7 +51,6 @@ ALLOWED: dict[str, str] = {
     "autobot-backend/api/llm.py": _CATALOGUE + " (llm model list)",
     "autobot-backend/models/npu_models.py": _CATALOGUE + " (loaded_models status payload)",
     "autobot-backend/services/model_manager_service.py": _CATALOGUE + " (capability table by name prefix)",
-    "autobot-backend/config/defaults.py": "ssot fallback for the settings default: config.llm.embedding_model or ...",
     "autobot-backend/services/knowledge/doc_indexer.py": _DIMS
     + " (_KNOWN_DIMS); the model itself comes from org config / ssot"
     + "; the 'or' default is the org-config fallback (follow-up)",

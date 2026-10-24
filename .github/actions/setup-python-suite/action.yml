@@ -15,6 +15,14 @@
 name: Set up Python suite environment
 description: Install the CI-safe Python dependency set and write the CI config fixture.
 
+inputs:
+  apt-fallback-mirror:
+    description: >-
+      The Ubuntu archive the CI package download retries against when the runner's own mirror
+      is too slow (#19308). Defined here once; scripts/ci/apt_fallback_mirror.sh takes it as an
+      argument.
+    default: http://mirrors.edge.kernel.org/ubuntu/
+
 outputs:
   venv:
     description: >-
@@ -38,12 +46,12 @@ runs:
       uses: actions/setup-python@v7
       with:
         python-version-file: '.python-version'
-        # Still worth keeping: this only speeds up the cache-MISS path, where
-        # pip has to fetch wheels before building the venv below.
-        cache: 'pip'
-        cache-dependency-path: |
-          requirements*.txt
-          autobot-backend/requirements*.txt
+        # #19308: no `cache: 'pip'`. It only sped up the venv cache's MISS path, yet every
+        # new requirements hash -- each dependency PR included -- saved a fresh 3.47 GB pip
+        # directory. Two of those filled most of the repo's 10 GB Actions cache and evicted
+        # the 67 MB apt archive the shards depend on (#18102). The venv cache below holds
+        # the installed environment; a miss now downloads wheels once, on the run that
+        # changed the requirements.
 
     # #14550: system packages ansible installs on every backend host for a
     # real capability (audio extraction here), that setup-python-suite never
@@ -164,6 +172,11 @@ runs:
     # would be missing on exactly the runs that reuse a warm cache.
     - name: "Install CI system packages (#14550, #13896)"
       shell: bash
+      env:
+        APT_FALLBACK_MIRROR: ${{ inputs.apt-fallback-mirror }}
+        # Relative to this action, not to the workspace (#19345 review): a caller that checks
+        # the repo out elsewhere still finds the script that ships beside the action.
+        APT_FALLBACK_SCRIPT: ${{ github.action_path }}/../../../scripts/ci/apt_fallback_mirror.sh
       run: |
         set -euo pipefail
         if command -v ffmpeg >/dev/null 2>&1 && command -v tesseract >/dev/null 2>&1; then
@@ -194,6 +207,11 @@ runs:
         # and that risk does not improve with a longer wait.
         readonly APT_DOWNLOAD_TIMEOUT_S=540   # wall-clock bound per download try
         readonly APT_DOWNLOAD_ATTEMPTS=2      # tries per download command (it resumes)
+        # #19308: of those two tries, the second goes to a different mirror. A slow primary
+        # mirror was the failure every time (#18102), and resuming the same partial files
+        # from the same slow host bought little; another host serves the identical files,
+        # so the partial download carries over. Same two tries, same worst-case bound. The
+        # mirror and the source rewrite live in scripts/ci/apt_fallback_mirror.sh.
         readonly APT_BACKOFF_S=15         # the sleep after try N is N times this
         readonly APT_FETCH_RETRIES=3      # apt's own retries of one failed download
         readonly APT_HTTP_IDLE_S=30       # drop a connection that sends nothing this long
@@ -247,6 +265,10 @@ runs:
             timeout "$APT_TIMEOUT_S" sudo dpkg --configure -a || echo "apt: dpkg --configure -a exited $?; the next attempt reports why" >&2
             sleep $((attempt * APT_BACKOFF_S))
           done
+          if [ "${APT_NOT_FINAL:-0}" = 1 ]; then
+            echo "apt: ${label}: failed ${tries} time(s) on this mirror; the fallback mirror is next (#19308)" >&2
+            return 1
+          fi
           if [ "${APT_ADVISORY:-0}" = 1 ]; then
             echo "::warning title=apt ${label} failed (continuing)::${label} failed ${tries} times, last exit ${rc}${why}; the installs decide" >&2
             return 0
@@ -299,10 +321,34 @@ runs:
           fi
           echo "::warning title=prefetched .debs did not satisfy the install::falling back to a network fetch (#18102)" >&2
         fi
-        APT_TRIES=$APT_DOWNLOAD_ATTEMPTS apt_retry "download ffmpeg" \
-          timeout "$APT_DOWNLOAD_TIMEOUT_S" sudo apt-get install -y --download-only --no-install-recommends ffmpeg
-        APT_TRIES=$APT_DOWNLOAD_ATTEMPTS apt_retry "download tesseract-ocr" \
-          timeout "$APT_DOWNLOAD_TIMEOUT_S" sudo apt-get install -y --download-only tesseract-ocr
+        # download_set TRIES: fetch both package sets, TRIES tries each (it resumes).
+        download_set() {
+          APT_TRIES=$1 apt_retry "download ffmpeg" \
+            timeout "$APT_DOWNLOAD_TIMEOUT_S" sudo apt-get install -y --download-only --no-install-recommends ffmpeg \
+            && APT_TRIES=$1 apt_retry "download tesseract-ocr" \
+              timeout "$APT_DOWNLOAD_TIMEOUT_S" sudo apt-get install -y --download-only tesseract-ocr
+        }
+        # #19308: scripts/ci/apt_fallback_mirror.sh edits the runner's mirror list (the
+        # archive is `mirror+file:/etc/apt/apt-mirrors.txt` on GitHub's images) and any plain
+        # archive URI, and exits 3 when it changed nothing -- said out loud, since the retry
+        # then hits the same mirror. The update gets ONE try (#19345 review): three would add
+        # up to 15 minutes to a worst case already near the 30-minute provision job limit.
+        apt_use_fallback_mirror() {
+          local n=0 rc=0
+          n=$(sudo bash "$APT_FALLBACK_SCRIPT" /etc/apt "$APT_FALLBACK_MIRROR") || rc=$?
+          case "$rc" in
+            0) echo "apt: fallback mirror applied to ${n} apt file(s) (#19308)" >&2 ;;
+            3) echo "::warning title=apt fallback mirror not applied::no Ubuntu archive entry found to repoint; the retry uses the same mirror (#19308)" >&2 ;;
+            *) echo "::warning title=apt fallback mirror script failed::exit ${rc}; the retry uses whatever apt is configured with (#19308)" >&2 ;;
+          esac
+          APT_TRIES=1 APT_ADVISORY=1 apt_retry "update (fallback mirror)" timeout "$APT_TIMEOUT_S" sudo apt-get update -qq
+        }
+        # At least one try on the primary mirror, however APT_DOWNLOAD_ATTEMPTS is set.
+        readonly APT_PRIMARY_TRIES=$(( APT_DOWNLOAD_ATTEMPTS > 1 ? APT_DOWNLOAD_ATTEMPTS - 1 : 1 ))
+        if ! APT_NOT_FINAL=1 download_set "$APT_PRIMARY_TRIES"; then
+          apt_use_fallback_mirror
+          download_set 1
+        fi
         apt_retry "install ffmpeg" timeout "$APT_TIMEOUT_S" sudo apt-get install -y --no-install-recommends ffmpeg
         apt_retry "install tesseract-ocr" timeout "$APT_TIMEOUT_S" sudo apt-get install -y tesseract-ocr
         echo "installed: $(ffmpeg -version | head -1); $(tesseract --version 2>&1 | head -1)"
