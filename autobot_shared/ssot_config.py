@@ -198,11 +198,7 @@ class VMConfig(RedactedSettings):
 class PortConfig(RedactedSettings):
     """Service port configuration."""
 
-    model_config = SettingsConfigDict(
-        env_file=str(PROJECT_ROOT / ".env"),
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
+    model_config = SettingsConfigDict(env_file=str(PROJECT_ROOT / ".env"), env_file_encoding="utf-8", extra="ignore")
 
     backend: int = Field(default=8001, alias="AUTOBOT_BACKEND_PORT")
     frontend: int = Field(default=5173, alias="AUTOBOT_FRONTEND_PORT")
@@ -217,6 +213,10 @@ class PortConfig(RedactedSettings):
     aistack: int = Field(default=8080, alias="AUTOBOT_AI_STACK_PORT")
     chromadb: int = Field(default=8100, alias="AUTOBOT_CHROMADB_PORT")  # Issue #3094: 8100 matches Ansible deploy
     npu: int = Field(default=8081, alias="AUTOBOT_NPU_WORKER_PORT")
+    # The Windows NPU worker (autobot-npu-worker/resources/windows-npu-worker) is a separate service
+    # from the Linux worker above, on 8082 by design. Its bundle cannot import this module, so it
+    # pins one copy of its own, held equal to this field by repo_tests/service_port_homes_test.py (#19325).
+    npu_windows: int = Field(default=8082, alias="AUTOBOT_NPU_WORKER_WINDOWS_PORT")
     tts: int = Field(default=8083, alias="AUTOBOT_TTS_WORKER_PORT")  # Issue #928; #3431: 8082 WSL2/Hyper-V reserved
     slm: int = Field(default=8000, alias="AUTOBOT_SLM_PORT")  # Issue #768
     prometheus: int = Field(default=9090, alias="AUTOBOT_PROMETHEUS_PORT")

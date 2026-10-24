@@ -859,7 +859,6 @@
 1|other|autobot-infrastructure/shared/scripts/utilities/run_unit_tests.py|60
 1|ssot|autobot-infrastructure/shared/scripts/utilities/settings_diagnostic_utility.py|qwen3.5:9b
 4|other|autobot-infrastructure/shared/scripts/utilities/sync-frontend.sh|/home/autobot
-2|ssot|autobot-infrastructure/shared/scripts/utilities/sync-npu-worker-to-windows.sh|:8082
 1|other|autobot-infrastructure/shared/scripts/utilities/sync-to-slm.sh|"/opt/autobot
 3|other|autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh|/home/autobot
 1|other|autobot-infrastructure/shared/scripts/utilities/system_monitor.py|30

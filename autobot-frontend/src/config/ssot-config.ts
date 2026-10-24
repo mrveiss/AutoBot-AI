@@ -448,15 +448,15 @@ function buildConfig(): AutoBotConfig {
   const vnc: VNCConfig = {
     desktop: {
       host: getEnv('VITE_DESKTOP_VNC_HOST', vm.main),
-      port: getEnvNumber('VITE_DESKTOP_VNC_PORT', 6080),
+      port: getEnvNumber('VITE_DESKTOP_VNC_PORT', PORT_DEFAULTS.vnc),
     },
     terminal: {
       host: getEnv('VITE_TERMINAL_VNC_HOST', vm.main),
-      port: getEnvNumber('VITE_TERMINAL_VNC_PORT', 6080),
+      port: getEnvNumber('VITE_TERMINAL_VNC_PORT', PORT_DEFAULTS.vnc),
     },
     playwright: {
       host: getEnv('VITE_PLAYWRIGHT_VNC_HOST', vm.browser),
-      port: getEnvNumber('VITE_PLAYWRIGHT_VNC_PORT', 6081),
+      port: getEnvNumber('VITE_PLAYWRIGHT_VNC_PORT', PORT_DEFAULTS.vnc), // #19327: browser noVNC is port.vnc
     },
   };
 

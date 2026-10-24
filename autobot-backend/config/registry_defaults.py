@@ -64,7 +64,7 @@ REGISTRY_DEFAULTS = {
     "port.browser": str(_ssot.port.browser),
     "port.aistack": str(_ssot.port.aistack),
     "port.npu": str(_ssot.port.npu),
-    "port.npu_windows": str(_ssot.port.npu),
+    "port.npu_windows": str(_ssot.port.npu_windows),  # #19325: was port.npu (8081), not the Windows worker
     "port.slm": str(_ssot.port.slm),  # Issue #768: SLM admin server
     "port.prometheus": str(_ssot.port.prometheus),
     "port.grafana": str(_ssot.port.grafana),

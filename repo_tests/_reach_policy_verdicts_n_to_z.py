@@ -256,4 +256,10 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Tracked Python, YAML and Jinja files, a subset of the tree; the other extensions grow at their own rate.",
     ),
+    "service-port-homes-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test Python and nine text extensions under seven roots, a subset of tracked files; the test "
+        "share and the other extensions grow at their own rate.",
+    ),
 }
