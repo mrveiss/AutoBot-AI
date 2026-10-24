@@ -544,3 +544,7 @@ register_env_var(
         range=(1, 300),
     )
 )
+
+# Node-health vars live in a sibling for room (#19292); importing it here
+# registers them whenever this module loads.
+from autobot_shared import env_registry_slm_health  # noqa: E402,F401

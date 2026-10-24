@@ -13,16 +13,16 @@ param, filename, or plugin manifest. Everything downstream of the validator is
 trusted to be inside a root.
 
 **Canonical enforcement:** [`autobot_shared/security/path_validator.py`](../../autobot_shared/security/path_validator.py)
-— `validate_path` (:95) absolute paths · `validate_relative_path` (:156) a segment under a
-known base · `resolve_within_sandbox` (:288) the file-management sandbox ·
-`require_path_string` (:240) type gate before `Path()` / `os.makedirs`.
+— `validate_path` (:96) absolute paths · `validate_relative_path` (:157) a segment under a
+known base · `resolve_within_sandbox` (:289) the file-management sandbox ·
+`require_path_string` (:241) type gate before `Path()` / `os.makedirs`.
 
 **Invariants**
-- `validate_path` is never called without an explicit `allowed_roots`. The default `_DEFAULT_ALLOWED_ROOTS` (:33) is `("/opt/autobot",)` — no `/tmp` (#15238): world-writable and shared, so a default including it let an unprivileged local process plant a file for any fallback-taking handler to read back. Prefer `PROJECT_ALLOWED_ROOTS` (:40) — `str(project_root())` — over the default for a request-supplied path scoped to this project.
-- Decode before resolve: `_canonicalize` (:64) runs `_MAX_DECODE_ROUNDS` unquote passes plus NFKC. `realpath` decodes nothing, so a denylist on the raw string is always wrong.
+- `validate_path` is never called without an explicit `allowed_roots`. The default `_DEFAULT_ALLOWED_ROOTS` (:34) is `("/opt/autobot",)` — no `/tmp` (#15238): world-writable and shared, so a default including it let an unprivileged local process plant a file for any fallback-taking handler to read back. Prefer `PROJECT_ALLOWED_ROOTS` (:41) — `str(project_root())` — over the default for a request-supplied path scoped to this project.
+- Decode before resolve: `_canonicalize` (:65) runs `_MAX_DECODE_ROUNDS` unquote passes plus NFKC. `realpath` decodes nothing, so a denylist on the raw string is always wrong.
 - Containment is the **sole** authority — `relative_to`, both sides realpath'd. Pre-resolution refusals (absolute, `..`, drive qualifier) are defence in depth only; replacing it is a smell (#15786).
 - The validated string is the string used. Validating `user_path` then opening something rebuilt from the original input is a finding.
-- `resolve_within_sandbox` forbids **any** `..`, `~`, leading `/`, or `SANDBOX_INVALID_PATH_CHARACTERS` (:45) — in-bounds or not. `''`, `'/'`, `'//'` legitimately address the sandbox root and return it unchanged (#11823); a diff that makes them raise again breaks root listing.
+- `resolve_within_sandbox` forbids **any** `..`, `~`, leading `/`, or `SANDBOX_INVALID_PATH_CHARACTERS` (:46) — in-bounds or not. `''`, `'/'`, `'//'` legitimately address the sandbox root and return it unchanged (#11823); a diff that makes them raise again breaks root listing.
 - Upload **filenames** are their own gate: [`autobot_shared/security/upload_filename_policy.py`](../../autobot_shared/security/upload_filename_policy.py) `is_safe_file(filename, allowed)` / `require_safe_upload` (re-exported by `autobot-backend/security/upload_filename_policy.py`) — a bare name only (no `/`, no `\\`), a per-purpose allow-list (`ALLOWED_EXTENSIONS` documents, `AUDIO_EXTENSIONS`, `IMAGE_EXTENSIONS`, `ZIP_EXTENSIONS`, `TARBALL_EXTENSIONS`), a deny-list by name; every `UploadFile` route reaches it — `repo_tests/upload_routes_call_is_safe_file_guard_19088_test.py` fails on one that does not (#19088) — and a route-local copy is a finding (the conversation copy accepted `a/b.txt` until #18704).
 
 **Known bypass shapes:** double percent-encoding (`%252e%252e`), Unicode confusables (`﹒﹒`, `‥`), null byte via encoding,

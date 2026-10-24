@@ -9,6 +9,7 @@ import time
 from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_llm_logger
+from constants.rag_graph_constants import RAG_GRAPH_PATH_DEPTH
 
 logger = get_llm_logger("graph_rag_service")
 
@@ -34,7 +35,7 @@ class GraphPathMixin:
         from_entity: str,
         to_entity: str,
         relation: str | None = None,
-        max_depth: int = 6,
+        max_depth: int = RAG_GRAPH_PATH_DEPTH,
         direction: str = "both",
         timeout: float | None = None,
         *,

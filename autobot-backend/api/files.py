@@ -39,6 +39,7 @@ from api.schemas_system import (
 )
 from auth_middleware import get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_http import require_contained_relative_path
 from autobot_shared.security.path_validator import (
@@ -707,11 +708,7 @@ async def view_file(request: Request, path: str):
             # File is binary, don't include content
             logger.debug("File is binary, skipping content read: %s", e)
 
-    return {
-        "file_info": file_info,
-        "content": content,
-        "is_text": content is not None,
-    }
+    return {"file_info": file_info, "content": content, "is_text": content is not None}
 
 
 def _log_rename_audit(
@@ -1134,7 +1131,7 @@ async def get_file_stats(request: Request):
 # SLM Admin File Browser (Issue #984) ==========================================
 
 _ADMIN_ALLOWED_DIRS = (
-    "/opt/autobot",
+    FLEET_INSTALL_ROOT,
     "/home/autobot",  # noqa: ssot-path
     "/var/log/autobot",
     "/etc/autobot",

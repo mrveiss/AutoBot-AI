@@ -146,6 +146,29 @@ def project_root() -> Path:
     return resolve_project_root(Path(__file__).resolve())
 
 
+def install_base_dir(when_undeterminable: str | None = None) -> Path:
+    """This process's install base: ``AUTOBOT_BASE_DIR``, else :func:`project_root` (#18094).
+
+    The rule ``ssot_config``'s ``path.base_dir`` follows (its env alias, then this as the default),
+    stated once here so a bootstrap path that cannot import ``ssot_config`` answers the same way
+    instead of restating ``/opt/autobot``.
+
+    *when_undeterminable* is for a caller that runs only on a deployed node and must still answer
+    when :func:`project_root` raises :class:`ProjectRootUndeterminable`: it names its own fallback
+    explicitly (``fleet_constants.FLEET_INSTALL_ROOT``). With none, the raise propagates -- this
+    module still never guesses on anyone's behalf (#14544).
+    """
+    configured = os.environ.get(BASE_DIR_ENV)  # ssot-config-exempt: bootstrap, ssot_config defaults to this
+    if configured:
+        return Path(configured)
+    try:
+        return project_root()
+    except ProjectRootUndeterminable:
+        if when_undeterminable is None:
+            raise
+        return Path(when_undeterminable)
+
+
 def chromadb_data_dir() -> Path:
     """The local ChromaDB store, ``<project root>/data/chromadb``: the one spelling of that directory (#18143)."""
     return project_root() / "data" / "chromadb"

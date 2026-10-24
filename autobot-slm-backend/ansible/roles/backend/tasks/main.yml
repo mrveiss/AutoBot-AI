@@ -286,7 +286,7 @@
 - name: "Backend | Read AUTOBOT_SECRETS_ROOT_KEY from slm-secrets.env (#14758)"
   ansible.builtin.shell:
     cmd: >-
-      grep -oP '^AUTOBOT_SECRETS_ROOT_KEY=\K.*'
+      grep -oP '^\s*(export\s+)?AUTOBOT_SECRETS_ROOT_KEY=\K.+'
       /etc/autobot/slm-secrets.env 2>/dev/null || true
   register: _backend_secrets_root_key
   changed_when: false
@@ -295,11 +295,36 @@
   no_log: true
   tags: ['backend', 'config']
 
+# #19051: the SAME line shapes the SLM back-fill's presence check accepts (an
+# `export ` prefix, a quoted value), so a key it counts as present is read here.
+- name: "Backend | Unquote the root key read from slm-secrets.env (#19051)"
+  ansible.builtin.set_fact:
+    _backend_slm_root_key: "{{ _backend_secrets_root_key.stdout | default('') | trim | regex_replace('^[\"\\x27]|[\"\\x27]$', '') }}"
+  no_log: true
+  tags: ['backend', 'config']
+
 - name: "Backend | Align autobot_secrets_root_key with slm-secrets.env when present (#14758)"
   ansible.builtin.set_fact:
-    autobot_secrets_root_key: "{{ _backend_secrets_root_key.stdout | trim }}"
-  when: (_backend_secrets_root_key.stdout | default('') | trim) | length > 0
+    autobot_secrets_root_key: "{{ _backend_slm_root_key }}"
+  when: _backend_slm_root_key | length > 0
   no_log: true
+  tags: ['backend', 'config']
+
+# #19051: where the SLM secrets file is on this host, it is the root key's only
+# source, so an empty key here means the back-fill never ran. Rendering
+# `AUTOBOT_SECRETS_ROOT_KEY=` turned that into a 503 from every System vault
+# call, discovered only from the backend log. Stop the deploy and name the fix.
+- name: "Backend | Fail when the SLM secrets file yields no root key (#19051)"
+  ansible.builtin.fail:
+    msg: >-
+      AUTOBOT_SECRETS_ROOT_KEY is empty in /etc/autobot/slm-secrets.env, so the
+      backend would start with the System vault disabled. Run the builtin update,
+      whose PLAY 1 back-fills the key (slm_manager secrets_root_key.yml), then
+      re-run this deploy.
+  when:
+    - _slm_secrets_stat.stat.exists | default(false)
+    # The FILE's key, not the merged var: an inventory key must not mask an SLM file that has none.
+    - _backend_slm_root_key | length == 0
   tags: ['backend', 'config']
 
 # #9914: Deploy the systemd unit BEFORE any stop/start so a fresh VM provisions

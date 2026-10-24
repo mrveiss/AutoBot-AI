@@ -21,7 +21,7 @@ from autobot_memory_graph.core import (
     canonical_relation_type,
 )
 from autobot_shared.env_utils import env_float
-from constants.rag_graph_constants import RAG_GRAPH_TRAVERSAL_DEPTH as RAG_DEPTH
+from constants.rag_graph_constants import RAG_GRAPH_PATH_DEPTH, RAG_GRAPH_TRAVERSAL_DEPTH, RAG_RELATION_DEPTH
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from knowledge.ownership import AccessLevel, VisibilityLevel
 from type_defs.common import Metadata
@@ -4366,7 +4366,7 @@ class TraverseRequest(BaseModel):
     """Request model for graph traversal."""
 
     start_fact_id: str = Field(..., description="Starting fact ID for traversal")
-    max_depth: int = Field(RAG_DEPTH, ge=1, le=5, description="Maximum traversal depth")
+    max_depth: int = Field(RAG_GRAPH_TRAVERSAL_DEPTH, ge=1, le=5, description="Maximum traversal depth")
     relation_types: List[str] | None = Field(None, description="Optional list of relation types to follow")
     include_fact_details: bool = Field(False, description="Include full fact content in results")
 
@@ -4377,7 +4377,7 @@ class HybridSearchRequest(BaseModel):
     query: str = Field(..., description="Search query text")
     top_k: int = Field(10, ge=1, le=100, description="Number of vector matches")
     expand_relations: bool = Field(True, description="Expand results with graph relations")
-    relation_depth: int = Field(1, ge=1, le=3, description="Relation traversal depth")
+    relation_depth: int = Field(RAG_RELATION_DEPTH, ge=1, le=3, description="Relation traversal depth")
     relation_types: List[str] | None = Field(None, description="Filter by relation types")
 
 
@@ -4521,7 +4521,7 @@ class GraphRequest(BaseModel):
     """Request model for multi-source knowledge graph."""
 
     max_facts: int = Field(50, ge=1, le=200, description="Maximum facts to include")
-    max_depth: int = Field(RAG_DEPTH, ge=1, le=3, description="Maximum relation depth")
+    max_depth: int = Field(RAG_GRAPH_TRAVERSAL_DEPTH, ge=1, le=3, description="Maximum relation depth")
     include_categories: bool = Field(True, description="Include category nodes")
     include_relations: bool = Field(True, description="Include fact relations")
     category_filter: str | None = Field(None, description="Filter by category path")
@@ -4576,7 +4576,7 @@ class GraphRAGSearchRequest(BaseModel):
 
     query: str = Field(..., min_length=1, max_length=1000, description="Search query string")
     start_entity: str | None = Field(None, max_length=200, description="Optional start entity name for graph traversal")
-    max_depth: int = Field(RAG_DEPTH, ge=1, le=3, description="Maximum traversal depth (1-3 hops)")
+    max_depth: int | None = Field(None, ge=1, le=3, description="Hops (1-3); None = RAGConfig.graph_traversal_depth")
     max_results: int = Field(5, ge=1, le=20, description="Maximum number of results to return")
     enable_reranking: bool = Field(True, description="Whether to apply cross-encoder reranking")
     timeout: float | None = Field(None, ge=1.0, le=30.0, description="Optional timeout in seconds (1-30s)")
@@ -4612,7 +4612,7 @@ class GraphRAGPathRequest(BaseModel):
     relation: str | None = Field(
         None, max_length=100, description="Restrict traversal to this relation type; omit for all types"
     )
-    max_depth: int = Field(6, ge=1, le=10, description="Maximum path length to search (1-10 hops)")
+    max_depth: int = Field(RAG_GRAPH_PATH_DEPTH, ge=1, le=10, description="Maximum path length to search (1-10 hops)")
     direction: Literal["outgoing", "incoming", "both"] = Field(
         "both", description="Edge direction to follow; 'both' treats relations as undirected"
     )
@@ -4686,7 +4686,7 @@ class MemoryRelatedRequest(BaseModel):
     """Arguments for the ``memory.related`` tool. #13762."""
 
     entity: str = Field(..., min_length=1, max_length=200, description="Entity name")
-    depth: int = Field(2, ge=1, le=5, description="Maximum traversal depth (1-5 hops)")
+    depth: int = Field(RAG_GRAPH_TRAVERSAL_DEPTH, ge=1, le=5, description="Maximum traversal depth (1-5 hops)")
 
     @field_validator("entity")
     @classmethod
@@ -5071,7 +5071,7 @@ class GraphRagMetricsData(BaseModel):
     """Response data for GET /graphrag/metrics."""
 
     service: str = ""
-    graph_weight: float = 0.0
+    graph_weight: float  # no second default: always RAGConfig.graph_weight (#18141)
     entity_extraction_enabled: bool = False
     rag_service: Dict[str, Any] = Field(default_factory=dict)
     graph_initialized: bool = False
