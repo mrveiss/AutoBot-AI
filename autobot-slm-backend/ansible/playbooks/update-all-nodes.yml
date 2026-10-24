@@ -499,6 +499,18 @@
         tasks_from: service_units.yml
       tags: [slm, systemd]
 
+    # #19051: the #14758 root-key back-fill, from the SAME task file the role
+    # uses. Only the role ran it, and this play never runs the role, so a host
+    # kept current by the updater alone never got a key: the backend rendered
+    # `AUTOBOT_SECRETS_ROOT_KEY=` and every System vault call returned 503. It
+    # runs here, before PLAY 2 renders the backend env from the SLM secrets
+    # file. Add-only: an existing key is never rotated.
+    - name: "[PLAY 1] SLM | Back-fill AUTOBOT_SECRETS_ROOT_KEY into the SLM secrets file (#19051)"
+      ansible.builtin.include_role:
+        name: slm_manager
+        tasks_from: secrets_root_key.yml
+      tags: [slm, secrets]
+
     # Issue #9225: slm-agent needs autobot_shared in PYTHONPATH
     - name: "[PLAY 1] SLM Agent | Create autobot_shared symlink for agent imports"
       ansible.builtin.file:

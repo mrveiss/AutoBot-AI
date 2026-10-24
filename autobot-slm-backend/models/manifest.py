@@ -14,6 +14,8 @@ from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field, field_validator
 
+from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
+
 
 class UpdatePolicy(str, Enum):
     """System update policy for apt packages."""
@@ -61,7 +63,7 @@ class ManifestDeploy(BaseModel):
     """Deployment configuration."""
 
     source: str = Field(description="Repo dir to sync (e.g. autobot-backend/)")
-    destination: str = Field(description="Target path on node (e.g. /opt/autobot/autobot-backend/)")
+    destination: str = Field(description=f"Target path on node (e.g. {FLEET_INSTALL_ROOT}/autobot-backend/)")
     shared: bool = Field(default=True, description="Also deploy autobot_shared/ to node")
     infrastructure: bool = Field(
         default=True,

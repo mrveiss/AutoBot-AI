@@ -13,11 +13,7 @@ import re
 from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
-from code_intelligence.shared.analysis_base import (
-    HAS_ANALYTICS_INFRASTRUCTURE,
-    SIMILARITY_MEDIUM,
-    BaseCodeAnalyzer,
-)
+from code_intelligence.shared.analysis_base import SIMILARITY_MEDIUM, BaseCodeAnalyzer
 
 from ..shared.line_index import LineIndex
 from .ast_visitor import SecurityASTVisitor
@@ -356,7 +352,7 @@ class SecurityAnalyzer(BaseCodeAnalyzer):
                     "description": "description",
                     "owasp_category": "owasp_category",
                 },
-                min_similarity=(SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7),
+                min_similarity=SIMILARITY_MEDIUM,
             )
         except Exception as e:
             logger.warning("Semantic duplicate detection failed: %s", e)

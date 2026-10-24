@@ -280,6 +280,14 @@ _DECLARED_SCOPES = {
         "pipeline-scripts/",
     ),
     "ansible-concept-forks-17856-scan": ("autobot-slm-backend/ansible",),
+    "defined-twice-18094-scan": (
+        "autobot-backend",
+        "autobot-slm-backend",
+        "autobot_shared",
+        "autobot-infrastructure",
+        "autobot-npu-worker",
+        "scripts",
+    ),
     "env-fallback-read-sites-18094": (
         "autobot-backend",
         "autobot-slm-backend",
