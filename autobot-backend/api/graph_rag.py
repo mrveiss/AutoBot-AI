@@ -355,7 +355,7 @@ async def graph_rag_metrics(
         ```json
         {
             "service": "GraphRAGService",
-            "graph_weight": 0.3,
+            "graph_weight": "<RAGConfig.graph_weight>",
             "entity_extraction_enabled": true,
             "rag_service": {
                 "enable_advanced_rag": true,

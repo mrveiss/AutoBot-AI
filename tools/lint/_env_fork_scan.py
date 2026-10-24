@@ -63,6 +63,7 @@ FORK_READ_FLOOR = 229
 
 #: Modules whose module-level literal constants are the SSOT a feature module must not restate.
 SSOT_CONSTANT_SOURCES = (
+    "autobot_shared/fleet_constants.py",
     "autobot_shared/ssot_config.py",
     "autobot_shared/ssot_constants.py",
     "autobot_shared/ssot_tls.py",
