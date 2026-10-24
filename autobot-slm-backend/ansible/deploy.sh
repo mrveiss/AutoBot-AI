@@ -374,7 +374,7 @@ patch_dependencies() {
     if [[ "$dry_run" != "true" ]]; then
         log "INFO" "Running pip-audit to verify CVE remediation..."
         # Verify on backend (primary Python service)
-        ansible backend -i "$INVENTORY_FILE" -m shell -a "source /opt/autobot/venv/bin/activate && pip-audit 2>/dev/null | head -20" --become || true
+        ansible backend -i "$INVENTORY_FILE" -m shell -a "source {{ autobot.base_dir }}/venv/bin/activate && pip-audit 2>/dev/null | head -20" --become || true
     fi
 
     success "Dependency patching completed"
