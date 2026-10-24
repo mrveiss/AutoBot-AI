@@ -22,7 +22,7 @@
   gather_facts: true
 
   vars:
-    frontend_install_dir: /opt/autobot
+    frontend_install_dir: "{{ autobot.base_dir }}"
     frontend_code_dir: "{{ frontend_install_dir }}/autobot-frontend"
     # #15603: frontend_dist_dir is NOT set here on purpose. This play-level
     # override used to hardcode ".../dist", which — once the `frontend` role's

@@ -17,10 +17,24 @@ example, a workflow might:
 
 Once you set up a workflow, it runs automatically on the schedule you define.
 
+## Before You Start: Create a Company
+
+Workflows live inside a **Company OS** company. If you have no company yet, opening
+Automation sends you to the Company OS company selector instead of the workflow builder.
+
+To create one:
+
+1. Click **Company OS** in the navigation bar. The selector shows "No companies yet."
+2. Click **Create a company**.
+3. In the wizard, choose **Start from Scratch** or **Use a Template** and follow the steps.
+
+Once a company exists, Automation opens that company's workflow builder.
+
 ## Accessing Workflows
 
-Click **Workflow Automation** in the navigation bar, or navigate to
-`/automation`. The sidebar on the left provides access to:
+Open **Automation**, or navigate to `/automation`. The link sits in the navigation overflow
+menu and is hidden in Minimal UI mode; switch to the full interface to see it. The sidebar
+on the left provides access to:
 
 - **Overview** -- a dashboard showing all your workflows and their statuses.
 - **Visual Builder** -- a drag-and-drop editor for creating workflows.

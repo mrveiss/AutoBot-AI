@@ -4,7 +4,9 @@
 
 BOUNDARY: every git-tracked file under autobot-slm-backend/ansible/. Counted: occurrences of
 `/opt/autobot` in CODE -- comments are stripped by tools.lint._comment_syntax, because prose
-that names the deploy folder is documentation, not configuration. Excluded: the one definition,
+that names the deploy folder is documentation, not configuration. For the same reason Markdown
+files and Python docstrings are outside it, and so is tests/fixtures/ (frozen copies of past
+files) -- owner decision 2026-10-22, #18882. Excluded: the one definition,
 `autobot.base_dir` (`base_dir: "/opt/autobot"`) in inventory/group_vars/all.yml (#15632).
 
 Frozen 2026-10-19: 309 occurrences in 72 files. Cross-derived once at freeze time by an
@@ -13,48 +15,8 @@ independent grep that dropped `#` comment lines: the same 72-file set. Each entr
 
 Retired by #19040: upgrade-backend-agent.yml (2) and fix-slm-agent-node-id.yml (4), so 303 in 70 files.
 #18881 moved every playbook to `autobot.base_dir`: 176 occurrences in 29 files, so 127 in 41 files.
+#18882 moved roles, templates, top-level playbooks and scripts; prose and fixtures left the
+boundary: 0 -- the floor. Only the one definition names the root.
 """
 
-BASELINE: dict[str, int] = {
-    "autobot-slm-backend/ansible/README-PLAYBOOKS.md": 2,
-    "autobot-slm-backend/ansible/README.md": 1,
-    "autobot-slm-backend/ansible/_shared/tasks/pre_migration_backup.yml": 3,
-    "autobot-slm-backend/ansible/apply-system-updates.yml": 3,
-    "autobot-slm-backend/ansible/backup-node-data.yml": 7,
-    "autobot-slm-backend/ansible/deploy-dns.yml": 3,
-    "autobot-slm-backend/ansible/deploy.sh": 1,
-    "autobot-slm-backend/ansible/docs/HARDWARE_PASSTHROUGH_SETUP.md": 5,
-    "autobot-slm-backend/ansible/enable-tls.yml": 4,
-    "autobot-slm-backend/ansible/fix-slm-env-ports.yml": 1,
-    "autobot-slm-backend/ansible/playbooks/README-backend-fixes.md": 2,
-    "autobot-slm-backend/ansible/pre-migration-check.yml": 1,
-    "autobot-slm-backend/ansible/roles/_shared/tasks/clean_legacy_dir.yml": 14,
-    "autobot-slm-backend/ansible/roles/_shared/tasks/clean_wrong_node_dir.yml": 1,
-    "autobot-slm-backend/ansible/roles/access_control/README.md": 5,
-    "autobot-slm-backend/ansible/roles/agent_config/README.md": 6,
-    "autobot-slm-backend/ansible/roles/ai-stack/templates/autobot-ai-stack.service.j2": 3,
-    "autobot-slm-backend/ansible/roles/backend/tasks/main.yml": 1,
-    "autobot-slm-backend/ansible/roles/backend/templates/backend.env.j2": 1,
-    "autobot-slm-backend/ansible/roles/backend_services/tasks/main.yml": 13,
-    "autobot-slm-backend/ansible/roles/browser/tasks/main.yml": 5,
-    "autobot-slm-backend/ansible/roles/browser/templates/autobot-browser-worker.env.j2": 1,
-    "autobot-slm-backend/ansible/roles/browser/templates/playwright.service.j2": 2,
-    "autobot-slm-backend/ansible/roles/common/tasks/main.yml": 5,
-    "autobot-slm-backend/ansible/roles/common/templates/autobot-logrotate.j2": 1,
-    "autobot-slm-backend/ansible/roles/distributed_setup/README.md": 7,
-    "autobot-slm-backend/ansible/roles/dns/README.md": 6,
-    "autobot-slm-backend/ansible/roles/dns/tasks/scripts.yml": 4,
-    "autobot-slm-backend/ansible/roles/dns/templates/refresh-dns.sh.j2": 1,
-    "autobot-slm-backend/ansible/roles/npu-worker/templates/autobot-npu-worker.service.j2": 1,
-    "autobot-slm-backend/ansible/roles/slm_agent/tasks/clean.yml": 2,
-    "autobot-slm-backend/ansible/setup-ai-stack.yml": 1,
-    "autobot-slm-backend/ansible/setup-browser-worker.yml": 1,
-    "autobot-slm-backend/ansible/setup-npu-worker.yml": 1,
-    "autobot-slm-backend/ansible/setup-user-backend.yml": 1,
-    "autobot-slm-backend/ansible/setup-user-frontend.yml": 1,
-    "autobot-slm-backend/ansible/tests/check_ssh_key_path_defined.py": 1,
-    "autobot-slm-backend/ansible/tests/check_venv_producers.py": 1,
-    "autobot-slm-backend/ansible/tests/fixtures/defect_15822/clean_wrong_node_dir.yml": 1,
-    "autobot-slm-backend/ansible/tests/playbooks/test_wrong_node_cleanup_effect.yml": 6,
-    "autobot-slm-backend/ansible/utils/backup.sh": 1,
-}
+BASELINE: dict[str, int] = {}

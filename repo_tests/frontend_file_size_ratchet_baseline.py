@@ -80,7 +80,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-frontend/src/components/knowledge/GraphRAGQuery.vue": 713,
     "autobot-frontend/src/components/knowledge/KBSearchResultPanel.vue": 630,
     "autobot-frontend/src/components/knowledge/KnowledgeBrowser.vue": 1785,
-    "autobot-frontend/src/components/knowledge/KnowledgeEntries.vue": 1359,  # #18849: 1360 -> 1359
+    "autobot-frontend/src/components/knowledge/KnowledgeEntries.vue": 1358,  # #19118: 1359 -> 1358
     "autobot-frontend/src/components/knowledge/KnowledgeGraph.vue": 2073,
     "autobot-frontend/src/components/knowledge/KnowledgeHealth.vue": 925,
     "autobot-frontend/src/components/knowledge/KnowledgePersistenceDialog.vue": 891,  # #18819+#18849 one import (-1)
@@ -165,7 +165,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-frontend/src/views/SettingsView.vue": 739,
     "autobot-frontend/src/views/VisionAutomationView.vue": 873,
     "autobot-frontend/src/views/WorkflowBuilderView.vue": 2300,
-    "autobot-frontend/src/views/llc/BacklogView.vue": 842,
+    "autobot-frontend/src/views/llc/BacklogView.vue": 823,
     "autobot-frontend/src/views/llc/CompanyCreationWizard.vue": 909,
     "autobot-frontend/src/views/llc/CompanyPortabilityView.vue": 867,
     "autobot-frontend/src/views/llc/CostDashboard.vue": 1017,
@@ -175,8 +175,8 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-frontend/src/views/llc/ProjectBrowserView.vue": 1372,  # #18819 1379->1374; #18849 -1; #14778 BaseInput -1
     "autobot-frontend/src/views/llc/RolesView.vue": 1026,  # #18819 1029->1027; #18849 one kit import on the merge (-1)
     "autobot-frontend/src/views/llc/RoutinesView.vue": 688,
-    "autobot-frontend/src/views/llc/SprintBoardView.vue": 681,
-    "autobot-frontend/src/views/llc/WorkItemDetail.vue": 1013,  # #14780: 1046 -> 1013 (kit BaseDrawer)
+    "autobot-frontend/src/views/llc/SprintBoardView.vue": 666,
+    "autobot-frontend/src/views/llc/WorkItemDetail.vue": 996,  # #14780: 1046 -> 1013 (kit BaseDrawer)
     "autobot-infrastructure/shared/ide-extensions/vscode-autobot/src/extension.ts": 741,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/background-monitor.ts": 713,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/index.ts": 957,

@@ -21,7 +21,7 @@
   gather_facts: false
 
   vars:
-    env_file: /opt/autobot/.env
+    env_file: "{{ autobot.base_dir }}/.env"
     frontend_host: "{{ infrastructure.hosts.frontend }}"
     frontend_tls_port: "443"
     npu_host: "{{ infrastructure.hosts.npu }}"

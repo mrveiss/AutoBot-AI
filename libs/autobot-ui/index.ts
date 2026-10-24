@@ -55,6 +55,10 @@ export { default as BaseDrawer } from './src/components/BaseDrawer.vue'
 export { default as BaseSwitch } from './src/components/BaseSwitch.vue'
 export type { SwitchSize } from './src/components/BaseSwitch.vue'
 
+export { default as BaseAvatar } from './src/components/BaseAvatar.vue'
+export type { AvatarSize, AvatarVariant, AvatarStatus } from './src/components/BaseAvatar.vue'
+export { initialsOf } from './src/utils/initials'
+
 export { default as BasePagination } from './src/components/BasePagination.vue'
 export type { PaginationLabels } from './src/components/BasePagination.vue'
 
@@ -127,6 +131,10 @@ export type { DurationStyle } from './src/utils/duration'
 // Scoped console logger (#14908) — canonical LogLevel/log/createLogger; both
 // apps' utils/debugUtils.ts re-export these rather than re-declaring them.
 export { log, createLogger } from './src/utils/logger'
+
+// One DOMPurify-backed sanitiser for every v-html binding in both apps (#2847, #19118).
+export { sanitizeChatHtml, sanitizeKnowledgeHtml, sanitizeHtml, escapeHtml } from './src/utils/sanitize'
+export type { SanitizePreset } from './src/utils/sanitize'
 export type { LogLevel } from './src/utils/logger'
 
 // The one exponential-backoff formula for reconnects and retries (#15402).

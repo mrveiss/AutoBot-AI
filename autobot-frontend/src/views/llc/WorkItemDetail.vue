@@ -159,7 +159,7 @@
           <div class="comments-list">
             <div v-for="c in comments" :key="c.id" class="comment-item">
               <div class="comment-author">
-                <span class="author-avatar">{{ initials(commentAuthor(c)) }}</span>
+                <BaseAvatar :name="commentAuthor(c)" size="sm" variant="primary" decorative />
                 <div class="author-meta">
                   <span class="author-name">{{ commentAuthor(c) }}</span>
                   <span class="comment-time">{{ formatTime(c.created_at ?? '') }}</span>
@@ -239,7 +239,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, nextTick, onMounted } from 'vue'
-import { BaseDrawer } from '@autobot/ui'
+import { BaseAvatar, BaseDrawer } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
@@ -349,10 +349,6 @@ const availableActions = computed(() => {
   }
   return [...transitions, ...extras]
 })
-
-function initials(name: string) {
-  return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
-}
 
 function formatTime(iso: string) {
   return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
@@ -849,19 +845,6 @@ onMounted(() => {
   gap: 0.5rem;
 }
 
-.author-avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: 50%;
-  background: var(--color-primary);
-  color: white;
-  font-size: 0.65rem;
-  font-weight: 600;
-  flex-shrink: 0;
-}
 
 .author-meta {
   display: flex;

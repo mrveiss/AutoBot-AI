@@ -81,8 +81,9 @@ python_security_updates:
   # Floors no `requirements*.txt` carries: these arrive transitively, so this
   # map is the only place their patched version is stated. The parity guard has
   # nothing to compare them against -- keep them, and bump them by advisory.
+  # filelock left this list for constraints/shared.txt (#19426): a package the
+  # SSOT constrains may not be restated here (ansible_requirements_parity_test).
   # -------------------------------------------------------------------------
-  filelock: "3.20.1"
   keras: "3.12.0"
   marshmallow: "3.26.2"
   urllib3: "2.6.0"
