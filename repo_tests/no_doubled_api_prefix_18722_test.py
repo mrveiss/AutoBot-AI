@@ -62,7 +62,7 @@ REACH = declare(
     "doubled-api-prefix-scan",
     discover=_population,
     # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=473,
+    floor=499,  # mid-window: population 529, window (469, 529)
     what="non-test python source",
     roots=_ROOTS,
     growth=60,
