@@ -26,7 +26,9 @@ DORNY = "dorny/paths-filter"
 
 
 def _filters() -> dict:
-    return {p.name: yaml.safe_load(p.read_text(encoding="utf-8")) for p in sorted(FILTERS.glob("*.yml"))}
+    return {
+        p.name: yaml.safe_load(p.read_text(encoding="utf-8")) for p in sorted(FILTERS.iterdir()) if p.suffix == ".yml"
+    }
 
 
 def _flat(value) -> set:
