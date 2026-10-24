@@ -126,7 +126,17 @@ def _seed_repo(tmp_path: Path, env: dict, branch: str) -> tuple[Path, str, str]:
     _git(tmp_path, "init", "--quiet", "--bare", str(bare), env=env)
     make_repo(local, default_branch="main")
     (local / "pytest.ini").write_text("[pytest]\npython_files = test_*.py *_test.py\n", encoding="utf-8")
-    _git(local, "add", "pytest.ini", env=env)
+    # #18808: the selection reads the scan-roots record (a missing one fails the selection on
+    # purpose), and the hook runs the hardcoded-values audit on every changed path. A synthetic
+    # repo has neither, so it gets an empty record and a detector that finds nothing -- this
+    # file tests that no open-PR cap remains, not those checks.
+    (local / "repo_tests").mkdir()
+    (local / "repo_tests" / "_reach_roots_record.py").write_text("REACH_ROOTS = {}\n", encoding="utf-8")
+    detector = local / "pipeline-scripts" / "detect-hardcoded-values.sh"
+    detector.parent.mkdir()
+    detector.write_text("#!/bin/bash\nexit 0\n", encoding="utf-8")
+    detector.chmod(0o755)
+    _git(local, "add", "pytest.ini", "repo_tests", "pipeline-scripts", env=env)
     _commit(local, env, "README.md")
     _git(local, "remote", "add", "origin", str(bare), env=env)
     _git(local, "push", "-q", "origin", "main", env=env)

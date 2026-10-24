@@ -620,7 +620,6 @@
 1|other|autobot-frontend/src/components/workflow/WorkflowCanvas.vue|offset=0
 1|other|autobot-frontend/src/composables/analytics/useCodeIntelScores.ts|'/opt/autobot
 1|other|autobot-frontend/src/composables/analytics/useSourceRegistry.ts|'/opt/autobot
-1|other|autobot-frontend/src/composables/analytics/useTechnicalDebtData.ts|10
 2|other|autobot-frontend/src/composables/chat/useContextOverflowProtection.ts|'system'
 1|other|autobot-frontend/src/composables/collaboration/useCollaborationInvite.ts|offset=0
 1|other|autobot-frontend/src/composables/knowledge/useKnowledgeBrowser.ts|offset=0
