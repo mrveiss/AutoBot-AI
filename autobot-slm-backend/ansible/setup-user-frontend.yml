@@ -33,7 +33,7 @@
     # automatically instead of needing its own matching update forever.
     frontend_user: autobot
     frontend_group: autobot
-    frontend_port: 443
+    frontend_tls_port: 443
     nginx_http_port: 80
     backend_host: "{{ infrastructure.hosts.backend }}"
     backend_port: 8443
@@ -51,7 +51,7 @@
           ═══════════════════════════════════════════════════════════════
           Target: {{ inventory_hostname }} ({{ ansible_host }})
           Code: {{ frontend_code_dir }}
-          HTTPS Port: {{ frontend_port }}
+          HTTPS Port: {{ frontend_tls_port }}
           Backend: {{ backend_host }}:{{ backend_port }}
           ═══════════════════════════════════════════════════════════════
 

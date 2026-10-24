@@ -8,6 +8,7 @@ adds the root but importlib mode requires explicit path insertion for namespace 
 Issue: #7458
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -15,6 +16,10 @@ from pathlib import Path
 _REPO_ROOT = str(Path(__file__).parent)
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
+
+# The test profile serves the frontend from the Vite dev server (#19326). config.frontend_url has
+# no default -- an unset AUTOBOT_FRONTEND_SERVED_BY raises -- and test modules read it at import.
+os.environ.setdefault("AUTOBOT_FRONTEND_SERVED_BY", "vite")
 
 # Repo-wide sys.modules leak guard (#13337). Declared here — the rootdir
 # conftest is the only conftest where ``pytest_plugins`` is still legal in

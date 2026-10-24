@@ -19,6 +19,7 @@ from urllib.parse import urlparse
 from fastapi import HTTPException, Request, status
 
 from auth_middleware import check_admin_permission
+from autobot_shared.frontend_served_by import try_frontend_url
 from autobot_shared.principal import resolve_principal_id
 from autobot_shared.ssot_config import config
 from llm_shared.provider_auth import org_vault_subject, user_vault_subject
@@ -107,7 +108,12 @@ def validate_redirect_uri(redirect_uri: str) -> None:
     """Require *redirect_uri* to be exactly the SPA callback on the SSOT frontend origin (#19241); 400 otherwise."""
     parsed = urlparse(redirect_uri)
     exact = parsed.path == PROVIDER_OAUTH_CALLBACK_PATH and not (parsed.query or parsed.fragment or parsed.params)
-    if not parsed.hostname or not exact or _origin(redirect_uri) != _origin(config.frontend_url):
+    frontend = try_frontend_url(config)
+    if frontend is None:  # AUTOBOT_FRONTEND_SERVED_BY unset or unknown: no origin to compare against (#19326)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="the frontend origin is not configured"
+        )
+    if not parsed.hostname or not exact or _origin(redirect_uri) != _origin(frontend):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="redirect_uri must be the frontend's provider sign-in callback",

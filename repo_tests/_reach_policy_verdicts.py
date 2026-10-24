@@ -364,6 +364,12 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test Python under thirteen source roots, a subset of tracked Python; the test-file share drifts.",
     ),
+    "frontend-url-served-by-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test Python, shell, YAML, Jinja, env and unit files under six roots plus the root .env profiles, a "
+        "subset of tracked files; the test share and the other extensions grow at their own rate.",
+    ),
 }
 
 #: Rows whose name sorts n-z live in the sibling module (600-line ceiling); one table, one name.

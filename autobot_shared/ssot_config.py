@@ -51,6 +51,7 @@ from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from autobot_shared.env_utils import env_int_clamped
+from autobot_shared.frontend_served_by import frontend_url as served_url
 from autobot_shared.paths import install_base_dir, project_root
 from autobot_shared.secret_redaction import RedactedReprMixin
 from autobot_shared.ssot_llm_oauth_config import LlmOAuthConfig
@@ -205,7 +206,8 @@ class PortConfig(RedactedSettings):
     )
 
     backend: int = Field(default=8001, alias="AUTOBOT_BACKEND_PORT")
-    frontend: int = Field(default=5173, alias="AUTOBOT_FRONTEND_PORT")
+    frontend: int = Field(default=5173, alias="AUTOBOT_FRONTEND_PORT")  # Vite dev server only (#19326)
+    frontend_http: int = Field(default=80, alias="AUTOBOT_FRONTEND_HTTP_PORT")  # nginx HTTP; HTTPS is tls (#19326)
     redis: int = Field(default=6379, alias="AUTOBOT_REDIS_PORT")
     ollama: int = Field(default=11434, alias="AUTOBOT_OLLAMA_PORT")
     vnc: int = Field(default=6080, alias="AUTOBOT_VNC_PORT")
@@ -2372,6 +2374,7 @@ class AutoBotConfig(RedactedSettings):
     environment: str = Field(default="development", alias="AUTOBOT_ENVIRONMENT")
     debug: bool = Field(default=False, alias="AUTOBOT_DEBUG")
     log_level: str = Field(default="INFO", alias="AUTOBOT_LOG_LEVEL")
+    frontend_served_by: str = Field(default="", alias="AUTOBOT_FRONTEND_SERVED_BY")  # #19326: vite|nginx, no default
 
     # GH#8995: Data-hygiene TTL settings (retention OFF by default — 0 means disabled)
     # Safe defaults: nothing is deleted unless an admin explicitly sets a period.
@@ -2479,8 +2482,7 @@ class AutoBotConfig(RedactedSettings):
             return PortConfig()
         return v
 
-    # Computed URL properties for backward compatibility
-    # Issue #164: Support HTTPS when TLS is enabled
+    # Computed URL properties for backward compatibility; HTTPS when TLS is enabled (Issue #164)
     @property
     def backend_url(self) -> str:
         """Get the full backend API URL (HTTP or HTTPS based on TLS config)."""
@@ -2490,10 +2492,8 @@ class AutoBotConfig(RedactedSettings):
 
     @property
     def frontend_url(self) -> str:
-        """Get the full frontend URL (HTTP or HTTPS based on TLS config)."""
-        if self.tls.frontend_tls_enabled:
-            return f"https://{self.vm.frontend}:{self.tls.frontend_tls_port}"
-        return f"http://{self.vm.frontend}:{self.port.frontend}"
+        """The frontend's served URL, by what serves it (#19326); unset or unknown ``frontend_served_by`` raises."""
+        return served_url(self)
 
     @property
     def redis_url(self) -> str:
@@ -2633,20 +2633,20 @@ class AutoBotConfig(RedactedSettings):
             Service URL or None if not found
         """
         url_map = {
-            "backend": self.backend_url,
-            "frontend": self.frontend_url,
-            "redis": self.redis_url,
-            "ollama": self.ollama_url,
-            "websocket": self.websocket_url,
-            "aistack": self.aistack_url,
-            "ai_stack": self.aistack_url,
-            "npu": self.npu_worker_url,
-            "npu_worker": self.npu_worker_url,
-            "browser": self.browser_service_url,
-            "vnc": self.vnc_url,
-            "slm": self.slm_url,  # Issue #768
+            "backend": "backend_url",
+            "frontend": "frontend_url",
+            "redis": "redis_url",
+            "ollama": "ollama_url",
+            "websocket": "websocket_url",
+            "aistack": "aistack_url",
+            "ai_stack": "aistack_url",
+            "npu": "npu_worker_url",
+            "npu_worker": "npu_worker_url",
+            "browser": "browser_service_url",
+            "vnc": "vnc_url",
+            "slm": "slm_url",  # Issue #768
         }
-        return url_map.get(service_name.lower())
+        return getattr(self, url_map[key]) if (key := service_name.lower()) in url_map else None
 
     def get_vm_ip(self, vm_name: str) -> str | None:
         """

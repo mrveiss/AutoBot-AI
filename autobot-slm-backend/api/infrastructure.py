@@ -278,7 +278,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         category=PlaybookCategory.NETWORKING,
         playbook_file="setup-user-frontend.yml",
         target_hosts=["frontend"],
-        variables={"frontend_port": 443},
+        variables={"frontend_tls_port": 443},
         estimated_duration="5 minutes",
         requires_confirmation=True,
     ),

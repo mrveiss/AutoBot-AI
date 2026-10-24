@@ -54,6 +54,7 @@ from api.schemas_analytics_collector import AnalyticsPerformanceMetricsResponse,
 from api.ws_security import open_authenticated_ws
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.frontend_served_by import try_frontend_url
 from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase
@@ -254,8 +255,7 @@ async def get_detailed_system_health(current_user: Dict = Depends(get_current_us
         db_name, status = result
         detailed_health["analytics_health"]["redis_connectivity"][db_name] = status
 
-    # Issue #370: Check service connectivity in parallel
-    services = {"ollama": config.ollama_url, "frontend": config.frontend_url}
+    services = {n: u for n, u in {"ollama": config.ollama_url, "frontend": try_frontend_url(config)}.items() if u}
 
     async with httpx.AsyncClient(timeout=5.0) as client:
         service_results = await asyncio.gather(

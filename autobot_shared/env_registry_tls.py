@@ -66,3 +66,30 @@ register_env_var(
         component="network",
     )
 )
+
+# --- frontend served URL (#19326) ---
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_FRONTEND_SERVED_BY",
+        type=str,
+        default=None,
+        description=(
+            "What serves the frontend: 'vite' (dev server, AUTOBOT_FRONTEND_PORT) or 'nginx' "
+            "(AUTOBOT_FRONTEND_TLS_PORT with TLS, else AUTOBOT_FRONTEND_HTTP_PORT). No default: "
+            "unset or unknown makes config.frontend_url raise."
+        ),
+        component="network",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_FRONTEND_HTTP_PORT",
+        type=int,
+        default=80,
+        description="Port nginx serves the frontend over plain HTTP; used when AUTOBOT_FRONTEND_SERVED_BY=nginx.",
+        component="network",
+        range=(1, 65535),
+    )
+)

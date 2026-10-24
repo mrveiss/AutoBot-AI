@@ -162,11 +162,12 @@ def _server_called_urls() -> list[str]:
     health probes call (``config.llm.lmstudio_host`` and ``config.vllm_host``, both full URLs).
     Prometheus is deliberately absent: its host is derived two ways (``vm.main`` vs ``REDIS_VM_IP``), pending #18326.
     """
+    from autobot_shared.frontend_served_by import try_frontend_url
     from autobot_shared.network_constants import ServiceURLs
     from autobot_shared.ssot_config import config
 
     return [
-        config.frontend_url,
+        *filter(None, [try_frontend_url(config)]),  # unset AUTOBOT_FRONTEND_SERVED_BY: left out, not guessed (#19326)
         *(
             f"{scheme}://{host}:{config.port.vnc}"
             for host in (config.vm.main, config.vm.browser)

@@ -335,7 +335,7 @@
 - name: "Frontend | Configure firewall - Allow HTTPS"
   ufw:
     rule: allow
-    port: "{{ frontend_port }}"
+    port: "{{ frontend_tls_port }}"
     proto: tcp
     comment: "HTTPS"
   become: true
