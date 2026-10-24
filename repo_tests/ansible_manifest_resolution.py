@@ -154,7 +154,7 @@ SITE_MANIFESTS: dict[tuple[str, str], Resolution] = {
         (EVERY_MANIFEST,),
         "python_security_updates is rendered into a requirements file and installed into every "
         "autobot venv on the host, so its floors must contradict no manifest (#15597)",
-        unanchored=("filelock", "keras", "marshmallow", "urllib3", "werkzeug"),
+        unanchored=("keras", "marshmallow", "urllib3", "werkzeug"),
     ),
     (f"{_ROLES}/dependency_patching/tasks/update-venv.yml", "{{ host_venv_path }}"): Resolution(
         (EVERY_MANIFEST,),

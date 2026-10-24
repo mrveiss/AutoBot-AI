@@ -31,7 +31,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "bg-blue-500": 7,
     "bg-blue-500/10": 3,
     "bg-blue-500/20": 5,
-    "bg-blue-600": 10,
+    "bg-blue-600": 7,  # #14780 BaseAvatar: hand-rolled avatars and presence dots left for the kit (10 -> 7)
     "bg-blue-700": 4,
     "bg-blue-900": 3,
     "bg-blue-900/20": 1,
@@ -46,7 +46,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "bg-green-100": 9,
     "bg-green-400/10": 2,
     "bg-green-50": 3,
-    "bg-green-500": 11,
+    "bg-green-500": 9,  # #14780 BaseAvatar: hand-rolled avatars and presence dots left for the kit (11 -> 9)
     "bg-green-500/10": 2,
     "bg-green-600": 5,
     "bg-green-700": 3,
@@ -81,7 +81,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "bg-yellow-400": 1,
     "bg-yellow-400/10": 1,
     "bg-yellow-50": 3,
-    "bg-yellow-500": 6,
+    "bg-yellow-500": 4,  # #14780 BaseAvatar: hand-rolled avatars and presence dots left for the kit (6 -> 4)
     "bg-yellow-500/20": 3,
     "bg-yellow-600": 1,
     "bg-yellow-700": 1,
@@ -393,4 +393,6 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
 }
 
 #: Frozen total, asserted separately so a hand edit of one number cannot pass.
-TOTAL_OCCURRENCES = 6116  # #14780 BaseSwitch: 6153 -> 6117, LoadBalancingView 6117 -> 6116
+TOTAL_OCCURRENCES = (
+    6109  # #14780 BaseAvatar: 6116 -> 6109; #14780 BaseSwitch: 6153 -> 6117, LoadBalancingView 6117 -> 6116
+)

@@ -13,7 +13,7 @@
   gather_facts: true
 
   vars:
-    backup_dir: "{{ backup_dir | default('/opt/autobot/backups') }}"
+    backup_dir: "{{ backup_dir | default(autobot.base_dir ~ '/backups') }}"
     backup_timestamp: "{{ ansible_facts['date_time'].epoch }}"
     backup_name: "{{ target_host }}-{{ backup_timestamp }}"
     backup_path: "{{ backup_dir }}/{{ backup_name }}"
@@ -23,7 +23,7 @@
     # default (roles/redis/defaults/main.yml). The legacy /var/lib/chromadb path
     # never existed on installed nodes, so the ChromaDB backup block was a silent
     # no-op and ChromaDB collections were never captured (#10016 member 2).
-    chromadb_data_dir: "{{ chromadb_data_dir | default('/opt/autobot/autobot-db-stack/chromadb/data') }}"
+    chromadb_data_dir: "{{ chromadb_data_dir | default(autobot.base_dir ~ '/autobot-db-stack/chromadb/data') }}"
     # Retention: prune this host's backup dirs older than N days at the end of a
     # run. The just-created backup (mtime=now) always survives. 0 disables.
     backup_retention_days: "{{ backup_retention_days | default(30) }}"
@@ -148,8 +148,8 @@
     - name: Find SQLite databases
       ansible.builtin.find:
         paths:
-          - /opt/autobot/autobot-backend/data
-          - /opt/autobot/autobot-slm-backend/data
+          - "{{ autobot.base_dir }}/autobot-backend/data"
+          - "{{ autobot.base_dir }}/autobot-slm-backend/data"
         patterns: "*.db"
         recurse: true
       register: sqlite_dbs
@@ -234,19 +234,19 @@
     # =========================================================================
     - name: Check if Ollama models exist
       ansible.builtin.stat:
-        path: /opt/autobot/llm-models
+        path: "{{ autobot.base_dir }}/llm-models"
       register: llm_models_dir
 
     - name: Backup LLM models
       block:
         - name: Create models list
           ansible.builtin.shell: |
-            find /opt/autobot/llm-models -type f -name "*.gguf" -o -name "*.bin" > {{ backup_path }}/model-list.txt
+            find {{ autobot.base_dir }}/llm-models -type f -name "*.gguf" -o -name "*.bin" > {{ backup_path }}/model-list.txt
           changed_when: false
 
         - name: Tar LLM models (may take a while!)
           ansible.builtin.archive:
-            path: /opt/autobot/llm-models
+            path: "{{ autobot.base_dir }}/llm-models"
             dest: "{{ backup_path }}/llm-models.tar.gz"
             format: gz
           async: 3600  # 1 hour timeout

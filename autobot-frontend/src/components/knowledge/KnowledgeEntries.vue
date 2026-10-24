@@ -454,6 +454,7 @@ import EmptyState from '@/components/ui/EmptyState.vue'
 import { BaseModal, BaseButton } from '@autobot/ui'
 import { useModal } from '@/composables/useModal'
 import { createLogger } from '@/utils/debugUtils'
+import { escapeHtml, sanitizeKnowledgeHtml } from '@/utils/sanitize'
 
 type ExportFormat = 'json' | 'csv' | 'markdown'
 
@@ -856,15 +857,13 @@ const closeDialog = () => {
   dialogMode.value = 'view'
 }
 
-// NOTE: formatDate and formatDateTime removed - now using shared utilities from @/utils/formatHelpers
-
 const formatContent = (content: string): string => {
-  // Basic markdown-like formatting
-  return content
+  // #19118: escape, format, then sanitise (#2847 sanitiser) - stored content is untrusted
+  return sanitizeKnowledgeHtml(escapeHtml(content)
     .replace(/\n/g, '<br>')
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/`(.*?)`/g, '<code>$1</code>')
+    .replace(/`(.*?)`/g, '<code>$1</code>'))
 }
 
 // Icon mapping now centralized in @/utils/iconMappings

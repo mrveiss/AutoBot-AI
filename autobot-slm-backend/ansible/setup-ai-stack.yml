@@ -21,7 +21,7 @@
   gather_facts: true
 
   vars:
-    ai_stack_install_dir: /opt/autobot/ai-stack
+    ai_stack_install_dir: "{{ autobot.base_dir }}/ai-stack"
     ai_stack_user: autobot
     ai_stack_group: autobot
     chromadb_port: 8100

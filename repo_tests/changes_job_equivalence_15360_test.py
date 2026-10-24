@@ -210,6 +210,10 @@ ALLOWED_ADDITIONS = {
             f"{WORKFLOWS}/co-located-smoke.yml",
             # #17500, #18729: both guards read the secrets generator, so editing it must run the suite.
             "docker/generate-secrets.sh",
+            # #19178: user_docs_stay_consistent_19178_test.py reads docs/README.md.
+            "docs/README.md",
+            # #18266: social_preview_18266_test.py pins the rendered preview image.
+            "docs/assets/social-preview.png",
         ]
     },
     # frontend_path_filter_mirror_test pins frontend-test.yml's on.push.paths to this file, so the
