@@ -44,10 +44,11 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from repo_tests.ansible_inventory_scope import inventory_globals  # noqa: E402
 
+from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT  # noqa: E402
 from tools.lint._scan_helpers import enforce_reach  # noqa: E402
 
 # The deploy syncs the repo to this prefix, so what follows it is a repo path.
-_DEPLOYED_SRC_PREFIX = "/opt/autobot/src/"
+_DEPLOYED_SRC_PREFIX = f"{FLEET_INSTALL_ROOT}/src/"
 
 # Keys whose value is a path to a file the repo is expected to provide.
 _FILE_KEYS = ("requirements", "src", "chdir", "creates")
@@ -430,7 +431,7 @@ def _run() -> int:
     if path_violations:
         print("Ansible plays reference repo paths that do not exist:")
         print("\n".join(f"  {v}" for v in path_violations))
-        print("\nThe deploy syncs the repo to /opt/autobot/src/, so each of these")
+        print(f"\nThe deploy syncs the repo to {_DEPLOYED_SRC_PREFIX}, so each of these")
         print("resolves to a repo path. A wrong one fails on a host, not in CI.")
 
     if host_violations:

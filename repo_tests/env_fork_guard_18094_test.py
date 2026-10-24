@@ -63,6 +63,7 @@ def test_no_env_var_forks_and_no_ssot_constant_is_shadowed() -> None:
 
 def _tree(tmp_path: Path, files: dict[str, str]) -> tuple[Path, list[Path]]:
     base = {
+        "autobot_shared/fleet_constants.py": "",
         "autobot_shared/ssot_config.py": 'DEFAULT_EMBEDDING_MODEL = "nomic-embed-text:latest"\n',
         "autobot_shared/ssot_constants.py": "",
         "autobot_shared/ssot_tls.py": "",

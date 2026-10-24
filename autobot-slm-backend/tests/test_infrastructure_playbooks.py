@@ -7,7 +7,8 @@
 Guards against the #12095 bug class — catalog ``playbook_file`` values that point at
 a path which does not exist under ``ansible/`` (missing ``playbooks/`` prefix or a
 renamed/removed playbook), so clicking the entry raised ``FileNotFoundError`` at
-``os.path.join(PLAYBOOKS_DIR, playbook_file)`` in ``api/infrastructure.py``.
+the playbook-path join in ``api/infrastructure.py`` (then on ``PLAYBOOKS_DIR``, retired in #18094 for
+``_ansible_dir()``).
 """
 
 from __future__ import annotations
