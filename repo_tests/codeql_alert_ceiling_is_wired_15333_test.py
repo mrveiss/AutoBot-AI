@@ -8,7 +8,7 @@ The ceiling itself is enforced at runtime by
 `pipeline-scripts/check_codeql_alert_ceiling.sh`, which needs the GitHub API and
 so cannot run here. What this guard checks is the thing a static test *can*
 prove and that quietly breaks: that the script is still invoked from
-`code-quality.yml`, still has the permission it needs, and that the ceiling file
+`_gate-code-quality.yml`, still has the permission it needs, and that the ceiling file
 still parses.
 
 Why that matters more than it sounds. The whole defect class this addresses is a
@@ -32,7 +32,7 @@ from repo_tests._paths import repo_root
 from tools.lint._comment_syntax import code_lines
 
 _ROOT = repo_root()
-_WORKFLOW = _ROOT / ".github" / "workflows" / "code-quality.yml"
+_WORKFLOW = _ROOT / ".github" / "workflows" / "_gate-code-quality.yml"
 _SCRIPT = _ROOT / "pipeline-scripts" / "check_codeql_alert_ceiling.sh"
 _CEILING = _ROOT / "pipeline-scripts" / "codeql_alert_ceiling.txt"
 
@@ -132,7 +132,7 @@ def test_the_gate_is_invoked_from_the_code_quality_workflow():
     a merge.
     """
     assert _invokes_the_gate(_workflow_text()), (
-        "the open-alert ceiling is no longer invoked from code-quality.yml — the backlog can grow again "
+        "the open-alert ceiling is no longer invoked from _gate-code-quality.yml — the backlog can grow again "
         "without anything going red"
     )
 
@@ -144,7 +144,7 @@ def test_the_workflow_grants_the_permission_the_gate_needs():
     perms = (yaml.safe_load(_workflow_text()) or {}).get("permissions") or {}
 
     assert _grants_security_events_read(_workflow_text()), (
-        "code-quality.yml no longer grants security-events: read, so the alert-ceiling "
+        "_gate-code-quality.yml no longer grants security-events: read, so the alert-ceiling "
         f"gate cannot read the alerts. Current permissions: {perms}"
     )
 
@@ -176,7 +176,12 @@ _SCRIPT_SRC = _SCRIPT.read_text(encoding="utf-8")
 _CHECKS_WITHOUT_CODEQL = '{"total_count":2,"check_runs":[{"name":"python-suite"},{"name":"code-quality"}]}'
 #: codeql.yml's own job name.
 _CHECKS_WORKFLOW_JOB = '{"total_count":2,"check_runs":[{"name":"Analyze (python)"},{"name":"python-suite"}]}'
-#: GitHub's code-scanning status check, which codeql.yml does not name.
+#: The same job as ci.yml publishes it since #18208: "<caller job> / <job>".
+_CHECKS_CALLEE_JOB = '{"total_count":2,"check_runs":[{"name":"run-codeql / Analyze (python)"},{"name":"python-suite"}]}'
+#: ci.yml's `run-codeql` caller when no language matched: SKIPPED, and still a check run. The matcher
+#: must not read it as "CodeQL ran" or every dependency-only PR fails closed again (#18105).
+_CHECKS_SKIPPED_CALLER = '{"total_count":2,"check_runs":[{"name":"run-codeql"},{"name":"python-suite"}]}'
+#: GitHub's code-scanning status check, which the CodeQL body does not name.
 _CHECKS_PLATFORM = '{"total_count":2,"check_runs":[{"name":"CodeQL"},{"name":"python-suite"}]}'
 
 
@@ -306,7 +311,11 @@ def test_nothing_scanned_the_ref_and_codeql_never_ran_falls_back_to_the_default_
 
 @pytest.mark.parametrize(
     "checks,label",
-    [(_CHECKS_WORKFLOW_JOB, "codeql.yml's own Analyze job"), (_CHECKS_PLATFORM, "GitHub's CodeQL status check")],
+    [
+        (_CHECKS_WORKFLOW_JOB, "the body's own Analyze job"),
+        (_CHECKS_CALLEE_JOB, "the Analyze job as ci.yml's run-codeql publishes it (#18208)"),
+        (_CHECKS_PLATFORM, "GitHub's CodeQL status check"),
+    ],
 )
 def test_a_codeql_check_without_any_analysis_still_trips(tmp_path, checks, label):
     """SHOULD trip: the contrast for the case above — CodeQL ran and produced nothing.
@@ -316,6 +325,15 @@ def test_a_codeql_check_without_any_analysis_still_trips(tmp_path, checks, label
     looked for the workflow's jobs would miss the status check GitHub publishes itself.
     """
     assert _run_gate(tmp_path, analyses="[]", alerts=_NO_ALERTS, checks=checks) == 1, label
+
+
+def test_a_skipped_run_codeql_caller_is_not_evidence_that_codeql_ran(tmp_path):
+    """SHOULD NOT trip (#18208): ci.yml's skipped `run-codeql` job is not a CodeQL run.
+
+    The old pattern matched 'codeql' anywhere in a check name, which would count the skipped
+    caller and turn "touches nothing CodeQL scans" back into the #18105 failure.
+    """
+    assert _run_gate(tmp_path, analyses="[]", alerts=_NO_ALERTS, checks=_CHECKS_SKIPPED_CALLER) == 0
 
 
 def _paged_checks(codeql_page: int, *, declared_total: int | None = None) -> str:

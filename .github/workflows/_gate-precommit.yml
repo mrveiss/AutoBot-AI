@@ -1,40 +1,37 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
 # GitHub Actions workflow to enforce pre-commit hooks installation
 # Ensures developers have pre-commit configured to catch issues before push
 # Related: MVA-2111, MVA-2108 (6 PRs required admin override due to missing local checks)
+#
+# #18208: this file is the reusable BODY of one gate. ci.yml calls it; the triggers, the
+# `changes` job, the concurrency group and any required-context job that used to live here
+# are in ci.yml now. Nothing in this file may publish a required context: a job in a called
+# workflow reports as `<caller job> / <job>`, which is not the name branch protection matches.
 
-name: Enforce Pre-commit Hooks
+name: Enforce Pre-commit Hooks (reusable body)
 
 on:
-  # #14054: the tenth required context. Without this trigger the queue
-  # deadlocks on verify-precommit-config -- every entrant waiting on a
-  # check that never fires. Inert until the merge_queue ruleset rule
-  # exists; this event cannot occur before then.
-  merge_group:
-  pull_request:
-    branches: [ release, main, develop ]
-  # #15358: the repo-wide sweep moves here. On a pull request the hooks run
-  # against the diff only; whole-tree drift is still caught, nightly, off the
-  # critical path. Without this trigger, diff-scoping would silently drop
-  # whole-tree coverage rather than relocate it.
-  schedule:
-    - cron: '17 3 * * *'
-  workflow_dispatch:
-    # No `paths:` filter — this workflow is a REQUIRED status check (#12174), and
-    # a required check that is path-filtered out never reports, wedging any PR
-    # that touches only non-matching files (docs, .sh, .css, .json). Running on
-    # every PR guarantees it always reports, and also closes the SPDX coverage
-    # gap: the header check covers .sh/.css/.js/.mjs/.tsx, which the old filter
-    # (.py/.ts/.vue/.yml only) never triggered on.
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  workflow_call:
+    inputs:
+      sweep:
+        description: "'true' runs the repo-wide pre-commit sweep; 'false' (a docs-only diff) skips it. Scheduled and manual runs keep the default."
+        type: string
+        default: 'true'
+    outputs:
+      ok:
+        description: "'true' only when every step of the pre-commit config job passed"
+        value: ${{ jobs.precommit-config.outputs.ok }}
 
 permissions:
   contents: read
 
 jobs:
-  verify-precommit-config:
+  precommit-config:
+    name: Pre-commit Configuration
+    outputs:
+      ok: ${{ steps.done.outputs.ok }}
     # Self-hosted (#15310). Unblocked by #15314: setup-python-ci now branches on
     # runner.environment, so on a self-hosted runner it uses the interpreter
     # already on PATH instead of downloading a build that does not exist for
@@ -97,22 +94,10 @@ jobs:
           echo "✓ All required hooks (black, isort, flake8, autoflake, mypy) are configured"
 
       # #13517: shared composite action (also upgrades pip/setuptools/wheel).
-      # Step-level, not job-level: this job publishes a required status context
-      # and carries the SPDX and symlink checks, which must cover EVERY pull
-      # request including docs-only ones (see the `on:` comment above). Gating
-      # the job would re-open that gap and wedge the context. Only the repo-wide
-      # sweep below is scoped, and it is the whole cost: measured on PR #15250
-      # (one markdown file) the sweep was 1008s of the job's 1142s, while every
-      # other step finished in 0-7s (#15299).
-      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
-        id: filter
-        with:
-          # #14054: dorny/paths-filter errors on an event it does not
-          # recognise unless `base` is given. This filter gates steps rather
-          # than the job, so the failure mode is not a deadlock but a RED
-          # required context on every queue entrant. Empty on push/PR.
-          base: ${{ github.event.merge_group.base_sha || '' }}
-          filters: .github/filters/docs-only-paths.yml
+      # The repo-wide sweep below is scoped by the `sweep` input: ci.yml's `changes` job runs
+      # .github/filters/docs-only-paths.yml once and passes the answer in (#18208, #15299).
+      # The job itself is never gated -- it carries the SPDX and symlink checks, which must cover
+      # every pull request including docs-only ones, and it publishes a required context.
 
       # NOT gated, deliberately (#15299). Two ungated steps below run
       # `python3 pipeline-scripts/...` and those scripts `import yaml`; pyyaml
@@ -142,7 +127,7 @@ jobs:
       # there is no missing-build problem to work around (#15313 does not apply).
       # Version matches the rest of CI.
       - name: Set up Node
-        if: steps.filter.outputs.code == 'true'
+        if: inputs.sweep == 'true'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
           node-version: '22'
@@ -168,7 +153,7 @@ jobs:
             pre-commit-${{ runner.os }}-
 
       - name: Run pre-commit over the change under review
-        if: steps.filter.outputs.code == 'true'
+        if: inputs.sweep == 'true'
         env:
           IS_PULL_REQUEST: ${{ github.event_name == 'pull_request' }}
         run: |
@@ -211,7 +196,7 @@ jobs:
           cat precommit-output.txt
 
       - name: Fail when a hook could not run at all (#14181)
-        if: steps.filter.outputs.code == 'true'
+        if: inputs.sweep == 'true'
         run: |
           # Tolerates exactly the hooks still on check_hook_exec_bits.py's
           # _KNOWN_DORMANT list, imported rather than duplicated -- a second copy
@@ -234,7 +219,7 @@ jobs:
       # One hook today (ssot-config-lib-guard, a shell test suite); the ids come
       # from the script so this stays a single source of truth.
       - name: Run the behavioural gating hooks at full scope (#14878)
-        if: steps.filter.outputs.code == 'true'
+        if: inputs.sweep == 'true'
         run: |
           ids="$(python3 pipeline-scripts/check_gating_precommit_hooks.py --print-ids)"
           echo "gating hooks: ${ids}"
@@ -252,7 +237,7 @@ jobs:
           cat precommit-gating.txt
 
       - name: Fail when a behavioural hook reported a finding (#14878)
-        if: steps.filter.outputs.code == 'true'
+        if: inputs.sweep == 'true'
         run: |
           # The third class, between the two the steps above already handle.
           #
@@ -381,6 +366,14 @@ jobs:
           # so unlike the symlink guard above there is nothing pre-existing
           # to blame an unrelated PR for.
           bash autobot-infrastructure/shared/scripts/hooks/pre-commit-no-gitignore-shadow
+
+      # Positive evidence for the `verify-precommit-config` gate in ci.yml (#18208): this step is
+      # reached only when every step above it succeeded, so the output below is
+      # 'true' on a full pass and empty on a failure, a cancel or a timeout.
+      - name: Record that every step passed
+        id: done
+        shell: bash
+        run: echo "ok=true" >> "$GITHUB_OUTPUT"
 
   check-instructions:
     # Self-hosted (#15310) — same reasoning as verify-precommit-config above.

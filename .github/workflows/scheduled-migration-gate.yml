@@ -1,0 +1,26 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Nightly and manual migration matrix (#18208, #17490). The matrix is the reusable body
+# `_gate-migration.yml`; ci.yml calls it on pull requests, this thin caller runs the SAME body
+# on a schedule and on demand. These runs ignore any path filter: their whole purpose is to
+# catch a break no diff caused, so gating them on "did a path change" would reproduce the
+# blind spot they exist to close.
+
+name: Scheduled Migration Gate
+
+on:
+  schedule:
+    - cron: '40 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: read  # pull the ghcr CI image mirror (#18160)
+
+jobs:
+  migration-matrix-run:
+    uses: ./.github/workflows/_gate-migration.yml
+    permissions:
+      contents: read
+      packages: read

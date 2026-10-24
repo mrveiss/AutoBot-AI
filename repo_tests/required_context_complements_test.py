@@ -2,21 +2,35 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Guards for every required-context complement split (#14353, and the
-`startup-import-smoke` deadlock this file was renamed for).
+"""Guards for the required status contexts (#14353, #15606, #17391, #18208).
 
-`python-suite` can only be a required status check if *exactly one* job publishes
-it on every pull request: the real twelve-shard suite in ci.yml when Python paths
-changed, and the shim in python-required-context.yml when they did not.
+A required context is matched by check-run NAME. A job whose `if:` is false is
+SKIPPED, and a skipped required job is the defect this file keeps out: it reads as
+"never ran" and as "nothing to verify" at once. Until #18208 each context was
+published by two same-named jobs in two workflows -- a real job and a "shim" -- and
+a guard had to prove that exactly one of them could conclude. It covered one of the
+five pairs (#17391) and could not cover the ordering of their check runs (#14922).
 
-The dangerous direction is silent. If the shim believed nothing Python changed
-while ci.yml believed otherwise, the pull request would take the shim's green for
-a suite that never ran — a gate bypass, not a flake. These tests pin the two
-properties that prevent it: the job names match, and both sides read the same
-filter file rather than keeping copies that can drift.
+#18208 removed the pairs. Each gated required context is now published by ONE
+top-level `if: always()` job in ci.yml (a "gate"), which reads the single `changes`
+job and the work behind it through `.github/actions/gate-verdict`. The invariant this
+file enforces (AC 4 of #18208): no required context's job can be skipped without its
+always-reporting complement, because the only job that publishes the name IS the
+always-reporting one, and every job that CAN be skipped has a different name.
+
+G1  every required context is published by exactly one job in the whole tree
+G2  each gated context's job is a top-level job of ci.yml, `if: always()`, and needs
+    `changes` and the work it stands for
+G3  the gate reads `needs.changes.result` (fail closed) and the work's result
+G4  no work job or reusable-body job takes the name of a required context
+G5  ci.yml's pull_request trigger carries no paths/branches filter and has the four
+    types; the contexts that carry no draft clause still carry none
+G6  the required list is non-vacuous: the scan resolves every one of the eleven
+G7  control fixtures: a gate missing `if: always()`, a gate gated on a filter output
+    and a duplicated context name must each FAIL the checker
 """
 
-import re
+import copy
 from pathlib import Path
 
 import pytest
@@ -25,126 +39,16 @@ from repo_tests._paths import repo_root
 yaml = pytest.importorskip("yaml", reason="PyYAML needed to parse the workflows")
 
 REPO_ROOT = repo_root()
-CI = REPO_ROOT / ".github" / "workflows" / "ci.yml"
-SHIM = REPO_ROOT / ".github" / "workflows" / "python-required-context.yml"
-FILTER = REPO_ROOT / ".github" / "filters" / "python-paths.yml"
+WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
+CI = WORKFLOW_DIR / "ci.yml"
 
-REQUIRED_CONTEXT = "python-suite"
-
-
-def _jobs(path: Path) -> dict:
-    return yaml.safe_load(path.read_text(encoding="utf-8"))["jobs"]
-
-
-REUSABLE_CHANGES = "./" + ".github/workflows" + "/_changes.yml"
-
-
-def _changes_runner(jobs: dict) -> str:
-    """`runs-on` of the `changes` job, resolved through the reusable call (#15360).
-
-    A caller that `uses:` _changes.yml has no `runs-on` of its own: the runner is
-    the reusable job's, so that is the thing to assert on.
-    """
-    job = jobs["changes"]
-    if job.get("uses") == REUSABLE_CHANGES:
-        return _jobs(REPO_ROOT / ".github" / "workflows" / "_changes.yml")["changes"]["runs-on"]
-    return job["runs-on"]
-
-
-def test_both_workflows_publish_the_same_context_name():
-    """The required context is the job NAME; a rename on one side breaks the split."""
-    assert _jobs(CI)[REQUIRED_CONTEXT]["name"] == REQUIRED_CONTEXT
-    assert _jobs(SHIM)[REQUIRED_CONTEXT]["name"] == REQUIRED_CONTEXT
-
-
-def test_the_two_conditions_are_exact_complements():
-    """One and only one of them may run for any given pull request."""
-    real = _jobs(CI)[REQUIRED_CONTEXT]["if"]
-    shim = _jobs(SHIM)[REQUIRED_CONTEXT]["if"]
-
-    assert "needs.changes.outputs.python == 'true'" in real
-    assert shim.strip() == "needs.changes.outputs.python != 'true'"
-
-
-def test_both_sides_read_the_shared_filter_file():
-    """A second inline copy of the path set is how the two sides drift apart."""
-    assert FILTER.is_file(), f"missing canonical filter: {FILTER}"
-
-    for path in (CI, SHIM):
-        text = path.read_text(encoding="utf-8")
-        assert ".github/filters/python-paths.yml" in text, f"{path.name} does not read the shared filter"
-
-    # ...and ci.yml resolves the set through that file rather than an inline copy.
-    steps = yaml.safe_load(CI.read_text(encoding="utf-8"))["jobs"]["changes"]["steps"]
-    python_steps = [s for s in steps if s.get("id") == "filter-python"]
-    assert len(python_steps) == 1, "ci.yml must resolve `python` through exactly one filter step"
-    assert python_steps[0]["with"]["filters"] == ".github/filters/python-paths.yml"
-
-
-def test_the_filter_covers_its_own_inputs():
-    """Editing the filter or the shim must run the real suite, not the shim."""
-    patterns = yaml.safe_load(FILTER.read_text(encoding="utf-8"))["python"]
-
-    assert ".github/filters/python-paths.yml" in patterns
-    assert ".github/workflows/python-required-context.yml" in patterns
-    assert ".github/workflows/ci.yml" in patterns
-    assert "**/*.py" in patterns
-
-
-def test_the_shim_triggers_only_on_pull_request():
-    """The shim's trigger set, pinned so #15937's decision cannot drift (#16098).
-
-    This file checked conditions, job names, runners and the shared filter -- and
-    NOT triggers. A complement only holds while both workflows run, so "which
-    events run this" is half of the property the file exists to protect, and it
-    was the half blind to the axis #16098 changed.
-
-    The shim must not gain `merge_group`. Inside a queue `ci.yml` always triggers
-    and publishes `python-suite` on its own -- running when the group touches
-    Python, reporting skipped when it does not -- so a shim that also triggered
-    would publish a second, competing report of the same context. #15937 records
-    that as an acceptance criterion; this asserts it.
-
-    Stated as an exact set rather than an absence: `assert "merge_group" not in
-    on` would still pass if the shim quietly gained `push` or `schedule`, which
-    is the same silent-widening this file exists to prevent.
-    """
-    doc = yaml.safe_load(SHIM.read_text(encoding="utf-8"))
-    on = doc.get(True) or doc.get("on") or {}
-    assert set(on) == {"pull_request"}, (
-        f"the shim's triggers are {sorted(on)}; #15937 fixes them at pull_request alone. "
-        "Adding merge_group would double-publish python-suite inside a queue."
-    )
-
-
-def test_the_shim_declares_no_concurrency_group():
-    """A shared concurrency group is what made the frontend shim useless (#13405).
-
-    Asserted against the parsed document, not the raw text: the file *explains*
-    why it has no concurrency block, and a substring check fails on its own
-    comment.
-    """
-    parsed = yaml.safe_load(SHIM.read_text(encoding="utf-8"))
-    assert "concurrency" not in parsed
-    assert "concurrency" not in parsed["jobs"][REQUIRED_CONTEXT]
-
-
-def test_the_shim_runs_on_a_github_hosted_runner():
-    """The shim must not depend on the singleton self-hosted pool."""
-    assert _jobs(SHIM)[REQUIRED_CONTEXT]["runs-on"] == "ubuntu-latest"
-    assert _changes_runner(_jobs(SHIM)) == "ubuntu-latest"
-
-
-def test_the_shim_fails_closed_on_a_broken_detector():
-    """If `changes` errors, the shim must skip rather than report green."""
-    shim_job = _jobs(SHIM)[REQUIRED_CONTEXT]
-    assert shim_job["needs"] == "changes", "without `needs`, a failed detector would not gate the shim"
-
-
-# The ten contexts branch protection requires on main today, plus
-# `python-suite`, which #14353 exists to make the eleventh. Branch protection
-# lives in the GitHub API and cannot be read offline, so this list is declared
-# rather than derived — the test below is what keeps the workflows honest to it.
+# The eleven contexts branch protection requires on main. Branch protection lives in
+# the GitHub API and cannot be read offline, so the list is declared here rather than
+# derived. This hardcoded copy is a SECOND copy of the protection list and is kept
+# only until the owner completes D7 of #18208 (move the required checks into the
+# ruleset so the guard can compare against `GET /rules/branches/main`); at that point
+# this constant is replaced by a read of the live rule. Until then, a change to the
+# protected set must change this list in the same PR.
 REQUIRED_CONTEXTS = frozenset(
     {
         "smoke-test",
@@ -157,307 +61,271 @@ REQUIRED_CONTEXTS = frozenset(
         "migration-matrix",
         "verify-precommit-config",
         "api-wiring",
-        REQUIRED_CONTEXT,
+        "python-suite",
     }
 )
 
-WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
+# context -> (the gate's job id in ci.yml, the work jobs it must `need`, draft-gated).
+# Rows are the whole of the gated set; the two governance checks are separate workflows.
+GATES = {
+    "python-suite": ("python-suite", ("python-shard",), True),
+    "code-quality": ("code-quality", ("run-code-quality",), True),
+    "startup-import-smoke": ("startup-import-smoke", ("run-startup-import-smoke",), True),
+    "Unit & Integration Tests": ("unit-tests", ("run-frontend-test",), True),
+    "smoke-test": ("smoke-test", ("run-docker-smoke",), True),
+    "api-wiring": ("api-wiring", ("run-api-wiring",), True),
+    "migration-matrix": ("migration-matrix", ("run-migration-gate",), True),
+    "verify-generated-types": ("verify-generated-types", ("run-generated-types",), True),
+    # #17957: the one context that runs on drafts (SPDX and symlink checks cover every PR).
+    "verify-precommit-config": ("verify-precommit-config", ("run-precommit",), False),
+}
+
+# Separate workflows, kept apart on purpose (D1 of #18208).
+GOVERNANCE = {
+    "No commit trailers": "no-commit-trailers.yml",
+    "No open blocks-merge issues reference this PR": "pr-blocking-findings.yml",
+}
+
+GATE_ACTION = "./.github/actions/gate-verdict"
+SHIMS = (
+    "python-required-context.yml",
+    "backend-required-context.yml",
+    "code-quality-required-context.yml",
+    "frontend-required-context.yml",
+    "docker-smoke-required-context.yml",
+)
 
 
-def _triggers(doc: dict) -> dict:
-    """Return the workflow's `on:` block.
+def _load(path: Path) -> dict:
+    return yaml.safe_load(path.read_text(encoding="utf-8")) or {}
 
-    YAML 1.1 resolves the bare key ``on`` to the boolean ``True``, so
-    ``doc["on"]`` raises and ``doc.get("on", {})`` silently returns nothing —
-    which would make every assertion below vacuous while the test still passed.
-    """
+
+def _on(doc: dict) -> dict:
+    """The `on:` block. YAML 1.1 turns the bare key into True, so `doc["on"]` misses it."""
     return doc.get(True) or doc.get("on") or {}
 
 
-def _published_context_names(doc: dict) -> set:
-    jobs = doc.get("jobs") or {}
-    return {(spec or {}).get("name", job_id) for job_id, spec in jobs.items()}
+def _all_workflows() -> dict:
+    return {p.name: _load(p) for p in sorted(WORKFLOW_DIR.glob("*.yml"))}
 
 
-def _workflows_publishing_a_required_context():
-    for path in sorted(WORKFLOW_DIR.glob("*.yml")):
-        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-        if _published_context_names(doc) & REQUIRED_CONTEXTS:
-            yield path, doc
+def _job_name(job_id: str, spec: dict) -> str:
+    return (spec or {}).get("name", job_id)
 
 
-def test_the_scan_actually_finds_workflows():
-    """A glob that matched nothing would make the guard below assert nothing."""
-    found = list(_workflows_publishing_a_required_context())
-    assert len(found) >= 3, (
-        f"only {len(found)} workflow(s) matched a required context - the scan is "
-        "no longer bound to the workflows it is meant to guard"
-    )
-
-
-def test_ci_triggers_on_stacked_pull_requests_and_on_merge_group():
-    """`ci.yml` is the only publisher of `python-suite`, so both triggers are its own.
-
-    Scoped to this one file deliberately. The generalised versions of both rules
-    are wrong, and measuring said so before they shipped:
-
-    * **`branches:` is the norm, not the defect.** Thirteen workflows publishing
-      a required context carry `pull_request.branches`. Forbidding it repo-wide
-      would fail all of them, and that is a far larger change than this issue.
-      What makes it load-bearing *here* is that `python-suite` is the context
-      #14353 is about to require, and a stacked pull request -- base is another
-      feature branch -- matches neither `release` nor `main`. Measured on PR
-      #14641: **zero** CI/CD runs, with the page showing green from the workflows
-      that do trigger. The shim cannot rescue it: on a stacked PR *with* Python
-      changes it correctly skips, so neither side publishes (#14747).
-
-    * **The four shims lack `merge_group` on purpose** -- #15937 states it as an
-      acceptance criterion, and this file's own note at the complement pairs says
-      the shim "cannot see" merge_group because it is not one of its triggers.
-      Inside a queue `ci.yml` always triggers and its `python-suite` job skips on
-      a Python-free group, which reports the context; the shim is not needed and
-      must not gain the trigger.
-
-    So the invariant is about this file, and the reason is that it publishes the
-    eleventh context.
-    """
-    doc = yaml.safe_load((WORKFLOW_DIR / "ci.yml").read_text(encoding="utf-8"))
-    on = doc.get(True) or doc.get("on") or {}
-
-    assert "merge_group" in on, (
-        "ci.yml has no `merge_group:` trigger, so `python-suite` can never report "
-        "inside a merge queue and every queue entry would block on it once #14353 "
-        "makes it required (#15937 / #14054)."
-    )
-
-    pull_request = on.get("pull_request") or {}
-    assert isinstance(pull_request, dict) and "branches" not in pull_request, (
-        "ci.yml filters `pull_request.branches`, so a STACKED pull request never "
-        "triggers it and `python-suite` never runs -- measured on #14641 as zero "
-        "CI/CD runs. Harmless while the context is unrequired; a permanent hard "
-        "block the moment #14353 lands (#14747)."
-    )
-
-
-def test_the_shims_have_not_gained_a_merge_group_trigger():
-    """The counterpart, because the fix above is one edit away from breaking it.
-
-    #15937's acceptance criteria require the shims to stay `pull_request`-only.
-    An earlier draft of this change added `merge_group:` to
-    `python-required-context.yml` on the reasoning that both publishers should
-    match -- which is wrong, and only a direct scan of all fourteen workflows
-    showed it. Pinning it so the next person reasoning the same way is stopped by
-    a test rather than by review.
-    """
-    for _, _, _, shim_wf, _, _ in _COMPLEMENT_PAIRS:
-        on_block = yaml.safe_load((WORKFLOW_DIR / shim_wf).read_text(encoding="utf-8"))
-        triggers = on_block.get(True) or on_block.get("on") or {}
-        assert "merge_group" not in triggers, (
-            f"{shim_wf} gained a `merge_group:` trigger. Shims are pull_request-only "
-            "by design (#15937): inside a queue the real workflow always triggers and "
-            "its job skips, which reports the context."
-        )
-
-
-@pytest.mark.parametrize(
-    "path",
-    [pytest.param(p, id=p.name) for p, _ in _workflows_publishing_a_required_context()],
-)
-def test_a_workflow_publishing_a_required_context_has_no_pull_request_paths(path):
-    """A path-filtered required check deadlocks the pull request it gates.
-
-    If the trigger does not match, the workflow never starts, so the context is
-    never reported and the pull request waits on "Expected" forever. The
-    complement shim cannot rescue it: the shim reads the *filter*, sees the path
-    as Python, and skips - so neither side publishes.
-
-    #13388 stated this rule for ci.yml and #14353 had to apply it; frontend-test.yml
-    and code-quality.yml each removed their own filter for the same reason.
-    """
-    doc = yaml.safe_load(path.read_text(encoding="utf-8"))
-    pull_request = _triggers(doc).get("pull_request") or {}
-
-    assert "paths" not in pull_request, (
-        f"{path.name} publishes a required status context but filters "
-        f"pull_request on paths {pull_request['paths']!r}. A pull request that "
-        "misses this filter never starts the run, so the context never reports "
-        "and the merge box blocks forever."
-    )
-
-
-# Each row is one required status context published by two mutually exclusive
-# jobs: the real gate when its paths changed, and a shim reporting green when
-# they did not. Adding a third pair is one row here.
-#
-#   (context, real workflow, real `if:` fragment, shim workflow, shim `if:`, filter)
-_COMPLEMENT_PAIRS = (
-    (
-        "python-suite",
-        "ci.yml",
-        "needs.changes.outputs.python == 'true'",
-        "python-required-context.yml",
-        "needs.changes.outputs.python != 'true'",
-        "python-paths.yml",
-    ),
-    (
-        "startup-import-smoke",
-        "startup-import-smoke.yml",
-        "needs.changes.outputs.backend == 'true'",
-        "backend-required-context.yml",
-        "needs.changes.outputs.backend != 'true'",
-        "backend-python-paths.yml",
-    ),
-    (
-        "code-quality",
-        "code-quality.yml",
-        "needs.changes.outputs.backend == 'true'",
-        "code-quality-required-context.yml",
-        "needs.changes.outputs.backend != 'true'",
-        "code-quality-paths.yml",
-    ),
-)
-
-_PAIR_IDS = [p[0] for p in _COMPLEMENT_PAIRS]
-
-
-@pytest.mark.parametrize("pair", _COMPLEMENT_PAIRS, ids=_PAIR_IDS)
-def test_the_pair_publishes_one_context_under_two_complementary_conditions(pair):
-    """The required context is the job NAME, and exactly one side may run."""
-    context, real_wf, real_if, shim_wf, shim_if, _ = pair
-    real = _jobs(WORKFLOW_DIR / real_wf)[context]
-    shim = _jobs(WORKFLOW_DIR / shim_wf)[context]
-
-    assert real.get("name", context) == context
-    assert shim["name"] == context
-    assert real_if in real["if"], f"{real_wf}:{context} no longer carries {real_if!r}"
-    assert shim["if"].strip() == shim_if
-
-
-@pytest.mark.parametrize("pair", _COMPLEMENT_PAIRS, ids=_PAIR_IDS)
-def test_the_shim_cannot_be_cancelled_or_starved(pair):
-    """No shared concurrency group (#13405), and never the self-hosted pool.
-
-    Asserted against the parsed document, not the raw text: each file *explains*
-    why it has no concurrency block, and a substring check fails on its own
-    comment.
-    """
-    context, _, _, shim_wf, _, _ = pair
-    parsed = yaml.safe_load((WORKFLOW_DIR / shim_wf).read_text(encoding="utf-8"))
-
-    assert "concurrency" not in parsed
-    assert "concurrency" not in parsed["jobs"][context]
-    assert parsed["jobs"][context]["runs-on"] == "ubuntu-latest"
-    assert _changes_runner(parsed["jobs"]) == "ubuntu-latest"
-
-
-@pytest.mark.parametrize("pair", _COMPLEMENT_PAIRS, ids=_PAIR_IDS)
-def test_the_shim_fails_closed_and_reads_the_shared_filter(pair):
-    """A broken detector must block, and neither side may keep its own path copy."""
-    context, real_wf, _, shim_wf, _, filter_name = pair
-    shim_job = _jobs(WORKFLOW_DIR / shim_wf)[context]
-    assert shim_job["needs"] == "changes", "without `needs`, a failed detector would not gate the shim"
-
-    canonical = REPO_ROOT / ".github" / "filters" / filter_name
-    assert canonical.is_file(), f"missing canonical filter: {canonical}"
-    for wf in (real_wf, shim_wf):
-        text = (WORKFLOW_DIR / wf).read_text(encoding="utf-8")
-        assert f".github/filters/{filter_name}" in text, f"{wf} does not read the shared filter"
-
-
-# ── the general catcher ──────────────────────────────────────────────────────
-#
-# The pairs above are pinned by name, but detection must NOT depend on that
-# table: a context missing from it is exactly the case that needs catching. This
-# resolves the property structurally instead — a required context is safe when
-# some job publishing it is unconditional, or when two of them carry conditions
-# that are exact complements.
-#
-# `startup-import-smoke` is why this exists. Its workflow correctly carries no
-# `pull_request.paths` filter, so the older test above passed — but its single
-# job was gated on `needs.changes.outputs.backend == 'true'` with no complement,
-# and its own header claimed the job "self-skips (reporting success) when no
-# backend paths are touched". A job whose `if:` is false is SKIPPED, and a
-# skipped job publishes a check run whose conclusion is `skipped`, not `success`.
-# A pull request touching only `scripts/` and `.dockerignore` therefore sat
-# blocked on a required context nothing could turn green (#15606).
-#
-# The two failure directions are not symmetric. A missing complement BLOCKS,
-# loudly and immediately. A complement whose condition is not an exact negation
-# reports green for a gate that never ran, which is a silent bypass — so the
-# string-level pinning in the parametrized tests matters more than this sweep.
-
-# Shrink-only. A context here is a KNOWN deadlock with an issue against it, not a
-# permitted shape: removing the gap must remove the entry, and a stale entry
-# fails as loudly as a new unpaired context.
-# Empty, and that is the point: #15608 was the last entry, closed by extracting
-# code-quality's inline path set to .github/filters/code-quality-paths.yml and
-# pairing it with .github/workflows/code-quality-required-context.yml. Every
-# required context now has either an unconditional publisher or an exact
-# complement, and the structural sweep below is what keeps it that way.
-_KNOWN_UNPAIRED: dict[str, str] = {}
-
-
-def _condition_is_always_true(expression: str) -> bool:
-    """`always()` and a bare `true` run unconditionally, so they cannot deadlock."""
-    return expression.strip().strip("${} ").lower() in {"always()", "true", "success() || failure()"}
-
-
-def _negates(left: str, right: str) -> bool:
-    """True when two `if:` expressions are exact complements of each other.
-
-    Compared on the `outputs.<name> ==/!= 'true'` clause rather than the whole
-    string: the real gate usually also admits `merge_group`, which the shim
-    cannot see because `merge_group` is not one of its triggers.
-    """
-    clause = re.compile(r"needs\.changes\.outputs\.(\w+)\s*(==|!=)\s*'true'")
-    left_clauses = {m.group(1): m.group(2) for m in clause.finditer(left)}
-    right_clauses = {m.group(1): m.group(2) for m in clause.finditer(right)}
-    shared = set(left_clauses) & set(right_clauses)
-    return any(left_clauses[name] != right_clauses[name] for name in shared)
-
-
-def _publishers_of_required_contexts():
-    """Map each required context to every `if:` expression publishing it."""
-    found = {}
-    for path in sorted(WORKFLOW_DIR.glob("*.yml")):
-        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+def _publishers(workflows: dict) -> dict:
+    """context -> [(workflow file, job id)] for every job whose name is a required context."""
+    found: dict = {}
+    for fname, doc in workflows.items():
         for job_id, spec in (doc.get("jobs") or {}).items():
-            spec = spec or {}
-            context = spec.get("name", job_id)
-            if context in REQUIRED_CONTEXTS:
-                found.setdefault(context, []).append((path.name, str(spec.get("if") or "")))
+            name = _job_name(job_id, spec)
+            if name in REQUIRED_CONTEXTS:
+                found.setdefault(name, []).append((fname, job_id))
     return found
 
 
-def test_the_publisher_sweep_finds_every_required_context():
-    """A sweep that resolved nothing would make the guard below assert nothing."""
-    found = _publishers_of_required_contexts()
-    missing = sorted(REQUIRED_CONTEXTS - set(found))
-    assert not missing, f"no workflow publishes these required contexts at all: {missing}"
+def _needs(spec: dict) -> set:
+    needs = spec.get("needs") or []
+    return {needs} if isinstance(needs, str) else set(needs)
 
 
-def test_every_required_context_can_report_success_on_any_pull_request():
-    """A required context nothing can turn green deadlocks the pull request."""
-    unpaired = []
-    for context, publishers in sorted(_publishers_of_required_contexts().items()):
-        conditions = [expr for _, expr in publishers]
-        if any(not expr or _condition_is_always_true(expr) for expr in conditions):
+def _gate_violations(workflows: dict) -> list:
+    """Every way the tree breaks G1-G4, as readable strings. Empty means clean."""
+    problems: list = []
+    published = _publishers(workflows)
+
+    # G1: exactly one publisher per required context, across ALL workflows.
+    for context in sorted(REQUIRED_CONTEXTS):
+        where = published.get(context, [])
+        if len(where) != 1:
+            problems.append(f"G1 {context!r} is published by {len(where)} jobs {where}, expected exactly 1")
+
+    ci_jobs = (workflows.get("ci.yml") or {}).get("jobs") or {}
+    for context, (job_id, work, draft_gated) in GATES.items():
+        spec = ci_jobs.get(job_id)
+        if spec is None:
+            problems.append(f"G2 {context!r}: no top-level job {job_id!r} in ci.yml")
             continue
-        if any(_negates(a, b) for i, a in enumerate(conditions) for b in conditions[i + 1 :]):
-            continue
-        where = ", ".join(sorted({name for name, _ in publishers}))
-        unpaired.append((context, where))
+        if _job_name(job_id, spec) != context:
+            problems.append(f"G2 {context!r}: job {job_id!r} is named {_job_name(job_id, spec)!r}")
+        if str(spec.get("if", "")).strip() != "always()":
+            problems.append(
+                f"G2 {context!r}: `if:` is {spec.get('if')!r}, must be exactly `always()` -- "
+                "a gate that can be skipped re-publishes `skipped` on the context"
+            )
+        missing = ({"changes"} | set(work)) - _needs(spec)
+        if missing:
+            problems.append(f"G2 {context!r}: `needs` lacks {sorted(missing)}")
+        problems.extend(_verdict_step_violations(context, spec, work, draft_gated))
 
-    unexpected = [f"{c} (in {w})" for c, w in unpaired if c not in _KNOWN_UNPAIRED]
-    assert not unexpected, (
-        "these required contexts are published only by conditional jobs with no "
-        "complement. When the condition is false the job is SKIPPED, which is "
-        "not SUCCESS, so the pull request blocks on a context nothing can "
-        "produce (#15606):\n  " + "\n  ".join(unexpected)
-    )
+    # G4: nothing that can be skipped takes a required name.
+    for fname, doc in workflows.items():
+        callee = fname.startswith("_gate-")
+        for job_id, spec in (doc.get("jobs") or {}).items():
+            name = _job_name(job_id, spec)
+            is_work = callee or (fname == "ci.yml" and job_id.startswith("run-"))
+            if is_work and any(ctx in {name, job_id} for ctx in REQUIRED_CONTEXTS):
+                problems.append(
+                    f"G4 {fname}:{job_id} is named {name!r}, a required context; a job in a called "
+                    "workflow reports as '<caller> / <job>' and a work job may be skipped"
+                )
+    return problems
 
-    fixed = sorted(set(_KNOWN_UNPAIRED) - {c for c, _ in unpaired})
-    assert not fixed, (
-        "these contexts now have a complement but are still listed in "
-        "_KNOWN_UNPAIRED — remove them, a stale entry hides the next real one:\n  " + "\n  ".join(fixed)
-    )
+
+def _verdict_step_violations(context: str, spec: dict, work: tuple, draft_gated: bool) -> list:
+    problems: list = []
+    steps = [s for s in spec.get("steps") or [] if s.get("uses") == GATE_ACTION]
+    if len(steps) != 1:
+        return [f"G3 {context!r}: expected exactly one `{GATE_ACTION}` step, found {len(steps)}"]
+    with_ = steps[0].get("with") or {}
+    if with_.get("context") != context:
+        problems.append(f"G3 {context!r}: verdict `context` is {with_.get('context')!r}")
+    if "needs.changes.result" not in str(with_.get("changes-result", "")):
+        problems.append(f"G3 {context!r}: verdict does not read needs.changes.result (fail closed)")
+    for w in work:
+        if f"needs.{w}." not in str(with_.get("work-ok", "")):
+            problems.append(f"G3 {context!r}: `work-ok` does not read the result of {w!r}")
+    if "pull_request.draft" not in str(with_.get("draft", "")):
+        problems.append(f"G3 {context!r}: `draft` is not wired to the pull request")
+    is_gated = str(with_.get("draft-gated", "true")).lower() != "false"
+    if is_gated != draft_gated:
+        problems.append(f"G3 {context!r}: draft-gated is {is_gated}, expected {draft_gated}")
+    return problems
+
+
+# ── G1-G4 on the real tree ───────────────────────────────────────────────────
+
+
+def test_the_scan_binds_to_the_workflows_it_guards():
+    """A glob that matched nothing would make everything below assert nothing (G6)."""
+    workflows = _all_workflows()
+    assert "ci.yml" in workflows and len(workflows) > 20
+    published = _publishers(workflows)
+    assert (
+        set(published) == REQUIRED_CONTEXTS
+    ), f"the scan resolved {sorted(published)}; missing {sorted(REQUIRED_CONTEXTS - set(published))}"
+    assert len(REQUIRED_CONTEXTS) == 11
+
+
+def test_every_required_context_has_one_always_reporting_publisher():
+    assert _gate_violations(_all_workflows()) == []
+
+
+def test_the_governance_checks_are_separate_ungated_workflows():
+    """D1: kept out of ci.yml, and neither carries a draft clause (they run on drafts)."""
+    workflows = _all_workflows()
+    for context, fname in GOVERNANCE.items():
+        assert workflows[fname]["jobs"], fname
+        assert [j for j, s in workflows[fname]["jobs"].items() if _job_name(j, s) == context], (context, fname)
+        for spec in workflows[fname]["jobs"].values():
+            assert "draft" not in str(spec.get("if", "")), f"{fname} gained a draft clause"
+
+
+def test_the_shims_are_gone():
+    for name in SHIMS:
+        assert not (WORKFLOW_DIR / name).exists(), f"{name} is back: a same-named second publisher (#17391, #14922)"
+
+
+# ── G5: the trigger ──────────────────────────────────────────────────────────
+
+
+def test_ci_triggers_on_stacked_pull_requests_and_on_merge_group():
+    """ci.yml publishes nine required contexts, so both triggers are its own.
+
+    `branches:` would drop STACKED pull requests (base is another feature branch): zero
+    runs, every context absent (#14747, measured on #14641). `paths:` would deadlock a PR
+    that misses the filter (#13388). `ready_for_review` is the only event marking a PR ready
+    fires, and the gates fail on a draft until it does.
+    """
+    on = _on(_load(CI))
+    assert "merge_group" in on, "no merge_group trigger: no context can report inside a queue (#14054)"
+    pull_request = on.get("pull_request") or {}
+    assert isinstance(pull_request, dict)
+    for key in ("paths", "paths-ignore", "branches", "branches-ignore"):
+        assert key not in pull_request, f"ci.yml filters pull_request.{key}: a context can fail to report"
+    assert {"opened", "synchronize", "reopened", "ready_for_review"} <= set(pull_request.get("types", []))
+
+
+@pytest.mark.parametrize("fname", sorted(set(GOVERNANCE.values())))
+def test_the_separate_required_workflows_have_no_pull_request_paths(fname):
+    on = _on(_load(WORKFLOW_DIR / fname))
+    assert "paths" not in (on.get("pull_request") or {}), f"{fname} would deadlock a PR that misses its filter"
+
+
+# ── G7: control fixtures -- the checker must catch what it claims ────────────
+
+
+def _fixture() -> dict:
+    return copy.deepcopy(_all_workflows())
+
+
+def test_control_a_gate_missing_always_fails_the_checker():
+    """The deliberate break: `if: always()` removed from one gate."""
+    docs = _fixture()
+    del docs["ci.yml"]["jobs"]["python-suite"]["if"]
+    problems = _gate_violations(docs)
+    assert any(p.startswith("G2 'python-suite'") and "always()" in p for p in problems), problems
+
+
+def test_control_a_gate_that_can_be_skipped_by_a_filter_output_fails_the_checker():
+    docs = _fixture()
+    docs["ci.yml"]["jobs"]["code-quality"]["if"] = "${{ needs.changes.outputs.run_code_quality == 'true' }}"
+    problems = _gate_violations(docs)
+    assert any(p.startswith("G2 'code-quality'") for p in problems), problems
+
+
+def test_control_a_second_publisher_of_a_context_fails_the_checker():
+    """The shim shape #17391 and #14922 measured: two same-named jobs."""
+    docs = _fixture()
+    docs["backend-required-context.yml"] = {
+        "jobs": {"startup-import-smoke": {"name": "startup-import-smoke", "if": "needs.changes.outputs.x != 'true'"}}
+    }
+    problems = _gate_violations(docs)
+    assert any(p.startswith("G1 'startup-import-smoke'") for p in problems), problems
+
+
+def test_control_a_work_job_named_like_a_required_context_fails_the_checker():
+    docs = _fixture()
+    docs["_gate-code-quality.yml"]["jobs"]["audit"]["name"] = "code-quality"
+    problems = _gate_violations(docs)
+    assert any(p.startswith("G4 _gate-code-quality.yml:audit") for p in problems), problems
+
+
+def test_control_a_gate_that_ignores_detection_failure_fails_the_checker():
+    docs = _fixture()
+    step = docs["ci.yml"]["jobs"]["smoke-test"]["steps"][1]
+    step["with"]["changes-result"] = "success"
+    problems = _gate_violations(docs)
+    assert any(p.startswith("G3 'smoke-test'") and "fail closed" in p for p in problems), problems
+
+
+def test_control_a_gate_that_ignores_its_work_fails_the_checker():
+    docs = _fixture()
+    docs["ci.yml"]["jobs"]["api-wiring"]["steps"][1]["with"]["work-ok"] = "true"
+    problems = _gate_violations(docs)
+    assert any(p.startswith("G3 'api-wiring'") and "run-api-wiring" in p for p in problems), problems
+
+
+def test_the_work_callers_hold_back_draft_pull_requests():
+    """A required gate's work does not run on a draft; the gate says why (D4).
+
+    The exception is `run-precommit`, which carries no `ready` condition.
+    """
+    jobs = _load(CI)["jobs"]
+    for context, (_, work, draft_gated) in GATES.items():
+        for w in work:
+            if w == "python-shard":
+                cond = str(jobs["python-shard"].get("if", ""))
+            else:
+                cond = str(jobs[w].get("if", ""))
+            if draft_gated:
+                assert "outputs.ready == 'true'" in cond, f"{w} (for {context}) is not held back on a draft"
+            else:
+                assert "ready" not in cond, f"{w} (for {context}) must run on drafts"
+
+
+def test_the_gate_names_are_the_exact_branch_protection_strings():
+    """A rename silently un-requires a context. Compare against the literal job `name:`."""
+    jobs = _load(CI)["jobs"]
+    names = {_job_name(j, s) for j, s in jobs.items()}
+    assert set(GATES) <= names

@@ -1,3 +1,6 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
 # Security Scanning workflow
 #
 # Security checks are blocking — failures prevent merge (Issue #2874).
@@ -47,84 +50,38 @@
 # Do NOT relax a gate to clear a red build. A red here means a real finding
 # reached the tree; add an allowance only by naming the advisory and recording
 # why, exactly as #13400 established.
+#
+# #18208: this file is the reusable BODY of one gate. ci.yml calls it; the triggers, the
+# `changes` job, the concurrency group and any required-context job that used to live here
+# are in ci.yml now. Nothing in this file may publish a required context: a job in a called
+# workflow reports as `<caller job> / <job>`, which is not the name branch protection matches.
 
-name: Security Scanning
+name: Security Scanning (reusable body)
 
 on:
-  push:
-    branches: [ release, dev, main ]
-  pull_request:
-    # ready_for_review is REQUIRED here: the jobs below are gated on
-    # draft == false, and marking a PR ready fires ONLY this event. Without
-    # it a required context stays `skipped` and the PR can never merge.
-    types: [opened, synchronize, reopened, ready_for_review]
-    branches: [ release, main ]  # Issue #6597: Semgrep blocks merge on all feature PRs
-    # #13388: SAFE — this workflow publishes no required status context (none of
-    # the ten on main comes from here), so skipping the run cannot deadlock
-    # a pull request on a check that never reports.
-    #
-    # Exact UNION of the `python` and `deps` filters in `changes` below, which
-    # gate `dependency-security` and `static-analysis`. `compliance-check` is
-    # ungated but only greps the three backend package trees and writes counts to
-    # the step summary — it has no failure path, so losing it on a pull request
-    # that touches none of those trees removes no signal.
-    #
-    # The `schedule:` trigger below is NOT affected by path filters, so the daily
-    # full scan still covers everything unconditionally.
-    #
-    # #12986: the backend-Python entries below are the canonical
-    # `backend-python` set from .github/filters/backend-python-paths.yml. GitHub has no include mechanism for
-    # event path filters, so this copy is unavoidable —
-    # pipeline-scripts/check_workflow_path_filters.py fails the build if it
-    # ever stops matching the canonical set.
-    paths:
-      - 'autobot-backend/**/*.py'
-      - 'autobot-slm-backend/**/*.py'
-      - 'autobot_shared/**/*.py'
-      - '.github/filters/backend-python-paths.yml'
-      - '**/requirements*.txt'
-      - 'requirements-ci/**'
-      - 'pyproject.toml'
-      - 'autobot_shared/pyproject.toml'
-      - '**/package*.json'
-      - '.secrets.baseline'  # #17067: a baseline-only PR must trigger the whole-tree secret scan too
-      - '.github/workflows/security.yml'
-      - '.github/workflows/_changes.yml'
-  schedule:
-    # Run security scans daily at 2 AM UTC
-    - cron: '0 2 * * *'
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  workflow_call:
+    inputs:
+      deps:
+        description: "'true' runs the dependency scan (ci.yml passes the deps filter; scheduled runs keep the default)"
+        type: string
+        default: 'true'
+      static_analysis:
+        description: "'true' runs the SAST scan (ci.yml passes the static_analysis filter; scheduled runs keep the default)"
+        type: string
+        default: 'true'
 
 env:
   NODE_VERSION: '20'
-
 
 permissions:
   contents: read
   security-events: write
 
 jobs:
-  changes:
-    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
-    # every `always()` aggregate below reads `needs.changes.result`.
-    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
-    # context would report FAILED on every draft -- worse than no gate.
-    # Gate the expensive jobs, never the cheap thing others read.
-    name: Detect changed paths
-    uses: ./.github/workflows/_changes.yml
-    with:
-      # #12986: the `python` and `deps` sets live in the canonical filter
-      # file, which defines the backend-Python paths exactly once.
-      filters: .github/filters/backend-python-paths.yml
-
   dependency-security:
     name: Dependency Security Scan
-    needs: changes
     # Always run on schedule (daily security scan); gate on `deps` for push/PR.
-    if: github.event_name == 'schedule' || needs.changes.outputs.deps == 'true'
+    if: inputs.deps == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -355,9 +312,8 @@ jobs:
 
   static-analysis:
     name: Static Application Security Testing (SAST)
-    needs: changes
     # Always run on schedule (daily SAST scan); gate on `python` for push/PR.
-    if: github.event_name == 'schedule' || needs.changes.outputs.python == 'true'
+    if: inputs.static_analysis == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -638,7 +594,7 @@ jobs:
   security-summary:
     name: Security Summary Report
     runs-on: ubuntu-latest
-    needs: [changes, dependency-security, static-analysis, secret-detection, compliance-check]
+    needs: [dependency-security, static-analysis, secret-detection, compliance-check]
     if: always()
 
     steps:

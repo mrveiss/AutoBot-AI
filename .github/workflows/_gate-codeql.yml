@@ -1,0 +1,84 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# CodeQL code scanning, advanced setup (#16283; config file from #1826).
+#
+# Scans the three languages GitHub's default setup covered (python,
+# javascript-typescript, actions) under the same `/language:<lang>` category,
+# and applies .github/codeql/codeql-config.yml, which default setup cannot
+# read. That file no longer carries file-scoped `query-filters` entries --
+# they excluded nothing under either setup (#16302, removed in #16311). Its
+# reviewed false positives are code-scanning alert dismissals instead, with
+# each dismissal's reason kept as a comment there.
+#
+# Triggers
+# - push to release or main, the weekly schedule and workflow_dispatch:
+#   unfiltered, every language. A pull request's results are compared with the
+#   analysis of its base branch, so a base scan must never be skipped by a path
+#   filter; GitHub's CodeQL docs advise against `paths` on `on.push` for that
+#   reason.
+# - pull_request: ci.yml's `changes` job picks which languages the matrix analyses from
+#   the three `codeql_*` filters in .github/filters/gate-paths.yml (#18208). A pull request
+#   touching none of them gets an empty list and ci.yml does not call this body. There is no
+#   second `on.pull_request.paths` copy any more, so the union that had to be kept in step
+#   with the language filters is gone.
+#
+# Default setup vs. this workflow (owner decision, #16283): default setup is
+# OFF, reporting `not-configured` from the code-scanning API. This workflow is
+# the only source of python, javascript-typescript and actions analyses now.
+# Advanced-setup uploads have landed for all three languages on Dev_new_gui
+# and on PR refs; main hasn't been pushed to since the switch, so it will
+# pick up uploads on its next push.
+#
+# #18208: this file is the reusable BODY of one gate. ci.yml calls it; the triggers, the
+# `changes` job, the concurrency group and any required-context job that used to live here
+# are in ci.yml now. Nothing in this file may publish a required context: a job in a called
+# workflow reports as `<caller job> / <job>`, which is not the name branch protection matches.
+
+name: CodeQL Analysis (reusable body)
+
+on:
+  workflow_call:
+    inputs:
+      languages:
+        description: "JSON array of CodeQL languages to analyse; ci.yml passes the changed ones on a pull request"
+        type: string
+        default: '["python","javascript-typescript","actions"]'
+      upload:
+        description: "Upload results to code scanning ('never' is a dry run)"
+        type: string
+        default: 'always'
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      security-events: write  # upload results to code scanning
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ${{ fromJSON(inputs.languages) }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@24c54180a607b1449ed407dd24f251e4e9147c8d  # v4.38.3
+        with:
+          languages: ${{ matrix.language }}
+          config-file: ./.github/codeql/codeql-config.yml
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d  # v4.38.3
+        with:
+          category: "/language:${{ matrix.language }}"
+          upload: ${{ inputs.upload || 'always' }}

@@ -92,8 +92,9 @@ if [ -n "$ALERT_REF" ]; then
   else
     # #18105: zero analyses has two causes and they need opposite answers.
     #
-    # codeql.yml's `pull_request` trigger carries a `paths` filter (the union of its
-    # three language filters), so a change touching nothing CodeQL scans -- a
+    # ci.yml's `changes` job computes which CodeQL languages a pull request touches (the
+    # three `codeql_*` filters, #18208) and does not call the CodeQL body at all when
+    # there are none, so a change touching nothing CodeQL scans -- a
     # dependency bump, a docs edit -- produces no analysis at all. Failing closed there
     # blocks a REQUIRED check on a PR that cannot have grown the backlog, and that is
     # what this gate did to every dependency-only PR once it became ref-scoped: #18105
@@ -104,18 +105,24 @@ if [ -n "$ALERT_REF" ]; then
     #
     # They are distinguishable by evidence rather than assumption: ask whether CodeQL
     # reported a check for this commit at all.
-    # Three names, because one of them is not ours to keep. GitHub publishes a
+    # Two names, because one of them is not ours to keep. GitHub publishes a
     # code-scanning status check literally named "CodeQL" (observed `neutral` on a
-    # commit CodeQL analysed), and codeql.yml publishes its own jobs "Detect changed
-    # languages" and "Analyze (<language>)" (#18113 review). Matching only the first
-    # would rest the whole discrimination on a platform-chosen name; matching only the
-    # workflow's would miss a run that reported the status check and nothing else. Any
-    # of the three means CodeQL ran here.
+    # commit CodeQL analysed), and the CodeQL body publishes "Analyze (<language>)" --
+    # as "<caller job> / Analyze (<language>)" since ci.yml calls it as a reusable
+    # workflow (#18208). Matching only the first would rest the whole discrimination on
+    # a platform-chosen name; matching only the workflow's would miss a run that reported
+    # the status check and nothing else. Either means CodeQL ran here.
+    #
+    # NOT the caller job's own name: when no language matched, ci.yml's `run-codeql` job
+    # is SKIPPED and still shows as a (skipped) check run. A pattern loose enough to count
+    # it ('codeql' alone) would read "CodeQL did not run" as "CodeQL ran and uploaded
+    # nothing", which is the fail-closed answer this branch exists to avoid for
+    # dependency-only pull requests (#18105).
     # Every page, via the ONE check-runs helper (#16120): one unpaginated page made a
     # CodeQL run sitting past run 100 read as "did not run" (#19085). The helper
     # also exits nonzero when the API's total_count is not the runs read.
     codeql_checks=$(python3 "$(dirname "${BASH_SOURCE[0]}")/../scripts/lib/check_run_status.py" count-named \
-      "${REPO}" "${GITHUB_SHA:-${ALERT_REF}}" 'codeql|^Analyze \(|Detect changed languages' 2>/dev/null) || codeql_checks=""
+      "${REPO}" "${GITHUB_SHA:-${ALERT_REF}}" '^CodeQL$|(^|/ )Analyze \(' 2>/dev/null) || codeql_checks=""
     if [ -z "$codeql_checks" ] || ! [[ "$codeql_checks" =~ ^[0-9]+$ ]]; then
       fail "could not determine whether CodeQL ran for ${ALERT_REF} (the check-runs API errored) — an undetermined answer is not a pass"
     elif [ "$codeql_checks" -eq 0 ]; then

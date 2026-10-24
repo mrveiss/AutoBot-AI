@@ -1,0 +1,22 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Weekly Docker smoke test (#18208). The image build and compose smoke test is the reusable
+# body `_gate-docker-smoke.yml`; ci.yml calls it on pull requests and pushes, this thin caller
+# runs the SAME body on a schedule so the two cannot drift. A scheduled run has no diff to
+# filter on, so it builds unconditionally.
+
+name: Scheduled Docker Smoke Test
+
+on:
+  schedule:
+    - cron: '0 10 * * 0'  # Every Sunday at 10 AM UTC
+
+permissions:
+  contents: read
+
+jobs:
+  docker-smoke:
+    uses: ./.github/workflows/_gate-docker-smoke.yml
+    permissions:
+      contents: read

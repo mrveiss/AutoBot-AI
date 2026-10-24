@@ -1,3 +1,6 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
 # SLM Frontend Check — type-check + lint + build + unit tests for autobot-slm-frontend
 # (#10493, #15667)
 #
@@ -5,91 +8,35 @@
 # TypeScript/build changes could merge undetected and cross-app migrations
 # (#10488 Workstream A) had no way to be verified. This adds that gate.
 #
-# Mirrors the "changes filter + self-skip" pattern so the check always reports
-# a conclusion. The two halves now live in different files: the changes filter
-# in frontend-test.yml, the self-skip job in frontend-required-context.yml
-# after the #13405 split (a path-filtered required check that never fires
-# would deadlock the PR on "Expected — Waiting for status").
+# ci.yml's `changes` job computes `slm_frontend` once (.github/filters/gate-paths.yml)
+# and calls this body only when it matched; the self-skip step below still keeps a manual
+# call with the default input honest.
+#
+# #18208: this file is the reusable BODY of one gate. ci.yml calls it; the triggers, the
+# `changes` job, the concurrency group and any required-context job that used to live here
+# are in ci.yml now. Nothing in this file may publish a required context: a job in a called
+# workflow reports as `<caller job> / <job>`, which is not the name branch protection matches.
 
-name: SLM Frontend Check
+name: SLM Frontend Check (reusable body)
 
 on:
-  push:
-    branches: [release, main, develop]
-    paths:
-      - 'autobot-slm-frontend/**'
-      - '.github/workflows/slm-frontend-check.yml'
-      - '.github/workflows/_changes.yml'
-      - 'autobot-frontend/scripts/check-i18n-keys.mjs'
-      # The lifting rule's INPUTS, not just its output (review finding on
-      # #17395). `lift_locale_translations.py --check` regenerates the SLM
-      # locales from `autobot-frontend`'s and fails on drift -- so a PR that
-      # changes only the source locales, or only the generator, must start
-      # this workflow. Without these two such a PR passes untested and the
-      # NEXT SLM change reports drift the earlier one caused.
-      - 'autobot-frontend/src/i18n/locales/**'
-      - 'scripts/lift_locale_translations.py'
-  pull_request:
-    # ready_for_review is REQUIRED here: the jobs below are gated on
-    # draft == false, and marking a PR ready fires ONLY this event. Without
-    # it a required context stays `skipped` and the PR can never merge.
-    types: [opened, synchronize, reopened, ready_for_review]
-    branches: [release, main, develop]
-    # #13388: SAFE — "SLM Frontend Check" is NOT one of the ten required contexts
-    # on main, so this workflow may skip its run entirely. (The header note
-    # above about a path-filtered required check deadlocking a pull request is why
-    # the job-level self-skip exists; it applies to required contexts, and this is
-    # not one.) Mirrors the `slm_frontend` filter in `changes` below.
-    paths:
-      - 'autobot-slm-frontend/**'
-      - '.github/workflows/slm-frontend-check.yml'
-      - '.github/workflows/_changes.yml'
-      - 'autobot-frontend/scripts/check-i18n-keys.mjs'
-      # The lifting rule's INPUTS, not just its output (review finding on
-      # #17395). `lift_locale_translations.py --check` regenerates the SLM
-      # locales from `autobot-frontend`'s and fails on drift -- so a PR that
-      # changes only the source locales, or only the generator, must start
-      # this workflow. Without these two such a PR passes untested and the
-      # NEXT SLM change reports drift the earlier one caused.
-      - 'autobot-frontend/src/i18n/locales/**'
-      - 'scripts/lift_locale_translations.py'
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
-permissions:
-  contents: read
+  workflow_call:
+    inputs:
+      slm_frontend:
+        description: "'true' when autobot-slm-frontend or its i18n inputs changed"
+        type: string
+        default: 'false'
 
 env:
   NODE_VERSION: '22'
 
-jobs:
-  # Always runs so the check reports a conclusion even when nothing matched.
-  changes:
-    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
-    # every `always()` aggregate below reads `needs.changes.result`.
-    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
-    # context would report FAILED on every draft -- worse than no gate.
-    # Gate the expensive jobs, never the cheap thing others read.
-    name: Detect changed paths
-    uses: ./.github/workflows/_changes.yml
-    with:
-      filters: |
-        slm_frontend:
-          - 'autobot-slm-frontend/**'
-          - '.github/workflows/slm-frontend-check.yml'
-          - 'autobot-frontend/scripts/check-i18n-keys.mjs'
-          # Mirrors the `on:` paths above -- the trigger and the
-          # job-level filter have to agree, or the workflow starts and
-          # every step self-skips.
-          - 'autobot-frontend/src/i18n/locales/**'
-          - 'scripts/lift_locale_translations.py'
+permissions:
+  contents: read
 
+jobs:
   slm-frontend-check:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: SLM Frontend Check
-    needs: changes
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -98,11 +45,11 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Self-skip when no SLM frontend changes
-        if: needs.changes.outputs.slm_frontend != 'true'
+        if: inputs.slm_frontend != 'true'
         run: echo "No autobot-slm-frontend changes — skipping (reporting success)."
 
       - name: Set up Node
-        if: needs.changes.outputs.slm_frontend == 'true'
+        if: inputs.slm_frontend == 'true'
         uses: actions/setup-node@v7
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -110,22 +57,22 @@ jobs:
           cache-dependency-path: autobot-slm-frontend/package-lock.json
 
       - name: Install dependencies
-        if: needs.changes.outputs.slm_frontend == 'true'
+        if: inputs.slm_frontend == 'true'
         run: npm ci
 
       - name: Type-check (vue-tsc)
-        if: needs.changes.outputs.slm_frontend == 'true'
+        if: inputs.slm_frontend == 'true'
         run: npm run type-check
 
       - name: Lint
-        if: needs.changes.outputs.slm_frontend == 'true'
+        if: inputs.slm_frontend == 'true'
         run: npx eslint .
 
       # #15665: the SLM console had no i18n gate, so a key used in code but missing
       # from en.json shipped unnoticed. Same checker as the main GUI, pointed here
       # with --root/--en; it checks key existence, not bare literals.
       - name: i18n keys
-        if: needs.changes.outputs.slm_frontend == 'true'
+        if: inputs.slm_frontend == 'true'
         run: npm run check:i18n
 
       # #14781: the console now ships all 11 locales. Two things can rot: a key
@@ -136,11 +83,11 @@ jobs:
       # which is why the generation is a script in the repo rather than a
       # one-off someone ran.
       - name: Locale parity
-        if: needs.changes.outputs.slm_frontend == 'true'
+        if: inputs.slm_frontend == 'true'
         run: npm run check:locales
 
       - name: Locales match the lifting rule
-        if: needs.changes.outputs.slm_frontend == 'true'
+        if: inputs.slm_frontend == 'true'
         working-directory: .
         run: python3 scripts/lift_locale_translations.py --app autobot-slm-frontend/src/locales --check
 
@@ -158,13 +105,13 @@ jobs:
       # (`json`, `re`, `html.parser`) plus `repo_tests._paths`, so pytest is the
       # whole dependency -- no requirements file, no cache key to invalidate.
       - name: Set up Python for the i18n guards
-        if: needs.changes.outputs.slm_frontend == 'true'
+        if: inputs.slm_frontend == 'true'
         uses: actions/setup-python@v7
         with:
           python-version-file: '.python-version'
 
       - name: Install pytest
-        if: needs.changes.outputs.slm_frontend == 'true'
+        if: inputs.slm_frontend == 'true'
         working-directory: .
         # pytest-asyncio as well as pytest, because `pytest.ini`'s global
         # `addopts` carries `--asyncio-mode=auto` and this job runs from that
@@ -177,7 +124,7 @@ jobs:
         run: python3 -m pip install --quiet pytest pytest-asyncio
 
       - name: i18n guards (bare literals, locale parity)
-        if: needs.changes.outputs.slm_frontend == 'true'
+        if: inputs.slm_frontend == 'true'
         working-directory: .
         run: |
           python3 -m pytest -q \
@@ -185,7 +132,7 @@ jobs:
             repo_tests/slm_frontend_i18n_parity_test.py
 
       - name: Build
-        if: needs.changes.outputs.slm_frontend == 'true'
+        if: inputs.slm_frontend == 'true'
         # build:slm sets VITE_API_URL=/slm (the co-located base the vite config requires).
         run: npm run build:slm
 
@@ -196,5 +143,5 @@ jobs:
       # its sibling steps, and deliberately WITHOUT continue-on-error: a gate
       # that cannot turn the check red is not a gate.
       - name: Unit tests (vitest)
-        if: needs.changes.outputs.slm_frontend == 'true'
+        if: inputs.slm_frontend == 'true'
         run: npm run test:unit

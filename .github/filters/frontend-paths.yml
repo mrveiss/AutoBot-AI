@@ -1,33 +1,20 @@
 # Canonical path set for "does this change require the frontend test suite?"
 #
-# SINGLE SOURCE OF TRUTH — do not inline a copy back into either workflow.
+# SINGLE SOURCE OF TRUTH -- do not inline a copy back into a workflow.
 #
-# Two workflows load this file with dorny/paths-filter, and between them they
-# publish exactly one conclusion for the REQUIRED `Unit & Integration Tests`
-# status context:
+# Read once, by ci.yml's `changes` job, and published as two outputs of the same
+# set: `run_unit_tests` (the REQUIRED `Unit & Integration Tests` context, also
+# forced on merge_group) and `run_frontend_tests` (ci.yml's own `frontend-tests`
+# job). Before #18208 ci.yml carried a second, narrower inline `frontend` set
+# (autobot-frontend/**, ci.yml, the terminal plugin) under the same name; that
+# was a defined-twice defect, and its three patterns are all inside this file.
+# The consequence of unifying them is that `frontend-tests` now also runs when
+# only the shared kit, ssot_config.py or the npm audit gate changes -- the safe
+# direction.
 #
-#   .github/workflows/frontend-test.yml
-#       job `unit-tests`, self-hosted, runs when `frontend == 'true'`
-#       (the real gate)
-#
-#   .github/workflows/frontend-required-context.yml
-#       job `unit-tests-skip`, ubuntu-latest, runs when `frontend != 'true'`
-#       (reports the context green when the suite does not apply)
-#
-# The two `if:` conditions are exact complements, so the split is only correct
-# while both workflows compute the SAME value for `frontend`. If they ever
-# disagreed in one particular direction — the shim seeing "no frontend change"
-# while frontend-test.yml sees one — a pull request would take the shim's green
-# while the real suite never ran. That is a silent gate bypass, not a flake.
-#
-# Keeping the patterns in one file that both jobs read from the same checkout of
-# the same commit removes that divergence by construction (#13405).
-#
-# The list is also mirrored in frontend-test.yml's `on.push.paths`, because
-# GitHub requires event path filters to be inline. That copy only decides
-# whether a POST-merge run happens on an integration branch; it never gates a
-# required context, so a drift there is visible and harmless. This file remains
-# authoritative.
+# The list used to be mirrored in frontend-test.yml's `on.push.paths`; that
+# trigger went away with the workflow (#18208), so there is no copy to keep in
+# step any more.
 frontend:
   - 'autobot-frontend/**'
   # #14786: the shared kit both frontends consume via a `file:` dependency.
@@ -37,14 +24,6 @@ frontend:
   # kit-only change would take this workflow's REQUIRED context green while
   # its own tests never executed.
   - 'libs/autobot-ui/**'
-  - '.github/workflows/frontend-test.yml'
-  # #15360: the reusable `changes` job both workflows call; editing it changes how
-  # `frontend` is computed, so it must run the suite (mirrored in frontend-test.yml).
-  - '.github/workflows/_changes.yml'
-  # The shim workflow gates a required context, so editing it must run the real
-  # suite for the same reason editing frontend-test.yml does.
-  - '.github/workflows/frontend-required-context.yml'
-  # A change to this file changes what "frontend" means for both workflows.
   - '.github/filters/frontend-paths.yml'
   # Canonical source for the cross-language parity guard (#13073, #13074):
   # a port/enum edit here with no frontend edit must still run the suite.
@@ -54,7 +33,4 @@ frontend:
   - 'pipeline-scripts/npm_audit_gate.py'
   # #15002: the redactor drift guard runs in this suite and reads the terminal
   # plugin's copy, so a plugin-only edit must still run it.
-  # Mirrored in frontend-test.yml's push list and ci.yml's filter since #17329
-  # made those files editable again -- both had been dropped from #15002
-  # because the hardcoded-values hook blocked staging them (#16260).
   - 'autobot-plugins/terminal/**'

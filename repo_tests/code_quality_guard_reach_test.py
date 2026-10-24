@@ -194,24 +194,23 @@ def test_backend_filter_reads_the_shared_filter_file_not_the_workflow():
     assert "**/*.py" in patterns
     assert "autobot-slm-backend/ansible/roles/backend/tasks/**" in patterns
     assert ".github/actions/**" in patterns
-    # The set is an input to itself: editing either half of the required-context
-    # pair must run the REAL gate, not the shim reporting green over its own change.
+    # The set is an input to itself: editing it must run the gate. (The workflow files
+    # themselves are covered by `self` in gate-paths.yml since #18208; the complement shim
+    # that used to be listed here is gone.)
     assert ".github/filters/code-quality-paths.yml" in patterns
-    assert ".github/workflows/code-quality-required-context.yml" in patterns
+    assert ".github/workflows/code-quality-required-context.yml" not in patterns
 
 
-def test_the_workflow_and_the_shim_both_read_the_shared_filter_file():
-    """Neither half of the pair may keep an inline copy of the path set (#15608)."""
-    for name in ("code-quality.yml", "code-quality-required-context.yml"):
-        text = (REPO_ROOT / ".github" / "workflows" / name).read_text(encoding="utf-8")
-        assert (
-            "filters: .github/filters/code-quality-paths.yml" in text
-        ), f"{name} does not resolve the path set through the shared filter file"
-        assert "filters: |" not in text, (
-            f"{name} carries an inline `filters: |` block again — a second copy is "
-            "how the gate and its complement shim drift apart, and the drift "
-            "direction is silent"
-        )
+def test_ci_reads_the_shared_filter_file_and_keeps_no_inline_copy():
+    """ci.yml's one `changes` job resolves the set through the shared file (#15608, #18208).
+
+    The shim that used to read it from a second workflow is gone. An inline `filters: |` block in
+    ci.yml would be a second copy of any set it carried.
+    """
+    text = (REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert "filters: .github/filters/code-quality-paths.yml" in text
+    assert "filters: |" not in text, "ci.yml carries an inline `filters: |` block again"
+    assert not (REPO_ROOT / ".github" / "workflows" / "code-quality-required-context.yml").exists()
 
 
 # --------------------------------------------------------------------------
@@ -220,9 +219,9 @@ def test_the_workflow_and_the_shim_both_read_the_shared_filter_file():
 
 
 def test_code_quality_runs_the_audit():
-    workflow = (REPO_ROOT / ".github" / "workflows" / "code-quality.yml").read_text(encoding="utf-8")
+    workflow = (REPO_ROOT / ".github" / "workflows" / "_gate-code-quality.yml").read_text(encoding="utf-8")
     assert "check_code_quality_guard_reach.py --audit" in workflow, (
-        "code-quality.yml no longer runs the guard-reach audit — the two guards it "
+        "_gate-code-quality.yml no longer runs the guard-reach audit — the two guards it "
         "protects could go dark again while these tests kept passing (#14550/#14551)"
     )
     assert _CHECKER.is_file(), f"{_CHECKER} is gone but the workflow still calls it"

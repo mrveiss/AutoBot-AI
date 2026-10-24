@@ -338,7 +338,9 @@ def test_no_second_upsert_implementation_exists() -> None:
     )
 
 
-@pytest.mark.parametrize("rel", [".github/workflows/ssot-coverage.yml", ".github/workflows/ai-security-review.yml"])
+@pytest.mark.parametrize(
+    "rel", [".github/workflows/ssot-coverage.yml", ".github/workflows/_gate-ai-security-review.yml"]
+)
 def test_both_callers_use_the_action(rel: str) -> None:
     """READ, not run: the step exists, is advisory (continue-on-error), and names a marker."""
     text = (repo_root() / rel).read_text(encoding="utf-8")

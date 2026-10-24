@@ -23,7 +23,7 @@ down in a pull request that nobody will read again:
 
 * `check_syntax.py` byte-compiled four named files. **`black --check` alone**
   guarantees that coverage. A linter has to parse Python before it can judge it,
-  so a syntax error fails black with exit 123, and `.github/workflows/code-quality.yml`
+  so a syntax error fails black with exit 123, and `.github/workflows/_gate-code-quality.yml`
   runs it over `autobot-backend/` and `autobot_shared/` with no exclusions.
 
   `flake8` did **not** cover three of the four until #14419. Its `.flake8`
@@ -61,7 +61,7 @@ import pytest
 from repo_tests._paths import repo_root
 
 _REPO = repo_root()
-_WORKFLOW = _REPO / ".github" / "workflows" / "code-quality.yml"
+_WORKFLOW = _REPO / ".github" / "workflows" / "_gate-code-quality.yml"
 
 #: The files `check_syntax.py` byte-compiled. Something must still parse each.
 _GUARDED_FILES = (
@@ -175,7 +175,7 @@ def _flake8_prunes(rel: str, patterns: list[str]) -> bool:
 
 
 def _invocation(workflow_text: str, tool: str) -> str | None:
-    """The line in code-quality.yml that actually runs *tool*, if any."""
+    """The line in _gate-code-quality.yml that actually runs *tool*, if any."""
     for line in workflow_text.splitlines():
         if f"-m {tool}" in line and "pip install" not in line:
             return line

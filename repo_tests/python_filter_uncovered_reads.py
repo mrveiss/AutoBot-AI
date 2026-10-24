@@ -41,9 +41,6 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         ".github/dependabot.yml",
         ".github/filters/code-quality-paths.yml",
         ".github/workflows/auto-merge-base-into-parked-branches.yml",
-        ".github/workflows/code-quality-required-context.yml",
-        ".github/workflows/code-quality.yml",
-        ".github/workflows/frontend-test.yml",
         ".github/workflows/hardened-smoke-test.yml",
         ".github/workflows/marker-tests.yml",
         ".github/workflows/ssot-coverage.yml",
@@ -147,7 +144,9 @@ UNCOVERED_READS: frozenset[str] = frozenset(
 #: uninstall guard (a fake /opt/autobot tree), a new bypass and not a real read.
 #: LOWERED 40 -> 39 by the train-81 CodeRabbit round: the filter now covers
 #: `docker/generate-secrets.sh`, which two guards really read (#17500, #18729).
-MAX_UNCOVERED_READS = 39
+#: LOWERED 39 -> 36 by #18208: the filter now names `.github/workflows/_gate-*.yml`, the reusable gate
+#: bodies the guards read (the pre-merge `code-quality.yml`, `security.yml` and friends were uncovered reads).
+MAX_UNCOVERED_READS = 36
 
 #: A deliberate raise of ``MAX_UNCOVERED_READS`` is recorded here, as
 #: ``(value, "#issue")``. #17650's criterion is that raising is **justified**, not
