@@ -65,15 +65,42 @@ def test_an_empty_key_from_the_slm_file_fails_the_backend_deploy() -> None:
     ), "the file must stat slm-secrets.env itself, not lean on a caller"
 
 
+def _flat_tasks(tasks):
+    """Every task in file order, descending into block/rescue/always."""
+    for task in tasks or []:
+        yield task
+        for key in ("block", "rescue", "always"):
+            yield from _flat_tasks(task.get(key))
+
+
+def _includes_root_key_read(task) -> bool:
+    """A LIVE include of the read: not commented out (YAML drops comments) and not `when: false`."""
+    target = task.get("ansible.builtin.include_tasks", task.get("include_tasks"))
+    target = target.get("file") if isinstance(target, dict) else target
+    return target == "read_secrets_root_key.yml" and str(task.get("when", True)).strip().lower() not in (
+        "false",
+        "no",
+        "0",
+    )
+
+
+def _renders_backend_env(task) -> bool:
+    module = task.get("ansible.builtin.template", task.get("template")) or {}
+    return isinstance(module, dict) and module.get("src") == "backend.env.j2"
+
+
 def test_every_backend_env_render_reads_the_root_key_first() -> None:
     # Host evidence on #19051: the updater renders through env_only.yml, which had no read, so an
-    # updated install got `AUTOBOT_SECRETS_ROOT_KEY=` while the SLM file held a key.
+    # updated install got `AUTOBOT_SECRETS_ROOT_KEY=` while the SLM file held a key. Parsed as YAML,
+    # not matched as text, so a commented-out include or one under `when: false` does not pass.
+    yaml = __import__("yaml")
     for path in (BACKEND_MAIN, BACKEND_ENV_ONLY):
-        text = _read(path)
-        include = text.find("include_tasks: read_secrets_root_key.yml")
-        render = text.find("src: backend.env.j2")
-        assert include >= 0, f"{path.name} renders the backend env without reading the root key"
-        assert 0 <= include < render, f"{path.name} must read the root key before it renders the env"
+        tasks = list(_flat_tasks(yaml.safe_load(_read(path))))
+        include = next((i for i, t in enumerate(tasks) if _includes_root_key_read(t)), -1)
+        render = next((i for i, t in enumerate(tasks) if _renders_backend_env(t)), -1)
+        assert render >= 0, f"{path.name} no longer renders backend.env.j2; this guard reads the wrong file"
+        assert include >= 0, f"{path.name} renders the backend env without a live read of the root key"
+        assert include < render, f"{path.name} must read the root key before it renders the env"
 
 
 def test_the_backend_root_key_read_exists_once() -> None:

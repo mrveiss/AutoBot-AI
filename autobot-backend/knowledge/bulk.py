@@ -24,7 +24,7 @@ from autobot_shared.security.path_validator import require_path_string
 from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import CategoryDefaults
 from knowledge.export_fields import filter_fact_fields
-from knowledge.quarantine import BACKUP_AUDIT_ACTOR, EXPORT_AUDIT_ACTOR, read_every_fact
+from knowledge.quarantine import BACKUP_AUDIT_ACTOR, EXPORT_AUDIT_ACTOR, QuarantineAuditFailed, read_every_fact
 
 if TYPE_CHECKING:
     import aioredis
@@ -181,9 +181,9 @@ class BulkOperationsMixin:
             output = self._format_output(facts, format)
             if output is None:
                 return {"status": "error", "message": f"Unknown format: {format}"}
-
             return await self._build_export_result(facts, output, output_file)
-
+        except QuarantineAuditFailed:
+            raise  # a failed read audit is a 503 to the caller, not a 200 with status=error (#19163)
         except Exception as e:
             logger.error("Export failed: %s", e)
             return {"status": "error", "message": "Bulk operation failed"}
@@ -1432,7 +1432,6 @@ class BulkOperationsMixin:
                 len(facts),
                 file_size,
             )
-
             return self._build_backup_success_result(
                 backup_name,
                 backup_file,
@@ -1442,7 +1441,8 @@ class BulkOperationsMixin:
                 compression,
                 backup_data["created_at"],
             )
-
+        except QuarantineAuditFailed:
+            raise  # the route answers 503; the scheduler logs it and records the failure (#19163)
         except Exception as e:
             logger.error("Backup failed: %s", e)
             return {"status": "error", "message": "Bulk operation failed"}

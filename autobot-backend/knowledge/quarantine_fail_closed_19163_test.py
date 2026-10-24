@@ -12,7 +12,6 @@ that the backup/export audit names the requesting human and that the admin route
 from __future__ import annotations
 
 import inspect
-import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -38,10 +37,6 @@ def failed_audit(request):
     mock = AsyncMock(return_value=False) if request.param == "returns_false" else AsyncMock(side_effect=OSError("x"))
     with patch(_AUDIT_LOG, mock):
         yield mock
-
-
-def _served(blob) -> bool:
-    return _HELD in json.dumps(blob, default=str)
 
 
 @pytest.mark.asyncio
@@ -74,18 +69,17 @@ async def test_get_all_facts_default_read_needs_no_audit(failed_audit):
 
 @pytest.mark.asyncio
 async def test_backup_writes_no_file_when_the_audit_fails(tmp_path, failed_audit):
-    result = await _KB().create_backup(backup_dir=str(tmp_path), compression=False, include_embeddings=False)
-
-    assert result["status"] == "error"
+    with pytest.raises(QuarantineAuditFailed):
+        await _KB().create_backup(backup_dir=str(tmp_path), compression=False, include_embeddings=False)
     assert list(tmp_path.glob("*")) == []
 
 
 @pytest.mark.asyncio
 async def test_export_facts_and_export_all_data_serve_nothing_when_the_audit_fails(tmp_path, failed_audit):
-    exported = await _KB().export_facts()
+    with pytest.raises(QuarantineAuditFailed):
+        await _KB().export_facts()
     all_data = await _KB().export_all_data(str(tmp_path))
 
-    assert exported["status"] == "error" and not _served(exported)
     assert all_data["status"] == "error" and not (tmp_path / "facts.json").exists()
 
 
