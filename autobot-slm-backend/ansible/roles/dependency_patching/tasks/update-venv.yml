@@ -30,6 +30,43 @@
   register: pip_freeze_before
   changed_when: false
 
+# #19428: a floor in constraints/shared.txt reaches a venv here too, not only through a manifest
+# reinstall. Stage the SSOT from the controller (patch-dependencies.yml can reach a node that
+# update-all-nodes.yml never staged it on), name every constrained package this venv already
+# holds, and constrain the install against the file. A package the venv does not hold is never
+# added: the constraints file covers several components' venvs. The install moves a held package
+# to what the file allows -- up to a floor, and down under an upper bound (numpy <3.0.0) too.
+- name: Ensure the constraints directory exists on the node (#19428)
+  ansible.builtin.file:
+    path: "{{ constraints_path | dirname }}"
+    state: directory
+    mode: "0755"
+
+- name: Stage the shared constraints SSOT onto the node (#19428)
+  ansible.builtin.copy:
+    src: "{{ constraints_source }}"
+    dest: "{{ constraints_path }}"
+    mode: "0644"
+
+- name: Read the shared constraints SSOT (#19428)
+  ansible.builtin.slurp:
+    src: "{{ constraints_path }}"
+  register: _constraints_file
+
+- name: Name the constrained packages this venv holds (#19428)
+  ansible.builtin.set_fact:
+    constrained_installed: "{{ _constrained_names | select('in', _installed_names) | list }}"
+  vars:
+    _constrained_names: >-
+      {{ (_constraints_file.content | b64decode).splitlines()
+         | map('regex_replace', '#.*$', '') | map('trim') | reject('equalto', '')
+         | map('regex_search', '^[A-Za-z0-9][A-Za-z0-9._-]*') | select
+         | map('lower') | map('regex_replace', '[._]', '-') | list }}
+    _installed_names: >-
+      {{ pip_freeze_before.stdout_lines
+         | map('regex_search', '^[A-Za-z0-9][A-Za-z0-9._-]*') | select
+         | map('lower') | map('regex_replace', '[._]', '-') | list }}
+
 - name: Create temporary requirements file with security updates
   ansible.builtin.template:
     src: requirements-security-update.txt.j2
@@ -62,7 +99,7 @@
         requirements: /tmp/requirements-security-update.txt
         virtualenv: "{{ host_venv_path }}"
         virtualenv_command: "python3 -m venv"
-        extra_args: "{{ pip_extra_args }}"
+        extra_args: "{{ pip_extra_args }} -c {{ constraints_path }}"  # the SSOT floors (#19428)
       register: pip_update
       timeout: "{{ update_timeout }}"
 
