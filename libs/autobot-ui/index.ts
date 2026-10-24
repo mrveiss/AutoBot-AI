@@ -64,6 +64,14 @@ export type { PaginationLabels } from './src/components/BasePagination.vue'
 
 export { default as BaseFormField } from './src/components/BaseFormField.vue'
 
+// Tier-1 interaction primitives on Reka UI (#14779).
+export { default as BaseTabs } from './src/components/BaseTabs.vue'
+export type { TabItem } from './src/components/BaseTabs.vue'
+export { default as BaseAccordion } from './src/components/BaseAccordion.vue'
+export type { AccordionEntry } from './src/components/BaseAccordion.vue'
+export { useDocumentDirection } from './src/composables/useDocumentDirection'
+export type { Direction } from './src/composables/useDocumentDirection'
+
 export { default as BrandMark } from './src/components/BrandMark.vue'
 
 export { default as BaseTooltip } from './src/components/BaseTooltip.vue'
