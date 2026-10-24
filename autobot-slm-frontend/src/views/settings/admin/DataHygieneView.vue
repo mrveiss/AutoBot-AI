@@ -370,15 +370,12 @@ onMounted(() => {
       <p class="text-sm text-gray-500 mb-4">{{ $t('dataHygiene.storage.subtitle') }}</p>
 
       <BaseAlert v-if="storageError" variant="error" class="mb-4" :message="storageError" />
-      <div
+      <BaseAlert
         v-for="status in unavailableProviders"
         :key="status.provider"
-        class="mb-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700"
-        role="alert"
-        data-testid="storage-provider-unavailable"
-      >
-        {{ $t('dataHygiene.storage.providerUnavailable', { provider: status.provider, error: status.error || 'unknown error' }) }}
-      </div>
+        variant="warning" size="compact" class="mb-2" role="alert" data-testid="storage-provider-unavailable"
+        :message="$t('dataHygiene.storage.providerUnavailable', { provider: status.provider, error: status.error || $t('dataHygiene.storage.unknownError') })"
+      />
 
       <div class="grid grid-cols-2 sm:grid-cols-2 gap-4 mb-4 max-w-md">
         <div class="bg-gray-50 rounded-lg p-4">
@@ -610,14 +607,11 @@ onMounted(() => {
       </div>
       <p class="text-sm text-gray-500 mb-4">{{ $t('dataHygiene.audit.subtitle') }}</p>
 
-      <div
+      <BaseAlert
         v-if="auditPartialError"
-        class="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700"
-        role="alert"
-        data-testid="audit-partial-error"
-      >
-        {{ auditPartialError }}
-      </div>
+        variant="warning" size="compact" class="mb-4" role="alert" data-testid="audit-partial-error"
+        :message="auditPartialError"
+      />
 
       <div class="overflow-x-auto border border-gray-200 rounded-lg">
         <table class="w-full text-sm">

@@ -12,9 +12,11 @@ import { BaseAlert } from '@autobot/ui'
  */
 
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAutobotApi, type PromptTemplate } from '@/composables/useAutobotApi'
 import { formatDateTime } from '@/composables/useTimezone'
 
+const { t } = useI18n()
 const api = useAutobotApi()
 
 // State
@@ -69,7 +71,7 @@ async function loadPrompts(): Promise<void> {
   try {
     prompts.value = await api.getPromptTemplates()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load prompts'
+    error.value = e instanceof Error ? e.message : t('settings.admin.promptsSettings.failedToLoadPrompts')
   } finally {
     loading.value = false
   }
@@ -77,7 +79,7 @@ async function loadPrompts(): Promise<void> {
 
 function selectPrompt(prompt: PromptTemplate): void {
   if (hasUnsavedChanges.value) {
-    if (!confirm('You have unsaved changes. Discard them?')) {
+    if (!confirm(t('settings.admin.promptsSettings.youHaveUnsavedChangesDiscardThem'))) {
       return
     }
   }
@@ -113,10 +115,10 @@ async function savePrompt(): Promise<void> {
 
     selectedPrompt.value.content = editedContent.value
 
-    success.value = 'Prompt saved successfully'
+    success.value = t('settings.admin.promptsSettings.promptSaved')
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save prompt'
+    error.value = e instanceof Error ? e.message : t('settings.admin.promptsSettings.failedToSavePrompt')
   } finally {
     saving.value = false
   }
@@ -125,7 +127,7 @@ async function savePrompt(): Promise<void> {
 async function revertToDefault(): Promise<void> {
   if (!selectedPrompt.value) return
 
-  if (!confirm('Are you sure you want to revert this prompt to its default content?')) {
+  if (!confirm(t('settings.admin.promptsSettings.areYouSureYouWantToRevert'))) {
     return
   }
 
@@ -134,7 +136,7 @@ async function revertToDefault(): Promise<void> {
 
   try {
     await api.revertPromptToDefault(selectedPrompt.value.id)
-    success.value = 'Prompt reverted to default'
+    success.value = t('settings.admin.promptsSettings.promptReverted')
 
     // Reload prompts to get the default content
     await loadPrompts()
@@ -150,7 +152,7 @@ async function revertToDefault(): Promise<void> {
 
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to revert prompt'
+    error.value = e instanceof Error ? e.message : t('settings.admin.promptsSettings.failedToRevertPrompt')
   } finally {
     saving.value = false
   }
@@ -167,12 +169,7 @@ onMounted(() => {
     <!-- Messages -->
     <BaseAlert v-if="error" variant="error" :message="error" dismissible :dismiss-label="$t('settings.admin.promptsSettings.dismissError')" @dismiss="error = null" />
 
-    <div v-if="success" class="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 flex items-center gap-3">
-      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      {{ success }}
-    </div>
+    <BaseAlert v-if="success" variant="success" :message="success" />
 
     <!-- Header with Controls -->
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">

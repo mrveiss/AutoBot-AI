@@ -11,8 +11,10 @@ import { BaseAlert, BaseSwitch } from '@autobot/ui'
  */
 
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { listSettings, upsertSetting } from '@/utils/slmSettingsApi'
 
+const { t } = useI18n()
 const loading = ref(false)
 const saving = ref(false)
 const error = ref<string | null>(null)
@@ -49,7 +51,7 @@ async function fetchSettings(): Promise<void> {
       }
     })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load settings'
+    error.value = e instanceof Error ? e.message : t('settings.notificationsSettings.failedToLoadSettings')
   } finally {
     loading.value = false
   }
@@ -70,12 +72,12 @@ async function saveSettings(): Promise<void> {
       }
     }
     if (failed.length > 0) {
-      throw new Error(`Failed to save setting(s): ${failed.join(', ')}`)
+      throw new Error(t('settings.notificationsSettings.failedToSaveSettingsList', { keys: failed.join(', ') }))
     }
-    success.value = 'Notification settings saved successfully'
+    success.value = t('settings.notificationsSettings.settingsSaved')
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save settings'
+    error.value = e instanceof Error ? e.message : t('settings.notificationsSettings.failedToSaveSettings')
   } finally {
     saving.value = false
   }
@@ -97,9 +99,7 @@ onMounted(fetchSettings)
     <template v-else>
       <!-- Messages -->
       <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
-      <div v-if="success" class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">
-        {{ success }}
-      </div>
+      <BaseAlert v-if="success" variant="success" class="mb-4" :message="success" />
 
       <!-- Alert Types -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 mb-6">

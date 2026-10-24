@@ -13,11 +13,13 @@ import { BaseAlert } from '@autobot/ui'
  */
 
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import slmApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { formatDateTime } from '@/composables/useTimezone'
 
 const logger = createLogger('ConfigDefaultsSettings')
+const { t } = useI18n()
 
 // Types
 interface ConfigEntry {
@@ -66,7 +68,7 @@ async function apiRequest<T>(
     if (method === 'PUT') return await slmApiClient.put<T>(path, body)
     return await slmApiClient.delete<T>(path)
   } catch (err) {
-    errorMessage.value = `Request failed: ${err instanceof Error ? err.message : 'Unknown error'}`
+    errorMessage.value = t('settings.admin.configDefaultsSettings.requestFailed', { detail: err instanceof Error ? err.message : t('settings.admin.configDefaultsSettings.unknownError') })
     logger.error('API error:', err)
     return null
   }
@@ -108,7 +110,7 @@ async function saveConfig(): Promise<void> {
     { value: newValue.value, value_type: newValueType.value }
   )
   if (result) {
-    successMessage.value = `Config "${key}" saved`
+    successMessage.value = t('settings.admin.configDefaultsSettings.configSaved', { key })
     showAddForm.value = false
     await fetchDefaults()
     setTimeout(() => { successMessage.value = null }, 3000)
@@ -116,7 +118,7 @@ async function saveConfig(): Promise<void> {
 }
 
 async function deleteConfig(key: string): Promise<void> {
-  if (!confirm(`Delete global config "${key}"?`)) return
+  if (!confirm(t('settings.admin.configDefaultsSettings.deleteGlobalConfig', { key }))) return
   const result = await apiRequest<{ message: string }>(
     'DELETE',
     `/config/defaults/${encodeURIComponent(key)}`
@@ -158,14 +160,12 @@ onMounted(() => { fetchDefaults() })
 
     <!-- Alerts -->
     <BaseAlert v-if="errorMessage" variant="error" :message="errorMessage" dismissible :dismiss-label="$t('settings.admin.configDefaultsSettings.dismiss')" @dismiss="errorMessage = null" />
-    <div v-if="successMessage" class="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
-      {{ successMessage }}
-    </div>
+    <BaseAlert v-if="successMessage" variant="success" size="compact" :message="successMessage" />
 
     <!-- Add/Edit Form -->
     <div v-if="showAddForm" class="bg-white rounded-lg border">
       <div class="px-4 py-3 bg-gray-50 border-b flex items-center justify-between">
-        <h3 class="font-medium text-gray-900">{{ editingKey ? `Edit: ${editingKey}` : $t('settings.admin.configDefaultsSettings.addConfigDefault') }}</h3>
+        <h3 class="font-medium text-gray-900">{{ editingKey ? $t('settings.admin.configDefaultsSettings.editKey', { key: editingKey }) : $t('settings.admin.configDefaultsSettings.addConfigDefault') }}</h3>
         <button @click="showAddForm = false" class="text-gray-400 hover:text-gray-600">{{ $t('settings.admin.configDefaultsSettings.times') }}</button>
       </div>
       <form @submit.prevent="saveConfig" class="p-4 space-y-4">

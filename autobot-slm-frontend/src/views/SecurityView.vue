@@ -17,11 +17,12 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
-import { BaseModal, usePagination, BasePagination } from '@autobot/ui'
+import { BaseAlert, BaseModal, usePagination, BasePagination } from '@autobot/ui'
 import type { TLSEndpointResponse, FleetCert } from '@/types/api-responses'
 import { createLogger } from '@/utils/debugUtils'
 import { formatRelativeTime } from '@/utils/dateUtils'
 import config from '@/config/ssot-config'
+import { useI18n } from 'vue-i18n'
 import type {
   SecurityEventResponse,
   SecurityOverviewResponse,
@@ -30,6 +31,7 @@ import type {
   SecurityPolicyResponse,
 } from '@/types/slm'
 
+const { t } = useI18n()
 const logger = createLogger('SecurityView')
 const slmApi = useSlmApi()
 const route = useRoute()
@@ -176,7 +178,7 @@ async function fetchOverview() {
     logger.info('Security overview loaded')
   } catch (err) {
     logger.error('Failed to fetch security overview:', err)
-    error.value = 'Failed to load security overview'
+    error.value = t('securityView.failedToLoadSecurityOverview')
   } finally {
     loading.value = false
   }
@@ -195,7 +197,7 @@ async function fetchAuditLogs() {
     logger.info('Audit logs loaded:', response.total)
   } catch (err) {
     logger.error('Failed to fetch audit logs:', err)
-    error.value = 'Failed to load audit logs'
+    error.value = t('securityView.failedToLoadAuditLogs')
   } finally {
     loading.value = false
   }
@@ -214,7 +216,7 @@ async function fetchSecurityEvents() {
     logger.info('Security events loaded:', response.total)
   } catch (err) {
     logger.error('Failed to fetch security events:', err)
-    error.value = 'Failed to load security events'
+    error.value = t('securityView.failedToLoadSecurityEvents')
   } finally {
     loading.value = false
   }
@@ -252,7 +254,7 @@ async function fetchPolicies() {
     logger.info('Security policies loaded:', response.total)
   } catch (err) {
     logger.error('Failed to fetch security policies:', err)
-    error.value = 'Failed to load security policies'
+    error.value = t('securityView.failedToLoadSecurityPolicies')
   } finally {
     loading.value = false
   }
@@ -290,14 +292,14 @@ async function fetchTlsEndpoints() {
     logger.info('TLS endpoints loaded:', response.total)
   } catch (err) {
     logger.error('Failed to fetch TLS endpoints:', err)
-    error.value = 'Failed to load TLS certificates'
+    error.value = t('securityView.failedToLoadTlsCertificates')
   } finally {
     loading.value = false
   }
 }
 
 async function deleteTlsCertificate(credentialId: string) {
-  if (!confirm('Are you sure you want to delete this certificate?')) {
+  if (!confirm(t('securityView.areYouSureYouWantToDelete'))) {
     return
   }
 
@@ -307,7 +309,7 @@ async function deleteTlsCertificate(credentialId: string) {
     logger.info('TLS certificate deleted:', credentialId)
   } catch (err) {
     logger.error('Failed to delete TLS certificate:', err)
-    alert('Failed to delete certificate')
+    alert(t('securityView.failedToDeleteCertificate'))
   }
 }
 
@@ -326,7 +328,7 @@ const rotatingCredentialId = ref<string | null>(null)
 const bulkRenewing = ref(false)
 
 async function renewTlsCertificate(credentialId: string) {
-  if (!confirm('Renew this certificate? This will generate a new certificate with the same CN and extended validity.')) {
+  if (!confirm(t('securityView.renewThisCertificateThisWillGenerateA'))) {
     return
   }
 
@@ -335,17 +337,17 @@ async function renewTlsCertificate(credentialId: string) {
     const result = await slmApi.renewTlsCertificate(credentialId, true)
     await fetchTlsEndpoints()
     logger.info('TLS certificate renewed:', result)
-    alert(`Certificate renewed successfully. New expiry: ${result.expires_at || 'Unknown'}`)
+    alert(t('securityView.certificateRenewed', { expiry: result.expires_at || t('securityView.unknownExpiry') }))
   } catch (err) {
     logger.error('Failed to renew TLS certificate:', err)
-    alert('Failed to renew certificate')
+    alert(t('securityView.failedToRenewCertificate'))
   } finally {
     renewingCredentialId.value = null
   }
 }
 
 async function rotateTlsCertificate(credentialId: string) {
-  if (!confirm('Rotate this certificate? This will generate a completely new certificate with new keys (more secure than renewal).')) {
+  if (!confirm(t('securityView.rotateThisCertificateThisWillGenerateA'))) {
     return
   }
 
@@ -354,17 +356,17 @@ async function rotateTlsCertificate(credentialId: string) {
     const result = await slmApi.rotateTlsCertificate(credentialId, true, true)
     await fetchTlsEndpoints()
     logger.info('TLS certificate rotated:', result)
-    alert(`Certificate rotated successfully. New expiry: ${result.expires_at || 'Unknown'}`)
+    alert(t('securityView.certificateRotated', { expiry: result.expires_at || t('securityView.unknownExpiry') }))
   } catch (err) {
     logger.error('Failed to rotate TLS certificate:', err)
-    alert('Failed to rotate certificate')
+    alert(t('securityView.failedToRotateCertificate'))
   } finally {
     rotatingCredentialId.value = null
   }
 }
 
 async function bulkRenewExpiring() {
-  if (!confirm('Renew all certificates expiring within 30 days? This will deploy new certificates to the nodes.')) {
+  if (!confirm(t('securityView.renewAllCertificatesExpiringWithin30Days'))) {
     return
   }
 
@@ -373,10 +375,10 @@ async function bulkRenewExpiring() {
     const result = await slmApi.bulkRenewExpiringCertificates(30, true)
     await fetchTlsEndpoints()
     logger.info('Bulk renewal completed:', result)
-    alert(`Bulk renewal complete: ${result.renewed} renewed, ${result.failed} failed`)
+    alert(t('securityView.bulkRenewalCompleteRenewedFailed', { renewed: result.renewed, failed: result.failed }))
   } catch (err) {
     logger.error('Failed to bulk renew certificates:', err)
-    alert('Failed to bulk renew certificates')
+    alert(t('securityView.failedToBulkRenewCertificates'))
   } finally {
     bulkRenewing.value = false
   }
@@ -390,11 +392,11 @@ function openUploadModal() {
 
 async function uploadTlsCertificate() {
   if (!selectedNodeId.value) {
-    alert('Please select a node')
+    alert(t('securityView.pleaseSelectANode'))
     return
   }
   if (!uploadForm.value.ca_cert || !uploadForm.value.server_cert || !uploadForm.value.server_key) {
-    alert('Please provide all certificate files')
+    alert(t('securityView.pleaseProvideAllCertificateFiles'))
     return
   }
 
@@ -405,7 +407,7 @@ async function uploadTlsCertificate() {
     logger.info('TLS certificate uploaded for node:', selectedNodeId.value)
   } catch (err) {
     logger.error('Failed to upload TLS certificate:', err)
-    alert('Failed to upload certificate')
+    alert(t('securityView.failedToUploadCertificate'))
   }
 }
 
@@ -471,11 +473,11 @@ function toggleTlsService(serviceName: string) {
 
 async function enableTlsOnSelectedServices() {
   if (selectedTlsServices.value.length === 0) {
-    alert('Please select at least one service to enable TLS')
+    alert(t('securityView.pleaseSelectAtLeastOneServiceTo'))
     return
   }
 
-  if (!confirm(`Enable TLS on ${selectedTlsServices.value.join(', ')}?\n\nThis will:\n1. Deploy TLS certificates to the nodes\n2. Configure services for HTTPS\n3. Restart affected services\n\nContinue?`)) {
+  if (!confirm(t('securityView.confirmEnableTls', { services: selectedTlsServices.value.join(', ') }))) {
     return
   }
 
@@ -509,7 +511,7 @@ async function enableTlsOnSelectedServices() {
     logger.error('Failed to enable TLS:', err)
     tlsEnableResult.value = {
       success: false,
-      message: err instanceof Error ? err.message : 'Failed to enable TLS'
+      message: err instanceof Error ? err.message : t('securityView.failedToEnableTls')
     }
   } finally {
     tlsEnabling.value = false
@@ -652,7 +654,7 @@ const scoreColor = computed(() => {
                 <div
                   :class="['w-2 h-2 rounded-full', severityColors[event.severity] || 'bg-gray-500']"
                   role="img"
-                  :aria-label="`${event.severity} severity`"
+                  :aria-label="$t('securityView.severityLabel', { severity: event.severity })"
                 ></div>
                 <div>
                   <div class="text-sm font-medium text-gray-900">{{ event.title }}</div>
@@ -726,7 +728,7 @@ const scoreColor = computed(() => {
                   type="checkbox"
                   :checked="selectedTlsServices.includes(service.name)"
                   class="h-5 w-5 text-primary-600 rounded-sm border-gray-300 focus:ring-primary-500"
-                  :aria-label="`Enable TLS for ${service.displayName}`"
+                  :aria-label="$t('securityView.enableTlsForService', { name: service.displayName })"
                   @click.stop
                   @change="toggleTlsService(service.name)"
                 />
@@ -797,24 +799,16 @@ const scoreColor = computed(() => {
       </div>
 
       <!-- Help Section -->
-      <div class="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
-        <div class="flex items-start gap-3">
-          <svg class="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <div class="text-sm text-blue-800">
-            <p class="font-medium mb-1">{{ $t('securityView.whatHappensWhenYouEnableTLS') }}</p>
-            <ul class="list-disc list-inside space-y-1 text-blue-700">
-              <li>{{ $t('securityView.tLSCertificatesAreDeployedToThe') }}</li>
-              <li>{{ $t('securityView.serviceConfigurationsAreUpdatedToUse') }}</li>
-              <li>{{ $t('securityView.servicesAreRestartedToApplyThe') }}</li>
-              <li>{{ $t('securityView.frontendAccessibleAt', { port: config.port.tlsFrontend }) }}</li>
-              <li>{{ $t('securityView.backendAccessibleAt', { port: config.port.tlsBackend }) }}</li>
-              <li>{{ $t('securityView.redisWillAcceptTLSConnectionsOn', { value0: config.port.tlsRedis }) }}</li>
-            </ul>
-          </div>
-        </div>
-      </div>
+      <BaseAlert variant="info" class="mt-8" :title="$t('securityView.whatHappensWhenYouEnableTLS')">
+        <ul class="list-disc list-inside space-y-1">
+          <li>{{ $t('securityView.tLSCertificatesAreDeployedToThe') }}</li>
+          <li>{{ $t('securityView.serviceConfigurationsAreUpdatedToUse') }}</li>
+          <li>{{ $t('securityView.servicesAreRestartedToApplyThe') }}</li>
+          <li>{{ $t('securityView.frontendAccessibleAt', { port: config.port.tlsFrontend }) }}</li>
+          <li>{{ $t('securityView.backendAccessibleAt', { port: config.port.tlsBackend }) }}</li>
+          <li>{{ $t('securityView.redisWillAcceptTLSConnectionsOn', { value0: config.port.tlsRedis }) }}</li>
+        </ul>
+      </BaseAlert>
     </div>
 
     <!-- TLS Certificates (Issue #725) -->
@@ -963,7 +957,7 @@ const scoreColor = computed(() => {
                     @click="renewTlsCertificate(endpoint.credential_id)"
                     :disabled="renewingCredentialId === endpoint.credential_id"
                     class="px-2 py-1 rounded-sm text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 disabled:opacity-50"
-                    :aria-label="`Renew certificate for ${endpoint.hostname}`"
+                    :aria-label="$t('securityView.renewCertificateFor', { hostname: endpoint.hostname })"
                   >
                     {{ renewingCredentialId === endpoint.credential_id ? '...' : $t('securityView.renew') }}
                   </button>
@@ -971,7 +965,7 @@ const scoreColor = computed(() => {
                     @click="rotateTlsCertificate(endpoint.credential_id)"
                     :disabled="rotatingCredentialId === endpoint.credential_id"
                     class="px-2 py-1 rounded-sm text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 disabled:opacity-50"
-                    :aria-label="`Rotate certificate for ${endpoint.hostname}`"
+                    :aria-label="$t('securityView.rotateCertificateFor', { hostname: endpoint.hostname })"
                   >
                     {{ rotatingCredentialId === endpoint.credential_id ? '...' : $t('securityView.rotate') }}
                   </button>
@@ -983,14 +977,14 @@ const scoreColor = computed(() => {
                         ? 'bg-gray-100 hover:bg-gray-200 text-gray-700'
                         : 'bg-success-100 hover:bg-success-200 text-success-700'
                     ]"
-                    :aria-label="`${endpoint.is_active ? 'Disable' : 'Enable'} certificate for ${endpoint.hostname}`"
+                    :aria-label="endpoint.is_active ? $t('securityView.disableCertificateFor', { hostname: endpoint.hostname }) : $t('securityView.enableCertificateFor', { hostname: endpoint.hostname })"
                   >
                     {{ endpoint.is_active ? $t('securityView.disable') : $t('securityView.enable') }}
                   </button>
                   <button
                     @click="deleteTlsCertificate(endpoint.credential_id)"
                     class="px-2 py-1 rounded-sm text-xs bg-error-100 hover:bg-error-200 text-error-700"
-                    :aria-label="`Delete certificate for ${endpoint.hostname}`"
+                    :aria-label="$t('securityView.deleteCertificateFor', { hostname: endpoint.hostname })"
                   >{{ $t('securityView.delete') }}</button>
                 </div>
               </td>
@@ -1146,7 +1140,7 @@ const scoreColor = computed(() => {
                 <div
                   :class="['w-3 h-3 mt-1 rounded-full', severityColors[event.severity]]"
                   role="img"
-                  :aria-label="`${event.severity} severity`"
+                  :aria-label="$t('securityView.severityLabel', { severity: event.severity })"
                 ></div>
                 <div>
                   <div class="font-medium text-gray-900">{{ event.title }}</div>
@@ -1176,12 +1170,12 @@ const scoreColor = computed(() => {
                     v-if="!event.is_acknowledged"
                     @click="acknowledgeEvent(event.event_id)"
                     class="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-sm"
-                    :aria-label="`Acknowledge event: ${event.title}`"
+                    :aria-label="$t('securityView.acknowledgeEvent', { title: event.title })"
                   >{{ $t('securityView.ack') }}</button>
                   <button
                     @click="resolveEvent(event.event_id)"
                     class="px-2 py-1 text-xs bg-success-100 hover:bg-success-200 text-success-700 rounded-sm"
-                    :aria-label="`Resolve event: ${event.title}`"
+                    :aria-label="$t('securityView.resolveEvent', { title: event.title })"
                   >{{ $t('securityView.resolve') }}</button>
                 </div>
               </div>
@@ -1251,7 +1245,7 @@ const scoreColor = computed(() => {
                       ? 'bg-error-100 hover:bg-error-200 text-error-700'
                       : 'bg-success-100 hover:bg-success-200 text-success-700'
                   ]"
-                  :aria-label="`${policy.is_enforced ? 'Disable' : 'Enable'} policy: ${policy.name}`"
+                  :aria-label="policy.is_enforced ? $t('securityView.disablePolicy', { name: policy.name }) : $t('securityView.enablePolicy', { name: policy.name })"
                 >
                   {{ policy.is_enforced ? $t('securityView.disable') : $t('securityView.enable') }}
                 </button>

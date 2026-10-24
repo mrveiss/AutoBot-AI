@@ -15,6 +15,7 @@ import { BaseAlert, BaseSwitch } from '@autobot/ui'
  */
 
 import { onMounted, reactive, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useSlmJsonSetting } from '@/composables/useSlmJsonSetting'
 
 interface DisposalPolicyPayload {
@@ -22,6 +23,7 @@ interface DisposalPolicyPayload {
   require_approval: boolean
 }
 
+const { t } = useI18n()
 const KEY = 'llc.project_disposal_policy'
 const { saving, saved, load: loadJson, save: saveJson } = useSlmJsonSetting<DisposalPolicyPayload>(KEY)
 const policy = reactive({ retention_days: 0, require_approval: false })
@@ -36,7 +38,7 @@ async function load(): Promise<void> {
       policy.require_approval = Boolean(parsed.require_approval ?? false)
     }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load disposal policy'
+    error.value = e instanceof Error ? e.message : t('settings.disposalPolicySettings.failedToLoadDisposalPolicy')
   }
 }
 
@@ -48,10 +50,10 @@ async function save(): Promise<void> {
       'Company OS project disposal policy',
     )
     if (!ok) {
-      error.value = 'Failed to save disposal policy'
+      error.value = t('settings.disposalPolicySettings.failedToSaveDisposalPolicy')
     }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save disposal policy'
+    error.value = e instanceof Error ? e.message : t('settings.disposalPolicySettings.failedToSaveDisposalPolicy')
   }
 }
 
@@ -65,7 +67,7 @@ onMounted(load)
       <p class="text-sm text-gray-500 mb-6">{{ $t('settings.disposalPolicySettings.controlsHowCompanyOSProjectsAre') }}</p>
 
       <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
-      <div v-if="saved" class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">{{ $t('settings.disposalPolicySettings.policySavedSuccessfully') }}</div>
+      <BaseAlert v-if="saved" variant="success" class="mb-4" :message="$t('settings.disposalPolicySettings.policySavedSuccessfully')" />
 
       <div class="space-y-6">
         <!-- Retention period -->

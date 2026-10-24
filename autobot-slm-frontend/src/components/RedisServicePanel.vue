@@ -256,14 +256,15 @@ onUnmounted(() => {
     </div>
 
     <!-- Success / Error banners -->
-    <div v-if="successMessage" class="px-4 py-2 bg-green-50 border-b border-green-100 text-sm text-green-700 flex items-center justify-between">
-      <span>{{ successMessage }}</span>
-      <button @click="successMessage = null" class="text-green-500 hover:text-green-700" :aria-label="$t('redisServicePanel.dismiss')">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-    </div>
+    <BaseAlert
+      v-if="successMessage"
+      variant="success"
+      size="compact"
+      :message="successMessage"
+      dismissible
+      :dismiss-label="$t('redisServicePanel.dismiss')"
+      @dismiss="successMessage = null"
+    />
     <BaseAlert
       v-if="errorMessage"
       variant="error"

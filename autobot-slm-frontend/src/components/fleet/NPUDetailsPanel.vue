@@ -14,6 +14,7 @@ import { BaseAlert, BaseDrawer } from '@autobot/ui'
  */
 
 import { ref, computed, reactive, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useFleetStore } from '@/stores/fleet'
 import type { SLMNode, NPUNodeStatus, NPUWorkerMetrics, NPUWorkerConfig } from '@/types/slm'
 import { formatDateTime } from '@/composables/useTimezone'
@@ -31,6 +32,7 @@ const emit = defineEmits<{
 }>()
 
 const fleetStore = useFleetStore()
+const { t: translate } = useI18n()
 const loading = ref(false)
 const saving = ref(false)
 const error = ref<string | null>(null)
@@ -114,18 +116,18 @@ async function saveConfig(): Promise<void> {
   try {
     const ok = await fleetStore.updateNpuWorkerConfig(props.node.node_id, { ...workerConfig })
     if (ok) {
-      success.value = 'Configuration saved'
+      success.value = translate('fleet.nPUDetailsPanel.configurationSaved')
       setTimeout(() => { success.value = null }, 3000)
     }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save configuration'
+    error.value = e instanceof Error ? e.message : translate('fleet.nPUDetailsPanel.failedToSaveConfiguration')
   } finally {
     saving.value = false
   }
 }
 
 async function removeNpuRole(): Promise<void> {
-  if (!confirm(`Remove NPU Worker role from ${props.node.hostname}?`)) return
+  if (!confirm(translate('fleet.nPUDetailsPanel.removeNpuWorkerRoleFrom', { hostname: props.node.hostname }))) return
   loading.value = true
   error.value = null
   try {
@@ -133,7 +135,7 @@ async function removeNpuRole(): Promise<void> {
     emit('close')
     emit('refresh')
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to remove NPU role'
+    error.value = e instanceof Error ? e.message : translate('fleet.nPUDetailsPanel.failedToRemoveNpuRole')
   } finally {
     loading.value = false
   }
@@ -148,7 +150,7 @@ async function refreshStatus(): Promise<void> {
       loadLiveMetrics(loadToken),
     ])
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to refresh NPU status'
+    error.value = e instanceof Error ? e.message : translate('fleet.nPUDetailsPanel.failedToRefreshNpuStatus')
   } finally {
     loading.value = false
   }
@@ -191,9 +193,7 @@ watch(
     <div class="space-y-6">
       <!-- Messages -->
       <BaseAlert v-if="error" variant="error" :message="error" />
-      <div v-if="success" class="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
-        {{ success }}
-      </div>
+      <BaseAlert v-if="success" variant="success" size="compact" :message="success" />
 
       <!-- Device Info -->
       <div class="bg-gray-50 rounded-lg p-4">

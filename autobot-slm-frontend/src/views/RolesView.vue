@@ -396,9 +396,7 @@ onMounted(() => {
 
     <!-- Alerts -->
     <BaseAlert v-if="errorMessage" variant="error" class="mb-4" :message="errorMessage" dismissible :dismiss-label="$t('rolesView.dismiss')" @dismiss="errorMessage = null" />
-    <div v-if="successMessage" class="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
-      {{ successMessage }}
-    </div>
+    <BaseAlert v-if="successMessage" variant="success" class="mb-4" :message="successMessage" />
 
     <!-- Role Form (Create/Edit) -->
     <div v-if="showForm" class="bg-white rounded-lg border mb-6">
@@ -566,9 +564,12 @@ onMounted(() => {
             </option>
           </select>
         </div>
-        <div v-if="migratingRole?.degraded_without?.length" class="text-xs text-yellow-700 bg-yellow-50 p-2 rounded-sm">
-          {{ $t('rolesView.optionalRoleWithout', { detail: migratingRole.degraded_without.join('; ') }) }}
-        </div>
+        <BaseAlert
+          v-if="migratingRole?.degraded_without?.length"
+          variant="warning"
+          size="compact"
+          :message="$t('rolesView.optionalRoleWithout', { detail: migratingRole.degraded_without.join('; ') })"
+        />
         <!-- Output -->
         <div v-if="migrateOutput" class="mt-2">
           <p class="text-xs font-medium text-gray-600 mb-1">{{ $t('rolesView.playbookOutput') }}</p>

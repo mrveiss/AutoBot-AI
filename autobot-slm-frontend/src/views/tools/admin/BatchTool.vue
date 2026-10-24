@@ -5,6 +5,7 @@
 <script setup lang="ts">
 import { createLogger } from '@/utils/debugUtils'
 
+const { t } = useI18n()
 const logger = createLogger('BatchTool')
 /**
  * BatchTool - Batch Processing Manager
@@ -17,6 +18,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useAutobotApi } from '@/composables/useAutobotApi'
 import { formatDateTime } from '@/composables/useTimezone'
 import { BaseAlert, BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 
 const api = useAutobotApi()
 
@@ -145,13 +147,13 @@ function handlePollError(e: unknown): void {
   if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
     stopPolling()
     backendAvailable.value = false
-    error.value = 'AutoBot backend unreachable. Polling paused.'
+    error.value = t('tools.admin.batchTool.autoBotBackendUnreachablePolling')
     logger.warn(
       'Batch polling stopped after %d consecutive errors',
       consecutiveErrors,
     )
   } else {
-    error.value = e instanceof Error ? e.message : 'Failed to load jobs'
+    error.value = e instanceof Error ? e.message : t('tools.admin.batchTool.failedToLoadJobs')
   }
 }
 
@@ -177,7 +179,7 @@ async function refreshData(): Promise<void> {
 
 async function createJob(): Promise<void> {
   if (!newJob.value.name) {
-    error.value = 'Please enter a job name'
+    error.value = t('tools.admin.batchTool.pleaseEnterAJobName')
     return
   }
 
@@ -189,7 +191,7 @@ async function createJob(): Promise<void> {
     newJob.value = { name: '', type: 'file_processing', items: [], options: {} }
     await loadJobs()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to create job'
+    error.value = e instanceof Error ? e.message : t('tools.admin.batchTool.failedToCreateJob')
   } finally {
     loading.value = false
   }
@@ -201,7 +203,7 @@ async function cancelJob(jobId: string): Promise<void> {
     await api.cancelBatchJob(jobId)
     await loadJobs()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to cancel job'
+    error.value = e instanceof Error ? e.message : t('tools.admin.batchTool.failedToCancelJob')
   }
 }
 
@@ -214,12 +216,12 @@ async function retryJob(jobId: string): Promise<void> {
     }
     await loadJobs()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to retry job'
+    error.value = e instanceof Error ? e.message : t('tools.admin.batchTool.failedToRetryJob')
   }
 }
 
 async function deleteJob(jobId: string): Promise<void> {
-  if (!confirm('Are you sure you want to delete this job?')) return
+  if (!confirm(t('tools.admin.batchTool.areYouSureYouWantToDelete'))) return
 
   try {
     // Issue #835 - use cancelBatchJob (DELETE endpoint)
@@ -229,7 +231,7 @@ async function deleteJob(jobId: string): Promise<void> {
     }
     await loadJobs()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to delete job'
+    error.value = e instanceof Error ? e.message : t('tools.admin.batchTool.failedToDeleteJob')
   }
 }
 
@@ -345,15 +347,21 @@ onUnmounted(() => {
     </div>
 
     <!-- Issue #1092: Backend unavailable banner with retry -->
-    <div v-if="!backendAvailable" class="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
-      <span class="text-amber-800">{{ $t('tools.admin.batchTool.autoBotBackendUnreachablePolling') }}</span>
-      <button
-        @click="resumePolling"
-        class="px-3 py-1.5 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700"
-      >
-        {{ $t('tools.admin.batchTool.retry') }}
-      </button>
-    </div>
+    <BaseAlert
+      v-if="!backendAvailable"
+      variant="warning"
+      class="mb-6"
+      :message="$t('tools.admin.batchTool.autoBotBackendUnreachablePolling')"
+    >
+      <template #actions>
+        <button
+          @click="resumePolling"
+          class="px-3 py-1.5 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700"
+        >
+          {{ $t('tools.admin.batchTool.retry') }}
+        </button>
+      </template>
+    </BaseAlert>
 
     <!-- Error Message -->
     <BaseAlert v-if="error && backendAvailable" variant="error" class="mb-6" :message="error" />

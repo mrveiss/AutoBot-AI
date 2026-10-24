@@ -13,12 +13,14 @@
 
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { BaseAlert } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 import { useFleetStore } from '@/stores/fleet'
 import { formatDateTime } from '@/composables/useTimezone'
 import {
   useSystemUpdates,
   type UpdatePackage,
 } from '@/composables/useSystemUpdates'
+const { t } = useI18n()
 const fleetStore = useFleetStore()
 const systemUpdates = useSystemUpdates()
 
@@ -96,7 +98,7 @@ function startDiscoverPolling(jobId: string): void {
         systemUpdates.fetchJobs(),
       ])
       if (status.status === 'completed') {
-        successMessage.value = status.message || 'Discovery completed'
+        successMessage.value = status.message || t('systemUpdatesTab.discoveryCompleted')
         setTimeout(() => {
           successMessage.value = null
         }, 5000)
@@ -144,17 +146,17 @@ async function handleUpgradeSelected(): Promise<void> {
     await systemUpdates.applyUpdates(nodeId, updateIds)
   }
   selectedPackages.value.clear()
-  successMessage.value = 'Upgrade jobs started'
+  successMessage.value = t('systemUpdatesTab.upgradeJobsStarted')
   setTimeout(() => {
     successMessage.value = null
   }, 3000)
 }
 
 async function handleUpgradeAllForNode(nodeId: string): Promise<void> {
-  if (!confirm(`Upgrade ALL packages on ${nodeId}?`)) return
+  if (!confirm(t('systemUpdatesTab.upgradeAllPackagesOn', { nodeId }))) return
   const ok = await systemUpdates.upgradeAll(nodeId)
   if (ok) {
-    successMessage.value = `Upgrade all started for ${nodeId}`
+    successMessage.value = t('systemUpdatesTab.upgradeAllStarted', { nodeId })
     setTimeout(() => {
       successMessage.value = null
     }, 3000)
@@ -162,11 +164,11 @@ async function handleUpgradeAllForNode(nodeId: string): Promise<void> {
 }
 
 async function handleCancelJob(jobId: string): Promise<void> {
-  if (!confirm('Cancel this update job?')) return
+  if (!confirm(t('systemUpdatesTab.cancelThisUpdateJob'))) return
   cancellingJobId.value = jobId
   const ok = await systemUpdates.cancelJob(jobId)
   if (ok) {
-    successMessage.value = 'Job cancelled'
+    successMessage.value = t('systemUpdatesTab.jobCancelled')
     setTimeout(() => {
       successMessage.value = null
     }, 3000)
@@ -319,13 +321,7 @@ onUnmounted(() => {
       :dismiss-label="$t('systemUpdatesTab.dismiss')"
       @dismiss="systemUpdates.clearError()"
     />
-    <div
-      v-if="successMessage"
-      class="mb-4 p-3 bg-green-50 border border-green-200
-             rounded-lg text-green-700 text-sm"
-    >
-      {{ successMessage }}
-    </div>
+    <BaseAlert v-if="successMessage" variant="success" size="compact" class="mb-4" :message="successMessage" />
 
     <!-- Discovery Progress -->
     <div

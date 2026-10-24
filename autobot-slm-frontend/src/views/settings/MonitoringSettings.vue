@@ -48,7 +48,7 @@ async function fetchSettings(): Promise<void> {
       }
     })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load settings'
+    error.value = e instanceof Error ? e.message : t('settings.monitoringSettings.failedToLoadSettings')
   } finally {
     loading.value = false
   }
@@ -63,13 +63,13 @@ async function saveSetting(key: string, value: string): Promise<void> {
     const ok = await upsertSetting(key, { value })
 
     if (!ok) {
-      throw new Error('Failed to save setting')
+      throw new Error(t('settings.monitoringSettings.failedToSaveSetting'))
     }
 
     success.value = t('settings.monitoringSettings.settingSaved')
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save setting'
+    error.value = e instanceof Error ? e.message : t('settings.monitoringSettings.failedToSaveSetting')
   } finally {
     saving.value = false
   }
@@ -132,9 +132,7 @@ onMounted(fetchSettings)
     <template v-else>
       <!-- Messages -->
       <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
-      <div v-if="success" class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">
-        {{ success }}
-      </div>
+      <BaseAlert v-if="success" variant="success" class="mb-4" :message="success" />
 
       <!-- Settings Card -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 mb-6">

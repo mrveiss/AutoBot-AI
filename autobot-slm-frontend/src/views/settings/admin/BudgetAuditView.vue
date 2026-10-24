@@ -20,9 +20,11 @@
 
 import { ref, computed, onMounted } from 'vue'
 import { BaseAlert } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 import { useAutobotApi, type BudgetPolicy } from '@/composables/useAutobotApi'
 import { createLogger } from '@/utils/debugUtils'
 
+const { t } = useI18n()
 const logger = createLogger('BudgetAuditView')
 const api = useAutobotApi()
 
@@ -46,7 +48,7 @@ async function fetchPolicies(): Promise<void> {
     policies.value = data.policies
   } catch (err) {
     error.value =
-      err instanceof Error ? err.message : 'Failed to fetch budget policies'
+      err instanceof Error ? err.message : t('budgetAudit.failedToFetchBudgetPolicies')
     logger.error('Error fetching budget policies:', err)
   } finally {
     loading.value = false
@@ -120,25 +122,7 @@ onMounted(() => {
     </div>
 
     <!-- Read-only oversight notice -->
-    <div
-      class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-start gap-2"
-    >
-      <svg
-        class="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        aria-hidden="true"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-        />
-      </svg>
-      <p class="text-sm text-blue-700">{{ $t('budgetAudit.readOnlyNotice') }}</p>
-    </div>
+    <BaseAlert variant="info" size="compact" class="mb-4" :message="$t('budgetAudit.readOnlyNotice')" />
 
     <!-- Error display -->
     <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />

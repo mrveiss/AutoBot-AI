@@ -25,6 +25,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
+import { BaseAlert } from '@autobot/ui'
 import NotificationsSettings from './NotificationsSettings.vue'
 import { useAuthStore } from '@/stores/auth'
 import en from '@/locales/en.json'
@@ -160,7 +161,9 @@ describe('NotificationsSettings', () => {
     expect(urls).toContain('/api/settings/email_address')
     const body = JSON.parse((writes[0][1] as RequestInit).body as string)
     expect(body).toEqual({ value: 'true' })
-    expect(wrapper.find('.bg-green-50').exists()).toBe(true)
+    const success = wrapper.findAllComponents(BaseAlert).filter((a) => a.props('variant') === 'success')
+    expect(success).toHaveLength(1)
+    expect(success[0].text()).toContain(en.settings.notificationsSettings.settingsSaved)
   })
 
   it('reports a rejected write instead of claiming the save succeeded', async () => {
@@ -174,7 +177,7 @@ describe('NotificationsSettings', () => {
     await wrapper.find('button:not([role="switch"])').trigger('click') // Save; the switches are buttons too
     await flushPromises()
 
-    expect(wrapper.find('.bg-green-50').exists()).toBe(false)
+    expect(wrapper.findAllComponents(BaseAlert).some((a) => a.props('variant') === 'success')).toBe(false)
     expect(wrapper.find('[role="alert"]').text()).toContain('Failed to save setting(s)')
   })
 })

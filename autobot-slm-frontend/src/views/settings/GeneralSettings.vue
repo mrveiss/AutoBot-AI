@@ -13,6 +13,7 @@ import { BaseAlert, BaseSwitch } from '@autobot/ui'
 
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useDarkMode } from '@/composables/useAccessibility'
 // #13140: settings/setup endpoints live beside the canonical SLM client
 // (ADR-008 rule 3). `TimeConfig`/`TimeSyncResult`/`WizardStatus` are the
@@ -33,6 +34,7 @@ import {
 const darkMode = useDarkMode()
 
 const router = useRouter()
+const { t } = useI18n()
 const loading = ref(false)
 const saving = ref(false)
 const syncing = ref(false)
@@ -186,7 +188,7 @@ async function fetchSettings(): Promise<void> {
       settings.value.default_timezone = tc.timezone
     }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load settings'
+    error.value = e instanceof Error ? e.message : t('settings.generalSettings.failedToLoadSettings')
   } finally {
     loading.value = false
   }
@@ -208,19 +210,19 @@ async function saveAllSettings(): Promise<void> {
       }
     }
     if (failed.length > 0) {
-      throw new Error(`Failed to save setting(s): ${failed.join(', ')}`)
+      throw new Error(t('settings.generalSettings.failedToSaveSettingsList', { keys: failed.join(', ') }))
     }
 
     // Save time config (timezone + NTP)
     timeConfig.value.timezone = settings.value.default_timezone
     await putTimeConfig(timeConfig.value)
 
-    success.value = 'Settings saved successfully'
+    success.value = t('settings.generalSettings.settingsSaved')
     setTimeout(() => {
       success.value = null
     }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save settings'
+    error.value = e instanceof Error ? e.message : t('settings.generalSettings.failedToSaveSettings')
   } finally {
     saving.value = false
   }
@@ -237,7 +239,7 @@ async function syncTimeToNodes(): Promise<void> {
     // previous raw `res.text()` body (a JSON blob) as the surfaced message.
     syncResult.value = await syncTimeToNodesApi(null)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Time sync failed'
+    error.value = e instanceof Error ? e.message : t('settings.generalSettings.timeSyncFailed')
   } finally {
     syncing.value = false
   }
@@ -269,11 +271,11 @@ async function resetWizard(): Promise<void> {
   try {
     if (await resetWizardApi()) {
       await fetchWizardStatus()
-      success.value = 'Setup wizard has been reset'
+      success.value = t('settings.generalSettings.setupWizardReset')
       setTimeout(() => { success.value = null }, 3000)
     }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to reset wizard'
+    error.value = e instanceof Error ? e.message : t('settings.generalSettings.failedToResetWizard')
   } finally {
     wizardResetting.value = false
   }
@@ -298,9 +300,7 @@ onMounted(() => {
     <template v-else>
       <!-- Messages -->
       <BaseAlert v-if="error" variant="error" :message="error" />
-      <div v-if="success" class="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
-        {{ success }}
-      </div>
+      <BaseAlert v-if="success" variant="success" :message="success" />
 
       <!-- General Settings Card -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
@@ -436,7 +436,7 @@ onMounted(() => {
           v-if="syncResult"
           :variant="syncResult.success ? 'success' : 'error'"
         >
-          <div class="font-medium mb-1">{{ $t('settings.generalSettings.value0Value1NodePlural', { value0: syncResult.success ? $t('settings.generalSettings.syncComplete') : $t('settings.generalSettings.syncFailed'), value1: syncResult.node_count, plural: syncResult.node_count !== 1 ? 's' : '' }) }}</div>
+          <div class="font-medium mb-1">{{ $t('settings.generalSettings.value0Value1NodePlural', { value0: syncResult.success ? $t('settings.generalSettings.syncComplete') : $t('settings.generalSettings.syncFailed'), value1: syncResult.node_count }, syncResult.node_count) }}</div>
           <div class="text-xs opacity-80">{{ syncResult.message }}</div>
           <details v-if="syncResult.output" class="mt-2">
             <summary class="cursor-pointer text-xs font-medium">{{ $t('settings.generalSettings.ansibleOutput') }}</summary>
