@@ -223,6 +223,12 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "One frontend tree's source, against all tracked frontend source.",
     ),
+    "v-html-sanitiser-sinks": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Both frontends' and the kit's non-test `.vue`/`.ts`, against all tracked frontend source; "
+        "the test-file share drifts.",
+    ),
     "vnc-password-not-in-frontend-source": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

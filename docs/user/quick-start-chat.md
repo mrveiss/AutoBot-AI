@@ -6,9 +6,9 @@ AutoBot, attached a file, and learned the basic chat controls.
 ## Step 1 -- Open the Chat
 
 1. Open AutoBot in your browser.
-2. Click **AI Assistant** in the navigation bar (or go directly to `/chat`).
+2. Click **Chat** in the navigation bar (or go directly to `/chat`).
 
-<!-- Screenshot: Navigation bar with AI Assistant highlighted -->
+<!-- Screenshot: Navigation bar with Chat highlighted -->
 
 You will see the chat interface with a message input area at the bottom and a
 sidebar listing your conversations on the left.

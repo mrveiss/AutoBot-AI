@@ -25,7 +25,7 @@ const PACKAGE = JSON.parse(readFileSync(new URL('./package.json', import.meta.ur
 }
 
 /** Bare packages the kit imports that must come from the consuming app's copy. */
-export const KIT_SHARED_DEPS = ['vue', '@vueuse/core']
+export const KIT_SHARED_DEPS = ['vue', '@vueuse/core', 'dompurify']
 
 const escapeRegex = (text: string) => text.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')
 
