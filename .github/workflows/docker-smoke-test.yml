@@ -115,10 +115,15 @@ jobs:
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4
 
       - name: Cache Docker layers
-        uses: actions/cache@v6
+        # #19308: keyed on what the image layers are built from, not on the commit. A
+        # per-commit key saved a new ~1.2 GB entry on every run and pushed the repo's
+        # Actions cache over its 10 GB limit, evicting the small caches CI depends on. An
+        # exact hit skips the save, so a commit that changes no dependency adds nothing.
+        id: buildx-cache
+        uses: actions/cache/restore@v6
         with:
           path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          key: ${{ runner.os }}-buildx-${{ hashFiles('docker/**', 'requirements*.txt', 'constraints/**', 'autobot-backend/requirements*.txt', 'autobot-slm-backend/requirements*.txt', 'package-lock.json', 'autobot-frontend/package-lock.json', 'autobot-slm-frontend/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-buildx-
 
@@ -174,6 +179,16 @@ jobs:
 
           echo "Final disk space:"
           df -h
+
+
+      # #19308 review: restored everywhere, saved only from main. A save from every PR -- each
+      # dependency PR has a new key -- brought the eviction back under dependabot load.
+      - name: Save Docker layers (main only)
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.buildx-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ hashFiles('docker/**', 'requirements*.txt', 'constraints/**', 'autobot-backend/requirements*.txt', 'autobot-slm-backend/requirements*.txt', 'package-lock.json', 'autobot-frontend/package-lock.json', 'autobot-slm-frontend/package-lock.json') }}
 
       - name: Pick the management network range (#16833)
         # docker-compose.yml has no default autobot-mgmt range; this is the pick

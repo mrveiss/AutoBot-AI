@@ -60,6 +60,7 @@ from pathlib import Path
 
 import pytest
 from repo_tests._paths import repo_root
+from repo_tests._ratchet_base import base_tree_texts
 
 _REPO_ROOT = repo_root()
 _FRONTEND_SRC = _REPO_ROOT / "autobot-frontend" / "src"
@@ -103,17 +104,9 @@ BASELINE = {
     # replaced by the shared kit SkipLink (lowered from 5615). Earlier: #17020,
     # Terminal.vue removed -- pure deletion of dead code, lowered, not held.
     # #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit (5611 -> 5594).
-    # Total CSS rule declarations.
-    #
-    # #16972/#15455: same owner-approved, one-off exception as distinct_class_names
-    # directly above -- see that comment.
-    "css_rule_declarations": 9139,  # train-84: #14780 BaseAvatar (-2) on main's 9141; train-82: #14780 BaseFormField (-2) on #17829 9143; #17829: the chat input status bar left its scoped CSS for utility classes in ChatInputStatusBar.vue (-7); train-74 on main: drawer adoption (-16) on train 77 OrgChart drawer (-2), 9168 -> 9150; #14780 drawer adoption: 9168 -> 9152 (SourcePreviewPanel, WorkItemDetail on BaseDrawer); #14780: -1, AuditLogTable's pager layout left for the kit BasePagination; #14778: -16, the local BaseInput fork retired into the kit (on main's 9185); #18242: -3 on main's 9188 (CustomDashboard onto DashboardGrid); #18849: -30, the local BaseButton fork retired into the kit; #18819: -25 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-46);  #14776: local BaseBadge retired (9354 -> 9337), then local BaseCard + BasePanel (9337 -> 9289); #14785: density reuses the existing
-    # [data-layout-density] attribute (no .density-* classes), and the dead
-    # assets/main.css .sr-only rule went with that file (lowered from 9379).
-    # #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit (9371 -> 9354).
-    # #17565: the App.vue skip-link rules moved to the kit (lowered from 9381);
-    # #18240: App.vue scoped style + ThemePresetPicker .sr-only + LoginForm .logo-mark (lowered from 9378);
-    # earlier #17020, same reason as distinct_class_names
+    # css_rule_declarations has no constant here (#19283): it is compared with the same
+    # measurement over the base commit's tree (test_css_rule_declarations_do_not_rise),
+    # so PRs that each remove rules never edit a shared line.
     # Files declaring at least one `.btn-*` CSS rule. Target is 1 — a single
     # shared stylesheet.
     "button_definition_files": 100,  # #18849: 101 -> 100, the local BaseButton fork retired into the kit; Distinct `.btn-*` class names declared anywhere.
@@ -240,6 +233,23 @@ def _measure() -> dict[str, int]:
     takes minutes — the pre-push hook timed out at 120s on the uncached
     version. The tree does not change during a run, so one scan is correct.
     """
+    return _measure_texts((path, _read(path)) for path in _source_files())
+
+
+@functools.lru_cache(maxsize=1)
+def _measure_base() -> dict[str, int]:
+    """The same measurement over the base commit's tree (#19283), with the same file filter."""
+    prefix = str(_FRONTEND_SRC.relative_to(_REPO_ROOT))
+    items = [
+        (Path(rel), text)
+        for rel, text in base_tree_texts(_REPO_ROOT, prefix).items()
+        if Path(rel).suffix in _SOURCE_SUFFIXES and "node_modules" not in Path(rel).parts and not _is_test(Path(rel))
+    ]
+    return _measure_texts(items)
+
+
+def _measure_texts(items) -> dict[str, int]:
+    """The dimensions, from ``(path, text)`` pairs -- the live tree's or the base's."""
     button_files = 0
     button_names: set[str] = set()
     zindex = 0
@@ -250,9 +260,7 @@ def _measure() -> dict[str, int]:
     rule_declarations = 0
     family_names: dict[str, set[str]] = collections.defaultdict(set)
 
-    for path in _source_files():
-        text = _read(path)
-
+    for path, text in items:
         if path.suffix in _STYLE_SUFFIXES:
             declared = _ANY_RULE_RE.findall(text)
             if declared:
@@ -347,4 +355,14 @@ def test_fragmentation_only_shrinks(dimension: str) -> None:
     assert actual == baseline, (
         f"{dimension} is down to {actual} but the baseline still says {baseline} — "
         "lower it in the commit that did the work, so the number stays a deliberate claim"
+    )
+
+
+def test_css_rule_declarations_do_not_rise() -> None:
+    """#19283: measured on this tree and on the base commit's; no hand-maintained number.
+    Two PRs that each remove rules no longer conflict on one constant."""
+    now, base = _measure()["css_rule_declarations"], _measure_base()["css_rule_declarations"]
+    assert now <= base, (
+        f"css_rule_declarations rose from {base} at the base to {now} (#12730, #12731).\n"
+        f"{_ADVICE['css_rule_declarations']}"
     )

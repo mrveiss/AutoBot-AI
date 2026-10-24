@@ -272,19 +272,27 @@ def check_runs_for(repository: str, sha: str) -> list[dict]:
         return _read_check_runs_once(repository, sha)
 
 
-def count_runs_named(repository: str, sha: str, pattern: str) -> int:
-    """How many check runs on ``sha`` have a name matching ``pattern`` (case-insensitive)."""
+def count_runs_named(repository: str, sha: str, pattern: str, *, pending_only: bool = False) -> int:
+    """How many check runs on ``sha`` have a name matching ``pattern`` (case-insensitive).
+
+    With ``pending_only``, only those not yet ``completed`` (queued, in progress, waiting):
+    the CodeQL ceiling gate waits on these instead of failing on a scan still running (#18123).
+    """
     rx = re.compile(pattern, re.IGNORECASE)
-    return sum(1 for run in check_runs_for(repository, sha) if rx.search(run.get("name", "")))
+    return sum(
+        1
+        for run in check_runs_for(repository, sha)
+        if rx.search(run.get("name", "")) and not (pending_only and run.get("status") == "completed")
+    )
 
 
 def main(argv: list[str]) -> int:
-    """``count-named REPO SHA REGEX`` -- prints the count; nonzero exit on any failed read."""
-    if len(argv) != 4 or argv[0] != "count-named":
-        print("usage: check_run_status.py count-named REPO SHA REGEX", file=sys.stderr)
+    """``count-named|pending-named REPO SHA REGEX`` -- prints the count; nonzero exit on any failed read."""
+    if len(argv) != 4 or argv[0] not in ("count-named", "pending-named"):
+        print("usage: check_run_status.py count-named|pending-named REPO SHA REGEX", file=sys.stderr)
         return 2
     try:
-        print(count_runs_named(argv[1], argv[2], argv[3]))
+        print(count_runs_named(argv[1], argv[2], argv[3], pending_only=argv[0] == "pending-named"))
     except (CheckRunsIncomplete, subprocess.CalledProcessError, ValueError, re.error) as exc:
         print(f"check_run_status: {exc}", file=sys.stderr)
         return 1
