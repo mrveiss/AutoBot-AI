@@ -54,7 +54,7 @@
             @select="handleCompletionSelect"
           />
           <div class="terminal-input-line">
-            <span class="prompt" v-html="currentPrompt"></span>
+            <span class="prompt" v-html="promptHtml"></span>
             <input
               ref="terminalInput"
               v-model="currentInput"
@@ -153,7 +153,7 @@ import CompletionSuggestions from './CompletionSuggestions.vue';
 import TerminalHeader from './TerminalHeader.vue';
 import { createLogger } from '@/utils/debugUtils';
 import { useTabCompletion } from '@/composables/useTabCompletion';
-import { escapeHtml } from '@/utils/sanitize';
+import { escapeHtml, sanitizeHtml } from '@/utils/sanitize';
 import { buildAutomationSteps, exampleWorkflow, useAutomationPacing, workflowStartedLines } from '@/composables/useAutomationPacing';
 
 const logger = createLogger('TerminalWindow');
@@ -210,6 +210,7 @@ export default {
     const outputLines = ref([]);
     const currentInput = ref('');
     const currentPrompt = ref('$ ');
+    const promptHtml = computed(() => sanitizeHtml(escapeHtml(currentPrompt.value), 'plain')); // #19118: raw prompt, escaped at render
     const connectionStatus = ref('disconnected');
     const connecting = ref(false);
     const showCursor = ref(true);
@@ -952,9 +953,7 @@ export default {
       });
     };
 
-    const handlePromptChange = (prompt) => {
-      currentPrompt.value = prompt;
-    };
+    const handlePromptChange = (prompt) => { currentPrompt.value = prompt; };
 
     const handleStatusChange = (status) => {
       const oldStatus = connectionStatus.value;
@@ -1184,6 +1183,7 @@ export default {
       outputLines,
       currentInput,
       currentPrompt,
+      promptHtml,
       connectionStatus,
       connecting,
       showCursor,

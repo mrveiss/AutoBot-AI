@@ -20,7 +20,21 @@ import pytest
 jinja2 = pytest.importorskip("jinja2")
 yaml = pytest.importorskip("yaml")
 
-_ROLE = Path(__file__).resolve().parents[1] / "ansible" / "roles" / "common"
+_ANSIBLE = Path(__file__).resolve().parents[1] / "ansible"
+_ROLE = _ANSIBLE / "roles" / "common"
+_GROUP_VARS_ALL = _ANSIBLE / "inventory" / "group_vars" / "all.yml"
+
+
+def _inventory_autobot() -> dict:
+    """The `autobot` fact `group_vars/all.yml` supplies to every play (#18882).
+
+    The logrotate template builds its log glob from `{{ autobot.base_dir }}`, so the
+    render needs that variable. Read from the SSOT file rather than restated here, the
+    same way test_cleanup_never_destroys_data_14856.py resolves it.
+    """
+    data = yaml.safe_load(_GROUP_VARS_ALL.read_text(encoding="utf-8"))
+    assert "base_dir" in data.get("autobot", {}), f"{_GROUP_VARS_ALL} no longer defines autobot.base_dir"
+    return data["autobot"]
 
 
 def _render(template: str, **ctx) -> str:
@@ -52,11 +66,20 @@ def test_timer_override_clears_the_vendor_oncalendar_first():
 
 def test_maxsize_cap_still_present_in_logrotate_config():
     """The drop-in only makes the cap enforceable — the cap itself must remain."""
-    rendered = _render("autobot-logrotate.j2")
+    rendered = _render("autobot-logrotate.j2", autobot=_inventory_autobot())
     assert "maxsize 100M" in rendered
     # copytruncate is load-bearing: every unit writes with StandardOutput=append:
     # and holds the fd open, so a rename-based rotation would strand the writer.
     assert "copytruncate" in rendered
+
+
+def test_runtime_log_glob_follows_the_install_root():
+    """#18882: the runtime-log stanza is built from `autobot.base_dir`, so a different root moves it."""
+    root = "/srv/autobot-render-test"
+    rendered = _render("autobot-logrotate.j2", autobot={**_inventory_autobot(), "base_dir": root})
+    assert f"{root}/logs/*.log {{" in rendered
+    default = _inventory_autobot()["base_dir"]
+    assert f"{default}/logs/*.log" not in rendered
 
 
 def test_task_installs_dropin_and_notifies_a_real_handler():

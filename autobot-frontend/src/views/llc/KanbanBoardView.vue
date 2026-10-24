@@ -137,6 +137,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseAvatar } from '@autobot/ui'
 import { ref, computed, onMounted, defineComponent, h } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
@@ -304,11 +305,7 @@ async function fetchBoard() {
 // Inline card component to avoid extra file
 const KanbanCard = defineComponent({
   props: { item: { type: Object as () => BoardCard, required: true } },
-  setup(props) {
-    function initials(name: string) {
-      return name.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()
-    }
-    return () => h('div', { class: 'kanban-card-inner' }, [
+  setup(props) {    return () => h('div', { class: 'kanban-card-inner' }, [
       h('div', { class: 'card-header-row' }, [
         h('span', { class: 'card-id' }, props.item.identifier),
         h(WorkItemBadge, { kind: 'type', value: props.item.type, size: 'xs' }),
@@ -321,7 +318,7 @@ const KanbanCard = defineComponent({
         h(WorkItemBadge, { kind: 'priority', value: props.item.priority, variant: 'dot', size: 'xs' }),
         props.item.story_points ? h('span', { class: 'card-pts' }, String(props.item.story_points)) : null,
         props.item.assignee_name
-          ? h('span', { class: 'card-avatar', title: props.item.assignee_name }, initials(props.item.assignee_name))
+          ? h(BaseAvatar, { class: 'card-avatar', name: props.item.assignee_name, size: 'xs', variant: 'primary' })
           : null,
       ]),
     ])
@@ -543,16 +540,6 @@ onMounted(async () => {
 
 .card-avatar {
   margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.4rem;
-  height: 1.4rem;
-  border-radius: 50%;
-  background: var(--color-primary);
-  color: white;
-  font-size: 0.55rem;
-  font-weight: 600;
 }
 
 .column-empty {

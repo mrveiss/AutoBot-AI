@@ -46,7 +46,7 @@
 # directory answered "no data" without anyone having looked (#14856).
 - name: "{{ caller_role }} | Legacy: probe {{ dir_name }} for data (#14856)"
   ansible.builtin.stat:
-    path: "/opt/autobot/{{ dir_name }}/data"
+    path: "{{ autobot.base_dir }}/{{ dir_name }}/data"
   register: _legacy_data_stat
   tags: ['clean']
 
@@ -55,8 +55,8 @@
     path: "{{ item }}"
   register: _legacy_stats
   loop:
-    - "/opt/autobot/{{ _legacy_canonical }}"
-    - "/opt/autobot/{{ _legacy_canonical }}/data"
+    - "{{ autobot.base_dir }}/{{ _legacy_canonical }}"
+    - "{{ autobot.base_dir }}/{{ _legacy_canonical }}/data"
   when: _legacy_canonical | length > 0
   tags: ['clean']
 
@@ -77,9 +77,9 @@
 # neither place.
 - name: "{{ caller_role }} | Legacy: MIGRATE {{ dir_name }}/data to {{ _legacy_canonical }}/data (#14856)"
   ansible.builtin.command:
-    cmd: "mv /opt/autobot/{{ dir_name }}/data /opt/autobot/{{ _legacy_canonical }}/data"
-    removes: "/opt/autobot/{{ dir_name }}/data"
-    creates: "/opt/autobot/{{ _legacy_canonical }}/data"
+    cmd: "mv {{ autobot.base_dir }}/{{ dir_name }}/data {{ autobot.base_dir }}/{{ _legacy_canonical }}/data"
+    removes: "{{ autobot.base_dir }}/{{ dir_name }}/data"
+    creates: "{{ autobot.base_dir }}/{{ _legacy_canonical }}/data"
   become: true
   when:
     - _legacy_has_data | bool
@@ -90,7 +90,7 @@
 
 - name: "{{ caller_role }} | Legacy: verify the migration landed before removing anything (#14856)"
   ansible.builtin.stat:
-    path: "/opt/autobot/{{ _legacy_canonical }}/data"
+    path: "{{ autobot.base_dir }}/{{ _legacy_canonical }}/data"
   register: _legacy_migrated_check
   when: _legacy_migrated.changed | default(false)
   tags: ['clean']
@@ -98,7 +98,7 @@
 - name: "{{ caller_role }} | Legacy: migration did not land — keeping {{ dir_name }} (#14856)"
   ansible.builtin.fail:
     msg: >-
-      Moved /opt/autobot/{{ dir_name }}/data to /opt/autobot/{{ _legacy_canonical }}/data
+      Moved {{ autobot.base_dir }}/{{ dir_name }}/data to {{ autobot.base_dir }}/{{ _legacy_canonical }}/data
       but the target is not there afterwards. Refusing to continue; the legacy
       directory is untouched and the data is not lost.
   when:
@@ -109,7 +109,7 @@
 - name: "{{ caller_role }} | Legacy: BOTH paths hold data — not guessing which wins (#14856)"
   ansible.builtin.debug:
     msg: >-
-      /opt/autobot/{{ dir_name }}/data and /opt/autobot/{{ _legacy_canonical }}/data
+      {{ autobot.base_dir }}/{{ dir_name }}/data and {{ autobot.base_dir }}/{{ _legacy_canonical }}/data
       both exist. Merging them is a judgement about live state, so neither is
       touched and {{ dir_name }} is left in place. Reconcile them deliberately,
       then remove the legacy directory by hand.
@@ -121,7 +121,7 @@
 - name: "{{ caller_role }} | Legacy: no canonical target for {{ dir_name }} — keeping it (#14856)"
   ansible.builtin.debug:
     msg: >-
-      /opt/autobot/{{ dir_name }} holds data but has no known canonical path to
+      {{ autobot.base_dir }}/{{ dir_name }} holds data but has no known canonical path to
       migrate to, so it stays. Add it to the mapping in clean_legacy_dir.yml if
       it should be retired.
   when:
@@ -154,6 +154,6 @@
   ansible.builtin.include_tasks: ../../_shared/tasks/remove_component_dir.yml
   when: _legacy_safe_to_remove | bool
   vars:
-    remove_dir_path: "/opt/autobot/{{ dir_name }}"
+    remove_dir_path: "{{ autobot.base_dir }}/{{ dir_name }}"
     remove_reason: "legacy path retired in favour of {{ _legacy_canonical | default('its canonical location') }}"
   tags: ['clean']
