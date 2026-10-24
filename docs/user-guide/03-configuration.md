@@ -19,7 +19,7 @@ SLM Admin > Settings has these sections:
 
 | Section | Covers |
 |---------|--------|
-| General | System configuration; re-run the Setup Wizard |
+| General | System configuration; **Launch Wizard** and **Reset Wizard** for the Setup Wizard |
 | Monitoring, Notifications | Monitoring and alert delivery |
 | Security | MFA and API keys |
 | API, Backend | API and backend settings |

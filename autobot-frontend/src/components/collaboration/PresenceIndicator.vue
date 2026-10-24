@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseAvatar } from '@autobot/ui'
 /**
  * Presence Indicator Component
  *
@@ -12,15 +13,6 @@ import { useSessionCollaboration, type UserPresence } from '@/composables/useSes
 
 const { sessionPresence, myPresence, isConnected } = useSessionCollaboration()
 
-// Get status color
-const getStatusColor = (status: UserPresence['status']): string => {
-  switch (status) {
-    case 'online': return 'bg-green-500'
-    case 'away': return 'bg-yellow-500'
-    case 'offline': return 'bg-autobot-text-muted'
-    default: return 'bg-autobot-text-muted'
-  }
-}
 
 // Get tab icon
 const getTabIcon = (tab?: UserPresence['currentTab']): string => {
@@ -34,15 +26,18 @@ const getTabIcon = (tab?: UserPresence['currentTab']): string => {
   }
 }
 
-// Get initials from username
-const getInitials = (username: string): string => {
-  return username
-    .split(/[\s_-]/)
-    .map(part => part[0])
-    .join('')
-    .toUpperCase()
-    .substring(0, 2)
-}
+
+type Translate = (key: string, named: Record<string, unknown>) => string
+
+// #14780: compact avatars are decorative, so each wrapper is named for the person and status.
+const presenceLabel = (tr: Translate, p: UserPresence, isMe = false): string =>
+  isMe
+    ? tr('collaboration.presenceIndicator.youStatus', { status: p.status })
+    : tr('collaboration.presenceIndicator.collaboratorTooltip', {
+        username: p.username,
+        status: p.status,
+        tab: p.currentTab || tr('collaboration.presenceIndicator.unknownTab', {}),
+      })
 
 // Other collaborators (excluding myself)
 const otherCollaborators = computed<UserPresence[]>(() => {
@@ -64,17 +59,11 @@ const props = defineProps<{
       <div
         v-if="myPresence"
         class="relative"
-        :title="$t('collaboration.presence.youStatus', { status: myPresence.status })"
+        :title="presenceLabel($t, myPresence, true)"
+        role="img"
+        :aria-label="presenceLabel($t, myPresence, true)"
       >
-        <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-xs font-medium text-white ring-2 ring-autobot-bg-secondary">
-          {{ getInitials(myPresence.username) }}
-        </div>
-        <span
-          :class="[
-            'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-autobot-bg-secondary',
-            getStatusColor(myPresence.status)
-          ]"
-        />
+        <BaseAvatar :name="myPresence.username" size="md" variant="primary" :status="myPresence.status" ring decorative />
       </div>
 
       <!-- Other collaborators (stacked) -->
@@ -84,17 +73,11 @@ const props = defineProps<{
           :key="collaborator.userId"
           class="relative"
           :style="{ zIndex: 3 - index }"
-          :title="$t('collaboration.presence.collaboratorTooltip', { name: collaborator.username, status: collaborator.status, tab: collaborator.currentTab || $t('collaboration.presence.unknownTab') })"
+          :title="presenceLabel($t, collaborator)"
+          role="img"
+          :aria-label="presenceLabel($t, collaborator)"
         >
-          <div class="w-7 h-7 rounded-full bg-autobot-bg-tertiary flex items-center justify-center text-xs font-medium text-autobot-text-primary ring-2 ring-autobot-bg-secondary">
-            {{ getInitials(collaborator.username) }}
-          </div>
-          <span
-            :class="[
-              'absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-autobot-bg-secondary',
-              getStatusColor(collaborator.status)
-            ]"
-          />
+          <BaseAvatar :name="collaborator.username" size="sm" :status="collaborator.status" ring decorative />
         </div>
       </div>
 
@@ -128,15 +111,7 @@ const props = defineProps<{
         class="flex items-center gap-3 p-2 bg-blue-500/10 rounded-lg border border-blue-500/20"
       >
         <div class="relative">
-          <div class="w-9 h-9 rounded-full bg-blue-600 flex items-center justify-center text-sm font-medium text-white">
-            {{ getInitials(myPresence.username) }}
-          </div>
-          <span
-            :class="[
-              'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-autobot-bg-secondary',
-              getStatusColor(myPresence.status)
-            ]"
-          />
+          <BaseAvatar :name="myPresence.username" size="md" variant="primary" :status="myPresence.status" decorative />
         </div>
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2">
@@ -159,15 +134,7 @@ const props = defineProps<{
         class="flex items-center gap-3 p-2 bg-autobot-bg-tertiary/50 rounded-lg hover:bg-autobot-bg-tertiary transition-colors"
       >
         <div class="relative">
-          <div class="w-9 h-9 rounded-full bg-autobot-bg-tertiary flex items-center justify-center text-sm font-medium text-autobot-text-primary">
-            {{ getInitials(collaborator.username) }}
-          </div>
-          <span
-            :class="[
-              'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-autobot-bg-secondary',
-              getStatusColor(collaborator.status)
-            ]"
-          />
+          <BaseAvatar :name="collaborator.username" size="md" :status="collaborator.status" decorative />
         </div>
         <div class="flex-1 min-w-0">
           <div class="text-sm font-medium text-autobot-text-primary truncate">
