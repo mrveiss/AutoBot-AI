@@ -90,8 +90,9 @@ HARDCODED_COLOUR_LITERALS: dict[str, int] = {
     "#ffffff": 3,
 }
 
-#: Frozen total, asserted separately so a per-literal edit cannot drift it unseen.
-TOTAL_OCCURRENCES = 53
+# No hand-maintained totals here (#19283): each entry is compared with this table at the base
+# commit (repo_tests/_ratchet_base.py), so a raised entry still fails and PRs lowering different
+# entries never edit a shared line.
 
 
 #: ``path under autobot-frontend/src -> `!important` declarations in its <style>``.
@@ -134,6 +135,3 @@ IMPORTANT_DECLARATIONS: dict[str, int] = {
     "slm:components/monitoring/GrafanaDashboard.vue": 1,
     "slm:views/AgentsView.vue": 2,
 }
-
-#: Frozen total, asserted separately.
-TOTAL_IMPORTANT = 60  # #14780: 61 -> 60, SourcePreviewPanel onto BaseDrawer; #18242: 62 -> 61 (DashboardGrid)

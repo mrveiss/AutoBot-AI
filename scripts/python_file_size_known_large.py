@@ -109,7 +109,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/knowledge_tags.py": 887,
     "autobot-backend/api/knowledge_vectorization.py": 1690,
     "autobot-backend/api/knowledge_vectorization_test.py": 601,
-    "autobot-backend/api/llm.py": 1078,
+    "autobot-backend/api/llm.py": 1060,
     "autobot-backend/api/llm_optimization.py": 725,
     "autobot-backend/api/log_forwarding.py": 761,  # #18734: one served-destination helper (777 -> 761)
     "autobot-backend/api/logs.py": 1027,
@@ -214,7 +214,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/judges/multi_agent_arbitrator.py": 611,
     "autobot-backend/judges/security_risk_judge.py": 842,
     "autobot-backend/knowledge/adapters/okf_adapter.py": 770,
-    "autobot-backend/knowledge/base.py": 709,
+    "autobot-backend/knowledge/base.py": 704,
     "autobot-backend/knowledge/bulk.py": 2013,
     "autobot-backend/knowledge/categories.py": 965,
     "autobot-backend/knowledge/collections.py": 728,
