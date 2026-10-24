@@ -19,7 +19,8 @@ from pathlib import Path
 
 import pytest
 from repo_tests._paths import repo_root
-from repo_tests._raw_palette_baseline import RAW_PALETTE_CLASSES, TOTAL_OCCURRENCES
+from repo_tests._ratchet_base import base_table, raised_entries
+from repo_tests._raw_palette_baseline import RAW_PALETTE_CLASSES
 from repo_tests._raw_palette_detect import (
     RAW_PALETTE_CLASS,
     REACH_PALETTE_FILES,
@@ -97,8 +98,11 @@ class TestThePopulationOnlyShrinks:
         )
         assert any(f.startswith(SLM_KEY_PREFIX) for f in read), "the control plane was never opened"
 
-    def test_the_total_matches_the_entries(self):
-        assert TOTAL_OCCURRENCES == sum(RAW_PALETTE_CLASSES.values())
+    def test_no_entry_rose_against_the_base(self):
+        """#19283: the tripwire for a raised entry is the base commit's table, not a hand total."""
+        base = base_table(repo_root(), ("repo_tests/_raw_palette_baseline.py",), "RAW_PALETTE_CLASSES")
+        rose = raised_entries(RAW_PALETTE_CLASSES, base)
+        assert not rose, f"entries raised or added against the base (base, now): {rose}. {_FIX}"
 
     def test_no_entry_is_zero(self):
         assert all(n > 0 for n in RAW_PALETTE_CLASSES.values())
@@ -107,12 +111,9 @@ class TestThePopulationOnlyShrinks:
         grew = {k: (RAW_PALETTE_CLASSES.get(k, 0), n) for k, n in measured.items() if n > RAW_PALETTE_CLASSES.get(k, 0)}
         assert not grew, f"raw palette classes used more often than pinned (pinned, now): {grew}. {_FIX}"
 
-    def test_the_total_never_rises(self, measured):
-        assert sum(measured.values()) <= TOTAL_OCCURRENCES, _FIX
-
     def test_a_drained_class_leaves_the_baseline(self, measured):
         stale = sorted(k for k, n in RAW_PALETTE_CLASSES.items() if measured.get(k, 0) < n)
         assert not stale, (
-            "fewer uses than pinned -- lower the entry (or delete it at zero) and TOTAL_OCCURRENCES, "
+            "fewer uses than pinned -- lower the entry (or delete it at zero), "
             f"or the freed headroom lets the class come back: {stale}"
         )

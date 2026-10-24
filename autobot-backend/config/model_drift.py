@@ -14,6 +14,7 @@ rewritten and no behaviour changes.
 import logging  # stdlib: avoids deadlock — config is on the logging-manager init path (GH#7765 pattern)
 from typing import Any, Dict, List, Tuple
 
+from autobot_shared.embedding_model import active_embedding_model
 from autobot_shared.ssot_config import config
 
 logger = logging.getLogger(__name__)
@@ -29,7 +30,7 @@ def _bare(model: str) -> str:
 
 def _tier_model(path: List[str]) -> str:
     """The tier-map model a ``backend.llm.*`` provider block should select."""
-    return config.llm.embedding_model if "embedding" in path else config.llm.default_model
+    return active_embedding_model() if "embedding" in path else config.llm.default_model  # #19377
 
 
 def _walk(node: Any, path: List[str], out: List[Drift]) -> None:

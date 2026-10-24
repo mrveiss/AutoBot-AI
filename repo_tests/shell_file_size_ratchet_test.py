@@ -21,6 +21,7 @@ import importlib.util
 import pytest
 import yaml
 from repo_tests._paths import repo_root
+from repo_tests._ratchet_base import base_table, raised_entries
 from repo_tests.shell_file_size_ratchet_baseline import RATCHET_BASELINE
 
 #: Asks git first, so a worktree resolves to its own tree (#15925). Deriving it
@@ -209,3 +210,15 @@ def test_an_unreadable_file_is_a_violation_not_a_skip(hook):
     message = hook.unmeasured("scripts/gone.sh")
     assert "never measured" in message
     assert "not a passing one" in message
+
+
+def test_no_ceiling_rose_against_the_base(hook):
+    """#19283: each KNOWN_LARGE entry is at most what the base commit's table recorded, and an
+    entry the base did not have is a raise. The fixed reference a sum or a mirrored pair could
+    not give: a two-sided raise moves both records together, never the base commit."""
+    base = base_table(repo_root(), ("scripts/check_shell_file_size.py",), "KNOWN_LARGE")
+    rose = raised_entries(dict(hook.KNOWN_LARGE), base)
+    assert not rose, (
+        f"ceilings raised or added against the base (base, now): {rose}. Split the file instead "
+        "of raising its ceiling; raises are refused, against the base and the last green main."
+    )
