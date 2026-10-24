@@ -444,7 +444,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/services/backup.py": 777,
     "autobot-slm-backend/services/blue_green.py": 1282,
     "autobot-slm-backend/services/deployment.py": 705,
-    "autobot-slm-backend/services/drift_checker.py": 839,
+    "autobot-slm-backend/services/drift_checker.py": 838,
     "autobot-slm-backend/services/drift_checker_test.py": 1351,
     "autobot-slm-backend/services/inventory_builder.py": 710,
     "autobot-slm-backend/services/playbook_executor.py": 1399,  # #17150: ansible_dir self-heal, re-detect before sync
