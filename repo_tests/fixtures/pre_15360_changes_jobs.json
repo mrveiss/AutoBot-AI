@@ -1297,7 +1297,7 @@
   },
   "other_jobs_sha256": {
    "compliance-check": "123899e0-fd587e01-b14084dd-0e8759c8-fe7288b4-9ffd527b-46a3f255-e6168d12",
-   "dependency-security": "df69eea4-4640e723-3d0139e1-7cf03735-35c2af86-2d36366e-098371e6-9fa5cff5",
+   "dependency-security": "6334633a-24286fb3-8c6c99f0-05696a9e-86333882-1e6cb445-e1c469ed-721ee1fd",
    "secret-detection": "1a70dd4d-b07dda90-8885db96-e999d7fa-2ebac94b-4549aee2-a00815ba-ad431d1d",
    "security-summary": "d7ada57f-e7d14e7d-4559749f-a7e4e3e6-44b5e914-96e7e4aa-fb0a26fc-7de2aaa9",
    "static-analysis": "f27cd020-be74dfdc-a50d1946-f1e0d1c6-bdef6255-f121145c-5dcbd146-02398fee"

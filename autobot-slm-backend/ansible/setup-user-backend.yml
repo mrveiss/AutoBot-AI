@@ -32,7 +32,7 @@
     # /opt/autobot_shared instead of /opt/autobot/autobot_shared). Declare the
     # root under its own name and derive backend_install_dir FROM it, so the
     # role's `| dirname` convention still lands on /opt/autobot.
-    backend_deployed_root: /opt/autobot
+    backend_deployed_root: "{{ autobot.base_dir }}"
     backend_install_dir: "{{ backend_deployed_root }}/autobot-backend"
     backend_code_dir: "{{ backend_install_dir }}"
     # #15560/3: this was `backend_shared_dir` -- the right value under a name

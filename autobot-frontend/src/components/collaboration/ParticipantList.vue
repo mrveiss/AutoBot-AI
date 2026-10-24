@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseAvatar } from '@autobot/ui'
 /**
  * Participant List Component
  *
@@ -119,24 +120,7 @@ const getRoleBadge = (role: ParticipantWithRole['role']): { color: string; label
   }
 }
 
-// Get status color
-const getStatusColor = (status: UserPresence['status']): string => {
-  switch (status) {
-    case 'online': return 'bg-green-500'
-    case 'away': return 'bg-yellow-500'
-    case 'offline': return 'bg-autobot-text-muted'
-  }
-}
 
-// Get initials from username
-const getInitials = (username: string): string => {
-  return username
-    .split(/[\s_-]/)
-    .map(part => part[0])
-    .join('')
-    .toUpperCase()
-    .substring(0, 2)
-}
 
 // Toggle role menu
 const toggleRoleMenu = (userId: string) => {
@@ -262,19 +246,7 @@ watch(
           <div class="flex items-start gap-3">
             <!-- Avatar -->
             <div class="relative shrink-0">
-              <div
-                class="w-10 h-10 rounded-full flex items-center justify-center text-sm font-medium"
-                :class="virtualItem.data.userId === myPresence?.userId ? 'bg-blue-600 text-white' : 'bg-autobot-bg-tertiary text-autobot-text-primary'"
-              >
-                {{ getInitials(virtualItem.data.username) }}
-              </div>
-              <span
-                :class="[
-                  'absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-autobot-bg-secondary',
-                  getStatusColor(virtualItem.data.status)
-                ]"
-                :title="virtualItem.data.status"
-              />
+              <BaseAvatar :name="virtualItem.data.username" size="lg" :variant="virtualItem.data.userId === myPresence?.userId ? 'primary' : 'neutral'" :status="virtualItem.data.status" decorative />
             </div>
 
             <!-- Info -->

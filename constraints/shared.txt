@@ -23,3 +23,8 @@ openvino>=2026.4.1
 # croniter: the cron engine behind the shared 5-field validator, the backend triggers, the LLC
 # routine scheduler and the SLM schedule executor (#18449). Was declared in two files.
 croniter>=6.2.4
+
+# filelock: runtime dependency via torch (unbounded `filelock` requirement) and the HF stack.
+# Floor at the release fixing CVE-2026-112940, CVE-2026-112913 and CVE-2026-112907 (#19426).
+# Was also a stale 3.20.1 floor in ansible dependency_patching; that restatement is removed.
+filelock>=4.2.1

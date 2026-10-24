@@ -45,11 +45,12 @@ def _frontend_source_files(root) -> list[str]:
 
 
 #: Bound at the 1,411 .vue/.ts/.js files measured under autobot-frontend/src/
-#: when this guard was introduced (#16299).
+#: when this guard was introduced (#16299). Train 84: re-pinned mid-window [1397, 1547]
+#: on a population of 1547.
 REACH = declare(
     "vnc-password-not-in-frontend-source",
     discover=_frontend_source_files,
-    floor=1411,
+    floor=1472,
     growth=150,
     skips=0,
     what="frontend .vue/.ts/.js source files",
