@@ -45,11 +45,11 @@ def _workflow_files(root: Path) -> list[Path]:
     return sorted(p for p in directory.iterdir() if p.suffix == ".yml") if directory.is_dir() else []
 
 
-#: 69 workflow files at #18208; a floor well below so a moved or emptied tree fails, not passes.
+#: 69 workflow files at #18208; repinned by scripts/repin_reach_floors.py, so a moved or emptied tree fails.
 REACH = declare(
     "docker-smoke-context-publishers",
     discover=_workflow_files,
-    floor=50,
+    floor=69,  # mid-window: population 69, window (69, 69)
     what="workflow files",
     roots=(".github/workflows",),
 )
