@@ -19,13 +19,15 @@ from __future__ import annotations
 import uuid
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, Form, HTTPException
+from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
 from api.schemas_realtime_session import RealtimeSessionSummary
 from api.user_management.dependencies import get_current_user
+from api.voice_bundle_helpers import voice_bundle_user_id
 from auth_middleware import check_admin_permission
+from autobot_shared.auth.permissions import Role, is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import get_config
 from voice_processing.realtime.base import RealtimeProviderError
@@ -215,16 +217,28 @@ async def ingest_response_done(session_id: str, body: ResponseDoneRequest) -> di
 
 
 @router.post("/tools/call")
-async def call_realtime_tool(body: ToolCallRequest, current_user: dict = Depends(get_current_user)) -> dict:
-    """Route a Realtime tool call through the MCP bridge (#7343); its AI line is resolved first (#18430)."""
+async def call_realtime_tool(
+    body: ToolCallRequest, request: Request, current_user: dict = Depends(get_current_user)
+) -> dict:
+    """The one handler for ``POST /api/voice/realtime/tools/call`` (#7343, #18721).
+
+    Only a tool in the caller's active voice bundle may run (403 otherwise), and the call carries the
+    authenticated session, user and company, never the model's (#18430). ``X-Session-Id`` stands in when the
+    body names no session.
+    """
     from services.realtime_mcp_bridge import get_realtime_bridge
 
-    bridge = await get_realtime_bridge()
+    role = current_user.get("role") or Role.USER.value
+    user_id = voice_bundle_user_id(current_user)  # the same key the listing endpoint resolves the bundle by
+    bridge = await get_realtime_bridge(is_admin=is_admin_role(role))  # #12717
+    allowed = {t.name for t in await bridge.list_realtime_tools(user_id=user_id, role=role)}
+    if body.name not in allowed:
+        raise HTTPException(status_code=403, detail="Tool not permitted in active voice bundle")
     result = await bridge.call_tool(
         name=body.name,
         arguments=body.arguments,
-        session_id=body.session_id,
-        user_id=current_user.get("id") or current_user.get("sub"),
+        session_id=body.session_id or request.headers.get("X-Session-Id"),
+        user_id=user_id,
         company_id=current_user.get("org_id"),
     )
     return {"call_id": body.call_id, "content": result.content, "is_error": result.is_error}

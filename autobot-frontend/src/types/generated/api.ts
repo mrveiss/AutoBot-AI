@@ -11278,26 +11278,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/voice/realtime/tools/call": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Call Realtime Tool
-         * @description Route a Realtime tool call through the MCP bridge (#7343); its AI line is resolved first (#18430).
-         */
-        post: operations["call_realtime_tool_api_voice_realtime_tools_call_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/voice/listen": {
         parameters: {
             query?: never;
@@ -52937,32 +52917,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Get Context
-         * @description Get assembled heartbeat context for a work item (GH#8236).
-         *
-         *     Returns rich context with company goals, project/agent KB, and similar
-         *     past work items. Context is compressed with gzip before storage.
-         *
-         *     Args:
-         *         item_id: Work item UUID
-         *         mode: "thin" or "fat" context mode
-         *         session: DB session
-         *         ctx: Tenant context — its ``org_id`` scopes the whole assembled
-         *             context, so another company's item id reads as 404 (#13756)
-         *
-         *     Returns:
-         *         Dict with assembled context:
-         *         - work_item_id, work_item_detail
-         *         - goal_ancestry (parent chain)
-         *         - company_context, project_context, agent_memory (RAG results)
-         *         - similar_past_work (completed items)
-         *         - api_base, agent_api_key (runtime injection)
-         *
-         *     Raises:
-         *         404: Work item not found
-         *         422: Invalid context_mode
+         * Get Item Context
+         * @description Return agent context for a work item, including any human handoff KB notes (GH#8232).
          */
-        get: operations["get_context_api_llc_agent_context__item_id__get"];
+        get: operations["get_item_context_api_llc_agent_context__item_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -53549,6 +53507,48 @@ export interface paths {
         head?: never;
         /** Update Review Gate Policy */
         patch: operations["update_review_gate_policy_api_llc_companies__company_id__review_gate_policies__policy_id__patch"];
+        trace?: never;
+    };
+    "/api/llc/context/{item_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Context
+         * @description Get assembled heartbeat context for a work item (GH#8236).
+         *
+         *     Returns rich context with company goals, project/agent KB, and similar
+         *     past work items. Context is compressed with gzip before storage.
+         *
+         *     Args:
+         *         item_id: Work item UUID
+         *         mode: "thin" or "fat" context mode
+         *         session: DB session
+         *         ctx: Tenant context — its ``org_id`` scopes the whole assembled
+         *             context, so another company's item id reads as 404 (#13756)
+         *
+         *     Returns:
+         *         Dict with assembled context:
+         *         - work_item_id, work_item_detail
+         *         - goal_ancestry (parent chain)
+         *         - company_context, project_context, agent_memory (RAG results)
+         *         - similar_past_work (completed items)
+         *         - api_base, agent_api_key (runtime injection)
+         *
+         *     Raises:
+         *         404: Work item not found
+         *         422: Invalid context_mode
+         */
+        get: operations["get_context_api_llc_context__item_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/llc/companies/{company_id}/controls/agents/{agent_id}/pause": {
@@ -54289,6 +54289,30 @@ export interface paths {
          * @description Ingest a response.done payload and enforce soft-caps.
          */
         post: operations["ingest_response_done_api_voice_realtime_session__session_id__response_done_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/voice/realtime/tools/call": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Call Realtime Tool
+         * @description The one handler for ``POST /api/voice/realtime/tools/call`` (#7343, #18721).
+         *
+         *     Only a tool in the caller's active voice bundle may run (403 otherwise), and the call carries the
+         *     authenticated session, user and company, never the model's (#18430). ``X-Session-Id`` stands in when the
+         *     body names no session.
+         */
+        post: operations["call_realtime_tool_api_voice_realtime_tools_call_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -106263,20 +106287,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** _RealtimeToolCallRequest */
-        _RealtimeToolCallRequest: {
-            /** Name */
-            name: string;
-            /**
-             * Arguments
-             * @default {}
-             */
-            arguments: {
-                [key: string]: unknown;
-            };
-        } & {
-            [key: string]: unknown;
-        };
     };
     responses: never;
     parameters: never;
@@ -120666,41 +120676,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
-                };
-            };
-        };
-    };
-    call_realtime_tool_api_voice_realtime_tools_call_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ToolCallRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -178316,11 +178291,9 @@ export interface operations {
             };
         };
     };
-    get_context_api_llc_agent_context__item_id__get: {
+    get_item_context_api_llc_agent_context__item_id__get: {
         parameters: {
-            query?: {
-                mode?: string;
-            };
+            query?: never;
             header?: never;
             path: {
                 item_id: string;
@@ -179633,6 +179606,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ReviewGatePolicyRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_context_api_llc_context__item_id__get: {
+        parameters: {
+            query?: {
+                mode?: string;
+            };
+            header?: never;
+            path: {
+                item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -181327,6 +181335,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ResponseDoneRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    call_realtime_tool_api_voice_realtime_tools_call_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ToolCallRequest"];
             };
         };
         responses: {

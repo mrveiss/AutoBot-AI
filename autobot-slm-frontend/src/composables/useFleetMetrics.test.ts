@@ -4,7 +4,7 @@
 // Author: mrveiss
 
 /**
- * usePrometheusMetrics — metrics transport behaviour (#13140).
+ * useFleetMetrics — metrics transport behaviour (#13140).
  *
  * This composable is the largest of the `getSlmApiBase()` group (9 call sites)
  * and the one with the most to lose from a mechanical swap, because every read
@@ -31,7 +31,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import { usePrometheusMetrics } from './usePrometheusMetrics'
+import { useFleetMetrics } from './useFleetMetrics'
 import { useAuthStore } from '@/stores/auth'
 
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }))
@@ -51,7 +51,7 @@ function textResponse(body: string, status = 200): Response {
 
 /** The composable is used outside a component here, so lifecycle hooks no-op. */
 function metrics() {
-  return usePrometheusMetrics({ autoFetch: false, pollInterval: 0 })
+  return useFleetMetrics({ autoFetch: false, pollInterval: 0 })
 }
 
 function lastInit(mock: ReturnType<typeof vi.fn>): RequestInit {
@@ -62,7 +62,7 @@ function headerOf(init: RequestInit, name: string): string | undefined {
   return (init.headers as Record<string, string>)[name]
 }
 
-describe('usePrometheusMetrics transport', () => {
+describe('useFleetMetrics transport', () => {
   let fetchMock: ReturnType<typeof vi.fn>
   let originalLocation: Location
 
@@ -178,7 +178,7 @@ describe('usePrometheusMetrics transport', () => {
   })
 })
 
-describe('usePrometheusMetrics GPU state and recommendations (#15226)', () => {
+describe('useFleetMetrics GPU state and recommendations (#15226)', () => {
   let fetchMock: ReturnType<typeof vi.fn>
 
   const measured = {
@@ -213,7 +213,7 @@ describe('usePrometheusMetrics GPU state and recommendations (#15226)', () => {
 
   it('reads each node\'s GPUs from the SLM and summarises the measured ones', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ nodes: [nodeStatus('present', [measured])], total: 1 }))
-    const metrics = usePrometheusMetrics({ autoFetch: false })
+    const metrics = useFleetMetrics({ autoFetch: false })
 
     await metrics.fetchGPUDetails()
 
@@ -227,7 +227,7 @@ describe('usePrometheusMetrics GPU state and recommendations (#15226)', () => {
     fetchMock.mockResolvedValueOnce(
       jsonResponse({ nodes: [nodeStatus('none'), nodeStatus('present', [{ ...measured, monitored: false }])], total: 2 }),
     )
-    const metrics = usePrometheusMetrics({ autoFetch: false })
+    const metrics = useFleetMetrics({ autoFetch: false })
 
     await metrics.fetchGPUDetails()
 
@@ -237,7 +237,7 @@ describe('usePrometheusMetrics GPU state and recommendations (#15226)', () => {
 
   it('marks the GPU read unavailable when the SLM does not answer', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ detail: 'boom' }, 500))
-    const metrics = usePrometheusMetrics({ autoFetch: false })
+    const metrics = useFleetMetrics({ autoFetch: false })
 
     await metrics.fetchGPUDetails()
 
@@ -246,7 +246,7 @@ describe('usePrometheusMetrics GPU state and recommendations (#15226)', () => {
   })
 
   it('reports recommendations as unavailable rather than as an empty list', async () => {
-    const metrics = usePrometheusMetrics({ autoFetch: false })
+    const metrics = useFleetMetrics({ autoFetch: false })
 
     await metrics.fetchRecommendations()
 
