@@ -127,7 +127,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/orchestration.py": 610,
     "autobot-backend/api/playwright.py": 877,
     "autobot-backend/api/redis_mcp/tools.py": 658,
-    "autobot-backend/api/schemas_agent.py": 2224,
+    "autobot-backend/api/schemas_agent.py": 2223,
     "autobot-backend/api/schemas_analytics.py": 3533,
     "autobot-backend/api/schemas_chat.py": 702,
     "autobot-backend/api/schemas_code.py": 3265,
@@ -449,7 +449,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-backend/services/backup.py": 777,
     "autobot-slm-backend/services/blue_green.py": 1282,
     "autobot-slm-backend/services/deployment.py": 705,
-    "autobot-slm-backend/services/drift_checker.py": 839,
+    "autobot-slm-backend/services/drift_checker.py": 838,
     "autobot-slm-backend/services/drift_checker_test.py": 1351,
     "autobot-slm-backend/services/inventory_builder.py": 710,
     "autobot-slm-backend/services/playbook_executor.py": 1399,  # #17150: ansible_dir self-heal, re-detect before sync
