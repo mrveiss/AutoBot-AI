@@ -1051,7 +1051,9 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   if [ "$PREPUSH_FULL" != "1" ]; then
     log "fast gate: $(fast_guard_tests | grep -c .) guard tests + reach-floor pins; the full vue-tsc / vitest / pytest suites run in CI (owner 2026-10-25) -- AUTOBOT_PREPUSH_FULL=1 runs them here"
     # The interpreter path alone would let an in-place venv upgrade reuse an old pass (#19550 review)
-    py_env=$("$PYTEST_PYTHON" -VV 2>/dev/null | tr -d '\n'; "$PYTEST_PYTHON" -m pytest --version 2>/dev/null | tr -d '\n')
+    # pytest's version is READ, not run as `-m pytest`: every `-m pytest` line here is a test run
+    # that must deselect reach_floor (#17810), and a version probe is not one.
+    py_env=$("$PYTEST_PYTHON" -VV 2>/dev/null | tr -d '\n'; "$PYTEST_PYTHON" -c 'import pytest; print("pytest", pytest.__version__)' 2>/dev/null | tr -d '\n')
     fast_key=$(stage_key "fast guards|${PYTEST_PYTHON}|${py_env}" "")
     if ! stage_cached "fast guards" "$fast_key"; then
       stage_begin "fast guards" "$fast_key"

@@ -41,7 +41,7 @@ duplication_gate = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(duplication_gate)  # type: ignore[union-attr]
 
 
-class Scope(NamedTuple):
+class DuplicationScope(NamedTuple):
     """One jscpd scope: the env var holding its pin and the log its gate step tees."""
 
     pin_var: str
@@ -50,12 +50,12 @@ class Scope(NamedTuple):
 
 #: Every scope duplication-guard.yml gates. repo_tests/duplication_guard_scopes_18559_test.py
 #: holds this table to the workflow, so dropping a scope from either side fails.
-SCOPES: tuple[Scope, ...] = (
-    Scope("MAX_DUP_LINES", "main-dup.log"),
-    Scope("SLM_MAX_DUP_LINES", "slm-gate.log"),
-    Scope("TOOLING_MAX_DUP_LINES", "tooling-gate.log"),
-    Scope("CROSS_GUI_MAX_DUP_LINES", "cross-gui-gate.log"),
-    Scope("CROSS_BACKEND_MAX_DUP_LINES", "cross-backend-gate.log"),
+SCOPES: tuple[DuplicationScope, ...] = (
+    DuplicationScope("MAX_DUP_LINES", "main-dup.log"),
+    DuplicationScope("SLM_MAX_DUP_LINES", "slm-gate.log"),
+    DuplicationScope("TOOLING_MAX_DUP_LINES", "tooling-gate.log"),
+    DuplicationScope("CROSS_GUI_MAX_DUP_LINES", "cross-gui-gate.log"),
+    DuplicationScope("CROSS_BACKEND_MAX_DUP_LINES", "cross-backend-gate.log"),
 )
 
 

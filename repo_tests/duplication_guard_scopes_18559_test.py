@@ -21,8 +21,8 @@ import pytest
 import yaml
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
 from autobot_shared.symbol_forks import FORK_ROOTS
+from tools.lint._scan_helpers import tracked_paths
 
 WORKFLOW = Path(".github/workflows/duplication-guard.yml")
 
@@ -151,16 +151,9 @@ def _glob_matches(pattern: str, path: str) -> bool:
 
 
 def _tracked(tree: str) -> list[str]:
-    out = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "ls-files", "--", tree],
-        cwd=repo_root(),
-        env=scrubbed_git_env(),
-        capture_output=True,
-        text=True,
-        check=True,
-        timeout=60,
-    ).stdout
-    return [f for f in out.splitlines() if f.rsplit(".", 1)[-1] in _SCANNED and not _IGNORED.search("/" + f)]
+    """Through the canonical enumerator, never a direct `git ls-files` (#15926)."""
+    paths = tracked_paths(repo_root(), tree)
+    return [f for f in paths if f.rsplit(".", 1)[-1] in _SCANNED and not _IGNORED.search("/" + f)]
 
 
 def _uncovered(paths: list[str], trigger_paths: list[str]) -> list[str]:
