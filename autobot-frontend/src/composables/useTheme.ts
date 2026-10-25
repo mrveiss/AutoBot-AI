@@ -62,15 +62,15 @@ const PRESET_STORAGE_KEY = 'autobot-theme-preset'
 const DEFAULT_THEME: Theme = 'light'
 // `theme` = no accent preset: the theme's own primary colour stands (#18223).
 const DEFAULT_ACCENT: AccentColor = 'theme'
-// 'auto' is also the "no preset chosen" sentinel: initTheme/initializeTheme skip
-// applyPreset for it and use the stored individual theme, whose default is light. So a
-// fresh install is light; picking Auto stores theme 'system' and follows the OS.
-const DEFAULT_PRESET: ThemePreset = 'auto'
+// Stored and sent to the server, 'auto' means "no named preset" (the backend default).
+// In memory no preset is null, and the Auto preset is selected only while system theme +
+// theme accent is what is applied. So a fresh install (light) selects nothing (#18252).
+const NO_NAMED_PRESET: ThemePreset = 'auto'
 
 /** Global reactive state (singleton pattern) */
 const currentTheme = ref<Theme>(DEFAULT_THEME)
 const currentAccent = ref<AccentColor>(DEFAULT_ACCENT)
-const currentPreset = ref<ThemePreset>(DEFAULT_PRESET)
+const currentPreset = ref<ThemePreset | null>(null)
 
 /** Track if theme has been initialized */
 let isInitialized = false
@@ -148,9 +148,9 @@ function saveAccentColor(accent: AccentColor): void {
 /**
  * Saves theme preset preference to localStorage
  */
-function savePreset(preset: ThemePreset): void {
+function savePreset(preset: ThemePreset | null): void {
   try {
-    localStorage.setItem(PRESET_STORAGE_KEY, preset)
+    localStorage.setItem(PRESET_STORAGE_KEY, preset ?? NO_NAMED_PRESET)
   } catch {
     // localStorage may be unavailable in some contexts
   }
@@ -198,7 +198,14 @@ function loadPreset(): ThemePreset {
   } catch {
     // localStorage may be unavailable
   }
-  return DEFAULT_PRESET
+  return NO_NAMED_PRESET
+}
+
+/** The preset a stored value selects, given the theme and accent actually applied */
+export function presetFor(stored: ThemePreset, theme: Theme, accent: AccentColor): ThemePreset | null {
+  if (stored !== NO_NAMED_PRESET) return stored
+  const auto = THEME_PRESETS.auto
+  return theme === auto.theme && accent === auto.accentColor ? 'auto' : null
 }
 
 /**
@@ -243,7 +250,7 @@ function applyPreset(preset: ThemePreset): void {
  *   <!-- Use preset picker (recommended) -->
  *   <select v-model="preset" @change="setPreset(preset)">
  *     <option v-for="p in availablePresets" :key="p" :value="p">
- *       {{ THEME_PRESETS[p].name }}
+ *       {{ t(THEME_PRESETS[p].nameKey) }}
  *     </option>
  *   </select>
  *
@@ -276,13 +283,14 @@ export function useTheme() {
     const savedAccent = loadAccentColor()
 
     // If preset is saved, apply it (overrides individual theme/accent)
-    if (savedPreset !== DEFAULT_PRESET) {
+    if (savedPreset !== NO_NAMED_PRESET) {
       currentPreset.value = savedPreset
       applyPreset(savedPreset)
     } else {
       // Otherwise apply individual theme + accent
       currentTheme.value = savedTheme
       currentAccent.value = savedAccent
+      currentPreset.value = presetFor(savedPreset, savedTheme, savedAccent)
       applyTheme(savedTheme)
       applyAccentColor(savedAccent)
     }
@@ -306,9 +314,7 @@ export function useTheme() {
     currentTheme.value = theme
     saveTheme(theme)
     applyTheme(theme)
-    // Clear preset when manually changing theme
-    currentPreset.value = 'auto'
-    savePreset('auto')
+    clearNamedPreset()
   }
 
   /**
@@ -319,9 +325,14 @@ export function useTheme() {
     currentAccent.value = accent
     saveAccentColor(accent)
     applyAccentColor(accent)
-    // Clear preset when manually changing accent
-    currentPreset.value = 'auto'
-    savePreset('auto')
+    clearNamedPreset()
+  }
+
+  /** A manual theme or accent change leaves no named preset; high contrast goes with it */
+  function clearNamedPreset(): void {
+    currentPreset.value = presetFor(NO_NAMED_PRESET, currentTheme.value, currentAccent.value)
+    savePreset(null)
+    document.documentElement.removeAttribute('data-high-contrast')
   }
 
   /**
@@ -436,10 +447,18 @@ export function useTheme() {
   }
 
   /**
-   * i18n keys for accent descriptions that are localised so far
+   * i18n keys for the accent descriptions (#18255)
    */
-  const accentDescriptionKeys: Partial<Record<AccentColor, string>> = {
+  const accentDescriptionKeys: Record<AccentColor, string> = {
     theme: 'ui.themeToggle.accentThemeDescription',
+    blue: 'ui.themeToggle.accentBlueDescription',
+    green: 'ui.themeToggle.accentGreenDescription',
+    purple: 'ui.themeToggle.accentPurpleDescription',
+    orange: 'ui.themeToggle.accentOrangeDescription',
+    pink: 'ui.themeToggle.accentPinkDescription',
+    teal: 'ui.themeToggle.accentTealDescription',
+    indigo: 'ui.themeToggle.accentIndigoDescription',
+    red: 'ui.themeToggle.accentRedDescription',
   }
 
   /**
@@ -455,21 +474,6 @@ export function useTheme() {
     teal: 'Teal',
     indigo: 'Indigo',
     red: 'Red',
-  }
-
-  /**
-   * Accent color descriptions
-   */
-  const accentDescriptions: Record<AccentColor, string> = {
-    theme: "Theme default — the theme's own primary colour",
-    blue: 'Electric Blue — Technical Precision',
-    green: 'Emerald — Growth & Success',
-    purple: 'Violet — Creative & Premium',
-    orange: 'Amber — Energy & Innovation',
-    pink: 'Rose — Friendly & Approachable',
-    teal: 'Cyan — Modern & Professional',
-    indigo: 'Deep Blue — Trust & Stability',
-    red: 'Crimson — Bold & Urgent',
   }
 
   // Initialize on mount if in browser context
@@ -536,9 +540,6 @@ export function useTheme() {
     /** Accent color display labels */
     accentLabels,
 
-    /** Accent color descriptions */
-    accentDescriptions,
-
     /** Preset configurations (for metadata access) */
     THEME_PRESETS,
   }
@@ -554,7 +555,7 @@ export function initializeTheme(): void {
   // Load saved preset first
   const savedPreset = loadPreset()
 
-  if (savedPreset !== DEFAULT_PRESET && savedPreset in THEME_PRESETS) {
+  if (savedPreset !== NO_NAMED_PRESET && savedPreset in THEME_PRESETS) {
     // Apply preset
     const config = THEME_PRESETS[savedPreset]
     currentPreset.value = savedPreset
@@ -571,8 +572,10 @@ export function initializeTheme(): void {
     const savedAccent = loadAccentColor()
     applyTheme(savedTheme)
     applyAccentColor(savedAccent)
+    document.documentElement.removeAttribute('data-high-contrast')
     currentTheme.value = savedTheme
     currentAccent.value = savedAccent
+    currentPreset.value = presetFor(savedPreset, savedTheme, savedAccent)
   }
 
   isInitialized = true
