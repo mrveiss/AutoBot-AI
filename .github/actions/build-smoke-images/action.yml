@@ -1,0 +1,95 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Composite action: build the Docker smoke images from docker/docker-bake.hcl (#19527)
+#
+# Shared by docker-smoke-test.yml, hardened-smoke-test.yml and co-located-smoke.yml,
+# which each carried their own copy of the cache restore, three sequential
+# `docker buildx build` calls, the cache rotation and the main-only save.
+#
+# While the images build, the third-party service images (postgres, redis,
+# chromadb, ...) are pulled in the background, so `docker compose up` no longer
+# downloads them after the build has finished. A failed pull fails this step,
+# exactly as it failed `compose up` before. The compose environment (credentials,
+# network prefix, secrets) must therefore be in place before this action runs.
+#
+# Usage:
+#   - uses: ./.github/actions/build-smoke-images
+#     with:
+#       group: smoke                  # bake group: smoke | hardened
+#       cache-key-prefix: buildx-bake # Actions cache key namespace
+
+name: Build smoke images
+description: >
+  Build the AutoBot images a smoke workflow starts, concurrently and with a
+  per-image layer cache, while pulling the compose stack's service images.
+
+inputs:
+  group:
+    description: 'Bake group from docker/docker-bake.hcl to build (smoke or hardened).'
+    required: true
+  cache-key-prefix:
+    description: 'Actions cache key namespace for this workflow''s layer cache.'
+    required: true
+  compose-args:
+    description: 'Arguments placed before `pull` on the docker compose command line.'
+    required: false
+    default: '--env-file docker/.env.docker'
+
+runs:
+  using: composite
+  steps:
+    # #19308: keyed on what the image layers are built from, not on the commit. A
+    # per-commit key saved a new ~1.2 GB entry on every run and pushed the repo's
+    # Actions cache over its 10 GB limit, evicting the small caches CI depends on. An
+    # exact hit skips the save, so a commit that changes no dependency adds nothing.
+    # The `buildx-bake` namespace (#19527) holds one directory per image; a restore
+    # of the older single-directory layout would be downloaded and never read.
+    - name: Restore Docker layers
+      id: buildx-cache
+      uses: actions/cache/restore@v6
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-${{ inputs.cache-key-prefix }}-${{ hashFiles('docker/**', 'requirements*.txt', 'constraints/**', 'autobot-backend/requirements*.txt', 'autobot-slm-backend/requirements*.txt', 'package-lock.json', 'autobot-frontend/package-lock.json', 'autobot-slm-frontend/package-lock.json') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ inputs.cache-key-prefix }}-
+          ${{ runner.os }}-buildx-bake-
+
+    - name: Build images and pull service images
+      shell: bash
+      env:
+        BAKE_GROUP: ${{ inputs.group }}
+        COMPOSE_ARGS: ${{ inputs.compose-args }}
+      run: |
+        set -euo pipefail
+        mkdir -p /tmp/.buildx-cache
+        read -r -a compose_args <<< "$COMPOSE_ARGS"
+        pull_log="$RUNNER_TEMP/compose-pull.log"
+
+        docker compose "${compose_args[@]}" pull --ignore-buildable --quiet > "$pull_log" 2>&1 &
+        pull_pid=$!
+
+        echo "=== Building bake group '${BAKE_GROUP}' ==="
+        docker buildx bake --file docker/docker-bake.hcl --progress plain --load "$BAKE_GROUP"
+        df -h / | grep -v Filesystem
+
+        if ! wait "$pull_pid"; then
+          cat "$pull_log"
+          echo "::error::docker compose pull of the service images failed (log above)"
+          exit 1
+        fi
+        echo "Service images pulled."
+
+        # Rotate so the next save holds only this build's layers.
+        rm -rf /tmp/.buildx-cache
+        mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+    # #19308 review: restored everywhere, saved only from main. A save from every PR -- each
+    # dependency PR has a new key -- brought the eviction back under dependabot load.
+    - name: Save Docker layers (main only)
+      if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.buildx-cache.outputs.cache-hit != 'true'
+      uses: actions/cache/save@v6
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ steps.buildx-cache.outputs.cache-primary-key }}

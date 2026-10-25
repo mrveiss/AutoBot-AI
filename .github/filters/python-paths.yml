@@ -84,6 +84,9 @@ python:
   # to frontend-test.yml's push paths, so its verdict depends on the content --
   # a real dependency, covered here rather than recorded as a bypass.
   - '.github/filters/frontend-paths.yml'
+  # #19527: changes_job_equivalence_15360_test.py declares the smoke-action entries
+  # of this filter and checks the file holds exactly them on top of its frozen content.
+  - '.github/filters/docker-paths.yml'
   # #17885: repo_tests/frontend_file_size_ratchet_baseline.py names 184
   # frontend files BY CONCRETE LITERAL and the ratchet reads each one to
   # compare it with its ceiling. Without these two trees a change confined to a

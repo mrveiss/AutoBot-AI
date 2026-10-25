@@ -7,9 +7,10 @@
 # under 10 seconds. So the time is instrumentation overhead, not test work, and
 # paying it on every pull request buys nothing a nightly run does not.
 #
-# The split is the same twelve-way pytest-split arrangement the PR gate uses, for
-# the same reason (one job would be ~45 minutes), and it reuses the same
-# durations files. Those were recorded WITHOUT instrumentation, so they describe
+# The split is twelve-way pytest-split, for the same reason the PR gate shards
+# (one job would be ~45 minutes); the PR gate runs eight stable_shard groups
+# since #19527, and instrumentation makes each shard here far slower, so this
+# nightly keeps its own count. It reuses the same durations files. Those were recorded WITHOUT instrumentation, so they describe
 # relative test cost rather than relative coverage cost; the chunks are
 # therefore approximate here. That is acceptable for a nightly job and is why
 # the shard timeout below is generous.
