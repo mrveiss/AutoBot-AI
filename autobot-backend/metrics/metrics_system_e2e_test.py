@@ -14,7 +14,7 @@ sys.path.append(config.project_root)
 
 from metrics.system_monitor import system_monitor
 from metrics.workflow_metrics import workflow_metrics
-from tests.test_helpers import get_test_backend_url
+from tests.test_helpers import live_backend_url
 
 
 async def test_workflow_metrics():
@@ -184,7 +184,7 @@ async def test_metrics_api_integration():
         async with aiohttp.ClientSession() as session:
             for endpoint in endpoints_to_test:
                 try:
-                    async with session.get(get_test_backend_url() + endpoint) as response:
+                    async with session.get(live_backend_url() + endpoint) as response:
                         if response.status == 200:
                             print(f"✅ {endpoint}: OK")  # noqa: print
                         else:

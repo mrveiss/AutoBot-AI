@@ -170,8 +170,8 @@ DANGEROUS_REGEX_PATTERNS: Tuple[DangerousPattern, ...] = (
     ),
     # Command injection patterns
     DangerousPattern(
-        re.compile(r"\$\(.*\)"),
-        "Command substitution",
+        re.compile(r"[$<>]\(.*\)"),
+        "Command substitution ($(), or process substitution <() >(), #19462)",
         "high",
     ),
     DangerousPattern(
