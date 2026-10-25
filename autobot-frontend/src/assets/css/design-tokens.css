@@ -907,7 +907,7 @@
 
   /* ============================================
    * SECRETS VIEW TOKENS
-   * Issue #12005 (umbrella #11515). Scoped to llc/SecretsView.vue.
+   * Issue #12005 (umbrella #11515). Scoped to llc/CompanySecretsView.vue.
    * Hex-only (deliberately NO OKLCH override) so the view renders
    * pixel-identical to its previous hardcoded values across all browsers.
    * These are the literal fallbacks the view rendered because their intended
@@ -915,17 +915,17 @@
    * --color-success-subtle, --color-success-text, --color-danger-subtle) are
    * undefined in non-ember themes; preserved behind those intended token
    * names via nested var() so ember still wins where it defines them.
-   * --secretsview-on-accent is the white primary-button label on the accent
+   * --company-secrets-on-accent is the white primary-button label on the accent
    * fill (--text-on-primary carries an OKLCH override that would drift).
    * ============================================ */
-  --secretsview-accent: #c4651a;             /* primary-button accent fill (non-ember) */
-  --secretsview-on-accent: #fff;             /* primary-button label on accent */
-  --secretsview-bg-code: #f3f4f6;            /* secret-name code chip fill */
-  --secretsview-success-bg: #dcfce7;         /* active status-badge fill */
-  --secretsview-success-text: #15803d;       /* active status-badge text */
-  --secretsview-status-revoked-bg: #e5e7eb;  /* revoked status-badge fill */
-  --secretsview-input-disabled-bg: #f3f4f6;  /* disabled modal-input fill */
-  --secretsview-danger-border: #fecaca;      /* danger button border */
+  --company-secrets-accent: #c4651a;             /* primary-button accent fill (non-ember) */
+  --company-secrets-on-accent: #fff;             /* primary-button label on accent */
+  --company-secrets-bg-code: #f3f4f6;            /* secret-name code chip fill */
+  --company-secrets-success-bg: #dcfce7;         /* active status-badge fill */
+  --company-secrets-success-text: #15803d;       /* active status-badge text */
+  --company-secrets-status-revoked-bg: #e5e7eb;  /* revoked status-badge fill */
+  --company-secrets-input-disabled-bg: #f3f4f6;  /* disabled modal-input fill */
+  --company-secrets-danger-border: #fecaca;      /* danger button border */
 
   /* ============================================
    * BACKLOG VIEW TOKENS
