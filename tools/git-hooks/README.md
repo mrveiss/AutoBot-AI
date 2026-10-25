@@ -70,14 +70,20 @@ Commits on any other branch pass straight through.
 
 ## What the pre-push hook does
 
-For each ref you're pushing, the hook walks the changed files and runs:
+For each ref you're pushing, the hook runs the **fast gate** by default. Owner decision
+2026-10-25 (#19472): the full vue-tsc / vitest / pytest suites duplicate the work GitHub's
+runners do on every PR, so they no longer run locally unless you opt in.
 
 | Check | When | What |
 |---|---|---|
 | **Phase 6 issue check** | branch matches `issue-NNNN` | warn if issue is CLOSED on GitHub OR if `origin/main` already has a commit citing `#NNNN` |
-| **Phase 0c type check** | any `.ts` or `.vue` file changed | `vue-tsc --noEmit -p tsconfig.app.json` (90s timeout); only **errors in changed files** block — pre-existing project errors warn |
-| **Phase 0c test run** | any test file or composable changed | `vitest run <relevant test files>` (120s timeout); failures block |
-| **Phase 0c backend tests** | any `.py` file changed | `pytest <co-located *_test.py>` (120s timeout); failures block |
+| **Phase 7 PR body** | the branch has an open PR | `scripts/validate_pr_body.py --pr <branch>`; a failing body blocks |
+| **Hardcoded-values baseline** | any file changed | scoped `detect-hardcoded-values.sh --audit-baseline` over the changed paths (seconds) |
+| **Fast guards** | any file changed | the guard set in `fast_guard_tests` (record / equivalence / ratchet tests, whole tree) + `scripts/repin_reach_floors.py --check`; a pass is cached per tree |
+| **Full suites** | only with `AUTOBOT_PREPUSH_FULL=1` | Phase 0c: vue-tsc and vitest per frontend app, the kit's `vitest related`, and the selected pytest run, in parallel |
+
+The commit-msg checks (trailers) and the pre-commit protected-branch refusal live in
+their own hooks and are unaffected.
 
 Time-boxed: a slow check warns and skips rather than blocking forever. Real
 failures block the push with a clear "fix this" message.
