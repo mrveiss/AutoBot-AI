@@ -61,7 +61,7 @@
           <transition name="accordion">
             <div v-if="isExpandedType(type)" class="accordion-items">
               <div
-                v-for="(declaration, index) in typeData.declarations.slice(0, 30)"
+                v-for="(declaration, index) in visible(type, typeData.declarations)"
                 :key="index"
                 class="list-item"
                 :class="{ 'item-exported': declaration.is_exported }"
@@ -72,9 +72,7 @@
                 </div>
                 <div class="item-location">{{ declaration.file_path }}:{{ declaration.line_number }}</div>
               </div>
-              <div v-if="typeData.declarations.length > 30" class="show-more">
-                <span class="muted">{{ $t('analytics.declarations.showingOf', { shown: 30, total: typeData.declarations.length.toLocaleString(), type: formatDeclarationType(String(type)) }) }}</span>
-              </div>
+              <TruncationNotice :shown="shown(type, typeData.declarations.length)" :total="typeData.declarations.length" :step="30" @show-more="showMore(type)" />
             </div>
           </transition>
         </div>
@@ -103,6 +101,8 @@
  */
 
 import { useI18n } from 'vue-i18n'
+import { useShowMore } from '@autobot/ui'
+import TruncationNotice from './TruncationNotice.vue'
 import { useGroupingMemo } from '@/composables/useComputedMemo'
 import { useExpansion } from '@/composables/useExpansion'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -125,6 +125,10 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+
+// #12741: a capped list is expandable; the notice below it is the control.
+const PAGE_SIZE = 30
+const { visible, shown, showMore } = useShowMore(PAGE_SIZE, () => props.declarations)
 const emit = defineEmits<{
   export: [format: 'md' | 'json']
 }>()
@@ -340,16 +344,6 @@ const getDeclarationTypeClass = (type: string): string => {
   color: var(--text-tertiary);
   font-size: var(--text-xs);
   font-family: var(--font-mono);
-}
-
-.show-more {
-  text-align: center;
-  padding: var(--spacing-2);
-}
-
-.muted {
-  color: var(--text-muted);
-  font-size: var(--text-sm);
 }
 
 .accordion-enter-active,

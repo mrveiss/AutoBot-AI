@@ -1,0 +1,67 @@
+# AutoBot - AI-Powered Automation Platform
+# Copyright (c) 2025 mrveiss
+# Author: mrveiss
+#
+# Composite action: a required gate whose upstream was CANCELLED ends CANCELLED, never FAILURE (#17764)
+#
+# The one home for this rule, used by every required verdict gate that runs on `always()`
+# (verify-generated-types, migration-matrix, smoke-test). Parking a PR cancels its run; the
+# gate still runs because of `always()`, and before #17764 it read `cancelled` upstream as
+# its own `failure`, so every parked PR read red with no code failure behind it.
+#
+# A gate with no upstream verdict has no verdict of its own. It must not report `skipped`
+# either: branch protection counts a skipped required context as satisfied (#17126). So the
+# action force-cancels the run it sits in, which ends the calling job `cancelled`: not
+# green, so merge stays blocked, and not red, so nobody root-causes a failure that never
+# happened. If the cancel does not take effect, the step fails, so the gate still fails closed.
+#
+# Usage (the job needs `permissions: actions: write` and a sparse checkout of .github/actions):
+#   - uses: ./.github/actions/cancel-run-on-cancelled-upstream
+#     with:
+#       results: ${{ needs.changes.result }} ${{ needs.verify-types-run.result }}
+
+name: Cancel the run when an upstream was cancelled
+description: >
+  Force-cancel the current workflow run when any upstream job result is `cancelled`, so a
+  required gate with no upstream verdict ends cancelled instead of reporting a failure.
+
+inputs:
+  results:
+    description: 'Space-separated `needs.<job>.result` values of the gate''s upstream jobs.'
+    required: true
+  wait-seconds:
+    description: 'How long to wait for the cancel to stop this job before failing closed.'
+    required: false
+    default: '120'
+
+runs:
+  using: composite
+  steps:
+    - name: Cancel this run if an upstream was cancelled
+      shell: bash
+      env:
+        RESULTS: ${{ inputs.results }}
+        WAIT_SECONDS: ${{ inputs.wait-seconds }}
+        GH_TOKEN: ${{ github.token }}
+        REPO: ${{ github.repository }}
+        RUN_ID: ${{ github.run_id }}
+      run: |
+        set -euo pipefail
+        echo "upstream results: $RESULTS"
+        case " $RESULTS " in
+          *" cancelled "*) ;;
+          *) echo "no upstream was cancelled; the gate reads its verdict as usual"; exit 0 ;;
+        esac
+        # A job that exceeded its timeout-minutes can also read `cancelled` in needs.<job>.result,
+        # but the jobs API keeps it apart as `timed_out`. A hung upstream is a real defect: fail red.
+        timed_out=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs?per_page=100" --paginate \
+          --jq '.jobs[] | select(.conclusion == "timed_out") | .name')
+        if [ -n "$timed_out" ]; then
+          echo "::error::upstream job(s) timed out, which is a failure, not a parked run: ${timed_out//$'\n'/, } (#17764)"
+          exit 1
+        fi
+        echo "::notice::An upstream job was cancelled (the run was parked or superseded), so this gate has no verdict. Cancelling the run: the gate ends cancelled, not failed, and still blocks merge until a real run exists (#17764)."
+        gh api -X POST "repos/$REPO/actions/runs/$RUN_ID/force-cancel" >/dev/null
+        sleep "$WAIT_SECONDS"
+        echo "::error::the force-cancel did not stop this job within ${WAIT_SECONDS}s, so the gate fails closed (#17764)"
+        exit 1

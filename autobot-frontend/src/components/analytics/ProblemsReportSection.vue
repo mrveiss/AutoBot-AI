@@ -77,7 +77,7 @@
           <transition name="accordion">
             <div v-if="isTypeExpanded(type)" class="accordion-items">
               <div
-                v-for="(problem, index) in typeData.problems.slice(0, 20)"
+                v-for="(problem, index) in visible(type, typeData.problems)"
                 :key="index"
                 class="list-item"
                 :class="getItemSeverityClass(problem.severity)"
@@ -91,9 +91,7 @@
                 <div class="item-location">{{ problem.file_path }}{{ problem.line_number ? ':' + problem.line_number : '' }}</div>
                 <div v-if="problem.suggestion" class="item-suggestion">{{ problem.suggestion }}</div>
               </div>
-              <div v-if="typeData.problems.length > 20" class="show-more">
-                <span class="muted">{{ $t('analytics.problems.showingOf', { shown: 20, total: typeData.problems.length.toLocaleString(), type: formatProblemType(String(type)) }) }}</span>
-              </div>
+              <TruncationNotice :shown="shown(type, typeData.problems.length)" :total="typeData.problems.length" :step="20" @show-more="showMore(type)" />
             </div>
           </transition>
         </div>
@@ -122,6 +120,8 @@
  */
 
 import Icon from '@/components/ui/Icon.vue'
+import { useShowMore } from '@autobot/ui'
+import TruncationNotice from './TruncationNotice.vue'
 import { useGroupingMemo } from '@/composables/useComputedMemo'
 import { useExpansion } from '@/composables/useExpansion'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -144,6 +144,10 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+
+// #12741: a capped list is expandable; the notice below it is the control.
+const PAGE_SIZE = 20
+const { visible, shown, showMore } = useShowMore(PAGE_SIZE, () => props.problems)
 const emit = defineEmits<{
   export: [format: string]
 }>()
@@ -399,16 +403,6 @@ const getItemSeverityClass = (severity: string): string => {
   color: var(--color-info);
   font-size: var(--text-xs);
   margin-top: var(--spacing-1-5);
-}
-
-.show-more {
-  text-align: center;
-  padding: var(--spacing-2);
-}
-
-.muted {
-  color: var(--text-disabled);
-  font-size: var(--text-xs);
 }
 
 .accordion-enter-active,

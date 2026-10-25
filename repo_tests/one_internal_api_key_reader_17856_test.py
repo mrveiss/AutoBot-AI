@@ -107,7 +107,7 @@ def _source_population(root: Path) -> list[str]:
 REACH = declare(
     "one-internal-api-key-reader-scan",
     discover=_source_population,
-    floor=3010,
+    floor=3131,  # mid-window: population 3281, window (2981, 3281)
     # Mid-window, from REACH.window(): 3032 measured, growth 300 -> 150 of headroom each way.
     what="non-test python source",
     roots=_ROOTS,
