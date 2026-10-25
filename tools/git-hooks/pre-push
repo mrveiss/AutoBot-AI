@@ -123,6 +123,7 @@ ALLOW_TIMEOUT="${AUTOBOT_PREPUSH_ALLOW_TIMEOUT:-0}"
 ALLOW_UNRUNNABLE="${AUTOBOT_PREPUSH_ALLOW_UNRUNNABLE:-0}"
 did_not_run() {
     # $1 = tool, $2 = seconds
+    STAGE_CLEAN=0  # #19472: allowed or not, an unverified stage is never cached as a pass
     if [ "$ALLOW_TIMEOUT" = "1" ]; then
         warn "$1 DID NOT RUN (timed out after ${2}s) — allowed by AUTOBOT_PREPUSH_ALLOW_TIMEOUT=1"
         return 0
@@ -133,6 +134,7 @@ did_not_run() {
 }
 could_not_run() {
     # $1 = tool, $2 = the reason, quoted from the tool's own output.
+    STAGE_CLEAN=0  # #19472: allowed or not, an unverified stage is never cached as a pass
     #
     # NOT the same as a failure, and not the same as a pass (#16711 follow-on).
     # A check that cannot execute on this interpreter found nothing because it
@@ -155,6 +157,129 @@ could_not_run() {
     EXIT_CODE=1
 }
 fail()  { printf "${RED}[pre-push FAIL]${CLR} %s\n" "$*" >&2; }
+
+# ---------------------------------------------------------------------------
+# #19472: STAGES -- the independent heavy runs (vue-tsc and vitest per app, the kit's
+# `vitest related` per app, pytest, the train guards) run concurrently, each in a subshell
+# writing to its own log, printed as ONE block when collected, so logs never interleave.
+# A stage keeps its own timeout and OK/FAIL/COULD-NOT-RUN lines; its exit code carries the
+# verdict back (0 pass, 1 blocks, 3 ran-unverified but allowed), so EXIT_CODE ends exactly
+# as a serial run would leave it. AUTOBOT_PREPUSH_PARALLEL=0 runs them one at a time.
+#
+# Only a PASS is cached, keyed by stage name + the content of its inputs at the pushed
+# sha (tree hashes of the dirs it reads, its selection, this hook's own dir), under the
+# git COMMON dir -- never in the tree. A matching key skips the stage with one line.
+# The key describes $local_sha while the stages run on the WORKING TREE, so the cache is
+# neither read nor written unless the two are the same thing: a clean tree whose HEAD is
+# the pushed sha (stage_cache_usable, decided once per ref). AUTOBOT_PREPUSH_CACHE=0
+# disables both lookup and recording.
+# ---------------------------------------------------------------------------
+STAGE_CLEAN=1
+STAGE_CACHE_OK=0
+STAGE_PIDS=(); STAGE_LOGS=(); STAGE_NAMES=(); STAGE_KEYS=()
+# 0 when the working tree IS $local_sha: HEAD is it and nothing is modified or untracked.
+stage_cache_usable() {
+  [ "${AUTOBOT_PREPUSH_CACHE:-1}" = "1" ] || return 1
+  [ "$(git rev-parse HEAD 2>/dev/null)" = "$local_sha" ] || return 1
+  local dirty
+  dirty=$(git status --porcelain 2>/dev/null) || return 1
+  [ -z "$dirty" ]
+}
+# A process and every descendant (vitest/tsc sit under timeout under a subshell).
+stage_kill_tree() {
+  local child
+  # pgrep where present; procps `ps --ppid` otherwise (a minimal image may lack pgrep).
+  for child in $(pgrep -P "$1" 2>/dev/null || ps -o pid= --ppid "$1" 2>/dev/null); do
+    stage_kill_tree "$child"
+  done
+  kill "$1" 2>/dev/null
+}
+# INT/TERM: no stage outlives the hook, and no temp log is left behind.
+stage_abort() {
+  local pid
+  for pid in ${STAGE_PIDS[@]+"${STAGE_PIDS[@]}"}; do stage_kill_tree "$pid"; done
+  # ${a[@]+...}: an empty array under `set -u` aborts the trap on bash < 4.4.
+  rm -f ${STAGE_LOGS[@]+"${STAGE_LOGS[@]}"}
+  exit 130
+}
+trap stage_abort INT TERM
+stage_cache_dir() {
+  local common
+  common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 1
+  printf '%s/autobot-prepush-cache' "$common"
+}
+# Args: <extra text> <repo path>... -> sha256 over the extra text and each path's object id
+# at $local_sha (tools/git-hooks always included: a changed gate re-verifies).
+stage_key() {
+  local extra="$1" path
+  shift
+  {
+    printf '%s\n' "$extra"
+    for path in tools/git-hooks "$@"; do
+      printf '%s %s\n' "$path" "$(git rev-parse -q --verify "${local_sha}:${path}" 2>/dev/null || echo absent)"
+    done
+  } | sha256sum | cut -c1-64
+}
+# A frontend stage's key: <stage> <selection> over the WHOLE root tree plus $fe_env -- as
+# pytest. Parsing the configs for the trees they reach failed open (path.resolve, globs,
+# extends chains, imports in the config), and a missed tree reuses a stale pass; so the cache
+# only answers an identical re-push. Empty (never cached) when the app's install has no
+# hidden lockfile ($fe_install) to describe it.
+fe_key() {
+  [ -n "$fe_install" ] || return 0
+  stage_key "$1|${fe_env}|$2" ""
+}
+stage_marker() {
+  local dir
+  dir=$(stage_cache_dir) || return 1
+  printf '%s/%s-%s' "$dir" "$(printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '_')" "$2"
+}
+# 0 (and one OK line) when <name> passed before on exactly <key>. An EMPTY key means "the
+# inputs could not be described" -- never a hit, and stage_record never stores one.
+stage_cached() {
+  local marker
+  [ "$STAGE_CACHE_OK" = "1" ] && [ -n "$2" ] || return 1
+  marker=$(stage_marker "$1" "$2") && [ -f "$marker" ] || return 1
+  ok "$1: unchanged since a recorded pass @ ${2:0:10}, skipped"
+}
+# Before a stage's subshell: STAGE_LOG is where it writes.
+stage_begin() {
+  STAGE_LOG=$(mktemp)
+  STAGE_NAMES+=("$1"); STAGE_KEYS+=("$2"); STAGE_LOGS+=("$STAGE_LOG")
+}
+# Last statement of a stage's subshell: its verdict as an exit code.
+stage_exit() {
+  [ "$EXIT_CODE" != "0" ] && exit 1
+  [ "$STAGE_CLEAN" = "1" ] && exit 0
+  exit 3
+}
+stage_track() {
+  STAGE_PIDS+=("$1")
+  [ "${AUTOBOT_PREPUSH_PARALLEL:-1}" = "1" ] || stage_wait_all
+}
+# Waits for every tracked stage in launch order, prints each log as one block, folds the
+# verdicts into EXIT_CODE, and records a marker for each pass.
+stage_wait_all() {
+  local i rc
+  for i in "${!STAGE_PIDS[@]}"; do
+    rc=0
+    wait "${STAGE_PIDS[$i]}" || rc=$?
+    cat "${STAGE_LOGS[$i]}" >&2
+    rm -f "${STAGE_LOGS[$i]}"
+    if [ "$rc" = "0" ]; then
+      stage_record "${STAGE_NAMES[$i]}" "${STAGE_KEYS[$i]}"
+    elif [ "$rc" != "3" ]; then
+      EXIT_CODE=1
+    fi
+  done
+  STAGE_PIDS=(); STAGE_LOGS=(); STAGE_NAMES=(); STAGE_KEYS=()
+}
+stage_record() {
+  local marker
+  [ "$STAGE_CACHE_OK" = "1" ] && [ -n "$2" ] || return 0
+  marker=$(stage_marker "$1" "$2") || return 0
+  mkdir -p "$(dirname "$marker")" && printf '%s\n%s\n' "$1" "$2" > "$marker"
+}
 
 # ---------------------------------------------------------------------------
 # #18058: run pytest on an interpreter that meets the platform's 3.11 floor.
@@ -243,6 +368,104 @@ pytest_xdist_args() {
 node_modules_usable() {
   [ -d "$1/node_modules" ] && [ -x "$1/node_modules" ]
 }
+
+# ---------------------------------------------------------------------------
+# #19472: TRAIN MODE (owner-approved 2026-10-24). A push to refs/heads/train-* carries only
+# merge commits of members that each passed this hook on their own push, and the train's
+# CI runs the full suite; re-running Phase 0c over the union is minutes that verify
+# nothing new. It runs the fast record/equivalence/ratchet guard set instead -- the
+# failures that cost a merged train a CI round. The open-PR cap and PR-body checks still
+# run; commit-msg and the protected-branch refusal live in other hooks and are untouched.
+# ---------------------------------------------------------------------------
+# Args: <local ref> <remote ref> <base> <local sha>. 0 = train mode; otherwise TRAIN_OFF says why.
+# BOTH refs must be train-* (so `git push origin issue-x:train-x` is a full run), and the
+# range must be shaped like a train (train_range_ok).
+train_mode_ref() {
+  TRAIN_OFF=""
+  if ! [[ "$1" == refs/heads/train-* && "$2" == refs/heads/train-* ]]; then
+    TRAIN_OFF="the local and the remote ref must both be refs/heads/train-*"
+  elif [ -z "$3" ]; then
+    TRAIN_OFF="no merge base with origin/main"
+  else
+    train_range_ok "$3" "$4"
+  fi
+  [ -z "$TRAIN_OFF" ]
+}
+# The FIRST-PARENT line of <base>..<sha> must be merges or `fix(train):` commits (the
+# trainmaster's in-train fix convention; CI stays their control), and at least one merge must
+# bring in something other than the base branch: a second parent outside <base>'s history.
+# Commits reached only through a merge's second parent are members' own work, which passed
+# their own pre-push. Sets TRAIN_OFF on a violation.
+train_range_ok() {
+  local base_for_train="$1" sha_for_train="$2" sha p1 p2 members=0
+  while read -r sha p1 p2 _; do
+    if [ -z "$p2" ]; then
+      [[ "$(git log -1 --format=%s "$sha")" == "fix(train):"* ]] && continue
+      TRAIN_OFF="first-parent commit ${sha:0:10} is neither a merge nor a fix(train): commit"
+      return
+    fi
+    git merge-base --is-ancestor "$p2" "$base_for_train" 2>/dev/null || members=$((members + 1))
+  done < <(git log --first-parent --format='%H %P' "$base_for_train..$sha_for_train" 2>/dev/null)
+  [ "$members" -gt 0 ] || TRAIN_OFF="no first-parent merge brings in anything but the base branch"
+}
+# The guard set, one repo path per line. A listed file that is gone fails the run: a
+# stale list would otherwise shrink the set with no word said.
+train_guard_tests() {
+  cat <<'EOF'
+repo_tests/reach_declarations_test.py
+repo_tests/reach_roots_record_18808_test.py
+repo_tests/reach_scope_claim_17844_test.py
+repo_tests/guard_reach_meta_test.py
+repo_tests/changes_job_equivalence_15360_test.py
+repo_tests/python_filter_covers_its_guards_test.py
+repo_tests/one_fake_async_session_18883_test.py
+repo_tests/one_git_enumeration_15926_test.py
+repo_tests/frontend_file_size_ratchet_test.py
+repo_tests/frontend_fragmentation_ratchet_test.py
+repo_tests/i18n_untranslated_ratchet_test.py
+repo_tests/hardcoded_ui_literal_ratchet_12732_test.py
+repo_tests/threat_model_anchors_resolve_test.py
+scripts/check_nosec_format_test.py
+EOF
+}
+# The guard tests, then the reach-floor pins (`repin_reach_floors.py --check`: 0 clean, 2 when
+# some guard modules cannot import locally -- both still judged by their STALE/PIN lines;
+# 124 is a timeout; any other exit is a crash and fails, never reads as clean).
+run_train_guards() {
+  local guards missing guard_output out rc=0
+  guards=$(train_guard_tests)
+  missing=$(printf '%s\n' "$guards" | while IFS= read -r t; do [ -f "$REPO_ROOT/$t" ] || echo "$t"; done)
+  if [ -n "$missing" ]; then
+    fail "train guard list names file(s) that do not exist (fix train_guard_tests): $(echo $missing)"
+    EXIT_CODE=1
+  fi
+  # shellcheck disable=SC2046,SC2086 # word-splitting the file list and xdist args is intended
+  # -m "not reach_floor" as every pre-push pytest (#17810): the floors are CI's; the pins are below.
+  guard_output=$(cd "$REPO_ROOT" && timeout "$MAX_BUDGET" "$PYTEST_PYTHON" -m pytest -q -p no:cacheprovider -m "not reach_floor" \
+    $(pytest_xdist_args) --tb=line $(printf '%s\n' "$guards" | grep -vxF -f <(printf '%s\n' "$missing")) 2>&1) || rc=$?
+  if [ "$rc" = "124" ]; then did_not_run "train guards" "$MAX_BUDGET"
+  elif [ "$rc" != "0" ]; then fail "train guards failed:"; failure_excerpt "$guard_output" >&2; EXIT_CODE=1
+  else ok "train guards: $(printf '%s\n' "$guards" | grep -c .) guard file(s) pass"; fi
+  rc=0
+  out=$(cd "$REPO_ROOT" && timeout "$MAX_BUDGET" "$PYTEST_PYTHON" scripts/repin_reach_floors.py --check 2>&1) || rc=$?
+  if [ "$rc" = "124" ]; then
+    did_not_run "repin_reach_floors.py --check" "$MAX_BUDGET"
+  elif printf '%s\n' "$out" | grep -qE '^(STALE|PIN)'; then
+    fail "reach floors are stale -- run scripts/repin_reach_floors.py and commit:"
+    printf '%s\n' "$out" | grep -E '^(STALE|PIN)' | head -20 >&2
+    EXIT_CODE=1
+  elif [ "$rc" != "0" ] && [ "$rc" != "2" ]; then
+    fail "repin_reach_floors.py --check crashed (exit ${rc}), so the reach-floor pins are NOT verified:"
+    printf '%s\n' "$out" | tail -20 >&2
+    EXIT_CODE=1
+  elif [ "$rc" = "2" ]; then
+    # Not a failure (the modules need CI's deps), but those floors went unmeasured: say which,
+    # and never cache this stage as a pass -- it did not verify everything it names.
+    STAGE_CLEAN=0
+    warn "reach floors NOT measured for some guards: $(printf '%s\n' "$out" | grep -m1 '^ERROR:' || echo 'exit 2 without its ERROR line')"
+    ok "reach floors: nothing stale among the guards that imported"
+  else ok "reach floors: repin_reach_floors.py --check reports nothing stale"; fi
+}
 # #18406: vitest prints a "Test Files" summary whenever it ran at least one test file,
 # pass or fail. A non-zero exit WITHOUT it means vitest died before collecting
 # anything (a package missing from an emptied node_modules, an unloadable config), so
@@ -269,6 +492,17 @@ absent_added_deps() {
         [ -f "$REPO_ROOT/$dir/node_modules/$name/package.json" ] && continue
         printf '%s\n' "$name"
       done
+}
+# #19472: worktrees link node_modules to the main checkout's install (#16912) and nothing
+# refreshes it, so a dependency already declared on main can be missing from it -- dompurify
+# (#19118) read as 50+ vitest suites failing. Args: <diff-range base> <head> <project-dir>.
+# Prints the declared names (project + kit manifests, added_js_deps.py --stale) the install
+# lacks, minus those the push range adds: absent_added_deps' classifier (#19130) owns those.
+stale_installed_deps() {
+  local added
+  added=$(absent_added_deps "$1" "$2" "$3")
+  "$PYTEST_PYTHON" -I "$REPO_ROOT/tools/git-hooks/added_js_deps.py" --stale "$3" "$REPO_ROOT/$KIT_TREE" 2>/dev/null \
+    | grep -vxF -f <(printf '%s\n' "$added") || true
 }
 # Per FAILED TEST FILE, not per run (#19130): 0 only when every failed file in vitest's
 # output ($1) is a collection error -- vitest's `FAIL <file> [ <file> ]` header, a file that
@@ -516,6 +750,26 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     continue
   fi
 
+  STAGE_CACHE_OK=0
+  if stage_cache_usable; then
+    STAGE_CACHE_OK=1
+  elif [ "${AUTOBOT_PREPUSH_CACHE:-1}" = "1" ]; then
+    log "pass cache off for this push: the working tree is not exactly ${local_sha:0:10} (dirty, or HEAD differs) -- a full run"
+  fi
+  if train_mode_ref "$local_ref" "$remote_ref" "$base" "$local_sha"; then
+    log "train mode: ${remote_ref#refs/heads/} runs only the fast guard set — every member passed its own pre-push; the train's CI runs the full suite (#19472)"
+    train_key=$(stage_key "train guards|${PYTEST_PYTHON}" "")
+    if ! stage_cached "train guards" "$train_key"; then
+      stage_begin "train guards" "$train_key"
+      ( EXIT_CODE=0; STAGE_CLEAN=1; run_train_guards; stage_exit ) </dev/null >"$STAGE_LOG" 2>&1 &
+      stage_track $!
+    fi
+    stage_wait_all
+    continue
+  elif [[ "$local_ref" == refs/heads/train-* || "$remote_ref" == refs/heads/train-* ]]; then
+    log "train mode OFF: ${TRAIN_OFF} -- a full run (#19472)"
+  fi
+
   # ----- Frontend (TypeScript / Vue) --------------------------------------
   #
   # PER PROJECT (#17574). This phase named `autobot-frontend` as a literal while
@@ -568,6 +822,29 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     vitest_exit=0
     project_dir="$REPO_ROOT/$project"
 
+    # #19472: a declared dependency missing from the install is a stale node_modules, not a
+    # test verdict. Said up front; a run that then fails ONLY on those imports is COULD NOT
+    # RUN with that reason (never 50 blamed suites), and anything else is still judged. The
+    # runs are kept: a stale devDependency no test loads (a linter) must not cost the check.
+    # Owner ruling 2026-10-24: detect it and say so; nothing here installs.
+    stale_deps=""
+    if node_modules_usable "$project_dir"; then
+      stale_deps=$(stale_installed_deps "${base:-$remote_sha}" "$local_sha" "$project_dir")
+    fi
+    stale_reason="${project}/node_modules is stale — missing $(echo $stale_deps); the owner refreshes it with: npm ci (in ${project})"
+    [ -n "$stale_deps" ] && warn "$stale_reason"
+
+    # #19472: keyed on the app and kit trees, the changed paths its verdict filters on, the
+    # install's stale set, the node version and the INSTALL itself (npm's hidden lockfile,
+    # node_modules/.package-lock.json): a linked install upgraded in the main checkout under an
+    # unchanged tree is a different toolchain. No hidden lockfile -> no key -> no caching.
+    fe_install=$(sha256sum "$project_dir/node_modules/.package-lock.json" 2>/dev/null | cut -c1-64)
+    fe_env="node=$(node --version 2>/dev/null || echo none)|install=${fe_install}|stale=$(echo $stale_deps)"
+    tsc_key=$(fe_key vue-tsc "${project_changed}|${kit_changed}")
+    if ! stage_cached "vue-tsc ${project}" "$tsc_key"; then
+    stage_begin "vue-tsc ${project}" "$tsc_key"
+    (
+    EXIT_CODE=0; STAGE_CLEAN=1
     log "${project}: frontend files changed — running vue-tsc (timeout ${TYPE_CHECK_TIMEOUT}s)"
     if node_modules_usable "$project_dir"; then
       tsc_output=$(
@@ -614,6 +891,10 @@ while read -r local_ref local_sha remote_ref remote_sha; do
             echo "$relevant" | head -20 >&2
             could_not_run "vue-tsc (${project})" \
               "ran; only TS2307 for the new dependency (CI's npm ci verifies): $(echo $new_dep_absent)"
+          elif [ -n "$relevant" ] && [ -n "$stale_deps" ] \
+               && tsc_failed_on_new_dep_only "$relevant" "$stale_deps $new_dep_absent"; then
+            echo "$relevant" | head -20 >&2
+            could_not_run "vue-tsc (${project})" "ran; only TS2307 for a stale install: $stale_reason"
           elif [ -n "$relevant" ]; then
             fail "vue-tsc errors in CHANGED files (${project}, #5142):"
             echo "$relevant" | head -20 >&2
@@ -635,6 +916,10 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         "${project}/node_modules is missing or cannot be traversed, so its toolchain is unreachable (a fresh worktree gets it linked by scripts/hooks/post-checkout; #17573 is the present-but-mode-644 case)"
     fi
 
+    stage_exit
+    ) </dev/null >"$STAGE_LOG" 2>&1 &
+    stage_track $!
+    fi
     # Targeted test runs for changed test files + sibling __tests__/.
     # vitest runs with cwd inside this project, so every path here is relative
     # to it, not to the repo root $changed uses.
@@ -672,6 +957,11 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     all_tests=$(printf "%s\n%s" "$test_files" "$composable_tests" \
       | sort -u | grep -v '^$' || true)
 
+    vitest_key=$(fe_key vitest "${all_tests}")
+    if [ -n "$all_tests" ] && ! stage_cached "vitest ${project}" "$vitest_key"; then
+    stage_begin "vitest ${project}" "$vitest_key"
+    (
+    EXIT_CODE=0; STAGE_CLEAN=1
     if [ -n "$all_tests" ] && node_modules_usable "$project_dir"; then
       log "${project}: running vitest on relevant tests (timeout ${TEST_TIMEOUT}s):"
       echo "$all_tests" | sed 's/^/    /' >&2
@@ -689,6 +979,9 @@ while read -r local_ref local_sha remote_ref remote_sha; do
            && vitest_failed_on_new_dep_only "$vitest_output" "$new_dep_absent"; then
         could_not_run "vitest (${project})" \
           "could not run (new dependency; CI's npm ci verifies): $(echo $new_dep_absent)"
+      elif [ "$vitest_exit" != "0" ] && [ -n "$stale_deps" ] \
+           && vitest_failed_on_new_dep_only "$vitest_output" "$stale_deps $new_dep_absent"; then
+        could_not_run "vitest (${project})" "$stale_reason"
       elif [ "$vitest_exit" != "0" ]; then
         fail "vitest failures (${project}, #5142):"
         failure_excerpt "$vitest_output" >&2
@@ -704,9 +997,18 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         "${project}/node_modules is missing or cannot be traversed, so the $(echo "$all_tests" | grep -c .) selected test file(s) did not run"
     fi
 
+    stage_exit
+    ) </dev/null >"$STAGE_LOG" 2>&1 &
+    stage_track $!
+    fi
     # #17959: kit change -> this app's tests that depend on it. `vitest related`
     # walks the module graph, which reaches the kit through the in-tree alias, so
     # the selection is exactly the tests that import a changed kit file.
+    kit_key=$(fe_key "vitest related" "${kit_changed}")
+    if [ -n "$kit_changed" ] && ! stage_cached "vitest related ${project}" "$kit_key"; then
+    stage_begin "vitest related ${project}" "$kit_key"
+    (
+    EXIT_CODE=0; STAGE_CLEAN=1
     if [ -n "$kit_changed" ] && node_modules_usable "$project_dir"; then
       kit_rel=$(echo "$kit_changed" | sed 's|^|../|')
       kit_timeout=$(kit_related_budget "$project_dir")
@@ -722,6 +1024,9 @@ while read -r local_ref local_sha remote_ref remote_sha; do
            && vitest_failed_on_new_dep_only "$kit_output" "$new_dep_absent"; then
         could_not_run "vitest related (${project})" \
           "could not run (new dependency; CI's npm ci verifies): $(echo $new_dep_absent)"
+      elif [ "$kit_exit" != "0" ] && [ -n "$stale_deps" ] \
+           && vitest_failed_on_new_dep_only "$kit_output" "$stale_deps $new_dep_absent"; then
+        could_not_run "vitest related (${project})" "$stale_reason"
       elif [ "$kit_exit" != "0" ]; then
         fail "vitest failures after a ${KIT_TREE} change (${project}, #17959):"
         failure_excerpt "$kit_output" >&2
@@ -732,6 +1037,10 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     elif [ -n "$kit_changed" ]; then
       could_not_run "vitest related (${project})" \
         "${project}/node_modules is missing or cannot be traversed, so tests depending on ${KIT_TREE} did not run"
+    fi
+    stage_exit
+    ) </dev/null >"$STAGE_LOG" 2>&1 &
+    stage_track $!
     fi
   done
 
@@ -786,7 +1095,13 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   fi
   rm -f "$sel_err"
   all_py_tests=$(printf '%s\n' "$selection" | cut -f1 | grep -v '^$' || true)
-  if [ -n "$all_py_tests" ]; then
+  # #19472: keyed on the selection (and why), the interpreter, and the WHOLE root tree: the
+  # whole-tree guards read the app trees and docs/ too, so no subtree is safe to leave out.
+  pytest_key=$(stage_key "pytest|${PYTEST_PYTHON}|${selection}" "")
+  if [ -n "$all_py_tests" ] && ! stage_cached "pytest" "$pytest_key"; then
+  stage_begin "pytest" "$pytest_key"
+  (
+  EXIT_CODE=0; STAGE_CLEAN=1
     # The selection can outgrow the changeset, so the budget follows it too (#15985).
     selected_count=$(printf '%s\n' "$all_py_tests" | grep -c . || true)
     PYTEST_XDIST_ARGS="$(pytest_xdist_args)"
@@ -907,8 +1222,12 @@ while read -r local_ref local_sha remote_ref remote_sha; do
         ok "pytest: all relevant tests pass"
       fi
     fi
+  stage_exit
+  ) </dev/null >"$STAGE_LOG" 2>&1 &
+  stage_track $!
   fi
 
+  stage_wait_all
 done
 
 if [ "$EXIT_CODE" != "0" ]; then

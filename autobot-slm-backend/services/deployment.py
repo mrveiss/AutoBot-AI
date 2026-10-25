@@ -28,6 +28,7 @@ from config import settings
 from models.database import Deployment, DeploymentStatus, Node, NodeStatus
 from models.schemas import DeploymentCreate, DeploymentResponse
 from services.ansible_utils import _find_ansible_playbook as _resolve_ansible_playbook
+from services.ansible_utils import ansible_run_failure
 from services.encryption import decrypt_data
 from services.yaml_scalar import yaml_double_quoted
 
@@ -405,7 +406,7 @@ class DeploymentService:
         try:
             if secrets_path:
                 cmd.extend(["-e", "@" + secrets_path])
-            return await self._run_ansible_command(cmd, "Ansible playbook failed")
+            return await self._run_ansible_command(cmd, "Ansible playbook failed", host)
         finally:
             if secrets_path:
                 Path(secrets_path).unlink(missing_ok=True)
@@ -594,8 +595,8 @@ class DeploymentService:
             raise
         return path
 
-    async def _run_ansible_command(self, cmd: List[str], failure: str) -> str:
-        """Run an ansible-playbook command; return its output or raise on non-zero exit."""
+    async def _run_ansible_command(self, cmd: List[str], failure: str, host: str) -> str:
+        """Run a single-host ansible-playbook; raise unless the recap proves ``host`` ran (#19475)."""
         process = await asyncio.create_subprocess_exec(
             *cmd,
             stdout=asyncio.subprocess.PIPE,
@@ -603,10 +604,9 @@ class DeploymentService:
             cwd=str(self.ansible_dir),
             env=self._get_ansible_environment(),
         )
-        stdout, _ = await process.communicate()
-        output = stdout.decode("utf-8", errors="replace")
-        if process.returncode != 0:
-            raise RuntimeError(f"{failure}:\n{output}")
+        output = (await process.communicate())[0].decode("utf-8", errors="replace")
+        if problem := ansible_run_failure(output, host, process.returncode):
+            raise RuntimeError(f"{failure}:\n{problem}")
         return output
 
     async def _execute_enrollment_playbook(
@@ -631,7 +631,7 @@ class DeploymentService:
             if secrets_path:
                 cmd.extend(["-e", "@" + secrets_path])
             logger.debug("Running enrollment: %s", " ".join(cmd[:10]) + " ...")
-            return await self._run_ansible_command(cmd, "Enrollment playbook failed")
+            return await self._run_ansible_command(cmd, "Enrollment playbook failed", host)
         finally:
             if secrets_path:
                 Path(secrets_path).unlink(missing_ok=True)

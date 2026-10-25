@@ -4336,6 +4336,9 @@
       "errorEnterBoth": "Please enter both a source and a target entity.",
       "notInGraph": "These entities are not in the relationship graph yet.",
       "notInGraphHint": "They exist, but have no graph links — so no connection can be traced. Re-run entity extraction to index their relations."
+    },
+    "chroma": {
+      "quarantined": "Research quarantine"
     }
   },
   "workflow": {

@@ -260,7 +260,9 @@ class TestTheDeferralUsesTheExistingCouldNotRunPath:
             assert not self._guards_branch(_SOURCE.replace(helper, "&& true; then"), exit_var, out_var, label)
 
     def test_the_helper_is_called_from_exactly_the_two_branches(self) -> None:
-        assert _SOURCE.count('vitest_failed_on_new_dep_only "$') == 2
+        # Twice each: the added-dependency deferral and the #19472 stale-install one.
+        assert _SOURCE.count('vitest_failed_on_new_dep_only "$') == 4
+        assert _SOURCE.count('"$stale_deps $new_dep_absent"') == 3
 
     def test_allow_unrunnable_semantics(self, tmp_path: Path) -> None:
         stubs = 'RED=; CLR=; warn() { echo "WARN $*" >&2; }; EXIT_CODE=0\n'
@@ -422,4 +424,133 @@ class TestVueTscNewDependency:
         assert guard in _SOURCE
         after = _SOURCE.find(guard)
         assert _SOURCE.find('elif [ -n "$relevant" ]; then', after) > after
-        assert _SOURCE.count('tsc_failed_on_new_dep_only "$') == 1
+        assert _SOURCE.count('tsc_failed_on_new_dep_only "$') == 2  # + the #19472 stale-install elif
+
+
+def _stale_repo(tmp_path: Path, *, app: dict, kit: dict) -> Path:
+    """A committed repo with app/ and libs/autobot-ui/ manifests and the staged tool (#19472)."""
+    make_repo(tmp_path)
+    for rel, manifest in (("app", app), ("libs/autobot-ui", kit)):
+        (tmp_path / rel).mkdir(parents=True)
+        (tmp_path / rel / "package.json").write_text(json.dumps(manifest), encoding="utf-8")
+    (tmp_path / "app" / "node_modules").mkdir()
+    _stage_tool(tmp_path)
+    _git(tmp_path, "add", "-A")
+    _git(tmp_path, "commit", "-qm", "base")
+    return tmp_path
+
+
+_STALE_BLOCK = re.search(
+    r'\n(    stale_deps=""\n(?:.*\n)*?    \[ -n "\$stale_deps" \] && warn "\$stale_reason"\n)', _SOURCE
+)
+
+
+def _stale(root: Path, base: str, head: str, then: str = "", allow: str = "0") -> subprocess.CompletedProcess[str]:
+    """The hook's own per-project stale detection for project `app`, followed by `then`."""
+    assert _STALE_BLOCK, "the hook no longer carries the #19472 stale block — move this test with it"
+    script = "\n".join(
+        [
+            f"REPO_ROOT={root}; PYTEST_PYTHON={sys.executable}; KIT_TREE=libs/autobot-ui; project=app",
+            f'RED=; CLR=; EXIT_CODE=0; ALLOW_UNRUNNABLE={allow}; base={base}; local_sha={head}; project_dir="$REPO_ROOT/app"',
+            'warn() { echo "WARN $*" >&2; }',
+            *(_fn(name) for name in ("could_not_run", "node_modules_usable", "absent_added_deps")),
+            _fn("stale_installed_deps"),
+            _fn("vitest_failed_on_new_dep_only"),
+            _STALE_BLOCK.group(1),
+            'echo "stale=[$(echo $stale_deps)]"',
+            then,
+            'echo "exit=$EXIT_CODE"',
+        ]
+    )
+    return subprocess.run(
+        ["bash", "-c", script], cwd=root, capture_output=True, text=True, check=False, env=isolated_git_env()
+    )
+
+
+#: The vitest branch's stale classification, as the hook writes it (asserted against the source below).
+_CLASSIFY = (
+    'new_dep_absent=""; out="$(cat out.txt)"\n'
+    'if [ -n "$stale_deps" ] && vitest_failed_on_new_dep_only "$out" "$stale_deps $new_dep_absent"; then\n'
+    '  could_not_run "vitest (${project})" "$stale_reason"\nelse echo BLAMED; fi'
+)
+
+
+class TestAStaleInstallIsCouldNotRun:
+    """#19472: a dependency declared at the base but missing from the linked install."""
+
+    _APP = {"dependencies": {"vue": "1", "dompurify": "3"}, "devDependencies": {"vitest": "5"}}
+    _KIT = {"peerDependencies": {"dompurify": ">=3", "vue": ">=3"}, "devDependencies": {"kit-only": "1"}}
+    _REASON = "app/node_modules is stale — missing dompurify; the owner refreshes it with: npm ci (in app)"
+
+    def _run(self, tmp_path: Path, output: str, *installed: str, allow: str = "0") -> subprocess.CompletedProcess:
+        root = _stale_repo(tmp_path, app=self._APP, kit=self._KIT)
+        _install(root, *installed)
+        (root / "out.txt").write_text(output, encoding="utf-8")
+        head = _git(root, "rev-parse", "HEAD")
+        return _stale(root, head, head, then=_CLASSIFY, allow=allow)
+
+    def test_unresolved_stale_import_is_could_not_run_with_one_named_reason(self, tmp_path: Path) -> None:
+        done = self._run(tmp_path, _UNRESOLVED, "vue", "vitest")
+        assert "stale=[dompurify]" in done.stdout and "exit=1" in done.stdout
+        assert "BLAMED" not in done.stdout, "the suites failing on the stale import must not be blamed"
+        assert f"WARN {self._REASON}" in done.stderr
+        assert [ln for ln in done.stderr.splitlines() if "reason:" in ln] == [
+            f"[pre-push COULD NOT RUN]   reason: {self._REASON}"
+        ]
+        assert str(tmp_path) not in done.stderr
+
+    def test_allow_unrunnable_lets_the_push_proceed(self, tmp_path: Path) -> None:
+        done = self._run(tmp_path, _UNRESOLVED, "vue", "vitest", allow="1")
+        assert "exit=0" in done.stdout and "BLAMED" not in done.stdout
+
+    def test_a_real_failure_beside_the_stale_import_is_still_blamed(self, tmp_path: Path) -> None:
+        done = self._run(tmp_path, _UNRESOLVED + _ASSERTION, "vue", "vitest")
+        assert "BLAMED" in done.stdout
+
+    def test_a_non_stale_import_error_is_not_reclassified(self, tmp_path: Path) -> None:
+        # dompurify IS stale, but the failed file cannot resolve lodash: that failure is the change's.
+        done = self._run(tmp_path, _collect_error("src/a.test.ts", "lodash"), "vue", "vitest")
+        assert "stale=[dompurify]" in done.stdout and "BLAMED" in done.stdout
+        assert "COULD NOT RUN" not in done.stderr
+
+    def test_a_complete_install_is_not_stale(self, tmp_path: Path) -> None:
+        done = self._run(tmp_path, _UNRESOLVED, "vue", "vitest", "dompurify")
+        assert "stale=[]" in done.stdout and "BLAMED" in done.stdout
+        assert "stale —" not in done.stderr
+
+    def test_kit_peers_count_but_kit_dev_and_optional_peers_do_not(self, tmp_path: Path) -> None:
+        kit = dict(self._KIT, peerDependenciesMeta={"vue": {"optional": True}})
+        root = _stale_repo(tmp_path, app={"dependencies": {}}, kit=kit)
+        head = _git(root, "rev-parse", "HEAD")
+        assert "stale=[dompurify]" in _stale(root, head, head).stdout
+
+    def test_an_optional_peer_that_is_also_a_direct_dependency_still_counts(self, tmp_path: Path) -> None:
+        app = {
+            "dependencies": {"foo": "1"},
+            "peerDependencies": {"foo": "1", "bar": "1"},
+            "peerDependenciesMeta": {"foo": {"optional": True}, "bar": {"optional": True}},
+        }
+        root = _stale_repo(tmp_path, app=app, kit={})
+        head = _git(root, "rev-parse", "HEAD")
+        assert "stale=[foo]" in _stale(root, head, head).stdout, "bar is only an optional peer; foo is direct"
+
+    def test_a_dependency_the_push_adds_stays_with_the_19130_classifier(self, tmp_path: Path) -> None:
+        root, base, head = _repo(tmp_path)
+        _stage_tool(root)
+        _install(root, "vue")
+        assert "stale=[]" in _stale(root, base, head).stdout
+
+    def test_each_run_branch_classifies_a_stale_install_before_blaming(self) -> None:
+        for out_var, label, blame in (
+            ("vitest_output", "vitest (${project})", 'fail "vitest failures (${project}'),
+            ("kit_output", "vitest related (${project})", 'fail "vitest failures after'),
+        ):
+            guard = (
+                f'&& vitest_failed_on_new_dep_only "${out_var}" "$stale_deps $new_dep_absent"; then\n'
+                f'        could_not_run "{label}" "$stale_reason"\n'
+            )
+            assert _SOURCE.count(guard) == 1, label
+            assert _SOURCE.find(guard) < _SOURCE.find(blame, _SOURCE.find(guard))
+        tsc = '&& tsc_failed_on_new_dep_only "$relevant" "$stale_deps $new_dep_absent"; then'
+        assert _SOURCE.find(tsc) < _SOURCE.find('fail "vue-tsc errors in CHANGED files') and tsc in _SOURCE
+        assert _SOURCE.find(_STALE_BLOCK.group(1)) < _SOURCE.find("npm run --silent type-check")

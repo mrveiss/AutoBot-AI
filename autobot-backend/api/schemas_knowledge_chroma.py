@@ -69,6 +69,7 @@ class SearchResultItem(BaseModel):
     document: Optional[str] = None
     metadata: Optional[Dict[str, Any]] = None
     distance: Optional[float] = Field(None, description="Similarity distance score")
+    quarantined: bool = Field(False, description="Research-quarantined fact, read through the audited opt-out (#19163)")
 
 
 class ChromaSearchResponse(BaseModel):

@@ -32,7 +32,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, List
+from typing import Any, Callable, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import parse_utc_iso
@@ -185,10 +185,10 @@ def is_servable(fact_like: Any, as_of: datetime | str | None = None) -> bool:
     return serving_verdict(fact_like, as_of) is ServingVerdict.VALID
 
 
-def servable(items: Iterable[Any] | None) -> List[Any]:
-    """*items* without any fact that may not be served now, order preserved."""
+def servable(items: Iterable[Any] | None, keep: Callable[[Any], bool] = is_servable) -> List[Any]:
+    """*items* without any fact *keep* refuses (default: not servable now), order preserved."""
     pool = list(items or ())
-    kept = [item for item in pool if is_servable(item)]
+    kept = [item for item in pool if keep(item)]
     if len(kept) != len(pool):
         logger.debug("Serving predicate withheld %d of %d hit(s)", len(pool) - len(kept), len(pool))
     return kept
@@ -199,11 +199,11 @@ def _fewer(items: Any, kept: list) -> int:
     return len(items) - len(kept)
 
 
-def _servable_cluster(cluster: Any) -> Any:
+def _servable_cluster(cluster: Any, keep: Callable[[Any], bool] = is_servable) -> Any:
     """A response cluster without the hits that may not be served; counts follow."""
     if not isinstance(cluster, dict) or not isinstance(cluster.get("results"), list):
         return cluster
-    kept = servable(cluster["results"])
+    kept = servable(cluster["results"], keep)
     dropped = _fewer(cluster["results"], kept)
     out = {**cluster, "results": kept}
     if dropped and isinstance(out.get("result_count"), int):
@@ -217,22 +217,24 @@ def _reduced(response: dict, key: str, dropped: int) -> None:
         response[key] = max(0, response[key] - dropped)
 
 
-def servable_response(response: Any) -> Any:
+def servable_response(response: Any, keep: Callable[[Any], bool] = is_servable) -> Any:
     """A KB search response without the facts that may not be served now.
 
     The single place the predicate meets a search result, whatever the mode returned: a list of
     hits (basic) or a response dict whose ``results`` and ``clusters`` carry hits (enhanced and
     advanced). Anything else -- an error dict without ``results`` -- is returned untouched.
+    *keep* is the per-hit predicate; the default is :func:`is_servable`, and ``KB.search`` composes the
+    research-quarantine check into it (#19163).
     """
     if isinstance(response, list):
-        return servable(response)
+        return servable(response, keep)
     if not isinstance(response, dict) or not isinstance(response.get("results"), list):
         return response
-    kept = servable(response["results"])
+    kept = servable(response["results"], keep)
     out = {**response, "results": kept}
     dropped = _fewer(response["results"], kept)
     _reduced(out, "total_count", dropped)
     _reduced(out, "unclustered_count", dropped)
     if isinstance(out.get("clusters"), list):
-        out["clusters"] = [_servable_cluster(c) for c in out["clusters"]]
+        out["clusters"] = [_servable_cluster(c, keep) for c in out["clusters"]]
     return out
