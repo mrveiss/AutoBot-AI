@@ -3,8 +3,9 @@
 /**
  * @autobot/ui — shared Prometheus/monitoring metric shapes (#14907).
  *
- * `usePrometheusMetrics.ts` is declared once per app (`autobot-frontend`,
- * `autobot-slm-frontend`) because the surrounding polling/transport logic is
+ * Each app has its own metrics composable (`useInstallMetrics` in
+ * `autobot-frontend`, `useFleetMetrics` in `autobot-slm-frontend`; both were
+ * `usePrometheusMetrics` until #18225) because the surrounding polling/transport logic is
  * legitimately different per app (see each composable's own docs). But eight
  * type names were declared IDENTICALLY-NAMED, near-identically-shaped in
  * both files — that vocabulary belongs in one place even though the
@@ -114,7 +115,7 @@ export interface OptimizationRecommendation {
   expected_improvement: string
 }
 
-/** Options accepted by both apps' `usePrometheusMetrics()`. */
+/** Options accepted by `useInstallMetrics()` and `useFleetMetrics()`. */
 export interface UsePrometheusMetricsOptions {
   /** Auto-fetch on mount (default: true) */
   autoFetch?: boolean

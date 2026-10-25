@@ -27,7 +27,6 @@ rejected before PyJWT is invoked.
 """
 
 import asyncio
-import logging
 import secrets
 from datetime import timedelta
 from typing import Callable, NoReturn
@@ -44,6 +43,7 @@ from autobot_shared.auth.permission_evaluator import evaluate_permission
 from autobot_shared.auth.permission_gate import PermissionGate
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.auth.revocation_unavailable import revocation_unavailable_error
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from autobot_shared.user_management.password_epoch import (
     MalformedTokenClaims,
@@ -63,10 +63,7 @@ try:  # redis-py exceptions do NOT inherit builtin ConnectionError/OSError
 except ImportError:  # pragma: no cover - redis is a hard dep in deployments
     _RedisError = ConnectionError  # type: ignore[assignment,misc]
 
-# Stdlib logging, deliberately: the auth test harness (tests/api/test_auth_logout.py) loads
-# this module with the config stack mocked, where logging_manager.get_logger raises (see
-# autobot_shared/user_management/password_epoch.py).
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 security = HTTPBearer()
 

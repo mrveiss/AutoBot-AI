@@ -160,6 +160,10 @@ def _run_hook(
             # The retired knob: setting it to 1 must change nothing.
             "AUTOBOT_OPEN_PR_CAP": "1",
             "GH_FAIL": "1" if gh_fail else "0",
+            # #19472: the default fast gate needs the repo's guard tests and a pytest-capable
+            # interpreter, which this synthetic repo and sandbox PATH do not have; this file
+            # tests that no open-PR cap remains. prepush_stages_19472_test drives the fast gate.
+            "AUTOBOT_PREPUSH_FULL": "1",
         }
     )
     branch = "no-open-pr-cap-test"

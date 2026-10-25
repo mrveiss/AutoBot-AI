@@ -15,7 +15,7 @@ import GrafanaDashboard from '@/components/monitoring/GrafanaDashboard.vue'
 import MetricsDetailsView from './MetricsDetailsView.vue'
 import NodeGpuSummary from '@/components/monitoring/NodeGpuSummary.vue'
 import { useFleetStore } from '@/stores/fleet'
-import { usePrometheusMetrics } from '@/composables/usePrometheusMetrics'
+import { useFleetMetrics } from '@/composables/useFleetMetrics'
 
 const fleetStore = useFleetStore()
 const {
@@ -25,7 +25,7 @@ const {
   systemHealth,
   gpuNodes,
   gpuUnavailable,
-} = usePrometheusMetrics({ autoFetch: true, pollInterval: 30000 })
+} = useFleetMetrics({ autoFetch: true, pollInterval: 30000 })
 
 // #15226: each node's GPUs, matched to its card by node_id
 const gpuByNode = computed(() => new Map(gpuNodes.value.map((gpuNode) => [gpuNode.node_id, gpuNode])))

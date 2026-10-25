@@ -121,6 +121,12 @@ warn()  { printf "${YEL}[pre-push WARN]${CLR} %s\n" "$*" >&2; }
 # escape hatch nobody can see in the transcript is indistinguishable from the bug.
 ALLOW_TIMEOUT="${AUTOBOT_PREPUSH_ALLOW_TIMEOUT:-0}"
 ALLOW_UNRUNNABLE="${AUTOBOT_PREPUSH_ALLOW_UNRUNNABLE:-0}"
+# #19472, owner decision 2026-10-25 ("when we run locally it's duplicate work"): GitHub's
+# runners run the full suites, so by default this hook runs only the FAST GATE -- the guard
+# set (tools/git-hooks/fast_guard_tests.txt) plus the checks that cost seconds.
+# AUTOBOT_PREPUSH_FULL=1 restores the full local vue-tsc / vitest / pytest runs (Phase 0c's
+# frontend and backend sections).
+PREPUSH_FULL="${AUTOBOT_PREPUSH_FULL:-0}"
 did_not_run() {
     # $1 = tool, $2 = seconds
     STAGE_CLEAN=0  # #19472: allowed or not, an unverified stage is never cached as a pass
@@ -160,7 +166,7 @@ fail()  { printf "${RED}[pre-push FAIL]${CLR} %s\n" "$*" >&2; }
 
 # ---------------------------------------------------------------------------
 # #19472: STAGES -- the independent heavy runs (vue-tsc and vitest per app, the kit's
-# `vitest related` per app, pytest, the train guards) run concurrently, each in a subshell
+# `vitest related` per app, pytest, the fast guards) run concurrently, each in a subshell
 # writing to its own log, printed as ONE block when collected, so logs never interleave.
 # A stage keeps its own timeout and OK/FAIL/COULD-NOT-RUN lines; its exit code carries the
 # verdict back (0 pass, 1 blocks, 3 ran-unverified but allowed), so EXIT_CODE ends exactly
@@ -370,82 +376,51 @@ node_modules_usable() {
 }
 
 # ---------------------------------------------------------------------------
-# #19472: TRAIN MODE (owner-approved 2026-10-24). A push to refs/heads/train-* carries only
-# merge commits of members that each passed this hook on their own push, and the train's
-# CI runs the full suite; re-running Phase 0c over the union is minutes that verify
-# nothing new. It runs the fast record/equivalence/ratchet guard set instead -- the
-# failures that cost a merged train a CI round. The open-PR cap and PR-body checks still
-# run; commit-msg and the protected-branch refusal live in other hooks and are untouched.
+# #19472: the FAST GATE (owner decision 2026-10-25) -- every push, every branch, unless
+# AUTOBOT_PREPUSH_FULL=1. The record/equivalence/ratchet guards are the failures that cost a
+# CI round; each runs in seconds over the whole tree. The full suites are CI's. (This
+# replaced the 2026-10-24 train-only mode: with every branch light, a train needs no
+# shape check of its own.)
 # ---------------------------------------------------------------------------
-# Args: <local ref> <remote ref> <base> <local sha>. 0 = train mode; otherwise TRAIN_OFF says why.
-# BOTH refs must be train-* (so `git push origin issue-x:train-x` is a full run), and the
-# range must be shaped like a train (train_range_ok).
-train_mode_ref() {
-  TRAIN_OFF=""
-  if ! [[ "$1" == refs/heads/train-* && "$2" == refs/heads/train-* ]]; then
-    TRAIN_OFF="the local and the remote ref must both be refs/heads/train-*"
-  elif [ -z "$3" ]; then
-    TRAIN_OFF="no merge base with origin/main"
-  else
-    train_range_ok "$3" "$4"
-  fi
-  [ -z "$TRAIN_OFF" ]
-}
-# The FIRST-PARENT line of <base>..<sha> must be merges or `fix(train):` commits (the
-# trainmaster's in-train fix convention; CI stays their control), and at least one merge must
-# bring in something other than the base branch: a second parent outside <base>'s history.
-# Commits reached only through a merge's second parent are members' own work, which passed
-# their own pre-push. Sets TRAIN_OFF on a violation.
-train_range_ok() {
-  local base_for_train="$1" sha_for_train="$2" sha p1 p2 members=0
-  while read -r sha p1 p2 _; do
-    if [ -z "$p2" ]; then
-      [[ "$(git log -1 --format=%s "$sha")" == "fix(train):"* ]] && continue
-      TRAIN_OFF="first-parent commit ${sha:0:10} is neither a merge nor a fix(train): commit"
-      return
-    fi
-    git merge-base --is-ancestor "$p2" "$base_for_train" 2>/dev/null || members=$((members + 1))
-  done < <(git log --first-parent --format='%H %P' "$base_for_train..$sha_for_train" 2>/dev/null)
-  [ "$members" -gt 0 ] || TRAIN_OFF="no first-parent merge brings in anything but the base branch"
-}
-# The guard set, one repo path per line. A listed file that is gone fails the run: a
-# stale list would otherwise shrink the set with no word said.
-train_guard_tests() {
-  cat <<'EOF'
-repo_tests/reach_declarations_test.py
-repo_tests/reach_roots_record_18808_test.py
-repo_tests/reach_scope_claim_17844_test.py
-repo_tests/guard_reach_meta_test.py
-repo_tests/filters_moved_intact_18208_test.py
-repo_tests/python_filter_covers_its_guards_test.py
-repo_tests/one_fake_async_session_18883_test.py
-repo_tests/one_git_enumeration_15926_test.py
-repo_tests/frontend_file_size_ratchet_test.py
-repo_tests/frontend_fragmentation_ratchet_test.py
-repo_tests/i18n_untranslated_ratchet_test.py
-repo_tests/hardcoded_ui_literal_ratchet_12732_test.py
-repo_tests/threat_model_anchors_resolve_test.py
-scripts/check_nosec_format_test.py
-EOF
+# The guard set lives in a tracked file, one repo path per line (#19550 review: a list baked
+# into the INSTALLED hook blocked any branch that renamed or deleted a listed guard).
+FAST_GUARD_LIST="tools/git-hooks/fast_guard_tests.txt"
+fast_guard_tests() {
+  # From the PUSHED commit, so a branch's own list governs its push; the working-tree copy only
+  # when that commit predates the file. No list at all is an error, never an empty set.
+  local list
+  list=$(git show "${local_sha}:${FAST_GUARD_LIST}" 2>/dev/null) \
+    || list=$(cat "${REPO_ROOT}/${FAST_GUARD_LIST}" 2>/dev/null) \
+    || return 1
+  printf '%s\n' "$list" | sed -e 's/#.*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d'
 }
 # The guard tests, then the reach-floor pins (`repin_reach_floors.py --check`: 0 clean, 2 when
 # some guard modules cannot import locally -- both still judged by their STALE/PIN lines;
 # 124 is a timeout; any other exit is a crash and fails, never reads as clean).
-run_train_guards() {
+run_fast_guards() {
   local guards missing guard_output out rc=0
-  guards=$(train_guard_tests)
-  missing=$(printf '%s\n' "$guards" | while IFS= read -r t; do [ -f "$REPO_ROOT/$t" ] || echo "$t"; done)
+  if ! guards=$(fast_guard_tests) || [ -z "$guards" ]; then
+    fail "no fast guard list: ${FAST_GUARD_LIST} is in neither ${local_sha:0:10} nor the working tree"
+    EXIT_CODE=1
+    return
+  fi
+  # Missing from the PUSHED commit fails, as does missing from the tree the stage runs on.
+  missing=$(printf '%s\n' "$guards" | while IFS= read -r t; do
+    git cat-file -e "${local_sha}:${t}" 2>/dev/null && [ -f "$REPO_ROOT/$t" ] || echo "$t"; done)
   if [ -n "$missing" ]; then
-    fail "train guard list names file(s) that do not exist (fix train_guard_tests): $(echo $missing)"
+    fail "fast guard list names file(s) absent from ${local_sha:0:10} (fix ${FAST_GUARD_LIST}): $(echo $missing)"
     EXIT_CODE=1
   fi
   # shellcheck disable=SC2046,SC2086 # word-splitting the file list and xdist args is intended
   # -m "not reach_floor" as every pre-push pytest (#17810): the floors are CI's; the pins are below.
   guard_output=$(cd "$REPO_ROOT" && timeout "$MAX_BUDGET" "$PYTEST_PYTHON" -m pytest -q -p no:cacheprovider -m "not reach_floor" \
     $(pytest_xdist_args) --tb=line $(printf '%s\n' "$guards" | grep -vxF -f <(printf '%s\n' "$missing")) 2>&1) || rc=$?
-  if [ "$rc" = "124" ]; then did_not_run "train guards" "$MAX_BUDGET"
-  elif [ "$rc" != "0" ]; then fail "train guards failed:"; failure_excerpt "$guard_output" >&2; EXIT_CODE=1
-  else ok "train guards: $(printf '%s\n' "$guards" | grep -c .) guard file(s) pass"; fi
+  # As the full pytest run (#19312 review): an interpreter that cannot import pytest ran nothing.
+  if ! "$PYTEST_PYTHON" -c 'import pytest' >/dev/null 2>&1; then
+    could_not_run "fast guards" "${PYTEST_PYTHON} cannot import pytest, so the guard tests did not run"
+  elif [ "$rc" = "124" ]; then did_not_run "fast guards" "$MAX_BUDGET"
+  elif [ "$rc" != "0" ]; then fail "fast guards failed:"; failure_excerpt "$guard_output" >&2; EXIT_CODE=1
+  else ok "fast guards: $(printf '%s\n' "$guards" | grep -c .) guard file(s) pass"; fi
   rc=0
   out=$(cd "$REPO_ROOT" && timeout "$MAX_BUDGET" "$PYTEST_PYTHON" scripts/repin_reach_floors.py --check 2>&1) || rc=$?
   if [ "$rc" = "124" ]; then
@@ -756,19 +731,7 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   elif [ "${AUTOBOT_PREPUSH_CACHE:-1}" = "1" ]; then
     log "pass cache off for this push: the working tree is not exactly ${local_sha:0:10} (dirty, or HEAD differs) -- a full run"
   fi
-  if train_mode_ref "$local_ref" "$remote_ref" "$base" "$local_sha"; then
-    log "train mode: ${remote_ref#refs/heads/} runs only the fast guard set — every member passed its own pre-push; the train's CI runs the full suite (#19472)"
-    train_key=$(stage_key "train guards|${PYTEST_PYTHON}" "")
-    if ! stage_cached "train guards" "$train_key"; then
-      stage_begin "train guards" "$train_key"
-      ( EXIT_CODE=0; STAGE_CLEAN=1; run_train_guards; stage_exit ) </dev/null >"$STAGE_LOG" 2>&1 &
-      stage_track $!
-    fi
-    stage_wait_all
-    continue
-  elif [[ "$local_ref" == refs/heads/train-* || "$remote_ref" == refs/heads/train-* ]]; then
-    log "train mode OFF: ${TRAIN_OFF} -- a full run (#19472)"
-  fi
+  [ "$PREPUSH_FULL" = "1" ] && log "AUTOBOT_PREPUSH_FULL=1: running the full local vue-tsc / vitest / pytest suites (#19472)"
 
   # ----- Frontend (TypeScript / Vue) --------------------------------------
   #
@@ -807,6 +770,8 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   KIT_TREE="libs/autobot-ui"
 
   frontend_changed=$(echo "$changed" | grep -E '\.(ts|vue)$' || true)
+  # #19472 fast gate: the frontend suites are CI's unless AUTOBOT_PREPUSH_FULL=1.
+  [ "$PREPUSH_FULL" = "1" ] || frontend_changed=""
   frontend_unclaimed="$frontend_changed"
   kit_changed=$(echo "$frontend_changed" | grep -E "^${KIT_TREE}/" || true)
   frontend_unclaimed=$(echo "$frontend_unclaimed" | grep -vE "^${KIT_TREE}/" || true)
@@ -1078,6 +1043,22 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   fi
 
   # ----- Backend (Python) -------------------------------------------------
+  # #19472 fast gate (default): the guard set instead of the selected pytest run, which is CI's.
+  if [ "$PREPUSH_FULL" != "1" ]; then
+    log "fast gate: $(fast_guard_tests | grep -c .) guard tests + reach-floor pins; the full vue-tsc / vitest / pytest suites run in CI (owner 2026-10-25) -- AUTOBOT_PREPUSH_FULL=1 runs them here"
+    # The interpreter path alone would let an in-place venv upgrade reuse an old pass (#19550 review)
+    # pytest's version is READ, not run as `-m pytest`: every `-m pytest` line here is a test run
+    # that must deselect reach_floor (#17810), and a version probe is not one.
+    py_env=$("$PYTEST_PYTHON" -VV 2>/dev/null | tr -d '\n'; "$PYTEST_PYTHON" -c 'import pytest; print("pytest", pytest.__version__)' 2>/dev/null | tr -d '\n')
+    fast_key=$(stage_key "fast guards|${PYTEST_PYTHON}|${py_env}" "")
+    if ! stage_cached "fast guards" "$fast_key"; then
+      stage_begin "fast guards" "$fast_key"
+      ( EXIT_CODE=0; STAGE_CLEAN=1; run_fast_guards; stage_exit ) </dev/null >"$STAGE_LOG" 2>&1 &
+      stage_track $!
+    fi
+    stage_wait_all
+    continue
+  fi
   # #16711: tools/lint/prepush_selection.py chooses the tests and says why. It
   # picks changed tests under every pytest.ini python_files pattern (test_*.py
   # was missed before) and the co-located foo_test.py of a changed foo.py, and

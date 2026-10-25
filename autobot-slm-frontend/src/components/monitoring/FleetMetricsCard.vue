@@ -9,7 +9,7 @@
  */
 
 import { computed } from 'vue'
-import type { FleetMetricsDetailed } from '@/composables/usePrometheusMetrics'
+import type { FleetMetricsDetailed } from '@/composables/useFleetMetrics'
 
 interface Props {
   metrics: FleetMetricsDetailed | null

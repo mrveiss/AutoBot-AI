@@ -21,6 +21,9 @@ python:
   # bypassed: a PR touching only this workflow computes `python != true`,
   # python-suite reports green, and the test guarding it never runs.
   - '.github/workflows/duplication-guard.yml'
+  # #18559: the duplication-guard pins file, read by
+  # duplication_guard_names_the_failing_scope_test.py and duplication_guard_scopes_18559_test.py.
+  - '.github/duplication-pins.json'
   # #17856: frontend_api_timeout_ssot_17856_test.py reads both files' API
   # timeout and holds them equal to TimeoutConfig.api; an edit confined to one
   # must run it.
