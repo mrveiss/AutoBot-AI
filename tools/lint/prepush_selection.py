@@ -150,7 +150,7 @@ ALWAYS_RUN = {
     "repo_tests/shell_file_size_ratchet_test.py": "whole-tree: shell file-size ceilings",
     "repo_tests/frontend_file_size_ratchet_test.py": "whole-tree: frontend file-size ceilings",
     "repo_tests/python_filter_covers_its_guards_test.py": "whole-tree: the python filter covers every guard input",
-    "repo_tests/changes_job_equivalence_15360_test.py": "whole-tree: the #15360 changes-job equivalence",
+    "repo_tests/filters_moved_intact_18208_test.py": "whole-tree: the change filters moved intact into ci.yml (#18208)",
     "repo_tests/secrets_baseline_reasons_guard_test.py": "whole-tree: every secrets-baseline entry has a reason",
     "repo_tests/reach_scope_claim_17844_test.py": "whole-tree: reach declarations match their scopes",
     "repo_tests/guard_reach_meta_test.py": "whole-tree: every tree-scanning guard has a reach floor",

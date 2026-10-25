@@ -33,10 +33,19 @@ from pathlib import Path
 
 import yaml
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
 _WORKFLOWS = Path(".github/workflows")
 _CONTEXT = "smoke-test"
 _VERDICT = Path(".github/actions/gate-verdict/verdict.sh")
+
+
+def _workflow_files(root: Path) -> list[Path]:
+    return sorted(p for p in (root / _WORKFLOWS).iterdir() if p.suffix == ".yml")
+
+
+#: 69 workflow files at #18208; a floor well below so a moved or emptied tree fails, not passes.
+REACH = declare("docker-smoke-context-publishers", discover=_workflow_files, floor=50, what="workflow files")
 
 
 def _ci() -> dict:
@@ -66,11 +75,13 @@ def _verdict(**env: str) -> subprocess.CompletedProcess:
 def test_exactly_one_job_in_the_whole_tree_publishes_the_context() -> None:
     """The shim is gone; a second same-named job is the shape #17391 measured as unsafe."""
     publishers = []
-    for path in sorted(p for p in (repo_root() / _WORKFLOWS).iterdir() if p.suffix == ".yml"):
+    files = REACH.examined(repo_root())
+    for path in files:
         doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         for job_id, spec in (doc.get("jobs") or {}).items():
             if (spec or {}).get("name", job_id) == _CONTEXT:
                 publishers.append(f"{path.name}:{job_id}")
+    REACH.completed(files)
     assert publishers == [f"ci.yml:{_CONTEXT}"], publishers
 
 
