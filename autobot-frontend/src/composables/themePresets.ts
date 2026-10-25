@@ -31,8 +31,10 @@ export type ThemePreset =
 
 /** Configuration for each theme preset */
 export interface ThemePresetConfig {
-  name: string
-  description: string
+  /** i18n key of the display name; render sites translate with t() (#18255) */
+  nameKey: string
+  /** i18n key of the one-line description */
+  descriptionKey: string
   theme: Theme
   accentColor: AccentColor
   highContrast?: boolean
@@ -41,82 +43,82 @@ export interface ThemePresetConfig {
 /** Preset configurations */
 export const THEME_PRESETS: Record<ThemePreset, ThemePresetConfig> = {
   auto: {
-    name: 'Auto',
-    description: 'Follows system preference',
+    nameKey: 'ui.themePresets.names.auto',
+    descriptionKey: 'ui.themePresets.descriptions.auto',
     theme: 'system',
     accentColor: 'theme',
   },
   'catppuccin-mocha': {
-    name: 'Catppuccin Mocha',
-    description: 'Warm dark theme with purple accents',
+    nameKey: 'ui.themePresets.names.catppuccin-mocha',
+    descriptionKey: 'ui.themePresets.descriptions.catppuccin-mocha',
     theme: 'dark',
     accentColor: 'purple',
   },
   'catppuccin-latte': {
-    name: 'Catppuccin Latte',
-    description: 'Soft light theme with purple accents',
+    nameKey: 'ui.themePresets.names.catppuccin-latte',
+    descriptionKey: 'ui.themePresets.descriptions.catppuccin-latte',
     theme: 'light',
     accentColor: 'purple',
   },
   'solarized-dark': {
-    name: 'Solarized Dark',
-    description: 'Classic dark theme with cyan accents',
+    nameKey: 'ui.themePresets.names.solarized-dark',
+    descriptionKey: 'ui.themePresets.descriptions.solarized-dark',
     theme: 'dark',
     accentColor: 'teal',
   },
   'solarized-light': {
-    name: 'Solarized Light',
-    description: 'Classic light theme with cyan accents',
+    nameKey: 'ui.themePresets.names.solarized-light',
+    descriptionKey: 'ui.themePresets.descriptions.solarized-light',
     theme: 'light',
     accentColor: 'teal',
   },
   'high-contrast-dark': {
-    name: 'High Contrast Dark',
-    description: 'Maximum readability dark theme',
+    nameKey: 'ui.themePresets.names.high-contrast-dark',
+    descriptionKey: 'ui.themePresets.descriptions.high-contrast-dark',
     theme: 'dark',
     accentColor: 'blue',
     highContrast: true,
   },
   'high-contrast-light': {
-    name: 'High Contrast Light',
-    description: 'Maximum readability light theme',
+    nameKey: 'ui.themePresets.names.high-contrast-light',
+    descriptionKey: 'ui.themePresets.descriptions.high-contrast-light',
     theme: 'light',
     accentColor: 'blue',
     highContrast: true,
   },
   'brand-dark': {
-    name: 'AutoBot Dark',
-    description: 'Official AutoBot dark theme',
+    nameKey: 'ui.themePresets.names.brand-dark',
+    descriptionKey: 'ui.themePresets.descriptions.brand-dark',
     theme: 'dark',
     accentColor: 'teal',
   },
   'brand-light': {
-    name: 'AutoBot Light',
-    description: 'Official AutoBot light theme',
+    nameKey: 'ui.themePresets.names.brand-light',
+    descriptionKey: 'ui.themePresets.descriptions.brand-light',
     theme: 'light',
     accentColor: 'teal',
   },
   midnight: {
-    name: 'Midnight',
-    description: 'Deep blue night theme',
+    nameKey: 'ui.themePresets.names.midnight',
+    descriptionKey: 'ui.themePresets.descriptions.midnight',
     theme: 'dark',
     accentColor: 'indigo',
   },
   sunset: {
-    name: 'Sunset',
-    description: 'Warm orange light theme',
+    nameKey: 'ui.themePresets.names.sunset',
+    descriptionKey: 'ui.themePresets.descriptions.sunset',
     theme: 'light',
     accentColor: 'orange',
   },
   forest: {
-    name: 'Forest',
-    description: 'Natural green dark theme',
+    nameKey: 'ui.themePresets.names.forest',
+    descriptionKey: 'ui.themePresets.descriptions.forest',
     theme: 'dark',
     accentColor: 'green',
   },
   rose: {
-    name: 'Rose',
-    description: 'Elegant pink light theme',
+    nameKey: 'ui.themePresets.names.rose',
+    descriptionKey: 'ui.themePresets.descriptions.rose',
     theme: 'light',
     accentColor: 'pink',
   },
