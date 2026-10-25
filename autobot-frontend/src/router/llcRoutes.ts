@@ -78,7 +78,7 @@ export const llcCompanyChildren: RouteRecordRaw[] = [
   { path: 'roles', name: 'llc-roles', component: () => import('@/views/llc/RolesView.vue'), props: true, meta: { title: 'Roles', requiresAuth: true } },
   { path: 'members', name: 'llc-members', component: () => import('@/views/llc/MembersView.vue'), props: true, meta: { title: 'Members', requiresAuth: true } },
   { path: 'portability', name: 'llc-company-portability', component: () => import('@/views/llc/CompanyPortabilityView.vue'), props: true, meta: { title: 'Portability', requiresAuth: true } },
-  { path: 'secrets', name: 'llc-company-secrets', component: () => import('@/views/llc/SecretsView.vue'), props: true, meta: { title: 'Secrets', requiresAuth: true } },
+  { path: 'secrets', name: 'llc-company-secrets', component: () => import('@/views/llc/CompanySecretsView.vue'), props: true, meta: { title: 'Secrets', requiresAuth: true } },
   // GH#10750 (B3): in-layout variants of the formerly top-level dashboard/
   // goals/org-chart views so the LlcSidebar stays mounted on navigation.
   // The views resolve the active company from :companyId via
