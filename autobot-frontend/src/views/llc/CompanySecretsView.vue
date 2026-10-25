@@ -115,7 +115,7 @@ import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{ companyId?: string }>()
 
-const logger = createLogger('SecretsView')
+const logger = createLogger('CompanySecretsView')
 const api = useApiClient()
 const userStore = useUserStore()
 const { t } = useI18n()
@@ -283,7 +283,7 @@ onMounted(() => void loadSecrets())
 .secret-name code {
   font-family: var(--font-mono, monospace);
   font-size: 0.8125rem;
-  background: var(--bg-code, var(--secretsview-bg-code));
+  background: var(--bg-code, var(--company-secrets-bg-code));
   padding: 0.125rem 0.375rem;
   border-radius: var(--radius-sm);
 }
@@ -302,12 +302,12 @@ onMounted(() => void loadSecrets())
 }
 
 .status-active {
-  background: var(--color-success-subtle, var(--secretsview-success-bg));
-  color: var(--color-success-text, var(--secretsview-success-text));
+  background: var(--color-success-subtle, var(--company-secrets-success-bg));
+  color: var(--color-success-text, var(--company-secrets-success-text));
 }
 
 .status-revoked {
-  background: var(--bg-muted, var(--secretsview-status-revoked-bg));
+  background: var(--bg-muted, var(--company-secrets-status-revoked-bg));
   color: var(--text-muted);
 }
 
@@ -322,8 +322,8 @@ onMounted(() => void loadSecrets())
   font-weight: 600;
   border: none;
   border-radius: var(--radius-md);
-  background: var(--color-accent, var(--secretsview-accent));
-  color: var(--secretsview-on-accent);
+  background: var(--color-accent, var(--company-secrets-accent));
+  color: var(--company-secrets-on-accent);
   cursor: pointer;
 }
 
@@ -349,7 +349,7 @@ onMounted(() => void loadSecrets())
 
 .btn-danger {
   color: var(--color-danger);
-  border-color: var(--color-danger-subtle, var(--secretsview-danger-border));
+  border-color: var(--color-danger-subtle, var(--company-secrets-danger-border));
 }
 
 .btn-close {
@@ -412,7 +412,7 @@ onMounted(() => void loadSecrets())
 }
 
 .field input:disabled {
-  background: var(--bg-muted, var(--secretsview-input-disabled-bg));
+  background: var(--bg-muted, var(--company-secrets-input-disabled-bg));
   color: var(--text-muted);
 }
 

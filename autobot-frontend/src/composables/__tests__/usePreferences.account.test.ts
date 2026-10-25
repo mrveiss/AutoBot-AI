@@ -176,3 +176,28 @@ describe('every appearance field follows the sign-in rule', () => {
     expect(localStorage.getItem('autobot-theme')).toBe('dark')
   })
 })
+
+describe('theme_preset round trip (#18252)', () => {
+  it("sends 'auto' when no preset is chosen, and a named preset by name", async () => {
+    const { prefs } = await fresh()
+    const theme = (await import('../useTheme')).useTheme()
+    expect(theme.preset.value).toBeNull()
+    await prefs.saveAppearanceToBackend()
+    expect((apiPatch.mock.calls[0][1] as Record<string, unknown>).theme_preset).toBe('auto')
+
+    theme.setPreset('midnight')
+    await prefs.saveAppearanceToBackend()
+    expect((apiPatch.mock.calls[1][1] as Record<string, unknown>).theme_preset).toBe('midnight')
+  })
+
+  it.each([
+    [{ theme_preset: 'auto', theme: 'dark', accent_color: 'theme' }, null],
+    [{ theme_preset: 'auto', theme: 'system', accent_color: 'theme' }, 'auto'],
+    [{ theme_preset: 'midnight', theme: 'dark', accent_color: 'indigo' }, 'midnight'],
+  ])('a fresh sign-in with %o selects preset %s', async (account, expected) => {
+    apiGet.mockResolvedValue({ data: { preferences: account } })
+    const { prefs } = await fresh()
+    await prefs.loadAppearanceFromBackend({ freshSignIn: true })
+    expect((await import('../useTheme')).useTheme().preset.value).toBe(expected)
+  })
+})
