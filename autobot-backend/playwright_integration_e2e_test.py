@@ -13,7 +13,7 @@ from pathlib import Path
 import aiohttp
 
 sys.path.insert(0, str(Path(__file__).parent))
-from tests.test_helpers import get_test_backend_url
+from tests.test_helpers import live_backend_url
 
 
 async def test_playwright_service():
@@ -74,7 +74,7 @@ async def test_workflow_with_research():
     print("\n\n🔄 Testing Workflow Orchestration with Web Research")  # noqa: print
     print("=" * 60)  # noqa: print
 
-    base_url = get_test_backend_url() + "/api/workflow"
+    base_url = live_backend_url() + "/api/workflow"
 
     async with aiohttp.ClientSession() as session:
         # Execute a research workflow
@@ -173,7 +173,7 @@ async def test_chat_with_workflow():
         print("-" * 40)  # noqa: print
 
         try:
-            async with session.post(get_test_backend_url() + "/api/chats/new") as response:
+            async with session.post(live_backend_url() + "/api/chats/new") as response:
                 if response.status == 200:
                     chat_data = await response.json()
                     chat_id = chat_data.get("chat_id")
@@ -195,7 +195,7 @@ async def test_chat_with_workflow():
         }
 
         try:
-            async with session.post(get_test_backend_url() + "/api/chat", json=chat_request) as response:
+            async with session.post(live_backend_url() + "/api/chat", json=chat_request) as response:
                 if response.status == 200:
                     result = await response.json()
                     print("✅ Message sent successfully")  # noqa: print
