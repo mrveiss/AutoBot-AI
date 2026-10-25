@@ -4,19 +4,37 @@
 // Author: mrveiss
 
 /**
- * Prometheus Metrics Composable for SLM Admin
+ * useFleetMetrics — the fleet's monitoring metrics for SLM Admin
  *
- * Provides access to monitoring metrics from the SLM backend API.
+ * Provides access to monitoring metrics from the SLM backend API. It was
+ * usePrometheusMetrics until #18225: the user app's composable of that name
+ * reads one install's backend, a different concept (owner decision 2026-10-24),
+ * so each now carries its own name and the headline numbers come from the kit's
+ * useMetricsSummary.
  * Uses local SLM monitoring endpoints for fleet metrics, alerts, and health.
  * Issue #729 - Integrated monitoring into SLM.
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { slmApiClient } from '@/utils/ApiClient'
 import { POLLED_READ_MAX_RETRIES } from '@/constants/api-timeouts'
 import type { GPUNodeStatus } from '@/types/slm'
-// Shared with autobot-frontend's usePrometheusMetrics.ts — see the kit
+import { useMetricsSummary } from '@autobot/ui'
+// Types and the pure summary helper live in fleetMetricsModel.ts (#18225).
+import { summariseGpus } from './fleetMetricsModel'
+import type {
+  DashboardViewModel,
+  NodeMetricsDetailed,
+  FleetMetricsDetailed,
+  PerformanceOverview,
+  NPUFleetMetrics,
+  DashboardWire,
+  MonitoringHealthWire,
+  MonitoringAlertsWire,
+  NpuNodesWire,
+} from './fleetMetricsModel'
+// Metric shapes shared with autobot-frontend's useInstallMetrics.ts — see the kit
 // file's doc comment for which fields are main-app-only extensions (#14907).
 // ServiceHealth is used only inside ServicesSummary's shape (not referenced
 // directly in this file), so it is re-exported but not locally imported —
@@ -41,7 +59,7 @@ export type {
   UsePrometheusMetricsOptions,
 } from '@autobot/ui'
 
-const logger = createLogger('usePrometheusMetrics')
+const logger = createLogger('useFleetMetrics')
 
 /**
  * Every read below goes through `slmApiClient` (#13140), which owns the
@@ -69,167 +87,18 @@ const logger = createLogger('usePrometheusMetrics')
 /** Polled read options — single-shot, see note 2 above. */
 const POLL_OPTS = { maxRetries: POLLED_READ_MAX_RETRIES } as const
 
-// ===== Type Definitions =====
-
-/**
- * Host-level metrics as this composable presents them — a client-side
- * VIEW-MODEL, not a wire shape.
- *
- * Renamed from `SystemMetrics` in #13138: it collided with the generated
- * `components['schemas']['SystemMetrics']` (the `/health/metrics` response,
- * autobot-slm-backend/api/health.py:59) while sharing almost nothing with it —
- * `fetchDashboard` below synthesises every field from `/monitoring/dashboard`'s
- * `fleet_metrics` averages, and `timestamp` here is `Date.now()`, not an ISO
- * string. Deriving it would have been actively harmful.
- */
-export interface SystemMetricsViewModel {
-  cpu_percent: number
-  memory_percent: number
-  disk_percent: number
-  network_bytes_sent: number
-  network_bytes_recv: number
-  process_count: number
-  timestamp: number
-}
-
-/**
- * Dashboard shape this composable exposes — a client-side VIEW-MODEL.
- *
- * Renamed from `DashboardOverview` in #13138: it collided with the generated
- * `components['schemas']['DashboardOverview']` (api/monitoring.py:118), which
- * `fetchDashboard` deliberately REMAPS into this shape (see the mapping right
- * below). The real wire model is derived, under its own name, in
- * `types/api-responses.ts`.
- */
-export interface DashboardViewModel {
-  system_metrics?: SystemMetricsViewModel
-  gpu_metrics?: GPUMetrics
-  npu_metrics?: NPUMetrics
-  hardware_acceleration?: Record<string, boolean>
-  analysis?: {
-    overall_health: string
-    performance_score: number
-    bottlenecks: string[]
-    resource_utilization: Record<string, number>
-  }
-  timestamp?: number
-}
-
-export interface NodeMetricsDetailed {
-  node_id: string
-  hostname: string
-  ip_address: string
-  status: string
-  cpu_percent: number
-  memory_percent: number
-  disk_percent: number
-  last_heartbeat: string | null
-  services_running: number
-  services_failed: number
-}
-
-export interface FleetMetricsDetailed {
-  total_nodes: number
-  online_nodes: number
-  degraded_nodes: number
-  offline_nodes: number
-  avg_cpu_percent: number
-  avg_memory_percent: number
-  avg_disk_percent: number
-  total_services: number
-  running_services: number
-  failed_services: number
-  nodes: NodeMetricsDetailed[]
-  timestamp: string
-}
-
-export interface PerformanceOverview {
-  avg_response_time_ms: number
-  p50_response_time_ms: number
-  p95_response_time_ms: number
-  p99_response_time_ms: number
-  request_rate: number
-  error_rate: number
-  trace_count: number
-  error_count: number
-  timestamp: string
-}
-
-export interface NPUFleetMetrics {
-  total_npu_nodes: number
-  online_npu_nodes: number
-  total_workers: number
-  active_workers: number
-  avg_utilization_percent: number
-  total_inferences: number
-  avg_inference_time_ms: number
-}
-
-/**
- * Transport-local wire shapes for the four endpoints whose responses this
- * composable REMAPS rather than assigns. They exist only to type the
- * `slmApiClient.get<T>()` calls that replace an untyped `response.json()`;
- * deriving and naming them from the generated contract is #13138's scope and is
- * deliberately not widened here.
- */
-interface DashboardWire {
-  fleet_metrics?: {
-    avg_cpu_percent?: number
-    avg_memory_percent?: number
-    avg_disk_percent?: number
-    total_services?: number
-  }
-  health_summary?: {
-    overall_status?: string
-    health_score?: number
-    issues?: string[]
-  }
-}
-
-interface MonitoringHealthWire {
-  overall_status?: string
-  health_score?: number
-}
-
-interface MonitoringAlertsWire {
-  total_count?: number
-  critical_count?: number
-  warning_count?: number
-  alerts?: Record<string, unknown>[]
-}
-
-interface NpuNodesWire {
-  nodes?: Record<string, unknown>[]
-}
-
-/** Mean of the values a tool could read; 0 only when it read none of them. */
-function meanOfKnown(values: (number | null | undefined)[]): number {
-  const known = values.filter((value): value is number => value != null)
-  return known.length ? known.reduce((sum, value) => sum + value, 0) / known.length : 0
-}
-
-/**
- * The fleet's measured GPUs as one GPUMetrics, or null when none is measured
- * (#15226): an unmeasured fleet is unknown, not a fleet sitting at 0%.
- */
-function summariseGpus(nodes: GPUNodeStatus[]): GPUMetrics | null {
-  const devices = nodes.flatMap((node) => (node.devices ?? []).filter((device) => device.monitored))
-  if (devices.length === 0) return null
-  const used = devices.reduce((sum, device) => sum + (device.memory_used_mb ?? 0), 0)
-  const total = devices.reduce((sum, device) => sum + (device.memory_total_mb ?? 0), 0)
-  return {
-    available: true,
-    utilization_percent: meanOfKnown(devices.map((device) => device.utilization_percent)),
-    memory_utilization_percent: total ? (used / total) * 100 : 0,
-    temperature_celsius: Math.max(0, ...devices.map((device) => device.temperature_celsius ?? 0)),
-    power_watts: devices.reduce((sum, device) => sum + (device.power_watts ?? 0), 0),
-    name: devices.length === 1 ? (devices[0].name ?? undefined) : undefined,
-  }
-}
+export type {
+  SystemMetricsViewModel,
+  DashboardViewModel,
+  NodeMetricsDetailed,
+  FleetMetricsDetailed,
+  PerformanceOverview,
+  NPUFleetMetrics,
+} from './fleetMetricsModel'
 
 // ===== Composable Implementation =====
 
-export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) {
+export function useFleetMetrics(options: UsePrometheusMetricsOptions = {}) {
   const { autoFetch = true, pollInterval = 30000 } = options
 
   // State
@@ -260,18 +129,7 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
 
   // ===== Computed Values =====
 
-  const systemHealth = computed<'healthy' | 'degraded' | 'critical' | 'unknown'>(() => {
-    if (!services.value) return 'unknown'
-    return services.value.overall_status
-  })
-
-  const cpuUsage = computed(() => dashboard.value?.system_metrics?.cpu_percent ?? 0)
-  const memoryUsage = computed(() => dashboard.value?.system_metrics?.memory_percent ?? 0)
-  const diskUsage = computed(() => dashboard.value?.system_metrics?.disk_percent ?? 0)
-  const gpuUsage = computed(() => gpuDetails.value?.available ? gpuDetails.value.utilization_percent : 0)
-  const npuUsage = computed(() => npuDetails.value?.available ? npuDetails.value.utilization_percent : 0)
-  const healthScore = computed(() => dashboard.value?.analysis?.performance_score ?? 0)
-  const activeAlertCount = computed(() => alerts.value?.total_count ?? 0)
+  const summary = useMetricsSummary({ dashboard, services, alerts, gpuDetails, npuDetails })
 
   // ===== API Methods =====
 
@@ -586,14 +444,7 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
     prometheusExport,
 
     // Computed
-    systemHealth,
-    cpuUsage,
-    memoryUsage,
-    diskUsage,
-    gpuUsage,
-    npuUsage,
-    healthScore,
-    activeAlertCount,
+    ...summary,
 
     // Methods
     fetchDashboard,
@@ -619,4 +470,4 @@ export function usePrometheusMetrics(options: UsePrometheusMetricsOptions = {}) 
   }
 }
 
-export default usePrometheusMetrics
+export default useFleetMetrics

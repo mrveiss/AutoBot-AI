@@ -9,7 +9,7 @@
  */
 
 import { onMounted, onUnmounted, ref } from 'vue'
-import { usePrometheusMetrics } from '@/composables/usePrometheusMetrics'
+import { useFleetMetrics } from '@/composables/useFleetMetrics'
 import FleetMetricsCard from '@/components/monitoring/FleetMetricsCard.vue'
 import NodeMetricsGrid from '@/components/monitoring/NodeMetricsGrid.vue'
 import { createLogger } from '@/utils/debugUtils'
@@ -26,7 +26,7 @@ const {
   lastUpdate,
   refreshMetrics,
   fetchPrometheusExport,
-} = usePrometheusMetrics({ autoFetch: false })
+} = useFleetMetrics({ autoFetch: false })
 
 const showNPUMetrics = ref(false)
 let refreshInterval: ReturnType<typeof setInterval> | null = null

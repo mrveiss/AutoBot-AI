@@ -3,9 +3,13 @@
 // AutoBot - AI-Powered Automation Platform
 // Author: mrveiss
 /**
- * Vue Composable for Prometheus Metrics Access
+ * useInstallMetrics — this install's monitoring metrics
  *
- * Provides real-time access to Prometheus metrics from the backend monitoring API.
+ * Provides real-time access to the install backend's monitoring API. It was
+ * usePrometheusMetrics until #18225: the SLM's composable of that name reads the
+ * fleet from the SLM backend, a different concept (owner decision 2026-10-24),
+ * so each now carries its own name and the headline numbers come from the kit's
+ * useMetricsSummary.
  * Supports automatic polling, WebSocket real-time updates, and parsed metric data.
  *
  * All metrics are fetched from real backend endpoints - no mock data.
@@ -13,7 +17,7 @@
  */
 
 import { ref, computed, onMounted, getCurrentInstance } from 'vue'
-import type { Ref, ComputedRef } from 'vue'
+import type { Ref } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase, getBackendWsUrl } from '@/config/ssot-config'
@@ -21,8 +25,9 @@ import { useWebSocket } from '@/composables/useWebSocket'
 import { buildAuthenticatedWsSubprotocols } from '@/utils/buildAuthenticatedWsUrl'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useLoadingState } from './useLoadingState'
-// Shared with autobot-slm-frontend's usePrometheusMetrics.ts — see the
-// kit file's doc comment for which fields are main-only extensions (#14907).
+import { useMetricsSummary, type MetricsSummary } from '@autobot/ui'
+// Metric shapes shared with the SLM's useFleetMetrics.ts — see the kit file's
+// doc comment for which fields are main-only extensions (#14907).
 import type {
   GPUMetrics,
   NPUMetrics,
@@ -45,7 +50,7 @@ export type {
 } from '@autobot/ui'
 
 // Create scoped logger
-const logger = createLogger('usePrometheusMetrics')
+const logger = createLogger('useInstallMetrics')
 
 // ===== Type Definitions =====
 
@@ -105,7 +110,7 @@ export interface GithubMetrics {
   issues_open: number
 }
 
-export interface PrometheusMetricsState {
+export interface InstallMetricsState {
   // Core metrics
   dashboard: Ref<DashboardOverview | null>
   services: Ref<ServicesSummary | null>
@@ -123,17 +128,7 @@ export interface PrometheusMetricsState {
   isConnected: Ref<boolean>
 }
 
-export interface UsePrometheusMetricsReturn extends PrometheusMetricsState {
-  // Computed values
-  systemHealth: ComputedRef<'healthy' | 'degraded' | 'critical' | 'unknown'>
-  cpuUsage: ComputedRef<number>
-  memoryUsage: ComputedRef<number>
-  diskUsage: ComputedRef<number>
-  gpuUsage: ComputedRef<number>
-  npuUsage: ComputedRef<number>
-  healthScore: ComputedRef<number>
-  activeAlertCount: ComputedRef<number>
-
+export interface UseInstallMetricsReturn extends InstallMetricsState, MetricsSummary {
   // Methods
   fetchDashboard: () => Promise<void>
   fetchServices: () => Promise<void>
@@ -151,9 +146,9 @@ export interface UsePrometheusMetricsReturn extends PrometheusMetricsState {
 
 // ===== Composable Implementation =====
 
-export function usePrometheusMetrics(
+export function useInstallMetrics(
   options: UsePrometheusMetricsOptions = {}
-): UsePrometheusMetricsReturn {
+): UseInstallMetricsReturn {
   const {
     autoFetch = true,
     pollInterval = 30000,
@@ -243,40 +238,7 @@ export function usePrometheusMetrics(
 
   // ===== Computed Values =====
 
-  const systemHealth = computed<'healthy' | 'degraded' | 'critical' | 'unknown'>(() => {
-    if (!services.value) return 'unknown'
-    return services.value.overall_status
-  })
-
-  const cpuUsage = computed(() => {
-    return dashboard.value?.system_metrics?.cpu_percent ?? 0
-  })
-
-  const memoryUsage = computed(() => {
-    return dashboard.value?.system_metrics?.memory_percent ?? 0
-  })
-
-  const diskUsage = computed(() => {
-    return dashboard.value?.system_metrics?.disk_percent ?? 0
-  })
-
-  const gpuUsage = computed(() => {
-    if (!gpuDetails.value?.available) return 0
-    return gpuDetails.value.utilization_percent ?? 0
-  })
-
-  const npuUsage = computed(() => {
-    if (!npuDetails.value?.available) return 0
-    return npuDetails.value.utilization_percent ?? 0
-  })
-
-  const healthScore = computed(() => {
-    return dashboard.value?.analysis?.performance_score ?? 0
-  })
-
-  const activeAlertCount = computed(() => {
-    return alerts.value?.total_count ?? 0
-  })
+  const summary = useMetricsSummary({ dashboard, services, alerts, gpuDetails, npuDetails })
 
   // ===== API Methods =====
 
@@ -423,14 +385,7 @@ export function usePrometheusMetrics(
     isConnected,
 
     // Computed
-    systemHealth,
-    cpuUsage,
-    memoryUsage,
-    diskUsage,
-    gpuUsage,
-    npuUsage,
-    healthScore,
-    activeAlertCount,
+    ...summary,
 
     // Methods
     fetchDashboard,
@@ -640,4 +595,4 @@ export function useAlerts(pollInterval = 30000) {
   }
 }
 
-export default usePrometheusMetrics
+export default useInstallMetrics

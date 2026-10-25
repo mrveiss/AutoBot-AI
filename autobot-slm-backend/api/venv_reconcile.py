@@ -57,7 +57,6 @@ from __future__ import annotations
 import asyncio
 import configparser
 import json
-import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -65,16 +64,11 @@ from typing import Dict, List, Optional, Set, Tuple
 
 import venv_provenance as provenance
 from autobot_shared.env_utils import env_float
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.slug import sanitize_token
 from autobot_shared.time_utils import utc_timestamp
 
-# Plain stdlib logging, deliberately (mirrors code_sync.py itself, and the
-# password_epoch.py precedent CLAUDE.md documents): this module is imported
-# at collection time by tests that stub `config` as a MagicMock, and
-# `autobot_shared.logging_manager.get_logger()` reads real config at import
-# time to size its file handler — under that stub regime it raises before a
-# single test in the file can run.
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Timeouts are env-backed module constants, never a hardcoded bare number
 # scattered through call sites — mirrors the existing pip-install timeout
