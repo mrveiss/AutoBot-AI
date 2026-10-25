@@ -575,26 +575,8 @@ SPECIFIC_REASONS[
     "into i18n), not a credential; `Password` in the key trips the Secret Keyword denylist. Plain SHA1 "
     "of the literal label reproduces this hash."
 )
-for _type in ("Basic Auth Credentials", "Secret Keyword"):
-    SPECIFIC_REASONS[
-        (
-            ".github/workflows/_gate-migration.yml",
-            _type,
-            "73f8b006461899b9ce28347f03f96db78b7abff8",  # pragma: allowlist secret
-        )
-    ] = (
-        "the throwaway `migtest` user/password of the migration gate's CI-only postgres container and its "
-        "admin URL, moved verbatim from migration-gate.yml (frozen legacy entry, same hash) by #18208. "
-        "Plain SHA1 of `migtest` reproduces this hash."
-    )
-SPECIFIC_REASONS[
-    (
-        ".github/workflows/_gate-security.yml",
-        "Secret Keyword",
-        "bb97e2eb9656dd63351c52cd1d35ff3a38383690",  # pragma: allowlist secret
-    )
-] = (
-    "the `run:` block of the detect-secrets step (it names secrets.baseline paths), moved verbatim "
-    "from security.yml, where the same hash is a frozen legacy entry, when #18208 made it a gate "
-    "workflow; no credential is present in that step."
-)
+# The required-gate workflows' entries live in their own module (#18208): this table sits at the
+# 600-line ceiling, so the next group of entries moves out rather than trimming what is here.
+from repo_tests.secrets_baseline_reason_workflows import WORKFLOW_REASONS  # noqa: E402
+
+SPECIFIC_REASONS.update(WORKFLOW_REASONS)
