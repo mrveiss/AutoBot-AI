@@ -118,6 +118,7 @@ import { SkipLink } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { cacheBuster } from '@/utils/CacheBuster.js';
 import { healthMonitor } from '@/utils/HealthMonitor.js';
+import { useBackendHealthNotice } from '@/composables/useBackendHealthNotice';
 import { initializeNotificationBridge } from '@/utils/notificationBridge';
 import { smartMonitoringController, getAdaptiveInterval } from '@/config/OptimizedPerformance.js';
 import { clearAllSystemNotifications, resetHealthMonitor } from '@/utils/ClearNotifications.js';
@@ -159,6 +160,10 @@ export default {
 
     // Store references
     const appStore = useAppStore();
+    const backendHealthNotice = useBackendHealthNotice(appStore, t, () => ({
+      consecutiveFailures: healthMonitor.consecutiveFailures?.backend ?? 0,
+      error: healthMonitor.lastBackendError,
+    }));
     const userStore = useUserStore();
     const chatStore = useChatStore();
     const knowledgeStore = useKnowledgeStore();
@@ -316,24 +321,11 @@ export default {
         // Update app store with health status
         if (appStore && typeof appStore.setBackendStatus === 'function') {
           const backendStatus = healthData.status.backend;
-
-          // Determine status text based on backend health
-          let statusText = 'Disconnected';
-          let statusClass: 'success' | 'warning' | 'error' = 'error';
-
-          if (backendStatus === 'healthy') {
-            statusText = 'Connected';
-            statusClass = 'success';
-          } else if (backendStatus === 'degraded') {
-            statusText = 'Degraded';
-            statusClass = 'warning';
-          }
-
-          appStore.setBackendStatus({
-            text: statusText,
-            class: statusClass
-          });
+          const statusClass = backendStatus === 'healthy' ? 'success' : backendStatus === 'degraded' ? 'warning' : 'error';
+          appStore.setBackendStatus({ class: statusClass });
         }
+        // #16253: a degraded or critical backend raises one notice with its status details.
+        backendHealthNotice.onHealthChange(healthData);
 
         // Update smart monitoring controller (filter out 'unknown' state)
         const healthState = healthData.status.overall;

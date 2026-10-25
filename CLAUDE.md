@@ -8,6 +8,7 @@ global instructions and are not repeated here; where the two disagree, **this fi
 
 | Trigger | Doc |
 |---|---|
+| Unsure which workflow rule is current, or two rules disagree | [`OWNER_RULES.md`](docs/developer/OWNER_RULES.md) |
 | Starting a task — the 8 core rules in full | [`CLAUDE_RULES.md`](docs/developer/CLAUDE_RULES.md) |
 | Branching, worktree collisions, stashing, force-push, push recovery | [`CLAUDE_GIT.md`](docs/developer/CLAUDE_GIT.md) |
 | Labels, `gh` workarounds, deployment, pre-merge gates | [`CLAUDE_WORKFLOW.md`](docs/developer/CLAUDE_WORKFLOW.md) |
@@ -43,6 +44,7 @@ symbol, on extraction PRs · 8 Outbound HTTP goes through the guarded fetch (egr
 - **Say "I don't know" — never fabricate.** A guessed cause, count or verdict is the one error treated as serious; an admission is an opening, not a closure → [`MEASUREMENT_DISCIPLINE.md`](docs/developer/MEASUREMENT_DISCIPLINE.md#a-stated-gap-is-a-finding-never-a-closure).
 - **PRs target `main`; `release` is the release branch.** `release`/`master` are blocked by the pre-commit hook — use `issue-*` or `hotfix-*`.
 - **Never work from a stale base.** `git fetch origin` and branch from current base before the first edit; answer "is this already done?" against current `origin/main` and the issue's ACs, **never an old branch** → `CLAUDE_GIT.md`.
+- **No commit trailers** — `mrveiss` is sole author; never add `Co-Authored-By` or tool trailers.
 - **Commit format:** `<type>(scope): <description> (#issue-number)`. Never `--no-verify` — a PostToolUse hook auto-formats `.py`.
 - **Never hardcode.** Config via SSOT, TTLs via env-var-backed module constants, no IPs or ports in code.
 - **The codebase is the source of truth** — never edit `/opt/autobot/` or `/var/log/autobot/`.
@@ -50,7 +52,8 @@ symbol, on extraction PRs · 8 Outbound HTTP goes through the guarded fetch (egr
 - **No agent cleans up data or credentials on its own.** Deleting, rewriting or rotating stored data or credentials is only *proposed* by an agent. A human approves it through an always-available review queue (the approval gates), it is never auto-approved, and it always leaves a durable paper trail — [#17038](https://github.com/mrveiss/AutoBot-AI/issues/17038).
 - **Security reviews are findings-first** — one-line verdict, then a severity/`file:line`/issue/fix table, within 3 tool calls. Verify *after*; never explore before the verdict lands. Skill: `secreview`.
 - **Nothing internal in outward artifacts** — no IPs, hostnames, secrets, tokens, or internal filesystem paths in issues, PRs, comments or logs. Redact to a generic role or node reference.
-- **Open-PR cap:** `AUTOBOT_OPEN_PR_CAP` (default 40), enforced at pre-push for new branches — at the cap, finish, merge, or close before starting new work; every PR still gets a `code-reviewer` pass before merge.
+- **No cap on open PRs** — finished local work is pushed, never held local-only ([#19397](https://github.com/mrveiss/AutoBot-AI/issues/19397)); landing throughput is governed by merge trains and the CI slots.
+- **Every PR gets a `code-reviewer` pass before merge.**
 - **Same file ⇒ ONE PR, ONE agent** — check the open PRs touching a file before editing it; batching, append-before-open and the sweep point → [`CLAUDE_REVIEW.md`](docs/developer/CLAUDE_REVIEW.md#pr-granularity).
 
 ## When rules conflict
@@ -72,11 +75,7 @@ Rules here accumulate; some pull against each other. **Precedence, highest first
 
 **PR-granularity conflicts** (same file vs same scope vs append) → [`CLAUDE_REVIEW.md`](docs/developer/CLAUDE_REVIEW.md#pr-granularity).
 
-**Known conflict, unresolved by design:** *finish everything* and *one PR's CI at a time* cannot
-both hold at a queue depth above one. Serialization wins while it is in force; the completion goal
-becomes *nothing mergeable left unmerged, nothing merged left uncleaned*, which is checkable at any
-instant. A goal phrased as "no work in flight" has no reachable end state in a repo with running CI
-and will read as permanent failure.
+**Known conflict, by design:** *finish everything* vs *CI is a shared resource*. Two CI slots; exactly one train is worked at a time ([`OWNER_RULES.md`](docs/developer/OWNER_RULES.md)). The completion goal is *nothing mergeable left unmerged, nothing merged left uncleaned*, checkable at any instant; "no work in flight" has no reachable end state with running CI.
 
 ## Git/PR Workflow
 

@@ -95,7 +95,7 @@
                 <span class="category-badge" :class="analysisResult.category">
                   {{ analysisResult.category }}
                 </span>
-                <span class="tokens-badge">~{{ analysisResult.estimated_tokens }} tokens</span>
+                <span class="tokens-badge">{{ $t('analytics.codebase.shared.tokens', { count: analysisResult.estimated_tokens }) }}</span>
                 <span class="cost-badge">${{ formatCost(analysisResult.estimated_cost) }}</span>
               </div>
 
@@ -246,7 +246,7 @@
             </div>
             <div v-else class="cache-list">
               <div
-                v-for="opp in cacheOpportunities.slice(0, 5)"
+                v-for="opp in visible('cache', cacheOpportunities)"
                 :key="opp.prompt_hash"
                 class="cache-item"
               >
@@ -256,10 +256,7 @@
                 </div>
                 <p class="cache-preview">{{ opp.prompt_preview }}</p>
               </div>
-              <TruncationNotice
-                :shown="Math.min(5, cacheOpportunities.length)"
-                :total="cacheOpportunities.length"
-              />
+              <TruncationNotice :shown="shown('cache', cacheOpportunities.length)" :total="cacheOpportunities.length" :step="CACHE_PAGE" @show-more="showMore('cache')" />
             </div>
           </div>
         </div>
@@ -329,6 +326,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import TruncationNotice from './TruncationNotice.vue'
+import { useShowMore } from '@autobot/ui'
 import { useExpansion } from '@/composables/useExpansion'
 import {
   useLLMPatternData,
@@ -371,6 +369,8 @@ const recommendations = ref<Recommendation[]>([])
 const modelComparison = ref<ModelData[]>([])
 const categoryData = ref<CategoryData>({ categories: [], total_count: 0, total_cost: 0 })
 const cacheOpportunities = ref<CacheOpportunity[]>([])
+const CACHE_PAGE = 5
+const { visible, shown, showMore } = useShowMore(CACHE_PAGE, cacheOpportunities)
 
 const analyzePrompt = ref('')
 const analyzeModel = ref('')

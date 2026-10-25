@@ -156,7 +156,7 @@ After agents complete:
    - Syntax: `npm run lint` / `python -m black --check`
    - Imports: `python -c 'import <module>'` for each modified file
    - Call sites: grep for removed/renamed functions
-4. **Merge:** each PR to `main` — only with every required check green (see "Red CI Never Merges")
+4. **Merge:** each PR to `main` (approved PRs land via a train, see "Merge trains") — only with every required check green (see "Red CI Never Merges")
 5. **Verify count:** PR count should be 0 after all merges
 
 ---
@@ -324,12 +324,17 @@ After merging all PRs in a batch:
 
 ---
 
+## Merge trains
+
+The trainmaster (PR-coordinator session) alone builds and lands trains: merge commits, never squash, two CI slots, one train worked at a time. Authors send the PR number and head, then stop pushing to a queued head unless asked. CodeRabbit never blocks a first CI run; a relaunch answers open threads first. Full list: [`OWNER_RULES.md`](OWNER_RULES.md).
+
 ## CI Diagnosis
 
 **Before declaring CI "stuck" or attempting to cancel/retrigger:**
 - Confirm whether checks are actually failing vs. queued on a self-hosted runner
 - Default assumption: checks are running normally, not broken
 - Only cancel/retrigger when a check has been in a non-running state for >30 minutes with no activity
+- Never cancel a `train-*` branch's runs or any run under a live `ci-slot` ledger hold (`ledger holds | grep ci-slot`); the trainmaster owns CI priority ([OWNER_RULES.md](OWNER_RULES.md))
 
 **Why:** Sessions wasted time canceling/retriggering smoke tests that were running normally.
 

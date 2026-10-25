@@ -11,8 +11,10 @@ Nothing is hand-summed, so PRs that lower different entries touch different line
 
 The base is:
 - in CI (``GITHUB_ACTIONS``): ``AUTOBOT_RATCHET_BASE_SHA`` when ci.yml sets it -- a merge
-  group's ``base_sha``, or on a push to main the commit main pointed at before -- else
-  ``HEAD^1``. A pull_request run checks out the merge ref, whose first parent is the base tip.
+  group's ``base_sha``, on a push to main the commit main pointed at before, or on a pull
+  request into ``release`` the head's merge base with main (#19466: gates judge only commits
+  not already on main, so a promotion is not re-judged against the weeks-old release tip) --
+  else ``HEAD^1``. A pull_request run checks out the merge ref, whose first parent is the base tip.
   The checkout needs ``fetch-depth: 2``.
 - elsewhere: ``git merge-base HEAD <AUTOBOT_RATCHET_BASE_REF, default origin/main>``.
 
