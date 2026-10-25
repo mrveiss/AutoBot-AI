@@ -10,7 +10,7 @@
  */
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { usePrometheusMetrics } from '@/composables/usePrometheusMetrics'
+import { useFleetMetrics } from '@/composables/useFleetMetrics'
 import { createLogger } from '@/utils/debugUtils'
 import { slmApiClient } from '@/utils/ApiClient'
 
@@ -22,7 +22,7 @@ const {
   fetchAlerts,
   fetchRecommendations,
   isLoading,
-} = usePrometheusMetrics({ autoFetch: false })
+} = useFleetMetrics({ autoFetch: false })
 
 const isClearing = ref(false)
 const clearError = ref<string | null>(null)
