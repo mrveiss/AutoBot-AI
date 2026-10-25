@@ -204,6 +204,16 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         {"repo_tests/python_version_declaration_drift_test.py"},
         "CI metadata tree; covering it runs twelve shards on almost every pull request (#15900)",
     ),
+    ".github/actions/build-smoke-images/**": (
+        {"repo_tests/changes_job_equivalence_15360_test.py"},
+        "a docker-paths filter ENTRY the equivalence guard compares as a string (#19527); it reads "
+        "no file under the tree, so no change there can alter its verdict",
+    ),
+    ".github/actions/free-disk-space/**": (
+        {"repo_tests/changes_job_equivalence_15360_test.py"},
+        "a docker-paths filter ENTRY the equivalence guard compares as a string (#19527); it reads "
+        "no file under the tree, so no change there can alter its verdict",
+    ),
     ".github/workflows/*.yaml": (
         {
             "repo_tests/python_version_declaration_drift_test.py",
