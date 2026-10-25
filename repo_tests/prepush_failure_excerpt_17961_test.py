@@ -114,7 +114,7 @@ def test_every_report_site_uses_the_excerpt() -> None:
     """Reverting one site to a fixed tail fails here, not silently."""
     source = _HOOK.read_text(encoding="utf-8")
     calls = re.findall(r'failure_excerpt "\$(\w+)" >&2', source)
-    assert sorted(calls) == ["group_output", "kit_output", "vitest_output"]
+    assert sorted(calls) == ["group_output", "guard_output", "kit_output", "vitest_output"]  # + train guards #19472
     body = _FUNC.search(source).group(0)
     assert source.count("tail -25") == body.count("tail -25") == 1
 
