@@ -11,6 +11,10 @@
 #   4. the work finished and passed     -> PASS
 #   5. anything else                    -> FAIL  (failed, cancelled, skipped, timed out)
 #
+# A cancelled upstream normally never reaches (5): each gate runs
+# .github/actions/cancel-run-on-cancelled-upstream first, which ends the run
+# `cancelled` (#17764). (5) still fails it, as the backstop if that step is skipped.
+#
 # A gate that applies but whose work is `skipped` fails (5): a skipped suite is no
 # evidence a suite ran (#18106). Only (3) may pass without work, and it names the
 # reason so a reader of the log can tell "nothing to verify" from "verified".

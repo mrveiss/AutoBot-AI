@@ -87,6 +87,8 @@ GOVERNANCE = {
 }
 
 GATE_ACTION = "./.github/actions/gate-verdict"
+#: Runs before the verdict: a cancelled upstream ends the run `cancelled`, not failed or skipped (#17764).
+CANCEL_ACTION = "./.github/actions/cancel-run-on-cancelled-upstream"
 SHIMS = (
     "python-required-context.yml",
     "backend-required-context.yml",
@@ -177,6 +179,7 @@ def _verdict_step_violations(context: str, spec: dict, work: tuple, draft_gated:
     steps = [s for s in spec.get("steps") or [] if s.get("uses") == GATE_ACTION]
     if len(steps) != 1:
         return [f"G3 {context!r}: expected exactly one `{GATE_ACTION}` step, found {len(steps)}"]
+    problems += _cancel_step_violations(context, spec, work)
     with_ = steps[0].get("with") or {}
     if with_.get("context") != context:
         problems.append(f"G3 {context!r}: verdict `context` is {with_.get('context')!r}")
@@ -191,6 +194,25 @@ def _verdict_step_violations(context: str, spec: dict, work: tuple, draft_gated:
     if is_gated != draft_gated:
         problems.append(f"G3 {context!r}: draft-gated is {is_gated}, expected {draft_gated}")
     return problems
+
+
+def _cancel_step_violations(context: str, spec: dict, work: tuple) -> list:
+    """G5: the cancel step runs before the verdict and reads every upstream the verdict reads (#17764)."""
+    uses = [s.get("uses") for s in spec.get("steps") or []]
+    if uses.count(CANCEL_ACTION) != 1:
+        return [f"G5 {context!r}: expected exactly one `{CANCEL_ACTION}` step, found {uses.count(CANCEL_ACTION)}"]
+    if uses.index(CANCEL_ACTION) > uses.index(GATE_ACTION):
+        return [f"G5 {context!r}: the cancel step runs after the verdict, so a parked run reads as failed"]
+    results = str((spec["steps"][uses.index(CANCEL_ACTION)].get("with") or {}).get("results", ""))
+    missing = [u for u in ("changes", *work) if f"needs.{u}.result" not in results]
+    problems = [f"G5 {context!r}: the cancel step does not read needs.{u}.result" for u in missing]
+    if (spec.get("permissions") or {}).get("actions") != "write":
+        problems.append(f"G5 {context!r}: the job lacks `permissions: actions: write`, so the cancel cannot run")
+    return problems
+
+
+def _verdict_step(job: dict) -> dict:
+    return next(s for s in job["steps"] if s.get("uses") == GATE_ACTION)
 
 
 # ── G1-G4 on the real tree ───────────────────────────────────────────────────
@@ -293,7 +315,7 @@ def test_control_a_work_job_named_like_a_required_context_fails_the_checker():
 
 def test_control_a_gate_that_ignores_detection_failure_fails_the_checker():
     docs = _fixture()
-    step = docs["ci.yml"]["jobs"]["smoke-test"]["steps"][1]
+    step = _verdict_step(docs["ci.yml"]["jobs"]["smoke-test"])
     step["with"]["changes-result"] = "success"
     problems = _gate_violations(docs)
     assert any(p.startswith("G3 'smoke-test'") and "fail closed" in p for p in problems), problems
@@ -301,7 +323,7 @@ def test_control_a_gate_that_ignores_detection_failure_fails_the_checker():
 
 def test_control_a_gate_that_ignores_its_work_fails_the_checker():
     docs = _fixture()
-    docs["ci.yml"]["jobs"]["api-wiring"]["steps"][1]["with"]["work-ok"] = "true"
+    _verdict_step(docs["ci.yml"]["jobs"]["api-wiring"])["with"]["work-ok"] = "true"
     problems = _gate_violations(docs)
     assert any(p.startswith("G3 'api-wiring'") and "run-api-wiring" in p for p in problems), problems
 
@@ -329,3 +351,22 @@ def test_the_gate_names_are_the_exact_branch_protection_strings():
     jobs = _load(CI)["jobs"]
     names = {_job_name(j, s) for j, s in jobs.items()}
     assert set(GATES) <= names
+
+
+def test_control_a_gate_whose_cancel_step_misses_its_work_fails_the_checker():
+    """G5 contrast: dropping the work job from the cancel step's `results` is caught (#17764)."""
+    docs = _fixture()
+    steps = docs["ci.yml"]["jobs"]["migration-matrix"]["steps"]
+    cancel = next(s for s in steps if s.get("uses") == CANCEL_ACTION)
+    cancel["with"]["results"] = "${{ needs.changes.result }}"
+    problems = _gate_violations(docs)
+    assert any(p.startswith("G5 'migration-matrix'") and "run-migration-gate" in p for p in problems), problems
+
+
+def test_control_a_cancel_step_after_the_verdict_fails_the_checker():
+    docs = _fixture()
+    steps = docs["ci.yml"]["jobs"]["code-quality"]["steps"]
+    i = next(n for n, s in enumerate(steps) if s.get("uses") == CANCEL_ACTION)
+    steps.append(steps.pop(i))
+    problems = _gate_violations(docs)
+    assert any(p.startswith("G5 'code-quality'") and "after the verdict" in p for p in problems), problems

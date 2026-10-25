@@ -776,13 +776,21 @@ jobs:
     name: python-suite
     needs: [changes, python-shard]
     if: always()
+    # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
+    permissions:
+      contents: read
+      actions: write
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
         with:
-          sparse-checkout: .github/actions/gate-verdict
+          sparse-checkout: .github/actions
           persist-credentials: false
+      # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
+      - uses: ./.github/actions/cancel-run-on-cancelled-upstream
+        with:
+          results: ${{ needs.changes.result }} ${{ needs.python-shard.result }}
       - uses: ./.github/actions/gate-verdict
         with:
           context: python-suite
@@ -874,13 +882,21 @@ jobs:
     name: code-quality
     needs: [changes, run-code-quality]
     if: always()
+    # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
+    permissions:
+      contents: read
+      actions: write
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
         with:
-          sparse-checkout: .github/actions/gate-verdict
+          sparse-checkout: .github/actions
           persist-credentials: false
+      # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
+      - uses: ./.github/actions/cancel-run-on-cancelled-upstream
+        with:
+          results: ${{ needs.changes.result }} ${{ needs.run-code-quality.result }}
       - uses: ./.github/actions/gate-verdict
         with:
           context: code-quality
@@ -903,13 +919,21 @@ jobs:
     name: startup-import-smoke
     needs: [changes, run-startup-import-smoke]
     if: always()
+    # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
+    permissions:
+      contents: read
+      actions: write
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
         with:
-          sparse-checkout: .github/actions/gate-verdict
+          sparse-checkout: .github/actions
           persist-credentials: false
+      # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
+      - uses: ./.github/actions/cancel-run-on-cancelled-upstream
+        with:
+          results: ${{ needs.changes.result }} ${{ needs.run-startup-import-smoke.result }}
       - uses: ./.github/actions/gate-verdict
         with:
           context: startup-import-smoke
@@ -933,13 +957,21 @@ jobs:
     name: Unit & Integration Tests
     needs: [changes, run-frontend-test]
     if: always()
+    # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
+    permissions:
+      contents: read
+      actions: write
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
         with:
-          sparse-checkout: .github/actions/gate-verdict
+          sparse-checkout: .github/actions
           persist-credentials: false
+      # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
+      - uses: ./.github/actions/cancel-run-on-cancelled-upstream
+        with:
+          results: ${{ needs.changes.result }} ${{ needs.run-frontend-test.result }}
       - uses: ./.github/actions/gate-verdict
         with:
           context: Unit & Integration Tests
@@ -963,13 +995,21 @@ jobs:
     name: smoke-test
     needs: [changes, run-docker-smoke]
     if: always()
+    # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
+    permissions:
+      contents: read
+      actions: write
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
         with:
-          sparse-checkout: .github/actions/gate-verdict
+          sparse-checkout: .github/actions
           persist-credentials: false
+      # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
+      - uses: ./.github/actions/cancel-run-on-cancelled-upstream
+        with:
+          results: ${{ needs.changes.result }} ${{ needs.run-docker-smoke.result }}
       - uses: ./.github/actions/gate-verdict
         with:
           context: smoke-test
@@ -992,13 +1032,21 @@ jobs:
     name: api-wiring
     needs: [changes, run-api-wiring]
     if: always()
+    # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
+    permissions:
+      contents: read
+      actions: write
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
         with:
-          sparse-checkout: .github/actions/gate-verdict
+          sparse-checkout: .github/actions
           persist-credentials: false
+      # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
+      - uses: ./.github/actions/cancel-run-on-cancelled-upstream
+        with:
+          results: ${{ needs.changes.result }} ${{ needs.run-api-wiring.result }}
       - uses: ./.github/actions/gate-verdict
         with:
           context: api-wiring
@@ -1022,13 +1070,21 @@ jobs:
     name: migration-matrix
     needs: [changes, run-migration-gate]
     if: always()
+    # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
+    permissions:
+      contents: read
+      actions: write
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
         with:
-          sparse-checkout: .github/actions/gate-verdict
+          sparse-checkout: .github/actions
           persist-credentials: false
+      # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
+      - uses: ./.github/actions/cancel-run-on-cancelled-upstream
+        with:
+          results: ${{ needs.changes.result }} ${{ needs.run-migration-gate.result }}
       - uses: ./.github/actions/gate-verdict
         with:
           context: migration-matrix
@@ -1055,13 +1111,21 @@ jobs:
     name: verify-generated-types
     needs: [changes, run-generated-types]
     if: always()
+    # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
+    permissions:
+      contents: read
+      actions: write
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
         with:
-          sparse-checkout: .github/actions/gate-verdict
+          sparse-checkout: .github/actions
           persist-credentials: false
+      # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
+      - uses: ./.github/actions/cancel-run-on-cancelled-upstream
+        with:
+          results: ${{ needs.changes.result }} ${{ needs.run-generated-types.result }}
       - uses: ./.github/actions/gate-verdict
         with:
           context: verify-generated-types
@@ -1088,13 +1152,21 @@ jobs:
     name: verify-precommit-config
     needs: [changes, run-precommit]
     if: always()
+    # actions: write lets the cancel step force-cancel this run when an upstream was cancelled (#17764).
+    permissions:
+      contents: read
+      actions: write
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
         with:
-          sparse-checkout: .github/actions/gate-verdict
+          sparse-checkout: .github/actions
           persist-credentials: false
+      # A parked or superseded run has no verdict: end the gate cancelled, never failed or skipped (#17764).
+      - uses: ./.github/actions/cancel-run-on-cancelled-upstream
+        with:
+          results: ${{ needs.changes.result }} ${{ needs.run-precommit.result }}
       - uses: ./.github/actions/gate-verdict
         with:
           context: verify-precommit-config
