@@ -46,7 +46,13 @@ def _workflow_files(root: Path) -> list[Path]:
 
 
 #: 69 workflow files at #18208; a floor well below so a moved or emptied tree fails, not passes.
-REACH = declare("docker-smoke-context-publishers", discover=_workflow_files, floor=50, what="workflow files")
+REACH = declare(
+    "docker-smoke-context-publishers",
+    discover=_workflow_files,
+    floor=50,
+    what="workflow files",
+    roots=(".github/workflows",),
+)
 
 
 def _ci() -> dict:
