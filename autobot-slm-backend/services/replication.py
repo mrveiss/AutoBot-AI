@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.ssot_config import config as ssot_config
 from config import settings
 from models.database import Node, Replication, ReplicationStatus
+from services.ansible_utils import ansible_run_failure
 from services.redis_cli_auth import RedisCliAuth, redis_cli_auth
 from services.ssh_utils import ssh_destination_args, ssh_options
 
@@ -544,11 +545,9 @@ class ReplicationService:
 
             stdout, _ = await asyncio.wait_for(process.communicate(), timeout=300)
 
-            if process.returncode != 0:
-                logger.error(
-                    "Ansible replication failed: %s",
-                    stdout.decode("utf-8", errors="replace"),
-                )
+            failure = ansible_run_failure(stdout.decode("utf-8", errors="replace"), target_ip, process.returncode)
+            if failure:
+                logger.error("Ansible replication failed: %s", failure)
                 return False
 
             return True
@@ -602,11 +601,9 @@ class ReplicationService:
 
             stdout, _ = await asyncio.wait_for(process.communicate(), timeout=120)
 
-            if process.returncode != 0:
-                logger.error(
-                    "Ansible promotion failed: %s",
-                    stdout.decode("utf-8", errors="replace"),
-                )
+            failure = ansible_run_failure(stdout.decode("utf-8", errors="replace"), target_ip, process.returncode)
+            if failure:
+                logger.error("Ansible promotion failed: %s", failure)
                 return False
 
             return True

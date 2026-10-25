@@ -9,7 +9,7 @@ Tests all 4 endpoints with success cases, error cases, and edge cases.
 Uses pytest with async test support and mocks ChromaDB client.
 """
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
@@ -172,6 +172,7 @@ async def test_list_documents_success(mock_chroma_client, mock_chroma_collection
             limit=100,
             offset=0,
             _=True,
+            request=MagicMock(),
         )
 
     assert response.success is True
@@ -207,6 +208,7 @@ async def test_list_documents_pagination(mock_chroma_client, mock_chroma_collect
             limit=50,
             offset=100,
             _=True,
+            request=MagicMock(),
         )
 
     # Verify pagination was used
@@ -234,6 +236,7 @@ async def test_list_documents_empty_collection(mock_chroma_client, mock_chroma_c
         response = await list_documents(
             name="empty_collection",
             _=True,
+            request=MagicMock(),
         )
 
     assert response.success is True
@@ -249,7 +252,7 @@ async def test_list_documents_not_found(mock_chroma_client):
 
     with patch("api.knowledge_chroma.get_async_chromadb_client", return_value=mock_chroma_client):
         with pytest.raises(HTTPException) as exc_info:
-            await list_documents(name="nonexistent", _=True)
+            await list_documents(name="nonexistent", _=True, request=MagicMock())
 
     assert exc_info.value.status_code == 404
 
@@ -280,6 +283,7 @@ async def test_search_collection_success(mock_chroma_client, mock_chroma_collect
             name="test_collection",
             request=search_req,
             _=True,
+            http_request=MagicMock(),
         )
 
     assert response.success is True
@@ -317,6 +321,7 @@ async def test_search_collection_with_filter(mock_chroma_client, mock_chroma_col
             name="test_collection",
             request=search_req,
             _=True,
+            http_request=MagicMock(),
         )
 
     # Verify filter was passed
@@ -335,6 +340,7 @@ async def test_search_collection_empty_query(mock_chroma_client):
                 name="test_collection",
                 request=search_req,
                 _=True,
+                http_request=MagicMock(),
             )
 
     assert exc_info.value.status_code == 400
@@ -352,6 +358,7 @@ async def test_search_collection_whitespace_query(mock_chroma_client):
                 name="test_collection",
                 request=search_req,
                 _=True,
+                http_request=MagicMock(),
             )
 
     assert exc_info.value.status_code == 400
@@ -378,6 +385,7 @@ async def test_search_collection_no_results(mock_chroma_client, mock_chroma_coll
             name="test_collection",
             request=search_req,
             _=True,
+            http_request=MagicMock(),
         )
 
     assert response.success is True
@@ -397,6 +405,7 @@ async def test_search_collection_not_found(mock_chroma_client):
                 name="nonexistent",
                 request=search_req,
                 _=True,
+                http_request=MagicMock(),
             )
 
     assert exc_info.value.status_code == 404

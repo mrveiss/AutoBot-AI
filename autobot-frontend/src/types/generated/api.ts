@@ -95687,6 +95687,12 @@ export interface components {
              * @description Similarity distance score
              */
             distance?: number | null;
+            /**
+             * Quarantined
+             * @description Research-quarantined fact, read through the audited opt-out (#19163)
+             * @default false
+             */
+            quarantined: boolean;
         } & {
             [key: string]: unknown;
         };

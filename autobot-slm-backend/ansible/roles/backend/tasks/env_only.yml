@@ -51,6 +51,11 @@
     scrape_token_env_files: ["{{ backend_env_dest }}", "{{ autobot_backend_env_file }}"]
   tags: ['backend', 'env']
 
+# #19051: without this the updater rendered the role default "" for the root key.
+- name: "Backend | Read the secrets root key from slm-secrets.env (#14758, #19051)"
+  ansible.builtin.include_tasks: read_secrets_root_key.yml
+  tags: ['backend', 'env']
+
 - name: "Backend | Render .env from template (#12871)"
   ansible.builtin.template:
     src: backend.env.j2

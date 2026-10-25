@@ -31,6 +31,7 @@ from autobot_shared.time_utils import utc_timestamp
 from config import settings
 from models.database import BlueGreenDeployment, BlueGreenStatus, Node, NodeStatus
 from models.schemas import BlueGreenCreate, BlueGreenResponse, EligibleNodeResponse
+from services.ansible_utils import ansible_run_failure
 from services.purge_playbook import PURGE_PLAYBOOK_TEMPLATE as _PURGE_PLAYBOOK_TEMPLATE
 
 # The purge playbook lives in its own module because this file is at its
@@ -1097,11 +1098,9 @@ class BlueGreenService:
 
             stdout, _ = await asyncio.wait_for(process.communicate(), timeout=600.0)
 
-            if process.returncode != 0:
-                logger.error(
-                    "Ansible deployment failed: %s",
-                    stdout.decode("utf-8", errors="replace"),
-                )
+            failure = ansible_run_failure(stdout.decode("utf-8", errors="replace"), node.ip_address, process.returncode)
+            if failure:
+                logger.error("Ansible deployment failed: %s", failure)
                 return False
 
             logger.info("Deployed roles %s to node %s", roles, node.node_id)
@@ -1237,11 +1236,9 @@ class BlueGreenService:
 
             stdout, _ = await asyncio.wait_for(process.communicate(), timeout=300.0)
 
-            if process.returncode != 0:
-                logger.error(
-                    "Purge playbook failed: %s",
-                    stdout.decode("utf-8", errors="replace"),
-                )
+            failure = ansible_run_failure(stdout.decode("utf-8", errors="replace"), ip_address, process.returncode)
+            if failure:
+                logger.error("Purge playbook failed: %s", failure)
                 return False
 
             return True

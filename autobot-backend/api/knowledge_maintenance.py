@@ -22,6 +22,8 @@ from pathlib import Path as PathLib
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Path, Query, Request
 
+from api.knowledge_lint_chunks import _fetch_all_chunks  # noqa: F401 -- stays importable from here (#16707)
+from api.quarantine_read_audit import audit_admin_quarantine_read, request_actor
 from api.schemas_knowledge import (
     BackupRequest,
     BulkCategoryUpdateRequest,
@@ -1258,7 +1260,8 @@ async def export_knowledge(
 
     logger.info(f"Export request: format={request.format.value}, include_metadata={request.include_metadata}")
 
-    result = await kb.export_facts(
+    return await kb.export_facts(
+        audit_actor=await request_actor(req),
         format=request.format.value,
         categories=categories,
         tags=tags,
@@ -1269,8 +1272,6 @@ async def export_knowledge(
         include_tags=request.include_tags,
         include_embeddings=request.include_embeddings,
     )
-
-    return result
 
 
 @router.post("/import", response_model=ImportKnowledgeResponse)
@@ -1712,14 +1713,13 @@ async def create_backup(
 
     logger.info(f"Backup request: embeddings={request.include_embeddings}, " f"compression={request.compression}")
 
-    result = await kb.create_backup(
+    return await kb.create_backup(
+        audit_actor=await request_actor(req),
         include_embeddings=request.include_embeddings,
         include_metadata=request.include_metadata,
         compression=request.compression,
         description=request.description,
     )
-
-    return result
 
 
 @router.post("/restore", response_model=RestoreBackupResponse)
@@ -1885,18 +1885,6 @@ async def _run_lint_scan(job_id: str, chunks: list[dict]) -> None:
         logger.exception("Lint job %s failed", job_id)
 
 
-async def _fetch_all_chunks(kb) -> list[dict]:
-    """Fetch all KB chunks as dicts with a 'text' key -- kb.chroma_collection was never real (#16707)."""
-
-    def _load():
-        results = kb.vector_store._collection.get(include=["documents", "metadatas"])
-        docs = results.get("documents") or []
-        metas = results.get("metadatas") or [{}] * len(docs)
-        return [{"text": d, "metadata": m} for d, m in zip(docs, metas)]
-
-    return await asyncio.to_thread(_load)
-
-
 @router.post("/lint", response_model=StartLintResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -1905,8 +1893,8 @@ async def _fetch_all_chunks(kb) -> list[dict]:
 )
 async def start_lint(
     background_tasks: BackgroundTasks,
+    req: Request,
     admin_check: bool = Depends(check_admin_permission),
-    req: Request = None,
 ):
     """Trigger a background contradiction scan of the knowledge base (Issue #4566).
 
@@ -1918,6 +1906,8 @@ async def start_lint(
 
     job_id = generate_job_id()
     chunks = await _fetch_all_chunks(kb)
+    # #19163: one audit entry per run (who, count, ids) for the quarantined chunks the lint read.
+    await audit_admin_quarantine_read(req, "knowledge.lint", [str(c["id"]) for c in chunks if c.get("quarantined")])
     background_tasks.add_task(_run_lint_scan, job_id, chunks)
     logger.info("Lint job %s queued (%d chunks)", job_id, len(chunks))
     return {"status": "started", "job_id": job_id}
