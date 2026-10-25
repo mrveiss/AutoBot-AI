@@ -216,6 +216,8 @@ ALLOWED_ADDITIONS = {
             "docs/assets/social-preview.png",
             # #18559: both duplication-guard tests read the pins file.
             ".github/duplication-pins.json",
+            # #19324: browser_port_single_home_19324_test.py pins this file's browser-port fallback.
+            "autobot-frontend/vite.config.js",
         ]
     },
     # frontend_path_filter_mirror_test pins frontend-test.yml's on.push.paths to this file, so the

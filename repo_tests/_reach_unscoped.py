@@ -33,6 +33,8 @@ UNSCOPED = frozenset(
         "ansible-inventory-shell-sweep",
         "audio-extension-allowlist",
         "blanket-skip-test-module-sweep",
+        # #19324: an extension filter (*.py, *.sh, *.yml, .env*, ...) over the whole tree, not a set of prefixes.
+        "browser-port-single-home-scan",
         "chromadb-bind-host-override-candidates",
         "chromadb-bind-launch-sites",
         "chromadb-compose-port-sites",

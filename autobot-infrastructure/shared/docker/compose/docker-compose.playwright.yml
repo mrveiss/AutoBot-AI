@@ -8,7 +8,7 @@ services:
       - DISPLAY=${DISPLAY:-:0}
       - XAUTHORITY=${XAUTHORITY:-/home/${USER:-autobot}/.Xauthority}
       - HEADLESS=${HEADLESS:-false}
-      - PLAYWRIGHT_PORT=3000  # the canonical server defaults to 9001; healthcheck and callers expect 3000 (#18549)
+      - PLAYWRIGHT_PORT=${AUTOBOT_BROWSER_SERVICE_PORT:-9001}  # the fleet's port.browser (#19418)
     volumes:
       # One canonical server + its two local modules (#18549)
       - ../../../../autobot-browser-worker/playwright-server.js:/app/server.js
@@ -44,7 +44,7 @@ services:
     security_opt:
       - no-new-privileges:true
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}/health"]
       interval: 30s
       timeout: 10s
       retries: 3

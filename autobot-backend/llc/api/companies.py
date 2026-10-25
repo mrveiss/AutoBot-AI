@@ -45,7 +45,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import QueryDefaults
 from autobot_shared.user_management.models.user import resolve_display_name
 from llc.deps import assert_company_access, get_session, service_dep
-from llc.kb.collections import KbCollectionManager
+from llc.kb.collections import KbCollectionManager, company_id_of
 from llc.models.company import (
     CompanyAncestor,
     CompanyCreate,
@@ -551,7 +551,7 @@ async def get_kb_ancestry_collections(
             collection_name=collection_name,
             # False positive: the ValueError above is caught and
             # re-raised as a generic HTTPException; no exception data flows into this response.
-            company_id=collection_name.split(":")[0],
+            company_id=company_id_of(collection_name),
             weight=weight,
         )
         for collection_name, weight in chain

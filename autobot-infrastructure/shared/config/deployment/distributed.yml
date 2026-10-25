@@ -45,7 +45,7 @@ services:
 
   playwright-vnc:
     host: browser-01.autobot.prod
-    port: 3000
+    port: 9001
     scheme: http
     health_endpoint: /health
 
