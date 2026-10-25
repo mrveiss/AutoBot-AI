@@ -41,7 +41,8 @@ _VERDICT = Path(".github/actions/gate-verdict/verdict.sh")
 
 
 def _workflow_files(root: Path) -> list[Path]:
-    return sorted(p for p in (root / _WORKFLOWS).iterdir() if p.suffix == ".yml")
+    directory = root / _WORKFLOWS
+    return sorted(p for p in directory.iterdir() if p.suffix == ".yml") if directory.is_dir() else []
 
 
 #: 69 workflow files at #18208; a floor well below so a moved or emptied tree fails, not passes.
