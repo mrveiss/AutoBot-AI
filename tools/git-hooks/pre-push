@@ -1050,7 +1050,9 @@ while read -r local_ref local_sha remote_ref remote_sha; do
   # #19472 fast gate (default): the guard set instead of the selected pytest run, which is CI's.
   if [ "$PREPUSH_FULL" != "1" ]; then
     log "fast gate: $(fast_guard_tests | grep -c .) guard tests + reach-floor pins; the full vue-tsc / vitest / pytest suites run in CI (owner 2026-10-25) -- AUTOBOT_PREPUSH_FULL=1 runs them here"
-    fast_key=$(stage_key "fast guards|${PYTEST_PYTHON}" "")
+    # The interpreter path alone would let an in-place venv upgrade reuse an old pass (#19550 review)
+    py_env=$("$PYTEST_PYTHON" -VV 2>/dev/null | tr -d '\n'; "$PYTEST_PYTHON" -m pytest --version 2>/dev/null | tr -d '\n')
+    fast_key=$(stage_key "fast guards|${PYTEST_PYTHON}|${py_env}" "")
     if ! stage_cached "fast guards" "$fast_key"; then
       stage_begin "fast guards" "$fast_key"
       ( EXIT_CODE=0; STAGE_CLEAN=1; run_fast_guards; stage_exit ) </dev/null >"$STAGE_LOG" 2>&1 &
