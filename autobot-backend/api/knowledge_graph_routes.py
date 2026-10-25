@@ -71,6 +71,7 @@ async def run_pipeline(
 
         from knowledge.pipeline.base import PipelineContext
         from knowledge.pipeline.config import get_default_pipeline_config, load_pipeline_config
+        from knowledge.pipeline.loaders.chromadb_loader import SUMMARY_COLLECTION_KEY
         from knowledge.pipeline.runner import PipelineRunner
 
         if request.config:
@@ -82,6 +83,10 @@ async def run_pipeline(
         context = PipelineContext()
         context.document_id = document_uuid
         context.metadata["document_id"] = document_id
+        # #19163: summaries of a quarantined fact inherit its collection marker, so summary search withholds them.
+        source_collection = (fact.get("metadata") or {}).get("collection")
+        if source_collection:
+            context.metadata[SUMMARY_COLLECTION_KEY] = source_collection
 
         result = await runner.run(text, context)
 

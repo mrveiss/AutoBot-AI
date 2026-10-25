@@ -20,9 +20,14 @@ from autobot_shared.content_digest import fact_dedup_key
 from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
 from knowledge.fact_projection import FactProjectionMixin
+from knowledge.fact_redis_codec import (  # noqa: F401 -- names stay patchable here
+    _apply_usage_fields,
+    _decode_redis_hash,
+)
 from knowledge.fact_sharing import FactSharingMixin
 from knowledge.ingest_sanitize import redact_url_metadata_fields, sanitize_fact_content
 from knowledge.ownership_index import index_ownership, ownership_changed, reindex_ownership
+from knowledge.quarantine import QuarantineAuditFailed, apply_quarantine, require_audit_actor, without_quarantine
 
 if TYPE_CHECKING:
     import aioredis
@@ -313,50 +318,6 @@ def _parse_iso(value: Any) -> datetime | None:
     return ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts
 
 
-def _apply_usage_fields(decoded: Dict[str, Any], metadata: Dict[str, Any]) -> None:
-    """Surface authoritative usage counters from the Redis hash into metadata.
-
-    A1 (#12552): ``access_count`` / ``last_accessed`` live as top-level hash
-    fields (so ``HINCRBY`` stays atomic and the metadata JSON blob is never
-    rewritten on access). They are the single source of truth; on read we copy
-    them into the returned metadata dict, defaulting to 0 / "" when absent so
-    every fact — old or new — exposes the keys.
-    """
-    try:
-        metadata["access_count"] = int(decoded.get("access_count") or 0)
-    except (TypeError, ValueError):
-        metadata["access_count"] = 0
-    metadata["last_accessed"] = decoded.get("last_accessed") or ""
-
-
-def _decode_redis_hash(fact_data: Dict[bytes, bytes]) -> Dict[str, Any]:
-    """Decode Redis hash bytes to strings and parse metadata (Issue #315: extracted).
-
-    Args:
-        fact_data: Raw Redis hash data with bytes keys/values
-
-    Returns:
-        Decoded dict with parsed metadata
-    """
-    decoded = {}
-    for key, value in fact_data.items():
-        k = key.decode("utf-8") if isinstance(key, bytes) else key
-        v = value.decode("utf-8") if isinstance(value, bytes) else value
-        decoded[k] = v
-
-    # Parse metadata JSON if present
-    if "metadata" in decoded:
-        try:
-            raw = decoded["metadata"]
-            decoded["_parsed_metadata"] = raw if isinstance(raw, dict) else json.loads(raw)
-        except (json.JSONDecodeError, TypeError):
-            decoded["_parsed_metadata"] = {}
-    else:
-        decoded["_parsed_metadata"] = {}
-
-    return decoded
-
-
 # ===== PROVENANCE HELPERS (Issue #1252) =====
 
 #: Default provenance field values applied to every new fact/document.
@@ -458,6 +419,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
                 chroma_collection.query,
                 query_embeddings=[embedding],
                 n_results=3,
+                where=without_quarantine(),  # a quarantined fact is not a duplicate, and its id is not returned
                 include=["metadatas", "distances"],
             )
             ids = (results.get("ids") or [[]])[0]
@@ -998,34 +960,39 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         limit: int | None = None,
         offset: int = 0,
         collection: str | None = None,
+        include_quarantined: bool = False,
+        audit_actor: str | None = None,
     ) -> List[Dict[str, Any]]:
         """
         Retrieve facts from Redis with optional pagination and filtering.
+
+        Research-quarantined facts are excluded unless ``include_quarantined=True``, which needs
+        ``audit_actor`` and writes one audit entry (who, count, ids) -- #19163.
 
         Args:
             limit: Maximum number of facts to retrieve (None = all)
             offset: Number of facts to skip
             collection: Filter by collection name (None = all collections)
+            include_quarantined: The only way to receive quarantined facts (audited)
+            audit_actor: Who is reading, required with ``include_quarantined``
 
         Returns:
             List of fact dictionaries with content and metadata
         """
+        require_audit_actor(include_quarantined, audit_actor)
         self.ensure_initialized()
 
         try:
-            # Get all fact keys using async scanner
             fact_keys = await self._scan_redis_keys_async("fact:*")
 
             if not fact_keys:
                 return []
 
-            # Apply offset and limit
             if offset > 0:
                 fact_keys = fact_keys[offset:]
             if limit is not None:
                 fact_keys = fact_keys[:limit]
 
-            # Batch fetch facts
             facts = []
             pipeline = self.redis().pipeline()
             for key in fact_keys:
@@ -1037,8 +1004,10 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
                 if fact:
                     facts.append(fact)
 
-            return facts
+            return await apply_quarantine(facts, include_quarantined, audit_actor)
 
+        except QuarantineAuditFailed:
+            raise  # fail closed: an unaudited privileged read is refused, not turned into []
         except Exception as e:
             logger.error("Error retrieving all facts: %s", e)
             return []

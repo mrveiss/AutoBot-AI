@@ -8,7 +8,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Literal
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
 from services.ssh_utils import SshHost, SshPassword, SshUser
 
@@ -330,7 +330,7 @@ class BackupCreate(BaseModel):
 
 
 class BackupResponse(BaseModel):
-    """Backup response."""
+    """Backup response; ``restorable`` tells the GUI where to offer Restore (#19455)."""
 
     id: int
     backup_id: str
@@ -344,8 +344,27 @@ class BackupResponse(BaseModel):
     started_at: datetime | None = None
     completed_at: datetime | None = None
     created_at: datetime
-
     model_config = {"from_attributes": True}
+
+    @computed_field
+    @property
+    def restorable(self) -> bool:
+        return BackupServiceType.is_restorable(self.service_type)
+
+
+class BackupListResponse(BaseModel):
+    """Paginated backup list."""
+
+    backups: List[BackupResponse]
+    total: int
+
+
+class BackupRestoreResponse(BaseModel):
+    """Backup restore response."""
+
+    success: bool
+    message: str
+    job_id: str | None = None
 
 
 # =============================================================================
@@ -744,26 +763,6 @@ class ReplicationListResponse(BaseModel):
 
     replications: List[ReplicationResponse]
     total: int
-
-
-# =============================================================================
-# Backup Schemas (extended)
-# =============================================================================
-
-
-class BackupListResponse(BaseModel):
-    """Paginated backup list."""
-
-    backups: List[BackupResponse]
-    total: int
-
-
-class BackupRestoreResponse(BaseModel):
-    """Backup restore response."""
-
-    success: bool
-    message: str
-    job_id: str | None = None
 
 
 # =============================================================================
