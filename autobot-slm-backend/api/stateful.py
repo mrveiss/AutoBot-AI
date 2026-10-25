@@ -174,16 +174,16 @@ async def restore_backup(
     backup = result.scalar_one_or_none()
 
     if not backup:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Backup not found",
-        )
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Backup not found")
 
     if backup.status != BackupStatus.COMPLETED.value:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Cannot restore backup in status: {backup.status}",
-        )
+        detail = f"Cannot restore backup in status: {backup.status}"
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+
+    # #19455: refused before the job starts, since the restore stops Redis and replaces its dump.rdb.
+    if not BackupServiceType.is_restorable(backup.service_type):
+        detail = f"A {backup.service_type} backup is restored by the operator, not by this action"
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
 
     # Start async restore job
     job_id = str(uuid.uuid4())[:16]

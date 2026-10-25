@@ -93,7 +93,7 @@ _WRONG = (
 #: entry is a live path a process resolves; an exemption that covered one would
 #: be this guard reporting a clean sweep over the bug it exists to catch.
 _EXEMPT = {
-    "autobot-slm-backend/services/backup.py:495": (
+    "autobot-slm-backend/services/backup.py:492": (
         "docstring prose recording #16625's finding -- it names the path to say "
         "roles/redis never renders it. Not a `#` comment, so the sweep sees it."
     ),

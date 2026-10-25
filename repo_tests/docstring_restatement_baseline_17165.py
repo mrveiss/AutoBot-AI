@@ -246,7 +246,6 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
         {
             "AgentCreateRequest",
             "AgentUpdateRequest",
-            "BackupResponse",
             "BackupRestoreResponse",
             "BlueGreenActionResponse",
             "CertificateActionResponse",
