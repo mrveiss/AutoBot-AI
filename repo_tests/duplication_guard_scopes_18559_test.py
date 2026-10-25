@@ -65,8 +65,13 @@ _SPEC = importlib.util.spec_from_file_location(
     "duplication_pin_lowering", repo_root() / "scripts" / "duplication_pin_lowering.py"
 )
 lowering = importlib.util.module_from_spec(_SPEC)
+# Registered only while the module executes (its dataclasses resolve through sys.modules), then
+# removed so the substitution does not outlive this file (#13337 guard).
 sys.modules[_SPEC.name] = lowering
-_SPEC.loader.exec_module(lowering)
+try:
+    _SPEC.loader.exec_module(lowering)
+finally:
+    sys.modules.pop(_SPEC.name, None)
 
 
 def _document() -> dict:

@@ -54,6 +54,7 @@ _STORE = "autobot-backend/llc/services/ai_lines.py"
 _DISPATCH = "autobot-backend/chat_workflow/tool_handler.py"
 _BRIDGE = "autobot-backend/services/realtime_mcp_bridge.py"
 _VOICE_ROUTES = ("autobot-backend/api/voice.py", "autobot-backend/api/realtime_session.py")
+_TOOL_EXECUTING_ROUTES = ("autobot-backend/api/realtime_session.py",)
 
 #: Every approval-decision function in production, and what it is. Adding one means saying which of these
 #: it is; none of them may be a policy of its own.
@@ -207,7 +208,9 @@ def test_the_realtime_bridge_is_reached_only_by_routes_that_pass_the_authenticat
     assert users == set(
         _VOICE_ROUTES
     ), f"#18430: a new caller of the realtime bridge: {sorted(users - set(_VOICE_ROUTES))}"
-    for rel in _VOICE_ROUTES:
+    # #18721 removed voice.py's duplicate realtime call route; the tool-executing call lives only
+    # in realtime_session.py, while voice.py only lists tools. Both still reach the bridge above.
+    for rel in _TOOL_EXECUTING_ROUTES:
         sites = [
             node
             for node in ast.walk(ast.parse(_sources()[rel]))
