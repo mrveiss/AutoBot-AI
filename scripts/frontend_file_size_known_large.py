@@ -123,7 +123,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/composables/useKeyboard.ts": 650,
     "autobot-frontend/src/composables/useKnowledgeVectorization.ts": 679,
     "autobot-frontend/src/composables/usePatternAnalysis.ts": 867,
-    "autobot-frontend/src/composables/usePrometheusMetrics.ts": 643,
     "autobot-frontend/src/composables/useTimeout.ts": 749,
     "autobot-frontend/src/composables/useVoiceConversation.ts": 986,
     "autobot-frontend/src/composables/useVoiceOutput.ts": 1089,
@@ -179,7 +178,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-frontend/src/composables/useAutobotApi.ts": 2062,  # #18734: 2068 -> 2062
     "autobot-slm-frontend/src/composables/useCodeSync.ts": 1078,
     "autobot-slm-frontend/src/composables/useOrchestrationManagement.ts": 693,
-    "autobot-slm-frontend/src/composables/usePrometheusMetrics.ts": 622,
     "autobot-slm-frontend/src/composables/useSlmApi.ts": 1457,
     "autobot-slm-frontend/src/stores/fleet.ts": 994,
     "autobot-slm-frontend/src/types/slm.ts": 838,

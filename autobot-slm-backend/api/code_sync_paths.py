@@ -27,19 +27,14 @@ with an equality branch.
 from __future__ import annotations
 
 import asyncio
-import logging
 import os
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from autobot_shared.env_utils import env_float
+from autobot_shared.logging_manager import get_logger
 
-# Plain stdlib logging, deliberately -- see autobot_shared/user_management/
-# password_epoch.py:50-58 and api/_pricing_post_sync.py: this module is
-# imported by code_sync.py, whose test harness stubs config as a MagicMock,
-# and autobot_shared.logging_manager.get_logger compares that MagicMock
-# against an int at call time, raising under that harness.
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _CONSTRAINTS_SOURCE_SUBDIR: str = "constraints"
 

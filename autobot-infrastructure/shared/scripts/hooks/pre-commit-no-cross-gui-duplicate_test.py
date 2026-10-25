@@ -94,14 +94,27 @@ def test_composable_collision_passes_when_both_sides_are_kit_shims(tmp_path: Pat
     assert violations == []
 
 
-def test_composable_collision_respects_filename_allowlist(tmp_path: Path) -> None:
+def test_composable_collision_respects_filename_allowlist(tmp_path: Path, monkeypatch) -> None:
+    repo = _make_repo(tmp_path)
+    monkeypatch.setattr(guard, "FILENAME_ALLOWLIST", {"useTracked.ts"})
+    for app in guard.APPS:
+        _write(repo, f"{app}/src/composables/useTracked.ts", "export function x() {}\n")
+
+    violations, _scanned = guard.collect_composable_violations(repo)
+
+    assert violations == []
+
+
+def test_the_former_prometheus_collision_is_no_longer_allowed(tmp_path: Path) -> None:
+    """#18225: a usePrometheusMetrics.ts in both apps again is a violation."""
     repo = _make_repo(tmp_path)
     for app in guard.APPS:
         _write(repo, f"{app}/src/composables/usePrometheusMetrics.ts", "export function x() {}\n")
 
     violations, _scanned = guard.collect_composable_violations(repo)
 
-    assert violations == []
+    assert violations
+    assert all("usePrometheusMetrics.ts" in str(v) for v in violations), violations
 
 
 def test_composable_no_collision_when_only_one_side_has_the_file(tmp_path: Path) -> None:

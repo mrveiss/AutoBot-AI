@@ -37,11 +37,11 @@ together -- rather than one component at a time.
 from __future__ import annotations
 
 import hashlib
-import logging
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from services.deploy_artifacts import (
     ARTIFACT_DIR_SUFFIXES,
@@ -58,10 +58,7 @@ from services.git_subprocess import component_pathspec, last_commit_for_path, ru
 from services.git_tracker import DEFAULT_REPO_PATH
 from services.host_state_filter import kept_reason
 
-# Plain stdlib logging, deliberately -- see services/git_subprocess.py's
-# comment: get_logger() crashes at creation time under a MagicMock `config`,
-# the precedent autobot_shared/user_management/password_epoch.py:50-58 sets.
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Top-level names the SLM frontend publish step owns, sourced from
 # services/deploy_artifacts.py (#16717) rather than restated here -- the same
