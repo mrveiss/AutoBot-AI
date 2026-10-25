@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { resetCircuitBreakers } from '@/utils/apiCircuitBreaker'
-import { useSystemMetrics } from '@/composables/usePrometheusMetrics'
+import { useSystemMetrics } from '@/composables/useInstallMetrics'
 import { useServiceMessages } from '@/composables/useServiceMessages'
 import { useErrorMonitoring } from '@/composables/useErrorMonitoring'
 

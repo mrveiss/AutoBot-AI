@@ -18,7 +18,6 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
-import logging
 import secrets
 from typing import Callable
 
@@ -26,11 +25,9 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-# Plain stdlib logging, deliberately -- NOT autobot_shared.logging_manager. The SLM
-# backend loads its encryption module in test harnesses that stub `config` as a
-# MagicMock, and get_logger() builds a RotatingFileHandler that fails against it at
-# logger-CREATION time. Same precedent as autobot_shared/user_management/password_epoch.py.
-logger = logging.getLogger(__name__)
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 _MIN_RECOMMENDED_KEY_CHARS = 32
 
