@@ -158,7 +158,7 @@
           </div>
           <div v-else class="priority-list">
             <div
-              v-for="(item, index) in roiPriorities.slice(0, 10)"
+              v-for="(item, index) in roiPriorities"
               :key="item.id"
               class="priority-item"
               :class="{ 'top-priority': index < 3 }"
@@ -188,10 +188,7 @@
                 <button class="btn-fix" @click="showFixDetails(item)">{{ $t('analytics.technicalDebt.fix') }}</button>
               </div>
             </div>
-            <TruncationNotice
-              :shown="Math.min(10, roiPriorities.length)"
-              :total="roiPriorities.length"
-            />
+            <TruncationNotice :shown="roiPriorities.length" :total="roiTotal" :step="ROI_PAGE" :server-limited="roiAtCap" @show-more="onLoadMoreRoi" />
           </div>
         </div>
       </div>
@@ -263,7 +260,7 @@
             <g v-if="hoveredPoint" class="tooltip">
               <rect :x="hoveredPoint.x - 40" :y="hoveredPoint.y - 45" width="80" height="35" rx="4" class="chart-tooltip-bg" />
               <text :x="hoveredPoint.x" :y="hoveredPoint.y - 32" text-anchor="middle" class="chart-tooltip-text-primary" font-size="11">
-                {{ hoveredPoint.count }} items
+                {{ $t('analytics.codebase.shared.items', { count: hoveredPoint.count }, hoveredPoint.count) }}
               </text>
               <text :x="hoveredPoint.x" :y="hoveredPoint.y - 18" text-anchor="middle" class="chart-tooltip-text-secondary" font-size="9">
                 {{ hoveredPoint.date }}
@@ -443,25 +440,16 @@ import { BaseModal } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils';
 import { getCssVar } from '@/composables/useCssVars'
-import {
-  useTechnicalDebtData,
-  type DebtItem,
-  type CategoryBreakdown,
-  type TrendPoint,
-  type DebtSummary,
-} from '@/composables/analytics/useTechnicalDebtData'
+import { useTechnicalDebtData, ROI_PAGE } from '@/composables/analytics/useTechnicalDebtData'
+import type { DebtItem, CategoryBreakdown, TrendPoint, DebtSummary } from '@/composables/analytics/useTechnicalDebtData'
 const { t } = useI18n()
 
 // Create scoped logger for TechnicalDebtDashboard
 const logger = createLogger('TechnicalDebtDashboard');
 
 const {
-  fetchSummary,
-  fetchCategoryBreakdown,
-  fetchRoiPriorities,
-  fetchDebtItems,
-  fetchTrends,
-  fetchReportBlob,
+  fetchSummary, fetchCategoryBreakdown, fetchRoiPriorities, roiTotal, roiAtCap, loadMoreRoi,
+  fetchDebtItems, fetchTrends, fetchReportBlob,
 } = useTechnicalDebtData()
 
 // State
@@ -696,9 +684,15 @@ async function loadCategoryBreakdown(): Promise<void> {
   categoryBreakdown.value = await fetchCategoryBreakdown();
 }
 
-async function loadRoiPriorities(): Promise<void> {
-  roiPriorities.value = await fetchRoiPriorities(10);
+// #12741: each ROI request (refresh or "show more") takes a number; a reply to a superseded one is dropped.
+let roiCall = 0;
+async function applyRoi(request: Promise<DebtItem[]>): Promise<void> {
+  const call = ++roiCall;
+  const items = await request;
+  if (call === roiCall) roiPriorities.value = items;
 }
+const loadRoiPriorities = () => applyRoi(fetchRoiPriorities(ROI_PAGE));
+const onLoadMoreRoi = () => applyRoi(loadMoreRoi());
 
 async function loadDebtItems(): Promise<void> {
   allDebtItems.value = await fetchDebtItems();

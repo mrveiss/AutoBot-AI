@@ -21,8 +21,27 @@ import { ref } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import type { components } from '@/types/generated/api'
 
 const logger = createLogger('useAgentActivityData')
+
+// The wire shape of GET /agents/status, from the backend schema (#17514).
+type AgentStatusListResponse = components['schemas']['AgentStatusListResponse']
+type AgentStatusItem = components['schemas']['AgentStatusItem']
+
+/** The schema types `type`/`status` and the task lists loosely; Agent narrows them to what the widget renders. */
+function toAgent(item: AgentStatusItem): Agent {
+  return {
+    ...item,
+    type: item.type as Agent['type'],
+    status: (item.status ?? null) as Agent['status'],
+    tasksCompleted: item.tasksCompleted ?? null,
+    uptime: item.uptime ?? null,
+    successRate: item.successRate ?? null,
+    recentTasks: (item.recentTasks ?? []) as Agent['recentTasks'],
+    activityTimeline: (item.activityTimeline ?? []) as Agent['activityTimeline'],
+  }
+}
 
 // ── Shared Types ─────────────────────────────────────────────────────────────
 
@@ -30,12 +49,16 @@ export interface Agent {
   id: string
   name: string
   type: 'orchestrator' | 'worker' | 'monitor' | 'analyzer' | 'executor'
-  // #9724: 'abstained' added — AgentActivityVisualization renders this state
-  status: 'working' | 'idle' | 'error' | 'paused' | 'abstained'
-  currentTask?: string
-  tasksCompleted: number
-  uptime: number
-  successRate: number
+  // #9724: 'abstained' added — AgentActivityVisualization renders this state.
+  // #17514: null = not reported. The server sends null for anything it does not measure,
+  // never a 0 that reads as observed; the widget shows "not reported".
+  status: 'working' | 'idle' | 'error' | 'paused' | 'abstained' | null
+  companyId?: string | null
+  companyName?: string | null
+  currentTask?: string | null
+  tasksCompleted: number | null
+  uptime: number | null
+  successRate: number | null
   recentTasks: Array<{
     id: string
     name: string
@@ -179,13 +202,13 @@ export function useAgentActivityData() {
 
   async function fetchAgents(): Promise<void> {
     try {
-      const data = await apiClient.get<{ agents?: Agent[] }>(
+      const data: AgentStatusListResponse = await apiClient.get(
         `${getApiBase()}/agents/status`,
         // Optional widget: a 404 (endpoint unmounted) or timeout is handled
         // below, so don't emit console noise. 404s are not retried by the client.
         { suppressErrorLog: true },
       )
-      agents.value = data.agents ?? []
+      agents.value = (data.agents ?? []).map(toAgent)
       error.value = null
     } catch (e) {
       // Visible empty/error state — do NOT fall back to fabricated sample data.

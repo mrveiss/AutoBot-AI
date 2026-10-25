@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { defineAsyncComponent } from 'vue'
 import TruncationNotice from './TruncationNotice.vue'
+import { useShowMore } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import DependencyTreemap from '@/components/charts/DependencyTreemap.vue'
@@ -84,7 +85,10 @@ interface Props {
   callGraphError: string
 }
 
-defineProps<Props>()
+const props = defineProps<Props>()
+
+// #12741: the notice under a capped list is its "show more" control.
+const { visible, shown, showMore } = useShowMore(10, () => props.dependencyData)
 
 const emit = defineEmits<{
   'load-dependency-data': []
@@ -172,7 +176,7 @@ const emit = defineEmits<{
         </div>
         <div class="circular-deps-list">
           <div
-            v-for="(cycle, index) in dependencyData.circular_dependencies.slice(0, 10)"
+            v-for="(cycle, index) in visible('circular', dependencyData.circular_dependencies)"
             :key="index"
             class="circular-dep-item"
           >
@@ -180,9 +184,7 @@ const emit = defineEmits<{
             <span>{{ Array.isArray(cycle) ? cycle.join(' ↔ ') : (cycle.modules || []).join(' ↔ ') }}</span>
           </div>
         </div>
-        <div v-if="dependencyData.circular_dependencies.length > 10" class="show-more">
-          <span class="muted">and {{ dependencyData.circular_dependencies.length - 10 }} more...</span>
-        </div>
+        <TruncationNotice :shown="shown('circular', dependencyData.circular_dependencies.length)" :total="dependencyData.circular_dependencies.length" :step="10" @show-more="showMore('circular')" />
       </div>
 
       <!-- Top External Dependencies Table -->
@@ -190,17 +192,16 @@ const emit = defineEmits<{
         <h4><Icon name="cube" /> {{ $t('analytics.codebase.dependencies.topExternal') }}</h4>
         <div class="deps-table-content">
           <div
-            v-for="(dep, index) in dependencyData.external_dependencies.slice(0, 20)"
+            v-for="(dep, index) in visible('external', dependencyData.external_dependencies, 20)"
             :key="index"
             class="dep-row"
           >
             <span class="dep-name">{{ dep.package }}</span>
-            <span class="dep-count">{{ dep.usage_count }} imports</span>
+            <span class="dep-count">{{ $t('analytics.codebase.shared.imports', { count: dep.usage_count }, dep.usage_count ?? 0) }}</span>
           </div>
-          <TruncationNotice
-            :shown="Math.min(20, dependencyData.external_dependencies.length)"
-            :total="dependencyData.external_dependencies.length"
-          />
+          <TruncationNotice :shown="shown('external', dependencyData.external_dependencies.length, 20)" :total="dependencyData.external_dependencies.length" :step="20" @show-more="showMore('external', 20)" />
+          <!-- The server returns the top 50 packages; the summary holds the real count. -->
+          <TruncationNotice v-if="(dependencyData.summary?.external_dependency_count ?? 0) > dependencyData.external_dependencies.length" :shown="dependencyData.external_dependencies.length" :total="dependencyData.summary?.external_dependency_count ?? 0" server-limited />
         </div>
       </div>
     </div>
@@ -438,19 +439,6 @@ const emit = defineEmits<{
   background: rgba(30, 41, 59, 0.5);
   border-radius: var(--radius-xl);
   border: 1px solid rgba(71, 85, 105, 0.5);
-}
-
-.show-more {
-  text-align: center;
-  padding: var(--spacing-3);
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  margin-top: var(--spacing-2);
-}
-
-.muted {
-  color: var(--text-tertiary);
-  font-style: italic;
 }
 
 /* Loading Skeleton */
