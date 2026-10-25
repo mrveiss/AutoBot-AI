@@ -5,7 +5,10 @@
 """LLC heartbeat context API (GH#8236).
 
 Routes:
-  GET  /api/llc/agent/context/{item_id}  — get assembled heartbeat context
+  GET  /api/llc/context/{item_id}  — get assembled heartbeat context (user JWT, org-scoped)
+
+/api/llc/agent/context/{item_id} is the agent-key handler in agent_api.py (#18721); this one used to share
+that path and sat behind it, unreachable.
 """
 
 import uuid
@@ -23,7 +26,7 @@ from ..kb.rag_assembler import LLCRAGAssembler
 from ..services.goal import GoalService
 from ..services.work_item_service import WorkItemService
 
-router = APIRouter(prefix="/agent", tags=["llc-context"])
+router = APIRouter(tags=["llc-context"])
 
 
 def _get_context_services() -> Dict[str, Any]:
