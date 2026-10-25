@@ -137,11 +137,17 @@ jobs:
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4
 
       - name: Cache Docker layers
-        # Shares the docker-smoke-test cache prefix so layers stay warm.
-        uses: actions/cache@v6
+        # Shares the docker-smoke-test cache prefix so layers stay warm. Restore only: this
+        # workflow never runs on a main push, so the entries it reads are docker-smoke-test's.
+        # #19308: keyed on what the image layers are built from, not on the commit. A
+        # per-commit key saved a new ~1.2 GB entry on every run and pushed the repo's
+        # Actions cache over its 10 GB limit, evicting the small caches CI depends on. An
+        # exact hit skips the save, so a commit that changes no dependency adds nothing.
+        id: buildx-cache
+        uses: actions/cache/restore@v6
         with:
           path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}-colocated
+          key: ${{ runner.os }}-buildx-colocated-${{ hashFiles('docker/**', 'requirements*.txt', 'constraints/**', 'autobot-backend/requirements*.txt', 'autobot-slm-backend/requirements*.txt', 'package-lock.json', 'autobot-frontend/package-lock.json', 'autobot-slm-frontend/package-lock.json') }}
           restore-keys: |
             ${{ runner.os }}-buildx-
 

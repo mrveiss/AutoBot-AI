@@ -107,3 +107,21 @@ def test_every_pattern_a_changes_job_read_is_still_read(case):
         f"{workflow}:{old_key} read {sorted(lost - stale_self_refs)} before #15360; {new_file}:{new_key} no longer does. "
         "Only a self-reference to a workflow file that is gone may be dropped (ci.yml's `self` covers it)."
     )
+
+
+#: #17822 widened the Migration Gate on purpose: its filter used to list where its tests live, not the
+#: code they import. The pinned set is DATA (`fixtures/issue_17822_migration_gate_entries.json`),
+#: separate from the regenerable pre-#15360 fixture, so removing an entry from gate-paths.yml still
+#: fails here. It was held by changes_job_equivalence_15360_test.py until #18208 retired that test.
+ISSUE_17822_FIXTURE = Path(__file__).parent / "fixtures" / "issue_17822_migration_gate_entries.json"
+#: 14 = the eleven #17822 entries plus `services/__init__.py`, `services/approval_gate_service.py` and
+#: `llc/services/workspace_lease.py` (#17996), which the migration tests import.
+ISSUE_17822_COUNT = 14
+
+
+def test_the_issue_17822_migration_entries_are_still_read():
+    entries = json.loads(ISSUE_17822_FIXTURE.read_text(encoding="utf-8"))
+    assert len(entries) == ISSUE_17822_COUNT, "an emptied fixture would pin nothing"
+    migrations = _flat(_new_keys("gate-paths.yml")["migrations"])
+    missing = sorted(set(entries) - migrations)
+    assert not missing, f"gate-paths.yml `migrations` no longer reads the #17822 entries {missing}"

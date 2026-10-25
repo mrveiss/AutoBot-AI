@@ -56999,10 +56999,8 @@ export interface components {
         };
         /**
          * AgentStatusItem
-         * @description Runtime status for one registered agent (#10502).
-         *
-         *     Shape consumed by the Home dashboard "Agent Activity Monitor"
-         *     (frontend ``useAgentActivityData`` ``Agent`` interface).
+         * @description One agent for the Home dashboard "Agent Activity Monitor" (#10502, frontend ``Agent``).
+         *     A field the server cannot measure is None, never 0: the widget shows "not reported" (#17514).
          */
         AgentStatusItem: {
             /** Id */
@@ -57014,28 +57012,20 @@ export interface components {
              * @default worker
              */
             type: string;
-            /**
-             * Status
-             * @default idle
-             */
-            status: string;
+            /** Status */
+            status?: string | null;
+            /** Companyid */
+            companyId?: string | null;
+            /** Companyname */
+            companyName?: string | null;
             /** Currenttask */
             currentTask?: string | null;
-            /**
-             * Taskscompleted
-             * @default 0
-             */
-            tasksCompleted: number;
-            /**
-             * Uptime
-             * @default 0
-             */
-            uptime: number;
-            /**
-             * Successrate
-             * @default 0
-             */
-            successRate: number;
+            /** Taskscompleted */
+            tasksCompleted?: number | null;
+            /** Uptime */
+            uptime?: number | null;
+            /** Successrate */
+            successRate?: number | null;
             /** Recenttasks */
             recentTasks?: {
                 [key: string]: unknown;
@@ -70253,21 +70243,6 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** DataResponse[EmbeddingUpdateData] */
-        DataResponse_EmbeddingUpdateData_: {
-            /**
-             * Success
-             * @default true
-             */
-            success: boolean;
-            data?: components["schemas"]["EmbeddingUpdateData"] | null;
-            /** Message */
-            message?: string | null;
-            /** Timestamp */
-            timestamp?: string | null;
-        } & {
-            [key: string]: unknown;
-        };
         /** DataResponse[EnterpriseBulkEnableResponse] */
         DataResponse_EnterpriseBulkEnableResponse_: {
             /**
@@ -74138,13 +74113,6 @@ export interface components {
             /** Endpoint */
             endpoint?: string | null;
         } & {
-            [key: string]: unknown;
-        };
-        /**
-         * EmbeddingUpdateData
-         * @description data payload for PUT /settings.
-         */
-        EmbeddingUpdateData: {
             [key: string]: unknown;
         };
         /**
@@ -150430,8 +150398,15 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["DataResponse_EmbeddingUpdateData_"];
+                    "application/json": unknown;
                 };
+            };
+            /** @description Always: the embedding model is changed through the embedding-model switch (#19379), which re-indexes the knowledge base, never through this endpoint. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

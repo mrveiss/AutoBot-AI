@@ -83,10 +83,8 @@ def _fallback_agents_from_registry() -> List[Dict[str, Any]]:
                     "name": profile.agent_id.replace("_", " ").title(),
                     "type": _ORCH_TYPE_MAP.get(profile.agent_type, "worker"),
                     "status": profile.availability_status,
-                    "currentTask": None,
-                    "tasksCompleted": 0,
-                    "uptime": 0,
-                    "successRate": int(profile.success_rate * 100),
+                    # #17514: the registry counts no tasks, so its success_rate is a starting
+                    # default until tasks run; activity fields are not reported (None).
                     "recentTasks": [],
                     "activityTimeline": [],
                 }

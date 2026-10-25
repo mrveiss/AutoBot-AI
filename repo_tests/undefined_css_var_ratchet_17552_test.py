@@ -94,8 +94,9 @@ def _inspected_files(root: Path) -> list[Path]:
 REACH = declare(
     "undefined-css-var-scan",
     discover=_inspected_files,
+    # train-85b: population 1584 -> window [1524, 1584]; 1528 sat in the bottom band, re-pinned mid-window.
     # #18242: population 1558 -> window [1498, 1558]; 1503 sat in the bottom band, re-pinned mid-window.
-    floor=1528,
+    floor=1554,
     growth=60,
     skips=0,
     what="frontend source files scanned for var() references",

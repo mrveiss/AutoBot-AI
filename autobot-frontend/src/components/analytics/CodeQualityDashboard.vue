@@ -72,7 +72,7 @@
       <div class="health-details">
         <h3>{{ $t('analytics.codeQuality.overallHealthScore') }}</h3>
         <p class="health-description">
-          Your codebase is rated <strong :class="'grade-' + healthScore.grade">{{ getGradeDescription(healthScore.grade) }}</strong>
+          {{ $t('analytics.codeQuality.codebaseRatedPrefix') }} <strong :class="'grade-' + healthScore.grade">{{ getGradeDescription(healthScore.grade) }}</strong>
         </p>
         <div class="trend-indicator" :class="getTrendClass(healthScore.trend)">
           <span class="trend-arrow">{{ healthScore.trend >= 0 ? '↑' : '↓' }}</span>
@@ -81,14 +81,11 @@
         <div class="recommendations" v-if="healthScore.recommendations.length > 0">
           <h4>{{ $t('analytics.codeQuality.topRecommendations') }}</h4>
           <ul>
-            <li v-for="(rec, i) in healthScore.recommendations.slice(0, 3)" :key="i">
+            <li v-for="(rec, i) in visible('recommendations', healthScore.recommendations)" :key="i">
               {{ rec }}
             </li>
           </ul>
-          <TruncationNotice
-            :shown="Math.min(3, healthScore.recommendations.length)"
-            :total="healthScore.recommendations.length"
-          />
+          <TruncationNotice :shown="shown('recommendations', healthScore.recommendations.length)" :total="healthScore.recommendations.length" :step="RECOMMENDATIONS_PAGE" @show-more="showMore('recommendations')" />
         </div>
       </div>
     </div>
@@ -454,6 +451,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue';
 import TruncationNotice from './TruncationNotice.vue';
+import { useShowMore } from '@autobot/ui'
 import type { DirectiveBinding } from 'vue';
 import { BaseModal } from '@autobot/ui'
 import { useRoute } from 'vue-router';
@@ -588,6 +586,8 @@ const healthScore = ref<HealthScore>({
   components: {},
   recommendations: [],
 });
+const RECOMMENDATIONS_PAGE = 3;
+const { visible, shown, showMore } = useShowMore(RECOMMENDATIONS_PAGE, () => healthScore.value.recommendations);
 
 const metrics = ref<Metric[]>([]);
 const patterns = ref<Pattern[]>([]);

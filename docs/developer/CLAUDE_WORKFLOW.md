@@ -278,9 +278,18 @@ comment body is literal markdown, never raw JSON or a file path.
 
   # Multi-line body (HEREDOC — required for PR descriptions with newlines)
   gh api repos/mrveiss/AutoBot-AI/pulls/$PR_NUMBER -X PATCH -f body="$(cat <<'EOF'
-  ## Summary
+  ## Thinking Path
+  why
+
+  ## What Changed
   - change one
   - change two
+
+  ## Verification
+  evidence
+
+  ## Model Used
+  model id
   EOF
   )"
 
@@ -345,7 +354,7 @@ normal state seconds after a push.
 
 It reuses the *same* logic CI does rather than approximating it: the same `awk` extraction as `pr-template-check.yml` (so a heading that is present but placeholder-only fails locally exactly as it does in CI), the same keyword regex as `pr-issue-validation.yml`, and black/isort/flake8/bandit with the same flags as `code-quality.yml` — including bandit's absent severity floor, which is stricter than the medium-and-up filter used elsewhere. It also catches backticks in a commit message (the shell executes them when the message is passed via `-m`), authorship trailers, conflict markers, and fleet IPs.
 
-It also runs (or explains why it did not) each of the ten required status checks the `Main` ruleset gates `Dev_new_gui` on. Every check is path-filtered by default, using the same `.github/filters/*.yml` set its own workflow uses, so a diff outside those paths gets the identical "nothing to check" verdict locally that it would in CI. `--full` bypasses that filter and forces every check to actually run, and is also what turns on `api-wiring` (it builds the whole backend app to dump its OpenAPI schema, so it stays behind `--full` even on a relevant diff). Two checks are out of reach either way: `migration-matrix` needs a live PostgreSQL (set `AUTOBOT_MIGRATION_TEST_ADMIN_URL` to enable it), and `smoke-test` needs a Docker daemon plus three image builds and a running compose stack — reported SKIPPED with that reason rather than approximated (#15933). The gates below remain the reference; this runs the mechanical ones early.
+It also runs (or explains why it did not) each of the ten required status checks the `Main` ruleset gates `main` on. Every check is path-filtered by default, using the same `.github/filters/*.yml` set its own workflow uses, so a diff outside those paths gets the identical "nothing to check" verdict locally that it would in CI. `--full` bypasses that filter and forces every check to actually run, and is also what turns on `api-wiring` (it builds the whole backend app to dump its OpenAPI schema, so it stays behind `--full` even on a relevant diff). Two checks are out of reach either way: `migration-matrix` needs a live PostgreSQL (set `AUTOBOT_MIGRATION_TEST_ADMIN_URL` to enable it), and `smoke-test` needs a Docker daemon plus three image builds and a running compose stack — reported SKIPPED with that reason rather than approximated (#15933). The gates below remain the reference; this runs the mechanical ones early.
 
 **Match CI's interpreter first (#13573).** CI runs Python **3.14**. A box's default `python3` is often older, and every local gate silently uses it:
 
@@ -401,17 +410,17 @@ not reproduce or suppress it, so do not reach for one. A guard enumerating a rou
 (#14998), and an `hasattr`-guarded walk finds nothing at all rather than raising. #15093 records the
 behaviour and the sweep that bounds its blast radius; do not re-derive it.
 
-### Gate 0: Squash-Duplicate Detection
+### Gate 0: Duplicate Detection
 
-Before running any other validation, check whether the branch contains commits that are already squash-merged to `main`. A squash merge collapses N commits into one, so the individual commit SHAs differ even though the diff is identical. `git log --cherry-pick` detects this by comparing patch IDs rather than SHAs.
+Before running any other validation, check whether the branch contains commits whose patch is already in `main` (a solo squash-merged PR collapses N commits into one; merge-commit trains keep SHAs, so this mostly catches re-applied work). The SHAs can differ even though the diff is identical. `git log --cherry-pick` detects this by comparing patch IDs rather than SHAs.
 
 ```bash
-# Gate 0: Squash-Duplicate Detection
+# Gate 0: Duplicate Detection
 DUPES=$(git log --cherry-pick --right-only origin/main...$BRANCH --oneline 2>/dev/null | wc -l)
 TOTAL=$(git log origin/main...$BRANCH --oneline 2>/dev/null | wc -l)
 NEW=$((TOTAL - DUPES))
 if [ "$DUPES" -gt 0 ]; then
-  echo "WARNING: $DUPES of $TOTAL commit(s) already squash-merged to main — $NEW truly new"
+  echo "WARNING: $DUPES of $TOTAL commit(s) already in main — $NEW truly new"
   git log --cherry-pick --right-only origin/main...$BRANCH --format="  %H %s"
 fi
 ```

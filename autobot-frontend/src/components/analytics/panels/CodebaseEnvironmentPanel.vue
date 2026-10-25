@@ -8,7 +8,7 @@
     <h3>
       <Icon name="leaf" /> {{ $t('analytics.codebase.environment.title') }}
       <span v-if="analysis" class="total-count">
-        ({{ analysis.total_hardcoded_values }} hardcoded values)
+        ({{ $t('analytics.codebase.shared.hardcodedValues', { count: analysis.total_hardcoded_values }, analysis.total_hardcoded_values) }})
       </span>
       <button
         @click="emit('refresh')"
@@ -76,7 +76,7 @@
       <span v-if="llmFilteringResult" class="llm-result-badge">
         <Icon name="check-circle" />
         {{ llmFilteringResult.original_count }} → {{ llmFilteringResult.filtered_count }}
-        ({{ llmFilteringResult.reduction_percent }}% reduced)
+        ({{ $t('analytics.codebase.shared.reducedPercent', { percent: llmFilteringResult.reduction_percent }) }})
       </span>
     </div>
 
@@ -134,7 +134,7 @@
       <div v-if="analysis.recommendations.length > 0" class="recommendations-list">
         <h4>{{ $t('analytics.codebase.environment.envVarRecommendations') }}</h4>
         <div
-          v-for="(rec, index) in analysis.recommendations.slice(0, 10)"
+          v-for="(rec, index) in visible('recommendations', analysis.recommendations)"
           :key="'rec-' + index"
           class="recommendation-item"
           :class="'priority-' + rec.priority"
@@ -145,32 +145,19 @@
           </div>
           <div class="rec-description">{{ rec.description }}</div>
           <div class="rec-default">
-            Default: <code>{{ truncateValue(rec.default_value, 50) }}</code>
+            {{ $t('analytics.codebase.environment.defaultLabel') }} <code>{{ truncateValue(rec.default_value, 50) }}</code>
           </div>
         </div>
-        <div v-if="analysis.recommendations.length > 10" class="show-more">
-          <span class="muted">
-            Showing 10 of {{ analysis.recommendations.length }} recommendations
-          </span>
-        </div>
+        <TruncationNotice :shown="shown('recommendations', analysis.recommendations.length)" :total="analysis.recommendations.length" :step="PAGE_SIZE" @show-more="showMore('recommendations')" />
+        <TruncationNotice v-if="analysis.recommendations.length < analysis.recommendations_count" :shown="analysis.recommendations.length" :total="analysis.recommendations_count" server-limited />
       </div>
 
       <div v-if="analysis.hardcoded_values.length > 0" class="hardcoded-preview">
         <h4>
           {{ $t('analytics.codebase.environment.sampleHardcodedValues') }}
-          <span
-            v-if="
-              analysis.is_truncated ||
-              analysis.hardcoded_values.length < analysis.total_hardcoded_values
-            "
-            class="truncation-warning"
-          >
-            (showing {{ analysis.hardcoded_values.length }} of
-            {{ analysis.total_hardcoded_values.toLocaleString() }} - use Export for full data)
-          </span>
         </h4>
         <div
-          v-for="(hv, index) in analysis.hardcoded_values.slice(0, 8)"
+          v-for="(hv, index) in visible('hardcoded', analysis.hardcoded_values)"
           :key="'hv-' + index"
           class="hardcoded-item"
           :class="'severity-' + hv.severity"
@@ -184,14 +171,17 @@
             <span class="value-type">{{ hv.type }}</span>
           </div>
           <div v-if="hv.suggested_env_var" class="hv-suggestion">
-            <Icon name="lightbulb" /> Use: <code>{{ hv.suggested_env_var }}</code>
+            <Icon name="lightbulb" /> {{ $t('analytics.codebase.environment.use') }} <code>{{ hv.suggested_env_var }}</code>
           </div>
         </div>
+        <TruncationNotice :shown="shown('hardcoded', analysis.hardcoded_values.length)" :total="analysis.hardcoded_values.length" :step="PAGE_SIZE" @show-more="showMore('hardcoded')" />
+        <!-- The server caps the sample list; `total_hardcoded_values` is the real count. -->
+        <TruncationNotice v-if="analysis.is_truncated || analysis.hardcoded_values.length < analysis.total_hardcoded_values" :shown="analysis.hardcoded_values.length" :total="analysis.total_hardcoded_values" server-limited />
       </div>
 
       <div class="scan-timestamp">
         <Icon name="clock" />
-        Analysis completed in {{ analysis.analysis_time_seconds.toFixed(2) }}s
+        {{ $t('analytics.codebase.shared.analysisCompleted', { seconds: analysis.analysis_time_seconds.toFixed(2) }) }}
       </div>
     </div>
 
@@ -213,6 +203,8 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useShowMore } from '@autobot/ui'
+import TruncationNotice from '../TruncationNotice.vue'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
 // #5311: canonical HardcodedValue from analyticsTypes — was inline-duplicated here.
@@ -257,6 +249,10 @@ const props = defineProps<{
   aiFilteringPriority: string
   llmFilteringResult: LLMFilteringResult | null
 }>()
+
+// #12741: a capped list is expandable; the notice below it is the control.
+const PAGE_SIZE = 8
+const { visible, shown, showMore } = useShowMore(PAGE_SIZE, () => props.analysis)
 
 const emit = defineEmits<{
   refresh: []
@@ -465,13 +461,6 @@ function formatFactorName(factor: string): string {
 }
 
 /* Issue #631: Truncation warning style */
-.environment-analysis-section .truncation-warning {
-  font-size: 0.85em;
-  color: var(--color-warning);
-  font-weight: normal;
-  margin-left: var(--spacing-2);
-}
-
 .environment-analysis-section .hardcoded-item {
   padding: var(--spacing-3);
   background: rgba(17, 24, 39, 0.5);

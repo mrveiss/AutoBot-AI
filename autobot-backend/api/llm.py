@@ -317,24 +317,6 @@ async def get_available_embedding_models(
         )
 
 
-async def _apply_embedding_config(provider: str, model: str, embedding_data: dict) -> None:
-    """Helper for update_embedding_model. Ref: #1088."""
-    config.set("backend.llm.embedding.provider", provider)
-    config.set(f"backend.llm.embedding.providers.{provider}.selected_model", model)
-    if "endpoint" in embedding_data:
-        config.set(
-            f"backend.llm.embedding.providers.{provider}.endpoint",
-            embedding_data["endpoint"],
-        )
-    if provider == "openai" and "api_key" in embedding_data:
-        config.set(
-            f"backend.llm.embedding.providers.{provider}.api_key",
-            embedding_data["api_key"],
-        )
-    await asyncio.to_thread(config.save_settings)
-    await asyncio.to_thread(config.save_config_to_yaml)
-
-
 @router.post("/embedding", response_model=DataResponse[LLMDeprecatedData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,

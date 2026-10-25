@@ -30,6 +30,7 @@ migrations:
   - 'autobot-backend/tests/migrations/**'
   - 'autobot-backend/user_management/models/**'
   - 'autobot-backend/llc/models/**'
+  - 'autobot-backend/llc/services/workspace_lease.py'
   - 'autobot-backend/canvas/models.py'
   - 'autobot-backend/models/**'
   - 'autobot-backend/initialization/lifespan.py'

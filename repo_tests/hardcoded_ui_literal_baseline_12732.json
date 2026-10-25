@@ -79,15 +79,8 @@
   "750034f6",
   "750034f6"
  ],
- "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": [
-  "4feeda39"
- ],
  "autobot-frontend/src/components/analytics/CodebaseAnalytics.vue": [
   "1f992944"
- ],
- "autobot-frontend/src/components/analytics/CodebaseDependenciesPanel.vue": [
-  "260038dc",
-  "4f0ad41b"
  ],
  "autobot-frontend/src/components/analytics/CodebaseOverviewPanel.vue": [
   "485afeef"
@@ -98,17 +91,12 @@
  "autobot-frontend/src/components/analytics/LLMPatternDashboard.vue": [
   "0b34ceaf",
   "5a8cdae8",
-  "a1a5d08f",
   "d573da1d",
   "f1c7bd09",
   "fac4e750"
  ],
  "autobot-frontend/src/components/analytics/LogPatternDashboard.vue": [
   "bb0c1794"
- ],
- "autobot-frontend/src/components/analytics/PatternAnalysis.vue": [
-  "a8f0c866",
-  "f4b40050"
  ],
  "autobot-frontend/src/components/analytics/PrecommitHookDashboard.vue": [
   "2b0f75f9",
@@ -127,51 +115,8 @@
   "7c508842",
   "dcd8b8ad"
  ],
- "autobot-frontend/src/components/analytics/panels/CodebaseApiEndpointsPanel.vue": [
-  "147c16b4",
-  "37b3bd2d",
-  "5f541dc2",
-  "829e0344",
-  "c51f5185"
- ],
- "autobot-frontend/src/components/analytics/panels/CodebaseBugPredictionPanel.vue": [
-  "13f99239",
-  "2fe03eec",
-  "45f8bb12",
-  "4c722e37",
-  "555ac7c9",
-  "5d58058a",
-  "bbf9bc0b",
-  "caafd6c1",
-  "eedab620",
-  "f0bc38df"
- ],
- "autobot-frontend/src/components/analytics/panels/CodebaseConfigDuplicatesPanel.vue": [
-  "0c498e1a",
-  "7b1e2dee",
-  "f9ab2c97",
-  "fe0d914a"
- ],
  "autobot-frontend/src/components/analytics/panels/CodebaseCrossLanguagePanel.vue": [
-  "12891ccd",
-  "33d3e44f",
-  "707d255f",
-  "750034f6",
-  "77790874",
-  "dc5579ed",
-  "e9813d8d",
-  "f4b40050",
-  "fd9a3253"
- ],
- "autobot-frontend/src/components/analytics/panels/CodebaseEnvironmentPanel.vue": [
-  "006957f0",
-  "0079f356",
-  "03a919c2",
-  "435ecc6f",
-  "5d69a5aa",
-  "c97a62d5",
-  "cbf65645",
-  "cf3997d5"
+  "750034f6"
  ],
  "autobot-frontend/src/components/analytics/panels/CodebaseIntelligenceScoresPanel.vue": [
   "0dcc9bf3",
@@ -195,20 +140,6 @@
   "caba3e1d",
   "d3d24eb3",
   "fbede0e4"
- ],
- "autobot-frontend/src/components/analytics/panels/CodebaseOwnershipPanel.vue": [
-  "006957f0",
-  "4e174cc5",
-  "5fddfcda",
-  "6fb01fbb",
-  "85f9cc7e",
-  "a508267f",
-  "c22fc6dc",
-  "c22fc6dc",
-  "c22fc6dc",
-  "c22fc6dc",
-  "c22fc6dc",
-  "c6f5367c"
  ],
  "autobot-frontend/src/components/artifact-cells/ChartCell.vue": [
   "14901835",
