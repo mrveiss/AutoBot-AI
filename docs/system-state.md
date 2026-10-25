@@ -184,7 +184,7 @@ After analysis, it was determined that the main frontend and SLM should **coexis
 
 - `useSlmApi.ts` - SLM REST API integration
 - `useAutobotApi.ts` - Main AutoBot backend integration (Issue #729)
-- `usePrometheusMetrics.ts` - Prometheus metrics integration
+- `useFleetMetrics.ts` - fleet monitoring metrics (was `usePrometheusMetrics.ts` until #18225)
 - `useSlmWebSocket.ts` - Real-time fleet updates
 
 **Access:**

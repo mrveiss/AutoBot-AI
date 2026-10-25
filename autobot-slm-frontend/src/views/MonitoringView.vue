@@ -17,7 +17,7 @@ import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useFleetStore } from '@/stores/fleet'
 import { useAuthStore } from '@/stores/auth'
-import { usePrometheusMetrics } from '@/composables/usePrometheusMetrics'
+import { useFleetMetrics } from '@/composables/useFleetMetrics'
 
 const route = useRoute()
 const router = useRouter()
@@ -26,7 +26,7 @@ const fleetStore = useFleetStore()
 const {
   systemHealth,
   activeAlertCount,
-} = usePrometheusMetrics({ autoFetch: true, pollInterval: 30000 })
+} = useFleetMetrics({ autoFetch: true, pollInterval: 30000 })
 
 // Navigation tabs for monitoring sub-routes (all SLM monitoring - Issue #729)
 const tabs = [

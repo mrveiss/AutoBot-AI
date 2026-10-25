@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Tenant-scope tests for GET /api/llc/agent/context/{item_id} (#13756).
+"""Tenant-scope tests for GET /api/llc/context/{item_id} (#13756).
 
 The route bound ``require_org_context`` but never applied it, so any
 authenticated caller could read another company's work item, its goal
@@ -82,7 +82,7 @@ def test_own_company_item_is_readable(mode: str) -> None:
         patch("llc.services.goal.GoalService.get_goal_ancestry_for_work_item", new=AsyncMock(return_value=[])),
         patch("llc.kb.rag_assembler.LLCRAGAssembler.assemble", new=AsyncMock(side_effect=Exception("no KB"))),
     ):
-        response = TestClient(app).get(f"/agent/context/{item.id}?mode={mode}")
+        response = TestClient(app).get(f"/context/{item.id}?mode={mode}")
 
     assert response.status_code == 200
     assert response.json()["work_item_id"] == str(item.id)
@@ -99,7 +99,7 @@ def test_other_companys_item_is_404(mode: str) -> None:
         patch("llc.services.work_item_service.WorkItemService.get", new=AsyncMock(side_effect=scoped_get)),
         patch("llc.services.goal.GoalService.get_goal_ancestry_for_work_item", new=ancestry),
     ):
-        response = TestClient(app).get(f"/agent/context/{item.id}?mode={mode}")
+        response = TestClient(app).get(f"/context/{item.id}?mode={mode}")
 
     assert response.status_code == 404
     assert "Company A" not in response.text

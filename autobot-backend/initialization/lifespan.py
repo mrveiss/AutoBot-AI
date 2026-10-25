@@ -23,11 +23,7 @@ from fastapi import FastAPI
 from autobot_shared.env_utils import env_raw, truthy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import STARTUP_ERROR_FILE
-from autobot_shared.tracing import (
-    instrument_aiohttp,
-    instrument_redis,
-    shutdown_tracing,
-)
+from autobot_shared.tracing import instrument_aiohttp, instrument_redis, shutdown_tracing
 from chat_history import ChatHistoryManager
 from chat_workflow import ChatWorkflowManager
 from config.manager import get_config_manager
@@ -36,6 +32,7 @@ from initialization import lifespan_shutdown as shutdown_steps
 from initialization.background_workers import start_background_workers
 from initialization.neural_mesh_wiring import wire_neural_mesh_components
 from initialization.startup_error_file import persist_startup_error
+from initialization.system_knowledge_import import start_system_knowledge_import
 from knowledge_factory import get_or_create_knowledge_base
 from llm_shared.pricing.sync_cache_scheduler import start_pricing_cache_scheduler
 from security_layer import SecurityLayer
@@ -712,6 +709,7 @@ async def _init_knowledge_base(app: FastAPI):
         knowledge_base = await get_or_create_knowledge_base(app)
         await update_app_state("knowledge_base", knowledge_base)
         logger.info("✅ [ 70%] Knowledge Base: Knowledge base ready")
+        start_system_knowledge_import(app)  # #19347: once per startup, after the KB is ready
 
         # Issue #2309: Wire KB into the already-initialized chat workflow manager.
         # Phase 1 initializes the manager before the KB is ready, leaving

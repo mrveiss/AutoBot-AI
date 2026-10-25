@@ -9,6 +9,14 @@ import { describe, it, expect, vi } from 'vitest'
 vi.mock('@/stores/useAppStore', () => ({ useAppStore: () => ({ addSystemNotification: vi.fn() }) }))
 vi.mock('@/i18n', () => ({ default: { global: { t: (key: string) => key } } }))
 
+/**
+ * The first case pays the cold transform of RumAgent's import graph (~3 s alone), which a
+ * loaded pre-push stretched past vitest's default 10 s. It gets its own budget, as
+ * ThemePresetPicker.test.ts does (#18252), rather than a warm-up import that would load
+ * the module before the case sets up what its import reads.
+ */
+const COLD_IMPORT_MS = 60_000
+
 describe('RUM reporting of window events (#19458)', () => {
   it('reports one window error as exactly one javascript_error', async () => {
     localStorage.setItem('rum_enabled', 'true')
@@ -20,7 +28,7 @@ describe('RUM reporting of window events (#19458)', () => {
 
     const reports = spy.mock.calls.filter(([type]) => type === 'javascript_error')
     expect(reports).toHaveLength(1)
-  })
+  }, COLD_IMPORT_MS)
 
   it('reports one unhandled rejection as exactly one unhandled_promise_rejection', async () => {
     const { default: rumAgent } = await import('@/utils/RumAgent')

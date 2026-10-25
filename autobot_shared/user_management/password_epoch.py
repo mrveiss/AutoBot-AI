@@ -43,24 +43,16 @@ at their own ``exp``; #12924's window closes as soon as they do.
 """
 
 import asyncio
-import logging
 import time
 from collections.abc import Awaitable, Callable
 
 from redis.exceptions import RedisError
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_constants import TTL_24_HOURS
 
-# Plain stdlib logging, deliberately. This module is imported at module scope by
-# `autobot-slm-backend/services/auth.py`, whose test harness
-# (`tests/api/test_auth_logout.py`) loads that file with most of the config
-# stack replaced by MagicMock. `autobot_shared.logging_manager.get_logger`
-# builds a RotatingFileHandler from config at call time and raises under that
-# harness. Its sibling in the same import chain,
-# `autobot-slm-backend/services/token_denylist.py`, uses stdlib logging for the
-# same reason, and it is what CLAUDE.md's pattern table prescribes.
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 #: Redis key prefix for the per-subject password-change epoch.
 #: nosec B105 — this is a Redis key namespace, not a credential. bandit flags
