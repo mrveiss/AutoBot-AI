@@ -206,7 +206,7 @@ export interface TLSEnableResponse {
 //
 // NOTE for future passes: the same three names — `DashboardOverview`,
 // `SystemMetrics` and `LogEntry` — are ALSO declared in
-// `composables/usePrometheusMetrics.ts`, `views/monitoring/LogViewer.vue` and
+// `composables/useFleetMetrics.ts`, `views/monitoring/LogViewer.vue` and
 // `components/DeploymentLogViewer.vue`. Those are client-side VIEW-MODELS that
 // deliberately remap these endpoints; they must never be derived. They were
 // renamed in #13138 so the collision cannot come back.

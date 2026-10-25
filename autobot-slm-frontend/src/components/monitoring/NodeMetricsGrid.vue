@@ -9,7 +9,7 @@
  */
 
 import { ref, computed } from 'vue'
-import type { NodeMetricsDetailed } from '@/composables/usePrometheusMetrics'
+import type { NodeMetricsDetailed } from '@/composables/useFleetMetrics'
 import { formatDateTime } from '@/composables/useTimezone'
 
 interface Props {

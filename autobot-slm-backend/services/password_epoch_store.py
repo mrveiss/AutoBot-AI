@@ -20,12 +20,12 @@ itself, and its fail-closed handling (#16411, #16422), stay in the shared module
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.user_management import password_epoch
 from autobot_shared.user_management.password_epoch import RevocationCheckUnavailable
 
@@ -36,7 +36,7 @@ try:  # asyncpg can raise its own errors at connect time, before SQLAlchemy wrap
 except ImportError:  # pragma: no cover - asyncpg is the SLM's driver in deployments
     _DRIVER_FAILURES = ()
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _STORE_FAILURES = (asyncio.TimeoutError, ConnectionError, OSError, SQLAlchemyError, *_DRIVER_FAILURES)
 _STORE_DEADLINE_SECONDS = 2.0  # same bound as the jti denylist (#11443)

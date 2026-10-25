@@ -16,7 +16,6 @@ from typing import Any, Dict, List
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import JSONResponse, Response, StreamingResponse
-from pydantic import BaseModel
 
 from api.schemas_agent import VoiceCreateResponse
 from api.schemas_code import (
@@ -24,6 +23,7 @@ from api.schemas_code import (
     VoiceListenResponse,
     VoiceTranscribeResponse,
 )
+from api.voice_bundle_helpers import voice_bundle_user_id
 from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -45,11 +45,6 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 
 
-class _RealtimeToolCallRequest(BaseModel):
-    name: str
-    arguments: Dict[str, Any] = {}
-
-
 @realtime_router.get("/realtime/tools")
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -67,9 +62,8 @@ async def voice_realtime_list_tools(
     """
     role = current_user.get("role", "user")
     is_admin = is_admin_role(role)  # #12717: superadmin gets the admin realtime bridge
-    user_id = current_user.get("user_id") or current_user.get("sub") or current_user.get("username")
     bridge = await get_realtime_bridge(is_admin=is_admin)
-    tools = await bridge.list_realtime_tools(user_id=str(user_id) if user_id else None, role=role)
+    tools = await bridge.list_realtime_tools(user_id=voice_bundle_user_id(current_user), role=role)
     return {
         "tools": [
             {
@@ -83,44 +77,7 @@ async def voice_realtime_list_tools(
     }
 
 
-@realtime_router.post("/realtime/tools/call")
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="voice_realtime_call_tool",
-    error_code_prefix="VOICE",
-)
-async def voice_realtime_call_tool(
-    body: _RealtimeToolCallRequest,
-    request: Request,
-    current_user: dict = Depends(get_current_user),
-):
-    """Invoke an MCP tool by name and return the result envelope.
-
-    Accepts ``{name, arguments}`` and proxies the call through MCPClient.
-    Errors surface as ``{is_error: true, content: "<message>"}`` so the
-    Realtime model can self-correct verbally without the session crashing.
-    """
-    from fastapi import HTTPException
-
-    is_admin = is_admin_role(current_user.get("role"))  # #12717
-    _id = current_user.get("id")
-    user_id = _id if _id is not None else current_user.get("sub")
-    session_id = request.headers.get("X-Session-Id")
-
-    bridge = await get_realtime_bridge(is_admin=is_admin)
-    allowed_tools = await bridge.list_realtime_tools()
-    allowed_names = {t.name for t in allowed_tools}
-    if body.name not in allowed_names:
-        raise HTTPException(status_code=403, detail="Tool not permitted in active voice bundle")
-
-    result = await bridge.call_tool(
-        body.name,
-        body.arguments,
-        user_id=user_id,
-        session_id=session_id,
-        company_id=current_user.get("org_id"),  # #18430: the authenticated company, never the model's
-    )
-    return {"is_error": result.is_error, "content": result.content}
+# POST /realtime/tools/call lives in api/realtime_session.py only (#18721): one handler, one scoping.
 
 
 # #13215: chunked audio wire format for the HTTP synthesis routes.

@@ -19,8 +19,8 @@ import MonitoringView from './MonitoringView.vue'
 const auth = { isAdmin: false }
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => auth }))
 vi.mock('@/stores/fleet', () => ({ useFleetStore: () => ({ nodeList: [] }) }))
-vi.mock('@/composables/usePrometheusMetrics', () => ({
-  usePrometheusMetrics: () => ({ systemHealth: ref('healthy'), activeAlertCount: ref(0) }),
+vi.mock('@/composables/useFleetMetrics', () => ({
+  useFleetMetrics: () => ({ systemHealth: ref('healthy'), activeAlertCount: ref(0) }),
 }))
 vi.mock('vue-router', () => ({
   useRoute: () => ({ path: '/monitoring/system' }),
