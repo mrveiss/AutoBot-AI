@@ -120,6 +120,40 @@ def _missing_report(missing: list[str], found: list[str]) -> list[str]:
     ]
 
 
+_REF = r"(?:[\w.-]+/[\w.-]+)?#\d+"
+# A closing keyword whose ref is followed by a LIST of refs. GitHub links only the first:
+# `Closes #19397, #17120, #19248` left #19248 open after #19451 landed (#19521).
+_MULTI_CLOSE = re.compile(
+    rf"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+{_REF}(?:(?:\s*,\s*|\s*&\s*|\s+and\s+){_REF})+",
+    re.IGNORECASE,
+)
+_FENCE = re.compile(r"^\s*(```|~~~)")
+_INLINE_CODE = re.compile(r"`[^`]*`")
+
+
+def multi_close_lines(body: str) -> list[str]:
+    """Lines where one closing keyword is followed by several issues (#19521).
+
+    Fenced blocks and inline code are skipped, so a body may quote the wrong form as an example.
+    """
+    found, fenced = [], False
+    for line in (body or "").splitlines():
+        if _FENCE.match(line):
+            fenced = not fenced
+            continue
+        prose = _INLINE_CODE.sub("", _COMMENT.sub("", line))
+        if not fenced and _MULTI_CLOSE.search(prose):
+            found.append(line.strip())
+    return found
+
+
+def _multi_close_report(found: list[str]) -> list[str]:
+    lines = [
+        f"::error::One closing keyword names several issues; GitHub closes only the first: {line}" for line in found
+    ]
+    return lines + ["Write one per line instead -- `Closes #A` on one line, `Closes #B` on the next (#19521)."]
+
+
 def report(body: str) -> tuple[bool, list[str]]:
     """Return (ok, output lines) for one pull request body.
 
@@ -153,9 +187,14 @@ def report(body: str) -> tuple[bool, list[str]]:
         lines.append(f"::error::Required section '{section}' is empty. Please fill it in before merging.")
     if missing:
         lines.extend(_missing_report(missing, headings(body)))
+    multi = multi_close_lines(body)
+    if multi:
+        lines.extend(_multi_close_report(multi))
 
-    if not missing and not empty:
+    if not missing and not empty and not multi:
         return True, lines + ["All required PR template sections are filled in."]
+    if not missing and not empty:
+        return False, lines + ["::error::PR template check failed: a closing keyword lists more than one issue."]
     return False, lines + [_summary(missing, empty)]
 
 

@@ -711,13 +711,6 @@
  "autobot-frontend/src/components/settings/TelegramSettingsPanel.vue": [
   "a9d9ae21"
  ],
- "autobot-frontend/src/components/settings/ThemePresetPicker.vue": [
-  "23cbc8bb",
-  "796a9747",
-  "bc9f7f09",
-  "bd6e538b",
-  "def030fd"
- ],
  "autobot-frontend/src/components/terminal/CompletionSuggestions.vue": [
   "83b0e066"
  ],

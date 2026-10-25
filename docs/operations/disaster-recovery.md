@@ -1,6 +1,6 @@
 # AutoBot Disaster Recovery Procedures
 
-**Last Updated**: 2025-12-13
+**Last Updated**: 2026-10-24
 **Related Issue**: [#251](https://github.com/mrveiss/AutoBot-AI/issues/251)
 **Classification**: Operations Critical
 
@@ -32,24 +32,16 @@ This document provides disaster recovery procedures for AutoBot's distributed in
 
 1. **Diagnose the failure**
    ```bash
-   # Check if process is running
-   ps aux | grep uvicorn
+   # The backend runs as the systemd unit autobot-backend
+   sudo systemctl status autobot-backend --no-pager
 
-   # Check system logs
-   journalctl -u autobot-backend -n 100
-
-   # Check application logs
-   tail -f logs/backend.log
+   # Its logs (startup validation runs before the server starts, so a failed start shows here)
+   journalctl -u autobot-backend -n 100 --no-pager
    ```
 
 2. **Restart the service**
    ```bash
-   # Stop existing process
-   pkill -f "uvicorn backend.main:app"
-
-   # Start fresh
-   cd /opt/autobot
-   sudo systemctl start autobot-backend
+   sudo systemctl restart autobot-backend
    ```
 
 3. **Verify recovery**
@@ -61,40 +53,38 @@ This document provides disaster recovery procedures for AutoBot's distributed in
 
 ---
 
-### Scenario 2: Frontend VM Failure (<frontend-ip>)
+### Scenario 2: Frontend Failure (<frontend-ip>)
 
 **Impact**: No web interface, API still functional
 
+The deployed frontend is a production build served by nginx from the frontend role's
+`autobot-frontend/current` directory under the install root (`frontend_dist_dir`), on ports 80 and 443.
+It is not a Vite dev server.
+
 **Symptoms**:
-- Cannot access `http://<frontend-ip>:5173`
-- SSH to the frontend role fails or shows issues
+- `https://<frontend-ip>/` doesn't load, or loads a blank page
+- SSH to the frontend role's machine fails
 
 **Recovery Steps**:
 
-1. **Check VM status**
-   ```powershell
-   # On Hyper-V host
-   Get-VM -Name "AutoBot-Frontend" | Select-Object State, Status
-   ```
+1. **If the machine itself is down**, start or restart it from your hypervisor or cloud console, then continue.
 
-2. **Restart VM if needed**
-   ```powershell
-   Restart-VM -Name "AutoBot-Frontend" -Force
-   ```
-
-3. **SSH and restart service**
+2. **Check nginx**
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@<frontend-ip>
-
-   # On the frontend role's machine:
-   cd /opt/autobot/autobot-slm-frontend
-   npm run dev -- --host 0.0.0.0
+   ssh autobot@<frontend-ip>
+   sudo systemctl status nginx --no-pager
+   sudo nginx -t                      # a config error stops a reload
+   journalctl -u nginx -n 100 --no-pager
    ```
 
-4. **Or use startup script from main machine**
+3. **Restart nginx**
    ```bash
-   sudo systemctl start autobot-backend
+   sudo systemctl restart nginx
    ```
+
+4. **If nginx runs but the page is blank or 404**, the build is missing or broken. Rebuild it through
+   the builtin updater: the SLM's **Maintenance → Updates → Code Sync** tab, for the frontend node.
+   (**System Updates** on the same page is OS packages, not the AutoBot build.) Don't build by hand on the node.
 
 **Estimated Recovery Time**: 5-15 minutes
 
@@ -113,7 +103,7 @@ This document provides disaster recovery procedures for AutoBot's distributed in
 
 1. **Check Redis status**
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@<database-ip>
+   ssh autobot@<database-ip>
    sudo systemctl status redis-stack-server
    ```
 
@@ -129,17 +119,20 @@ This document provides disaster recovery procedures for AutoBot's distributed in
    ```
 
 4. **Restore from backup if data lost**
+
+   Use the SLM: **Backups**, then **Restore** on a completed Redis backup. It stops Redis, puts the
+   snapshot in place as `dump.rdb` and starts Redis again (see [Backup and restore](#backup-and-restore)).
+   By hand, on the Redis node, with a verified snapshot:
    ```bash
-   # Stop Redis
    sudo systemctl stop redis-stack-server
-
-   # Restore RDB file
-   sudo cp /path/to/backup/dump.rdb /var/lib/redis-stack/dump.rdb
-   sudo chown redis:redis /var/lib/redis-stack/dump.rdb
-
-   # Start Redis
+   # Keep the current file aside, never delete it
+   sudo mv /var/lib/redis/dump.rdb /var/lib/redis/dump.rdb.before-restore
+   sudo cp /path/to/backup/dump.rdb /var/lib/redis/dump.rdb
+   sudo chown redis:redis /var/lib/redis/dump.rdb
    sudo systemctl start redis-stack-server
    ```
+   `/var/lib/redis` is the redis role's `redis_data_dir`. If your node overrides it, use
+   `redis-cli CONFIG GET dir` before stopping Redis.
 
 **Estimated Recovery Time**: 5-30 minutes (depending on restore need)
 
@@ -158,7 +151,7 @@ This document provides disaster recovery procedures for AutoBot's distributed in
 
 1. **Check Ollama status**
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@<aiml-ip>
+   ssh autobot@<aiml-ip>
    sudo systemctl status ollama
    ```
 
@@ -196,7 +189,7 @@ This document provides disaster recovery procedures for AutoBot's distributed in
 
 1. **Check NPU worker status**
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@<npu-ip>
+   ssh autobot@<npu-ip>
    sudo systemctl status npu-worker
    ```
 
@@ -228,7 +221,7 @@ This document provides disaster recovery procedures for AutoBot's distributed in
 
 1. **Check VM and Playwright**
    ```bash
-   ssh -i ~/.ssh/autobot_key autobot@<browser-ip>
+   ssh autobot@<browser-ip>
    sudo systemctl status playwright-server
    ```
 
@@ -279,39 +272,72 @@ This document provides disaster recovery procedures for AutoBot's distributed in
 
 ---
 
-## Backup Procedures
+## Backup and restore
 
-### Daily Backups
+AutoBot has two backup mechanisms. Neither copies off the machine on its own: keep copies elsewhere
+yourself (VM snapshots, an off-site copy of the backup directories).
 
+### SLM backups (GUI and API)
+
+The SLM's **Backups** page (`autobot-slm-frontend/src/views/BackupsView.vue`) and its API
+(`/api/stateful/backups`, `autobot-slm-backend/api/stateful.py`) back up three services on a node,
+**on demand**:
+
+| `service_type` | What is captured | Restore from the SLM |
+|---|---|---|
+| `redis` | `BGSAVE`, then the node's `dump.rdb` copied to SLM backup storage | **Yes**: **Restore** in the GUI, or `POST /api/stateful/backups/{id}/restore` |
+| `postgres` | a `pg_dumpall` of the cluster | No: operator restore |
+| `secrets` | an SQLite online snapshot of the backend's `secrets.db` | No: operator restore, [below](#secrets-store-backup-and-restore-18281) |
+
+- Storage: `SLM_BACKUP_DIR` (default `/var/lib/slm/backups`) on the SLM host. Each completed backup
+  records a sha256, which `verify_backup_integrity` checks.
+- Retention (`services/backup.py` `apply_retention`): after each successful `redis` or `postgres`
+  backup, older completed backups of that node and type beyond `SLM_BACKUP_RETENTION_COUNT`
+  (default 10) or older than `SLM_BACKUP_RETENTION_DAYS` (default 30) are pruned. Secrets backups are
+  never pruned automatically (#17038).
+- **No schedule.** Nothing triggers SLM backups periodically. Create them from the Backups page or
+  the API, for example before an update.
+- Restore is offered for Redis only (#19455). Restoring a PostgreSQL or secrets backup through the
+  Redis restore path would overwrite Redis's data, so the SLM refuses it.
+
+**Restoring a `postgres` backup (operator).** The artifact is a gzipped `pg_dumpall --clean --if-exists`.
+On the PostgreSQL node, with the backend and SLM services stopped:
 ```bash
-#!/bin/bash
-# backup_autobot.sh - Run daily via cron
-
-BACKUP_DIR="/backups/autobot/$(date +%Y-%m-%d)"
-mkdir -p "$BACKUP_DIR"
-
-# Redis backup
-ssh autobot@<database-ip> "redis-cli BGSAVE"
-sleep 10
-scp autobot@<database-ip>:/var/lib/redis-stack/dump.rdb "$BACKUP_DIR/"
-
-# Configuration backup
-cp -r .env "$BACKUP_DIR/"
-cp -r backend/core/config.py "$BACKUP_DIR/"
-
-# Knowledge base metadata
-redis-cli -h <database-ip> -n 1 KEYS "doc:*" > "$BACKUP_DIR/kb_keys.txt"
-
-echo "Backup completed: $BACKUP_DIR"
+gunzip -c <backup>.sql.gz | sudo -u postgres psql -X postgres 2>&1 | tee /tmp/autobot-restore.log
+grep ERROR /tmp/autobot-restore.log
 ```
+Expect exactly two errors, both harmless: `current user cannot be dropped` and
+`role "postgres" already exists`. The dump drops and recreates every role, including the one
+running the restore. Any other `ERROR` line needs investigating before the services start again.
 
-### Weekly Backups
+**Don't add `-v ON_ERROR_STOP=1`.** `--clean` drops each database before recreating it, and the
+dump drops roles after that. Stopping on the first error aborts after the databases are already
+gone, at `DROP ROLE IF EXISTS postgres`, which leaves no data at all. This was checked on a
+PostgreSQL 16 scratch cluster: with the flag the database was dropped and not restored, and
+without it the data came back with the two errors above.
 
-- Full VM snapshots via Hyper-V
-- Off-site backup of Redis dump
-- Git repository backup
+`--clean` drops and recreates every database in the dump, so take a fresh backup of the current state first.
 
----
+### Scheduled PostgreSQL dumps (systemd timer)
+
+The postgresql role installs `autobot-pg-backup.timer`
+(`autobot-slm-backend/ansible/roles/postgresql/tasks/backup.yml`), on by default
+(`postgresql_backup_enabled`):
+
+- Nightly at `postgresql_backup_on_calendar` (default `*-*-* 02:30:00`, with up to 15 minutes of
+  random delay), it writes `postgresql-all-<timestamp>.sql.gz` (`pg_dumpall`) to
+  `postgresql_backup_dir` (default `/var/backups/autobot/postgresql`) on the PostgreSQL node.
+- It deletes its own dumps older than `postgresql_backup_retention_days` (default 14).
+- These dumps are local files. They aren't rows on the SLM's Backups page, and the SLM doesn't restore them.
+  Restore one with the `psql` command above.
+
+Check it: `systemctl list-timers autobot-pg-backup.timer` and `journalctl -u autobot-pg-backup.service`.
+
+### Verifying a backup set
+
+`autobot-slm-backend/ansible/verify-backup-restore.yml` restores every artifact into a scratch
+directory and checks it (checksums, the PostgreSQL dump, `redis-check-rdb`, archive contents)
+without touching live data.
 
 ### Secrets-store backup and restore (#18281)
 
