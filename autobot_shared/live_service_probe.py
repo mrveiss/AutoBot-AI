@@ -29,10 +29,11 @@ import socket
 import sys
 from urllib.parse import urlsplit
 
-from autobot_shared.env_utils import env_float
+from autobot_shared.env_utils import env_flag, env_float
 
 __all__ = [
     "DEFAULT_PROBE_TIMEOUT_SECONDS",
+    "LIVE_TESTS_ENV",
     "endpoint_is_listening",
     "redis_client_is_stubbed",
     "require_live_endpoint",
@@ -48,6 +49,8 @@ REDIS_CLIENT_MODULE = "autobot_shared.redis_client"
 # its own budget. Kept short — this runs before every guarded test, and a
 # refused loopback connect returns in well under a millisecond.
 DEFAULT_PROBE_TIMEOUT_SECONDS = env_float("AUTOBOT_LIVE_PROBE_TIMEOUT_SECONDS", 1.0)
+# The opt-in a run gives before any test may dial a live service (#19479).
+LIVE_TESTS_ENV = "AUTOBOT_LIVE_TESTS"
 
 _DEFAULT_PORTS = {"http": 80, "https": 443, "redis": 6379, "rediss": 6379, "ws": 80, "wss": 443}
 
@@ -122,18 +125,25 @@ def endpoint_is_listening(
 
 
 def require_live_endpoint(target: str, what: str, port: int | None = None) -> None:
-    """Skip the calling test iff nothing is listening on *target*.
+    """Skip the calling test unless the run opted into live services and *target* is listening.
 
     *what* names the missing service in the skip reason, so a skipped run says
     which part of the stack was absent instead of reading as an unexplained
     non-result.
-    """
-    host, resolved_port = split_endpoint(target, port)
-    if endpoint_is_listening(target, port):
-        return
 
+    #19479: a listener alone is not consent. On a machine that also runs an
+    install, the configured URL is the user's live system, and these tests
+    write to it (chat_knowledge_system_e2e_test.py posts ``add_to_kb``
+    decisions). A run that targets a live stack says so with
+    ``AUTOBOT_LIVE_TESTS=1``.
+    """
     import pytest
 
+    host, resolved_port = split_endpoint(target, port)  # a bad target is an error, opted in or not
+    if not env_flag(LIVE_TESTS_ENV):
+        pytest.skip(f"{what}: live-service tests run only with {LIVE_TESTS_ENV}=1 (#19479)")
+    if endpoint_is_listening(target, port):
+        return
     pytest.skip(f"{what} is not listening on {host}:{resolved_port} — this test drives a live service")
 
 
