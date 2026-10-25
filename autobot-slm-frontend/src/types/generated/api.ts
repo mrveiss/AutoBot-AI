@@ -8132,7 +8132,7 @@ export interface components {
         };
         /**
          * BackupResponse
-         * @description Backup response.
+         * @description Backup response; ``restorable`` tells the GUI where to offer Restore (#19455).
          */
         BackupResponse: {
             /** Backup Id */
@@ -8154,6 +8154,8 @@ export interface components {
             id: number;
             /** Node Id */
             node_id: string;
+            /** Restorable */
+            readonly restorable: boolean;
             /** Service Type */
             service_type: string;
             /** Size Bytes */

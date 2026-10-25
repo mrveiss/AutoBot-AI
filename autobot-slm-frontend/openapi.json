@@ -1836,7 +1836,7 @@
         "type": "object"
       },
       "BackupResponse": {
-        "description": "Backup response.",
+        "description": "Backup response; ``restorable`` tells the GUI where to offer Restore (#19455).",
         "properties": {
           "backup_id": {
             "title": "Backup Id",
@@ -1900,6 +1900,11 @@
             "title": "Node Id",
             "type": "string"
           },
+          "restorable": {
+            "readOnly": true,
+            "title": "Restorable",
+            "type": "boolean"
+          },
           "service_type": {
             "title": "Service Type",
             "type": "string"
@@ -1932,7 +1937,8 @@
           "service_type",
           "status",
           "size_bytes",
-          "created_at"
+          "created_at",
+          "restorable"
         ],
         "title": "BackupResponse",
         "type": "object"

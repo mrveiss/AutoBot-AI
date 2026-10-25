@@ -358,7 +358,7 @@ def _run_enrollment(deployment, monkeypatch, tmp_path, returncode: int, deploy: 
             self.returncode = returncode
 
         async def communicate(self):
-            return b"out", None
+            return b"out\nPLAY RECAP ***\nh : ok=1 changed=0 unreachable=0 failed=0 skipped=0\n", None
 
     async def fake_exec(*argv, **_kw):
         seen["argv"] = list(argv)
