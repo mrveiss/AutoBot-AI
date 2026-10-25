@@ -30,6 +30,8 @@ git -C .worktrees/issue-XXXX status --short         # if it exists: any output =
 git -C .worktrees/issue-XXXX log --oneline -3       # commits you did not write = not yours
 ```
 
+Claim the worktree in the ledger on create/reuse (`ledger iam`, then `ledger claim worktree <dir>`) and release it on removal; reuse your own clean, fully pushed worktree before adding one ([OWNER_RULES.md](OWNER_RULES.md)). The `status`/`log` checks above are the fallback when no claim exists.
+
 Three rules, each from a real collision:
 
 - **Never pipe a command whose exit code gates the next step.**
@@ -151,7 +153,7 @@ deliberate, evidenced act — not cleanup.
 
 **Protected (blocked by pre-commit hook):** `release`, `master`
 
-**Allowed:** `main`, `issue-*`, `hotfix-*`, worktree branches matching those patterns
+**Allowed:** `main`, `issue-*`, `hotfix-*`, and any other feature branch (the hook only blocks the protected names, so trainmaster `train-*` branches are fine), plus worktree branches matching those
 
 **Workflow:**
 1. `git checkout -b issue-XXXX origin/main`

@@ -46,6 +46,8 @@ from api.schemas_system import (
     SecretUpdateRequest,
 )
 from api.secrets_audit import audit_secret_op
+from api.secrets_failure_log import describe_failure
+from api.secrets_ownership import stamp_owner
 from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.auth import resolve_auth_type, validate_config_against_schema
@@ -291,7 +293,9 @@ class SecretsManager:
 
         # Encrypt and store the secret value
         encrypted_value = self._encrypt_value(request.value)
-        secret_data = secret.dict()
+        # #19476: JSON-native (ISO datetimes, plain enum values) so the cache
+        # holds exactly what the file holds and a fresh process would load.
+        secret_data = secret.model_dump(mode="json")
         secret_data["encrypted_value"] = encrypted_value
 
         secrets[secret.id] = secret_data
@@ -721,15 +725,9 @@ async def create_secret(
             secret_id = secret_data["id"]
         else:
             # Issue #666: Wrap blocking file I/O in asyncio.to_thread
-            secret = await asyncio.to_thread(secrets_manager.create_secret, request)
-            # Convert datetime objects to strings for JSON serialization
-            secret_data = secret.dict()
-            if secret_data.get("created_at"):
-                secret_data["created_at"] = secret_data["created_at"].isoformat()
-            if secret_data.get("updated_at"):
-                secret_data["updated_at"] = secret_data["updated_at"].isoformat()
-            if secret_data.get("expires_at"):
-                secret_data["expires_at"] = secret_data["expires_at"].isoformat()
+            # #19476: owner/org come from the authenticated principal.
+            secret = await asyncio.to_thread(secrets_manager.create_secret, stamp_owner(request, _user))
+            secret_data = secret.model_dump(mode="json")
             secret_id = secret.id
             # #10088 Task 7: mirror LLM-provider-key captures into the System vault
             # (best-effort -- never turns a successful legacy write into a failure).
@@ -793,7 +791,8 @@ async def list_secrets(
             },
         )
     except Exception as e:
-        logger.error("Failed to list secrets: %s", type(e).__name__)
+        # #19476: names the cause without a value (secrets_failure_log).
+        logger.error("Failed to list secrets: %s", describe_failure(e))
         raise HTTPException(status_code=500, detail="Failed to list secrets")
 
 
@@ -975,14 +974,8 @@ async def update_secret(
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         secret = await asyncio.to_thread(secrets_manager.update_secret, secret_id, request, chat_id=chat_id)
         if secret:
-            # Convert datetime objects to strings for JSON serialization
-            secret_data = secret.dict()
-            if secret_data.get("created_at"):
-                secret_data["created_at"] = secret_data["created_at"].isoformat()
-            if secret_data.get("updated_at"):
-                secret_data["updated_at"] = secret_data["updated_at"].isoformat()
-            if secret_data.get("expires_at"):
-                secret_data["expires_at"] = secret_data["expires_at"].isoformat()
+            # One serialization for the cache, the file and every response (#19476)
+            secret_data = secret.model_dump(mode="json")
         elif request.credentials:
             # #16428: not a legacy secret; rotate it in ConnectorCredentialStore
             # instead -- #13632's one-store decision, "PUT rotates the credential."

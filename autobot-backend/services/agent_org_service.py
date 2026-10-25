@@ -128,11 +128,9 @@ class AgentOrgService:
         return [self._subtree(root, nodes) for root in roots]
 
     @staticmethod
-    def _status_for_node(node: AgentOrgNode) -> str:
-        """Derive a runtime status string for the activity monitor (#10502)."""
-        if node.pre_pause_status is not None:
-            return "paused"
-        return "idle"
+    def _status_for_node(node: AgentOrgNode) -> str | None:
+        """The one status the org registry knows: paused. Anything else is unmeasured (#17514)."""
+        return "paused" if node.pre_pause_status is not None else None
 
     async def get_agent_statuses(self, *, can_see: Callable[[Any], bool]) -> List[Dict[str, Any]]:
         """Return all registered agents with runtime status (#10502).
@@ -143,21 +141,36 @@ class AgentOrgService:
         is returned.
         """
         nodes = [n for n in await self.get_all_nodes() if can_see(n.company_id)]  # #19246: caller's view
+        names = await self._company_names({n.company_id for n in nodes if n.company_id})
+        # #17514: the registry measures no activity, so those fields are None ("not reported"),
+        # never a 0 that reads as observed. The company tells two same-role agents apart.
         return [
             {
                 "id": node.agent_id,
                 "name": node.name,
                 "type": _ROLE_TO_ACTIVITY_TYPE.get(node.org_role, "worker"),
                 "status": self._status_for_node(node),
-                "currentTask": None,
-                "tasksCompleted": 0,
-                "uptime": 0,
-                "successRate": 0,
+                "companyId": str(node.company_id) if node.company_id else None,
+                "companyName": names.get(node.company_id),
                 "recentTasks": [],
                 "activityTimeline": [],
             }
             for node in nodes
         ]
+
+    async def _company_names(self, company_ids: set) -> Dict[Any, str]:
+        """company_id -> display name, in one query, for companies already in the caller's view."""
+        if not company_ids:
+            return {}
+        from user_management.models.organization import Organization
+
+        # A soft-deleted company is not named (Organization.deleted_at, the canonical soft-delete).
+        rows = await self.session.execute(
+            select(Organization.id, Organization.name).where(
+                Organization.id.in_(company_ids), Organization.deleted_at.is_(None)
+            )
+        )
+        return {company_id: name for company_id, name in rows.all()}
 
     async def get_chain_of_command(self, agent_id: str) -> List[Dict[str, Any]]:
         """

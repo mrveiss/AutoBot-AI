@@ -69,7 +69,7 @@
           <transition name="accordion">
             <div v-if="isGroupExpanded(similarity)" class="accordion-items">
               <div
-                v-for="(duplicate, index) in group.slice(0, 20)"
+                v-for="(duplicate, index) in visible(similarity, group)"
                 :key="index"
                 class="list-item"
                 :class="`item-${similarity}`"
@@ -83,9 +83,7 @@
                   <div class="item-file">{{ duplicate.file2 }}</div>
                 </div>
               </div>
-              <div v-if="group.length > 20" class="show-more">
-                <span class="muted">{{ $t('analytics.duplicates.showingOf', { shown: 20, total: group.length.toLocaleString() }) }}</span>
-              </div>
+              <TruncationNotice :shown="shown(similarity, group.length)" :total="group.length" :step="20" @show-more="showMore(similarity)" />
             </div>
           </transition>
         </div>
@@ -125,6 +123,8 @@
  */
 
 import Icon from '@/components/ui/Icon.vue'
+import { useShowMore } from '@autobot/ui'
+import TruncationNotice from './TruncationNotice.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
@@ -150,6 +150,10 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+
+// #12741: a capped list is expandable; the notice below it is the control.
+const PAGE_SIZE = 20
+const { visible, shown, showMore } = useShowMore(PAGE_SIZE, () => props.duplicates)
 const emit = defineEmits<{
   export: [format: 'md' | 'json']
 }>()
@@ -359,16 +363,6 @@ const formatSimilarityGroup = (similarity: string): string => {
   color: var(--text-secondary);
   font-size: var(--text-xs);
   font-family: var(--font-mono);
-}
-
-.show-more {
-  text-align: center;
-  padding: var(--spacing-2);
-}
-
-.muted {
-  color: var(--text-disabled);
-  font-size: var(--text-xs);
 }
 
 .accordion-enter-active,

@@ -267,12 +267,15 @@ async def test_search_passes_filters_to_query_chromadb():
     ):
         await searcher.search(query="test", top_k=5, filters=where_filter)
 
-    mock_query.assert_called_once_with(query_embedding, 5, where=where_filter)
+    # #19163: the caller's filter reaches the store AND-ed with the quarantine/serving clause
+    from knowledge.quarantine import store_side_where
+
+    mock_query.assert_called_once_with(query_embedding, 5, where=store_side_where(where_filter, False, False))
 
 
 @pytest.mark.asyncio
 async def test_search_no_filters_omits_where():
-    """When filters=None, _query_chromadb is called without where."""
+    """When filters=None, _query_chromadb gets only the quarantine/serving clause (#19163)."""
     searcher = _make_bare_searcher()
 
     query_embedding = [0.1] * 768
@@ -297,4 +300,7 @@ async def test_search_no_filters_omits_where():
     ):
         await searcher.search(query="test", top_k=5)
 
-    mock_query.assert_called_once_with(query_embedding, 5, where=None)
+    # #19163: with no caller filter the store still gets the quarantine/serving clause, nothing else
+    from knowledge.quarantine import store_side_where
+
+    mock_query.assert_called_once_with(query_embedding, 5, where=store_side_where(None, False, False))

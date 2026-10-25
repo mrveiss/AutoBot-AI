@@ -56999,10 +56999,8 @@ export interface components {
         };
         /**
          * AgentStatusItem
-         * @description Runtime status for one registered agent (#10502).
-         *
-         *     Shape consumed by the Home dashboard "Agent Activity Monitor"
-         *     (frontend ``useAgentActivityData`` ``Agent`` interface).
+         * @description One agent for the Home dashboard "Agent Activity Monitor" (#10502, frontend ``Agent``).
+         *     A field the server cannot measure is None, never 0: the widget shows "not reported" (#17514).
          */
         AgentStatusItem: {
             /** Id */
@@ -57014,28 +57012,20 @@ export interface components {
              * @default worker
              */
             type: string;
-            /**
-             * Status
-             * @default idle
-             */
-            status: string;
+            /** Status */
+            status?: string | null;
+            /** Companyid */
+            companyId?: string | null;
+            /** Companyname */
+            companyName?: string | null;
             /** Currenttask */
             currentTask?: string | null;
-            /**
-             * Taskscompleted
-             * @default 0
-             */
-            tasksCompleted: number;
-            /**
-             * Uptime
-             * @default 0
-             */
-            uptime: number;
-            /**
-             * Successrate
-             * @default 0
-             */
-            successRate: number;
+            /** Taskscompleted */
+            tasksCompleted?: number | null;
+            /** Uptime */
+            uptime?: number | null;
+            /** Successrate */
+            successRate?: number | null;
             /** Recenttasks */
             recentTasks?: {
                 [key: string]: unknown;
@@ -95679,6 +95669,12 @@ export interface components {
              * @description Similarity distance score
              */
             distance?: number | null;
+            /**
+             * Quarantined
+             * @description Research-quarantined fact, read through the audited opt-out (#19163)
+             * @default false
+             */
+            quarantined: boolean;
         } & {
             [key: string]: unknown;
         };

@@ -81,7 +81,7 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         "requirements-gpu-torch.txt",
         "requirements-gpu.txt",
         "requirements.txt",
-        # #17133: "README.md" is a literal pre_push_open_pr_cap_17006_test.py
+        # #17133: "README.md" is a literal pre_push_no_open_pr_cap_19397_test.py
         # writes inside its own synthetic tmp_path repo fixture (_seed_repo),
         # never a read of the real root-level file -- same shape as the
         # CLAUDE.md entry above (#17129).

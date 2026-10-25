@@ -88,3 +88,17 @@ def extract_search_params(ctx: Any) -> Dict[str, Any]:
         "track_analytics": ctx.options.track_analytics,
         "session_id": ctx.session_id,
     }
+
+
+def map_kb_result_to_dict(raw: Dict[str, Any]) -> Dict[str, Any]:
+    """Map one raw KB search row to the canonical result shape. Issue #10740.
+
+    Keys: content, source (node_id with doc_id fallback), score, metadata.
+    Single-item mapper; callers apply it with a list comprehension.
+    """
+    return {
+        "content": raw.get("content", ""),
+        "source": raw.get("node_id", raw.get("doc_id", "")),
+        "score": raw.get("score", 0.0),
+        "metadata": raw.get("metadata", {}),
+    }
