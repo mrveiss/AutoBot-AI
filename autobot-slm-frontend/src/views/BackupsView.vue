@@ -221,7 +221,7 @@ function getNodeHostname(nodeId: string): string {
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm space-x-3">
               <button
-                v-if="backup.status === 'completed'"
+                v-if="backup.status === 'completed' && backup.restorable"
                 @click="handleRestore(backup.backup_id)"
                 class="text-blue-600 hover:text-blue-800 font-medium"
               >

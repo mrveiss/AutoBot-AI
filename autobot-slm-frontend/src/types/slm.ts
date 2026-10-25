@@ -351,11 +351,11 @@ export interface Backup {
   node_id: string
   service_type: string
   backup_path: string | null
-  // #13307: the API field is `status` (models/schemas.py BackupResponse). This
-  // said `state`, so every read of it was undefined: the Status column rendered
-  // blank and `v-if="backup.state === 'completed'"` meant the Restore button
-  // never appeared at all. `backup_path` is nullable until the copy succeeds.
+  // #13307: the API field is `status` (models/schemas.py BackupResponse); `state` read undefined, so the
+  // Status column was blank and Restore never appeared. `backup_path` is nullable until the copy succeeds.
   status: 'pending' | 'in_progress' | 'completed' | 'failed'
+  // #19455: the API restores only these; restoring any other type over Redis destroyed its data.
+  restorable: boolean
   size_bytes: number
   started_at: string | null
   completed_at: string | null
