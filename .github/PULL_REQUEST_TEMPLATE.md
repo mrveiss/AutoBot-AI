@@ -21,7 +21,7 @@
 
 
 ## Issue Link
-<!-- Closes #N or related #N -->
+<!-- Closes #N or related #N. One issue per closing keyword: `Closes #A, #B` closes only #A (#19521). -->
 Closes #
 
 ## Changelog fragment
