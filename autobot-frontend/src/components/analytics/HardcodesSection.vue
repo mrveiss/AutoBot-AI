@@ -67,7 +67,7 @@
           <transition name="accordion">
             <div v-if="isGroupExpanded(severity)" class="accordion-items">
               <div
-                v-for="(hc, index) in group.slice(0, 20)"
+                v-for="(hc, index) in visible(severity, group)"
                 :key="index"
                 class="list-item"
                 :class="`item-${severity}`"
@@ -91,9 +91,7 @@
                   </div>
                 </div>
               </div>
-              <div v-if="group.length > 20" class="show-more">
-                <span class="muted">{{ $t('analytics.hardcodes.showingOf', { shown: 20, total: group.length.toLocaleString() }) }}</span>
-              </div>
+              <TruncationNotice :shown="shown(severity, group.length)" :total="group.length" :step="20" @show-more="showMore(severity)" />
             </div>
           </transition>
         </div>
@@ -120,6 +118,8 @@
  */
 
 import { computed } from 'vue'
+import { useShowMore } from '@autobot/ui'
+import TruncationNotice from './TruncationNotice.vue'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { useExpansion } from '@/composables/useExpansion'
@@ -138,6 +138,10 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+
+// #12741: a capped list is expandable; the notice below it is the control.
+const PAGE_SIZE = 20
+const { visible, shown, showMore } = useShowMore(PAGE_SIZE, () => props.hardcodes)
 const emit = defineEmits<{
   export: [format: 'md' | 'json']
 }>()
@@ -369,16 +373,6 @@ const formatSeverityGroup = (severity: string): string => {
 .item-code.item-suggestion {
   color: var(--color-success);
   background: var(--color-success-bg);
-}
-
-.show-more {
-  text-align: center;
-  padding: var(--spacing-2);
-}
-
-.muted {
-  color: var(--text-disabled);
-  font-size: var(--text-xs);
 }
 
 .accordion-enter-active,

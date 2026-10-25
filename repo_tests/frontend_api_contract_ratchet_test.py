@@ -88,7 +88,7 @@ _BASELINES = {
         # removed with its two `apiClient.get<...>` calls; recounted at the rebased
         # tree, combined with the other cuts already on main.
         # train-35: useBackgroundTask clear-stuck drops its `apiClient.post<unknown>` (-1).
-        "inline_generics": 561,
+        "inline_generics": 560,
     },
     "autobot-slm-frontend": {
         "clients": 1,

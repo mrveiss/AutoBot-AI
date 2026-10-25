@@ -44,7 +44,7 @@
  * ```
  */
 
-import { ref, computed, watch, unref, type Ref, type ComputedRef } from 'vue'
+import { ref, computed, watch, unref, type Ref, type ComputedRef, type WatchSource } from 'vue'
 import { createLogger } from '../utils/logger'
 
 // Create scoped logger for usePagination
@@ -525,4 +525,43 @@ export function useShowAllToggle<T>(
 
     return data.value.slice(0, limit)
   })
+}
+
+/**
+ * "Show more" for lists the client already holds in full (#12741).
+ *
+ * A capped list that only says "Showing 30 of 1947" is a label, not a control. This keeps a
+ * visible-row limit per list, keyed by name, so one instance serves a panel with several lists
+ * (or a list inside a `v-for` over groups). Each key starts at `pageSize` and grows by
+ * `pageSize` per `showMore(key)`. `resetOn` is a watch source (the loaded data, a filter):
+ * when it changes every key goes back to the first page, as `CodebaseBugPredictionPanel` does.
+ * Lists the SERVER capped are not this: expanding cannot reach rows that are not in the payload.
+ *
+ * @example
+ * ```vue
+ * const { visible, shown, showMore } = useShowMore(20, () => props.analysis)
+ * <div v-for="x in visible('orphaned', list)" :key="x.id" />
+ * <TruncationNotice :shown="shown('orphaned', list.length)" :total="list.length"
+ *   :step="20" @show-more="showMore('orphaned')" />
+ * ```
+ */
+export function useShowMore(pageSize: number, resetOn?: WatchSource<unknown>) {
+  const limits = ref<Record<string, number>>({})
+
+  // `size` is the step for one key: a nested list (a row's tags or locations) can page by a
+  // different amount than the panel's main lists.
+  const limitFor = (key: string, size = pageSize): number => limits.value[key] ?? size
+  const visible = <T>(key: string, items: readonly T[] | null | undefined, size = pageSize): T[] =>
+    (items ?? []).slice(0, limitFor(key, size))
+  const shown = (key: string, total: number, size = pageSize): number => Math.min(limitFor(key, size), total)
+  const showMore = (key: string, size = pageSize): void => {
+    limits.value = { ...limits.value, [key]: limitFor(key, size) + size }
+  }
+  const reset = (): void => {
+    limits.value = {}
+  }
+
+  if (resetOn) watch(resetOn, reset)
+
+  return { visible, shown, showMore, reset, pageSize }
 }
