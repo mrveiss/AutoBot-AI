@@ -79,7 +79,7 @@ runners do on every PR, so they no longer run locally unless you opt in.
 | **Phase 6 issue check** | branch matches `issue-NNNN` | warn if issue is CLOSED on GitHub OR if `origin/main` already has a commit citing `#NNNN` |
 | **Phase 7 PR body** | the branch has an open PR | `scripts/validate_pr_body.py --pr <branch>`; a failing body blocks |
 | **Hardcoded-values baseline** | any file changed | scoped `detect-hardcoded-values.sh --audit-baseline` over the changed paths (seconds) |
-| **Fast guards** | any file changed | the guard set in `fast_guard_tests` (record / equivalence / ratchet tests, whole tree) + `scripts/repin_reach_floors.py --check`; a pass is cached per tree |
+| **Fast guards** | any file changed | the guard set listed in `tools/git-hooks/fast_guard_tests.txt`, read from the pushed commit (working-tree copy only if that commit lacks it; a listed path absent from the commit fails) — record / equivalence / ratchet tests, whole tree — + `scripts/repin_reach_floors.py --check`; a pass is cached per tree |
 | **Full suites** | only with `AUTOBOT_PREPUSH_FULL=1` | Phase 0c: vue-tsc and vitest per frontend app, the kit's `vitest related`, and the selected pytest run, in parallel. The sys.modules leak probe (#13337) runs with these, so by default it runs in CI only |
 
 The commit-msg checks (trailers) and the pre-commit protected-branch refusal live in

@@ -123,8 +123,9 @@ ALLOW_TIMEOUT="${AUTOBOT_PREPUSH_ALLOW_TIMEOUT:-0}"
 ALLOW_UNRUNNABLE="${AUTOBOT_PREPUSH_ALLOW_UNRUNNABLE:-0}"
 # #19472, owner decision 2026-10-25 ("when we run locally it's duplicate work"): GitHub's
 # runners run the full suites, so by default this hook runs only the FAST GATE -- the guard
-# set (fast_guard_tests) plus the checks that cost seconds. AUTOBOT_PREPUSH_FULL=1 restores
-# the full local vue-tsc / vitest / pytest runs (Phase 0c's frontend and backend sections).
+# set (tools/git-hooks/fast_guard_tests.txt) plus the checks that cost seconds.
+# AUTOBOT_PREPUSH_FULL=1 restores the full local vue-tsc / vitest / pytest runs (Phase 0c's
+# frontend and backend sections).
 PREPUSH_FULL="${AUTOBOT_PREPUSH_FULL:-0}"
 did_not_run() {
     # $1 = tool, $2 = seconds
@@ -381,38 +382,33 @@ node_modules_usable() {
 # replaced the 2026-10-24 train-only mode: with every branch light, a train needs no
 # shape check of its own.)
 # ---------------------------------------------------------------------------
-# The guard set, one repo path per line. A listed file that is gone fails the run: a
-# stale list would otherwise shrink the set with no word said.
+# The guard set lives in a tracked file, one repo path per line (#19550 review: a list baked
+# into the INSTALLED hook blocked any branch that renamed or deleted a listed guard).
+FAST_GUARD_LIST="tools/git-hooks/fast_guard_tests.txt"
 fast_guard_tests() {
-  cat <<'EOF'
-repo_tests/reach_declarations_test.py
-repo_tests/reach_roots_record_18808_test.py
-repo_tests/reach_scope_claim_17844_test.py
-repo_tests/guard_reach_meta_test.py
-repo_tests/changes_job_equivalence_15360_test.py
-repo_tests/python_filter_covers_its_guards_test.py
-repo_tests/one_fake_async_session_18883_test.py
-repo_tests/one_git_enumeration_15926_test.py
-repo_tests/frontend_file_size_ratchet_test.py
-repo_tests/frontend_fragmentation_ratchet_test.py
-repo_tests/i18n_untranslated_ratchet_test.py
-repo_tests/hardcoded_ui_literal_ratchet_12732_test.py
-repo_tests/threat_model_anchors_resolve_test.py
-scripts/check_nosec_format_test.py
-repo_tests/symbol_fork_ratchet_17312_test.py
-repo_tests/frontend_api_contract_ratchet_test.py
-repo_tests/migration_gate_filter_covers_what_its_tests_import_test.py
-EOF
+  # From the PUSHED commit, so a branch's own list governs its push; the working-tree copy only
+  # when that commit predates the file. No list at all is an error, never an empty set.
+  local list
+  list=$(git show "${local_sha}:${FAST_GUARD_LIST}" 2>/dev/null) \
+    || list=$(cat "${REPO_ROOT}/${FAST_GUARD_LIST}" 2>/dev/null) \
+    || return 1
+  printf '%s\n' "$list" | sed -e 's/#.*//' -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e '/^$/d'
 }
 # The guard tests, then the reach-floor pins (`repin_reach_floors.py --check`: 0 clean, 2 when
 # some guard modules cannot import locally -- both still judged by their STALE/PIN lines;
 # 124 is a timeout; any other exit is a crash and fails, never reads as clean).
 run_fast_guards() {
   local guards missing guard_output out rc=0
-  guards=$(fast_guard_tests)
-  missing=$(printf '%s\n' "$guards" | while IFS= read -r t; do [ -f "$REPO_ROOT/$t" ] || echo "$t"; done)
+  if ! guards=$(fast_guard_tests) || [ -z "$guards" ]; then
+    fail "no fast guard list: ${FAST_GUARD_LIST} is in neither ${local_sha:0:10} nor the working tree"
+    EXIT_CODE=1
+    return
+  fi
+  # Missing from the PUSHED commit fails, as does missing from the tree the stage runs on.
+  missing=$(printf '%s\n' "$guards" | while IFS= read -r t; do
+    git cat-file -e "${local_sha}:${t}" 2>/dev/null && [ -f "$REPO_ROOT/$t" ] || echo "$t"; done)
   if [ -n "$missing" ]; then
-    fail "fast guard list names file(s) that do not exist (fix fast_guard_tests): $(echo $missing)"
+    fail "fast guard list names file(s) absent from ${local_sha:0:10} (fix ${FAST_GUARD_LIST}): $(echo $missing)"
     EXIT_CODE=1
   fi
   # shellcheck disable=SC2046,SC2086 # word-splitting the file list and xdist args is intended

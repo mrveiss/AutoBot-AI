@@ -228,12 +228,14 @@ class TestContentKeyedPassCache:
         assert "  stage_wait_all\ndone\n" in _SOURCE, "every ref's stages are collected before the next ref"
 
 
-_GUARDS = re.search(r"fast_guard_tests\(\) \{\n  cat <<'EOF'\n((?:.*\n)*?)EOF\n\}", _SOURCE)
+_GUARD_LIST_REL = "tools/git-hooks/fast_guard_tests.txt"
+_GUARD_LIST = repo_root() / _GUARD_LIST_REL
 
 
 def _guard_list() -> list[str]:
-    assert _GUARDS, "the hook no longer lists the fast guards — move this test with it"
-    return [line for line in _GUARDS.group(1).splitlines() if line]
+    """The tracked list, parsed as the hook parses it: `#` comments and blank lines dropped."""
+    lines = (line.split("#", 1)[0].strip() for line in _GUARD_LIST.read_text(encoding="utf-8").splitlines())
+    return [line for line in lines if line]
 
 
 def _shim(tmp_path: Path) -> str:
@@ -256,6 +258,8 @@ def _gate_repo(tmp_path: Path) -> tuple[Path, str, str]:
     for guard in _guard_list():
         (repo / guard).parent.mkdir(parents=True, exist_ok=True)
         (repo / guard).write_text("def test_ok():\n    pass\n", encoding="utf-8")
+    (repo / _GUARD_LIST_REL).parent.mkdir(parents=True, exist_ok=True)
+    (repo / _GUARD_LIST_REL).write_text(_GUARD_LIST.read_text(encoding="utf-8"), encoding="utf-8")
     (repo / "scripts" / "repin_reach_floors.py").write_text("print('OK nothing stale')\n", encoding="utf-8")
     # The hardcoded-values audit runs on every push; this fixture's detector finds nothing.
     detector = repo / "pipeline-scripts" / "detect-hardcoded-values.sh"
@@ -288,16 +292,39 @@ def _push(tmp_path: Path, branch: str, **env: str) -> subprocess.CompletedProces
 
 
 def _guards(
-    tmp_path: Path, *, guard: str = "pass", repin: str = "print('OK')", python: str = sys.executable
+    tmp_path: Path,
+    *,
+    guard: str = "pass",
+    repin: str = "print('OK')",
+    python: str = sys.executable,
+    pushed_list: str | None = None,
+    tree_list: bool = True,
 ) -> subprocess.CompletedProcess[str]:
-    """The hook's own run_fast_guards; `timeout` answers 124 for a repin given `raise TimeoutError`."""
-    repo, _, _ = _gate_repo(tmp_path)
+    """The hook's own run_fast_guards; `timeout` answers 124 for a repin given `raise TimeoutError`.
+
+    *pushed_list* replaces the list in a further commit, which becomes the pushed `local_sha`;
+    an empty string removes the file from that commit, and *tree_list* then decides whether an
+    untracked working-tree copy remains for the hook to fall back to.
+    """
+    repo, _, head = _gate_repo(tmp_path)
+    if pushed_list is not None:
+        target = repo / _GUARD_LIST_REL
+        if pushed_list == "":
+            target.unlink()
+        else:
+            target.write_text(pushed_list, encoding="utf-8")
+        git(repo, "add", "-A")
+        git(repo, "commit", "-qm", "list")
+        head = git(repo, "rev-parse", "HEAD").stdout.strip()
+        if pushed_list == "" and tree_list:
+            target.write_text(_GUARD_LIST.read_text(encoding="utf-8"), encoding="utf-8")
     (repo / _guard_list()[0]).write_text(f"def test_x():\n    {guard}\n", encoding="utf-8")
     (repo / "scripts" / "repin_reach_floors.py").write_text(repin + "\n", encoding="utf-8")
     script = "\n".join(
         [
             _STUBS,
-            f"REPO_ROOT={repo}; PYTEST_PYTHON={python}; MAX_BUDGET=60",
+            f"REPO_ROOT={repo}; PYTEST_PYTHON={python}; MAX_BUDGET=60; local_sha={head}",
+            f"FAST_GUARD_LIST={_GUARD_LIST_REL}",
             "pytest_xdist_args() { :; }; failure_excerpt() { printf '%s\\n' \"$1\" | tail -5; }",
             'timeout() { shift; if [[ "$*" == *repin* ]] && grep -q TimeoutError scripts/repin_reach_floors.py; '
             'then return 124; fi; "$@"; }',
@@ -364,6 +391,29 @@ class TestFastGate:
         shim.chmod(0o755)
         done = _guards(tmp_path, python=str(shim))
         assert "exit=1 clean=0" in done.stdout and "cannot import pytest" in done.stderr
+
+    def test_the_list_is_a_tracked_file_the_hook_reads_from_the_pushed_commit(self) -> None:
+        assert f'FAST_GUARD_LIST="{_GUARD_LIST_REL}"' in _SOURCE
+        assert 'git show "${local_sha}:${FAST_GUARD_LIST}"' in _fn("fast_guard_tests")
+        assert "cat <<'EOF'" not in _fn("fast_guard_tests"), "the list is baked into the hook again"
+
+    def test_the_pushed_commits_list_governs_not_the_working_tree(self, tmp_path: Path) -> None:
+        # The pushed commit drops every guard but the first; the working tree still names all 17.
+        done = _guards(tmp_path, pushed_list="# one only\n" + _guard_list()[0] + "\n")
+        assert "exit=0" in done.stdout and "fast guards: 1 guard file(s) pass" in done.stderr, done.stderr
+
+    def test_a_listed_guard_absent_from_the_pushed_commit_blocks(self, tmp_path: Path) -> None:
+        listed = _GUARD_LIST.read_text(encoding="utf-8") + "repo_tests/gone_from_this_commit_test.py\n"
+        done = _guards(tmp_path, pushed_list=listed)
+        assert "exit=1" in done.stdout and "gone_from_this_commit_test.py" in done.stderr, done.stderr
+
+    def test_a_commit_without_the_list_falls_back_to_the_working_tree(self, tmp_path: Path) -> None:
+        done = _guards(tmp_path, pushed_list="")
+        assert "exit=0" in done.stdout and "fast guards: 17 guard file(s) pass" in done.stderr, done.stderr
+
+    def test_no_list_anywhere_blocks_rather_than_running_nothing(self, tmp_path: Path) -> None:
+        done = _guards(tmp_path, pushed_list="", tree_list=False)
+        assert "exit=1" in done.stdout and "no fast guard list" in done.stderr, done.stderr
 
     def test_a_failing_fast_guard_blocks(self, tmp_path: Path) -> None:
         done = _guards(tmp_path, guard="assert False")
