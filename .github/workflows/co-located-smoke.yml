@@ -174,7 +174,7 @@ jobs:
         uses: ./.github/actions/build-smoke-images
         with:
           group: smoke
-          cache-key-prefix: buildx-bake
+          cache-key-prefix: buildx-bake-smoke
 
       - name: Start co-located stack
         run: docker compose --env-file docker/.env.docker up -d

@@ -150,7 +150,7 @@ jobs:
         uses: ./.github/actions/build-smoke-images
         with:
           group: smoke
-          cache-key-prefix: buildx-bake
+          cache-key-prefix: buildx-bake-smoke
 
       - name: Start services with Docker Compose
         # GH#9905: no manual secret step — the stack auto-provisions unique

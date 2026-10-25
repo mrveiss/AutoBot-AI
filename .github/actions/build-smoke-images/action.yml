@@ -18,7 +18,7 @@
 #   - uses: ./.github/actions/build-smoke-images
 #     with:
 #       group: smoke                  # bake group: smoke | hardened
-#       cache-key-prefix: buildx-bake # Actions cache key namespace
+#       cache-key-prefix: buildx-bake-smoke  # Actions cache key namespace
 
 name: Build smoke images
 description: >
@@ -44,8 +44,10 @@ runs:
     # per-commit key saved a new ~1.2 GB entry on every run and pushed the repo's
     # Actions cache over its 10 GB limit, evicting the small caches CI depends on. An
     # exact hit skips the save, so a commit that changes no dependency adds nothing.
-    # The `buildx-bake` namespace (#19527) holds one directory per image; a restore
-    # of the older single-directory layout would be downloaded and never read.
+    # Each workflow's namespace (`buildx-bake-smoke`, `buildx-bake-hardened`, #19527)
+    # holds one directory per image of its own bake group, and restores only from
+    # itself: a prefix shared between the two would hand one group the other's cache,
+    # and a restore of the older single-directory layout would never be read.
     - name: Restore Docker layers
       id: buildx-cache
       uses: actions/cache/restore@v6
@@ -54,7 +56,6 @@ runs:
         key: ${{ runner.os }}-${{ inputs.cache-key-prefix }}-${{ hashFiles('docker/**', 'requirements*.txt', 'constraints/**', 'autobot-backend/requirements*.txt', 'autobot-slm-backend/requirements*.txt', 'package-lock.json', 'autobot-frontend/package-lock.json', 'autobot-slm-frontend/package-lock.json') }}
         restore-keys: |
           ${{ runner.os }}-${{ inputs.cache-key-prefix }}-
-          ${{ runner.os }}-buildx-bake-
 
     - name: Build images and pull service images
       shell: bash
@@ -63,7 +64,10 @@ runs:
         COMPOSE_ARGS: ${{ inputs.compose-args }}
       run: |
         set -euo pipefail
-        mkdir -p /tmp/.buildx-cache
+        # Both cache directories must exist: buildx grants filesystem entitlements by
+        # path, and a destination that does not exist yet can only be granted through
+        # its parent -- here that would be all of /tmp.
+        mkdir -p /tmp/.buildx-cache /tmp/.buildx-cache-new
         read -r -a compose_args <<< "$COMPOSE_ARGS"
         pull_log="$RUNNER_TEMP/compose-pull.log"
 
@@ -71,7 +75,14 @@ runs:
         pull_pid=$!
 
         echo "=== Building bake group '${BAKE_GROUP}' ==="
-        docker buildx bake --file docker/docker-bake.hcl --progress plain --load "$BAKE_GROUP"
+        # Bake refuses local cache import/export without an explicit filesystem grant
+        # ("ERROR: additional privileges requested"). Exactly the two cache directories
+        # docker/docker-bake.hcl names: read the restored cache, write the new one. The
+        # build context is the working directory, which bake reads without a grant.
+        docker buildx bake \
+          --allow=fs.read=/tmp/.buildx-cache \
+          --allow=fs.write=/tmp/.buildx-cache-new \
+          --file docker/docker-bake.hcl --progress plain --load "$BAKE_GROUP"
         df -h / | grep -v Filesystem
 
         if ! wait "$pull_pid"; then
