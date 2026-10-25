@@ -6000,7 +6000,15 @@
       "switchToLight": "Switch to light mode",
       "switchToDark": "Switch to dark mode",
       "light": "Light",
-      "dark": "Dark"
+      "dark": "Dark",
+      "accentBlueDescription": "Electric Blue — Technical Precision",
+      "accentGreenDescription": "Emerald — Growth & Success",
+      "accentPurpleDescription": "Violet — Creative & Premium",
+      "accentOrangeDescription": "Amber — Energy & Innovation",
+      "accentPinkDescription": "Rose — Friendly & Approachable",
+      "accentTealDescription": "Cyan — Modern & Professional",
+      "accentIndigoDescription": "Deep Blue — Trust & Stability",
+      "accentRedDescription": "Crimson — Bold & Urgent"
     },
     "toastContainer": {
       "notifications": "Notifications",
@@ -6022,7 +6030,43 @@
       "loading": "Loading…"
     },
     "minimalNote": "Showing essentials · technical widgets hidden",
-    "minimalNoteAction": "Show all features"
+    "minimalNoteAction": "Show all features",
+    "themePresets": {
+      "title": "Theme Presets",
+      "description": "Choose a pre-configured theme or customize your own color scheme",
+      "names": {
+        "auto": "Auto",
+        "catppuccin-mocha": "Catppuccin Mocha",
+        "catppuccin-latte": "Catppuccin Latte",
+        "solarized-dark": "Solarized Dark",
+        "solarized-light": "Solarized Light",
+        "high-contrast-dark": "High Contrast Dark",
+        "high-contrast-light": "High Contrast Light",
+        "brand-dark": "AutoBot Dark",
+        "brand-light": "AutoBot Light",
+        "midnight": "Midnight",
+        "sunset": "Sunset",
+        "forest": "Forest",
+        "rose": "Rose"
+      },
+      "descriptions": {
+        "auto": "Follows system preference",
+        "catppuccin-mocha": "Warm dark theme with purple accents",
+        "catppuccin-latte": "Soft light theme with purple accents",
+        "solarized-dark": "Classic dark theme with cyan accents",
+        "solarized-light": "Classic light theme with cyan accents",
+        "high-contrast-dark": "Maximum readability dark theme",
+        "high-contrast-light": "Maximum readability light theme",
+        "brand-dark": "Official AutoBot dark theme",
+        "brand-light": "Official AutoBot light theme",
+        "midnight": "Deep blue night theme",
+        "sunset": "Warm orange light theme",
+        "forest": "Natural green dark theme",
+        "rose": "Elegant pink light theme"
+      },
+      "advanced": "Advanced Customization",
+      "baseTheme": "Base Theme"
+    }
   },
   "base": {
     "badge": {

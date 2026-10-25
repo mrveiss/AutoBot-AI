@@ -13,3 +13,8 @@
 {% for package, version in python_security_updates.items() %}
 {{ package }}>={{ version }}
 {% endfor %}
+{# #19428: each constrained package this venv holds, unversioned: the version comes from the -c
+   constraints/shared.txt the install passes, so a floor there is applied in place. #}
+{% for package in constrained_installed %}
+{{ package }}
+{% endfor %}
