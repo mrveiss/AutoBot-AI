@@ -248,7 +248,7 @@ Before the route-deletion PR can run:
    UI may lose some diagnostic fields:
    - `useBatchProcessing.ts:263` → `/api/batch-jobs/health`
    - `useOperationsApi.ts:117` → `/api/long-running/health`
-   - `usePrometheusMetrics.ts:368/583` → `/api/monitoring/services/health`
+   - `useInstallMetrics.ts` (`fetchServices`, `useServiceHealth`; was `usePrometheusMetrics.ts` until #18225) → `/api/monitoring/services/health`
 5. **`Sunset:` header live for at least one release** — the middleware
    shipped with PR #6912 (commit landed on `main` at 2026-05-04).
 6. **Pre-commit hook becomes hard-line** — drop the `# noqa: health-route`
@@ -276,12 +276,12 @@ It is **deliberately not** registered as a probe under `/api/system/health` beca
 | Endpoint | Question | Caller |
 |---|---|---|
 | `GET /api/system/health` | "Is the AutoBot backend itself healthy?" | Frontend health monitor before login + post-login banners |
-| `GET /api/monitoring/services/health` | "What's the status of the constellation of remote services I depend on?" | Ops dashboard scraping (`usePrometheusMetrics`) |
+| `GET /api/monitoring/services/health` | "What's the status of the constellation of remote services I depend on?" | Ops dashboard scraping (`useInstallMetrics`) |
 
 If the rollup ever needs to fold into the canonical aggregator, the migration path is:
 
 - Add a `monitoring_services` probe whose `data: {services: [...]}` mirrors `ServicesSummaryResponse`
-- Migrate the two `usePrometheusMetrics` callers to read `probes[name=monitoring_services].data.services`
+- Migrate the two `useInstallMetrics` callers to read `probes[name=monitoring_services].data.services`
 - Add `/api/monitoring/services/health` to the deletion list in #6902
 
 Until that migration has explicit ops/frontend buy-in, both endpoints stay as-is. This document records the architectural decision so future contributors don't accidentally fork further.

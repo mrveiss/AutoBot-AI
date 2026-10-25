@@ -68,13 +68,10 @@ MIN_VOCAB_FILES_SCANNED = 15
 APPS = ("autobot-frontend", "autobot-slm-frontend")
 VOCAB_SUBDIRS = ("utils", "types")
 
-# Composable FILENAMES known to collide and already tracked.
-FILENAME_ALLOWLIST = {
-    # #14907: shared TYPES extracted to the kit (prometheus-metrics.ts); the
-    # composable itself stays per-app — polling/transport logic legitimately
-    # differs (main uses useApiClient + useWebSocket, SLM uses slmApiClient).
-    "usePrometheusMetrics.ts",
-}
+# Composable FILENAMES known to collide and already tracked. Empty since #18225:
+# the two usePrometheusMetrics.ts became useInstallMetrics (main) and
+# useFleetMetrics (SLM), whose shared numbers come from the kit's useMetricsSummary.
+FILENAME_ALLOWLIST: set[str] = set()
 
 # Exported TYPE NAMES (in src/utils/*.ts + src/types/*.ts, top-level) known
 # to collide and already tracked.

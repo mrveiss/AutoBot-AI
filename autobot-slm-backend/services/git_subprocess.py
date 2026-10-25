@@ -14,20 +14,13 @@ from __future__ import annotations
 
 import asyncio
 import enum
-import logging
 from pathlib import Path
 
 from autobot_shared.env_utils import env_float
 from autobot_shared.git_probe import start_git
+from autobot_shared.logging_manager import get_logger
 
-# Plain stdlib logging, deliberately -- NOT autobot_shared.logging_manager.
-# This module is imported (via services/full_tree_drift.py, api/full_tree_drift.py)
-# by api/code_sync.py, whose test harness
-# (tests/api/test_collect_outdated_node_ids.py) stubs `config` as a MagicMock;
-# logging_manager.get_logger() builds a RotatingFileHandler that compares
-# that MagicMock to an int and raises at logger-CREATION time. Same
-# precedent as autobot_shared/user_management/password_epoch.py:50-58.
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Bounds every subprocess below. A cold `git diff`/`git log` over a
 # monorepo-sized range is fast, but a hung git process (a wedged fsmonitor, an

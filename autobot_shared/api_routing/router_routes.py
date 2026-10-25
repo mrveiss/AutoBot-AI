@@ -32,8 +32,11 @@ route itself declares it* — which already includes any prefix given to the
 child's own ``APIRouter(prefix=...)`` constructor, because FastAPI applies that
 at decoration time.
 
-**Cannot**, on the deferred shape: a prefix passed to the ``include_router``
-call itself, and dependencies passed the same way. Nothing on the wrapper is
+**Can too**, on the deferred shape: a prefix passed to the ``include_router``
+call, read from the wrapper's ``include_context.prefix`` (#17325).
+
+**Cannot**, on the deferred shape: dependencies passed to the ``include_router``
+call, and a prefix on any wrapper that carries no ``include_context``. Nothing on the wrapper is
 guaranteed to expose them. Rather than guess, every :class:`MountedRoute`
 carries :attr:`MountedRoute.prefix_complete`; when it is ``False`` at least one
 inclusion hop above that route hid its prefix and :attr:`MountedRoute.path` is
@@ -97,6 +100,12 @@ def _hop_prefix(parent: Any, wrapper: Any) -> Tuple[str, bool]:
     beneath the child and adding it would duplicate the segment rather than
     recover anything.
     """
+    # fastapi>=0.139's wrapper records the whole hop on ``include_context.prefix`` -- the including router's own
+    # prefix AND the include_router() call's, verified against a real two-level nesting (#17325). Preferred
+    # over the bare ``prefix`` below, which no real wrapper carries.
+    recorded = getattr(getattr(wrapper, "include_context", None), "prefix", None)
+    if isinstance(recorded, str):
+        return recorded, True
     own = getattr(parent, "prefix", "") or ""
     hop = getattr(wrapper, "prefix", None)
     if isinstance(hop, str):
