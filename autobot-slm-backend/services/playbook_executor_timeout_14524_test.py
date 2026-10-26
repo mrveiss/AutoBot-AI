@@ -136,7 +136,13 @@ def test_run_subprocess_without_timeout_is_unaffected(tmp_path):
 
     async def _go():
         return await executor._run_subprocess(
-            cmd=["/bin/sh", "-c", "echo hello-14524"],
+            # #19475: a real run ends with a PLAY RECAP; without one the exit proof
+            # (ansible_run_failure) rightly reports failure, which is not this test's subject.
+            cmd=[
+                "/bin/sh",
+                "-c",
+                "echo hello-14524; echo 'PLAY RECAP ***'; echo 'localhost : ok=1 changed=0 unreachable=0 failed=0'",
+            ],
             env=dict(os.environ),
             progress_callback=None,
         )

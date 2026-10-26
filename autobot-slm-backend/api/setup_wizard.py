@@ -261,11 +261,10 @@ _ROLE_INFRA_VARS: dict[str, tuple[str, int]] = {
     "tts-worker": ("tts_host", 8083),  # Issue #3431: 8082 is WSL2/Hyper-V reserved (Windows NPU)
 }
 
-# ChromaDB runs on the AI stack VM but is NOT a separately-routed role, so it
-# has no entry in _ROLE_INFRA_VARS.  This constant must match chromadb_port in
-# ansible/roles/ai-stack/defaults/main.yml and backend_chromadb_port in
-# ansible/roles/backend/defaults/main.yml (#3526).
-_CHROMADB_PORT = 8100
+# ChromaDB runs on the AI stack VM but is NOT a separately-routed role, so it has no
+# _ROLE_INFRA_VARS entry (#3526). Its port is the SSOT's (#19321); the ansible
+# chromadb_port / backend_chromadb_port defaults are pinned to it by a repo test.
+_CHROMADB_PORT = config.port.chromadb
 
 
 def _build_infra_vars(
