@@ -104,10 +104,10 @@ huggingface-cli download meta-llama/Llama-3.2-3B-Instruct
 # Option 2: Llama-3.1-8B (7.4GB VRAM) - Complex tasks
 huggingface-cli download meta-llama/Meta-Llama-3.1-8B-Instruct
 
-# Option 3: Phi-3-mini (3.8GB VRAM) - Fast inference
+# Option 3: Phi-3-mini (3.8GB VRAM) - Fast inference; not provisioned by the installer
 huggingface-cli download microsoft/Phi-3-mini-4k-instruct
 
-# Option 4: CodeLlama-7B (6.5GB VRAM) - Code-focused
+# Option 4: CodeLlama-7B (6.5GB VRAM) - Code-focused; not provisioned by the installer
 huggingface-cli download codellama/CodeLlama-7b-Instruct-hf
 ```
 
@@ -223,11 +223,11 @@ print(f"Second request: {response2.processing_time:.2f}s (cached)")
 ### Model Selection Based on Task
 
 ```python
-# For code analysis: Use CodeLlama
+# For code analysis: Use CodeLlama (a vLLM model; not provisioned by the installer)
 code_response = await llm.chat_completion(
     messages=[{"role": "user", "content": "Review this Python code: ..."}],
     provider="vllm",
-    model_name="codellama/CodeLlama-7b-Instruct-hf"
+    model_name="codellama/CodeLlama-7b-Instruct-hf"  # not provisioned
 )
 
 # For general tasks: Use Llama-3.2-3B

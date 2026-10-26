@@ -1,3 +1,4 @@
+<!-- doc-model-tags: not advice -->
 <!-- Copyright (c) 2025-2026 mrveiss -->
 # Model revision pinning and integrity verification (#13034)
 
