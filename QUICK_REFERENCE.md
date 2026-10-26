@@ -20,8 +20,6 @@ docker compose up -d
 - ✅ Keeps data on your hardware, which helps with your own compliance obligations (see [Compliance Targets](docs/compliance/COMPLIANCE_TARGETS.md); no compliance is claimed)
 - ✅ Full customization and control
 
-[Learn more about self-hosted automation](docs/self-hosted-advantages.md)
-
 ## 🚀 **Essential Commands**
 
 ```bash

@@ -68,6 +68,9 @@ class GitHubApi:
         self.repository = repository
         self.api_root = api_root.rstrip("/")
         self.timeout = timeout
+        # #19548: the last response's headers, so a caller can honour a
+        # secondary-rate-limit ``Retry-After`` without a second transport.
+        self.last_headers: Dict[str, str] = {}
 
     def request(self, method: str, path: str, payload: Optional[Dict[str, Any]] = None) -> Tuple[int, Any]:
         """
@@ -87,11 +90,14 @@ class GitHubApi:
         request.add_header("X-GitHub-Api-Version", "2022-11-28")
         if data is not None:
             request.add_header("Content-Type", "application/json")
+        self.last_headers = {}
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:  # noqa: S310 - fixed api host
+                self.last_headers = {k.lower(): v for k, v in response.headers.items()}
                 body = response.read().decode("utf-8")
                 return response.status, (json.loads(body) if body else None)
         except urllib.error.HTTPError as exc:
+            self.last_headers = {k.lower(): v for k, v in (exc.headers or {}).items()}
             body = exc.read().decode("utf-8", errors="replace")
             try:
                 decoded: Any = json.loads(body) if body else None

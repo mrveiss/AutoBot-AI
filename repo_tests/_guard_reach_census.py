@@ -125,7 +125,8 @@ _ENUMERATOR = re.compile(r"tracked_paths|ls-files|rglob\(|os\.walk\(|\.iterdir\(
 #: assertions in different tests -- see `_window_complaint` (#17818).
 #: RE-PINNED 2026-10-16 (train 20): #18612's AST guard raised the narrowed reach to 209, the
 #: pin's own value, so the window is (209, 247]. The pin is two below full reach, per #17870 AC2 above.
-MIN_GUARDS_EXAMINED = 245
+#: RE-PINNED train 85l: the window measured on CI is (248, 288]; re-pinned to 288 as the guard instructs.
+MIN_GUARDS_EXAMINED = 288
 
 #: Members that MATCH `_ENUMERATOR` and scan nothing of the tree (#17870).
 #:

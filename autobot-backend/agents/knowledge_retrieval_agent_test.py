@@ -23,6 +23,7 @@ from unittest.mock import create_autospec
 import pytest
 
 from agents.knowledge_retrieval_agent import KnowledgeRetrievalAgent
+from knowledge.ownership import KnowledgeOwnership
 from knowledge_base import KnowledgeBase
 
 
@@ -31,9 +32,12 @@ async def test_find_similar_documents_returns_real_content():
     agent = object.__new__(KnowledgeRetrievalAgent)
     agent._kb_initialized = True
     agent.knowledge_base = create_autospec(KnowledgeBase, instance=True)
-    agent.knowledge_base.search.return_value = [{"content": "fact", "score": 0.9}]
+    agent.knowledge_base.search.return_value = [
+        {"content": "fact", "score": 0.9, "metadata": {"owner_id": "alice", "visibility": "private"}}
+    ]
+    agent.knowledge_base.ownership_manager = KnowledgeOwnership(None)  # #16665: the real visibility decision
 
-    result = await agent.find_similar_documents("query", top_k=5)
+    result = await agent.find_similar_documents("query", top_k=5, user_id="alice")
 
     assert result["status"] == "success"
     assert result["count"] == 1

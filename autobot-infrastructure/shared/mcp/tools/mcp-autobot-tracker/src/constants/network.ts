@@ -36,7 +36,7 @@ export const NetworkConstants = {
   REDIS_PORT: parseInt(process.env.REDIS_PORT || '6379'),
   OLLAMA_PORT: parseInt(process.env.OLLAMA_PORT || '11434'),
   VNC_PORT: parseInt(process.env.VNC_PORT || '6080'),
-  BROWSER_SERVICE_PORT: parseInt(process.env.BROWSER_SERVICE_PORT || '3000'),
+  BROWSER_SERVICE_PORT: parseInt(process.env.BROWSER_SERVICE_PORT || '9001'),
   AI_STACK_PORT: parseInt(process.env.AI_STACK_PORT || '8080'),
   NPU_WORKER_PORT: parseInt(process.env.NPU_WORKER_PORT || '8081'), // Linux NPU worker (VM2)
   NPU_WORKER_WINDOWS_PORT: parseInt(process.env.NPU_WORKER_WINDOWS_PORT || '8082'), // Windows NPU worker (primary)

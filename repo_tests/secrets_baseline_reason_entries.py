@@ -575,3 +575,7 @@ SPECIFIC_REASONS[
     "into i18n), not a credential; `Password` in the key trips the Secret Keyword denylist. Plain SHA1 "
     "of the literal label reproduces this hash."
 )
+
+from repo_tests.secrets_baseline_reason_entries_slm_labels import SLM_LABEL_REASONS  # noqa: E402  (#18863)
+
+SPECIFIC_REASONS.update(SLM_LABEL_REASONS)

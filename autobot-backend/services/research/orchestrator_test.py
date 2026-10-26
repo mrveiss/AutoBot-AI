@@ -24,6 +24,7 @@ import pytest
 import agent_loop.search.registry  # noqa: F401,E402
 import web_fetch  # noqa: F401,E402
 from autobot_shared.ssot_config import config
+from knowledge.ownership import KnowledgeOwnership
 from services.research.models import ExtractedClaim, ResearchBudget, StoredFact
 from services.research.orchestrator import ResearchOrchestrator
 from services.research.planner import SubQuestion
@@ -393,14 +394,20 @@ class TestPlannerRoundLoop:
 
         # Warm run: KB already has a high-confidence fact answering the question.
         warm_kb = _make_kb()
+        warm_kb.ownership_manager = KnowledgeOwnership(None)  # #16665: the real visibility decision
         warm_kb.search = AsyncMock(
-            return_value=[{"metadata": {"fact_id": "fact-1", "confidence": 0.9}, "node_id": "fact-1"}]
+            return_value=[
+                {
+                    "metadata": {"fact_id": "fact-1", "confidence": 0.9, "owner_id": "alice", "visibility": "private"},
+                    "node_id": "fact-1",
+                }
+            ]
         )
         registry_mock = AsyncMock(return_value=[_FakeSearchResult("https://a.example")])
         patches = _round_loop_patches(warm_kb, AsyncMock(side_effect=_passthrough_decompose))
         patches[1] = patch("agent_loop.search.registry.search", registry_mock)
         with patches[0], patches[1], patches[2], patches[3], patches[4], patches[5]:
-            warm_response = await ResearchOrchestrator(llm_service=AsyncMock()).research("known?")
+            warm_response = await ResearchOrchestrator(llm_service=AsyncMock()).research("known?", user_id="alice")
 
         # Cold run: KB has nothing for this question.
         cold_kb = _make_kb()

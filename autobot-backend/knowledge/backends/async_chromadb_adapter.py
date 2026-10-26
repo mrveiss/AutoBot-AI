@@ -227,6 +227,12 @@ class AsyncChromaDBClient(AsyncBaseClient):
             raise ValueError(f"no such collection: {name}") from exc
         return AsyncChromaDBCollection(raw_col)
 
+    async def get_collection_or_none(self, name: str) -> AsyncBaseCollection | None:
+        # Absence is ``None``; any other failure (an unreachable server) raises,
+        # as ``AsyncChromaClient.get_collection_or_none`` does (#13920, #19519).
+        raw_col = await self._raw.get_collection_or_none(_chroma_safe_name(name))
+        return None if raw_col is None else AsyncChromaDBCollection(raw_col)
+
     async def create_collection(
         self,
         name: str,

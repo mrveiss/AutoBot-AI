@@ -25,8 +25,10 @@ import github_api as ga  # noqa: E402
 
 
 class _Response:
-    def __init__(self, status: int, body: object) -> None:
+    def __init__(self, status: int, body: object, headers: dict | None = None) -> None:
         self.status = status
+        # urllib's response carries headers; GitHubApi records them as last_headers (#19548).
+        self.headers = headers or {}
         self._raw = json.dumps(body).encode("utf-8") if body is not None else b""
 
     def read(self) -> bytes:

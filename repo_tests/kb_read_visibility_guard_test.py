@@ -108,6 +108,12 @@ FILTER_HELPERS = frozenset(
         # filter_non_private_results (SYSTEM_SCOPE); RAG legs call them, never a second filter.
         "filter_for_principal",
         "filter_ranked",
+        # #16665: the API-caller and identified-user adapters over filter_for_principal.
+        "filter_for_caller",
+        "filter_for_user_id",
+        # #19280: api/knowledge_search.py's permission filter plus the shared stale filter, in that order
+        # (filter_search_results_by_permission, then drop_stale) -- the same filter, not a second one.
+        "_readable_fresh",
     }
 )
 
@@ -190,7 +196,15 @@ MIN_READS_FOUND = 40
 #: before and after over every changed file: the only difference is that one key.
 #: Then 86 -> 87 (#19216): the system-knowledge import's ``_adopt_duplicate`` reads the matched fact's
 #: metadata only, from a job with no user, and returns an id and status (classified NOT_USER_FACING).
-UNFILTERED_READ_CEILING = 87
+#: Then 87 -> 71 (#16665): the MCP knowledge routes, chat citations, the async chat workflow, the grounded agent and claim
+#: verifier, the agent KB tools, the KB librarian, the agent diary and the essential story now filter through
+#: ``filter_for_caller`` / ``filter_for_user_id`` (adapters over ``filter_for_principal``, so not a second filter).
+#: 16 entries removed; no detector change beyond adding those two names to FILTER_HELPERS.
+#: Then 71 -> 64 (#16665): the agent context/research routes, the knowledge-retrieval agent, chat knowledge search, the
+#: research planner's skip-known read and the KB search task handler filter through ``filter_for_user_id``.
+#: Then 64 -> 65 (#16665, train-85f): ``knowledge/summary_visibility._source_metadata`` reads the source fact's
+#: metadata to make the visibility decision itself; classified SCOPED.
+UNFILTERED_READ_CEILING = 65
 
 _REASON_PREFIXES = ("TRACKED_GAP #", "SCOPED: ", "NOT_USER_FACING: ", "IMPL: ", "ADMIN_ONLY: ")
 _NESTED = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
@@ -230,7 +244,7 @@ def _production_files(root: Path) -> list[str]:
 REACH = declare(
     "kb-read-visibility-production-sweep",
     discover=_production_files,
-    floor=2762,
+    floor=2866,  # mid-window: population 2991, window (2741, 2991)
     growth=250,
     skips=0,
     what="production python files",

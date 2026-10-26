@@ -496,7 +496,8 @@ knowledge_base:
   # Semantic chunking settings
   semantic_chunking:
     enabled: true
-    model: "nomic-embed-text:latest"
+    # No model key (#19430): the chunker's sentence model is code-pinned in
+    # autobot-backend/utils/semantic_chunker_base.py; nothing read the old key.
     percentile_threshold: 95.0
 
   # Query settings

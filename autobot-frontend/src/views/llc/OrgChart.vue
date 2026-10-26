@@ -8,6 +8,7 @@ import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
 import { useLlcCompanyContext } from '@/composables/llc/useLlcCompanyContext'
+import { shareInFlight } from '@/composables/llc/shareInFlight'
 import OrgTreeNode from './OrgTreeNode.vue'
 import type { OrgNode } from './OrgTreeNode.vue'
 import HireAgentModal from '@/components/llc/HireAgentModal.vue'
@@ -71,6 +72,9 @@ const { companyId, resolveCompanyId } = useLlcCompanyContext()
 const tree = ref<OrgNode[]>([])
 const isLoading = ref(false)
 const error = ref<string | null>(null)
+// #14556: the company id did not resolve. Not an empty company: we could not tell whose chart
+// to load, so the view says so and offers a retry instead of an empty chart.
+const companyUnresolved = ref(false)
 const selectedNode = ref<OrgNode | null>(null)
 const drawerOpen = ref(false)
 // The last node shown: the drawer's title holds through its leave transition (#19198).
@@ -559,30 +563,9 @@ function onCanvasNodeSelected(nodeId: string | null) {
   if (node) openDrawer(node)
 }
 
-/**
- * De-duplicate the in-flight company resolution (#13942 review).
- *
- * `fetchTree` and `loadExecutorRollup` both start with `await resolveCompanyIdOnce()`
- * and `onMounted` fires them together. The composable has no in-flight
- * de-duplication, so on the path it exists for — reached from a top-level nav
- * entry carrying no company id — both raced into their own
- * `GET /api/llc/companies/` fallback, doubling that request on the view most
- * users land on. Harmless but wasteful, and invisible to CI: every test that
- * mounts this view stubs the composable with a static resolver, so the real
- * resolution path is never exercised.
- *
- * Only the *pending* promise is shared; it is released on settle, so a later
- * call still re-resolves.
- */
-let pendingCompanyId: Promise<string | null> | null = null
-function resolveCompanyIdOnce(): Promise<string | null> {
-  if (!pendingCompanyId) {
-    pendingCompanyId = Promise.resolve(resolveCompanyId()).finally(() => {
-      pendingCompanyId = null
-    })
-  }
-  return pendingCompanyId
-}
+// #13942 review: fetchTree and loadExecutorRollup resolve the company together on mount;
+// one shared in-flight resolution instead of two racing GET /api/llc/companies/ fallbacks.
+const resolveCompanyIdOnce = shareInFlight(() => resolveCompanyId())
 
 /**
  * Load the workflows this company's roles run (#13963).
@@ -815,10 +798,12 @@ async function onToolDetached(roleId: string, toolName: string): Promise<void> {
 async function fetchTree() {
   isLoading.value = true
   error.value = null
+  companyUnresolved.value = false
   try {
     const cid = await resolveCompanyIdOnce()
     if (!cid) {
       tree.value = []
+      companyUnresolved.value = true
       return
     }
     const resp = await api.get<{ nodes: OrgNode[] }>(`/api/llc/companies/${cid}/org-chart`)
@@ -873,9 +858,8 @@ async function toggleAgentPause(node: OrgNode) {
     } else {
       await api.post(`/api/llc/companies/${cid}/controls/agents/${node.id}/resume`, {})
     }
-    // #13996: mutate the tree node itself — the drawer reads through
-    // `selectedNode`, so replacing it with a detached copy left a second
-    // toggle updating the copy while the canvas kept the stale status.
+    // #13996: mutate the tree node itself — the drawer reads through `selectedNode`, so a detached
+    // copy left a second toggle updating the copy while the canvas kept the stale status.
     node.status = willPause ? 'paused' : 'idle'
     if (selectedNode.value?.id === node.id) selectedNode.value = node
   } catch (err: unknown) {
@@ -1147,6 +1131,16 @@ onMounted(() => {
     </div>
 
     <div v-if="isLoading" class="text-center py-12 text-autobot-text-muted">{{ t('llc.orgChart.loading') }}</div>
+
+    <div
+      v-else-if="companyUnresolved"
+      class="text-center py-12 text-autobot-text-muted"
+      role="status"
+      data-testid="org-chart-company-unresolved"
+    >
+      {{ t('llc.orgChart.companyUnresolved') }}
+      <button class="ml-4 underline" @click="fetchTree">{{ t('llc.orgChart.retry') }}</button>
+    </div>
 
     <!-- GH#13938: the People list carries its own empty state. An empty
          hierarchy does not mean an empty company — a company can have contacts
@@ -1516,6 +1510,7 @@ onMounted(() => {
         :terminating="terminating"
         @pause="toggleAgentPause"
         @terminate="terminateAgent"
+        @heartbeat="(n: OrgNode, on: boolean) => { n.heartbeat_enabled = on }"
       />
     </BaseDrawer>
   </div>
