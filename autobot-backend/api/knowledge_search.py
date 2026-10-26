@@ -68,10 +68,6 @@ logger = get_logger(__name__)
 # search, expand queries and record clicks against the knowledge base.
 router = APIRouter(tags=["knowledge-search"], dependencies=[Depends(get_current_user)])
 
-# Performance optimization: O(1) lookup for valid search modes (Issue #326)
-VALID_SEARCH_MODES = {"vector", "text", "auto"}
-
-
 # =============================================================================
 # Helper Functions for search endpoints (Issue #281)
 # =============================================================================

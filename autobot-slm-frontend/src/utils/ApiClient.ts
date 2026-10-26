@@ -30,7 +30,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { getSlmApiBase } from '@/config/ssot-config'
 import { clearSlmSession, readSlmToken } from '@/utils/authStorage'
 import { buildLoginUrl, isLoginPathname } from '@/utils/loginRedirect'
-import { backoffDelay, HttpError, RETRY_BACKOFF, type GetPath, type GetResponse } from '@autobot/ui'
+import { backoffDelay, httpErrorFrom, isHttpClientError, parseJsonBody, RETRY_BACKOFF, type GetPath, type GetResponse } from '@autobot/ui'
 import type { paths } from '@/types/generated/api'
 
 const logger = createLogger('SlmApiClient')
@@ -90,12 +90,6 @@ export function withQuery(endpoint: string, params: RequestOptions['params']): s
   const text = query.toString()
   if (!text) return endpoint
   return `${endpoint}${endpoint.includes('?') ? '&' : '?'}${text}`
-}
-
-export interface ErrorInfo {
-  status: number
-  message: string
-  details: Record<string, unknown> | null
 }
 
 export class SlmApiClient {
@@ -270,36 +264,6 @@ export class SlmApiClient {
   // CONVENIENCE METHODS — return parsed JSON data (not Response)
   // ==================================================================================
 
-  private async extractErrorInfo(response: Response): Promise<ErrorInfo> {
-    try {
-      const errorData = await response.json()
-      return {
-        status: response.status,
-        message: (() => {
-          const raw = errorData.error || errorData.message || errorData.detail
-          if (raw == null) return JSON.stringify(errorData) || 'Unknown error'
-          return typeof raw === 'string' ? raw : JSON.stringify(raw)
-        })(),
-        details: errorData,
-      }
-    } catch {
-      return {
-        status: response.status,
-        message: response.statusText || 'Unknown error',
-        details: null,
-      }
-    }
-  }
-
-  private async parseJsonBody<T>(response: Response): Promise<T> {
-    if (response.status === 204) return {} as T
-    const contentType = response.headers.get('content-type')
-    if (contentType && contentType.includes('application/json')) {
-      return (await response.json()) as T
-    }
-    return {} as T
-  }
-
   // GET with retry logic and exponential backoff.
   async get<T = unknown>(endpoint: string, options: GetOptions = {}): Promise<T> {
     let lastError: Error | undefined
@@ -317,8 +281,7 @@ export class SlmApiClient {
           if (response.status === SERVICE_UNAVAILABLE_STATUS) {
             retryAfterMs = parseRetryAfterMs(response.headers.get('retry-after'))
           }
-          const errorData = await this.extractErrorInfo(response)
-          throw new HttpError(response.status, errorData.message, errorData.details)
+          throw await httpErrorFrom(response)
         }
 
         if (options.responseType === 'text') return (await response.text()) as T
@@ -328,7 +291,7 @@ export class SlmApiClient {
         logger.debug(`GET attempt ${attempt} failed for ${endpoint}: ${lastError.message}`)
 
         // Don't retry 4xx client errors — they won't succeed on retry.
-        if (lastError.message.includes('HTTP 4')) {
+        if (isHttpClientError(lastError)) {
           break
         }
 
@@ -366,30 +329,27 @@ export class SlmApiClient {
   async post<T = unknown>(endpoint: string, data?: unknown, options: RequestOptions = {}): Promise<T> {
     const response = await this.rawRequest(endpoint, { method: 'POST', body: data, ...options })
     if (!response.ok) {
-      const errorData = await this.extractErrorInfo(response)
-      throw new HttpError(response.status, errorData.message, errorData.details)
+      throw await httpErrorFrom(response)
     }
-    return this.parseJsonBody<T>(response)
+    return parseJsonBody<T>(response)
   }
 
   // PUT — returns parsed JSON (handles 204 No Content).
   async put<T = unknown>(endpoint: string, data?: unknown, options: RequestOptions = {}): Promise<T> {
     const response = await this.rawRequest(endpoint, { method: 'PUT', body: data, ...options })
     if (!response.ok) {
-      const errorData = await this.extractErrorInfo(response)
-      throw new HttpError(response.status, errorData.message, errorData.details)
+      throw await httpErrorFrom(response)
     }
-    return this.parseJsonBody<T>(response)
+    return parseJsonBody<T>(response)
   }
 
   // PATCH — partial update, returns parsed JSON (handles 204 No Content).
   async patch<T = unknown>(endpoint: string, data?: unknown, options: RequestOptions = {}): Promise<T> {
     const response = await this.rawRequest(endpoint, { method: 'PATCH', body: data, ...options })
     if (!response.ok) {
-      const errorData = await this.extractErrorInfo(response)
-      throw new HttpError(response.status, errorData.message, errorData.details)
+      throw await httpErrorFrom(response)
     }
-    return this.parseJsonBody<T>(response)
+    return parseJsonBody<T>(response)
   }
 
   // DELETE — returns parsed JSON (handles empty responses).
@@ -397,10 +357,9 @@ export class SlmApiClient {
   async delete<T = unknown>(endpoint: string, options: RequestOptions & { body?: unknown } = {}): Promise<T> {
     const response = await this.rawRequest(endpoint, { method: 'DELETE', ...options })
     if (!response.ok) {
-      const errorData = await this.extractErrorInfo(response)
-      throw new HttpError(response.status, errorData.message, errorData.details)
+      throw await httpErrorFrom(response)
     }
-    return this.parseJsonBody<T>(response)
+    return parseJsonBody<T>(response)
   }
 
   // ==================================================================================

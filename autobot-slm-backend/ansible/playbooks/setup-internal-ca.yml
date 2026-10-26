@@ -39,7 +39,7 @@
 #   node_cert_days     Node cert validity (default: 365)
 #   cert_renew_threshold_days  Re-issue if expiring within N days (default: 30)
 #   slm_admin_url      SLM API URL (default: derived from inventory)
-#   slm_admin_password SLM admin password (default: reads from env)
+#   slm_admin_password SLM admin password (no default: _shared/tasks/read_slm_admin_password.yml, #19318)
 
 # ---------------------------------------------------------------------------
 # Play 0: Authenticate with SLM API (for cert reporting)
@@ -49,9 +49,11 @@
   gather_facts: false
   vars:
     slm_admin_url: "{{ lookup('env', 'AUTOBOT_SLM_URL') | default('https://' ~ (slm_host | default(hostvars[groups.get('slm_manager', groups.get('slm', ['localhost']))[0]]['ansible_host'] | default('127.0.0.1'))) ~ '/slm', true) }}"
-    slm_admin_password: "{{ lookup('env', 'AUTOBOT_SLM_ADMIN_PASSWORD') | default('admin', true) }}"
 
   tasks:
+    - name: "Auth | Resolve the SLM admin password (#19318)"
+      ansible.builtin.include_tasks: ../_shared/tasks/read_slm_admin_password.yml
+
     - name: "Auth | Login to SLM API"
       ansible.builtin.uri:
         url: "{{ slm_admin_url }}/api/auth/login"

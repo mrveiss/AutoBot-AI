@@ -54,6 +54,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Python files under two of the tracked trees, a subset of all tracked Python; the other trees drift.",
     ),
+    "deployment-profile-writers-19315": (
+        ABSOLUTE,
+        "NOT_PATHS",
+        "Assignment lines, not paths: one item per literal AUTOBOT_ENVIRONMENT/DEPLOYMENT_MODE/DEBUG write.",
+    ),
     "egress-default-outbound-call-sites": (
         ABSOLUTE,
         "NOT_PATHS",
@@ -217,6 +222,26 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test source is a subset of tracked .py under two detector packages; the test-file share drifts.",
     ),
+    "generated-type-redeclarations": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "The main GUI's non-test .ts/.vue, against all tracked frontend source; the test-file share drifts.",
+    ),
+    "llc-sigterm-grace-copies": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test LLC modules, against all tracked .py under autobot-backend/llc; the test-file share drifts.",
+    ),
+    "frontend-http-transports": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Both GUIs' non-test .ts/.js/.vue under src, against all tracked frontend source; the test-file share drifts.",
+    ),
+    "feature-routers-strict-one-home-19319": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "All tracked files minus vendored/build parts, against the whole tracked tree; the skipped share drifts.",
+    ),
     "llc-actor-id-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -369,6 +394,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "Non-test Python under thirteen source roots, a subset of tracked Python; the test-file share drifts.",
+    ),
+    "landing-page-declared-dependencies": (
+        ABSOLUTE,
+        "FIXED_INVENTORY",
+        "The requirements files and the root pyproject.toml: a small, deliberately enumerable set.",
     ),
 }
 

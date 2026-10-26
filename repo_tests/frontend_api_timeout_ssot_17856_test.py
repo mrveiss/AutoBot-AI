@@ -72,6 +72,44 @@ def test_every_mirror_restates_the_ssot(where):
     assert _mirrors()[where] == str(_ssot_value()), f"{where} disagrees with TimeoutConfig.api"
 
 
+#: The env overlays and profile files (#19333): each may omit the key -- an overlay carries only
+#: keys that differ from the base -- but never restate a different number. 10000 sat in two of
+#: them with no recorded reason, aborting long LLM-backed calls after 10 s on those profiles.
+_ENV_OVERLAYS = (
+    ".env.base",
+    ".env.example",
+    ".env.localhost",
+    ".env.native-vm",
+    ".env.network",
+    ".env.network-template",
+    "docker/.env.docker",
+)
+#: Reads active AND commented-out (``# KEY=...``) assignments, indented or ``export``-prefixed, with
+#: quotes stripped: a commented 10000 in an overlay is a copy that misleads the next reader too.
+_API_TIMEOUT_LINE = re.compile(
+    r"""^\s*(?:#\s*)?(?:export\s+)?(?:AUTOBOT|VITE)_API_TIMEOUT=["']?([^\s#"']+)["']?\s*(?:#.*)?$""", re.MULTILINE
+)
+
+
+def _overlay_values(text: str) -> list[str]:
+    return _API_TIMEOUT_LINE.findall(text)
+
+
+@pytest.mark.parametrize("rel", _ENV_OVERLAYS)
+def test_no_env_overlay_restates_a_different_api_timeout(rel):
+    path = _ROOT / rel
+    assert path.is_file(), f"{rel} moved; update _ENV_OVERLAYS (#19333)"
+    wrong = [v for v in _overlay_values(path.read_text(encoding="utf-8")) if v != str(_ssot_value())]
+    assert not wrong, f"{rel} restates the API timeout as {wrong}; drop the line, the base carries {_ssot_value()}"
+
+
+def test_a_different_overlay_value_is_caught():
+    assert _overlay_values("AUTOBOT_API_TIMEOUT=10000\n") == ["10000"]
+    assert _overlay_values("export VITE_API_TIMEOUT=10000  # profile\n") == ["10000"]
+    assert _overlay_values("# AUTOBOT_API_TIMEOUT=10000\n") == ["10000"], "a commented copy is still a copy"
+    assert _overlay_values("    AUTOBOT_API_TIMEOUT='10000'\n") == ["10000"], "indented and quoted"
+
+
 def test_a_disagreeing_mirror_is_caught():
     """Contrast: the comparison above fails on a wrong value, so a pass is not vacuous."""
     sample = "VITE_API_TIMEOUT=30000\n"

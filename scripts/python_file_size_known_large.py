@@ -47,7 +47,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/agent_config.py": 1371,
     "autobot-backend/api/agent_terminal.py": 773,
     "autobot-backend/api/analytics.py": 1277,
-    "autobot-backend/api/analytics_architecture.py": 1264,
+    "autobot-backend/api/analytics_architecture.py": 1260,
     "autobot-backend/api/analytics_bug_prediction.py": 1430,
     "autobot-backend/api/analytics_cfg.py": 1331,
     "autobot-backend/api/analytics_code_generation.py": 992,
@@ -74,7 +74,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/cache_management.py": 779,
     "autobot-backend/api/chat.py": 2666,  # #18316: delete delegates to the canonical path
     "autobot-backend/api/chat_sessions.py": 1859,  # #18293: legacy transcripts only ever proposed
-    "autobot-backend/api/code_intelligence.py": 2151,
+    "autobot-backend/api/code_intelligence.py": 2145,
     "autobot-backend/api/code_search.py": 828,
     "autobot-backend/api/codebase_analytics/analyzers.py": 1684,
     "autobot-backend/api/codebase_analytics/api_endpoint_scanner.py": 1444,
@@ -83,7 +83,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 756,
     "autobot-backend/api/codebase_analytics/endpoints/environment.py": 698,  # #13602: sanitised traversal log
     "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 817,
-    "autobot-backend/api/codebase_analytics/endpoints/report.py": 2264,
+    "autobot-backend/api/codebase_analytics/endpoints/report.py": 2262,
     "autobot-backend/api/codebase_analytics/endpoints/stats.py": 663,
     "autobot-backend/api/conversation_files.py": 996,
     "autobot-backend/api/database_mcp.py": 1056,
@@ -103,7 +103,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/knowledge_maintenance.py": 1960,
     "autobot-backend/api/knowledge_mcp.py": 1441,
     "autobot-backend/api/knowledge_population.py": 1425,
-    "autobot-backend/api/knowledge_search.py": 813,  # #16665: analytics endpoints moved out
+    "autobot-backend/api/knowledge_search.py": 809,  # #16665: analytics endpoints moved out
     "autobot-backend/api/knowledge_search_aggregator.py": 951,  # #16665: doc-search moved out
     "autobot-backend/api/knowledge_tags.py": 887,
     "autobot-backend/api/knowledge_vectorization.py": 1690,
@@ -125,7 +125,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/schemas_analytics.py": 3533,
     "autobot-backend/api/schemas_chat.py": 702,
     "autobot-backend/api/schemas_code.py": 3257,
-    "autobot-backend/api/schemas_knowledge.py": 5121,
+    "autobot-backend/api/schemas_knowledge.py": 5120,
     "autobot-backend/api/schemas_system.py": 4176,  # #18734: log-forwarding schemas moved out (4345 -> 4176)
     "autobot-backend/api/schemas_workflows.py": 2824,
     "autobot-backend/api/secrets.py": 1172,  # #19476 one model_dump serialization (was 1178, #16444)
@@ -184,7 +184,6 @@ KNOWN_LARGE: dict[str, int] = {
     # live violation, not #5060 backlog -- see #14630.
     "autobot-backend/code_intelligence/testing_pattern_analyzer.py": 1159,
     "autobot-backend/code_intelligence/typescript_analyzer.py": 609,
-    "autobot-backend/code_intelligence/vue_analyzer.py": 613,
     "autobot-backend/command_manual_manager.py": 908,
     "autobot-backend/computer_vision/screen_analyzer.py": 662,
     "autobot-backend/conftest.py": 1498,  # #16483: _make_pkg_stub/_real_load_and_bind moved to testkit/module_stubs.py
@@ -199,7 +198,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/events/types.py": 885,
     "autobot-backend/hardware_acceleration.py": 609,
     "autobot-backend/initialization/lifespan.py": 2316,
-    "autobot-backend/initialization/router_registry/feature_routers.py": 762,
+    "autobot-backend/initialization/router_registry/feature_routers.py": 758,
     "autobot-backend/integrations/cloud_integration.py": 616,
     "autobot-backend/integrations/communication_integration.py": 605,
     "autobot-backend/integrations/microsoft365_integration.py": 632,
@@ -271,7 +270,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/monitoring/alertmanager_webhook_test.py": 782,
     "autobot-backend/multimodal_processor/multimodal_integration_test.py": 633,
     "autobot-backend/multimodal_processor/processor.py": 774,
-    "autobot-backend/npu_semantic_search.py": 1522,
+    "autobot-backend/npu_semantic_search.py": 1518,
     # 984 -> 978 (#14039): the single-use _build_slm_ssl_context wrapper was
     # inlined onto autobot_shared.tls.get_internal_tls_context, its only body.
     "autobot-backend/orchestration/dag_executor.py": 978,
@@ -339,7 +338,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/llm_service.py": 1199,  # #16845: _track_usage delegated to llm_usage_recording
     "autobot-backend/services/load_balancer.py": 685,
     "autobot-backend/services/nl_database_service.py": 775,
-    "autobot-backend/services/notification_service.py": 634,
+    "autobot-backend/services/notification_service.py": 614,
     "autobot-backend/services/npu_worker_manager.py": 1419,
     "autobot-backend/services/rag_service.py": 1076,
     "autobot-backend/services/redis_service_manager_test.py": 839,
@@ -417,7 +416,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/workflow_scheduler.py": 1070,
     "autobot-npu-worker/npu_worker_pool_test.py": 1010,
     "autobot-slm-backend/api/code_source.py": 701,
-    "autobot-slm-backend/api/code_sync.py": 5785,  # #19352, #19367 (was 5803)
+    "autobot-slm-backend/api/code_sync.py": 5782,  # #19352, #19367 (was 5803)
     "autobot-slm-backend/api/errors.py": 866,
     "autobot-slm-backend/api/infrastructure.py": 723,
     "autobot-slm-backend/api/monitoring.py": 1087,
@@ -433,7 +432,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/api/stateful.py": 685,
     "autobot-slm-backend/api/tls.py": 994,
     "autobot-slm-backend/api/updates.py": 1107,
-    "autobot-slm-backend/main.py": 774,  # #18672: admin password sync moved into services/admin_password_sync.py
+    "autobot-slm-backend/main.py": 773,  # #19368: admin seed password into services/admin_seed_password.py
     "autobot-slm-backend/models/database.py": 1140,
     "autobot-slm-backend/models/schemas.py": 2144,
     "autobot-slm-backend/monitoring/business_intelligence_dashboard.py": 1159,
@@ -466,9 +465,9 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/tests/test_cleanup_never_destroys_data_14856.py": 981,
     "autobot-slm-backend/user_management/services/sso_service.py": 775,
     "autobot_shared/circuit_breaker.py": 689,
-    "autobot_shared/env_registry.py": 1125,  # #13602, #18765: sibling imports; blocks moved to siblings
+    "autobot_shared/env_registry.py": 1061,  # #19320: postgres block -> env_registry_postgres (was 1125)
     "autobot_shared/monitoring/prometheus_metrics.py": 949,
-    "autobot_shared/network_constants.py": 614,
+    "autobot_shared/network_constants.py": 611,  # #19315: env/mode fallbacks moved to deployment_profile
     "autobot_shared/npu/integration.py": 929,
     "autobot_shared/plugin_sdk/loader.py": 690,
     "autobot_shared/plugin_sdk/plugin_load_visibility_test.py": 750,
@@ -477,9 +476,9 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot_shared/redis_client.py": 674,
     "autobot_shared/redis_management/connection_manager.py": 1387,
     "autobot_shared/security/ssrf_guard_test.py": 633,
-    "autobot_shared/ssot_config.py": 3260,  # #16375: AUTOBOT_PROMETHEUS_SCRAPE_TOKEN
+    "autobot_shared/ssot_config.py": 3239,  # #19319 split to ssot_role_mirrors; #15501 to ssot_hosted_models
     "autobot_shared/ssot_config_test.py": 782,
-    "autobot_shared/ssot_constants.py": 896,
+    "autobot_shared/ssot_constants.py": 861,
     "autobot_shared/user_management/team_service.py": 724,
     "pipeline-scripts/check-pre-commit-hook-pr_test.py": 747,
     "pipeline-scripts/ci_dispatch_watchdog.py": 1244,  # #13439: supersession split to ci_run_supersession.py

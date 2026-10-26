@@ -1333,16 +1333,11 @@
   # key is read earlier from the same file (#11507) so both env files carry one key.
   # Without these the clean-install .env has no DB password / admin → /login has
   # no account, matching the deploy-path wiring in update-all-nodes.yml.
-  - name: "Backend | Read admin seed password (AUTOBOT_ADMIN_PASSWORD, fallback SLM_ADMIN_PASSWORD) (#10636)"
-    ansible.builtin.shell:
-      cmd: >-
-        grep -oP '^AUTOBOT_ADMIN_PASSWORD=\K.*' /etc/autobot/slm-secrets.env 2>/dev/null
-        || grep -oP '^SLM_ADMIN_PASSWORD=\K.*' /etc/autobot/slm-secrets.env 2>/dev/null
-        || true
-    register: _backend_admin_password
-    changed_when: false
-    failed_when: false
-    no_log: true
+  - name: "Backend | Read admin seed password (AUTOBOT_ADMIN_PASSWORD, fallback SLM_ADMIN_PASSWORD) (#10636, #19370)"
+    ansible.builtin.include_tasks:
+      file: ../../../_shared/tasks/read_admin_seed_password.yml
+      apply:
+        tags: ['backend', 'config']
     tags: ['backend', 'config']
 
   # #10636 / #12520: autobot-db-credentials.env is the SINGLE role-managed
@@ -1372,7 +1367,7 @@
     ansible.builtin.set_fact:
       # autobot_internal_api_key is set earlier from slm-secrets.env (#11507) so both
       # env files render one value; do not re-set (and never blank) it here.
-      autobot_admin_password: "{{ _backend_admin_password.stdout | default('') | trim }}"
+      autobot_admin_password: "{{ _admin_seed_password_read | default('') }}"
       # #12520: role-managed creds file FIRST (the value actually applied to
       # Postgres), then the in-memory db_password from this run, then a deliberate
       # external override (a genuinely remote DB has no local creds file, so the

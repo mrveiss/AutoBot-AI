@@ -117,12 +117,13 @@ commit's pre-image), not carried over from the issue table unchecked; see
   ``ssot_config.py``; they are deliberately not repeated here, because a
   literal URL in prose is both a second place to update and a hardcoded-value
   violation on this file's own lines.
-- ``openrouter_default_model``/``vllm_dtype``/``vllm_gpu_memory_utilization``/
-  ``vllm_tensor_parallel_size``: ``llm_shared/provider_registry.py`` (moved
-  from the pre-#7437 ``llm_interface_pkg/provider_registry.py``) reads all
-  four unguarded; ``vllm_gpu_memory_utilization=""`` raises on
-  ``float("")``, ``vllm_tensor_parallel_size=0`` silently zeroes the vLLM
-  tensor-parallel degree. Pre-#7437: "gpt-3.5-turbo" / "auto" / "0.9" / 1.
+- ``vllm_dtype``/``vllm_gpu_memory_utilization``/``vllm_tensor_parallel_size``:
+  ``llm_shared/provider_registry.py`` (moved from the pre-#7437
+  ``llm_interface_pkg/provider_registry.py``) reads all three unguarded
+  (``openrouter_default_model`` moved to ``autobot_shared/ssot_hosted_models``,
+  #15501); ``vllm_gpu_memory_utilization=""`` raises on ``float("")``,
+  ``vllm_tensor_parallel_size=0`` silently zeroes the vLLM tensor-parallel
+  degree. Pre-#7437: "auto" / "0.9" / 1.
 """
 
 from __future__ import annotations

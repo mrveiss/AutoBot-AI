@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 import pytest
 
+from autobot_shared import deployment_profile
 from autobot_shared.network_constants import NetworkConstants
 from config import get_config_section, get_config_value
 from config.manager import ConfigManager as ConfigManager
@@ -38,7 +39,7 @@ class TestConfigManager:
 
         # Test that default sections exist (dot-path access is get_nested())
         assert cm.get_nested("backend.llm.local.provider") == "ollama"
-        assert cm.get_nested("deployment.mode") == "local"
+        assert cm.get_nested("deployment.mode") == deployment_profile.deployment_mode()  # #19316
         assert cm.get_nested("redis.port") == NetworkConstants.REDIS_PORT
         assert cm.get_nested("multimodal.vision.enabled") is True
         assert cm.get_nested("security.enable_sandboxing") is True
@@ -73,7 +74,7 @@ class TestConfigManager:
             assert cm.get_nested("redis.port") == 9999
 
             # Test that unspecified values use defaults
-            assert cm.get_nested("deployment.mode") == "local"
+            assert cm.get_nested("deployment.mode") == deployment_profile.deployment_mode()  # #19316
             assert cm.get_nested("multimodal.vision.enabled") is True
 
     def test_environment_variable_fallback(self):

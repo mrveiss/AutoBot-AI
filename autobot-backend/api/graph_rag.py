@@ -28,6 +28,7 @@ from typing import Callable, Dict, List
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.schemas_common import DataResponse
 from api.schemas_knowledge import (
@@ -39,7 +40,7 @@ from api.schemas_knowledge import (
     GraphRAGSearchResponse,
 )
 from api.system_health import register_app_state_probe
-from api.user_management.dependencies import get_tenant_context
+from api.user_management.dependencies import get_db_session, get_tenant_context
 from auth_middleware import get_current_user
 from autobot_memory_graph.owner_scope import OwnerScope, OwnerScopeRequired
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -174,6 +175,7 @@ async def graph_rag_search(
     search_request: GraphRAGSearchRequest = Body(...),
     service: GraphRAGService = Depends(get_graph_rag_service),
     tenant: TenantContext = Depends(get_tenant_context),
+    session: AsyncSession = Depends(get_db_session),
 ) -> JSONResponse:
     """
     Perform graph-aware RAG search combining semantic search with graph traversal.
@@ -183,7 +185,7 @@ async def graph_rag_search(
     """
     request_id = generate_request_id()
     owner = _owner_scope(tenant)  # outside the try: a 403 must not become a 500 (#18825)
-    principal = kb_principal_from_tenant(tenant)  # #16664: the KB leg returns what the caller may read
+    principal = await kb_principal_from_tenant(tenant, session)  # #16664, #19007: what the caller may read
 
     try:
         logger.info(

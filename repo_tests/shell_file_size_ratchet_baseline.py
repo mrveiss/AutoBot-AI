@@ -28,7 +28,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-infrastructure/shared/scripts/deployment/validate_access_control.sh": 659,
     "autobot-infrastructure/shared/scripts/install-bare-metal.sh": 882,
     "autobot-infrastructure/shared/scripts/install-slm.sh": 822,
-    "autobot-slm-backend/ansible/deploy.sh": 718,
+    "autobot-slm-backend/ansible/deploy.sh": 712,
     # #17929: +41 for the /dev/tty prompt helper. The documented one-command
     # install aborted silently at the password prompt -- stdin is the script
     # pipe, `read` got EOF, `set -e` killed it. Delivered BY the download

@@ -14,6 +14,7 @@ import os
 
 from sqlalchemy.engine import make_url
 
+from autobot_shared import postgres_identity
 from autobot_shared.db_url import assemble_postgres_url
 
 
@@ -31,16 +32,18 @@ def get_url() -> str:
         return deployment_config.postgres_sync_url
     except Exception:
         # Default fallback for development: assemble from AUTOBOT_POSTGRES_HOST
-        # only; user/password/db are fixed to their dev values (#11466).
+        # only; user/password/db are fixed to their dev values (#11466). User and
+        # DB are the compose identity; the DB was `autobot`, which no
+        # provisioning path creates (#19320).
         return assemble_postgres_url(
             {
                 "AUTOBOT_POSTGRES_HOST": os.environ.get(
-                    "AUTOBOT_POSTGRES_HOST", "autobot-postgres"
+                    "AUTOBOT_POSTGRES_HOST", postgres_identity.COMPOSE_DB_HOST
                 )  # ssot-config-exempt: dev-only docker-compose service-name fallback (#11466), not the SSOT default
             },
-            default_host="autobot-postgres",
-            default_user="autobot",
-            default_db="autobot",
+            default_host=postgres_identity.COMPOSE_DB_HOST,
+            default_user=postgres_identity.COMPOSE_OWNER_ROLE,
+            default_db=postgres_identity.USERS_DB_NAME,
             password_default="autobot",  # nosec B106  # dev-env placeholder, not a real credential
         )
 

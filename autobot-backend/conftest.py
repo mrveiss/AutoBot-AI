@@ -1265,7 +1265,7 @@ def set_test_environment():
     original_env = dict(os.environ)
 
     config.test_mode = "true"
-    config.env = "test"
+    config.environment = "test"  # #19315: AUTOBOT_ENV and AUTOBOT_ENVIRONMENT are one setting
 
     yield
 
