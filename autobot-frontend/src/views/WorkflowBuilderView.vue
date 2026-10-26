@@ -514,11 +514,12 @@
                   v-for="step in pendingApproval.steps"
                   :key="step.step_id"
                   class="approval-step"
-                  :class="{ 'high-risk': step.risk_level === 'high' || step.risk_level === 'critical' }"
+                  :class="{ 'high-risk': step.risk_tier === 'high' || step.risk_tier === 'critical' }"
                 >
                   <div class="step-header">
                     <span class="step-description">{{ step.description }}</span>
-                    <span class="risk-badge" :class="step.risk_level">{{ step.risk_level }}</span>
+                    <RiskBadge v-if="step.risk_tier" :tier="step.risk_tier" :label="t(`common.riskTier.${step.risk_tier}`)" />
+                    <BaseBadge v-else size="sm" :label="step.risk_level" />
                   </div>
                   <code class="step-command">{{ step.command }}</code>
                 </div>
@@ -693,6 +694,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { workflowIdFromQuery } from '@/composables/workflow/workflowDeepLink';
 import { useI18n } from 'vue-i18n';
+import { BaseBadge, RiskBadge } from '@autobot/ui';
 import { createLogger } from '@/utils/debugUtils';
 import { useNotificationBus } from '@/composables/useNotificationBus';
 import {
@@ -2015,41 +2017,6 @@ watch(hasActiveWorkflows, (hasActive) => {
   color: var(--text-primary);
 }
 
-.risk-badge {
-  font-size: var(--text-xs);
-  padding: var(--spacing-0-5) var(--spacing-2);
-  border-radius: var(--radius-xl);
-  text-transform: uppercase;
-}
-
-.risk-badge.low {
-  background: var(--color-success-bg);
-  color: var(--color-success);
-}
-
-/* #14993: a rule for every value the canonical RiskLevel can carry, not only the
-   four the approval flow produces today -- #14956 took the unstyled set from
-   three values to six. */
-.risk-badge.unknown,
-.risk-badge.info,
-.risk-badge.minimal {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-}
-
-.risk-badge.medium,
-.risk-badge.warning,
-.risk-badge.degraded {
-  background: var(--color-warning-bg);
-  color: var(--color-warning);
-}
-
-.risk-badge.high,
-.risk-badge.error,
-.risk-badge.critical {
-  background: var(--color-error-bg);
-  color: var(--color-error);
-}
 
 .step-command {
   display: block;

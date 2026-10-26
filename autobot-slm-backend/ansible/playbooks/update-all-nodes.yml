@@ -701,6 +701,17 @@
       delegate_to: localhost
       tags: [always]
 
+    # #19318: resolved by the one shared reader -- never a default password. Best-effort:
+    # unresolved leaves it empty and the login below is refused, skipping sync tracking.
+    - name: "[PLAY 1] SLM | Resolve the SLM admin password (#19318)"
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/read_slm_admin_password.yml
+        apply:
+          tags: [always]
+      vars:
+        require_slm_admin_password: false
+      tags: [always]
+
     - name: "[PLAY 1] SLM | Login to get auth token"
       uri:
         url: "https://{{ ansible_host }}/slm/api/auth/login"
@@ -708,7 +719,7 @@
         body_format: json
         body:
           username: "admin"
-          password: "{{ slm_admin_password | default('admin') }}"
+          password: "{{ slm_admin_password }}"
         validate_certs: false
         status_code: [200, 401, 403]
       register: slm_login_play1
@@ -782,6 +793,15 @@
     deploy_tmp: "/tmp/autobot-deploy"
 
   pre_tasks:
+    - name: "[PLAY 2] Resolve the SLM admin password (#19318)"
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/read_slm_admin_password.yml
+        apply:
+          tags: [always]
+      vars:
+        require_slm_admin_password: false
+      tags: [always]
+
     - name: "[PLAY 2] Login to SLM API"
       uri:
         url: "https://{{ slm_host }}/slm/api/auth/login"
@@ -789,7 +809,7 @@
         body_format: json
         body:
           username: "admin"
-          password: "{{ slm_admin_password | default('admin') }}"
+          password: "{{ slm_admin_password }}"
         validate_certs: false
         status_code: [200, 401, 403]
       register: slm_login
@@ -1105,18 +1125,13 @@
     # autobot_users at startup ONLY when this is set (#10636). Installer writes
     # AUTOBOT_ADMIN_PASSWORD alongside SLM_ADMIN_PASSWORD; fall back to the SLM
     # admin password so the user app and SLM share one admin credential.
-    - name: "[PLAY 2] Backend | Read admin password for full-user-management seed (#10636)"
-      ansible.builtin.shell:
-        cmd: >-
-          grep -oP '^AUTOBOT_ADMIN_PASSWORD=\K.*' /etc/autobot/slm-secrets.env 2>/dev/null
-          || grep -oP '^SLM_ADMIN_PASSWORD=\K.*' /etc/autobot/slm-secrets.env 2>/dev/null
-          || true
-      register: existing_admin_password
-      become: true
+    - name: "[PLAY 2] Backend | Read admin password for full-user-management seed (#10636, #19370)"
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/read_admin_seed_password.yml
+        apply:
+          become: true
+          tags: [backend, env]
       when: "'backend' in group_names"
-      failed_when: false
-      changed_when: false
-      no_log: true
       tags: [backend, env]
 
     - name: "[PLAY 2] Backend | Load shared backend env vars (#2727)"
@@ -1197,7 +1212,7 @@
         autobot_internal_api_key: "{{ existing_internal_api_key.stdout | default('') | trim }}"
         backend_postgres_password: "{{ existing_autobot_db_password.stdout | default('') | trim }}"
         # #10636: seed the default platform admin on first boot (full user mgmt).
-        autobot_admin_password: "{{ existing_admin_password.stdout | default('') | trim }}"
+        autobot_admin_password: "{{ _admin_seed_password_read | default('') }}"
       tags: [backend, env]
 
     - name: "[PLAY 2] Backend | Read backend user mode (#10001)"

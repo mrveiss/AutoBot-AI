@@ -31,6 +31,7 @@ import uuid
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from api.chat_citations import retrieve_citations
 from api.chat_streaming import _stream_chat_workflow_messages, _stream_direct_response, principal_scope
 from api.schemas_chat import (
     ChatCapabilitiesData,
@@ -42,7 +43,6 @@ from api.schemas_chat import (
     ChatPreferences,
     ChatSaveData,
     ChatStatsData,
-    Citation,
     ConversationSummarizeRequest,
     DetectLanguageData,
     DetectLanguageRequest,
@@ -69,8 +69,8 @@ from dependencies import provide_config_manager, provide_knowledge_base
 
 # Import shared exception classes (Issue #292 - Eliminate duplicate code)
 from exceptions import get_exceptions_lazy
-from knowledge.chunk_identity import resolve_chunk_id
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
+from knowledge.search_filters import filter_for_user_id
 
 # CRITICAL SECURITY FIX: Import session ownership validation
 from security.chat_message_safety import scan_chat_message
@@ -635,26 +635,6 @@ async def _generate_ai_response(
         }, None
 
 
-def _build_citations_from_kb_results(kb_results: List[Dict[str, Any]]) -> List[Citation]:
-    """Convert raw KB search results to structured Citation objects (#10548).
-
-    Each kb_result dict coming from search() typically carries:
-      content, source (file path), score, metadata (chunk_id, title, …).
-    We construct a Citation for each entry, capping at 5 to avoid payload bloat.
-    """
-    citations: List[Citation] = []
-    for idx, result in enumerate(kb_results[:5]):
-        raw_meta = result.get("metadata") or {}
-        chunk_id = resolve_chunk_id({"metadata": raw_meta}) or raw_meta.get("id") or f"chunk-{idx}"
-        source_path = result.get("source") or raw_meta.get("source_path") or ""
-        title = raw_meta.get("title") or (source_path.split("/")[-1] if source_path else f"Source {idx + 1}")
-        score = float(result.get("score") or 0.0)
-        citations.append(
-            Citation(id=str(chunk_id), source_type="chunk", title=title, uri=source_path or None, score=score)
-        )
-    return citations
-
-
 async def _store_and_log_ai_response(
     ai_response: Dict,
     session_id: str,
@@ -758,6 +738,20 @@ async def _resolve_chat_reasoning_effort(message: "ChatMessage", user_id: str | 
     return "auto"
 
 
+def _context_warning(overflow_status: Dict[str, Any]) -> Dict[str, Any]:
+    """The ``context_warning`` metadata of a turn that crossed the context threshold."""
+    return {
+        "fill_percentage": overflow_status.get("current_fill_percentage", 0),
+        "total_tokens": overflow_status.get("total_tokens", 0),
+        "context_limit": overflow_status.get("context_limit", 0),
+        # #14065: a failed compaction has to be visible to the user, not
+        # only to the log. Without this the session silently stays over
+        # threshold and the only symptom is the assistant contradicting
+        # earlier turns once history is eventually trimmed.
+        "compaction_failed": bool(overflow_status.get("summary_error")),
+    }
+
+
 async def process_chat_message(
     message: ChatMessage,
     chat_history_manager,
@@ -831,30 +825,10 @@ async def process_chat_message(
     # Add overflow warning to metadata if triggered
     metadata = ai_response.get("metadata", {})
     if overflow_status.get("warning_triggered"):
-        metadata["context_warning"] = {
-            "fill_percentage": overflow_status.get("current_fill_percentage", 0),
-            "total_tokens": overflow_status.get("total_tokens", 0),
-            "context_limit": overflow_status.get("context_limit", 0),
-            # #14065: a failed compaction has to be visible to the user, not
-            # only to the log. Without this the session silently stays over
-            # threshold and the only symptom is the assistant contradicting
-            # earlier turns once history is eventually trimmed.
-            "compaction_failed": bool(overflow_status.get("summary_error")),
-        }
+        metadata["context_warning"] = _context_warning(overflow_status)
 
-    # Issue #10548: RAG grounding — query KB and attach structured citations by default.
-    # Uses the knowledge_base dependency already available on this path (no re-retrieval).
-    citations: List[Citation] = []
-    if message.use_knowledge_base and knowledge_base:
-        try:
-            # Issue #13009: exclude quarantined research facts (#12622) -- this
-            # citation path surfaces raw KB content directly in the response.
-            kb_hits = await knowledge_base.search(query=message.content, top_k=5, filters=RESEARCH_QUARANTINE_FILTER)
-            if kb_hits:
-                citations = _build_citations_from_kb_results(kb_hits)
-                logger.debug("[#10548] Attached %d citations to response in session %s", len(citations), session_id)
-        except Exception as _cit_err:
-            logger.warning("[#10548] Citation retrieval failed (non-fatal): %s", _cit_err)
+    # Issue #10548: RAG grounding -- structured citations by default; #16665: the author's readable facts only.
+    citations = await retrieve_citations(message, knowledge_base, author_id, session_id)
 
     grounding = GroundingStatus(grounded=bool(citations), strategy="rag" if citations else None)
     # Surface citations in metadata so CitationsDisplay.vue can consume them
@@ -1977,6 +1951,7 @@ async def _get_ai_stack_chat_context(
 async def _enhance_with_knowledge_base(
     message: ChatMessage,
     knowledge_base,
+    author_id: str | None = None,
 ) -> tuple:
     """Enhance context with knowledge base search."""
     enhanced_context = None
@@ -1986,6 +1961,7 @@ async def _enhance_with_knowledge_base(
         try:
             # Issue #13009: exclude quarantined research facts (#12622).
             kb_results = await knowledge_base.search(query=message.content, top_k=5, filters=RESEARCH_QUARANTINE_FILTER)
+            kb_results = await filter_for_user_id(kb_results, knowledge_base, author_id)  # #16665
             if kb_results:
                 knowledge_sources = kb_results
                 kb_summary = "\n".join([f"- {item.get('content', '')[:300]}..." for item in kb_results[:3]])
@@ -2146,6 +2122,7 @@ async def _execute_ai_stack_chat_pipeline(
     knowledge_base,
     request_id: str,
     preferences: ChatPreferences | None,
+    author_id: str | None = None,
 ) -> ChatData:
     """Helper for process_ai_stack_chat_message. Ref: #1088, #6502 (typed return).
 
@@ -2157,7 +2134,7 @@ async def _execute_ai_stack_chat_pipeline(
 
     chat_context = await _get_ai_stack_chat_context(message, session_id, chat_history_manager)
 
-    enhanced_context, knowledge_sources = await _enhance_with_knowledge_base(message, knowledge_base)
+    enhanced_context, knowledge_sources = await _enhance_with_knowledge_base(message, knowledge_base, author_id)
 
     if message.use_ai_stack:
         ai_response = await _generate_ai_stack_chat_response(
@@ -2194,6 +2171,7 @@ async def process_ai_stack_chat_message(
     config: Metadata,
     request_id: str,
     preferences: ChatPreferences | None = None,
+    author_id: str | None = None,
 ) -> ChatData:
     """
     Process a chat message with AI Stack capabilities.
@@ -2214,6 +2192,7 @@ async def process_ai_stack_chat_message(
             knowledge_base,
             request_id,
             preferences,
+            author_id,
         )
 
     except HTTPException:
@@ -2381,6 +2360,7 @@ async def chat_ai_stack(
             config,
             request_id,
             preferences,
+            author_id=current_user.get("user_id") if current_user else None,
         )
 
         return create_chat_response(

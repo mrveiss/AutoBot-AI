@@ -129,7 +129,6 @@ PASSTHROUGH_ROUTES: frozenset[tuple[str, str, str]] = frozenset(
         ("autobot-backend/api/code_search.py", "DELETE /cache", "CodeSearchCacheClearResultResponse"),
         ("autobot-backend/api/code_search.py", "GET /search", "CodeSearchGetResponse"),
         ("autobot-backend/api/code_search.py", "POST /index", "CodeSearchIndexResultResponse"),
-        ("autobot-backend/api/embeddings.py", "GET /models", "EmbeddingModelsData"),
         ("autobot-backend/api/embeddings.py", "GET /settings", "EmbeddingSettingsData"),
         ("autobot-backend/api/embeddings.py", "GET /status", "EmbeddingStatusData"),
         ("autobot-backend/api/embeddings.py", "POST /providers/{provider_name}/refresh-models", "EmbeddingRefreshData"),

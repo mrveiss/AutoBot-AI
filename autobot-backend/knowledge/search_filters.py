@@ -11,6 +11,7 @@ Integrates with ChromaDB metadata and ownership system.
 
 import asyncio
 import json
+from dataclasses import dataclass
 from typing import Dict, List
 
 from fastapi import HTTPException
@@ -67,16 +68,9 @@ async def build_chromadb_permission_filter(
     conditions.append({"visibility": "system"})
     conditions.append({"visibility": "public"})
 
-    # Condition 3: Organization-level
+    # Condition 3: Organization-level (combined through the one ``$and`` builder, #19144)
     if user_org_id:
-        conditions.append(
-            {
-                "$and": [
-                    {"visibility": "organization"},
-                    {"organization_id": user_org_id},
-                ]
-            }
-        )
+        conditions.append(and_where({"visibility": "organization"}, {"organization_id": user_org_id}))
 
     # Conditions 4-6: group-level and shared facts, and facts readable by access level
     # alone, cannot be decided by a ChromaDB where (membership lives in list metadata).
@@ -193,13 +187,8 @@ async def augment_search_request_with_permissions(
         user_id=user_id, user_org_id=user_org_id, user_group_ids=user_group_ids
     )
 
-    # Combine with original filter if provided
-    if original_where:
-        combined_where = {"$and": [original_where, permission_filter]}
-    else:
-        combined_where = permission_filter
-
-    return combined_where
+    # The caller's filter is AND-ed through the one combinator, so it only narrows (#19144)
+    return and_where(original_where, permission_filter)
 
 
 def extract_user_context_from_request(current_user) -> tuple:
@@ -437,16 +426,19 @@ def _authenticated_principal(user_id, org_id, group_ids) -> Principal:
     return Principal(user_id=user_id, company_id=org_id, group_ids=frozenset(group_ids), is_authenticated=True)
 
 
-def kb_principal_from_tenant(tenant) -> Principal:
-    """The visibility principal of a verified ``TenantContext`` (#16664, #18825).
+async def kb_principal_from_tenant(tenant, session) -> Principal:
+    """The visibility principal of a verified ``TenantContext`` (#16664, #18825, #19007).
 
     For routes that take ``get_tenant_context`` and no user dict. Same ``Principal`` as
-    :func:`kb_principal`: user and org come from the verified context; a tenant context carries
-    no team memberships, so ``group_ids`` is empty (as for dict-based auth). No admin bypass.
+    :func:`kb_principal`: user and org come from the verified context, the team memberships from
+    the canonical team service via *session* (cached; a failed lookup gives no groups). No admin bypass.
     """
+    from knowledge.tenant_groups import tenant_group_ids  # noqa: PLC0415 -- keeps the ORM off this import
+
     user_id = str(tenant.user_id) if getattr(tenant, "user_id", None) else None
     org_id = str(tenant.org_id) if getattr(tenant, "org_id", None) else None
-    return _authenticated_principal(user_id, org_id, [])
+    group_ids = await tenant_group_ids(tenant, session) if user_id else []
+    return _authenticated_principal(user_id, org_id, group_ids)
 
 
 def principal_for_identity(user_id: str | None, org_id: str | None = None) -> KbPrincipal:
@@ -485,3 +477,109 @@ async def filter_for_principal(results: List[Dict], principal: KbPrincipal, owne
         list(principal.group_ids),
         ownership_manager=ownership_manager,
     )
+
+
+def caller_principal(current_user) -> Principal:
+    """The principal of an API caller, or a 401 when the caller cannot be resolved (#16665).
+
+    Fails closed: a missing, empty or malformed user is refused, never read as ``SYSTEM_SCOPE``
+    or as an unscoped read. Call it before any ``try`` that swallows errors.
+    """
+    try:
+        return kb_principal(current_user)
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise HTTPException(status_code=401, detail="Authentication required") from exc
+
+
+@dataclass(frozen=True)
+class KbReader:
+    """Who an explicit read API reads for: the caller's principal and whether they are an admin (#16665).
+
+    Only explicit read APIs build one with ``is_admin`` (see :func:`caller_reader`); chat and agent
+    grounding pass a bare user id, which never carries the admin input.
+    """
+
+    principal: Principal
+    is_admin: bool = False
+
+    @property
+    def user_id(self) -> str:
+        return self.principal.user_id
+
+    @property
+    def key(self) -> str:
+        """A stable cache partition: an admin's reads never share one with the same user's scoped reads."""
+        return f"{self.principal.user_id}|admin" if self.is_admin else self.principal.user_id
+
+
+def caller_reader(current_user) -> KbReader:
+    """The :class:`KbReader` of an API caller; 401 when unresolvable. Admin role -> ``is_admin`` (#16662)."""
+    return KbReader(caller_principal(current_user), is_admin_role(_user_field(current_user, "role")))
+
+
+def scoped_reader(current_user) -> KbReader:
+    """A :class:`KbReader` with the caller's org and groups and never the admin input (#16665).
+
+    For routes that run an agent or a grounding pass on the caller's behalf: they read what the
+    caller's normal rules give them, even when the caller is an admin.
+    """
+    return KbReader(caller_principal(current_user), False)
+
+
+def _fact_ids(results: List[Dict]) -> List[str]:
+    return [str(r.get("id") or r.get("fact_id") or (r.get("metadata") or {}).get("fact_id") or "") for r in results]
+
+
+async def _admin_read(results: List[Dict], reader: KbReader, ownership_manager) -> List[Dict]:
+    """An audited admin read through the ownership helper's explicit admin input; no audit, no results."""
+    from services.audit.taxonomy import AuditAction
+    from services.audit_logger import audit_log
+
+    kept = await filter_search_results_by_permission(
+        results, reader.user_id, reader.principal.company_id, [], ownership_manager=ownership_manager, is_admin=True
+    )
+    try:
+        await audit_log(
+            AuditAction.KNOWLEDGE_ADMIN_READ.value,
+            user_id=reader.user_id,
+            resource="knowledge_base",
+            details={"fact_ids": _fact_ids(kept), "count": len(kept)},
+        )
+    except Exception:
+        logger.error("kb.admin_read audit failed; withholding the admin read (#16665)", exc_info=True)
+        return []
+    return kept
+
+
+async def _filter_reader(results: List[Dict], kb, reader: KbReader) -> List[Dict]:
+    manager = getattr(kb, "ownership_manager", None)
+    if reader.is_admin:
+        return await _admin_read(results, reader, manager)
+    return await filter_for_principal(results, reader.principal, manager)
+
+
+async def filter_for_caller(results: List[Dict], kb, current_user) -> List[Dict]:
+    """*results* the API caller may read: the canonical filter as the caller (#16665).
+
+    An admin reads any fact on these explicit read APIs, audited; everyone else gets the scoped view.
+    No ownership manager on *kb* means no results.
+    """
+    return await _filter_reader(results, kb, caller_reader(current_user))
+
+
+async def filter_for_user_id(
+    results: List[Dict], kb, user_id: "str | KbReader | None", org_id: str | None = None
+) -> List[Dict]:
+    """*results* the identified user may read; no user id means no results (#16665).
+
+    For callers that hold an id, not a user object (a chat turn's ``author_id``). Fails closed:
+    it does not fall back to :data:`SYSTEM_SCOPE`. A bare id is always the scoped view (chat and agent
+    grounding never bypass); only an explicit read API's :class:`KbReader` can carry the admin input.
+    """
+    if isinstance(user_id, KbReader):
+        return await _filter_reader(results, kb, user_id)
+    if not user_id:
+        logger.warning("KB read with no user id; returning no results (#16665)")
+        return []
+    principal = _authenticated_principal(str(user_id), org_id, [])
+    return await filter_for_principal(results, principal, getattr(kb, "ownership_manager", None))

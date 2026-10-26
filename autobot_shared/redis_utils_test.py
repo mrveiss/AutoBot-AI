@@ -7,7 +7,9 @@ covered only indirectly, through two setup scripts. It is in ``autobot_shared``
 and therefore reachable by any caller, so it gets its own coverage here.
 """
 
-from autobot_shared.redis_utils import decode_redis_list, decode_redis_value
+import pytest
+
+from autobot_shared.redis_utils import COMPARE_AND_DELETE_LUA, decode_redis_list, decode_redis_value, delete_if_value
 
 
 class TestDecodeRedisValue:
@@ -55,3 +57,46 @@ class TestDecodeRedisList:
             "attributes",
             [["type", "VECTOR", "DIM", "768"]],
         ]
+
+
+class TestDeleteIfValue:
+    """The atomic release-if-owner, against fakeredis's real Lua engine."""
+
+    @staticmethod
+    def _redis():
+        import fakeredis
+
+        return fakeredis.aioredis.FakeRedis(decode_responses=True)
+
+    @pytest.mark.asyncio
+    async def test_a_matching_holder_is_deleted(self):
+        redis = self._redis()
+        await redis.set("fence", "agent-a")
+        assert await delete_if_value(redis, "fence", "agent-a") is True
+        assert await redis.get("fence") is None
+
+    @pytest.mark.asyncio
+    async def test_a_newer_holder_is_left_alone(self):
+        redis = self._redis()
+        await redis.set("fence", "agent-newer")
+        assert await delete_if_value(redis, "fence", "agent-a") is False
+        assert await redis.get("fence") == "agent-newer"
+
+    @pytest.mark.asyncio
+    async def test_an_absent_key_is_not_an_error(self):
+        assert await delete_if_value(self._redis(), "fence", "agent-a") is False
+
+    @pytest.mark.asyncio
+    async def test_the_delete_is_one_script_not_a_client_side_get(self):
+        redis = self._redis()
+        await redis.set("fence", "agent-a")
+        script_calls = []
+        real_eval = redis.eval
+
+        async def spy(script, numkeys, *args):
+            script_calls.append((script, numkeys, args))
+            return await real_eval(script, numkeys, *args)
+
+        redis.eval = spy
+        await delete_if_value(redis, "fence", "agent-a")
+        assert script_calls == [(COMPARE_AND_DELETE_LUA, 1, ("fence", "agent-a"))]

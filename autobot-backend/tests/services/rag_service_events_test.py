@@ -50,24 +50,22 @@ _bind_real_rag_service()
 def isolate_hash_cache(tmp_path, monkeypatch):
     """Isolate the doc-indexer hash cache from ambient on-disk state (#12673).
 
-    ``RAGService._filter_stale_chunks`` reads ``doc_indexer.HASH_CACHE_FILE``
+    ``knowledge.stale_filter`` reads ``doc_indexer.HASH_CACHE_FILE``
     through a module-level TTL memo. Without isolation the suite picks up the
     real ``data/.doc_index_hashes.json`` that exists on any machine where the
     indexer has run, so the provenance filter drops every test-double chunk.
     Point the cache at an absent tmp path and reset the memo around each test;
     classes needing a populated cache patch ``HASH_CACHE_FILE`` themselves.
     """
-    import services.rag_service as rag_mod
+    from knowledge.stale_filter import reset_hash_cache
 
     monkeypatch.setattr(
         "services.knowledge.doc_indexer.HASH_CACHE_FILE",
         tmp_path / "absent_doc_index_hashes.json",
     )
-    rag_mod._hash_cache_memo = {}
-    rag_mod._hash_cache_loaded_at = 0.0
+    reset_hash_cache()
     yield
-    rag_mod._hash_cache_memo = {}
-    rag_mod._hash_cache_loaded_at = 0.0
+    reset_hash_cache()
 
 
 # =============================================================================
@@ -804,7 +802,7 @@ class TestFilterStaleChunks:
 
         return RankedResult(
             content="text",
-            metadata={"relative_path": source_path},
+            metadata={"source": "autobot_docs", "file_path": source_path},
             semantic_score=0.9,
             keyword_score=0.0,
             hybrid_score=0.9,
@@ -852,7 +850,7 @@ class TestFilterStaleChunks:
         stale = self._make_chunk("docs/gone.md")
 
         with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
-            with patch("services.rag_service.logger") as mock_logger:
+            with patch("knowledge.stale_filter.logger") as mock_logger:
                 await svc._filter_stale_chunks([stale])
 
         mock_logger.warning.assert_called_once()
@@ -904,7 +902,7 @@ class TestFilterStaleChunks:
     @pytest.mark.asyncio
     async def test_first_call_loads_from_disk(self, tmp_path):
         """First call triggers a disk read via asyncio.to_thread."""
-        import services.rag_service as rag_mod
+        import knowledge.stale_filter as stale_mod
 
         cache_file = tmp_path / ".doc_index_hashes.json"
         await write_text_async(cache_file, '{"docs/guide.md": "abc"}')
@@ -913,8 +911,7 @@ class TestFilterStaleChunks:
         chunk = self._make_chunk("docs/guide.md")
 
         # Reset module-level state so we always start cold.
-        rag_mod._hash_cache_loaded_at = 0.0
-        rag_mod._hash_cache_memo = {}
+        stale_mod.reset_hash_cache()
 
         load_call_count = 0
         original_to_thread = asyncio.to_thread
@@ -925,7 +922,7 @@ class TestFilterStaleChunks:
             return await original_to_thread(fn, *args, **kwargs)
 
         with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
-            with patch("services.rag_service.asyncio.to_thread", side_effect=counting_to_thread):
+            with patch("knowledge.stale_filter.asyncio.to_thread", side_effect=counting_to_thread):
                 await svc._filter_stale_chunks([chunk])
 
         assert load_call_count == 1
@@ -933,7 +930,7 @@ class TestFilterStaleChunks:
     @pytest.mark.asyncio
     async def test_second_call_within_ttl_skips_disk(self, tmp_path):
         """Second call within TTL window uses the in-process memo — no disk read."""
-        import services.rag_service as rag_mod
+        import knowledge.stale_filter as stale_mod
 
         cache_file = tmp_path / ".doc_index_hashes.json"
         await write_text_async(cache_file, '{"docs/guide.md": "abc"}')
@@ -942,8 +939,7 @@ class TestFilterStaleChunks:
         chunk = self._make_chunk("docs/guide.md")
 
         # Seed memo as if we already loaded recently.
-        rag_mod._hash_cache_memo = {"docs/guide.md": "abc"}
-        rag_mod._hash_cache_loaded_at = time.monotonic()  # just now — within TTL
+        stale_mod._cache.update(paths={"docs/guide.md": "abc"}, loaded_at=time.monotonic())  # within TTL
 
         load_call_count = 0
         original_to_thread = asyncio.to_thread
@@ -954,7 +950,7 @@ class TestFilterStaleChunks:
             return await original_to_thread(fn, *args, **kwargs)
 
         with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
-            with patch("services.rag_service.asyncio.to_thread", side_effect=counting_to_thread):
+            with patch("knowledge.stale_filter.asyncio.to_thread", side_effect=counting_to_thread):
                 result = await svc._filter_stale_chunks([chunk])
 
         assert load_call_count == 0, "Should not re-read disk within TTL"
@@ -963,7 +959,7 @@ class TestFilterStaleChunks:
     @pytest.mark.asyncio
     async def test_call_after_ttl_expiry_reloads(self, tmp_path):
         """A call made after the TTL expires triggers a fresh disk read."""
-        import services.rag_service as rag_mod
+        import knowledge.stale_filter as stale_mod
 
         cache_file = tmp_path / ".doc_index_hashes.json"
         await write_text_async(cache_file, '{"docs/guide.md": "abc"}')
@@ -972,8 +968,8 @@ class TestFilterStaleChunks:
         chunk = self._make_chunk("docs/guide.md")
 
         # Simulate an expired memo: loaded_at is older than TTL.
-        rag_mod._hash_cache_memo = {"docs/guide.md": "abc"}
-        rag_mod._hash_cache_loaded_at = time.monotonic() - rag_mod._HASH_CACHE_TTL - 1.0
+        expired_at = time.monotonic() - stale_mod.HASH_CACHE_TTL_SECONDS - 1.0
+        stale_mod._cache.update(paths={"docs/guide.md": "abc"}, loaded_at=expired_at)
 
         load_call_count = 0
         original_to_thread = asyncio.to_thread
@@ -984,7 +980,7 @@ class TestFilterStaleChunks:
             return await original_to_thread(fn, *args, **kwargs)
 
         with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
-            with patch("services.rag_service.asyncio.to_thread", side_effect=counting_to_thread):
+            with patch("knowledge.stale_filter.asyncio.to_thread", side_effect=counting_to_thread):
                 result = await svc._filter_stale_chunks([chunk])
 
         assert load_call_count == 1, "Should reload disk after TTL expiry"
@@ -1014,7 +1010,7 @@ class TestFallbackBasicSearchFiltersStaleChunks:
         # visibility: system -- the SYSTEM_SCOPE principal these tests search as reads non-private facts only
         return {
             "content": f"content from {source}",
-            "metadata": {"source": source, "visibility": "system"},
+            "metadata": {"source": "autobot_docs", "file_path": source, "visibility": "system"},
             "score": score,
         }
 
@@ -1050,7 +1046,7 @@ class TestFallbackBasicSearchFiltersStaleChunks:
         with patch("services.knowledge.doc_indexer.HASH_CACHE_FILE", cache_file):
             results, metrics = await svc._fallback_basic_search(query="test", max_results=10, principal=SYSTEM_SCOPE)
 
-        source_paths = [r.source_path for r in results]
+        source_paths = [r.metadata["file_path"] for r in results]
         assert "docs/present.md" in source_paths
         assert "docs/removed.md" not in source_paths
 

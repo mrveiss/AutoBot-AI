@@ -86,6 +86,10 @@ jobs:
           openssl rand -hex 32 > secrets/slm_admin_password.txt
           openssl rand -hex 32 > secrets/slm_jwt_secret.txt
           chmod 600 secrets/*.txt
+          # Compose file secrets keep the host owner and mode. The SLM image runs as
+          # uid 999 (docker/slm/Dockerfile) and must read its two files; since #19318
+          # an unreadable SLM_ADMIN_PASSWORD_FILE fails the seed instead of being skipped.
+          sudo chown 999:999 secrets/slm_admin_password.txt secrets/slm_jwt_secret.txt
 
       - name: Generate signing secrets (GH#9775)
         run: |

@@ -12,13 +12,12 @@ current LLM config, and selecting the active model.
 import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from api.schemas_agent import (
     LLMConfigResponse,
     LLMConnectionTestResponse,
     LLMCurrentResponse,
-    LLMEmbeddingModelsResponse,
     LLMModelsResponse,
 )
 from api.schemas_common import DataResponse
@@ -56,10 +55,6 @@ config = get_config_manager()
 router = APIRouter()
 
 logger = get_logger(__name__)
-
-# Performance optimization: O(1) lookup for embedding model detection (Issue #326)
-EMBEDDING_MODEL_PATTERNS = {"embed", "nomic", "all-minilm", "sentence"}
-TEXT_MODEL_SIZE_INDICATORS = {"small", "large", "medium"}
 
 
 @router.get("/config", response_model=LLMConfigResponse)
@@ -267,54 +262,15 @@ async def update_llm_provider(
     )
 
 
-@router.get("/embedding/models", response_model=LLMEmbeddingModelsResponse)
-@cache_response(cache_key="embedding_models", ttl=300)  # Cache for 5 minutes
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_available_embedding_models",
-    error_code_prefix="LLM",
-)
-async def get_available_embedding_models(
-    current_user: dict = Depends(get_current_user),
-):
-    """Get list of available embedding models.
+@router.get("/embedding/models")
+async def get_available_embedding_models() -> RedirectResponse:
+    """Moved to ``GET /api/embeddings/models``, the one embedding-model listing (#19378).
 
-    Issue #744: Requires authenticated user.
+    This listing used its own name patterns and fell back to a hard-coded pair, so it could offer a
+    chat model or a model that is not installed. The options endpoint filters with the canonical
+    ``is_embedding_model_id`` and marks the active model.
     """
-    try:
-        # For now, return Ollama models (embedding models are typically the same as LLM models)
-        result = await ModelManager.get_available_models()
-        if result["status"] == "error":
-            raise HTTPException(status_code=500, detail=result["error"])
-
-        # Filter to common embedding models if possible, otherwise return all
-        embedding_models = []
-        for model in result["models"]:
-            model_name = model.get("name", "") if isinstance(model, dict) else str(model)
-            # Cache model_name.lower() to avoid repeated computation (Issue #323)
-            model_name_lower = model_name.lower()
-            # Common embedding model patterns
-            if any(pattern in model_name_lower for pattern in EMBEDDING_MODEL_PATTERNS):
-                embedding_models.append(model)
-            elif "text" in model_name_lower and any(size in model_name_lower for size in TEXT_MODEL_SIZE_INDICATORS):
-                embedding_models.append(model)
-
-        # If no specific embedding models found, include some common ones
-        if not embedding_models:
-            embedding_models = [
-                {"name": "nomic-embed-text", "available": True, "type": "ollama"},
-                {"name": "all-minilm:l6-v2", "available": True, "type": "ollama"},
-            ]
-
-        return {"models": embedding_models, "total_count": len(embedding_models)}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Error getting available embedding models: %s", str(e))
-        raise HTTPException(
-            status_code=500,
-            detail="Error getting available embedding models",
-        )
+    return RedirectResponse("/api/embeddings/models", status_code=308)
 
 
 @router.post("/embedding", response_model=DataResponse[LLMDeprecatedData])

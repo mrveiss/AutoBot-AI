@@ -331,12 +331,13 @@ Options:
   --ip=IP               Override auto-detected IP address (#2832)
   --rotate-secrets      Replace existing SLM_ADMIN_PASSWORD on reinstall (#7075).
                         By default reinstall PRESERVES the wizard-set password
-                        and ignores --admin-pass-file= / AUTOBOT_SLM_ADMIN_PASSWORD.
+                        and ignores --admin-pass-file= / SLM_ADMIN_PASSWORD.
   --help                Show this help message
 
 Environment overrides (skip the corresponding interactive prompt; #7057):
   AUTOBOT_INSTALL_BRANCH=<branch>     same as --branch=
-  AUTOBOT_SLM_ADMIN_PASSWORD=<pass>   the admin password itself (not a file path)
+  SLM_ADMIN_PASSWORD=<pass>           the admin password itself (not a file path);
+                                      AUTOBOT_SLM_ADMIN_PASSWORD is a deprecated alias (#19318)
   AUTOBOT_INSTALL_INTERFACE=<iface>   pick an interface by name (eth2, eth0, ...)
                                       instead of the menu prompt
   OVERRIDE_IP=<ip>                    skip detection entirely and use this IP
@@ -350,7 +351,7 @@ Examples:
   sudo $0 --uninstall --yes                  # Full uninstall (no prompt)
   sudo AUTOBOT_INSTALL_INTERFACE=eth2 \\
        AUTOBOT_INSTALL_BRANCH=${DEFAULT_BRANCH} \\
-       AUTOBOT_SLM_ADMIN_PASSWORD=secret \\
+       SLM_ADMIN_PASSWORD='<pass>' \\
        $0 --reinstall                        # Fully scripted reinstall (#7057)
 
 Post-Install:
@@ -994,14 +995,13 @@ prompt_config() {
     # #7057: env-var overrides skip the corresponding interactive prompt
     # so the script can run from CI / cron / runbooks without a TTY.
     #   AUTOBOT_INSTALL_BRANCH=<branch>     skips the branch prompt
-    #   AUTOBOT_SLM_ADMIN_PASSWORD=<pass>   skips the password prompt
+    #   SLM_ADMIN_PASSWORD=<pass>   skips the password prompt (AUTOBOT_SLM_ADMIN_PASSWORD: deprecated alias, #19318)
     #   (interface override is in detect_local_ip via AUTOBOT_INSTALL_INTERFACE)
     if [[ -n "${AUTOBOT_INSTALL_BRANCH:-}" ]]; then
         GIT_BRANCH="${AUTOBOT_INSTALL_BRANCH}"
     fi
-    if [[ -n "${AUTOBOT_SLM_ADMIN_PASSWORD:-}" ]]; then
-        ADMIN_PASSWORD="${AUTOBOT_SLM_ADMIN_PASSWORD}"
-    fi
+    ADMIN_PASSWORD="${SLM_ADMIN_PASSWORD:-${AUTOBOT_SLM_ADMIN_PASSWORD:-${ADMIN_PASSWORD}}}"
+    if [[ -n "${AUTOBOT_SLM_ADMIN_PASSWORD:-}" && -z "${SLM_ADMIN_PASSWORD:-}" ]]; then warn "AUTOBOT_SLM_ADMIN_PASSWORD is deprecated: set SLM_ADMIN_PASSWORD (#19318)"; fi
 
     # #7075: preserve existing admin password on reinstall.
     # The install wizard is the source of truth for SLM_ADMIN_PASSWORD;
@@ -1015,7 +1015,7 @@ prompt_config() {
         existing_pass=$(grep -E '^SLM_ADMIN_PASSWORD=' "${secrets_file}" 2>/dev/null | cut -d'=' -f2- || true)
         if [[ -n "${existing_pass}" ]]; then
             if [[ -n "${ADMIN_PASSWORD}" && "${ADMIN_PASSWORD}" != "${existing_pass}" ]]; then
-                warn "AUTOBOT_SLM_ADMIN_PASSWORD env-var ignored — existing wizard-set password preserved."
+                warn "SLM_ADMIN_PASSWORD env-var ignored — existing wizard-set password preserved."
                 warn "  To rotate: rerun with --rotate-secrets (warns + replaces) or edit ${secrets_file} manually."
             fi
             ADMIN_PASSWORD="${existing_pass}"; ADMIN_PASSWORD_PRESERVED=true

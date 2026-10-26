@@ -32,7 +32,9 @@ from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_7_DAYS
+from knowledge.search_filters import filter_for_user_id
 from llm_shared.decisions import ChoiceQuestion, LocalModelBackend, decide
+from services.claim_verifier_types import RAGResult, ResearchAgentResult, ResearchStatus
 from services.knowledge_grounding_models import (
     Claim,
     KBSource,
@@ -62,38 +64,6 @@ _CORROBORATION_CONFIDENCE_BASE: float = config.research_corroboration_confidence
 _CORROBORATION_CONFIDENCE_PER_SOURCE: float = config.research_corroboration_confidence_per_source
 _CORROBORATION_CONFIDENCE_CAP: float = config.research_corroboration_confidence_cap
 _CORROBORATION_CLASSIFY_TIMEOUT_SECONDS: float = config.research_corroboration_classify_timeout_seconds
-
-
-class ResearchStatus(str, Enum):
-    """Status from research agent investigation."""
-
-    FOUND = "found"
-    NOT_FOUND = "not_found"
-    CONFLICTING = "conflicting"
-    TIMEOUT = "timeout"
-
-
-@dataclass
-class RAGResult:
-    """Result from KB RAG search."""
-
-    fact: str
-    matches: List[KBSource]
-    confidence: float
-    search_time_ms: float
-
-
-@dataclass
-class ResearchAgentResult:
-    """Result from research agent investigation."""
-
-    claim: str
-    fact: str | None
-    status: ResearchStatus
-    url: str | None = None
-    confidence: float = 0.0
-    timestamp: float = field(default_factory=time.time)
-    research_time_ms: float = 0.0
 
 
 class SourceAgreement(str, Enum):
@@ -330,10 +300,11 @@ class ClaimVerifier:
             )
         return self._score_corroboration(claim_text, agree_count)
 
-    def _build_cache_key(self, claim: Claim) -> str:
-        """Build cache key for a claim (based on claim text hash)."""
+    def _build_cache_key(self, claim: Claim, user_id: str | None = None) -> str:
+        """Build cache key for a claim (claim text hash, partitioned by the user it was verified for, #16665)."""
         claim_hash = hashlib.sha256(claim.claim_text.encode("utf-8")).hexdigest()
-        return f"{_CACHE_KEY_PREFIX}:{claim_hash}"
+        user_hash = hashlib.sha256(str(getattr(user_id, "key", user_id) or "").encode("utf-8")).hexdigest()[:16]
+        return f"{_CACHE_KEY_PREFIX}:{user_hash}:{claim_hash}"
 
     async def _get_from_cache(self, cache_key: str) -> VerifiedClaim | None:
         """Get verified claim from cache if not expired."""
@@ -385,7 +356,7 @@ class ClaimVerifier:
         """Reconstruct VerifiedClaim from dictionary."""
         return VerifiedClaim.from_dict(data)
 
-    async def kb_rag_search(self, claim: str) -> RAGResult | None:
+    async def kb_rag_search(self, claim: str, user_id: str | None = None) -> RAGResult | None:
         """
         Search knowledge base via RAG for evidence.
 
@@ -394,6 +365,8 @@ class ClaimVerifier:
 
         Args:
             claim: Claim text to search
+            user_id: The user the search runs for (#16665); only facts that user may read
+                are used. None means no facts: the search fails closed.
 
         Returns:
             RAGResult with matches and confidence, or None on error
@@ -408,6 +381,7 @@ class ClaimVerifier:
 
             # Search KB (attempt to use advanced search if available)
             search_results = await self.kb.search(query=claim, top_k=3)
+            search_results = await filter_for_user_id(search_results or [], self.kb, user_id)  # #16665
 
             if not search_results:
                 logger.info("KB RAG search returned no results for claim: %s...", claim[:80])
@@ -536,9 +510,9 @@ class ClaimVerifier:
             logger.error("Research agent lookup failed: %s", e)
             return None
 
-    async def _verify_unknown_claim(self, claim: Claim) -> VerifiedClaim:
+    async def _verify_unknown_claim(self, claim: Claim, user_id: str | None = None) -> VerifiedClaim:
         """RAG search, then the research agent, for an UNKNOWN claim (called by :meth:`verify`)."""
-        rag_result = await self.kb_rag_search(claim.claim_text)
+        rag_result = await self.kb_rag_search(claim.claim_text, user_id)
         rag_confidence = rag_result.confidence if rag_result else 0.0
 
         # If RAG confidence is high enough, return RAG result
@@ -623,7 +597,7 @@ class ClaimVerifier:
 
         return verified
 
-    async def verify(self, claim: Claim) -> VerifiedClaim:
+    async def verify(self, claim: Claim, user_id: str | None = None) -> VerifiedClaim:
         """
         Verify a single claim using KB RAG and research agent.
 
@@ -638,11 +612,12 @@ class ClaimVerifier:
 
         Args:
             claim: Claim to verify
+            user_id: The user the KB is read as (#16665); None means no private KB facts are used
 
         Returns:
             VerifiedClaim with verification status and sources
         """
-        cache_key = self._build_cache_key(claim)
+        cache_key = self._build_cache_key(claim, user_id)
 
         # Check cache first
         cached = await self._get_from_cache(cache_key)
@@ -681,7 +656,7 @@ class ClaimVerifier:
 
             # Handle UNKNOWN status: RAG search + optional research agent
             if claim.kb_status == KBStatus.UNKNOWN:
-                verified = await self._verify_unknown_claim(claim)
+                verified = await self._verify_unknown_claim(claim, user_id)
                 await self._set_to_cache(cache_key, verified)
                 return verified
 
@@ -709,7 +684,7 @@ class ClaimVerifier:
             elapsed_ms = (time.time() - start_time) * 1000
             logger.debug("Claim verification completed in %.1fms", elapsed_ms)
 
-    async def batch_verify(self, claims: List[Claim]) -> List[VerifiedClaim]:
+    async def batch_verify(self, claims: List[Claim], user_id: str | None = None) -> List[VerifiedClaim]:
         """
         Verify multiple claims in parallel with intelligent prioritization.
 
@@ -720,6 +695,7 @@ class ClaimVerifier:
 
         Args:
             claims: List of claims to verify
+            user_id: The user the KB is read as (#16665)
 
         Returns:
             List of verified claims in same order as input
@@ -747,7 +723,7 @@ class ClaimVerifier:
         async def verify_with_semaphore(claim: Claim) -> Tuple[str, VerifiedClaim]:
             """Verify claim with concurrency limit."""
             async with semaphore:
-                result = await self.verify(claim)
+                result = await self.verify(claim, user_id)
                 return (claim.claim_text, result)
 
         try:

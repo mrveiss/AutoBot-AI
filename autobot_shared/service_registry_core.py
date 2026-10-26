@@ -18,7 +18,9 @@ What is here, and only this:
 * ``build_base_url`` / ``join_service_path`` -- the URL construction.
 * ``ServiceHealth`` -- the health-state shape.
 * ``DeploymentMode`` / ``parse_deployment_mode`` / ``detect_deployment_mode`` -- the
-  deployment-mode vocabulary and the single detection decision.
+  deployment-mode vocabulary and the single detection decision; ``resolve_deployment_mode``
+  is the one resolver every caller uses (#19316, #19372): ``AUTOBOT_DEPLOYMENT_MODE`` when
+  set and valid, else detection.
 
 What deliberately is NOT here: runtime discovery, circuit breaking and host patterns
 (backend-only), and the urllib probe (scripts-only).
@@ -27,10 +29,12 @@ What deliberately is NOT here: runtime discovery, circuit breaking and host patt
 from __future__ import annotations
 
 import logging
+import os
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Dict, Optional
 
+from autobot_shared import deployment_profile
 from autobot_shared.ssot_config import config as ssot_config
 from autobot_shared.ssot_constants import PATH_API_HEALTH, PATH_HEALTH, PATH_OLLAMA_TAGS
 
@@ -74,6 +78,25 @@ def detect_deployment_mode(
     if kubernetes:
         return DeploymentMode.KUBERNETES
     return DeploymentMode.DISTRIBUTED if distributed else DeploymentMode.DOCKER_LOCAL
+
+
+#: The marker file Docker creates in every container; its presence is the container signal.
+_DOCKER_MARKER = "/.dockerenv"
+
+
+def resolve_deployment_mode(
+    log: Optional[logging.Logger] = None, *, kubernetes: bool = False, distributed: bool = False
+) -> DeploymentMode:
+    """The one deployment-mode resolver (#19316, #19372).
+
+    The explicit mode is ``AUTOBOT_DEPLOYMENT_MODE`` read through ``deployment_profile`` (unset
+    is ``""``: detect). An invalid value is warned about and detection decides.
+    """
+    raw = deployment_profile.deployment_mode()
+    explicit = parse_deployment_mode(raw, log or logging.getLogger(__name__), deployment_profile.DEPLOYMENT_MODE_VAR)
+    return detect_deployment_mode(
+        explicit, in_container=os.path.exists(_DOCKER_MARKER), kubernetes=kubernetes, distributed=distributed
+    )
 
 
 @dataclass(frozen=True)

@@ -14,18 +14,23 @@ import { getApiBase } from '@/config/ssot-config';
 import { createLogger } from '@/utils/debugUtils';
 import { useLoadingState } from '@/composables/useLoadingState';
 import apiClient from '@/utils/ApiClient';
+import type { NotificationChannel, NotificationEvent } from '@/types/_generated/workflow';
 
 const logger = createLogger('NotificationConfig');
 
-/** Notification events that can trigger channel delivery. */
+export type { NotificationChannel, NotificationEvent };
+
+/**
+ * The events and channels the notification config UI offers: typed SUBSETS of the generated
+ * backend vocabulary (#19334), checked by `satisfies` so a value the backend lacks fails to compile.
+ * `service_failed` and `telegram` are not offered here -- the form has no telegram_chat_id field.
+ */
 export const NOTIFICATION_EVENTS = [
   'workflow_completed',
   'workflow_failed',
   'step_failed',
   'approval_needed',
-] as const;
-
-export type NotificationEvent = (typeof NOTIFICATION_EVENTS)[number];
+] as const satisfies readonly NotificationEvent[];
 
 /** Channels available for each event. */
 export const NOTIFICATION_CHANNELS = [
@@ -33,9 +38,7 @@ export const NOTIFICATION_CHANNELS = [
   'slack',
   'webhook',
   'in_app',
-] as const;
-
-export type NotificationChannel = (typeof NOTIFICATION_CHANNELS)[number];
+] as const satisfies readonly NotificationChannel[];
 
 /** Shape of the notification config as returned by the API. */
 export interface NotificationConfigData {

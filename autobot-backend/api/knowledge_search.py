@@ -38,6 +38,7 @@ from knowledge.search_filters import (
     filter_search_results_by_permission,
 )
 from knowledge.serving import servable_response
+from knowledge.stale_filter import drop_stale
 from knowledge.vector_search_engine import VectorSearchResult, get_vector_search_engine
 from knowledge_factory import get_or_create_knowledge_base
 from type_defs.common import Metadata
@@ -67,13 +68,24 @@ logger = get_logger(__name__)
 # search, expand queries and record clicks against the knowledge base.
 router = APIRouter(tags=["knowledge-search"], dependencies=[Depends(get_current_user)])
 
-# Performance optimization: O(1) lookup for valid search modes (Issue #326)
-VALID_SEARCH_MODES = {"vector", "text", "auto"}
-
-
 # =============================================================================
 # Helper Functions for search endpoints (Issue #281)
 # =============================================================================
+
+
+async def _readable_fresh(
+    results: list, kb_to_use, user_id: str, user_org_id: str | None, user_group_ids: List[str], is_admin: bool
+) -> list:
+    """*results* the caller may read (#16665), through the shared stale filter of the RAG branches (#19280)."""
+    readable = await filter_search_results_by_permission(
+        results,
+        user_id=user_id,
+        user_org_id=user_org_id,
+        user_group_ids=user_group_ids,
+        ownership_manager=getattr(kb_to_use, "ownership_manager", None),
+        is_admin=is_admin,
+    )
+    return await drop_stale(readable)
 
 
 def _build_search_response(
@@ -190,14 +202,7 @@ async def _execute_kb_search(
         else:
             results = await kb_to_use.search(query=query, similarity_top_k=search_limit, mode=mode)
 
-    return await filter_search_results_by_permission(
-        servable_response(results),
-        user_id=user_id,
-        user_org_id=user_org_id,
-        user_group_ids=user_group_ids,
-        ownership_manager=getattr(kb_to_use, "ownership_manager", None),
-        is_admin=is_admin,
-    )
+    return await _readable_fresh(servable_response(results), kb_to_use, user_id, user_org_id, user_group_ids, is_admin)
 
 
 async def _apply_reranking(query: str, results: list, kb_to_use) -> dict | None:
@@ -382,14 +387,7 @@ async def _search_with_all_queries(
         except Exception as e:
             logger.error("Search failed for query '%s': %s", search_query, e)
 
-    all_results = await filter_search_results_by_permission(
-        all_results,
-        user_id=user_id,
-        user_org_id=user_org_id,
-        user_group_ids=user_group_ids,
-        ownership_manager=getattr(kb_to_use, "ownership_manager", None),
-        is_admin=is_admin,
-    )
+    all_results = await _readable_fresh(all_results, kb_to_use, user_id, user_org_id, user_group_ids, is_admin)
     return all_results[:search_limit]
 
 
@@ -666,17 +664,9 @@ async def _aistack_search(
     before returning.
     """
     kb_class_name = kb_to_use.__class__.__name__
-    ownership_manager = getattr(kb_to_use, "ownership_manager", None)
 
     async def _filtered(results: list) -> list:
-        return await filter_search_results_by_permission(
-            results,
-            user_id=user_id,
-            user_org_id=user_org_id,
-            user_group_ids=user_group_ids,
-            ownership_manager=ownership_manager,
-            is_admin=is_admin,
-        )
+        return await _readable_fresh(results, kb_to_use, user_id, user_org_id, user_group_ids, is_admin)
 
     # Unified search() handles both enhanced and advanced params (#10666)
     if request.uses_advanced_features() and hasattr(kb_to_use, "search"):
