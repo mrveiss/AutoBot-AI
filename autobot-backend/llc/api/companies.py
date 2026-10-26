@@ -880,6 +880,7 @@ class OrgChartNode(BaseModel):
     # user-management lifecycle at all -- so a bare `False` default would
     # quietly assert every agent is inactive.
     is_active: Optional[bool] = None
+    heartbeat_enabled: Optional[bool] = None  # #15907: periodic schedule on/off; None for a person
     last_heartbeat: Optional[str]
     budget_spent: float
     budget_total: float
@@ -1110,14 +1111,12 @@ def _compose_agent_node(
         # heartbeat status — see `_resolve_org_status` for the precedence
         # rule and why every other lifecycle value falls through to it.
         status=_resolve_org_status(row.status, run.status if run else None),
-        # #14109: the real ``adapter_type`` column, not ``org_role``. Falls
-        # back to "" (not the role) when NULL: the hire flow
-        # (agent_hires.py) always sets a concrete adapter — "claude_code"
-        # by default — so a NULL here means a legacy/manually-seeded row
-        # with genuinely no configured adapter, and reusing ``org_role``
-        # is exactly the dishonest substitution this fix removes.
+        # #14109: the real ``adapter_type`` column, not ``org_role``. "" when
+        # NULL (a provisioned CEO or a legacy row, no adapter configured): substituting
+        # ``org_role`` is exactly the dishonest substitution this fix removes.
         adapter_type=row.adapter_type or "",
         is_human=False,
+        heartbeat_enabled=row.heartbeat_enabled,
         # Liveness: latest run is picked by created_at; a just-queued run
         # may have no started_at, so fall back to created_at.
         last_heartbeat=(

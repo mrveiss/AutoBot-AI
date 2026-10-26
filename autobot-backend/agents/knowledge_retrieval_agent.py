@@ -20,11 +20,14 @@ from autobot_shared.ssot_config import (
     get_agent_provider_explicit,
 )
 from constants.threshold_constants import LLMDefaults
+from knowledge.search_filters import filter_for_user_id
 from knowledge_base import get_knowledge_base
 from services.llm_service import get_llm_service
 
 from .base_agent import AgentDeploymentMode
+from .llm_response_content import extract_response_content
 from .payloads import AgentOutcome, KnowledgeQueryPayload
+from .request_user import request_user_id
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
@@ -120,20 +123,20 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
         limit = request.payload.get("limit", 5)
         similarity_threshold = request.payload.get("similarity_threshold", 0.6)
         context = request.payload.get("context")
-        return await self.process_query(query, limit=limit, similarity_threshold=similarity_threshold, context=context)
+        return await self.process_query(query, limit, similarity_threshold, context, user_id=request_user_id(request))
 
     async def _handle_find_similar(self, request) -> Dict[str, Any]:
         """Handle find_similar action via StandardizedAgent routing."""
         query = request.payload["query"]
         top_k = request.payload.get("top_k", 10)
         min_score = request.payload.get("min_score", 0.5)
-        return await self.find_similar_documents(query, top_k=top_k, min_score=min_score)
+        return await self.find_similar_documents(query, top_k, min_score, user_id=request_user_id(request))
 
     async def _handle_quick_fact(self, request) -> Dict[str, Any]:
         """Handle quick_fact action via StandardizedAgent routing."""
         fact_query = request.payload["fact_query"]
         max_docs = request.payload.get("max_docs", 3)
-        return await self.quick_fact_lookup(fact_query, max_docs=max_docs)
+        return await self.quick_fact_lookup(fact_query, max_docs, user_id=request_user_id(request))
 
     async def _ensure_kb_initialized(self):
         """Ensure knowledge base is initialized (lazy loading)."""
@@ -213,6 +216,7 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
         limit: int = 5,
         similarity_threshold: float = 0.6,
         context: Dict[str, Any] | None = None,
+        user_id: str | None = None,
     ) -> Dict[str, Any]:
         """
         Process a simple knowledge query and return quick results.
@@ -224,6 +228,7 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
             limit: Maximum number of results to return
             similarity_threshold: Minimum similarity score for results
             context: Optional context information
+            user_id: The user the KB is read as (#16665); none returns nothing
 
         Returns:
             Dict containing search results and metadata
@@ -239,6 +244,7 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
 
             # Issue #13024: canonical search() has no n_results kwarg -- use top_k.
             search_results = await self.knowledge_base.search(query, top_k=limit)
+            search_results = await filter_for_user_id(search_results, self.knowledge_base, user_id)  # #16665
             processing_time = time.time() - start_time
 
             processed_results = self._process_search_results(search_results, similarity_threshold, query)
@@ -253,7 +259,9 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
             logger.error("Knowledge Retrieval Agent error: %s", e)
             return self._build_error_response(query, e)
 
-    async def find_similar_documents(self, query: str, top_k: int = 10, min_score: float = 0.5) -> Dict[str, Any]:
+    async def find_similar_documents(
+        self, query: str, top_k: int = 10, min_score: float = 0.5, user_id: str | None = None
+    ) -> Dict[str, Any]:
         """
         Find documents similar to the query without LLM processing.
 
@@ -274,6 +282,7 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
             # Direct vector search without LLM processing
             # Issue #13024: canonical search() has no n_results kwarg -- use top_k.
             results = await self.knowledge_base.search(query, top_k=top_k)
+            results = await filter_for_user_id(results, self.knowledge_base, user_id)  # #16665
 
             # Filter by minimum score if vector scores are available
             filtered_docs = []
@@ -297,7 +306,7 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
                 "error": "Document search failed",
             }
 
-    async def quick_fact_lookup(self, fact_query: str, max_docs: int = 3) -> Dict[str, Any]:
+    async def quick_fact_lookup(self, fact_query: str, max_docs: int = 3, user_id: str | None = None) -> Dict[str, Any]:
         """
         Quick fact lookup optimized for specific factual questions.
 
@@ -316,6 +325,7 @@ class KnowledgeRetrievalAgent(StandardizedAgent):
                 fact_query,
                 limit=max_docs,
                 similarity_threshold=0.7,  # Higher threshold for facts
+                user_id=user_id,
             )
 
             if search_result["documents_found"] == 0:
@@ -505,45 +515,9 @@ If the information is not in the provided text, respond with "Information not fo
             logger.error("Fact extraction error: %s", e)
             return "Could not extract fact from documents."
 
-    def _try_extract_message_content(self, response: Dict) -> str | None:
-        """Try to extract content from message dict (Issue #334 - extracted helper)."""
-        if "message" not in response or not isinstance(response["message"], dict):
-            return None
-        content = response["message"].get("content")
-        return content.strip() if content else None
-
-    def _try_extract_choices_content(self, response: Dict) -> str | None:
-        """Try to extract content from choices list (Issue #334 - extracted helper)."""
-        if "choices" not in response or not isinstance(response["choices"], list):
-            return None
-        if not response["choices"]:
-            return None
-        choice = response["choices"][0]
-        if "message" not in choice or "content" not in choice["message"]:
-            return None
-        return choice["message"]["content"].strip()
-
     def _extract_response_content(self, response: Any) -> str:
-        """Extract text content from LLM response."""
-        try:
-            if isinstance(response, dict):
-                content = self._try_extract_message_content(response)
-                if content:
-                    return content
-                content = self._try_extract_choices_content(response)
-                if content:
-                    return content
-                if "content" in response:
-                    return response["content"].strip()
-
-            if isinstance(response, str):
-                return response.strip()
-
-            return str(response)
-
-        except Exception as e:
-            logger.error("Error extracting response content: %s", e)
-            return "Error processing response"
+        """Extract text content from LLM response (see ``llm_response_content``)."""
+        return extract_response_content(response)
 
     def _is_question(self, text: str) -> bool:
         """Determine if the text is a question."""

@@ -117,7 +117,7 @@ class Layer1EssentialStory:
             from memory.essential_story import EssentialStoryGenerator
 
             model_name: str | None = context.get("model_name")
-            return await EssentialStoryGenerator().generate(model_name)
+            return await EssentialStoryGenerator().generate(model_name, principal=context.get("principal"))  # #16665
         except Exception:
             logger.warning("Layer1EssentialStory.render failed", exc_info=True)
             return ""

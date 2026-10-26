@@ -656,9 +656,6 @@
  "autobot-frontend/src/components/knowledge/web-research/SiteMapTab.vue": [
   "dcd8b8ad"
  ],
- "autobot-frontend/src/components/llc/LlcBreadcrumb.vue": [
-  "20937a73"
- ],
  "autobot-frontend/src/components/llc/TemplateBrowser.vue": [
   "064fb25b",
   "064fb25b",
@@ -718,10 +715,6 @@
   "725b0d2d",
   "8c9062cc",
   "cf68ac57"
- ],
- "autobot-frontend/src/components/terminal/TerminalHeader.vue": [
-  "22a5cfdc",
-  "c1eb5ece"
  ],
  "autobot-frontend/src/components/terminal/TerminalModals.vue": [
   "29387b99"
@@ -1102,13 +1095,6 @@
   "8dae3e12",
   "efbd2d46"
  ],
- "autobot-slm-frontend/src/views/SystemUpdatesTab.vue": [
-  "5efbc653",
-  "68f32bac",
-  "7d5f448a",
-  "afa93d13",
-  "c5c7f0b4"
- ],
  "autobot-slm-frontend/src/views/monitoring/AlertsMonitor.vue": [
   "ee2d5e5c"
  ],
@@ -1188,11 +1174,6 @@
   "cf8fd361",
   "ed433e7a",
   "f8fa0eeb"
- ],
- "autobot-slm-frontend/src/views/tools/admin/BatchTool.vue": [
-  "0cc5cc88",
-  "375d6f32",
-  "8717ffe7"
  ],
  "autobot-slm-frontend/src/views/tools/admin/MCPTool.vue": [
   "742ddc50"

@@ -1272,7 +1272,7 @@
       db_host: "127.0.0.1"
       databases:
         - "{{ backend_postgres_db | default('autobot_users') }}"
-      postgresql_listen_addresses: "localhost"
+      # listen_addresses: the postgresql role's single definition (#19239), never set here.
       # #10636 gave the backend its OWN creds file because the postgresql role
       # then rendered the WHOLE file from a template, so writing AUTOBOT_DB_*
       # erased the SLM's SLM_DB_* entries on a collapsed single-box deploy.
@@ -1290,7 +1290,9 @@
       # existing login role first — see roles/postgresql/tasks/configure.yml — so
       # slm_app's rules survive), and this second run must ONLY reload, never
       # restart, the shared instance. postgresql.conf renders identically on both
-      # runs (both pass listen_addresses=localhost), so no restart is triggered.
+      # runs because listen_addresses has one definition, in the postgresql role
+      # (#19239) -- before, the SLM play passed "*" and this run "localhost", so a
+      # collapsed box flipped it, restarted Postgres, and the last run won.
     tags: ['backend', 'postgresql']
 
   # ==========================================================

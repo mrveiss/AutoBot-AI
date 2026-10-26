@@ -53,10 +53,7 @@ ALLOWED: dict[str, str] = {
     "autobot-backend/services/knowledge/doc_indexer.py": _DIMS
     + " (_KNOWN_DIMS); the model itself comes from org config / ssot"
     + "; the 'or' default is the org-config fallback (follow-up)",
-    "autobot-backend/utils/entity_resolver.py": "default of a config key for an in-memory sentence-transformer; it stores and queries no vectors",
-    "autobot-backend/utils/semantic_chunker.py": _CHUNKER,
     "autobot-backend/utils/semantic_chunker_base.py": _CHUNKER,
-    "autobot-backend/utils/semantic_chunker_gpu.py": _CHUNKER,
 }
 
 
@@ -72,7 +69,7 @@ REACH_PY = declare(
     "embedding-model-literal-sites",
     discover=_py_files,
     # Mid-window (2454..2754) from REACH_PY.window(): population 2754, growth 300; two infra builders added (#18328).
-    floor=2725,  # train 30: re-pinned mid-window (#15928)
+    floor=2850,  # train 30: re-pinned mid-window (#15928)
     what="production python files, parsed for embedding-model string constants",
     roots=_ROOTS,
     growth=300,

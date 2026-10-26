@@ -25,9 +25,18 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const require = createRequire(resolve(root, 'autobot-frontend', 'package.json'))
 const { chromium } = require('playwright')
 
+/** The card takes its colours from the mark; a mark without them is an error that names which. */
+function markColour(pattern, what) {
+  const found = mark.match(pattern)
+  if (!found) {
+    throw new Error(`render_social_preview: mark.svg has no 6-digit hex ${what}; the card takes its colours from the mark (#18266)`)
+  }
+  return found[1]
+}
+
 const mark = readFileSync(resolve(root, 'libs/autobot-ui/src/assets/brand/mark.svg'), 'utf-8')
-const surface = mark.match(/<rect[^>]*fill="(#[0-9A-Fa-f]{6})"/)[1]
-const ink = mark.match(/stroke="(#[0-9A-Fa-f]{6})"/)[1]
+const surface = markColour(/<rect[^>]*fill="(#[0-9A-Fa-f]{6})"/, 'surface (the <rect> fill)')
+const ink = markColour(/stroke="(#[0-9A-Fa-f]{6})"/, 'ink (the stroke)')
 const out = resolve(root, 'docs/assets/social-preview.png')
 
 const html = `<!doctype html><html><head><meta charset="utf-8"><style>

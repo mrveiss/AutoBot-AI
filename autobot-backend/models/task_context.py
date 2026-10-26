@@ -131,6 +131,7 @@ class WorkflowStepContext:
         orchestrator: The orchestrator instance managing the workflow
         action: The action to perform in this step
         metadata: Optional additional metadata
+        user_id: The user who started the workflow; KB reads in a step run as them
     """
 
     workflow_id: str
@@ -138,6 +139,7 @@ class WorkflowStepContext:
     orchestrator: Any  # Orchestrator instance
     action: str
     metadata: Dict[str, Any] = field(default_factory=dict)
+    user_id: str | None = None  # the user who started the workflow (#16665); none means KB reads deny
 
 
 @dataclass

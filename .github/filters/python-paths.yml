@@ -457,6 +457,13 @@ python:
   # FILE, not `docs/**` (the #17930 owner decision above): a change confined to
   # the index is the change that can break the link set, so it runs the guard.
   - 'docs/README.md'
+  # #19184: the same guard reads the five Company OS docs by concrete literal
+  # (`_COMPANY_OS_DOCS`, no bare "LLC" product name). One file each, not `docs/**`.
+  - 'docs/GLOSSARY.md'
+  - 'docs/INDEX.md'
+  - 'docs/architecture/PLATFORM_MODEL.md'
+  - 'docs/features/CATALOG.md'
+  - 'docs/llc/_index.md'
   # #18266: `social_preview_18266_test.py` pins the repository social-preview
   # image's dimensions and size. A change confined to the image -- replacing it
   # with one of the wrong shape -- is exactly what the guard exists to catch.

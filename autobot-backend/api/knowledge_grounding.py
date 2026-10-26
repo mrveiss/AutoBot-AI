@@ -43,6 +43,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_utils import decode_redis_value
 from constants.threshold_constants import QueryDefaults
+from knowledge.search_filters import caller_reader
 from services.grounded_agent import get_grounded_agent
 from services.knowledge_grounding_models import Claim, VerificationMethod
 
@@ -128,11 +129,13 @@ async def ground_response(
         request.query[:80],
     )
 
+    user_id = caller_reader(current_user)  # #16665: 401 when the caller cannot be resolved
     agent = get_grounded_agent(req.app if req else None)
     grounded = await agent.respond_with_grounding(
         user_query=request.query,
         agent_response=request.agent_response,
         context=request.context,
+        user_id=user_id,
     )
 
     logger.info(
@@ -202,8 +205,9 @@ async def verify_claim(
         object=request.object or "",
     )
 
+    user_id = caller_reader(current_user)  # #16665: 401 when the caller cannot be resolved
     agent = get_grounded_agent(req.app if req else None)
-    verified = await agent._classify_and_verify_claim(claim)
+    verified = await agent._classify_and_verify_claim(claim, user_id)
 
     logger.info(
         "Verified claim: status=%s, confidence=%.2f",

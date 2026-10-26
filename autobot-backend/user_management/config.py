@@ -16,25 +16,20 @@ import logging
 from dataclasses import dataclass, field
 from enum import Enum
 
+from autobot_shared import postgres_identity
 from autobot_shared.ssot_config import config
 
 logger = logging.getLogger(__name__)
 
 
 def _get_default_postgres_host() -> str:
-    """Get default PostgreSQL host from SSOT config.
+    """Default PostgreSQL host: the SSOT value (``AUTOBOT_POSTGRES_HOST``).
 
-    PostgreSQL runs on the Redis VM in AutoBot architecture.
-    Uses ConfigRegistry for consistent fallback chain (#639).
+    #19320: this used to return the Redis VM address -- a fourth host default
+    beside ssot_config, the env registry and Ansible. It now reads the one
+    home, so an unset environment resolves the same way everywhere.
     """
-    try:
-        from config.registry import ConfigRegistry
-
-        return ConfigRegistry.get("vm.redis")  # SSOT default via registry_defaults
-    except Exception:
-        from autobot_shared.ssot_config import get_config
-
-        return get_config().vm.redis
+    return config.postgres_host
 
 
 class UserManagementMode(str, Enum):
@@ -69,9 +64,9 @@ class DeploymentConfig:
     features: UserModeFeatures
     postgres_enabled: bool = False
     postgres_host: str = field(default_factory=_get_default_postgres_host)
-    postgres_port: int = 5432
-    postgres_db: str = "autobot"
-    postgres_user: str = "autobot"
+    postgres_port: int = postgres_identity.DB_PORT
+    postgres_db: str = postgres_identity.USERS_DB_NAME
+    postgres_user: str = postgres_identity.USERS_DB_ROLE
     postgres_password: str = ""
     encryption_key: str | None = None
 

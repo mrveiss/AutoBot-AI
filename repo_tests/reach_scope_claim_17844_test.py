@@ -339,6 +339,8 @@ _DECLARED_SCOPES = {
         "tools",
     ),
     "llc-actor-id-scan": ("autobot-backend/llc",),
+    "llc-sigterm-grace-copies": ("autobot-backend/llc",),
+    "frontend-http-transports": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "one-system-knowledge-template-tree": ("autobot-backend",),
     "one-static-data-copy-scan": (
         "autobot-backend",
