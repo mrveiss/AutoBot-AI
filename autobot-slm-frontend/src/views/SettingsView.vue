@@ -127,9 +127,7 @@ onMounted(() => {
 
     <!-- Messages -->
     <BaseAlert v-if="error" variant="error" class="mx-6 mt-4" :message="error" />
-    <div v-if="success" class="mx-6 mt-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700" role="status">
-      {{ success }}
-    </div>
+    <BaseAlert v-if="success" variant="success" class="mx-6 mt-4" :message="success" />
 
     <!-- Content Area -->
     <div class="flex-1 overflow-auto">

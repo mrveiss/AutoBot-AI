@@ -47,7 +47,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/agent_config.py": 1371,
     "autobot-backend/api/agent_terminal.py": 773,
     "autobot-backend/api/analytics.py": 1277,
-    "autobot-backend/api/analytics_architecture.py": 1264,
+    "autobot-backend/api/analytics_architecture.py": 1260,
     "autobot-backend/api/analytics_bug_prediction.py": 1430,
     "autobot-backend/api/analytics_cfg.py": 1331,
     "autobot-backend/api/analytics_code_generation.py": 992,
@@ -184,7 +184,6 @@ KNOWN_LARGE: dict[str, int] = {
     # live violation, not #5060 backlog -- see #14630.
     "autobot-backend/code_intelligence/testing_pattern_analyzer.py": 1159,
     "autobot-backend/code_intelligence/typescript_analyzer.py": 609,
-    "autobot-backend/code_intelligence/vue_analyzer.py": 613,
     "autobot-backend/command_manual_manager.py": 908,
     "autobot-backend/computer_vision/screen_analyzer.py": 662,
     "autobot-backend/conftest.py": 1498,  # #16483: _make_pkg_stub/_real_load_and_bind moved to testkit/module_stubs.py
@@ -477,7 +476,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot_shared/redis_client.py": 674,
     "autobot_shared/redis_management/connection_manager.py": 1387,
     "autobot_shared/security/ssrf_guard_test.py": 633,
-    "autobot_shared/ssot_config.py": 3242,  # #19319: role-mirrored defaults split to ssot_role_mirrors
+    "autobot_shared/ssot_config.py": 3239,  # #19319 split to ssot_role_mirrors; #15501 to ssot_hosted_models
     "autobot_shared/ssot_config_test.py": 782,
     "autobot_shared/ssot_constants.py": 861,
     "autobot_shared/user_management/team_service.py": 724,

@@ -947,15 +947,8 @@
  "autobot-slm-frontend/src/components/agents/ProcessMonitorTab.vue": [
   "b7a9fea0"
  ],
- "autobot-slm-frontend/src/components/fleet/AssignNPURoleModal.vue": [
-  "b88fec58"
- ],
  "autobot-slm-frontend/src/components/fleet/DecommissionModal.vue": [
   "126cfd30"
- ],
- "autobot-slm-frontend/src/components/fleet/NPUDetailsPanel.vue": [
-  "7b33fc7e",
-  "cf0055b0"
  ],
  "autobot-slm-frontend/src/components/fleet/NodeServicesPanel.vue": [
   "ebf2ee40"
@@ -966,36 +959,6 @@
  ],
  "autobot-slm-frontend/src/components/orchestration/RestartConfirmDialog.vue": [
   "dd2f7d75"
- ],
- "autobot-slm-frontend/src/views/CodeSyncView.vue": [
-  "024a1719",
-  "1dc353ad",
-  "63d9135c",
-  "ae439fd3",
-  "b31fa4f7"
- ],
- "autobot-slm-frontend/src/views/DeploymentsView.vue": [
-  "0964bf9e",
-  "0b9b8a6f",
-  "0df7dcad",
-  "1d505184",
-  "1f7790ca",
-  "2bea5468",
-  "2bea5468",
-  "2eae3164",
-  "35ec5dc9",
-  "4b718812",
-  "53b2cb93",
-  "571eabdb",
-  "754fc196",
-  "7f6ce019",
-  "86a034e5",
-  "8d7c5cef",
-  "8d7c5cef",
-  "a064a9be",
-  "b9c4d49a",
-  "c1efad70",
-  "fff66357"
  ],
  "autobot-slm-frontend/src/views/ExternalAgentsView.vue": [
   "a0fae4ce"
@@ -1015,33 +978,6 @@
   "0b167b80",
   "9657932e"
  ],
- "autobot-slm-frontend/src/views/ReplicationView.vue": [
-  "8851e29c",
-  "c479f08b"
- ],
- "autobot-slm-frontend/src/views/SecurityView.vue": [
-  "09929d79",
-  "204a388c",
-  "36b407c7",
-  "3d318cfd",
-  "48d12903",
-  "510ae5a1",
-  "59ef89d0",
-  "6121cca5",
-  "6194c09f",
-  "68a4d337",
-  "6cbf7046",
-  "76a54917",
-  "8037ffaf",
-  "b88fec58",
-  "cea20e09",
-  "d217b774",
-  "d4407138",
-  "ddf1d38e",
-  "e08023a2",
-  "f1e0d472",
-  "f440b379"
- ],
  "autobot-slm-frontend/src/views/SetupWizardView.vue": [
   "8298e52f",
   "8dae3e12",
@@ -1056,76 +992,15 @@
  "autobot-slm-frontend/src/views/settings/APISettings.vue": [
   "0fd796ca"
  ],
- "autobot-slm-frontend/src/views/settings/BackendSettings.vue": [
-  "150ec424",
-  "79284540"
- ],
- "autobot-slm-frontend/src/views/settings/DisposalPolicySettings.vue": [
-  "0f2731b5"
- ],
- "autobot-slm-frontend/src/views/settings/GeneralSettings.vue": [
-  "36c13cd3",
-  "4538fb76",
-  "7c7fa060"
- ],
- "autobot-slm-frontend/src/views/settings/MonitoringSettings.vue": [
-  "150ec424"
- ],
- "autobot-slm-frontend/src/views/settings/NotificationsSettings.vue": [
-  "0ddb3176",
-  "4538fb76"
- ],
- "autobot-slm-frontend/src/views/settings/SecuritySettings.vue": [
-  "2aab7377",
-  "48e580ed",
-  "5776482c",
-  "772da6cd",
-  "a0907179",
-  "a0907179"
- ],
- "autobot-slm-frontend/src/views/settings/admin/CacheSettings.vue": [
-  "37590268",
-  "5ff5c3ee",
-  "6d1aaac3",
-  "7edb30a4",
-  "ecad5063"
- ],
  "autobot-slm-frontend/src/views/settings/admin/ConfigDefaultsSettings.vue": [
-  "24941acf",
-  "701007cd",
-  "b24891de",
-  "e0490ed1"
+  "24941acf"
  ],
  "autobot-slm-frontend/src/views/settings/admin/DataHygieneView.vue": [
   "b714aea6"
  ],
- "autobot-slm-frontend/src/views/settings/admin/LLMSettings.vue": [
-  "37d6ab93",
-  "9006193d"
- ],
- "autobot-slm-frontend/src/views/settings/admin/NPUWorkersSettings.vue": [
-  "0c24aa3b",
-  "28f14146",
-  "5b43388a",
-  "e78581fb"
- ],
- "autobot-slm-frontend/src/views/settings/admin/PromptsSettings.vue": [
-  "28a29b1b",
-  "2f911003",
-  "51b818b4",
-  "df956f7a"
- ],
  "autobot-slm-frontend/src/views/settings/admin/SSOSettings.vue": [
   "3ee16ddf",
   "b8af3171"
- ],
- "autobot-slm-frontend/src/views/settings/admin/UserManagementSettings.vue": [
-  "6e57bc3b",
-  "96b18a5b",
-  "cab5a137",
-  "cf8fd361",
-  "ed433e7a",
-  "f8fa0eeb"
  ],
  "autobot-slm-frontend/src/views/tools/admin/MCPTool.vue": [
   "742ddc50"

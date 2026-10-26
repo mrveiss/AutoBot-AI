@@ -357,6 +357,9 @@ python:
   # confined to the guide -- documenting a name that resolves to nothing -- skips
   # the guard written to catch exactly that.
   - 'docs/guides/CONFIGURATION_GUIDE.md'
+  # #19279: `landing_page_claims_19279_test.py` reads the public landing page by concrete literal
+  # for the libraries it names and any placeholder it renders.
+  - 'docs/index.html'
   # #16427: `secretsmanager_template_names_match_vault_registry_16427_test.py`
   # reads this component's `credentialTemplates` array by concrete literal, to
   # assert its provider names still match the vault registry. Without an entry

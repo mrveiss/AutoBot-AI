@@ -223,6 +223,8 @@ ALLOWED_ADDITIONS = {
             "docs/llc/_index.md",
             # #19611: the playbook-reference guard reads this guide for its declared exemption.
             "docs/guides/slm-docker-ansible-deployment.md",
+            # #19279: the landing-page guard reads the page for the libraries and placeholders it renders.
+            "docs/index.html",
             # #18559: both duplication-guard tests read the pins file.
             ".github/duplication-pins.json",
             # #19324: browser_port_single_home_19324_test.py pins this file's browser-port fallback.

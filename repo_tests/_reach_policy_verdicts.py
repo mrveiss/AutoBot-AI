@@ -395,6 +395,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test Python under thirteen source roots, a subset of tracked Python; the test-file share drifts.",
     ),
+    "landing-page-declared-dependencies": (
+        ABSOLUTE,
+        "FIXED_INVENTORY",
+        "The requirements files and the root pyproject.toml: a small, deliberately enumerable set.",
+    ),
 }
 
 #: Rows whose name sorts n-z live in the sibling module (600-line ceiling); one table, one name.

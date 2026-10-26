@@ -212,7 +212,11 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         "auditable, and they live outside the python filter's trees",
     ),
     "*requirements*.txt": (
-        {"repo_tests/declared_distributions_test.py", "repo_tests/dependabot_requirements_coverage_test.py"},
+        {
+            "repo_tests/declared_distributions_test.py",
+            "repo_tests/dependabot_requirements_coverage_test.py",
+            "repo_tests/landing_page_claims_19279_test.py",
+        },
         "root-relative `*requirements*.txt` sweep; the matching files live outside the python filter's trees",
     ),
     ".github/actions/**": (

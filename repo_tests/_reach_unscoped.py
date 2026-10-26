@@ -44,6 +44,8 @@ UNSCOPED = frozenset(
         "blanket-skip-test-module-sweep",
         # #19324: an extension filter (*.py, *.sh, *.yml, .env*, ...) over the whole tree, not a set of prefixes.
         "browser-port-single-home-scan",
+        # #19279: requirements files live in every package directory; a glob, not a set of prefixes.
+        "landing-page-declared-dependencies",
         "chromadb-bind-host-override-candidates",
         "chromadb-bind-launch-sites",
         "chromadb-compose-port-sites",

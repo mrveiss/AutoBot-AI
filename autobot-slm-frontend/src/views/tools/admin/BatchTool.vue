@@ -350,15 +350,21 @@ onMounted(() => poller.start(String(++pollRun)))
     </div>
 
     <!-- Issue #1092: Backend unavailable banner with retry -->
-    <div v-if="!backendAvailable" class="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
-      <span class="text-amber-800">{{ $t('tools.admin.batchTool.autoBotBackendUnreachablePolling') }}</span>
-      <button
-        @click="refreshData"
-        class="px-3 py-1.5 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700"
-      >
-        {{ $t('tools.admin.batchTool.retry') }}
-      </button>
-    </div>
+    <BaseAlert
+      v-if="!backendAvailable"
+      variant="warning"
+      class="mb-6"
+      :message="$t('tools.admin.batchTool.autoBotBackendUnreachablePolling')"
+    >
+      <template #actions>
+        <button
+          @click="refreshData"
+          class="px-3 py-1.5 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700"
+        >
+          {{ $t('tools.admin.batchTool.retry') }}
+        </button>
+      </template>
+    </BaseAlert>
 
     <!-- Error Message -->
     <BaseAlert v-if="error && backendAvailable" variant="error" class="mb-6" :message="error" />

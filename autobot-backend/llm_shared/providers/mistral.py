@@ -28,6 +28,7 @@ from typing import Any, AsyncIterator, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from autobot_shared.ssot_hosted_models import hosted_default_model
 from constants.model_constants import (
     MISTRAL_CODESTRAL_LATEST,
     MISTRAL_DEVSTRAL_LATEST,
@@ -56,7 +57,7 @@ MISTRAL_MODELS: List[str] = [
     MISTRAL_NEMO,
 ]
 
-_DEFAULT_MODEL = MISTRAL_SMALL_LATEST
+_DEFAULT_MODEL = hosted_default_model("mistral")  # #15501
 
 
 class MistralProvider(BaseProvider):
