@@ -1,13 +1,12 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
-import { RETRY_BACKOFF, backoffDelay } from '@autobot/ui'
+import { RETRY_BACKOFF, backoffDelay, httpErrorFrom, isHttpClientError, parseJsonBody } from '@autobot/ui'
 import appConfig from '@/config/AppConfig.js';
 import { createLogger } from '@/utils/debugUtils';
 import { getApiBase } from '@/config/ssot-config';
 import { getSelectedCompanyId } from '@/utils/orgContext';
 import { clearStoredAuth, readStoredAuthToken } from '@/utils/authToken';
 import { CircuitBreakerError, runWithCircuitBreaker } from '@/utils/apiCircuitBreaker';
-import { extractErrorInfo } from '@/utils/apiErrorInfo';
 
 // Create scoped logger for ApiClient
 const logger = createLogger('ApiClient');
@@ -70,12 +69,6 @@ export interface ChatBrowserSessionConfig {
   conversation_id?: string;
   headless?: boolean;
   initial_url?: string;
-}
-
-export interface ErrorInfo {
-  status: number;
-  message: string;
-  details: Record<string, unknown> | null;
 }
 
 export interface ChatMessageResponse {
@@ -381,10 +374,7 @@ export class ApiClient {
         });
 
         if (!response.ok) {
-          const errorData = await extractErrorInfo(response);
-          throw new Error(
-            `HTTP ${response.status}: ${errorData.message}`
-          );
+          throw await httpErrorFrom(response);
         }
 
         return await response.json();
@@ -397,7 +387,7 @@ export class ApiClient {
         );
 
         // Don't retry 4xx client errors — they won't succeed on retry.
-        if (lastError.message.includes('HTTP 4') || lastError instanceof CircuitBreakerError) {
+        if (isHttpClientError(lastError) || lastError instanceof CircuitBreakerError) {
           break;
         }
 
@@ -424,16 +414,10 @@ export class ApiClient {
     });
 
     if (!response.ok) {
-      const errorData = await extractErrorInfo(response);
-      throw new Error(`HTTP ${response.status}: ${errorData.message}`);
+      throw await httpErrorFrom(response);
     }
 
-    if (response.status === 204) return {} as T;
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      return await response.json() as T;
-    }
-    return {} as T;
+    return parseJsonBody<T>(response);
   }
 
   // PUT — returns parsed JSON (handles 204 No Content: #822)
@@ -443,16 +427,10 @@ export class ApiClient {
     });
 
     if (!response.ok) {
-      const errorData = await extractErrorInfo(response);
-      throw new Error(`HTTP ${response.status}: ${errorData.message}`);
+      throw await httpErrorFrom(response);
     }
 
-    if (response.status === 204) return {} as T;
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      return await response.json() as T;
-    }
-    return {} as T;
+    return parseJsonBody<T>(response);
   }
 
   // DELETE — returns parsed JSON (handles empty responses)
@@ -462,15 +440,10 @@ export class ApiClient {
     });
 
     if (!response.ok) {
-      const errorData = await extractErrorInfo(response);
-      throw new Error(`HTTP ${response.status}: ${errorData.message}`);
+      throw await httpErrorFrom(response);
     }
 
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      return await response.json() as T;
-    }
-    return {} as T;
+    return parseJsonBody<T>(response);
   }
 
   // PATCH — partial update, returns parsed JSON (handles 204 No Content)
@@ -480,16 +453,10 @@ export class ApiClient {
     });
 
     if (!response.ok) {
-      const errorData = await extractErrorInfo(response);
-      throw new Error(`HTTP ${response.status}: ${errorData.message}`);
+      throw await httpErrorFrom(response);
     }
 
-    if (response.status === 204) return {} as T;
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      return await response.json() as T;
-    }
-    return {} as T;
+    return parseJsonBody<T>(response);
   }
 
   // ==================================================================================
@@ -564,8 +531,7 @@ export class ApiClient {
     });
 
     if (!response.ok) {
-      const errorData = await extractErrorInfo(response);
-      throw new Error(`HTTP ${response.status}: ${errorData.message}`);
+      throw await httpErrorFrom(response);
     }
 
     const contentType = response.headers.get('content-type');

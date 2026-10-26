@@ -149,7 +149,7 @@ Open `https://<server>/slm/` and accept the self-signed certificate warning. The
 
 ```bash
 docker compose --env-file docker/.env.docker --env-file docker/.env.secrets ps
-curl -s http://localhost/api/health | jq   # backend, via the frontend proxy
+curl -s http://localhost/api/system/health | jq   # backend, via the frontend proxy
 docker compose --env-file docker/.env.docker --env-file docker/.env.secrets logs -f --tail=50
 ```
 

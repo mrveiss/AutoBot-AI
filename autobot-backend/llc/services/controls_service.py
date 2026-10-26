@@ -14,13 +14,15 @@ Redis keys:
 """
 
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import text
+from sqlalchemy import false, select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
+from models.agent_org import AgentOrgNode
 
 from ..models.enums import ActivityEventType, LLCAgentStatus
 from .activity_log import LLCActivityLogService
@@ -38,6 +40,32 @@ class AgentNotFoundError(Exception):
 
 class SprintNotFoundError(Exception):
     pass
+
+
+class AgentNotSchedulableError(Exception):
+    """Enabling a heartbeat on an agent whose status means it must never run (#15907)."""
+
+    def __init__(self, agent_id: str, status: str) -> None:
+        super().__init__(f"Agent {agent_id} is {status}; its heartbeat cannot be enabled")
+        self.status = status
+
+
+#: Statuses no heartbeat may wake: the terminal pair ``llc/api/replay.py`` rejects,
+#: and the one migration 090 writes for a node that is not a company's CEO.
+_NEVER_SCHEDULED_STATUSES = frozenset({LLCAgentStatus.INACTIVE.value, LLCAgentStatus.TERMINATED.value})
+
+
+def _agent_in_company(company_id: str, agent_id: str) -> tuple:
+    """One agent, by slug, only within *company_id* -- the tenant scope of every heartbeat write.
+
+    A malformed company id matches nothing rather than raising, exactly as an
+    unknown one does.
+    """
+    try:
+        company = uuid.UUID(company_id)
+    except ValueError:
+        return (false(),)
+    return (AgentOrgNode.company_id == company, AgentOrgNode.agent_id == agent_id)
 
 
 class ControlsService:
@@ -203,6 +231,47 @@ class ControlsService:
 
         return {"agent_id": agent_id, "status": LLCAgentStatus.TERMINATED.value}
 
+    async def set_agent_heartbeat(
+        self,
+        session: AsyncSession,
+        company_id: str,
+        agent_id: str,
+        enabled: bool,
+        actor_user_id: str,
+        default_cron: str,
+    ) -> dict:
+        """Switch one agent's periodic heartbeat on or off (#15907).
+
+        Writes ``heartbeat_enabled``, the column the scheduler selects on. Enabling
+        an agent that has no cron (a provisioned CEO) also gives it *default_cron*:
+        the scheduler requires ``heartbeat_cron IS NOT NULL`` as well, so the flag
+        alone would read as on and never fire. A cron already set is kept.
+        """
+        row = await self._get_heartbeat_row(session, company_id, agent_id)
+        if row is None:
+            raise AgentNotFoundError(agent_id)
+        if enabled and row["status"] in _NEVER_SCHEDULED_STATUSES:
+            raise AgentNotSchedulableError(agent_id, row["status"])
+
+        cron = row["heartbeat_cron"] or (default_cron if enabled else None)
+        await session.execute(
+            update(AgentOrgNode)
+            .where(*_agent_in_company(company_id, agent_id))
+            .values(heartbeat_enabled=enabled, heartbeat_cron=cron)
+        )
+        await self._activity_log.record(
+            session=session,
+            company_id=company_id,
+            actor_type="user",
+            actor_id=actor_user_id,
+            event_type=ActivityEventType.CONTROL_AGENT_HEARTBEAT_SET,
+            entity_type="agent",
+            entity_id=agent_id,
+            before={"heartbeat_enabled": row["heartbeat_enabled"], "heartbeat_cron": row["heartbeat_cron"]},
+            after={"heartbeat_enabled": enabled, "heartbeat_cron": cron},
+        )
+        return {"agent_id": agent_id, "heartbeat_enabled": enabled, "heartbeat_cron": cron}
+
     # ------------------------------------------------------------------
     # Sprint controls
     # ------------------------------------------------------------------
@@ -337,6 +406,15 @@ class ControlsService:
         )
         row = result.fetchone()
         return {"status": row[0], "pre_pause_status": row[1]} if row else None
+
+    async def _get_heartbeat_row(self, session: AsyncSession, company_id: str, agent_id: str) -> Optional[dict]:
+        result = await session.execute(
+            select(AgentOrgNode.status, AgentOrgNode.heartbeat_enabled, AgentOrgNode.heartbeat_cron).where(
+                *_agent_in_company(company_id, agent_id)
+            )
+        )
+        row = result.first()
+        return {"status": row[0], "heartbeat_enabled": bool(row[1]), "heartbeat_cron": row[2]} if row else None
 
     async def _get_company_row(self, session: AsyncSession, company_id: str) -> Optional[dict]:
         result = await session.execute(

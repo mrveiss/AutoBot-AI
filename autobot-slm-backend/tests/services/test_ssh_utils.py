@@ -6,34 +6,18 @@
 
 ``Path(SSH_KEY_PATH).exists()`` propagated PermissionError when the key's
 parent directory was unreadable, crashing every ssh command build in
-sync_orchestrator / code_distributor / nodes_execution / nodes / code_sync.
+sync_orchestrator / nodes_execution / nodes / code_sync.
 ``_ssh_key_usable`` must degrade instead: False -> no ``-i`` flag (default
 ssh identity), with a single actionable WARNING per path.
 """
 
-import importlib
 import logging
-import sys
 from unittest.mock import patch
 
 import pytest
 
 import services.ssh_utils as ssh_utils
 from services.ssh_utils import _ssh_key_usable, build_ssh_base_cmd
-
-# ── Load the REAL services.code_distributor (same pattern) ───────────────────
-_CD_KEY = "services.code_distributor"
-_orig_cd = sys.modules.get(_CD_KEY)
-sys.modules.pop(_CD_KEY, None)
-try:
-    _cd_mod = importlib.import_module(_CD_KEY)
-finally:
-    if _orig_cd is not None:
-        sys.modules[_CD_KEY] = _orig_cd
-    else:
-        sys.modules.pop(_CD_KEY, None)
-
-CodeDistributor = _cd_mod.CodeDistributor
 
 _LOGGER_NAME = "services.ssh_utils"
 
@@ -151,20 +135,3 @@ def test_build_ssh_command_degrades_on_permissionerror(caplog):
     assert cmd[0] == "ssh"
     assert cmd[-1] == "autobot@10.0.0.5"
     assert len(_warnings(caplog)) == 1
-
-
-def test_code_distributor_ssh_argv_is_wellformed(tmp_path):
-    """Regression guard for the stray ``-o`` token fixed with #11793 (same
-    class as #10277): every ``-o`` in CodeDistributor._build_ssh_command must
-    be followed by a ``key=value`` token, and the ssh-key gate is the shared
-    helper (degrades on a missing key)."""
-    distributor = CodeDistributor.__new__(CodeDistributor)
-    with patch.object(_cd_mod, "SSH_KEY_PATH", str(tmp_path / "absent_key")):
-        cmd = distributor._build_ssh_command(2222)
-
-    assert "-i" not in cmd
-    for idx, token in enumerate(cmd):
-        if token == "-o":
-            assert idx + 1 < len(cmd), f"trailing -o with no argument: {cmd!r}"
-            value = cmd[idx + 1]
-            assert "=" in value and not value.startswith("-"), f"-o not followed by key=value: {value!r} in {cmd!r}"

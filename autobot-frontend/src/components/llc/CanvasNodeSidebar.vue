@@ -27,6 +27,7 @@ import type { OrgNode } from '@/views/llc/OrgTreeNode.vue'
 import type { WorkItem } from '@/views/llc/workItemTypes'
 import WorkItemBadge from './WorkItemBadge.vue'
 import HandoffModal from './HandoffModal.vue'
+import AgentHeartbeatControl from './AgentHeartbeatControl.vue'
 import {
   SIDEBAR_RAIL_ICONS,
   NOTE_TABS,
@@ -55,6 +56,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   pause: [OrgNode]
   terminate: [OrgNode]
+  // #15907: the heartbeat switch changed; the parent owns the tree node and updates it.
+  heartbeat: [OrgNode, boolean]
 }>()
 
 const logger = createLogger('CanvasNodeSidebar')
@@ -493,6 +496,12 @@ function formatTime(ts: string | null): string {
       {{ t('llc.orgChart.humanNoAgentControls') }}
     </div>
     <div v-else-if="node.status !== 'terminated'" class="px-5 py-4 border-t border-autobot-border space-y-2">
+      <AgentHeartbeatControl
+        :company-id="companyId"
+        :agent-id="node.id"
+        :enabled="node.heartbeat_enabled ?? false"
+        @changed="(on: boolean) => emit('heartbeat', node, on)"
+      />
       <button
         class="w-full py-2 rounded-lg text-sm font-medium transition-colors"
         :class="node.status === 'paused'

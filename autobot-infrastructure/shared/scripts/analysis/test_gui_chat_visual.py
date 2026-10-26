@@ -14,16 +14,17 @@ logger = logging.getLogger(__name__)
 import requests
 
 from autobot_shared.network_constants import ServiceURLs
+from autobot_shared.ssot_config import config
 
 
 def test_gui_chat():
     """Test the GUI chat interface visually."""
     logger.info("🎭 Visual GUI Chat Test")
     logger.info("=" * 60)
-    logger.info("📺 Please watch the browser at http://localhost:3000")
+    logger.info("📺 Please watch the browser at %s", ServiceURLs.VNC_LOCAL)
     logger.info("=" * 60)
 
-    base_url = "http://localhost:3000"
+    base_url = f"http://localhost:{config.port.browser}"
 
     # Step 1: Navigate to AutoBot GUI
     logger.info("\n1. Navigating to AutoBot GUI...")
@@ -144,7 +145,7 @@ def test_gui_chat():
         logger.error(f"❌ Screenshot error: {e}")
 
     logger.info("\n" + "=" * 60)
-    logger.info("📺 Check http://localhost:3000 to see the visual result")
+    logger.info("📺 Check %s to see the visual result", ServiceURLs.FRONTEND_LOCAL)
     logger.info("=" * 60)
 
 

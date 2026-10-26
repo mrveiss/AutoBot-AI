@@ -111,7 +111,7 @@ echo "  Frontend:     $(get_config "infrastructure.hosts.frontend" 2>/dev/null |
 echo "  NPU Worker:   $(get_config "infrastructure.hosts.npu_worker" 2>/dev/null || echo "localhost"):$(get_config "infrastructure.ports.npu_worker" 2>/dev/null || echo "8081") (VM2 - Hardware detection)"
 echo "  Redis Stack:  $(get_config "infrastructure.hosts.redis" 2>/dev/null || echo "localhost"):$(get_config "infrastructure.ports.redis" 2>/dev/null || echo "6379") (VM3 - Data layer)"
 echo "  AI Stack:     $(get_config "infrastructure.hosts.ai_stack" 2>/dev/null || echo "localhost"):$(get_config "infrastructure.ports.ai_stack" 2>/dev/null || echo "8080") (VM4 - AI processing)"
-echo "  Browser:      $(get_config "infrastructure.hosts.browser_service" 2>/dev/null || echo "localhost"):$(get_config "infrastructure.ports.browser_service" 2>/dev/null || echo "3000") (VM5 - Playwright automation)"
+echo "  Browser:      $(get_config "infrastructure.hosts.browser_service" 2>/dev/null || echo "localhost"):$(get_config "infrastructure.ports.browser_service" 2>/dev/null || echo "${AUTOBOT_BROWSER_SERVICE_PORT}") (VM5 - Playwright automation)"
 echo ""
 
 echo -e "${YELLOW}🔍 Testing Individual VM Services...${NC}"
@@ -121,7 +121,7 @@ test_service "Frontend VM1" "$(get_service_url "frontend" 2>/dev/null || echo "h
 test_service "NPU Worker VM2" "$(get_service_url "npu_worker" 2>/dev/null || echo "http://${AUTOBOT_NPU_WORKER_HOST}:8081")/health" "healthy"
 test_redis "Redis Stack VM3" "$(get_config "infrastructure.hosts.redis" 2>/dev/null || echo "localhost")" "$(get_config "infrastructure.ports.redis" 2>/dev/null || echo "6379")"
 test_service "AI Stack VM4" "$(get_service_url "ai_stack" 2>/dev/null || echo "http://${AUTOBOT_AI_STACK_HOST}:8080")/health" "healthy"
-test_service "Browser VM5" "$(get_service_url "browser_service" 2>/dev/null || echo "http://${AUTOBOT_BROWSER_SERVICE_HOST}:3000")/health" "healthy"
+test_service "Browser VM5" "$(get_service_url "browser_service" 2>/dev/null || echo "http://${AUTOBOT_BROWSER_SERVICE_HOST}:${AUTOBOT_BROWSER_SERVICE_PORT}")/health" "healthy"
 
 echo ""
 echo -e "${YELLOW}🔗 Testing Inter-VM Communication...${NC}"
@@ -193,7 +193,7 @@ test_response_time() {
 test_response_time "Frontend" "$(get_service_url "frontend" 2>/dev/null || echo "http://${AUTOBOT_FRONTEND_HOST}")/"
 test_response_time "NPU Worker" "$(get_service_url "npu_worker" 2>/dev/null || echo "http://${AUTOBOT_NPU_WORKER_HOST}:8081")/health"
 test_response_time "AI Stack" "$(get_service_url "ai_stack" 2>/dev/null || echo "http://${AUTOBOT_AI_STACK_HOST}:8080")/health"
-test_response_time "Browser" "$(get_service_url "browser_service" 2>/dev/null || echo "http://${AUTOBOT_BROWSER_SERVICE_HOST}:3000")/health"
+test_response_time "Browser" "$(get_service_url "browser_service" 2>/dev/null || echo "http://${AUTOBOT_BROWSER_SERVICE_HOST}:${AUTOBOT_BROWSER_SERVICE_PORT}")/health"
 
 echo ""
 echo -e "${BLUE}📊 Validation Summary${NC}"

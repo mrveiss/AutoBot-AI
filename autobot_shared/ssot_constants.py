@@ -66,6 +66,7 @@ ERR_INVALID_TOKEN = "Invalid token"  # nosec B105  # user-facing error message s
 # MODEL CONSTANTS (imported from ssot_config)
 # ============================================================================
 
+from autobot_shared.category_defaults import CategoryDefaults  # noqa: F401 -- split out (#19335)
 from autobot_shared.ssot_config import CLASSIFICATION_MODEL as SSOT_CLASSIFICATION_MODEL
 from autobot_shared.ssot_config import (
     DEFAULT_EMBEDDING_MODEL,
@@ -769,42 +770,6 @@ class QueryDefaults:
     RAG_DEFAULT_RESULTS: int = ModelConfig.RAG_DEFAULT_MAX_RESULTS  # alias of the canonical (#18094)
     RAG_MAX_RESULTS: int = 20
     KNOWLEDGE_DEFAULT_LIMIT: int = 100
-
-
-class CategoryDefaults:
-    """Default category and type values for classification."""
-
-    GENERAL: str = "general"
-    IMPORTED: str = "imported"
-    UNKNOWN: str = "unknown"
-    SEARCH_MODE_HYBRID: str = "hybrid"
-    SEARCH_MODE_SEMANTIC: str = "semantic"
-    SEARCH_MODE_KEYWORD: str = "keyword"
-    QUERY_TYPE_GENERAL: str = "general"
-    QUERY_TYPE_TECHNICAL: str = "technical"
-    QUERY_TYPE_CODE: str = "code"
-    CONTEXT_TYPE_GENERAL: str = "general"
-    CONTEXT_TYPE_SECURITY: str = "security"
-    CONTEXT_TYPE_RESEARCH: str = "research"
-    # CHAT MESSAGE authorship — who wrote a message. NOT an authorization role.
-    #
-    # Two other vocabularies use the word "role" and share values with this one
-    # (#14024): ``autobot_shared.auth.permissions.Role`` (platform RBAC) and
-    # ``llc.models.enums.MembershipRole`` (company membership). ``ROLE_USER``
-    # holds the same string as ``Role.USER``, and this class is a bare string
-    # constant holder, so a value from here satisfies an RBAC parameter with no
-    # type error and no test failure.
-    #
-    # ``tools/tool_registry`` came within one applied lint suggestion of tying an
-    # authorization decision to ``ROLE_USER`` (#13934). If a field is consumed by
-    # a permission check, it wants ``auth.permissions.Role`` — not these. The
-    # overlap is asserted in ``security/roles_do_not_collide_test.py``.
-    ROLE_USER: str = "user"
-    ROLE_ASSISTANT: str = "assistant"
-    ROLE_SYSTEM: str = "system"
-    MODE_DEVELOPMENT: str = "development"
-    MODE_PRODUCTION: str = "production"
-    MODE_TESTING: str = "testing"
 
 
 class WorkStealingConfig:

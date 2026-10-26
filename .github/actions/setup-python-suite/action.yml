@@ -563,8 +563,7 @@ runs:
                 ollama:
                   selected_model: "mock-embed"
 
-        deployment:
-          mode: "local"
+        # #19316: no deployment.mode -- AUTOBOT_DEPLOYMENT_MODE is the one home; unset is auto-detect.
 
         data:
           reliability_stats_file: "data/reliability_stats.json"

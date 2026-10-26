@@ -16,6 +16,7 @@ import re
 from typing import Dict, FrozenSet, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.secret_redaction import LOG_MASK
 from autobot_shared.singleton_factory import lazy_singleton
 from services.secrets_service import SecretsService, get_secrets_service
 
@@ -28,7 +29,7 @@ _SECRET_REF_RE = re.compile(r"\$\{secrets\.([A-Za-z0-9_\-\.]+)\}")
 WORKFLOW_SCOPE = "workflow"
 
 # Placeholder used in logs/responses in place of a resolved secret value.
-REDACTED = "***"
+REDACTED = LOG_MASK  # the one in-text mask (#19337)
 
 
 class WorkflowSecretService:

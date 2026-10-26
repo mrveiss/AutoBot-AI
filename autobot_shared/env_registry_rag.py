@@ -33,6 +33,16 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_DOC_HASH_CACHE_TTL_SECONDS",
+        type=float,
+        default=60.0,
+        description="Seconds the shared stale filter reuses the doc hash cache before re-reading it (#4723, #19280).",
+        component="rag",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_HTML_EXTRACT_MAX_BYTES",
         type=int,
         default=10 * 1024 * 1024,
