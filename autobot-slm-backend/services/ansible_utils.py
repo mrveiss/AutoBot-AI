@@ -4,12 +4,15 @@
 # Author: mrveiss
 """Ansible output parsing utilities for slm-backend endpoints."""
 
+import asyncio
 import json
 import os
 import re
 import shutil
+from pathlib import Path
 
 from autobot_shared.env_utils import env_int
+from services.process_group import kill_process_group
 
 # Common install locations checked when ansible-playbook isn't on PATH
 # (Issue #12693 — shared between DeploymentService and PlaybookExecutor).
@@ -47,13 +50,36 @@ _NO_HOSTS_MARKERS = (
 )
 
 
-def ansible_run_failure(output: str, host: str, returncode: int) -> str | None:
-    """Why a single-host run did not prove success on ``host``, or None if it did (#19475).
+_RECAP_LINE_RE = re.compile(r"^\s*(\S+)\s*:\s*ok=(\d+)\s+changed=\d+\s+unreachable=(\d+)\s+failed=(\d+)", re.MULTILINE)
 
-    ``ansible-playbook`` exits 0 when the inventory is unparsable and the play matches
-    no hosts, so the exit code alone cannot prove the target ran. A run counts only if
-    it exited 0, no no-hosts marker was printed, and the PLAY RECAP lists ``host`` with
-    unreachable=0 and failed=0. One shared check for every SLM runner using ``-i "<host>,"``.
+
+def ansible_config_env(ansible_dir) -> dict:
+    """``ANSIBLE_CONFIG`` naming the repo's ansible.cfg, so its inventory settings always apply (#19475)."""
+    return {"ANSIBLE_CONFIG": str(Path(ansible_dir) / "ansible.cfg")}
+
+
+def ansible_subprocess_env(ansible_dir, **extra: str) -> dict:
+    """The process environment plus ``ANSIBLE_CONFIG`` (and ``extra``) for an ansible-playbook child (#19475)."""
+    return {**os.environ, **ansible_config_env(ansible_dir), **extra}
+
+
+def ansible_exit_code(output: str, host: str | None, returncode: int | None) -> int | None:
+    """``returncode``, except an exit-0 run that ``ansible_run_failure`` rejects reports 1 (#19475)."""
+    return 1 if returncode == 0 and ansible_run_failure(output, host, returncode) else returncode
+
+
+def ansible_run_failure(output: str, host: str | None, returncode: int | None) -> str | None:
+    """Why an ansible run did not prove success, or None if it did (#19475).
+
+    ``ansible-playbook`` exits 0 when the inventory is unparsable and the play matches no
+    hosts, so the exit code alone cannot prove anything ran. A run counts only if it exited
+    0, printed no no-hosts marker, and the LAST PLAY RECAP shows no unreachable/failed host.
+    With ``host`` (a single-target run) that host must also be listed with ok>=1; with
+    ``host=None`` (multi-host or inventory-file play) there is no single target, but the
+    recap must still be non-empty and list at least one host with ok>=1. The no-hosts
+    markers are matched across the WHOLE output, every play of a multi-play run, not only the
+    last recap: a "skipping: no hosts matched" in an early play fails the run even if a later
+    play succeeded (the conservative limit).
     Returns the text to report: the raw output on a non-zero exit, else the reason.
     """
     if returncode != 0:
@@ -61,16 +87,59 @@ def ansible_run_failure(output: str, host: str, returncode: int) -> str | None:
     for marker in _NO_HOSTS_MARKERS:
         if marker in output:
             return f"ansible matched no hosts ({marker!r})"
-    recap = re.search(
-        rf"^{re.escape(host)}\s*:\s*ok=\d+.*?unreachable=(\d+)\s+failed=(\d+)",
-        output,
-        re.MULTILINE,
-    )
-    if not recap:
+    tail = output[max(output.rfind("PLAY RECAP"), 0) :]
+    recap = {m[1]: tuple(int(n) for n in m.groups()[1:]) for m in _RECAP_LINE_RE.finditer(tail)}
+    if host is not None and host not in recap:
         return f"target host {host} is absent from the PLAY RECAP"
-    if int(recap.group(1)) or int(recap.group(2)):
-        return f"target host {host} reported unreachable={recap.group(1)} failed={recap.group(2)}"
+    if host is not None and recap[host][0] < 1:
+        return f"target host {host} ran no task (ok=0)"
+    if host is None and not any(counts[0] >= 1 for counts in recap.values()):
+        return "no host in the PLAY RECAP ran a task (recap empty or all ok=0)"
+    for name, (_ok, unreachable, failed) in recap.items():
+        if unreachable or failed:
+            return f"host {name} reported unreachable={unreachable} failed={failed}"
     return None
+
+
+_HOST_KEY_ARGS = "ansible_ssh_common_args='-o StrictHostKeyChecking=accept-new'"
+
+
+async def run_single_host_playbook(
+    ansible_dir,
+    playbook_path,
+    host: str,
+    ssh_user: str,
+    ssh_port: int,
+    *,
+    extra_vars: tuple[str, ...] = (),
+    timeout: float,
+    **env: str,
+) -> str | None:
+    """Run *playbook_path* against the one *host*; return why it failed, or None when the recap proved success.
+
+    The single-host callers (blue/green deploy and purge, replication setup and promotion) each
+    built this argv, subprocess and recap check by hand (#19475). A timeout or cancellation kills
+    the whole process group before re-raising, so no ansible run outlives its caller. *env* reaches the playbook
+    through the subprocess environment only, never argv or disk.
+    """
+    cmd = ["ansible-playbook", str(playbook_path), "-i", f"{host},"]
+    for var in (*extra_vars, f"ansible_user={ssh_user}", f"ansible_port={ssh_port}", _HOST_KEY_ARGS):
+        cmd += ["-e", var]
+    process = await asyncio.create_subprocess_exec(
+        *cmd,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+        cwd=str(ansible_dir),
+        env=ansible_subprocess_env(ansible_dir, **env),
+        start_new_session=True,  # its own process group, so a kill reaches the forked ssh workers too
+    )
+    try:
+        stdout, _ = await asyncio.wait_for(process.communicate(), timeout=timeout)
+    except (asyncio.TimeoutError, asyncio.CancelledError):
+        # wait_for abandons communicate() but leaves ansible and its ssh children running (#19475).
+        await kill_process_group(process)
+        raise
+    return ansible_run_failure(stdout.decode("utf-8", errors="replace"), host, process.returncode)
 
 
 def _msg_from_result_json(line: str) -> str:

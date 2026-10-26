@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""
-Role Registry Service (Issue #779, #1129).
+"""Role Registry Service (Issue #779, #1129).
 
 Manages role definitions and provides default roles for code distribution.
 See docs/developer/ROLES.md for the authoritative role specification including
@@ -299,7 +298,7 @@ _AI_STACK_ROLES = [
         "target_path": "",
         "systemd_service": "autobot-chromadb",
         "auto_restart": True,
-        "health_check_port": 8100,  # #16025: was 8000/v1 -- ssot_config (#3094) + ai-stack ansible use 8100/v2
+        "health_check_port": config.port.chromadb,  # #16025 /v2 heartbeat; #19321: the SSOT port, not a copy
         "health_check_path": "/api/v2/heartbeat",
         "required": True,
         "degraded_without": [],

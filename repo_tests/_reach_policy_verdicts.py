@@ -108,6 +108,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "FIXED_INVENTORY",
         "Single-digit launch sites; the band is already near equality.",
     ),
+    "chromadb-port-one-home-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Tracked files outside docs and tests, a subset of the tree; docs and tests grow at their own rate.",
+    ),
     "compose-files": (
         ABSOLUTE,
         "FIXED_INVENTORY",

@@ -38,6 +38,7 @@ from user_management.schemas.api_key import (
 )
 from user_management.services.api_key_service import (
     APIKeyNotFoundError,
+    APIKeyPepperNotConfiguredError,
     APIKeyService,
     APIKeyServiceError,
 )
@@ -81,6 +82,12 @@ async def create_api_key(
             scopes=api_key.scopes,
             expires_at=api_key.expires_at,
             created_at=api_key.created_at,
+        )
+    except APIKeyPepperNotConfiguredError as e:
+        logger.warning("API key creation refused for %s: %s", username, e)
+        raise HTTPException(
+            status_code=503,
+            detail="API key creation is unavailable until an administrator completes setup.",
         )
     except APIKeyServiceError as e:
         logger.warning("API key creation error for %s: %s", username, e)

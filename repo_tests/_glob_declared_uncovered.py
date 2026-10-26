@@ -287,7 +287,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
 #: workflow is retired -- and the third case FAILS rather than lapsing.
 GLOB_RUN_BY_A_DEDICATED_WORKFLOW: dict[str, tuple[set[str], str, str]] = {
     "docs/**/*.md": (
-        {"repo_tests/docs_liquid_tags_are_defined_17930_test.py"},
+        {"repo_tests/doc_model_tags_15219_test.py", "repo_tests/docs_liquid_tags_are_defined_17930_test.py"},
         ".github/workflows/docs-liquid-tags.yml",
         "the Liquid-tag guard runs on its own docs-gated job in seconds; covering `docs/**/*.md` "
         "in the python filter would instead spend the twelve-shard suite on every documentation "
