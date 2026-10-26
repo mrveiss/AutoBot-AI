@@ -15,6 +15,7 @@ Registration contract (import side effect, ordering): see ``env_registry``.
 from __future__ import annotations
 
 from autobot_shared.env_registry import EnvVarSpec, register_env_var
+from autobot_shared.fleet_constants import FLEET_CODE_SOURCE_DIR
 from autobot_shared.network_constants import NetworkConstants
 
 
@@ -83,6 +84,17 @@ _register(
     None,
     "SQLAlchemy DSN of the SLM admin-users database. Unset falls back to the "
     "slm_users database on the colocated PostgreSQL.",
+    "slm",
+)
+_register(
+    "SLM_REPO_PATH",
+    str,
+    FLEET_CODE_SOURCE_DIR,
+    "The SLM's code_source git CHECKOUT (the directory holding .git), never the install root that "
+    "contains it (default: fleet_constants.FLEET_CODE_SOURCE_DIR). Read once, in services/git_tracker.py "
+    "as DEFAULT_REPO_PATH; drift checks, packaging "
+    "and the python-provision playbook path all resolve under it. The provision sudoers rule does not "
+    "follow an override (#19204), so leave it at the default unless that rule is changed too (#15708).",
     "slm",
 )
 

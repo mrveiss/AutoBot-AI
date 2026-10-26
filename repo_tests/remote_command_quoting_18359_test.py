@@ -31,7 +31,6 @@ _SCANNED = (
     "autobot-slm-backend/services/service_restart.py",
     "autobot-slm-backend/services/journal_fetch.py",
     "autobot-slm-backend/services/service_orchestrator.py",
-    "autobot-slm-backend/services/code_distributor.py",
     "autobot-slm-backend/api/services.py",
     "autobot-slm-backend/services/secrets_store_snapshot.py",
 )
@@ -40,11 +39,6 @@ _LOG_METHODS = frozenset({"debug", "info", "warning", "error", "exception", "cri
 
 #: (file, enclosing function, interpolated expression source) -> why it is safe. A new entry needs a reason a reviewer accepts.
 _ALLOWED: dict[tuple[str, str, str], str] = {
-    (
-        "autobot-slm-backend/services/code_distributor.py",
-        "_build_ssh_opts",
-        "ssh_port",
-    ): "an int port from the node row, typed `int` on every caller; reaches the LOCAL ssh argv option string",
     (
         "autobot-slm-backend/services/journal_fetch.py",
         "build_journal_command",
