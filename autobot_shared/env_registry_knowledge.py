@@ -143,3 +143,19 @@ register_env_var(
         range=(10, 86400),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_TENANT_GROUPS_TTL_SECONDS",
+        type=int,
+        default=60,
+        description=(
+            "Seconds a user's team memberships, resolved for the KB visibility principal of a "
+            "tenant-context route, are reused before the team service is asked again; a membership "
+            "change takes effect within this window; 0 disables the cache; read by "
+            "knowledge/tenant_groups.py (#19007)."
+        ),
+        component="knowledge",
+        range=(0, 3600),
+    )
+)

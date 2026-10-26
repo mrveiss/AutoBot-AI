@@ -296,6 +296,9 @@ python:
   # green while the guard that reads it never runs.
   - '.github/workflows/sync-main-to-release.yml'
   - 'autobot-frontend/package.json'
+  # #19324: browser_port_single_home_19324_test.py pins this file's browser-port
+  # fallback to ssot_config.port.browser; an edit confined to it must run that guard.
+  - 'autobot-frontend/vite.config.js'
   # #13841: `preroll_reset_is_complete_13841_test.py` reads this composable by literal
   # path, comparing the fields `_preroll` declares against the fields its `reset()`
   # clears -- a property nothing behavioural catches, since dropping a field leaves all
@@ -354,6 +357,9 @@ python:
   # confined to the guide -- documenting a name that resolves to nothing -- skips
   # the guard written to catch exactly that.
   - 'docs/guides/CONFIGURATION_GUIDE.md'
+  # #19279: `landing_page_claims_19279_test.py` reads the public landing page by concrete literal
+  # for the libraries it names and any placeholder it renders.
+  - 'docs/index.html'
   # #16427: `secretsmanager_template_names_match_vault_registry_16427_test.py`
   # reads this component's `credentialTemplates` array by concrete literal, to
   # assert its provider names still match the vault registry. Without an entry
@@ -454,6 +460,16 @@ python:
   # FILE, not `docs/**` (the #17930 owner decision above): a change confined to
   # the index is the change that can break the link set, so it runs the guard.
   - 'docs/README.md'
+  # #19184: the same guard reads the five Company OS docs by concrete literal
+  # (`_COMPANY_OS_DOCS`, no bare "LLC" product name). One file each, not `docs/**`.
+  - 'docs/GLOSSARY.md'
+  - 'docs/INDEX.md'
+  - 'docs/architecture/PLATFORM_MODEL.md'
+  - 'docs/features/CATALOG.md'
+  - 'docs/llc/_index.md'
+  # #19611: `operational_docs_name_real_playbooks_19611_test.py` reads this guide by concrete
+  # literal for its one declared exemption. One file, not `docs/**`.
+  - 'docs/guides/slm-docker-ansible-deployment.md'
   # #18266: `social_preview_18266_test.py` pins the repository social-preview
   # image's dimensions and size. A change confined to the image -- replacing it
   # with one of the wrong shape -- is exactly what the guard exists to catch.

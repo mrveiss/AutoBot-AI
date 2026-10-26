@@ -25,6 +25,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from api.agent_events import BROADCAST_CHANNEL, owner_channel, publish_event_safe, publish_goal_events
+from api.agent_kb_context import _enhance_context_with_kb
 from api.schemas_agent import (
     AgentAvailableData,
     AgentCommandApprovalResponse,
@@ -53,6 +54,7 @@ from constants.threshold_constants import TimingConstants
 from dependencies import provide_config_manager, provide_knowledge_base
 from exceptions import InternalError, SubprocessError
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
+from knowledge.search_filters import filter_for_user_id, scoped_reader
 from monitoring.prometheus_metrics import get_metrics_manager
 from services.ai_stack_client import AIStackError, get_ai_stack_client
 from utils.response_helpers import create_success_response, handle_ai_stack_error
@@ -950,30 +952,6 @@ async def _select_agents_for_goal(ai_client, payload, available_agents: list) ->
     return await get_optimal_agents_for_goal(payload.goal, available_agents)
 
 
-async def _enhance_context_with_kb(payload, knowledge_base) -> str | None:
-    """Enhance context with knowledge base results (Issue #398: extracted).
-
-    Args:
-        payload: Goal payload with context and KB settings
-        knowledge_base: Knowledge base instance or None
-
-    Returns:
-        Augmented context string or original context
-    """
-    if not (payload.use_knowledge_base and knowledge_base):
-        return payload.context
-
-    try:
-        # Issue #13009: exclude quarantined research facts (#12622).
-        kb_results = await knowledge_base.search(query=payload.goal, top_k=5, filters=RESEARCH_QUARANTINE_FILTER)
-        if kb_results:
-            kb_context = "\n".join([f"- {item.get('content', '')[:200]}..." for item in kb_results[:3]])
-            return f"{payload.context or ''}\n\nRelevant knowledge:\n{kb_context}"
-    except Exception as e:
-        logger.warning("Knowledge base context enhancement failed: %s", e)
-    return payload.context
-
-
 def _determine_coordination_mode(payload, selected_agents: list) -> str:
     """Determine coordination mode for multi-agent execution (Issue #398: extracted)."""
     if payload.coordination_mode != "intelligent":
@@ -1021,7 +999,7 @@ async def execute_orchestrated_goal(
 
     # Issue #398: Use extracted helpers
     selected_agents = await _select_agents_for_goal(ai_client, payload, available_agents)
-    kb_context = await _enhance_context_with_kb(payload, knowledge_base)
+    kb_context = await _enhance_context_with_kb(payload, knowledge_base, scoped_reader(current_user))
     coordination_mode = _determine_coordination_mode(payload, selected_agents)
 
     execution_start = time.monotonic()
@@ -1150,6 +1128,7 @@ async def comprehensive_research_task(
                 kb_results = await knowledge_base.search(
                     query=request_data.research_query, top_k=3, filters=RESEARCH_QUARANTINE_FILTER
                 )
+                kb_results = await filter_for_user_id(kb_results, knowledge_base, scoped_reader(current_user))  # #16665
                 if kb_results:
                     kb_context = "\n".join([f"- {item.get('content', '')[:150]}..." for item in kb_results])
                     research_query = f"{request_data.research_query}\n\nExisting" f"knowledge:\n{kb_context}"

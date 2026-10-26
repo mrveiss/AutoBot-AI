@@ -1,5 +1,7 @@
 [
  "autobot-backend/llc/services/workspace_lease.py",
+ "autobot-backend/llc/services/company.py",
+ "autobot-backend/llc/services/company_ceo.py",
  "autobot-backend/services/*secret*.py",
  "autobot-backend/services/credential_*.py",
  "autobot-backend/services/orphan_repair*.py",

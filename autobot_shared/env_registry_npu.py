@@ -15,6 +15,7 @@ Registration contract (import side effect, ordering): see ``env_registry``.
 from __future__ import annotations
 
 from autobot_shared.env_registry import EnvVarSpec, register_env_var
+from autobot_shared.fleet_constants import FLEET_CODE_SOURCE_DIR
 from autobot_shared.network_constants import NetworkConstants
 
 
@@ -78,11 +79,42 @@ _register(
     "slm",
 )
 _register(
+    "SLM_ADMIN_PASSWORD",
+    str,
+    "",
+    "SLM admin password, the one name for it (#19318). Its home is SLM_ADMIN_PASSWORD in "
+    "slm-secrets.env (install.sh or the slm_manager role generates it). Empty means the SLM "
+    "creates the admin with a random password and never resets an existing one. No default "
+    "password. AUTOBOT_SLM_ADMIN_PASSWORD is a deprecated alias that only install.sh and "
+    "the shared ansible reader honour.",
+    "slm",
+)
+_register(
+    "SLM_ADMIN_PASSWORD_FILE",
+    str,
+    "",
+    "Path to a file holding the SLM admin password (the hardened compose overlay's mounted "
+    "secret). Seeds a fresh install only; an existing admin keeps its stored password (#19368). "
+    "Set but unreadable or empty stops the first start with an error.",
+    "slm",
+)
+_register(
     "SLM_USERS_DATABASE_URL",
     str,
     None,
     "SQLAlchemy DSN of the SLM admin-users database. Unset falls back to the "
     "slm_users database on the colocated PostgreSQL.",
+    "slm",
+)
+_register(
+    "SLM_REPO_PATH",
+    str,
+    FLEET_CODE_SOURCE_DIR,
+    "The SLM's code_source git CHECKOUT (the directory holding .git), never the install root that "
+    "contains it (default: fleet_constants.FLEET_CODE_SOURCE_DIR). Read once, in services/git_tracker.py "
+    "as DEFAULT_REPO_PATH; drift checks, packaging "
+    "and the python-provision playbook path all resolve under it. The provision sudoers rule does not "
+    "follow an override (#19204), so leave it at the default unless that rule is changed too (#15708).",
     "slm",
 )
 

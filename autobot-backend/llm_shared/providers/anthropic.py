@@ -83,6 +83,7 @@ async def _apply_adapter_pre_send(request: LLMRequest, context_type: str) -> Non
 
 
 from autobot_shared.ssot_config import config
+from autobot_shared.ssot_hosted_models import hosted_default_model
 from constants.model_constants import (
     ANTHROPIC_CLAUDE3_OPUS_DATED,
     ANTHROPIC_CLAUDE35_HAIKU,
@@ -375,7 +376,7 @@ class AnthropicProvider(BaseProvider):
         """
         self._total_requests += 1
         start = time.time()
-        model = request.model_name or self._get_setting("default_model", ANTHROPIC_CLAUDE_SONNET4_6)
+        model = request.model_name or self._get_setting("default_model", hosted_default_model("anthropic"))
 
         _adapter = _get_adapter_sync()
         _context_type: str = request.llm_type.value if hasattr(request.llm_type, "value") else "general"
@@ -447,7 +448,7 @@ class AnthropicProvider(BaseProvider):
         payload instead of only computing (and discarding) an optimized string.
         """
         self._total_requests += 1
-        model = request.model_name or self._get_setting("default_model", ANTHROPIC_CLAUDE_SONNET4_6)
+        model = request.model_name or self._get_setting("default_model", hosted_default_model("anthropic"))
 
         _stream_adapter = _get_adapter_sync()
         _stream_context_type = request.llm_type.value if hasattr(request.llm_type, "value") else "general"
@@ -489,7 +490,7 @@ class AnthropicProvider(BaseProvider):
         try:
             client = self._ensure_client()
             await client.messages.count_tokens(
-                model="claude-haiku-4-5-20251001",
+                model=hosted_default_model("anthropic", "light"),  # #15501: the cheap tier for a ping
                 messages=[{"role": "user", "content": "ping"}],
             )
             return True

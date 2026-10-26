@@ -179,7 +179,7 @@ Embedding              Reciprocal Rank Fusion
    |                        |
    v                        v
 ChromaDB Storage       Cross-Encoder Reranking
-+ Redis Metadata       (ms-marco-MiniLM-L-6-v2)
++ Redis Metadata       (RAGConfig.reranking_model)
                             |
                             v
                        Context Assembly
@@ -226,9 +226,10 @@ AutoBot uses a tiered embedding strategy with automatic fallback:
 2. **Ollama** (fallback) -- Local model via `OllamaEmbedding` (LlamaIndex integration)
 3. **Sentence-Transformers** (secondary fallback) -- CPU-based embedding
 
-The function `_generate_embedding_with_npu_fallback()` in `knowledge/facts.py` implements
-this cascade with bounded concurrency (`_FALLBACK_MAX_CONCURRENT = 5`) to prevent
-overwhelming Ollama during NPU outages.
+The canonical helpers in `services/npu_client.py` implement this cascade
+(`knowledge/facts.py::_generate_embedding_with_npu_fallback()` is a thin shim over them); the batch
+helper bounds its concurrency with its `max_concurrent` parameter to avoid overwhelming Ollama
+during NPU outages.
 
 ---
 
@@ -546,28 +547,29 @@ Authorization: Bearer <token>
     "enable_rag": false,
     "enable_reranking": true,
     "reformulate_query": false,
-    "min_score": 0.3,
     "return_context": false,
     "tags": [],
     "tags_match_any": false
 }
 ```
 
-**Parameters:**
+**Parameters:** every default is the `SearchRequest` field default in
+`autobot-backend/api/schemas_knowledge.py` (also published in the OpenAPI schema); only `query`
+is required.
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `query` | string | (required) | Search query, 1-1000 characters |
-| `top_k` | int | 10 | Maximum results (1-100) |
-| `category` | string | null | Filter by category |
-| `mode` | string | `"hybrid"` | `"semantic"`, `"keyword"`, `"hybrid"`, or `"auto"` |
-| `enable_rag` | bool | false | Enable RAG enhancement with synthesized response |
-| `enable_reranking` | bool | false | Apply cross-encoder reranking |
-| `reformulate_query` | bool | false | Expand query for better recall |
-| `min_score` | float | 0.0 | Minimum relevance score threshold |
-| `return_context` | bool | false | Return optimized context string for chat |
-| `tags` | list | [] | Filter results by tags |
-| `tags_match_any` | bool | false | Match any tag (true) or all tags (false) |
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `query` | string | Search query, 1-1000 characters |
+| `top_k` | int | Maximum results (1-100) |
+| `category` | string | Filter by category |
+| `mode` | string | `"semantic"`, `"keyword"`, `"hybrid"`, or `"auto"` |
+| `enable_rag` | bool | Enable RAG enhancement with synthesized response |
+| `enable_reranking` | bool | Apply cross-encoder reranking |
+| `reformulate_query` | bool | Expand query for better recall |
+| `min_score` | float | Minimum relevance score threshold |
+| `return_context` | bool | Return optimized context string for chat |
+| `tags` | list | Filter results by tags |
+| `tags_match_any` | bool | Match any tag (true) or all tags (false) |
 
 **Response (200) -- Standard search:**
 
@@ -809,9 +811,9 @@ def _build_ssl_context() -> ssl.SSLContext:
 async def rag_chat_with_pdf_context(
     query: str,
     auth_token: str,
+    score_threshold: float,
+    top_k: int,
     session_id: str = "",
-    score_threshold: float = 0.3,
-    top_k: int = 5,
 ) -> dict:
     """
     Complete RAG workflow: search knowledge base for PDF context, then chat.
@@ -958,17 +960,16 @@ quality. The consolidated `/api/knowledge_base/search` endpoint supports all mod
 
 ### Hybrid Search Weights
 
-The `AdvancedRAGOptimizer` applies these default weights (configurable via `RAGConfig`):
-
-- **Semantic weight:** 0.7 (vector similarity)
-- **Keyword weight:** 0.3 (term matching)
-
-These are normalized to sum to 1.0, validated at config load time.
+The `AdvancedRAGOptimizer` blends a semantic (vector similarity) weight and a keyword (term
+matching) weight: `RAGConfig.hybrid_weight_semantic` and `RAGConfig.hybrid_weight_keyword`,
+whose defaults are `ModelConfig.RAG_HYBRID_WEIGHT_SEMANTIC` / `RAG_HYBRID_WEIGHT_KEYWORD` in
+`autobot_shared/ssot_constants.py`. They are normalized to sum to 1.0 at config load time.
 
 ### Cross-Encoder Reranking
 
 When `enable_reranking: true`, results pass through a second-stage cross-encoder model
-(`cross-encoder/ms-marco-MiniLM-L-6-v2`) that scores each (query, document) pair jointly
+(`RAGConfig.reranking_model`, declared once as `ResultReranker.MODEL_NAME` in
+`knowledge/search_components/reranking.py`) that scores each (query, document) pair jointly
 for more accurate relevance ranking.
 
 ### NPU-Accelerated Search
@@ -980,7 +981,7 @@ search with automatic device selection:
 async def npu_enhanced_search(
     query: str,
     auth_token: str,
-    top_k: int = 10,
+    top_k: int,
 ) -> dict:
     """
     Perform NPU-accelerated semantic search.
@@ -1202,9 +1203,9 @@ GraphRAGService
 async def graph_rag_search(
     query: str,
     auth_token: str,
+    max_depth: int,
+    max_results: int,
     start_entity: str = None,
-    max_depth: int = 2,
-    max_results: int = 5,
 ) -> dict:
     """
     Perform graph-aware RAG search combining semantic search with graph traversal.
@@ -1213,8 +1214,10 @@ async def graph_rag_search(
         query: Search query string (1-1000 chars).
         auth_token: Bearer token for authenticated access.
         start_entity: Optional starting entity for graph traversal.
-        max_depth: Maximum traversal depth, 1-3 hops (default: 2).
-        max_results: Maximum results to return, 1-20 (default: 5).
+        max_depth: Maximum traversal depth, 1-3 hops. The server default is
+            RAGConfig.graph_traversal_depth (declared in constants/rag_graph_constants.py).
+        max_results: Maximum results to return, 1-20. The server default is the
+            GraphRAGSearchRequest field default in api/schemas_knowledge.py.
 
     Returns:
         Dict with results, metrics, and request_id.
@@ -1287,20 +1290,13 @@ async def graph_rag_search(
 }
 ```
 
-**Performance Metrics (GET /api/graph-rag/metrics):**
-
-```json
-{
-    "service": "GraphRAGService",
-    "graph_weight": 0.3,
-    "entity_extraction_enabled": true,
-    "rag_service": {
-        "enable_advanced_rag": true,
-        "timeout_seconds": 10.0
-    },
-    "graph_initialized": true
-}
-```
+**Performance Metrics (GET /api/graph-rag/metrics):** returns `service`, `graph_weight`,
+`graph_timeout_seconds`, `entity_extraction_enabled`, `rag_service` (with `enable_advanced_rag`
+and `timeout_seconds`) and `graph_initialized`. The response example lives in the endpoint's
+docstring (`autobot-backend/api/graph_rag.py`, published in the OpenAPI schema). The live values
+are `RAGConfig.graph_weight`, `RAGConfig.graph_timeout_seconds` and `RAGConfig.timeout_seconds`;
+their defaults are declared once, in `autobot-backend/constants/rag_graph_constants.py` and
+`services/rag_config.py`.
 
 ---
 
@@ -1549,7 +1545,6 @@ async def step_3_rag_query(
             "enable_rag": True,
             "enable_reranking": True,
             "reformulate_query": True,
-            "min_score": 0.3,
         },
         headers=headers,
     )
@@ -1661,68 +1656,53 @@ which loads from `config/complete.yaml` under the `knowledge.rag` section.
 
 ### RAG Configuration Parameters
 
-```yaml
-# config/complete.yaml -- knowledge.rag section
-knowledge:
-  rag:
-    # Hybrid search weights (must sum to 1.0)
-    hybrid_weight_semantic: 0.7    # Weight for vector similarity
-    hybrid_weight_keyword: 0.3     # Weight for keyword matching
+Every `knowledge.rag` key is a `RAGConfig` field of the same name. Defaults are declared once,
+in code; this guide does not repeat them:
 
-    # Search parameters
-    max_results_per_stage: 20      # Results to consider in each pipeline stage
-    diversity_threshold: 0.85      # Cosine similarity threshold for diversification
-    default_max_results: 10        # Default top_k when not specified
-
-    # Context optimization
-    default_context_length: 2000   # Default context window (chars)
-    max_context_length: 8000       # Maximum context window (chars)
-
-    # Reranking
-    enable_reranking: true
-    reranking_model: "cross-encoder/ms-marco-MiniLM-L-6-v2"
-
-    # Performance
-    cache_ttl_seconds: 300         # Result cache TTL
-    timeout_seconds: 10.0          # Search timeout
-
-    # Feature flags
-    enable_advanced_rag: true      # Enable AdvancedRAGOptimizer
-    fallback_to_basic_search: true # Fall back to basic search on error
-
-    # Category filtering for chat RAG
-    default_chat_categories: null  # null = search all categories
-    enable_smart_category_selection: true
-```
+| Keys | Default declared in |
+|------|---------------------|
+| `hybrid_weight_semantic`, `hybrid_weight_keyword` (normalized to sum to 1.0) | `ModelConfig.RAG_HYBRID_WEIGHT_*`, `autobot_shared/ssot_constants.py` |
+| `max_results_per_stage`, `diversity_threshold`, `default_max_results` | `ModelConfig.RAG_MAX_RESULTS_PER_STAGE`, `RAG_DIVERSITY_THRESHOLD`, `RAG_DEFAULT_MAX_RESULTS` |
+| `default_context_length`, `max_context_length` | `ModelConfig.RAG_DEFAULT_CONTEXT_LENGTH`, `RAG_MAX_CONTEXT_LENGTH` |
+| `min_score`, `mmr_lambda` | `ModelConfig.RAG_MIN_SCORE`, `RAG_MMR_LAMBDA` |
+| `cache_ttl_seconds`, `timeout_seconds` | `ModelConfig.DEFAULT_CACHE_TTL`, `DEFAULT_TIMEOUT` |
+| `graph_weight`, `graph_traversal_depth`, `graph_timeout_seconds` | `autobot-backend/constants/rag_graph_constants.py` |
+| `reranking_model` | `ResultReranker.MODEL_NAME`, `knowledge/search_components/reranking.py` |
+| `rerank_weights` | `RerankWeights` field defaults, same file |
+| feature flags (`enable_reranking`, `enable_advanced_rag`, `fallback_to_basic_search`, `enable_smart_category_selection`, `default_chat_categories`, ...) | the `RAGConfig` dataclass, `autobot-backend/services/rag_config.py` |
 
 ### ChromaDB HNSW Index Parameters
 
-Configured in `knowledge/base.py` via `ConfigManager`:
+Configured in `knowledge/base.py` via `ConfigManager`; the fallback defaults are the ones passed
+to `config_manager.get(...)` there:
 
-| Parameter | Config Path | Default | Description |
-|-----------|------------|---------|-------------|
-| `space` | `memory.chromadb.hnsw.space` | `cosine` | Distance metric |
-| `construction_ef` | `memory.chromadb.hnsw.construction_ef` | 300 | Build-time accuracy (higher = slower build, better recall) |
-| `search_ef` | `memory.chromadb.hnsw.search_ef` | 100 | Query-time accuracy (higher = slower query, better recall) |
-| `M` | `memory.chromadb.hnsw.M` | 32 | Connections per node (higher = more memory, better recall) |
+| Parameter | Config Path | Description |
+|-----------|------------|-------------|
+| `space` | `memory.chromadb.hnsw.space` | Distance metric |
+| `construction_ef` | `memory.chromadb.hnsw.construction_ef` | Build-time accuracy (higher = slower build, better recall) |
+| `search_ef` | `memory.chromadb.hnsw.search_ef` | Query-time accuracy (higher = slower query, better recall) |
+| `M` | `memory.chromadb.hnsw.M` | Connections per node (higher = more memory, better recall) |
 
-These values are optimized for the 545K+ vector collection (Issue #72).
+The defaults are optimized for the 545K+ vector collection (Issue #72).
 
 ### Environment Variables
 
-| Variable | Purpose | Default |
-|----------|---------|---------|
-| `AUTOBOT_NPU_ENABLED` | Enable NPU acceleration for embeddings | `true` |
-| `AUTOBOT_NPU_DEVICE` | Device selection: `AUTO`, `CPU`, `GPU`, `NPU` | `AUTO` |
-| `AUTOBOT_OLLAMA_HOST` | Ollama endpoint for fallback embeddings | `127.0.0.1` |
+Defaults are in the generated registry table, `docs/developer/ENV_VARS.md`.
+
+| Variable | Purpose |
+|----------|---------|
+| `AUTOBOT_NPU_ENABLED` | Enable NPU acceleration for embeddings |
+| `AUTOBOT_NPU_DEVICE` | Device selection: `AUTO`, `CPU`, `GPU`, `NPU` |
+| `AUTOBOT_OLLAMA_HOST` | Ollama endpoint for fallback embeddings |
 
 ### Score Threshold Alignment
 
-All search endpoints use a consistent default `score_threshold` of **0.3** (Issue #1532
-aligned this across 6 locations). Adjust this to control result quality:
+The knowledge-retrieval paths share one `score_threshold` default (Issue #1532 aligned it). It
+has no single home yet: it is a literal at each call site, tracked in #19354. Read the signature
+of the function you call. Adjust it to control result quality:
 
 - **0.1-0.2**: Broad recall, includes tangentially relevant results
-- **0.3** (default): Balanced precision and recall
+- **0.3-0.4**: Balanced precision and recall
 - **0.5-0.7**: High precision, only highly relevant results
 - **0.8+**: Very strict, may miss relevant content
 
@@ -1732,7 +1712,7 @@ aligned this across 6 locations). Adjust this to control result quality:
 
 ### Low Relevance Scores
 
-**Symptoms:** Search returns results with scores below 0.3, or no results at all.
+**Symptoms:** Search returns results with scores below your threshold, or no results at all.
 
 **Diagnosis:**
 

@@ -163,7 +163,7 @@ ENV PYTHONPATH=/app:/app/autobot-backend:/app/autobot_shared
 ENV AUTOBOT_PROJECT_ROOT=/app
 ENV AUTOBOT_ENVIRONMENT=production
 ENV AUTOBOT_LOG_LEVEL=INFO
-ENV AUTOBOT_DEPLOYMENT_MODE=local
+# #19316: no AUTOBOT_DEPLOYMENT_MODE -- unset is auto-detect, docker_local in a container.
 ENV AUTOBOT_BACKEND_PORT=8001
 
 EXPOSE 8001

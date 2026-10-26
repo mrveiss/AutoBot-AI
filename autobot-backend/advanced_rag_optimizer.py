@@ -33,12 +33,12 @@ from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge.search_components.bm25 import BM25Scorer
 from knowledge.search_components.reranking import (
     RerankWeights,
-    _shared_rerank_weights,
     apply_mmr_reorder_by_content,
     fetch_staleness_scores,
     final_rerank_score,
     ranking_score,
     set_reranking_active,
+    shared_rerank_weights,
 )
 from knowledge.search_filters import SYSTEM_SCOPE, KbPrincipal
 from rag_optimizer_context import OptimizedContextMixin
@@ -149,7 +149,7 @@ class AdvancedRAGOptimizer(OptimizedContextMixin):
         """
         self.kb = None
         self.semantic_chunker = None
-        self._rerank_weights: RerankWeights = rerank_weights if rerank_weights is not None else _shared_rerank_weights()
+        self._rerank_weights: RerankWeights = rerank_weights if rerank_weights is not None else shared_rerank_weights()
         # Issue #10600: config-gated retrieval-quality knobs (defaults = no-op).
         self._bm25_hybrid_enabled: bool = (
             model_config.RAG_BM25_HYBRID_ENABLED if bm25_hybrid_enabled is None else bm25_hybrid_enabled

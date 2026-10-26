@@ -955,9 +955,11 @@ class HybridVectorSearch(AsyncInitializable):
         # Try FAISS first for speed
         if self.gpu_index.index is not None and self.gpu_index.index.ntotal > 0:
             results, metrics = await self.gpu_index.search(query_embedding, top_k)
-
-            # Enrich results with documents from ChromaDB
-            if include_documents and self.chromadb is not None and results:
+            # Enrich from ChromaDB; a filter is checked there, and one that cannot be checked serves nothing (#19144)
+            if metadata_filter and self.chromadb is None:
+                logger.warning("GPU search with a metadata filter but no ChromaDB client; serving no results (#19144)")
+                results = []
+            elif (include_documents or metadata_filter) and self.chromadb is not None and results:
                 results = await self._enrich_from_chromadb(results, collection_name, metadata_filter)
 
             return results, metrics
@@ -1000,33 +1002,31 @@ class HybridVectorSearch(AsyncInitializable):
         collection_name: str,
         metadata_filter: Dict[str, Any] | None = None,
     ) -> List[GpuSearchResult]:
-        """Fetch document content and metadata from ChromaDB."""
+        """Fetch document content and metadata from ChromaDB.
+
+        Under a *metadata_filter* a hit is kept only when its metadata was fetched and matches: a hit
+        the lookup misses, or a failed lookup, cannot be checked and is dropped (fail closed, #19144).
+        """
         try:
             collection: BaseCollection = await asyncio.to_thread(self.chromadb.get_collection, collection_name)
             doc_ids = [r.doc_id for r in results]
-
             chromadb_results = await asyncio.to_thread(collection.get, ids=doc_ids, include=["documents", "metadatas"])
             doc_lookup = self._build_doc_lookup(chromadb_results)
 
             enriched = []
             for result in results:
-                if result.doc_id in doc_lookup:
-                    data = doc_lookup[result.doc_id]
-
-                    if metadata_filter:
-                        if not self._matches_filter(data["metadata"], metadata_filter):
-                            continue
-
+                data = doc_lookup.get(result.doc_id)
+                if metadata_filter and (data is None or not self._matches_filter(data["metadata"], metadata_filter)):
+                    continue
+                if data is not None:
                     result.content = data["content"]
                     result.metadata = data["metadata"]
-
                 enriched.append(result)
-
             return enriched
 
         except Exception as e:
             logger.error("Failed to enrich from ChromaDB: %s", e)
-            return results
+            return [] if metadata_filter else results
 
     def _convert_chromadb_results(self, chromadb_results: Dict[str, Any]) -> List[GpuSearchResult]:
         """

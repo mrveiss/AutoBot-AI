@@ -21,6 +21,7 @@ from constants.threshold_constants import TimingConstants
 from dependency_container import inject_services
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER as _RESEARCH_QUARANTINE_FILTER
 from knowledge.search import map_kb_result_to_dict
+from knowledge.search_filters import filter_for_user_id
 from knowledge_base_factory import get_knowledge_base_or_none
 from llm_shared.models import LLMChatMessage, LLMResponse  # Phase 2D #3185
 from retry_mechanism import RetryPolicy, RetryStrategy, with_retry
@@ -133,13 +134,13 @@ class AsyncChatWorkflow:
     @with_retry(RetryPolicy(max_attempts=3, base_delay=1.0, max_delay=5.0, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
     @inject_services(llm="llm", config="config")
     async def process_chat_message(
-        self, user_message: str, chat_id: str = "default", llm=None, config=None
+        self, user_message: str, chat_id: str = "default", llm=None, config=None, user_id: str | None = None
     ) -> ChatWorkflowResult:
         """
         Process chat message through complete workflow with dependency injection.
 
         Issue #281: Refactored from 152 lines to use extracted helper methods
-        for each workflow stage.
+        for each workflow stage. #16665: ``user_id`` is the user the KB is read as; none means no KB facts.
         """
         self._start_time = time.time()
         self.workflow_messages.clear()
@@ -151,7 +152,7 @@ class AsyncChatWorkflow:
             message_type = await self._workflow_classify(user_message, workflow_steps)
 
             # Stage 2: Knowledge search
-            knowledge_status, kb_results = await self._workflow_knowledge_search(user_message)
+            knowledge_status, kb_results = await self._workflow_knowledge_search(user_message, user_id)
 
             # Stage 3: LLM response generation (grounded with KB results, #10732)
             llm_response = await self._workflow_llm_generate(user_message, llm, workflow_steps, kb_results)
@@ -203,10 +204,11 @@ class AsyncChatWorkflow:
     async def _workflow_knowledge_search(
         self,
         query: str,
+        user_id: str | None = None,
     ) -> tuple[KnowledgeStatus, List[Dict[str, Any]]]:
         """Search knowledge base using the canonical KB facade. Issue #10715."""
         await self.add_workflow_message("debug", "🔍 WORKFLOW: Searching knowledge base...", step="knowledge_search")
-        knowledge_status, kb_results = await self._execute_kb_search(query)
+        knowledge_status, kb_results = await self._execute_kb_search(query, user_id)
         await self.add_workflow_message(
             "utility",
             "📚 Knowledge base search completed",
@@ -218,14 +220,19 @@ class AsyncChatWorkflow:
     async def _execute_kb_search(
         self,
         query: str,
+        user_id: str | None = None,
     ) -> tuple[KnowledgeStatus, List[Dict[str, Any]]]:
-        """Call the KB facade and map results; returns (status, results). Issue #10715."""
+        """Call the KB facade and map results; returns (status, results). Issue #10715.
+
+        #16665: results are filtered to what *user_id* may read; no user id yields none.
+        """
         try:
             kb = await get_knowledge_base_or_none()
             if kb is None:
                 logger.warning("Knowledge base unavailable; skipping search for query: %.80s", query)
                 return KnowledgeStatus.MISSING, []
             raw: List[Dict[str, Any]] = await kb.search(query=query, top_k=5, filters=_RESEARCH_QUARANTINE_FILTER)
+            raw = await filter_for_user_id(raw or [], kb, user_id)
             if not raw:
                 return KnowledgeStatus.MISSING, []
             results = [map_kb_result_to_dict(r) for r in raw]  # Issue #10740
@@ -392,12 +399,16 @@ get_workflow_manager = lazy_singleton(WorkflowManager)
 
 
 # Convenience function
-async def process_chat_message_with_timeout(user_message: str, chat_id: str = "default") -> ChatWorkflowResult:
+async def process_chat_message_with_timeout(
+    user_message: str, chat_id: str = "default", user_id: str | None = None
+) -> ChatWorkflowResult:
     """Process chat message through async workflow"""
     try:
         # Add timeout protection to prevent hanging - maximum 25 seconds
         workflow = await get_workflow_manager().get_workflow()
-        result = await asyncio.wait_for(workflow.process_chat_message(user_message, chat_id), timeout=25.0)
+        result = await asyncio.wait_for(
+            workflow.process_chat_message(user_message, chat_id, user_id=user_id), timeout=25.0
+        )
         return result
     except asyncio.TimeoutError:
         logger.error(f"Chat workflow timed out after 25 seconds for message: {user_message[:50]}...")

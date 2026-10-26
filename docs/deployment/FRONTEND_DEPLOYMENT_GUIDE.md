@@ -254,7 +254,7 @@ NodeRole (
 # /etc/autobot/slm-secrets.env
 AUTOBOT_SLM_HOST=<slm-manager-ip>
 AUTOBOT_CODE_SOURCE_NODE=01-Backend
-SLM_REPO_PATH=/opt/autobot
+SLM_REPO_PATH=/opt/autobot/code_source  # the code_source git checkout, not the install root (#15708)
 SLM_SSH_KEY=/home/autobot/.ssh/autobot_key
 ```
 

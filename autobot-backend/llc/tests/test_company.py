@@ -380,9 +380,14 @@ class TestCycleGuardOnUpdate:
         svc._assert_no_cycle = AsyncMock()
 
         data = CompanyUpdate(parent_org_id=uuid.uuid4())
-        await svc.update(org.id, data)
+        # #15907: a top-level org moved under a parent also retires its CEO.
+        with patch("llc.services.company.CompanyCEOService.sync_with_parent", new=AsyncMock()) as sync:
+            await svc.update(org.id, data)
 
         svc._assert_no_cycle.assert_awaited_once_with(org.id, data.parent_org_id)
+        sync.assert_awaited_once_with(svc.session, org.id, data.parent_org_id)
+        # #15907 review: the move reads the org row under a lock.
+        svc._get_or_404.assert_any_await(org.id, for_update=True)
 
     @pytest.mark.asyncio
     async def test_update_raises_when_cycle_detected(self):

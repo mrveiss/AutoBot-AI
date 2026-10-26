@@ -446,6 +446,8 @@ class ActivityEventType(str, Enum):
     CONTROL_AGENT_PAUSED = "control.agent_paused"
     CONTROL_AGENT_RESUMED = "control.agent_resumed"
     CONTROL_AGENT_TERMINATED = "control.agent_terminated"
+    # #15907: the periodic heartbeat switched on or off for one agent.
+    CONTROL_AGENT_HEARTBEAT_SET = "control.agent_heartbeat_set"
     CONTROL_SPRINT_PAUSED = "control.sprint_paused"
     CONTROL_SPRINT_RESUMED = "control.sprint_resumed"
     CONTROL_COMPANY_PAUSED = "control.company_paused"

@@ -297,13 +297,6 @@ class LLMCurrentResponse(BaseModel):
     provider: str
 
 
-class LLMEmbeddingModelsResponse(BaseModel):
-    """Response for GET /llm/embedding/models."""
-
-    models: List[Any]
-    total_count: int
-
-
 # ---------------------------------------------------------------------------
 # LLM Optimization schemas  (llm_optimization.py)
 # ---------------------------------------------------------------------------

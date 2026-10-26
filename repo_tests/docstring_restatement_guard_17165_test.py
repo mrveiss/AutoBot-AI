@@ -84,7 +84,7 @@ REACH = declare(
     #: margin and every PR adding one public symbol went red on an unrelated
     #: branch. Raising a *floor* tightens the guard; the 1,000 stays as the
     #: working headroom the note above describes.
-    floor=24_426,  # train 38: population 24926, window [23926, 24926], mid-window
+    floor=24830,  # train 38: population 24926, window [23926, 24926], mid-window
     growth=1_000,
     what="named public non-test symbols (functions, methods, classes)",
 )

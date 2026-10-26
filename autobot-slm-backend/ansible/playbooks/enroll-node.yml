@@ -65,7 +65,7 @@
       browser:
         services: ['playwright-service', 'vnc-server']
         packages: ['python3', 'xvfb', 'tigervnc-standalone-server']
-        ports: [3000, 5900]
+        ports: [9001, 5900]
       vnc:
         services: ['vnc-server', 'vnc-websockify']
         # #13069: 'novnc' deliberately absent — the distro package is 1.0.0 (2018)

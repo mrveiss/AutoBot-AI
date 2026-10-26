@@ -26,6 +26,7 @@ from autobot_shared.env_utils import env_str
 from autobot_shared.logging_manager import get_logger
 from llc.adapters import adapter_unavailable_reason, registered_adapter_types
 from llc.deps import assert_company_access
+from llc.scheduler.schedule_entry import schedule_heartbeat
 from llc.services.budget import BudgetService
 from llc.services.model_tiers import get_model_tier_service
 from user_management.database import get_async_session
@@ -422,21 +423,11 @@ async def list_agent_hires(
 # ---------------------------------------------------------------------------
 
 
-@router.post(
-    "/companies/{company_id}/agent-hires",
-    response_model=AgentHireResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Hire a new agent (Sonnet or Haiku tier) for a company (GH#8486)",
-)
-async def hire_agent(
-    company_id: uuid.UUID,
-    body: AgentHireRequest,
-    session: AsyncSession = Depends(get_async_session),
-    _current_user: dict = Depends(get_current_user),
-    ctx: TenantContext = Depends(require_org_context),
-) -> AgentHireResponse:
-    """Hire a new LLC agent with explicit model selection and AGENTS.md generation."""
-    assert_company_access(ctx, str(company_id))
+def _validate_hire(body: AgentHireRequest) -> str:
+    """The hire's resolved model, or a 422 for a model or adapter that cannot run.
+
+    Extracted from ``hire_agent`` (#15907, function length); the checks are unchanged.
+    """
     resolved_model = body.model or SONNET_MODEL
     if resolved_model not in _VALID_MODELS:
         raise HTTPException(
@@ -465,13 +456,11 @@ async def hire_agent(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=(f"Adapter {resolved_adapter!r} is registered but cannot run on this " f"deployment: {unavailable}"),
         )
+    return resolved_model
 
-    is_haiku = resolved_model == HAIKU_MODEL
-    agent_id = str(uuid.uuid4())
 
-    adapter_cfg: Dict[str, Any] = dict(body.adapter_config or {})
-    adapter_cfg["model"] = resolved_model
-
+def _render_agents_md(body: AgentHireRequest, company_id: uuid.UUID, is_haiku: bool) -> str:
+    """The hired agent's AGENTS.md, by tier. Extracted from ``hire_agent`` (#15907)."""
     role_desc = body.role_description or f"{body.agent_name} — LLC agent for company {company_id}."
     if is_haiku:
         reports_to_name = body.reports_to or "the supervising Sonnet agent"
@@ -492,6 +481,32 @@ async def hire_agent(
             agent_name=body.agent_name,
             role_description=role_desc,
         )
+    return agents_md
+
+
+@router.post(
+    "/companies/{company_id}/agent-hires",
+    response_model=AgentHireResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Hire a new agent (Sonnet or Haiku tier) for a company (GH#8486)",
+)
+async def hire_agent(
+    company_id: uuid.UUID,
+    body: AgentHireRequest,
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> AgentHireResponse:
+    """Hire a new LLC agent with explicit model selection and AGENTS.md generation."""
+    assert_company_access(ctx, str(company_id))
+    resolved_model = _validate_hire(body)
+    is_haiku = resolved_model == HAIKU_MODEL
+    agent_id = str(uuid.uuid4())
+
+    adapter_cfg: Dict[str, Any] = dict(body.adapter_config or {})
+    adapter_cfg["model"] = resolved_model
+
+    agents_md = _render_agents_md(body, company_id, is_haiku)
 
     instructions_file_path = f"/etc/llc/agents/{company_id}/{agent_id}/AGENTS.md"
 
@@ -530,6 +545,9 @@ async def hire_agent(
     await budget_svc.provision_budget(session, agent_id, str(company_id))
 
     await session.commit()
+    # #15907: a hire that opts into the heartbeat wakes without waiting for a restart.
+    if body.heartbeat_enabled and body.heartbeat_cron:
+        await schedule_heartbeat(agent_id, body.heartbeat_cron)
 
     logger.info(
         "Hired agent %s (name=%r model=%r company=%s reports_to=%s)",

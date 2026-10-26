@@ -12,6 +12,7 @@ import { BaseAlert } from '@autobot/ui'
  */
 
 import { ref, reactive, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import {
   useLlmConfigApi,
   type SlmLLMConfig,
@@ -20,6 +21,7 @@ import {
 } from '@/composables/useLlmConfigApi'
 import ssotConfig from '@/config/ssot-config'
 
+const { t } = useI18n()
 const api = useLlmConfigApi()
 
 const loading = ref(false)
@@ -78,7 +80,7 @@ async function fetchConfig(): Promise<void> {
     hasUnsavedChanges.value = false
   } catch (e: unknown) {
     const err = e as { response?: { data?: { detail?: string } } }
-    error.value = err.response?.data?.detail || 'Failed to load LLM config'
+    error.value = err.response?.data?.detail || t('settings.admin.lLMSettings.failedToLoadLlmConfig')
   } finally {
     loading.value = false
   }
@@ -91,10 +93,10 @@ async function saveConfig(): Promise<void> {
     const resp = await api.saveConfig({ ...config })
     Object.assign(config, resp.config)
     hasUnsavedChanges.value = false
-    showSuccessMsg('Configuration saved')
+    showSuccessMsg(t('settings.admin.lLMSettings.configurationSaved'))
   } catch (e: unknown) {
     const err = e as { response?: { data?: { detail?: string } } }
-    error.value = err.response?.data?.detail || 'Failed to save LLM config'
+    error.value = err.response?.data?.detail || t('settings.admin.lLMSettings.failedToSaveLlmConfig')
   } finally {
     saving.value = false
   }
@@ -112,13 +114,13 @@ async function testProvider(provider: LLMProviderConfig): Promise<void> {
     })
   } catch (e: unknown) {
     const err = e as { response?: { data?: { detail?: string } } }
-    error.value = err.response?.data?.detail || 'Connection test failed'
+    error.value = err.response?.data?.detail || t('settings.admin.lLMSettings.connectionTestFailed')
   }
 }
 
 async function applyToFleet(): Promise<void> {
   if (hasUnsavedChanges.value) {
-    error.value = 'Save configuration before applying to fleet'
+    error.value = t('settings.admin.lLMSettings.saveConfigurationBeforeApplyingToFleet')
     return
   }
   applying.value = true
@@ -126,13 +128,13 @@ async function applyToFleet(): Promise<void> {
   try {
     const resp = await api.applyToFleet()
     if (resp.success) {
-      showSuccessMsg(`Config applied to ${resp.node_count} nodes`)
+      showSuccessMsg(t('settings.admin.lLMSettings.configApplied', { count: resp.node_count }))
     } else {
-      error.value = resp.message || 'Apply failed'
+      error.value = resp.message || t('settings.admin.lLMSettings.applyFailed')
     }
   } catch (e: unknown) {
     const err = e as { response?: { data?: { detail?: string } } }
-    error.value = err.response?.data?.detail || 'Failed to apply config to fleet'
+    error.value = err.response?.data?.detail || t('settings.admin.lLMSettings.failedToApplyConfigToFleet')
   } finally {
     applying.value = false
   }
@@ -154,7 +156,7 @@ function addProvider(): void {
 
 function removeProvider(index: number): void {
   const name = config.providers[index]?.name
-  if (!confirm(`Remove provider "${name}"?`)) return
+  if (!confirm(t('settings.admin.lLMSettings.removeProvider', { name }))) return
   config.providers.splice(index, 1)
   markDirty()
 }
@@ -198,16 +200,7 @@ onMounted(fetchConfig)
     <!-- Messages -->
     <BaseAlert v-if="error" variant="error" :message="error" dismissible :dismiss-label="$t('settings.admin.lLMSettings.dismissError')" @dismiss="error = null" />
 
-    <div
-      v-if="success"
-      class="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 flex items-center gap-3"
-    >
-      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      {{ success }}
-    </div>
+    <BaseAlert v-if="success" variant="success" :message="success" />
 
     <!-- Test Result Banner -->
     <BaseAlert
@@ -266,9 +259,9 @@ onMounted(fetchConfig)
       <nav class="-mb-px flex space-x-8">
         <button
           v-for="tab in [
-            { id: 'providers', label: 'Providers' },
-            { id: 'server', label: 'Server Settings' },
-            { id: 'models', label: 'Models' },
+            { id: 'providers', label: $t('settings.admin.lLMSettings.providersTab') },
+            { id: 'server', label: $t('settings.admin.lLMSettings.serverSettingsTab') },
+            { id: 'models', label: $t('settings.admin.lLMSettings.modelsTab') },
           ]"
           :key="tab.id"
           @click="activeTab = tab.id as 'providers' | 'server' | 'models'"
@@ -515,20 +508,10 @@ onMounted(fetchConfig)
       </div>
     </div>
 
-    <!-- Info Box -->
-    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-      <div class="flex gap-3">
-        <svg class="w-5 h-5 text-blue-500 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <div class="text-sm text-blue-800">
-          <p class="font-medium">{{ $t('settings.admin.lLMSettings.aboutLLMConfiguration') }}</p>
-          <p class="mt-1">
-            {{ $t('settings.admin.lLMSettings.changesSavedHereAre') }}
-          </p>
-        </div>
-      </div>
-    </div>
+    <BaseAlert
+      variant="info"
+      :title="$t('settings.admin.lLMSettings.aboutLLMConfiguration')"
+      :message="$t('settings.admin.lLMSettings.changesSavedHereAre')"
+    />
   </div>
 </template>
