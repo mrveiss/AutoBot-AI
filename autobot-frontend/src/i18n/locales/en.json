@@ -4346,6 +4346,9 @@
     },
     "chroma": {
       "quarantined": "Research quarantine"
+    },
+    "chromaExplorer": {
+      "subtitle": "Browse and search vector collections"
     }
   },
   "workflow": {

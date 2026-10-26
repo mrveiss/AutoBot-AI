@@ -348,7 +348,7 @@ providers:
   ollama:
     enabled: true
     base_url: "http://<backend-ip>:11434"
-    models: ["tinyllama", "phi", "llama2", "codellama"]
+    models: ["tinyllama", "phi", "llama2", "codellama"]  # example names, not provisioned
     health_check_interval: 30
 
 routing_rules:

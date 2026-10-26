@@ -64,6 +64,7 @@ def _load_executor():
         spec = importlib.util.spec_from_file_location("_pe_11492", _BACKEND_ROOT / "services" / "playbook_executor.py")
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
+        mod.ansible_exit_code = lambda _o, _h, rc: rc  # these tests are about the systemd wrap, not exit proof (#19475)
         return mod
     finally:
         for n, orig in saved.items():
@@ -270,8 +271,7 @@ async def test_run_subprocess_wraps_file_backed_when_systemd_available(tmp_path)
     assert str(log_path) in tail[2]
     assert tail[3:] == cmd
 
-    # Never the backend's pipe: a dead backend must not be able to
-    # BrokenPipe-crash the detached process (#11492 crux).
+    # Never the backend's pipe: a dead backend must not BrokenPipe-crash the detached process (#11492).
     assert captured["kwargs"]["stdout"] == asyncio.subprocess.DEVNULL
     assert captured["kwargs"]["stderr"] == asyncio.subprocess.DEVNULL
     # The log file was truncated fresh for this run and locked to 0600.

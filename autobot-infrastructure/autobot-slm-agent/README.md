@@ -72,11 +72,14 @@ ansible-playbook playbooks/slm-service-control.yml \
 
 ```bash
 # Correct (set in systemd unit by Ansible)
-ExecStart=/opt/autobot/autobot-slm-agent/venv/bin/python main.py --node-id 01-Backend
+ExecStart=/opt/autobot/autobot-slm-agent/venv/bin/python main.py --node-id <node_id>
 
 # Also supported via env var
-SLM_NODE_ID=01-Backend
+SLM_NODE_ID=<node_id>
 ```
+
+`SLM_NODE_ID` is this host's own agent id, with no default. The SLM manager's own id is a
+different setting, `AUTOBOT_SLM_NODE_ID` (#19322).
 
 If `node_id` is missing → `KeyError: 'node_id'` → crash loop (restart counter climbs to 300+).
 
