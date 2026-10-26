@@ -205,6 +205,18 @@ def _warn_config_fallback(key: str, value: object, default: object) -> None:
     )
 
 
+def _warn_file_logging_off(path: Path, exc: OSError) -> None:
+    """Say once per path, on stderr, that file logging to *path* is off and why (#19628).
+
+    Straight to stderr for the same reason as ``_warn_config_fallback``: a logger is being built.
+    """
+    key = f"file:{path}"
+    if key in _warned_config_keys:
+        return
+    _warned_config_keys.add(key)
+    sys.stderr.write(f"autobot logging: cannot write logs at {str(path)!r} ({exc.strerror}); logging to console only\n")
+
+
 def _config_non_negative_int(key: str, default: int) -> int:
     """Read *key* as a non-negative int; bool, MagicMock or anything else yields *default*."""
     value = _get_config_manager().get_nested(key, default)
@@ -289,6 +301,8 @@ class LoggingManager:
     """
 
     _initialized = False
+    # Set when the logs directory cannot be created (#19628): loggers get console handlers only.
+    _file_logging_disabled = False
     _loggers: Dict[str, logging.Logger] = {}
     # Set by set_level(): wins over the configured level for every logger, existing and future.
     _level_override: int | None = None
@@ -380,16 +394,21 @@ class LoggingManager:
 
     @classmethod
     def _setup_logging_internal(cls) -> None:
-        """Setup basic logging configuration (internal, called under lock)"""
-        # Create logs directory if it doesn't exist
-        logs_dir_path = os.getenv("AUTOBOT_LOGS_DIR", "logs")
-        logs_dir = Path(logs_dir_path)
-        logs_dir.mkdir(exist_ok=True)
+        """Setup basic logging configuration (internal, called under lock).
 
-        # Create backup directory
+        A logs directory that cannot be created (a ``ProtectSystem=strict`` unit whose working
+        directory is read-only, #19628) turns file logging off with one stderr warning: every logger
+        still gets its console handlers, which journald captures, instead of the import that asked
+        for a logger raising.
+        """
+        logs_dir = Path(os.getenv("AUTOBOT_LOGS_DIR", "logs"))
         backup_dir_name = os.getenv("AUTOBOT_LOGS_BACKUP_DIR", "backup")  # ssot-config-exempt: pre-init logging
-        backup_dir = logs_dir / backup_dir_name
-        backup_dir.mkdir(exist_ok=True)
+        try:
+            logs_dir.mkdir(exist_ok=True)
+            (logs_dir / backup_dir_name).mkdir(exist_ok=True)
+        except OSError as exc:
+            cls._file_logging_disabled = True
+            _warn_file_logging_off(logs_dir, exc)
 
         cls._initialized = True
 
@@ -408,14 +427,20 @@ class LoggingManager:
         or the MagicMock a config-mocking test harness returns -- falls back to its default with one
         stderr warning instead of raising here, at the import of whichever module asked for a logger.
         """
+        # No _file_logging_disabled short-cut here: a log file configured outside the logs dir may
+        # still be writable, and a failing one is caught per file below (#19628 review).
         log_file = _log_file_path(log_type)
-        Path(log_file).parent.mkdir(parents=True, exist_ok=True)
 
         # Use rotating file handler to prevent large log files
         max_bytes = _config_non_negative_int("logging.rotation.max_bytes", _DEFAULT_MAX_BYTES)
         backup_count = _config_non_negative_int("logging.rotation.backup_count", _DEFAULT_BACKUP_COUNT)
 
-        handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count)
+        try:
+            Path(log_file).parent.mkdir(parents=True, exist_ok=True)
+            handler = logging.handlers.RotatingFileHandler(log_file, maxBytes=max_bytes, backupCount=backup_count)
+        except OSError as exc:
+            _warn_file_logging_off(Path(log_file), exc)
+            return None
         handler.setFormatter(cls._get_formatter())
 
         return handler
@@ -459,6 +484,8 @@ class LoggingManager:
         Args:
             log_type: Specific log type to rotate, or None for all
         """
+        if cls._file_logging_disabled:
+            return  # no logs dir and no backup dir to rotate into (#19628)
         # Issue #380: Use module-level constant
         log_types_to_rotate = list(_LOG_TYPES) if not log_type else [log_type]
 

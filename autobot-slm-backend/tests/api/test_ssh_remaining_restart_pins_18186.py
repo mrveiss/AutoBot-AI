@@ -2,12 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""The four other SSH systemctl sites keep their exact argv, timeout and failure handling (#18186).
+"""The other SSH systemctl sites keep their exact argv, timeout and failure handling (#18186).
 
-backup (redis stop/start), blue_green (stop), code_distributor (`restart ... || true`) and
-service_orchestrator (`_systemctl_action`) move onto the one executor with NO behaviour change.
+backup (redis stop/start), blue_green (stop) and service_orchestrator (`_systemctl_action`) move onto
+the one executor with NO behaviour change.
 These pins go through each site's public entry point with autospecced fakes, and pass on the tree
-from before the move, which is what shows they are today's behaviour.
+from before the move, which is what shows they are today's behaviour. code_distributor's
+`restart ... || true` pin left with the rsync path it belonged to (#19352).
 """
 
 from __future__ import annotations
@@ -32,11 +33,10 @@ _LOADED = import_modules_with_real_orm(
         "services.service_restart": _SVC / "service_restart.py",
         "services.backup": _SVC / "backup.py",
         "services.blue_green": _SVC / "blue_green.py",
-        "services.code_distributor": _SVC / "code_distributor.py",
         "services.service_orchestrator": _SVC / "service_orchestrator.py",
     },
 )
-_, backup, blue_green, code_distributor, service_orchestrator = _LOADED
+_, backup, blue_green, service_orchestrator = _LOADED
 
 
 _REAL = (asyncio.create_subprocess_exec, asyncio.wait_for, asyncio.sleep)  # captured before any fake replaces them
@@ -199,40 +199,6 @@ async def test_blue_green_rejects_an_invalid_name_without_spawning(monkeypatch):
     run = _Runner(monkeypatch)
     assert await _bg()._stop_service_via_ssh("h", "svc", 22, "a; rm -rf /") is False
     assert run.spawns == []
-
-
-# ---- code_distributor: restart ... || true -------------------------------------------------------
-
-
-@pytest.fixture
-def key(tmp_path):
-    path = tmp_path / "id"
-    path.write_text("k", encoding="utf-8")
-    return path
-
-
-async def test_code_distributor_restart_argv_or_true_merged_stderr_timeout_60(monkeypatch, key):
-    monkeypatch.setattr(code_distributor, "SSH_KEY_PATH", str(key))
-    fake = _fake_logger(monkeypatch, code_distributor)
-    run = _Runner(monkeypatch, script=((0, b"fine", b""),))
-    dist = code_distributor.CodeDistributor.__new__(code_distributor.CodeDistributor)
-    await dist._restart_slm_agent("n1", "node.example.test", "svc", 2222)
-    assert run.argv == [
-        "ssh", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=30", "-p", "2222",
-        "-i", str(key), "--", "svc@node.example.test", "sudo systemctl restart -- slm-agent || true",
-    ]  # fmt: skip
-    assert (run.kwargs["stdout"], run.kwargs["stderr"]) == (asyncio.subprocess.PIPE, asyncio.subprocess.STDOUT)
-    assert run.timeouts == [60.0]
-    fake.info.assert_called_with("slm-agent restarted on node %s", "n1")
-    fake.reset_mock()
-    _Runner(monkeypatch, script=((1, b"why", b""),))
-    await dist._restart_slm_agent("n1", "h", "svc", 22)
-    fake.warning.assert_called_once_with("slm-agent restart may have failed on %s: %s", "n1", "why")
-    for failure in _FAILURES:
-        fake.reset_mock()
-        _Runner(monkeypatch, **failure)
-        await dist._restart_slm_agent("n1", "h", "svc", 22)
-        assert fake.warning.call_args.args[:2] == ("Could not restart slm-agent on %s: %s", "n1")
 
 
 # ---- service_orchestrator: _systemctl_action -------------------------------------------------------

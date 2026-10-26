@@ -80,7 +80,7 @@ def _en_message_keys(root: Path | None = None) -> list[str]:
 REACH = declare(
     "slm-frontend-locale-keys",
     discover=_en_message_keys,
-    floor=3_280,  # train 33: #18797/#18802 keys; re-pinned mid-window on 3,310
+    floor=3511,  # #18863 main-merge: re-pinned on 3,541 keys
     what="message keys in autobot-slm-frontend's en.json",
     growth=60,
 )

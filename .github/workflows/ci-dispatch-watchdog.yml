@@ -3,7 +3,7 @@
 # Guards the two ways a pull request ends up reading as "waiting for CI" with
 # nothing actually queued:
 #
-#   #12823  auto-update-pr-branches refreshes stale PR branches with the default
+#   #12823  auto-update-pr-branches (retired by #19548) refreshed PR branches with the default
 #           GITHUB_TOKEN, so the merge commit is pushed as github-actions[bot].
 #           The repository's fork-PR approval policy treats that bot as an
 #           external contributor, so every run it triggers is created with
@@ -72,7 +72,7 @@ on:
     # head, and the `synchronize` event that push raises is itself attributed to
     # the bot — so a watchdog run triggered by it would be parked awaiting the
     # very approval it exists to grant. The bot case is repaired by the
-    # `approve-refreshed-runs` job in auto-update-pr-branches.yml. What this
+    # (now retired) `approve-refreshed-runs` job of auto-update-pr-branches.yml. What this
     # trigger adds is immediate coverage for every OTHER way a head moves.
     types: [opened, synchronize, reopened]
 

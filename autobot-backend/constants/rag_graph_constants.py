@@ -7,7 +7,11 @@
 Read through ``RAGConfig`` (``graph_weight``, ``graph_traversal_depth``) by graph-RAG, the
 Neural Mesh retriever and the API request schemas; ``RAG_PPR_MAX_HOPS`` is PPR's own default.
 The path and relation-expansion depths are the request-schema and service defaults of those
-two operations, referenced from both so they cannot drift.
+two operations, referenced from both so they cannot drift. ``autobot_memory_graph`` takes its
+traversal defaults from here too (#19280): ``multi_hop`` / ``subgraph`` the traversal depth,
+``shortest_path`` / ``find_path`` the path depth, ``get_related_entities`` the relation depth.
+The library already imports backend modules (``knowledge.serving``), so this stays the one home;
+``services/rag_single_definition_19280_test`` fails if a literal default is re-added.
 """
 
 from autobot_shared.env_utils import env_float

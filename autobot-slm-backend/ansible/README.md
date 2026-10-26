@@ -132,14 +132,10 @@ Options:
 
 ### Service-Specific Deployments
 
-```bash
-# Deploy specific VM type
-ansible-playbook -i inventory/production.yml playbooks/deploy-frontend.yml
-ansible-playbook -i inventory/production.yml playbooks/deploy-backend.yml
-ansible-playbook -i inventory/production.yml playbooks/deploy-database.yml
-ansible-playbook -i inventory/production.yml playbooks/deploy-aiml.yml
-ansible-playbook -i inventory/production.yml playbooks/deploy-browser.yml
-```
+A deployed host is updated through the SLM's builtin updater (**Maintenance → Updates → Code Sync**),
+which runs the role dispatcher `playbooks/deploy_role.yml` with each node's `role_name`
+(frontend, backend, browser, redis, …). Don't run playbooks by hand against a deployed host; a role
+the updater cannot deploy is a gap to fix there.
 
 ## File Structure
 
@@ -162,14 +158,12 @@ ansible/
 ├── playbooks/
 │   ├── deploy-full.yml      # Complete deployment orchestration
 │   ├── deploy-base.yml      # Base system setup
-│   ├── deploy-frontend.yml  # Frontend VM deployment
-│   ├── deploy-backend.yml   # Backend VM deployment
+│   ├── deploy_role.yml      # One role dispatcher: -e role_name=frontend|backend|browser|...
 │   ├── deploy-database.yml  # Database VM deployment
 │   ├── deploy-aiml.yml      # AI/ML VM deployment
-│   ├── deploy-browser.yml   # Browser VM deployment
 │   ├── data-migration.yml   # Data migration from Docker
 │   ├── health-check.yml     # Service health validation
-│   └── rollback.yml         # Rollback procedures
+│   └── rollback-dependencies.yml  # Dependency rollback (no deployment rollback playbook, #17657)
 ├── roles/
 │   ├── base-system/         # Ubuntu base system setup
 │   ├── autobot-frontend/    # Frontend service role
@@ -237,8 +231,8 @@ install and are never hardcoded):
 
 2. **Transfer to VMs**:
    ```bash
-   # Automated by Ansible data-migration playbook
-   ansible-playbook -i inventory/production.yml playbooks/data-migration.yml
+   # Automated by the data-migration playbook, through this directory's script
+   ./deploy.sh --data-migration
    ```
 
 3. **Import to the role machines**:

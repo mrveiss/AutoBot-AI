@@ -26,6 +26,7 @@ from knowledge.chunk_identity import resolve_chunk_id
 from knowledge.search_components.query_classifier import get_query_classifier
 from knowledge.search_components.retrieval_learner import GLOBAL_USER, get_retrieval_learner
 from knowledge.search_filters import KbPrincipal, require_kb_principal
+from knowledge.stale_filter import drop_stale
 from services.knowledge_base_adapter import KnowledgeBaseAdapter
 from services.neural_mesh_retriever import NeuralMeshRetriever
 from services.rag_cache_tiers import RAGCacheTiersMixin
@@ -38,13 +39,6 @@ from type_defs.common import Metadata
 logger = get_llm_logger("rag_service")
 
 _STREAM_TTL_SECONDS = TTL_30_DAYS
-
-# In-process cache for the DocIndexer hash cache file (Issue #4723).
-# The file is only rewritten when indexing completes (infrequent), so reading
-# it on every advanced_search() call is unnecessary I/O.
-_hash_cache_memo: dict = {}
-_hash_cache_loaded_at: float = 0.0
-_HASH_CACHE_TTL: float = 60.0  # seconds
 
 # Module-level singleton cache for synthesis schema — avoids repeated disk reads on the
 # hot path (_get_kb_synthesis_context is called on every advanced_search). (#4654)
@@ -652,8 +646,7 @@ class RAGService(RAGDerivedContextMixin, RAGCacheTiersMixin):
             except Exception as _doc_exc:
                 logger.debug("autobot_docs search skipped: %s", _doc_exc)
 
-        # Issue #4689: filter chunks whose source_path is absent from the hash cache
-        # (file was removed/moved since last index run).
+        # Issue #4689: drop doc chunks whose file has left the doc index (knowledge.stale_filter).
         results = await self._filter_stale_chunks(results)
 
         # Store the filtered results in the semantic + topic caches, inside this scope
@@ -826,75 +819,9 @@ class RAGService(RAGDerivedContextMixin, RAGCacheTiersMixin):
             logger.error("Reranking failed: %s", e)
             return results
 
-    async def _filter_stale_chunks(
-        self,
-        results: List[RankedResult],
-    ) -> List[RankedResult]:
-        """Filter out chunks whose source_path is absent from the DocIndexer hash cache.
-
-        Issue #4689: chunks for files removed/moved since the last index run must
-        not reach the LLM context.  If the hash cache is unavailable (file missing,
-        parse error) the method returns the original list unchanged so RAG is never
-        disrupted by a cache I/O failure.
-
-        The check is path-presence only (not hash equality); we trust that the
-        DocIndexer re-indexes changed files on the next cycle.
-
-        Returns:
-            Filtered list (stale chunks dropped) or original list on cache failure.
-        """
-        import json as _json
-        from pathlib import Path as _Path
-
-        try:
-            from services.knowledge.doc_indexer import HASH_CACHE_FILE
-
-            cache_path: _Path = HASH_CACHE_FILE
-        except Exception as exc:
-            logger.debug("Could not import HASH_CACHE_FILE (skipping provenance check): %s", exc)
-            return results
-
-        def _load() -> dict:
-            if not cache_path.exists():
-                return {}
-            try:
-                with open(cache_path, "r", encoding="utf-8") as fh:
-                    return _json.load(fh)
-            except Exception:
-                return {}
-
-        try:
-            global _hash_cache_memo, _hash_cache_loaded_at
-            now = time.monotonic()
-            if now - _hash_cache_loaded_at > _HASH_CACHE_TTL:
-                _hash_cache_memo = await asyncio.to_thread(_load)
-                _hash_cache_loaded_at = now
-            hash_cache: dict = _hash_cache_memo
-        except Exception as exc:
-            logger.debug("Hash cache load failed (skipping provenance check): %s", exc)
-            return results
-
-        if not hash_cache:
-            # Empty cache means indexer hasn't run yet; skip filtering to avoid
-            # dropping all results on a fresh deployment.
-            return results
-
-        valid: List[RankedResult] = []
-        stale_paths: List[str] = []
-        for chunk in results:
-            if chunk.source_path in hash_cache:
-                valid.append(chunk)
-            else:
-                stale_paths.append(chunk.source_path)
-
-        if stale_paths:
-            logger.warning(
-                "Provenance check: dropped %d stale chunk(s) — source paths absent from " "hash cache: %s",
-                len(stale_paths),
-                stale_paths[:10],  # cap log line length
-            )
-
-        return valid
+    async def _filter_stale_chunks(self, results: List[RankedResult]) -> List[RankedResult]:
+        """*results* through the shared stale filter, ``knowledge.stale_filter.drop_stale`` (#4689, #19280)."""
+        return await drop_stale(results)
 
     def _filter_by_categories(
         self,

@@ -85,6 +85,13 @@ returns the same placeholder, so no `llm_shared` path reveals any part of a key.
 changed: tuples and sets are now walked (the old walk skipped them), and `None`/`""` under a credential name
 is returned as-is (nothing to hide) instead of `***`.
 
+**One placeholder per purpose (#19337).** `autobot_shared.secret_redaction` holds both spellings: `REDACTED_PLACEHOLDER`
+(`**********`) replaces a redacted *value* (dict fields, events, stored snapshots), and `LOG_MASK` (`***`) replaces a
+secret scrubbed out of free *text* (log lines, error messages, output). A new redactor imports one of them and never
+spells its own; `repo_tests/redaction_placeholder_one_home_19337_test.py` counts the spellings left outside the home
+under a down-only pin (the remaining display masks are listed on #19337). Config revisions stored before #19337 keep
+`***REDACTED***`; nothing compares it, so old rows are left as they are.
+
 **Behaviour that changed in `redact_nested` / `redact_dict` (#18205).**
 - A URL under a credential name is masked whole by `redact_dict` (`mask_credential_urls=True`, so its masked set
   never shrinks against base: `webhook_secret_url`, `token_url`, `auth_url` all `**********`). `redact_nested`'s

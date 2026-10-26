@@ -790,13 +790,19 @@
           <div class="terminal-body">
             <div><span class="t-comment"># Step 1 — clone</span></div>
             <div><span class="t-cmd">$ git clone</span> <span class="t-out">https://github.com/mrveiss/AutoBot-AI &amp;&amp; cd AutoBot-AI</span></div>
-            <div style="margin-top:6px"><span class="t-comment"># Step 2 — start</span></div>
-            <div><span class="t-cmd">$ docker compose up -d --build</span></div>
+            <div style="margin-top:6px"><span class="t-comment"># Step 2 — per-host secrets, start with local models, pull the default chat and embedding models</span></div>
+            <div><span class="t-cmd">$ bash docker/generate-secrets.sh</span></div>
+            <div><span class="t-cmd">$ docker compose --env-file docker/.env.docker --env-file docker/.env.secrets --profile ollama up -d --build</span></div>
+            <div><span class="t-cmd">$ docker compose --env-file docker/.env.docker --env-file docker/.env.secrets exec autobot-ollama ollama pull qwen3.5:9b</span></div>
+            <div><span class="t-cmd">$ docker compose --env-file docker/.env.docker --env-file docker/.env.secrets exec autobot-ollama ollama pull nomic-embed-text:latest</span></div>
             <div style="margin-top:6px"><span class="t-comment"># Step 3 — open dashboard, add your docs and fleet nodes</span></div>
             <div><span class="t-highlight">→ Dashboard</span> <span class="t-out">http://localhost/</span> <span class="t-cursor"></span></div>
-            <div><span class="t-highlight">→ Service Lifecycle Manager</span> <span class="t-out">http://localhost/slm</span></div>
-            <div style="margin-top:8px"><span class="t-success">✓ FastAPI backend</span> <span class="t-comment">· Redis · ChromaDB · Ollama all included</span></div>
+            <div><span class="t-highlight">→ Service Lifecycle Manager</span> <span class="t-out">http://localhost/slm/</span></div>
+            <div style="margin-top:8px"><span class="t-success">✓ FastAPI backend</span> <span class="t-comment">· Redis · ChromaDB · Ollama, or a cloud provider instead (without --profile ollama and no provider, there is no model to answer with)</span></div>
             <div><span class="t-success">✓ Ask:</span> <span class="t-out">"Summarise last week's Ansible failures and suggest fixes"</span></div>
+            <div style="margin-top:8px"><span class="t-comment"># Native Ubuntu 22.04+ instead: installs the SLM control plane; its Setup Wizard provisions the rest</span></div>
+            <div><span class="t-cmd">$ curl -fsSL https://raw.githubusercontent.com/mrveiss/AutoBot-AI/main/install.sh | sudo bash</span></div>
+            <div><span class="t-comment"># Verified pinned release and uninstall: see INSTALL.md (not shown here)</span></div>
           </div>
         </div>
       </div>
@@ -814,7 +820,7 @@
         <div class="feature-card">
           <div class="feature-icon"><svg class="icon"><use href="#i-scope"/></svg></div>
           <h3>You hold the data</h3>
-          <p>Docker on a single VM or bare metal. No SaaS, no telemetry. Your documents, memory, and knowledge graph never leave your infrastructure.</p>
+          <p>Docker on a single VM or bare metal. No telemetry. Your documents, memory, and knowledge graph stay on your infrastructure, and so does model inference unless you configure a hosted LLM provider.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon"><svg class="icon"><use href="#i-cpu"/></svg></div>
@@ -877,7 +883,7 @@
         <div class="feature-card">
           <div class="feature-icon"><svg class="icon"><use href="#i-blocks"/></svg></div>
           <h3>Extend it with modules</h3>
-          <p>Install modules on the core: AutoBot LLC (agents that work together as a company), Transcriber, and Codebase Analytics <em>(work in progress)</em>.</p>
+          <p>Install modules on the core: Company OS (agents that work together as a company), Transcriber, and Codebase Analytics <em>(work in progress)</em>.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon"><svg class="icon"><use href="#i-cpu"/></svg></div>
@@ -894,7 +900,7 @@
       <div class="features-header">
         <span class="section-label">What you can do</span>
         <h2 class="section-title">From first deploy to production operations</h2>
-        <p class="section-sub">All model inference, document storage, and fleet data stays on your servers. No SaaS, no telemetry, no vendor lock-in.</p>
+        <p class="section-sub">Document storage and fleet data stay on your servers. Model inference does too with local models; prompts go to a hosted provider only when you configure one. No telemetry, no vendor lock-in.</p>
       </div>
       <div class="features-grid">
         <div class="feature-card">
@@ -925,7 +931,7 @@
         <div class="feature-card">
           <div class="feature-icon"><svg class="icon"><use href="#i-code"/></svg></div>
           <h3>Keep data local with open components</h3>
-          <p>FastAPI backend · PostgreSQL/SQLite · Redis · ChromaDB · Ollama. Every component is replaceable, self-hosted, and ships in the Docker Compose bundle.</p>
+          <p>FastAPI backend · PostgreSQL/SQLite · Redis · ChromaDB · Ollama. Every component is replaceable and self-hosted; Ollama runs under the Compose <code>ollama</code> profile, or use a cloud provider.</p>
         </div>
       </div>
     </div>
@@ -942,7 +948,7 @@
           <h3><span class="arch-num">1</span> FastAPI Backend + SLM</h3>
           <p><strong>SLM</strong> (Service Lifecycle Manager) is the admin control plane — it handles deployments, health checks, config, and user management separately from chat traffic, so a heavy inference job never blocks an operator command.</p>
           <ul>
-            <li>FastAPI · 4 uvicorn workers</li>
+            <li>FastAPI backend · shares a host with the other roles or runs on a node of its own</li>
             <li>Multi-provider LLM gateway (Ollama, vLLM, Anthropic, OpenAI)</li>
             <li>Redis session cache · WebSocket streaming</li>
             <li>PostgreSQL or SQLite for persistence</li>
@@ -962,7 +968,7 @@
           <h3><span class="arch-num">3</span> ChromaDB Knowledge Engine</h3>
           <p>Upload docs once, query forever. ChromaDB stores vector embeddings alongside keyword index. Every system prompt gets your top relevant facts prepended automatically — no retrieval round-trip at chat time.</p>
           <ul>
-            <li>ChromaDB · fastembed (ONNX, no GPU needed)</li>
+            <li>ChromaDB · nomic-embed-text embeddings via Ollama</li>
             <li>Hybrid search: semantic vectors + BM25 keyword</li>
             <li>Auto-indexes: runbooks, man pages, codebase</li>
             <li>Memory extracted and consolidated from every session</li>
@@ -1006,7 +1012,7 @@
             <div class="sp-icon"><svg class="icon" style="width:16px;height:16px"><use href="#i-mesh"/></svg></div>
             <div>
               <strong>Redis-backed shared state across workers</strong>
-              <p>All four uvicorn backend workers share session cache and rate-limit counters via Redis Stack. Adding more workers requires zero code change.</p>
+              <p>Run it on Docker, VMs or bare metal; keep roles together on one host or move each onto its own node, sized for that role. Backend workers share session cache and rate-limit counters via Redis Stack, so adding workers needs no code change.</p>
             </div>
           </div>
           <div class="scale-point">
@@ -1023,8 +1029,8 @@
             <div class="scale-tile-label">VMs supported</div>
           </div>
           <div class="scale-tile">
-            <div class="scale-tile-num">4</div>
-            <div class="scale-tile-label">Concurrent backend workers</div>
+            <div class="scale-tile-num">Per role</div>
+            <div class="scale-tile-label">Each role on its own node, sized for it</div>
           </div>
           <div class="scale-tile">
             <div class="scale-tile-num">8+</div>
@@ -1056,7 +1062,7 @@
               <div class="kb-dot"><svg class="icon"><use href="#i-code"/></svg></div>
               <div>
                 <strong>Index your content</strong>
-                <p>Man pages, source code, internal docs, and PDFs are chunked, embedded with ONNX-accelerated fastembed, and stored in ChromaDB.</p>
+                <p>Man pages, source code, internal docs, and PDFs are chunked, embedded with the configured embedding model (nomic-embed-text by default), and stored in ChromaDB.</p>
               </div>
             </div>
             <div class="kb-step">
@@ -1084,8 +1090,8 @@
         </div>
         <div class="kb-cards">
           <div class="kb-card">
-            <h4><span class="kb-tag">Vector</span> ChromaDB + fastembed</h4>
-            <p>ONNX-accelerated embedding generation. No GPU required — the embedding model runs efficiently on CPU with sub-100ms latency per chunk.</p>
+            <h4><span class="kb-tag">Vector</span> ChromaDB + nomic-embed-text</h4>
+            <p>Embeddings come from the configured embedding model, nomic-embed-text via Ollama by default, and can be switched to another embedding model.</p>
           </div>
           <div class="kb-card">
             <h4><span class="kb-tag">Keyword</span> BM25 hybrid search</h4>
@@ -1287,7 +1293,7 @@
             For businesses
           </span>
           <h3>Production Support</h3>
-          <div class="tier-price"><span class="tier-todo">TODO(human): price</span><span>/yr</span></div>
+          <div class="tier-price"><span class="tier-todo">Price on request</span><span>/yr</span></div>
           <ul class="tier-features">
             <li>For companies running AutoBot in production</li>
             <li>Guaranteed security patching &amp; version-pinned stable releases</li>
@@ -1301,9 +1307,9 @@
         </div>
         <div class="donate-card">
           <h3>Compliance Pack</h3>
-          <div class="tier-price"><span class="tier-todo">TODO(human): price</span></div>
+          <div class="tier-price"><span class="tier-todo">Price on request</span></div>
           <ul class="tier-features">
-            <li>NIS2 / ISO 27001 documentation</li>
+            <li>Documentation for working towards NIS2 and ISO 27001 (<a href="https://github.com/mrveiss/AutoBot-AI/blob/main/docs/compliance/COMPLIANCE_TARGETS.md">targets and status</a>; ISO 27001 is a readiness review, not a certification)</li>
             <li>Security architecture overview &amp; hardening guide</li>
             <li>Audit-support materials for regulated buyers</li>
             <li>Builds on AutoBot's existing security framework</li>

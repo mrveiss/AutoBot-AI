@@ -85,7 +85,7 @@ show_deployment_plan() {
     log "INFO" ""
     log "INFO" "VM5 (${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}) - autobot-browser:"
     log "INFO" "  • Node.js runtime for Playwright"
-    log "INFO" "  • Browser service (port 3000)"
+    log "INFO" "  • Browser service (port ${AUTOBOT_BROWSER_SERVICE_PORT})"
     log "INFO" "  • VNC server for desktop access (port 5900)"
     log "INFO" "  • SystemD services: autobot-browser, autobot-vnc"
     log "INFO" ""
@@ -145,7 +145,7 @@ AUTOBOT_OLLAMA_HOST=${AUTOBOT_AI_STACK_HOST:-localhost}
 AUTOBOT_OLLAMA_PORT=11434
 
 AUTOBOT_BROWSER_SERVICE_HOST=${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}
-AUTOBOT_BROWSER_PORT=3000
+AUTOBOT_BROWSER_SERVICE_PORT=${AUTOBOT_BROWSER_SERVICE_PORT}
 
 AUTOBOT_FRONTEND_HOST=${AUTOBOT_FRONTEND_HOST:-localhost}
 AUTOBOT_FRONTEND_PORT=80
@@ -184,7 +184,7 @@ validate_deployment() {
         "${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT}|AI Stack"
         "${AUTOBOT_AI_STACK_HOST:-localhost}:8081|NPU Worker"
         "${AUTOBOT_AI_STACK_HOST:-localhost}:11434|Ollama"
-        "${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:3000|Browser Service"
+        "${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT}|Browser Service"
     )
 
     local failed_services=()
@@ -248,7 +248,7 @@ show_summary() {
     log "INFO" "  RedisInsight: http://${AUTOBOT_REDIS_HOST:-localhost}:8002"
     log "INFO" "  AI Stack:     http://${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT}"
     log "INFO" "  Ollama:       http://${AUTOBOT_AI_STACK_HOST:-localhost}:11434"
-    log "INFO" "  Browser:      http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:3000"
+    log "INFO" "  Browser:      http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT}"
     log "INFO" ""
     log "INFO" "🖥️  Management Access:"
     log "INFO" "  Terminal:     http://${AUTOBOT_BACKEND_HOST:-localhost}:7681 (WSL)"

@@ -1,6 +1,9 @@
 # Deploying Docker Containers via SLM Ansible Playbooks
 
 
+
+> **Scope:** the `ansible-playbook` commands in this guide are for writing and testing a playbook. A deployed fleet is updated only through the SLM's builtin updater (Maintenance → Updates → Code Sync), never by hand.
+
 ## Quick Answer
 
 **How do you deploy a Docker container using the SLM and an Ansible playbook?**
@@ -1724,9 +1727,9 @@ If SSH fails, check:
 All changes must follow the local-edit-then-sync pattern. See CLAUDE.md for details:
 
 ```bash
-# CORRECT - edit locally, sync via Ansible
+# CORRECT - edit locally, commit, then update the host through the builtin updater
 vim autobot-slm-backend/ansible/deploy-container.yml
-ansible-playbook ansible/playbooks/deploy-infrastructure.yml
+# SLM: Maintenance -> Updates -> Code Sync (runs playbooks/deploy_role.yml for the node's roles)
 
 # WRONG - direct editing on VM
 ssh autobot@<slm-manager-ip> "vim /opt/autobot/.../deploy-container.yml"

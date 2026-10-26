@@ -19,7 +19,8 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
 
-SEVERITY_ORDER = ("critical", "high", "moderate", "low", "info")
+#: npm's own advisory vocabulary (``moderate``), not ``Severity`` -- named for its domain (#19336).
+NPM_ADVISORY_ORDER = ("critical", "high", "moderate", "low", "info")
 FAILING_SEVERITIES = ("critical", "high")
 
 _GHSA = re.compile(r"GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4}")

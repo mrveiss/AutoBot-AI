@@ -28,6 +28,10 @@ export type { InputSize, InputType } from './src/components/BaseInput.vue'
 
 export { default as BaseBadge } from './src/components/BaseBadge.vue'
 export type { BadgeVariant, BadgeSize } from './src/components/BaseBadge.vue'
+// The one risk-tier badge (#13422): RiskTier is the backend's ladder, sent as risk_tier.
+export { default as RiskBadge } from './src/components/RiskBadge.vue'
+export { RISK_TIERS } from './src/types/riskTier'
+export type { RiskTier } from './src/types/riskTier'
 
 // The one inline alert/banner for both apps (#18819).
 export { default as BaseAlert } from './src/components/BaseAlert.vue'
@@ -63,6 +67,11 @@ export { default as BasePagination } from './src/components/BasePagination.vue'
 export type { PaginationLabels } from './src/components/BasePagination.vue'
 
 export { default as BaseFormField } from './src/components/BaseFormField.vue'
+
+// Page title row and trail (#17563).
+export { default as PageHeader } from './src/components/PageHeader.vue'
+export { default as Breadcrumb } from './src/components/Breadcrumb.vue'
+export type { BreadcrumbItem } from './src/components/Breadcrumb.vue'
 
 export { default as BrandMark } from './src/components/BrandMark.vue'
 
@@ -139,6 +148,9 @@ export type { DurationStyle } from './src/utils/duration'
 // Scoped console logger (#14908) — canonical LogLevel/log/createLogger; both
 // apps' utils/debugUtils.ts re-export these rather than re-declaring them.
 export { log, createLogger } from './src/utils/logger'
+// Managed polling with scoped disposal and a consecutive-error stop (#19482).
+export { usePollingJob } from './src/composables/usePollingJob'
+export type { UsePollingJobOptions, UsePollingJobReturn } from './src/composables/usePollingJob'
 
 // One DOMPurify-backed sanitiser for every v-html binding in both apps (#2847, #19118).
 export { sanitizeChatHtml, sanitizeKnowledgeHtml, sanitizeHtml, escapeHtml } from './src/utils/sanitize'
@@ -148,6 +160,9 @@ export type { LogLevel } from './src/utils/logger'
 // The one exponential-backoff formula for reconnects and retries (#15402).
 export { backoffDelay, RETRY_BACKOFF } from './src/utils/backoff'
 export type { BackoffOptions } from './src/utils/backoff'
+
+// What a canonical API client throws for a non-2xx response: status and details kept (#12363).
+export { HttpError, isHttpError, isHttpClientError, extractErrorInfo, httpErrorFrom, parseJsonBody, type ErrorInfo } from './src/utils/httpError'
 
 export { default as SchedulePicker } from './src/components/SchedulePicker.vue'
 export * from './src/schedule'
