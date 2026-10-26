@@ -111,6 +111,9 @@ FILTER_HELPERS = frozenset(
         # #16665: the API-caller and identified-user adapters over filter_for_principal.
         "filter_for_caller",
         "filter_for_user_id",
+        # #19280: api/knowledge_search.py's permission filter plus the shared stale filter, in that order
+        # (filter_search_results_by_permission, then drop_stale) -- the same filter, not a second one.
+        "_readable_fresh",
     }
 )
 

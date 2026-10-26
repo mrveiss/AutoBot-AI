@@ -16,7 +16,7 @@ from typing import Any, Literal
 from autobot_shared.logging_manager import get_llm_logger
 from constants.model_constants import model_config
 from constants.rag_graph_constants import RAG_GRAPH_TIMEOUT_SECONDS, RAG_GRAPH_TRAVERSAL_DEPTH, RAG_GRAPH_WEIGHT
-from knowledge.search_components.reranking import RerankWeights
+from knowledge.search_components.reranking import RerankWeights, ResultReranker
 from type_defs.common import Metadata
 
 logger = get_llm_logger("rag_config")
@@ -45,7 +45,7 @@ class RAGConfig:
 
     # Reranking
     enable_reranking: bool = True
-    reranking_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    reranking_model: str = ResultReranker.MODEL_NAME  # #19280: declared once; loader wiring is #19355
     # Issue #2004: Configurable blend weights; defaults preserve legacy 0.8/0.2 behaviour.
     rerank_weights: RerankWeights = field(default_factory=RerankWeights)
     # Issue #2090: MMR diversity pass lambda (0.0 = disabled, backward-compatible).

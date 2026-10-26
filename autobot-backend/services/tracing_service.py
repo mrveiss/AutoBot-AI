@@ -166,7 +166,7 @@ class TracingService:
             {
                 SERVICE_NAME: self._service_name,
                 SERVICE_VERSION: self._service_version,
-                "deployment.environment": config.env,
+                "deployment.environment": config.environment,  # #19315: AUTOBOT_ENV aliases it
                 "service.namespace": "autobot",
             }
         )

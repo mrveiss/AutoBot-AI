@@ -48,6 +48,8 @@ services:
         --app-dir /app/autobot-backend
     environment:
       - AUTOBOT_ENVIRONMENT=development
+      # #19319: dev stays strict (FEATURE_ROUTERS_STRICT_DEFAULT); overrides the production base's 0.
+      - AUTOBOT_FEATURE_ROUTERS_STRICT=1
       - AUTOBOT_LOG_LEVEL=DEBUG
     ports:
       # debugpy remote debugging — to enable, install debugpy in container:
