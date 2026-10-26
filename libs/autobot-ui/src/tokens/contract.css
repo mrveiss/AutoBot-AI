@@ -52,6 +52,19 @@
   --aui-color-info: #0284c7;
   --aui-color-info-contrast: #ffffff;
 
+  /* ---- Color: risk tier (#13422) -------------------------------------
+   * The four-rung RiskTier ladder (autobot_shared/risk_tier.py). Aliases of the
+   * status colours, so each theme resolves them through the adapter; a theme
+   * may override one tier without touching the status set. */
+  --aui-risk-low: var(--aui-color-success);
+  --aui-risk-low-contrast: var(--aui-color-success-contrast);
+  --aui-risk-medium: var(--aui-color-warning);
+  --aui-risk-medium-contrast: var(--aui-color-warning-contrast);
+  --aui-risk-high: var(--aui-color-error);
+  --aui-risk-high-contrast: var(--aui-color-error-contrast);
+  --aui-risk-critical: var(--aui-color-error);
+  --aui-risk-critical-contrast: var(--aui-color-error-contrast);
+
   /* ---- Color: overlay (modal/dialog backdrop scrim) ------------------ */
   --aui-color-overlay: rgb(0 0 0 / 0.5);
 

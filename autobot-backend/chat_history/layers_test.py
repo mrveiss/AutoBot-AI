@@ -81,10 +81,11 @@ class TestLayer1EssentialStory:
         mock_gen.generate = AsyncMock(return_value="## Essential Context\n[general] fact1")
         with patch("memory.essential_story.EssentialStoryGenerator", return_value=mock_gen):
             layer = Layer1EssentialStory()
-            result = await layer.render({"model_name": "test-model"})
+            result = await layer.render({"model_name": "test-model", "principal": "turn-principal"})
             assert isinstance(result, str)
             assert result == "## Essential Context\n[general] fact1"
-            mock_gen.generate.assert_awaited_once_with("test-model")
+            # #16665: the story is generated for the turn's principal, never an unscoped read
+            mock_gen.generate.assert_awaited_once_with("test-model", principal="turn-principal")
 
     @pytest.mark.asyncio
     async def test_render_returns_empty_on_generator_failure(self):

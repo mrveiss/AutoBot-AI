@@ -93,20 +93,32 @@ python -Xmx4g main.py
 ### Network and Connectivity
 
 #### Issue: Web interface not accessible
-**Symptoms**: Cannot reach `http://localhost:8001`
+**Symptoms**: The web UI does not load, or the health check below fails.
+
+The backend is reached through nginx, never on a port of its own. In Docker, port `8001` is
+RedisInsight, not the backend (#19183).
+
+| Install | Web UI | Health check |
+|---|---|---|
+| Docker | `http://localhost` (`https://localhost` when `AUTOBOT_DOCKER_NGINX_CONF` selects the TLS config) | `curl http://localhost/api/system/health` (with TLS: `curl -k https://localhost/api/system/health`) |
+| Native (`install.sh`) | `https://<server>` (SLM at `/slm/`) | `curl -k https://<server>/api/system/health` (self-signed certificate) |
+
 **Diagnosis**:
 ```bash
-# Check if port is in use
-netstat -tlnp | grep 8001
+# Is nginx listening? (Docker: 80; native: 443)
+ss -tlnp | grep -E ':(80|443)\b'
 
-# Test local connection
-curl http://localhost:8001/health
+# Docker: are the containers up and healthy?
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets ps
+
+# Native: are the services running?
+systemctl status nginx autobot-slm-backend
 ```
 
 **Solutions**:
-- Change port in configuration
-- Check firewall settings
-- Verify network bindings
+- Run the health check for your install type from the table above
+- Check firewall settings for port 80 (Docker) or 443 (native)
+- Docker: `docker compose --env-file docker/.env.docker --env-file docker/.env.secrets logs autobot-frontend autobot-backend` (the frontend container's nginx serves the UI and proxies `/api`)
 
 #### Issue: Redis connection failed
 **Symptoms**: Knowledge base and memory features unavailable

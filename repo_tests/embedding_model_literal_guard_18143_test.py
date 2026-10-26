@@ -73,7 +73,7 @@ REACH_PY = declare(
     "embedding-model-literal-sites",
     discover=_py_files,
     # Mid-window (2454..2754) from REACH_PY.window(): population 2754, growth 300; two infra builders added (#18328).
-    floor=2725,  # train 30: re-pinned mid-window (#15928)
+    floor=2850,  # train 30: re-pinned mid-window (#15928)
     what="production python files, parsed for embedding-model string constants",
     roots=_ROOTS,
     growth=300,

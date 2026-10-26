@@ -23,6 +23,12 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "Non-test Python under the backend and shared trees, a subset of tracked Python; the test share and "
         "the other trees grow at their own rate, so a share of all Python would sink with nothing wrong.",
     ),
+    "browser-port-single-home-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Tracked code, config and env files by extension, minus docs/ and changelog/; the Markdown and "
+        "asset share grows at its own rate, so a share of all tracked files would sink with nothing wrong.",
+    ),
     "brand-mark-announcer-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

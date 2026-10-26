@@ -20,6 +20,8 @@ from typing import Any, Dict, List, Optional
 
 from autobot_shared.logging_manager import get_logger
 
+from .collections import agent_collection, company_collection, kb_chroma_client, project_collection
+
 logger = get_logger(__name__)
 
 
@@ -45,6 +47,17 @@ class LLCContext:
     chunks: List[Dict[str, Any]] = field(default_factory=list)
     sources: List[str] = field(default_factory=list)
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+def _collections_for(company_id: str, project_id: Optional[str], agent_id: Optional[str]) -> List[str]:
+    """Collection names one assemble() call queries: project, agent, company."""
+    names = []
+    if project_id:
+        names.append(project_collection(project_id))
+    if agent_id:
+        names.append(agent_collection(agent_id))
+    names.append(company_collection(company_id))
+    return names
 
 
 class LLCRAGAssembler:
@@ -80,24 +93,13 @@ class LLCRAGAssembler:
             LLCContext with merged chunks from all relevant collections.
         """
         try:
-            try:
-                from utils.async_chromadb_client import get_async_chromadb_client
-            except ImportError as e:
-                logger.error("ChromaDB client not available: %s", e)
-                raise
-
-            client = await get_async_chromadb_client()
+            # #19519: the same client and name builder the collections are
+            # created through — a raw client or a hand-built name finds nothing.
+            client = await kb_chroma_client()
 
             # Determine query parameters based on profile
             query_params = self._get_query_params(profile, project_id, agent_id, query_text)
-
-            # Build ChromaDB collection names (scope: company, project, agent)
-            collections_to_query = []
-            if project_id:
-                collections_to_query.append(f"{company_id}:project:{project_id}")
-            if agent_id:
-                collections_to_query.append(f"{company_id}:agent:{agent_id}")
-            collections_to_query.append(f"{company_id}:company")
+            collections_to_query = _collections_for(company_id, project_id, agent_id)
 
             # Query all collections in parallel (each ≤ 800ms target)
             tasks = [

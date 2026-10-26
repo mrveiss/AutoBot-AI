@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for ArtifactIngestor — work products indexed into project KB (GH#8242)."""
 
-import sys
 import uuid
 from typing import Optional
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -116,10 +115,7 @@ async def test_ingest_indexes_content_text(ingestor, mock_session):
     mock_client = AsyncMock()
     mock_client.get_or_create_collection = AsyncMock(return_value=mock_collection)
 
-    mock_chroma_module = MagicMock()
-    mock_chroma_module.get_async_chromadb_client = AsyncMock(return_value=mock_client)
-
-    with patch.dict(sys.modules, {"utils.async_chromadb_client": mock_chroma_module}):
+    with patch("llc.kb.artifact_ingestor.kb_chroma_client", new=AsyncMock(return_value=mock_client)):
         result = await ingestor.ingest(
             mock_session,
             work_product_id=str(product.id),
@@ -242,7 +238,7 @@ async def test_ingest_all_pending_counts_only_successful(ingestor, mock_session)
     mock_session.execute.return_value = mock_scalars
 
     # First succeeds, second fails
-    with patch.object(ingestor, "ingest", new=AsyncMock(side_effect=[True, False])) as mock_ingest:
+    with patch.object(ingestor, "ingest", new=AsyncMock(side_effect=[True, False])):
         count = await ingestor.ingest_all_pending(
             mock_session,
             work_item_id=str(item_id),
@@ -319,8 +315,8 @@ async def test_ingest_skips_guard_when_no_company_id(ingestor, mock_session):
         mock_collection = AsyncMock()
         mock_client.get_or_create_collection.return_value = mock_collection
 
-        with patch("utils.async_chromadb_client.get_async_chromadb_client", new=AsyncMock(return_value=mock_client)):
-            result = await ingestor.ingest(
+        with patch("llc.kb.artifact_ingestor.kb_chroma_client", new=AsyncMock(return_value=mock_client)):
+            await ingestor.ingest(
                 mock_session,
                 work_product_id=str(product_id),
                 project_id=str(project_id),

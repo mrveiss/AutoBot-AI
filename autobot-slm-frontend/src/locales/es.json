@@ -989,7 +989,8 @@
     "stepValue0Of3": "Step {value0} of 3",
     "targetHosts": "Target Hosts",
     "thisPlaybookWillMake": "This playbook will make changes to your infrastructure. Please review the configuration carefully before proceeding.",
-    "whatHappensNext": "What happens next?"
+    "whatHappensNext": "What happens next?",
+    "failedToExecutePlaybook": "Failed to execute playbook"
   },
   "loginView": {
     "authenticationCode": "Authentication code",
@@ -3120,7 +3121,13 @@
     "upgradeAll": "Upgrade All",
     "upgradeSelectedValue0": "Upgrade Selected ({value0})",
     "value0Value1Nodes": "{value0} / {value1} nodes",
-    "version": "Version"
+    "version": "Version",
+    "discoveryCompleted": "Discovery completed",
+    "upgradeJobsStarted": "Upgrade jobs started",
+    "confirmCancelJob": "Cancel this update job?",
+    "jobCancelled": "Job cancelled",
+    "confirmUpgradeAllOnNode": "Upgrade ALL packages on {nodeId}?",
+    "upgradeAllStartedOnNode": "Upgrade all started for {nodeId}"
   },
   "tools": {
     "admin": {
@@ -3237,7 +3244,13 @@
         "running": "Running",
         "started": "Started",
         "totalJobs": "Total Jobs",
-        "value0Value1ItemsValue2": "{value0} / {value1} items ({value2}%)"
+        "value0Value1ItemsValue2": "{value0} / {value1} items ({value2}%)",
+        "failedToLoadJobs": "Failed to load jobs",
+        "failedToCreateJob": "Failed to create job",
+        "failedToCancelJob": "No se pudo cancelar el trabajo",
+        "failedToRetryJob": "Failed to retry job",
+        "failedToDeleteJob": "Failed to delete job",
+        "confirmDeleteJob": "Are you sure you want to delete this job?"
       },
       "browserTool": {
         "back": "Atrás",

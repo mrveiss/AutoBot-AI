@@ -114,9 +114,10 @@ def test_every_pattern_a_changes_job_read_is_still_read(case):
 #: separate from the regenerable pre-#15360 fixture, so removing an entry from gate-paths.yml still
 #: fails here. It was held by changes_job_equivalence_15360_test.py until #18208 retired that test.
 ISSUE_17822_FIXTURE = Path(__file__).parent / "fixtures" / "issue_17822_migration_gate_entries.json"
-#: 14 = the eleven #17822 entries plus `services/__init__.py`, `services/approval_gate_service.py` and
-#: `llc/services/workspace_lease.py` (#17996), which the migration tests import.
-ISSUE_17822_COUNT = 14
+#: 16 = the eleven #17822 entries plus `services/__init__.py`, `services/approval_gate_service.py` and
+#: `llc/services/workspace_lease.py` (#17996), and `llc/services/company.py` + `company_ceo.py` (#15907's
+#: concurrent-move test), which the migration tests import.
+ISSUE_17822_COUNT = 16
 
 
 def test_the_issue_17822_migration_entries_are_still_read():

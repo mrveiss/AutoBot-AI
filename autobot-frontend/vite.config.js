@@ -46,7 +46,10 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const config = {
     backend: { host: env.VITE_BACKEND_HOST || '127.0.0.1', port: env.VITE_BACKEND_PORT || '8001' },
-    browser: { host: env.VITE_BROWSER_HOST || '127.0.0.1', port: env.VITE_BROWSER_PORT || '3000' },
+    // #19324: 9001, pinned to PORT_DEFAULTS.browser in src/config/ssot-config.ts by
+    // repo_tests/browser_port_single_home_19324_test.py. That module runs getConfig()
+    // at import (import.meta.env), which vite's own config cannot evaluate.
+    browser: { host: env.VITE_BROWSER_HOST || '127.0.0.1', port: env.VITE_BROWSER_PORT || '9001' },
     vnc: { host: env.VITE_DESKTOP_VNC_HOST || env.VITE_BACKEND_HOST || '127.0.0.1', port: env.VITE_DESKTOP_VNC_PORT || '6080' },
     protocol: env.VITE_HTTP_PROTOCOL || 'http'
   }

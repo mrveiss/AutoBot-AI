@@ -218,8 +218,6 @@ AutoBot keeps your AI and your data on infrastructure you control:
 - **Low latency** — local inference and command execution, no network round-trip
 - **Scale on your terms** — grow within your own infrastructure with the SLM
 
-📚 **Learn more:** [Why Self-Hosted Infrastructure Automation?](docs/self-hosted-advantages.md)
-
 ---
 
 ## Architecture Overview
@@ -321,8 +319,8 @@ AutoBot runs as a coordinated set of services. Ports differ by install mode.
 **Native install:** nginx serves HTTPS on 443 and proxies the API at `/api`; the SLM is at
 `https://<server>/slm/`. Per-service ports on the fleet nodes are set by the roles you assign.
 
-**Health check:** Docker `curl http://localhost/api/health`; native
-`curl -k https://<server>/api/health` (self-signed certificate).
+**Health check:** Docker `curl http://localhost/api/system/health`; native
+`curl -k https://<server>/api/system/health` (self-signed certificate).
 
 ---
 
@@ -519,7 +517,7 @@ the support contact path live in **[FUNDING.md](FUNDING.md)**.
 
 **Current version**: see the [GitHub Releases](https://github.com/mrveiss/AutoBot-AI/releases) page and the [CHANGELOG](CHANGELOG.md) (Active Development)
 
-AutoBot is actively developed and used for self-hosted AI and infrastructure automation.
+AutoBot is actively developed and used for self-hosted AI.
 It's suitable for:
 - ✅ Self-hosted deployments on your infrastructure
 - ✅ Development and testing environments

@@ -16,6 +16,7 @@ from unittest.mock import create_autospec, patch
 import pytest
 
 from api.knowledge_mcp import KnowledgeSearchRequest, mcp_search_knowledge_base
+from knowledge.ownership import KnowledgeOwnership
 from knowledge_base import KnowledgeBase
 
 
@@ -23,7 +24,10 @@ from knowledge_base import KnowledgeBase
 @pytest.mark.parametrize("filters", [{"category": "docs"}, None], ids=["caller-filter", "default-filter"])
 async def test_mcp_search_does_not_opt_out_of_the_serving_check(filters):
     mock_kb = create_autospec(KnowledgeBase, instance=True)
-    mock_kb.search.return_value = [{"content": "kept", "score": 0.9, "metadata": {}}]
+    mock_kb.search.return_value = [
+        {"content": "kept", "score": 0.9, "metadata": {"owner_id": "test-user", "visibility": "private"}}
+    ]
+    mock_kb.ownership_manager = KnowledgeOwnership(None)  # #16665: results are scoped to the caller
 
     with patch("api.knowledge_mcp.get_knowledge_base", return_value=mock_kb):
         response = await mcp_search_knowledge_base(
