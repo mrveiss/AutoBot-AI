@@ -4243,6 +4243,9 @@
       "errorEnterBoth": "Lūdzu, ievadiet gan sākuma, gan mērķa entītiju.",
       "notInGraph": "Šīs entītijas vēl nav attiecību grafā.",
       "notInGraphHint": "Tās pastāv, bet tām nav grafa saišu, tāpēc savienojumu nevar izsekot. Palaidiet entītiju izguvi vēlreiz."
+    },
+    "chromaExplorer": {
+      "subtitle": "Pārlūkot un meklēt vektoru kolekcijas"
     }
   },
   "workflow": {

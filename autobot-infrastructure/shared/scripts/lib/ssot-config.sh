@@ -106,6 +106,7 @@ fi
 : "${AUTOBOT_BROWSER_SERVICE_HOST:=127.0.0.1}"
 : "${AUTOBOT_SLM_HOST:=127.0.0.1}"
 : "${AUTOBOT_OLLAMA_HOST:=127.0.0.1}"
+: "${AUTOBOT_CHROMADB_HOST:=127.0.0.1}"
 
 # PortConfig
 : "${AUTOBOT_BACKEND_PORT:=8001}"
@@ -119,6 +120,9 @@ fi
 : "${AUTOBOT_BROWSER_SERVICE_PORT:=9001}"
 : "${AUTOBOT_OLLAMA_PORT:=11434}"
 : "${AUTOBOT_VNC_PORT:=6080}"
+# #19321: the port ChromaDB listens on (PortConfig.chromadb). Pinned to the SSOT
+# default by repo_tests/chromadb_port_one_home_19321_test.py.
+: "${AUTOBOT_CHROMADB_PORT:=8100}"
 
 # RedisConfig
 : "${AUTOBOT_REDIS_PASSWORD:=}"
@@ -149,7 +153,13 @@ fi
 # PathConfig.ssh_user
 : "${AUTOBOT_SSH_USER:=autobot}"
 
-# MiscConfig.slm_node_id
+# MiscConfig.slm_node_id. #19322: SLM_NODE_ID is each host's own agent id; as the
+# manager's id it is a deprecated alias, honoured (with a warning) only when the
+# canonical name is unset -- the same order the SLM backend resolves them in.
+if [ -z "${AUTOBOT_SLM_NODE_ID:-}" ] && [ -n "${SLM_NODE_ID:-}" ]; then
+    echo "WARNING: SLM_NODE_ID is deprecated for the SLM manager's node id; set AUTOBOT_SLM_NODE_ID=${SLM_NODE_ID}" >&2
+    AUTOBOT_SLM_NODE_ID="${SLM_NODE_ID}"
+fi
 : "${AUTOBOT_SLM_NODE_ID:=00-SLM-Manager}"
 
 # VNC: network/network-config.sh is the only script that reads all four
@@ -168,10 +178,10 @@ fi
 
 export AUTOBOT_BACKEND_HOST AUTOBOT_FRONTEND_HOST AUTOBOT_NPU_WORKER_HOST \
     AUTOBOT_REDIS_HOST AUTOBOT_AI_STACK_HOST AUTOBOT_BROWSER_SERVICE_HOST \
-    AUTOBOT_SLM_HOST AUTOBOT_OLLAMA_HOST \
+    AUTOBOT_SLM_HOST AUTOBOT_OLLAMA_HOST AUTOBOT_CHROMADB_HOST \
     AUTOBOT_BACKEND_PORT AUTOBOT_FRONTEND_PORT AUTOBOT_NPU_WORKER_PORT \
     AUTOBOT_REDIS_PORT AUTOBOT_AI_STACK_PORT AUTOBOT_BROWSER_SERVICE_PORT \
-    AUTOBOT_OLLAMA_PORT AUTOBOT_VNC_PORT \
+    AUTOBOT_OLLAMA_PORT AUTOBOT_VNC_PORT AUTOBOT_CHROMADB_PORT \
     AUTOBOT_REDIS_PASSWORD AUTOBOT_REDIS_DB_CELERY_BROKER AUTOBOT_REDIS_DB_CELERY_RESULTS \
     AUTOBOT_API_TIMEOUT \
     AUTOBOT_NOVNC_PATH NETWORK_SUBNET \

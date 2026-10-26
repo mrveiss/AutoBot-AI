@@ -166,7 +166,7 @@ async def run_doctor() -> dict[str, Any]:
     chromadb_port = config.port.chromadb
 
     ollama_reachable, ollama_detail = await _probe_http(f"{ollama_base}/api/tags")
-    chromadb_reachable, chromadb_detail = await _probe_http(f"http://{chromadb_host}:{chromadb_port}/api/v1/heartbeat")
+    chromadb_reachable, chromadb_detail = await _probe_http(f"http://{chromadb_host}:{chromadb_port}/api/v2/heartbeat")
     redis_reachable, redis_detail = await _probe_redis()
 
     services = {
