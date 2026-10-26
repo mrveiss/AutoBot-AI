@@ -121,7 +121,7 @@ import os
 BASE_URL     = "https://autobot.example.com:8443/api"
 TOKEN        = "your-jwt-token"
 OLLAMA_URL   = os.getenv("AUTOBOT_OLLAMA_ENDPOINT", "http://localhost:11434")
-MODEL        = "llama3:8b"
+MODEL        = "qwen3.5:9b"
 
 client = httpx.Client(
     base_url=BASE_URL,
