@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Tuple
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 
+from .feature_boot_policy import enforce_feature_boot_policy
 from .loader import get_load_results, load_router_group
 
 logger = get_logger(__name__)
@@ -738,24 +739,19 @@ def load_feature_routers() -> List[Tuple]:
 
     #6797: When fewer routers loaded than configured, escalate the summary log
     to ERROR (was always INFO) so the partial-boot state is loud at deploy
-    time. Optional strict mode via ``AUTOBOT_FEATURE_ROUTERS_STRICT=1`` raises
-    instead of warning, for production deploys that want hard guarantees.
+    time. Strict mode (``config.misc.feature_routers_strict``) raises instead; on
+    by default, off in the production profile (``ssot_role_mirrors``, #19319).
+    A required security router aborts startup in either mode (#19319).
 
     Returns:
         list: List of tuples in format (router, prefix, tags, name)
               Only includes routers that successfully imported.
     """
     # #14207: the reset, the loop and the loaded/expected summary are the
-    # shared loader's, which every registry now uses. Strict mode stays here
-    # because it is this group's policy, not the mechanism's.
+    # shared loader's. The abort policy (strict mode, and the security routers
+    # that abort in any mode, #19319) is this group's, in feature_boot_policy.
     optional_routers = load_router_group("feature", FEATURE_ROUTER_CONFIGS)
-
-    failed = [r for r in _load_results() if not r["loaded"]]
-    if failed and config.misc.feature_routers_strict.lower() in {"1", "true", "yes"}:
-        raise RuntimeError(
-            f"AUTOBOT_FEATURE_ROUTERS_STRICT=1 — {len(failed)} feature router(s) "
-            f"failed to load: {', '.join(r['name'] for r in failed)}"
-        )
+    enforce_feature_boot_policy(_load_results(), config.misc.feature_routers_strict)
     # #6808: publish this worker's results to Redis so the health endpoint can
     # aggregate across all workers instead of returning a per-worker snapshot.
     _publish_load_results_to_redis(_load_results())

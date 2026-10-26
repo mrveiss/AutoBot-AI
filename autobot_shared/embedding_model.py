@@ -18,15 +18,14 @@ changing the model without re-indexing strands every stored vector.
 
 from __future__ import annotations
 
-import logging
 import re
 import time
 
 from autobot_shared.env_utils import env_float_clamped
+from autobot_shared.logging_manager import get_logger
 
-# stdlib logging, not get_logger(): this module is imported by modules that tests load under
-# a mocked config, where get_logger() sizes its file handler from config (as redis_client does).
-logger = logging.getLogger(__name__)
+# Must import under a fully mocked config: autobot_shared/import_under_mocked_config_19288_test.py.
+logger = get_logger(__name__)
 
 EMBEDDING_OVERRIDE_KEY = "autobot:kb:embedding_model"
 EMBEDDING_OVERRIDE_CACHE_S = env_float_clamped("AUTOBOT_EMBEDDING_OVERRIDE_CACHE_SECONDS", 5.0, 0.0, 300.0)

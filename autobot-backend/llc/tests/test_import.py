@@ -228,6 +228,8 @@ async def test_execute_import_happy_path() -> None:
 
     with (
         patch.object(svc, "_resolve_or_create_company", return_value=company_id),
+        # The CEO step has its own SQLite tests (#19588); this mock session cannot run it.
+        patch("llc.services.portability.settle_imported_ceo", AsyncMock()),
         patch.object(svc, "_import_agent", return_value=str(uuid.uuid4())),
         patch.object(svc, "_import_goal", return_value=uuid.uuid4()),
         patch.object(svc, "_import_project", return_value=uuid.uuid4()),
@@ -350,6 +352,8 @@ async def test_execute_import_skips_non_seed_work_items() -> None:
 
     with (
         patch.object(svc, "_resolve_or_create_company", return_value=company_id),
+        # The CEO step has its own SQLite tests (#19588); this mock session cannot run it.
+        patch("llc.services.portability.settle_imported_ceo", AsyncMock()),
         patch.object(svc, "_import_work_item", side_effect=fake_import_work_item),
     ):
         sp_mock = AsyncMock()

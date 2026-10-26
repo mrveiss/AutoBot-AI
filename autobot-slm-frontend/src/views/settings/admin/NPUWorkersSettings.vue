@@ -87,7 +87,7 @@ async function fetchWorkers(): Promise<void> {
   try {
     workers.value = await api.getNPUWorkers()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load workers'
+    error.value = e instanceof Error ? e.message : t('settings.admin.nPUWorkersSettings.failedToLoadWorkers')
   } finally {
     loading.value = false
   }
@@ -120,10 +120,10 @@ async function saveLoadBalancingConfig(): Promise<void> {
 
   try {
     await api.updateNPULoadBalancingConfig(loadBalancingConfig)
-    success.value = 'Load balancing configuration saved'
+    success.value = t('settings.admin.nPUWorkersSettings.loadBalancingSaved')
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save configuration'
+    error.value = e instanceof Error ? e.message : t('settings.admin.nPUWorkersSettings.failedToSaveConfiguration')
   } finally {
     saving.value = false
   }
@@ -188,12 +188,12 @@ async function saveWorker(): Promise<void> {
       await api.pairNPUWorker({ url, name: workerForm.name, enabled: workerForm.enabled })
     }
 
-    success.value = `Worker ${editingWorker.value ? 'updated' : 'paired'} successfully`
+    success.value = t(editingWorker.value ? 'settings.admin.nPUWorkersSettings.workerUpdated' : 'settings.admin.nPUWorkersSettings.workerPaired')
     closeModal()
     await fetchWorkers()
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save worker'
+    error.value = e instanceof Error ? e.message : t('settings.admin.nPUWorkersSettings.failedToSaveWorker')
   } finally {
     saving.value = false
   }
@@ -209,10 +209,10 @@ async function testWorker(worker: NPUWorker): Promise<void> {
       error.value = result.error_message || t('settings.admin.nPUWorkersSettings.connectionTestFailed')
       return
     }
-    success.value = `Connection to ${worker.hostname} successful`
+    success.value = t('settings.admin.nPUWorkersSettings.connectionSuccessful', { hostname: worker.hostname })
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Connection test failed'
+    error.value = e instanceof Error ? e.message : t('settings.admin.nPUWorkersSettings.connectionTestFailed')
   } finally {
     testingWorker.value[worker.id] = false
   }
@@ -232,12 +232,12 @@ async function deleteWorker(): Promise<void> {
 
   try {
     await api.removeNPUWorker(deleteTarget.value.id)
-    success.value = 'Worker removed successfully'
+    success.value = t('settings.admin.nPUWorkersSettings.workerRemoved')
     deleteTarget.value = null
     await fetchWorkers()
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to remove worker'
+    error.value = e instanceof Error ? e.message : t('settings.admin.nPUWorkersSettings.failedToRemoveWorker')
   } finally {
     saving.value = false
   }
@@ -292,12 +292,7 @@ onUnmounted(() => {
     <!-- Messages -->
     <BaseAlert v-if="error" variant="error" :message="error" dismissible :dismiss-label="$t('settings.admin.nPUWorkersSettings.dismissError')" @dismiss="error = null" />
 
-    <div v-if="success" class="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 flex items-center gap-3">
-      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      {{ success }}
-    </div>
+    <BaseAlert v-if="success" variant="success" :message="success" />
 
     <!-- Header -->
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">

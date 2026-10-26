@@ -30,6 +30,7 @@ import asyncio
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from constants.rag_graph_constants import RAG_GRAPH_PATH_DEPTH
 
 from .core import AutoBotMemoryGraphCore
 from .owner_scope import UNSCOPED_ALL_USERS, OwnerScope, entity_visible, require_scope
@@ -249,7 +250,7 @@ class PropertyGraphMixin:
         from_entity: str,
         to_entity: str,
         relation: str | None = None,
-        max_depth: int = 6,
+        max_depth: int = RAG_GRAPH_PATH_DEPTH,
         direction: str = "both",
         *,
         owner: Any,

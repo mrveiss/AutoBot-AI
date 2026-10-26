@@ -78,10 +78,10 @@ for vm in autobot-backend autobot-frontend nginx; do
 done
 ```
 
-Or trigger a full Ansible deploy which will restart services automatically:
+Or redeploy through the builtin updater, which restarts services:
 
 ```bash
-ansible-playbook playbooks/deploy.yml
+# SLM: Maintenance -> Updates -> Code Sync (never a hand-run deploy against the fleet)
 ```
 
 ### 5. Verify
@@ -100,8 +100,9 @@ All certificates should show as valid and no "RENEWAL NEEDED" entries should rem
 If the new CA causes issues, restore the backup:
 
 ```bash
-# Stop services first to avoid partial-state reads
-ansible-playbook playbooks/stop-services.yml
+# Stop services first to avoid partial-state reads: per service, from the SLM (node -> Services
+# -> Stop), or the playbook it runs, once per service:
+ansible-playbook playbooks/slm-service-control.yml -e target=<node> -e service=<unit> -e action=stop
 
 # Restore old certs
 rm -rf certs/
@@ -110,8 +111,7 @@ cp -r certs.bak-<YYYYMMDD>/ certs/
 # Re-distribute old certs
 python3 -m pki.cli distribute
 
-# Restart services
-ansible-playbook playbooks/deploy.yml
+# Restart services: from the SLM (node -> Services -> Start), or redeploy through Code Sync
 ```
 
 ---

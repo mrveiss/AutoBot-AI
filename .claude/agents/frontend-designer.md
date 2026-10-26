@@ -169,8 +169,7 @@ vim backend/api/chat.py
 
 # Then sync to the AI Stack role
 ./scripts/utilities/sync-to-vm.sh ai-stack backend/api/ /home/autobot/backend/api/
-# OR
-ansible-playbook -i ansible/inventory ansible/playbooks/deploy-backend.yml
+# OR, for a deployed fleet: the builtin updater (SLM Maintenance -> Updates -> Code Sync), never ad-hoc ansible
 ```
 [Code example removed for token optimization]
 ```bash
@@ -178,7 +177,7 @@ ansible-playbook -i ansible/inventory ansible/playbooks/deploy-backend.yml
 vim config/redis.conf
 
 # Then deploy via Ansible
-ansible-playbook -i ansible/inventory ansible/playbooks/update-redis-config.yml
+# Deployed hosts update through the builtin updater (SLM Maintenance -> Updates -> Code Sync); never an ad-hoc playbook run
 ```
 [Code example removed for token optimization]
 ```bash
@@ -186,7 +185,7 @@ ansible-playbook -i ansible/inventory ansible/playbooks/update-redis-config.yml
 vim docker-compose.yml
 
 # Then deploy via Ansible
-ansible-playbook -i ansible/inventory ansible/playbooks/deploy-infrastructure.yml
+# Deployed hosts update through the builtin updater (SLM Maintenance -> Updates -> Code Sync); never an ad-hoc playbook run
 ```
 [Code example removed for token optimization]
 ```bash
@@ -207,11 +206,11 @@ vim app.py
 
 # RIGHT - Local config + Ansible
 vim config/redis.conf  
-ansible-playbook ansible/playbooks/update-redis.yml
+# Deployed hosts update through the builtin updater (SLM Maintenance -> Updates -> Code Sync); never an ad-hoc playbook run
 
 # RIGHT - Local Docker + deployment
 vim docker-compose.yml
-ansible-playbook ansible/playbooks/deploy-containers.yml
+# Deployed hosts update through the builtin updater (SLM Maintenance -> Updates -> Code Sync); never an ad-hoc playbook run
 ```
 
 **This policy is NON-NEGOTIABLE. Violations will be corrected immediately.**

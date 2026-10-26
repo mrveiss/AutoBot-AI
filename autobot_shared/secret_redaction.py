@@ -297,6 +297,8 @@ class RedactedReprMixin:
 #: Stand-in used by :func:`redact_text` / :func:`redact_mapping`; distinct from :data:`REDACTED_PLACEHOLDER`
 #: because log and extra-vars consumers (and their tests) key on this exact value.
 LOG_MASK = "***"
+#: Spellings redactors emitted before #19337; read-side only (never emitted): a value equal to one is redacted.
+LEGACY_PLACEHOLDERS: FrozenSet[str] = frozenset({"***REDACTED***", "<redacted>"})
 
 #: The template export's pre-#17336 exact names: ``True`` under one stays a placeholder (#18196, #17337 AC2).
 LEGACY_EXPORT_KEY_NAMES = frozenset(

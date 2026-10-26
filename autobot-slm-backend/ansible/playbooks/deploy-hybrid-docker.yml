@@ -109,7 +109,7 @@
             - { name: 'AI Stack', port: '8080' }
             - { name: 'NPU Worker', port: '8081' }
           'autobot-browser':
-            - { name: 'Playwright', port: '3000' }
+            - { name: 'Playwright', port: '{{ playwright_port | default(9001) }}' }
             - { name: 'VNC', port: '5900' }
 
 ---
@@ -436,20 +436,20 @@
               container_name: {{ container_name }}
               restart: unless-stopped
               ports:
-                - "3000:3000"
+                - "{{ playwright_port | default(9001) }}:{{ playwright_port | default(9001) }}"
                 - "5900:5900"
               volumes:
                 - browser_data:/app/data
                 - browser_logs:/app/logs
               environment:
-                - PLAYWRIGHT_SERVER_PORT=3000
+                - PLAYWRIGHT_SERVER_PORT={{ playwright_port | default(9001) }}
                 - DISPLAY=:99
                 - REDIS_HOST={{ hostvars['autobot-database']['ansible_host'] }}
               command: >
                 sh -c "Xvfb :99 -screen 0 1920x1080x24 &
-                       npx playwright run-server --port 3000 --host 0.0.0.0"
+                       npx playwright run-server --port {{ playwright_port | default(9001) }} --host 0.0.0.0"
               healthcheck:
-                test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+                test: ["CMD", "curl", "-f", "http://localhost:{{ playwright_port | default(9001) }}/health"]
                 interval: 30s
                 timeout: 10s
                 retries: 3
@@ -477,7 +477,7 @@
 
     - name: Wait for Browser service to be ready
       wait_for:
-        port: 3000
+        port: "{{ playwright_port | default(9001) }}"
         host: "{{ ansible_facts['default_ipv4'].address | default(ansible_host) }}"
         delay: 10
         timeout: 120
@@ -513,7 +513,7 @@
             - { url: 'http://localhost:8080/health', name: 'AI Stack' }
             - { url: 'http://localhost:8081/health', name: 'NPU Worker' }
           'autobot-browser':
-            - { url: 'http://localhost:3000/health', name: 'Browser Service' }
+            - { url: 'http://localhost:{{ playwright_port | default(9001) }}/health', name: 'Browser Service' }
       # Endpoint tests are informational; services may still be starting (#2950)
       failed_when: false
 

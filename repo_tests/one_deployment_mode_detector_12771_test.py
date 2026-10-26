@@ -65,6 +65,10 @@ def test_literal_expectations() -> None:
     assert detect_deployment_mode(M.CLOUD, True, True, True) is M.CLOUD
 
 
+#: The shared functions a thin ``_detect_deployment_mode`` may delegate to (#19372 added the resolver).
+_DELEGATES = {"detect_deployment_mode", "resolve_deployment_mode"}
+
+
 def _forking_detectors(source: str) -> list[str]:
     """`_detect_deployment_mode` defs that do not delegate, or that return a mode themselves."""
     bad = []
@@ -81,7 +85,7 @@ def _forking_detectors(source: str) -> list[str]:
             )
             for r in ast.walk(node)
         )
-        if "detect_deployment_mode" not in calls or decides:
+        if not calls & _DELEGATES or decides:
             bad.append(node.name)
     return bad
 
@@ -96,7 +100,7 @@ def _scanned_files(root: Path) -> list[str]:
 SCAN_REACH = declare(
     "deployment-mode-detector-scan",
     discover=_scanned_files,
-    floor=5076,  # re-pinned mid-window (train 82 on main)
+    floor=5139,  # re-pinned mid-window (train 82 on main)
     growth=150,
     what="python files scanned for a second deployment-mode decision body",
     roots=("autobot-backend/", "autobot-infrastructure/"),

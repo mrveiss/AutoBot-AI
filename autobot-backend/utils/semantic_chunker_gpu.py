@@ -38,7 +38,12 @@ import numpy as np
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import TimingConstants
-from utils.semantic_chunker_base import SemanticChunk, SemanticChunkerBase
+from utils.semantic_chunker_base import (
+    SENTENCE_EMBEDDING_MODEL,
+    SemanticChunk,
+    SemanticChunkerBase,
+    load_sentence_transformer,
+)
 
 __all__ = ["GPUSemanticChunker", "SemanticChunk", "get_gpu_semantic_chunker"]
 
@@ -61,7 +66,7 @@ class GPUSemanticChunker(SemanticChunkerBase):
 
     def __init__(
         self,
-        embedding_model: str = "all-MiniLM-L6-v2",
+        embedding_model: str = SENTENCE_EMBEDDING_MODEL,
         percentile_threshold: float = 95.0,
         min_chunk_size: int = 100,
         max_chunk_size: int = 1000,
@@ -184,7 +189,6 @@ class GPUSemanticChunker(SemanticChunkerBase):
 
     def _load_model_with_optimizations(self):
         import torch
-        from sentence_transformers import SentenceTransformer
 
         self._setup_gpu_optimizations()
         self._initialize_gpu_memory_pool()
@@ -199,15 +203,14 @@ class GPUSemanticChunker(SemanticChunkerBase):
             logger.warning("CUDA not available - falling back to CPU")
 
         logger.info("Loading model with GPU optimizations...")
-        model = SentenceTransformer(self.embedding_model_name, device=device)
+        model = load_sentence_transformer(self.embedding_model_name, device=device)
         return self._apply_model_optimizations(model, device)
 
     def _load_fallback_model(self) -> None:
         import torch
-        from sentence_transformers import SentenceTransformer
 
         device = "cuda" if torch.cuda.is_available() else "cpu"
-        self._embedding_model = SentenceTransformer(self.embedding_model_name, device=device)
+        self._embedding_model = load_sentence_transformer(self.embedding_model_name, device=device)
         logger.warning("Using basic model fallback")
 
     async def _initialize_model(self) -> None:
