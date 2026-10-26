@@ -34,6 +34,8 @@ Configuration via environment variables:
 import logging
 import os
 
+from autobot_shared.deployment_profile import environment_name
+
 logger = logging.getLogger(__name__)
 
 # Lazy-loaded OpenTelemetry imports (graceful degradation if not installed)
@@ -81,7 +83,7 @@ def _create_tracer_provider(service_name: str, service_version: str | None):
         {
             "service.name": service_name,
             "service.version": version,  # type: ignore[dict-item]  # GH#7105: OTel stubs expect int|float|Sequence; str valid at runtime  # noqa: E501
-            "deployment.environment": os.getenv("AUTOBOT_ENVIRONMENT", "development"),
+            "deployment.environment": environment_name(),  # #19315: the one environment setting
         }
     )
 

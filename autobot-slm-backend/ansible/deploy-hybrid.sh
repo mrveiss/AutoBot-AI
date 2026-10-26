@@ -62,7 +62,7 @@ show_deployment_plan() {
     log "INFO" "  • Ollama LLM server (port 11434)"
     log "INFO" ""
     log "INFO" "VM5 (${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}) - autobot-browser:"
-    log "INFO" "  • Playwright browser service (port 3000)"
+    log "INFO" "  • Playwright browser service (port ${AUTOBOT_BROWSER_SERVICE_PORT:-9001})"
     log "INFO" "  • VNC server for desktop access (port 5900)"
     log "INFO" ""
 }
@@ -121,7 +121,7 @@ AUTOBOT_OLLAMA_HOST=${AUTOBOT_AI_STACK_HOST:-localhost}
 AUTOBOT_OLLAMA_PORT=11434
 
 AUTOBOT_BROWSER_SERVICE_HOST=${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}
-AUTOBOT_BROWSER_PORT=3000
+AUTOBOT_BROWSER_SERVICE_PORT=${AUTOBOT_BROWSER_SERVICE_PORT:-9001}
 
 AUTOBOT_FRONTEND_HOST=${AUTOBOT_FRONTEND_HOST:-localhost}
 AUTOBOT_FRONTEND_PORT=5173
@@ -186,7 +186,7 @@ validate_deployment() {
         "${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT}|AI Stack"
         "${AUTOBOT_AI_STACK_HOST:-localhost}:8081|NPU Worker"
         "${AUTOBOT_AI_STACK_HOST:-localhost}:11434|Ollama"
-        "${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:3000|Browser Service"
+        "${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}|Browser Service"
     )
 
     local failed_services=()
@@ -247,7 +247,7 @@ show_summary() {
     log "INFO" "  AI Stack (VM):    http://${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT}"
     log "INFO" "  NPU Worker (VM):  http://${AUTOBOT_AI_STACK_HOST:-localhost}:8081"
     log "INFO" "  Ollama (VM):      http://${AUTOBOT_AI_STACK_HOST:-localhost}:11434"
-    log "INFO" "  Browser (VM):     http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:3000"
+    log "INFO" "  Browser (VM):     http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT:-9001}"
     log "INFO" ""
     log "INFO" "Next Steps:"
     log "INFO" "  1. Update backend environment: export AUTOBOT_ENV_FILE=${PROJECT_ROOT}/.env.hybrid"

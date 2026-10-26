@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BaseAlert, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseModal, usePollingJob } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -12,6 +12,7 @@ import { BaseAlert, BaseModal } from '@autobot/ui'
  */
 
 import { ref, computed, watch, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { slmApiClient } from '@/utils/ApiClient'
 import { PLAYBOOK_EXECUTE_TIMEOUT_MS, POLLED_READ_MAX_RETRIES } from '@/constants/api-timeouts'
@@ -39,8 +40,10 @@ const currentExecution = ref<PlaybookExecution | null>(null)
 const customVariables = ref<Record<string, string>>({})
 const confirmationChecked = ref(false)
 
-// Polling interval for execution status
-let statusPollInterval: ReturnType<typeof setInterval> | null = null
+const { t } = useI18n()
+
+/** Execution status is polled every second while a playbook runs. */
+const STATUS_POLL_INTERVAL_MS = 1000
 
 const selectedPlaybook = computed(() =>
   playbooks.value.find((p) => p.id === selectedPlaybookId.value)
@@ -102,10 +105,7 @@ function reset(): void {
 }
 
 function stopPolling(): void {
-  if (statusPollInterval) {
-    clearInterval(statusPollInterval)
-    statusPollInterval = null
-  }
+  statusPoller.stop()
 }
 
 async function loadPlaybooks(): Promise<void> {
@@ -150,7 +150,7 @@ async function execute(): Promise<void> {
 
     if (!response.ok) {
       const error = await response.json()
-      throw new Error(error.detail || 'Failed to execute playbook')
+      throw new Error(error.detail || t('infrastructureWizard.failedToExecutePlaybook'))
     }
 
     const data = await response.json()
@@ -160,39 +160,37 @@ async function execute(): Promise<void> {
     // Start polling for status
     startStatusPolling(data.execution.execution_id)
   } catch (e) {
-    executeError.value = e instanceof Error ? e.message : 'Failed to execute playbook'
+    executeError.value = e instanceof Error ? e.message : t('infrastructureWizard.failedToExecutePlaybook')
   } finally {
     isExecuting.value = false
   }
 }
 
-function startStatusPolling(executionId: string): void {
-  stopPolling()
-  statusPollInterval = setInterval(async () => {
-    await pollExecutionStatus(executionId)
-  }, 1000)
+async function fetchExecutionStatus(executionId: string): Promise<PlaybookExecution> {
+  // `POLLED_READ_MAX_RETRIES`: this runs on a 1s interval, and the client's
+  // default GET retry (3 attempts, ~3s of exponential backoff) would leave
+  // several ticks in flight at once and make the reported status lag the run
+  // it describes. A failed tick is retried by the next tick, not in-place.
+  const data = await slmApiClient.get<{ execution: PlaybookExecution }>(
+    `/infrastructure/executions/${executionId}`,
+    { maxRetries: POLLED_READ_MAX_RETRIES }
+  )
+  currentExecution.value = data.execution
+  return data.execution
 }
 
-async function pollExecutionStatus(executionId: string): Promise<void> {
-  try {
-    // `POLLED_READ_MAX_RETRIES`: this runs on a 1s interval, and the client's
-    // default GET retry (3 attempts, ~3s of exponential backoff) would leave
-    // several ticks in flight at once and make the reported status lag the run
-    // it describes. A failed tick is retried by the next tick, not in-place.
-    const data = await slmApiClient.get<{ execution: PlaybookExecution }>(
-      `/infrastructure/executions/${executionId}`,
-      { maxRetries: POLLED_READ_MAX_RETRIES }
-    )
-    currentExecution.value = data.execution
+// usePollingJob stops on unmount too, which the hand-rolled interval did not (#19482).
+// No consecutiveErrorLimit: a running playbook keeps being watched through transient
+// failures, as before, rather than freezing its status.
+const statusPoller = usePollingJob(fetchExecutionStatus, {
+  intervalMs: STATUS_POLL_INTERVAL_MS,
+  maxAttempts: Infinity,
+  isComplete: () => isExecutionComplete.value,
+  onDone: (execution) => emit('executed', execution.execution_id),
+})
 
-    // Stop polling when execution is complete
-    if (isExecutionComplete.value) {
-      stopPolling()
-      emit('executed', executionId)
-    }
-  } catch (e) {
-    logger.error('Error polling execution status:', e)
-  }
+function startStatusPolling(executionId: string): void {
+  statusPoller.start(executionId)
 }
 
 async function cancelExecution(): Promise<void> {

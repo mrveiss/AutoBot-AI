@@ -417,28 +417,11 @@
             </div>
           </div>
           <div class="drill-down-files">
-            <table class="files-table">
-              <thead>
-                <tr>
-                  <th>{{ $t('analytics.codeQuality.file') }}</th>
-                  <th>{{ $t('analytics.codeQuality.issues') }}</th>
-                  <th>{{ $t('analytics.codeQuality.score') }}</th>
-                  <th>{{ $t('analytics.codeQuality.topIssue') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="file in drillDownData.files" :key="file.path">
-                  <td class="file-path">{{ truncatePath(file.path) }}</td>
-                  <td class="issues-count">{{ file.issues }}</td>
-                  <td>
-                    <span class="score-badge" :class="getScoreClass(file.score)">
-                      {{ file.score }}
-                    </span>
-                  </td>
-                  <td class="top-issue">{{ file.top_issue }}</td>
-                </tr>
-              </tbody>
-            </table>
+            <BaseTable :columns="drillDownColumns" :rows="drillDownRows" size="compact" :aria-label="$t('analytics.codeQuality.file')">
+              <template #cell-score="{ row }">
+                <BaseBadge size="sm" :variant="SCORE_VARIANT[getScoreClass(Number(row.score))]">{{ row.score }}</BaseBadge>
+              </template>
+            </BaseTable>
           </div>
       </template>
       <template #actions>
@@ -453,7 +436,7 @@ import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue';
 import TruncationNotice from './TruncationNotice.vue';
 import { useShowMore } from '@autobot/ui'
 import type { DirectiveBinding } from 'vue';
-import { BaseModal } from '@autobot/ui'
+import { BaseBadge, BaseModal, BaseTable, type BadgeVariant, type BaseTableColumn } from '@autobot/ui'
 import { useRoute } from 'vue-router';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
@@ -937,6 +920,18 @@ function getScoreClass(score: number): string {
   if (score >= 40) return 'warning';
   return 'critical';
 }
+
+// #17562: the drill-down file list is the kit table; the score cell is a kit badge.
+const SCORE_VARIANT: Record<string, BadgeVariant> = { excellent: 'success', good: 'info', warning: 'warning', critical: 'error' };
+const drillDownColumns = computed<BaseTableColumn[]>(() => [
+  { key: 'path', label: t('analytics.codeQuality.file'), monospace: true },
+  { key: 'issues', label: t('analytics.codeQuality.issues'), numeric: true },
+  { key: 'score', label: t('analytics.codeQuality.score') },
+  { key: 'top_issue', label: t('analytics.codeQuality.topIssue') },
+]);
+const drillDownRows = computed(() =>
+  drillDownData.value.files.map((file) => ({ ...file, id: file.path, path: truncatePath(file.path) })),
+);
 
 function getTrendClass(trend: number): string {
   if (trend > 0) return 'positive';
@@ -1824,67 +1819,6 @@ watch(selectedPeriod, () => {
 .drill-down-summary .card-label {
   font-size: var(--text-xs);
   color: var(--text-muted);
-}
-
-.files-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-sm);
-}
-
-.files-table th {
-  text-align: left;
-  padding: var(--spacing-3);
-  background: var(--bg-surface);
-  color: var(--text-muted);
-  font-weight: var(--font-semibold);
-}
-
-.files-table td {
-  padding: var(--spacing-3);
-  border-bottom: 1px solid var(--bg-surface);
-  color: var(--text-secondary);
-}
-
-.file-path {
-  font-family: var(--font-mono);
-  color: var(--color-info);
-}
-
-.issues-count {
-  font-weight: var(--font-semibold);
-}
-
-.score-badge {
-  display: inline-block;
-  padding: var(--spacing-1) var(--spacing-2);
-  border-radius: var(--radius-default);
-  font-weight: var(--font-semibold);
-}
-
-.score-badge.excellent {
-  background: var(--color-success-bg);
-  color: var(--color-success);
-}
-
-.score-badge.good {
-  background: var(--color-info-bg);
-  color: var(--color-info);
-}
-
-.score-badge.warning {
-  background: var(--color-warning-bg);
-  color: var(--color-warning);
-}
-
-.score-badge.critical {
-  background: var(--color-error-bg);
-  color: var(--color-error);
-}
-
-.top-issue {
-  color: var(--text-muted);
-  font-size: var(--text-xs);
 }
 
 .btn-secondary {

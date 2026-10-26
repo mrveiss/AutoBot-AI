@@ -1623,14 +1623,6 @@ class WriteFileRequest(BaseModel):
     content: str = Field(..., description="File content to write")
 
 
-class EditFileRequest(BaseModel):
-    """Request model for editing files."""
-
-    path: str = Field(..., description="Absolute path to file")
-    edits: List[Dict[str, str]] = Field(..., description="List of {old_text, new_text} edits")
-    dry_run: bool | None = Field(False, description="Preview changes without applying")
-
-
 class CreateDirectoryRequest(BaseModel):
     """Request model for creating directories."""
 

@@ -166,6 +166,18 @@ class AsyncBaseClient(ABC):
     async def get_collection(self, name: str) -> AsyncBaseCollection:
         """Return existing collection. Raise ``ValueError`` if missing."""
 
+    async def get_collection_or_none(self, name: str) -> AsyncBaseCollection | None:
+        """Return the collection, or ``None`` if it does not exist (#13920).
+
+        Default for backends whose only ``get_collection`` failure is absence;
+        a backend that can also fail by being unreachable overrides this so an
+        outage still raises instead of reading as an empty KB.
+        """
+        try:
+            return await self.get_collection(name)
+        except ValueError:
+            return None
+
     @abstractmethod
     async def create_collection(
         self,

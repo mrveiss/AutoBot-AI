@@ -213,11 +213,10 @@ def _ai_stack_value(role: str) -> str:
 
 def test_complete_yaml_names_no_model() -> None:
     """The tier map is the only model authority; complete.yaml carries no model selection (#15502)."""
-    doc = _load_yaml(_COMPLETE_YAML)
-    # Scoped to the LLM-selection subtrees: knowledge_base.*.chunking.model is a sentence-embedding
-    # model for chunking, not a tier model, and is not part of the tier map.
-    llm_selection = {k: doc[k] for k in ("llm", "agents", "agent_global")}
-    assert _model_key_paths(llm_selection) == []
+    # The whole document (#19430): the old exemption for knowledge_base.semantic_chunking.model
+    # rested on it being a chunker model, but it named the embedding tier and nothing read it. The
+    # chunker's sentence model is code-pinned in utils/semantic_chunker_base.py.
+    assert _model_key_paths(_load_yaml(_COMPLETE_YAML)) == []
 
 
 def test_the_model_key_scan_sees_a_model_when_one_exists() -> None:

@@ -14,6 +14,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from knowledge.ownership import KnowledgeOwnership
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -26,10 +28,18 @@ def _make_kb_result(content: str = "fact text", score: float = 0.9) -> dict:
     return {
         "content": content,
         "score": score,
-        "metadata": {"fact_id": "abc123"},
+        "metadata": {"fact_id": "abc123", "owner_id": "alice", "visibility": "private"},
         "node_id": "node-1",
         "doc_id": "node-1",
     }
+
+
+def _kb(results: list) -> MagicMock:
+    """A KB stub with the real ownership decision (#16665): results are scoped to their owner."""
+    kb = MagicMock()
+    kb.search = AsyncMock(return_value=results)
+    kb.ownership_manager = KnowledgeOwnership(None)
+    return kb
 
 
 # ---------------------------------------------------------------------------
@@ -50,11 +60,10 @@ class TestExecuteKbSearch:
         """Populated KB returns FOUND status and non-empty kb_results."""
         from async_chat_workflow import KnowledgeStatus
 
-        mock_kb = MagicMock()
-        mock_kb.search = AsyncMock(return_value=[_make_kb_result("doc A", 0.95)])
+        mock_kb = _kb([_make_kb_result("doc A", 0.95)])
 
         with patch(f"{_MODULE}.get_knowledge_base_or_none", AsyncMock(return_value=mock_kb)):
-            status, results = await workflow._execute_kb_search("what is autobot")
+            status, results = await workflow._execute_kb_search("what is autobot", "alice")
 
         assert status is KnowledgeStatus.FOUND
         assert len(results) == 1
@@ -123,11 +132,10 @@ class TestExecuteKbSearch:
         from async_chat_workflow import KnowledgeStatus
 
         raw = [_make_kb_result(f"doc {i}", 0.9 - i * 0.1) for i in range(3)]
-        mock_kb = MagicMock()
-        mock_kb.search = AsyncMock(return_value=raw)
+        mock_kb = _kb(raw)
 
         with patch(f"{_MODULE}.get_knowledge_base_or_none", AsyncMock(return_value=mock_kb)):
-            status, results = await workflow._execute_kb_search("query")
+            status, results = await workflow._execute_kb_search("query", "alice")
 
         assert status is KnowledgeStatus.FOUND
         assert len(results) == 3
@@ -156,11 +164,10 @@ class TestWorkflowKnowledgeSearch:
         """FOUND status and results propagate through _workflow_knowledge_search."""
         from async_chat_workflow import KnowledgeStatus
 
-        mock_kb = MagicMock()
-        mock_kb.search = AsyncMock(return_value=[_make_kb_result()])
+        mock_kb = _kb([_make_kb_result()])
 
         with patch(f"{_MODULE}.get_knowledge_base_or_none", AsyncMock(return_value=mock_kb)):
-            status, results = await workflow._workflow_knowledge_search("hello")
+            status, results = await workflow._workflow_knowledge_search("hello", "alice")
 
         assert status is KnowledgeStatus.FOUND
         assert len(results) == 1
@@ -190,3 +197,26 @@ class TestWorkflowKnowledgeSearch:
 
         assert status is KnowledgeStatus.MISSING
         assert results == []
+
+
+class TestKbSearchIsScopedToTheUser:
+    """#16665: the workflow grounds a turn only on facts its user may read."""
+
+    @pytest.fixture()
+    def workflow(self):
+        from async_chat_workflow import AsyncChatWorkflow
+
+        return AsyncChatWorkflow()
+
+    async def test_another_users_private_fact_is_not_returned(self, workflow):
+        from async_chat_workflow import KnowledgeStatus
+
+        with patch(
+            f"{_MODULE}.get_knowledge_base_or_none", AsyncMock(return_value=_kb([_make_kb_result("alice only")]))
+        ):
+            for_bob = await workflow._execute_kb_search("q", "bob")
+            for_alice = await workflow._execute_kb_search("q", "alice")
+            for_nobody = await workflow._execute_kb_search("q")
+
+        assert for_bob == (KnowledgeStatus.MISSING, []) and for_nobody == (KnowledgeStatus.MISSING, [])
+        assert for_alice[0] is KnowledgeStatus.FOUND and for_alice[1][0]["content"] == "alice only"

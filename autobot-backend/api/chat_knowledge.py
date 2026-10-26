@@ -74,6 +74,7 @@ from api.user_management.dependencies import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults
+from knowledge.search_filters import scoped_reader
 from security.upload_filename_policy import require_safe_upload
 
 # Import existing components
@@ -335,7 +336,9 @@ async def compile_chat_to_knowledge(request_data: CompileChatRequest, request: R
     operation="search_chat_knowledge",
     error_code_prefix="CHAT_KNOWLEDGE",
 )
-async def search_chat_knowledge(request_data: ChatKnowledgeSearchRequest, request: Request):
+async def search_chat_knowledge(
+    request_data: ChatKnowledgeSearchRequest, request: Request, current_user=Depends(get_current_user)
+):
     """Search knowledge across chats or within specific chat"""
     try:
         manager = await get_chat_knowledge_manager_instance(request)
@@ -343,6 +346,7 @@ async def search_chat_knowledge(request_data: ChatKnowledgeSearchRequest, reques
             query=request_data.query,
             chat_id=request_data.chat_id,
             include_temporary=request_data.include_temporary,
+            user_id=scoped_reader(current_user),  # #16665
         )
 
         return {"success": True, "data": {"success": True, "results": results, "count": len(results)}}

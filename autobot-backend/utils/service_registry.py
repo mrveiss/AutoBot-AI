@@ -25,7 +25,6 @@ Usage:
 
 import asyncio
 import json
-import os
 import time
 from dataclasses import dataclass
 from typing import Any, Dict, List
@@ -40,9 +39,8 @@ from autobot_shared.service_registry_core import (
     DeploymentMode,
     ServiceHealth,
     build_base_url,
-    detect_deployment_mode,
     join_service_path,
-    parse_deployment_mode,
+    resolve_deployment_mode,
 )
 
 # Import unified configuration system - NO HARDCODED VALUES
@@ -149,13 +147,11 @@ class ServiceRegistry:
         self.logger.info(f"Service registry initialized in {self.deployment_mode.value} mode")
 
     def _detect_deployment_mode(self) -> DeploymentMode:
-        """Detect current deployment mode"""
-        explicit = parse_deployment_mode(config.get("deployment.mode", "").lower(), self.logger, "deployment.mode")
-        return detect_deployment_mode(
-            explicit,
-            in_container=os.path.exists("/.dockerenv"),
-            kubernetes=bool(config.get("deployment.kubernetes.service_host", False)),
-            distributed=bool(config.get("deployment.distributed", False)),
+        """The shared resolver (#19372): the flat ``config.get("deployment.mode")`` never found the key."""
+        return resolve_deployment_mode(
+            self.logger,
+            kubernetes=bool(config.get_nested("deployment.kubernetes.service_host", False)),
+            distributed=bool(config.get_nested("deployment.distributed", False)),
         )
 
     def _load_default_services(self):

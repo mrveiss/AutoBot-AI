@@ -12,6 +12,8 @@ from pathlib import Path
 
 import aiohttp
 
+from autobot_shared.ssot_config import config
+
 sys.path.insert(0, str(Path(__file__).parent))
 from tests.test_helpers import live_backend_url
 
@@ -28,7 +30,7 @@ async def test_playwright_service():
 
         try:
             async with session.get(
-                "http://localhost:3000/health"
+                f"http://localhost:{config.port.browser}/health"
             ) as response:  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
                 if response.status == 200:
                     health_data = await response.json()
@@ -54,7 +56,7 @@ async def test_playwright_service():
 
         try:
             async with session.post(
-                "http://localhost:3000/scrape", json=scrape_request
+                f"http://localhost:{config.port.browser}/scrape", json=scrape_request
             ) as response:  # canonical: ignore py-hardcoded-url — test fixture/mock URL, not an executable default
                 if response.status == 200:
                     result = await response.json()

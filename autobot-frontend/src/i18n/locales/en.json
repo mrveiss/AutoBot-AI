@@ -93,6 +93,7 @@
     "toggleLayout": "Toggle layout",
     "fullscreen": "Fullscreen",
     "exitFullscreen": "Exit fullscreen",
+    "breadcrumb": "Breadcrumb",
     "expand": "Expand",
     "collapse": "Collapse",
     "copyToClipboard": "Copy to clipboard",
@@ -103,7 +104,13 @@
     "exportCsv": "Export as CSV",
     "download": "Download",
     "filterByCategory": "Filter by category",
-    "copied": "Copied"
+    "copied": "Copied",
+    "riskTier": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "critical": "Critical"
+    }
   },
   "chat": {
     "contextWindow": {
@@ -4753,10 +4760,12 @@
       "channelSlack": "Slack",
       "channelWebhook": "Webhook",
       "channelInApp": "In-App",
+      "channelTelegram": "Telegram",
       "eventCompleted": "Workflow Completed",
       "eventFailed": "Workflow Failed",
       "eventStepFailed": "Step Failed",
       "eventApprovalNeeded": "Approval Needed",
+      "eventServiceFailed": "Service Failed",
       "save": "Save",
       "saving": "Saving...",
       "saved": "Saved successfully"
@@ -5031,6 +5040,10 @@
       "reconnect": "Reconnect",
       "clear": "Clear",
       "closeWindow": "Close Window",
+      "kill": "Kill",
+      "pause": "Pause",
+      "resume": "Resume",
+      "interrupt": "Interrupt",
       "session": "Session:",
       "lines": "Lines:",
       "shortcutHint": "Press Ctrl+C to interrupt, Ctrl+D to exit",
@@ -8684,6 +8697,7 @@
       "hireAgent": "Hire Agent",
       "loading": "Loading…",
       "empty": "No people or agents found.",
+      "companyUnresolved": "Could not determine which company this org chart belongs to.",
       "retry": "Retry",
       "agentDetail": "Agent Detail",
       "personDetail": "Person Detail",
@@ -8702,6 +8716,12 @@
       "terminateAgent": "Terminate Agent",
       "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
       "terminatedNote": "This agent has been terminated.",
+      "heartbeat": {
+        "label": "Run on heartbeat",
+        "on": "On: wakes on its schedule.",
+        "off": "Off: no scheduled wakes.",
+        "saveFailed": "Could not change the heartbeat: {detail}"
+      },
       "viewMode": "View mode",
       "viewTree": "Tree",
       "viewCanvas": "Canvas",
@@ -9661,6 +9681,9 @@
     "roleCoordinator": "Coordinator",
     "roleManager": "Manager",
     "adapter": "Adapter",
+    "runOnHeartbeat": "Run on heartbeat",
+    "runOnHeartbeatHint": "Wake this agent on a fixed schedule. Leave off for an agent you wake yourself.",
+    "failed": "Failed to hire agent.",
     "hiring": "Hiring…",
     "hire": "Hire"
   },

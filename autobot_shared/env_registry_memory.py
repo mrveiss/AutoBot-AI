@@ -1,6 +1,6 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-"""Memory / fact-lane / tool-output-spill AUTOBOT_* environment variable registrations.
+"""Memory / fact-lane / tool-output-spill / edit-miss-search AUTOBOT_* environment variable registrations.
 
 New sibling module (#17855), following the pattern ``env_registry_slm.py``'s
 docstring records: ``env_registry.py`` is closed to new entries.
@@ -175,5 +175,44 @@ env_registry.register_env_var(
             "examine before it stops and returns what it found, logging a warning (autobot_memory_graph/queries.py)."
         ),
         component="memory_graph",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_EDIT_MISS_OLD_TEXT_MAX_CHARS",
+        type=int,
+        default=2000,
+        description=(
+            "Longest edit_file old_text that the closest-span search runs for after a miss. A longer "
+            "old_text still fails as a miss, and the error says the search was capped (api/filesystem_edit.py, #19463)."
+        ),
+        component="filesystem_mcp",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_EDIT_MISS_MAX_WINDOWS",
+        type=int,
+        default=2000,
+        description=(
+            "Most line windows that the edit_file closest-span search compares after a miss before it stops "
+            "and reports that the search was capped (api/filesystem_edit.py, #19463)."
+        ),
+        component="filesystem_mcp",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_EDIT_MISS_SEARCH_BUDGET_SECONDS",
+        type=float,
+        default=1.0,
+        description=(
+            "Wall-clock budget for one edit_file closest-span search after a miss. On expiry the search "
+            "returns the best span found so far and says it was capped (api/filesystem_edit.py, #19463)."
+        ),
+        component="filesystem_mcp",
     )
 )

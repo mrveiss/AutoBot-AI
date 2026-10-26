@@ -1149,7 +1149,7 @@ async def _init_graph_rag_service(app: FastAPI, memory_graph):
         from services.rag_service import RAGService, register_shared_mesh_components
 
         if app.state.knowledge_base:
-            # #18141: the shared RAGConfig -- graph-RAG no longer runs on its own 10 s budget.
+            # #18141: both services read the shared RAGConfig; graph-RAG's deadline is RAGConfig.graph_timeout_seconds.
             rag_service = RAGService(knowledge_base=app.state.knowledge_base)
             await rag_service.initialize()
 
