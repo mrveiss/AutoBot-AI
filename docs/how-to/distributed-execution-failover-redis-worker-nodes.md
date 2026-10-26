@@ -77,7 +77,7 @@ async def enqueue_tasks():
     # Enqueue with different priorities
     task_id = await queue.enqueue(
         task_type="run_inference",
-        payload={"model": "llama3:8b", "prompt": "Hello"},
+        payload={"model": "qwen3.5:9b", "prompt": "Hello"},
         priority=TaskPriority.HIGH,
         max_retries=3,
         retry_delay=5,  # seconds base delay (doubled on each retry)

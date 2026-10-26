@@ -2030,8 +2030,8 @@ class MiscConfig(RedactedSettings):
     # node; this default matches the inventory default (slm_server host in
     # autobot-slm-backend/ansible/inventory/slm-nodes.yml) and the Ansible
     # fact derived from it (inventory/group_vars/all.yml slm_manager_node_id).
-    # Overridable per-deployment via AUTOBOT_SLM_NODE_ID; no SSOT source
-    # existed under this name before this field.
+    # Overridable per-deployment via AUTOBOT_SLM_NODE_ID. #19322: the one home --
+    # the SLM backend (config._resolve_slm_node_id) and sync-to-slm.sh read it.
     slm_node_id: str = Field(default="00-SLM-Manager", alias="AUTOBOT_SLM_NODE_ID")
     slm_url: str = Field(default="", alias="SLM_URL")
     skill_hub_url: str = Field(default="", alias="AUTOBOT_SKILL_HUB_URL")
