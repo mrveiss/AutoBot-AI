@@ -64,7 +64,7 @@ from typing import Callable
 # owner, one name: anything needing the record imports `npm_audit_exceptions`.
 from npm_audit_exceptions import (  # noqa: F401
     FAILING_SEVERITIES,
-    SEVERITY_ORDER,
+    NPM_ADVISORY_ORDER,
     AdvisoryException,
     entry_offers_a_patch,
     exception_problems,
@@ -159,7 +159,7 @@ def _counts(vulnerabilities: dict) -> dict[str, int] | None:
     A missing, non-numeric or negative count is not zero: reading it as zero
     would turn a malformed report into a pass (#16357 review).
     """
-    counts = {key: vulnerabilities.get(key) for key in SEVERITY_ORDER}
+    counts = {key: vulnerabilities.get(key) for key in NPM_ADVISORY_ORDER}
     if not all(isinstance(value, int) and not isinstance(value, bool) and value >= 0 for value in counts.values()):
         return None
     return counts  # type: ignore[return-value]
@@ -343,7 +343,7 @@ def summary_lines(outcome: Outcome, attempts: int) -> list[str]:
     ]
     if verdict.counts:
         lines += ["", "| Severity | Count |", "| --- | --- |"]
-        lines += [f"| {key} | {verdict.counts[key]} |" for key in SEVERITY_ORDER]
+        lines += [f"| {key} | {verdict.counts[key]} |" for key in NPM_ADVISORY_ORDER]
     return lines
 
 

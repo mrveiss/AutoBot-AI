@@ -5,10 +5,11 @@
 """Pure decisions for the branch sync (#19548): no git, no network, no clock.
 
 ``branch_sync.py`` merges main into every open same-repo PR branch and every
-PR-less branch, pushing with ``GITHUB_TOKEN`` so a sync starts no workflow run.
+PR-less branch, pushing with ``AUTOBOT_PUSH_TOKEN``; every merge commit ends with
+`` [skip ci]`` so a sync starts no push or pull_request workflow run.
 Every judgement it makes lives here, so each one is pinned by a fixture test
 rather than trusted: which branches are targets, how a merge or a push ended,
-whether a merge would change a workflow file, and what the one PR comment says.
+which workflow files a merge changes, and what the one PR comment says.
 """
 
 from __future__ import annotations
@@ -52,14 +53,19 @@ MAX_COMMITS_PER_SIDE = 15
 _ISSUE_REF = re.compile(r"#\d+")
 
 # Outcome names. The summary rows and the tests use these, never literals.
-SYNCED, CURRENT, CONFLICT, WORKFLOW = "synced", "up-to-date", "conflict", "workflow-skipped"
+SYNCED, CURRENT, CONFLICT, WORKFLOW = "synced", "up-to-date", "conflict", "workflow-push-refused"
 HEAD_MOVED, FORK, ERROR, UNREACHABLE = "head-moved", "fork-skipped", "error", "unreachable"
 OTHER_BASE, POLICY = "other-base", "excluded-by-policy"
 
 
 def merge_message(branch: str, base: str = "main") -> str:
-    """The exact merge-commit subject, so a reviewer can tell a delta is merge-only."""
-    return f"Merge {base} into {branch} (auto-sync)"
+    """The exact merge-commit subject, so a reviewer can tell a delta is merge-only.
+
+    It ends with `` [skip ci]``: the push token is a PAT, whose pushes DO start
+    workflow runs, and GitHub skips push and pull_request workflows for a head
+    commit carrying it. That is what keeps a sync at zero CI (#19548).
+    """
+    return f"Merge {base} into {branch} (auto-sync) [skip ci]"
 
 
 def classify_merge(returncode: int, output: str, unmerged: Sequence[str]) -> str:
@@ -77,12 +83,12 @@ def classify_merge(returncode: int, output: str, unmerged: Sequence[str]) -> str
 
 
 def workflow_changes(paths: Iterable[str]) -> List[str]:
-    """The paths under ``.github/workflows/``; GitHub refuses a GITHUB_TOKEN push of these."""
+    """The paths under ``.github/workflows/``: a push of these needs the token's ``workflow`` scope."""
     return sorted({path for path in paths if path.startswith(WORKFLOW_DIR)})
 
 
 def classify_push(returncode: int, output: str) -> str:
-    """``synced`` / ``workflow-skipped`` / ``head-moved`` / ``error`` for one push."""
+    """``synced`` / ``workflow-push-refused`` / ``head-moved`` / ``error`` for one push."""
     if returncode == 0:
         return SYNCED
     lowered = output.lower()
@@ -136,9 +142,14 @@ def _policy_bucket(branch: str) -> Optional[str]:
     return None
 
 
+def oldest_first(pulls: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """PRs by ``created_at`` ascending, then number: a run cut short still caught up the oldest (owner rule)."""
+    return sorted(pulls, key=lambda pull: (pull.get("created_at") or "", int(pull["number"])))
+
+
 def _plan_pulls(plan: Plan, pulls: Sequence[Dict[str, Any]], repository: str, base: str) -> set:
     claimed = set()
-    for pull in pulls:
+    for pull in oldest_first(pulls):
         target = _pr_target(pull)
         if _is_fork(pull, repository):
             plan.skip(FORK, f"#{target.pr}")
@@ -155,7 +166,7 @@ def _plan_pulls(plan: Plan, pulls: Sequence[Dict[str, Any]], repository: str, ba
 
 
 def plan_run(pulls: Sequence[Dict[str, Any]], branches: Iterable[str], repository: str, base: str = "main") -> Plan:
-    """Every target for one run: same-repo PRs into ``base`` first, then PR-less branches.
+    """Every target for one run: same-repo PRs into ``base`` oldest first, then PR-less branches.
 
     A same-repo PR into another base is never merged into AND never treated as
     parked: either would put main into a branch whose PR says it belongs elsewhere.
@@ -241,12 +252,12 @@ def conflict_comment(branch: str, base: str, merge_base: str, files: Sequence[Fi
 
 def workflow_comment(branch: str, base: str, paths: Sequence[str]) -> str:
     """The one ``sync-needs-workflow-token`` comment."""
-    listed = "\n".join(f"- {code(path)}" for path in paths) or "- (GitHub refused the push; no path list)"
+    listed = "\n".join(f"- {code(path)}" for path in paths) or "- (no workflow path in the merge delta)"
     return (
         f"{MARKER_WORKFLOW}\n### Auto-sync: {code(base)} not merged into {code(branch)}\n\n"
-        f"The merge is clean, but it changes workflow files, and GitHub refuses a `GITHUB_TOKEN` push "
-        f"that does. The sync uses `GITHUB_TOKEN` only (#19548), so that a sync never starts CI, and "
-        f"so it pushed nothing:\n\n{listed}\n\n"
-        f"This branch catches up on the author's next push (merge {code(base)} in first) or in its train. "
-        f"The label clears on the first run that finds it 0 behind.\n"
+        f"The merge is clean, but GitHub refused the push: the sync's `AUTOBOT_PUSH_TOKEN` lacks the "
+        f"`workflow` scope that a push changing workflow files needs (#19548). Nothing was pushed. "
+        f"Workflow files in the merge:\n\n{listed}\n\n"
+        f"This branch catches up once an owner grants the token that scope, on the author's next push "
+        f"(merge {code(base)} in first), or in its train. The label clears on the next successful sync.\n"
     )

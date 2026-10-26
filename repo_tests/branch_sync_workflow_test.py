@@ -2,15 +2,19 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""The branch-sync workflow merges with GITHUB_TOKEN only; it never rebases or forces (#19548, #15306).
+"""The branch sync pushes with AUTOBOT_PUSH_TOKEN only, no fallback; it never rebases or forces (#19548, #15306).
 
 Ported from the parked-branch guard when #19548 folded
 ``auto-merge-base-into-parked-branches.yml`` and ``auto-update-pr-branches.yml``
 into ``sync-branches-with-main.yml``. #15306's property still holds and is wider
 now: every branch, PR or not, is checked out in some session's worktree, so its
-history must never be rewritten. #19548 adds the token rule: a ``GITHUB_TOKEN``
-push starts no workflow run, so any other credential would turn every sync back
-into a full CI run, and a ``PAT || GITHUB_TOKEN`` fallback is forbidden (#19542).
+history must never be rewritten. #19548 adds the token rule (owner decision,
+2026-10-26): ``git push`` uses ``AUTOBOT_PUSH_TOKEN`` and nothing else, the job
+fails at its first step when that secret is empty, and a ``PAT || GITHUB_TOKEN``
+fallback is forbidden (#19542). ``GITHUB_TOKEN`` serves the REST calls only. The
+PAT is never written to ``.git/config`` (no ``set-url``): the script takes it out of
+its environment and hands it to ``git push`` alone (code review on PR #19636). The
+zero-CI property moves to the ``[skip ci]`` merge message (branch_sync_19548_test).
 
 WHY THIS STRIPS COMMENTS FIRST. The workflow's header explains at length why it
 merges rather than rebases and why it never forces. A guard over the raw text
@@ -104,22 +108,81 @@ def test_never_rebases_or_forces_in_the_script() -> None:
     assert not hits, f"forbidden git argv in the branch sync: {hits} (#19548 rule: merge only, plain push)"
 
 
-def test_the_token_is_github_token_and_nothing_else() -> None:
-    """AC: no PAT and no fallback. Every `${{ }}` naming a secret names GITHUB_TOKEN alone."""
+_PAT = "${{ secrets.AUTOBOT_PUSH_TOKEN }}"
+_REQUIRE, _SYNC = "Require AUTOBOT_PUSH_TOKEN", "Merge main"
+
+
+def _steps() -> list[dict]:
+    (job,) = _spec()["jobs"].values()
+    return job["steps"]
+
+
+def _step(prefix: str) -> dict:
+    (step,) = [step for step in _steps() if str(step.get("name", "")).startswith(prefix)]
+    return step
+
+
+def test_no_secret_expression_has_a_fallback() -> None:
+    """AC: every `${{ }}` naming a secret names exactly one, never `A || B` (#19542)."""
     text = _WORKFLOW.read_text(encoding="utf-8")
     expressions = _EXPRESSION.findall(code_text(text, name="x.yml"))
     secrets = [name for expression in expressions for name in _SECRET.findall(expression)]
     assert secrets, "no `secrets.` expression parsed; the token check is inspecting nothing"
-    assert set(secrets) == {"GITHUB_TOKEN"}, f"the sync may use GITHUB_TOKEN only (#19548, #19542); found {secrets}"
-    fallback = [e for e in expressions if "secrets." in e and ("||" in e or "&&" in e)]
+    assert set(secrets) == {"AUTOBOT_PUSH_TOKEN", "GITHUB_TOKEN"}, f"unexpected secrets: {secrets}"
+    fallback = [e for e in expressions if "secrets." in e and ("||" in e or "&&" in e or len(_SECRET.findall(e)) > 1)]
     assert not fallback, f"a token fallback is forbidden (#19542): {fallback}"
+
+
+def test_the_pat_is_the_only_push_credential_and_reaches_nothing_else() -> None:
+    """AUTOBOT_PUSH_TOKEN reaches the check and the sync step only, never .git/config; GITHUB_TOKEN does REST.
+
+    Inside the sync step the script pops it before any git call and prepends it to
+    the push argv alone: branch_sync_19548_test pins that by the argv each git call ran.
+    """
+    users = {
+        step.get("name"): key for step in _steps() for key, value in (step.get("env") or {}).items() if value == _PAT
+    }
+    assert users == {_REQUIRE: "PUSH_TOKEN", _step(_SYNC)["name"]: "AUTOBOT_PUSH_TOKEN"}, f"the PAT reaches: {users}"
+    joined = "\n".join(_shell_bodies())
+    assert "set-url" not in joined and "@github.com" not in joined, "a token in a remote URL persists in .git/config"
+    assert "extraheader" not in joined and "credential." not in joined, "the shell configures no git credential"
+    sync_env = _step(_SYNC)["env"]
+    assert sync_env["GITHUB_TOKEN"] == "${{ secrets.GITHUB_TOKEN }}", "REST calls use the run-scoped token"
+
+
+def test_the_token_and_its_header_form_are_masked_before_the_script_runs() -> None:
+    body = code_text(_step(_SYNC)["run"], name="x.sh")
+    raw, header = (
+        'echo "::add-mask::${AUTOBOT_PUSH_TOKEN}"',
+        "printf 'x-access-token:%s' \"${AUTOBOT_PUSH_TOKEN}\" | base64 -w0",
+    )
+    assert raw in body and header in body, "both the token and its base64 header must be masked"
+    assert body.index(header) < body.index("branch_sync.py"), "masking after the script starts is too late"
+
+
+def test_a_missing_push_token_fails_the_job_before_anything_runs() -> None:
+    first = _steps()[0]
+    assert first.get("name") == _REQUIRE, "the token check must be the first step: fail loudly at the start"
+    assert "if" not in first and not first.get("continue-on-error"), "the check must never be skippable"
+    body = code_text(first["run"], name="x.sh")
+    assert '[ -z "${PUSH_TOKEN}" ]' in body and "::error::AUTOBOT_PUSH_TOKEN" in body and "exit 1" in body
+
+
+def test_the_checkout_is_main_and_persists_no_credential() -> None:
+    checkout = next(step for step in _steps() if str(step.get("uses", "")).startswith("actions/checkout"))
+    assert checkout["with"].get("persist-credentials") is False, "the PAT reaches the push argv only"
+    assert checkout["with"].get("ref") == "main", "the default branch, never PR code (untrusted-checkout)"
+    assert "token" not in checkout["with"], "the fetch needs no credential beyond the default"
+    (job,) = _spec()["jobs"].values()
+    assert job.get("if") == "github.ref == 'refs/heads/main'", "a dispatch from a branch must not run with the PAT"
 
 
 def test_permissions_are_exactly_what_the_sync_needs() -> None:
     spec = _spec()
     assert spec.get("permissions") == {}, "workflow-level permissions must be empty; the job declares its own"
     (job,) = spec["jobs"].values()
-    assert job["permissions"] == {"contents": "write", "pull-requests": "write", "issues": "write"}
+    # contents: read -- the PAT pushes; GITHUB_TOKEN only reads the clone, lists PRs, labels and comments.
+    assert job["permissions"] == {"contents": "read", "pull-requests": "write", "issues": "write"}
     assert job.get("timeout-minutes"), "a sync over ~150 branches needs an explicit timeout"
     assert job["runs-on"] == "ubuntu-latest", "never the singleton self-hosted runner (#13401)"
 

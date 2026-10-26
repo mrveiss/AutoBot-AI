@@ -97,6 +97,8 @@ grafana_enable_cors: true
 
 ### Test Both Roles Produce Working Config
 
+Development dry runs (`--check` changes nothing); a deployed host is updated through the builtin updater.
+
 **Test 1: slm_manager Role**
 ```bash
 cd autobot-slm-backend/ansible
@@ -107,7 +109,7 @@ ansible-playbook playbooks/deploy-slm-manager.yml -i inventory.ini \
 **Test 2: monitoring Role**
 ```bash
 cd autobot-slm-backend/ansible
-ansible-playbook playbooks/deploy-monitoring.yml -i inventory.ini \
+ansible-playbook deploy-monitoring.yml -i inventory.ini \
   -e monitoring_install_grafana=true --check
 ```
 
@@ -153,9 +155,8 @@ done
 
 **If SLM server was manually configured:**
 ```bash
-# Re-apply Ansible configuration to make it idempotent
-cd autobot-slm-backend/ansible
-ansible-playbook playbooks/deploy-slm-manager.yml -i inventory.ini --tags grafana
+# Re-apply the configuration through the builtin updater (SLM Maintenance -> Updates -> Code Sync),
+# never a hand-run playbook against the SLM host
 
 # Verify settings
 ssh autobot@<slm-manager-ip> "grep -E 'serve_from_sub_path|allow_embedding' /etc/grafana/grafana.ini"

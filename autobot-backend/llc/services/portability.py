@@ -26,6 +26,7 @@ from llc.models.routine import LLCRoutine
 from llc.models.secret import LLCSecret
 from llc.models.sprint import LLCPortfolio, LLCProject, LLCSprint
 from llc.models.work_item import LLCWorkItem
+from llc.services.portability_ceo import CEO_EXPORT_KEY, exported_ceo_agent_id, mint_agent_ids, settle_imported_ceo
 from llc.services.portability_export_names import export_masks
 from user_management.models.organization import Organization
 
@@ -212,12 +213,7 @@ class PortabilityService(LLCServiceBase):
         remapping_options = remapping_options or {}
         secret_mapping = secret_mapping or {}
 
-        created_entities: Dict[str, Any] = {
-            "agents": [],
-            "goals": [],
-            "projects": [],
-            "work_items": [],
-        }
+        created_entities: Dict[str, Any] = {"agents": [], "goals": [], "projects": [], "work_items": []}
         skipped: Dict[str, List[str]] = {"agents": [], "goals": [], "work_items": []}
         warnings: List[str] = []
 
@@ -232,11 +228,10 @@ class PortabilityService(LLCServiceBase):
             company_id = await self._resolve_or_create_company(template, target_company_id, remapping_options, warnings)
 
             # Pass 1: pre-mint all agent IDs so reports_to can be remapped before
-            # any INSERT, avoiding topology-ordering FK violations
+            # any INSERT, avoiding topology-ordering FK violations; the source's
+            # default CEO node keeps the ``ceo-<id>`` convention here (#19588)
             agents_list = template.get("agents", [])
-            agent_id_map: Dict[str, str] = {
-                a.get("agent_id", ""): str(uuid.uuid4()) for a in agents_list if a.get("agent_id")
-            }
+            agent_id_map = await mint_agent_ids(self.session, template, company_id)
 
             # Pass 2: insert agents. `reports_to` is deliberately NOT resolved
             # here — which agents land is decided in this loop (an existing name
@@ -258,6 +253,10 @@ class PortabilityService(LLCServiceBase):
             # Pass 3: attach every reporting line whose manager actually landed,
             # and name the ones that did not instead of pointing at nothing.
             await self._link_reporting_lines(agents_list, landed, dropped_links, company_id)
+
+            # The company's CEO (#19588): the template's own, designated, or the default
+            # when it carries none -- never both. In the savepoint, so it rolls back too.
+            await settle_imported_ceo(self.session, template, company_id, landed)
 
             # goals
             for goal in template.get("goals", []):
@@ -315,6 +314,7 @@ class PortabilityService(LLCServiceBase):
         if row is None:
             return {}
         data = dict(row)
+        data[CEO_EXPORT_KEY] = await exported_ceo_agent_id(self.session, company_id)
         data["id"] = str(data["id"]) if data.get("id") else None
         if data.get("parent_org_id"):
             data["parent_org_id"] = str(data["parent_org_id"])

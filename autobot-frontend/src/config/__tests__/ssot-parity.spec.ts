@@ -211,7 +211,8 @@ describe('Python source parser (self-check)', () => {
   })
 })
 
-const PYTHON_SHARED_SSOT_RELATIVE = join('autobot_shared', 'ssot_constants.py')
+// CategoryDefaults lives in its own module since #19335 (ssot_constants re-exports it).
+const PYTHON_SHARED_SSOT_RELATIVE = join('autobot_shared', 'category_defaults.py')
 
 function findPythonSharedSsotPath(): string {
   let dir = resolve(process.cwd())

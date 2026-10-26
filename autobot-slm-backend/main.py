@@ -475,20 +475,18 @@ async def _ensure_admin_user():
     """Create or sync the admin user.
 
     When SLM_ADMIN_PASSWORD is set (Ansible-managed), ensures the
-    admin password always matches. This makes the secrets file the
-    single source of truth for the admin credential.
+    admin password always matches. SLM_ADMIN_PASSWORD_FILE seeds a fresh
+    install only (#19368); services/admin_seed_password.py resolves both.
 
     Uses the user_management UserService and slm_users database (Issue #1900).
     """
-    import os
     import secrets
 
     from autobot_shared.user_management.user_service_errors import DuplicateUserError
     from services.admin_password_sync import sync_admin_password_at_startup
+    from services.admin_seed_password import password_for_existing_admin, password_for_new_admin
     from user_management.database import get_slm_session
     from user_management.services import TenantContext, UserService
-
-    env_password = os.getenv("SLM_ADMIN_PASSWORD", "")
 
     async with get_slm_session() as db:
         context = TenantContext(is_platform_admin=True)
@@ -497,11 +495,12 @@ async def _ensure_admin_user():
         existing = await user_service.get_user_by_username("admin")
 
         if existing:
+            env_password = password_for_existing_admin()
             if env_password:  # rehash + revoke older sessions only on a real change; an epoch outage logs, never aborts
                 await sync_admin_password_at_startup(db, existing, env_password)
             return
 
-        password = env_password
+        password = password_for_new_admin()
         if not password:
             password = secrets.token_urlsafe(16)
             logger.critical("Initial admin password set — CHANGE IMMEDIATELY")

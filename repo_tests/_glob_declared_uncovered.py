@@ -54,8 +54,10 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     ),
     "*.j2": (
         {
+            "repo_tests/operational_docs_name_real_playbooks_19611_test.py",
             "repo_tests/browser_port_single_home_19324_test.py",
             "repo_tests/nginx_internal_api_key_auth_gate_test.py",
+            "repo_tests/slm_admin_password_one_home_19318_test.py",
             "repo_tests/slm_frontend_publish_contract_test.py",
         },
         "root-relative `*.j2` sweep; the matching files live outside the python filter's trees",
@@ -63,6 +65,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     "*.md": (
         {
             "repo_tests/deployment_profile_one_source_19315_test.py",
+            "repo_tests/operational_docs_name_real_playbooks_19611_test.py",
             "repo_tests/doc_sync_hook_resolves_indexer_15845_test.py",
             "repo_tests/documented_playbook_invocations_test.py",
             "repo_tests/redis_config_path_is_canonical_17434_test.py",
@@ -89,6 +92,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     ),
     "*.sh": (
         {
+            "repo_tests/operational_docs_name_real_playbooks_19611_test.py",
             "repo_tests/ansible_inventory_path_exists_test.py",
             "repo_tests/browser_port_single_home_19324_test.py",
             "repo_tests/chromadb_bind_not_hardcoded_15317_test.py",
@@ -102,6 +106,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/python_filter_covers_tested_shell_wrappers_test.py",
             "repo_tests/redis_password_literal_guard_test.py",
             "repo_tests/shell_lib_test.py",
+            "repo_tests/slm_admin_password_one_home_19318_test.py",
             "repo_tests/slm_frontend_publish_contract_test.py",
             "repo_tests/slm_frontend_shell_publish_test.py",
         },
@@ -121,6 +126,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/_hardcoded_ui_literal_detect.py",
             "repo_tests/_raw_palette_detect.py",
             "repo_tests/slm_frontend_bare_ui_literals_test.py",
+            "repo_tests/raw_table_ratchet_17562_test.py",
             "repo_tests/slm_frontend_calls_reach_served_routes_test.py",
             "repo_tests/v_html_sanitiser_guard_19118_test.py",
         },
@@ -135,6 +141,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/hooks_path_override_15961_test.py",
             "repo_tests/infra_libs_test_wiring_guard_15051_test.py",
             "repo_tests/one_static_data_copy_18556_test.py",
+            "repo_tests/slm_admin_password_one_home_19318_test.py",
             "repo_tests/slm_frontend_publish_contract_test.py",
         },
         "root-relative `*.yaml` sweep; the matching files live outside the python filter's trees",
@@ -169,6 +176,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/python_interpreter_role_rename_test.py",
             "repo_tests/redis_config_path_is_canonical_17434_test.py",
             "repo_tests/required_context_complements_test.py",
+            "repo_tests/slm_admin_password_one_home_19318_test.py",
             "repo_tests/slm_frontend_publish_contract_test.py",
             "repo_tests/sync_deletions_ansible_wiring_16310_test.py",
             "repo_tests/test_agent_venv_isolation_14278.py",
@@ -204,7 +212,11 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
         "auditable, and they live outside the python filter's trees",
     ),
     "*requirements*.txt": (
-        {"repo_tests/declared_distributions_test.py", "repo_tests/dependabot_requirements_coverage_test.py"},
+        {
+            "repo_tests/declared_distributions_test.py",
+            "repo_tests/dependabot_requirements_coverage_test.py",
+            "repo_tests/landing_page_claims_19279_test.py",
+        },
         "root-relative `*requirements*.txt` sweep; the matching files live outside the python filter's trees",
     ),
     ".github/actions/**": (

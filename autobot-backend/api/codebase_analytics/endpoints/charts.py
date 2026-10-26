@@ -13,6 +13,7 @@ from typing import Dict
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from api.codebase_analytics.problem_severity import PROBLEM_SEVERITY_ORDER
 from api.codebase_analytics.source_scope import SourceIdQuery, require_source_id
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -24,9 +25,6 @@ from ..type_coverage import problem_type_coverage
 logger = get_logger(__name__)
 
 router = APIRouter()
-
-# Issue #380: Module-level tuple for severity ordering in charts
-_CHART_SEVERITY_ORDER = ("high", "medium", "low", "info", "hint")
 
 
 def _try_chromadb_aggregation(
@@ -86,12 +84,12 @@ def _build_severity_chart_data(severity_counts: Dict[str, int]) -> list[dict]:
     """
     severity_data = []
     # Add severities in defined order
-    for sev in _CHART_SEVERITY_ORDER:
+    for sev in PROBLEM_SEVERITY_ORDER:
         if sev in severity_counts:
             severity_data.append({"severity": sev, "count": severity_counts[sev]})
     # Add any unlisted severities at the end
     for sev, count in severity_counts.items():
-        if sev not in _CHART_SEVERITY_ORDER:
+        if sev not in PROBLEM_SEVERITY_ORDER:
             severity_data.append({"severity": sev, "count": count})
     return severity_data
 

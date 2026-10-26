@@ -94,6 +94,7 @@ REACH_ROOTS = {
         "scripts",
     ),
     "repo_tests/frontend_single_api_client_12363_test.py": ("autobot-frontend/src", "autobot-slm-frontend/src"),
+    "repo_tests/generated_type_names_not_redeclared_19334_test.py": ("autobot-frontend/src",),
     "repo_tests/github_api_single_module_15411_test.py": ("pipeline-scripts", "scripts"),
     "repo_tests/hardcoded_ui_literal_ratchet_12732_test.py": ("autobot-frontend/src/", "autobot-slm-frontend/src/"),
     "repo_tests/infra_scripts_no_backend_imports_18288_test.py": ("autobot-infrastructure",),
@@ -237,6 +238,11 @@ REACH_ROOTS = {
         "autobot_shared",
         "plugins",
     ),
+    "repo_tests/redaction_placeholder_one_home_19337_test.py": (
+        "autobot-backend",
+        "autobot-slm-backend",
+        "autobot_shared",
+    ),
     "repo_tests/redis_direct_constructor_18553_test.py": (
         "autobot-backend",
         "autobot-browser-worker",
@@ -262,10 +268,17 @@ REACH_ROOTS = {
         "tools",
     ),
     "repo_tests/script_module_names_unique_14873_test.py": ("autobot-infrastructure/shared/scripts",),
+    "repo_tests/search_mode_one_home_19335_test.py": ("autobot-backend",),
     "repo_tests/severity_enum_fork_guard_18098_test.py": (
         "autobot-backend",
         "autobot-infrastructure",
         "autobot_shared",
+    ),
+    "repo_tests/severity_order_one_home_19336_test.py": (
+        "autobot-backend",
+        "autobot-slm-backend",
+        "autobot_shared",
+        "pipeline-scripts",
     ),
     "repo_tests/shadowed_literal_routes_18720_test.py": ("autobot-backend", "autobot-slm-backend"),
     "repo_tests/sigterm_grace_one_home_19340_test.py": ("autobot-backend/llc",),

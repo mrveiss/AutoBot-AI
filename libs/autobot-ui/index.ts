@@ -162,7 +162,7 @@ export { backoffDelay, RETRY_BACKOFF } from './src/utils/backoff'
 export type { BackoffOptions } from './src/utils/backoff'
 
 // What a canonical API client throws for a non-2xx response: status and details kept (#12363).
-export { HttpError, isHttpError } from './src/utils/httpError'
+export { HttpError, isHttpError, isHttpClientError, extractErrorInfo, httpErrorFrom, parseJsonBody, type ErrorInfo } from './src/utils/httpError'
 
 export { default as SchedulePicker } from './src/components/SchedulePicker.vue'
 export * from './src/schedule'
