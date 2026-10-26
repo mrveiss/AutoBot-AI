@@ -19,6 +19,8 @@ import logging
 import os
 from typing import Any, Dict, List, Optional
 
+from .collections import company_collection, kb_chroma_client, project_collection
+
 logger = logging.getLogger(__name__)
 
 # #8240: suggestion cache TTL (seconds).
@@ -121,11 +123,11 @@ class AcSuggester:
     async def _query_policies(self, company_id: str, query: str) -> List[Dict[str, Any]]:
         """Query ``company:{company_id}`` for top-3 policy/standards matches."""
         try:
-            from utils.async_chromadb_client import get_async_chromadb_client
-
-            client = await get_async_chromadb_client()
+            # #19519: the client the collection was created through (raw-client
+            # lookups of a ``:`` name are rejected by ChromaDB).
+            client = await kb_chroma_client()
             try:
-                collection = await client.get_collection(f"company:{company_id}")
+                collection = await client.get_collection(company_collection(company_id))
             except Exception:
                 return []
             count = await collection.count()
@@ -144,11 +146,11 @@ class AcSuggester:
     async def _query_past_items(self, project_id: str, query: str) -> List[Dict[str, Any]]:
         """Query ``project:{project_id}`` for top-3 completed similar PBIs."""
         try:
-            from utils.async_chromadb_client import get_async_chromadb_client
-
-            client = await get_async_chromadb_client()
+            # #19519: the client the collection was created through (raw-client
+            # lookups of a ``:`` name are rejected by ChromaDB).
+            client = await kb_chroma_client()
             try:
-                collection = await client.get_collection(f"project:{project_id}")
+                collection = await client.get_collection(project_collection(project_id))
             except Exception:
                 return []
             count = await collection.count()

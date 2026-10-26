@@ -9,6 +9,7 @@
 # We use importlib to load essential_story.py directly, bypassing the
 # memory package __init__ (which pulls in aiosqlite, ssot_config, etc.).
 # ---------------------------------------------------------------------------
+import asyncio
 import contextlib
 import importlib.util
 import sys
@@ -19,6 +20,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from autobot_shared.token_count import estimate_fast
+from knowledge.ownership import KnowledgeOwnership
+from knowledge.search_filters import kb_principal
 
 # #11796: snapshot sys.modules before the stub bootstrap.  The stubs below
 # leaked (e.g. a bare "knowledge._composed" stub broke the real knowledge
@@ -117,6 +120,8 @@ token_estimation:
   safety_margin: 0.9
 """
 
+ALICE = kb_principal({"user_id": "alice"})
+
 
 def _make_facts(count: int, quality_step: float = 0.1) -> list:
     return [
@@ -126,6 +131,8 @@ def _make_facts(count: int, quality_step: float = 0.1) -> list:
             "metadata": {
                 "category": f"cat{i % 3}",
                 "quality_score": round(count * quality_step - i * quality_step, 2),
+                "owner_id": "alice",
+                "visibility": "private",
             },
             "timestamp": "2026-01-01T00:00:00",
         }
@@ -142,7 +149,7 @@ class TestGetTokenBudget:
     @pytest.mark.asyncio
     async def test_reads_explicit_essential_story_tokens(self, tmp_path):
         yaml_file = tmp_path / "context_windows.yaml"
-        yaml_file.write_text(_YAML_CONTENT, encoding="utf-8")
+        await asyncio.to_thread(yaml_file.write_text, _YAML_CONTENT, encoding="utf-8")
         gen = EssentialStoryGenerator()
         with patch.object(_es_mod, "_YAML_PATH", yaml_file):
             budget = await gen._get_token_budget("big-model")
@@ -151,7 +158,9 @@ class TestGetTokenBudget:
     @pytest.mark.asyncio
     async def test_derives_300_for_small_context(self, tmp_path):
         yaml_file = tmp_path / "context_windows.yaml"
-        yaml_file.write_text("models:\n  tiny:\n    context_window_tokens: 4096\n", encoding="utf-8")
+        await asyncio.to_thread(
+            yaml_file.write_text, "models:\n  tiny:\n    context_window_tokens: 4096\n", encoding="utf-8"
+        )
         gen = EssentialStoryGenerator()
         with patch.object(_es_mod, "_YAML_PATH", yaml_file):
             budget = await gen._get_token_budget("tiny")
@@ -160,7 +169,9 @@ class TestGetTokenBudget:
     @pytest.mark.asyncio
     async def test_derives_600_for_medium_context(self, tmp_path):
         yaml_file = tmp_path / "context_windows.yaml"
-        yaml_file.write_text("models:\n  mid:\n    context_window_tokens: 32768\n", encoding="utf-8")
+        await asyncio.to_thread(
+            yaml_file.write_text, "models:\n  mid:\n    context_window_tokens: 32768\n", encoding="utf-8"
+        )
         gen = EssentialStoryGenerator()
         with patch.object(_es_mod, "_YAML_PATH", yaml_file):
             budget = await gen._get_token_budget("mid")
@@ -169,7 +180,9 @@ class TestGetTokenBudget:
     @pytest.mark.asyncio
     async def test_derives_800_for_large_context(self, tmp_path):
         yaml_file = tmp_path / "context_windows.yaml"
-        yaml_file.write_text("models:\n  large:\n    context_window_tokens: 128000\n", encoding="utf-8")
+        await asyncio.to_thread(
+            yaml_file.write_text, "models:\n  large:\n    context_window_tokens: 128000\n", encoding="utf-8"
+        )
         gen = EssentialStoryGenerator()
         with patch.object(_es_mod, "_YAML_PATH", yaml_file):
             budget = await gen._get_token_budget("large")
@@ -232,10 +245,11 @@ class TestFetchTopFacts:
         facts = _make_facts(5, quality_step=0.2)
         mock_kb = AsyncMock()
         mock_kb.get_all_facts = AsyncMock(return_value=facts)
+        mock_kb.ownership_manager = KnowledgeOwnership(None)  # #16665: the real visibility decision
 
         gen = EssentialStoryGenerator()
         with _patch_get_kb(mock_kb):
-            result = await gen._fetch_top_facts(max_tokens=10000)
+            result = await gen._fetch_top_facts(max_tokens=10000, principal=ALICE)
 
         qualities = [f["metadata"]["quality_score"] for f in result]
         assert qualities == sorted(qualities, reverse=True)
@@ -248,10 +262,11 @@ class TestFetchTopFacts:
         facts = _make_facts(20, quality_step=0.05)
         mock_kb = AsyncMock()
         mock_kb.get_all_facts = AsyncMock(return_value=facts)
+        mock_kb.ownership_manager = KnowledgeOwnership(None)  # #16665: the real visibility decision
 
         gen = EssentialStoryGenerator()
         with _patch_get_kb(mock_kb):
-            result = await gen._fetch_top_facts(max_tokens=40)
+            result = await gen._fetch_top_facts(max_tokens=40, principal=ALICE)
 
         # Each fact is ~13 tokens; 40 tokens allows at most 3
         assert len(result) <= 3
@@ -262,10 +277,11 @@ class TestFetchTopFacts:
         facts = _make_facts(200, quality_step=0.005)
         mock_kb = AsyncMock()
         mock_kb.get_all_facts = AsyncMock(return_value=facts)
+        mock_kb.ownership_manager = KnowledgeOwnership(None)  # #16665: the real visibility decision
 
         gen = EssentialStoryGenerator()
         with _patch_get_kb(mock_kb):
-            await gen._fetch_top_facts(max_tokens=100_000)
+            await gen._fetch_top_facts(max_tokens=100_000, principal=ALICE)
 
         mock_kb.get_all_facts.assert_awaited_once_with(limit=200)
 
@@ -273,10 +289,11 @@ class TestFetchTopFacts:
     async def test_empty_kb_returns_empty_list(self):
         mock_kb = AsyncMock()
         mock_kb.get_all_facts = AsyncMock(return_value=[])
+        mock_kb.ownership_manager = KnowledgeOwnership(None)
 
         gen = EssentialStoryGenerator()
         with _patch_get_kb(mock_kb):
-            result = await gen._fetch_top_facts(max_tokens=600)
+            result = await gen._fetch_top_facts(max_tokens=600, principal=ALICE)
 
         assert result == []
 
@@ -336,7 +353,7 @@ class TestGenerate:
         # a cache hit still fetches facts (to compute the fingerprint) but
         # skips formatting and never rewrites the cache.
         yaml_file = tmp_path / "cw.yaml"
-        yaml_file.write_text(_YAML_CONTENT, encoding="utf-8")
+        await asyncio.to_thread(yaml_file.write_text, _YAML_CONTENT, encoding="utf-8")
 
         gen = EssentialStoryGenerator()
         cached_story = "## Essential Context\n[x] cached"
@@ -363,7 +380,7 @@ class TestGenerate:
     @pytest.mark.asyncio
     async def test_cache_miss_calls_kb_and_writes_cache(self, tmp_path):
         yaml_file = tmp_path / "cw.yaml"
-        yaml_file.write_text(_YAML_CONTENT, encoding="utf-8")
+        await asyncio.to_thread(yaml_file.write_text, _YAML_CONTENT, encoding="utf-8")
 
         facts = _make_facts(2, quality_step=0.5)
         set_cached_mock = AsyncMock()

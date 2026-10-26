@@ -270,8 +270,8 @@
     "component": "مؤلفه:",
     "configure": "Configure",
     "configureAutomaticCodeSync": "Configure automatic code sync schedules",
-    "countDriftedFilePluralDetected": "{count} drifted file{plural} detected",
-    "countUntrackedFilePlural": "{count} untracked file{plural} on this host",
+    "countDriftedFilePluralDetected": "{count} drifted file detected | {count} drifted files detected",
+    "countUntrackedFilePlural": "{count} untracked file on this host | {count} untracked files on this host",
     "createAScheduleTo": "Create a schedule to automatically sync code at specific times.",
     "createFirstSchedule": "Create First Schedule",
     "currentVersion": "Current Version",
@@ -369,7 +369,20 @@
     "updatePipelineDesc": "Fetches from GitHub, pulls code_source, updates this server, then updates fleet nodes with all dependency installs.",
     "updatePipelineTitle": "Full Update Pipeline",
     "updateThisServer": "Update This Server",
-    "updatesAvailable": "Updates Available"
+    "updatesAvailable": "Updates Available",
+    "syncedNodes": "Successfully synced {count} node | Successfully synced {count} nodes",
+    "queuedSyncNodes": "Successfully queued sync for {count} node | Successfully queued sync for {count} nodes",
+    "pulledLatestChanges": "Successfully pulled latest changes ({commit})",
+    "unknownCommit": "unknown",
+    "componentResynced": "Resynced {component} from code_source",
+    "fleetSyncFailed": "Fleet sync failed",
+    "selfUpdateFailed": "Self-update failed",
+    "failedToPullFromSource": "Failed to pull from source",
+    "driftResolveJobFailed": "Drift resolve job failed",
+    "viewCommitOnGithub": "View commit on GitHub",
+    "fullCommitHashUnavailable": "Full commit hash unavailable",
+    "removeCodeSourceAssignment": "Remove code source assignment?",
+    "deleteSchedule": "Delete schedule \"{name}\"?"
   },
   "common": {
     "codeSyncBadge": {},
@@ -547,7 +560,44 @@
     "total": "Total",
     "upgrade": "Upgrade",
     "viewDetails": "View details",
-    "yes": "Yes"
+    "yes": "Yes",
+    "rollbackCompleted2": "Rollback completed",
+    "rollbackCompletedMessage": "Rollback completed",
+    "failedToRetryDeployment": "Failed to retry deployment",
+    "areYouSureYouWantToCancel": "Are you sure you want to cancel this deployment?",
+    "failedToCancelDeployment": "Failed to cancel deployment",
+    "areYouSureYouWantToRollback": "Are you sure you want to rollback this deployment? This will revert the node to its previous state.",
+    "failedToRollbackDeployment": "Failed to rollback deployment",
+    "pleaseSelectABlueSourceNode": "Please select a blue (source) node",
+    "pleaseSelectAGreenTargetNode": "Please select a green (target) node",
+    "accessDeniedBlueGreenDeploymentsRequireAdmin": "Access denied: Blue-green deployments require admin privileges",
+    "failedToCreateBlueGreenDeployment": "Failed to create blue-green deployment: {detail}",
+    "areYouSureYouWantToSwitch": "Are you sure you want to switch traffic to the green node?",
+    "failedToSwitchTraffic": "Failed to switch traffic",
+    "failedToRollback": "Failed to rollback",
+    "failedToCancel": "Failed to cancel",
+    "areYouSureYouWantToRetry": "Are you sure you want to retry this deployment?",
+    "pleaseSelectATargetNode": "Please select a target node",
+    "failedToCreateDeployment": "Failed to create deployment: {detail}",
+    "confirmRollbackToBlue": "Are you sure you want to rollback to the blue node?",
+    "pleaseSelectRoleToDeploy": "Please select at least one role to deploy",
+    "pleaseSelectRoleToMigrate": "Please select at least one role to migrate",
+    "categoryCoreLabel": "Core Infrastructure",
+    "categoryCoreDescription": "Required base components for all nodes",
+    "categoryDataLabel": "Data Layer",
+    "categoryDataDescription": "Database and caching services",
+    "categoryApplicationLabel": "Application Layer",
+    "categoryApplicationDescription": "Backend API and frontend web servers",
+    "categoryAiLabel": "AI/ML Services",
+    "categoryAiDescription": "LLM inference and AI processing",
+    "categoryAutomationLabel": "Automation",
+    "categoryAutomationDescription": "Browser automation and scripting",
+    "categoryObservabilityLabel": "Observability",
+    "categoryObservabilityDescription": "Monitoring and logging stack",
+    "categoryRemoteAccessLabel": "Remote Access",
+    "categoryRemoteAccessDescription": "VNC and remote desktop services",
+    "categoryInfrastructureLabel": "Infrastructure",
+    "categoryInfrastructureDescription": "Shared libraries and agents deployed to all nodes"
   },
   "externalAgentsView": {
     "actions": "عملیات",
@@ -611,7 +661,9 @@
       "selectANode": "-- Select a node --",
       "selectANodeTo": "Select a node to enable NPU acceleration capabilities",
       "selectNode": "Select Node",
-      "status": "وضعیت"
+      "status": "وضعیت",
+      "failedToAssignNpuRole": "Failed to assign NPU role",
+      "pleaseSelectANode": "Please select a node"
     },
     "decommissionModal": {
       "backupDataBeforeRemoval": "Backup data before removal",
@@ -689,7 +741,15 @@
       "utilization": "Utilization",
       "value0Tasks": "{value0} tasks",
       "weight": "Weight:",
-      "workerLoadOverview": "Worker Load Overview"
+      "workerLoadOverview": "Worker Load Overview",
+      "strategyUpdated": "Load balancing strategy updated successfully.",
+      "metricsRefreshed": "Fleet metrics refreshed. Load distribution updated.",
+      "failedToLoadData": "Failed to load data",
+      "failedToSaveStrategy": "Failed to save strategy",
+      "rebalanceFailed": "Rebalance failed",
+      "highUtilizationSpread": "High utilization spread ({spread}%). Consider switching to \"least-loaded\" strategy.",
+      "moderateUtilizationSpread": "Moderate utilization spread ({spread}%). Current strategy may be adequate.",
+      "loadWellDistributed": "Load is well distributed. No action needed."
     },
     "nPUDetailsPanel": {
       "alertOnly": "Alert Only",
@@ -730,7 +790,12 @@
       "unknown": "Unknown",
       "value0ErrorsRecorded": "{value0} errors recorded",
       "weight1100": "Weight (1-100)",
-      "workerConfiguration": "Worker Configuration"
+      "workerConfiguration": "Worker Configuration",
+      "configurationSaved": "Configuration saved",
+      "failedToSaveConfiguration": "Failed to save configuration",
+      "failedToRemoveNpuRole": "Failed to remove NPU role",
+      "failedToRefreshNpuStatus": "Failed to refresh NPU status",
+      "removeNpuWorkerRoleFrom": "Remove NPU Worker role from {hostname}?"
     },
     "nPUNodeCard": {
       "detecting": "Detecting...",
@@ -989,7 +1054,8 @@
     "stepValue0Of3": "Step {value0} of 3",
     "targetHosts": "Target Hosts",
     "thisPlaybookWillMake": "This playbook will make changes to your infrastructure. Please review the configuration carefully before proceeding.",
-    "whatHappensNext": "What happens next?"
+    "whatHappensNext": "What happens next?",
+    "failedToExecutePlaybook": "Failed to execute playbook"
   },
   "loginView": {
     "authenticationCode": "Authentication code",
@@ -1830,7 +1896,9 @@
     "verifySync": "Verify Sync",
     "verifySyncStatus": "Verify sync status",
     "verifyingSyncStatus": "Verifying sync status...",
-    "viewDetails": "View details"
+    "viewDetails": "View details",
+    "areYouSureYouWantToPromote": "Are you sure you want to promote this replica to primary? This will make the target node a standalone master.",
+    "areYouSureYouWantToStop": "Are you sure you want to stop this replication? The replica will remain connected but replication link will be marked as stopped."
   },
   "roleManagementModal": {
     "actions": "عملیات",
@@ -2106,7 +2174,41 @@
     "user": "کاربر",
     "value0Violations": "{value0} violations",
     "whatHappensWhenYouEnableTLS": "What happens when you enable TLS?",
-    "paginationAria": "Security list pages"
+    "paginationAria": "Security list pages",
+    "failedToLoadSecurityOverview": "Failed to load security overview",
+    "failedToLoadAuditLogs": "Failed to load audit logs",
+    "failedToLoadSecurityEvents": "Failed to load security events",
+    "failedToLoadSecurityPolicies": "Failed to load security policies",
+    "failedToLoadTlsCertificates": "Failed to load TLS certificates",
+    "failedToEnableTls": "Failed to enable TLS",
+    "areYouSureYouWantToDelete": "Are you sure you want to delete this certificate?",
+    "failedToDeleteCertificate": "Failed to delete certificate",
+    "renewThisCertificateThisWillGenerateA": "Renew this certificate? This will generate a new certificate with the same CN and extended validity.",
+    "failedToRenewCertificate": "Failed to renew certificate",
+    "rotateThisCertificateThisWillGenerateA": "Rotate this certificate? This will generate a completely new certificate with new keys (more secure than renewal).",
+    "failedToRotateCertificate": "Failed to rotate certificate",
+    "renewAllCertificatesExpiringWithin30Days": "Renew all certificates expiring within 30 days? This will deploy new certificates to the nodes.",
+    "bulkRenewalCompleteRenewedFailed": "Bulk renewal complete: {renewed} renewed, {failed} failed",
+    "failedToBulkRenewCertificates": "Failed to bulk renew certificates",
+    "pleaseSelectANode": "Please select a node",
+    "pleaseProvideAllCertificateFiles": "Please provide all certificate files",
+    "failedToUploadCertificate": "Failed to upload certificate",
+    "pleaseSelectAtLeastOneServiceTo": "Please select at least one service to enable TLS",
+    "certificateRenewed": "Certificate renewed successfully. New expiry: {expiry}",
+    "certificateRotated": "Certificate rotated successfully. New expiry: {expiry}",
+    "unknownExpiry": "Unknown",
+    "confirmEnableTls": "Enable TLS on {services}?\n\nThis will:\n1. Deploy TLS certificates to the nodes\n2. Configure services for HTTPS\n3. Restart affected services\n\nContinue?",
+    "enableTlsForService": "Enable TLS for {name}",
+    "renewCertificateFor": "Renew certificate for {hostname}",
+    "rotateCertificateFor": "Rotate certificate for {hostname}",
+    "deleteCertificateFor": "Delete certificate for {hostname}",
+    "acknowledgeEvent": "Acknowledge event: {title}",
+    "resolveEvent": "Resolve event: {title}",
+    "severityLabel": "{severity} severity",
+    "disableCertificateFor": "Disable certificate for {hostname}",
+    "enableCertificateFor": "Enable certificate for {hostname}",
+    "disablePolicy": "Disable policy: {name}",
+    "enablePolicy": "Enable policy: {name}"
   },
   "settings": {
     "aPISettings": {
@@ -2166,7 +2268,16 @@
         "turnCachingOnOr": "Turn caching on or off globally",
         "value0Keys": "{value0} keys",
         "warmUpCaches": "Warm Up Caches",
-        "yourBrowserIsStill": "Your browser is still caching API responses and static assets automatically."
+        "yourBrowserIsStill": "Your browser is still caching API responses and static assets automatically.",
+        "configurationSaved": "Cache configuration saved successfully",
+        "cacheCleared": "{type} cache cleared successfully",
+        "redisDatabaseCleared": "Redis {database} database cleared successfully",
+        "warmupCompleted": "Cache warmup completed successfully",
+        "failedToSaveCacheConfiguration": "Failed to save cache configuration",
+        "failedToClearCache": "Failed to clear cache",
+        "failedToWarmUpCaches": "Failed to warm up caches",
+        "confirmClearRedisDatabase": "Are you sure you want to clear the {database} Redis database?",
+        "confirmClearCache": "Are you sure you want to clear the {type} cache?"
       },
       "configDefaultsSettings": {
         "actions": "عملیات",
@@ -2198,7 +2309,12 @@
         "update": "Update",
         "updated": "به‌روزشده",
         "value": "Value *",
-        "value1": "مقدار"
+        "value1": "مقدار",
+        "configSaved": "Config \"{key}\" saved",
+        "deleteGlobalConfig": "Delete global config \"{key}\"?",
+        "requestFailed": "Request failed: {detail}",
+        "unknownError": "خطای ناشناخته",
+        "editKey": "Edit: {key}"
       },
       "lLMFallbacksView": {},
       "lLMSettings": {
@@ -2263,7 +2379,19 @@
         "setActive": "Set Active",
         "temperature": "Temperature:",
         "test": "Test",
-        "unsavedChanges": "Unsaved changes"
+        "unsavedChanges": "Unsaved changes",
+        "configurationSaved": "Configuration saved",
+        "configApplied": "Config applied to {count} nodes",
+        "failedToLoadLlmConfig": "Failed to load LLM config",
+        "failedToSaveLlmConfig": "Failed to save LLM config",
+        "saveConfigurationBeforeApplyingToFleet": "Save configuration before applying to fleet",
+        "applyFailed": "Apply failed",
+        "failedToApplyConfigToFleet": "Failed to apply config to fleet",
+        "connectionTestFailed": "Connection test failed",
+        "removeProvider": "Remove provider \"{name}\"?",
+        "providersTab": "Providers",
+        "serverSettingsTab": "Server Settings",
+        "modelsTab": "مدل‌ها"
       },
       "logForwardingSettings": {
         "aPIKeyOptional": "API Key (optional)",
@@ -2392,7 +2520,16 @@
         "worker": "Worker",
         "workerName": "Worker Name *",
         "connectionTestFailed": "Connection test failed",
-        "loadBalancingLoadFailed": "Failed to load load-balancing configuration"
+        "loadBalancingLoadFailed": "Failed to load load-balancing configuration",
+        "loadBalancingSaved": "Load balancing configuration saved",
+        "workerUpdated": "Worker updated successfully",
+        "workerPaired": "Worker paired successfully",
+        "connectionSuccessful": "Connection to {hostname} successful",
+        "workerRemoved": "Worker removed successfully",
+        "failedToLoadWorkers": "Failed to load workers",
+        "failedToSaveWorker": "Failed to save worker",
+        "failedToRemoveWorker": "Failed to remove worker",
+        "failedToSaveConfiguration": "Failed to save configuration"
       },
       "personalitySettings": {
         "active": "فعال",
@@ -2433,7 +2570,13 @@
         "thisActionCannotBe": "This action cannot be undone. The profile will be permanently removed.",
         "tone": "Tone",
         "voice": "Voice",
-        "whenThisPersonalityIs": "When this personality is active, voice output will use the selected voice."
+        "whenThisPersonalityIs": "When this personality is active, voice output will use the selected voice.",
+        "profileSaved": "Profile saved.",
+        "profileActivated": "Profile activated.",
+        "profileReset": "Profile reset to default values.",
+        "profileDeleted": "Profile deleted.",
+        "profileCreated": "Profile \"{name}\" created.",
+        "profileDuplicated": "Duplicated as \"{name}\"."
       },
       "promptsSettings": {
         "allCategories": "All Categories",
@@ -2456,7 +2599,14 @@
         "selectAPrompt": "Select a Prompt",
         "selectAPromptFrom": "Select a prompt from the list to edit",
         "status": "Status:",
-        "unsavedChanges": "Unsaved Changes"
+        "unsavedChanges": "Unsaved Changes",
+        "promptSaved": "Prompt saved successfully",
+        "promptReverted": "Prompt reverted to default",
+        "failedToLoadPrompts": "Failed to load prompts",
+        "failedToSavePrompt": "Failed to save prompt",
+        "failedToRevertPrompt": "Failed to revert prompt",
+        "youHaveUnsavedChangesDiscardThem": "You have unsaved changes. Discard them?",
+        "areYouSureYouWantToRevert": "Are you sure you want to revert this prompt to its default content?"
       },
       "sSOSettings": {
         "aCSURLAssertionConsumerService": "ACS URL (Assertion Consumer Service)",
@@ -2695,7 +2845,34 @@
         "username": "نام کاربری",
         "usersWhoAccessAutoBot": "Users who access AutoBot chat, workflows, and tools",
         "usersWhoManageThe": "Users who manage the AutoBot fleet via the SLM admin dashboard",
-        "resetPasswordFor": "Reset Password for {username}"
+        "resetPasswordFor": "Reset Password for {username}",
+        "userCreated": "User created successfully",
+        "slmUserDeleted": "SLM user deleted successfully",
+        "autobotUserDeleted": "AutoBot user deleted successfully",
+        "teamCreated": "Team created successfully",
+        "teamDeleted": "Team deleted successfully",
+        "rbacInitializedSuccessfully": "RBAC initialized successfully",
+        "ssoProviderCreated": "SSO provider created successfully",
+        "ssoProviderDeleted": "SSO provider deleted successfully",
+        "ssoConnectionSuccessful": "SSO provider connection successful",
+        "failedToLoadSlmUsers": "Failed to load SLM users",
+        "failedToLoadAutobotUsers": "Failed to load AutoBot users",
+        "failedToLoadTeams": "Failed to load teams",
+        "failedToLoadSsoProviders": "Failed to load SSO providers",
+        "passwordsDoNotMatch": "Passwords do not match",
+        "failedToCreateUser": "Failed to create user",
+        "failedToDeleteUser": "Failed to delete user",
+        "failedToCreateTeam": "Failed to create team",
+        "failedToDeleteTeam": "Failed to delete team",
+        "failedToCheckRbacStatus": "Failed to check RBAC status",
+        "failedToCreateSsoProvider": "Failed to create SSO provider",
+        "failedToDeleteSsoProvider": "Failed to delete SSO provider",
+        "failedToTestSsoProvider": "Failed to test SSO provider",
+        "confirmDeleteUser": "Are you sure you want to delete this user?",
+        "confirmDeleteTeam": "Are you sure you want to delete this team?",
+        "confirmDeleteSsoProvider": "Are you sure you want to delete this SSO provider?",
+        "confirmDeleteSlmAdmin": "Are you sure you want to delete this SLM admin?",
+        "checkingRbacStatus": "Checking RBAC status..."
       }
     },
     "backendSettings": {
@@ -2730,7 +2907,9 @@
       "test": "Test",
       "theseSettingsAreRead": "These settings are read-only and configured in the backend.",
       "timeBeforeANode": "Time before a node is marked offline (seconds)",
-      "warning": "هشدار"
+      "warning": "هشدار",
+      "failedToSaveSetting": "Failed to save setting",
+      "failedToLoadSettings": "Failed to load settings"
     },
     "disposalPolicySettings": {
       "controlsHowCompanyOSProjectsAre": "Controls how Company OS projects are disposed after archiving. Default: immediate, no approval.",
@@ -2741,7 +2920,9 @@
       "retentionPeriodDays": "Retention period (days)",
       "savePolicy": "Save Policy",
       "saving": "در حال ذخیره…",
-      "whenEnabledDisposalCreatesAnApproval": "When enabled, disposal creates an approval request before the project is deleted."
+      "whenEnabledDisposalCreatesAnApproval": "When enabled, disposal creates an approval request before the project is deleted.",
+      "failedToLoadDisposalPolicy": "Failed to load disposal policy",
+      "failedToSaveDisposalPolicy": "Failed to save disposal policy"
     },
     "findingsPolicySettings": {
       "automaticallyTriggerFindings": "Automatically trigger findings analysis whenever the code index is refreshed.",
@@ -2802,8 +2983,15 @@
       "systemName": "System Name",
       "timezoneForDisplayingDatesAndTimes": "Timezone for displaying dates and times ({count} zones available)",
       "useDarkThemeFor": "Use dark theme for the interface",
-      "value0Value1NodePlural": "{value0} — {value1} node{plural}",
-      "viewWizard": "View Wizard"
+      "value0Value1NodePlural": "{value0} — {value1} node | {value0} — {value1} nodes",
+      "viewWizard": "View Wizard",
+      "settingsSaved": "Settings saved successfully",
+      "setupWizardReset": "Setup wizard has been reset",
+      "failedToLoadSettings": "Failed to load settings",
+      "failedToSaveSettings": "Failed to save settings",
+      "timeSyncFailed": "Time sync failed",
+      "failedToResetWizard": "Failed to reset wizard",
+      "failedToSaveSettingsList": "Failed to save setting(s): {keys}"
     },
     "monitoringSettings": {
       "10Seconds": "10 seconds",
@@ -2843,7 +3031,9 @@
       "grafanaConnected": "Grafana connection successful",
       "grafanaFailed": "Grafana connection failed",
       "grafanaUnreachable": "Cannot reach the Grafana server",
-      "deployViaAnsible": "Monitoring role deployment will be triggered via Ansible"
+      "deployViaAnsible": "Monitoring role deployment will be triggered via Ansible",
+      "failedToLoadSettings": "Failed to load settings",
+      "failedToSaveSetting": "Failed to save setting"
     },
     "notificationsSettings": {
       "adminExampleCom": "admin{'@'}example.com",
@@ -2866,7 +3056,11 @@
       "saveChanges": "Save Changes",
       "saving": "Saving...",
       "securityAlerts": "Security Alerts",
-      "sendNotificationsViaEmail": "Send notifications via email"
+      "sendNotificationsViaEmail": "Send notifications via email",
+      "settingsSaved": "Notification settings saved successfully",
+      "failedToLoadSettings": "Failed to load settings",
+      "failedToSaveSettings": "Failed to save settings",
+      "failedToSaveSettingsList": "Failed to save setting(s): {keys}"
     },
     "securitySettings": {
       "1Year": "1 year",
@@ -2918,7 +3112,25 @@
       "value0Uses": "{value0} uses",
       "verifyAndEnable": "Verify and Enable",
       "whatThisKeyIsFor": "What this key is for",
-      "yourAccountIsProtectedWithValue0": "Your account is protected with {value0} authentication"
+      "yourAccountIsProtectedWithValue0": "Your account is protected with {value0} authentication",
+      "mFAEnabledSuccessfully": "MFA enabled successfully",
+      "mFADisabledSuccessfully": "MFA disabled successfully",
+      "aPIKeyRevoked": "API key revoked successfully",
+      "copiedToClipboard": "Copied to clipboard",
+      "failedToLoadMfaStatus": "Failed to load MFA status",
+      "failedToStartMfaSetup": "Failed to start MFA setup",
+      "pleaseEnterAValid6DigitCode": "Please enter a valid 6-digit code",
+      "verificationFailed": "Verification failed",
+      "failedToVerifyMfaCode": "Failed to verify MFA code",
+      "passwordIsRequired": "Password is required",
+      "failedToDisableMfa": "Failed to disable MFA",
+      "failedToRegenerateBackupCodes": "Failed to regenerate backup codes",
+      "failedToLoadApiKeys": "Failed to load API keys",
+      "failedToLoadScopes": "Failed to load scopes",
+      "nameAndAtLeastOneScopeAre": "Name and at least one scope are required",
+      "failedToCreateApiKey": "Failed to create API key",
+      "failedToRevokeApiKey": "Failed to revoke API key",
+      "confirmRevokeApiKey": "Are you sure you want to revoke this API key? This action cannot be undone."
     },
     "cache": {
       "databaseLabel": "{name} (DB {db})"
@@ -3120,7 +3332,13 @@
     "upgradeAll": "Upgrade All",
     "upgradeSelectedValue0": "Upgrade Selected ({value0})",
     "value0Value1Nodes": "{value0} / {value1} nodes",
-    "version": "Version"
+    "version": "Version",
+    "discoveryCompleted": "Discovery completed",
+    "upgradeJobsStarted": "Upgrade jobs started",
+    "confirmCancelJob": "Cancel this update job?",
+    "jobCancelled": "Job cancelled",
+    "confirmUpgradeAllOnNode": "Upgrade ALL packages on {nodeId}?",
+    "upgradeAllStartedOnNode": "Upgrade all started for {nodeId}"
   },
   "tools": {
     "admin": {
@@ -3237,7 +3455,13 @@
         "running": "در حال اجرا",
         "started": "شروع‌شده",
         "totalJobs": "Total Jobs",
-        "value0Value1ItemsValue2": "{value0} / {value1} items ({value2}%)"
+        "value0Value1ItemsValue2": "{value0} / {value1} items ({value2}%)",
+        "failedToLoadJobs": "Failed to load jobs",
+        "failedToCreateJob": "Failed to create job",
+        "failedToCancelJob": "Failed to cancel job",
+        "failedToRetryJob": "Failed to retry job",
+        "failedToDeleteJob": "Failed to delete job",
+        "confirmDeleteJob": "Are you sure you want to delete this job?"
       },
       "browserTool": {
         "back": "برگشت",
@@ -3539,7 +3763,8 @@
     "title": "Budget Policy Audit",
     "totalPolicies": "Total Policies",
     "unnamed": "(unnamed)",
-    "warning": "Warning At"
+    "warning": "Warning At",
+    "failedToFetchBudgetPolicies": "Failed to fetch budget policies"
   },
   "dataHygiene": {
     "audit": {
@@ -3599,7 +3824,8 @@
       "subtitle": "Storage no live record references. Deletion is only ever PROPOSED here — approving it in the approval queue is what actually removes anything.",
       "title": "Unreferenced Storage",
       "totalCandidates": "Candidates",
-      "totalSize": "Total Size"
+      "totalSize": "Total Size",
+      "unknownError": "unknown error"
     },
     "subtitle": "Preview unreferenced storage, repair unreachable resources, and review the audit trail — every deletion is proposed through the approval queue, never applied directly.",
     "tabName": "Data Hygiene",

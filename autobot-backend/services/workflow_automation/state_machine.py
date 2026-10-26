@@ -21,7 +21,6 @@ Usage::
 """
 
 import json
-from enum import Enum
 from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field
@@ -32,6 +31,7 @@ from autobot_shared.models.service_message import ServiceMessage
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from constants.redis_constants import REDIS_KEY
 from constants.ttl_constants import TTL_24_HOURS
+from services.workflow_automation.phases import WorkflowPhase  # noqa: F401 -- #19334
 
 logger = get_logger(__name__)
 
@@ -39,17 +39,6 @@ logger = get_logger(__name__)
 # ------------------------------------------------------------------
 # Enums & Model
 # ------------------------------------------------------------------
-
-
-class WorkflowPhase(str, Enum):
-    """Discrete phases a workflow can occupy."""
-
-    PLANNING = "planning"
-    AWAITING_APPROVAL = "awaiting_approval"  # #1402: approval gate
-    EXECUTING = "executing"
-    VALIDATING = "validating"
-    COMPLETE = "complete"
-    FAILED = "failed"
 
 
 # Default routing table: phase → service that should act next

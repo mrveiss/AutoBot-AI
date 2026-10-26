@@ -562,7 +562,9 @@ def python_files(root: Path, skip: FrozenSet[str] = _SKIP_DIRS) -> Iterable[Path
         yield path
 
 
-def build_graph(backend: Path, skip: FrozenSet[str] = _SKIP_DIRS | frozenset({"tests"})) -> MountGraph:
+def build_graph(
+    backend: Path, skip: FrozenSet[str] = _SKIP_DIRS | frozenset({"tests"}), skip_tests: bool = False
+) -> MountGraph:
     """Derive the whole mount graph from source — nothing is handed in.
 
     Three discovery sources, matching the three ways a router reaches the app:
@@ -572,6 +574,8 @@ def build_graph(backend: Path, skip: FrozenSet[str] = _SKIP_DIRS | frozenset({"t
     graph = MountGraph()
     registry_files: List[Tuple[Path, Dict[str, str]]] = []
     for path in python_files(backend, skip):
+        if skip_tests and (path.name.endswith("_test.py") or path.name.startswith("test_")):
+            continue  # a colocated test's throwaway FastAPI() mount is no route into the app
         try:
             source = path.read_text(encoding="utf-8")
             if not is_relevant(source) and _REGISTRY_DIRNAME not in path.parts:

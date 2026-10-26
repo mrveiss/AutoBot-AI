@@ -166,11 +166,10 @@ location ~* \.(js|css)$ {
 
 To minimize cache-related issues after deployments:
 
-### 1. Always Deploy via Ansible
-```bash
-cd autobot-slm-backend/ansible
-ansible-playbook -i inventory/inventory.yml playbooks/deploy-frontend.yml --tags frontend,nginx
-```
+### 1. Always Deploy through the builtin updater
+Deployed hosts update through the SLM's builtin updater (**Maintenance → Updates → Code Sync**,
+frontend role), which runs the role dispatcher `playbooks/deploy_role.yml` with
+`role_name=frontend`. Never run an ad-hoc playbook against a deployed host.
 
 This ensures:
 - Old files are removed from `dist/` before new ones are copied

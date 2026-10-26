@@ -128,6 +128,39 @@ _REGISTRY: dict[str, PinnedModel] = {
         revision="84fd25912480287da0247647c3d2b4853cb3ee5d",  # pragma: allowlist secret
         no_weight_files=True,
     ),
+    # Bumped by: mrveiss, 2026-10-24, via the procedure in this module's docstring (#19430).
+    # The semantic chunker's sentence model and its two fallbacks, code-pinned by owner decision
+    # (2026-10-24): no config override; utils/semantic_chunker_base.py holds the names.
+    "sentence-transformers/all-MiniLM-L6-v2": PinnedModel(
+        repo_id="sentence-transformers/all-MiniLM-L6-v2",
+        revision="1110a243fdf4706b3f48f1d95db1a4f5529b4d41",  # pragma: allowlist secret
+        weight_digests={
+            # pragma: allowlist nextline secret
+            "pytorch_model.bin": "c3a85f238711653950f6a79ece63eb0ea93d76f6a6284be04019c53733baf256",
+            # pragma: allowlist nextline secret
+            "model.safetensors": "53aa51172d142c89d9012cce15ae4d6cc0ca6895895114379cacb4fab128d9db",
+        },
+    ),
+    "sentence-transformers/all-mpnet-base-v2": PinnedModel(
+        repo_id="sentence-transformers/all-mpnet-base-v2",
+        revision="e8c3b32edf5434bc2275fc9bab85f82640a19130",  # pragma: allowlist secret
+        weight_digests={
+            # pragma: allowlist nextline secret
+            "model.safetensors": "78c0197b6159d92658e319bc1d72e4c73a9a03dd03815e70e555c5ef05615658",
+            # pragma: allowlist nextline secret
+            "pytorch_model.bin": "a8fd120b1a0032e70ff3d4b8ab8e46a6d01c2cb08ffe7c007a021c1788928146",
+        },
+    ),
+    "sentence-transformers/all-MiniLM-L12-v2": PinnedModel(
+        repo_id="sentence-transformers/all-MiniLM-L12-v2",
+        revision="a50ef00143b4d5391434df20ae11632588ac25be",  # pragma: allowlist secret
+        weight_digests={
+            # pragma: allowlist nextline secret
+            "model.safetensors": "d2d541e5f101695ae495eacd867a8d025ecfe8f9674fb23aa6cf93cdb60a5542",
+            # pragma: allowlist nextline secret
+            "pytorch_model.bin": "54609dea3ff88f3167f049eeadbfe780b1173a3117bfac862134ebcd8ce33661",
+        },
+    ),
 }
 
 

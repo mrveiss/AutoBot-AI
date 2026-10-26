@@ -33,6 +33,7 @@ from typing import Awaitable, Callable, Optional
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_utils import delete_if_value
 
 logger = get_logger(__name__)
 
@@ -153,8 +154,9 @@ class LeaderLease:
     async def release(self) -> None:
         """Drop the lease if held, so another worker can take over immediately.
 
-        Best-effort: deletes only when the key still carries this worker's id,
-        so a lease that already expired and was retaken is never deleted.
+        Best-effort: deletes only when the key still carries this worker's id, in
+        one atomic compare-and-delete, so a lease that expired and was retaken --
+        even between a read and a delete -- is never deleted.
         """
         if not self._is_leader:
             return
@@ -163,16 +165,9 @@ class LeaderLease:
         if redis is None:
             return
         try:
-            current = await redis.get(self.key)
-            if _decode(current) == self.worker_id:
-                await redis.delete(self.key)
+            await delete_if_value(redis, self.key, self.worker_id)
         except Exception as exc:
             logger.warning("Failed to release leader lease %s: %s", self.label, exc)
-
-
-def _decode(val: object) -> str:
-    """Decode bytes to str; pass through str. Redis may return either."""
-    return val.decode() if isinstance(val, bytes) else (val or "")  # type: ignore[return-value]
 
 
 async def _call(hook: Hook | None) -> None:

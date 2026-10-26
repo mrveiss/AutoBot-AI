@@ -114,7 +114,8 @@
                 </div>
                 <code class="step-command">{{ step.command }}</code>
                 <div class="step-meta">
-                  <span class="risk" :class="step.risk_level"><Icon name="shield-alt" /> {{ step.risk_level }}</span>
+                  <RiskBadge v-if="step.risk_tier" :tier="step.risk_tier" :label="$t(`common.riskTier.${step.risk_tier}`)" />
+                  <BaseBadge v-else-if="step.risk_level" size="sm" :label="step.risk_level" />
                   <span v-if="step.started_at"><Icon name="play" /> {{ formatTime(step.started_at) }}</span>
                   <span v-if="step.completed_at"><Icon name="check" /> {{ formatTime(step.completed_at) }}</span>
                 </div>
@@ -152,6 +153,7 @@
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
+import { BaseBadge, RiskBadge } from '@autobot/ui'
 import { ref, computed } from 'vue';
 import type { ActiveWorkflow } from '@/composables/useWorkflowBuilder';
 import NotificationConfigModal from './NotificationConfigModal.vue';
@@ -319,10 +321,6 @@ function formatResult(result: Record<string, unknown>): string {
 .step-command { display: block; padding: var(--spacing-2) var(--spacing-2-5); background: var(--bg-tertiary); border-radius: var(--radius-default); font-size: var(--text-xs); color: var(--text-secondary); margin-bottom: var(--spacing-2); overflow-x: auto; }
 .step-meta { display: flex; gap: var(--spacing-3); font-size: var(--text-xs); color: var(--text-tertiary); }
 .step-meta span { display: flex; align-items: center; gap: var(--spacing-1); }
-.step-meta .risk { padding: var(--spacing-0-5) var(--spacing-1-5); border-radius: var(--radius-lg); }
-.step-meta .risk.low { background: var(--color-success-bg); color: var(--color-success); }
-.step-meta .risk.medium { background: var(--color-warning-bg); color: var(--color-warning); }
-.step-meta .risk.high { background: var(--color-error-bg); color: var(--color-error); }
 
 .step-actions { display: flex; gap: var(--spacing-2); margin-top: var(--spacing-3); padding-top: var(--spacing-3); border-top: 1px solid var(--border-default); }
 .step-result { margin-top: var(--spacing-3); padding: var(--spacing-2-5); background: var(--bg-tertiary); border-radius: var(--radius-default); }

@@ -227,7 +227,7 @@ class SearchMixin(BasicVectorSearchMixin):
         top_k: int = 10,
         similarity_top_k: int = None,
         filters: Dict[str, Any] | None = None,
-        mode: str = "auto",
+        mode: str = CategoryDefaults.SEARCH_MODE_AUTO,
         # ---- Enhanced params (formerly enhanced_search) ----
         limit: int | None = None,
         offset: int = 0,
@@ -286,7 +286,7 @@ class SearchMixin(BasicVectorSearchMixin):
 
         if advanced or enhanced:
             eff_limit = limit if limit is not None else top_k
-            eff_mode = mode if mode != "auto" else CategoryDefaults.SEARCH_MODE_HYBRID
+            eff_mode = mode if mode != CategoryDefaults.SEARCH_MODE_AUTO else CategoryDefaults.SEARCH_MODE_HYBRID
             ctx = SearchContext.from_params(
                 query=query,
                 limit=eff_limit,
@@ -491,9 +491,9 @@ class SearchMixin(BasicVectorSearchMixin):
         if filter_parts:
             base_filters = filter_parts
 
-        if mode == "keyword":
+        if mode == CategoryDefaults.SEARCH_MODE_KEYWORD:
             return await self._keyword_search(processed_query, fetch_limit, category)
-        elif mode == "semantic":
+        elif mode == CategoryDefaults.SEARCH_MODE_SEMANTIC:
             return await self._dispatch_search(
                 processed_query,
                 top_k=fetch_limit,
@@ -578,7 +578,7 @@ class SearchMixin(BasicVectorSearchMixin):
         category: str | None = None,
         tags: List[str] | None = None,
         tags_match_any: bool = False,
-        mode: str = "hybrid",
+        mode: str = CategoryDefaults.SEARCH_MODE_HYBRID,
         enable_reranking: bool = False,
         min_score: float = 0.0,
         board_id: str | None = None,

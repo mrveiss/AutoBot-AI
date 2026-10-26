@@ -17,6 +17,7 @@ import { BaseAlert, BaseSwitch } from '@autobot/ui'
  */
 
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useFleetStore } from '@/stores/fleet'
 import { createLogger } from '@/utils/debugUtils'
 import type {
@@ -28,6 +29,7 @@ import type {
 const logger = createLogger('LoadBalancingView')
 
 const fleetStore = useFleetStore()
+const { t } = useI18n()
 
 // ============================================================
 // State
@@ -176,7 +178,7 @@ async function refreshData(): Promise<void> {
       nodeMetrics.map(m => fleetStore.fetchNpuWorkerConfig(m.node_id))
     )
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Failed to load data'
+    const msg = e instanceof Error ? e.message : t('fleet.loadBalancingView.failedToLoadData')
     error.value = msg
     logger.error('refreshData failed:', msg)
   } finally {
@@ -197,10 +199,10 @@ async function saveStrategy(): Promise<void> {
       modelAffinity: currentConfig.value?.modelAffinity ?? {},
     }
     await fleetStore.updateNpuLoadBalancing(config)
-    showNotification('Load balancing strategy updated successfully.')
+    showNotification(t('fleet.loadBalancingView.strategyUpdated'))
     logger.info('Strategy updated to', selectedStrategy.value)
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Failed to save strategy'
+    const msg = e instanceof Error ? e.message : t('fleet.loadBalancingView.failedToSaveStrategy')
     error.value = msg
     logger.error('saveStrategy failed:', msg)
   } finally {
@@ -217,10 +219,10 @@ async function rebalanceNow(): Promise<void> {
 
   try {
     await fleetStore.fetchNpuFleetMetrics()
-    showNotification('Fleet metrics refreshed. Load distribution updated.')
+    showNotification(t('fleet.loadBalancingView.metricsRefreshed'))
     logger.info('Manual rebalance triggered')
   } catch (e) {
-    const msg = e instanceof Error ? e.message : 'Rebalance failed'
+    const msg = e instanceof Error ? e.message : t('fleet.loadBalancingView.rebalanceFailed')
     error.value = msg
     logger.error('rebalanceNow failed:', msg)
   } finally {
@@ -241,12 +243,12 @@ const autoRebalanceRecommendation = computed(() => {
   const spread = maxUtil - minUtil
 
   if (spread > 40) {
-    return `High utilization spread (${spread.toFixed(0)}%). Consider switching to "least-loaded" strategy.`
+    return t('fleet.loadBalancingView.highUtilizationSpread', { spread: spread.toFixed(0) })
   }
   if (spread > 20) {
-    return `Moderate utilization spread (${spread.toFixed(0)}%). Current strategy may be adequate.`
+    return t('fleet.loadBalancingView.moderateUtilizationSpread', { spread: spread.toFixed(0) })
   }
-  return 'Load is well distributed. No action needed.'
+  return t('fleet.loadBalancingView.loadWellDistributed')
 })
 
 // ============================================================
@@ -277,15 +279,7 @@ onBeforeUnmount(() => {
       leave-from-class="opacity-100 translate-y-0"
       leave-to-class="opacity-0 -translate-y-2"
     >
-      <div
-        v-if="notification"
-        class="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm flex items-center gap-2"
-      >
-        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        {{ notification }}
-      </div>
+      <BaseAlert v-if="notification" variant="success" size="compact" :message="notification" />
     </Transition>
 
     <!-- Error Banner -->
@@ -496,15 +490,13 @@ onBeforeUnmount(() => {
         leave-from-class="opacity-100 max-h-20"
         leave-to-class="opacity-0 max-h-0"
       >
-        <div
+        <BaseAlert
           v-if="autoRebalanceRecommendation"
-          class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700 flex items-start gap-2"
-        >
-          <svg class="w-4 h-4 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span>{{ autoRebalanceRecommendation }}</span>
-        </div>
+          variant="info"
+          size="compact"
+          class="mt-4"
+          :message="autoRebalanceRecommendation"
+        />
       </Transition>
     </div>
 

@@ -17,6 +17,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 
+from api.knowledge_mcp_llm import _get_chat_ollama
 from api.schemas_code import (
     SubscribeResourceRequest,
     UnsubscribeResourceRequest,
@@ -26,8 +27,6 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
-from constants.model_constants import ModelConstants
-from dependencies import provide_config_manager
 from knowledge.ownership_index import drop_ownership_unless_admin, refuses_platform_wide
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER, with_quarantine
 from knowledge.schemas.mcp import (
@@ -45,10 +44,10 @@ from knowledge.schemas.mcp import (
     McpToolsResponse,
     McpVectorSimilarityResponse,
 )
+from knowledge.search_filters import caller_principal, filter_for_caller
 from knowledge_base import KnowledgeBase
 from services.mcp_bridge_manifest import MCPBridgeManifest
 from type_defs.common import Metadata
-from utils.service_registry import get_service_url
 
 MANIFEST = MCPBridgeManifest(
     name="knowledge_mcp",
@@ -73,28 +72,6 @@ def get_vectors_redis_client():
     Issue #692: Migrated from deprecated RedisDatabaseManager to get_redis_client().
     """
     return get_redis_client(database="vectors")
-
-
-def _get_chat_ollama():
-    """Get a ChatOllama instance for LLM calls (langchain 1.x).
-
-    Issue #1047: Replaces LangChainAgentOrchestrator.llm with ChatOllama.
-    Uses SSOT config for Ollama endpoint and model selection.
-    """
-    try:
-        from langchain_ollama import ChatOllama
-    except ImportError:
-        logger.warning("langchain-ollama not installed — QA chain LLM unavailable")
-        return None
-
-    try:
-        llm_config = provide_config_manager().get_llm_config()
-        model = ModelConstants.DEFAULT_OLLAMA_MODEL
-        base_url = llm_config.get("ollama", {}).get("base_url", get_service_url("ollama"))
-        return ChatOllama(model=model, base_url=base_url, temperature=0.7)
-    except Exception as exc:
-        logger.warning("Failed to create ChatOllama: %s", exc)
-        return None
 
 
 def _create_search_tool() -> McpToolsResponse:
@@ -456,8 +433,9 @@ async def mcp_search_knowledge_base(
 ):
     """MCP tool: Search the knowledge base.
 
-    Issue #744: Requires authenticated user.
+    Issue #744: Requires authenticated user. #16665: results are the caller's own visible facts.
     """
+    caller_principal(current_user)  # 401 before the try below, which would swallow it
     try:
         kb = get_knowledge_base()
 
@@ -467,6 +445,7 @@ async def mcp_search_knowledge_base(
             top_k=request.top_k,
             filters=with_quarantine(request.filters),
         )
+        results = await filter_for_caller(results, kb, current_user)  # #16665
 
         # Format results for MCP
         formatted_results = []
@@ -574,8 +553,9 @@ async def mcp_summarize_knowledge_topic(
 ):
     """MCP tool: Summarize knowledge on a topic.
 
-    Issue #744: Requires authenticated user.
+    Issue #744: Requires authenticated user. #16665: only the caller's visible facts are summarised.
     """
+    caller_principal(current_user)  # 401 before the try below, which would swallow it
     try:
         kb = get_knowledge_base()
         topic = request.get("topic")
@@ -584,6 +564,7 @@ async def mcp_summarize_knowledge_topic(
         # Search for relevant documents
         # Issue #13009: exclude quarantined research facts (#12622).
         results = await kb.search(query=topic, top_k=10, filters=RESEARCH_QUARANTINE_FILTER)
+        results = await filter_for_caller(results, kb, current_user)  # #16665
 
         if not results:
             return {
@@ -635,8 +616,9 @@ async def mcp_vector_similarity_search(
 ):
     """MCP tool: Perform vector similarity search in Redis.
 
-    Issue #744: Requires authenticated user.
+    Issue #744: Requires authenticated user. #16665: only the caller's visible facts are returned.
     """
+    caller_principal(current_user)  # 401 before the try below, which would swallow it
     try:
         kb = get_knowledge_base()
         query = request.get("query")
@@ -650,6 +632,7 @@ async def mcp_vector_similarity_search(
             results = []
             # Issue #13009: exclude quarantined research facts (#12622).
             search_results = await kb.search(query, top_k, filters=RESEARCH_QUARANTINE_FILTER)
+            search_results = await filter_for_caller(search_results, kb, current_user)  # #16665
 
             for result in search_results:
                 if result.get("score", 0) >= threshold:
@@ -685,8 +668,9 @@ async def mcp_langchain_qa_chain(
 ):
     """MCP tool: Use LangChain QA chain for comprehensive answers.
 
-    Issue #744: Requires authenticated user.
+    Issue #744: Requires authenticated user. #16665: only the caller's visible facts reach the prompt.
     """
+    caller_principal(current_user)  # 401 before the try below, which would swallow it
     try:
         kb = get_knowledge_base()
         question = request.get("question")
@@ -695,6 +679,7 @@ async def mcp_langchain_qa_chain(
         # First get relevant documents
         # Issue #13009: exclude quarantined research facts (#12622).
         search_results = await kb.search(question, context_size, filters=RESEARCH_QUARANTINE_FILTER)
+        search_results = await filter_for_caller(search_results, kb, current_user)  # #16665
 
         if not search_results:
             return {
@@ -1111,6 +1096,7 @@ async def read_kb_resource(
     - kb://chunk/<ID> - retrieve chunk by ID
     - kb://stats - retrieve knowledge base statistics
     """
+    caller_principal(current_user)  # #16665: 401 before any read
     uri = request.get("uri", "")
     if not uri.startswith("kb://"):
         return {"success": False, "error": "Only kb:// URIs are supported"}
@@ -1146,6 +1132,7 @@ async def read_kb_resource(
             # implement document retrieval by ID in the knowledge base
             # Issue #13009: exclude quarantined research facts (#12622).
             results = await kb.search(query=f"id:{identifier}", top_k=1, filters=RESEARCH_QUARANTINE_FILTER)
+            results = await filter_for_caller(results, kb, current_user)  # #16665
             if results:
                 content = results[0].get("content", "")
                 mime_type = "text/plain"
@@ -1158,6 +1145,7 @@ async def read_kb_resource(
             # Retrieve chunk by ID
             # Issue #13009: exclude quarantined research facts (#12622).
             results = await kb.search(query=f"chunk_id:{identifier}", top_k=1, filters=RESEARCH_QUARANTINE_FILTER)
+            results = await filter_for_caller(results, kb, current_user)  # #16665
             if results:
                 content = results[0].get("content", "")
                 mime_type = "text/plain"

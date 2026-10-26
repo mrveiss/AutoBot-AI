@@ -378,6 +378,8 @@ def test_the_scanned_population_still_dwarfs_the_guarded_shape():
 # `Severity` — but nothing asserted that, so a re-declaration would have been
 # invisible. These two tests pin the collapse and the reason it was safe.
 _CAUSAL_ENGINE = "autobot-backend/services/causal_inference_engine.py"
+# #13422: the report dataclass (and its to_dict) moved here from the engine.
+_CAUSAL_MODELS = "autobot-backend/services/causal_inference_models.py"
 _DIAGNOSTICS = "autobot-backend/api/diagnostics.py"
 
 
@@ -418,9 +420,9 @@ def test_the_causal_report_still_crosses_the_wire_as_a_value():
     halves of that path are pinned: the report emits `.value`, and the endpoint
     returns `to_dict()` rather than the dataclass.
     """
-    engine = (REPO_ROOT / _CAUSAL_ENGINE).read_text(encoding="utf-8")
+    engine = (REPO_ROOT / _CAUSAL_MODELS).read_text(encoding="utf-8")
     assert '"severity": self.severity.value' in engine, (
-        f"#14988: {_CAUSAL_ENGINE} no longer serialises severity via .value — "
+        f"#14988: {_CAUSAL_MODELS} no longer serialises severity via .value — "
         "a plain Enum does not stringify itself, so the wire value changed"
     )
     endpoint = (REPO_ROOT / _DIAGNOSTICS).read_text(encoding="utf-8")
