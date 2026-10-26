@@ -418,7 +418,7 @@ def _resolve_service_urls() -> tuple:
         npu_url = f"http://{_ssot.vm.npu}:{_ssot.port.npu}/health"
         browser_url = f"http://{_ssot.vm.browser}:{_ssot.port.browser}/health"
         ollama_url = f"http://{_ssot.vm.ollama}:{_ssot.port.ollama}/api/version"
-        chromadb_url = f"http://{_ssot.vm.aistack}:{_ssot.port.aistack}/api/v2/heartbeat"
+        chromadb_url = f"http://{_ssot.vm.chromadb}:{_ssot.port.chromadb}/api/v2/heartbeat"  # #19321
     except Exception:
         # Issue #1229: Use ConfigRegistry (defaults from SSOT via registry_defaults)
         npu_host = ConfigRegistry.get("vm.npu")
@@ -427,8 +427,8 @@ def _resolve_service_urls() -> tuple:
         browser_port = ConfigRegistry.get("port.browser")
         ollama_host = ConfigRegistry.get("vm.llm")
         ollama_port = ConfigRegistry.get("port.ollama")
-        chromadb_host = ConfigRegistry.get("vm.aistack")
-        chromadb_port = ConfigRegistry.get("port.aistack")
+        chromadb_host = ConfigRegistry.get("vm.chromadb")  # #19321: was the AI-stack host/port
+        chromadb_port = ConfigRegistry.get("port.chromadb")
         npu_url = f"http://{npu_host}:{npu_port}/health"
         browser_url = f"http://{browser_host}:{browser_port}/health"
         ollama_url = f"http://{ollama_host}:{ollama_port}/api/version"
@@ -507,8 +507,8 @@ def _build_service_list(results: list) -> list:
         ),
         _to_service_entry(
             "ChromaDB",
-            ConfigRegistry.get("vm.aistack"),
-            int(ConfigRegistry.get("port.aistack")),
+            ConfigRegistry.get("vm.chromadb"),
+            int(ConfigRegistry.get("port.chromadb")),
             chromadb_s,
             chromadb_m,
         ),

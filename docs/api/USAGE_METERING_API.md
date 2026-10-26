@@ -524,7 +524,7 @@ Pricing is sourced from provider published rates. The table lives in
 | `deepseek-v3` | 0.27 | 1.10 |
 | `deepseek-r1` | 0.55 | 2.19 |
 
-**Local / Ollama models:** All local models (`llama3`, `mistral`, `codellama`,
+**Local / Ollama models:** All local models, provisioned or not provisioned (`llama3`, `mistral`, `codellama`,
 `qwen`, `phi`, `gemma`, `deepseek-coder`, etc.) are priced at `$0.00 / M` tokens.
 
 ### Staleness warning

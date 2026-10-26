@@ -656,9 +656,8 @@ INVENTORY
 
     if [[ ! -f "${SECRETS_FILE}" ]] || [[ "${REINSTALL}" == true ]]; then
         info "Writing secrets file..."
-        local secret_key encryption_key local_ip network_subnet network_gateway
-        secret_key=$(openssl rand -hex 32)
-        encryption_key=$(openssl rand -hex 32)
+        local secret_key encryption_key hmac_api_key_secret local_ip network_subnet network_gateway
+        secret_key=$(openssl rand -hex 32) encryption_key=$(openssl rand -hex 32) hmac_api_key_secret=$(grep -oP '^SLM_HMAC_API_KEY_SECRET=\K.+' "${SECRETS_FILE}" 2>/dev/null | head -1 || true); hmac_api_key_secret=${hmac_api_key_secret:-$(openssl rand -hex 32)}  # #16299, #19120: a reinstall keeps an existing pepper
         # Issue #2758: detect the machine's primary outbound IP so that
         # SLM_EXTERNAL_URL is set correctly and not left to the Python fallback.
         local_ip="$(detect_local_ip)"
@@ -666,6 +665,7 @@ INVENTORY
         cat > "${SECRETS_FILE}" << EOF
 SLM_SECRET_KEY=${secret_key}
 SLM_ENCRYPTION_KEY=${encryption_key}
+SLM_HMAC_API_KEY_SECRET=${hmac_api_key_secret}
 SLM_ADMIN_PASSWORD=${ADMIN_PASSWORD}
 SLM_EXTERNAL_URL=https://${local_ip}
 SLM_HOST=${local_ip}

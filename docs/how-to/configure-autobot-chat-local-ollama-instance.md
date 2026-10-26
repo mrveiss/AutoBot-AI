@@ -2,6 +2,13 @@
 
 AutoBot's chat module selects its Ollama endpoint and model from environment variables and a runtime-configurable settings store.  A local Ollama instance can be pointed to in seconds via environment variables; the admin API allows changing it without a restart.
 
+## Which models
+
+Use the models the installer provisions: the six tier models plus `nomic-embed-text` for
+embeddings, listed in [Tiered Model Routing](../developer/TIERED_MODEL_ROUTING.md). The default
+chat model is `qwen3.5:9b`. Another model works too, but you pull it yourself
+(`ollama pull <model>`), and nothing in AutoBot routes a tier to it unless you configure that.
+
 ## Quickstart — environment variables
 
 Set these before starting AutoBot backend:
@@ -12,7 +19,7 @@ export AUTOBOT_OLLAMA_ENDPOINT="http://localhost:11434"
 export AUTOBOT_OLLAMA_HOST="localhost"
 
 # Default model to use for chat
-export AUTOBOT_DEFAULT_LLM_MODEL="llama3:8b"
+export AUTOBOT_DEFAULT_LLM_MODEL="qwen3.5:9b"
 
 # Optional: separate GPU-accelerated endpoint
 export AUTOBOT_OLLAMA_GPU_ENDPOINT="http://localhost:11434"
@@ -39,16 +46,16 @@ client.put("/api/settings/admin/llm", json={
     "active_provider": "ollama",
     "ollama_host":     "localhost",
     "ollama_port":     11434,
-    "selected_model":  "llama3:8b",
-    "cpu_models":      ["llama3:8b", "mistral:7b", "phi3:mini"],
-    "gpu_models":      ["qwen3.5:9b", "llama3:70b"],
+    "selected_model":  "qwen3.5:9b",
+    "cpu_models":      ["llama3.2:1b", "gemma2:2b", "phi3:mini", "mistral:7b-instruct"],
+    "gpu_models":      ["qwen3.5:9b", "dolphin-llama3:8b"],
 })
 
 # 2. Test connectivity
 test = client.post("/api/settings/admin/llm/test", json={
     "provider": "ollama",
     "endpoint": "http://localhost:11434",
-    "model":    "llama3:8b",
+    "model":    "qwen3.5:9b",
 }).json()
 print(f"Connection test: {test['status']}")
 
@@ -84,7 +91,7 @@ For a local single-machine setup, only priority 3 applies.  The chat module call
 ```
 POST {AUTOBOT_OLLAMA_ENDPOINT}/api/generate
 {
-  "model":  "llama3:8b",
+  "model":  "qwen3.5:9b",
   "prompt": "<assembled full prompt>",
   "stream": true
 }

@@ -28,7 +28,7 @@ from config import settings
 from models.database import Deployment, DeploymentStatus, Node, NodeStatus
 from models.schemas import DeploymentCreate, DeploymentResponse
 from services.ansible_utils import _find_ansible_playbook as _resolve_ansible_playbook
-from services.ansible_utils import ansible_run_failure
+from services.ansible_utils import ansible_config_env, ansible_run_failure
 from services.encryption import decrypt_data
 from services.yaml_scalar import yaml_double_quoted
 
@@ -358,16 +358,14 @@ class DeploymentService:
             cmd.extend(["-e", f"ansible_port={ssh_port}"])
 
     def _get_ansible_environment(self) -> Dict[str, str]:
-        """Build the environment dict for Ansible execution.
-
-        Helper for _execute_ansible_playbook (Issue #665).
-        """
+        """Build the environment dict for Ansible execution (Issue #665)."""
         return {
             **os.environ,
             "ANSIBLE_FORCE_COLOR": "0",
             "ANSIBLE_NOCOLOR": "1",
             "ANSIBLE_HOST_KEY_CHECKING": "False",
             "ANSIBLE_SSH_RETRIES": "3",
+            **ansible_config_env(self.ansible_dir),
         }
 
     async def _execute_ansible_playbook(
