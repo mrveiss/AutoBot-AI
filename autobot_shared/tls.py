@@ -64,6 +64,15 @@ def tls_verify_enabled() -> bool:
     return os.environ.get("AUTOBOT_SKIP_TLS_VERIFY", "").lower() != "true"
 
 
+def _project_ca_fallback() -> str:
+    """``<project_root>/<AUTOBOT_TLS_CERT_DIR>/ca/ca-cert.pem``, with the one default (#19317)."""
+    from autobot_shared.env_registry_tls import DEFAULT_TLS_CERT_DIR
+
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    cert_dir = os.environ.get("AUTOBOT_TLS_CERT_DIR", DEFAULT_TLS_CERT_DIR)
+    return os.path.join(project_root, cert_dir, "ca", "ca-cert.pem")
+
+
 def get_internal_tls_context(
     target_url: Optional[str] = None,
     ca_path: Optional[str] = None,
@@ -116,9 +125,7 @@ def get_internal_tls_context(
         return ctx
 
     # 4. AutoBot project CA fallback (single-host installs with self-signed certs)
-    _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    _cert_dir = os.environ.get("AUTOBOT_TLS_CERT_DIR", "certs")
-    _fallback_ca = os.path.join(_project_root, _cert_dir, "ca", "ca-cert.pem")
+    _fallback_ca = _project_ca_fallback()
     if os.path.isfile(_fallback_ca):
         ctx.load_verify_locations(_fallback_ca)
         if client_cert and client_key:

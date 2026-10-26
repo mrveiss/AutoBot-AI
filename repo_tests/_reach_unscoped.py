@@ -25,6 +25,9 @@ UNSCOPED = frozenset(
         # Whole tree (#18940): every tracked test file, wherever a test lives; the population is
         # the test suite itself, so a roots= list would only go stale as tests move.
         "isolated-git-env",
+        # #19317: every tracked code/config/env/shell file outside docs -- the whole tree by suffix,
+        # since a re-added default can land in any component; a roots= list would only shrink it.
+        "tls-cert-dir-one-home-19317",
         # #19076: items are (role, unit) pairs from one registry file, not paths -- no roots= to check.
         "role-registry-installed-units",
         # #19318: every tracked code/config file by suffix (.py, .sh, .yml, .j2, .env*, Dockerfile*),
