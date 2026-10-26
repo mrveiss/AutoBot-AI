@@ -889,7 +889,7 @@
         port: "{{ item }}"
         proto: tcp
       loop:
-        - '3000'  # Playwright
+        - "{{ browser_port }}"  # Playwright (#19324: the port the unit above binds)
         - '5900'  # VNC
 
 
@@ -936,7 +936,7 @@
             - { url: 'http://localhost:8080/health', name: 'AI Stack', expected_status: [200, 404] }
             - { url: 'http://localhost:8081/health', name: 'NPU Worker', expected_status: [200, 404] }
           'autobot-browser':
-            - { url: 'http://localhost:3000/health', name: 'Browser Service', expected_status: [200, 404] }
+            - { url: 'http://localhost:{{ browser_port }}/health', name: 'Browser Service', expected_status: [200, 404] }
       ignore_errors: true
 
     - name: Display deployment summary

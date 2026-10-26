@@ -47,6 +47,10 @@ from repo_tests._undefined_css_var_baseline import TOTAL_SITES, UNDEFINED_CSS_VA
 
 _SCANNED_SUFFIXES = {".css", ".scss", ".vue", ".ts", ".js"}
 _FRONTEND = Path("autobot-frontend/src")
+#: The shared kit's token sheets. `autobot-frontend/src/assets/global-styles.ts`
+#: imports both, so what they declare renders in the app even though the files
+#: sit outside the scanned tree (train-85f: `--aui-space-4` read as undefined).
+_IMPORTED_TOKENS = (Path("libs/autobot-ui/src/tokens/contract.css"), Path("libs/autobot-ui/src/tokens/adapter.css"))
 
 _DECLARATION = re.compile(r"(--[A-Za-z0-9_-]+)\s*:")
 #: The capture group after the name is the comma that introduces a fallback.
@@ -103,7 +107,7 @@ REACH = declare(
 )
 
 
-def _scan(root: Path) -> dict[str, int]:
+def _scan(root: Path, imported: tuple[Path, ...] = ()) -> dict[str, int]:
     """``property name -> count`` of references that render nothing.
 
     Keyed by name rather than by file deliberately -- see the baseline's
@@ -112,6 +116,8 @@ def _scan(root: Path) -> dict[str, int]:
     which changes what CI runs on a frontend edit.
     """
     declared: set[str] = set()
+    for sheet in imported:
+        declared |= set(_DECLARATION.findall(sheet.read_text(encoding="utf-8")))
     references: list[str] = []
     for path in sorted(root.rglob("*")):
         if path.suffix not in _SCANNED_SUFFIXES or "node_modules" in path.parts:
@@ -137,7 +143,7 @@ def _scan(root: Path) -> dict[str, int]:
 def measured() -> dict[str, int]:
     root = repo_root() / _FRONTEND
     assert root.is_dir(), f"{_FRONTEND} has moved; this guard reads it by path"
-    return _scan(root)
+    return _scan(root, tuple(repo_root() / sheet for sheet in _IMPORTED_TOKENS))
 
 
 class TestTheDetectorWorksBeforeItsOutputIsRead:
@@ -181,6 +187,15 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
     def test_an_unreadable_file_costs_a_finding_not_the_run(self, tmp_path):
         (tmp_path / "bin.css").write_bytes(b"\xff\xfe\x00 not utf-8")
         _scan(tmp_path)  # must not raise
+
+    def test_a_token_declared_by_an_imported_sheet_is_defined(self, tmp_path):
+        sheet = tmp_path / "kit.css"
+        sheet.write_text(":root { --kit-space: 1rem; }", encoding="utf-8")
+        app = tmp_path / "app"
+        app.mkdir()
+        (app / "a.vue").write_text(".x { margin: var(--kit-space); }", encoding="utf-8")
+        assert _scan(app) == {"--kit-space": 1}
+        assert _scan(app, (sheet,)) == {}
 
 
 class TestTheBaselineIsInternallyConsistent:

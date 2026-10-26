@@ -20,6 +20,7 @@ import sys
 
 import psycopg2
 
+from autobot_shared.ssot_config import config
 from migrations.utils import (
     add_column_if_not_exists,
     create_index_if_not_exists,
@@ -48,7 +49,8 @@ SERVICE_DEFAULTS = {
     "slm-agent": {"port": 8000, "protocol": "http", "endpoint_path": "/api"},
     "slm-backend": {"port": 8000, "protocol": "http", "endpoint_path": "/api"},
     "ollama": {"port": 11434, "protocol": "http", "endpoint_path": "/api"},
-    "playwright-server": {"port": 3000, "protocol": "http", "endpoint_path": None},
+    # #19324: the browser service port is the SSOT's, not Grafana's (below).
+    "playwright-server": {"port": config.port.browser, "protocol": "http", "endpoint_path": None},
     "grafana-server": {"port": 3000, "protocol": "http", "endpoint_path": "/"},
     "prometheus": {"port": 9090, "protocol": "http", "endpoint_path": "/"},
 }

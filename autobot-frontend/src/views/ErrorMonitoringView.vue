@@ -119,25 +119,13 @@
       <!-- Top errors -->
       <section class="em-section">
         <h3 class="em-section-title">{{ $t('errorMonitoring.sections.topErrors') }}</h3>
-        <div v-if="topErrors.length === 0" class="em-empty em-empty-quiet">
-          {{ $t('errorMonitoring.empty.noData') }}
-        </div>
-        <table v-else class="em-top-table">
-          <thead>
-            <tr>
-              <th>{{ $t('errorMonitoring.topErrors.component') }}</th>
-              <th>{{ $t('errorMonitoring.topErrors.errorCode') }}</th>
-              <th class="em-top-count-col">{{ $t('errorMonitoring.topErrors.count') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(row, idx) in topErrors" :key="`${row.component}-${row.error_code}-${idx}`">
-              <td>{{ row.component }}</td>
-              <td><code class="em-code">{{ row.error_code }}</code></td>
-              <td class="em-top-count-col">{{ row.count }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <BaseTable
+          :columns="topErrorColumns"
+          :rows="topErrorRows"
+          size="compact"
+          :aria-label="$t('errorMonitoring.sections.topErrors')"
+          :empty-title="$t('errorMonitoring.empty.noData')"
+        />
       </section>
     </div>
 
@@ -269,6 +257,8 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { BaseTable, type BaseTableColumn } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { useErrorMonitoring } from '@/composables/useErrorMonitoring'
 
@@ -291,6 +281,19 @@ const {
   resolveError,
   refresh,
 } = useErrorMonitoring({ autoFetch: true, pollInterval: 60_000 })
+
+const { t } = useI18n()
+
+// #17562: the kit table, not a hand-rolled table element
+const topErrorColumns = computed<BaseTableColumn[]>(() => [
+  { key: 'component', label: t('errorMonitoring.topErrors.component') },
+  { key: 'error_code', label: t('errorMonitoring.topErrors.errorCode'), monospace: true },
+  { key: 'count', label: t('errorMonitoring.topErrors.count'), numeric: true },
+])
+// Rows carry no id, so the key is built the way the old v-for built it.
+const topErrorRows = computed(() =>
+  topErrors.value.map((row, idx) => ({ ...row, id: `${row.component}-${row.error_code}-${idx}` })),
+)
 
 // ── Sparkline geometry (viewBox units; scaled by CSS) ───────────────────────
 const SPARK_WIDTH = 300
@@ -608,38 +611,6 @@ async function onResolve(errorId: string): Promise<void> {
   justify-content: space-between;
   font-size: var(--text-xs, 0.75rem);
   color: var(--text-tertiary, var(--text-secondary));
-}
-
-/* Top-errors table */
-.em-top-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-sm, 0.875rem);
-}
-
-.em-top-table th {
-  text-align: left;
-  font-weight: 600;
-  color: var(--text-secondary);
-  padding: var(--spacing-1, 0.25rem) var(--spacing-2, 0.5rem);
-  border-bottom: 1px solid var(--border-default);
-}
-
-.em-top-table td {
-  padding: var(--spacing-1, 0.25rem) var(--spacing-2, 0.5rem);
-  color: var(--text-primary);
-  border-bottom: 1px solid var(--border-subtle, var(--border-default));
-}
-
-.em-top-count-col {
-  text-align: right;
-  white-space: nowrap;
-}
-
-.em-code {
-  font-family: var(--font-mono, monospace);
-  font-size: var(--text-xs, 0.75rem);
-  color: var(--text-secondary);
 }
 
 /* Filters */

@@ -44,18 +44,29 @@ import os
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import ClassVar, Dict, FrozenSet, List
+from typing import Annotated, ClassVar, Dict, FrozenSet, List
 from urllib.parse import quote
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, BeforeValidator, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from autobot_shared import deployment_profile as _profile  # #19315/#19316: environment/mode/debug home
+from autobot_shared import postgres_identity as _pg
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.paths import install_base_dir, project_root
 from autobot_shared.secret_redaction import RedactedReprMixin
 from autobot_shared.ssot_llm_oauth_config import LlmOAuthConfig
+from autobot_shared.ssot_role_mirrors import (  # #19319: SSOT defaults an Ansible role mirrors
+    FEATURE_ROUTERS_STRICT_DEFAULT,
+    SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE_DEFAULT,
+    SERVICE_AUTH_ENFORCEMENT_MODE_DEFAULT,
+    SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES_DEFAULT,
+    SERVICE_AUTH_RATE_LIMIT_WINDOW_DEFAULT,
+    SERVICE_AUTH_TIMESTAMP_WINDOW_DEFAULT,
+)
 from autobot_shared.ssot_tls import TLSConfig, TLSMode
 
+_Env = Annotated[str, BeforeValidator(_profile.env_field), Field(validation_alias=AliasChoices(*_profile.ENV_NAMES))]
 # Determine project root for .env file location.
 #
 # The resolution itself lives in ``autobot_shared.paths`` (#13149) so that the
@@ -122,32 +133,6 @@ PLANNING_CONTEXT_ENABLED: bool = os.environ.get("AUTOBOT_PLANNING_CONTEXT_ENABLE
 SUBAGENT_REFLECTION_ENABLED: bool = (
     os.environ.get("AUTOBOT_SUBAGENT_REFLECTION_ENABLED", "false").lower() in _TRUE_VALUES
 )
-
-
-# Service-auth failure rate limiting (#13326).
-# These mirror the values the service_auth Ansible role has always written to
-# .env; the Pydantic fields previously defaulted to 0, which made
-# ``len(failures) >= max_failures`` true on the very first request and rejected
-# every SERVICE_ONLY_PATHS call on a default install.
-SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES_DEFAULT = 10
-SERVICE_AUTH_RATE_LIMIT_WINDOW_DEFAULT = 300
-
-# Service-auth enforcement gate (#13335) - the third drift in this same block.
-# The Ansible role has always written ``true``/``100``; the Pydantic fields
-# defaulted to ``""``/``0.0``, so every install that did not go through Ansible
-# ran the service-auth middleware in LOGGING MODE with the circuit breaker
-# sampling 0% of requests. Unlike #13326 (which failed closed and was loud),
-# this pair failed OPEN and was silent. ``tests/test_service_auth_default_parity``
-# now pins each of these to the Ansible role default.
-SERVICE_AUTH_ENFORCEMENT_MODE_DEFAULT = "true"
-SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE_DEFAULT = 100.0
-
-# Replay window for HMAC-signed service requests (#13335). The Ansible role and
-# ``export_service_keys.py`` have always written ``AUTH_TIMESTAMP_WINDOW``, but
-# no Pydantic field claimed the alias, so ``ServiceAuthManager`` hard-coded 300
-# and the operator-facing knob did nothing. The default matches the role so
-# wiring it in cannot change behaviour on an existing install.
-SERVICE_AUTH_TIMESTAMP_WINDOW_DEFAULT = 300
 
 
 class RedactedSettings(RedactedReprMixin, BaseSettings):
@@ -1599,7 +1584,6 @@ class MiscConfig(RedactedSettings):
         default="",
         validation_alias=AliasChoices("AUTOBOT_ENCRYPTION_KEY", "ENCRYPTION_KEY"),
     )
-    env: str = Field(default="development", alias="AUTOBOT_ENV")  # #13264 batch 3
     error_resolved_ttl_seconds: str = Field(
         default="",
         alias="AUTOBOT_ERROR_RESOLVED_TTL_SECONDS",
@@ -1610,7 +1594,7 @@ class MiscConfig(RedactedSettings):
             "See utils/error_metrics.py."
         ),
     )
-    feature_routers_strict: str = Field(default="1", alias="AUTOBOT_FEATURE_ROUTERS_STRICT")
+    feature_routers_strict: str = Field(default=FEATURE_ROUTERS_STRICT_DEFAULT, alias="AUTOBOT_FEATURE_ROUTERS_STRICT")
     gc_threshold_0: int = Field(default=700, alias="AUTOBOT_GC_THRESHOLD_0")  # #13264 batch 3
     gc_threshold_1: int = Field(default=10, alias="AUTOBOT_GC_THRESHOLD_1")  # #13264 batch 3
     gc_threshold_2: int = Field(default=10, alias="AUTOBOT_GC_THRESHOLD_2")  # #13264 batch 3
@@ -1725,18 +1709,17 @@ class MiscConfig(RedactedSettings):
     memory_log_threshold_mb: int = Field(default=1, alias="AUTOBOT_MEMORY_LOG_THRESHOLD_MB")
     memory_pool_size: int = Field(default=100, alias="AUTOBOT_MEMORY_POOL_SIZE")
     memory_threshold_mb: int = Field(default=500, alias="AUTOBOT_MEMORY_THRESHOLD_MB")
-    # #11834: restore pre-#7437 meta-agent defaults (see #11681 pattern);
-    # llm_model default stays "" — backend falls back to its model constant.
+    # #11834: pre-#7437 meta-agent defaults (#11681); llm_model "" -> backend falls back to its model constant.
     meta_agent_approval_threshold: float = Field(default=0.1, alias="AUTOBOT_META_AGENT_APPROVAL_THRESHOLD")
     meta_agent_llm_model: str = Field(default="", alias="AUTOBOT_META_AGENT_LLM_MODEL")
     meta_agent_max_module_lines: int = Field(default=500, alias="AUTOBOT_META_AGENT_MAX_MODULE_LINES")
     meta_agent_test_timeout: int = Field(default=60, alias="AUTOBOT_META_AGENT_TEST_TIMEOUT")
     ollama_url: str = Field(default="", alias="AUTOBOT_OLLAMA_URL")
-    postgres_db: str = Field(default="autobot", alias="AUTOBOT_POSTGRES_DB")  # #13264 batch 3
-    postgres_host: str = Field(default="", alias="AUTOBOT_POSTGRES_HOST")
+    postgres_db: str = Field(default=_pg.USERS_DB_NAME, alias="AUTOBOT_POSTGRES_DB")  # #19320
+    postgres_host: str = Field(default=_pg.USERS_DB_HOST, alias="AUTOBOT_POSTGRES_HOST")  # #19320
     postgres_password: str = Field(default="", alias="AUTOBOT_POSTGRES_PASSWORD")
-    postgres_port: int = Field(default=5432, alias="AUTOBOT_POSTGRES_PORT")  # #13264 batch 3
-    postgres_user: str = Field(default="autobot", alias="AUTOBOT_POSTGRES_USER")  # #13264 batch 3
+    postgres_port: int = Field(default=_pg.DB_PORT, alias="AUTOBOT_POSTGRES_PORT")  # #19320
+    postgres_user: str = Field(default=_pg.USERS_DB_ROLE, alias="AUTOBOT_POSTGRES_USER")  # #19320
     project_root: str = Field(default="", alias="AUTOBOT_PROJECT_ROOT")
     project_state_db_path: str = Field(default="", alias="AUTOBOT_PROJECT_STATE_DB_PATH")
     prompt_compression_enabled: bool = Field(default=False, alias="AUTOBOT_PROMPT_COMPRESSION_ENABLED")
@@ -1967,7 +1950,6 @@ class MiscConfig(RedactedSettings):
     mcp_worker_nofile: str = Field(default="", alias="MCP_WORKER_NOFILE")
     mistral_api_base_url: str = Field(default="", alias="MISTRAL_API_BASE_URL")
     mistral_api_key: str = Field(default="", alias="MISTRAL_API_KEY")
-    mistral_default_model: str = Field(default="", alias="MISTRAL_DEFAULT_MODEL")
     network_subnet: str = Field(default="", alias="NETWORK_SUBNET")
     nous_api_base_url: str = Field(default="", alias="NOUS_API_BASE_URL")
     nous_api_key: str = Field(default="", alias="NOUS_API_KEY")
@@ -1977,7 +1959,6 @@ class MiscConfig(RedactedSettings):
     openai_api_base_url: str = Field(default="", alias="OPENAI_API_BASE_URL")
     openrouter_api_base_url: str = Field(default="", alias="OPENROUTER_API_BASE_URL")
     openrouter_api_key: str = Field(default="", alias="OPENROUTER_API_KEY")
-    openrouter_default_model: str = Field(default="gpt-3.5-turbo", alias="OPENROUTER_DEFAULT_MODEL")
     password: str = Field(default="", alias="PASSWORD")
     pytest_current_test: str = Field(default="", alias="PYTEST_CURRENT_TEST")
     pytest_running: str = Field(default="", alias="PYTEST_RUNNING")
@@ -2090,7 +2071,6 @@ class MiscConfig(RedactedSettings):
     username: str = Field(default="", alias="USERNAME")
     virustotal_api_key: str = Field(default="", alias="VIRUSTOTAL_API_KEY")
     virustotal_rate_limit: int = Field(default=0, alias="VIRUSTOTAL_RATE_LIMIT")
-    vertex_ai_default_model: str = Field(default="gemini-2.5-flash", alias="VERTEX_AI_DEFAULT_MODEL")
     vertex_ai_location: str = Field(default="us-central1", alias="VERTEX_AI_LOCATION")
     vertex_ai_project: str = Field(default="", alias="VERTEX_AI_PROJECT")
     vertex_ai_service_account_json: str = Field(default="", alias="VERTEX_AI_SERVICE_ACCOUNT_JSON")
@@ -2367,10 +2347,9 @@ class AutoBotConfig(RedactedSettings):
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)  # Issue #9035
     cost_model: CostModelConfig = Field(default_factory=CostModelConfig)  # Issue #10720
 
-    # Top-level settings
-    deployment_mode: str = Field(default="distributed", alias="AUTOBOT_DEPLOYMENT_MODE")
-    environment: str = Field(default="development", alias="AUTOBOT_ENVIRONMENT")
-    debug: bool = Field(default=False, alias="AUTOBOT_DEBUG")
+    deployment_mode: str = Field(default=_profile.DEPLOYMENT_MODE_DEFAULT, alias="AUTOBOT_DEPLOYMENT_MODE")
+    environment: _Env = _profile.ENVIRONMENT_DEFAULT  # #19315: one normalisation, deployment_profile.env_field
+    debug: bool = Field(default=_profile.DEBUG_DEFAULT, alias="AUTOBOT_DEBUG")
     log_level: str = Field(default="INFO", alias="AUTOBOT_LOG_LEVEL")
 
     # GH#8995: Data-hygiene TTL settings (retention OFF by default — 0 means disabled)

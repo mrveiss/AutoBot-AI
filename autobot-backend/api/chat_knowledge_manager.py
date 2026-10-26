@@ -43,6 +43,7 @@ from chat_history import ChatHistoryManager
 from constants.threshold_constants import CategoryDefaults
 from knowledge.ownership_index import drop_ownership_unless_admin
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
+from knowledge.search_filters import filter_for_user_id
 from knowledge_factory import get_knowledge_base_async
 from services.llm_service import get_llm_service
 from type_defs.common import Metadata
@@ -450,7 +451,7 @@ class ChatKnowledgeManager:
         return compiled_knowledge
 
     async def search_chat_knowledge(
-        self, query: str, chat_id: str | None = None, include_temporary: bool = True
+        self, query: str, chat_id: str | None = None, include_temporary: bool = True, user_id: str | None = None
     ) -> List[Metadata]:
         """Search knowledge across chats or within specific chat"""
         results = []
@@ -460,6 +461,7 @@ class ChatKnowledgeManager:
         # Issue #13009: exclude quarantined research facts (#12622).
         kb = await self._resolve_kb()
         kb_results = await kb.search(query, top_k=10, filters=RESEARCH_QUARANTINE_FILTER)
+        kb_results = await filter_for_user_id(kb_results, kb, user_id)  # #16665
 
         for result in kb_results:
             # Filter by chat if specified

@@ -14,6 +14,7 @@ import asyncio
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from constants.rag_graph_constants import RAG_RELATION_DEPTH
 
 from .core import (
     INCOMING_DIRECTIONS,
@@ -152,7 +153,7 @@ class RelationTraversalMixin:
         entity_name: str,
         relation_type: str | None = None,
         direction: str = "both",
-        max_depth: int = 1,
+        max_depth: int = RAG_RELATION_DEPTH,
         *,
         owner: Any,
     ) -> List[Dict[str, Any]]:

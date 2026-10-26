@@ -21,7 +21,28 @@ postgresql_data_dir: "/var/lib/postgresql/{{ postgresql_version }}/main"
 postgresql_config_dir: "/etc/postgresql/{{ postgresql_version }}/main"
 
 # Connection settings
-postgresql_listen_addresses: "localhost"
+# #19239: listen_addresses has ONE definition -- this one. Every play that applies this role on
+# a host (the SLM play, both user-management DB plays, the backend role on a collapsed box)
+# renders the same value, so no run flips it and restarts Postgres, and none can cut remote
+# clients by running last. Plays never override it.
+#   - always loopback;
+#   - plus this host's own fleet address when it is in a group that serves remote clients.
+# Never "*": that exposes 5432 on every interface.
+postgresql_fleet_groups: ['slm_server', 'slm', 'redis']
+postgresql_serves_fleet: "{{ group_names | intersect(postgresql_fleet_groups) | length > 0 }}"
+# This host's own address: the first of slm_host / ansible_host actually assigned here (on the DB
+# VM slm_host names ANOTHER host; a missing SLM_HOST defaults slm_host to loopback), else the
+# default-route address. Empty means unknown -- configure.yml fails a fleet host on that.
+# One fleet address only: a multi-NIC host serving clients on several interfaces, or an ansible_host
+# given as a hostname (never matched against all_ipv4_addresses, so default_ipv4 is used), needs
+# SLM_HOST/ansible_host set to the serving IP.
+_postgresql_own_addresses: "{{ ansible_facts['all_ipv4_addresses'] | default([]) | reject('match', '^127[.]') | list }}"
+postgresql_fleet_address: >-
+  {{ ([slm_host | default(''), ansible_host | default('')] | select('in', _postgresql_own_addresses) | list
+      + [(ansible_facts['default_ipv4'] | default({}))['address'] | default('')])
+     | reject('equalto', '') | reject('match', '^127[.]') | first | default('') }}
+postgresql_listen_addresses: >-
+  {{ (['localhost'] + ([postgresql_fleet_address] if postgresql_serves_fleet | bool else [])) | reject('equalto', '') | unique | join(',') }}
 postgresql_port: 5432
 postgresql_max_connections: 100
 

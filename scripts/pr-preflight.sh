@@ -244,7 +244,7 @@ if git rev-parse --verify --quiet "$BASE" >/dev/null; then
   # NO when the truth is yes, so the session builds work that already exists --
   # and nothing pushes back on that answer, because doing more work never looks
   # like a mistake. Freshness was previously a side effect of having a PR:
-  # auto-update-pr-branches.yml keeps PR branches current, and before the first
+  # sync-branches-with-main.yml (#19548) keeps PR branches current, and before the first
   # push there was no mechanism at all. This is that mechanism.
   #
   # Measured AFTER a best-effort fetch. Against a stale remote-tracking ref the

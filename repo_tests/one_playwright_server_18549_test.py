@@ -97,8 +97,8 @@ def _port_mismatch(text: str) -> str | None:
     """
     if _CANONICAL not in text:
         return None
-    env = re.search(r"PLAYWRIGHT_PORT=(\d+)", text)
-    health = re.search(r"localhost:(\d+)/health", text)
+    env = re.search(r"PLAYWRIGHT_PORT=(?:\$\{\w+:-)?(\d+)", text)
+    health = re.search(r"localhost:(?:\$\{\w+:-)?(\d+)\}?/health", text)
     if env is None:
         return "mounts the canonical server but does not set PLAYWRIGHT_PORT"
     if health is not None and health.group(1) != env.group(1):
@@ -120,3 +120,7 @@ def test_port_matcher_contrast():
     assert "probes 3000" in _port_mismatch(mounted + "- PLAYWRIGHT_PORT=9001\n" + probe)
     assert _port_mismatch(mounted + "- PLAYWRIGHT_PORT=3000\n" + probe) is None
     assert _port_mismatch(probe) is None
+    # The compose files spell both sides as `${NAME:-N}` fallbacks (#19418).
+    fallback = "- PLAYWRIGHT_PORT=${PORT:-9001}\n"
+    assert _port_mismatch(mounted + fallback + probe.replace(":3000/", ":${PORT:-9001}/")) is None
+    assert "probes 3000" in _port_mismatch(mounted + fallback + probe.replace(":3000/", ":${PORT:-3000}/"))

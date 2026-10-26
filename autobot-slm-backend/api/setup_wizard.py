@@ -25,6 +25,7 @@ from pydantic import BaseModel
 from api.websocket import ws_manager
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.role_group_ownership import split_node_role_rows, warn_stale_detected_roles, withhold_unowned_groups
+from autobot_shared.ssot_config import config
 from config import settings
 from services.auth import get_current_user
 from services.database import db_service
@@ -256,11 +257,8 @@ _ROLE_INFRA_VARS: dict[str, tuple[str, int]] = {
     "frontend": ("frontend_host", 5173),
     "ai-stack": ("ai_stack_host", 8080),
     "npu-worker": ("npu_worker_host", 8081),
-    "browser-service": ("browser_host", 3000),
-    "tts-worker": (
-        "tts_host",
-        8083,
-    ),  # Issue #3431: 8082 is WSL2/Hyper-V reserved (Windows NPU)
+    "browser-service": ("browser_host", config.port.browser),  # #19324: was Grafana's 3000
+    "tts-worker": ("tts_host", 8083),  # Issue #3431: 8082 is WSL2/Hyper-V reserved (Windows NPU)
 }
 
 # ChromaDB runs on the AI stack VM but is NOT a separately-routed role, so it

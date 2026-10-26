@@ -97,9 +97,6 @@ router = APIRouter()
 
 _REDIS_PREFIX = "sec_task:"
 
-# Issue #380: Module-level tuple for severity ordering (used in 4 endpoints)
-_SEVERITY_ORDER = ("info", "low", "medium", "high", "critical")
-
 # Issue #281: Pattern type definitions extracted from get_supported_pattern_types
 # This enables reuse and reduces function length
 PATTERN_TYPE_DEFINITIONS = {
@@ -471,8 +468,7 @@ def _filter_results_by_severity(results: list, min_severity: str | None) -> list
         return results
 
     try:
-        min_idx = _SEVERITY_ORDER.index(min_severity.lower())
-        return [r for r in results if _SEVERITY_ORDER.index(r.severity.value) >= min_idx]
+        return Severity.at_or_above(results, min_severity)
     except ValueError as e:
         logger.debug("Value parsing failed during severity filtering: %s", e)
         return results
@@ -539,8 +535,7 @@ def _filter_antipatterns_by_severity(
         return anti_patterns
 
     try:
-        min_idx = _SEVERITY_ORDER.index(min_severity.lower())
-        return [p for p in anti_patterns if _SEVERITY_ORDER.index(p.severity.value) >= min_idx]
+        return Severity.at_or_above(anti_patterns, min_severity)
     except ValueError:
         logger.warning("Invalid severity filter: %s", min_severity)
         return anti_patterns
@@ -602,8 +597,7 @@ def _filter_redis_results_by_severity(
         return results
 
     try:
-        min_idx = _SEVERITY_ORDER.index(min_severity.lower())
-        return [r for r in results if _SEVERITY_ORDER.index(r.severity.value) >= min_idx]
+        return Severity.at_or_above(results, min_severity)
     except ValueError:
         logger.warning("Invalid severity filter: %s", min_severity)
         return results

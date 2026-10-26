@@ -16,8 +16,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse
+from api.schemas_embeddings import EmbeddingModelsData
 from api.schemas_knowledge import (
-    EmbeddingModelsData,
     EmbeddingRefreshData,
     EmbeddingSettingsData,
     EmbeddingStatusData,
@@ -30,6 +30,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
 from config import unified_config_manager
 from services.config_service import ConfigService
+from services.embedding_options import embedding_model_options
 
 logger = get_logger(__name__)
 
@@ -140,41 +141,12 @@ async def update_embedding_settings(
 async def get_available_embedding_models(
     current_user: dict = Depends(get_current_user),
 ):
-    """Get available embedding models from all providers.
+    """The embedding models the user can switch to right now, with the active one marked (#19378).
 
-    Issue #744: Requires authenticated user.
+    This used to return the provider lists saved in settings.json, which nothing keeps current;
+    ``GET /api/llm/embedding/models`` (its own name patterns) now redirects here.
     """
-    try:
-        embedding_config = unified_config_manager.get_nested("backend.llm.unified.embedding", {})
-        providers = embedding_config.get("providers", {})
-
-        available_models = {}
-
-        for provider_name, provider_config in providers.items():
-            models = provider_config.get("models", [])
-            selected_model = provider_config.get("selected_model", "")
-            endpoint = provider_config.get("endpoint", "")
-
-            available_models[provider_name] = {
-                "models": models,
-                "selected_model": selected_model,
-                "endpoint": endpoint,
-                "status": "available" if models else "no_models",
-            }
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "success",
-                "providers": available_models,
-                "current_provider": embedding_config.get("provider", "ollama"),
-                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            },
-        )
-
-    except Exception as e:
-        logger.error("Failed to get embedding models: %s", e)
-        raise HTTPException(status_code=500, detail="Failed to get embedding models")
+    return DataResponse(data=EmbeddingModelsData(**await embedding_model_options()))
 
 
 @router.post("/providers/{provider_name}/refresh-models", response_model=DataResponse[EmbeddingRefreshData])
