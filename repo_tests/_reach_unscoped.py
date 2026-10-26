@@ -27,6 +27,9 @@ UNSCOPED = frozenset(
         "isolated-git-env",
         # #19076: items are (role, unit) pairs from one registry file, not paths -- no roots= to check.
         "role-registry-installed-units",
+        # #19318: every tracked code/config file by suffix (.py, .sh, .yml, .j2, .env*, Dockerfile*),
+        # wherever a copy of the SLM admin password default could be written -- no prefix describes it.
+        "slm-admin-password-one-home-sweep",
         # #19319: every tracked file repo-wide (minus vendored/build parts), wherever a copy of the
         # AUTOBOT_FEATURE_ROUTERS_STRICT default could be written -- no prefix describes it.
         "feature-routers-strict-one-home-19319",
@@ -38,6 +41,8 @@ UNSCOPED = frozenset(
         "blanket-skip-test-module-sweep",
         # #19324: an extension filter (*.py, *.sh, *.yml, .env*, ...) over the whole tree, not a set of prefixes.
         "browser-port-single-home-scan",
+        # #19279: requirements files live in every package directory; a glob, not a set of prefixes.
+        "landing-page-declared-dependencies",
         "chromadb-bind-host-override-candidates",
         "chromadb-bind-launch-sites",
         "chromadb-compose-port-sites",

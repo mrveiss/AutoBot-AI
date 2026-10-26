@@ -222,6 +222,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test source is a subset of tracked .py under two detector packages; the test-file share drifts.",
     ),
+    "generated-type-redeclarations": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "The main GUI's non-test .ts/.vue, against all tracked frontend source; the test-file share drifts.",
+    ),
     "llc-sigterm-grace-copies": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -389,6 +394,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "Non-test Python under thirteen source roots, a subset of tracked Python; the test-file share drifts.",
+    ),
+    "landing-page-declared-dependencies": (
+        ABSOLUTE,
+        "FIXED_INVENTORY",
+        "The requirements files and the root pyproject.toml: a small, deliberately enumerable set.",
     ),
 }
 

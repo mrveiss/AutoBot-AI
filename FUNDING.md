@@ -30,7 +30,7 @@ for permission to use the software:
 - **Production Support** — guaranteed security patching, version-pinned stable releases,
   defined SLA response times, priority bug fixes, and upgrade assistance for companies
   running AutoBot in production.
-- **Compliance Pack** — NIS2 / ISO 27001 documentation, security architecture overview,
+- **Compliance Pack** — documentation for working towards NIS2 and ISO 27001 ([targets and status](docs/compliance/COMPLIANCE_TARGETS.md); ISO 27001 is a readiness review, not a certification), security architecture overview,
   hardening guide, and audit-support materials (builds on AutoBot's existing
   [security framework](docs/security/SECURITY_FRAMEWORK.md)).
 - **Vendor / OEM** — reselling AutoBot-as-a-service requires a separate commercial

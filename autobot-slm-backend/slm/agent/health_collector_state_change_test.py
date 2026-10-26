@@ -316,11 +316,21 @@ def _exec_with_auto_stub(
     return module, stubbed
 
 
+def _load_backend_notification_types():
+    """The REAL enums module (#19334 moved the enums there): enum-only, so it loads standalone."""
+    path = _BACKEND_NOTIF_PATH.parent / "notification_types.py"
+    spec = importlib.util.spec_from_file_location("_backend_notification_types", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _load_backend_notification_service():
     module, _stubbed = _exec_with_auto_stub(
         _BACKEND_NOTIF_PATH,
         "_backend_notification_service",
-        forbidden=("services.notification_service",),
+        forbidden=("services.notification_service", "services.notification_types"),
+        preseed={"services.notification_types": _load_backend_notification_types()},
     )
     return module
 

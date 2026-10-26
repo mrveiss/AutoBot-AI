@@ -357,6 +357,9 @@ python:
   # confined to the guide -- documenting a name that resolves to nothing -- skips
   # the guard written to catch exactly that.
   - 'docs/guides/CONFIGURATION_GUIDE.md'
+  # #19279: `landing_page_claims_19279_test.py` reads the public landing page by concrete literal
+  # for the libraries it names and any placeholder it renders.
+  - 'docs/index.html'
   # #16427: `secretsmanager_template_names_match_vault_registry_16427_test.py`
   # reads this component's `credentialTemplates` array by concrete literal, to
   # assert its provider names still match the vault registry. Without an entry
@@ -464,6 +467,9 @@ python:
   - 'docs/architecture/PLATFORM_MODEL.md'
   - 'docs/features/CATALOG.md'
   - 'docs/llc/_index.md'
+  # #19611: `operational_docs_name_real_playbooks_19611_test.py` reads this guide by concrete
+  # literal for its one declared exemption. One file, not `docs/**`.
+  - 'docs/guides/slm-docker-ansible-deployment.md'
   # #18266: `social_preview_18266_test.py` pins the repository social-preview
   # image's dimensions and size. A change confined to the image -- replacing it
   # with one of the wrong shape -- is exactly what the guard exists to catch.

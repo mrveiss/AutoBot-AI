@@ -450,6 +450,8 @@ _REAL_SERVICE_MODULES = (
     # #19125: the SLM's JWKS token verifier; its co-located admin-family test
     # imports it directly and must exercise the real claim normalisation.
     "jwks_verifier",
+    # #19318: its co-located test imports it, so it must be real-loaded, not a MagicMock.
+    "admin_seed_password",
 )
 
 # The placeholder a failed real-load falls back to (#15563). Loaded by path for

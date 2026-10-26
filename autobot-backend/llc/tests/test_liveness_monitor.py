@@ -10,6 +10,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.redis_utils import COMPARE_AND_DELETE_LUA
 from llc.scheduler.liveness_monitor import LivenessMonitor, run_id_label
 
 
@@ -107,12 +108,12 @@ async def test_stuck_run_marked_timed_out() -> None:
 
 @pytest.mark.asyncio
 async def test_checkout_lock_released_on_recovery() -> None:
-    """Redis checkout lock DEL is called when work_item_id is set."""
+    """The checkout fence is released, compare-and-delete on the run's agent, when work_item_id is set."""
     wid = str(uuid.uuid4())
     run = _make_run(status="running", minutes_ago=40, work_item_id=wid)
 
     mock_redis = AsyncMock()
-    mock_redis.delete = AsyncMock()
+    mock_redis.eval = AsyncMock(return_value=1)
     # exists() must be falsy or _agent_deliberately_paused() treats the agent as
     # paused and skips the recovery flow under test.
     mock_redis.exists = AsyncMock(return_value=0)
@@ -136,7 +137,8 @@ async def test_checkout_lock_released_on_recovery() -> None:
         with patch("llc.scheduler.liveness_monitor.get_async_session_factory", return_value=factory):
             await monitor._check_once()
 
-    mock_redis.delete.assert_called_once_with(f"llc:checkout:{wid}")
+    mock_redis.eval.assert_called_once_with(COMPARE_AND_DELETE_LUA, 1, f"llc:checkout:{wid}", run.agent_id)
+    mock_redis.delete.assert_not_called()
 
 
 @pytest.mark.asyncio

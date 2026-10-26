@@ -316,13 +316,7 @@ onMounted(async () => {
       :dismiss-label="$t('systemUpdatesTab.dismiss')"
       @dismiss="systemUpdates.clearError()"
     />
-    <div
-      v-if="successMessage"
-      class="mb-4 p-3 bg-green-50 border border-green-200
-             rounded-lg text-green-700 text-sm"
-    >
-      {{ successMessage }}
-    </div>
+    <BaseAlert v-if="successMessage" variant="success" size="compact" class="mb-4" :message="successMessage" />
 
     <!-- Discovery Progress -->
     <div
