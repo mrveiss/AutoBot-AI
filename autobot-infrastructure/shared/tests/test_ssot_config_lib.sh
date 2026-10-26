@@ -367,7 +367,7 @@ fi
 
 out=$(bash -c "
 export HOME='/nonexistent-home-for-ssot-test'
-unset AUTOBOT_SSH_KEY AUTOBOT_SSH_USER AUTOBOT_SLM_NODE_ID AUTOBOT_VNC_WEB_PORT AUTOBOT_VNC_SERVER_PORT
+unset AUTOBOT_SSH_KEY AUTOBOT_SSH_USER AUTOBOT_SLM_NODE_ID SLM_NODE_ID AUTOBOT_VNC_WEB_PORT AUTOBOT_VNC_SERVER_PORT
 source '$LIB'
 echo \"\$AUTOBOT_SSH_KEY|\$AUTOBOT_SSH_USER|\$AUTOBOT_SLM_NODE_ID|\$AUTOBOT_VNC_WEB_PORT|\$AUTOBOT_VNC_SERVER_PORT\"
 ")
@@ -399,6 +399,21 @@ echo \"\$AUTOBOT_SSH_USER:\$AUTOBOT_SLM_NODE_ID\"
 ")
 rm -rf "$tmp_root3"
 check "14173: .env override wins for AUTOBOT_SSH_USER/AUTOBOT_SLM_NODE_ID" "$out" "custom-user:99-Custom-Manager"
+
+# --- #19322: SLM_NODE_ID is a deprecated alias of AUTOBOT_SLM_NODE_ID -------------
+out=$(bash -c "
+unset AUTOBOT_SLM_NODE_ID
+export SLM_NODE_ID='77-Legacy'
+source '$LIB' 2>/dev/null
+echo \"\$AUTOBOT_SLM_NODE_ID\"
+")
+check "19322: the legacy name is honoured when the canonical one is unset" "$out" "77-Legacy"
+out=$(bash -c "
+export AUTOBOT_SLM_NODE_ID='00-SLM-Manager' SLM_NODE_ID='77-Legacy'
+source '$LIB' 2>/dev/null
+echo \"\$AUTOBOT_SLM_NODE_ID\"
+")
+check "19322: the canonical name wins, even set to the default value" "$out" "00-SLM-Manager"
 
 # --- DENIAL / reproduction: status-all-vms.sh's own "SSH key not found"
 #     guard used to fire even when a real key existed at the conventional

@@ -50,6 +50,10 @@ UNSCOPED = frozenset(
         "chromadb-bind-launch-sites",
         "chromadb-compose-port-sites",
         "chromadb-compose-services",
+        # #19321/#19322: every tracked file outside docs and tests, wherever a copy could be
+        # re-added; a roots= list would name the whole tree and go stale as it grows.
+        "chromadb-port-one-home-scan",
+        "slm-node-id-one-home-scan",
         "collectable-modules-inert-on-import",
         "component-style-block-sweep",
         "compose-files",
