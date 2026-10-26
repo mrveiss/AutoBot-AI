@@ -195,6 +195,9 @@ def _receivers(text: str) -> dict[str, str]:
     axios_create = r"(?:const|let)\s+(\w+)[^=\n]*=\s*axios\.create\(\{[^}]*baseURL:\s*(getSlmApiBase|getBackendUrl)\(\)"
     for match in re.finditer(axios_create, text, re.S):
         found[match.group(1)] = "slm" if match.group(2) == "getSlmApiBase" else "main"
+    # #19217: the main-backend client is built by the one shared factory, not inline.
+    for match in re.finditer(r"(?:const|let)\s+(\w+)[^=\n]*=\s*createAutobotBackendClient\(\)", text):
+        found[match.group(1)] = "main"
     return found
 
 
@@ -306,3 +309,10 @@ def test_the_known_unserved_baseline_is_exact() -> None:
         "_KNOWN_UNSERVED in the commit that fixed them:\n"
         + "\n".join(f"  {f} -> [{service}] {path}" for f, service, path in fixed)
     )
+
+
+def test_a_client_from_the_shared_factory_is_resolved_as_the_main_backend() -> None:
+    """#19217: `createAutobotBackendClient()` builds the main-backend client; a sweep that
+    knew only an inline `axios.create` lost every call made through it."""
+    text = "const client = createAutobotBackendClient() // shared\nconst other = makeSomething()"
+    assert _receivers(text) == {"client": "main"}
