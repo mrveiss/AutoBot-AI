@@ -16,12 +16,11 @@ the line or within the three lines above it.
 from __future__ import annotations
 
 import re
-import subprocess  # nosec B404  # fixed argv, no shell
 
 import yaml
 from repo_tests._paths import repo_root
 
-from autobot_shared.paths import scrubbed_git_env
+from tools.lint._scan_helpers import tracked_paths
 
 _SSOT = "autobot-slm-backend/ansible/roles/agent_config/defaults/main.yml"
 _FAMILIES = (
@@ -32,10 +31,10 @@ _TAG = re.compile(r"(?<![\w/.@-])(" + _FAMILIES + r"[\w.-]*:[\w.-]+)", re.IGNORE
 _BARE = re.compile(r"(?<![\w/.-])(phi-?[23](?![\w:])|codellama(?!\w))", re.IGNORECASE)
 _LABEL = re.compile(r"not provision", re.IGNORECASE)
 _LABEL_WINDOW = 3  # a label on the line, or on one of this many lines above it (a block comment)
-#: History and research record what was true then; these two developer docs hold a grep
-#: pattern and a code-site table, not advice.
-_SKIP = ("docs/archive/", "docs/archives/", "docs/research/", "docs/adr/", "changelog/")
-_SKIP_FILES = {"docs/developer/MODEL_REVISION_PINNING.md", "docs/developer/CONFIG_MIGRATION_CHECKLIST.md"}
+#: History and research record what was true then. A doc that holds a grep pattern or a
+#: code-site table rather than advice opts out with ``_OPT_OUT`` in its own text.
+_SKIP = ("docs/archives/", "docs/research/", "docs/adr/", "changelog/")
+_OPT_OUT = "<!-- doc-model-tags: not advice -->"
 
 
 def _allowed() -> set[str]:
@@ -44,15 +43,11 @@ def _allowed() -> set[str]:
 
 
 def _docs() -> list[str]:
-    out = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "ls-files", "*.md"], cwd=repo_root(), capture_output=True, text=True, check=True, env=scrubbed_git_env()
-    ).stdout.split()
+    root = repo_root()
     return [
         p
-        for p in out
-        if (p.startswith("docs/") or p in {"README.md", "INSTALL.md"})
-        and not p.startswith(_SKIP)
-        and p not in _SKIP_FILES
+        for p in tracked_paths(root, "docs/**/*.md", "README.md", "INSTALL.md")
+        if not p.startswith(_SKIP) and _OPT_OUT not in (root / p).read_text(encoding="utf-8")
     ]
 
 

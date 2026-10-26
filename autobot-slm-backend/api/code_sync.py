@@ -97,7 +97,7 @@ from models.schemas import (
     ScheduleRunResponse,
     ScheduleUpdate,
 )
-from services.ansible_utils import parse_unreachable_hosts, summarize_playbook_failure
+from services.ansible_utils import ansible_run_failure, parse_unreachable_hosts, summarize_playbook_failure
 from services.auth import get_current_user
 from services.code_distributor import get_code_distributor
 from services.database import get_db
@@ -1749,7 +1749,6 @@ async def _run_python_provision_playbook(target: str, steps: List[str]) -> bool:
     The command matches the NOPASSWD sudoers grant from
     configure-python-provision-permissions.yml. Returns True on rc==0.
     """
-    # ARG LIST only — never a shell string. Matches the NOPASSWD sudoers grant.
     # Use an inline localhost inventory ("localhost,") rather than the fleet
     # inventory + "--limit localhost": the fleet inventory has no localhost host,
     # so "--limit localhost" left ansible with no hosts to target (#11352). The
@@ -1767,12 +1766,13 @@ async def _run_python_provision_playbook(target: str, steps: List[str]) -> bool:
         )
         stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=600.0)
         out = stdout.decode(errors="replace") if stdout else ""
-        if proc.returncode == 0:
+        failure = ansible_run_failure(out, "localhost", proc.returncode)  # #19475: exit 0 is not proof
+        if not failure:
             logger.info("drift resolve: provisioned interpreter %s", target)
             steps.append(f"python-provision: {target} install ok")
             return True
-        logger.error("drift resolve: interpreter provision failed (%d): %s", proc.returncode, out[-400:])
-        steps.append(f"python-provision: FAILED (rc={proc.returncode}): {out[-200:]}")
+        logger.error("drift resolve: interpreter provision failed (%s): %s", proc.returncode, failure[-400:])
+        steps.append(f"python-provision: FAILED (rc={proc.returncode}): {failure[-200:]}")
         return False
     except asyncio.TimeoutError:
         logger.error("drift resolve: interpreter provision timed out for %s", target)

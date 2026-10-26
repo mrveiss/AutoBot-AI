@@ -1,3 +1,4 @@
+<!-- doc-model-tags: not advice -->
 # Configuration Migration Checklist
 
 > **Checklist for migrating code to SSOT Configuration Pattern**
