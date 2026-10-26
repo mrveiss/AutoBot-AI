@@ -2076,12 +2076,6 @@ class EmbeddingUpdateData(BaseModel):
     model_config = {"extra": "allow"}
 
 
-class EmbeddingModelsData(BaseModel):
-    """data payload for GET /models."""
-
-    model_config = {"extra": "allow"}
-
-
 class EmbeddingRefreshData(BaseModel):
     """data payload for POST /providers/{provider_name}/refresh-models."""
 

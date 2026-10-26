@@ -30,7 +30,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { getSlmApiBase } from '@/config/ssot-config'
 import { clearSlmSession, readSlmToken } from '@/utils/authStorage'
 import { buildLoginUrl, isLoginPathname } from '@/utils/loginRedirect'
-import { backoffDelay, RETRY_BACKOFF, type GetPath, type GetResponse } from '@autobot/ui'
+import { backoffDelay, HttpError, RETRY_BACKOFF, type GetPath, type GetResponse } from '@autobot/ui'
 import type { paths } from '@/types/generated/api'
 
 const logger = createLogger('SlmApiClient')
@@ -68,6 +68,28 @@ export interface RequestOptions {
    * (optional widgets, health probes) so they don't generate console noise.
    */
   suppressErrorLog?: boolean
+  /**
+   * Query parameters, appended URL-encoded to the endpoint (#12363). `null` and
+   * `undefined` values are left out, so an optional filter needs no branching.
+   */
+  params?: Record<string, string | number | boolean | null | undefined>
+}
+
+/** GET only: `'text'` returns the body as a string instead of parsing JSON (#12363). */
+export interface GetOptions extends RequestOptions {
+  responseType?: 'json' | 'text'
+}
+
+/** Append `params` to `endpoint`, skipping null/undefined; keeps an existing `?query`. Scalars only (no arrays). */
+export function withQuery(endpoint: string, params: RequestOptions['params']): string {
+  if (!params) return endpoint
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== null && value !== undefined) query.append(key, String(value))
+  }
+  const text = query.toString()
+  if (!text) return endpoint
+  return `${endpoint}${endpoint.includes('?') ? '&' : '?'}${text}`
 }
 
 export interface ErrorInfo {
@@ -160,10 +182,12 @@ export class SlmApiClient {
       body,
       timeout = this.defaultTimeout,
       signal: externalSignal,
+      params,
     } = options
 
     const baseUrl = this.resolveBaseUrl()
-    const url = baseUrl ? `${baseUrl}${endpoint}` : endpoint
+    const path = withQuery(endpoint, params)
+    const url = baseUrl ? `${baseUrl}${path}` : path
 
     const controller = new AbortController()
     let timedOut = false
@@ -277,7 +301,7 @@ export class SlmApiClient {
   }
 
   // GET with retry logic and exponential backoff.
-  async get<T = unknown>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+  async get<T = unknown>(endpoint: string, options: GetOptions = {}): Promise<T> {
     let lastError: Error | undefined
     const maxRetries = options.maxRetries !== undefined ? options.maxRetries : 3
     let attemptsMade = 0
@@ -294,9 +318,10 @@ export class SlmApiClient {
             retryAfterMs = parseRetryAfterMs(response.headers.get('retry-after'))
           }
           const errorData = await this.extractErrorInfo(response)
-          throw new Error(`HTTP ${response.status}: ${errorData.message}`)
+          throw new HttpError(response.status, errorData.message, errorData.details)
         }
 
+        if (options.responseType === 'text') return (await response.text()) as T
         return (await response.json()) as T
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error))
@@ -342,7 +367,7 @@ export class SlmApiClient {
     const response = await this.rawRequest(endpoint, { method: 'POST', body: data, ...options })
     if (!response.ok) {
       const errorData = await this.extractErrorInfo(response)
-      throw new Error(`HTTP ${response.status}: ${errorData.message}`)
+      throw new HttpError(response.status, errorData.message, errorData.details)
     }
     return this.parseJsonBody<T>(response)
   }
@@ -352,7 +377,7 @@ export class SlmApiClient {
     const response = await this.rawRequest(endpoint, { method: 'PUT', body: data, ...options })
     if (!response.ok) {
       const errorData = await this.extractErrorInfo(response)
-      throw new Error(`HTTP ${response.status}: ${errorData.message}`)
+      throw new HttpError(response.status, errorData.message, errorData.details)
     }
     return this.parseJsonBody<T>(response)
   }
@@ -362,17 +387,18 @@ export class SlmApiClient {
     const response = await this.rawRequest(endpoint, { method: 'PATCH', body: data, ...options })
     if (!response.ok) {
       const errorData = await this.extractErrorInfo(response)
-      throw new Error(`HTTP ${response.status}: ${errorData.message}`)
+      throw new HttpError(response.status, errorData.message, errorData.details)
     }
     return this.parseJsonBody<T>(response)
   }
 
   // DELETE — returns parsed JSON (handles empty responses).
-  async delete<T = unknown>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+  /** `body` is for the few APIs that take one on DELETE (#12363); most send none. */
+  async delete<T = unknown>(endpoint: string, options: RequestOptions & { body?: unknown } = {}): Promise<T> {
     const response = await this.rawRequest(endpoint, { method: 'DELETE', ...options })
     if (!response.ok) {
       const errorData = await this.extractErrorInfo(response)
-      throw new Error(`HTTP ${response.status}: ${errorData.message}`)
+      throw new HttpError(response.status, errorData.message, errorData.details)
     }
     return this.parseJsonBody<T>(response)
   }

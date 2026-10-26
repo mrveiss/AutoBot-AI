@@ -225,6 +225,14 @@ async def build_tiered_context(session: Any, message: str, model_name: str) -> s
     )
 
 
+def _turn_user_principal(session: Any):
+    """The turn's user principal, or None when the turn has no user: no ``SYSTEM_SCOPE`` fallback (#16665)."""
+    from knowledge.search_filters import SYSTEM_SCOPE
+
+    principal = session.kb_principal()
+    return None if principal is SYSTEM_SCOPE else principal
+
+
 async def prepend_memory_context(system_prompt: str, session: Any, message: str, model_name: str) -> str:
     """Prepend the memory context to the system prompt; any failure leaves it unchanged.
 
@@ -241,7 +249,9 @@ async def prepend_memory_context(system_prompt: str, session: Any, message: str,
             # Issue #3787: legacy always-loaded compact memory summary.
             from memory.essential_story import EssentialStoryGenerator
 
-            prefix = await EssentialStoryGenerator().generate(model_name=model_name)
+            prefix = await EssentialStoryGenerator().generate(
+                model_name=model_name, principal=_turn_user_principal(session)
+            )
         return prefix + "\n\n" + system_prompt if prefix else system_prompt
     except Exception as ctx_exc:
         logger.warning("Context injection failed: %s", ctx_exc)

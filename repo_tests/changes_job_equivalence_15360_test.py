@@ -81,11 +81,12 @@ ISSUE_17822_ENTRIES = tuple(
         (Path(__file__).parent / "fixtures" / "issue_17822_migration_gate_entries.json").read_text(encoding="utf-8")
     )
 )
-# 13 = the eleven #17822 entries plus `services/__init__.py` and `services/approval_gate_service.py`,
-# which the migration tests import.
+# 16 = the eleven #17822 entries plus `services/__init__.py`, `services/approval_gate_service.py` and
+# `llc/services/workspace_lease.py` (#17996), and `llc/services/company.py` + `company_ceo.py` (#15907's
+# concurrent-move test), which the migration tests import.
 assert (
-    len(ISSUE_17822_ENTRIES) == 13
-), "the pinned migration-gate set is 13 entries; an emptied fixture would pin nothing"
+    len(ISSUE_17822_ENTRIES) == 16
+), "the pinned migration-gate set is 16 entries; an emptied fixture would pin nothing"
 ISSUE_17822_WORKFLOW = "migration-gate"
 EVENTS = ("push", "pull_request", "merge_group", "schedule", "workflow_dispatch")
 MG_SHA = "merge-group-base-sha"  # a stand-in value; only its presence or absence is compared
@@ -210,6 +211,20 @@ ALLOWED_ADDITIONS = {
             f"{WORKFLOWS}/co-located-smoke.yml",
             # #17500, #18729: both guards read the secrets generator, so editing it must run the suite.
             "docker/generate-secrets.sh",
+            # #19178: user_docs_stay_consistent_19178_test.py reads docs/README.md.
+            "docs/README.md",
+            # #18266: social_preview_18266_test.py pins the rendered preview image.
+            "docs/assets/social-preview.png",
+            # #19184: the same 19178 guard reads the five Company OS docs (_COMPANY_OS_DOCS).
+            "docs/GLOSSARY.md",
+            "docs/INDEX.md",
+            "docs/architecture/PLATFORM_MODEL.md",
+            "docs/features/CATALOG.md",
+            "docs/llc/_index.md",
+            # #18559: both duplication-guard tests read the pins file.
+            ".github/duplication-pins.json",
+            # #19324: browser_port_single_home_19324_test.py pins this file's browser-port fallback.
+            "autobot-frontend/vite.config.js",
         ]
     },
     # frontend_path_filter_mirror_test pins frontend-test.yml's on.push.paths to this file, so the

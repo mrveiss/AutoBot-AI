@@ -126,7 +126,6 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
             "execute_system_command",
             "list_system_services",
             "query_system_information",
-            "search_knowledge_base",
         }
     ),
     "autobot-backend/utils/advanced_cache_manager.py": frozenset({"get_cached_system_status"}),
@@ -246,7 +245,6 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
         {
             "AgentCreateRequest",
             "AgentUpdateRequest",
-            "BackupResponse",
             "BackupRestoreResponse",
             "BlueGreenActionResponse",
             "CertificateActionResponse",

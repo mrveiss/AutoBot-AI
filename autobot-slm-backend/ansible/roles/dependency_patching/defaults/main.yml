@@ -34,6 +34,11 @@ drain_timeout: 60  # seconds to wait for connections to drain
 venv_path: "{{ autobot.base_dir }}/venv"
 requirements_path: "{{ autobot.base_dir }}/requirements.txt"
 pip_extra_args: "--no-cache-dir"
+# #19428: the shared-version SSOT, where _shared/tasks/stage_shared_manifests.yml puts it on the
+# node (the same file update-all-nodes.yml stages, #17243), so a node this updater never touched
+# still gets the floors; the security install constrains against it and upgrades every constrained
+# package the venv holds -- to whatever the file allows, an upper bound included.
+constraints_path: "{{ autobot.base_dir }}/constraints/shared.txt"
 
 # Packages to update (CVE fixes from Issue #544)
 #
@@ -81,8 +86,9 @@ python_security_updates:
   # Floors no `requirements*.txt` carries: these arrive transitively, so this
   # map is the only place their patched version is stated. The parity guard has
   # nothing to compare them against -- keep them, and bump them by advisory.
+  # filelock left this list for constraints/shared.txt (#19426): a package the
+  # SSOT constrains may not be restated here (ansible_requirements_parity_test).
   # -------------------------------------------------------------------------
-  filelock: "3.20.1"
   keras: "3.12.0"
   marshmallow: "3.26.2"
   urllib3: "2.6.0"

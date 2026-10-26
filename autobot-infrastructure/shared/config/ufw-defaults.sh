@@ -128,8 +128,8 @@ apply_rules() {
     ufw allow 8081/tcp comment 'NPU Worker'
 
     # Browser Worker
-    log_info "  → Allowing Browser Worker (port 3000)"
-    ufw allow 3000/tcp comment 'Browser Worker'
+    log_info "  → Allowing Browser Worker (port 9001)"
+    ufw allow 9001/tcp comment 'Browser Worker'  # #19324: PLAYWRIGHT_PORT; 3000 is Grafana
 
     # VNC/NoVNC
     log_info "  → Allowing VNC (port 5900)"

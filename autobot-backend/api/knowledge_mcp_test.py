@@ -28,6 +28,7 @@ from api.knowledge_mcp import (
     mcp_search_knowledge_base,
     mcp_summarize_knowledge_topic,
 )
+from knowledge.ownership import KnowledgeOwnership
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge_base import KnowledgeBase
 
@@ -46,7 +47,10 @@ def test_get_knowledge_base_singleton_constructs_without_typeerror():
 @pytest.mark.asyncio
 async def test_mcp_search_knowledge_base_returns_real_content_and_applies_quarantine():
     mock_kb = create_autospec(KnowledgeBase, instance=True)
-    mock_kb.search.return_value = [{"content": "AutoBot uses Redis", "score": 0.9, "metadata": {}}]
+    mock_kb.search.return_value = [
+        {"content": "AutoBot uses Redis", "score": 0.9, "metadata": {"owner_id": "test-user", "visibility": "private"}}
+    ]
+    mock_kb.ownership_manager = KnowledgeOwnership(None)  # #16665: results are scoped to the caller
 
     with patch("api.knowledge_mcp.get_knowledge_base", return_value=mock_kb):
         response = await mcp_search_knowledge_base(
@@ -62,7 +66,10 @@ async def test_mcp_search_knowledge_base_returns_real_content_and_applies_quaran
 @pytest.mark.asyncio
 async def test_mcp_summarize_knowledge_topic_returns_real_content():
     mock_kb = create_autospec(KnowledgeBase, instance=True)
-    mock_kb.search.return_value = [{"content": "AutoBot uses Redis for caching."}]
+    mock_kb.search.return_value = [
+        {"content": "AutoBot uses Redis for caching.", "metadata": {"owner_id": "test-user", "visibility": "private"}}
+    ]
+    mock_kb.ownership_manager = KnowledgeOwnership(None)  # #16665: results are scoped to the caller
     del mock_kb.llm  # KnowledgeBase has no `llm` attribute -- exercise the truncation fallback
 
     with patch("api.knowledge_mcp.get_knowledge_base", return_value=mock_kb):

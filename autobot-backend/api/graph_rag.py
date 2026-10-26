@@ -351,17 +351,18 @@ async def graph_rag_metrics(
     Returns:
         JSONResponse with service metrics
 
-    Example Response:
+    Example Response (numbers illustrative; live values are RAGConfig.graph_weight,
+    timeout_seconds and graph_timeout_seconds):
         ```json
         {
             "service": "GraphRAGService",
-            "graph_weight": "<RAGConfig.graph_weight>",
+            "graph_weight": 0.5,
             "entity_extraction_enabled": true,
             "rag_service": {
                 "enable_advanced_rag": true,
-                "timeout_seconds": "<RAGConfig.timeout_seconds>"
+                "timeout_seconds": 20.0
             },
-            "graph_timeout_seconds": "<RAGConfig.graph_timeout_seconds>",
+            "graph_timeout_seconds": 15.0,
             "graph_initialized": true
         }
         ```

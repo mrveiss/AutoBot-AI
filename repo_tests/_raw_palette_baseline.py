@@ -27,12 +27,12 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "bg-amber-950": 1,
     "bg-blue-100": 8,
     "bg-blue-400/10": 2,
-    "bg-blue-50": 2,
+    "bg-blue-50": 1,  # #16253 SystemStatusNotification severities onto theme tokens (2 -> 1)
     "bg-blue-500": 7,
     "bg-blue-500/10": 3,
     "bg-blue-500/20": 5,
-    "bg-blue-600": 10,
-    "bg-blue-700": 4,
+    "bg-blue-600": 6,  # #14780 BaseAvatar (10 -> 7); #16253 SystemStatusNotification severities (7 -> 6)
+    "bg-blue-700": 3,  # #16253 SystemStatusNotification severities onto theme tokens (4 -> 3)
     "bg-blue-900": 3,
     "bg-blue-900/20": 1,
     "bg-cyan-100": 1,
@@ -45,11 +45,11 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "bg-gray-800": 3,
     "bg-green-100": 9,
     "bg-green-400/10": 2,
-    "bg-green-50": 3,
-    "bg-green-500": 11,
+    "bg-green-50": 2,  # #16253 SystemStatusNotification severities onto theme tokens (3 -> 2)
+    "bg-green-500": 9,  # #14780 BaseAvatar: hand-rolled avatars and presence dots left for the kit (11 -> 9)
     "bg-green-500/10": 2,
-    "bg-green-600": 5,
-    "bg-green-700": 3,
+    "bg-green-600": 4,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 4)
+    "bg-green-700": 2,  # #16253 SystemStatusNotification severities onto theme tokens (3 -> 2)
     "bg-green-900": 2,
     "bg-green-900/30": 3,
     "bg-indigo-100": 2,
@@ -68,29 +68,26 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "bg-purple-900": 1,
     "bg-red-100": 9,
     "bg-red-400/10": 1,
-    "bg-red-50": 5,  # #18819: 10 -> 5, hand-rolled notices moved to the kit BaseAlert
+    "bg-red-50": 3,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 3)
     "bg-red-500": 9,
     "bg-red-500/10": 5,
     "bg-red-500/20": 1,
     "bg-red-500/30": 1,
-    "bg-red-600": 5,
-    "bg-red-700": 5,
+    "bg-red-600": 4,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 4)
+    "bg-red-700": 4,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 4)
     "bg-red-900": 2,
     "bg-red-900/30": 3,
     "bg-yellow-100": 7,
     "bg-yellow-400": 1,
     "bg-yellow-400/10": 1,
-    "bg-yellow-50": 3,
-    "bg-yellow-500": 6,
+    "bg-yellow-50": 2,  # #16253 SystemStatusNotification severities onto theme tokens (3 -> 2)
+    "bg-yellow-500": 4,  # #14780 BaseAvatar: hand-rolled avatars and presence dots left for the kit (6 -> 4)
     "bg-yellow-500/20": 3,
-    "bg-yellow-600": 1,
-    "bg-yellow-700": 1,
     "bg-yellow-900": 1,
     "bg-yellow-900/20": 1,
     "bg-yellow-900/30": 1,
     "border-amber-200": 1,
     "border-amber-800": 1,
-    "border-blue-200": 1,
     "border-blue-300": 1,
     "border-blue-500": 4,
     "border-blue-500/20": 2,
@@ -100,7 +97,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "border-gray-300": 1,
     "border-gray-600": 1,
     "border-gray-700": 2,
-    "border-green-200": 2,
+    "border-green-200": 1,  # #16253 SystemStatusNotification severities onto theme tokens (2 -> 1)
     "border-green-300": 1,
     "border-green-500": 1,
     "border-green-500/20": 1,
@@ -111,21 +108,20 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "border-purple-200": 1,
     "border-purple-300": 1,
     "border-purple-500/30": 1,
-    "border-red-200": 2,  # #18819: 7 -> 2, hand-rolled notices moved to the kit BaseAlert
+    "border-red-200": 1,  # #16253 SystemStatusNotification severities onto theme tokens (2 -> 1)
     "border-red-500": 1,
     "border-red-500/20": 3,
     "border-red-500/50": 1,
-    "border-yellow-200": 2,
+    "border-yellow-200": 1,  # #16253 SystemStatusNotification severities onto theme tokens (2 -> 1)
     "border-yellow-300": 1,
     "border-yellow-700": 1,
     "ring-amber-950/50": 1,
-    "ring-blue-500": 5,
-    "ring-green-500": 2,
-    "ring-indigo-500": 2,
+    "ring-blue-500": 4,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 4)
+    "ring-green-500": 1,  # #16253 SystemStatusNotification severities onto theme tokens (2 -> 1)
+    "ring-indigo-500": 1,  # #16253 SystemStatusNotification severities onto theme tokens (2 -> 1)
     "ring-offset-gray-800": 1,
     "ring-purple-500": 1,
-    "ring-red-500": 3,
-    "ring-yellow-500": 1,
+    "ring-red-500": 2,  # #16253 SystemStatusNotification severities onto theme tokens (3 -> 2)
     "text-amber-200": 1,
     "text-amber-400": 2,
     "text-amber-600": 2,
@@ -133,12 +129,11 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "text-amber-950": 1,
     "text-blue-200": 3,
     "text-blue-300": 1,
-    "text-blue-400": 16,
+    "text-blue-400": 15,  # #16253 SystemStatusNotification severities onto theme tokens (16 -> 15)
     "text-blue-500": 3,
-    "text-blue-600": 9,
-    "text-blue-700": 7,
+    "text-blue-600": 8,  # #16253 SystemStatusNotification severities onto theme tokens (9 -> 8)
+    "text-blue-700": 6,  # #16253 SystemStatusNotification severities onto theme tokens (7 -> 6)
     "text-blue-800": 3,
-    "text-blue-900": 1,
     "text-cyan-200": 1,
     "text-cyan-400": 1,
     "text-cyan-800": 1,
@@ -154,12 +149,12 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "text-gray-900": 2,
     "text-green-200": 2,
     "text-green-300": 2,
-    "text-green-400": 15,
+    "text-green-400": 14,  # #16253 SystemStatusNotification severities onto theme tokens (15 -> 14)
     "text-green-500": 13,
-    "text-green-600": 20,
-    "text-green-700": 5,
+    "text-green-600": 18,  # #16253 SystemStatusNotification severities onto theme tokens (20 -> 18)
+    "text-green-700": 4,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 4)
     "text-green-800": 4,
-    "text-green-900": 2,
+    "text-green-900": 1,  # #16253 SystemStatusNotification severities onto theme tokens (2 -> 1)
     "text-indigo-400": 1,
     "text-indigo-600": 2,
     "text-indigo-700": 2,
@@ -174,19 +169,17 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "text-purple-800": 1,
     "text-red-200": 2,
     "text-red-300": 3,
-    "text-red-400": 19,  # #18819: 21 -> 19, hand-rolled notices moved to the kit BaseAlert
+    "text-red-400": 18,  # #16253 SystemStatusNotification severities onto theme tokens (19 -> 18)
     "text-red-500": 8,  # #18819: 9 -> 8, hand-rolled notices moved to the kit BaseAlert
-    "text-red-600": 27,  # #18819: 28 -> 27, hand-rolled notices moved to the kit BaseAlert
-    "text-red-700": 6,  # #18819: 11 -> 6, hand-rolled notices moved to the kit BaseAlert
+    "text-red-600": 23,  # #16253 SystemStatusNotification severities onto theme tokens (27 -> 23)
+    "text-red-700": 5,  # #16253 SystemStatusNotification severities onto theme tokens (6 -> 5)
     "text-red-800": 5,
-    "text-red-900": 1,
     "text-yellow-200": 2,
     "text-yellow-300": 1,
-    "text-yellow-400": 7,
-    "text-yellow-600": 11,
-    "text-yellow-700": 5,
+    "text-yellow-400": 6,  # #16253 SystemStatusNotification severities onto theme tokens (7 -> 6)
+    "text-yellow-600": 9,  # #16253 SystemStatusNotification severities onto theme tokens (11 -> 9)
+    "text-yellow-700": 4,  # #16253 SystemStatusNotification severities onto theme tokens (5 -> 4)
     "text-yellow-800": 4,
-    "text-yellow-900": 1,
     # The SLM control plane (#17566).
     "slm:bg-amber-100": 19,
     "slm:bg-amber-200": 4,
@@ -392,5 +385,6 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:text-yellow-900": 1,
 }
 
-#: Frozen total, asserted separately so a hand edit of one number cannot pass.
-TOTAL_OCCURRENCES = 6116  # #14780 BaseSwitch: 6153 -> 6117, LoadBalancingView 6117 -> 6116
+# No hand-maintained total (#19283): a raised entry is caught by comparing each entry with this
+# table at the base commit (repo_tests/_ratchet_base.py), so PRs lowering different entries
+# never edit a shared line.

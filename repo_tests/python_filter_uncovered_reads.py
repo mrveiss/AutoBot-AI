@@ -40,13 +40,16 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         ".github/actions/setup-python-suite/action.yml",
         ".github/dependabot.yml",
         ".github/filters/code-quality-paths.yml",
-        ".github/workflows/auto-merge-base-into-parked-branches.yml",
         ".github/workflows/code-quality-required-context.yml",
         ".github/workflows/code-quality.yml",
         ".github/workflows/frontend-test.yml",
         ".github/workflows/hardened-smoke-test.yml",
         ".github/workflows/marker-tests.yml",
         ".github/workflows/ssot-coverage.yml",
+        # #19548: replaces the parked-branch workflow's entry one-for-one (its
+        # reader moved with it). Covering it means adding a filter line, and
+        # python-paths.yml is held by open PRs #19432/#19456 (one file, one PR).
+        ".github/workflows/sync-branches-with-main.yml",
         ".mcp/autobot-mcp-server.js",
         ".pre-commit-config.yaml",
         "autobot-frontend/scripts/check-ts-delta.sh",
@@ -81,7 +84,7 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         "requirements-gpu-torch.txt",
         "requirements-gpu.txt",
         "requirements.txt",
-        # #17133: "README.md" is a literal pre_push_open_pr_cap_17006_test.py
+        # #17133: "README.md" is a literal pre_push_no_open_pr_cap_19397_test.py
         # writes inside its own synthetic tmp_path repo fixture (_seed_repo),
         # never a read of the real root-level file -- same shape as the
         # CLAUDE.md entry above (#17129).

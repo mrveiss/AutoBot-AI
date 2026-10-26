@@ -93,6 +93,7 @@
     "toggleLayout": "Toggle layout",
     "fullscreen": "Fullscreen",
     "exitFullscreen": "Exit fullscreen",
+    "breadcrumb": "Breadcrumb",
     "expand": "Expand",
     "collapse": "Collapse",
     "copyToClipboard": "Copy to clipboard",
@@ -103,7 +104,13 @@
     "exportCsv": "Export as CSV",
     "download": "Download",
     "filterByCategory": "Filter by category",
-    "copied": "Copied"
+    "copied": "Copied",
+    "riskTier": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "critical": "Critical"
+    }
   },
   "chat": {
     "contextWindow": {
@@ -1295,7 +1302,8 @@
         "uniquePatterns": "Unique Patterns",
         "recommendation": "Consider consolidating duplicate values into shared configuration files or environment variables.",
         "noDuplicatesFound": "No configuration duplicates found.",
-        "noConfigData": "No configuration duplicate data available."
+        "noConfigData": "No configuration duplicate data available.",
+        "locationsCount": "{count} location | {count} locations"
       },
       "declarations": {
         "title": "Code Declarations",
@@ -1378,7 +1386,9 @@
         "noData": "No environment analysis data available.",
         "modelHint": "Model: {model}",
         "modelLoading": "loading…",
-        "modelServerDefault": "server default"
+        "modelServerDefault": "server default",
+        "use": "Use:",
+        "defaultLabel": "Default:"
       },
       "ownership": {
         "title": "Code Ownership Analysis",
@@ -1570,6 +1580,45 @@
         "noCallersTitle": "No callers found",
         "noCallersBody": "Nothing in the indexed graph calls this node.",
         "skippedHeading": "Show {count} unresolved edge(s)"
+      },
+      "shared": {
+        "lines": "{count} line | {count} lines",
+        "files": "{count} file | {count} files",
+        "commits": "{count} commit | {count} commits",
+        "filesOwned": "{count} file owned | {count} files owned",
+        "points": "{count} pt | {count} pts",
+        "imports": "{count} import | {count} imports",
+        "calls": "{count} call | {count} calls",
+        "filesAffected": "{count} file affected | {count} files affected",
+        "filesNeedAttention": "{count} file needs attention | {count} files need attention",
+        "contributors": "{count} contributor | {count} contributors",
+        "duplicates": "{count} duplicate | {count} duplicates",
+        "patterns": "{count} pattern | {count} patterns",
+        "hardcodedValues": "{count} hardcoded value | {count} hardcoded values",
+        "items": "{count} item | {count} items",
+        "coveragePercent": "{percent}% coverage",
+        "similarPercent": "{percent}% similar",
+        "matchPercent": "{percent}% match",
+        "reducedPercent": "{percent}% reduced",
+        "analysisCompleted": "Analysis completed in {seconds}s",
+        "unknown": "Unknown",
+        "field": "Field:",
+        "impact": "Impact",
+        "recency": "Recency",
+        "complexityReduction": "-{count} complexity",
+        "locReduction": "{count} LOC",
+        "tokens": "~{count} tokens",
+        "filesProgress": "{done} / {total} files",
+        "filterAll": "All ({count})",
+        "filterHigh": "High ({count})",
+        "filterMedium": "Medium ({count})",
+        "filterLow": "Low ({count})",
+        "analyzedFiles": "Analyzed Files",
+        "riskFiles": "{risk} Risk Files",
+        "riskCount": "{name}: {count} file | {name}: {count} files",
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
       }
     },
     "patterns": {
@@ -1590,21 +1639,16 @@
       "duplicateCode": "Duplicate Code",
       "locations": "{count} locations",
       "linesSaveable": "{count} lines saveable",
-      "moreLocations": "+{count} more locations",
-      "showingOfDuplicates": "Showing {shown} of {total} duplicate patterns",
       "regexOpportunities": "Regex Opportunities",
       "current": "Current",
       "suggested": "Suggested",
-      "showingOfOpportunities": "Showing {shown} of {total} opportunities",
       "complexityHotspots": "Complexity Hotspots",
       "location": "Location",
       "cc": "CC",
       "cognitive": "Cognitive",
       "mi": "MI",
       "nesting": "Nesting",
-      "showingOfHotspots": "Showing {shown} of {total} hotspots",
       "refactoringSuggestions": "Refactoring Suggestions",
-      "showingOfSuggestions": "Showing {shown} of {total} suggestions",
       "patternsInChromaDB": "{count} patterns in ChromaDB",
       "clearStoredPatterns": "Clear stored patterns",
       "lastScan": "Last scan",
@@ -2045,7 +2089,8 @@
           "label": "Runtime Risk",
           "description": "Health based on where code actually fails at runtime."
         }
-      }
+      },
+      "codebaseRatedPrefix": "Your codebase is rated"
     },
     "bugPrediction": {
       "title": "Bug Prediction Dashboard",
@@ -2278,14 +2323,12 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total} {type}",
       "emptyMessage": "No code smells detected"
     },
     "declarations": {
       "title": "Declarations",
       "total": "Total",
       "exported": "Exported",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No declarations found",
       "types": {
         "function": "Function",
@@ -2308,7 +2351,6 @@
       "totalLines": "Total Lines",
       "similar": "similar",
       "lines": "lines",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No duplicate code detected",
       "similarityGroups": {
         "high": "High Similarity",
@@ -2329,7 +2371,6 @@
       "variable": "Variable",
       "value": "Value",
       "suggestedEnvVar": "Suggested Env Var",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No hardcoded values detected",
       "severityGroups": {
         "high": "High Severity",
@@ -2344,7 +2385,6 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No problems detected",
       "exportJson": "Export JSON",
       "exportMarkdown": "Export Markdown"
@@ -2656,7 +2696,9 @@
       }
     },
     "truncation": {
-      "showingOf": "Showing {shown} of {total}"
+      "showingOf": "Showing {shown} of {total}",
+      "showMore": "Show {count} more",
+      "serverLimited": "Showing the top {shown} of {total}. The server limits this list, so the rest cannot be loaded here."
     }
   },
   "knowledge": {
@@ -4301,6 +4343,9 @@
       "errorEnterBoth": "Please enter both a source and a target entity.",
       "notInGraph": "These entities are not in the relationship graph yet.",
       "notInGraphHint": "They exist, but have no graph links — so no connection can be traced. Re-run entity extraction to index their relations."
+    },
+    "chroma": {
+      "quarantined": "Research quarantine"
     }
   },
   "workflow": {
@@ -4993,6 +5038,10 @@
       "reconnect": "Reconnect",
       "clear": "Clear",
       "closeWindow": "Close Window",
+      "kill": "Kill",
+      "pause": "Pause",
+      "resume": "Resume",
+      "interrupt": "Interrupt",
       "session": "Session:",
       "lines": "Lines:",
       "shortcutHint": "Press Ctrl+C to interrupt, Ctrl+D to exit",
@@ -5941,7 +5990,13 @@
       "lastCheck": "Last Check:",
       "consecutiveFailures": "Consecutive Failures:",
       "errorDetails": "Error Details:",
-      "dismiss": "Dismiss"
+      "dismiss": "Dismiss",
+      "states": {
+        "healthy": "Healthy",
+        "degraded": "Degraded",
+        "critical": "Unreachable",
+        "unknown": "Unknown"
+      }
     },
     "themeToggle": {
       "system": "System",
@@ -5956,7 +6011,15 @@
       "switchToLight": "Switch to light mode",
       "switchToDark": "Switch to dark mode",
       "light": "Light",
-      "dark": "Dark"
+      "dark": "Dark",
+      "accentBlueDescription": "Electric Blue — Technical Precision",
+      "accentGreenDescription": "Emerald — Growth & Success",
+      "accentPurpleDescription": "Violet — Creative & Premium",
+      "accentOrangeDescription": "Amber — Energy & Innovation",
+      "accentPinkDescription": "Rose — Friendly & Approachable",
+      "accentTealDescription": "Cyan — Modern & Professional",
+      "accentIndigoDescription": "Deep Blue — Trust & Stability",
+      "accentRedDescription": "Crimson — Bold & Urgent"
     },
     "toastContainer": {
       "notifications": "Notifications",
@@ -5978,7 +6041,43 @@
       "loading": "Loading…"
     },
     "minimalNote": "Showing essentials · technical widgets hidden",
-    "minimalNoteAction": "Show all features"
+    "minimalNoteAction": "Show all features",
+    "themePresets": {
+      "title": "Theme Presets",
+      "description": "Choose a pre-configured theme or customize your own color scheme",
+      "names": {
+        "auto": "Auto",
+        "catppuccin-mocha": "Catppuccin Mocha",
+        "catppuccin-latte": "Catppuccin Latte",
+        "solarized-dark": "Solarized Dark",
+        "solarized-light": "Solarized Light",
+        "high-contrast-dark": "High Contrast Dark",
+        "high-contrast-light": "High Contrast Light",
+        "brand-dark": "AutoBot Dark",
+        "brand-light": "AutoBot Light",
+        "midnight": "Midnight",
+        "sunset": "Sunset",
+        "forest": "Forest",
+        "rose": "Rose"
+      },
+      "descriptions": {
+        "auto": "Follows system preference",
+        "catppuccin-mocha": "Warm dark theme with purple accents",
+        "catppuccin-latte": "Soft light theme with purple accents",
+        "solarized-dark": "Classic dark theme with cyan accents",
+        "solarized-light": "Classic light theme with cyan accents",
+        "high-contrast-dark": "Maximum readability dark theme",
+        "high-contrast-light": "Maximum readability light theme",
+        "brand-dark": "Official AutoBot dark theme",
+        "brand-light": "Official AutoBot light theme",
+        "midnight": "Deep blue night theme",
+        "sunset": "Warm orange light theme",
+        "forest": "Natural green dark theme",
+        "rose": "Elegant pink light theme"
+      },
+      "advanced": "Advanced Customization",
+      "baseTheme": "Base Theme"
+    }
   },
   "base": {
     "badge": {
@@ -7266,7 +7365,23 @@
       "abstained": "Abstained",
       "viewLogs": "View Logs",
       "loadError": "Unable to load agent activity right now.",
-      "noAgents": "No active agents."
+      "noAgents": "No active agents.",
+      "statusNotReported": "Status not reported",
+      "notReported": "Not reported",
+      "notApplicable": "N/A",
+      "seconds": "{n}s",
+      "minutes": "{n}m",
+      "hours": "{n}h",
+      "secondsAgo": "{n}s ago",
+      "minutesAgo": "{n}m ago",
+      "hoursAgo": "{n}h ago",
+      "types": {
+        "orchestrator": "Orchestrator Agent",
+        "worker": "Worker Agent",
+        "monitor": "Monitor Agent",
+        "analyzer": "Analyzer Agent",
+        "executor": "Executor Agent"
+      }
     },
     "resourceHeatmap": {
       "defaultTitle": "Resource Utilization Heatmap",
@@ -8130,7 +8245,13 @@
       "announceMinimal": "Minimal interface on. Advanced features hidden.",
       "announceFull": "Full interface on. All features shown."
     },
-    "llcLedger": "Agent ledger"
+    "llcLedger": "Agent ledger",
+    "backendHealth": {
+      "degradedTitle": "Backend degraded",
+      "degradedMessage": "Some backend services are slow or failing. Features may not work as expected.",
+      "criticalTitle": "Backend unreachable",
+      "criticalMessage": "AutoBot cannot reach its backend. Changes may not be saved until it is back."
+    }
   },
   "llcCompanyStatus": {
     "showArchived": "Show archived",
@@ -8574,6 +8695,7 @@
       "hireAgent": "Hire Agent",
       "loading": "Loading…",
       "empty": "No people or agents found.",
+      "companyUnresolved": "Could not determine which company this org chart belongs to.",
       "retry": "Retry",
       "agentDetail": "Agent Detail",
       "personDetail": "Person Detail",
@@ -8592,6 +8714,12 @@
       "terminateAgent": "Terminate Agent",
       "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
       "terminatedNote": "This agent has been terminated.",
+      "heartbeat": {
+        "label": "Run on heartbeat",
+        "on": "On: wakes on its schedule.",
+        "off": "Off: no scheduled wakes.",
+        "saveFailed": "Could not change the heartbeat: {detail}"
+      },
       "viewMode": "View mode",
       "viewTree": "Tree",
       "viewCanvas": "Canvas",
@@ -9551,6 +9679,9 @@
     "roleCoordinator": "Coordinator",
     "roleManager": "Manager",
     "adapter": "Adapter",
+    "runOnHeartbeat": "Run on heartbeat",
+    "runOnHeartbeatHint": "Wake this agent on a fixed schedule. Leave off for an agent you wake yourself.",
+    "failed": "Failed to hire agent.",
     "hiring": "Hiring…",
     "hire": "Hire"
   },

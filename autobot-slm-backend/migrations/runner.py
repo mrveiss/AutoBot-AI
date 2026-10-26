@@ -245,17 +245,22 @@ def ensure_migrations_table(conn: psycopg2.extensions.connection) -> None:
         # migrate() this issue added. Guarded on the 'agents' table and a
         # known roster member so it never re-fires once seeding has run,
         # and never errors on a fresh DB where 'agents' doesn't exist yet.
+        # The 'agents' read sits in its own nested IF: PL/pgSQL plans an IF
+        # condition as one expression, so an AND-ed `SELECT ... FROM agents`
+        # fails with 'relation "agents" does not exist' on a fresh DB even
+        # behind the to_regclass guard (#19238 made that failure fatal).
         cur.execute("""
             DO $$
             BEGIN
                 IF EXISTS (
                     SELECT 1 FROM migrations_applied WHERE name = 'seed_agents'
                 )
-                AND to_regclass('public.agents') IS NOT NULL
-                AND NOT EXISTS (
-                    SELECT 1 FROM agents WHERE agent_id = 'chat'
-                ) THEN
-                    DELETE FROM migrations_applied WHERE name = 'seed_agents';
+                AND to_regclass('public.agents') IS NOT NULL THEN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM agents WHERE agent_id = 'chat'
+                    ) THEN
+                        DELETE FROM migrations_applied WHERE name = 'seed_agents';
+                    END IF;
                 END IF;
             END
             $$;

@@ -217,7 +217,7 @@ validate_deployment() {
     fi
 
     # Browser service check
-    if curl -s -f "http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:3000/health" > /dev/null; then
+    if curl -s -f "http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT}/health" > /dev/null; then
         success "Browser service is healthy"
     else
         warn "Browser service health check failed"
@@ -236,7 +236,7 @@ show_summary() {
     log "INFO" "  RedisInsight: http://${AUTOBOT_REDIS_HOST:-localhost}:8002"
     log "INFO" "  AI Stack:    http://${AUTOBOT_AI_STACK_HOST:-localhost}:${AUTOBOT_AI_STACK_PORT}"
     log "INFO" "  NPU Worker:  http://${AUTOBOT_NPU_WORKER_HOST:-localhost}:8081"
-    log "INFO" "  Browser:     http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:3000"
+    log "INFO" "  Browser:     http://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:${AUTOBOT_BROWSER_SERVICE_PORT}"
     log "INFO" "  VNC Server:  vnc://${AUTOBOT_BROWSER_SERVICE_HOST:-localhost}:5901"
     log "INFO" ""
     log "INFO" "Management:"
@@ -374,7 +374,7 @@ patch_dependencies() {
     if [[ "$dry_run" != "true" ]]; then
         log "INFO" "Running pip-audit to verify CVE remediation..."
         # Verify on backend (primary Python service)
-        ansible backend -i "$INVENTORY_FILE" -m shell -a "source /opt/autobot/venv/bin/activate && pip-audit 2>/dev/null | head -20" --become || true
+        ansible backend -i "$INVENTORY_FILE" -m shell -a "source {{ autobot.base_dir }}/venv/bin/activate && pip-audit 2>/dev/null | head -20" --become || true
     fi
 
     success "Dependency patching completed"

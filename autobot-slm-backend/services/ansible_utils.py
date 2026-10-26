@@ -40,6 +40,39 @@ def _find_ansible_playbook() -> str:
     raise FileNotFoundError("ansible-playbook not found. Install Ansible: apt install ansible")
 
 
+_NO_HOSTS_MARKERS = (
+    "skipping: no hosts matched",
+    "Could not match supplied host pattern",
+    "No inventory was parsed",
+)
+
+
+def ansible_run_failure(output: str, host: str, returncode: int) -> str | None:
+    """Why a single-host run did not prove success on ``host``, or None if it did (#19475).
+
+    ``ansible-playbook`` exits 0 when the inventory is unparsable and the play matches
+    no hosts, so the exit code alone cannot prove the target ran. A run counts only if
+    it exited 0, no no-hosts marker was printed, and the PLAY RECAP lists ``host`` with
+    unreachable=0 and failed=0. One shared check for every SLM runner using ``-i "<host>,"``.
+    Returns the text to report: the raw output on a non-zero exit, else the reason.
+    """
+    if returncode != 0:
+        return output
+    for marker in _NO_HOSTS_MARKERS:
+        if marker in output:
+            return f"ansible matched no hosts ({marker!r})"
+    recap = re.search(
+        rf"^{re.escape(host)}\s*:\s*ok=\d+.*?unreachable=(\d+)\s+failed=(\d+)",
+        output,
+        re.MULTILINE,
+    )
+    if not recap:
+        return f"target host {host} is absent from the PLAY RECAP"
+    if int(recap.group(1)) or int(recap.group(2)):
+        return f"target host {host} reported unreachable={recap.group(1)} failed={recap.group(2)}"
+    return None
+
+
 def _msg_from_result_json(line: str) -> str:
     """``msg`` out of the result dict on a ``fatal:`` line, parsed as JSON.
 

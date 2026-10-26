@@ -21162,7 +21162,7 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
         self.assertIn('operation="update_embedding_settings"', source)
         self.assertIn('error_code_prefix="EMBEDDINGS"', source)
-        self.assertIn("HTTPException", source)
+        self.assertIn("status_code=409", source)  # #19377: refuses; no unread settings.json write
 
     def test_batch_126_get_available_embedding_models_simple_pattern(self):
         """Verify get_available_embedding_models endpoint uses Simple Pattern"""
@@ -29475,15 +29475,12 @@ class TestBatch110TerminalCOMPLETE(unittest.TestCase):
         self.assertIn('operation="update_llm_provider"', source)
         self.assertIn('error_code_prefix="LLM"', source)
 
-    def test_batch_169_get_available_embedding_models_simple_pattern(self):
-        """Verify get_available_embedding_models endpoint uses Simple Pattern"""
+    def test_batch_169_get_available_embedding_models_redirects(self):
+        """#19378: the old listing redirects to the one options endpoint, which carries the pattern"""
         from api import llm
 
         source = inspect.getsource(llm.get_available_embedding_models)
-        self.assertIn("@with_error_handling", source)
-        self.assertIn("category=ErrorCategory.SERVER_ERROR", source)
-        self.assertIn('operation="get_available_embedding_models"', source)
-        self.assertIn('error_code_prefix="LLM"', source)
+        self.assertIn('RedirectResponse("/api/embeddings/models", status_code=308)', source)
 
     def test_batch_169_update_embedding_model_simple_pattern(self):
         """Verify update_embedding_model endpoint uses Simple Pattern"""

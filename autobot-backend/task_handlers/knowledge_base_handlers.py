@@ -12,6 +12,7 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.task_result import task_success
+from knowledge.search_filters import filter_for_user_id
 from models.task_context import TaskExecutionContext
 
 from .base import TaskHandler
@@ -49,6 +50,9 @@ class KBSearchHandler(TaskHandler):
 
         kb = await ctx.worker.resolve_knowledge_base()
         kb_results = await kb.search(query, n_results)
+        # #16665: the task's triggering user, stamped by the orchestration layer in ctx.metadata -- never the
+        # payload, which a caller controls. No user, no results.
+        kb_results = await filter_for_user_id(kb_results, kb, ctx.metadata.get("user_id"))
 
         result = task_success("KB search successful.", data={"results": kb_results})
 

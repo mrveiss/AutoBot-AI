@@ -276,55 +276,10 @@
   no_log: true
   tags: ['backend', 'config']
 
-# #14758: the envelope secret store raised at import on every provisioned
-# deployment because nothing ever wrote its root key, and each consumer swallowed
-# the failure, so an entirely absent store looked like "that secret does not
-# exist". slm_manager generates it into slm-secrets.env; read it here so both
-# services derive the same vault KEKs. The SLM's SSO vault migration states
-# outright that it needs the BACKEND's root key, so two values would be a silent
-# decryption failure rather than a config nuisance.
-- name: "Backend | Read AUTOBOT_SECRETS_ROOT_KEY from slm-secrets.env (#14758)"
-  ansible.builtin.shell:
-    cmd: >-
-      grep -oP '^\s*(export\s+)?AUTOBOT_SECRETS_ROOT_KEY=\K.+'
-      /etc/autobot/slm-secrets.env 2>/dev/null || true
-  register: _backend_secrets_root_key
-  changed_when: false
-  failed_when: false
-  when: _slm_secrets_stat.stat.exists | default(false)
-  no_log: true
-  tags: ['backend', 'config']
-
-# #19051: the SAME line shapes the SLM back-fill's presence check accepts (an
-# `export ` prefix, a quoted value), so a key it counts as present is read here.
-- name: "Backend | Unquote the root key read from slm-secrets.env (#19051)"
-  ansible.builtin.set_fact:
-    _backend_slm_root_key: "{{ _backend_secrets_root_key.stdout | default('') | trim | regex_replace('^[\"\\x27]|[\"\\x27]$', '') }}"
-  no_log: true
-  tags: ['backend', 'config']
-
-- name: "Backend | Align autobot_secrets_root_key with slm-secrets.env when present (#14758)"
-  ansible.builtin.set_fact:
-    autobot_secrets_root_key: "{{ _backend_slm_root_key }}"
-  when: _backend_slm_root_key | length > 0
-  no_log: true
-  tags: ['backend', 'config']
-
-# #19051: where the SLM secrets file is on this host, it is the root key's only
-# source, so an empty key here means the back-fill never ran. Rendering
-# `AUTOBOT_SECRETS_ROOT_KEY=` turned that into a 503 from every System vault
-# call, discovered only from the backend log. Stop the deploy and name the fix.
-- name: "Backend | Fail when the SLM secrets file yields no root key (#19051)"
-  ansible.builtin.fail:
-    msg: >-
-      AUTOBOT_SECRETS_ROOT_KEY is empty in /etc/autobot/slm-secrets.env, so the
-      backend would start with the System vault disabled. Run the builtin update,
-      whose PLAY 1 back-fills the key (slm_manager secrets_root_key.yml), then
-      re-run this deploy.
-  when:
-    - _slm_secrets_stat.stat.exists | default(false)
-    # The FILE's key, not the merged var: an inventory key must not mask an SLM file that has none.
-    - _backend_slm_root_key | length == 0
+# #14758/#19051: read the SLM file's root key (and fail on an empty one) through
+# the one task file the updater's env_only render shares.
+- name: "Backend | Read the secrets root key from slm-secrets.env (#14758, #19051)"
+  ansible.builtin.include_tasks: read_secrets_root_key.yml
   tags: ['backend', 'config']
 
 # #9914: Deploy the systemd unit BEFORE any stop/start so a fresh VM provisions
@@ -863,7 +818,7 @@
   # runtime (three levels up from services/permission_matcher.py).  The clean
   # task that previously wiped /opt/autobot/config has been removed; this task
   # ensures the directory and file are always present after each deploy.
-  - name: "Backend | Ensure /opt/autobot/config directory exists (#3873)"
+  - name: "Backend | Ensure {{ autobot.base_dir }}/config directory exists (#3873)"
     ansible.builtin.file:
       path: "{{ backend_install_dir | dirname }}/config"
       state: directory
@@ -1317,7 +1272,7 @@
       db_host: "127.0.0.1"
       databases:
         - "{{ backend_postgres_db | default('autobot_users') }}"
-      postgresql_listen_addresses: "localhost"
+      # listen_addresses: the postgresql role's single definition (#19239), never set here.
       # #10636 gave the backend its OWN creds file because the postgresql role
       # then rendered the WHOLE file from a template, so writing AUTOBOT_DB_*
       # erased the SLM's SLM_DB_* entries on a collapsed single-box deploy.
@@ -1335,7 +1290,9 @@
       # existing login role first — see roles/postgresql/tasks/configure.yml — so
       # slm_app's rules survive), and this second run must ONLY reload, never
       # restart, the shared instance. postgresql.conf renders identically on both
-      # runs (both pass listen_addresses=localhost), so no restart is triggered.
+      # runs because listen_addresses has one definition, in the postgresql role
+      # (#19239) -- before, the SLM play passed "*" and this run "localhost", so a
+      # collapsed box flipped it, restarted Postgres, and the last run won.
     tags: ['backend', 'postgresql']
 
   # ==========================================================

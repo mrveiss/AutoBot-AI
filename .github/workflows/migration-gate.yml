@@ -29,6 +29,9 @@ on:
       - 'autobot-backend/tests/migrations/**'
       - 'autobot-backend/user_management/models/**'
       - 'autobot-backend/llc/models/**'
+      - 'autobot-backend/llc/services/workspace_lease.py'
+      - 'autobot-backend/llc/services/company.py'
+      - 'autobot-backend/llc/services/company_ceo.py'
       - 'autobot-backend/canvas/models.py'
       - 'autobot-backend/models/**'
       - 'autobot-backend/initialization/lifespan.py'
@@ -108,6 +111,9 @@ jobs:
           - 'autobot-backend/tests/migrations/**'
           - 'autobot-backend/user_management/models/**'
           - 'autobot-backend/llc/models/**'
+          - 'autobot-backend/llc/services/workspace_lease.py'
+          - 'autobot-backend/llc/services/company.py'
+          - 'autobot-backend/llc/services/company_ceo.py'
           - 'autobot-backend/canvas/models.py'
           - 'autobot-backend/models/**'
           - 'autobot-backend/initialization/lifespan.py'
@@ -272,16 +278,28 @@ jobs:
   #
   # `always()` rather than the repo's usual `!cancelled()` is deliberate:
   # `!cancelled()` would SKIP this job on a cancelled run and re-publish
-  # `skipped` on the required context, which is the bug being fixed. The cost
-  # is that a cancelled run reports this check red rather than absent — the
-  # safer direction for a required gate, and self-clearing on the next run.
+  # `skipped` on the required context, which is the bug being fixed. A cancelled
+  # upstream used to turn this check red; the shared cancel-run-on-cancelled-upstream
+  # action now ends it `cancelled` instead, which is still not green (#17764).
   migration-matrix:
     name: migration-matrix
     needs: [changes, migration-tests]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write  # force-cancel this run when an upstream was cancelled (#17764)
     steps:
+      - name: Check out the shared gate action
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          sparse-checkout: .github/actions
+          persist-credentials: false
+      - name: End cancelled, not failed, when an upstream was cancelled (#17764)
+        uses: ./.github/actions/cancel-run-on-cancelled-upstream
+        with:
+          results: ${{ needs.changes.result }} ${{ needs.migration-tests.result }}
       - name: Report migration gate verdict
         env:
           CHANGES_RESULT: ${{ needs.changes.result }}

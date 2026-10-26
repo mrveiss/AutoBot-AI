@@ -46,23 +46,21 @@ def _reset_rag_config_singleton():
 def _isolate_hash_cache(tmp_path, monkeypatch):
     """Isolate the doc-indexer hash cache from ambient on-disk state (#12673).
 
-    ``RAGService._filter_stale_chunks`` reads ``doc_indexer.HASH_CACHE_FILE``
+    ``knowledge.stale_filter`` reads ``doc_indexer.HASH_CACHE_FILE``
     through a module-level TTL memo.  Without isolation the suite picks up the
     real ``data/.doc_index_hashes.json`` that exists on any machine where the
     indexer has run, so the provenance filter drops every test-double chunk.
     Point the cache at an absent tmp path and reset the memo around each test.
     """
-    import services.rag_service as rag_mod
+    from knowledge.stale_filter import reset_hash_cache
 
     monkeypatch.setattr(
         "services.knowledge.doc_indexer.HASH_CACHE_FILE",
         tmp_path / "absent_doc_index_hashes.json",
     )
-    rag_mod._hash_cache_memo = {}
-    rag_mod._hash_cache_loaded_at = 0.0
+    reset_hash_cache()
     yield
-    rag_mod._hash_cache_memo = {}
-    rag_mod._hash_cache_loaded_at = 0.0
+    reset_hash_cache()
 
 
 class TestKnowledgeBaseAdapter:

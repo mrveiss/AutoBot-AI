@@ -14,7 +14,7 @@ sys.path.append(config.project_root)
 
 from agents.network_discovery_agent import network_discovery_agent
 from agents.security_scanner_agent import security_scanner_agent
-from tests.test_helpers import get_test_backend_url
+from tests.test_helpers import live_backend_url
 
 
 async def test_security_scanner():
@@ -139,7 +139,7 @@ async def test_workflow_integration():
                 "chat_id": "test_security_scan",
             }
 
-            async with session.post(get_test_backend_url() + "/api/workflow/execute", json=workflow_data) as response:
+            async with session.post(live_backend_url() + "/api/workflow/execute", json=workflow_data) as response:
                 if response.status == 200:
                     result = await response.json()
                     print("✅ Workflow created successfully")  # noqa: print

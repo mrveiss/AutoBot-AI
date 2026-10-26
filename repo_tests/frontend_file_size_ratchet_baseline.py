@@ -43,13 +43,13 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-frontend/src/components/analytics/ConversationFlowDashboard.vue": 909,
     "autobot-frontend/src/components/analytics/LLMPatternDashboard.vue": 1080,
     "autobot-frontend/src/components/analytics/LogPatternDashboard.vue": 952,
-    "autobot-frontend/src/components/analytics/PatternAnalysis.vue": 982,
+    "autobot-frontend/src/components/analytics/PatternAnalysis.vue": 964,
     "autobot-frontend/src/components/analytics/PerformanceAnalysisDashboard.vue": 1075,
     "autobot-frontend/src/components/analytics/PrecommitHookDashboard.vue": 1097,
     "autobot-frontend/src/components/analytics/SourceManager.vue": 867,
-    "autobot-frontend/src/components/analytics/TechnicalDebtDashboard.vue": 1819,
-    "autobot-frontend/src/components/analytics/panels/CodebaseBugPredictionPanel.vue": 802,
-    "autobot-frontend/src/components/analytics/panels/CodebaseCrossLanguagePanel.vue": 656,
+    "autobot-frontend/src/components/analytics/TechnicalDebtDashboard.vue": 1813,
+    "autobot-frontend/src/components/analytics/panels/CodebaseBugPredictionPanel.vue": 785,
+    "autobot-frontend/src/components/analytics/panels/CodebaseCrossLanguagePanel.vue": 646,
     "autobot-frontend/src/components/analytics/panels/CodebaseIntelligenceScoresPanel.vue": 1332,
     "autobot-frontend/src/components/analytics/panels/CodebaseOwnershipPanel.vue": 1035,
     "autobot-frontend/src/components/audit/AuditLogTable.vue": 741,  # #14780 BasePagination: 758 -> 741
@@ -72,15 +72,15 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-frontend/src/components/feature-flags/AccessMetrics.vue": 729,
     "autobot-frontend/src/components/feature-flags/EndpointEnforcement.vue": 701,
     "autobot-frontend/src/components/file-browser/FileBrowser.vue": 736,
-    "autobot-frontend/src/components/knowledge/ChromaDBExplorer.vue": 1158,
+    "autobot-frontend/src/components/knowledge/ChromaDBExplorer.vue": 1155,
     "autobot-frontend/src/components/knowledge/DocumentChangeFeed.vue": 601,
     "autobot-frontend/src/components/knowledge/EntityExtractor.vue": 781,
     "autobot-frontend/src/components/knowledge/EntityGraphManager.vue": 692,
     "autobot-frontend/src/components/knowledge/GraphConnectionPath.vue": 701,
     "autobot-frontend/src/components/knowledge/GraphRAGQuery.vue": 713,
     "autobot-frontend/src/components/knowledge/KBSearchResultPanel.vue": 630,
-    "autobot-frontend/src/components/knowledge/KnowledgeBrowser.vue": 1785,
-    "autobot-frontend/src/components/knowledge/KnowledgeEntries.vue": 1359,  # #18849: 1360 -> 1359
+    "autobot-frontend/src/components/knowledge/KnowledgeBrowser.vue": 1772,  # #17563: 1785 -> 1772 (kit Breadcrumb)
+    "autobot-frontend/src/components/knowledge/KnowledgeEntries.vue": 1358,  # #19118: 1359 -> 1358
     "autobot-frontend/src/components/knowledge/KnowledgeGraph.vue": 2073,
     "autobot-frontend/src/components/knowledge/KnowledgeHealth.vue": 925,
     "autobot-frontend/src/components/knowledge/KnowledgePersistenceDialog.vue": 891,  # #18819+#18849 one import (-1)
@@ -104,13 +104,13 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-frontend/src/components/terminal/AdvancedStepConfirmationModal.vue": 615,  # #18849: 616 -> 615
     "autobot-frontend/src/components/terminal/BaseXTerminal.vue": 825,
     "autobot-frontend/src/components/terminal/TerminalModals.vue": 742,  # #18849: 743 -> 742
-    "autobot-frontend/src/components/terminal/TerminalWindow.vue": 1726,
+    "autobot-frontend/src/components/terminal/TerminalWindow.vue": 1612,
     "autobot-frontend/src/components/ui/HostSelectionDialog.vue": 965,
     "autobot-frontend/src/components/vision/GUIAutomationControls.vue": 793,
     "autobot-frontend/src/components/vision/MediaGallery.vue": 843,
     "autobot-frontend/src/components/vision/ScreenCaptureViewer.vue": 836,
     "autobot-frontend/src/components/vision/VideoProcessor.vue": 897,
-    "autobot-frontend/src/components/visualizations/AgentActivityVisualization.vue": 959,
+    "autobot-frontend/src/components/visualizations/AgentActivityVisualization.vue": 936,
     "autobot-frontend/src/components/visualizations/SystemArchitectureDiagram.vue": 1881,
     "autobot-frontend/src/components/visualizations/WorkflowVisualization.vue": 1019,  # #16744: 1020 -> 1019
     "autobot-frontend/src/components/workflow/PhaseProgressionIndicator.vue": 634,
@@ -130,7 +130,6 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-frontend/src/composables/useKeyboard.ts": 650,
     "autobot-frontend/src/composables/useKnowledgeVectorization.ts": 679,
     "autobot-frontend/src/composables/usePatternAnalysis.ts": 867,
-    "autobot-frontend/src/composables/usePrometheusMetrics.ts": 643,
     "autobot-frontend/src/composables/useTimeout.ts": 749,
     "autobot-frontend/src/composables/useVoiceConversation.ts": 986,
     "autobot-frontend/src/composables/useVoiceOutput.ts": 1089,
@@ -147,7 +146,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-frontend/src/stores/useChatStore.ts": 1176,
     "autobot-frontend/src/stores/useKnowledgeStore.ts": 809,
     "autobot-frontend/src/utils/ApiClient.ts": 816,
-    "autobot-frontend/src/utils/RumAgent.ts": 869,
+    "autobot-frontend/src/utils/RumAgent.ts": 857,
     "autobot-frontend/src/utils/VisionMultimodalApiClient.ts": 663,
     "autobot-frontend/src/utils/debugUtils.ts": 620,
     "autobot-frontend/src/views/AdminUsersView.vue": 833,
@@ -158,25 +157,25 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-frontend/src/views/DevSpeedupView.vue": 658,
     "autobot-frontend/src/views/ErrorMonitoringView.vue": 872,
     "autobot-frontend/src/views/EvolutionView.vue": 781,
-    "autobot-frontend/src/views/FailureAnalysisDashboard.vue": 799,
+    "autobot-frontend/src/views/FailureAnalysisDashboard.vue": 782,  # #13422: 799 -> 782 (kit badges)
     "autobot-frontend/src/views/MarketplaceView.vue": 711,
     "autobot-frontend/src/views/OnboardingWizard.vue": 884,
     "autobot-frontend/src/views/PluginsView.vue": 1094,
     "autobot-frontend/src/views/SettingsView.vue": 739,
     "autobot-frontend/src/views/VisionAutomationView.vue": 873,
-    "autobot-frontend/src/views/WorkflowBuilderView.vue": 2300,
-    "autobot-frontend/src/views/llc/BacklogView.vue": 842,
+    "autobot-frontend/src/views/WorkflowBuilderView.vue": 2267,  # #13422: 2300 -> 2267 (kit RiskBadge)
+    "autobot-frontend/src/views/llc/BacklogView.vue": 823,
     "autobot-frontend/src/views/llc/CompanyCreationWizard.vue": 909,
     "autobot-frontend/src/views/llc/CompanyPortabilityView.vue": 867,
     "autobot-frontend/src/views/llc/CostDashboard.vue": 1017,
     "autobot-frontend/src/views/llc/GanttTimelineView.vue": 817,
     "autobot-frontend/src/views/llc/HeartbeatMonitor.vue": 807,
-    "autobot-frontend/src/views/llc/OrgChart.vue": 1522,  # #14780: 1527 -> 1522 (kit BaseDrawer)
+    "autobot-frontend/src/views/llc/OrgChart.vue": 1517,  # #14780: 1527 -> 1522 (kit BaseDrawer)
     "autobot-frontend/src/views/llc/ProjectBrowserView.vue": 1372,  # #18819 1379->1374; #18849 -1; #14778 BaseInput -1
     "autobot-frontend/src/views/llc/RolesView.vue": 1026,  # #18819 1029->1027; #18849 one kit import on the merge (-1)
     "autobot-frontend/src/views/llc/RoutinesView.vue": 688,
-    "autobot-frontend/src/views/llc/SprintBoardView.vue": 681,
-    "autobot-frontend/src/views/llc/WorkItemDetail.vue": 1013,  # #14780: 1046 -> 1013 (kit BaseDrawer)
+    "autobot-frontend/src/views/llc/SprintBoardView.vue": 666,
+    "autobot-frontend/src/views/llc/WorkItemDetail.vue": 996,  # #14780: 1046 -> 1013 (kit BaseDrawer)
     "autobot-infrastructure/shared/ide-extensions/vscode-autobot/src/extension.ts": 741,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/background-monitor.ts": 713,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/index.ts": 957,
@@ -186,7 +185,6 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-frontend/src/composables/useAutobotApi.ts": 2062,  # #18734: 2068 -> 2062
     "autobot-slm-frontend/src/composables/useCodeSync.ts": 1078,
     "autobot-slm-frontend/src/composables/useOrchestrationManagement.ts": 693,
-    "autobot-slm-frontend/src/composables/usePrometheusMetrics.ts": 622,
     "autobot-slm-frontend/src/composables/useSlmApi.ts": 1457,
     "autobot-slm-frontend/src/stores/fleet.ts": 994,
     "autobot-slm-frontend/src/types/slm.ts": 838,
@@ -200,7 +198,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-frontend/src/views/SecurityView.vue": 1374,  # #14780 BasePagination: 1386 -> 1374
     "autobot-slm-frontend/src/views/SetupWizardView.vue": 1834,
     "autobot-slm-frontend/src/views/SkillsView.vue": 633,  # #18819 + #14777: 645 -> 633
-    "autobot-slm-frontend/src/views/SystemUpdatesTab.vue": 635,  # #18819: 638 -> 635
+    "autobot-slm-frontend/src/views/SystemUpdatesTab.vue": 632,  # #18819: 638 -> 635; #19482: -> 632
     "autobot-slm-frontend/src/views/monitoring/ErrorMonitor.vue": 609,  # #14780 BasePagination: 617 -> 609
     "autobot-slm-frontend/src/views/monitoring/LogViewer.vue": 602,
     "autobot-slm-frontend/src/views/settings/SecuritySettings.vue": 773,  # #18819 + #14777: 807 -> 773

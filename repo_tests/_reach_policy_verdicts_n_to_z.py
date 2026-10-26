@@ -65,6 +65,11 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Tracked .js under three roots is a subset of those trees; the unrelated-script share drifts.",
     ),
+    "one-system-knowledge-template-tree": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Template-schema YAML is a subset of all tracked YAML (whole repo); unrelated YAML drifts (#19310).",
+    ),
     "one-static-data-copy-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -222,6 +227,12 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "One frontend tree's source, against all tracked frontend source.",
+    ),
+    "v-html-sanitiser-sinks": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Both frontends' and the kit's non-test `.vue`/`.ts`, against all tracked frontend source; "
+        "the test-file share drifts.",
     ),
     "vnc-password-not-in-frontend-source": (
         ABSOLUTE,

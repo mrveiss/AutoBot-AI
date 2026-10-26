@@ -29,7 +29,7 @@ const CLIENTS: Record<string, string> = {
   'composables/useOverseerAgent.ts': '/overseer/ws/',
   'composables/useWorkflowBuilder.ts': '/api/workflow-automation/workflow_ws/',
   'components/analytics/CodeQualityDashboard.vue': '/api/quality/ws',
-  'composables/usePrometheusMetrics.ts': '/api/monitoring/realtime',
+  'composables/useInstallMetrics.ts': '/api/monitoring/realtime',
 }
 
 const SENDS_TOKEN = /protocols:\s*\(\)\s*=>\s*buildAuthenticatedWsSubprotocols\(\)/

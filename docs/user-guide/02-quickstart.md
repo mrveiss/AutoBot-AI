@@ -30,8 +30,8 @@ If you started only the SLM GUI (`--profile slm`), http://localhost/slm/ is the 
 | Install mode | Command | What it reaches |
 |--------------|---------|-----------------|
 | Bare-metal | `curl -sk https://127.0.0.1/slm/api/health` | SLM backend, through nginx |
-| Bare-metal | `curl -sk https://127.0.0.1/api/health` | Main backend, once the Setup Wizard has provisioned it |
-| Docker (full stack) | `curl -s http://localhost/api/health` | Backend, through the frontend proxy |
+| Bare-metal | `curl -sk https://127.0.0.1/api/system/health` | Main backend, once the Setup Wizard has provisioned it |
+| Docker (full stack) | `curl -s http://localhost/api/system/health` | Backend, through the frontend proxy |
 | Docker (`--profile slm`) | `curl -s http://localhost/slm/api/health` | SLM backend |
 
 Do not use `localhost:8001` on a Docker host: the backend publishes no host port, and host port 8001 is RedisInsight.

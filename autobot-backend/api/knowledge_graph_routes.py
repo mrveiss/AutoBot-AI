@@ -28,7 +28,8 @@ from api.schemas_knowledge import (
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
-from knowledge.search_filters import authorize_fact_write
+from knowledge.search_filters import authorize_fact_write, caller_reader
+from knowledge.summary_visibility import document_is_visible, visible_summaries
 from knowledge_factory import get_or_create_knowledge_base
 
 logger = get_logger(__name__)
@@ -71,6 +72,7 @@ async def run_pipeline(
 
         from knowledge.pipeline.base import PipelineContext
         from knowledge.pipeline.config import get_default_pipeline_config, load_pipeline_config
+        from knowledge.pipeline.loaders.chromadb_loader import SUMMARY_COLLECTION_KEY
         from knowledge.pipeline.runner import PipelineRunner
 
         if request.config:
@@ -82,6 +84,10 @@ async def run_pipeline(
         context = PipelineContext()
         context.document_id = document_uuid
         context.metadata["document_id"] = document_id
+        # #19163: summaries of a quarantined fact inherit its collection marker, so summary search withholds them.
+        source_collection = (fact.get("metadata") or {}).get("collection")
+        if source_collection:
+            context.metadata[SUMMARY_COLLECTION_KEY] = source_collection
 
         result = await runner.run(text, context)
 
@@ -259,8 +265,10 @@ async def search_summaries(
     top_k: int = Query(10, ge=1, le=50),
     current_user: dict = Depends(get_current_user),
 ):
-    """Vector search on summary embeddings."""
+    """Vector search on summary embeddings; only summaries of facts the caller may read (#16665)."""
+    reader = caller_reader(current_user)  # 401 before the try below swallows it
     try:
+        from knowledge import get_knowledge_base
         from knowledge.backends import get_async_default_client
         from knowledge.summary_search import SummarySearchService
 
@@ -268,6 +276,7 @@ async def search_summaries(
         summary_svc = SummarySearchService(chromadb_client)
 
         summaries = await summary_svc.search_summaries(query=query, level=level, top_k=top_k)
+        summaries = await visible_summaries(summaries, await get_knowledge_base(), reader)
         return {"summaries": summaries, "total": len(summaries)}
 
     except Exception as e:
@@ -285,13 +294,16 @@ async def get_document_overview(
     document_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """Get document overview with hierarchical summaries."""
+    """Get document overview with hierarchical summaries; empty unless the caller may read the document (#16665)."""
+    reader = caller_reader(current_user)  # 401 before the try below swallows it
     try:
+        from knowledge import get_knowledge_base
         from knowledge.backends import get_async_default_client
         from knowledge.summary_search import SummarySearchService
 
-        chromadb_client = await get_async_default_client()
-        summary_svc = SummarySearchService(chromadb_client)
+        if not await document_is_visible(document_id, await get_knowledge_base(), reader):
+            return {"document_id": document_id, "document_summary": None, "section_summaries": []}
+        summary_svc = SummarySearchService(await get_async_default_client())
 
         overview = await summary_svc.get_document_overview(UUID(document_id))
         return overview
@@ -311,8 +323,10 @@ async def drill_down_summary(
     summary_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """Navigate from summary to children or source chunks."""
+    """Navigate from summary to children or source chunks; nothing unless the caller may read the source (#16665)."""
+    reader = caller_reader(current_user)  # 401 before the try below swallows it
     try:
+        from knowledge import get_knowledge_base
         from knowledge.backends import get_async_default_client
         from knowledge.summary_search import SummarySearchService
 
@@ -320,6 +334,10 @@ async def drill_down_summary(
         summary_svc = SummarySearchService(chromadb_client)
 
         result = await summary_svc.drill_down(UUID(summary_id))
+        if result.get("summary") and not await visible_summaries(
+            [result["summary"]], await get_knowledge_base(), reader
+        ):
+            return {"summary": None, "children": []}
         return result
 
     except Exception as e:

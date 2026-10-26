@@ -103,7 +103,13 @@
     "exportCsv": "Export as CSV",
     "download": "Download",
     "filterByCategory": "Filter by category",
-    "copied": "Copied"
+    "copied": "Copied",
+    "riskTier": {
+      "low": "پایین",
+      "medium": "متوسط",
+      "high": "بالا",
+      "critical": "Critical"
+    }
   },
   "nav": {
     "chat": "گفتگو",
@@ -896,21 +902,16 @@
       "duplicateCode": "Duplicate Code",
       "locations": "{count} locations",
       "linesSaveable": "{count} lines saveable",
-      "moreLocations": "+{count} more locations",
-      "showingOfDuplicates": "Showing {shown} of {total} duplicate patterns",
       "regexOpportunities": "Regex Opportunities",
       "current": "Current",
       "suggested": "Suggested",
-      "showingOfOpportunities": "Showing {shown} of {total} opportunities",
       "complexityHotspots": "Complexity Hotspots",
       "location": "Location",
       "cc": "CC",
       "cognitive": "Cognitive",
       "mi": "MI",
       "nesting": "Nesting",
-      "showingOfHotspots": "Showing {shown} of {total} hotspots",
       "refactoringSuggestions": "Refactoring Suggestions",
-      "showingOfSuggestions": "Showing {shown} of {total} suggestions",
       "patternsInChromaDB": "{count} patterns in ChromaDB",
       "clearStoredPatterns": "Clear stored patterns",
       "lastScan": "Last scan",
@@ -1584,14 +1585,12 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total} {type}",
       "emptyMessage": "No code smells detected"
     },
     "declarations": {
       "title": "Declarations",
       "total": "Total",
       "exported": "Exported",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No declarations found",
       "types": {
         "function": "Function",
@@ -1614,7 +1613,6 @@
       "totalLines": "Total Lines",
       "similar": "similar",
       "lines": "lines",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No duplicate code detected",
       "similarityGroups": {
         "high": "High Similarity",
@@ -1635,7 +1633,6 @@
       "variable": "متغیر",
       "value": "مقدار",
       "suggestedEnvVar": "متغیر محیطی پیشنهادی",
-      "showingOf": "نمایش {shown} از {total}",
       "emptyMessage": "هیچ مقدار کدنویسی‌شده‌ای یافت نشد",
       "severityGroups": {
         "high": "شدت بالا",
@@ -1650,7 +1647,6 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No problems detected",
       "exportMarkdown": "Export Markdown",
       "exportJson": "Export JSON"

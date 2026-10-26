@@ -103,7 +103,13 @@
     "exportCsv": "Export as CSV",
     "download": "Download",
     "filterByCategory": "Filter by category",
-    "copied": "Copied"
+    "copied": "Copied",
+    "riskTier": {
+      "low": "Faible",
+      "medium": "Moyen",
+      "high": "Élevé",
+      "critical": "Critique"
+    }
   },
   "chat": {
     "sendMessage": "Envoyer un message...",
@@ -1536,21 +1542,16 @@
       "duplicateCode": "Code dupliqué",
       "locations": "{count} emplacements",
       "linesSaveable": "{count} lignes économisables",
-      "moreLocations": "+{count} emplacements supplémentaires",
-      "showingOfDuplicates": "Affichage de {shown} sur {total} modèles dupliqués",
       "regexOpportunities": "Opportunités regex",
       "current": "Actuel",
       "suggested": "Suggéré",
-      "showingOfOpportunities": "Affichage de {shown} sur {total} opportunités",
       "complexityHotspots": "Points chauds de complexité",
       "location": "Emplacement",
       "cc": "CC",
       "cognitive": "Cognitif",
       "mi": "MI",
       "nesting": "Imbrication",
-      "showingOfHotspots": "Affichage de {shown} sur {total} points chauds",
       "refactoringSuggestions": "Suggestions de refactoring",
-      "showingOfSuggestions": "Affichage de {shown} sur {total} suggestions",
       "patternsInChromaDB": "Modèles dans ChromaDB",
       "clearStoredPatterns": "Effacer les modèles stockés",
       "lastScan": "Dernier scan",
@@ -2224,14 +2225,12 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total} {type}",
       "emptyMessage": "No code smells detected"
     },
     "declarations": {
       "title": "Déclarations",
       "total": "Total",
       "exported": "Exporté",
-      "showingOf": "Affichage de {shown} sur {total}",
       "emptyMessage": "Aucune déclaration trouvée",
       "types": {
         "function": "Fonction",
@@ -2254,7 +2253,6 @@
       "totalLines": "Lignes totales",
       "similar": "Similaire",
       "lines": "Lignes",
-      "showingOf": "Affichage de {shown} sur {total}",
       "emptyMessage": "Aucun doublon trouvé",
       "similarityGroups": {
         "high": "Haute similarité",
@@ -2275,7 +2273,6 @@
       "variable": "Variable",
       "value": "Valeur",
       "suggestedEnvVar": "Variable d'environnement suggérée",
-      "showingOf": "Affichage de {shown} sur {total}",
       "emptyMessage": "Aucune valeur codée en dur détectée",
       "severityGroups": {
         "high": "Gravité élevée",
@@ -2290,7 +2287,6 @@
       "high": "Élevé",
       "medium": "Moyen",
       "low": "Faible",
-      "showingOf": "Affichage de {shown} sur {total}",
       "emptyMessage": "Aucun problème trouvé",
       "exportMarkdown": "Export Markdown",
       "exportJson": "Export JSON"

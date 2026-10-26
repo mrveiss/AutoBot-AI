@@ -40,6 +40,23 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_LIVE_TESTS",
+        type=bool,
+        default=False,
+        description=(
+            "Opt a test run into driving live AutoBot services (#19479). Without it, every "
+            "test that calls require_live_endpoint (autobot_shared/live_service_probe.py) "
+            "skips, even when a service is listening: on a machine that also runs an "
+            "install, the configured URL is the user's live system, and some of these tests "
+            "write to it (knowledge-base decisions). Set it only for a run whose target is a "
+            "stack you mean to test."
+        ),
+        component="testing",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_PREPUSH_ALLOW_UNRUNNABLE",
         type=bool,
         default=False,

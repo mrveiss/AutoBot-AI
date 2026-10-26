@@ -24,7 +24,7 @@ User={{ npu_user }}
 Group={{ npu_group }}
 WorkingDirectory={{ npu_install_dir }}
 Environment="PATH={{ npu_install_dir }}/venv/bin:/usr/local/bin:/usr/bin:/bin"
-EnvironmentFile=/opt/autobot/autobot-npu-worker/.env
+EnvironmentFile={{ npu_install_dir }}/.env
 ExecStart={{ npu_install_dir }}/venv/bin/python {{ npu_install_dir }}/npu-worker.py
 Restart=always
 RestartSec=10

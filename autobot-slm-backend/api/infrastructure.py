@@ -23,6 +23,7 @@ from typing_extensions import Annotated
 
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
+from autobot_shared.ssot_config import config
 from services.ansible_utils import _extract_failure_summary
 from services.auth import get_current_user
 from services.playbook_output_stream import PIPE_LINE_LIMIT, iter_pipe_lines
@@ -123,8 +124,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         id="redis-stack",
         name="Redis Stack Deployment",
         description="Deploy Redis Stack server with RediSearch, RedisJSON, "
-        "RedisGraph, and RedisTimeSeries modules for high-performance "
-        "data operations.",
+        "RedisGraph, and RedisTimeSeries modules for high-performance data operations.",
         category=PlaybookCategory.DATABASE,
         # #12095: deploy-redis-stack.yml never existed; setup-redis-stack.yml is the
         # real Redis Stack provisioning playbook (same file the setup-redis-stack entry uses).
@@ -290,7 +290,7 @@ AVAILABLE_PLAYBOOKS: list[PlaybookInfo] = [
         category=PlaybookCategory.NETWORKING,
         playbook_file="setup-browser-worker.yml",
         target_hosts=["browser_worker"],
-        variables={"browser_port": 3000},
+        variables={"browser_port": config.port.browser},  # #19324: was Grafana's 3000
         estimated_duration="7 minutes",
         requires_confirmation=True,
     ),

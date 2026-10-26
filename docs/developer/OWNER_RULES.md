@@ -1,0 +1,28 @@
+# Owner Rules Register
+
+Where a `docs/developer/CLAUDE_*.md` doc restates one of these, this file wins; the root `CLAUDE.md` still outranks this file. Add new owner rules here first, then link from the doc.
+
+Each entry: **rule** · date · replaces · detail.
+
+| # | Rule | Date | Replaces | Detail |
+|---|---|---|---|---|
+| 1 | No open-PR cap; push finished work, never hold it local-only | 2026-10-23 | the cap-40 rule (#17006) | [#19397](https://github.com/mrveiss/AutoBot-AI/issues/19397) |
+| 2 | The trainmaster (the PR-coordinator session) builds and lands merge trains, sets CI priority and fixes small findings in-train; authors send PR number and head and do not push to a queued head unless asked | 2026-10-22/23/24 | author-merges-own-PR flow | [CLAUDE_REVIEW.md](CLAUDE_REVIEW.md#merge-trains) |
+| 3 | Two CI slots; exactly one train worked at a time | 2026-10-24 | "one PR's CI at a time" (2026-10-02) | [CLAUDE.md](../../CLAUDE.md#when-rules-conflict) |
+| 4 | Merge trains use merge commits, never squash | 2026-10-11 | squash-only merging | [CLAUDE_WORKFLOW.md](CLAUDE_WORKFLOW.md) |
+| 5 | Never cancel a train branch's CI; check `ledger holds` for `ci-slot` first | 2026-10-23 | "cancel freely" (2026-09-24) | [CLAUDE_REVIEW.md](CLAUDE_REVIEW.md#ci-diagnosis) |
+| 6 | Targeted local tests plus whole-tree guards only, never the full local suite; CI is the full gate; the `machine:heavy-run` hold is at most 20m per chunk, trains first | 2026-10-23 | full local `repo_tests/` before review (2026-10-18) | [CLAUDE_CLOSURE.md](CLAUDE_CLOSURE.md) |
+| 7 | Reuse your own clean, fully pushed worktree before adding one; take over orphans | 2026-10-21/24 | "never reuse a worktree" | [CLAUDE_GIT.md](CLAUDE_GIT.md) |
+| 8 | Claim worktrees in the ledger on create/reuse (`ledger claim worktree`) and release on removal | 2026-10-24 | empty "claim" commits | [CLAUDE_GIT.md](CLAUDE_GIT.md) |
+| 9 | At session end: push everything, release claims, remove worktrees with plain `git worktree remove`, never `--force` | 2026-10-24 | forced sweeps | [CLAUDE_GIT.md](CLAUDE_GIT.md) |
+| 10 | `Closes #N` auto-closes on merge: write `Closes` only when every AC is delivered, otherwise `Refs` | 2026-09-12 (default-branch switch, unrecorded; verified by #19118's auto-close in train 84, 7f3ee47047) | "Closes never auto-closes" | [CLAUDE_CLOSURE.md](CLAUDE_CLOSURE.md) |
+| 11 | No commit trailers; `mrveiss` is sole author | standing | tool-default trailers | [CLAUDE.md](../../CLAUDE.md) |
+| 12 | CodeRabbit is advisory, but every comment is answered (fixed, or replied to with the reason): it never blocks a PR opening or its first CI run, while answers are due before any relaunch and before merge | 2026-10-02/10-11/10-24 | "resolve every thread before any CI" read as blocking | [CLAUDE_REVIEW.md](CLAUDE_REVIEW.md#merge-trains) |
+| 13 | A hook or guard that blocks your branch is fixed in its own PR first, because the installed hook runs from the main checkout | standing | "fix it in the same PR" for hooks | [CLAUDE_REVIEW.md](CLAUDE_REVIEW.md#pr-granularity) |
+| 14 | Goal milestones M1-M4 hold all their issues; phases are `phase:Mx.y` labels, listed in order in each milestone's description | 2026-10-23 | phase sub-milestones Mx.y | GitHub milestones M1-M4 |
+| 15 | **Company OS** is the AutoBot feature (code name `llc`); docs, UI strings and issue titles name the feature "Company OS". **AutoBot LLC** is the virtual example company used when documenting Company OS features: keep it as the example, never as the feature's name | 2026-10-22/24 | "AutoBot LLC" used as the feature name | [#19184](https://github.com/mrveiss/AutoBot-AI/issues/19184), [owner ruling](https://github.com/mrveiss/AutoBot-AI/issues/19184#issuecomment-6382575714) |
+| 16 | Compliance wording is "aims towards", never "is compliant"; register: [`docs/compliance/COMPLIANCE_TARGETS.md`](../compliance/COMPLIANCE_TARGETS.md) | 2026-10-22 | n/a | [COMPLIANCE_TARGETS.md](../compliance/COMPLIANCE_TARGETS.md) |
+| 17 | Before a restart, each session pushes everything, saves its scratchpad to one durable folder under `$HOME`, and writes one indexed resume note. After it, sessions resume under the same ledger name, and orphan recovery is automatic: liveness comes from activity beats, and orphans are snapshotted, never swept | 2026-10-24/25 | ad-hoc restart broadcasts | [AGENT_COORDINATION.md](AGENT_COORDINATION.md#restart-and-resume), [#19452](https://github.com/mrveiss/AutoBot-AI/issues/19452) |
+| 18 | AutoBot is not a platform for managing systems: the SLM manages only AutoBot's own infrastructure (its nodes and services). Never describe AutoBot or the SLM as infrastructure, server or fleet management for anyone else's systems; "fleet" and "nodes" always mean AutoBot's own | 2026-10-25 | "self-hosted infrastructure automation" positioning | [#19545](https://github.com/mrveiss/AutoBot-AI/issues/19545) |
+| 19 | While any PR is open, GitHub runners never idle: with N PRs queued, min(N, 2) are in CI at every moment (e.g. 3 queued means 2 running). The next train is built while one runs; a freed slot starts the next item at once. Syncs run no CI, so slots go to real work | 2026-10-25 | slots left empty between trains | [#19548](https://github.com/mrveiss/AutoBot-AI/issues/19548) |
+| 20 | Docs never ride alone while other PRs are open: a docs-only PR (every file `.md`/`.rst`/`.txt` or under `docs/`) gets no CI slot of its own and boards the next train, or a code PR, as a passenger. Measured: docs-only CI runs started alone while a non-docs PR was open = 0 | 2026-10-25 | docs PRs taking a full CI slot alone | [#19549](https://github.com/mrveiss/AutoBot-AI/issues/19549) |

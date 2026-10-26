@@ -7,21 +7,16 @@
 import importlib.machinery
 import importlib.util
 import json
-import logging
 import sys
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from autobot_shared.logging_manager import get_logger
 from slm.agent.health_collector import _STATE_CHANGE_CHANNEL_TEMPLATE, HealthCollector
 
-# stdlib logging, not autobot_shared.logging_manager: the root conftest stubs
-# "config" as a MagicMock for the whole session, and LoggingManager reads
-# numeric handler settings from it — get_logger() would blow up at collection
-# time here (see autobot_shared/user_management/password_epoch.py for the
-# same, already-documented exception).
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -322,21 +317,10 @@ def _exec_with_auto_stub(
 
 
 def _load_backend_notification_service():
-    # autobot_shared.logging_manager resolves for real here, but this
-    # session's root conftest globally replaces "config" with a MagicMock
-    # for every OTHER test file's sake (conftest.py's own documented
-    # reason) — get_logger() reads numeric log-rotation settings through
-    # that same "config" and blows up constructing a real
-    # RotatingFileHandler.  Not a #14538 module-absence case — a
-    # config-mocking test harness conflict, the same class already
-    # documented in autobot_shared/user_management/password_epoch.py — so
-    # it is preseeded rather than left to the missing-module discovery.
-    preseed = {"autobot_shared.logging_manager": MagicMock(get_logger=MagicMock(return_value=MagicMock()))}
     module, _stubbed = _exec_with_auto_stub(
         _BACKEND_NOTIF_PATH,
         "_backend_notification_service",
         forbidden=("services.notification_service",),
-        preseed=preseed,
     )
     return module
 

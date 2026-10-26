@@ -27,6 +27,7 @@ from autobot_shared.security.path_validator import validate_path
 
 from ..models.work_product import LLCWorkProduct
 from ..storage_root import llc_local_storage_root
+from .collections import kb_chroma_client, project_collection
 from .write_guard import assert_not_writing_to_ancestor_kb
 
 logger = logging.getLogger(__name__)
@@ -120,6 +121,16 @@ def _split_text(text: str) -> List[str]:
     return chunks
 
 
+async def _upsert_chunks(collection_name: str, product_id: str, chunks: List[str], meta: Dict[str, Any]) -> None:
+    """Upsert one work product's chunks into its project collection (ArtifactIngestor.ingest)."""
+    # #19519: the KB client maps ``:`` to a ChromaDB-valid name; the raw
+    # client passes ``project:<id>`` through and ChromaDB rejects it.
+    client = await kb_chroma_client()
+    collection = await client.get_or_create_collection(collection_name)
+    ids = [f"wp:{product_id}:chunk:{i}" for i in range(len(chunks))]
+    await collection.upsert(ids=ids, documents=chunks, metadatas=[meta.copy() for _ in chunks])
+
+
 class ArtifactIngestor:
     """Indexes work product text content into the project ChromaDB collection."""
 
@@ -190,7 +201,7 @@ class ArtifactIngestor:
             return False
 
         chunks = _split_text(text)
-        collection_name = f"project:{project_id}"
+        collection_name = project_collection(project_id)
         meta: Dict[str, Any] = {
             "work_item_id": str(product.work_item_id),
             "work_item_identifier": work_item_identifier,
@@ -201,13 +212,7 @@ class ArtifactIngestor:
         }
 
         try:
-            from utils.async_chromadb_client import get_async_chromadb_client
-
-            client = await get_async_chromadb_client()
-            collection = await client.get_or_create_collection(collection_name)
-            ids = [f"wp:{product.id}:chunk:{i}" for i in range(len(chunks))]
-            metadatas = [meta.copy() for _ in chunks]
-            await collection.upsert(ids=ids, documents=chunks, metadatas=metadatas)
+            await _upsert_chunks(collection_name, str(product.id), chunks, meta)
             logger.info(
                 "ArtifactIngestor: indexed %d chunk(s) for work product %s into %s",
                 len(chunks),

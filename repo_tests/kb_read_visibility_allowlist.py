@@ -23,26 +23,42 @@ it. That ceiling is checked against the detected reads, not this mapping's lengt
 
 from __future__ import annotations
 
-_T2 = "TRACKED_GAP #16664: puts KB content into a chat, agent or RAG path without the user's scope"
-_T3 = "TRACKED_GAP #16665: returns KB facts to an API caller without the caller's scope"
-_T4 = "TRACKED_GAP #16666: MCP knowledge access with no user identity (owner: non-private facts only)"
+_T2 = (
+    "TRACKED_GAP #16654: puts KB content into a chat, agent or RAG path without the user's scope "
+    "(#16664 is closed; the parent's AC1 covers every remaining production path)"
+)
+_T4 = (
+    "TRACKED_GAP #16654: MCP knowledge access with no user identity (owner: non-private facts only); "
+    "#16666 is closed, the parent's AC1 covers the rest"
+)
+_MCP_NON_PRIVATE = (
+    "SCOPED: the stdio/token MCP server has no user, so it reads non-private facts only "
+    "(non_private_where on the query and filter_non_private_results on the hits; owner ruling on #16654, #16666)"
+)
 _EXPLORER = (
-    "TRACKED_GAP #16666: the raw ChromaDB explorer returns any collection, private facts included, "
-    "to any signed-in user; #16689 makes it admin-only"
+    "ADMIN_ONLY: the raw ChromaDB explorer returns any collection by name; every route of "
+    "api/knowledge_chroma.py carries Depends(check_admin_permission) (#16689), and quarantined rows are audited"
 )
 _IMPL_DEDUP = (
     "IMPL: the store path's duplicate check on the KB's own collection; returns an id, never content to a caller"
 )
 _IMPL_SEARCH = (
     "IMPL: the KB's own vector-search primitive; applying the ownership filter is its callers' job, "
-    "and #16664 tracks the callers that skip it"
+    "and #16654 AC1 tracks the callers that skip it"
 )
-_SUMMARIES = "TRACKED_GAP #16694: raw knowledge_summaries reads served to any signed-in user"
+_SUMMARIES = (
+    "SCOPED: the service's only callers are the summary routes in api/knowledge_graph_routes.py, which pass every "
+    "summary through knowledge.summary_visibility (the source fact's canonical visibility, fail closed) (#16665)"
+)
 _RAG_CACHE = (
     "SCOPED: a RAG cache lookup restricted by a ChromaDB where on the caller's visibility scope key "
-    "(sha256 of user, org, groups and the kb:acl_epoch), and its hit is post-filtered by RAGService (#16664)"
+    "(sha256 of user, org, groups and the kb:acl_epoch), and its hit is post-filtered by RAGService (#16664, landed)"
 )
 _RAW_ADMIN = "ADMIN_ONLY: raw KB-collection read reachable only behind an admin gate"
+_RAW_ADMIN_NO_QUARANTINE = (
+    "ADMIN_ONLY: the reindex job feeds chunk text to an LLM, so it reads through "
+    "knowledge.quarantine.without_quarantine -- a research-quarantined chunk is never enriched (#19163)"
+)
 _ORPHAN_REPAIR = (
     "ADMIN_ONLY: #16927 orphan-repair reads a fact's own metadata to judge/reassign it; "
     "reachable only through api/admin_orphan_repair.py's router-level "
@@ -74,23 +90,37 @@ _SCOPED_ADMIN_ROUTER = (
     "check_access already grants admins unconditional read (#16665)"
 )
 
+_RAG_LEG = (
+    "SCOPED: reached only through RAGService (services/rag_service.py:230,241,507), which post-filters every leg with "
+    "filter_ranked (#16664), and the module's convenience functions, which take a required principal (#18944); "
+    "services/knowledge_sync_service.py only initialises it"
+)
+_LIBRARIAN_UNCALLED = (
+    "NOT_USER_FACING: no production caller -- agents/system_knowledge_manager.py uses the librarian's store_* methods "
+    "only, so this reader is unreachable from any route, agent or job (#16665 trace)"
+)
+_PRESERVE = (
+    "NOT_USER_FACING: reads the fact only to check it exists and belongs to the session before marking it preserved; "
+    "the route returns a status and the fact id, never content"
+)
+_ADAPTER = (
+    "SCOPED: the adapter's only production caller is services/rag_service.py (:995), whose results pass "
+    "filter_ranked before use (#16664); get_all_facts has no production caller"
+)
+_RESEARCH_QUARANTINE = (
+    "NOT_USER_FACING: searches the research quarantine collection for corroborating candidates; those are "
+    "system-written web-research facts, and only a corroboration verdict -- never the fact -- leaves it"
+)
+
 ALLOWLIST: dict[tuple[str, str], str] = {
-    ("autobot-backend/advanced_rag_optimizer.py", "AdvancedRAGOptimizer._perform_semantic_search"): _T2,
-    ("autobot-backend/advanced_rag_optimizer.py", "AdvancedRAGOptimizer._retrieve_hybrid_results"): _T2,
-    ("autobot-backend/agents/kb_librarian/librarian.py", "KBLibrarian.get_tool_instructions"): _T2,
-    ("autobot-backend/agents/kb_librarian/librarian.py", "KBLibrarian.search_tool_knowledge"): _T2,
+    ("autobot-backend/advanced_rag_optimizer.py", "AdvancedRAGOptimizer._perform_semantic_search"): _RAG_LEG,
+    ("autobot-backend/advanced_rag_optimizer.py", "AdvancedRAGOptimizer._retrieve_hybrid_results"): _RAG_LEG,
+    ("autobot-backend/agents/kb_librarian/librarian.py", "KBLibrarian.get_tool_instructions"): _LIBRARIAN_UNCALLED,
+    ("autobot-backend/agents/kb_librarian/librarian.py", "KBLibrarian.search_tool_knowledge"): _LIBRARIAN_UNCALLED,
     ("autobot-backend/agents/kb_librarian/stable_ids.py", "_adopt_duplicate"): _SYSTEM_IMPORT,
-    ("autobot-backend/agents/kb_librarian_agent.py", "KBLibrarianAgent._search_formatted"): _T2,
-    ("autobot-backend/agents/knowledge_retrieval_agent.py", "KnowledgeRetrievalAgent.find_similar_documents"): _T2,
-    ("autobot-backend/agents/knowledge_retrieval_agent.py", "KnowledgeRetrievalAgent.process_query"): _T2,
     ("autobot-backend/ai_hardware_accelerator.py", "AIHardwareAccelerator._gpu_semantic_search"): _T2,
-    ("autobot-backend/api/agent.py", "_enhance_context_with_kb"): _T2,
-    ("autobot-backend/api/agent.py", "comprehensive_research_task"): _T2,
     ("autobot-backend/api/ai_stack_integration.py", "knowledge_search"): _SCOPED_ADMIN_ROUTER,
-    ("autobot-backend/api/chat.py", "_enhance_with_knowledge_base"): _T2,
-    ("autobot-backend/api/chat.py", "process_chat_message"): _T2,
-    ("autobot-backend/api/chat_knowledge.py", "_preserve_single_fact"): _T2,
-    ("autobot-backend/api/chat_knowledge_manager.py", "ChatKnowledgeManager.search_chat_knowledge"): _T2,
+    ("autobot-backend/api/chat_knowledge.py", "_preserve_single_fact"): _PRESERVE,
     (
         "autobot-backend/api/chat_sessions.py",
         "get_share_preview",
@@ -118,11 +148,6 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "autobot-backend/api/knowledge_collections.py",
         "get_facts_in_collection",
     ): _SCOPED_ADMIN_ROUTER,
-    ("autobot-backend/api/knowledge_mcp.py", "mcp_langchain_qa_chain"): _T3,
-    ("autobot-backend/api/knowledge_mcp.py", "mcp_search_knowledge_base"): _T3,
-    ("autobot-backend/api/knowledge_mcp.py", "mcp_summarize_knowledge_topic"): _T3,
-    ("autobot-backend/api/knowledge_mcp.py", "mcp_vector_similarity_search"): _T3,
-    ("autobot-backend/api/knowledge_mcp.py", "read_kb_resource"): _T3,
     ("autobot-backend/api/knowledge_metadata.py", "search_by_metadata"): _SCOPED_ADMIN_ROUTER,
     (
         "autobot-backend/api/knowledge_ownership.py",
@@ -176,45 +201,36 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "helper strips every fact field except fact_id/quality_score/access_count/"
         "last_accessed before it reaches the response -- fact content never leaves (#16665)"
     ),
-    ("autobot-backend/async_chat_workflow.py", "AsyncChatWorkflow._execute_kb_search"): _T2,
     (
-        "autobot-backend/knowledge/adapters/okf_adapter.py",
-        "OKFAdapter.export_from_kb",
+        "autobot-backend/knowledge/quarantine.py",
+        "read_every_fact",
     ): (
-        "NOT_USER_FACING: no caller anywhere in the tree besides its own test and the "
-        "module-level export_to_okf() re-export, which is itself uncalled outside tests "
-        "(#16665) -- not reachable from any route, CLI entry point, or scheduled task"
+        "NOT_USER_FACING: the backup and export serialisers read every fact through the audited "
+        "include_quarantined opt-out (one audit entry per read; the read fails closed if it cannot be "
+        "written) and write operator files or return an admin-gated export; nothing reaches a chat or "
+        "prompt (#19163)"
     ),
     (
         "autobot-backend/knowledge/vector_search_engine.py",
         "_CPUBackend.search",
     ): "IMPL: the KB's own CPU backend calling its vector primitive",
-    ("autobot-backend/mcp_server/autobot_server.py", "AutoBotMCPServer._kb_get_document"): _T4,
-    ("autobot-backend/mcp_server/autobot_server.py", "AutoBotMCPServer._kb_search"): _T4,
-    ("autobot-backend/memory/agent_diary.py", "AgentDiaryService.read"): _T2,
-    ("autobot-backend/memory/agent_diary.py", "AgentDiaryService.search"): _T2,
-    ("autobot-backend/memory/essential_story.py", "EssentialStoryGenerator._fetch_top_facts"): _T2,
+    ("autobot-backend/mcp_server/autobot_server.py", "AutoBotMCPServer._kb_get_document"): _MCP_NON_PRIVATE,
+    ("autobot-backend/mcp_server/autobot_server.py", "AutoBotMCPServer._kb_search"): _MCP_NON_PRIVATE,
     ("autobot-backend/npu_semantic_search.py", "NPUSemanticSearch._handle_search_error"): _T2,
     ("autobot-backend/npu_semantic_search.py", "NPUSemanticSearch._perform_vector_search"): _T2,
     (
         "autobot-backend/services/claim_classifier.py",
         "ClaimClassifier._search_knowledge_base",
-    ): "TRACKED_GAP #16673: un-awaited KB search; scope with #16664 once it runs",
-    ("autobot-backend/services/claim_verifier.py", "ClaimVerifier.kb_rag_search"): _T2,
+    ): "TRACKED_GAP #16673: un-awaited KB search; scope as the claimant once it runs (#16654 AC1)",
     (
         "autobot-backend/services/command_extraction_service.py",
         "search_commands",
     ): "TRACKED_GAP #16672: dead import; must read with fact visibility once wired",
-    ("autobot-backend/services/grounded_agent.py", "GroundedAgent._classify_and_verify_claim"): _T2,
-    ("autobot-backend/services/knowledge_base_adapter.py", "KnowledgeBaseAdapter.get_all_facts"): _T2,
-    ("autobot-backend/services/knowledge_base_adapter.py", "KnowledgeBaseAdapter.search"): _T2,
+    ("autobot-backend/services/knowledge_base_adapter.py", "KnowledgeBaseAdapter.get_all_facts"): _ADAPTER,
+    ("autobot-backend/services/knowledge_base_adapter.py", "KnowledgeBaseAdapter.search"): _ADAPTER,
     ("autobot-backend/services/orphan_repair_types.py", "KnowledgeFactRepairer._metadata"): _ORPHAN_REPAIR,
     ("autobot-backend/services/orphan_repair_types.py", "KnowledgeFactRepairer.find_orphans"): _ORPHAN_REPAIR,
-    ("autobot-backend/services/research/orchestrator.py", "_gather_candidate_sources"): _T2,
-    ("autobot-backend/services/research/planner.py", "filter_skip_known"): _T2,
-    ("autobot-backend/task_handlers/knowledge_base_handlers.py", "KBSearchHandler.execute"): _T2,
-    ("autobot-backend/tools/tool_registry.py", "ToolRegistry.get_fact"): _T2,
-    ("autobot-backend/tools/tool_registry.py", "ToolRegistry.search_knowledge_base"): _T2,
+    ("autobot-backend/services/research/orchestrator.py", "_gather_candidate_sources"): _RESEARCH_QUARANTINE,
     (
         "autobot-backend/utils/system_validator.py",
         "SystemValidator.validate_hybrid_search",
@@ -230,14 +246,21 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     # --- raw ChromaDB reads on KB-content collections (#16667 part 3, classified 2026-09-14) ---
     ("autobot-backend/api/knowledge_chroma.py", "list_documents"): _EXPLORER,
     ("autobot-backend/api/knowledge_chroma.py", "search_collection"): _EXPLORER,
-    ("autobot-backend/knowledge/facts.py", "FactsMixin._find_duplicate"): _IMPL_DEDUP,
+    ("autobot-backend/knowledge/facts.py", "FactsMixin._find_duplicate"): (
+        _IMPL_DEDUP + "; the query uses without_quarantine, so a quarantined fact is neither a duplicate nor "
+        "has its id returned to the store caller (#19163)"
+    ),
     ("autobot-backend/knowledge/search.py", "SearchMixin._query_chromadb"): _IMPL_SEARCH,
-    ("autobot-backend/api/knowledge_maintenance.py", "_fetch_all_chunks._load"): _RAW_ADMIN,
-    ("autobot-backend/api/knowledge_vectorization.py", "_fetch_chunks_by_ids"): _RAW_ADMIN,
-    ("autobot-backend/api/knowledge_vectorization.py", "_fetch_unenriched_ids"): _RAW_ADMIN,
+    ("autobot-backend/api/knowledge_lint_chunks.py", "_fetch_all_chunks._load"): _RAW_ADMIN,
+    ("autobot-backend/api/knowledge_vectorization.py", "_fetch_chunks_by_ids"): _RAW_ADMIN_NO_QUARANTINE,
+    ("autobot-backend/api/knowledge_vectorization.py", "_fetch_unenriched_ids"): _RAW_ADMIN_NO_QUARANTINE,
     ("autobot-backend/knowledge/summary_search.py", "SummarySearchService.search_summaries"): _SUMMARIES,
     ("autobot-backend/knowledge/summary_search.py", "SummarySearchService.get_document_overview"): _SUMMARIES,
     ("autobot-backend/knowledge/summary_search.py", "SummarySearchService.drill_down"): _SUMMARIES,
+    ("autobot-backend/knowledge/summary_visibility.py", "_source_metadata"): (
+        "SCOPED: reads only the source fact's metadata, which visible_summaries hands straight to "
+        "filter_for_user_id; the fact's content never leaves the function (#16665)"
+    ),
     ("autobot-backend/knowledge/vector_repair.py", "scan_poisoned_rows"): _RAW_REPAIR,
     ("autobot-backend/knowledge/vector_repair.py", "has_reachable_vector"): _RAW_REPAIR,
     ("autobot-backend/memory/ownership_reassign.py", "_reassign_kb_facts_chroma"): _RAW_ADMIN,
