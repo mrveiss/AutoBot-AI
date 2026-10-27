@@ -189,8 +189,8 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:bg-amber-500/10": 1,
     "slm:bg-amber-500/15": 1,
     "slm:bg-amber-500/20": 2,
-    "slm:bg-amber-600": 4,
-    "slm:bg-amber-700": 2,
+    "slm:bg-amber-600": 3,  # #19482: BatchTool banner -> kit PollingPausedAlert (-1)
+    "slm:bg-amber-700": 1,  # #19482: BatchTool banner -> kit PollingPausedAlert (-1)
     "slm:bg-amber-900/30": 1,
     "slm:bg-blue-100": 52,  # #18863 SLM notices onto BaseAlert (53 -> 52)
     "slm:bg-blue-200": 4,
