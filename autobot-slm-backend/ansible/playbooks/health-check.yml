@@ -299,7 +299,7 @@
 
     - name: Test ChromaDB health endpoint (AI Stack)
       uri:
-        url: "http://127.0.0.1:8100/health"
+        url: "http://127.0.0.1:8100{{ chromadb_heartbeat_path }}"  # #19413: 1.x has no /health
         method: GET
         timeout: 20
       register: chromadb_health_test

@@ -373,7 +373,7 @@ install_chromadb() {
     # Virtual environment + package
     sudo -u "${AUTOBOT_USER}" "${PYTHON_BIN}" -m venv "${venv_dir}" --clear
     sudo -u "${AUTOBOT_USER}" "${venv_dir}/bin/pip" install --upgrade pip -q
-    sudo -u "${AUTOBOT_USER}" "${venv_dir}/bin/pip" install "chromadb>=0.5" -q
+    sudo -u "${AUTOBOT_USER}" "${venv_dir}/bin/pip" install -c "${INSTALL_DIR}/code/constraints/shared.txt" chromadb -q
     log_info "ChromaDB installed: $(${venv_dir}/bin/chroma --version 2>/dev/null || echo 'unknown')"
 
     # Systemd unit
@@ -784,7 +784,7 @@ verify_installation() {
 
     # Check ChromaDB
     if [[ "$SKIP_CHROMADB" == false ]]; then
-        if curl -sf "http://127.0.0.1:${CHROMADB_PORT}/api/v1/heartbeat" >/dev/null 2>&1; then
+        if curl -sf "http://127.0.0.1:${CHROMADB_PORT}/api/v2/heartbeat" >/dev/null 2>&1; then  # #19413: pinned copy
             log_info "ChromaDB: OK"
         else
             log_warn "ChromaDB: not responding (may still be starting)"

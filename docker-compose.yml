@@ -17,8 +17,7 @@
 # an explicit value always overrides the auto-generated one.
 #
 # NOTE: --env-file docker/.env.docker is required when the root .env contains
-# fleet-specific paths (e.g. AUTOBOT_TLS_CERT_DIR=infrastructure/shared/certs)
-# that are invalid in a Docker context. See #2458.
+# fleet-specific values that are invalid in a Docker context. See #2458.
 #
 # Healthcheck convention (#7456):
 #   - Default to ``["CMD", ...]`` (exec form) — no shell, no env-var

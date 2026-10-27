@@ -75,7 +75,7 @@ reportlab>=5.0.1    # PDF export for transcripts
 openai>=2.54.0
 anthropic>=1.15.0,<2.0.0              # Issue #15016: call sites fixed for the 1.x messages.create()/.stream() signature (temperature/top_p/top_k removed, routed via extra_body); capped so the next major requires a deliberate bump, not a silent break
 boto3>=1.43.114                       # GH#9010: AWS Bedrock provider
-chromadb>=1.5.9,<2.0.0             # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
+chromadb                           # version from constraints/shared.txt (#19478)
 protobuf>=7.36.2,<8.0.0            # cap/floor rationale lives in ../requirements.txt (#15070, #4061); this file `-r`-includes it and pip resolves the intersection, so the two lines MUST stay identical — enforced by tools/lint/check_requirements_pin_parity.py
 sentence-transformers>=6.1.0
 torch==2.14.1  # embeddings/transcriber/multimodal; installed CPU-only in the default image (#10251). GPU build via requirements-gpu-torch.txt (#15162)
