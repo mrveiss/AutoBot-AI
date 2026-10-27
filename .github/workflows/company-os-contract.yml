@@ -1,17 +1,19 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
 #
-# LLC Contract Gate (GH#9861)
-# Blocking gate for the LLC module:
+# Company OS Contract Gate (GH#9861, renamed GH#19546)
+# Blocking gate for the Company OS module. `llc` is its internal code name:
+# packages, routes (/api/llc), symbols and LLC_* env vars keep it, while every
+# name a person sees (workflow, job and step names) says Company OS.
 #   1. Every /api/llc/* path the frontend calls must resolve to a real backend
 #      route (authoritative OpenAPI audit, scoped to /api/llc).
-#   2. The core LLC loop e2e test must pass.
+#   2. The core Company OS loop e2e test must pass.
 #
 # Unlike the repo-wide api-wiring.yml (non-blocking, has tracked false
-# positives elsewhere), this gate is scoped to LLC and IS blocking — the LLC
+# positives elsewhere), this gate is scoped to Company OS and IS blocking — its
 # surface was brought to zero unwired calls in #9861 and must stay there.
 
-name: LLC Contract Gate
+name: Company OS Contract Gate
 
 on:
   push:
@@ -23,7 +25,7 @@ on:
       - 'autobot-frontend/src/views/llc/**'
       - 'autobot-frontend/src/composables/llc/**'
       - 'scripts/audit_api_wiring.py'
-      - '.github/workflows/llc-contract.yml'
+      - '.github/workflows/company-os-contract.yml'
   pull_request:
     # ready_for_review is REQUIRED here: the jobs below are gated on
     # draft == false, and marking a PR ready fires ONLY this event. Without
@@ -40,7 +42,8 @@ permissions:
   contents: read
 
 jobs:
-  llc-wiring-audit:
+  company-os-wiring-audit:
+    name: Company OS wiring audit
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     steps:
@@ -72,7 +75,8 @@ jobs:
             --only-prefix /api/llc \
             --fail-on-unwired
 
-  llc-e2e:
+  company-os-e2e:
+    name: Company OS end-to-end
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     steps:
@@ -94,7 +98,7 @@ jobs:
           # Hermetic e2e essentials (no Postgres/Redis/network needed).
           python -m pip install aiosqlite pytest pytest-asyncio httpx --prefer-binary
 
-      - name: Run LLC core-loop + org-chart e2e tests (blocking)
+      - name: Run Company OS core-loop + org-chart e2e tests (blocking)
         working-directory: autobot-backend
         run: |
           export PYTHONPATH="$PWD/..:$PWD:${PYTHONPATH:-}"

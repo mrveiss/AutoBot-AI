@@ -432,6 +432,10 @@
     },
     "app": {
       "mainContentAria": "Main content"
+    },
+    "polling": {
+      "paused": "Updates paused: the backend did not answer several times in a row, so the figures shown may be out of date.",
+      "retry": "Retry"
     }
   },
   "deploymentLogViewer": {
@@ -826,10 +830,12 @@
     "nPUWorkerMonitor": {
       "avgUtilization": "Avg utilization:",
       "currentTask": "Current Task",
+      "metricsUnavailable": "NPU fleet metrics are unavailable",
       "noNPUWorkers": "No NPU Workers",
       "noNodesWithThe": "No nodes with the npu-worker role are registered in the fleet.",
       "online": "online",
       "queueDepth": "Queue Depth",
+      "refreshFailed": "Refresh failed",
       "refreshNow": "Refresh now",
       "utilization": "Utilization"
     },
@@ -2858,6 +2864,7 @@
         "ssoProviderCreated": "SSO provider created successfully",
         "ssoProviderDeleted": "SSO provider deleted successfully",
         "ssoConnectionSuccessful": "SSO provider connection successful",
+        "ssoConnectionFailed": "SSO provider connection test failed",
         "failedToLoadSlmUsers": "Failed to load SLM users",
         "failedToLoadAutobotUsers": "Failed to load AutoBot users",
         "failedToLoadTeams": "Failed to load teams",
