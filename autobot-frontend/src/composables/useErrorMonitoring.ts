@@ -78,7 +78,7 @@ export interface ComponentBreakdown {
 // ─── Metrics shapes (#9983 — reimplemented Prometheus/Redis metrics endpoints) ──
 
 /** GET /metrics/summary → data */
-export interface MetricsSummary {
+export interface ErrorMetricsSummary {
   total_errors: number
   unique_error_types: number
   category_breakdown: Record<string, number>
@@ -147,7 +147,7 @@ export interface UseErrorMonitoringReturn {
   recentErrors: Ref<RecentError[]>
   categories: Ref<CategoryBreakdown | null>
   components: Ref<ComponentBreakdown | null>
-  summary: Ref<MetricsSummary | null>
+  summary: Ref<ErrorMetricsSummary | null>
   timeline: Ref<TimelinePoint[]>
   topErrors: Ref<TopError[]>
   isLoading: Ref<boolean>
@@ -198,7 +198,7 @@ export function useErrorMonitoring(options: UseErrorMonitoringOptions = {}): Use
   const recentErrors = ref<RecentError[]>([])
   const categories = ref<CategoryBreakdown | null>(null)
   const components = ref<ComponentBreakdown | null>(null)
-  const summary = ref<MetricsSummary | null>(null)
+  const summary = ref<ErrorMetricsSummary | null>(null)
   const timeline = ref<TimelinePoint[]>([])
   const topErrors = ref<TopError[]>([])
   const error = ref<string | null>(null)
@@ -294,7 +294,7 @@ export function useErrorMonitoring(options: UseErrorMonitoringOptions = {}): Use
 
   async function fetchSummary(): Promise<void> {
     try {
-      const res = await api.get<DataResponse<MetricsSummary>>(`${base}/metrics/summary`, polled)
+      const res = await api.get<DataResponse<ErrorMetricsSummary>>(`${base}/metrics/summary`, polled)
       summary.value = res.data ?? null
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to fetch error metrics summary'

@@ -12,18 +12,18 @@
  * Issue #590 - NPU Dashboard Improvements.
  */
 
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { PollingPausedAlert } from '@autobot/ui'
+import { useDashboardPoller } from '@/composables/useDashboardPoller'
 import { formatUptime } from '@/utils/formatHelpers'
 import type { NPUFleetMetrics, NPUWorkerMetrics } from '@/types/slm'
 import { useFleetStore } from '@/stores/fleet'
-import { createLogger } from '@/utils/debugUtils'
 
-const logger = createLogger('NPUPerformanceMetrics')
 const fleetStore = useFleetStore()
 
 const isLoading = ref(true)
 const expandedNodes = ref<Set<string>>(new Set())
-let refreshTimer: ReturnType<typeof setInterval> | null = null
 
 const REFRESH_INTERVAL_MS = 5000
 
@@ -86,42 +86,34 @@ function isExpanded(nodeId: string): boolean {
 
 // -- Data Fetching --
 
+const { t } = useI18n()
+
+/** One tick; the store reports a failed read as null, so the tick throws for the poller to count. */
 async function loadMetrics(): Promise<void> {
   try {
-    await fleetStore.fetchNpuFleetMetrics()
-  } catch (err) {
-    logger.error('Failed to load NPU fleet metrics', err)
+    const metrics = await fleetStore.fetchNpuFleetMetrics()
+    if (metrics === null) throw new Error(fleetStore.error ?? 'NPU fleet metrics unavailable')
   } finally {
     isLoading.value = false
   }
 }
 
-function startAutoRefresh(): void {
-  stopAutoRefresh()
-  refreshTimer = setInterval(loadMetrics, REFRESH_INTERVAL_MS)
-}
-
-function stopAutoRefresh(): void {
-  if (refreshTimer !== null) {
-    clearInterval(refreshTimer)
-    refreshTimer = null
-  }
-}
+// #19482: the shared dashboard policy (stop on unmount and after repeated failures, paused alert)
+const metricsPoller = useDashboardPoller(loadMetrics, REFRESH_INTERVAL_MS)
 
 // -- Lifecycle --
 
-onMounted(async () => {
-  await loadMetrics()
-  startAutoRefresh()
-})
-
-onBeforeUnmount(() => {
-  stopAutoRefresh()
-})
+onMounted(() => metricsPoller.start(''))
 </script>
 
 <template>
   <div class="space-y-6">
+    <PollingPausedAlert
+      :poller="metricsPoller"
+      :message="t('common.polling.paused')"
+      :retry-label="t('common.polling.retry')"
+      @retry="metricsPoller.start('')"
+    />
     <!-- Loading Skeleton -->
     <template v-if="isLoading">
       <!-- Summary skeleton -->

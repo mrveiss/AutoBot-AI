@@ -100,23 +100,28 @@
       </div>
 
       <!-- Status Messages -->
-      <div v-if="statusMessage" :class="['status-message', statusMessage.type]">
-        <Icon :name="statusMessage.icon" />
-        <span>{{ statusMessage.text }}</span>
-        <button @click="statusMessage = null" class="dismiss-btn">
-          <Icon name="times" />
-        </button>
-      </div>
+      <BaseAlert
+        v-if="statusMessage"
+        :key="statusMessage.id"
+        class="mt-4"
+        bordered
+        :variant="statusMessage.type"
+        :message="statusMessage.text"
+        :auto-dismiss="statusAutoDismiss"
+        dismissible
+        :dismiss-label="$t('common.dismiss')"
+        @dismiss="clearStatus"
+      />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
+import { useStatusMessage } from '@/composables/knowledge/useStatusMessage'
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BaseButton } from '@autobot/ui'
+import { BaseButton, BaseAlert } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { useKnowledgeCleanupStats } from '@/composables/knowledge/useKnowledgeCleanupStats'
 import type { CleanupOptions } from '@/composables/knowledge/useKnowledgeCleanupStats'
@@ -127,12 +132,6 @@ const { t } = useI18n()
 const emit = defineEmits<{
   (e: 'cleanup-complete', result: { action: string; details: string }): void
 }>()
-
-interface StatusMessage {
-  type: 'success' | 'error' | 'warning' | 'info'
-  text: string
-  icon: IconName
-}
 
 // Composable
 const { scanResult, isScanning, isCleaning, scanForIssues, runCleanup: doCleanup } =
@@ -145,7 +144,7 @@ const options = ref<CleanupOptions>({
   fixMetadata: true,
 })
 
-const statusMessage = ref<StatusMessage | null>(null)
+const { statusMessage, showStatus, clearStatus, statusAutoDismiss } = useStatusMessage()
 
 // Computed
 const getTotalIssues = computed(() => {
@@ -154,29 +153,10 @@ const getTotalIssues = computed(() => {
   return (issues.empty_facts || 0) + (issues.orphaned_tags || 0) + (issues.malformed_metadata || 0)
 })
 
-// Methods
-const showStatus = (type: StatusMessage['type'], text: string) => {
-  const icons: Record<StatusMessage['type'], IconName> = {
-    success: 'check-circle',
-    error: 'exclamation-circle',
-    warning: 'exclamation-triangle',
-    info: 'info-circle',
-  }
-  statusMessage.value = { type, text, icon: icons[type] }
-
-  if (type === 'success') {
-    setTimeout(() => {
-      if (statusMessage.value?.type === 'success') {
-        statusMessage.value = null
-      }
-    }, 5000)
-  }
-}
-
 const runDryScan = async () => {
   if (isScanning.value || isCleaning.value) return
 
-  statusMessage.value = null
+  clearStatus()
 
   try {
     const result = await scanForIssues(options.value)
@@ -390,46 +370,6 @@ const runCleanup = async () => {
 .cleanup-actions {
   display: flex;
   gap: var(--spacing-4);
-}
-
-.status-message {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-3);
-  padding: var(--spacing-4);
-  border-radius: var(--radius-lg);
-  margin-top: var(--spacing-4);
-}
-
-.status-message.success {
-  background: var(--color-success-bg);
-  border: 1px solid var(--color-success);
-  color: var(--color-success);
-}
-
-.status-message.error {
-  background: var(--color-error-bg);
-  border: 1px solid var(--color-error);
-  color: var(--color-error);
-}
-
-.status-message.warning {
-  background: var(--color-warning-bg);
-  border: 1px solid var(--color-warning);
-  color: var(--color-warning);
-}
-
-.status-message span {
-  flex: 1;
-}
-
-.dismiss-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: var(--spacing-1);
-  color: inherit;
-  opacity: 0.7;
 }
 
 @media (max-width: 768px) {

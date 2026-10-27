@@ -312,6 +312,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test source is a subset of tracked .py under three roots; the test-file share drifts.",
     ),
+    "monitoring-version-literals": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Compose, infrastructure and Ansible files (yml/yaml/ini/sh), against all tracked files there; drifts.",
+    ),
     "model-tier-map-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -404,6 +409,12 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "FIXED_INVENTORY",
         "The requirements files and the root pyproject.toml: a small, deliberately enumerable set.",
+    ),
+    "kit-export-names-14908": (ABSOLUTE, "NOT_PATHS", "Names parsed out of the kit's index, not files."),
+    "kit-shadow-ts-files-scanned-14908": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "The scanned .ts files are every non-test file under two app trees; no reference count co-moves with it.",
     ),
 }
 
