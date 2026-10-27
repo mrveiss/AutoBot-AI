@@ -21,6 +21,11 @@
   gather_facts: true
   serial: 1
 
+  # chromadb_heartbeat_path has ONE home, loaded by name so any inventory defines it
+  # (#19413). Only that file: vars_files outranks inventory group_vars.
+  vars_files:
+    - ../vars/chromadb_endpoints.yml
+
   pre_tasks:
     - name: Display AI/ML deployment information
       ansible.builtin.debug:
