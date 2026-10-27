@@ -129,18 +129,8 @@ AUTOBOT_FRONTEND_PORT=5173
 # Deployment mode
 AUTOBOT_DEPLOYMENT_MODE=hybrid
 
-# Database assignments for VM Redis
-AUTOBOT_REDIS_DB_MAIN=0
-AUTOBOT_REDIS_DB_KNOWLEDGE=1
-AUTOBOT_REDIS_DB_PROMPTS=2
-AUTOBOT_REDIS_DB_AGENTS=3
-AUTOBOT_REDIS_DB_METRICS=4
-AUTOBOT_REDIS_DB_LOGS=5
-AUTOBOT_REDIS_DB_SESSIONS=6
-AUTOBOT_REDIS_DB_WORKFLOWS=7
-AUTOBOT_REDIS_DB_VECTORS=8
-AUTOBOT_REDIS_DB_MODELS=9
-AUTOBOT_REDIS_DB_TESTING=15
+# Redis database numbers: redis-databases.yaml (#19232). Set AUTOBOT_REDIS_DB_<NAME> only
+# where this deployment differs; a copy of the whole table here is a second source.
 EOF
 
     success "Backend configuration updated: $env_file"

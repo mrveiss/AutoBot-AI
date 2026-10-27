@@ -602,7 +602,6 @@
 1|other|autobot-frontend/src/components/file-browser/FilePathNavigation.stories.ts|'/opt/autobot/autobot-frontend/src/components/file-browser
 1|other|autobot-frontend/src/components/file-browser/FilePreview.stories.ts|https://via.placeholder.com/400x300
 1|other|autobot-frontend/src/components/knowledge/EntityExtractor.vue|'user'
-1|other|autobot-frontend/src/components/knowledge/WebResearchSettings.vue|30
 1|other|autobot-frontend/src/components/knowledge/connectors/ConnectorConfigModal.vue|"postgresql://<redacted>@host:5432/db"
 4|other|autobot-frontend/src/components/knowledge/connectors/ConnectorConfigModal.vue|https://gitlab.com
 1|other|autobot-frontend/src/components/knowledge/connectors/ConnectorConfigModal.vue|https://www.googleapis.com/auth/drive.readonly
@@ -612,7 +611,6 @@
 1|other|autobot-frontend/src/components/settings/ApiKeySetupWizard.vue|https://console.anthropic.com/
 1|other|autobot-frontend/src/components/settings/ApiKeySetupWizard.vue|https://huggingface.co/kyutai/pocket-tts
 1|other|autobot-frontend/src/components/settings/ApiKeySetupWizard.vue|https://platform.openai.com/api-keys
-1|other|autobot-frontend/src/components/settings/WebResearchSettingsPanel.vue|120
 1|other|autobot-frontend/src/components/terminal/AdvancedStepConfirmationModal.stories.ts|https://github.com/example/repo.git
 2|other|autobot-frontend/src/components/ui/LoadingSpinner.vue|offset=0
 1|ssot|autobot-frontend/src/components/ui/SystemStatusNotification.stories.ts|:8001
@@ -638,7 +636,7 @@
 1|other|autobot-frontend/src/models/repositories/KnowledgeRepository.ts|offset=0
 1|other|autobot-frontend/src/services/TerminalService.ts|100
 1|other|autobot-frontend/src/services/TerminalService.ts|50
-2|other|autobot-frontend/src/stores/useWebResearchStore.ts|30
+1|other|autobot-frontend/src/stores/useWebResearchStore.ts|30
 1|other|autobot-frontend/src/test/config/test-config.ts|30
 1|other|autobot-frontend/src/test/mocks/api-client-mock.ts|10
 1|other|autobot-frontend/src/test/utils/test-setup-helpers.ts|'user'
