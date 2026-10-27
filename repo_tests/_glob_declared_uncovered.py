@@ -44,6 +44,12 @@ from __future__ import annotations
 #: uncovered dependency pass — that is the decision this record exists to keep
 #: visible rather than to rubber-stamp.
 GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
+    "Dockerfile*": (
+        {"repo_tests/slm_admin_password_one_home_19318_test.py"},
+        "the guard sweeps Dockerfiles anywhere for the SLM admin password default; the read existed before "
+        "#19575 and became visible when the detector learned dotless named-file globs. Covering it needs "
+        "`**/Dockerfile*` in the python filter (#19817)",
+    ),
     "*.conf": (
         {"repo_tests/slm_frontend_atomic_publish_15610_test.py"},
         "root-relative `*.conf` sweep; the matching files live outside the python filter's trees",
