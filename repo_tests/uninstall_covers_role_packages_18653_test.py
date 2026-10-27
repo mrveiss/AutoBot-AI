@@ -127,7 +127,13 @@ def _removed_or_kept() -> list[str]:
 
 
 def uncovered_packages(installed, patterns: list[str]) -> list[str]:
-    return sorted(n for n in installed if "{{" not in n and not any(fnmatch.fnmatch(n, p) for p in patterns))
+    """Names no pattern covers; an apt ``name=version`` pin is matched by its name (#19329)."""
+
+    def covered(name: str) -> bool:
+        bare = name.split("=", 1)[0]
+        return any(fnmatch.fnmatch(bare, p) for p in patterns)
+
+    return sorted(n for n in installed if "{{" not in n and not covered(n))
 
 
 def test_every_package_a_role_installs_is_removed_or_kept() -> None:
@@ -240,3 +246,9 @@ def test_a_package_installed_before_is_never_recorded(tmp_path: Path) -> None:
 def test_only_the_packages_install_sh_added_are_recorded(tmp_path: Path) -> None:
     assert _install_with(tmp_path, ["python3.14"], ["python3.14", "python3.14-venv"]) == ["package=python3.14-venv"]
     assert _install_with(tmp_path / "fresh", [], ["ansible"]) == ["package=ansible"]
+
+
+def test_a_version_pinned_package_is_covered_by_its_name() -> None:
+    """#19329: ``grafana=11.1.0`` is the package ``grafana``; a wrong name still fails."""
+    assert uncovered_packages(["grafana=11.1.0"], ["grafana"]) == []
+    assert uncovered_packages(["grafanax=11.1.0"], ["grafana"]) == ["grafanax=11.1.0"]
