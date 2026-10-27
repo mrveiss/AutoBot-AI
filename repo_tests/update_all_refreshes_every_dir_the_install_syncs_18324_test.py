@@ -68,3 +68,9 @@ def test_update_all_refreshes_every_dir_the_fresh_install_role_syncs():
         f"directories synced from code_source on a fresh install but never on update-all: {missing}. "
         "Pull the role's sync through a tasks_from file (#18324)."
     )
+
+
+def test_src_detector_has_a_contrast_pair():
+    """Positive and negative fixture for the extractor itself (#18324)."""
+    assert _SRC.findall('src: "{{ code_source_dir }}/covered/"') == ["covered"]
+    assert not _SRC.findall('src: "{{ other_source_dir }}/uncovered/"')
