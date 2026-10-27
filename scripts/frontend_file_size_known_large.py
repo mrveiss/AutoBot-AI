@@ -83,7 +83,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/knowledge/KnowledgeVerificationQueue.vue": 799,
     "autobot-frontend/src/components/knowledge/SystemKnowledgeManager.vue": 1034,  # #18849: 1035 -> 1034
     "autobot-frontend/src/components/knowledge/WebResearchPanel.vue": 779,
-    "autobot-frontend/src/components/knowledge/WebResearchSettings.vue": 1028,
     "autobot-frontend/src/components/knowledge/connectors/ConnectorConfigModal.vue": 1626,  # #18849: 1627 -> 1626
     "autobot-frontend/src/components/knowledge/modals/BulkEditModal.vue": 615,  # #18849: 616 -> 615
     "autobot-frontend/src/components/knowledge/modals/CategoryEditModal.vue": 726,  # #18849: 727 -> 726
@@ -175,7 +174,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-frontend/src/components/AddNodeModal.vue": 1067,  # #14777 batch 2: 1111 -> 1067
     "autobot-slm-frontend/src/components/fleet/DecommissionModal.vue": 619,  # #14777: 699 -> 621; 619 (#18941 review)
     "autobot-slm-frontend/src/components/fleet/NodeLifecyclePanel.vue": 943,
-    "autobot-slm-frontend/src/composables/useAutobotApi.ts": 2062,  # #18734: 2068 -> 2062
+    "autobot-slm-frontend/src/composables/useAutobotApi.ts": 2026,  # #19217: factory in, fallback/budget types out
     "autobot-slm-frontend/src/composables/useCodeSync.ts": 1078,
     "autobot-slm-frontend/src/composables/useOrchestrationManagement.ts": 693,
     "autobot-slm-frontend/src/composables/useSlmApi.ts": 1457,
