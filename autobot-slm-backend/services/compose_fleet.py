@@ -20,6 +20,7 @@ import logging
 import os
 from datetime import datetime, timedelta, timezone
 
+from autobot_shared.chromadb_endpoints import CHROMADB_HEARTBEAT_PATH
 from autobot_shared.env_registry import env
 from autobot_shared.env_utils import env_int_clamped
 from config import settings
@@ -251,7 +252,7 @@ _COMPOSE_NODE_SPECS: list[dict] = [
         "host": 12,
         "port": 8000,
         "protocol": "http",
-        "path": "/api/v2/heartbeat",
+        "path": CHROMADB_HEARTBEAT_PATH,  # #19413
     },
 ]
 
