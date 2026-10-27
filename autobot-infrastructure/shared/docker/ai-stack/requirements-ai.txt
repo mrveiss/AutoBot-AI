@@ -12,7 +12,7 @@ llama-index-embeddings-ollama>=0.10.0,<1.0.0
 llama-index-llms-ollama>=0.11.0,<1.0.0
 
 # Vector Database
-chromadb>=1.5.9,<2.0.0           # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
+chromadb                         # version from constraints/shared.txt (#19478)
 sentence-transformers>=6.1.0
 
 # Model and Tokenization

@@ -105,7 +105,9 @@ class RedisDbConfig:
             if not self.ssl_ca_certs or not self.ssl_certfile or not self.ssl_keyfile:
                 from pathlib import Path
 
-                cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "certs")  # ssot-config-exempt: TLS cert dir
+                from autobot_shared.env_registry_tls import DEFAULT_TLS_CERT_DIR
+
+                cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", DEFAULT_TLS_CERT_DIR)  # the one default (#19317)
                 project_root = Path(__file__).parent.parent.parent
                 self.ssl_ca_certs = str(project_root / cert_dir / "ca" / "ca-cert.pem")
                 self.ssl_certfile = str(project_root / cert_dir / "main-host" / "server-cert.pem")

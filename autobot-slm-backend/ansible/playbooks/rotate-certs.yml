@@ -32,10 +32,14 @@
   gather_facts: false
   become: true
 
+  vars:
+    # #19366: the one spelling in this file; later plays alias it.
+    _cert_dir: &node_cert_dir "{{ autobot_tls_remote_cert_dir | default('/etc/autobot/certs') }}"
+
   tasks:
     - name: "Certs | Check cert file exists"
       ansible.builtin.stat:
-        path: /etc/autobot/certs/server-cert.pem
+        path: "{{ _cert_dir }}/server-cert.pem"
       register: _cert_stat
       failed_when: false
 
@@ -43,7 +47,7 @@
       ansible.builtin.command:
         cmd: >-
           openssl x509 -noout -enddate
-          -in /etc/autobot/certs/server-cert.pem
+          -in {{ _cert_dir }}/server-cert.pem
       register: _cert_expiry
       changed_when: false
       failed_when: false
@@ -58,7 +62,7 @@
 
     - name: "Certs | Note missing cert"
       ansible.builtin.debug:
-        msg: "{{ inventory_hostname }}: no cert at /etc/autobot/certs/server-cert.pem"
+        msg: "{{ inventory_hostname }}: no cert at {{ _cert_dir }}/server-cert.pem"
       when: not (_cert_stat.stat.exists | default(false))
 
   tags: ['check']
@@ -73,7 +77,7 @@
   gather_facts: true
 
   vars:
-    _cert_dir: /etc/autobot/certs
+    _cert_dir: *node_cert_dir
     _cert_file: "{{ _cert_dir }}/server-cert.pem"
     _key_file: "{{ _cert_dir }}/server-key.pem"
     _cert_days: "{{ slm_tls_days | default(365) }}"
@@ -150,7 +154,7 @@
   gather_facts: true
 
   vars:
-    _cert_dir: /etc/autobot/certs
+    _cert_dir: *node_cert_dir
     _cert_file: "{{ _cert_dir }}/server-cert.pem"
     _key_file: "{{ _cert_dir }}/server-key.pem"
     _cert_days: 365
@@ -216,7 +220,7 @@
   gather_facts: true
 
   vars:
-    _cert_dir: /etc/autobot/certs
+    _cert_dir: *node_cert_dir
     _cert_file: "{{ _cert_dir }}/server-cert.pem"
     _key_file: "{{ _cert_dir }}/server-key.pem"
     _cert_days: 365
