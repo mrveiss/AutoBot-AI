@@ -28,10 +28,10 @@ pillow==13.0.0
 # on a transitive resolution rather than on anything a PR changed. main was green
 # at 15:08 UTC and red at 16:16 UTC with no relevant commit between.
 #
-# `==2.14.0` matches `2.14.0+cpu` -- a local version satisfies an `==` without one --
-# so this keeps the CPU-only index and its ~3GB saving. Move it WITH
-# autobot-backend/requirements.txt's torch/torchvision pair, never alone.
-torch==2.14.1
+# The constraint's `==` matches `+cpu` -- a local version satisfies an `==` without one --
+# so this keeps the CPU-only index and its ~3GB saving. The version lives once, in
+# constraints/shared.txt, as a coupled torch/torchvision pair (#19330).
+torch
 torchmetrics>=1.9.0,<2.0.0
 # #14551: production dep (autobot-backend/requirements.txt, RAPTOR clustering).
 # pytest.importorskip("sklearn") gates entity_resolution_test.py,

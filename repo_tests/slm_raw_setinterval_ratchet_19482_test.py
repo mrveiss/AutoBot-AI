@@ -37,8 +37,10 @@ _CALL = re.compile(r"\bsetInterval\s*\(")
 _COMMENT = re.compile(r"^\s*(//|\*|/\*)")
 
 # 35 measured on 129148ebe9; 29 after the first batch (BatchTool, InfrastructureWizard,
-# SystemUpdatesTab, #19482). Lower it by exactly what a PR migrates.
-PINS = {"raw_setinterval_calls": 29}
+# SystemUpdatesTab); 23 after the second (RedisServicePanel, NPUPerformanceMetrics,
+# NPUWorkerMonitor, LLMFallbacksView, Sidebar, CodeSyncBadge;
+# #19482). Lower it by exactly what a PR migrates.
+PINS = {"raw_setinterval_calls": 23}
 
 # The non-poller calls that keep setInterval; the count cannot go below these.
 FLOOR = 3

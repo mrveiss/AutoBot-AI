@@ -431,7 +431,7 @@ async function testSsoProvider(providerId: string): Promise<void> {
     if (result.success) {
       showSuccess(result.message || t('settings.admin.userManagementSettings.ssoConnectionSuccessful'))
     } else {
-      error.value = result.message || 'SSO provider connection test failed'
+      error.value = result.message || t('settings.admin.userManagementSettings.ssoConnectionFailed')
     }
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('settings.admin.userManagementSettings.failedToTestSsoProvider')

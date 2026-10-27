@@ -1033,8 +1033,9 @@
   #
   # Filtered through the canonical script rather than copied raw: a file copied
   # out of the repo lands at a different depth, so any relative -c/-r include it
-  # gains later would resolve somewhere else (#14272). None of the three carries
-  # one today, which makes this cheap now and correct if that changes.
+  # gains later would resolve somewhere else (#14272). requirements-gpu-torch.txt
+  # carries `-c constraints/shared.txt` since #19330, so the rewrite is load-bearing:
+  # it points that include at the staged constraints file on the node.
   #
   # One task per manifest, not a loop: a loop renders the destination as a
   # template, and the manifest-resolution guard cannot tie that back to the
