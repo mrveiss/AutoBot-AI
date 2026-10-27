@@ -115,7 +115,7 @@
 - name: "Backend | Stat SLM TLS certs (#6677/#7272)"
   ansible.builtin.include_tasks: ../../../_shared/tasks/stat_tls_certs.yml
   vars:
-    tls_cert_dir: /etc/autobot/certs
+    tls_cert_dir: "{{ backend_tls_cert_dir }}"
   tags: ['backend', 'config']
 
 # #7689: Read SLM_AUTH_TOKEN from /etc/autobot/slm-secrets.env on the target
@@ -670,19 +670,8 @@
     notify: restart backend
     tags: ['backend', 'deploy']
 
-  # Issue #10294: plugins ship at the repo root (code_source/plugins/), a SIBLING of
-  # autobot-backend/, so the autobot-backend code sync never copied them. The backend
-  # resolves plugins at {{ backend_code_dir }}/plugins (AUTOBOT_BASE_DIR/plugins), which
-  # did not exist → discover_plugins() found nothing and every core plugin (image/video
-  # generation, kb-event, etc.) silently failed to register. Sync them into place.
-  - name: Sync plugins directory from code_source (#10294)
-    ansible.posix.synchronize:
-      src: "{{ code_source_dir }}/plugins/"
-      dest: "{{ backend_code_dir }}/plugins/"
-      rsync_opts:
-        - "--exclude=__pycache__"
-        - "--exclude=*.pyc"
-    notify: restart backend
+  - name: "Backend | Sync the core plugins directory (#10294, #18324)"
+    ansible.builtin.include_tasks: plugins_sync.yml
     tags: ['backend', 'deploy']
 
   # Issue #10020: The old rsync task created a real directory copy of autobot_shared
@@ -758,28 +747,8 @@
       group: "{{ backend_group }}"
       recurse: true
 
-  - name: "Backend | Sync docs directory from code_source (#4100)"
-    ansible.posix.synchronize:
-      src: "{{ code_source_dir }}/docs/"
-      dest: "{{ backend_install_dir }}/../docs/"
-      delete: true
-      rsync_opts:
-        - "--exclude=__pycache__"
-        - "--exclude=*.pyc"
-        - "--exclude=.git"
-        - "--exclude=archives"
-        # Host-generated state, mirrored from HOST_STATE_EXCLUDES in
-        # services/deploy_artifacts.py (#14231). Anchored entries cannot match
-        # anything here, and cost nothing -- carrying the whole vocabulary is what
-        # keeps the delete-style syncs from disagreeing with each other again.
-        - "--exclude=.env"
-        - "--exclude=.env.*"
-        - "--exclude=data"
-        - "--exclude=logs"
-        - "--exclude=/config/"
-        - "--exclude=/.deployed_commit"
-        - "--exclude=/.autobot_sync_deletions_commit"
-        - "--exclude=/ansible/enroll.yml"
+  - name: "Backend | Sync and record the docs directory (#4100, #18324)"
+    ansible.builtin.include_tasks: docs_sync.yml
     tags: ['backend', 'deploy']
 
   # Issue #10020: backend_install_dir/autobot_shared is now a symlink to
@@ -1323,8 +1292,8 @@
       owner: "{{ backend_user }}"
       group: "{{ backend_group }}"
     loop:
-      - /etc/autobot/certs/server-key.pem
-      - /etc/autobot/certs/server-cert.pem
+      - "{{ backend_tls_cert_dir }}/server-key.pem"
+      - "{{ backend_tls_cert_dir }}/server-cert.pem"
 
   # #10636: full-user-management secrets for the runtime .env. The DB password
   # is created by the postgresql role above (db_password); the initial-admin

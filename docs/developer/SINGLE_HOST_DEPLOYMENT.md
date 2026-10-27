@@ -325,7 +325,7 @@ redis-cli -h 127.0.0.7 ping       # loopback alias
 redis-cli -h 127.0.0.1 ping       # localhost default
 
 # ChromaDB (port 8100, NOT 8000)
-curl http://127.0.0.7:8100/api/v1/heartbeat
+curl http://127.0.0.7:8100/api/v2/heartbeat
 
 # Ollama
 curl http://127.0.0.1:11434/api/version
