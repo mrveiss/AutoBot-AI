@@ -99,6 +99,8 @@ EOF
 # removes (#13069) and which otherwise serves a stale pre-VeNCrypt client
 # (#13060). This script does not install noVNC itself; run the vnc role (or
 # an equivalent pinned install) first so /opt/novnc exists.
+# Node TLS dir: a pinned copy of env_registry_tls.DEFAULT_TLS_REMOTE_CERT_DIR (#19366).
+TLS_REMOTE_CERT_DIR="${AUTOBOT_TLS_REMOTE_CERT_DIR:-/etc/autobot/certs}"
 cat > /etc/systemd/system/novnc.service << EOF
 [Unit]
 Description=noVNC Web Interface
@@ -111,8 +113,8 @@ User=${VNC_USER}
 Group=${VNC_USER}
 WorkingDirectory=/opt/novnc
 ExecStart=/usr/bin/websockify --web /opt/novnc \\
-    --cert=/etc/autobot/certs/server-cert.pem \\
-    --key=/etc/autobot/certs/server-key.pem \\
+    --cert=${TLS_REMOTE_CERT_DIR}/server-cert.pem \\
+    --key=${TLS_REMOTE_CERT_DIR}/server-key.pem \\
     --ssl-only \\
     localhost:6080 localhost:5900
 Restart=always
