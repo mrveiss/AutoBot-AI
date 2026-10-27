@@ -5,7 +5,7 @@
 """Env vars for the batch-load dispatch (api/batch_dispatch.py, #18765).
 
 A sibling of ``env_registry_backend_services.py``, which sits too close to the file-size ceiling
-to take them.
+to take them. Also holds the PR merge-conflict gate retry knobs (#19769).
 """
 
 from __future__ import annotations
@@ -54,5 +54,31 @@ register_env_var(
         ),
         component="backend",
         range=(1, 20),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="PR_CONFLICT_GATE_MAX_ATTEMPTS",
+        type=int,
+        default=6,
+        description=(
+            "How many times the PR merge-conflict gate reads a PR whose mergeable state "
+            "GitHub reports as unknown before reporting it pending; clamped to 1..10 (#19769)."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="PR_CONFLICT_GATE_BACKOFF_SECONDS",
+        type=float,
+        default=5.0,
+        description=(
+            "Initial seconds the PR merge-conflict gate waits between reads of an unknown "
+            "mergeable state; doubles each retry, clamped to 0..60 (#19769)."
+        ),
+        component="backend",
     )
 )
