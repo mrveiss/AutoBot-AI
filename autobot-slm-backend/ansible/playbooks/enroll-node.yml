@@ -35,7 +35,7 @@
     autobot_home: "/home/autobot"
     autobot_data_dir: "/var/lib/autobot"
     autobot_log_dir: "/var/log/autobot"
-    autobot_cert_dir: "/etc/autobot/certs"
+    autobot_cert_dir: "{{ autobot_tls_remote_cert_dir | default('/etc/autobot/certs') }}"  # #19366
 
     # Emergency admin user for fallback access when SSH keys fail
     emergency_admin_user: "autobot_admin"

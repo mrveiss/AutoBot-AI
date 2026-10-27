@@ -38,7 +38,7 @@
     backend_host: "{{ infrastructure.hosts.backend }}"
     backend_port: 8443
     backend_protocol: "http"  # uvicorn serves HTTP, nginx on frontend handles SSL
-    frontend_tls_cert_dir: /etc/autobot/certs
+    frontend_tls_cert_dir: "{{ autobot_tls_remote_cert_dir | default('/etc/autobot/certs') }}"  # #19366
     frontend_tls_cert: "{{ frontend_tls_cert_dir }}/server-cert.pem"
     frontend_tls_key: "{{ frontend_tls_cert_dir }}/server-key.pem"
 

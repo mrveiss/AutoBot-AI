@@ -52,22 +52,27 @@
     HOME: "{{ chromadb_install_dir }}"
   tags: ['redis', 'chromadb']
 
-# #15598: the standalone ChromaDB service venv has no requirements manifest of
-# its own, so the floor must stay literal here. It is the specifier text
-# `autobot-backend/requirements.txt` and the ai-stack manifest both declare --
-# `>=0.5` admitted a chromadb two majors below the one the backend that reads
-# this instance is built against. The upper bound comes across with the floor
-# for the reason those manifests state next to it -- it guards against breaking
-# API changes above 2.x -- and an unbounded floor in a venv with no `-c` would
-# resolve straight past it.
+# #15598: `>=0.5` admitted a chromadb two majors below the one the backend that
+# reads this instance is built against.
+# #19478: the spec is no longer restated here -- constraints/shared.txt is the
+# single source of truth, the same file the backend and ai-stack manifests read,
+# so this server venv and its clients resolve one range. Staged onto the node
+# first (#17246): `code_source` is the controller's checkout and never synced.
+- name: "ChromaDB | Stage the manifests this node's pip step reads (#17246, #19478)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/stage_shared_manifests.yml
+  when: not (autobot_shared_manifests_staged | default(false))
+  # `always` for the reason roles/agent_config/tasks/openvino.yml gives: the
+  # staged file is a precondition of the pip step below.
+  tags: [always]
+
 # #16641: see "ChromaDB | Upgrade pip in venv" above.
 - name: "ChromaDB | Install chromadb package"
   ansible.builtin.pip:
-    name: "chromadb>=1.5.9,<2.0.0"
+    name: chromadb
     state: present
     virtualenv: "{{ chromadb_install_dir }}/venv"
     virtualenv_command: "python3.14 -m venv"
-    extra_args: "--timeout 300"
+    extra_args: "--timeout 300 -c {{ autobot.base_dir }}/constraints/shared.txt"
   become: true
   become_user: "{{ redis_owner }}"
   environment:

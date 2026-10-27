@@ -199,6 +199,10 @@ backend_has_gpu: "auto"
 backend_wsl2_loopback_host: "127.0.0.1"
 backend_wsl2_gateway_host: "10.255.255.254"
 
+# #19366: the node's shared TLS directory for this role's tasks. The two templates spell the
+# fallback themselves because deploy-backend-env.yml / deploy-nginx-proxy.yml render them outside the role.
+backend_tls_cert_dir: "{{ autobot_tls_remote_cert_dir | default('/etc/autobot/certs') }}"
+
 # Feature-router boot mode, production profile (#6690, #19319). Mirrors FEATURE_ROUTERS_STRICT_PRODUCTION
 # in autobot_shared/ssot_role_mirrors.py (Ansible cannot import Python); a guard pins the two equal. "0" lets
 # a managed backend start degraded when a feature router fails to import (logged at ERROR, published
