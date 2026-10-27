@@ -38,7 +38,7 @@ SELF = "repo_tests/chromadb_heartbeat_one_home_19413_test.py"
 
 #: Non-Python copies of the path: file -> the pattern capturing its value.
 PINNED: dict[str, str] = {
-    "autobot-slm-backend/ansible/inventory/group_vars/all.yml": r'^chromadb_heartbeat_path: "([^"]+)"',
+    "autobot-slm-backend/ansible/vars/chromadb_endpoints.yml": r'^chromadb_heartbeat_path: "([^"]+)"',
     "autobot-infrastructure/autobot-database/templates/db-start.sh": r'^CHROMADB_HEARTBEAT_PATH="([^"]+)"',
     "autobot-infrastructure/autobot-database/templates/db-status.sh": r'^CHROMADB_HEARTBEAT_PATH="([^"]+)"',
     # At its frozen shell-size ceiling (#17353), so the probe line carries the copy itself.
