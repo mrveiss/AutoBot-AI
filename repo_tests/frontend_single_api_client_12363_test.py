@@ -6,8 +6,10 @@
 
 **The boundary.** Per app (``autobot-frontend``, ``autobot-slm-frontend``), the count is every
 HTTP transport that is not the app's ``ApiClient.ts``, in a ``.ts``/``.js``/``.vue`` file under
-``src``: a raw ``fetch(`` / ``window.fetch(`` / ``globalThis.fetch(`` call, an ``axios`` import
-or require, and a ``new XMLHttpRequest(``. Tests, specs, stories, ``__tests__/``, ``e2e/`` and
+``src``: a raw ``fetch(`` / ``window.fetch(`` / ``globalThis.fetch(`` call, an ``axios`` value import
+or require (a type-only import creates no transport and is not counted, #19659), and a
+``new XMLHttpRequest(``. A raw ``fetch`` directly under eslint's reasoned
+``no-restricted-syntax`` exemption is exempt; that exemption never covers axios or XHR. Tests, specs, stories, ``__tests__/``, ``e2e/`` and
 the msw mocks under ``src/test/mocks`` mock fetch on purpose and are not read; neither are
 comment lines. ``fetchWithAuth.ts`` IS counted: by its own header it is a bridge for existing
 raw sites, and ``ApiClient.rawRequest()`` is the canonical path for new code.
@@ -36,11 +38,21 @@ _THIS = "repo_tests/frontend_single_api_client_12363_test.py"
 _CANONICAL = "src/utils/ApiClient.ts"
 _SUFFIXES = (".ts", ".js", ".vue")
 _EXCLUDED = re.compile(r"(\.test\.|\.spec\.|\.stories\.|/__tests__/|/e2e/|/src/test/mocks/)")
-_TRANSPORT = re.compile(
-    r"(?:(?<![\w.])|\b(?:window|globalThis|self)\.)fetch\s*(?:<[^>()]*>\s*)?(?:\?\.)?\("
-    r"|\bfrom\s+['\"]axios['\"]|\bimport\s+['\"]axios['\"]|\bimport\s*\(\s*['\"]axios['\"]"
+_FETCH = re.compile(r"(?:(?<![\w.])|\b(?:window|globalThis|self)\.)fetch\s*(?:<[^>()]*>\s*)?(?:\?\.)?\(")
+_OTHER_TRANSPORT = re.compile(
+    r"\bfrom\s+['\"]axios['\"]|\bimport\s+['\"]axios['\"]|\bimport\s*\(\s*['\"]axios['\"]"
     r"|\brequire\(\s*['\"]axios['\"]"
     r"|\bnew\s+XMLHttpRequest\s*\("
+)
+#: A type-only import or re-export creates no transport (``import type``, ``export type``, or braces
+#: holding only ``type`` specifiers); it may span lines.
+_TYPE_ONLY_AXIOS = re.compile(
+    r"\b(?:import|export)\s+(?:type\s+(?:[\w$]+\s*,?\s*)?(?:\{[^{};]*\}|\*\s+as\s+[\w$]+)?\s*"
+    # Specifiers are comma-SEPARATED, never optionally: an optional separator lets the repetition
+    # re-split ``type a type b ...`` exponentially (CodeQL, #19666 review).
+    r"|\{\s*type\s+[\w$]+(?:\s+as\s+[\w$]+)?(?:\s*,\s*type\s+[\w$]+(?:\s+as\s+[\w$]+)?)*\s*,?\s*\}\s*)"
+    r"from\s+['\"]axios['\"]",  # one statement only: the repo writes no semicolons (#19659 review)
+    re.DOTALL,
 )
 _COMMENT = re.compile(r"^\s*(//|\*|/\*|<!--)")
 #: The existing per-site exemption (eslint's raw-fetch ban): it must follow a comment giving the reason.
@@ -81,15 +93,20 @@ REACH = declare(
 )
 
 
+def _without_type_only_imports(text: str) -> str:
+    """*text* with each type-only axios import blanked, its newlines kept so line numbers hold."""
+    return _TYPE_ONLY_AXIOS.sub(lambda m: "\n" * m.group(0).count("\n"), text)
+
+
 def _transports(text: str) -> int:
-    """Transports in one file; one directly under a REASONED eslint raw-fetch exemption is exempt."""
-    lines, total = text.splitlines(), 0
+    """Transports in one file; one raw ``fetch`` directly under a REASONED eslint raw-fetch exemption is exempt."""
+    lines, total = _without_type_only_imports(text).splitlines(), 0
     for i, line in enumerate(lines):
         code = "" if _COMMENT.match(line) else _TRAILING_COMMENT.sub("", line)
-        hits = len(_TRANSPORT.findall(code))
-        if hits and i >= 2 and _EXEMPT.search(lines[i - 1]) and _REASON.match(lines[i - 2]):
-            hits -= 1  # the exemption covers one call, not the whole line
-        total += hits
+        fetches = len(_FETCH.findall(code))
+        if fetches and i >= 2 and _EXEMPT.search(lines[i - 1]) and _REASON.match(lines[i - 2]):
+            fetches -= 1  # the exemption is eslint's raw-fetch ban: it covers one fetch, never axios or XHR
+        total += fetches + len(_OTHER_TRANSPORT.findall(code))
     return total
 
 
@@ -152,6 +169,37 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
         self._w(tmp_path, "src/a.ts", body)
         assert count_transports(tmp_path) == 1
 
+    def test_an_exemption_never_hides_axios_or_xhr(self, tmp_path: Path) -> None:
+        reason = "// The probe reaches a separate service on its own origin.\n"
+        directive = "// eslint-disable-next-line no-restricted-syntax\n"
+        self._w(tmp_path, "src/a.ts", f"{reason}{directive}import axios from 'axios'\n")
+        self._w(tmp_path, "src/b.ts", f"{reason}{directive}const x = new XMLHttpRequest()\n")
+        assert count_transports(tmp_path) == 2
+
+    def test_a_type_only_import_is_not_a_transport(self, tmp_path: Path) -> None:
+        self._w(tmp_path, "src/a.ts", "import type { AxiosRequestConfig } from 'axios'\n")
+        self._w(tmp_path, "src/b.ts", "import type {\n  AxiosError,\n  AxiosResponse,\n} from 'axios'\nfetch(u)\n")
+        self._w(tmp_path, "src/c.ts", "import { type AxiosError, type AxiosResponse as R } from 'axios'\n")
+        self._w(tmp_path, "src/d.ts", "export type { AxiosInstance } from 'axios'\n")
+        assert count_transports(tmp_path) == 1  # only b.ts's fetch, still found on its own line
+
+    def test_a_type_import_never_hides_a_later_value_import(self, tmp_path: Path) -> None:
+        bodies = (
+            "import type { A } from 'x'\nimport axios from 'axios'\n",
+            "import type { A } from 'x'\nconst y = 1\nimport axios from 'axios'\n",
+            "import type A from 'x'\nimport { create } from 'axios'\n",
+            "export type Foo = { a: 1 }\nimport axios from 'axios'\n",
+            "<script setup lang=\"ts\">\nimport type { Props } from './p'\nimport axios from 'axios'\n</script>\n",
+        )
+        for i, body in enumerate(bodies):
+            self._w(tmp_path, f"src/m{i}.{'vue' if 'script' in body else 'ts'}", body)
+        assert count_transports(tmp_path) == len(bodies)
+
+    def test_a_value_import_beside_a_type_is_a_transport(self, tmp_path: Path) -> None:
+        self._w(tmp_path, "src/a.ts", "import axios, { type AxiosError } from 'axios'\n")
+        self._w(tmp_path, "src/b.ts", "import { type AxiosError, create } from 'axios'\n")
+        assert count_transports(tmp_path) == 2
+
     def test_a_method_named_fetch_is_not_a_transport(self, tmp_path: Path) -> None:
         self._w(tmp_path, "src/a.ts", "store.fetch(id)\nawait this.fetch()\nprefetch(x)\nrefetch()\n")
         assert count_transports(tmp_path) == 0
@@ -180,3 +228,12 @@ def test_no_pin_was_raised_against_the_base() -> None:
     ), f"apps dropped from PINS: {sorted(set(base) - set(PINS))}; an app's pin only goes down"
     raised = {app: (base[app], pin) for app, pin in PINS.items() if app in base and pin > base[app]}
     assert not raised, f"pins rose against the base (base, now): {raised}; a pin only goes down (#12363)."
+
+
+def test_the_type_only_pattern_stays_linear_on_a_pathological_input() -> None:
+    """CodeQL flagged exponential backtracking on many ``type $`` repetitions (#19666 review)."""
+    import time
+
+    started = time.perf_counter()
+    _TYPE_ONLY_AXIOS.search("import {" + " type $" * 40 + " from 'nowhere'")
+    assert time.perf_counter() - started < 1.0
