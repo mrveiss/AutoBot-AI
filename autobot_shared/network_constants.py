@@ -34,7 +34,7 @@ from functools import cached_property
 from autobot_shared import deployment_profile as _profile
 
 
-def _get_config_value(key: str, default: str) -> str:
+def _get_config_value(key: str, default: str | None) -> str:
     """Get configuration value with lazy ConfigRegistry import.
 
     ConfigRegistry lives in autobot-backend. This function imports it only
@@ -42,7 +42,12 @@ def _get_config_value(key: str, default: str) -> str:
     independently (e.g., in autobot-slm-backend or CI tooling).
 
     Issue #7526: Explicit import from autobot_shared pattern, not bare 'config'.
+    A ``None`` default is the SSOT value at *key* itself, never a restated literal (#19325).
     """
+    if default is None:
+        from autobot_shared.ssot_value import ssot_value
+
+        default = ssot_value(key)
     try:
         from config.registry import ConfigRegistry
 
@@ -81,7 +86,7 @@ def _emit_deprecation_warning(old_pattern: str, new_pattern: str) -> None:
 #
 # Resolving on access costs one lookup per use, and ConfigRegistry has its own
 # cache and TTL — which is where that caching belongs.
-# name -> (config key, default, type)
+# name -> (config key, default, type); a port's default is None -- its SSOT value (#19325)
 _LAZY_CONFIG_VALUES: dict = {
     "MAIN_MACHINE_IP": ("vm.main", "", str),
     "FRONTEND_VM_IP": ("vm.frontend", "", str),
@@ -91,21 +96,21 @@ _LAZY_CONFIG_VALUES: dict = {
     "BROWSER_VM_IP": ("vm.browser", "", str),
     "SLM_VM_IP": ("vm.slm", "", str),
     "AI_STACK_HOST": ("vm.aistack", "", str),
-    "BACKEND_PORT": ("port.backend", "8001", int),
-    "FRONTEND_PORT": ("port.frontend", "5173", int),
-    "REDIS_PORT": ("port.redis", "6379", int),
-    "OLLAMA_PORT": ("port.ollama", "11434", int),
-    "VNC_PORT": ("port.vnc", "6080", int),
-    "BROWSER_SERVICE_PORT": ("port.browser", "9001", int),
-    "AI_STACK_PORT": ("port.aistack", "8080", int),
-    "NPU_WORKER_PORT": ("port.npu", "8081", int),
-    "SLM_PORT": ("port.slm", "8000", int),
-    "NPU_WORKER_WINDOWS_PORT": ("port.npu_windows", "8081", int),
+    "BACKEND_PORT": ("port.backend", None, int),
+    "FRONTEND_PORT": ("port.frontend", None, int),
+    "REDIS_PORT": ("port.redis", None, int),
+    "OLLAMA_PORT": ("port.ollama", None, int),
+    "VNC_PORT": ("port.vnc", None, int),
+    "BROWSER_SERVICE_PORT": ("port.browser", None, int),
+    "AI_STACK_PORT": ("port.aistack", None, int),
+    "NPU_WORKER_PORT": ("port.npu", None, int),
+    "SLM_PORT": ("port.slm", None, int),
+    "NPU_WORKER_WINDOWS_PORT": ("port.npu_windows", None, int),
     "DESKTOP_DISPLAY": ("desktop.display", ":1", str),
-    "PROMETHEUS_PORT": ("port.prometheus", "9090", int),
-    "GRAFANA_PORT": ("port.grafana", "3000", int),
-    "DEV_FRONTEND_PORT": ("port.frontend", "5173", int),
-    "DEV_BACKEND_PORT": ("port.backend", "8001", int),
+    "PROMETHEUS_PORT": ("port.prometheus", None, int),
+    "GRAFANA_PORT": ("port.grafana", None, int),
+    "DEV_FRONTEND_PORT": ("port.frontend", None, int),
+    "DEV_BACKEND_PORT": ("port.backend", None, int),
 }
 
 
@@ -373,23 +378,14 @@ class ServiceURLs(metaclass=_LazyURLMeta):
     OLLAMA_LOCAL: str
 
     # VNC Desktop URLs (computed from ConfigRegistry)
-    # fmt: off
     VNC_DESKTOP: str
 
-    # fmt: on
-
     # Chrome DevTools Protocol URLs (static)
-    # fmt: off
     CHROME_DEBUGGER_LOCAL: str
-
-    # fmt: on
     VNC_LOCAL: str
 
     # Browser automation service (computed from ConfigRegistry)
-    # fmt: off
     BROWSER_SERVICE: str
-
-    # fmt: on
 
     # AI Stack service (computed from ConfigRegistry)
     AI_STACK_SERVICE: str
@@ -397,10 +393,7 @@ class ServiceURLs(metaclass=_LazyURLMeta):
     # NPU Worker services (computed from ConfigRegistry)
     NPU_WORKER_SERVICE: str
 
-    # fmt: off
     NPU_WORKER_WINDOWS_SERVICE: str
-
-    # fmt: on
 
     # Issue #474: Monitoring stack services (hosted on Redis VM)
     PROMETHEUS_API: str

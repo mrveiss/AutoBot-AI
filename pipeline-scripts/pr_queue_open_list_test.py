@@ -39,9 +39,7 @@ _WORKFLOW = _REPO_ROOT / ".github" / "workflows" / "pr-queue-gate.yml"
 _OPEN_PRS = [{"number": 100 + i, "title": f"pr number {100 + i}"} for i in range(30)]
 
 
-def _write_gh_stub(
-    directory: Path, *, count_rc: int = 0, list_rc: int = 0, comment_rc: int = 0
-) -> None:
+def _write_gh_stub(directory: Path, *, count_rc: int = 0, list_rc: int = 0, comment_rc: int = 0) -> None:
     """Put a fake `gh` on PATH that mimics the three calls the gate makes.
 
     The gate calls `gh pr list` TWICE and they must be controllable
@@ -52,9 +50,7 @@ def _write_gh_stub(
     exercise the list fallback never reached it, and passed for the wrong
     reason.
     """
-    payload = "".join(
-        f'{{"number": {p["number"]}, "title": "{p["title"]}"}},' for p in _OPEN_PRS
-    ).rstrip(",")
+    payload = "".join(f'{{"number": {p["number"]}, "title": "{p["title"]}"}},' for p in _OPEN_PRS).rstrip(",")
     stub = directory / "gh"
     stub.write_text(
         "#!/bin/bash\n"
@@ -70,8 +66,7 @@ def _write_gh_stub(
         "  if [ %d -ne 0 ]; then echo 'stub: gh count failed' >&2; exit %d; fi\n"
         "  echo %d; exit 0; }; done\n"
         "if [ %d -ne 0 ]; then echo 'stub: gh list failed' >&2; exit %d; fi\n"
-        "echo '[%s]'\n"
-        % (comment_rc, count_rc, count_rc, len(_OPEN_PRS), list_rc, list_rc, payload),
+        "echo '[%s]'\n" % (comment_rc, count_rc, count_rc, len(_OPEN_PRS), list_rc, list_rc, payload),
         encoding="utf-8",
     )
     stub.chmod(0o755)
@@ -259,3 +254,11 @@ def test_the_job_declares_the_scopes_its_steps_need() -> None:
             "scope to `none`"
         )
     assert permissions.get("pull-requests") == "write", "the gate posts a comment"
+
+
+def test_the_runaway_notice_never_tells_a_reader_to_merge_directly() -> None:
+    """#19785: PRs land through the merge train as merge commits; the notice must not say otherwise."""
+    text = _WORKFLOW.read_text(encoding="utf-8")
+    assert "past the runaway threshold" in text, "the notice moved -- re-point this guard"
+    assert "--squash" not in text
+    assert not re.search(r"gh pr merge\b", text)
