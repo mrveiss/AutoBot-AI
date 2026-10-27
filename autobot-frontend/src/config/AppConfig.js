@@ -44,17 +44,17 @@ export class AppConfigService {
         vnc: {
           desktop: {
             host: import.meta.env.VITE_DESKTOP_VNC_HOST,
-            port: import.meta.env.VITE_DESKTOP_VNC_PORT || '6080',
+            port: import.meta.env.VITE_DESKTOP_VNC_PORT || String(PORT_DEFAULTS.vnc),
             protocol: 'http'
           },
           terminal: {
             host: import.meta.env.VITE_TERMINAL_VNC_HOST,
-            port: import.meta.env.VITE_TERMINAL_VNC_PORT || '6080',
+            port: import.meta.env.VITE_TERMINAL_VNC_PORT || String(PORT_DEFAULTS.vnc),
             protocol: 'http'
           },
           playwright: {
             host: import.meta.env.VITE_PLAYWRIGHT_VNC_HOST,
-            port: import.meta.env.VITE_PLAYWRIGHT_VNC_PORT || '6081',
+            port: import.meta.env.VITE_PLAYWRIGHT_VNC_PORT || String(PORT_DEFAULTS.vnc), // #19327: was 6081, unserved
             protocol: 'http'
           }
         },

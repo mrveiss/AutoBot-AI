@@ -36,7 +36,8 @@ _LINT_SCRIPT = "scripts/lint-conventions.sh"
 # broken. scripts/lint_conventions_test.py already derives its fixture this way
 # for exactly this reason (#15245); this file is the second fixture with the
 # same shape and did not.
-_LIB_REF = re.compile(r"lib/([A-Za-z0-9_.-]+\.(?:sh|ere))")
+# #19645: .py too -- the commit-msg mode runs lib/outward_wording.py.
+_LIB_REF = re.compile(r"lib/([A-Za-z0-9_.-]+\.(?:sh|ere|py))")
 
 
 def _lint_files() -> tuple[str, ...]:
@@ -117,3 +118,23 @@ def test_a_real_commit_is_refused_then_accepted(repo: Path) -> None:
 
     assert refused.returncode != 0, refused.stdout + refused.stderr
     assert accepted.returncode == 0, accepted.stdout + accepted.stderr
+
+
+@pytest.mark.parametrize(
+    "subject",
+    [
+        "ci(wording): queued by the trainmaster (#19645)",
+        "ci(wording): handed a0 → 4d (#19645)",
+        "ci(wording): agreed with the M3 owner (#19645)",
+        "ci(wording): picked up from autobot-ai-4d (#19645)",
+    ],
+)
+def test_a_subject_naming_a_session_or_internal_role_is_rejected(repo: Path, subject: str) -> None:
+    """#19645: the hook runs the one wording detector, scripts/lib/outward_wording.py."""
+    result, _ = _run_hook(repo, subject + "\n")
+    assert result.returncode != 0, result.stdout
+    assert "FAIL" in result.stdout and "maintainer decision (YYYY-MM-DD)" in result.stdout
+
+
+def test_a_subject_with_a_hex_sha_and_the_word_train_passes(repo: Path) -> None:
+    assert _run_hook(repo, "ci(wording): the merge train reverts a0b1c2d3e4 (#19645)\n")[0].returncode == 0
