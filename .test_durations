@@ -42864,7 +42864,7 @@
     "repo_tests/workflow_concurrency_guard_test.py::test_a_pull_request_workflow_cancels_superseded_runs[frontend-typecheck-regression.yml]": 0.006277927000041927,
     "repo_tests/workflow_concurrency_guard_test.py::test_a_pull_request_workflow_cancels_superseded_runs[hardened-smoke-test.yml]": 0.009753578999948331,
     "repo_tests/workflow_concurrency_guard_test.py::test_a_pull_request_workflow_cancels_superseded_runs[import-hermeticity-sweep.yml]": 0.011631230999910258,
-    "repo_tests/workflow_concurrency_guard_test.py::test_a_pull_request_workflow_cancels_superseded_runs[llc-contract.yml]": 0.00605642400000761,
+    "repo_tests/workflow_concurrency_guard_test.py::test_a_pull_request_workflow_cancels_superseded_runs[company-os-contract.yml]": 0.00605642400000761,
     "repo_tests/workflow_concurrency_guard_test.py::test_a_pull_request_workflow_cancels_superseded_runs[marker-tests.yml]": 0.01324518400008401,
     "repo_tests/workflow_concurrency_guard_test.py::test_a_pull_request_workflow_cancels_superseded_runs[migration-gate.yml]": 0.010512173000051916,
     "repo_tests/workflow_concurrency_guard_test.py::test_a_pull_request_workflow_cancels_superseded_runs[no-commit-trailers.yml]": 0.0070754210000814055,
