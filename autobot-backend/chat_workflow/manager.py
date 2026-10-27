@@ -2110,11 +2110,11 @@ before summarizing.
         api_kwargs: dict | None = None,
         image_b64: str | None = None,
     ):
-        """Process a single LLM iteration. Yields chunks, then (llm_response, tool_calls). Issue #620.
+        """One LLM iteration: yields chunks, then (llm_response, tool_calls) (#620). ``image_b64`` (#11538) is
+        gated on vision support and attached in the shape ``ollama_endpoint`` consumes — see _attach_vision_payload.
 
-        Issue #11538: ``image_b64`` (the latest browser/VNC screenshot, if any) is
-        threaded into the payload, gated on vision support and attached in the shape
-        ``ollama_endpoint`` (the actual POST target) consumes — see _attach_vision_payload.
+        Spend exemption (#16924): records no LLM spend. True only while ``ollama_endpoint`` is self-hosted inference
+        with no per-token bill; pointed at a metered endpoint, this must record via ``services.llm_usage_recording``.
         """
         import aiohttp
 

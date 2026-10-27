@@ -152,10 +152,42 @@ register_env_var(
         description=(
             "Seconds a user's team memberships, resolved for the KB visibility principal of a "
             "tenant-context route, are reused before the team service is asked again; a membership "
-            "change takes effect within this window; 0 disables the cache; read by "
-            "knowledge/tenant_groups.py (#19007)."
+            "removal or team delete bumps the organisation's membership epoch and drops every "
+            "worker's entries at once; an epoch that cannot be read re-resolves and neither serves nor "
+            "fills the cache, so this window bounds staleness only after a bump exhausts its "
+            "retries; 0 disables the cache; read by "
+            "knowledge/tenant_groups.py (#19007, #19630)."
         ),
         component="knowledge",
         range=(0, 3600),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MEMBERSHIP_EPOCH_BUMP_ATTEMPTS",
+        type=int,
+        default=3,
+        description=(
+            "Tries the post-commit bump of an organisation's team-membership epoch gets before the "
+            "failure is raised; every failed try is logged at error level; read by "
+            "autobot_shared/membership_epoch.py (#19630)."
+        ),
+        component="knowledge",
+        range=(1, 10),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MEMBERSHIP_EPOCH_BUMP_BACKOFF_SECONDS",
+        type=float,
+        default=0.2,
+        description=(
+            "Seconds before the second try of a failed team-membership epoch bump; doubles on each "
+            "further try; read by autobot_shared/membership_epoch.py (#19630)."
+        ),
+        component="knowledge",
+        range=(0.0, 10.0),
     )
 )

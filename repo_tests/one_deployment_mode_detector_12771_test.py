@@ -48,6 +48,11 @@ def _old_scripts(explicit, in_container):
 )
 def test_matches_old_backend_detector(explicit, in_container, kubernetes, distributed):
     got = detect_deployment_mode(explicit, in_container, kubernetes, distributed)
+    if kubernetes and not in_container and not explicit:
+        # #19658: the one deliberate change -- the old body answered LOCAL for a pod with no
+        # Docker marker (containerd), so a Kubernetes deployment was detected as a bare host.
+        assert got == M.KUBERNETES
+        return
     assert got == _old_backend(explicit, in_container, kubernetes, distributed)
 
 
@@ -58,7 +63,8 @@ def test_matches_old_scripts_detector(explicit, in_container):
 
 
 def test_literal_expectations() -> None:
-    assert detect_deployment_mode(None, False, True, True) is M.LOCAL
+    assert detect_deployment_mode(None, False, True, True) is M.KUBERNETES  # no Docker marker in a pod (#19658)
+    assert detect_deployment_mode(None, False, False, True) is M.LOCAL
     assert detect_deployment_mode(None, True, True, True) is M.KUBERNETES
     assert detect_deployment_mode(None, True, False, True) is M.DISTRIBUTED
     assert detect_deployment_mode(None, True, False, False) is M.DOCKER_LOCAL
