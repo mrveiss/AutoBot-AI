@@ -96,7 +96,7 @@ CONSOLIDATED_INTO = {
     "redis.enabled": "autobot_shared.ssot_config.RedisConfig.enabled",
     "redis.host": "autobot_shared.ssot_config.VMConfig.redis",
     "redis.port": "autobot_shared.ssot_config.PortConfig.redis",
-    "redis.db": "autobot_shared.ssot_config.RedisConfig.db_main",
+    "redis.db": "autobot_shared.redis_management.types.DATABASE_MAPPING['main']",
     "redis.password": "autobot_shared.ssot_config.RedisConfig.password",
     "data.base_directory": "autobot_shared.ssot_config.PathConfig.data_dir",
     "data.chat_history_file": "autobot_shared.ssot_config.MiscConfig.chat_history_file",
