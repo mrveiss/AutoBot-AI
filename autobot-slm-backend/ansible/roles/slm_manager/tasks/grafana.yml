@@ -50,11 +50,26 @@
   when: grafana_install | bool
   tags: ['grafana', 'packages']
 
+# #19329: the pinned version applies to a fresh install. An installed Grafana is left
+# as it is: a pinned install over a newer one is a downgrade, which Grafana's
+# database does not support.
+- name: "Grafana | Check whether Grafana is installed"
+  ansible.builtin.command:
+    cmd: "dpkg-query -W --showformat=${Status} grafana"
+  register: _grafana_installed
+  changed_when: false
+  failed_when: false
+  check_mode: false  # read-only query; the install guard below needs it under --check
+  when: grafana_install | bool
+  tags: ['grafana', 'packages']
+
 - name: "Grafana | Install Grafana"
   ansible.builtin.apt:
-    name: grafana
-    state: "{{ 'latest' if grafana_version == 'latest' else 'present' }}"
-  when: grafana_install | bool
+    name: "grafana={{ grafana_version }}"
+    state: present
+  when:
+    - grafana_install | bool
+    - "'ok installed' not in _grafana_installed.stdout"
   tags: ['grafana', 'packages']
 
 # ==========================================================

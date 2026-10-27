@@ -5438,7 +5438,7 @@
   "knowledge.promptEditor.versionNumber": "v{version}",
   "knowledge.promptEditor.previewVersion": "Priekšskatījums - Versija {version}",
   "knowledge.promptEditor.errorLoadPrompts": "Neizdevās ielādēt uzveicinājumus",
-  "knowledge.promptEditor.confirmDiscardChanges": "Jums ir nesaglābātas izmaiņas. Atgriezties?",
+  "knowledge.promptEditor.confirmDiscardChanges": "Jums ir nesaglabātas izmaiņas. Vai tās atmest?",
   "knowledge.promptEditor.successSaved": "Uzveicinājums veiksmīgi saglabāts",
   "knowledge.promptEditor.errorSavePrompt": "Neizdevās saglabāt uzveicinājumu",
   "knowledge.promptEditor.successReverted": "Uzveicinājums veiksmīgi atjaunots",
