@@ -6,22 +6,23 @@ Main Window - NPU Worker Dashboard
 
 import logging
 
+from gui.utils.app_config import DEFAULT_WORKER_PORT
+from PySide6.QtCore import QTimer, Slot
+from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QApplication,
-    QMainWindow,
-    QWidget,
-    QVBoxLayout,
     QHBoxLayout,
-    QPushButton,
     QLabel,
-    QTabWidget,
-    QStatusBar,
-    QMessageBox,
-    QSystemTrayIcon,
+    QMainWindow,
     QMenu,
+    QMessageBox,
+    QPushButton,
+    QStatusBar,
+    QSystemTrayIcon,
+    QTabWidget,
+    QVBoxLayout,
+    QWidget,
 )
-from PySide6.QtCore import QTimer, Slot
-from PySide6.QtGui import QIcon, QAction
 
 logger = logging.getLogger(__name__)
 
@@ -387,7 +388,7 @@ class MainWindow(QMainWindow):
 
         # Update connection info with worker ID and port
         worker_id = metrics.get("worker_id", "N/A")
-        port = metrics.get("port", 8082)
+        port = metrics.get("port", DEFAULT_WORKER_PORT)
         self.connection_info.set_worker_id(worker_id)
         self.connection_info.set_port(port)
 
