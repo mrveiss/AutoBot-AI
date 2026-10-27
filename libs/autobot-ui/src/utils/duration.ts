@@ -3,11 +3,8 @@
 /**
  * @autobot/ui — shared duration-formatting vocabulary (#14908).
  *
- * `formatHelpers.ts` is declared once per app because the surrounding
- * formatting logic differs (577 vs 215 lines). `DurationStyle` itself was
- * declared identically in both — the low-risk starting point the issue
- * calls out. Only the type moves here; `formatDuration` and the rest of
- * each app's `formatHelpers.ts` stay per-app pending a full diff.
+ * `DurationStyle` was declared identically in both apps. `formatDuration` and the other
+ * byte/uptime formatters that take it live beside it in `./format.ts`.
  */
 
 /** Numeric duration-formatting style accepted by `formatDuration(value, { style })`. */
