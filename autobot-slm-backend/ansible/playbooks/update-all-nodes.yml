@@ -1261,6 +1261,8 @@
       ansible.builtin.include_role:
         name: backend
         tasks_from: docs_sync
+        apply:
+          tags: [backend, docs]
       when: "'backend' in group_names"
       tags: [backend, docs]
 
@@ -1269,6 +1271,12 @@
       ansible.builtin.include_role:
         name: backend
         tasks_from: plugins_sync
+        apply:
+          tags: [backend, plugins]
+      # The role's `notify: restart backend` ignores --skip-tags; this play
+      # restarts explicitly below, so suppress the handler here (#18324).
+      vars:
+        backend_plugins_sync_notify_restart: false
       when: "'backend' in group_names"
       tags: [backend, plugins]
 
