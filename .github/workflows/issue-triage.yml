@@ -53,3 +53,60 @@ jobs:
               labels
             });
             console.log(`Triage complete! Applied labels: ${labels.join(', ')}`);
+
+  # #19645: issue bodies must make sense to an outside contributor -- no automation
+  # session ids, no internal process roles. Flagged, never blocked: a hit adds the
+  # `needs-wording` label and ONE marker-identified comment, updated in place; a
+  # clean edit updates that comment and clears the label. The detector is
+  # scripts/lib/outward_wording.py, the same one behind the PR body check and the
+  # commit-msg hook.
+  wording:
+    name: Issue wording (session ids, internal roles)
+    if: github.event_name == 'issues' && !github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    concurrency:
+      group: ${{ github.workflow }}-wording-${{ github.event.issue.number }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          # A job holding a write token runs code from the default branch only.
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/lib
+            .github/actions/upsert-pr-comment
+
+      - name: Scan the issue body
+        id: scan
+        run: python3 scripts/lib/outward_wording.py issue --event "$GITHUB_EVENT_PATH" --out "$RUNNER_TEMP/wording.md"
+
+      - name: Post or update the wording comment
+        if: steps.scan.outputs.comment == 'true'
+        uses: ./.github/actions/upsert-pr-comment
+        with:
+          marker: ${{ steps.scan.outputs.marker }}
+          body-file: ${{ runner.temp }}/wording.md
+          number: ${{ steps.scan.outputs.number }}
+
+      - name: Add or clear the needs-wording label
+        if: steps.scan.outputs.label == 'add' || steps.scan.outputs.label == 'remove'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ steps.scan.outputs.number }}
+          LABEL_ACTION: ${{ steps.scan.outputs.label }}
+          LABEL_NAME: ${{ steps.scan.outputs.label_name }}
+        run: |
+          set -euo pipefail
+          # The REST add-labels call creates the label on first use; `gh issue edit
+          # --add-label` refuses a label the repository does not have yet.
+          if [ "$LABEL_ACTION" = add ]; then
+            gh api --method POST "repos/$REPO/issues/$NUMBER/labels" -f "labels[]=$LABEL_NAME" >/dev/null
+          else
+            gh api --method DELETE "repos/$REPO/issues/$NUMBER/labels/$LABEL_NAME" >/dev/null
+          fi

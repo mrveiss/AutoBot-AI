@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 # Constants (Issue #68 - Code smells fix: Extract magic numbers)
 # Note: No hardcoded IPs - backend host comes from config/environment
 # =============================================================================
+# The bundle's ONE home for its listen port: it cannot import autobot_shared, so this restates
+# ssot_config PortConfig.npu_windows and repo_tests/service_port_homes_test.py holds the two equal (#19325).
 DEFAULT_WORKER_PORT = 8082
 DEFAULT_BOOTSTRAP_TIMEOUT = 10
 DEFAULT_BOOTSTRAP_RETRIES = 3
