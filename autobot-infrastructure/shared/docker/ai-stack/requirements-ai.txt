@@ -42,8 +42,8 @@ tiktoken>=0.14.0
 # Tensor Operations
 -c ../../../../constraints/shared.txt  # single source of truth for shared versions (#10524)
 numpy  # version from constraints/shared.txt
-torch>=2.14.1
-torchvision>=0.29.1
+torch  # version from constraints/shared.txt (#19330)
+torchvision  # version from constraints/shared.txt, paired with torch (#19330)
 torchaudio>=2.11.0
 
 # Text Processing

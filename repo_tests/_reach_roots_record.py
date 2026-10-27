@@ -119,6 +119,7 @@ REACH_ROOTS = {
         "autobot-infrastructure/shared/mcp/",
         "autobot_shared/",
     ),
+    "repo_tests/kit_export_shadow_ratchet_14908_test.py": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "repo_tests/knowledge_metadata_parse_canonical_18220_test.py": ("autobot-backend/api",),
     "repo_tests/migration_gate_filter_covers_what_its_tests_import_test.py": ("autobot-backend/tests/migrations",),
     "repo_tests/model_revision_pinning_enforced_17804_test.py": (
@@ -131,6 +132,11 @@ REACH_ROOTS = {
         "autobot-frontend/src",
         "autobot-slm-backend",
         "autobot_shared",
+    ),
+    "repo_tests/monitoring_versions_one_home_19329_test.py": (
+        "autobot-infrastructure",
+        "autobot-slm-backend/ansible",
+        "docker-compose.yml",
     ),
     "repo_tests/no_doubled_api_prefix_18722_test.py": ("autobot-backend/api", "autobot-slm-backend/api"),
     "repo_tests/no_literal_secret_default_16299_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
@@ -298,10 +304,19 @@ REACH_ROOTS = {
     "repo_tests/slm_node_enum_members_exist_test.py": ("autobot-slm-backend",),
     "repo_tests/store_fact_chokepoint_guard_test.py": ("autobot-backend/", "autobot_shared/"),
     "repo_tests/tool_effect_single_source_18294_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
+    "repo_tests/torch_pair_one_home_19330_test.py": (
+        ".github",
+        "autobot-infrastructure",
+        "autobot-slm-backend/ansible",
+        "docker",
+        "install.sh",
+        "scripts",
+    ),
     "repo_tests/v_html_sanitiser_guard_19118_test.py": (
         "autobot-frontend/src",
         "autobot-slm-frontend/src",
         "libs/autobot-ui/index.ts",
         "libs/autobot-ui/src",
     ),
+    "repo_tests/workflow_names_say_company_os_19546_test.py": (".github/workflows",),
 }

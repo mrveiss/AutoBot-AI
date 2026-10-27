@@ -131,6 +131,11 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test source is a subset of tracked .py under two roots; the test-file share drifts.",
     ),
+    "torch-pair-literals": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Workflow, docker, infrastructure, Ansible and script files, against all tracked files there; drifts.",
+    ),
     "tool-effect-table-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -266,6 +271,12 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
     ),
     "workflow-job-parse-sweep": (ABSOLUTE, "NOT_PATHS", "Parsed workflow jobs, not files."),
     "workflow-rc-capture": (ABSOLUTE, "NOT_PATHS", "`run:` blocks under an errexit shell, not files."),
+    "workflow-visible-name-sweep": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Workflow files are a subset of tracked YAML; compose, ansible and filter files grow at "
+        "their own rate, so a share of all YAML would sink with nothing wrong.",
+    ),
     "user-mode-default-carriers-18729": (
         ABSOLUTE,
         "FIXED_INVENTORY",

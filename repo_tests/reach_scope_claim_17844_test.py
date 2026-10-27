@@ -217,6 +217,7 @@ def test_a_declared_scope_that_the_sweep_does_not_reach_is_refused() -> None:
 #: Compared as a SET in both directions. Adding a scoped declaration means adding a line here,
 #: and that is the point -- the scope is a decision, so it is written twice on purpose.
 _DECLARED_SCOPES = {
+    "kit-shadow-ts-files-scanned-14908": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "v-html-sanitiser-sinks": (
         "autobot-frontend/src",
         "autobot-slm-frontend/src",
@@ -234,6 +235,7 @@ _DECLARED_SCOPES = {
     "semantic-chunker-fork-scan": ("autobot-backend", "autobot_shared"),
     "migration-gate-test-import-sweep": ("autobot-backend/tests/migrations",),
     "paths-filter-workflow-sweep": (".github/workflows",),
+    "workflow-visible-name-sweep": (".github/workflows",),
     "anti-pattern-type-emitters": ("autobot-backend/code_analysis", "autobot-backend/code_intelligence"),
     "compat-module-needs-importer": ("autobot-backend",),
     "chat-history-async-calls-awaited": ("autobot-backend/api",),
@@ -268,6 +270,14 @@ _DECLARED_SCOPES = {
         "autobot-infrastructure/shared/tools/index_documentation.py",
     ),
     "single-attribute-writer-scan": ("autobot-frontend/src",),
+    "torch-pair-literals": (
+        ".github",
+        "docker",
+        "autobot-infrastructure",
+        "autobot-slm-backend/ansible",
+        "scripts",
+        "install.sh",
+    ),
     "tool-effect-table-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "deployment-mode-detector-scan": ("autobot-backend/", "autobot-infrastructure/"),
     "egress-default-outbound-call-sites": (
@@ -412,6 +422,7 @@ _DECLARED_SCOPES = {
     "severity-enum-fork-scan": ("autobot-backend", "autobot_shared", "autobot-infrastructure"),
     "session-ownership-validator-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "knowledge-metadata-parse-canonical": ("autobot-backend/api",),
+    "monitoring-version-literals": ("docker-compose.yml", "autobot-infrastructure", "autobot-slm-backend/ansible"),
     "model-tier-map-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "embedding-model-render-sites": ("autobot-slm-backend/ansible",),
     "frontend-model-literal-scan": ("autobot-frontend/src",),
