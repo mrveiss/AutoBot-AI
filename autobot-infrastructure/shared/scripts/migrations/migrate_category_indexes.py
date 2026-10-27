@@ -22,7 +22,6 @@ Usage:
 import asyncio
 import json
 import logging
-import os
 import sys
 import time
 from pathlib import Path
@@ -46,6 +45,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from autobot_shared.knowledge_categories import get_category_for_source  # noqa: E402
+from autobot_shared.redis_client import require_redis_client  # noqa: E402
 
 # Configure logging
 logging.basicConfig(
@@ -57,34 +57,20 @@ logger = logging.getLogger(__name__)
 
 def _connect_to_redis() -> redis.Redis:
     """
-    Connect to Redis and return client.
+    Connect to the knowledge database through the canonical client and return it.
 
     Issue #281: Extracted from migrate_category_indexes to reduce function length.
-    Issue #1086: Direct redis.Redis() used because this standalone migration script
-    cannot import autobot_shared.redis_client (requires full backend dependency tree).
+    #19232: host, port, credentials and the database number come from the one
+    endpoint resolver and the one name -> number table (redis-databases.yaml plus
+    AUTOBOT_REDIS_DB_KNOWLEDGE), not a private env chain with a literal default.
 
     Returns:
         Redis client or None if connection failed.
     """
-    redis_host = os.getenv("AUTOBOT_REDIS_HOST", "localhost")
-    redis_port = int(os.getenv("AUTOBOT_REDIS_PORT", "6379"))
-    redis_password = os.getenv("REDIS_PASSWORD") or os.getenv("AUTOBOT_REDIS_PASSWORD")
-    redis_username = os.getenv("REDIS_USERNAME") or os.getenv("AUTOBOT_REDIS_USERNAME")  # #16626
-    redis_db = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))
-
-    logger.info("Connecting to Redis at %s:%s (db=%s)", redis_host, redis_port, redis_db)
-
     try:
-        redis_client = redis.Redis(
-            host=redis_host,
-            port=redis_port,
-            password=redis_password,
-            username=redis_username,
-            db=redis_db,
-            decode_responses=False,
-        )
+        redis_client = require_redis_client(database="knowledge", decode_responses=False)
         redis_client.ping()
-        logger.info("Connected to Redis successfully")
+        logger.info("Connected to Redis knowledge database successfully")
         return redis_client
     except Exception as e:
         logger.error("Failed to connect to Redis: %s", e)

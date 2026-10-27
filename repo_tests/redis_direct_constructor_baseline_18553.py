@@ -49,13 +49,7 @@ BASELINE: dict[str, tuple[int, str, str]] = {
     ),
     f"{_ANSIBLE_ROOT}/deploy-hybrid.sh": (1, EXCEPTION, _SHELL),
     f"{_ANSIBLE_ROOT}/deploy-native.sh": (1, EXCEPTION, _SHELL),
-    "autobot-backend/code_analysis/install.sh": (1, EXCEPTION, _SHELL),
     # --- autobot-infrastructure/shared/scripts ------------------------------------------------
-    f"{_SCRIPTS}/migrations/migrate_category_indexes.py": (
-        1,
-        EXCEPTION,
-        "standalone one-off migration script, decode_responses=False with explicit credentials (#1086)",
-    ),
     f"{_SCRIPTS}/security/mtls-migrate.py": (
         4,
         EXCEPTION,
@@ -69,4 +63,4 @@ BASELINE: dict[str, tuple[int, str, str]] = {
 }
 
 #: Sum of the site counts above. It may only go DOWN.
-FROZEN_TOTAL = 13
+FROZEN_TOTAL = 11

@@ -149,17 +149,11 @@ class TestTimeoutConfig:
 class TestRedisConfig:
     """Tests for RedisConfig class."""
 
-    def test_default_redis_databases(self) -> None:
-        """Test that default Redis database assignments are correct."""
+    def test_redis_config_holds_no_database_numbers(self) -> None:
+        """#19232: database numbers live in one table (redis-databases.yaml + overrides), not here."""
         from autobot_shared.ssot_config import RedisConfig
 
-        with patch.dict(os.environ, {}, clear=True):
-            config = RedisConfig(_env_file=None)
-            assert config.db_main == 0
-            assert config.db_knowledge == 1
-            assert config.db_prompts == 2
-            assert config.db_cache == 5
-            assert config.db_testing == 13  # Changed from 15 in redis-databases.yaml SSOT
+        assert not [name for name in RedisConfig.model_fields if name.startswith("db_")]
 
     def test_redis_password_optional(self) -> None:
         """Test that Redis password can be None or a string."""
