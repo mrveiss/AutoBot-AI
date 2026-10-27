@@ -41,6 +41,7 @@ from repo_tests._reach import declare
 
 from autobot_shared import env_registry_tls, ssot_tls
 from autobot_shared.env_registry import REGISTRY
+from tools.lint._comment_syntax import strip_trailing_comment
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 HOME: dict[str, str] = {
@@ -124,7 +125,7 @@ def bare_literals(text: str) -> list[str]:
     for pat in (p for pats in _PATTERNS.values() for p in pats):
         text = pat.sub("", text)
     lines = (line.strip() for line in text.splitlines())
-    return [line for line in lines if HOME[_REMOTE] in line and not line.startswith(("#", "{#"))]
+    return [line for line in lines if HOME[_REMOTE] in strip_trailing_comment(line, ("#", "{#"))]
 
 
 def bare_literal_violations(texts: dict[str, str]) -> list[str]:

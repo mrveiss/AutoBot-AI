@@ -50,7 +50,7 @@
 
     - name: Verify ChromaDB health
       ansible.builtin.uri:
-        url: "http://127.0.0.1:{{ chromadb_port | default(8100) }}/api/v2/heartbeat"
+        url: "http://127.0.0.1:{{ chromadb_port | default(8100) }}{{ chromadb_heartbeat_path }}"
         return_content: true
       register: chromadb_health
       failed_when: chromadb_health.status != 200

@@ -1,6 +1,7 @@
 # Databases, caches, and ORMs
 redis>=8.1.0,<9.0
-chromadb==1.5.9
+-c ../constraints/shared.txt  # single source of truth for shared versions (#10524)
+chromadb  # version from constraints/shared.txt (#19478)
 sqlalchemy==2.0.54  # held below 2.1 with the three service manifests: 2.1 breaks the SLM suite (InternalTraversal); raising it is #17445's work, not a bump's
 aiosqlite==0.22.1
 greenlet==3.5.6  # SQLAlchemy async engine dependency, mirrored from the backends (#17432). Declared here rather than allowlisted in requirements_ci_drift_baseline.txt: this set declares sqlalchemy AND aiosqlite, so a test opening an async engine against it fails exactly as the SLM container did. "Not observed failing" is not "does not need it" -- that invisibility is what hid #17432 for a day.
@@ -9,7 +10,8 @@ psycopg2-binary>=2.9.13,<3.0.0  # production dep (autobot-slm-backend/requiremen
 
 # OpenTelemetry core (#17557) -- pinned HERE, beside chromadb, because chromadb
 # is what drags it. Whoever next bumps chromadb needs to see this constraint in
-# the same file.
+# the same file. chromadb's version now lives in constraints/shared.txt (#19478):
+# a bump there must re-check these floors, since CI resolves the shared range.
 #
 # NOT a new CI dependency. chromadb==1.5.9 requires opentelemetry-api,
 # -sdk and -exporter-otlp-proto-grpc (all >=1.2.0, unbounded above), which pull
