@@ -101,7 +101,7 @@ class WorkerStartupMixin:
             bootstrap = await fetch_bootstrap_config(
                 backend_host=backend_config.get("host") or default_backend_host,
                 backend_port=backend_config.get("port", 8001),
-                worker_port=service_config.get("port", 8082),
+                worker_port=service_config.get("port", DEFAULT_PORT),
                 platform="windows",
                 worker_id=self.worker_id,  # Pass existing ID to reuse registration
             )
@@ -388,7 +388,7 @@ class WorkerStartupMixin:
                 get_platform_info,
             )
 
-            port = config.get("service", {}).get("port", 8082)
+            port = config.get("service", {}).get("port", DEFAULT_PORT)
             interfaces = get_network_interfaces()
             platform_info = get_platform_info()
 

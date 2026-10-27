@@ -185,6 +185,9 @@ const PYTHON_ONLY_PORTS = [
   // per-session `vnc_port` API-response mock (AdvancedControlApiClient), a
   // dynamic runtime value with no static SSOT default on either side (#14173)
   'vnc_server',
+  // The Windows NPU worker (#19325): the backend pairs and dials it; the frontend never
+  // addresses it, and reads only the Linux worker's port ('npu' above).
+  'npu_windows',
 ] as const
 const TS_ONLY_PORTS = ['slmAdmin'] as const
 

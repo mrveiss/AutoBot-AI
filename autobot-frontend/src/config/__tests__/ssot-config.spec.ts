@@ -110,14 +110,14 @@ describe('SSOT Config Types', () => {
         },
         playwright: {
           host: '10.0.0.6',
-          port: 6081,
+          port: 6080,
         },
       };
 
       expect(vncConfig.desktop.host).toBe('10.0.0.1');
       expect(vncConfig.desktop.port).toBe(6080);
       expect(vncConfig.playwright.host).toBe('10.0.0.6');
-      expect(vncConfig.playwright.port).toBe(6081);
+      expect(vncConfig.playwright.port).toBe(6080);
     });
   });
 

@@ -99,7 +99,7 @@ declare -A HV_SSOT_PORTS=(
     ["6080"]="config.port.vnc (AUTOBOT_VNC_PORT)"
     ["8080"]="config.port.aistack (AUTOBOT_AI_STACK_PORT)"
     ["8081"]="config.port.npu (AUTOBOT_NPU_WORKER_PORT)"
-    ["8082"]="config.port.npu (AUTOBOT_NPU_WORKER_PORT)"
+    ["8082"]="config.port.npu_windows (AUTOBOT_NPU_WORKER_WINDOWS_PORT)"
     ["3000"]="config.port.* from ssot_config"
     # #14371: 8443, 5432 and 9090 come from detector 1's PORT_PATTERN, which was
     # DECLARED AND NEVER USED — the variable was assigned at the top of the

@@ -185,7 +185,7 @@ server {
 - **OS**: Ubuntu 22.04 LTS with Intel NPU drivers
 - **Hardware**: Intel NPU (AI Boost), RTX 4070 GPU access
 - **Services**: OpenVINO runtime, NPU service, GPU passthrough
-- **Ports**: 8081 (NPU API), 8082 (health check)
+- **Ports**: 8081 (NPU API, including `/health`)
 
 **NPU Service Architecture**:
 ```python
