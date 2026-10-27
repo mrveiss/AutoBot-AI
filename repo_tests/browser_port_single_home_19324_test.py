@@ -91,7 +91,6 @@ _PINNED: dict[str, tuple[str, ...]] = {
         r"^AUTOBOT_BROWSER_SERVICE_URL=http://YOUR_BROWSER_VM_IP:(\d+)$",
     ),
     ".env.localhost": (r"^AUTOBOT_BROWSER_SERVICE_URL=http://127\.0\.0\.1:(\d+)$",),
-    "autobot_shared/network_constants.py": (r'"BROWSER_SERVICE_PORT": \("port\.browser", "(\d+)", int\)',),
     "autobot_shared/env_registry_backend_services.py": (
         r'name="AUTOBOT_BROWSER_SERVICE_PORT",\n\s+type=int,\n\s+default=(\d+),',
     ),
