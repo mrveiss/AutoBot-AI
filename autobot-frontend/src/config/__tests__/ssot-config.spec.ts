@@ -20,7 +20,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { reloadConfig, runtimeHttpProto, getBackendUrl, getConfig } from '../ssot-config';
+import { reloadConfig, runtimeHttpProto, getBackendUrl, getConfig, getServiceUrl } from '../ssot-config';
 
 // Note: In a real test environment, we would need to mock import.meta.env
 // For now, these tests validate the TypeScript structure and default values
@@ -299,14 +299,6 @@ describe('SSOT Config URL Computation', () => {
     expect(websocketUrl).toBe('ws://10.0.0.1:8001/ws');
   });
 
-  it('should compute Redis URL correctly', () => {
-    const vm = { redis: '10.0.0.4' };
-    const port = { redis: 6379 };
-
-    const redisUrl = `redis://${vm.redis}:${port.redis}`;
-    expect(redisUrl).toBe('redis://10.0.0.4:6379');
-  });
-
   it('should compute VNC URL correctly', () => {
     const vm = { main: '10.0.0.1' };
     const port = { vnc: 6080 };
@@ -425,10 +417,11 @@ describe('SSOT Config runtimeHttpProto() — protocol detection', () => {
       expect(result).toMatch(/^https:\/\//);
     });
 
-    it('redisUrl still uses redis:// (not affected by protocol detection)', () => {
+    it('builds no Redis URL: a browser never dials Redis (#19232)', () => {
       setProtocol('https:');
       const cfg = reloadConfig();
-      expect(cfg.redisUrl).toMatch(/^redis:\/\//);
+      expect('redisUrl' in cfg).toBe(false);
+      expect(getServiceUrl('redis')).toBeUndefined();
     });
   });
 
@@ -518,7 +511,6 @@ describe('SSOT Config Service Lookup', () => {
     const urls: Record<string, string> = {
       backend: 'http://10.0.0.1:8001',
       frontend: 'http://10.0.0.2:5173',
-      redis: 'redis://10.0.0.4:6379',
       ollama: 'http://127.0.0.1:11434',
     };
 
@@ -528,7 +520,6 @@ describe('SSOT Config Service Lookup', () => {
 
     expect(getServiceUrl('backend')).toBe('http://10.0.0.1:8001');
     expect(getServiceUrl('BACKEND')).toBe('http://10.0.0.1:8001');
-    expect(getServiceUrl('redis')).toBe('redis://10.0.0.4:6379');
     expect(getServiceUrl('unknown')).toBeUndefined();
   });
 

@@ -884,7 +884,7 @@ async def _vector_op_info(kb, redis_mgr, params: dict) -> dict:
         "operation": "info",
         "data": {
             "used_memory": info.get("used_memory_human", "unknown"),
-            "total_keys": info.get("db8", {}).get("keys", 0),
+            "total_keys": await asyncio.to_thread(vector_db.dbsize),  # its own DB, whichever number (#19232)
             "vector_index": kb.redis_index_name if kb else "unknown",
         },
     }
