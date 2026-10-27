@@ -74,8 +74,10 @@ class _ConfigStub:
         avoid re-entering the circular-import path this stub exists to guard.
         Previously read nonexistent `config.redis_enabled`/`config.redis_db_main`
         attributes (AttributeError if ever invoked) — fixed to use the real
-        `config.redis.*` sub-config fields.
+        `config.redis.*` sub-config fields. #19232: the database number comes
+        from the one name -> number table, not a parallel SSOT field.
         """
+        from autobot_shared.redis_management.database_names import database_number
 
         return {
             "enabled": config.redis.enabled,
@@ -83,7 +85,7 @@ class _ConfigStub:
             "port": int(config.port.redis),
             "password": config.redis.password,
             "username": config.redis.username,
-            "db": int(config.redis.db_main),
+            "db": database_number("main"),
         }
 
     def get_llm_config(self):

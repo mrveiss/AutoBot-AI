@@ -277,7 +277,7 @@ export interface AutoBotConfig {
   // Computed URLs (readonly getters)
   readonly backendUrl: string;
   readonly frontendUrl: string;
-  readonly redisUrl: string;
+  // No redisUrl: a browser never dials Redis, and the backend owns the one Redis URL builder (#19232).
   readonly ollamaUrl: string;
   /** @deprecated #14822 — legacy broadcast socket base; use `liveEventsUrl`. */
   readonly websocketUrl: string;
@@ -497,10 +497,6 @@ function buildConfig(): AutoBotConfig {
       return `${runtimeHttpProto()}://${vm.frontend}:${port.frontend}`;
     },
 
-    get redisUrl(): string {
-      return `redis://${vm.redis}:${port.redis}`;
-    },
-
     get ollamaUrl(): string {
       return `${runtimeHttpProto()}://${vm.ollama}:${port.ollama}`;
     },
@@ -624,7 +620,6 @@ export function getServiceUrl(serviceName: string): string | undefined {
   const urlMap: Record<string, string> = {
     backend: cfg.backendUrl,
     frontend: cfg.frontendUrl,
-    redis: cfg.redisUrl,
     ollama: cfg.ollamaUrl,
     websocket: cfg.websocketUrl,
     aistack: cfg.aistackUrl,

@@ -52,12 +52,8 @@ export const DEFAULT_CONFIG = {
       protocol: config.httpProtocol
     },
 
-    // Redis VM - Database server
-    redis: {
-      host: config.vm.redis,
-      port: String(config.port.redis),
-      protocol: 'redis'
-    },
+    // No Redis entry (#19232): a browser never dials Redis; its host/port for display are
+    // config.vm.redis / config.port.redis, and the backend owns the one Redis URL builder.
 
     // AI Stack VM - LLM services
     ai_stack: {
