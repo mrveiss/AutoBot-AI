@@ -26,7 +26,7 @@ import pytest
 from repo_tests.scan_helpers_vacuity_test import _REPO_ROOT, _git, _run_isolated, _seed
 
 from autobot_shared.isolated_git import isolated_git_env, make_repo
-from tools.lint import check_getenv_ssot_drift  # noqa: F401 -- puts tools/lint on sys.path for the sibling import
+from tools.lint import check_getenv_ssot_drift  # also puts tools/lint on sys.path for the sibling import
 from tools.lint._scan_helpers import PY_FLOOR
 
 from tools.lint._env_fork_scan import FORK_READ_FLOOR, KNOWN_ENV_FORKS  # isort: skip
@@ -46,7 +46,7 @@ def _ssot_source(live_default: bool, calls: int = _FIELD_CALLS) -> str:
 
 
 def _getenv_sites(drift: bool) -> str:
-    """Ten comparable call sites (the floor is 8); the last one disagrees when *drift*."""
+    """Ten comparable call sites (above ``GETENV_CALL_FLOOR``); the last one disagrees when *drift*."""
     other = "other" if drift else "v9"
     lines = [f'os.getenv("AUTOBOT_PLANT_{i}", "v{i}")' for i in range(9)]
     return "import os\n\n" + "\n".join(lines) + f'\nos.getenv("AUTOBOT_PLANT_9", "{other}")\n'
@@ -158,7 +158,7 @@ def test_a_repository_without_ssot_config_exits_two(tmp_path: Path, checker: str
         ("check_field_defaults.py", 5, 0, "floor is 200"),
         # getenv: PY_FLOOR files and 320 field defaults both clear, zero comparable
         # pairs against GETENV_CALL_FLOOR (8) is what is left to refuse.
-        ("check_getenv_ssot_drift.py", _FIELD_CALLS, PY_FLOOR, "floor is 6"),
+        ("check_getenv_ssot_drift.py", _FIELD_CALLS, PY_FLOOR, f"floor is {check_getenv_ssot_drift.GETENV_CALL_FLOOR}"),
         # env-forks: no literal-fallback reads against FORK_READ_FLOOR.
         ("check_env_forks.py", 5, 0, f"env fallback read(s); floor is {FORK_READ_FLOOR}"),
     ],

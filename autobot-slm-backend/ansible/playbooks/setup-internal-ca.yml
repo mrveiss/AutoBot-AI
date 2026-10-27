@@ -172,9 +172,10 @@
   vars:
     ca_cert: /etc/autobot/ca/ca-cert.pem
     ca_key: /etc/autobot/ca/ca-key.pem
-    cert_dir: /etc/autobot/certs
-    node_cert: /etc/autobot/certs/server-cert.pem
-    node_key: /etc/autobot/certs/server-key.pem
+    # #19366: the one spelling in this file; later plays alias it.
+    cert_dir: &node_cert_dir "{{ autobot_tls_remote_cert_dir | default('/etc/autobot/certs') }}"
+    node_cert: "{{ cert_dir }}/server-cert.pem"
+    node_key: "{{ cert_dir }}/server-key.pem"
     node_csr: /tmp/autobot-node.csr
     node_cert_days: "{{ _node_cert_days | default(365) }}"
     cert_renew_threshold_days: "{{ _renew_threshold | default(30) }}"
@@ -382,6 +383,8 @@
   gather_facts: false
   become: true
   tags: ['distribute_ca']
+  vars:
+    cert_dir: *node_cert_dir
 
   tasks:
     - name: "CA Dist | Fetch CA cert from SLM"
@@ -390,10 +393,10 @@
       register: _ca_cert_b64
       delegate_to: "{{ slm_manager_inventory_host }}"
 
-    - name: "CA Dist | Deploy CA cert to /etc/autobot/certs/ca-cert.pem"
+    - name: "CA Dist | Deploy CA cert to {{ cert_dir }}/ca-cert.pem"
       ansible.builtin.copy:
         content: "{{ _ca_cert_b64.content | b64decode }}"
-        dest: /etc/autobot/certs/ca-cert.pem
+        dest: "{{ cert_dir }}/ca-cert.pem"
         mode: "0644"
         owner: root
         group: root
@@ -419,6 +422,8 @@
 - name: "Setup Internal CA — Summary"
   hosts: localhost
   gather_facts: false
+  vars:
+    cert_dir: *node_cert_dir
 
   tasks:
     - name: "Summary | Display result"
@@ -433,9 +438,9 @@
           - "CA key       : /etc/autobot/ca/ca-key.pem  (root:root 0600)"
           - "CA cert      : /etc/autobot/ca/ca-cert.pem (root:root 0644)"
           - ""
-          - "Node certs   : /etc/autobot/certs/server-cert.pem (all fleet nodes)"
-          - "Node keys    : /etc/autobot/certs/server-key.pem  (root:root 0600)"
-          - "CA cert copy : /etc/autobot/certs/ca-cert.pem     (all fleet nodes)"
+          - "Node certs   : {{ cert_dir }}/server-cert.pem (all fleet nodes)"
+          - "Node keys    : {{ cert_dir }}/server-key.pem  (root:root 0600)"
+          - "CA cert copy : {{ cert_dir }}/ca-cert.pem     (all fleet nodes)"
           - ""
           - "Cert metadata has been reported to SLM API."
           - ""

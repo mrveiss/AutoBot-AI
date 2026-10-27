@@ -122,6 +122,11 @@ ssh autobot@<slm-manager-ip> 'curl --insecure https://<backend-ip>:8443/api/heal
 curl -sk https://<frontend-ip>/api/health
 ```
 
+The update also refreshes the install's `docs/` and core `plugins/` directories from the
+code-source checkout and fails if the recorded docs commit differs from the code-source
+commit. The install has no maintained `autobot-infrastructure/` copy: run infrastructure
+scripts from the code-source checkout, never from an install-level copy.
+
 ---
 
 ## Updating Only autobot_shared

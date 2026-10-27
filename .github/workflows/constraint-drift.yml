@@ -22,6 +22,7 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - '**/requirements*.txt'
+      - 'requirements*/*.txt'
       - 'constraints/shared.txt'
       - 'scripts/check_constraint_drift.py'
       - 'scripts/check_websockets_cap.py'
@@ -30,6 +31,7 @@ on:
     branches: [main]
     paths:
       - '**/requirements*.txt'
+      - 'requirements*/*.txt'
       - 'constraints/shared.txt'
       - 'scripts/check_constraint_drift.py'
       - 'scripts/check_websockets_cap.py'
