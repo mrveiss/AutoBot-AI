@@ -142,8 +142,10 @@ export type {
   MetricsSummaryDashboard,
 } from './src/composables/useMetricsSummary'
 
-// Shared duration-formatting vocabulary (#14908).
+// Shared duration, uptime and byte formatting (#14908).
 export type { DurationStyle } from './src/utils/duration'
+export { formatDuration, formatUptime, formatFileSize, formatBytes } from './src/utils/format'
+export type { FormatDurationOptions, FormatUptimeOptions, FormatBytesOptions } from './src/utils/format'
 
 // Scoped console logger (#14908) — canonical LogLevel/log/createLogger; both
 // apps' utils/debugUtils.ts re-export these rather than re-declaring them.
@@ -151,6 +153,8 @@ export { log, createLogger } from './src/utils/logger'
 // Managed polling with scoped disposal and a consecutive-error stop (#19482).
 export { usePollingJob } from './src/composables/usePollingJob'
 export type { UsePollingJobOptions, UsePollingJobReturn } from './src/composables/usePollingJob'
+// The one "updates have stopped" notice for a poller paused on errors (#19482).
+export { default as PollingPausedAlert } from './src/components/PollingPausedAlert.vue'
 
 // One DOMPurify-backed sanitiser for every v-html binding in both apps (#2847, #19118).
 export { sanitizeChatHtml, sanitizeKnowledgeHtml, sanitizeHtml, escapeHtml } from './src/utils/sanitize'
