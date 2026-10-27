@@ -43,13 +43,16 @@ def _find_ansible_playbook() -> str:
     raise FileNotFoundError("ansible-playbook not found. Install Ansible: apt install ansible")
 
 
+# Inventory-level: the run as a whole targeted nothing. A per-play "skipping: no hosts matched" is
+# NOT here -- a multi-play playbook prints it for every play whose group the limit leaves out, while
+# the target's own plays run; the recap checks below decide whether the target ran (#19762).
 _NO_HOSTS_MARKERS = (
-    "skipping: no hosts matched",
     "Could not match supplied host pattern",
     "No inventory was parsed",
 )
 
 
+_LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1"})
 _RECAP_LINE_RE = re.compile(r"^\s*(\S+)\s*:\s*ok=(\d+)\s+changed=\d+\s+unreachable=(\d+)\s+failed=(\d+)", re.MULTILINE)
 
 
@@ -68,6 +71,36 @@ def ansible_exit_code(output: str, host: str | None, returncode: int | None) -> 
     return 1 if returncode == 0 and ansible_run_failure(output, host, returncode) else returncode
 
 
+def _last_recap(output: str) -> dict[str, tuple[int, int, int]]:
+    """``{host: (ok, unreachable, failed)}`` from the LAST PLAY RECAP of ``output``."""
+    tail = output[max(output.rfind("PLAY RECAP"), 0) :]
+    return {m[1]: tuple(int(n) for n in m.groups()[1:]) for m in _RECAP_LINE_RE.finditer(tail)}
+
+
+def limit_run_failure(output: str, limit: list[str] | None) -> str | None:
+    """Why a limited run reached none of the hosts its limit names beyond localhost, or None (#19762).
+
+    A multi-play playbook skips every play whose group the limit leaves out, which is normal; but
+    when ONLY localhost ran, every named host was skipped. Limit entries may be group names, so
+    this asks for any non-localhost recap host with ok>=1 rather than for each name -- with several
+    named hosts, one that ran satisfies it while another may have been skipped (the known limit).
+    """
+    named = [h for h in (limit or ()) if h not in _LOCAL_HOSTS]
+    if not named or any(c[0] >= 1 for h, c in _last_recap(output).items() if h not in _LOCAL_HOSTS):
+        return None
+    return f"no host named by the limit {named} ran a task (only localhost did)"
+
+
+def with_limit_proof(result: dict, limit: list[str] | None) -> dict:
+    """``result`` with an exit-0 run that ``limit_run_failure`` rejects turned into exit 1 (#19762).
+
+    The reason LEADS the output as an ``ERROR!`` line: callers report the first fatal-looking line,
+    and an exit-0 run is full of debug ``msg:`` lines that would otherwise come first.
+    """
+    why = limit_run_failure(result["output"], limit) if result.get("returncode") == 0 else None
+    return {**result, "returncode": 1, "output": f"ERROR! {why}\n{result['output']}"} if why else result
+
+
 def ansible_run_failure(output: str, host: str | None, returncode: int | None) -> str | None:
     """Why an ansible run did not prove success, or None if it did (#19475).
 
@@ -76,10 +109,8 @@ def ansible_run_failure(output: str, host: str | None, returncode: int | None) -
     0, printed no no-hosts marker, and the LAST PLAY RECAP shows no unreachable/failed host.
     With ``host`` (a single-target run) that host must also be listed with ok>=1; with
     ``host=None`` (multi-host or inventory-file play) there is no single target, but the
-    recap must still be non-empty and list at least one host with ok>=1. The no-hosts
-    markers are matched across the WHOLE output, every play of a multi-play run, not only the
-    last recap: a "skipping: no hosts matched" in an early play fails the run even if a later
-    play succeeded (the conservative limit).
+    recap must still be non-empty and list at least one host with ok>=1. The inventory-level
+    no-hosts markers are matched across the WHOLE output; a per-play skip is not one (#19762).
     Returns the text to report: the raw output on a non-zero exit, else the reason.
     """
     if returncode != 0:
@@ -87,8 +118,7 @@ def ansible_run_failure(output: str, host: str | None, returncode: int | None) -
     for marker in _NO_HOSTS_MARKERS:
         if marker in output:
             return f"ansible matched no hosts ({marker!r})"
-    tail = output[max(output.rfind("PLAY RECAP"), 0) :]
-    recap = {m[1]: tuple(int(n) for n in m.groups()[1:]) for m in _RECAP_LINE_RE.finditer(tail)}
+    recap = _last_recap(output)
     if host is not None and host not in recap:
         return f"target host {host} is absent from the PLAY RECAP"
     if host is not None and recap[host][0] < 1:
