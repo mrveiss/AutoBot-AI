@@ -13,8 +13,10 @@
  * Related to Issue #590 (NPU Dashboard Improvements).
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { BaseAlert } from '@autobot/ui'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { BaseAlert, PollingPausedAlert } from '@autobot/ui'
+import { useDashboardPoller } from '@/composables/useDashboardPoller'
 import { createLogger } from '@/utils/debugUtils'
 import type { SLMNode, NPUWorkerMetrics } from '@/types/slm'
 import { useFleetStore } from '@/stores/fleet'
@@ -31,7 +33,6 @@ const fleetStore = useFleetStore()
 const metricsMap = ref<Map<string, NPUWorkerMetrics>>(new Map())
 const loading = ref(false)
 const error = ref<string | null>(null)
-let refreshTimer: ReturnType<typeof setInterval> | null = null
 
 // -- Computed helpers --
 
@@ -126,61 +127,57 @@ function formatTimestamp(ts: string | null | undefined): string {
 
 // -- Data fetching --
 
+const { t } = useI18n()
+
+/** The store reports a failed read as null; throw it, so refresh() shows it and the poller counts it. */
 async function fetchMetrics(): Promise<void> {
-  try {
-    const fleetMetrics = await fleetStore.fetchNpuFleetMetrics()
-    if (fleetMetrics?.node_metrics) {
-      const newMap = new Map<string, NPUWorkerMetrics>()
-      for (const m of fleetMetrics.node_metrics) {
-        newMap.set(m.node_id, m)
-      }
-      metricsMap.value = newMap
+  const fleetMetrics = await fleetStore.fetchNpuFleetMetrics()
+  if (fleetMetrics === null) throw new Error(fleetStore.error ?? t('fleet.nPUWorkerMonitor.metricsUnavailable'))
+  if (fleetMetrics.node_metrics) {
+    const newMap = new Map<string, NPUWorkerMetrics>()
+    for (const m of fleetMetrics.node_metrics) {
+      newMap.set(m.node_id, m)
     }
-  } catch (e) {
-    logger.error('Failed to fetch NPU fleet metrics', e)
-    error.value = e instanceof Error ? e.message : 'Failed to fetch NPU metrics'
+    metricsMap.value = newMap
   }
 }
 
+/** Reload the node lists, then (re)start the metrics poller: its first tick is the metrics fetch. */
 async function refresh(): Promise<void> {
   loading.value = true
   error.value = null
   try {
     await fleetStore.fetchNodes()
     await fleetStore.fetchNpuNodes()
-    await fetchMetrics()
+    metricsPoller.start('')
   } catch (e) {
     logger.error('Refresh failed', e)
-    error.value = e instanceof Error ? e.message : 'Refresh failed'
+    error.value = e instanceof Error ? e.message : t('fleet.nPUWorkerMonitor.refreshFailed')
   } finally {
     loading.value = false
   }
 }
 
-function startAutoRefresh(): void {
-  stopAutoRefresh()
-  refreshTimer = setInterval(() => { fetchMetrics() }, REFRESH_INTERVAL_MS)
-}
+// #19482: the shared dashboard policy (stop on unmount and after repeated failures, paused alert)
+const metricsPoller = useDashboardPoller(fetchMetrics, REFRESH_INTERVAL_MS)
 
-function stopAutoRefresh(): void {
-  if (refreshTimer !== null) {
-    clearInterval(refreshTimer)
-    refreshTimer = null
-  }
-}
-
-onMounted(async () => {
-  await refresh()
-  startAutoRefresh()
+// Each failed tick shows, as the old interval did; after the limit the paused alert takes over.
+// start() (Retry, Refresh) resets the poller error, which clears the shown one too.
+watch(metricsPoller.error, (e) => {
+  error.value = e ? e.message : null
 })
 
-onUnmounted(() => {
-  stopAutoRefresh()
-})
+onMounted(() => refresh())
 </script>
 
 <template>
   <div>
+    <PollingPausedAlert
+      :poller="metricsPoller"
+      :message="t('common.polling.paused')"
+      :retry-label="t('common.polling.retry')"
+      @retry="metricsPoller.start('')"
+    />
     <!-- Fleet Summary Bar -->
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-4 mb-6">
       <div class="flex items-center justify-between">

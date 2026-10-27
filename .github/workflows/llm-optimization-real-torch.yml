@@ -160,9 +160,9 @@ jobs:
           python-version-file: '.python-version'
       - name: Install CPU torch at the repo's declared pin
         run: |
-          # One version, declared once: autobot-backend/requirements.txt.
-          pin="$(grep -m1 -E '^torch==[0-9][^ #]*' autobot-backend/requirements.txt | sed -E 's/^(torch==[^ #]+).*/\1/')"
-          test -n "$pin" || { echo "no torch== pin in autobot-backend/requirements.txt"; exit 1; }
+          # One version, declared once: constraints/shared.txt (#19330).
+          pin="$(grep -m1 -E '^torch==[0-9][^ #]*' constraints/shared.txt | sed -E 's/^(torch==[^ #]+).*/\1/')"
+          test -n "$pin" || { echo "no torch== pin in constraints/shared.txt"; exit 1; }
           python -m pip install --upgrade pip
           python -m pip install "$pin" --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple
           python -c "import torch; print('torch', torch.__version__)"
