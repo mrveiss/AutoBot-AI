@@ -22,7 +22,7 @@ entries are grandfathered history, not a way in.
 from __future__ import annotations
 
 RATCHET_BASELINE: dict[str, int] = {
-    "autobot-infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh": 652,
+    "autobot-infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh": 651,
     "autobot-infrastructure/shared/scripts/bulletproof-frontend/zero-downtime-update.sh": 614,
     "autobot-infrastructure/shared/scripts/cleanup-disk-space.sh": 838,
     "autobot-infrastructure/shared/scripts/deployment/validate_access_control.sh": 659,
