@@ -317,7 +317,7 @@ _OPTIONAL_ROLES = [
         "target_path": f"{_BASE_DIR}/autobot-npu-worker",
         "systemd_service": "autobot-npu-worker",
         "auto_restart": True,
-        "health_check_port": 8081,
+        "health_check_port": config.port.npu,
         "health_check_path": "/health",
         # #14275: routed through the canonical
         # scripts/build-filtered-requirements.sh rather than a bare
@@ -341,17 +341,10 @@ _OPTIONAL_ROLES = [
         "target_path": f"{_BASE_DIR}/autobot-tts-worker",
         "systemd_service": "autobot-tts-worker",
         "auto_restart": True,
-        "health_check_port": 8082,
+        # #19325: was 8082, the Windows NPU worker's port; the TTS worker listens on port.tts (8083, #3431).
+        "health_check_port": config.port.tts,
         "health_check_path": "/health",
-        # #14275: routed through the canonical
-        # scripts/build-filtered-requirements.sh rather than a bare
-        # `pip install -r requirements.txt`. This file's requirements carries a
-        # sibling-relative `-c ../constraints/shared.txt` (#10524) that does not
-        # resolve from the deployed directory, and pip aborts the whole sync:
-        #   ERROR: Could not open constraint file: '/constraints/shared.txt'
-        # The backend entry above has delegated to this script since #11134; the
-        # ansible half of the same defect was #14272. Same script, so the two
-        # deploy paths cannot drift apart again.
+        # #14275: the canonical filtered install, for the reason the npu-worker entry above states.
         "post_sync_cmd": _filtered_pip_install("autobot-tts-worker", "tts-worker"),
         "required": False,
         "degraded_without": ["Voice synthesis — TTS features unavailable"],

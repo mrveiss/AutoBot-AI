@@ -29,6 +29,7 @@ from knowledge import tenant_groups  # noqa: E402
 from knowledge.ownership import KnowledgeOwnership  # noqa: E402
 from knowledge.search_filters import filter_for_principal, kb_principal_from_tenant  # noqa: E402
 
+ORG = uuid.UUID("11111111-1111-1111-1111-111111111111")
 TEAM_T = uuid.UUID("77777777-7777-7777-7777-777777777777")
 USER_A = uuid.UUID("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
 USER_B = uuid.UUID("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")
@@ -40,7 +41,9 @@ _TEAM_FACT = {"id": "f-team", "metadata": {"owner_id": "carol", "visibility": "g
 @pytest.fixture(autouse=True)
 def _fresh_cache():
     tenant_groups._cache.clear()
-    yield
+    # A readable, unchanging ACL epoch (#19630); the epoch behaviour has its own test file.
+    with patch.object(tenant_groups, "read_membership_epoch", AsyncMock(return_value="0")):
+        yield
     tenant_groups._cache.clear()
 
 
@@ -64,7 +67,7 @@ async def _search_as(user_id: uuid.UUID) -> list:
                 query="q", start_entity=None, max_depth=1, max_results=5, enable_reranking=False, timeout=None
             ),
             service=service,
-            tenant=TenantContext(user_id=user_id),
+            tenant=TenantContext(org_id=ORG, user_id=user_id),
             session=MagicMock(),
         )
     assert response.status_code == 200 and json.loads(response.body)["success"] is True
@@ -83,7 +86,7 @@ async def test_a_non_member_does_not_see_the_fact_shared_to_the_team():
 
 @pytest.mark.asyncio
 async def test_a_failed_membership_lookup_reads_with_no_groups_logged_and_not_cached(caplog):
-    tenant = TenantContext(user_id=USER_A)
+    tenant = TenantContext(org_id=ORG, user_id=USER_A)
     failing = AsyncMock(side_effect=RuntimeError("db down"))
     with patch(_GET_USER_TEAMS, failing), caplog.at_level(logging.WARNING):
         principal = await kb_principal_from_tenant(tenant, MagicMock())
@@ -98,7 +101,7 @@ async def test_memberships_are_cached_per_user():
     teams = AsyncMock(side_effect=lambda uid: _TEAMS[uid])
     with patch(_GET_USER_TEAMS, teams):
         for _ in range(3):
-            await kb_principal_from_tenant(TenantContext(user_id=USER_A), MagicMock())
+            await kb_principal_from_tenant(TenantContext(org_id=ORG, user_id=USER_A), MagicMock())
     assert teams.await_count == 1
 
 

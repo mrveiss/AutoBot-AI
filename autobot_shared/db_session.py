@@ -12,7 +12,7 @@ db_session_context() in user_management.database, which passes that service's ow
 session maker (each service binds its own engine).
 """
 
-from collections.abc import AsyncGenerator, Callable, Generator
+from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from contextlib import asynccontextmanager, contextmanager
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -36,6 +36,25 @@ class PostCommitCallbackError(Exception):
     def __init__(self, errors: list[Exception]) -> None:
         super().__init__(f"{len(errors)} post-commit callback(s) failed after the transaction committed: {errors!r}")
         self.errors = errors
+
+
+class NoCommitScopeError(RuntimeError):
+    """A post-commit hook was requested on a session that has no post-commit callback list."""
+
+
+def run_after_commit(session: AsyncSession, hook: Callable[[], Awaitable[object]]) -> None:
+    """Queue *hook* to run once the session's transaction commits (once, however many writes ask).
+
+    Only ``async_session_scope`` seeds the list. Without it there is no commit point to run
+    after, and running the hook at once would fire it BEFORE the commit, so a reader could
+    re-cache the old state under the new epoch: that raises ``NoCommitScopeError`` instead.
+    A hook queued inside a rolled-back savepoint stays queued: over-invalidation, never under.
+    """
+    queued = session.info.get(POST_COMMIT_CALLBACKS)
+    if queued is None:
+        raise NoCommitScopeError("no post-commit callback list: open the session with async_session_scope")
+    if hook not in queued:
+        queued.append(hook)
 
 
 def _rollback_sync(session: Session) -> None:
