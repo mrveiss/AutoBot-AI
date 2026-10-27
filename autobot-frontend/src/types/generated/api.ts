@@ -87028,7 +87028,7 @@ export interface components {
          *       "name": "Primary NPU Worker",
          *       "platform": "linux",
          *       "priority": 8,
-         *       "url": "http://127.0.0.1:8081",
+         *       "url": "http://127.0.0.1:8082",
          *       "weight": 2
          *     }
          */
@@ -87092,7 +87092,7 @@ export interface components {
          *         "name": "Primary NPU Worker",
          *         "platform": "linux",
          *         "priority": 8,
-         *         "url": "http://127.0.0.1:8081",
+         *         "url": "http://127.0.0.1:8082",
          *         "weight": 2
          *       },
          *       "metrics": {

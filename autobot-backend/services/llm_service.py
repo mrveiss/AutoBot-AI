@@ -60,7 +60,7 @@ from services.llm_fallback_chain import (
     resolve_attempt_provider,
     track_attempt,
 )
-from services.llm_usage_recording import record_response_usage
+from services.llm_usage_recording import record_response_usage, recorded_stream
 
 try:
     from services.provider_health import ProviderHealthManager, ProviderHealthStatus
@@ -1012,7 +1012,7 @@ class LLMService:
         """
         chunks_yielded = False
         try:
-            async for chunk in provider.stream_completion(request):
+            async for chunk in recorded_stream(provider, request, session_id=conversation_id):
                 chunks_yielded = True
                 yield chunk
             await emit_fallback_success(
