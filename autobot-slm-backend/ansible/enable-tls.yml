@@ -44,7 +44,7 @@
         success_msg: "{{ inventory_hostname }} resolves to {{ ansible_host }}"
 
   vars:
-    tls_cert_dir: "{{ lookup('env', 'AUTOBOT_TLS_CERT_DIR') | default('/etc/autobot/certs', true) }}"
+    tls_cert_dir: "{{ lookup('env', 'AUTOBOT_TLS_REMOTE_CERT_DIR') | default('/etc/autobot/certs', true) }}"
     frontend_tls_enabled: true
     frontend_tls_port: 443
     frontend_tls_cert: "{{ tls_cert_dir }}/server-cert.pem"
@@ -159,7 +159,7 @@
         success_msg: "{{ inventory_hostname }} resolves to {{ ansible_host }}"
 
   vars:
-    tls_cert_dir: "{{ lookup('env', 'AUTOBOT_TLS_CERT_DIR') | default('/etc/autobot/certs', true) }}"
+    tls_cert_dir: "{{ lookup('env', 'AUTOBOT_TLS_REMOTE_CERT_DIR') | default('/etc/autobot/certs', true) }}"
     backend_tls_enabled: true
     backend_tls_port: 8443
 
@@ -234,7 +234,7 @@
         success_msg: "{{ inventory_hostname }} resolves to {{ ansible_host }}"
 
   vars:
-    tls_cert_dir: "{{ lookup('env', 'AUTOBOT_TLS_CERT_DIR') | default('/etc/autobot/certs', true) }}"
+    tls_cert_dir: "{{ lookup('env', 'AUTOBOT_TLS_REMOTE_CERT_DIR') | default('/etc/autobot/certs', true) }}"
     redis_tls_port: 6380
 
   tasks:

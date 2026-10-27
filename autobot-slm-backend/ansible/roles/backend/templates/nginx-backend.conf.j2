@@ -22,8 +22,10 @@ server {
     server_name _;
 
     # TLS termination — same certs previously used by uvicorn
-    ssl_certificate     /etc/autobot/certs/server-cert.pem;
-    ssl_certificate_key /etc/autobot/certs/server-key.pem;
+    {# #19366: rendered outside the role too (deploy-nginx-proxy.yml), so the group_vars home with its pinned fallback #}
+    {% set node_cert_dir = autobot_tls_remote_cert_dir | default('/etc/autobot/certs') %}
+    ssl_certificate     {{ node_cert_dir }}/server-cert.pem;
+    ssl_certificate_key {{ node_cert_dir }}/server-key.pem;
     ssl_protocols       TLSv1.2 TLSv1.3;
     ssl_ciphers         HIGH:!aNULL:!MD5;
 

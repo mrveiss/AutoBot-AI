@@ -24,6 +24,12 @@ openvino>=2026.4.1
 # routine scheduler and the SLM schedule executor (#18449). Was declared in two files.
 croniter>=6.2.4
 
+# chromadb: the vector store client in the backend, the ai-stack container and code_analysis,
+# plus the standalone server venvs the ansible redis role and install-bare-metal.sh build.
+# Was declared in 6 places with 4 specs, one a live conflict (>=0.5) (#19478). The cap
+# guards against breaking API changes; 1.5.5+ regenerated its protos for protobuf 5.x (#4053).
+chromadb>=1.5.9,<2.0.0
+
 # filelock: runtime dependency via torch (unbounded `filelock` requirement) and the HF stack.
 # Floor at the release fixing CVE-2026-112940, CVE-2026-112913 and CVE-2026-112907 (#19426).
 # Was also a stale 3.20.1 floor in ansible dependency_patching; that restatement is removed.

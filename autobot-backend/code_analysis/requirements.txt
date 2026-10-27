@@ -10,7 +10,7 @@ scikit-learn>=1.9.1
 pandas>=3.0.6
 
 # Vector Database for Embeddings
-chromadb>=1.5.9
+chromadb  # version from constraints/shared.txt (#19478)
 
 # Optional: NPU/AI Acceleration
 # openvino>=2023.0.0  # Intel OpenVINO for NPU
