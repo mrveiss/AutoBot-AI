@@ -56,7 +56,7 @@ _SOURCE_TREES = ("autobot-infrastructure/", "autobot-backend/code_analysis/")
 #: Lower it by splitting a file, or by bringing its tree into
 #: `EXCLUDED_PREFIXES`' scope — which is a decision for whoever also updates
 #: `.pre-commit-config.yaml`, not something to do incidentally here.
-EXCLUDED_TREE_DEBT = 44
+EXCLUDED_TREE_DEBT = 43  # #19232: an excluded-tree file dropped under 600 lines
 
 
 def _hook():
