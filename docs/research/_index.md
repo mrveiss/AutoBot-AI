@@ -83,6 +83,8 @@ Research reports covering hardware integration, system conflicts, and technology
 | [[evidence-first-recoverable-agent-runtime]] | Evidence-first recoverable agent runtime — one tool-effect SSOT, effect bracketing, run-generation fencing, per-turn context manifest, typed denial reasons; conversation turns were persisted twice (#18293, #18294, #18302–#18307) |
 | [[latvian-language-handling]] | Latvian-language handling in AutoBot — Latvian STT routing, phantom-text filtering, detection, browser locale and UI locale already work; gaps are the reply-language map and a Latvian synthesis voice (#18442, #18443) |
 | [[encoder-typed-decision-head]] | Encoder-based typed decision head — an open-source non-autoregressive decision engine compared against the `llm_shared/decisions.py` seam; the contract is already ours, gaps are a 0.7 default for unparsable confidence, unrecorded gate outcomes, no ECE/Brier calibration metrics, hand-picked thresholds and no option-order control (#18985–#18990) |
+| [[RES_hosted-knowledge-chat-agent-platform]] | Hosted knowledge-base chat agent platform — source analysis of a commercial no-code SaaS that turns an organisation's content into support, lead-capture and internal-search chat and voice agents (#19794) |
+| [[local-agent-team-desktop-workspace]] | Local agent-team desktop workspace — provider-agnostic persistent agents wrapping existing vendor CLIs, with failover, a mailbox and queues; phase 1 source analysis only |
 
 ## Related Sections
 
