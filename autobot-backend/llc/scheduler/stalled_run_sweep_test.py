@@ -44,12 +44,12 @@ def test_the_default_is_used_when_the_env_var_is_absent(monkeypatch):
 
 def test_a_run_older_than_the_cutoff_is_past_it(sweep):
     old = datetime.now(timezone.utc) - timedelta(seconds=120)
-    assert old <= sweep._cutoff()
+    assert old <= sweep.stall_cutoff()
 
 
 def test_a_fresh_run_is_not_past_the_cutoff(sweep):
     fresh = datetime.now(timezone.utc) - timedelta(seconds=5)
-    assert fresh > sweep._cutoff()
+    assert fresh > sweep.stall_cutoff()
 
 
 def test_only_non_terminal_statuses_are_candidates(sweep):

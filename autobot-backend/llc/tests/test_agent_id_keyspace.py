@@ -125,13 +125,18 @@ async def test_comment_wake_resolves_assignee_pk_to_slug_keyspace(session_factor
         session.add(LLCWorkItemComment(id=comment_id, company_id=_COMPANY, work_item_id=item_id, body="ping"))
         await session.commit()
 
+    from unittest.mock import patch
+
+    from llc.scheduler.heartbeat_scheduler import LLCHeartbeatScheduler
+
     async with session_factory() as session:
         result = await CommentWakeService().trigger_comment_wake(session, str(item_id), str(comment_id))
-        await session.commit()
+        with patch.object(LLCHeartbeatScheduler, "dispatch_run") as dispatch:  # no adapter runs in this test
+            await session.commit()
+        assert dispatch.call_args.args[0]["agent_id"] == slug  # dispatch config keyed by the slug
         # Wrong-column lookup (pre-#10032) would 'agent not found' → None.
         assert result is not None
-        run_pk = result[0]  # (run_id, agent_config, context)
-        assert result[1]["agent_id"] == slug  # dispatch config keyed by the slug
+        run_pk = result  # #19582: the run id; the dispatch fires on the commit above
         run = (await session.execute(select(LLCHeartbeatRun).where(LLCHeartbeatRun.id == run_pk))).scalar_one()
 
     assert run.agent_id == slug  # heartbeat run keyed by the slug, not the UUID PK

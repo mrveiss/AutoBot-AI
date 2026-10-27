@@ -70,7 +70,7 @@ from ..services.work_item_queue import has_pending_work
 # guard, and refactoring it is not this change.
 from .replay_recording import record_run_for_replay as _record_run_for_replay
 from .run_context import enrich_run_context
-from .run_status import mark_running
+from .run_status import RunSuperseded, latest_run_in, mark_running
 from .run_workspace import acquire_run_workspace, release_run_workspace, release_workspace_best_effort
 
 logger = logging.getLogger(__name__)
@@ -435,16 +435,7 @@ class LLCHeartbeatScheduler:
 
     async def _find_rate_limited_run(self, session: AsyncSession, agent_id: str) -> Optional[LLCHeartbeatRun]:
         """Return the most recent ``rate_limited`` run for *agent_id*, or None."""
-        result = await session.execute(
-            select(LLCHeartbeatRun)
-            .where(
-                LLCHeartbeatRun.agent_id == agent_id,
-                LLCHeartbeatRun.status == LLCRunStatus.RATE_LIMITED.value,
-            )
-            .order_by(LLCHeartbeatRun.created_at.desc())
-            .limit(1)
-        )
-        return result.scalar_one_or_none()
+        return await latest_run_in(session, agent_id, (LLCRunStatus.RATE_LIMITED.value,))
 
     # ------------------------------------------------------------------
     # Manual trigger (called from API)
@@ -454,8 +445,12 @@ class LLCHeartbeatScheduler:
         self,
         session: AsyncSession,
         agent_id: str,
+        source: HeartbeatInvocationSource = HeartbeatInvocationSource.MANUAL,
     ) -> tuple[LLCHeartbeatRun, Dict[str, Any]]:
         """Flush a QUEUED run record; caller must commit then call dispatch_run.
+
+        *source* is ``MANUAL`` for the API trigger and an event source for
+        ``event_wake.wake_agent`` (#19582): one run-creation path for both.
 
         Returns (run, agent_cfg) so the caller can fire the adapter task after
         the DB commit is visible to other connections (avoids the race where
@@ -472,11 +467,7 @@ class LLCHeartbeatScheduler:
         if agent is None:
             raise ValueError(f"Agent {agent_id!r} not found or not configured")
 
-        run = await self._create_run(
-            session,
-            agent=agent,
-            source=HeartbeatInvocationSource.MANUAL,
-        )
+        run = await self._create_run(session, agent=agent, source=source)
         await session.flush()
         return run, agent
 
@@ -511,7 +502,7 @@ class LLCHeartbeatScheduler:
         query = """
             SELECT aon.agent_id, aon.name, aon.heartbeat_cron, aon.heartbeat_enabled,
                    aon.adapter_type, aon.adapter_config, aon.context_mode,
-                   aon.company_id, aon.id AS agent_node_id
+                   aon.company_id, aon.id AS agent_node_id, aon.org_role, aon.status
             FROM agent_org_nodes aon
             WHERE aon.agent_id = :agent_id
         """
@@ -551,7 +542,11 @@ class LLCHeartbeatScheduler:
         """
         factory = get_async_session_factory()
 
-        retry_count = await mark_running(factory, run_id)
+        try:
+            retry_count = await mark_running(factory, run_id)
+        except RunSuperseded:  # #19582: another run of this agent holds RUNNING
+            await release_workspace_best_effort(factory, run_id, LLCRunStatus.SKIPPED.value)
+            return
         if retry_count is None:
             # The release stays HERE rather than inside the helper, so every exit from
             # this function keeps its release in view (#17725 review).

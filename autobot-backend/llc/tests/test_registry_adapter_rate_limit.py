@@ -393,7 +393,8 @@ async def test_run_adapter_applies_backoff_for_registry_rate_limit():
     # First execute call: SELECT retry_count + UPDATE to RUNNING.
     retry_count_result = MagicMock()
     retry_count_result.scalar_one_or_none.return_value = 0
-    session_mock.execute = AsyncMock(side_effect=[retry_count_result, None])
+    # #19582: the RUNNING claim reports one row claimed, so the run is not superseded.
+    session_mock.execute = AsyncMock(side_effect=[retry_count_result, MagicMock(rowcount=1)])
     session_mock.commit = AsyncMock()
     ctx_mgr_running = MagicMock()
     ctx_mgr_running.__aenter__ = AsyncMock(return_value=session_mock)

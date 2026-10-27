@@ -635,8 +635,8 @@ class TestRunAdapterSkipped:
         sql_text = [str(stmt) for stmt in session.statements]
         params = [_compiled_params(stmt) for stmt in session.statements]
 
-        # No phantom health: the last_heartbeat_at bump is never issued.
-        assert not any("agent_org_nodes" in s for s in sql_text)
+        # No phantom health: the last_heartbeat_at bump is never issued (the claim reads the row, #19582).
+        assert not any("last_heartbeat_at" in s for s in sql_text)
         # The run's final status is written as SKIPPED.
         assert any(p.get("status") == LLCRunStatus.SKIPPED.value for p in params)
 

@@ -49,6 +49,8 @@ from ..models.label import LLCWorkItemLabel
 from ..models.membership import LLCCompanyMembership
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
 from .base import LLCServiceBase
+from .wake_events import wake_for_comment, wake_for_item_changes
+from .work_item_approval_categories import validated_approval_categories as _validated_approval_categories
 from .work_item_relations import WorkItemRelationService
 
 logger = logging.getLogger(__name__)
@@ -59,25 +61,6 @@ logger = logging.getLogger(__name__)
 _bg_tasks: set = set()
 
 _CHECKOUT_TTL = 1800  # seconds
-
-
-def _validated_approval_categories(values: Optional[List[str]], existing: Optional[List[str]] = None) -> List[str]:
-    """Validate ``requires_approval_before`` entries against the controlled vocabulary (GH#11206).
-
-    A typo'd category matches no tools at the seam and silently disables the gate,
-    so reject unknown *newly-added* values (fail-fast) rather than let governance
-    no-op. Values already present in *existing* are exempt, so re-sending a
-    pre-controlled-vocabulary (legacy free-text) value while editing an item does
-    not block the edit.
-    """
-    from autobot_shared.tool_catalogue import valid_approval_categories
-
-    vals = list(values or [])
-    allowed = valid_approval_categories() | set(existing or [])
-    unknown = [v for v in vals if v not in allowed]
-    if unknown:
-        raise ValueError(f"unknown approval categories: {unknown} (valid: {sorted(valid_approval_categories())})")
-    return vals
 
 
 # Allowed status transitions: from → {to, ...}
@@ -318,6 +301,7 @@ class WorkItemService(LLCServiceBase):
             requires_approval_before=_validated_approval_categories(requires_approval_before),
         )
         session.add(item)
+        await wake_for_item_changes(session, item)  # #19582: before the flush clears the history
         await session.flush()
         return item
 
@@ -395,6 +379,7 @@ class WorkItemService(LLCServiceBase):
             if key not in allowed:
                 raise ValueError(f"Field '{key}' is not updatable via WorkItemService.update()")
             setattr(item, key, val)
+        await wake_for_item_changes(session, item)  # #19582: before the flush clears the history
         await session.flush()
         return item
 
@@ -1028,6 +1013,7 @@ class WorkItemService(LLCServiceBase):
         )
         session.add(comment)
         await session.flush()
+        await wake_for_comment(session, comment)  # #19582
         return comment
 
     # ------------------------------------------------------------------

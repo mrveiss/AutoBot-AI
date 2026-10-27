@@ -56,14 +56,12 @@ from ..models.enums import (
     WorkItemType,
 )
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
-from ..scheduler.heartbeat_scheduler import LLCHeartbeatScheduler
 from ..services.activity_log import ActivityLogQuery, LLCActivityLogService
 from ..services.attachment_service import (
     AttachmentNotFound,
     AttachmentService,
     AttachmentTooLarge,
 )
-from ..services.comment_wake_service import CommentWakeService
 from ..services.handoff import (
     HandoffAttachment,
     HandoffNotAllowed,
@@ -120,8 +118,6 @@ _get_handoff_service = lazy_singleton(HandoffService)
 _kb_manager = KbCollectionManager()
 _get_relation_service = lazy_singleton(WorkItemRelationService)
 _get_attachment_service = lazy_singleton(AttachmentService)
-_get_comment_wake_service = lazy_singleton(CommentWakeService)
-_get_heartbeat_scheduler = lazy_singleton(LLCHeartbeatScheduler)
 _get_activity_service = lazy_singleton(LLCActivityLogService)
 _get_ac_suggester = lazy_singleton(AcSuggester)
 
@@ -846,21 +842,8 @@ async def add_comment(
         author_agent_id=body.author_agent_id,
         author_user_id=body.author_user_id,
     )
-
-    # GH#9624: trigger comment-driven wake before commit
-    wake_result = await _get_comment_wake_service().trigger_comment_wake(
-        session,
-        work_item_id=work_item_id,
-        comment_id=str(comment.id),
-    )
-
+    # GH#9624/#19582: add_comment queued the comment and @mention wakes; they dispatch on this commit.
     await session.commit()
-
-    # GH#9624: dispatch the run after commit
-    if wake_result:
-        run_id, agent_config, context = wake_result
-        _get_heartbeat_scheduler().dispatch_run(agent_config, run_id, context)
-
     return {
         "id": str(comment.id),
         "work_item_id": str(comment.work_item_id),

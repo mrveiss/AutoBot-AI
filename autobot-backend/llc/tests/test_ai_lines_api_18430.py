@@ -32,6 +32,7 @@ from llc.models.ai_line import LLCAiLine
 from llc.models.enums import MembershipRole
 from llc.models.membership import LLCCompanyMembership
 from llc.tests import _e2e_harness as harness
+from models.agent_org import AgentOrgNode
 from models.approval import Approval, ApprovalComment, TaskApprovalLink
 from user_management.models.base import Base
 from user_management.services import TenantContext
@@ -52,6 +53,7 @@ async def factory():
         TaskApprovalLink.__table__,
         LLCAiLine.__table__,
         LLCCompanyMembership.__table__,
+        AgentOrgNode.__table__,  # #19582: a decision wakes the requesting agent, looked up here
     ]
     for table in tables:
         harness._scrub_pg_server_defaults(table)

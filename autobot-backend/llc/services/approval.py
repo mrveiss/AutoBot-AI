@@ -28,6 +28,7 @@ from models.approval import Approval
 from ..kb.decision_log import DecisionLogWriter
 from ..models.enums import ApprovalStatus, ApprovalType
 from .base import LLCServiceBase
+from .wake_events import wake_for_decided_approval
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +152,7 @@ class ApprovalService(LLCServiceBase):
         approval.decided_by_user = str(decided_by)
         approval.decided_at = datetime.now(timezone.utc)
         await session.flush()
+        await wake_for_decided_approval(session, approval, decision.value)  # #19582: wake the requester
         logger.info(
             "Approval decided: id=%s decision=%s decided_by=%s",
             approval_id,
