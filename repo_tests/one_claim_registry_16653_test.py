@@ -96,6 +96,11 @@ _THE_REGISTRY = "autobot_shared/coordination/work_claims_lua.py"
 #: old stale-entry check only fired when a file lost its LAST primitive, so
 #: going from two to one was invisible in both directions at once.
 _ALLOWED: dict[str, tuple[int, str]] = {
+    "autobot_shared/membership_epoch.py": (
+        1,
+        "#19630 -- a token mint, not a lock: SETNX fills a missing epoch key so concurrent workers "
+        "converge on one random token. No holder, no renewal, nothing to release.",
+    ),
     "autobot-backend/autobot_memory_graph/entity_upsert.py": (
         1,
         "#18417 — a dedup name index, not a work claim: SETNX adopts a pre-index entity so a name maps to one entity.",

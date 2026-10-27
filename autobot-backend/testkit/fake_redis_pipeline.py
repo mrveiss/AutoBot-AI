@@ -45,7 +45,7 @@ from typing import Any, Iterable, Mapping, Optional
 
 from redis.exceptions import WatchError
 
-__all__ = ["COMMANDS", "FakeAsyncPipeline", "FakePipeline", "WatchError"]
+__all__ = ["COMMANDS", "DualReply", "FakeAsyncPipeline", "FakePipeline", "WatchError"]
 
 #: Every command the tests and their fake clients queue through a pipeline (#18991); each exists on redis-py's pipeline.
 COMMANDS = frozenset(
@@ -292,3 +292,14 @@ class FakeAsyncPipeline(_PipelineBase):
             error = self._command_errors.get(name)
             results.append(error if error is not None else await self._apply(name, args, kwargs))
         return self._finish(results, raise_on_error)
+
+
+class DualReply:
+    """A write's reply usable from a sync client AND awaited from an async one (#19630).
+
+    For a fake that stands in for both clients of one key: the sync caller ignores it, the async
+    caller awaits it, and both see the write already applied.
+    """
+
+    def __await__(self):
+        return iter(())
