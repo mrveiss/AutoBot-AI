@@ -1270,6 +1270,8 @@
   # ==========================================================
   - name: "Backend | Ensure the shared node TLS keypair exists (#16020)"
     ansible.builtin.include_tasks: ../../../_shared/tasks/ensure_node_tls_cert.yml
+    vars:
+      node_tls_cert_dir_override: "{{ backend_tls_cert_dir }}"
     tags: ['backend', 'tls']
 
   # #16020: the shared task has no restart handler of its own -- it also
