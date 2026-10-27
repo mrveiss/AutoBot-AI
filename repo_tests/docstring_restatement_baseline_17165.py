@@ -158,9 +158,6 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
         {"provider_name", "supported_languages"}
     ),
     "autobot-infrastructure/shared/docker/ai-stack/ai_api_server.py": frozenset({"global_exception_handler"}),
-    "autobot-infrastructure/shared/scripts/analysis/redis_final_analysis.py": frozenset(
-        {"test_langchain_db0_workaround"}
-    ),
     "autobot-infrastructure/shared/scripts/apply_memory_optimizations.py": frozenset(
         {"apply_global_memory_optimizations", "save_optimization_report"}
     ),

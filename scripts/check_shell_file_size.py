@@ -98,7 +98,7 @@ MIN_TRACKED_SH_FILES = 180
 #: Ten entries, not the 509 the Python gate had to carry, which is why they sit
 #: inline here rather than in a sibling data module.
 KNOWN_LARGE: dict[str, int] = {
-    "autobot-infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh": 652,
+    "autobot-infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh": 651,
     "autobot-infrastructure/shared/scripts/bulletproof-frontend/zero-downtime-update.sh": 614,
     "autobot-infrastructure/shared/scripts/cleanup-disk-space.sh": 838,
     "autobot-infrastructure/shared/scripts/deployment/validate_access_control.sh": 659,
