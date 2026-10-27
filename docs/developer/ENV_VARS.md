@@ -318,9 +318,9 @@ appears outside the known overlays.
 | `AUTOBOT_RAG_GRAPH_WEIGHT` | rag | float | `0.3` | Graph-signal weight in the one pre-rerank vector+graph blend (RAGConfig.graph_weight, #18141). Range: 0.0–1.0. |
 | `AUTOBOT_RANKING_ALPHA` | code_analysis | float | `1.0` | Multiplicative weight applied to the runtime_risk boost when ranking anti-pattern findings (0 disables the boost; 1.0 lets a fully-risky file double its effective score). Raising it weights runtime risk more heavily in the ranking; lowering it toward 0 weights it less (code_analysis/src/anti_pattern_detector.py). |
 | `AUTOBOT_RATE_LIMITER_FAIL_OPEN_WARN_INTERVAL` | security | float | `60.0` | Minimum seconds between fail-open warnings per rate-limiter instance (#18617). While Redis is unreachable the limiters allow requests; the warning names only the limiter scope and is emitted at most once per interval so an outage cannot flood the log. |
-| `AUTOBOT_REDIS_DB_ANALYTICS` | redis | int | `11` | Redis logical database number for analytics data. Range: 0–15. |
-| `AUTOBOT_REDIS_DB_KNOWLEDGE` | redis | int | `1` | Redis logical database number for knowledge-base vectors. Range: 0–15. |
-| `AUTOBOT_REDIS_DB_MAIN` | redis | int | `0` | Redis logical database number for primary application data. Range: 0–15. |
+| `AUTOBOT_REDIS_DB_ANALYTICS` | redis | int | *(none)* | Redis DB number for analytics data; unset uses redis-databases.yaml (#19232). Range: 0–15. |
+| `AUTOBOT_REDIS_DB_KNOWLEDGE` | redis | int | *(none)* | Redis DB number for knowledge-base vectors; unset uses redis-databases.yaml (#19232). Range: 0–15. |
+| `AUTOBOT_REDIS_DB_MAIN` | redis | int | *(none)* | Redis DB number for primary application data; unset uses redis-databases.yaml (#19232). Range: 0–15. |
 | `AUTOBOT_REDIS_HOST` | redis | str | `'localhost'` | Redis server hostname or IP address. |
 | `AUTOBOT_REDIS_PASSWORD` | redis | str | *(none)* | Redis AUTH password (omit or leave blank for unauthenticated servers). |
 | `AUTOBOT_REDIS_PORT` | redis | int | `6379` | Redis server TCP port (plain connection). Range: 1–65535. |

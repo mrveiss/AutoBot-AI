@@ -352,6 +352,15 @@ def test_dependabot_and_automation_branches_are_never_synced_pr_or_not() -> None
         assert skipped in plan.skipped[core.POLICY], skipped
 
 
+def test_merge_train_branches_are_never_synced() -> None:
+    """A [skip ci] sync on a train supersedes the train's own full CI run (#19724)."""
+    pulls = [_pull(10, "train-2026-10-27-85t"), _pull(11, "issue-11")]
+    plan = core.plan_run(pulls, ["train-parked"], REPO)
+    assert [(t.branch, t.pr) for t in plan.targets] == [("issue-11", 11)]
+    assert "#10 `train-2026-10-27-85t`" in plan.skipped[core.POLICY]
+    assert "`train-parked` (no PR)" in plan.skipped[core.POLICY]
+
+
 def test_prs_are_synced_oldest_first_then_parked_branches() -> None:
     """A run cut short by a timeout or a moved head still caught up the oldest PRs (owner rule 2026-10-26)."""
     pulls = [_pull(30, "issue-30"), _pull(10, "issue-10"), _pull(20, "issue-20")]

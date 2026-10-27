@@ -34,7 +34,10 @@ NEVER_TARGET = frozenset({"main", "release", "master", "develop", "HEAD", "Dev_n
 #: stop managing the PR (owner decision on #19568).
 #: ``automation/`` -- bot-owned branches (e.g. ``automation/test-durations``) that their
 #: own workflow regenerates from main; a sync commit there is noise (#19568 review).
-EXCLUDED_PREFIXES = ("rescued/", "dependabot/", "automation/")
+#: ``train-`` -- merge-train branches. A train's whole point is the full CI run on its
+#: own head; a ``[skip ci]`` sync supersedes that run and leaves the train with no
+#: suite. Whoever builds the train merges main into it with CI (#19724).
+EXCLUDED_PREFIXES = ("rescued/", "dependabot/", "automation/", "train-")
 
 LABEL_CONFLICT = "sync-conflict"
 LABEL_WORKFLOW = "sync-needs-workflow-token"

@@ -12,14 +12,17 @@ Usage:
 Environment variables:
     REDIS_HOST: Redis server address (default: localhost)
     REDIS_PORT: Redis server port (default: 6379)
-    REDIS_DB: Redis database number (default: 0)
+    AUTOBOT_REDIS_DB_MAIN: Redis database number (default: main in redis-databases.yaml)
 """
 
 import argparse
 import json
 import os
 import sys
-from typing import Any, Dict
+from pathlib import Path
+from typing import Any, Dict, Optional
+
+import yaml
 
 try:
     import redis
@@ -28,21 +31,100 @@ except ImportError:
     sys.exit(1)
 
 
+#: The one name -> number table (#19232), read with plain PyYAML: this script runs under
+#: Ansible's interpreter without autobot_shared (#1086), so it cannot use database_number().
+_DATABASES_YAML = (
+    Path(__file__).resolve().parents[4] / "autobot-infrastructure" / "shared" / "config" / "redis-databases.yaml"
+)
+#: The override contract, mirrored from database_overrides.py (pinned equal to the Python and
+#: shell readers by redis_single_source_19232_test.py): AUTOBOT_REDIS_DB_<NAME>, trimmed ASCII
+#: digits within 0..15, refused (YAML number kept) when invalid or when two databases collide.
+_MAX_DATABASE_INDEX = 15
+_LEGACY_ENV_NAMES = {"AUTOBOT_REDIS_DB_TASKS": "workflows"}
+
+
+class DatabasesUnreadable(Exception):
+    """redis-databases.yaml is missing or malformed, so no Redis database number is known."""
+
+
+def _declared_databases() -> Dict[str, int]:
+    """Every database redis-databases.yaml declares; :class:`DatabasesUnreadable` when it cannot be read.
+
+    Fail-closed for Redis: no YAML, no Redis query -- never a guessed number. The caller
+    (:meth:`AutoBotInventory.connect_redis`) turns that into the static fallback inventory.
+    """
+    try:
+        with open(_DATABASES_YAML, encoding="utf-8") as f:
+            declared = yaml.safe_load(f)["redis_databases"]
+        return {name: int(cfg["db"]) for name, cfg in declared.items() if "db" in cfg}
+    except (OSError, KeyError, TypeError, ValueError, AttributeError, yaml.YAMLError) as exc:
+        raise DatabasesUnreadable(f"cannot read Redis databases from {_DATABASES_YAML}: {exc}") from exc
+
+
+def _override_number(raw: str) -> Optional[int]:
+    """database_overrides._parse: trimmed ASCII digits within 0.._MAX_DATABASE_INDEX, else None."""
+    text = raw.strip()
+    if not text.isascii() or not text.isdigit() or int(text) > _MAX_DATABASE_INDEX:
+        return None
+    return int(text)
+
+
+def _accepted_overrides(declared: Dict[str, int]) -> Dict[str, int]:
+    """The valid AUTOBOT_REDIS_DB_* overrides (legacy TASKS included); a refusal goes to stderr."""
+    accepted: Dict[str, int] = {}
+    names = {f"AUTOBOT_REDIS_DB_{n.upper()}": n for n in declared}
+    # A blank value (VAR=) is no request, as in database_overrides._requested.
+    requested = {name: os.environ[var] for var, name in names.items() if os.environ.get(var, "").strip()}
+    for legacy, name in _LEGACY_ENV_NAMES.items():
+        if os.environ.get(legacy, "").strip() and name in declared and name not in requested:
+            requested[name] = os.environ[legacy]
+    for name, raw in requested.items():
+        number = _override_number(raw)
+        if number is None:
+            sys.stderr.write(f"WARNING: refused Redis DB override for {name}={raw!r} (keeping the YAML)\n")
+        else:
+            accepted[name] = number
+    return accepted
+
+
+def resolved_databases() -> Dict[str, int]:
+    """The YAML with every acceptable override applied; colliding overrides are refused."""
+    declared = _declared_databases()
+    accepted = _accepted_overrides(declared)
+    while True:
+        merged = {**declared, **accepted}
+        clashing = {n for n in accepted if any(o != n and merged[o] == merged[n] for o in merged)}
+        if not clashing:
+            return merged
+        for name in clashing:
+            sys.stderr.write(f"WARNING: refused Redis DB override for {name}: collides (keeping the YAML)\n")
+            del accepted[name]
+
+
 class AutoBotInventory:
     """Generate Ansible inventory from AutoBot service registry"""
 
     def __init__(self):
         self.redis_host = os.getenv("REDIS_HOST", os.getenv("AUTOBOT_REDIS_HOST", "localhost"))
         self.redis_port = int(os.getenv("REDIS_PORT", "6379"))
-        self.redis_db = int(os.getenv("REDIS_DB", "0"))
+        self.redis_db: Optional[int] = None  # resolved by connect_redis, from the YAML
         self.inventory = {"_meta": {"hostvars": {}}}
 
     def connect_redis(self):
-        """Connect to Redis server.
+        """Connect to Redis server, or None -- the static fallback inventory then answers.
+
+        The database is resolved here, not in ``__init__`` (#19232): without
+        redis-databases.yaml the Redis path is skipped (fail-closed, no guessed number)
+        and the static fallback still runs.
 
         Issue #1086: Direct redis.Redis() required — Ansible dynamic inventory
         script runs standalone without access to autobot_shared.
         """
+        try:
+            self.redis_db = resolved_databases()["main"]
+        except DatabasesUnreadable as exc:
+            sys.stderr.write(f"ERROR: {exc}; skipping Redis, using the static fallback inventory\n")
+            return None
         try:
             client = redis.Redis(
                 host=self.redis_host,
