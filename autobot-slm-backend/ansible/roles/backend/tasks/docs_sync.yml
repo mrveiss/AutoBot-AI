@@ -37,7 +37,10 @@
 # a sync that "succeeded" onto a stale or unwritable tree fails the update instead
 # of passing silently. docs/ is a delete-sync, so the marker is excluded above.
 - name: "Backend | Record the docs commit marker (#18324)"
-  ansible.builtin.include_tasks: ../../_shared/tasks/record_slm_deployed_commit.yml
+  ansible.builtin.include_tasks:
+    file: ../../_shared/tasks/record_slm_deployed_commit.yml
+    apply:
+      tags: ['backend', 'docs', 'deploy']
   vars:
     deployed_commit_label: "Backend docs"
     deployed_commit_dir: "{{ backend_install_dir }}/../docs"
