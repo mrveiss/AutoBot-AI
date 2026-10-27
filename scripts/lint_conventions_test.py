@@ -34,7 +34,8 @@ LIB_DIR = Path(__file__).resolve().parent / "lib"
 # sources". A fixture that ships only *.sh gives the script an unreadable rule
 # file, and the script then dies at load -- which these tests would read as a
 # missing message rather than as a fixture that is not a checkout.
-_SOURCED_LIB = re.compile(r"lib/([A-Za-z0-9_.-]+\.(?:sh|ere))")
+# #19645: .py too -- the commit-msg mode runs lib/outward_wording.py.
+_SOURCED_LIB = re.compile(r"lib/([A-Za-z0-9_.-]+\.(?:sh|ere|py))")
 
 
 def _required_libs() -> list[str]:
@@ -190,6 +191,9 @@ def test_research_doc_with_issue_link_passes(repo: Path) -> None:
         # remains a failure, which is the one real violation in the last 400.
         ("Consolidate the thing (#1234)", 1),
         ("-bad(x): type may not start with a dash (#1234)", 1),
+        # #19645: no automation session ids or internal process roles in a subject.
+        ("ci(wording): queued for train 85l (#19645)", 1),
+        ("ci(wording): rebased onto a0b1c2d3e4 for the merge train (#19645)", 0),
     ],
 )
 def test_commit_msg_mode(repo: Path, subject: str, expected: int) -> None:
