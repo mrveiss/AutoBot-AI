@@ -28,6 +28,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 from autobot_shared.chromadb_endpoints import CHROMADB_HEARTBEAT_PATH
+from tools.lint._comment_syntax import markers_for, strip_trailing_comment
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ROOT = repo_root()
@@ -51,11 +52,9 @@ _CHROMA_HEALTH = re.compile(r"(?i)chroma\w*\W.*/health\b|\b8100/health\b")
 _NON_CODE = re.compile(r"(^docs/|\.md$|(^|/)tests?/|(^|/)test_[^/]*$|_test\.py$|\.test\.|^\.test_durations)")
 
 
-def _strip_comment(line: str) -> str:
-    """The code part of *line*: full-line ``#``/``//`` comments and trailing `` # `` comments go."""
-    if line.lstrip().startswith(("#", "//")):
-        return ""
-    return re.split(r"\s#\s", line, maxsplit=1)[0]
+def _strip_comment(line: str, markers: tuple[str, ...]) -> str:
+    """The code part of *line*, through the one quote-aware stripper (#17941)."""
+    return strip_trailing_comment(line, markers)
 
 
 def foreign_versions(text: str) -> list[str]:
@@ -63,9 +62,9 @@ def foreign_versions(text: str) -> list[str]:
     return [m for m in _VERSIONED.findall(text) if m != CHROMADB_HEARTBEAT_PATH]
 
 
-def chroma_health_probes(text: str) -> list[str]:
+def chroma_health_probes(text: str, markers: tuple[str, ...] = ("#",)) -> list[str]:
     """Code lines that send a ChromaDB probe to ``/health``, which chromadb 1.x does not serve."""
-    lines = (_strip_comment(line) for line in text.splitlines())
+    lines = (_strip_comment(line, markers) for line in text.splitlines())
     return [line.strip() for line in lines if _CHROMA_HEALTH.search(line)]
 
 
@@ -76,8 +75,8 @@ def _read(root: Path, rel: str) -> str | None:
         return None
 
 
-def _has_literal(text: str) -> bool:
-    return any(_strip_comment(line).count(CHROMADB_HEARTBEAT_PATH) for line in text.splitlines())
+def _has_literal(text: str, markers: tuple[str, ...]) -> bool:
+    return any(_strip_comment(line, markers).count(CHROMADB_HEARTBEAT_PATH) for line in text.splitlines())
 
 
 def _findings_of(rel: str, text: str, allowed: set[str]) -> dict[str, list[str]]:
@@ -87,9 +86,10 @@ def _findings_of(rel: str, text: str, allowed: set[str]) -> dict[str, list[str]]
         out["foreign"] = [f"{rel}: {bad}"]
     if _NON_CODE.search(rel) or rel.startswith("repo_tests/"):
         return out
-    if rel not in allowed and _has_literal(text):
+    markers = markers_for(rel)
+    if rel not in allowed and _has_literal(text, markers):
         out["unrecorded"] = [rel]
-    if hits := chroma_health_probes(text):
+    if hits := chroma_health_probes(text, markers):
         out["health"] = [f"{rel}: {hits}"]
     return out
 
