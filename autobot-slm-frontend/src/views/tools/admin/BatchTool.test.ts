@@ -1,7 +1,8 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 /**
- * BatchTool polls through the kit's usePollingJob (#19482): it stops after three
+ * BatchTool polls through the shared dashboard policy (#19482): it stops after
+ * POLL_CONSECUTIVE_ERROR_LIMIT
  * consecutive failures and shows the paused banner (#1092), Retry restarts it, and
  * unmounting stops it.
  */
@@ -23,6 +24,7 @@ vi.mock('@/composables/useAutobotApi', () => ({
 }))
 
 import BatchTool from './BatchTool.vue'
+import { POLL_CONSECUTIVE_ERROR_LIMIT as LIMIT } from '@/constants/api-timeouts'
 
 const POLL_MS = 10_000
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
@@ -48,20 +50,19 @@ describe('BatchTool polling', () => {
     vi.useRealTimers()
   })
 
-  it('pauses after three consecutive failures and shows the banner', async () => {
+  it('pauses after the shared limit of consecutive failures and shows the banner', async () => {
     listBatchJobs.mockRejectedValue(new Error('down'))
     const wrapper = mountTool()
     await flushPromises()
     expect(listBatchJobs).toHaveBeenCalledTimes(1)
     expect(wrapper.text()).not.toContain(paused)
 
-    await tick(POLL_MS)
-    await tick(POLL_MS)
-    expect(listBatchJobs).toHaveBeenCalledTimes(3)
+    for (let i = 1; i < LIMIT; i++) await tick(POLL_MS)
+    expect(listBatchJobs).toHaveBeenCalledTimes(LIMIT)
     expect(wrapper.text()).toContain(paused)
 
     await tick(POLL_MS * 3)
-    expect(listBatchJobs).toHaveBeenCalledTimes(3)
+    expect(listBatchJobs).toHaveBeenCalledTimes(LIMIT)
     wrapper.unmount()
   })
 
@@ -69,19 +70,18 @@ describe('BatchTool polling', () => {
     listBatchJobs.mockRejectedValue(new Error('down'))
     const wrapper = mountTool()
     await flushPromises()
-    await tick(POLL_MS)
-    await tick(POLL_MS)
+    for (let i = 1; i < LIMIT; i++) await tick(POLL_MS)
     expect(wrapper.text()).toContain(paused)
 
     listBatchJobs.mockResolvedValue({ jobs: [] })
     const retry = wrapper.findAll('button').find((b) => b.text() === en.tools.admin.batchTool.retry)
     await retry!.trigger('click')
     await flushPromises()
-    expect(listBatchJobs).toHaveBeenCalledTimes(4)
+    expect(listBatchJobs).toHaveBeenCalledTimes(LIMIT + 1)
     expect(wrapper.text()).not.toContain(paused)
 
     await tick(POLL_MS)
-    expect(listBatchJobs).toHaveBeenCalledTimes(5)
+    expect(listBatchJobs).toHaveBeenCalledTimes(LIMIT + 2)
     wrapper.unmount()
   })
 
