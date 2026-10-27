@@ -25,7 +25,7 @@ from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
 from autobot_shared.git_probe import start_git
 from services.ansible_secrets import fetch_deploy_secrets
 from services.ansible_utils import _find_ansible_playbook as _resolve_ansible_playbook
-from services.ansible_utils import ansible_config_env, ansible_exit_code
+from services.ansible_utils import ansible_config_env, ansible_exit_code, with_limit_proof
 from services.inventory_builder import (
     build_registry_inventory,
     validate_inventory,
@@ -1195,8 +1195,7 @@ class PlaybookExecutor:
         When ``inventory_path`` is None (the normal path for all non-wizard
         calls), a dynamic inventory is generated from the DB node registry
         (#10109, #10095).  When ``inventory_path`` is provided explicitly
-        (wizard provisioning, Issue #1294), the caller's inventory is used
-        unchanged.
+        (wizard provisioning, Issue #1294), the caller's inventory is used unchanged.
 
         Args:
             playbook_name: Name of playbook file (e.g., "update-all-nodes.yml")
@@ -1260,6 +1259,7 @@ class PlaybookExecutor:
             # with production.yml when wizard passes a temp inventory (#2836)
             env["ANSIBLE_INVENTORY"] = str(effective_inventory)
             proc_result = await self._run_subprocess(cmd, env, progress_callback, detach=detach, timeout_s=timeout_s)
+            proc_result = with_limit_proof(proc_result, limit)  # #19762: only-localhost-ran is no proof
             success = proc_result["returncode"] == 0
             if success:
                 logger.info(f"Playbook {playbook_name} completed successfully")
