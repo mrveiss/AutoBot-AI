@@ -40727,7 +40727,7 @@ export interface paths {
         put?: never;
         /**
          * Clear Redis Cache
-         * @description Clear Redis cache for specific database or all databases.
+         * @description Clear one cache database, or each distinct one once for ``all``; anything else is a 400 (#19497, #19365).
          */
         post: operations["clear_redis_cache_api_cache_redis_clear__database__post"];
         delete?: never;
@@ -92372,9 +92372,11 @@ export interface components {
         };
         /**
          * RedisDatabase
-         * @description Type-safe database enumeration aligned with redis-databases.yaml (#2670).
+         * @description Type-safe database names aligned with redis-databases.yaml (#2670).
          *
-         *     Each value corresponds to a Redis database number (0-15).
+         *     A member is a NAME. Its value is the YAML default number, kept only so members stay
+         *     distinct; it is not where a database lives. Resolve one with
+         *     ``database_names.database_number``, which honours ``AUTOBOT_REDIS_DB_*`` (#19232).
          * @enum {integer}
          */
         RedisDatabase: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 13 | 14 | 15 | 8 | 0;

@@ -37,11 +37,7 @@ export class AppConfigService {
           port: import.meta.env.VITE_BACKEND_PORT || '8001',
           protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http'
         },
-        redis: {
-          host: import.meta.env.VITE_REDIS_HOST,
-          port: import.meta.env.VITE_REDIS_PORT || '6379',
-          protocol: 'redis'
-        },
+        // No redis entry (#19232): a browser never dials Redis; the backend owns its URL.
         // DORMANT: VNC browser path replaced by screenshot panel (#1130). Preserved for #5136 re-integration.
         // #16299: no password fields -- the backend authenticates to the real VNC server
         // itself and offers the browser security-type "None" (api/vnc_handshake_bridge.py).
@@ -535,7 +531,7 @@ export class AppConfigService {
    * Get all service URLs for debugging
    */
   async getAllServiceUrls() {
-    const services = ['backend', 'redis', 'vnc_desktop', 'vnc_terminal', 'vnc_playwright', 'npu_worker', 'ollama', 'playwright'];
+    const services = ['backend', 'vnc_desktop', 'vnc_terminal', 'vnc_playwright', 'npu_worker', 'ollama', 'playwright'];
     const urls = {};
 
     for (const service of services) {

@@ -7,7 +7,9 @@ Redis Types Module — Single Source of Truth (#2670)
 
 Database numbers are loaded from redis-databases.yaml at import time.
 If the YAML is not found, a hardcoded fallback (kept in sync with the YAML
-via tests/test_redis_db_ssot.py) is used.
+via tests/test_redis_db_ssot.py) is used. ``AUTOBOT_REDIS_DB_<NAME>`` overrides
+are applied on top (#19232), so this module holds the ONE name -> number table;
+``redis_db_single_table_19232_test.py`` fails on a second one.
 
 Contains:
 - RedisDatabase: Type-safe database enumeration
@@ -24,6 +26,8 @@ import os
 from enum import Enum
 from typing import Dict
 
+from autobot_shared.redis_management.database_overrides import apply_overrides, override_source
+
 logger = logging.getLogger(__name__)
 
 
@@ -32,27 +36,48 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def _resolve_yaml_path() -> str | None:
-    """Find redis-databases.yaml in known locations."""
-    possible_paths = [
-        # Relative to this file: autobot_shared/redis_management/ → ../../
-        os.path.join(
-            os.path.dirname(__file__),
-            "..",
-            "..",
-            "autobot-infrastructure",
-            "shared",
-            "config",
-            "redis-databases.yaml",
-        ),
-        "/app/config/redis-databases.yaml",  # Container
-        "./config/redis-databases.yaml",  # Host relative
-        os.path.join(
-            os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"),  # ssot-config-exempt: bootstrap before config available
-            "config/redis-databases.yaml",
-        ),
+_YAML_NAME = "redis-databases.yaml"
+
+
+def _base_dir() -> str | None:
+    """``AUTOBOT_BASE_DIR``, else the project root (the SSOT ``path.base_dir`` rule), else None.
+
+    Never raises: importing ``redis_management`` must not fail on path resolution. With no
+    determinable root the host-absolute candidate is skipped; #19350 adds the install-root
+    fallback (``fleet_constants.FLEET_INSTALL_ROOT``) -- a literal here is a hardcoding finding.
+    """
+    explicit = os.environ.get("AUTOBOT_BASE_DIR")  # ssot-config-exempt: bootstrap before config available
+    if explicit:
+        return explicit
+    from autobot_shared.paths import ProjectRootUndeterminable, project_root
+
+    try:
+        return str(project_root())
+    except ProjectRootUndeterminable:
+        return None
+
+
+def _yaml_candidates() -> list[str]:
+    """Every place redis-databases.yaml may live, in priority order -- the ONE list (#19232).
+
+    Built per call, never at import, so a path that changes after import is seen.
+    """
+    here = os.path.dirname(__file__)
+    candidates = [
+        os.path.join(here, "..", "..", "autobot-infrastructure", "shared", "config", _YAML_NAME),  # checkout/install
+        os.path.join("/app/config", _YAML_NAME),  # container
+        os.path.join(".", "config", _YAML_NAME),  # host relative
     ]
-    for path in possible_paths:
+    base_dir = _base_dir()
+    if base_dir:
+        candidates.append(os.path.join(base_dir, "config", _YAML_NAME))  # host absolute
+    return candidates
+
+
+def resolve_databases_yaml() -> str | None:
+    """The redis-databases.yaml in use, or None. The one resolver: the number table and the
+    connection manager's per-database tuning read the same file (#19232)."""
+    for path in _yaml_candidates():
         resolved = os.path.normpath(path)
         if os.path.exists(resolved):
             return resolved
@@ -65,7 +90,7 @@ def load_database_mapping_from_yaml() -> Dict[str, int] | None:
     Returns:
         Dict mapping database names to numbers, or None if YAML not found.
     """
-    yaml_path = _resolve_yaml_path()
+    yaml_path = resolve_databases_yaml()
     if not yaml_path:
         return None
 
@@ -84,7 +109,8 @@ def load_database_mapping_from_yaml() -> Dict[str, int] | None:
 
 # ---------------------------------------------------------------------------
 # Hardcoded fallback — MUST match redis-databases.yaml exactly.
-# Validated by tests/test_redis_db_ssot.py (#2670).
+# Validated by tests/test_redis_db_ssot.py (#2670). The only number literals
+# allowed to name a database outside the YAML (#19232).
 # ---------------------------------------------------------------------------
 _FALLBACK_MAPPING: Dict[str, int] = {
     "main": 0,
@@ -104,56 +130,72 @@ _FALLBACK_MAPPING: Dict[str, int] = {
     "celery_results": 15,
 }
 
-# Backward-compatible aliases for names used in existing code.
-# These map to the canonical database they logically belong to.
-_ALIASES: Dict[str, int] = {
-    "conversations": 3,  # Alias for agents (conversation storage)
-    "locks": 6,  # Alias for sessions (distributed locks)
-    "memory": 0,  # Uses DB 0 — required for RediSearch indexing (FT.*)
-    "vectors": 8,  # LlamaIndex vector store — DB 8 per docs/system-state.md
-    "facts": 1,  # Knowledge facts and rules
+# Backward-compatible aliases: each NAMES the database it shares, never a number, so an
+# alias follows its target when the YAML or an override moves it (#19232).
+_ALIASES: Dict[str, str] = {
+    "conversations": "agents",  # conversation storage
+    "locks": "sessions",  # distributed locks
+    "memory": "main",  # RediSearch indexing (FT.*) needs DB 0
+    "vectors": "logs",  # LlamaIndex vector store, per docs/system-state.md
+    "facts": "knowledge",  # knowledge facts and rules
 }
 
 
-def _build_database_mapping() -> Dict[str, int]:
-    """Build the canonical DATABASE_MAPPING from YAML or fallback."""
+def _declared_databases() -> Dict[str, int]:
+    """Every database redis-databases.yaml declares, with its YAML number (no aliases, no overrides)."""
     yaml_mapping = load_database_mapping_from_yaml()
-    base = yaml_mapping if yaml_mapping is not None else _FALLBACK_MAPPING.copy()
-    # Merge aliases (don't overwrite canonical names from YAML)
-    for alias, db_num in _ALIASES.items():
-        if alias not in base:
-            base[alias] = db_num
-    return base
+    return yaml_mapping if yaml_mapping is not None else _FALLBACK_MAPPING.copy()
 
 
-# The runtime mapping used by RedisConnectionManager._get_database_number()
+#: The declared databases at their YAML numbers -- the documented defaults (env registry, docs).
+DECLARED_DATABASES: Dict[str, int] = _declared_databases()
+
+
+def _build_database_mapping() -> Dict[str, int]:
+    """The ONE name -> number table: the YAML, then ``AUTOBOT_REDIS_DB_*`` overrides, then aliases."""
+    mapping = apply_overrides(DECLARED_DATABASES, override_source())
+    for alias, target in _ALIASES.items():
+        if alias in mapping:
+            continue
+        if target not in mapping:
+            # A YAML that drops an alias's target must not fail the import; the alias is
+            # simply undeclared, and database_number() refuses it by name.
+            logger.warning("Redis alias %r names %r, which redis-databases.yaml does not declare", alias, target)
+            continue
+        mapping[alias] = mapping[target]
+    return mapping
+
+
+# The runtime mapping every reader resolves through (database_names.database_number).
 DATABASE_MAPPING: Dict[str, int] = _build_database_mapping()
 
 
 class RedisDatabase(Enum):
-    """Type-safe database enumeration aligned with redis-databases.yaml (#2670).
+    """Type-safe database names aligned with redis-databases.yaml (#2670).
 
-    Each value corresponds to a Redis database number (0-15).
+    A member is a NAME. Its value is the YAML default number, kept only so members stay
+    distinct; it is not where a database lives. Resolve one with
+    ``database_names.database_number``, which honours ``AUTOBOT_REDIS_DB_*`` (#19232).
     """
 
-    MAIN = 0
-    KNOWLEDGE = 1
-    PROMPTS = 2
-    AGENTS = 3
-    METRICS = 4
-    CACHE = 5
-    SESSIONS = 6
-    WORKFLOWS = 7
-    LOGS = 8
-    TEMP = 9
-    AUDIT = 10
-    ANALYTICS = 11
-    TESTING = 13
-    CELERY_BROKER = 14
-    CELERY_RESULTS = 15
-    # Aliases — share DB numbers with canonical entries
-    VECTORS = 8  # LlamaIndex vector store
-    MEMORY = 0  # RediSearch indexing on DB 0
+    MAIN = _FALLBACK_MAPPING["main"]
+    KNOWLEDGE = _FALLBACK_MAPPING["knowledge"]
+    PROMPTS = _FALLBACK_MAPPING["prompts"]
+    AGENTS = _FALLBACK_MAPPING["agents"]
+    METRICS = _FALLBACK_MAPPING["metrics"]
+    CACHE = _FALLBACK_MAPPING["cache"]
+    SESSIONS = _FALLBACK_MAPPING["sessions"]
+    WORKFLOWS = _FALLBACK_MAPPING["workflows"]
+    LOGS = _FALLBACK_MAPPING["logs"]
+    TEMP = _FALLBACK_MAPPING["temp"]
+    AUDIT = _FALLBACK_MAPPING["audit"]
+    ANALYTICS = _FALLBACK_MAPPING["analytics"]
+    TESTING = _FALLBACK_MAPPING["testing"]
+    CELERY_BROKER = _FALLBACK_MAPPING["celery_broker"]
+    CELERY_RESULTS = _FALLBACK_MAPPING["celery_results"]
+    # Aliases -- share a number with their canonical entry
+    VECTORS = _FALLBACK_MAPPING["logs"]  # LlamaIndex vector store
+    MEMORY = _FALLBACK_MAPPING["main"]  # RediSearch indexing on DB 0
 
 
 class ConnectionState(Enum):

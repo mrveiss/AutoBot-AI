@@ -34,7 +34,9 @@
 # WHAT A `[skip ci]` HEAD MEANS FOR A PR. Its required checks are not run, so they
 # stay "expected" (pending), never green or red, until a new head commit runs them.
 # - A merge train runs full CI on its OWN merge commit, so a synced PR that lands
-#   through a train needs nothing more.
+#   through a train needs nothing more. The train branch itself (`train-*`) is never
+#   synced: a `[skip ci]` head would supersede the train's own run and leave it with
+#   no suite, so the train's builder merges main into it with CI (#19724).
 # - A PR merged on its own (not through a train) needs a fresh author push to its
 #   branch, or a re-run of its checks, before the required checks can report.
 # #14022's one-per-push serialization and #12823's `approve-refreshed-runs` job
