@@ -17,8 +17,7 @@
 # an explicit value always overrides the auto-generated one.
 #
 # NOTE: --env-file docker/.env.docker is required when the root .env contains
-# fleet-specific paths (e.g. AUTOBOT_TLS_CERT_DIR=infrastructure/shared/certs)
-# that are invalid in a Docker context. See #2458.
+# fleet-specific values that are invalid in a Docker context. See #2458.
 #
 # Healthcheck convention (#7456):
 #   - Default to ``["CMD", ...]`` (exec form) — no shell, no env-var
@@ -402,8 +401,8 @@ services:
       - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
       - AUTOBOT_REDIS_HOST=autobot-redis
       - AUTOBOT_REDIS_PORT=6379
-      - CELERY_BROKER_URL=redis://autobot-redis:6379/${AUTOBOT_REDIS_DB_CELERY_BROKER:-14}
-      - CELERY_RESULT_BACKEND=redis://autobot-redis:6379/${AUTOBOT_REDIS_DB_CELERY_RESULTS:-15}
+      # Broker/result URLs: celery_app builds them from AUTOBOT_REDIS_HOST/PORT above and
+      # redis-databases.yaml (+ AUTOBOT_REDIS_DB_CELERY_*), #19232 -- no URL or DB literal here.
       - AUTOBOT_CHROMADB_HOST=autobot-chromadb
       - AUTOBOT_CHROMADB_PORT=8000
       # #12513: shared secret for CHROMA_SERVER_AUTHN_* token auth on the
@@ -522,8 +521,8 @@ services:
       - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
       - AUTOBOT_REDIS_HOST=autobot-redis
       - AUTOBOT_REDIS_PORT=6379
-      - CELERY_BROKER_URL=redis://autobot-redis:6379/${AUTOBOT_REDIS_DB_CELERY_BROKER:-14}
-      - CELERY_RESULT_BACKEND=redis://autobot-redis:6379/${AUTOBOT_REDIS_DB_CELERY_RESULTS:-15}
+      # Broker/result URLs: celery_app builds them from AUTOBOT_REDIS_HOST/PORT above and
+      # redis-databases.yaml (+ AUTOBOT_REDIS_DB_CELERY_*), #19232 -- no URL or DB literal here.
       - AUTOBOT_CHROMADB_HOST=autobot-chromadb
       - AUTOBOT_CHROMADB_PORT=8000
       # #12513: shared secret for CHROMA_SERVER_AUTHN_* token auth on the

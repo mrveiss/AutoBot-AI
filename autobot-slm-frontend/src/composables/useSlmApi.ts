@@ -81,7 +81,7 @@ import type {
   CategoriesResponse,
   ComponentsResponse,
   ErrorHealthResponse,
-  MetricsSummary,
+  ErrorMetricsSummary,
   TimelineResponse,
   TopErrorsResponse,
   AlertThresholdConfig,
@@ -1075,8 +1075,8 @@ export function useSlmApi() {
     return response.data
   }
 
-  async function getErrorMetricsSummary(): Promise<MetricsSummary> {
-    const response = await client.get<MetricsSummary>('/errors/metrics/summary')
+  async function getErrorMetricsSummary(): Promise<ErrorMetricsSummary> {
+    const response = await client.get<ErrorMetricsSummary>('/errors/metrics/summary')
     return response.data
   }
 

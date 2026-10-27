@@ -53,7 +53,7 @@ PRE_COMMIT_CONFIG = REPO_ROOT / ".pre-commit-config.yaml"
 #: nothing outside .ts/.vue" and "the gate never looked outside .ts/.vue" are
 #: the same observation (MEASUREMENT_DISCIPLINE.md).
 _UNCOVERED_OVERSIZED: dict[str, int] = {
-    "autobot-frontend/src/config/AppConfig.js": 616,
+    "autobot-frontend/src/config/AppConfig.js": 612,
 }
 
 #: Suffixes the uncovered-population sweep enumerates. Everything a frontend

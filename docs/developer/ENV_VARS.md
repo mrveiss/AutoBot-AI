@@ -318,9 +318,9 @@ appears outside the known overlays.
 | `AUTOBOT_RAG_GRAPH_WEIGHT` | rag | float | `0.3` | Graph-signal weight in the one pre-rerank vector+graph blend (RAGConfig.graph_weight, #18141). Range: 0.0–1.0. |
 | `AUTOBOT_RANKING_ALPHA` | code_analysis | float | `1.0` | Multiplicative weight applied to the runtime_risk boost when ranking anti-pattern findings (0 disables the boost; 1.0 lets a fully-risky file double its effective score). Raising it weights runtime risk more heavily in the ranking; lowering it toward 0 weights it less (code_analysis/src/anti_pattern_detector.py). |
 | `AUTOBOT_RATE_LIMITER_FAIL_OPEN_WARN_INTERVAL` | security | float | `60.0` | Minimum seconds between fail-open warnings per rate-limiter instance (#18617). While Redis is unreachable the limiters allow requests; the warning names only the limiter scope and is emitted at most once per interval so an outage cannot flood the log. |
-| `AUTOBOT_REDIS_DB_ANALYTICS` | redis | int | `11` | Redis logical database number for analytics data. Range: 0–15. |
-| `AUTOBOT_REDIS_DB_KNOWLEDGE` | redis | int | `1` | Redis logical database number for knowledge-base vectors. Range: 0–15. |
-| `AUTOBOT_REDIS_DB_MAIN` | redis | int | `0` | Redis logical database number for primary application data. Range: 0–15. |
+| `AUTOBOT_REDIS_DB_ANALYTICS` | redis | int | *(none)* | Redis DB number for analytics data; unset uses redis-databases.yaml (#19232). Range: 0–15. |
+| `AUTOBOT_REDIS_DB_KNOWLEDGE` | redis | int | *(none)* | Redis DB number for knowledge-base vectors; unset uses redis-databases.yaml (#19232). Range: 0–15. |
+| `AUTOBOT_REDIS_DB_MAIN` | redis | int | *(none)* | Redis DB number for primary application data; unset uses redis-databases.yaml (#19232). Range: 0–15. |
 | `AUTOBOT_REDIS_HOST` | redis | str | `'localhost'` | Redis server hostname or IP address. |
 | `AUTOBOT_REDIS_PASSWORD` | redis | str | *(none)* | Redis AUTH password (omit or leave blank for unauthenticated servers). |
 | `AUTOBOT_REDIS_PORT` | redis | int | `6379` | Redis server TCP port (plain connection). Range: 1–65535. |
@@ -402,9 +402,10 @@ appears outside the known overlays.
 | `AUTOBOT_TERMINAL_SESSION_TTL_SECONDS` | terminal | int | `86400` | TTL for terminal:session_config:* Redis keys — the cross-worker terminal session registry (services/terminal_session_store.py, #14961). A session config outlives the connection it was created for (the WebSocket may attach on a different uvicorn worker, or reconnect after one), so this is deliberately generous: 24h matches the sibling chat:session:* cache TTL (chat_history/cache.py) rather than the lifetime of any single PTY process. Range: 60–604800. |
 | `AUTOBOT_THREAT_INTEL_CACHE_TTL` | security | int | `7200` | Seconds a threat-intelligence verdict (VirusTotal/URLVoid) stays cached in-process (#18888). Measured on a monotonic clock, so a wall-clock step cannot extend it. Clamped to 1-604800. |
 | `AUTOBOT_TLS_CA_PATH` | tls | str | *(none)* | Path to the CA certificate file for TLS verification. |
-| `AUTOBOT_TLS_CERT_DIR` | tls | str | `'/etc/autobot/certs'` | Directory containing TLS certificate and key files. |
+| `AUTOBOT_TLS_CERT_DIR` | tls | str | `'certs'` | PKI certificate tree on the CA host (ca/, main-host/, <vm>/); relative to the project root unless absolute. A node's installed certs are AUTOBOT_TLS_REMOTE_CERT_DIR (#19317). |
 | `AUTOBOT_TLS_CERT_PATH` | tls | str | *(none)* | Path to the TLS client/server certificate file. |
 | `AUTOBOT_TLS_KEY_PATH` | tls | str | *(none)* | Path to the TLS private key file. |
+| `AUTOBOT_TLS_REMOTE_CERT_DIR` | tls | str | `'/etc/autobot/certs'` | Flat directory a fleet node serves TLS from (server-cert.pem, server-key.pem, ca-cert.pem) (#19317). |
 | `AUTOBOT_TOOL_OUTPUT_SPILL` | agent_loop | bool | false | Master switch for spilling oversized tool output to disk and returning a short excerpt plus an anchor (agent_loop/tool_output_spill.py). |
 | `AUTOBOT_TOOL_OUTPUT_SPILL_EXCERPT` | agent_loop | int | `2000` | Characters of a spilled tool result kept inline as the excerpt; clamped below the spill threshold (agent_loop/tool_output_spill.py). |
 | `AUTOBOT_TOOL_OUTPUT_SPILL_MAX` | agent_loop | int | `5000000` | Largest payload written to a spill artifact; above this the stored copy is truncated and marked (agent_loop/tool_output_spill.py). |
@@ -445,6 +446,8 @@ appears outside the known overlays.
 | `NPU_WORKER_HOST` | npu | str | `'0.0.0.0'` | Legacy, ambiguous name. In the worker it is the BIND address, used only when NPU_WORKER_BIND_HOST is unset. Connect-side readers use AUTOBOT_NPU_WORKER_HOST (ssot); `autobot doctor` still honours this name as a connect host when that is unset, mapping a 0.0.0.0 bind value to loopback. |
 | `NPU_WORKER_PORT` | npu | int | `8081` | Port the NPU worker listens on (worker) and that `autobot doctor` probes. AUTOBOT_NPU_WORKER_PORT is the ssot alias and wins in doctor; this bare name is still honoured so existing deployments keep working. |
 | `OPENAI_API_KEY` | image_generation | str | *(none)* | OpenAI image API key for the image-generation plugin. Environment fallback only: credentials belong in the secrets service. |
+| `PR_CONFLICT_GATE_BACKOFF_SECONDS` | backend | float | `5.0` | Initial seconds the PR merge-conflict gate waits between reads of an unknown mergeable state; doubles each retry, clamped to 0..60 (#19769). |
+| `PR_CONFLICT_GATE_MAX_ATTEMPTS` | backend | int | `6` | How many times the PR merge-conflict gate reads a PR whose mergeable state GitHub reports as unknown before reporting it pending; clamped to 1..10 (#19769). |
 | `SLM_ADMIN_PASSWORD` | slm | str | `""` | SLM admin password, the one name for it (#19318). Its home is SLM_ADMIN_PASSWORD in slm-secrets.env (install.sh or the slm_manager role generates it). Empty means the SLM creates the admin with a random password and never resets an existing one. No default password. AUTOBOT_SLM_ADMIN_PASSWORD is a deprecated alias that only install.sh and the shared ansible reader honour. |
 | `SLM_ADMIN_PASSWORD_FILE` | slm | str | `""` | Path to a file holding the SLM admin password (the hardened compose overlay's mounted secret). Seeds a fresh install only; an existing admin keeps its stored password (#19368). Set but unreadable or empty stops the first start with an error. |
 | `SLM_AUTH_LOOKUP_CACHE_TTL` | slm | float | `60.0` | Seconds an SLM process reuses its resolved API-key hashing setting (#19120); other workers follow within it. |

@@ -76,7 +76,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/auth.py": 684,
     "autobot-backend/api/batch_jobs.py": 916,
     "autobot-backend/api/browser_mcp.py": 1323,
-    "autobot-backend/api/cache_management.py": 779,
+    "autobot-backend/api/cache_management.py": 692,
     "autobot-backend/api/chat.py": 2666,  # #18316: delete delegates to the canonical path
     "autobot-backend/api/chat_sessions.py": 1859,  # #18293: legacy transcripts only ever proposed
     "autobot-backend/api/code_intelligence.py": 2145,
@@ -456,7 +456,7 @@ RATCHET_BASELINE: dict[str, int] = {
     # as a live violation, not #5060 backlog -- see #14630.
     "autobot-slm-backend/services/reconciler_remediation_tracker_expiry_14465_test.py": 783,
     "autobot-slm-backend/services/replication.py": 785,
-    "autobot-slm-backend/services/role_registry.py": 712,
+    "autobot-slm-backend/services/role_registry.py": 711,
     "autobot-slm-backend/services/service_orchestrator.py": 913,
     "autobot-slm-backend/slm/agent/agent.py": 630,
     "autobot-slm-backend/tests/api/test_code_sync_deploy_bugs.py": 1990,  # #18052: resolver test moved out
@@ -472,17 +472,17 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot_shared/circuit_breaker.py": 689,
     "autobot_shared/env_registry.py": 1061,  # #19320: postgres block -> env_registry_postgres (was 1125)
     "autobot_shared/monitoring/prometheus_metrics.py": 949,
-    "autobot_shared/network_constants.py": 611,  # #19315: env/mode fallbacks moved to deployment_profile
+    "autobot_shared/network_constants.py": 605,  # #19315 deployment_profile; #19232 one Redis resolver
     "autobot_shared/npu/integration.py": 929,
     "autobot_shared/plugin_sdk/loader.py": 690,
     "autobot_shared/plugin_sdk/plugin_load_visibility_test.py": 750,
     "autobot_shared/plugin_sdk/plugin_sdk_test.py": 941,
     "autobot_shared/rate_limiter_test.py": 618,
     "autobot_shared/redis_client.py": 674,
-    "autobot_shared/redis_management/connection_manager.py": 1387,
+    "autobot_shared/redis_management/connection_manager.py": 1290,
     "autobot_shared/security/ssrf_guard_test.py": 633,
-    "autobot_shared/ssot_config.py": 3239,  # #19319 split to ssot_role_mirrors; #15501 to ssot_hosted_models
-    "autobot_shared/ssot_config_test.py": 782,
+    "autobot_shared/ssot_config.py": 3221,  # #19319 split to ssot_role_mirrors; #15501 to ssot_hosted_models
+    "autobot_shared/ssot_config_test.py": 776,
     "autobot_shared/ssot_constants.py": 861,
     "autobot_shared/user_management/team_service.py": 724,
     "pipeline-scripts/check-pre-commit-hook-pr_test.py": 747,

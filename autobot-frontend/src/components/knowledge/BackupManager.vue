@@ -109,40 +109,35 @@
       </div>
 
       <!-- Status Messages -->
-      <div v-if="statusMessage" :class="['status-message', statusMessage.type]">
-        <Icon :name="statusMessage.icon" />
-        <span>{{ statusMessage.text }}</span>
-        <button
-          @click="statusMessage = null"
-          class="dismiss-btn"
-          :aria-label="$t('common.dismiss')"
-        >
-          <Icon name="times" />
-        </button>
-      </div>
+      <BaseAlert
+        v-if="statusMessage"
+        :key="statusMessage.id"
+        class="mt-4"
+        bordered
+        :variant="statusMessage.type"
+        :message="statusMessage.text"
+        :auto-dismiss="statusAutoDismiss"
+        dismissible
+        :dismiss-label="$t('common.dismiss')"
+        @dismiss="clearStatus"
+      />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
+import { useStatusMessage } from '@/composables/knowledge/useStatusMessage'
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatFileSize, formatDateTime } from '@/utils/formatHelpers'
-import { BaseButton } from '@autobot/ui'
+import { BaseButton, BaseAlert } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { useKnowledgeBackup, type BackupOptions } from '@/composables/knowledge/useKnowledgeBackup'
 
 const { t } = useI18n()
 
 const logger = createLogger('BackupManager')
-
-interface StatusMessage {
-  type: 'success' | 'error' | 'warning' | 'info'
-  text: string
-  icon: IconName
-}
 
 // Composable
 const {
@@ -166,26 +161,7 @@ const backupOptions = ref<BackupOptions>({
 })
 
 const selectedBackup = ref<string | null>(null)
-const statusMessage = ref<StatusMessage | null>(null)
-
-// Methods
-const showStatus = (type: StatusMessage['type'], text: string) => {
-  const icons: Record<StatusMessage['type'], IconName> = {
-    success: 'check-circle',
-    error: 'exclamation-circle',
-    warning: 'exclamation-triangle',
-    info: 'info-circle',
-  }
-  statusMessage.value = { type, text, icon: icons[type] }
-
-  if (type === 'success') {
-    setTimeout(() => {
-      if (statusMessage.value?.type === 'success') {
-        statusMessage.value = null
-      }
-    }, 5000)
-  }
-}
+const { statusMessage, showStatus, clearStatus, statusAutoDismiss } = useStatusMessage()
 
 const createBackup = async () => {
   try {
@@ -497,39 +473,5 @@ onMounted(() => {
 .action-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.status-message {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-3);
-  padding: var(--spacing-4);
-  border-radius: var(--radius-lg);
-  margin-top: var(--spacing-4);
-}
-
-.status-message.success {
-  background: var(--color-success-bg);
-  border: 1px solid var(--color-success);
-  color: var(--color-success);
-}
-
-.status-message.error {
-  background: var(--color-error-bg);
-  border: 1px solid var(--color-error);
-  color: var(--color-error);
-}
-
-.status-message span {
-  flex: 1;
-}
-
-.dismiss-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: var(--spacing-1);
-  color: inherit;
-  opacity: 0.7;
 }
 </style>

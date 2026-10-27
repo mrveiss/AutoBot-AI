@@ -147,7 +147,7 @@ REACH = declare(
     "serving-predicate-scan",
     discover=_population,
     # Mid-window, from REACH.window(): population 2922 at 06e8656eb2 -> (2622, 2922, 2772).
-    floor=2772,
+    floor=2894,  # mid-window: population 3044, window (2744, 3044)
     what="non-test python source",
     roots=SCAN_ROOTS,
     growth=300,

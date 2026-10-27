@@ -464,7 +464,7 @@ class AnalyticsController:
                 if redis_conn:
                     kb_info = await redis_conn.info()
                     stats["knowledge_base_usage"] = {
-                        "keys_count": kb_info.get("db1", {}).get("keys", 0),
+                        "keys_count": await redis_conn.dbsize(),  # its own DB, whichever number (#19232)
                         "memory_usage_mb": (kb_info.get("used_memory", 0) / (1024 * 1024)),
                     }
             except Exception:

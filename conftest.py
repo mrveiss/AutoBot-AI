@@ -27,8 +27,11 @@ if _REPO_ROOT not in sys.path:
 # bare `pytest` runs that never touch scripts/pr-preflight.sh.
 # Empty HuggingFace cache per session (#16994): first, so it is set before any
 # plugin or test module imports huggingface_hub.
+# SSOT singleton restore (#19232): a test that clears get_config() leaves it as it found it,
+# so import-time bindings to the singleton (models/settings.py's aliases) never go stale.
 pytest_plugins = [
     "repo_tests.hermetic_model_cache",
     "repo_tests.sys_modules_leak_guard",
     "repo_tests.dependency_floor_banner",
+    "repo_tests.ssot_config_singleton_guard",
 ]

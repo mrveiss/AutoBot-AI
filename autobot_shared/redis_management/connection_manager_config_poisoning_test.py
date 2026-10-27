@@ -20,7 +20,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-import autobot_shared.redis_management.connection_manager as cm_module
+import autobot_shared.redis_management.endpoint as endpoint_module  # #19232: the config manager moved here
 from autobot_shared.redis_management.config import PoolConfig
 from autobot_shared.redis_management.connection_manager import RedisConnectionManager
 
@@ -95,7 +95,7 @@ class TestPoisonedSingleton:
         """Pre-#11830: constructing under a MagicMock config manager left a
         MagicMock circuit_breaker_threshold and _record_failure raised
         TypeError('>=' not supported between int and MagicMock)."""
-        monkeypatch.setattr(cm_module, "_config_manager", MagicMock())
+        monkeypatch.setattr(endpoint_module, "_config_manager", MagicMock())
         manager = RedisConnectionManager()
         assert manager._pool_config.circuit_breaker_threshold == 5
         for _ in range(5):
@@ -105,7 +105,7 @@ class TestPoisonedSingleton:
     def test_reset_instance_returns_fresh_singleton_from_accessor(self, clean_singleton, monkeypatch):
         from autobot_shared.redis_client import _get_connection_manager
 
-        monkeypatch.setattr(cm_module, "_config_manager", MagicMock())
+        monkeypatch.setattr(endpoint_module, "_config_manager", MagicMock())
         poisoned = _get_connection_manager()
         RedisConnectionManager.reset_instance()
         fresh = _get_connection_manager()
@@ -113,7 +113,7 @@ class TestPoisonedSingleton:
         assert isinstance(fresh._pool_config.circuit_breaker_threshold, int)
 
     def test_reset_instance_drops_cached_config_manager_stub(self, clean_singleton, monkeypatch):
-        monkeypatch.setattr(cm_module, "_config_manager", MagicMock())
+        monkeypatch.setattr(endpoint_module, "_config_manager", MagicMock())
         RedisConnectionManager()
         RedisConnectionManager.reset_instance()
-        assert cm_module._config_manager is None, "reset must drop the poisoned lazy config-manager cache"
+        assert endpoint_module._config_manager is None, "reset must drop the poisoned lazy config-manager cache"

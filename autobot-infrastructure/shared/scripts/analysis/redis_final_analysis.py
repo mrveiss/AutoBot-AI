@@ -19,6 +19,8 @@ from autobot_shared.paths import project_root
 sys.path.insert(0, str(project_root()))
 from autobot_shared.network_constants import ServiceURLs
 from autobot_shared.redis_client import require_redis_client
+from autobot_shared.redis_management.database_names import database_number
+from autobot_shared.redis_management.endpoint import resolve_redis_endpoint
 
 # The sibling helper module lives beside this script; put its directory on the path so the import
 # resolves when the file is imported (pytest, tooling) as well as when it is run.
@@ -135,10 +137,8 @@ def _build_unmeasured_arm_recommendation() -> Dict[str, Any]:
         "recommendation": "INCONCLUSIVE_MODERN_ARM_NOT_MEASURED",
         "confidence": "NONE",
         "reasoning": [
-            "The modern langchain-redis arm was NOT measured - the package is "
-            "not importable on this machine",
-            "This run therefore compared ONE library, not two; no conclusion "
-            "about LangChain can be drawn from it",
+            "The modern langchain-redis arm was NOT measured - the package is not importable on this machine",
+            "This run therefore compared ONE library, not two; no conclusion about LangChain can be drawn from it",
         ],
         "next_step": "Install the analysis dependencies and re-run: " + INSTALL_HINT,
         "compatibility_issues_resolved": [],
@@ -206,8 +206,10 @@ def _configure_llamaindex_settings(fixes_attempted):
     )
     vector_store = RedisVectorStore(
         schema=schema,
-        redis_url=ServiceURLs.REDIS_LOCAL,
-        redis_kwargs={"db": 2},
+        redis_url=resolve_redis_endpoint().url(),
+        # #19232: the existing llama_index lives in "knowledge" (knowledge/base.py); the old
+        # literal 2 is the prompts database.
+        redis_kwargs={"db": database_number("knowledge")},
     )
     fixes_attempted.append("Connected to existing vector store without overwriting")
 
@@ -390,8 +392,8 @@ class AutoBotVectorStoreAnalysis:
             return False, 0, fixes_attempted
 
     async def test_langchain_db0_workaround_basic(self) -> Tuple[bool, int, List[str]]:
-        """Test LangChain on Redis DB 0 (basic version)"""
-        logger.info("\nTesting LangChain on Redis DB 0...")
+        """Test LangChain on the main Redis DB (basic version)"""
+        logger.info("\nTesting LangChain on the main Redis DB...")
         fixes_attempted = []
 
         try:
@@ -416,9 +418,9 @@ class AutoBotVectorStoreAnalysis:
             vector_store = RedisVectorStore(
                 embeddings=embeddings,
                 index_name="autobot_langchain_db0",
-                redis_url="%s/0" % ServiceURLs.REDIS_LOCAL,
+                redis_url=resolve_redis_endpoint().url(database_number("main")),
             )
-            fixes_attempted.append("Created LangChain vector store on Redis DB 0")
+            fixes_attempted.append("Created LangChain vector store on the main Redis DB")
 
             test_docs = ["Test deployment configuration document"]
             test_metadata = [{"source": "test", "type": "deployment"}]
@@ -641,7 +643,7 @@ class AutoBotVectorStoreAnalysis:
             return False, 0, fixes_attempted
 
     async def test_langchain_db0_workaround(self) -> Tuple[bool, int, List[str]]:
-        """Test LangChain with DB 0 workaround"""
+        """Test LangChain with main DB workaround"""
         fixes_attempted = []
 
         try:
@@ -667,9 +669,9 @@ class AutoBotVectorStoreAnalysis:
             vector_store = RedisVectorStore(
                 embeddings=embeddings,
                 index_name="autobot_langchain_test",
-                redis_url="%s/0" % ServiceURLs.REDIS_LOCAL,
+                redis_url=resolve_redis_endpoint().url(database_number("main")),
             )
-            fixes_attempted.append("Created vector store on Redis DB 0")
+            fixes_attempted.append("Created vector store on the main Redis DB")
 
             test_docs = ["Kubernetes deployment configuration for AutoBot"]
             test_metadata = [{"source": "test", "category": "deployment"}]
