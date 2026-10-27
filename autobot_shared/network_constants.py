@@ -29,7 +29,7 @@ Usage:
 
 import os
 import warnings
-from functools import cached_property, reduce
+from functools import cached_property
 
 from autobot_shared import deployment_profile as _profile
 
@@ -45,9 +45,9 @@ def _get_config_value(key: str, default: str | None) -> str:
     A ``None`` default is the SSOT value at *key* itself, never a restated literal (#19325).
     """
     if default is None:
-        from autobot_shared.ssot_config import get_config
+        from autobot_shared.ssot_value import ssot_value
 
-        default = str(reduce(getattr, key.split("."), get_config()))
+        default = ssot_value(key)
     try:
         from config.registry import ConfigRegistry
 

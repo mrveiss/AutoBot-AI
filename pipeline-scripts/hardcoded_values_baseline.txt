@@ -175,8 +175,6 @@
 1|other|autobot-backend/api/telegram_bot.py|"user"
 1|other|autobot-backend/api/terminal.py|30
 1|other|autobot-backend/api/terminal_handlers.py|"user"
-2|other|autobot-backend/api/transcripts.py|"system"
-1|other|autobot-backend/api/transcripts.py|"user"
 1|other|autobot-backend/api/user_management/users.py|50
 1|other|autobot-backend/api/user_management/users.py|offset=0
 1|other|autobot-backend/api/verbatim_memory.py|100

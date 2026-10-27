@@ -478,7 +478,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot_shared/ssot_config.py": 3221,  # #19319 split to ssot_role_mirrors; #15501 to ssot_hosted_models
     "autobot_shared/ssot_config_test.py": 776,
     "autobot_shared/ssot_constants.py": 861,
-    "autobot_shared/user_management/team_service.py": 724,
+    "autobot_shared/user_management/team_service.py": 659,
     "pipeline-scripts/check-pre-commit-hook-pr_test.py": 747,
     "pipeline-scripts/ci_dispatch_watchdog.py": 1244,  # #13439: supersession split to ci_run_supersession.py
     "pipeline-scripts/detect-hardcoded-values_test.py": 653,

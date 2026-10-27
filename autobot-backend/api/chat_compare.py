@@ -30,10 +30,13 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from llm_shared.provider_degradation import AllCredentialsNeedReauthError
 from llm_shared.types import LLMType
+from services.llm_usage_recording import recorded_stream, spend_attribution
 
 logger = get_logger(__name__)
 
 router = APIRouter(tags=["chat"])
+
+_COMPARE_ENDPOINT = "/api/chat/compare"
 
 # ---------------------------------------------------------------------------
 # Module-level singleton — initialized once, no lazy-init race (#5023)
@@ -72,12 +75,16 @@ def _parse_provider_model(spec: str) -> tuple[str, str]:
 async def _stream_single_model(
     model_spec: str,
     messages: List[Dict],
+    user_id: str | None = None,
 ) -> AsyncIterator[str]:
     """
     Yield SSE data lines for a single model using real provider streaming (#5013).
 
-    Resolves the provider via ProviderRegistry and calls stream_completion() so
-    chunks arrive from the LLM as they are generated, not as a post-hoc slice.
+    Resolves the provider via ProviderRegistry and streams through
+    ``recorded_stream`` so chunks arrive as they are generated and each model's
+    spend is recorded against ``user_id`` (#16924). It holds the provider itself
+    rather than going through ``LLMService.stream()``: a comparison must answer
+    from the model asked for, and that path falls back to other models.
     """
     from llm_shared import get_provider_registry
     from llm_shared.models import LLMRequest
@@ -91,6 +98,7 @@ async def _stream_single_model(
             provider=provider_name or None,
             model_name=model_name or None,
             stream=True,
+            metadata=spend_attribution(user_id=user_id, endpoint=_COMPARE_ENDPOINT),
         )
         try:
             provider = await registry.get_provider_for_request(
@@ -110,7 +118,7 @@ async def _stream_single_model(
             )
             return
 
-        async for chunk in provider.stream_completion(llm_request):
+        async for chunk in recorded_stream(provider, llm_request):
             if chunk:
                 yield _sse({"model": model_spec, "delta": chunk, "done": False})
 
@@ -129,6 +137,7 @@ def _sse(payload: Dict) -> str:
 async def _fan_out_stream(
     model_specs: List[str],
     messages: List[Dict],
+    user_id: str | None = None,
 ) -> AsyncIterator[str]:
     """
     Interleave SSE events from all models concurrently using asyncio queues.
@@ -147,7 +156,7 @@ async def _fan_out_stream(
         await queue.put(None)  # signal this model is done
 
     # Launch all model streams concurrently
-    tasks = [asyncio.create_task(_drain(_stream_single_model(spec, messages))) for spec in model_specs]
+    tasks = [asyncio.create_task(_drain(_stream_single_model(spec, messages, user_id))) for spec in model_specs]
 
     try:
         while sentinel_count < n_models:
@@ -197,12 +206,13 @@ async def compare_models(
         user_content = f"{body.context}\n\n{user_content}"
 
     messages = [{"role": "user", "content": user_content}]
+    user_id = resolve_principal_id(current_user)
 
     return StreamingResponse(
         # #19241: each fanned-out call prefers this user's own signed-in provider token, for this response only.
         stream_with_llm_principal(
-            (resolve_principal_id(current_user) or "", str(current_user.get("org_id") or "")),
-            _fan_out_stream(body.models, messages),
+            (user_id or "", str(current_user.get("org_id") or "")),
+            _fan_out_stream(body.models, messages, user_id),
         ),
         media_type="text/event-stream",
         headers={
