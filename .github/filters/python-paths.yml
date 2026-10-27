@@ -120,6 +120,8 @@ python:
   # equivalence and one-job guards under repo_tests read it, so editing it must
   # run them rather than take the shim's green.
   - '.github/workflows/_changes.yml'
+  # #19769: the conflict gate's guard reads its workflow, so editing it runs the suite.
+  - '.github/workflows/pr-merge-conflict-gate.yml'
   # A change here changes what "python" means for both workflows.
   - '.github/filters/python-paths.yml'
   # #17822: migration_gate_filter_covers_what_its_tests_import_test reads this workflow
