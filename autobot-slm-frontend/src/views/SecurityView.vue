@@ -166,8 +166,8 @@ const severityColors: Record<string, string> = {
   critical: 'bg-red-500',
 }
 
-// Format relative time
-
+// A known severity reads in the UI language in labels; an unknown one shows as sent.
+const severityName = (severity: string) => (severity in severityColors ? t(`securityView.${severity}`) : severity)
 
 // API calls
 async function fetchOverview() {
@@ -654,7 +654,7 @@ const scoreColor = computed(() => {
                 <div
                   :class="['w-2 h-2 rounded-full', severityColors[event.severity] || 'bg-gray-500']"
                   role="img"
-                  :aria-label="$t('securityView.severityLabel', { severity: event.severity })"
+                  :aria-label="$t('securityView.severityLabel', { severity: severityName(event.severity) })"
                 ></div>
                 <div>
                   <div class="text-sm font-medium text-gray-900">{{ event.title }}</div>
@@ -1140,7 +1140,7 @@ const scoreColor = computed(() => {
                 <div
                   :class="['w-3 h-3 mt-1 rounded-full', severityColors[event.severity]]"
                   role="img"
-                  :aria-label="$t('securityView.severityLabel', { severity: event.severity })"
+                  :aria-label="$t('securityView.severityLabel', { severity: severityName(event.severity) })"
                 ></div>
                 <div>
                   <div class="font-medium text-gray-900">{{ event.title }}</div>

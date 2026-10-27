@@ -290,8 +290,8 @@ async function triggerReplay(run: AgentRun) {
 async function fetchReplayLog(agentId: string, run: AgentRun): Promise<void> {
   replayLogLoading.value = true
   try {
-    // Literal `?` kept outside the interpolation so the llc-wiring-audit can
-    // strip the query string and match the route path.
+    // Literal `?` kept outside the interpolation so the company-os-wiring-audit
+    // job can strip the query string and match the route path.
     const url = `/api/llc/agents/${agentId}/runs/${run.id}/replay-log?redact_pii=${redactPii.value}`
     replayLog.value = await api.get<ReplayLog>(url)
   } catch (err) {
