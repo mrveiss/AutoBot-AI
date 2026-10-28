@@ -1006,12 +1006,6 @@
 2|ssot|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|:5173
 2|ssot|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|:8080
 2|ssot|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|:8081
-1|ssot|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|dolphin-llama3:8b
-1|ssot|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|gemma2:2b
-1|ssot|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|llama3.2:1b
-1|ssot|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|mistral:7b-instruct
-1|ssot|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|phi3:mini
-1|ssot|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|qwen3.5:9b
 1|other|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|'/tmp/autobot-deployment
 1|other|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|/home/autobot
 1|other|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|120
