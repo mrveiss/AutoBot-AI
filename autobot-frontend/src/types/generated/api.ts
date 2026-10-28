@@ -6406,7 +6406,8 @@ export interface paths {
          *     - Metadata about retrieved content
          *
          *     #16665: every fact entering the context is filtered to what the calling
-         *     user may see -- this feeds an LLM prompt, not just a display list.
+         *     user may see -- this feeds an LLM prompt, not just a display list. Owner ruling
+         *     2026-10-26: an admin is an ordinary caller here, with no visibility bypass.
          */
         post: operations["get_llm_context_api_knowledge_base_multi_source_context_post"];
         delete?: never;
@@ -46001,6 +46002,8 @@ export interface paths {
          * @description Knowledge search combining local KB and AI Stack capabilities.
          *
          *     Issue #744: Requires admin authentication.
+         *     Issue #16665: an explicit read API, not prompt grounding -- local KB hits are
+         *     scoped to the caller (an admin reads any fact, audited).
          */
         post: operations["knowledge_search_api_ai_stack_knowledge_search_post"];
         delete?: never;

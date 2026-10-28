@@ -31,7 +31,7 @@ from .call_graph_shaping import build_connected_nodes as _build_connected_nodes
 from .call_graph_shaping import build_orphaned_nodes as _build_orphaned_nodes
 from .call_graph_shaping import calculate_metrics as _calculate_metrics
 from .call_graph_shaping import deduplicate_edges as _deduplicate_edges
-from .shared import COMMON_THIRD_PARTY, STDLIB_MODULES, ImportContext, resolve_scan_root
+from .shared import COMMON_THIRD_PARTY, EXCLUDED_DIRS, STDLIB_MODULES, ImportContext, resolve_scan_root
 
 logger = get_logger(__name__)
 
@@ -166,20 +166,6 @@ BUILTIN_FUNCS = {
     "super",
 }
 
-# Directories to exclude from analysis
-EXCLUDED_DIRS = {
-    ".git",
-    "__pycache__",
-    "node_modules",
-    ".venv",
-    "venv",
-    "env",
-    ".env",
-    "archive",
-    "dist",
-    "build",
-}
-
 
 async def _get_python_files(project_root) -> List:
     """Get filtered list of Python files for analysis.
@@ -193,7 +179,9 @@ async def _get_python_files(project_root) -> List:
         get_analytics_executor(),
         lambda: list(project_root.rglob("*.py")),
     )
-    return [f for f in python_files if not any(excluded in f.parts for excluded in EXCLUDED_DIRS)]
+    # Root-relative: a project root that itself lives under a skipped name (a
+    # worktree checkout) must not exclude every file (#13602).
+    return [f for f in python_files if EXCLUDED_DIRS.isdisjoint(f.relative_to(project_root).parts)]
 
 
 def _get_decorator_name(decorator) -> str:

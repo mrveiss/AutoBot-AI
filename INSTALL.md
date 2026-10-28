@@ -285,8 +285,9 @@ provider in **SLM Admin > Settings > LLM**. With the `ollama` profile, Ollama st
 pull the models `docker/.env.docker` names, or the ones you set there instead:
 
 ```bash
-docker compose --env-file docker/.env.docker --env-file docker/.env.secrets exec autobot-ollama ollama pull qwen3.5:9b
-docker compose --env-file docker/.env.docker --env-file docker/.env.secrets exec autobot-ollama ollama pull nomic-embed-text:latest
+# every model docker/.env.docker names, read from the file itself (about 21 GB with the defaults)
+sed -n 's/^AUTOBOT_[A-Z_]*_MODEL=//p' docker/.env.docker | sort -u | \
+  xargs -n1 docker compose --env-file docker/.env.docker --env-file docker/.env.secrets exec -T autobot-ollama ollama pull
 ```
 
 ### Exposed Services

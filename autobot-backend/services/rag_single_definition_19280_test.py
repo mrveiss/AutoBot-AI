@@ -163,3 +163,94 @@ def test_the_rag_guide_restates_no_rag_config_default():
     numeric = sorted(n for n in defaults if re.search(NUMERIC_ASSIGNMENT.format(name=re.escape(n)), text))
     literal = sorted(n for n, v in defaults.items() if isinstance(v, str) and len(v) > 8 and v in text)
     assert (numeric, literal) == ([], [])
+
+
+def _literal_score_thresholds(source: str) -> list[str]:
+    """``score_threshold`` given a non-zero numeric literal as a parameter default or a call keyword.
+
+    0.0 is "no filtering" (e.g. models/task_context.py's generic SearchContext), not a retrieval floor.
+    """
+    found = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            positional = node.args.posonlyargs + node.args.args
+            args = positional + node.args.kwonlyargs
+            defaults = [None] * (len(positional) - len(node.args.defaults)) + node.args.defaults
+            pairs = zip(args, defaults + node.args.kw_defaults)
+            found += [f"{node.name}:{a.arg}" for a, d in pairs if a.arg == "score_threshold" and _nonzero(d)]
+        elif isinstance(node, ast.keyword) and node.arg == "score_threshold" and _nonzero(node.value):
+            found.append(f"line {node.value.lineno}: score_threshold=")
+        elif isinstance(node, ast.AnnAssign) and getattr(node.target, "id", "") == "score_threshold":
+            found += ["field score_threshold"] if _nonzero(node.value) else []
+    return found
+
+
+def _nonzero(node) -> bool:
+    """A non-zero numeric literal, signed (``-0.3`` is a ``UnaryOp`` over a ``Constant``) or not."""
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op, ast.USub | ast.UAdd):
+        node = node.operand
+    return isinstance(node, ast.Constant) and isinstance(node.value, int | float) and node.value != 0
+
+
+def test_the_retrieval_score_threshold_has_one_home():
+    """#19354: every retrieval default reads constants.rag_graph_constants.RAG_SCORE_THRESHOLD."""
+    found = [
+        f"{p.relative_to(BACKEND)}: {hit}"
+        for p in _files_containing("score_threshold")
+        for hit in _literal_score_thresholds(p.read_text(encoding="utf-8"))
+    ]
+    assert not found, f"read RAG_SCORE_THRESHOLD from constants.rag_graph_constants (#19354): {found}"
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "def f(q, score_threshold: float = 0.3):\n    pass\n",
+        "async def f(q, *, score_threshold=0.5):\n    pass\n",
+        "svc.retrieve(q, score_threshold=0.3)\n",
+        "class C:\n    score_threshold: float = 0.3\n",
+        "def f(score_threshold=0.3, /):\n    pass\n",
+        "def f(q, score_threshold=-0.3):\n    pass\n",
+        "svc.retrieve(q, score_threshold=-0.2)\n",
+    ],
+)
+def test_a_literal_score_threshold_is_flagged(source):
+    assert _literal_score_thresholds(source)
+
+
+def test_the_home_and_no_filtering_are_not_flagged():
+    assert not _literal_score_thresholds("def f(q, score_threshold: float = RAG_SCORE_THRESHOLD):\n    pass\n")
+    assert not _literal_score_thresholds("class C:\n    score_threshold: float = 0.0\n")
+
+
+def test_the_unit_interval_rag_knobs_are_range_checked_at_runtime():
+    """#19354 review: the registry's 0-1 range is enforced where the value is read, not only documented.
+
+    Out-of-range and NaN values fall back to the default rather than being clamped (second review).
+    """
+    source = (BACKEND / "constants" / "rag_graph_constants.py").read_text(encoding="utf-8")
+    calls = {
+        node.args[0].value: node
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Call) and node.args and isinstance(node.args[0], ast.Constant)
+    }
+    for name in ("AUTOBOT_RAG_SCORE_THRESHOLD", "AUTOBOT_RAG_GRAPH_WEIGHT"):
+        call = calls[name]
+        assert getattr(call.func, "id", "") == "env_unit_interval", f"{name} must be read range-checked"
+        assert [a.value for a in call.args[1:2]] == [0.3], f"{name}: default 0.3"
+
+
+@pytest.mark.parametrize("raw", ["nan", "inf", "-0.1", "1.5", "30"])
+def test_an_invalid_unit_interval_value_falls_back_to_the_default(monkeypatch, raw):
+    """NaN or a value outside 0-1 is refused, not clamped to a floor that admits or rejects everything."""
+    from constants.rag_graph_constants import env_unit_interval
+
+    monkeypatch.setenv("AUTOBOT_RAG_TEST_UNIT", raw)
+    assert env_unit_interval("AUTOBOT_RAG_TEST_UNIT", 0.3) == 0.3
+
+
+def test_a_valid_unit_interval_value_is_used(monkeypatch):
+    from constants.rag_graph_constants import env_unit_interval
+
+    monkeypatch.setenv("AUTOBOT_RAG_TEST_UNIT", "0.45")
+    assert env_unit_interval("AUTOBOT_RAG_TEST_UNIT", 0.3) == 0.45

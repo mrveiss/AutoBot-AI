@@ -17,6 +17,7 @@
   # the result gates conditional installation below.
   failed_when: false
   tags: ['deps', 'nodejs']
+  check_mode: false
 
 - name: "nodejs | Install prerequisites"
   ansible.builtin.apt:
@@ -70,3 +71,4 @@
     cmd: node --version
   changed_when: false
   tags: ['deps', 'nodejs']
+  when: not ansible_check_mode
