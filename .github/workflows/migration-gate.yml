@@ -32,6 +32,9 @@ on:
       - 'autobot-backend/llc/services/workspace_lease.py'
       - 'autobot-backend/llc/services/company.py'
       - 'autobot-backend/llc/services/company_ceo.py'
+      - 'autobot-backend/llc/services/company_move_lock.py'
+      - 'autobot-backend/llc/services/authz.py'
+      - 'autobot-backend/llc/services/membership_service.py'
       - 'autobot-backend/llc/scheduler/run_status.py'
       - 'autobot-backend/canvas/models.py'
       - 'autobot-backend/models/**'
@@ -52,6 +55,7 @@ on:
       - 'autobot_shared/auth/device_capabilities.py'
       - 'autobot_shared/secrets_vault.py'
       - 'autobot_shared/legacy_secret_keys.py'
+      - 'autobot_shared/db_errors.py'
       - '.github/workflows/_changes.yml'
   # NOTE (#11346): no pull_request.paths filter — this workflow ALWAYS runs on PRs
   # so its required-check context ("migration-matrix") always reports a conclusion.
@@ -115,6 +119,9 @@ jobs:
           - 'autobot-backend/llc/services/workspace_lease.py'
           - 'autobot-backend/llc/services/company.py'
           - 'autobot-backend/llc/services/company_ceo.py'
+          - 'autobot-backend/llc/services/company_move_lock.py'
+          - 'autobot-backend/llc/services/authz.py'
+          - 'autobot-backend/llc/services/membership_service.py'
           - 'autobot-backend/llc/scheduler/run_status.py'
           - 'autobot-backend/canvas/models.py'
           - 'autobot-backend/models/**'
@@ -135,6 +142,7 @@ jobs:
           - 'autobot_shared/auth/device_capabilities.py'
           - 'autobot_shared/secrets_vault.py'
           - 'autobot_shared/legacy_secret_keys.py'
+          - 'autobot_shared/db_errors.py'
 
   migration-tests:
     needs: changes
