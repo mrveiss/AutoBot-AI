@@ -119,7 +119,7 @@ readonly DATA_PATHS=(
     /root/autobot-credentials.txt /root/slm-credentials.txt
 )
 readonly DATABASES=(slm slm_users autobot_users)
-readonly DB_ROLES=(slm_app)
+readonly DB_ROLES=(slm_app autobot_app)  # every role provisioning creates (#19409)
 # PostgreSQL itself: only with --purge-data AND when it holds nothing but AutoBot's.
 readonly POSTGRES_PACKAGES=("postgresql-*" "postgresql-contrib-*" postgresql-common)
 # The client stays even then (KEPT_PACKAGES): other workloads use psql/pg_dump. `postgresql-*`

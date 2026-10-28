@@ -34,6 +34,12 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test .ts/.vue/.js source is a subset of tracked files under three roots; the test-file share drifts.",
     ),
+    "ceiling-table-sweep-19544": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Tracked Python only, a subset of all tracked files; the non-Python share grows at its own rate, "
+        "so a share of all tracked files would sink with nothing wrong.",
+    ),
     "migration-gate-test-import-sweep": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -80,6 +86,12 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Ansible variable files are a subset of tracked YAML; workflow and compose YAML grow "
         "independently of the ansible tree, so a share of all YAML sinks with nothing wrong.",
+    ),
+    "ansible-status-queries-check-mode-sweep": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Ansible YAML is a subset of all tracked YAML under the SLM backend; templates, scripts and "
+        "docs beside it grow independently, so a share of the tree sinks with nothing wrong.",
     ),
     "ansible-inventory-shell-sweep": (
         ABSOLUTE,
@@ -263,6 +275,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "All tracked files minus vendored/build parts, against the whole tracked tree; the skipped share drifts.",
     ),
+    "file-type-sets-one-home-19339": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test Python under autobot-backend, a subset of all tracked Python; the test-file share drifts.",
+    ),
     "llc-actor-id-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -393,6 +410,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "Python under the infrastructure tree, against all tracked Python; the backend grows independently.",
+    ),
+    "kb-populate-doc-patterns": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test infrastructure Python, against all tracked .py under autobot-infrastructure; drifts.",
     ),
     "kb-admin-read-bypass": (
         ABSOLUTE,
