@@ -22,8 +22,8 @@ describe('RiskBadge', () => {
     expect(RISK_TIERS.map(variant)).toEqual(['aui-badge--success', 'aui-badge--warning', 'aui-badge--error', 'aui-badge--error'])
   })
 
-  it('fills critical solid and high subtle, so they differ beyond hue', () => {
-    expect(mount(RiskBadge, { props: { tier: 'critical', label: 'c' } }).classes()).toContain('aui-badge--solid')
+  it('draws critical as a heavy outline and high subtle, so they differ beyond hue', () => {
+    expect(mount(RiskBadge, { props: { tier: 'critical', label: 'c' } }).classes()).toContain('aui-badge--outline')
     expect(mount(RiskBadge, { props: { tier: 'high', label: 'h' } }).classes()).toContain('aui-badge--subtle')
   })
 })

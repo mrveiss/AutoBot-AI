@@ -13,6 +13,7 @@
  * cleanup, no timeout).
  */
 
+import { useI18n } from 'vue-i18n'
 import { onMounted, ref } from 'vue'
 import {
   useAutobotApi,
@@ -25,6 +26,7 @@ import {
 import { BaseFormField } from '@autobot/ui'
 import OrgTreeNode from './OrgTreeNode.vue'
 
+const { t } = useI18n()
 const api = useAutobotApi()
 const tree = ref<AgentOrgNode[]>([])
 const loading = ref(true)
@@ -43,7 +45,7 @@ async function fetchTree() {
   try {
     tree.value = await api.getAgentOrgTree()
   } catch (err) {
-    error.value = autobotApiErrorMessage(err, 'Failed to load org tree')
+    error.value = autobotApiErrorMessage(err, t('agents.orgChartTab.loadFailed'))
   } finally {
     loading.value = false
   }
@@ -75,7 +77,7 @@ async function submitDelegation() {
     showDelegateForm.value = false
     await selectNode(selectedNode.value)
   } catch (err) {
-    delegateError.value = autobotApiErrorMessage(err, 'Delegation failed')
+    delegateError.value = autobotApiErrorMessage(err, t('agents.orgChartTab.delegationFailed'))
   }
 }
 

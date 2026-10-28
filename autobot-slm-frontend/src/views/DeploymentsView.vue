@@ -1259,8 +1259,8 @@ function getNodeHostname(nodeId: string): string {
         </div>
 
         <!-- Selected Roles Summary -->
-        <div v-if="newDeployment.roles.length > 0" class="bg-green-50 border border-green-200 rounded-md p-3">
-          <p class="text-sm font-medium text-green-800 mb-1">{{ $t('deploymentsView.selectedRolesCount', { count: newDeployment.roles.length }) }}</p>
+        <BaseAlert v-if="newDeployment.roles.length > 0" variant="success" size="compact" :icon="false">
+          <p class="text-sm font-medium mb-1">{{ $t('deploymentsView.selectedRolesCount', { count: newDeployment.roles.length }) }}</p>
           <div class="flex flex-wrap gap-1">
             <span
               v-for="role in newDeployment.roles"
@@ -1270,7 +1270,7 @@ function getNodeHostname(nodeId: string): string {
               {{ role }}
             </span>
           </div>
-        </div>
+        </BaseAlert>
 
         <!-- Force Option -->
         <div class="flex items-center gap-2">

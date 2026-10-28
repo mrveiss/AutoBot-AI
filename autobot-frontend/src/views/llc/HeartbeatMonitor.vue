@@ -39,7 +39,7 @@
                 {{ agent.last_run_status ?? $t('llc.heartbeat.statusUnknown') }}
               </span>
             </td>
-            <td class="agent-duration">{{ formatDuration(agent.current_run_started_at) }}</td>
+            <td class="agent-duration">{{ runningFor(agent.current_run_started_at) }}</td>
             <td @click.stop>
               <button
                 class="btn-trigger"
@@ -242,7 +242,7 @@ function formatDate(iso?: string) {
   return formatDateTime(iso) || '—'
 }
 
-function formatDuration(startedAt?: string) {
+function runningFor(startedAt?: string) {
   return startedAt ? fmtDuration(startedAt, null) : '—'
 }
 
