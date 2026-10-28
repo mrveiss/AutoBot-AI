@@ -17,7 +17,7 @@ import GovernanceModeSelector from '@/components/skills/GovernanceModeSelector.v
 import ApprovalsTab from '@/components/skills/ApprovalsTab.vue'
 import ReposTab from '@/components/skills/ReposTab.vue'
 import DraftsTab from '@/components/skills/DraftsTab.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, PollingPausedAlert } from '@autobot/ui'
 
 const {
   skills,
@@ -52,7 +52,7 @@ const {
   promoteDraft,
   fetchGovernance,
   setGovernanceMode,
-  startApprovalPolling,
+  approvalPoller,
   dismissDraftNotification,
 } = useSkillGovernance()
 
@@ -137,13 +137,9 @@ function selectCategory(cat: string | null): void {
 
 onMounted(async () => {
   await Promise.all([
-    initializeSkills(),
-    fetchGovernance(),
-    fetchApprovals(),
-    fetchRepos(),
-    fetchDrafts(),
+    initializeSkills(), fetchGovernance(), fetchApprovals(), fetchRepos(), fetchDrafts(),
   ])
-  startApprovalPolling()
+  approvalPoller.start('')
 })
 
 watch(searchQuery, (val) => {
@@ -313,6 +309,8 @@ function categoryIcon(category: string): string {
       @test="testDraft"
       @promote="promoteDraft"
     />
+
+    <PollingPausedAlert :poller="approvalPoller" :message="$t('common.polling.paused')" :retry-label="$t('common.polling.retry')" @retry="approvalPoller.start('')" />
 
     <!-- Error Banner (active skills tab) -->
     <template v-if="activeTab === 'active'">
