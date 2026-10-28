@@ -52,6 +52,7 @@ REACH_ROOTS = {
         "tools",
     ),
     "repo_tests/data_db_path_single_source_test.py": ("autobot-backend", "autobot_shared"),
+    "repo_tests/dead_icon_selector_ratchet_19491_test.py": ("autobot-frontend/src",),
     "repo_tests/defined_twice_18094_test.py": (
         "autobot-backend",
         "autobot-infrastructure",

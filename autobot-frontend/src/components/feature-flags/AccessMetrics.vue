@@ -344,7 +344,7 @@ const formatTime = (timestamp: number) => {
   gap: var(--spacing-2-5);
 }
 
-.header-info h3 i {
+.header-info h3 .icon {
   color: var(--color-primary);
 }
 

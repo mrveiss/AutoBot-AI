@@ -602,7 +602,7 @@ onMounted(() => {
   color: var(--text-secondary);
 }
 
-.loading-state i {
+.loading-state .icon {
   font-size: var(--text-2xl);
   margin-bottom: var(--spacing-3);
 }
