@@ -115,6 +115,13 @@ because their last token is `pin` (pinned by `test_a_pin_in_any_other_sense_is_m
 `secret_redaction_vocabulary.py` (split from `secret_redaction.py` for the 600-line ceiling); it is the same
 canonical module, re-exported, and the census guard treats the pair as one home.
 
+**File names (#19339).** Whether a FILE name holds a secret is judged by
+`secret_redaction_vocabulary.is_credential_file_stem` (re-exported by `secret_redaction`), which reuses `PRECISE`
+on each word-aligned prefix of the stem and on the same prefix with its last separator removed
+(`pass_word` -> `password`). `autobot_shared/secret_file_names.py` keeps only the file globs and calls it; it declares
+no nouns. `AMBIGUOUS_FILE_NOUNS` (`seed_data.sql`, `salt_states.sls`) and `FILE_COMPOUND_NOUNS` (`apikeys.json`) are
+file-only tables, not field vocabulary: never consult them for a field name.
+
 `BROAD` is a superset of `PRECISE` by construction (same nouns, plus
 `AUTHORIZATION_TERMS` and `BROAD_ONLY_STEMS`, which would over-mask as
 suffixes: `use_auth` is a flag, `is_private` is not a secret).

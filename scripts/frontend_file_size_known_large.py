@@ -13,11 +13,9 @@ in-scope ``*.ts``/``*.vue`` tree measured on the day this gate landed (#17885).
 The gate's job was to ask the question for the first time; this file is the
 answer it got, not a ceiling anybody picked.
 
-THIS MAPPING ONLY SHRINKS. Never add an entry to make a new file pass; split
-the file instead. Mirrored by ``RATCHET_BASELINE`` in
-``repo_tests/frontend_file_size_ratchet_baseline.py`` — lower an entry here and
-lower it there in the same commit (#14498), or the lines just cut stay
-spendable in the gap between the two.
+The table follows the rule stated once in ``scripts/python_file_size_known_large.py``
+(#19544): it only shrinks, it is the only record of these ceilings, and an entry is
+lowered here when its file shrinks.
 """
 
 from __future__ import annotations
