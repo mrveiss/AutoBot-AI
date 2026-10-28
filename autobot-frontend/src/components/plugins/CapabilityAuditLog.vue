@@ -69,7 +69,13 @@
     </div>
 
     <div v-else>
-      <BaseTable :columns="auditColumns" :rows="auditRows" size="compact" :aria-label="$t('plugins.capabilities.auditLogTitle')">
+      <BaseTable
+        :columns="auditColumns"
+        :rows="auditRows"
+        :row-variant="auditVariant"
+        size="compact"
+        :aria-label="$t('plugins.capabilities.auditLogTitle')"
+      >
         <template #cell-granted="{ row }">
           <BaseBadge size="sm" :variant="row.granted ? 'success' : 'error'">
             {{ row.granted ? $t('plugins.capabilities.granted') : $t('plugins.capabilities.denied') }}
@@ -83,7 +89,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BaseBadge, BaseTable, type BaseTableColumn } from '@autobot/ui'
+import { BaseBadge, BaseTable, type BaseTableColumn, type TableRow, type TableRowVariant } from '@autobot/ui'
 import { usePlugins, type AuditLogEntry } from '@/composables/usePlugins'
 
 const { getAuditLog } = usePlugins()
@@ -105,6 +111,8 @@ const auditColumns = computed<BaseTableColumn[]>(() => [
 const auditRows = computed(() =>
   filteredEntries.value.map((entry, index) => ({ ...entry, id: index, when: formatTimestamp(entry.timestamp) })),
 )
+// #19640: a denied row is what an audit reader scans for.
+const auditVariant = (row: TableRow): TableRowVariant | undefined => (row.granted ? undefined : 'error')
 
 const filteredEntries = computed(() => {
   if (!filterPluginName.value) {
