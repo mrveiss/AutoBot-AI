@@ -63,34 +63,42 @@ export const monitoringChildren: RouteRecordRaw[] = [
     meta: { title: 'Agent Ledger', parent: 'monitoring', admin: true }
   },
   // Issue #752: Performance — moved from standalone /performance into monitoring
+  // #19851: the performance sections are children of PerformanceView, which owns the
+  // route's one performance poll; the overview reads it instead of polling again.
   {
     path: 'performance',
-    name: 'monitoring-performance',
     component: () => import('@/views/PerformanceView.vue'),
-    meta: { title: 'Performance', parent: 'monitoring' }
-  },
-  {
-    path: 'performance/overview',
-    name: 'monitoring-performance-overview',
-    component: () => import('@/views/performance/PerformanceOverview.vue'),
-    meta: { title: 'Performance Overview', parent: 'monitoring' }
-  },
-  {
-    path: 'performance/traces',
-    name: 'monitoring-performance-traces',
-    component: () => import('@/views/performance/TracingView.vue'),
-    meta: { title: 'Distributed Traces', parent: 'monitoring' }
-  },
-  {
-    path: 'performance/slos',
-    name: 'monitoring-performance-slos',
-    component: () => import('@/views/performance/SLODashboard.vue'),
-    meta: { title: 'SLO Dashboard', parent: 'monitoring' }
-  },
-  {
-    path: 'performance/alerts',
-    name: 'monitoring-performance-alerts',
-    component: () => import('@/views/performance/AlertRulesView.vue'),
-    meta: { title: 'Alert Rules', parent: 'monitoring' }
+    meta: { title: 'Performance', parent: 'monitoring' },
+    children: [
+      {
+        path: '',
+        name: 'monitoring-performance',
+        redirect: '/monitoring/performance/overview'
+      },
+      {
+        path: 'overview',
+        name: 'monitoring-performance-overview',
+        component: () => import('@/views/performance/PerformanceOverview.vue'),
+        meta: { title: 'Performance Overview', parent: 'monitoring' }
+      },
+      {
+        path: 'traces',
+        name: 'monitoring-performance-traces',
+        component: () => import('@/views/performance/TracingView.vue'),
+        meta: { title: 'Distributed Traces', parent: 'monitoring' }
+      },
+      {
+        path: 'slos',
+        name: 'monitoring-performance-slos',
+        component: () => import('@/views/performance/SLODashboard.vue'),
+        meta: { title: 'SLO Dashboard', parent: 'monitoring' }
+      },
+      {
+        path: 'alerts',
+        name: 'monitoring-performance-alerts',
+        component: () => import('@/views/performance/AlertRulesView.vue'),
+        meta: { title: 'Alert Rules', parent: 'monitoring' }
+      },
+    ]
   },
 ]
