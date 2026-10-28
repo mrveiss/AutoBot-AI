@@ -93,10 +93,12 @@ jobs:
       # pytest.ini sets --asyncio-mode=auto, so the plugin is required even
       # though this guard is synchronous. The same three packages carry
       # `ansible-file-references.yml`, which runs a guard from this rootdir and
-      # therefore loads the same root conftest and its two plugins.
+      # therefore loads the same root conftest and its two plugins. jinja2: the
+      # model-tag guard reads the installer's model list through
+      # repo_tests/_ansible_tasks.resolved_vars, which renders its references.
       - uses: ./.github/actions/setup-python-ci
         with:
-          extra-packages: pyyaml pytest pytest-asyncio
+          extra-packages: pyyaml pytest pytest-asyncio jinja2
 
       - name: Every Liquid-rendered doc parses
         run: python3 -m pytest repo_tests/docs_liquid_tags_are_defined_17930_test.py -q
