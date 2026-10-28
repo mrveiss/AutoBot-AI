@@ -437,7 +437,7 @@ const checkConnectionFn = async () => {
     loading.value = false
     error.value = null
   } else {
-    throw new HttpError(response.status, response.statusText)
+    throw new HttpError(response.status)
   }
 }
 

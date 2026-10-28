@@ -344,7 +344,7 @@ async function loadUsers(): Promise<void> {
     const res = await apiClient.rawRequest(`/api/user-management/users?${params}`)
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      throw (body as { detail?: string }).detail != null ? new Error((body as { detail?: string }).detail) : new HttpError(res.status, res.statusText)
+      throw HttpError.withDetail(res.status, res.statusText, (body as { detail?: string }).detail)
     }
     const data = await res.json() as { users: UserRecord[]; total: number }
     users.value = data.users
@@ -442,7 +442,7 @@ async function onRoleChange(user: UserRecord, role: string): Promise<void> {
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      throw (body as { detail?: string }).detail != null ? new Error((body as { detail?: string }).detail) : new HttpError(res.status, res.statusText)
+      throw HttpError.withDetail(res.status, res.statusText, (body as { detail?: string }).detail)
     }
     await loadUsers()
   } catch (err) {
@@ -459,7 +459,7 @@ async function toggleActive(user: UserRecord, activate: boolean): Promise<void> 
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      throw (body as { detail?: string }).detail != null ? new Error((body as { detail?: string }).detail) : new HttpError(res.status, res.statusText)
+      throw HttpError.withDetail(res.status, res.statusText, (body as { detail?: string }).detail)
     }
     await loadUsers()
   } catch (err) {
@@ -480,7 +480,7 @@ async function deleteUser(): Promise<void> {
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      throw (body as { detail?: string }).detail != null ? new Error((body as { detail?: string }).detail) : new HttpError(res.status, res.statusText)
+      throw HttpError.withDetail(res.status, res.statusText, (body as { detail?: string }).detail)
     }
     deleteTarget.value = null
     await loadUsers()
@@ -506,7 +506,7 @@ async function createUser(): Promise<void> {
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      throw (body as { detail?: string }).detail != null ? new Error((body as { detail?: string }).detail) : new HttpError(res.status, res.statusText)
+      throw HttpError.withDetail(res.status, res.statusText, (body as { detail?: string }).detail)
     }
     showCreateModal.value = false
     newUser.value = { email: '', username: '', password: '', display_name: '' }

@@ -150,7 +150,7 @@ async function apiFetch<T>(
     const response = await slmApiClient.rawRequest(path, options)
     if (!response.ok) {
       const body = await response.json().catch(() => ({}))
-      throw body.detail ? new Error(body.detail) : new HttpError(response.status, response.statusText)
+      throw HttpError.withDetail(response.status, response.statusText, body.detail || undefined)
     }
     return await response.json()
   } catch (err) {

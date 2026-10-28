@@ -15,8 +15,8 @@
  * authentication, retries, and error serialisation are handled centrally.
  */
 
-import { HttpError, isHttpError } from '@autobot/ui'
 import { ref, readonly, type Ref } from 'vue'
+import { HttpError, isHttpError } from '@autobot/ui'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { useLoadingState } from '@/composables/useLoadingState'

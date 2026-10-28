@@ -158,7 +158,7 @@ export function usePushNotifications() {
           body: JSON.stringify({ endpoint: subscription.endpoint }),
         })
         if (!response.ok && response.status !== 404) {
-          throw new HttpError(response.status, response.statusText)
+          throw new HttpError(response.status)
         }
         await subscription.unsubscribe()
       }

@@ -12,11 +12,23 @@ export class HttpError extends Error {
   /** The parsed error body, or null when it was not JSON. */
   readonly details: Record<string, unknown> | null
 
-  constructor(status: number, message: string | undefined, details: Record<string, unknown> | null = null) {
+  constructor(status: number, message?: string, details: Record<string, unknown> | null = null) {
     super(message ? `HTTP ${status}: ${message}` : `HTTP ${status}`)
     this.name = 'HttpError'
     this.status = status
     this.details = details
+  }
+
+  /**
+   * The error a view throws for a non-2xx response whose body may carry a `detail`: with a
+   * detail the message is that text exactly (what the user reads) and `details` is `{ detail }`;
+   * without one it is the usual `HTTP <status>[: statusText]`. `status` is kept either way.
+   */
+  static withDetail(status: number, statusText?: string, detail?: string | null): HttpError {
+    if (detail == null) return new HttpError(status, statusText)
+    const error = new HttpError(status, statusText, { detail })
+    error.message = String(detail)
+    return error
   }
 
   /** The backend's own `detail` text when it sent one (FastAPI's error shape), else null. */

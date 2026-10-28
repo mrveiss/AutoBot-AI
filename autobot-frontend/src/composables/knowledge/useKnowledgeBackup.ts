@@ -124,7 +124,7 @@ export function useKnowledgeBackup(): UseKnowledgeBackupReturn {
         { method: 'DELETE', body: { backup_file: backupName } },
       )
       if (!response.ok) {
-        throw new HttpError(response.status, response.statusText)
+        throw new HttpError(response.status)
       }
       return (await response.json()) as BackupActionResponse
     })

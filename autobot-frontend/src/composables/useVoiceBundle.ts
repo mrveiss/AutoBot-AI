@@ -59,7 +59,7 @@ export function useVoiceBundle() {
       const res = await apiClient.rawRequest(`/api/voice/realtime/bundle/me`)
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        throw (body as { detail?: string }).detail != null ? new Error((body as { detail?: string }).detail) : new HttpError(res.status, res.statusText)
+        throw HttpError.withDetail(res.status, res.statusText, (body as { detail?: string }).detail)
       }
       bundleInfo.value = (await res.json()) as UserBundleInfo
     } catch (err) {
@@ -91,7 +91,7 @@ export function useAdminVoiceBundle() {
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        throw (body as { detail?: string }).detail != null ? new Error((body as { detail?: string }).detail) : new HttpError(res.status, res.statusText)
+        throw HttpError.withDetail(res.status, res.statusText, (body as { detail?: string }).detail)
       }
       return true
     } catch (err) {

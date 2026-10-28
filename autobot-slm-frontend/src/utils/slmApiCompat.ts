@@ -79,7 +79,7 @@ export async function adapterRequest<T>(
       /* non-JSON error body — leave data null, mirroring axios */
     }
     const details = typeof data === 'object' && data !== null && !Array.isArray(data) ? (data as Record<string, unknown>) : null
-    const error = new HttpError(response.status, response.statusText, details) as HttpError & {
+    const error = new HttpError(response.status, undefined, details) as HttpError & {
       response: { status: number; data: unknown }
     }
     // Reproduce the axios error shape consumers read (err.response.status/.data).

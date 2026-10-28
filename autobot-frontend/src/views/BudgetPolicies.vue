@@ -395,7 +395,7 @@ async function loadPolicies(): Promise<void> {
     const res = await apiClient.rawRequest(`/api/budget-policies?${params}`)
     if (!res.ok) {
       const body = await res.json().catch(() => ({})) as { detail?: string }
-      throw body.detail != null ? new Error(body.detail) : new HttpError(res.status, res.statusText)
+      throw HttpError.withDetail(res.status, res.statusText, body.detail)
     }
     const data = await res.json() as { policies: BudgetPolicyResponse[]; count: number }
     policies.value = data.policies
@@ -452,7 +452,7 @@ async function submitForm(): Promise<void> {
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({})) as { detail?: string }
-      throw body.detail != null ? new Error(body.detail) : new HttpError(res.status, res.statusText)
+      throw HttpError.withDetail(res.status, res.statusText, body.detail)
     }
     closeModal()
     await loadPolicies()
@@ -477,7 +477,7 @@ async function doDelete(): Promise<void> {
     })
     if (!res.ok && res.status !== 204) {
       const body = await res.json().catch(() => ({})) as { detail?: string }
-      throw body.detail != null ? new Error(body.detail) : new HttpError(res.status, res.statusText)
+      throw HttpError.withDetail(res.status, res.statusText, body.detail)
     }
     deleteTarget.value = null
     await loadPolicies()
@@ -499,7 +499,7 @@ async function checkAgentStatus(): Promise<void> {
     const res = await apiClient.rawRequest(`/api/budget-policies/${id}/status`)
     if (!res.ok) {
       const body = await res.json().catch(() => ({})) as { detail?: string }
-      throw body.detail != null ? new Error(body.detail) : new HttpError(res.status, res.statusText)
+      throw HttpError.withDetail(res.status, res.statusText, body.detail)
     }
     agentStatus.value = await res.json() as PauseStatusResponse
   } catch (err) {
@@ -517,7 +517,7 @@ async function resumeAgent(agentId: string): Promise<void> {
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({})) as { detail?: string }
-      throw body.detail != null ? new Error(body.detail) : new HttpError(res.status, res.statusText)
+      throw HttpError.withDetail(res.status, res.statusText, body.detail)
     }
     agentStatus.value = null
     agentIdQuery.value = ''

@@ -199,7 +199,7 @@ export const usePermissionStore = defineStore('permission', () => {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw errorData.detail ? new Error(errorData.detail) : new HttpError(response.status, response.statusText)
+        throw HttpError.withDetail(response.status, response.statusText, errorData.detail || undefined)
       }
 
       const data: PermissionModeResponse = await response.json()
@@ -277,7 +277,7 @@ export const usePermissionStore = defineStore('permission', () => {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw errorData.detail ? new Error(errorData.detail) : new HttpError(response.status, response.statusText)
+        throw HttpError.withDetail(response.status, response.statusText, errorData.detail || undefined)
       }
 
       // Refresh rules after adding
@@ -312,7 +312,7 @@ export const usePermissionStore = defineStore('permission', () => {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw errorData.detail ? new Error(errorData.detail) : new HttpError(response.status, response.statusText)
+        throw HttpError.withDetail(response.status, response.statusText, errorData.detail || undefined)
       }
 
       // Refresh rules after removing
