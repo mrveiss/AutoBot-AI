@@ -39,7 +39,7 @@ This guard does not consolidate any of it — that is many PRs' work across
 #12730. It exists so the job is finite: the numbers may only move one way while
 that work proceeds.
 
-**Fails in BOTH directions**, matching `python_file_size_ratchet_baseline.py`
+**Fails in BOTH directions**, matching `python_file_size_known_large.py`
 and the contract ratchet. Growth is a regression; an unrecorded *shrink* is
 also a failure, because a baseline that drifts below the real number stops
 being evidence — lower the constant in the commit that does the work.

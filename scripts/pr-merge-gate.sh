@@ -30,7 +30,7 @@
 #     seconds after a push. A gate that fails for a reason its reader cannot act
 #     on is one people stop running.
 #   * scripts/pr-preflight.sh is at its recorded size ceiling (818 lines,
-#     repo_tests/shell_file_size_ratchet_baseline.py). A grandfathered file may
+#     scripts/check_shell_file_size.py). A grandfathered file may
 #     not grow, and raising a ratchet to fit new code is the one repair
 #     RATCHET_BASELINES.md forbids by name.
 #
