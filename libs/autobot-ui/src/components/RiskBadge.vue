@@ -10,8 +10,15 @@
   (autobot_shared/risk_tier.py); the kit holds no text, so the translated tier
   name comes in as `label`. The label is always shown, so a tier is never told
   by colour alone. Colours are the --aui-risk-* tokens, which alias the theme's
-  status colours; `critical` is the solid fill, so it differs from `high` in
-  more than hue.
+  status colours. `critical` is the outline tone with a heavier border and
+  weight, so it differs from `high` in more than hue.
+
+  Contrast: the label ink is 40% tier colour, 60% theme text, over the tier
+  colour at 15% on the surface. That holds >= 4.5:1 in dark, light, contrast,
+  mono and both ember schemes (the 70% mix BaseBadge uses fell to 3.2-3.8:1 for
+  low/medium in light, contrast, mono and ember-light). Critical is not a solid
+  fill because --text-on-error on --color-error is only 3.76:1 (2.73:1 in
+  ember-dark), below AA for badge-sized text.
 -->
 <script setup lang="ts">
 import { computed } from 'vue'
@@ -37,7 +44,7 @@ const VARIANT: Record<RiskTier, BadgeVariant> = {
 }
 
 const variant = computed(() => VARIANT[props.tier])
-const tone = computed(() => (props.tier === 'critical' ? 'solid' : 'subtle'))
+const tone = computed(() => (props.tier === 'critical' ? 'outline' : 'subtle'))
 </script>
 
 <template>
@@ -52,6 +59,13 @@ const tone = computed(() => (props.tier === 'critical' ? 'solid' : 'subtle'))
 </template>
 
 <style scoped>
+.aui-badge.aui-risk-badge {
+  color: color-mix(in srgb, var(--aui-badge-color) 40%, var(--aui-color-text));
+}
+.aui-badge.aui-risk-badge--critical {
+  border-width: 2px;
+  font-weight: var(--aui-font-weight-semibold);
+}
 /* Two classes, so the tier tokens win over BaseBadge's variant colours on the same element. */
 .aui-badge.aui-risk-badge--low {
   --aui-badge-color: var(--aui-risk-low);

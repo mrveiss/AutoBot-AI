@@ -161,6 +161,20 @@ _REGISTRY: dict[str, PinnedModel] = {
             "pytorch_model.bin": "54609dea3ff88f3167f049eeadbfe780b1173a3117bfac862134ebcd8ce33661",
         },
     ),
+    # Bumped by: mrveiss, 2026-10-27, via the procedure in this module's docstring (#19355).
+    # The KB reranker's cross-encoder, code-pinned by the same owner decision as the chunker's
+    # models (2026-10-24): no config override; ResultReranker.MODEL_NAME holds the name. The Hub
+    # renamed the repo from ``ms-marco-MiniLM-L-6-v2``; this is the canonical id its API returns.
+    "cross-encoder/ms-marco-MiniLM-L6-v2": PinnedModel(
+        repo_id="cross-encoder/ms-marco-MiniLM-L6-v2",
+        revision="233902d25c440f23af6f7d6e94d2946bac0bee0a",  # pragma: allowlist secret
+        weight_digests={
+            # pragma: allowlist nextline secret
+            "model.safetensors": "821d1aa69520101d6e0737f78a042ae25b19e5cb9160701909d10434f4aeb0ae",
+            # pragma: allowlist nextline secret
+            "pytorch_model.bin": "3ae17b87eda3d184502a821fddff43d82feb7c206f665a851c491ec715b497ed",
+        },
+    ),
 }
 
 
@@ -273,6 +287,11 @@ def load_verified(repo_id: str, *loaders: Callable[[str], T]) -> tuple[T, ...]:
     unverified assignment.
     """
     revision = get_pinned_revision(repo_id)
+    if Path(repo_id).exists():
+        # Loaders such as CrossEncoder / SentenceTransformer load a local path in preference to the
+        # Hub id; a same-named directory under the working directory would run unverified weights
+        # while the check below verified the cache. Fail closed before any load (#19355 review).
+        raise ModelIntegrityError(f"{repo_id!r} names an existing local path; refusing to shadow the pinned model")
     results = tuple(loader(revision) for loader in loaders)
     verify_cached_model(repo_id)
     return results
