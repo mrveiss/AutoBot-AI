@@ -28,6 +28,9 @@ UNSCOPED = frozenset(
         # #19317: every tracked code/config/env/shell file outside docs -- the whole tree by suffix,
         # since a re-added default can land in any component; a roots= list would only shrink it.
         "tls-cert-dir-one-home-19317",
+        # #19437: docs and deployment files by extension (*.md, *.yml, *.j2, *.sh, *.json, ...) over the
+        # whole tree, since a tenancy value can be written in any component -- not a set of prefixes.
+        "user-mode-values-sweep-19437",
         # #19076: items are (role, unit) pairs from one registry file, not paths -- no roots= to check.
         "role-registry-installed-units",
         # #19413: every tracked file, so a ChromaDB heartbeat path written anywhere is seen.
@@ -49,6 +52,8 @@ UNSCOPED = frozenset(
         "blanket-skip-test-module-sweep",
         # #19324: an extension filter (*.py, *.sh, *.yml, .env*, ...) over the whole tree, not a set of prefixes.
         "browser-port-single-home-scan",
+        # #19544: every tracked .py in the repository, wherever a second path->ceiling table could be written.
+        "ceiling-table-sweep-19544",
         # #19279: requirements files live in every package directory; a glob, not a set of prefixes.
         "landing-page-declared-dependencies",
         "chromadb-bind-host-override-candidates",

@@ -234,7 +234,7 @@ units are implicit is a baseline that cannot be checked.
 
 ## Worked example — the one that passes
 
-`repo_tests/python_file_size_ratchet_baseline.py`, measured against
+`scripts/python_file_size_known_large.py`, measured against
 `origin/main`:
 
 | | |

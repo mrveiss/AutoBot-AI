@@ -63,7 +63,8 @@ _REASON = re.compile(r"^\s*(?://|\*|/\*)\s*(?!eslint|@ts-|prettier)(?:\S+\s+){3,
 _TRAILING_COMMENT = re.compile(r"/\*.*?\*/|(?<![:'\"\w])//.*$")
 
 # Measured on b07673947b; the SLM's Prometheus/Grafana probes are eslint-exempted with a reason. Lower an app's pin by exactly what a PR removes (#12363 phase 2).
-PINS = {"autobot-frontend": 14, "autobot-slm-frontend": 1}
+# #12363 step 2: the SLM's main-backend calls moved onto SlmApiClient, 1 -> 0.
+PINS = {"autobot-frontend": 14, "autobot-slm-frontend": 0}
 
 
 def _countable(app: Path, path: Path) -> bool:
@@ -83,10 +84,11 @@ def _sources(root: Path) -> list[Path]:
 
 
 #: 1,088 files measured on b07673947b across both GUIs; repinned by scripts/repin_reach_floors.py.
+#: #19532: the unmounted SettingsPanel, CacheService and settings types retired (1,087); pinned mid-window.
 REACH = declare(
     "frontend-http-transports",
     discover=_sources,
-    floor=1088,
+    floor=1037,
     growth=100,  # ~9%: ordinary GUI growth between repins must not turn an unrelated PR red
     what="non-test GUI source files",
     roots=tuple(f"{app}/src" for app in PINS),
