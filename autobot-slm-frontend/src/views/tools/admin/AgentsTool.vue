@@ -3,10 +3,11 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, PollingPausedAlert } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('AgentsTool')
+const REFRESH_INTERVAL_MS = 30000
 /**
  * AgentsTool - Agent Registry Manager
  *
@@ -14,7 +15,9 @@ const logger = createLogger('AgentsTool')
  * Migrated from main AutoBot frontend - Issue #729.
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { throwIfFailed, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useAutobotApi } from '@/composables/useAutobotApi'
 import { formatDateTime } from '@/composables/useTimezone'
 
@@ -48,8 +51,6 @@ const stats = ref<AgentStats>({ total_agents: 0, active_agents: 0, total_tasks: 
 const selectedAgent = ref<Agent | null>(null)
 const filterStatus = ref<string>('all')
 const searchQuery = ref('')
-
-let refreshInterval: ReturnType<typeof setInterval> | null = null
 
 // Computed
 const filteredAgents = computed(() => {
@@ -160,16 +161,12 @@ function selectAgent(agent: Agent): void {
   selectedAgent.value = selectedAgent.value?.id === agent.id ? null : agent
 }
 
-onMounted(() => {
-  refreshData()
-  refreshInterval = setInterval(() => refreshData(), 30000)
-})
+const { t } = useI18n()
 
-onUnmounted(() => {
-  if (refreshInterval) {
-    clearInterval(refreshInterval)
-  }
-})
+// #19482: the shared dashboard policy (stop on unmount and after repeated failures, paused alert)
+const refreshPoller = useDashboardPoller(throwIfFailed(refreshData, error), REFRESH_INTERVAL_MS)
+
+onMounted(() => refreshPoller.start(''))
 </script>
 
 <template>
@@ -255,7 +252,7 @@ onUnmounted(() => {
           <option value="stopped">{{ $t('tools.admin.agentsTool.stopped') }}</option>
         </select>
         <button
-          @click="refreshData"
+          @click="refreshPoller.start('')"
           :disabled="loading"
           class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center gap-2"
         >
@@ -266,6 +263,8 @@ onUnmounted(() => {
         </button>
       </div>
     </div>
+
+    <PollingPausedAlert :poller="refreshPoller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mb-6" @retry="refreshPoller.start('')" />
 
     <!-- Error Message -->
     <BaseAlert v-if="error" variant="error" class="mb-6" :message="error" />
