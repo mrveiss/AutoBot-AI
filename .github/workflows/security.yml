@@ -151,7 +151,7 @@ jobs:
         echo "SCANNER_BIN=$RUNNER_TEMP/scanners/bin" >> "$GITHUB_ENV"
         echo "PROJECT_PYTHON=$(command -v python)" >> "$GITHUB_ENV"
         # Use CI-safe requirements (excludes vllm and other GPU-dependent packages)
-        # -c applies the shared floors (filelock>=4.2.1 among them) to the audited set.
+        # -c applies the shared floors (filelock>=4.2.4 among them) to the audited set.
         python -m pip install -c constraints/shared.txt -r requirements-ci.txt --prefer-binary || {
           echo "::error::Some dependencies failed to install — security tools may be incomplete"
           exit 1
