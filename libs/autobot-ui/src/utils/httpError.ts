@@ -12,8 +12,8 @@ export class HttpError extends Error {
   /** The parsed error body, or null when it was not JSON. */
   readonly details: Record<string, unknown> | null
 
-  constructor(status: number, message: string, details: Record<string, unknown> | null = null) {
-    super(`HTTP ${status}: ${message}`)
+  constructor(status: number, message: string | undefined, details: Record<string, unknown> | null = null) {
+    super(message ? `HTTP ${status}: ${message}` : `HTTP ${status}`)
     this.name = 'HttpError'
     this.status = status
     this.details = details

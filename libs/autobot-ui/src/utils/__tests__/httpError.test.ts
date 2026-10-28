@@ -29,6 +29,15 @@ describe('HttpError', () => {
 const res = (status: number, body: string | null, type = 'application/json', statusText = '') =>
   new Response(body, { status, statusText, headers: type ? { 'content-type': type } : {} })
 
+describe('HttpError message without a status text', () => {
+  it('renders a bare status for an empty message', () => {
+    expect(new HttpError(502, '').message).toBe('HTTP 502')
+  })
+  it('renders a bare status for an undefined message', () => {
+    expect(new HttpError(502, undefined).message).toBe('HTTP 502')
+  })
+})
+
 describe('isHttpClientError', () => {
   it('is true for 4xx HttpErrors only', () => {
     expect(isHttpClientError(new HttpError(404, 'x'))).toBe(true)
