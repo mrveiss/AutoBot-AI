@@ -35,7 +35,7 @@ ollama_models:
 
 # Node.js configuration
 install_nodejs: true
-nodejs_version: "20"
+nodejs_version: "{{ node_major }}"
 use_nvm: false  # Use apt repository instead
 
 # Playwright configuration
