@@ -631,8 +631,8 @@ onUnmounted(() => {
   gap: var(--spacing-3);
 }
 
-.loading-state i,
-.empty-state i {
+.loading-state .icon,
+.empty-state .icon {
   font-size: var(--font-size-2xl);
 }
 
@@ -744,7 +744,7 @@ onUnmounted(() => {
   border-radius: var(--radius-sm);
 }
 
-.default-badge i {
+.default-badge .icon {
   font-size: var(--text-xs);
 }
 

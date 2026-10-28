@@ -1281,7 +1281,7 @@ watch(layoutMode, () => {
   gap: var(--spacing-sm);
 }
 
-.header-content h3 i {
+.header-content h3 .icon {
   color: var(--color-primary);
 }
 
@@ -1854,7 +1854,7 @@ watch(layoutMode, () => {
   gap: var(--spacing-xs);
 }
 
-.relation-target i {
+.relation-target .icon {
   font-size: var(--text-xs);
   color: var(--text-tertiary);
 }
