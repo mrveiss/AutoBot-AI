@@ -107,7 +107,8 @@ GRANDFATHERED = frozenset(
 )
 
 #: GRANDFATHERED as last recorded -- a mirrored second copy (#16147 AC4), the
-#: same two-copy shape as the file-size ratchet's RATCHET_BASELINE. The staleness
+#: two-copy shape the file-size ratchet had until #19544 replaced its copy with a
+#: base-commit check (``_ratchet_base``). The staleness
 #: test forces removals; without this copy, ADDING an entry to GRANDFATHERED
 #: silences a new unfloored guard and no test fails. Growing the list now takes
 #: editing both sets -- a recorded decision a reviewer sees -- and a shrink is

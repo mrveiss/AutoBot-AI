@@ -24,15 +24,18 @@
  * forwarded to the backend.
  */
 
+import { useI18n } from 'vue-i18n'
 import { ref } from 'vue'
 import { getBackendUrl } from '@/config/ssot-config'
 import { useAuthStore } from '@/stores/auth'
+import { formatDuration } from '@/utils/formatHelpers'
 import {
   useAutobotApi,
   autobotApiErrorMessage,
   type ProcessRun,
 } from '@/composables/useAutobotApi'
 
+const { t } = useI18n()
 const api = useAutobotApi()
 const authStore = useAuthStore()
 const processes = ref<ProcessRun[]>([])
@@ -67,7 +70,7 @@ async function fetchProcesses() {
       status: statusFilter.value || undefined,
     })
   } catch (err) {
-    error.value = autobotApiErrorMessage(err, 'Failed to load processes')
+    error.value = autobotApiErrorMessage(err, t('agents.processMonitorTab.loadFailed'))
     processes.value = []
   } finally {
     loading.value = false
@@ -150,7 +153,7 @@ async function signalProcess(processId: string, sig: string) {
     showKillConfirm.value = null
     await fetchProcesses()
   } catch (err) {
-    error.value = autobotApiErrorMessage(err, 'Signal failed')
+    error.value = autobotApiErrorMessage(err, t('agents.processMonitorTab.signalFailed'))
   }
 }
 
@@ -167,7 +170,7 @@ async function spawnProcess() {
     spawnForm.value = { agent_id: '', command: '', args: '', timeout_seconds: 300 }
     await fetchProcesses()
   } catch (err) {
-    error.value = autobotApiErrorMessage(err, 'Spawn failed')
+    error.value = autobotApiErrorMessage(err, t('agents.processMonitorTab.spawnFailed'))
   }
 }
 
@@ -197,14 +200,7 @@ function statusBadgeClass(status: string): string {
   return map[status] || 'badge-gray'
 }
 
-function formatDuration(start: string | null, end: string | null): string {
-  if (!start) return '—'
-  const s = new Date(start).getTime()
-  const e = end ? new Date(end).getTime() : Date.now()
-  const secs = Math.round((e - s) / 1000)
-  if (secs < 60) return `${secs}s`
-  return `${Math.floor(secs / 60)}m ${secs % 60}s`
-}
+const DURATION_OPTIONS = { style: 'msMinutesSeconds', nullText: '—' } as const
 
 function formatTime(iso: string | null): string {
   if (!iso) return '—'
@@ -306,7 +302,7 @@ function formatTime(iso: string | null): string {
               {{ proc.command }} {{ (proc.args || []).join(' ') }}
             </td>
             <td>{{ proc.exit_code ?? '—' }}</td>
-            <td>{{ formatDuration(proc.started_at, proc.completed_at) }}</td>
+            <td>{{ formatDuration(proc.started_at, proc.completed_at, DURATION_OPTIONS) }}</td>
             <td class="time-cell">{{ formatTime(proc.started_at) }}</td>
             <td>
               <button
