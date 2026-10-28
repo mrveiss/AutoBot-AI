@@ -18,10 +18,11 @@ from agents.kb_librarian_agent import KBLibrarianAgent
 from api import agent_diary, kb_librarian, knowledge_suggestions
 from auth_middleware import get_current_user
 from knowledge.ownership import KnowledgeOwnership
-from knowledge.read_path_fakes_16665 import PRIVATE_A, FakeKB, all_facts
+from knowledge.read_path_fakes_16665 import PRIVATE_A, RESEARCH, FakeKB, QuarantineGatedKB, all_facts, quarantined_fact
 from knowledge.suggestions import SuggestionsMixin
 
 ALICE, BOB, NOBODY = {"user_id": "alice"}, {"user_id": "bob"}, {"role": "user"}
+ADMIN = {"user_id": "root", "role": "admin"}
 
 
 class _SuggestKB(SuggestionsMixin):
@@ -34,6 +35,13 @@ class _SuggestKB(SuggestionsMixin):
         return all_facts()
 
 
+class _QuarantinedSuggestKB(_SuggestKB):
+    """Reads through the real quarantine gate, with a quarantined research fact among the facts."""
+
+    async def search(self, *args, **kwargs):
+        return await QuarantineGatedKB().search(*args, **kwargs)
+
+
 def _client(router, user, prefix="") -> TestClient:
     app = FastAPI()
     app.include_router(router, prefix=prefix)
@@ -41,8 +49,11 @@ def _client(router, user, prefix="") -> TestClient:
     return TestClient(app)
 
 
-def _suggest(route, user, body):
-    with patch.object(knowledge_suggestions, "get_knowledge_base", AsyncMock(return_value=_SuggestKB())):
+def _suggest(route, user, body, kb_class=_SuggestKB):
+    with (
+        patch.object(knowledge_suggestions, "get_knowledge_base", AsyncMock(return_value=kb_class())),
+        patch("services.audit_logger.audit_log", new=AsyncMock(return_value=True)),
+    ):
         return _client(knowledge_suggestions.router, user).post(route, json=body)
 
 
@@ -68,6 +79,35 @@ def test_context_suggestions_return_the_owner_their_own_private_snippet():
 
     assert PRIVATE_A in _suggest("/suggestions/context", ALICE, body).text
     assert PRIVATE_A not in _suggest("/suggestions/context", BOB, body).text
+
+
+def test_context_suggestions_give_an_admin_another_users_private_snippet():
+    response = _suggest("/suggestions/context", ADMIN, {"context": "anything at all", "min_score": 0.0})
+
+    assert response.status_code == 200 and PRIVATE_A in response.text
+
+
+@pytest.mark.parametrize("user", [ALICE, BOB, ADMIN])
+@pytest.mark.parametrize("route,body", SUGGEST_ROUTES)
+def test_suggestions_never_derive_from_a_quarantined_research_fact(route, body, user):
+    body = {**body, "min_score": 0.0}
+    response = _suggest(route, user, body, _QuarantinedSuggestKB)
+
+    assert response.status_code == 200 and RESEARCH not in response.text
+    if route != "/suggestions/context":  # context returns snippets, not a candidate count
+        counted = response.json().get("total_candidates", response.json().get("similar_docs_analyzed"))
+        assert counted == (3 if user is ADMIN else 2)  # one more would be the quarantined fact
+
+
+def test_the_suggestion_quarantine_test_is_sensitive_to_a_leak():
+    class _Leaky(_SuggestKB):
+        async def search(self, *args, **kwargs):
+            return [quarantined_fact()]
+
+    assert (
+        RESEARCH
+        in _suggest("/suggestions/context", ALICE, {"context": "anything at all", "min_score": 0.0}, _Leaky).text
+    )
 
 
 @pytest.mark.parametrize("route,body", SUGGEST_ROUTES)
