@@ -316,6 +316,7 @@
         status_code: [200, 404]
       register: mark_result
       ignore_errors: true
+      no_log: true  # #19764: credentials in the request or response
 
     - name: "Update NodeCodeVersion rows to UP_TO_DATE"
       ansible.builtin.uri:
@@ -328,6 +329,7 @@
         status_code: 200
       register: version_check
       ignore_errors: true
+      no_log: true  # #19764: credentials in the request or response
 
     - name: "Display update summary"
       ansible.builtin.debug:
