@@ -147,7 +147,7 @@ h5 {
   margin: var(--spacing-0);
 }
 
-h5 i {
+h5 .icon {
   color: var(--color-primary);
 }
 
