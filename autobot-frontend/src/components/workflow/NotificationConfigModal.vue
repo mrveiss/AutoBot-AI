@@ -297,7 +297,7 @@ async function handleSave(): Promise<void> {
   gap: var(--spacing-2);
 }
 
-.notif-header h3 i { color: var(--color-primary); }
+.notif-header h3 .icon { color: var(--color-primary); }
 
 .btn-close {
   padding: var(--spacing-1-5) var(--spacing-2);
