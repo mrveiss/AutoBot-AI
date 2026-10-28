@@ -10,7 +10,7 @@
  * AI skills across the AutoBot platform.
  */
 
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSkills, useSkillGovernance, type SkillInfo } from '@/composables/useSkills'
 import GovernanceModeSelector from '@/components/skills/GovernanceModeSelector.vue'
@@ -135,11 +135,11 @@ function selectCategory(cat: string | null): void {
 
 // --- Lifecycle ---
 
+let unmounted = false
+onUnmounted(() => { unmounted = true })
 onMounted(async () => {
-  await Promise.all([
-    initializeSkills(), fetchGovernance(), fetchApprovals(), fetchRepos(), fetchDrafts(),
-  ])
-  approvalPoller.start('')
+  await Promise.all([initializeSkills(), fetchGovernance(), fetchApprovals(), fetchRepos(), fetchDrafts()])
+  if (!unmounted) approvalPoller.start('')
 })
 
 watch(searchQuery, (val) => {

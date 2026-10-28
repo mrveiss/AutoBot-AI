@@ -247,7 +247,7 @@ function editProvider(provider: SSOProviderResponse) {
 
 async function saveProvider(): Promise<void> {
   if (!formData.name) {
-    error.value = 'Provider name is required'
+    error.value = t('settings.admin.sSOSettings.providerNameRequired')
     return
   }
 
@@ -300,7 +300,7 @@ async function saveProvider(): Promise<void> {
         config,
       }
       await api.updateProvider(editingProvider.value.id, updateData)
-      showSuccessMsg('Provider updated successfully')
+      showSuccessMsg(t('settings.admin.sSOSettings.providerUpdated'))
     } else {
       // Create new provider
       const createData: SSOProviderCreate = {
@@ -315,7 +315,7 @@ async function saveProvider(): Promise<void> {
         config,
       }
       await api.createProvider(createData)
-      showSuccessMsg('Provider created successfully')
+      showSuccessMsg(t('settings.admin.sSOSettings.providerCreated'))
     }
 
     closeForm()
@@ -333,7 +333,7 @@ async function toggleProvider(provider: SSOProviderResponse): Promise<void> {
       is_active: !provider.is_active,
     })
     provider.is_active = !provider.is_active
-    showSuccessMsg(`Provider ${provider.is_active ? 'enabled' : 'disabled'}`)
+    showSuccessMsg(t(provider.is_active ? 'settings.admin.sSOSettings.providerEnabled' : 'settings.admin.sSOSettings.providerDisabled'))
   } catch (e: unknown) {
     showErrorMsg(autobotApiErrorMessage(e, t('settings.admin.sSOSettings.failedToToggleProvider')))
   }
@@ -364,7 +364,7 @@ async function deleteProvider(provider: SSOProviderResponse): Promise<void> {
 
   try {
     await api.deleteProvider(provider.id)
-    showSuccessMsg('Provider deleted successfully')
+    showSuccessMsg(t('settings.admin.sSOSettings.providerDeleted'))
     await fetchProviders()
   } catch (e: unknown) {
     showErrorMsg(autobotApiErrorMessage(e, t('settings.admin.sSOSettings.failedToDeleteProvider')))
