@@ -20,7 +20,11 @@ const auth = { isAdmin: false }
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => auth }))
 vi.mock('@/stores/fleet', () => ({ useFleetStore: () => ({ nodeList: [] }) }))
 vi.mock('@/composables/useFleetMetrics', () => ({
-  useFleetMetrics: () => ({ systemHealth: ref('healthy'), activeAlertCount: ref(0) }),
+  useFleetMetrics: () => ({
+    systemHealth: ref('healthy'),
+    activeAlertCount: ref(0),
+    poller: { pausedOnErrors: ref(false), start: vi.fn() },
+  }),
 }))
 vi.mock('vue-router', () => ({
   useRoute: () => ({ path: '/monitoring/system' }),

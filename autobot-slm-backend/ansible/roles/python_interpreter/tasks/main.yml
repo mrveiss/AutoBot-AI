@@ -34,6 +34,7 @@
   # rc != 0 triggers the deadsnakes PPA installation below.
   failed_when: false
   tags: ['deps', 'python_interpreter', 'python314']
+  check_mode: false
 
 - name: "python_interpreter | Install software-properties-common"
   ansible.builtin.apt:
@@ -92,3 +93,4 @@
     cmd: "{{ python_interpreter_binary }} --version"
   changed_when: false
   tags: ['deps', 'python_interpreter', 'python314']
+  when: not ansible_check_mode

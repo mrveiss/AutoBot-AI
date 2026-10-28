@@ -17,7 +17,6 @@ Issue #1955: Flash Attention v2 with variable-length sequence optimization.
 # so torch types in dataclass fields / function signatures are strings at runtime.
 from __future__ import annotations
 
-import threading
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Tuple
@@ -158,50 +157,25 @@ def detect_backend() -> AttentionBackend:
     return AttentionBackend.VANILLA
 
 
-def _build_repeat_kv_fn():
-    """Build a JIT-compiled repeat_kv function for GQA expansion.
-
-    Issue #1955: JIT compilation avoids Python overhead on repeated calls.
-    Issue #3009: torch imported lazily — only called after torch is available.
-    """
-    import torch  # noqa: PLC0415 — lazy import, torch is a heavy optional dep
-
-    @torch.jit.script
-    def repeat_kv(kv: torch.Tensor, n_rep: int) -> torch.Tensor:
-        """Expand KV heads for Grouped Query Attention.
-
-        Args:
-            kv: Key or value tensor [batch, seq_len, num_kv_heads, head_dim].
-            n_rep: Number of times to repeat each KV head.
-
-        Returns:
-            Expanded tensor [batch, seq_len, num_kv_heads * n_rep, head_dim].
-        """
-        if n_rep == 1:
-            return kv
-        batch, seq_len, num_kv_heads, head_dim = kv.shape
-        kv = kv[:, :, :, None, :].expand(batch, seq_len, num_kv_heads, n_rep, head_dim)
-        return kv.reshape(batch, seq_len, num_kv_heads * n_rep, head_dim)
-
-    return repeat_kv
-
-
-# Issue #3009: repeat_kv is built lazily on first use so that importing this
-# module does not trigger a torch import at startup.
-# Issue #10916: double-checked lock prevents concurrent threads from each
-# calling _build_repeat_kv_fn() and compiling the JIT function multiple times.
-_repeat_kv_fn = None
-_repeat_kv_fn_lock = threading.Lock()
-
-
 def repeat_kv(kv: Any, n_rep: int) -> Any:
-    """Expand KV heads for GQA — thin wrapper around the JIT-compiled version."""
-    global _repeat_kv_fn  # noqa: PLW0603
-    if _repeat_kv_fn is None:
-        with _repeat_kv_fn_lock:
-            if _repeat_kv_fn is None:
-                _repeat_kv_fn = _build_repeat_kv_fn()
-    return _repeat_kv_fn(kv, n_rep)
+    """Expand KV heads for Grouped Query Attention.
+
+    Eager tensor ops (#19686): ``torch.jit.script`` is deprecated, and expand + reshape are
+    view operations with no Python loop for a compiler to remove. No torch import is needed
+    here, so importing this module still does not import torch (#3009).
+
+    Args:
+        kv: Key or value tensor [batch, seq_len, num_kv_heads, head_dim].
+        n_rep: Number of times to repeat each KV head.
+
+    Returns:
+        Expanded tensor [batch, seq_len, num_kv_heads * n_rep, head_dim].
+    """
+    if n_rep == 1:
+        return kv
+    batch, seq_len, num_kv_heads, head_dim = kv.shape
+    kv = kv[:, :, :, None, :].expand(batch, seq_len, num_kv_heads, n_rep, head_dim)
+    return kv.reshape(batch, seq_len, num_kv_heads * n_rep, head_dim)
 
 
 class GrowingKVCache:

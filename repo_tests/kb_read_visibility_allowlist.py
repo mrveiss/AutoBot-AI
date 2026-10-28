@@ -119,7 +119,6 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("autobot-backend/agents/kb_librarian/librarian.py", "KBLibrarian.search_tool_knowledge"): _LIBRARIAN_UNCALLED,
     ("autobot-backend/agents/kb_librarian/stable_ids.py", "_adopt_duplicate"): _SYSTEM_IMPORT,
     ("autobot-backend/ai_hardware_accelerator.py", "AIHardwareAccelerator._gpu_semantic_search"): _T2,
-    ("autobot-backend/api/ai_stack_integration.py", "knowledge_search"): _SCOPED_ADMIN_ROUTER,
     ("autobot-backend/api/chat_knowledge.py", "_preserve_single_fact"): _PRESERVE,
     (
         "autobot-backend/api/chat_sessions.py",

@@ -21,6 +21,15 @@ The source's default CEO node is re-slugged to this company's ``ceo-<id>``, so
 ``sync_with_parent`` finds and designates it instead of creating another, and a
 later demotion (#15907) retires it like any provisioned CEO.
 
+Exactly one CEO-role node (#19643): when the import ends with a designated CEO
+that is *not* the template's default CEO node -- the target already holds
+``ceo-<target>`` (an import into an existing company), or ``company.ceo_agent_id``
+names a different agent -- the default node is **surplus**. Owner decision: it is
+imported as a NORMAL agent with its CEO ``org_role`` reset to ``worker``, not
+dropped: no template data is lost, and the agent stays visible and reassignable.
+In the second case it also keeps a fresh UUID slug rather than ``ceo-<target>``,
+so the provisioned-CEO convention never names a non-CEO.
+
 The imported node's ``heartbeat_enabled`` is whatever the template carries
 (off when absent); nothing here touches it.
 """
@@ -32,11 +41,11 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
-from models.agent_org import AgentOrgNode
+from models.agent_org import AgentOrgNode, OrgRole
 from user_management.models.organization import Organization
 
 from ..models.enums import RoleHolderType
-from .company_ceo import CompanyCEOService, default_ceo_slug
+from .company_ceo import DEFAULT_CEO_ORG_ROLE, CompanyCEOService, default_ceo_slug
 
 logger = get_logger(__name__)
 
@@ -70,11 +79,14 @@ async def mint_agent_ids(session: AsyncSession, template: Dict[str, Any], compan
 
     Fresh UUIDs, except that the source's default CEO node takes this company's
     ``ceo-<id>`` slug -- unless the target already holds that slug (an import into
-    an existing company), where the existing node stays the default CEO.
+    an existing company), where the existing node stays the default CEO, or the
+    template designates a different agent, which makes the default node surplus
+    (see the module docstring). A surplus node keeps its fresh UUID slug.
     """
     minted = {a["agent_id"]: str(uuid.uuid4()) for a in template.get("agents", []) if a.get("agent_id")}
     source_slug = _source_default_slug(template)
-    if source_slug not in minted:
+    designee = (template.get("company") or {}).get(CEO_EXPORT_KEY)
+    if source_slug not in minted or (designee in minted and designee != source_slug):
         return minted
     target_slug = default_ceo_slug(company_id)
     held = await session.execute(sa.select(AgentOrgNode.id).where(AgentOrgNode.agent_id == target_slug))
@@ -104,7 +116,8 @@ async def settle_imported_ceo(
     company is top-level and has no CEO yet -- an owner's existing choice is
     never displaced. ``sync_with_parent`` then settles the rest: it keeps that
     designation, designates the re-slugged imported default node, or provisions
-    a fresh default when the template carried no CEO.
+    a fresh default when the template carried no CEO. Last, a default CEO node
+    left beside that designation is demoted to a normal agent (#19643).
     """
     service = CompanyCEOService()
     org = await session.get(Organization, company_id)
@@ -115,3 +128,26 @@ async def settle_imported_ceo(
             await service.set_ceo(session, company_id, RoleHolderType.AGENT.value, designee)
             logger.info("Imported company %s keeps its template's CEO %s", company_id, designee)
     await service.sync_with_parent(session, company_id, parent_org_id)
+    await demote_surplus_ceo(session, template, company_id, landed)
+
+
+async def demote_surplus_ceo(
+    session: AsyncSession, template: Dict[str, Any], company_id: uuid.UUID, landed: Dict[str, str]
+) -> None:
+    """Reset the template's default CEO node to a normal agent when another holds the CEO.
+
+    Called at the end of :func:`settle_imported_ceo`. Only the node carrying the source's
+    default CEO slug is touched, and only when the company now has a designated
+    CEO that is a different node; it is kept, with ``org_role`` set to ``worker``.
+    """
+    dest_slug = landed.get(_source_default_slug(template) or "")
+    if dest_slug is None:
+        return
+    stmt = sa.select(AgentOrgNode).where(AgentOrgNode.agent_id == dest_slug, AgentOrgNode.company_id == company_id)
+    node = (await session.execute(stmt)).scalars().first()
+    holder = await CompanyCEOService().resolve(session, company_id)
+    if node is None or holder is None or holder.id == node.id or node.org_role != DEFAULT_CEO_ORG_ROLE:
+        return
+    node.org_role = OrgRole.WORKER.value
+    await session.flush()
+    logger.info("Imported default CEO node %s is surplus beside CEO %s; kept as a worker", node.agent_id, holder.id)

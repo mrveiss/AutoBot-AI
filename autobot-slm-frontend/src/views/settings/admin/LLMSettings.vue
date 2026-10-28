@@ -284,12 +284,12 @@ onMounted(fetchConfig)
 
     <!-- Providers Tab -->
     <div v-else-if="activeTab === 'providers'" class="space-y-4">
-      <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+      <BaseAlert variant="info" :icon="false">
         <div class="flex items-center gap-2">
-          <span class="text-sm font-medium text-blue-800">{{ $t('settings.admin.lLMSettings.activeProvider') }}</span>
-          <span class="text-sm text-blue-700 font-mono">{{ config.active_provider }}</span>
+          <span class="text-sm font-medium">{{ $t('settings.admin.lLMSettings.activeProvider') }}</span>
+          <span class="text-sm font-mono">{{ config.active_provider }}</span>
         </div>
-      </div>
+      </BaseAlert>
 
       <div class="flex justify-end">
         <button

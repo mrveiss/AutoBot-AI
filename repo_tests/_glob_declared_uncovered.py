@@ -65,11 +65,17 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/nginx_internal_api_key_auth_gate_test.py",
             "repo_tests/slm_admin_password_one_home_19318_test.py",
             "repo_tests/slm_frontend_publish_contract_test.py",
+            "repo_tests/user_mode_values_19437_test.py",
         },
         "root-relative `*.j2` sweep; the matching files live outside the python filter's trees",
     ),
+    "*.json": (
+        {"repo_tests/user_mode_values_19437_test.py"},
+        "root-relative `*.json` sweep; the matching files live outside the python filter's trees",
+    ),
     "*.md": (
         {
+            "repo_tests/agent_model_tiers_19332_test.py",
             "repo_tests/deployment_profile_one_source_19315_test.py",
             "repo_tests/operational_docs_name_real_playbooks_19611_test.py",
             "repo_tests/doc_sync_hook_resolves_indexer_15845_test.py",
@@ -78,6 +84,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/sdk_docs_paths_test.py",
             "repo_tests/tls_cert_dir_one_home_19317_test.py",
             "repo_tests/user_docs_stay_consistent_19178_test.py",
+            "repo_tests/user_mode_values_19437_test.py",
         },
         "root-relative `*.md` sweep; the matching files live outside the python filter's trees",
     ),
@@ -115,6 +122,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/slm_admin_password_one_home_19318_test.py",
             "repo_tests/slm_frontend_publish_contract_test.py",
             "repo_tests/slm_frontend_shell_publish_test.py",
+            "repo_tests/user_mode_values_19437_test.py",
         },
         "root-relative `*.sh` sweep; the matching files live outside the python filter's trees",
     ),
@@ -151,6 +159,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/one_static_data_copy_18556_test.py",
             "repo_tests/slm_admin_password_one_home_19318_test.py",
             "repo_tests/slm_frontend_publish_contract_test.py",
+            "repo_tests/user_mode_values_19437_test.py",
         },
         "root-relative `*.yaml` sweep; the matching files live outside the python filter's trees",
     ),
@@ -195,6 +204,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/workflow_closed_reference_guard_test.py",
             "repo_tests/workflow_concurrency_guard_test.py",
             "repo_tests/workflow_names_say_company_os_19546_test.py",
+            "repo_tests/user_mode_values_19437_test.py",
         },
         "root-relative `*.yml` sweep; the matching files live outside the python filter's trees",
     ),
@@ -298,7 +308,11 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
 #: workflow is retired -- and the third case FAILS rather than lapsing.
 GLOB_RUN_BY_A_DEDICATED_WORKFLOW: dict[str, tuple[set[str], str, str]] = {
     "docs/**/*.md": (
-        {"repo_tests/doc_model_tags_15219_test.py", "repo_tests/docs_liquid_tags_are_defined_17930_test.py"},
+        {
+            "repo_tests/doc_model_tags_15219_test.py",
+            "repo_tests/docs_liquid_tags_are_defined_17930_test.py",
+            "repo_tests/kb_populate_one_home_19339_test.py",
+        },
         ".github/workflows/docs-liquid-tags.yml",
         "the Liquid-tag guard runs on its own docs-gated job in seconds; covering `docs/**/*.md` "
         "in the python filter would instead spend the twelve-shard suite on every documentation "

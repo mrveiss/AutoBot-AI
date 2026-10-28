@@ -18,6 +18,7 @@
 import type { Ref } from 'vue'
 import { usePollingJob, type UsePollingJobReturn } from '@autobot/ui'
 import { POLL_CONSECUTIVE_ERROR_LIMIT } from '@/constants/api-timeouts'
+import i18n from '@/i18n'
 
 export function useDashboardPoller(tick: () => Promise<void>, intervalMs: number): UsePollingJobReturn<void> {
   return usePollingJob(() => tick(), {
@@ -33,4 +34,9 @@ export function throwIfFailed(load: () => Promise<void>, error: Readonly<Ref<str
     await load()
     if (error.value) throw new Error(error.value)
   }
+}
+
+/** Make a tick fail, so the poller counts it, when the read it just ran did not load. */
+export function throwUnlessLoaded(loaded: boolean): void {
+  if (!loaded) throw new Error(i18n.global.t('common.polling.readFailed'))
 }
