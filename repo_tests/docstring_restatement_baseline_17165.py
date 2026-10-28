@@ -134,7 +134,6 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
     "autobot-backend/utils/gpu_optimization/monitoring.py": frozenset(
         {"calculate_memory_efficiency", "calculate_power_efficiency", "calculate_thermal_efficiency"}
     ),
-    "autobot-backend/utils/graceful_degradation.py": frozenset({"get_strategy_name"}),
     "autobot-backend/utils/hardware_metrics.py": frozenset({"get_phase9_performance_dashboard"}),
     "autobot-backend/utils/hot_reload_manager.py": frozenset({"get_hot_reload_status"}),
     "autobot-backend/utils/monitoring_alerts.py": frozenset({"add_notification_channel", "remove_alert_rule"}),

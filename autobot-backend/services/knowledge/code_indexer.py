@@ -39,7 +39,7 @@ from autobot_shared.code_graph import ResolvedCall, compute_node_id, module_path
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import scrubbed_git_env
-from constants.path_constants import PATH
+from services.knowledge.index_cache_paths import code_index_hashes
 from utils.file_categorization import (
     ALL_CODE_EXTENSIONS,
     JS_EXTENSIONS,
@@ -431,9 +431,6 @@ UNSUPPORTED_CODE_EXTENSIONS: "frozenset[str]" = frozenset(ext.lower() for ext in
 )
 
 
-_DEFAULT_CACHE = PATH.DATA_DIR / ".code_index_hashes.json"
-
-
 class CodeIndexer:
     """Index source files into ChromaDB using AST extraction.
 
@@ -447,11 +444,11 @@ class CodeIndexer:
         self,
         collection: Any,
         embed_model: Any,
-        cache_file: Path = _DEFAULT_CACHE,
+        cache_file: Path | None = None,  # None: the shared user cache (index_cache_paths, #19553)
     ) -> None:
         self._collection = collection
         self._embed_model = embed_model
-        self._cache_file = cache_file
+        self._cache_file = cache_file or code_index_hashes()
         self._hash_cache: dict[str, str] = self._load_cache()
         # Node ids known to the collection plus everything indexed so far this
         # run; lazily seeded (#13469) so cross-file/cross-run call resolution

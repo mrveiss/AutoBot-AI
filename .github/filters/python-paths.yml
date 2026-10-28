@@ -301,6 +301,11 @@ python:
   # green while the guard that reads it never runs.
   - '.github/workflows/sync-main-to-release.yml'
   - 'autobot-frontend/package.json'
+  # #19328/#14725: node_major_one_home_19328_test.py reads the Node home and checks the
+  # frontend engines floor against every locked dependency -- a lock bump that needs a
+  # newer Node, or an edit to the home, must run that guard.
+  - '.nvmrc'
+  - 'autobot-frontend/package-lock.json'
   # #19324: browser_port_single_home_19324_test.py pins this file's browser-port
   # fallback to ssot_config.port.browser; an edit confined to it must run that guard.
   - 'autobot-frontend/vite.config.js'
@@ -362,6 +367,9 @@ python:
   # confined to the guide -- documenting a name that resolves to nothing -- skips
   # the guard written to catch exactly that.
   - 'docs/guides/CONFIGURATION_GUIDE.md'
+  # #19459: `disaster_recovery_names_real_units_19459_test.py` reads this runbook by concrete
+  # literal to check every unit it tells an operator to start is one a role deploys.
+  - 'docs/operations/disaster-recovery.md'
   # #19279: `landing_page_claims_19279_test.py` reads the public landing page by concrete literal
   # for the libraries it names and any placeholder it renders.
   - 'docs/index.html'

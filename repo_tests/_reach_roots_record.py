@@ -5,12 +5,14 @@
 REACH_ROOTS = {
     "repo_tests/ai_line_single_policy_18430_test.py": ("autobot-backend", "autobot_shared"),
     "repo_tests/ansible_concept_forks_17856_test.py": ("autobot-slm-backend/ansible",),
+    "repo_tests/ansible_credentials_never_logged_19764_test.py": ("autobot-slm-backend/ansible",),
     "repo_tests/anti_pattern_type_emitted_18189_test.py": (
         "autobot-backend/code_analysis",
         "autobot-backend/code_intelligence",
     ),
     "repo_tests/audit_action_vocabulary_18716_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "repo_tests/audit_writer_single_source_17225_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
+    "repo_tests/cache_never_in_repo_19553_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "repo_tests/captcha_type_fork_guard_18131_test.py": ("autobot-backend", "autobot_shared"),
     "repo_tests/chat_history_async_calls_awaited_18316_test.py": ("autobot-backend/api",),
     "repo_tests/chat_single_delete_implementation_18316_test.py": ("autobot-backend/api",),
@@ -61,6 +63,7 @@ REACH_ROOTS = {
         "scripts",
     ),
     "repo_tests/direct_secrets_service_callers_17773_test.py": ("autobot-backend", "autobot_shared"),
+    "repo_tests/disaster_recovery_names_real_units_19459_test.py": ("autobot-slm-backend/ansible/roles",),
     "repo_tests/docker_admin_seed_18729_test.py": (
         ".env",
         "autobot-backend/migrations/versions",
@@ -141,6 +144,12 @@ REACH_ROOTS = {
     ),
     "repo_tests/no_doubled_api_prefix_18722_test.py": ("autobot-backend/api", "autobot-slm-backend/api"),
     "repo_tests/no_literal_secret_default_16299_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
+    "repo_tests/node_major_one_home_19328_test.py": (
+        ".github",
+        "autobot-infrastructure/shared/scripts",
+        "autobot-slm-backend/ansible",
+        "install.sh",
+    ),
     "repo_tests/oauth_bundle_no_app_secret_13630_test.py": ("autobot-backend", "autobot_shared"),
     "repo_tests/one_actor_id_15754_test.py": ("autobot-backend/llc",),
     "repo_tests/one_anthropic_message_split_16815_test.py": ("autobot-backend/llm_shared/providers",),

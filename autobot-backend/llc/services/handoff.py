@@ -23,6 +23,7 @@ from ..kb.handoff_brief import HandoffBriefGenerator
 from ..models.enums import ActivityEventType, AssigneeType, WorkItemStatus
 from ..models.work_item import LLCWorkItem
 from .base import LLCServiceBase
+from .wake_events import wake_for_item_changes
 
 try:
     from user_management.database import get_async_session_factory
@@ -114,6 +115,7 @@ class HandoffService(LLCServiceBase):
         item.checkout_locked_at = None
         item.review_brief = review_brief
         item.version += 1
+        await wake_for_item_changes(session, item)  # #19582: the handoff assigns it to the agent
         await session.flush()
         await self._release_redis_key(work_item_id, user_id)
         await self._publish_h2a_notification(company_id, target_agent_id, work_item_id)
@@ -271,6 +273,7 @@ class HandoffService(LLCServiceBase):
         item.assignee_agent_id = uuid.UUID(return_to_agent_id) if return_to_agent_id else None
         item.assignee_user_id = None
         item.version += 1
+        await wake_for_item_changes(session, item)  # #19582: handed back to the agent
         await session.flush()
         from ..models.work_item import LLCWorkItemComment
 

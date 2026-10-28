@@ -5,6 +5,7 @@
  "autobot-backend/llc/services/company_move_lock.py",
  "autobot-backend/llc/services/authz.py",
  "autobot-backend/llc/services/membership_service.py",
+ "autobot-backend/llc/scheduler/run_status.py",
  "autobot-backend/services/*secret*.py",
  "autobot-backend/services/credential_*.py",
  "autobot-backend/services/orphan_repair*.py",

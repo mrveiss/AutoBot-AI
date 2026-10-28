@@ -81,14 +81,15 @@ ISSUE_17822_ENTRIES = tuple(
         (Path(__file__).parent / "fixtures" / "issue_17822_migration_gate_entries.json").read_text(encoding="utf-8")
     )
 )
-# 19 = the eleven #17822 entries plus `services/__init__.py`, `services/approval_gate_service.py` and
+# 21 = the eleven #17822 entries plus `services/__init__.py`, `services/approval_gate_service.py` and
 # `llc/services/workspace_lease.py` (#17996), `llc/services/company.py` + `company_ceo.py` (#15907's
 # concurrent-move test), `llc/services/authz.py` + `membership_service.py` (the move's authorization,
-# #19634), `llc/services/company_move_lock.py` (the move's row locks, #19593) and `autobot_shared/db_errors.py`
-# (its deadlock SQLSTATE), which the migration tests import.
+# #19634), `llc/services/company_move_lock.py` (the move's row locks, #19593), `autobot_shared/db_errors.py`
+# (its deadlock SQLSTATE) and `llc/scheduler/run_status.py` (#19582's concurrent-claim test), which the
+# migration tests import.
 assert (
-    len(ISSUE_17822_ENTRIES) == 20
-), "the pinned migration-gate set is 20 entries; an emptied fixture would pin nothing"
+    len(ISSUE_17822_ENTRIES) == 21
+), "the pinned migration-gate set is 21 entries; an emptied fixture would pin nothing"
 ISSUE_17822_WORKFLOW = "migration-gate"
 EVENTS = ("push", "pull_request", "merge_group", "schedule", "workflow_dispatch")
 MG_SHA = "merge-group-base-sha"  # a stand-in value; only its presence or absence is compared
@@ -227,6 +228,8 @@ ALLOWED_ADDITIONS = {
             "docs/architecture/PLATFORM_MODEL.md",
             "docs/features/CATALOG.md",
             "docs/llc/_index.md",
+            # #19459: the disaster-recovery guard reads the runbook for the units it names.
+            "docs/operations/disaster-recovery.md",
             # #19611: the playbook-reference guard reads this guide for its declared exemption.
             "docs/guides/slm-docker-ansible-deployment.md",
             # #19279: the landing-page guard reads the page for the libraries and placeholders it renders.
@@ -235,6 +238,9 @@ ALLOWED_ADDITIONS = {
             ".github/duplication-pins.json",
             # #19324: browser_port_single_home_19324_test.py pins this file's browser-port fallback.
             "autobot-frontend/vite.config.js",
+            # #19328: node_major_one_home_19328_test.py reads the Node home and the frontend lock.
+            ".nvmrc",
+            "autobot-frontend/package-lock.json",
         ]
     },
     # frontend_path_filter_mirror_test pins frontend-test.yml's on.push.paths to this file, so the

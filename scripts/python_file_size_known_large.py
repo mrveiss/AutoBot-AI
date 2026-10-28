@@ -186,7 +186,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/code_intelligence/typescript_analyzer.py": 609,
     "autobot-backend/command_manual_manager.py": 908,
     "autobot-backend/computer_vision/screen_analyzer.py": 662,
-    "autobot-backend/conftest.py": 1498,  # #16483: _make_pkg_stub/_real_load_and_bind moved to testkit/module_stubs.py
+    "autobot-backend/conftest.py": 1459,  # #16483, #19582: stubs moved to testkit/
     "autobot-backend/context_aware_decision/decision_engine.py": 815,
     "autobot-backend/context_aware_decision/tests/test_counterfactual_reasoner.py": 663,
     "autobot-backend/context_window_manager.py": 626,
@@ -212,7 +212,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/judges/multi_agent_arbitrator.py": 611,
     "autobot-backend/judges/security_risk_judge.py": 842,
     "autobot-backend/knowledge/adapters/okf_adapter.py": 770,
-    "autobot-backend/knowledge/base.py": 704,
+    "autobot-backend/knowledge/base.py": 683,
     "autobot-backend/knowledge/bulk.py": 1983,
     "autobot-backend/knowledge/categories.py": 965,
     "autobot-backend/knowledge/collections.py": 728,
@@ -221,7 +221,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/knowledge/connectors/gdrive.py": 660,
     "autobot-backend/knowledge/connectors/gitlab.py": 873,
     "autobot-backend/knowledge/connectors/tests/test_credential_store.py": 1021,
-    "autobot-backend/knowledge/facts.py": 1729,
+    "autobot-backend/knowledge/facts.py": 1727,
     "autobot-backend/knowledge/ownership.py": 757,
     "autobot-backend/knowledge/pipeline/cognifiers/cognifiers_test.py": 806,
     "autobot-backend/knowledge/rag_benchmarks.py": 1607,
@@ -237,11 +237,11 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llc/api/companies.py": 1718,
     "autobot-backend/llc/api/roles.py": 713,
     "autobot-backend/llc/api/sprints.py": 1223,
-    "autobot-backend/llc/api/work_items.py": 1416,
-    "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 1028,  # #16818 onto #17726
+    "autobot-backend/llc/api/work_items.py": 1399,  # #19582: comment wake moved into the service
+    "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 1023,  # #19582 (shared run finder)
     "autobot-backend/llc/services/portability.py": 920,
     "autobot-backend/llc/services/template.py": 643,
-    "autobot-backend/llc/services/work_item_service.py": 1100,
+    "autobot-backend/llc/services/work_item_service.py": 1086,  # #19582: approval-category check moved out
     "autobot-backend/llc/tests/conftest.py": 832,
     "autobot-backend/llc/tests/test_autobot_agent_adapter.py": 663,
     "autobot-backend/llc/tests/test_heartbeat_scheduler.py": 1042,
@@ -328,8 +328,8 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/graph_rag_service.py": 647,
     "autobot-backend/services/graph_rag_service_test.py": 890,
     "autobot-backend/services/knowledge/autonomous_loop.py": 798,
-    "autobot-backend/services/knowledge/code_indexer.py": 1179,
-    "autobot-backend/services/knowledge/doc_indexer.py": 1259,
+    "autobot-backend/services/knowledge/code_indexer.py": 1176,
+    "autobot-backend/services/knowledge/doc_indexer.py": 1258,
     "autobot-backend/services/knowledge/service.py": 849,  # train 48: #18935 merged onto #18945
     "autobot-backend/services/knowledge/test_autonomous_loop.py": 708,
     "autobot-backend/services/knowledge/test_doc_indexer.py": 1466,
@@ -398,7 +398,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/utils/error_catalog.py": 775,
     "autobot-backend/utils/file_categorization.py": 724,
     "autobot-backend/utils/gpu_vector_search.py": 1227,
-    "autobot-backend/utils/graceful_degradation.py": 704,
     "autobot-backend/utils/hardware_metrics.py": 1267,
     "autobot-backend/utils/monitoring_alerts.py": 858,
     "autobot-backend/utils/operation_timeout_integration.py": 730,
