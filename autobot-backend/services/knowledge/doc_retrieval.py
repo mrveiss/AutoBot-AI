@@ -17,6 +17,7 @@ import time
 from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_llm_logger
+from constants.rag_graph_constants import RAG_SCORE_THRESHOLD
 from knowledge.search_filters import KbPrincipal, filter_for_principal, require_kb_principal
 
 from .doc_searcher import DocumentationSearcher
@@ -35,7 +36,9 @@ class DocumentationRetrievalMixin:
 
     doc_searcher: DocumentationSearcher | None
 
-    def _retrieve_documentation_context(self, query: str, n_results: int = 3, score_threshold: float = 0.3) -> str:
+    def _retrieve_documentation_context(
+        self, query: str, n_results: int = 3, score_threshold: float = RAG_SCORE_THRESHOLD
+    ) -> str:
         """Retrieve documentation context if query matches doc patterns.
 
         Issue #1261: Searches autobot_docs ChromaDB collection to provide
@@ -78,7 +81,7 @@ class DocumentationRetrievalMixin:
             return ""
 
     async def _retrieve_raw_doc_results(
-        self, query: str, n_results: int = 3, score_threshold: float = 0.3, *, principal: KbPrincipal
+        self, query: str, n_results: int = 3, score_threshold: float = RAG_SCORE_THRESHOLD, *, principal: KbPrincipal
     ) -> List[Dict[str, Any]]:
         """Return raw doc-search results without pre-formatting (#10658).
 
@@ -178,7 +181,7 @@ class DocumentationRetrievalMixin:
         self,
         query: str,
         n_results: int = 3,
-        score_threshold: float = 0.3,
+        score_threshold: float = RAG_SCORE_THRESHOLD,
     ) -> Tuple[str, List[Dict[str, Any]]]:
         """
         Retrieve relevant AutoBot documentation for a query.

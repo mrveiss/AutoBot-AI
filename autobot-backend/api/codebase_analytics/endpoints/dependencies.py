@@ -25,7 +25,7 @@ from utils.celery_task_status import known_task_status_or_404, store_latest_task
 from utils.chromadb_client import get_all_paginated
 
 from ..storage import get_code_collection
-from .shared import COMMON_THIRD_PARTY, STDLIB_MODULES, resolve_scan_root
+from .shared import COMMON_THIRD_PARTY, EXCLUDED_DIRS, STDLIB_MODULES, resolve_scan_root
 
 logger = get_logger(__name__)
 
@@ -439,19 +439,8 @@ async def _scan_filesystem_imports(
     """
     # Issue #358 - avoid blocking (use lambda to defer rglob to thread)
     python_files = await asyncio.to_thread(lambda: list(project_root.rglob("*.py")))
-    excluded_dirs = {
-        ".git",
-        "__pycache__",
-        "node_modules",
-        ".venv",
-        "venv",
-        "env",
-        ".env",
-        "archive",
-        "dist",
-        "build",
-    }
-    python_files = [f for f in python_files if not any(excluded in f.parts for excluded in excluded_dirs)]
+    # Root-relative: a project root that is itself a worktree must not exclude every file (#13602).
+    python_files = [f for f in python_files if EXCLUDED_DIRS.isdisjoint(f.relative_to(project_root).parts)]
     # Prioritize source directories over infrastructure/tooling (#1197)
     _priority = {"autobot-backend", "autobot_shared"}
     python_files.sort(key=lambda f: 0 if _priority & set(f.parts) else 1)

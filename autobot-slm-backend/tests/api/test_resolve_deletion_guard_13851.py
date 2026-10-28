@@ -555,4 +555,30 @@ def test_host_generated_map_has_one_definition_and_no_component_predicate() -> N
                 offenders.append(f"{py.name}: component-specific release predicate")
             if "is_release_artifact" in text or "SLM_FRONTEND_RELEASE_EXCLUDES" in text:
                 offenders.append(f"{py.name}: removed per-component predicate")
+            if py.name != "deploy_artifacts.py":
+                offenders += [f"{py.name}:{line}: re-declared release layout" for line in _layout_sets(text)]
     assert not offenders, offenders
+
+
+def _layout_sets(source: str) -> list[int]:
+    """Lines of set/tuple/list literals built from 2+ release-layout constants: a second declaration (#19453).
+
+    Narrow on purpose: it recognises a copy spelled with the ``SLM_FRONTEND_*`` constants. A copy
+    of the layout written as bare strings ({"dist", "current", ...}) or under other names escapes it.
+    """
+    import ast
+
+    return [
+        node.lineno
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Set | ast.Tuple | ast.List)
+        and sum(isinstance(e, ast.Name) and e.id.startswith("SLM_FRONTEND_") for e in node.elts) >= 2
+    ]
+
+
+def test_a_redeclared_release_layout_is_flagged_and_a_lookup_is_not() -> None:
+    """#19453: full_tree_drift kept its own _BUILD_BUNDLE_NAMES set; is_host_generated is the lookup."""
+    copy = "NAMES = frozenset({SLM_FRONTEND_CURRENT_LINK, SLM_FRONTEND_PREVIOUS_LINK})\n"
+    assert _layout_sets(copy) == [1]
+    assert _layout_sets("NAMES = (SLM_FRONTEND_LEGACY_DIR, SLM_FRONTEND_CURRENT_LINK)\n") == [1]
+    assert _layout_sets("ok = is_host_generated(component, name)\n") == []

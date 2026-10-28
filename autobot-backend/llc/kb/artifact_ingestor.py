@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.security.path_validator import validate_path
+from utils.file_types import TEXT_FILE_EXTENSIONS
 
 from ..models.work_product import LLCWorkProduct
 from ..storage_root import llc_local_storage_root
@@ -36,33 +37,6 @@ logger = logging.getLogger(__name__)
 _CHUNK_SIZE = 4000
 _CHUNK_OVERLAP = 200
 
-# Extensions treated as plain text (match WorkItemKB._TEXT_EXTENSIONS).
-_TEXT_EXTENSIONS = {
-    ".md",
-    ".txt",
-    ".py",
-    ".js",
-    ".ts",
-    ".go",
-    ".rs",
-    ".java",
-    ".c",
-    ".cpp",
-    ".h",
-    ".rb",
-    ".sh",
-    ".yaml",
-    ".yml",
-    ".toml",
-    ".ini",
-    ".cfg",
-    ".sql",
-    ".html",
-    ".css",
-    ".jsx",
-    ".tsx",
-}
-
 
 def _is_text_path(path: str) -> bool:
     """Whether this is a shape we can parse. NOT a containment check (#17302).
@@ -74,7 +48,7 @@ def _is_text_path(path: str) -> bool:
     as narrow as its name.
     """
     ext = os.path.splitext(path)[1].lower()
-    return ext in _TEXT_EXTENSIONS
+    return ext in TEXT_FILE_EXTENSIONS
 
 
 def _contained_storage_path(raw: str, product_id: object) -> Optional[str]:
@@ -299,7 +273,7 @@ class ArtifactIngestor:
                 # still received data derived from the untrusted string.
                 #
                 # An allowlist does not rescue it here: this branch runs
-                # precisely when the extension is NOT in `_TEXT_EXTENSIONS`, so
+                # precisely when the extension is NOT in `TEXT_FILE_EXTENSIONS`, so
                 # "log it if allowlisted else a constant" logs the constant
                 # every time. The message already states the reason, and the
                 # product id is the join key to the row that holds the path.

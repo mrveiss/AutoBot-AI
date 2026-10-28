@@ -32,7 +32,7 @@ FIELDS = {
     "NPU_WORKER_WINDOWS_PORT": "npu_windows",
 }
 #: PortConfig fields not yet on this tree, each with what adds them. Stale-checked.
-PENDING_FIELDS = {"npu_windows": "PortConfig.npu_windows / AUTOBOT_NPU_WORKER_WINDOWS_PORT arrive with PR #19429"}
+PENDING_FIELDS: dict[str, str] = {}
 _PORT_CALL = re.compile(r"^\s*(\w+_PORT): port\('(\w+)', '(\w+)', '(\d+)'\)", re.M)
 _ANY_PORT_KEY = re.compile(r"^\s*(\w+_PORT): ", re.M)
 
