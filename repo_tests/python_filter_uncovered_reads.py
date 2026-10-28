@@ -38,7 +38,6 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         ".flake8",
         ".github/actions/setup-python-ci/action.yml",
         ".github/actions/setup-python-suite/action.yml",
-        ".github/dependabot.yml",
         ".github/filters/code-quality-paths.yml",
         ".github/workflows/code-quality-required-context.yml",
         ".github/workflows/code-quality.yml",
@@ -150,7 +149,9 @@ UNCOVERED_READS: frozenset[str] = frozenset(
 #: uninstall guard (a fake /opt/autobot tree), a new bypass and not a real read.
 #: LOWERED 40 -> 39 by the train-81 CodeRabbit round: the filter now covers
 #: `docker/generate-secrets.sh`, which two guards really read (#17500, #18729).
-MAX_UNCOVERED_READS = 39
+#: LOWERED 39 -> 38 by #19523: the filter now covers `.github/dependabot.yml`, which the
+#: dependabot coverage guards read; deleting a block's directory touches no .py file.
+MAX_UNCOVERED_READS = 38
 
 #: A deliberate raise of ``MAX_UNCOVERED_READS`` is recorded here, as
 #: ``(value, "#issue")``. #17650's criterion is that raising is **justified**, not

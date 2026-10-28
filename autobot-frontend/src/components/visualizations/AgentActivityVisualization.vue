@@ -827,7 +827,7 @@ defineExpose({
   gap: var(--spacing-2);
 }
 
-.activity-feed h4 i {
+.activity-feed h4 .icon {
   color: var(--color-warning);
 }
 

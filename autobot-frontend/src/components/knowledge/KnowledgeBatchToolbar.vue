@@ -95,7 +95,7 @@ defineEmits<Emits>()
   font-weight: var(--font-medium);
 }
 
-.toolbar-info i {
+.toolbar-info .icon {
   font-size: var(--text-lg);
 }
 

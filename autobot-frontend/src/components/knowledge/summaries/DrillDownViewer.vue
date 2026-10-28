@@ -343,7 +343,7 @@ h5 {
   margin: var(--spacing-0);
 }
 
-h5 i {
+h5 .icon {
   color: var(--color-primary);
   font-size: var(--text-sm);
 }
@@ -475,8 +475,8 @@ h5 i {
   gap: var(--spacing-md);
 }
 
-.loading-state i,
-.empty-state i {
+.loading-state .icon,
+.empty-state .icon {
   font-size: var(--text-2xl);
 }
 
