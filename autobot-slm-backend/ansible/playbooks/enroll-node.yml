@@ -28,6 +28,12 @@
   gather_facts: true
   become: true
 
+  # node_major (the Node.js major, #19328) comes from its single definition by
+  # name: a run with a bare `-i "<host>,"` loads no group_vars, the same reason
+  # deploy.yml and enroll-slm-agent.yml load it (#15348).
+  vars_files:
+    - ../inventory/group_vars/all.yml
+
   vars:
     enrollment_timestamp: "{{ ansible_facts['date_time'].iso8601 }}"
     autobot_user: "autobot"
@@ -232,7 +238,7 @@
           block:
             - name: "Add NodeSource repository"
               shell: |
-                curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+                curl -fsSL {{ nodesource_base_url }}/setup_{{ node_major }}.x | bash -
               args:
                 creates: /etc/apt/sources.list.d/nodesource.list
 

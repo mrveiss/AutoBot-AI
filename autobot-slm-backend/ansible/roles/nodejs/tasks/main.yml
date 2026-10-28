@@ -37,7 +37,7 @@
 
 - name: "nodejs | Add NodeSource repository"
   ansible.builtin.shell: |
-    curl -fsSL https://deb.nodesource.com/setup_{{ nodejs_major_version }}.x | bash -
+    curl -fsSL {{ nodesource_base_url }}/setup_{{ nodejs_major_version }}.x | bash -
   become: true
   when:
     - _node_check.rc != 0
