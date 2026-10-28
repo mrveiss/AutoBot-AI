@@ -34,6 +34,12 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test .ts/.vue/.js source is a subset of tracked files under three roots; the test-file share drifts.",
     ),
+    "ceiling-table-sweep-19544": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Tracked Python only, a subset of all tracked files; the non-Python share grows at its own rate, "
+        "so a share of all tracked files would sink with nothing wrong.",
+    ),
     "migration-gate-test-import-sweep": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -268,6 +274,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "All tracked files minus vendored/build parts, against the whole tracked tree; the skipped share drifts.",
+    ),
+    "file-type-sets-one-home-19339": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test Python under autobot-backend, a subset of all tracked Python; the test-file share drifts.",
     ),
     "llc-actor-id-scan": (
         ABSOLUTE,
