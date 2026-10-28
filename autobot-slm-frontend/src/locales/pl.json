@@ -73,7 +73,7 @@
     "sSHPort": "SSH Port",
     "sSHPrivateKey": "SSH Private Key",
     "saveChanges": "Save Changes",
-    "saving": "Saving...",
+    "saving": "Zapisywanie...",
     "selectedRolesWillConfigure": "Selected roles will configure:",
     "showPasswordAria": "Show password",
     "sshKeyPemHint": "Paste your OpenSSH private key in PEM format",
@@ -116,7 +116,9 @@
       "rollingBack": "Rolling back...",
       "select": "Select...",
       "source": "Źródło:",
-      "yesRollback": "Yes, rollback"
+      "yesRollback": "Yes, rollback",
+      "loadFailed": "Failed to load revisions",
+      "rollbackFailed": "Rollback failed"
     },
     "orgChartTab": {
       "agentHierarchy": "Agent Hierarchy",
@@ -135,7 +137,9 @@
       "selectReport": "Select report...",
       "submit": "Złóż",
       "task": "Zadanie",
-      "total": "Total"
+      "total": "Total",
+      "loadFailed": "Failed to load org tree",
+      "delegationFailed": "Delegation failed"
     },
     "orgTreeNode": {
       "value0Reports": "{value0} reports"
@@ -174,7 +178,10 @@
       "timedOut": "Timed Out",
       "timeoutS": "Timeout (s)",
       "usrBinPython3": "/usr/bin/python3",
-      "viewFullLog": "View Full Log"
+      "viewFullLog": "View Full Log",
+      "loadFailed": "Failed to load processes",
+      "signalFailed": "Signal failed",
+      "spawnFailed": "Spawn failed"
     }
   },
   "agentsView": {
@@ -242,7 +249,7 @@
     "loadingNodes": "Loading nodes...",
     "node": "Node",
     "repositoryPath": "Repository Path",
-    "saving": "Saving...",
+    "saving": "Zapisywanie...",
     "selectANode": "Select a node...",
     "update": "Zaktualizuj"
   },
@@ -435,7 +442,12 @@
     },
     "polling": {
       "paused": "Updates paused: the backend did not answer several times in a row, so the figures shown may be out of date.",
+      "readFailed": "A dashboard read did not load.",
       "retry": "Retry"
+    },
+    "errors": {
+      "withStatus": "{message} (HTTP {status})",
+      "withCause": "{message}: {cause}"
     }
   },
   "deploymentLogViewer": {
@@ -738,7 +750,7 @@
       "refreshing": "Odświeżanie...",
       "roundRobin": "Round Robin",
       "saveStrategy": "Save Strategy",
-      "saving": "Saving...",
+      "saving": "Zapisywanie...",
       "strategyConfiguration": "Strategy Configuration",
       "taskDistribution": "Task Distribution",
       "totalQueueDepthAcross": "Total queue depth across all workers",
@@ -787,7 +799,7 @@
       "removeNPURole": "Remove NPU Role",
       "retryOnSameWorker": "Retry on Same Worker",
       "saveConfiguration": "Save Configuration",
-      "saving": "Saving...",
+      "saving": "Zapisywanie...",
       "skipTask": "Skip Task",
       "temperature": "Temperature",
       "throughputReqS": "Throughput (req/s)",
@@ -1159,7 +1171,7 @@
     "resumeNode": "Resume Node",
     "resuming": "Resuming...",
     "returnAMaintenanceNode": "Return a maintenance node to active service.",
-    "saving": "Saving...",
+    "saving": "Zapisywanie...",
     "scheduleFirstWindow": "Schedule First Window",
     "scheduleMaintenance": "Schedule Maintenance",
     "scheduleMaintenanceAcrossAll": "Schedule maintenance across all nodes with rolling updates.",
@@ -2283,7 +2295,8 @@
         "failedToClearCache": "Failed to clear cache",
         "failedToWarmUpCaches": "Failed to warm up caches",
         "confirmClearRedisDatabase": "Are you sure you want to clear the {database} Redis database?",
-        "confirmClearCache": "Are you sure you want to clear the {type} cache?"
+        "confirmClearCache": "Are you sure you want to clear the {type} cache?",
+        "failedToClearRedisDatabase": "Failed to clear Redis database"
       },
       "configDefaultsSettings": {
         "actions": "Actions",
@@ -2381,7 +2394,7 @@
         "remove": "Remove",
         "requireGPUForReasonable": "Require GPU for reasonable performance (>= 7B parameters)",
         "save": "Zapisz",
-        "saving": "Saving...",
+        "saving": "Zapisywanie...",
         "setActive": "Set Active",
         "temperature": "Temperatura:",
         "test": "Testuj",
@@ -2678,7 +2691,7 @@
         "sAMLConfiguration": "SAML Configuration",
         "sPEntityID": "SP Entity ID",
         "sSOOIDCConfiguration": "SSO / OIDC Configuration",
-        "saving": "Saving...",
+        "saving": "Zapisywanie...",
         "scope": "Zakres",
         "searchFilter": "Search Filter",
         "searchFilterExample": "(uid={username})",
@@ -2734,7 +2747,7 @@
         "placeholderNewValue": "New value",
         "placeholderValue": "Secret value (will be encrypted)",
         "save": "Zapisz",
-        "saving": "Saving...",
+        "saving": "Zapisywanie...",
         "secretCreated": "Secret \"{key}\" created",
         "secretDeleted": "Secret \"{key}\" deleted",
         "secretUpdated": "Secret \"{key}\" updated",
@@ -2882,7 +2895,8 @@
         "confirmDeleteTeam": "Are you sure you want to delete this team?",
         "confirmDeleteSsoProvider": "Are you sure you want to delete this SSO provider?",
         "confirmDeleteSlmAdmin": "Are you sure you want to delete this SLM admin?",
-        "checkingRbacStatus": "Checking RBAC status..."
+        "checkingRbacStatus": "Checking RBAC status...",
+        "failedToInitializeRbac": "Failed to initialize RBAC"
       },
       "webResearchSettings": {
         "title": "Badania Internetowe",
@@ -2906,7 +2920,7 @@
         "resetBreakers": "Reset circuit breakers ({count})",
         "formTitle": "Ustawienia",
         "save": "Zapisz zmiany",
-        "saving": "Saving...",
+        "saving": "Zapisywanie...",
         "discard": "Discard changes",
         "range": "Between {min} and {max}",
         "atLeast": "At least {min}",
@@ -3043,7 +3057,7 @@
       "resetting": "Resetting...",
       "runTheGuidedFleet": "Run the guided fleet configuration wizard to add nodes, enroll agents, assign roles, and provision your fleet.",
       "saveChanges": "Save Changes",
-      "saving": "Saving...",
+      "saving": "Zapisywanie...",
       "serversAreTriedIn": "Servers are tried in order. Changes are applied on next \"Save Changes\" or \"Sync All Nodes\".",
       "setupWizard": "Setup Wizard",
       "syncAllNodes": "Sync All Nodes",
@@ -3124,7 +3138,7 @@
       "performanceWarnings": "Performance Warnings",
       "remindersForScheduledMaintenance": "Reminders for scheduled maintenance windows",
       "saveChanges": "Save Changes",
-      "saving": "Saving...",
+      "saving": "Zapisywanie...",
       "securityAlerts": "Security Alerts",
       "sendNotificationsViaEmail": "Send notifications via email",
       "settingsSaved": "Notification settings saved successfully",
@@ -3290,7 +3304,7 @@
     "sSHUser": "SSH User",
     "saveAPIKeys": "Save API Keys",
     "saveContinue": "Save & Continue",
-    "saving": "Saving...",
+    "saving": "Zapisywanie...",
     "secretsSavedTheyWill": "Secrets saved. They will be injected during provisioning.",
     "setupComplete": "Setup Complete!",
     "sharedLibrary": "Shared Library",
@@ -3350,6 +3364,19 @@
       "sync": "Synchronizuj",
       "type": "Typ",
       "uRL": "URL"
+    },
+    "errors": {
+      "generic": "Skills request failed",
+      "fetchReposFailed": "Failed to fetch repos",
+      "addRepoFailed": "Failed to add repo",
+      "syncRepoFailed": "Failed to sync repo",
+      "fetchApprovalsFailed": "Failed to fetch approvals",
+      "processApprovalFailed": "Failed to process approval",
+      "fetchDraftsFailed": "Failed to fetch drafts",
+      "testDraftFailed": "Test draft failed",
+      "promoteDraftFailed": "Failed to promote draft",
+      "fetchGovernanceFailed": "Failed to fetch governance config",
+      "updateGovernanceModeFailed": "Failed to update governance mode"
     }
   },
   "skillsView": {
@@ -3379,7 +3406,7 @@
     "repos": "Repos",
     "review": "Review",
     "saveConfiguration": "Save Configuration",
-    "saving": "Saving...",
+    "saving": "Zapisywanie...",
     "searchSkillsByNameDescriptionOr": "Search skills by name, description, or tags...",
     "skillsManagement": "Skills Management",
     "status": "Stan",
@@ -3575,7 +3602,12 @@
           "disconnected": "disconnected",
           "unknown": "unknown"
         },
-        "takeScreenshot": "Take Screenshot"
+        "takeScreenshot": "Take Screenshot",
+        "startFailed": "Failed to start browser",
+        "navigateFailed": "Nawigacja nie powiodła się",
+        "backFailed": "Failed to go back",
+        "forwardFailed": "Failed to go forward",
+        "refreshFailed": "Failed to refresh"
       },
       "fileBrowserTool": {
         "actions": "Actions",

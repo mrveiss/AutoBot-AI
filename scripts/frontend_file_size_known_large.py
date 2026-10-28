@@ -13,11 +13,9 @@ in-scope ``*.ts``/``*.vue`` tree measured on the day this gate landed (#17885).
 The gate's job was to ask the question for the first time; this file is the
 answer it got, not a ceiling anybody picked.
 
-THIS MAPPING ONLY SHRINKS. Never add an entry to make a new file pass; split
-the file instead. Mirrored by ``RATCHET_BASELINE`` in
-``repo_tests/frontend_file_size_ratchet_baseline.py`` — lower an entry here and
-lower it there in the same commit (#14498), or the lines just cut stay
-spendable in the gap between the two.
+The table follows the rule stated once in ``scripts/python_file_size_known_large.py``
+(#19544): it only shrinks, it is the only record of these ceilings, and an entry is
+lowered here when its file shrinks.
 """
 
 from __future__ import annotations
@@ -92,7 +90,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/security/ThreatIntelligenceDashboard.vue": 838,
     "autobot-frontend/src/components/security/ThreatIntelligenceSettings.vue": 652,
     "autobot-frontend/src/components/settings/ApiKeySetupWizard.vue": 614,
-    "autobot-frontend/src/components/settings/SettingsPanel.vue": 943,
     "autobot-frontend/src/components/terminal/AdvancedStepConfirmationModal.vue": 615,  # #18849: 616 -> 615
     "autobot-frontend/src/components/terminal/BaseXTerminal.vue": 825,
     "autobot-frontend/src/components/terminal/TerminalModals.vue": 742,  # #18849: 743 -> 742
@@ -173,8 +170,8 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/index.ts": 957,
     "autobot-slm-frontend/src/components/AddNodeModal.vue": 1067,  # #14777 batch 2: 1111 -> 1067
     "autobot-slm-frontend/src/components/fleet/DecommissionModal.vue": 619,  # #14777: 699 -> 621; 619 (#18941 review)
-    "autobot-slm-frontend/src/components/fleet/NodeLifecyclePanel.vue": 943,
-    "autobot-slm-frontend/src/composables/useAutobotApi.ts": 2026,  # #19217: factory in, fallback/budget types out
+    "autobot-slm-frontend/src/components/fleet/NodeLifecyclePanel.vue": 934,
+    "autobot-slm-frontend/src/composables/useAutobotApi.ts": 1978,  # #19217 factory in; #12363 formatter out
     "autobot-slm-frontend/src/composables/useCodeSync.ts": 1078,
     "autobot-slm-frontend/src/composables/useOrchestrationManagement.ts": 693,
     "autobot-slm-frontend/src/composables/useSlmApi.ts": 1457,
@@ -191,8 +188,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-frontend/src/views/SetupWizardView.vue": 1834,
     "autobot-slm-frontend/src/views/SkillsView.vue": 633,  # #18819 + #14777: 645 -> 633
     "autobot-slm-frontend/src/views/SystemUpdatesTab.vue": 626,  # #18819: 638 -> 635; #19482: -> 632; #18863: -> 626
-    "autobot-slm-frontend/src/views/monitoring/ErrorMonitor.vue": 609,  # #14780 BasePagination: 617 -> 609
-    "autobot-slm-frontend/src/views/monitoring/LogViewer.vue": 602,
+    "autobot-slm-frontend/src/views/monitoring/ErrorMonitor.vue": 608,  # #14780: 617 -> 609; #19482: -> 608
     "autobot-slm-frontend/src/views/settings/SecuritySettings.vue": 710,  # #18819 + #14777: 807 -> 773
     "autobot-slm-frontend/src/views/settings/admin/DataHygieneView.vue": 656,  # #18819 + #14777: 669 -> 662
     "autobot-slm-frontend/src/views/settings/admin/LogForwardingSettings.vue": 650,  # #14780: 664 -> 655 (BaseSwitch)

@@ -30,7 +30,7 @@
  */
 
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, PollingPausedAlert } from '@autobot/ui'
 import { useRoute, useRouter } from 'vue-router'
 import { readSlmToken } from '@/utils/authStorage'
 import { useOrchestrationManagement } from '@/composables/useOrchestrationManagement'
@@ -58,6 +58,7 @@ import type { NodeStatus, ServiceStatus } from '@/types/slm'
 import { normalizeServiceStatus } from '@/utils/node-status'
 import { useToast } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
+import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 
 const logger = createLogger('OrchestrationView')
 
@@ -141,7 +142,6 @@ const categoryFilter = ref<'autobot' | 'system' | 'all'>('autobot')
 const statusFilter = ref<string>('all')
 const expandedNodes = ref<Set<string>>(new Set())
 const autoRefresh = ref(true)
-let refreshInterval: ReturnType<typeof setInterval> | null = null
 
 // Status filter options (parity with ServicesView.vue — #15224)
 const statusFilterOptions = computed(() => [
@@ -918,7 +918,7 @@ async function executePlaybookMigration(): Promise<void> {
 // Lifecycle
 // =============================================================================
 
-async function refresh(): Promise<void> {
+async function refresh(): Promise<boolean> {
   try {
     // Use Promise.allSettled to continue even if some calls fail
     const results = await Promise.allSettled([
@@ -937,19 +937,24 @@ async function refresh(): Promise<void> {
         logger.warn(`Failed to fetch ${names[index]}:`, result.reason)
       }
     })
+    return results.some((result) => result.status === 'fulfilled')
   } catch (err) {
     logger.error('Unexpected error during refresh:', err)
+    return false
   }
 }
 
+// #19482: shared dashboard policy; refresh() is false when every read failed. Refresh/Retry restart it
+let latestRefresh: Promise<boolean> = Promise.resolve(true)
+const refreshPoller = useDashboardPoller(async () => {
+  throwUnlessLoaded(await (latestRefresh = refresh()))
+}, 15000)
+const restartRefresh = () => (autoRefresh.value ? refreshPoller.start('') : (latestRefresh = refresh()))
+
 function toggleAutoRefresh(): void {
   autoRefresh.value = !autoRefresh.value
-  if (autoRefresh.value) {
-    refreshInterval = setInterval(refresh, 15000)
-  } else if (refreshInterval) {
-    clearInterval(refreshInterval)
-    refreshInterval = null
-  }
+  if (autoRefresh.value) refreshPoller.start('')
+  else refreshPoller.stop()
 }
 
 onMounted(async () => {
@@ -961,7 +966,8 @@ onMounted(async () => {
   }
 
   logger.info('Calling refresh()')
-  await refresh()
+  restartRefresh()
+  await latestRefresh
   fetchRoleOwners()
   logger.info('After refresh:', {
     nodes: orchestration.fleetStore.nodeList.length,
@@ -986,23 +992,17 @@ onMounted(async () => {
     logger.debug('Service status update:', nodeId, data.service_name, data.status)
   })
 
-  if (autoRefresh.value) {
-    refreshInterval = setInterval(refresh, 15000)
-  }
-
   document.addEventListener('click', handleClickOutsideCategoryMenu)
 })
 
 onUnmounted(() => {
-  if (refreshInterval) {
-    clearInterval(refreshInterval)
-  }
   document.removeEventListener('click', handleClickOutsideCategoryMenu)
 })
 </script>
 
 <template>
   <div class="p-6">
+    <PollingPausedAlert :poller="refreshPoller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mb-6" @retry="refreshPoller.start('')" />
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div>
@@ -1033,7 +1033,7 @@ onUnmounted(() => {
           {{ $t('orchestrationView.autoRefresh') }}
         </label>
         <button
-          @click="refresh"
+          @click="restartRefresh"
           :disabled="orchestration.loading"
           class="btn btn-secondary flex items-center gap-2"
         >
@@ -1065,7 +1065,7 @@ onUnmounted(() => {
     >
       <template #actions>
         <button
-          @click="refresh"
+          @click="restartRefresh"
           class="text-sm underline"
         >
           {{ $t('orchestrationView.retry') }}
@@ -1333,7 +1333,7 @@ onUnmounted(() => {
               : $t('orchestrationView.tryChangingTheFilterOrSearch') }}
           </p>
           <button
-            @click="refresh"
+            @click="restartRefresh"
             class="px-4 py-2 text-sm bg-primary-100 text-primary-700 rounded-lg hover:bg-primary-200"
           >
             {{ $t('orchestrationView.refresh') }}

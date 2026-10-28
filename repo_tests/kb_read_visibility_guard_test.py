@@ -204,7 +204,9 @@ MIN_READS_FOUND = 40
 #: research planner's skip-known read and the KB search task handler filter through ``filter_for_user_id``.
 #: Then 64 -> 65 (#16665, train-85f): ``knowledge/summary_visibility._source_metadata`` reads the source fact's
 #: metadata to make the visibility decision itself; classified SCOPED.
-UNFILTERED_READ_CEILING = 65
+#: Then 65 -> 64 (#16665, #19644): ``/ai-stack/knowledge/search`` scopes its local hits to the caller, so the scan
+#: marks it filtered and its _SCOPED_ADMIN_ROUTER allowlist entry is removed.
+UNFILTERED_READ_CEILING = 64
 
 _REASON_PREFIXES = ("TRACKED_GAP #", "SCOPED: ", "NOT_USER_FACING: ", "IMPL: ", "ADMIN_ONLY: ")
 _NESTED = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)

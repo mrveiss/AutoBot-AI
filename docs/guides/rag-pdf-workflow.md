@@ -179,7 +179,7 @@ Embedding              Reciprocal Rank Fusion
    |                        |
    v                        v
 ChromaDB Storage       Cross-Encoder Reranking
-+ Redis Metadata       (RAGConfig.reranking_model)
++ Redis Metadata       (ResultReranker.MODEL_NAME)
                             |
                             v
                        Context Assembly
@@ -968,9 +968,10 @@ whose defaults are `ModelConfig.RAG_HYBRID_WEIGHT_SEMANTIC` / `RAG_HYBRID_WEIGHT
 ### Cross-Encoder Reranking
 
 When `enable_reranking: true`, results pass through a second-stage cross-encoder model
-(`RAGConfig.reranking_model`, declared once as `ResultReranker.MODEL_NAME` in
-`knowledge/search_components/reranking.py`) that scores each (query, document) pair jointly
-for more accurate relevance ranking.
+(`ResultReranker.MODEL_NAME` in `knowledge/search_components/reranking.py`, loaded at the
+revision pinned in `autobot_shared/pinned_model_registry.py`) that scores each (query, document)
+pair jointly for more accurate relevance ranking. The model is code-pinned and has no config key
+(#19355): an arbitrary model id loaded at runtime is a supply-chain surface.
 
 ### NPU-Accelerated Search
 
@@ -1667,7 +1668,6 @@ in code; this guide does not repeat them:
 | `min_score`, `mmr_lambda` | `ModelConfig.RAG_MIN_SCORE`, `RAG_MMR_LAMBDA` |
 | `cache_ttl_seconds`, `timeout_seconds` | `ModelConfig.DEFAULT_CACHE_TTL`, `DEFAULT_TIMEOUT` |
 | `graph_weight`, `graph_traversal_depth`, `graph_timeout_seconds` | `autobot-backend/constants/rag_graph_constants.py` |
-| `reranking_model` | `ResultReranker.MODEL_NAME`, `knowledge/search_components/reranking.py` |
 | `rerank_weights` | `RerankWeights` field defaults, same file |
 | feature flags (`enable_reranking`, `enable_advanced_rag`, `fallback_to_basic_search`, `enable_smart_category_selection`, `default_chat_categories`, ...) | the `RAGConfig` dataclass, `autobot-backend/services/rag_config.py` |
 
@@ -1697,9 +1697,10 @@ Defaults are in the generated registry table, `docs/developer/ENV_VARS.md`.
 
 ### Score Threshold Alignment
 
-The knowledge-retrieval paths share one `score_threshold` default (Issue #1532 aligned it). It
-has no single home yet: it is a literal at each call site, tracked in #19354. Read the signature
-of the function you call. Adjust it to control result quality:
+The knowledge-retrieval paths share one `score_threshold` default (Issue #1532 aligned it):
+`RAG_SCORE_THRESHOLD` in `autobot-backend/constants/rag_graph_constants.py`, set per host with
+`AUTOBOT_RAG_SCORE_THRESHOLD` (#19354). Pass `score_threshold` to one call to override it there.
+To control result quality:
 
 - **0.1-0.2**: Broad recall, includes tangentially relevant results
 - **0.3-0.4**: Balanced precision and recall

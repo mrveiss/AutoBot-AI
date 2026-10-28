@@ -200,6 +200,13 @@ export function formatTimeAgo(timestamp: Date | string | number): string {
 // Byte, uptime and duration formatting live once in the kit (#14908).
 import { formatDuration, formatUptime, formatFileSize, formatBytes } from '@autobot/ui'
 export { formatDuration, formatUptime, formatFileSize, formatBytes }
+
+/** File-browser size text: `1.5 KB` up to GB, `0 B` for a missing size. */
+export const FILE_BROWSER_SIZE_OPTIONS = {
+  decimals: 1,
+  units: ['B', 'KB', 'MB', 'GB'],
+  nullText: '0 B',
+} as const
 export type { FormatDurationOptions, FormatUptimeOptions, FormatBytesOptions } from '@autobot/ui'
 
 // ==================== NUMBER FORMATTING ====================

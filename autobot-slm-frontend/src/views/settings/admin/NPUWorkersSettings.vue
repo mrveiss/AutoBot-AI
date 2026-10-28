@@ -10,11 +10,12 @@
  * Provides management of distributed NPU workers for AI processing.
  */
 
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAutobotApi, type NPUWorker } from '@/composables/useAutobotApi'
+import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { createLogger } from '@/utils/debugUtils'
-import { BaseAlert, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseModal, PollingPausedAlert } from '@autobot/ui'
 
 const logger = createLogger('NPUWorkersSettings')
 
@@ -64,7 +65,6 @@ const workerForm = reactive({
 const showMetrics = ref(false)
 const selectedWorkerMetrics = ref<NPUWorker | null>(null)
 
-let refreshInterval: ReturnType<typeof setInterval> | null = null
 
 // Computed
 const healthyWorkers = computed(() =>
@@ -80,14 +80,16 @@ const offlineWorkers = computed(() =>
 )
 
 // Methods
-async function fetchWorkers(): Promise<void> {
+async function fetchWorkers(): Promise<boolean> {
   loading.value = true
   error.value = null
 
   try {
     workers.value = await api.getNPUWorkers()
+    return true
   } catch (e) {
     error.value = e instanceof Error ? e.message : t('settings.admin.nPUWorkersSettings.failedToLoadWorkers')
+    return false
   } finally {
     loading.value = false
   }
@@ -274,22 +276,20 @@ function getLoadColor(load: number): string {
   return 'bg-red-500'
 }
 
-// Initialize
-onMounted(async () => {
-  await Promise.all([fetchWorkers(), fetchLoadBalancingConfig()])
-  refreshInterval = setInterval(fetchWorkers, 30000)
-})
-
-onUnmounted(() => {
-  if (refreshInterval) {
-    clearInterval(refreshInterval)
-  }
+// #19482: shared dashboard policy; fetchWorkers() is false on a failed read, which the poller counts
+const workersPoller = useDashboardPoller(async () => {
+  throwUnlessLoaded(await fetchWorkers())
+}, 30000)
+onMounted(() => {
+  void fetchLoadBalancingConfig()
+  workersPoller.start('')
 })
 </script>
 
 <template>
   <div class="p-6 space-y-6">
     <!-- Messages -->
+    <PollingPausedAlert :poller="workersPoller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" @retry="workersPoller.start('')" />
     <BaseAlert v-if="error" variant="error" :message="error" dismissible :dismiss-label="$t('settings.admin.nPUWorkersSettings.dismissError')" @dismiss="error = null" />
 
     <BaseAlert v-if="success" variant="success" :message="success" />
@@ -393,7 +393,7 @@ onUnmounted(() => {
       <div class="p-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
         <h3 class="font-semibold text-gray-900">{{ $t('settings.admin.nPUWorkersSettings.registeredWorkersCount', { count: workers.length }) }}</h3>
         <button
-          @click="fetchWorkers"
+          @click="workersPoller.start('')"
           :disabled="loading"
           class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-sm"
           :aria-label="$t('settings.admin.nPUWorkersSettings.refreshWorkers')"

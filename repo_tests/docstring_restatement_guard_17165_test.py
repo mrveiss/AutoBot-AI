@@ -149,7 +149,7 @@ def test_no_new_restatement_beyond_the_grandfathered_baseline() -> None:
 def test_the_baseline_has_no_stale_entries() -> None:
     """The other half of a ratchet: an entry that no longer restates (fixed, but
     the baseline was not updated in the same commit) must be removed, not left
-    as unused headroom -- the same discipline RATCHET_BASELINE is held to."""
+    as unused headroom -- the same discipline the file-size ceilings are held to."""
     current = _current_restatements(REPO_ROOT)
     stale: dict[str, frozenset[str]] = {}
     for rel, names in KNOWN_RESTATEMENTS.items():

@@ -21,8 +21,9 @@ import { fileURLToPath } from 'node:url'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
-import axios from 'axios'
 import UserManagementSettings from './UserManagementSettings.vue'
+import { HttpError } from '@autobot/ui'
+import { backendClient } from '@/testing/mockAutobotBackendClient'
 import en from '@/locales/en.json'
 
 vi.mock('@/stores/auth', () => ({
@@ -58,28 +59,11 @@ vi.mock('@/composables/useSsoApi', () => ({
   }),
 }))
 
-vi.mock('axios', () => {
-  const instance = {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    interceptors: {
-      request: { use: () => undefined },
-      response: { use: () => undefined },
-    },
-  }
-  return { default: { create: () => instance } }
-})
+vi.mock('@/utils/ApiClient', async (importOriginal) =>
+  (await import('@/testing/mockAutobotBackendClient')).withMockedBackendClient(importOriginal),
+)
 
 const i18n = createI18n({ legacy: true, locale: 'en', fallbackLocale: 'en', messages: { en } })
-
-type MockedClient = { get: ReturnType<typeof vi.fn>; post: ReturnType<typeof vi.fn> }
-
-function client(): MockedClient {
-  return (axios.create as unknown as () => MockedClient)()
-}
 
 type Vm = {
   error: string | null
@@ -97,26 +81,25 @@ function mountView(): Vm {
 
 describe('UserManagementSettings RBAC transport (#13079)', () => {
   beforeEach(() => {
-    const c = client()
-    c.get.mockReset()
-    c.post.mockReset()
-    c.get.mockImplementation(async (url: string) => {
+    backendClient.get.mockReset()
+    backendClient.post.mockReset()
+    backendClient.get.mockImplementation(async (url: string) => {
       if (url === '/settings/rbac/status') {
-        return { data: { initialized: true, message: 'RBAC ready' }, status: 200 }
+        return { initialized: true, message: 'RBAC ready' }
       }
-      return { data: { users: [] }, status: 200 }
+      return { users: [] }
     })
-    c.post.mockResolvedValue({ data: { message: 'RBAC initialized' }, status: 200 })
+    backendClient.post.mockResolvedValue({ message: 'RBAC initialized' })
   })
 
   it('GETs /settings/rbac/status through the shared client', async () => {
     const vm = mountView()
     await flushPromises()
-    client().get.mockClear()
+    backendClient.get.mockClear()
 
     await vm.checkRbacStatus()
 
-    expect(client().get.mock.calls[0][0]).toBe('/settings/rbac/status')
+    expect(backendClient.get.mock.calls[0][0]).toBe('/settings/rbac/status')
     expect(vm.rbacStatus.initialized).toBe(true)
     expect(vm.rbacStatus.message).toBe('RBAC ready')
   })
@@ -130,7 +113,7 @@ describe('UserManagementSettings RBAC transport (#13079)', () => {
     await vm.initializeRbac()
     await flushPromises()
 
-    expect(client().post.mock.calls[0].slice(0, 2)).toEqual([
+    expect(backendClient.post.mock.calls[0].slice(0, 2)).toEqual([
       '/settings/rbac/initialize',
       { create_admin: true, admin_username: 'ops' },
     ])
@@ -139,7 +122,7 @@ describe('UserManagementSettings RBAC transport (#13079)', () => {
   it('surfaces the backend detail when the bootstrap is refused', async () => {
     const vm = mountView()
     await flushPromises()
-    client().post.mockRejectedValue({ response: { data: { detail: 'RBAC already initialized' } } })
+    backendClient.post.mockRejectedValue(new HttpError(409, 'Conflict', { detail: 'RBAC already initialized' }))
 
     await vm.initializeRbac()
 
@@ -149,7 +132,7 @@ describe('UserManagementSettings RBAC transport (#13079)', () => {
   it('leaves the status message unchanged text when the status probe fails', async () => {
     const vm = mountView()
     await flushPromises()
-    client().get.mockRejectedValue(new Error('offline'))
+    backendClient.get.mockRejectedValue(new Error('offline'))
 
     await vm.checkRbacStatus()
 
