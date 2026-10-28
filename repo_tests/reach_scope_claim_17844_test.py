@@ -240,6 +240,7 @@ _DECLARED_SCOPES = {
     "workflow-visible-name-sweep": (".github/workflows",),
     "anti-pattern-type-emitters": ("autobot-backend/code_analysis", "autobot-backend/code_intelligence"),
     "compat-module-needs-importer": ("autobot-backend",),
+    "compose-nodes-restated-default": ("autobot-slm-backend", "autobot-infrastructure", "docker", "docker-compose.yml"),
     "chat-history-async-calls-awaited": ("autobot-backend/api",),
     "chat-single-delete-implementation": ("autobot-backend/api",),
     "ai-line-single-policy": ("autobot-backend", "autobot_shared"),
@@ -268,7 +269,6 @@ _DECLARED_SCOPES = {
     "embedding-model-literal-sites": (
         "autobot-backend",
         "autobot_shared",
-        "autobot-infrastructure/shared/scripts/populate_kb_chromadb.py",
         "autobot-infrastructure/shared/tools/index_documentation.py",
     ),
     "single-attribute-writer-scan": ("autobot-frontend/src",),
@@ -299,6 +299,7 @@ _DECLARED_SCOPES = {
         "pipeline-scripts/",
     ),
     "ansible-concept-forks-17856-scan": ("autobot-slm-backend/ansible",),
+    "ansible-status-queries-check-mode-sweep": ("autobot-slm-backend/ansible",),
     "defined-twice-18094-scan": (
         "autobot-backend",
         "autobot-slm-backend",
@@ -352,6 +353,7 @@ _DECLARED_SCOPES = {
         "scripts",
         "tools",
     ),
+    "file-type-sets-one-home-19339": ("autobot-backend",),
     "llc-actor-id-scan": ("autobot-backend/llc",),
     "cache-never-in-repo": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "node-major-literals": (
@@ -374,6 +376,7 @@ _DECLARED_SCOPES = {
     "severity-order-copies": ("autobot-backend", "autobot-slm-backend", "autobot_shared", "pipeline-scripts"),
     "llc-sigterm-grace-copies": ("autobot-backend/llc",),
     "frontend-http-transports": ("autobot-frontend/src", "autobot-slm-frontend/src"),
+    "frontend-local-formatter-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "search-mode-copies": ("autobot-backend",),
     "redaction-placeholder-literals": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "one-system-knowledge-template-tree": ("autobot-backend",),
@@ -454,6 +457,7 @@ _DECLARED_SCOPES = {
     "direct-secrets-service-callers": ("autobot-backend", "autobot_shared"),
     "data-db-path-production-python": ("autobot-backend", "autobot_shared"),
     "jekyll-processed-docs": ("docs",),
+    "kb-populate-doc-patterns": ("autobot-infrastructure",),
     "kb-admin-read-bypass": ("autobot-backend/", "autobot_shared/"),
     "kb-construction-18122-scan": (
         "autobot-backend/",
@@ -486,6 +490,14 @@ _DECLARED_SCOPES = {
     ),
     "store-fact-chokepoint": ("autobot-backend/", "autobot_shared/"),
     "ssh-restart-executor-scan": ("autobot-slm-backend",),
+    "ssot-rehardcode-scan-19730": ("autobot-backend", "autobot_shared", "autobot-slm-backend"),
+    "browser-service-routes-scan-19490": (
+        "autobot-backend",
+        "autobot_shared",
+        "autobot-infrastructure",
+        "autobot-slm-backend",
+        "scripts",
+    ),
 }
 
 

@@ -4,6 +4,7 @@
 
 <script setup lang="ts">
 import { BaseAlert } from '@autobot/ui'
+import { formatFileSize } from '@/utils/formatHelpers'
 /**
  * FileBrowserTool - File Browser Interface
  *
@@ -49,13 +50,7 @@ const breadcrumbs = computed(() => {
 })
 
 // Format file size
-function formatSize(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
-}
+const SIZE_OPTIONS = { decimals: 2, units: ['B', 'KB', 'MB', 'GB', 'TB'] } as const
 
 function formatDate(dateStr: string): string {
   return formatDateTime(dateStr)
@@ -281,7 +276,7 @@ onMounted(() => {
                   </div>
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                  {{ entry.type === 'directory' ? '-' : formatSize(entry.size) }}
+                  {{ entry.type === 'directory' ? '-' : formatFileSize(entry.size, SIZE_OPTIONS) }}
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                   {{ formatDate(entry.modified) }}

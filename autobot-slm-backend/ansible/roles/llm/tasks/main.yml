@@ -91,6 +91,7 @@
   changed_when: false
   failed_when: false
   when: _ollama_binary.stat.exists
+  check_mode: false
 
 - name: "Install | Parse the installed Ollama version (#18128)"
   ansible.builtin.set_fact:
