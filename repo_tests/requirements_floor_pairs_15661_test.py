@@ -15,10 +15,9 @@ undetected because the per-site ansible/requirements parity guard
 guard (`scripts/check_constraint_drift.py`) both only ever compare an ansible
 site or a `constraints/shared.txt` package, and neither of these two files is
 either. This is the general-case guard AC3 asks for: a direct, narrow
-comparison of just these two known-risky pairs, not a repo-wide migration of
-fastapi/uvicorn onto `constraints/shared.txt` (which would force every
-shipped manifest -- a dozen-plus files -- to stop stating its own floor, a
-much larger change than this issue's actual defect warrants).
+comparison of the known-risky pairs. fastapi has since moved onto
+`constraints/shared.txt` (#18060), so its floor has one home and only the
+uvicorn pair is compared here.
 
 Only the version constraint is compared, not the full declaration line:
 `docs/guides/requirements-local.txt` legitimately carries `uvicorn[standard]`
