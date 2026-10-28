@@ -405,9 +405,9 @@ These conflicts drive the default fleet layout:
 | **TLS** | Configurable via `AUTOBOT_REDIS_TLS_ENABLED` |
 | **Redis database IDs** | 0=main+RediSearch, 1=metrics, 2=prompts, 3=agents, 4=cache, 6=sessions, 8=chat_history, 15=testing |
 | **Celery databases** | broker=db1, result_backend=db2 (from `celery_app.py`) |
-| **PostgreSQL databases** | `autobot` (backend user management — only when `AUTOBOT_DEPLOYMENT_MODE != single_user`) |
+| **PostgreSQL databases** | `autobot` (backend user management — always, in every `AUTOBOT_USER_MODE`; #10636) |
 | **PostgreSQL credentials** | `/etc/autobot/db-credentials.env` (prefix: `AUTOBOT_DB_`) |
-| **Notes** | Always use `from autobot_shared.redis_client import get_redis_client` — never direct connection. PostgreSQL co-hosted here for backend user management; not needed in `single_user` deployment mode. |
+| **Notes** | Always use `from autobot_shared.redis_client import get_redis_client` — never direct connection. PostgreSQL co-hosted here for backend user management, which every `AUTOBOT_USER_MODE` needs (#10636). |
 
 ---
 
@@ -509,7 +509,7 @@ These conflicts drive the default fleet layout:
 frontend (.21)
   └── backend (.20) :8443
         ├── redis (.23) :6379
-        ├── postgresql (.23) :5432  [user mgmt; only when AUTOBOT_DEPLOYMENT_MODE != single_user]
+        ├── postgresql (.23) :5432  [user mgmt; always (#10636)]
         ├── autobot-llm-gpu :11434
         ├── ai-stack (.24) :8080
         │     ├── chromadb :8000
@@ -610,8 +610,8 @@ Provisioned by: `playbooks/deploy_role.yml` (postgresql role)
 |----------|-------|---------|
 | `autobot` | `autobot` | Backend user management (users, teams, orgs, API keys, audit) |
 
-**Only active when** `AUTOBOT_DEPLOYMENT_MODE != single_user`.
-Set `AUTOBOT_DEPLOYMENT_MODE=single_company` (or higher) to enable.
+**Always active**: every `AUTOBOT_USER_MODE` (`single_company`, `multi_company`, `provider`) is
+PostgreSQL-backed (#10636). `AUTOBOT_DEPLOYMENT_MODE` is the topology setting, not tenancy.
 Schema applied by: `alembic upgrade head` inside the backend venv
 Credentials file: `/etc/autobot/db-credentials.env` (prefix `AUTOBOT_DB_`)
 

@@ -10,8 +10,9 @@
  * Integrates with /api/errors/* endpoints for comprehensive error monitoring.
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { BaseModal, usePagination, BasePagination } from '@autobot/ui'
+import { ref, computed, onMounted } from 'vue'
+import { BaseModal, usePagination, BasePagination, PollingPausedAlert } from '@autobot/ui'
+import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useSlmApi } from '@/composables/useSlmApi'
 import type {
   RecentError,
@@ -59,10 +60,9 @@ const {
 } = usePagination<RecentError>(errors, {
   itemsPerPage: 20,
   serverTotalItems: totalErrors,
-  onPageChange: () => fetchData(),
+  onPageChange: async () => { await fetchData() },
 })
 
-let refreshInterval: ReturnType<typeof setInterval> | null = null
 
 // Filtered errors (client-side search only, API handles severity/resolved)
 const filteredErrors = computed(() => {
@@ -134,7 +134,7 @@ function formatTimestamp(ts: string): string {
 
 
 
-async function fetchData() {
+async function fetchData(): Promise<boolean> {
   isLoading.value = true
   try {
     // Build filter options
@@ -164,8 +164,10 @@ async function fetchData() {
     totalErrors.value = errorsData.total
     categories.value = categoriesData.categories
     components.value = componentsData.components
+    return true
   } catch (err) {
     logger.error('Failed to fetch error data:', err)
+    return false
   } finally {
     isLoading.value = false
   }
@@ -215,20 +217,17 @@ function onFilterChange() {
   fetchData()
 }
 
-onMounted(() => {
-  fetchData()
-  refreshInterval = setInterval(fetchData, 60000)
-})
+// #19482: shared dashboard policy; fetchData() is false on a failed read, which the poller counts
+const dataPoller = useDashboardPoller(async () => {
+  throwUnlessLoaded(await fetchData())
+}, 60000)
 
-onUnmounted(() => {
-  if (refreshInterval) {
-    clearInterval(refreshInterval)
-  }
-})
+onMounted(() => dataPoller.start(''))
 </script>
 
 <template>
   <div class="p-6">
+    <PollingPausedAlert :poller="dataPoller" :message="$t('common.polling.paused')" :retry-label="$t('common.polling.retry')" class="mb-6" @retry="dataPoller.start('')" />
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <h2 class="text-xl font-bold text-gray-900">{{ $t('monitoring.errorMonitor.errorMonitoring') }}</h2>
@@ -246,7 +245,7 @@ onUnmounted(() => {
           {{ $t('monitoring.errorMonitor.testError') }}
         </button>
         <button
-          @click="fetchData"
+          @click="dataPoller.start('')"
           :disabled="isLoading"
           class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 flex items-center gap-2"
         >
