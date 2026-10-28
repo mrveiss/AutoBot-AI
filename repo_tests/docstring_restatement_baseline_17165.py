@@ -167,7 +167,6 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
         {"backup_docker_volume", "create_backup_metadata"}
     ),
     "autobot-infrastructure/shared/scripts/monitor_services.py": frozenset({"stop_monitoring"}),
-    "autobot-infrastructure/shared/scripts/populate_kb_fixed.py": frozenset({"populate_knowledge_base_chromadb"}),
     "autobot-infrastructure/shared/scripts/run_code_analysis.py": frozenset(
         {"run_architecture_analysis", "run_code_quality_analysis"}
     ),

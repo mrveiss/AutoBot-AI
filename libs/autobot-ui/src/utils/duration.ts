@@ -8,4 +8,4 @@
  */
 
 /** Numeric duration-formatting style accepted by `formatDuration(value, { style })`. */
-export type DurationStyle = 'msSeconds2dp' | 'secondsCompact' | 'clock' | 'msMinutes'
+export type DurationStyle = 'msSeconds2dp' | 'secondsCompact' | 'clock' | 'msMinutes' | 'msCompound' | 'msSeconds1dp' | 'msSecondsMinutes' | 'msMinutesSeconds'

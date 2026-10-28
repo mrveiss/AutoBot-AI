@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
+from utils.file_categorization import SKIP_DIRS
 
 from .types import CodeLocation, PatternSeverity, RegexOpportunity
 
@@ -200,17 +201,8 @@ class RegexPatternDetector:
     MIN_CHAIN_LENGTH = 2
 
     # Exclude patterns (test files, etc.)
-    EXCLUDE_DIRS = frozenset(
-        {
-            ".venv",
-            "venv",
-            "node_modules",
-            "__pycache__",
-            ".git",
-            "archives",
-            ".mypy_cache",
-        }
-    )
+    # Canonical skip dirs plus extras: archived copies and the type checker's cache.
+    EXCLUDE_DIRS = frozenset(SKIP_DIRS | {"archives", ".mypy_cache"})
 
     def __init__(
         self,
@@ -291,7 +283,7 @@ class RegexPatternDetector:
 
         for py_file in dir_path.rglob("*.py"):
             # Check exclusions
-            if any(exc in py_file.parts for exc in self.exclude_dirs):
+            if any(exc in py_file.relative_to(dir_path).parts for exc in self.exclude_dirs):
                 continue
 
             file_opportunities = self.detect_in_file(str(py_file))
