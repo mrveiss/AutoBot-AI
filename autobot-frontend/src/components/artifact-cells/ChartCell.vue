@@ -241,13 +241,13 @@ onMounted(() => {
   gap: var(--spacing-sm);
 }
 
-.placeholder-content i,
-.error-content i {
+.placeholder-content .icon,
+.error-content .icon {
   font-size: 48px;
   color: var(--text-tertiary);
 }
 
-.error-content i {
+.error-content .icon {
   color: var(--color-error);
 }
 

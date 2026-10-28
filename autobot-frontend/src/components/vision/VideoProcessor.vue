@@ -557,7 +557,7 @@ onUnmounted(() => {
   color: var(--text-tertiary);
 }
 
-.drop-placeholder i {
+.drop-placeholder .icon {
   font-size: var(--text-5xl);
   color: var(--text-muted);
 }
