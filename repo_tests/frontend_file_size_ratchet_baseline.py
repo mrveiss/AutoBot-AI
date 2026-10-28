@@ -180,8 +180,8 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/index.ts": 957,
     "autobot-slm-frontend/src/components/AddNodeModal.vue": 1067,  # #14777 batch 2: 1111 -> 1067
     "autobot-slm-frontend/src/components/fleet/DecommissionModal.vue": 619,  # #14777: 699 -> 621; 619 (#18941 review)
-    "autobot-slm-frontend/src/components/fleet/NodeLifecyclePanel.vue": 943,
-    "autobot-slm-frontend/src/composables/useAutobotApi.ts": 2026,  # #19217: factory in, fallback/budget types out
+    "autobot-slm-frontend/src/components/fleet/NodeLifecyclePanel.vue": 934,
+    "autobot-slm-frontend/src/composables/useAutobotApi.ts": 1978,  # #19217 factory in; #12363 formatter out
     "autobot-slm-frontend/src/composables/useCodeSync.ts": 1078,
     "autobot-slm-frontend/src/composables/useOrchestrationManagement.ts": 693,
     "autobot-slm-frontend/src/composables/useSlmApi.ts": 1457,
@@ -198,8 +198,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-frontend/src/views/SetupWizardView.vue": 1834,
     "autobot-slm-frontend/src/views/SkillsView.vue": 633,  # #18819 + #14777: 645 -> 633
     "autobot-slm-frontend/src/views/SystemUpdatesTab.vue": 626,  # #18819: 638 -> 635; #19482: -> 632; #18863: -> 626
-    "autobot-slm-frontend/src/views/monitoring/ErrorMonitor.vue": 609,  # #14780 BasePagination: 617 -> 609
-    "autobot-slm-frontend/src/views/monitoring/LogViewer.vue": 602,
+    "autobot-slm-frontend/src/views/monitoring/ErrorMonitor.vue": 608,  # #14780: 617 -> 609; #19482: -> 608
     "autobot-slm-frontend/src/views/settings/SecuritySettings.vue": 710,  # #18819 + #14777: 807 -> 773
     "autobot-slm-frontend/src/views/settings/admin/DataHygieneView.vue": 656,  # #18819 + #14777: 669 -> 662
     "autobot-slm-frontend/src/views/settings/admin/LogForwardingSettings.vue": 650,  # #14780: 664 -> 655 (BaseSwitch)
