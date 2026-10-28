@@ -91,3 +91,11 @@ def test_an_unreadable_store_exits_with_a_message(admin, tmp_path, monkeypatch) 
 
 def test_a_missing_store_is_empty(admin, tmp_path) -> None:
     assert admin.load_env_file(str(tmp_path / "absent.env")) == {}
+
+
+def test_a_non_utf8_store_exits_with_a_message_not_a_traceback(admin, tmp_path) -> None:
+    store = tmp_path / "slm-secrets.env"
+    store.write_bytes(b"SLM_DATABASE_URL=\xff\xfe\n")
+    with pytest.raises(SystemExit) as exit_info:
+        admin.load_env_file(store)
+    assert "not UTF-8" in str(exit_info.value) and "\xff" not in str(exit_info.value)

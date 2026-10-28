@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
 from code_intelligence.python_files import collect_python_files
+from utils.file_categorization import SKIP_DIRS
 from utils.io_executor import get_analytics_executor
 
 from .complexity_analyzer import ComplexityAnalyzer
@@ -87,21 +88,8 @@ class CodePatternAnalyzer:
         7. Produce comprehensive report
     """
 
-    # Default exclusions
-    DEFAULT_EXCLUDE_DIRS = frozenset(
-        {
-            ".venv",
-            "venv",
-            "node_modules",
-            "__pycache__",
-            ".git",
-            "archives",
-            ".mypy_cache",
-            ".pytest_cache",
-            "dist",
-            "build",
-        }
-    )
+    # Canonical skip dirs plus extras: archived copies and the type checker's cache.
+    DEFAULT_EXCLUDE_DIRS = frozenset(SKIP_DIRS | {"archives", ".mypy_cache"})
 
     def _init_feature_flags(
         self,
@@ -542,7 +530,7 @@ class CodePatternAnalyzer:
         dir_path = Path(directory)
 
         for py_file in dir_path.rglob("*.py"):
-            if any(exc in py_file.parts for exc in self.exclude_dirs):
+            if any(exc in py_file.relative_to(dir_path).parts for exc in self.exclude_dirs):
                 continue
 
             try:

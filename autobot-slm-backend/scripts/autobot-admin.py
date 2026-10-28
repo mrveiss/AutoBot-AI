@@ -73,6 +73,8 @@ def load_env_file(path: str) -> dict:
     except OSError as err:
         reason = "permission denied" if isinstance(err, PermissionError) else err.strerror or type(err).__name__
         sys.exit(f"autobot-admin: cannot read {path} ({reason}); run it as root or the autobot user.")
+    except UnicodeDecodeError as err:
+        sys.exit(f"autobot-admin: {path} is not UTF-8 (byte {err.start}); the store must be a UTF-8 env file.")
     return parse_env_text(text)
 
 
