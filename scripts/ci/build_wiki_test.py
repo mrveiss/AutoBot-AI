@@ -84,3 +84,24 @@ def test_an_address_glued_to_a_word_is_still_redacted():
     private = ".".join(["10", "0", "0", "7"])  # built at runtime: no address literal in source
     assert bw.redact(f"host{private}:8443") == "host<private-ip>:8443"
     assert bw.redact("v1.10.0.0.1") == "v1.10.0.0.1"  # a longer dotted run is not an address
+
+
+def test_the_config_page_check_reports_only_unregistered_variables():
+    page = "| Variable | ... |\n|---|---|\n| `AUTOBOT_KNOWN` | x |\n| `AUTOBOT_GHOST` | y |\nprose `AUTOBOT_PROSE`\n"
+    assert bw.check_config_page(page, {"AUTOBOT_KNOWN"}) == ["AUTOBOT_GHOST"]
+    assert bw.check_config_page(page, {"AUTOBOT_KNOWN", "AUTOBOT_GHOST"}) == []
+
+
+def test_the_published_config_page_documents_only_registered_variables():
+    """#19278 AC3: the configuration page names no variable the code does not register."""
+    page = (bw.ROOT / bw.CONFIG_SOURCE).read_text(encoding="utf-8")
+    registered = bw._registered()
+    assert len(bw.check_config_page(page, set())) > 100, "the row parser no longer matches ENV_VARS.md"
+    assert bw.check_config_page(page, registered) == []
+
+
+def test_the_config_page_is_the_manifest_configuration_source():
+    import yaml
+
+    pages = yaml.safe_load(bw.MANIFEST.read_text(encoding="utf-8"))["pages"]
+    assert pages["Configuration"] == bw.CONFIG_SOURCE
