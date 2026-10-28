@@ -144,7 +144,7 @@ const formatSize = (bytes: number): string => {
   background: var(--bg-hover);
 }
 
-.attachment-item i:first-child {
+.attachment-item .icon:first-child {
   width: 20px;
   text-align: center;
   color: var(--text-secondary);
