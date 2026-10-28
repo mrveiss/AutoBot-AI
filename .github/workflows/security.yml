@@ -98,10 +98,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-env:
-  NODE_VERSION: '20'
-
-
 permissions:
   contents: read
   security-events: write
@@ -231,7 +227,7 @@ jobs:
       if: ${{ !cancelled() }}
       uses: actions/setup-node@v7
       with:
-        node-version: '22'
+        node-version-file: .nvmrc
         cache: 'npm'
         cache-dependency-path: autobot-frontend/package-lock.json
 
