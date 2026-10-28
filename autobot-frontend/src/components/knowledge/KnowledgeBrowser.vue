@@ -1461,7 +1461,7 @@ watch(() => props.mode, () => {
   flex-shrink: 0;
 }
 
-.refresh-status-btn i {
+.refresh-status-btn .icon {
   font-size: var(--text-sm);
 }
 
@@ -1492,7 +1492,7 @@ watch(() => props.mode, () => {
   font-weight: 500;
 }
 
-.toolbar-info i {
+.toolbar-info .icon {
   font-size: var(--text-xl);
 }
 
@@ -1615,7 +1615,7 @@ watch(() => props.mode, () => {
   font-size: var(--text-sm);
 }
 
-.loading-more i {
+.loading-more .icon {
   font-size: var(--text-base);
 }
 
@@ -1632,9 +1632,9 @@ watch(() => props.mode, () => {
   color: var(--text-tertiary);
 }
 
-.loading-state i,
-.error-state i,
-.placeholder-state i {
+.loading-state .icon,
+.error-state .icon,
+.placeholder-state .icon {
   font-size: var(--text-5xl);
   margin-bottom: var(--spacing-4);
   opacity: 0.5;
@@ -1671,7 +1671,7 @@ watch(() => props.mode, () => {
   flex: 1;
 }
 
-.file-info > i {
+.file-info > .icon {
   font-size: 2rem;
   color: var(--color-primary);
   margin-top: var(--spacing-1);

@@ -671,7 +671,7 @@ onUnmounted(() => {
   gap: var(--spacing-2);
 }
 
-.no-elements i {
+.no-elements .icon {
   font-size: var(--text-2xl);
 }
 

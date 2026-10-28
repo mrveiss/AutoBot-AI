@@ -323,7 +323,7 @@ onMounted(() => {
   padding: var(--spacing-10);
 }
 
-.error-state i {
+.error-state .icon {
   font-size: 32px;
   margin-bottom: var(--spacing-3);
 }
