@@ -783,15 +783,7 @@
     "logging": "السجلات",
     "prompts": "الأوامر",
     "backend": "الخادم",
-    "save": "حفظ الإعدادات",
     "reset": "إعادة الإعدادات الافتراضية",
-    "panelLoadFailed": "فشل تحميل لوحة الإعدادات",
-    "loadingSettings": "جارٍ تحميل الإعدادات...",
-    "backendOffline": "الخادم غير متاح — عرض الإعدادات المؤقتة",
-    "saving": "جارٍ الحفظ...",
-    "discardChanges": "تجاهل التغييرات",
-    "cacheApiUnavailable": "واجهة التخزين المؤقت غير متاحة",
-    "cachedSettings": "استخدام الإعدادات المؤقتة",
     "appearanceDesc": "خصّص مظهر مساحة عملك",
     "voiceDesc": "اضبط صوت تحويل النص إلى كلام",
     "languageDesc": "اختر لغتك المفضلة للواجهة",
@@ -801,31 +793,11 @@
     "languageChanged": "تم تحديث اللغة بنجاح",
     "languageChangeFailed": "فشل تحديث اللغة",
     "webResearch": {
-      "maxResultsHint": "Maximum number of search results to retrieve (1–50)",
       "title": "Web Research",
-      "methodLabel": "Search method",
-      "confirmationLabel": "Require confirmation",
-      "rateLimitRequests": "Requests",
-      "timeoutLabel": "Timeout (seconds)",
-      "enabledLabel": "Enable web research",
       "methodBasic": "Basic",
-      "thresholdLabel": "Auto-research threshold",
       "methodAdvanced": "Advanced",
       "desc": "Configure automated web research behaviour and privacy settings",
-      "rateLimitLabel": "Rate limiting",
-      "methodHint": "Choose how web searches are performed",
-      "maxResultsLabel": "Max results",
-      "confirmationHint": "Ask before performing a web search on your behalf",
-      "methodApiBased": "API-based",
-      "storeInKbHint": "Save research results to the knowledge base",
-      "filterAdultHint": "Filter adult content from search results",
-      "enabledHint": "Allow AutoBot to search the web when answering questions",
-      "privacyLabel": "Privacy & storage",
-      "anonymizeHint": "Anonymize requests before sending to search engines",
-      "timeoutHint": "Maximum time to wait for search results (5–120 s)",
-      "rateLimitWindow": "Window (s)",
-      "thresholdHint": "Confidence level below which AutoBot triggers an automatic search",
-      "rateLimitHint": "Limit how many requests are sent in a given time window"
+      "methodApiBased": "API-based"
     },
     "apiKeys": {
       "enterKey": "Enter API key...",
@@ -4243,6 +4215,9 @@
       "errorEnterBoth": "يرجى إدخال كيان المصدر وكيان الهدف معًا.",
       "notInGraph": "هذه الكيانات ليست بعد في رسم العلاقات البياني.",
       "notInGraphHint": "إنها موجودة لكن بلا روابط في الرسم البياني، لذا لا يمكن تتبع أي اتصال. أعد تشغيل استخراج الكيانات."
+    },
+    "chromaExplorer": {
+      "subtitle": "تصفح مجموعات المتجهات والبحث فيها"
     }
   },
   "workflow": {

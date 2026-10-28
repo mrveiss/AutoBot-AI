@@ -13,6 +13,8 @@ passed together, improving code maintainability and type safety.
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List
 
+from autobot_shared.ssot_constants import CategoryDefaults
+
 if TYPE_CHECKING:
     from worker_node import WorkerNode
 
@@ -362,7 +364,7 @@ class SearchOptions:
         track_analytics: Track search analytics
     """
 
-    mode: str = "hybrid"
+    mode: str = CategoryDefaults.SEARCH_MODE_HYBRID
     enable_reranking: bool = False
     min_score: float = 0.0
     enable_query_expansion: bool = False
@@ -400,7 +402,7 @@ class SearchContext:
         category: str | None = None,
         tags: List[str] | None = None,
         tags_match_any: bool = False,
-        mode: str = "hybrid",
+        mode: str = CategoryDefaults.SEARCH_MODE_HYBRID,
         enable_reranking: bool = False,
         min_score: float = 0.0,
         enable_query_expansion: bool = False,

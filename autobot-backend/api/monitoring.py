@@ -58,6 +58,7 @@ from api.ws_security import open_authenticated_ws
 from auth_middleware import check_admin_permission
 
 # Import AutoBot monitoring system
+from autobot_shared.chromadb_endpoints import CHROMADB_HEARTBEAT_PATH
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
 from autobot_shared.http_egress_guard import EGRESS_POLICY
@@ -418,7 +419,7 @@ def _resolve_service_urls() -> tuple:
         npu_url = f"http://{_ssot.vm.npu}:{_ssot.port.npu}/health"
         browser_url = f"http://{_ssot.vm.browser}:{_ssot.port.browser}/health"
         ollama_url = f"http://{_ssot.vm.ollama}:{_ssot.port.ollama}/api/version"
-        chromadb_url = f"http://{_ssot.vm.aistack}:{_ssot.port.aistack}/api/v2/heartbeat"
+        chromadb_url = f"http://{_ssot.vm.chromadb}:{_ssot.port.chromadb}{CHROMADB_HEARTBEAT_PATH}"  # #19321, #19423
     except Exception:
         # Issue #1229: Use ConfigRegistry (defaults from SSOT via registry_defaults)
         npu_host = ConfigRegistry.get("vm.npu")
@@ -427,12 +428,11 @@ def _resolve_service_urls() -> tuple:
         browser_port = ConfigRegistry.get("port.browser")
         ollama_host = ConfigRegistry.get("vm.llm")
         ollama_port = ConfigRegistry.get("port.ollama")
-        chromadb_host = ConfigRegistry.get("vm.aistack")
-        chromadb_port = ConfigRegistry.get("port.aistack")
+        chromadb_host = ConfigRegistry.get("vm.chromadb")  # #19321: was the AI-stack host/port
         npu_url = f"http://{npu_host}:{npu_port}/health"
         browser_url = f"http://{browser_host}:{browser_port}/health"
         ollama_url = f"http://{ollama_host}:{ollama_port}/api/version"
-        chromadb_url = f"http://{chromadb_host}:{chromadb_port}/api/v2/heartbeat"
+        chromadb_url = f"http://{chromadb_host}:{ConfigRegistry.get('port.chromadb')}{CHROMADB_HEARTBEAT_PATH}"
     return npu_url, browser_url, ollama_url, chromadb_url
 
 
@@ -507,8 +507,8 @@ def _build_service_list(results: list) -> list:
         ),
         _to_service_entry(
             "ChromaDB",
-            ConfigRegistry.get("vm.aistack"),
-            int(ConfigRegistry.get("port.aistack")),
+            ConfigRegistry.get("vm.chromadb"),
+            int(ConfigRegistry.get("port.chromadb")),
             chromadb_s,
             chromadb_m,
         ),

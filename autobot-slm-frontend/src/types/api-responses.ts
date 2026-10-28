@@ -338,7 +338,7 @@ export type ErrorHealthResponse = components['schemas']['ErrorHealthResponse'] &
 }
 
 /** Response model of GET `/errors/metrics/summary` (api/errors.py:116). */
-export type MetricsSummary = components['schemas']['MetricsSummary']
+export type ErrorMetricsSummary = components['schemas']['MetricsSummary']
 
 /** Entry of `TimelineResponse.timeline` (api/errors.py:128). */
 export type TimelinePoint = components['schemas']['TimelinePoint']

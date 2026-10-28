@@ -38,7 +38,6 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         ".flake8",
         ".github/actions/setup-python-ci/action.yml",
         ".github/actions/setup-python-suite/action.yml",
-        ".github/dependabot.yml",
         ".github/filters/code-quality-paths.yml",
         ".github/workflows/hardened-smoke-test.yml",
         ".github/workflows/marker-tests.yml",
@@ -149,7 +148,10 @@ UNCOVERED_READS: frozenset[str] = frozenset(
 #: `docker/generate-secrets.sh`, which two guards really read (#17500, #18729).
 #: LOWERED 39 -> 36 by #18208: the filter now names `.github/workflows/_gate-*.yml`, the reusable gate
 #: bodies the guards read (the pre-merge `code-quality.yml`, `security.yml` and friends were uncovered reads).
-MAX_UNCOVERED_READS = 36
+#: LOWERED 39 -> 38 by #19523: the filter now covers `.github/dependabot.yml`, which the
+#: dependabot coverage guards read; deleting a block's directory touches no .py file.
+#: (36 after #18208, minus the one #19523 covered.)
+MAX_UNCOVERED_READS = 35
 
 #: A deliberate raise of ``MAX_UNCOVERED_READS`` is recorded here, as
 #: ``(value, "#issue")``. #17650's criterion is that raising is **justified**, not

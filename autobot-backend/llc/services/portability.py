@@ -8,11 +8,9 @@ Depends on GH#8245 (export) for the shared template schema version "1.0".
 """
 
 import json
-import re
 import uuid
 from typing import Any, Dict, List, Optional
 
-import sqlalchemy as sa
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,11 +20,9 @@ from llc.adapters import adapter_unavailable_reason, registered_adapter_types
 from llc.models.enums import ActivityEventType, LLCCompanyStatus
 from llc.models.export import LLCExportArtifact
 from llc.models.goal import LLCGoal
-from llc.models.routine import LLCRoutine
-from llc.models.secret import LLCSecret
-from llc.models.sprint import LLCPortfolio, LLCProject, LLCSprint
-from llc.models.work_item import LLCWorkItem
-from llc.services.portability_export_names import export_masks
+from llc.services.portability_ceo import mint_agent_ids, settle_imported_ceo
+from llc.services.portability_export import PortabilityExportMixin, _scrub_adapter_config
+from llc.services.portability_import import _PLACEHOLDER_RE, PortabilityImportMixin
 from user_management.models.organization import Organization
 
 from .activity_log import LLCActivityLogService
@@ -34,12 +30,8 @@ from .base import LLCServiceBase
 
 logger = get_logger(__name__)
 
-_PLACEHOLDER_RE = re.compile(r"\{\{(\w+)\}\}")
-
 _SCHEMA_VERSION = "1.0"
 _EXPORT_TTL_SECONDS = 7 * 24 * 3600  # 7 days
-_SEED_ITEM_TYPES = ("epic", "feature")
-_SEED_ITEM_LIMIT = 20
 
 
 # ---------------------------------------------------------------------------
@@ -52,14 +44,18 @@ class TemplateImportError(Exception):
     """Raised when import cannot proceed (schema, collision, rollback)."""
 
 
-class PortabilityService(LLCServiceBase):
+class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServiceBase):
     """Service for company template export/import (GH#8245, GH#8246).
 
     All methods accept an ``AsyncSession`` and participate in the caller's
     transaction.  ``execute_import`` manages its own savepoint for rollback.
     """
 
-    def __init__(self, session: AsyncSession, activity_log: Optional[LLCActivityLogService] = None) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        activity_log: Optional[LLCActivityLogService] = None,
+    ) -> None:
         super().__init__(activity_log=activity_log)
         self.session = session
 
@@ -232,11 +228,10 @@ class PortabilityService(LLCServiceBase):
             company_id = await self._resolve_or_create_company(template, target_company_id, remapping_options, warnings)
 
             # Pass 1: pre-mint all agent IDs so reports_to can be remapped before
-            # any INSERT, avoiding topology-ordering FK violations
+            # any INSERT, avoiding topology-ordering FK violations; the source's
+            # default CEO node keeps the ``ceo-<id>`` convention here (#19588)
             agents_list = template.get("agents", [])
-            agent_id_map: Dict[str, str] = {
-                a.get("agent_id", ""): str(uuid.uuid4()) for a in agents_list if a.get("agent_id")
-            }
+            agent_id_map = await mint_agent_ids(self.session, template, company_id)
 
             # Pass 2: insert agents. `reports_to` is deliberately NOT resolved
             # here — which agents land is decided in this loop (an existing name
@@ -258,6 +253,10 @@ class PortabilityService(LLCServiceBase):
             # Pass 3: attach every reporting line whose manager actually landed,
             # and name the ones that did not instead of pointing at nothing.
             await self._link_reporting_lines(agents_list, landed, dropped_links, company_id)
+
+            # The company's CEO (#19588): the template's own, designated, or the default
+            # when it carries none -- never both. In the savepoint, so it rolls back too.
+            await settle_imported_ceo(self.session, template, company_id, landed)
 
             # goals
             for goal in template.get("goals", []):
@@ -300,188 +299,6 @@ class PortabilityService(LLCServiceBase):
     # Private helpers — export data collectors
     # ------------------------------------------------------------------
 
-    async def _export_company(self, company_id: str) -> Dict[str, Any]:
-        result = await self.session.execute(
-            text("""
-                SELECT id, name, slug, description, issue_prefix,
-                       budget_monthly_cents, brand_color, require_approval_for_hires,
-                       parent_org_id, llc_status, created_at
-                FROM organizations
-                WHERE id = :cid
-                """),
-            {"cid": company_id},
-        )
-        row = result.mappings().first()
-        if row is None:
-            return {}
-        data = dict(row)
-        data["id"] = str(data["id"]) if data.get("id") else None
-        if data.get("parent_org_id"):
-            data["parent_org_id"] = str(data["parent_org_id"])
-        if data.get("created_at"):
-            data["created_at"] = data["created_at"].isoformat()
-        return data
-
-    async def _build_secret_map(self, company_id: str) -> Dict[str, str]:
-        """Map secret binding names for this company (name -> name).
-
-        Returns {name: name} so scrubber can substitute ``{{NAME}}``.
-        Only active (non-revoked) secrets are included.
-        """
-        result = await self.session.execute(
-            select(LLCSecret.name).where(
-                sa.and_(
-                    LLCSecret.company_id == company_id,
-                    LLCSecret.revoked_at.is_(None),
-                )
-            )
-        )
-        return {row[0]: row[0] for row in result}
-
-    async def _export_agents(self, company_id: str, secret_map: Dict[str, str]) -> List[Dict[str, Any]]:
-        """Export agents from agent_org_nodes with adapter_config secrets scrubbed."""
-        result = await self.session.execute(
-            text("""
-                SELECT agent_id, name, adapter_type, adapter_config,
-                       context_mode, heartbeat_cron, heartbeat_enabled,
-                       llc_agent_status, created_at
-                FROM agent_org_nodes
-                WHERE company_id = :cid
-                ORDER BY created_at
-                """),
-            {"cid": company_id},
-        )
-        agents = []
-        for row in result.mappings():
-            d = dict(row)
-            d["agent_id"] = str(d["agent_id"]) if d.get("agent_id") else None
-            if d.get("created_at"):
-                d["created_at"] = d["created_at"].isoformat()
-            if d.get("adapter_config"):
-                d["adapter_config"] = _scrub_adapter_config(d["adapter_config"], secret_map)
-            agents.append(d)
-        return agents
-
-    async def _export_goals(self, company_id: str) -> List[Dict[str, Any]]:
-        result = await self.session.execute(
-            select(LLCGoal).where(LLCGoal.company_id == company_id).order_by(LLCGoal.created_at)
-        )
-        goals = []
-        for (goal,) in result:
-            goals.append(
-                {
-                    "id": str(goal.id),
-                    "parent_goal_id": str(goal.parent_goal_id) if goal.parent_goal_id else None,
-                    "title": goal.title,
-                    "description": goal.description,
-                    "level": goal.level,
-                    "status": goal.status,
-                    "owner_agent_id": goal.owner_agent_id,
-                    "created_at": goal.created_at.isoformat() if goal.created_at else None,
-                }
-            )
-        return goals
-
-    async def _export_routines(self, company_id: str) -> List[Dict[str, Any]]:
-        """Export only ACTIVE routines (status='active')."""
-        result = await self.session.execute(
-            select(LLCRoutine).where(
-                sa.and_(
-                    LLCRoutine.company_id == company_id,
-                    LLCRoutine.status == "active",
-                )
-            )
-        )
-        routines = []
-        for (routine,) in result:
-            routines.append(
-                {
-                    "id": str(routine.id),
-                    "name": routine.name,
-                    "description": routine.description,
-                    "cron_schedule": routine.cron_schedule,
-                    "assignee_agent_id": str(routine.assignee_agent_id) if routine.assignee_agent_id else None,
-                    "produces": routine.produces,
-                    "work_item_template": routine.work_item_template,
-                    "env": routine.env,
-                }
-            )
-        return routines
-
-    async def _export_projects_portfolios(self, company_id: str) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-        portfolios_result = await self.session.execute(
-            select(LLCPortfolio).where(LLCPortfolio.company_id == company_id)
-        )
-        portfolios = [
-            {
-                "id": str(p.id),
-                "name": p.name,
-                "description": p.description,
-                "status": p.status,
-            }
-            for (p,) in portfolios_result
-        ]
-
-        projects_result = await self.session.execute(select(LLCProject).where(LLCProject.company_id == company_id))
-        projects = [
-            {
-                "id": str(p.id),
-                "name": p.name,
-                "description": p.description,
-                "status": p.status,
-                "program_id": str(p.program_id) if p.program_id else None,
-                "goal_id": str(p.goal_id) if p.goal_id else None,
-                "target_date": p.target_date.isoformat() if p.target_date else None,
-                "env": p.env,
-                "auto_rollover": p.auto_rollover,
-            }
-            for (p,) in projects_result
-        ]
-        return projects, portfolios
-
-    async def _export_seed_items(self, company_id: str) -> List[Dict[str, Any]]:
-        """Up to 20 epic/feature work items as seed tasks (is_seed=true)."""
-        result = await self.session.execute(
-            select(LLCWorkItem)
-            .where(
-                sa.and_(
-                    LLCWorkItem.company_id == company_id,
-                    LLCWorkItem.type.in_(list(_SEED_ITEM_TYPES)),
-                )
-            )
-            .order_by(LLCWorkItem.created_at)
-            .limit(_SEED_ITEM_LIMIT)
-        )
-        items = []
-        for (item,) in result:
-            items.append({**_work_item_dict(item), "is_seed": True})
-        return items
-
-    async def _export_all_work_items(self, company_id: str) -> List[Dict[str, Any]]:
-        result = await self.session.execute(
-            select(LLCWorkItem).where(LLCWorkItem.company_id == company_id).order_by(LLCWorkItem.created_at)
-        )
-        return [_work_item_dict(item) for (item,) in result]
-
-    async def _export_sprints(self, company_id: str) -> List[Dict[str, Any]]:
-        result = await self.session.execute(
-            select(LLCSprint).where(LLCSprint.company_id == company_id).order_by(LLCSprint.start_date)
-        )
-        sprints = []
-        for (s,) in result:
-            sprints.append(
-                {
-                    "id": str(s.id),
-                    "project_id": str(s.project_id) if s.project_id else None,
-                    "name": s.name,
-                    "status": s.status,
-                    "start_date": s.start_date.isoformat() if s.start_date else None,
-                    "end_date": s.end_date.isoformat() if s.end_date else None,
-                    "goal": s.goal,
-                }
-            )
-        return sprints
-
     async def _list_kb_collections(self, company_id: str) -> List[str]:
         """Return KB collection names for the company (not content)."""
         redis = await get_async_redis_client()
@@ -501,7 +318,13 @@ class PortabilityService(LLCServiceBase):
     # Private helpers — export persistence
     # ------------------------------------------------------------------
 
-    async def _persist(self, company_id: uuid.UUID, export_kind: str, payload: Dict[str, Any], actor: str) -> uuid.UUID:
+    async def _persist(
+        self,
+        company_id: uuid.UUID,
+        export_kind: str,
+        payload: Dict[str, Any],
+        actor: str,
+    ) -> uuid.UUID:
         artifact_id = uuid.uuid4()
         storage_path = f"llc:export:{company_id}:{artifact_id}"
 
@@ -654,59 +477,6 @@ class PortabilityService(LLCServiceBase):
             return False
         return True
 
-    async def _link_reporting_lines(
-        self,
-        agents_list: List[Dict[str, Any]],
-        landed: Dict[str, str],
-        dropped_links: List[Dict[str, str]],
-        company_id: Any,
-    ) -> None:
-        """Attach reports_to for agents whose manager was actually inserted (#14811).
-
-        Runs inside execute_import's savepoint, so a failure here rolls the whole
-        import back with everything else.
-
-        A manager that was skipped leaves its subordinate as a root rather than
-        pointing at a row that does not exist. That is not a silent downgrade:
-        the unresolvable edge is recorded in `dropped_links` and returned to the
-        caller. The alternative — keeping the pointer — made the subordinate
-        vanish from the org tree entirely, because that tree matches children by
-        agent_id and roots by a NULL reports_to, so an agent referencing a
-        nonexistent manager is neither.
-        """
-        names_by_source_id = {str(a["agent_id"]): a.get("name", "") for a in agents_list if a.get("agent_id")}
-
-        for agent in agents_list:
-            source_id = str(agent.get("agent_id") or "")
-            manager_source_id = str(agent.get("reports_to") or "")
-            if not source_id or not manager_source_id or source_id not in landed:
-                continue
-
-            manager_dest_id = landed.get(manager_source_id)
-            if manager_dest_id is None:
-                dropped_links.append(
-                    {
-                        "agent_name": agent.get("name", ""),
-                        "agent_id": landed[source_id],
-                        "manager_name": names_by_source_id.get(manager_source_id, ""),
-                        "manager_source_agent_id": manager_source_id,
-                    }
-                )
-                continue
-
-            # Scoped by company as well as agent_id. `agent_id` carries a
-            # table-wide UNIQUE constraint today, so the company clause is
-            # redundant — but that constraint is declared in a migration three
-            # files away, and if it ever became per-company (the natural change
-            # when two tenants want the same agent slug) this UPDATE would
-            # silently start crossing tenants. Every sibling query on this table
-            # scopes by company_id; this one was the outlier.
-            await self.session.execute(
-                text(
-                    "UPDATE agent_org_nodes SET reports_to = :mgr " "WHERE agent_id = :aid AND company_id = :cid"
-                ).bindparams(mgr=manager_dest_id, aid=landed[source_id], cid=company_id)
-            )
-
     async def _import_agent(
         self,
         agent: Dict[str, Any],
@@ -775,96 +545,11 @@ class PortabilityService(LLCServiceBase):
 
             await AgentCapabilityIndexer().index_from_db(new_agent_id, str(company_id))
         except Exception:
-            logger.exception("Capability index failed for imported agent %s (non-fatal)", new_agent_id)
+            logger.exception(
+                "Capability index failed for imported agent %s (non-fatal)",
+                new_agent_id,
+            )
         return new_agent_id
-
-    def _resolve_secrets(
-        self,
-        config: Any,
-        secret_mapping: Dict[str, str],
-        agent_name: str,
-        warnings: List[str],
-    ) -> Any:
-        """Replace {{SECRET_NAME}} placeholders in config by walking the structure.
-
-        Operates on the decoded Python object (not the JSON string) to prevent
-        injection when secret values contain quote characters.
-        """
-        unresolved: set[str] = set()
-
-        def _walk(node: Any) -> Any:
-            if isinstance(node, str):
-
-                def _replace(m: re.Match) -> str:
-                    key = m.group(1)
-                    if key in secret_mapping:
-                        return secret_mapping[key]
-                    unresolved.add(key)
-                    return m.group(0)
-
-                return _PLACEHOLDER_RE.sub(_replace, node)
-            if isinstance(node, dict):
-                return {k: _walk(v) for k, v in node.items()}
-            if isinstance(node, list):
-                return [_walk(v) for v in node]
-            return node
-
-        result = _walk(config)
-        if unresolved:
-            warnings.append(f"Agent {agent_name!r}: unresolved secret placeholders {sorted(unresolved)}")
-        return result
-
-    async def _import_goal(self, goal: Dict[str, Any], company_id: uuid.UUID) -> Optional[uuid.UUID]:
-        title = goal.get("title", "")
-        existing = await self._goal_titles_exist([title], company_id)
-        if existing:
-            return None
-
-        new_id = uuid.uuid4()
-        obj = LLCGoal(
-            id=new_id,
-            company_id=str(company_id),
-            title=title,
-            description=goal.get("description"),
-            level=goal.get("level", "objective"),
-            status=goal.get("status", "draft"),
-            owner_agent_id=None,
-            due_date=None,
-        )
-        self.session.add(obj)
-        await self.session.flush()
-        return new_id
-
-    async def _import_project(self, project: Dict[str, Any], company_id: uuid.UUID) -> Optional[uuid.UUID]:
-        new_id = uuid.uuid4()
-        obj = LLCProject(
-            id=new_id,
-            company_id=company_id,
-            name=project.get("name", "Imported Project"),
-            description=project.get("description"),
-            status=project.get("status", "planning"),
-        )
-        self.session.add(obj)
-        await self.session.flush()
-        return new_id
-
-    async def _import_work_item(self, item: Dict[str, Any], company_id: uuid.UUID) -> Optional[uuid.UUID]:
-        new_id = uuid.uuid4()
-        identifier = f"IMP-{new_id.hex[:8].upper()}"
-        obj = LLCWorkItem(
-            id=new_id,
-            company_id=company_id,
-            type=item.get("type", "epic"),
-            identifier=identifier,
-            title=item.get("title", ""),
-            description=item.get("description"),
-            status="backlog",
-            priority=item.get("priority", "medium"),
-            labels=item.get("labels", []),
-        )
-        self.session.add(obj)
-        await self.session.flush()
-        return new_id
 
     # ------------------------------------------------------------------
     # Schema validation
@@ -877,44 +562,4 @@ class PortabilityService(LLCServiceBase):
             raise TemplateImportError(f"Unsupported schema_version {version!r}; expected '1.0'")
 
 
-# ------------------------------------------------------------------
-# Helpers
-# ------------------------------------------------------------------
-
-
-def _scrub_adapter_config(config: Dict[str, Any], secret_map: Dict[str, str]) -> Dict[str, Any]:
-    """Replace secret values in adapter_config with ``{{NAME}}`` placeholders.
-
-    Uses secret_map (name->name) for known bound secrets; falls back to
-    uppercasing the key name for unrecognised secret-like keys.
-    """
-    scrubbed: Dict[str, Any] = {}
-    for k, v in config.items():
-        if export_masks(k, v):
-            bound = secret_map.get(str(v)) or secret_map.get(k)
-            placeholder_name = bound if bound else k.upper()
-            scrubbed[k] = f"{{{{{placeholder_name}}}}}"
-        else:
-            scrubbed[k] = v
-    return scrubbed
-
-
-def _work_item_dict(item: LLCWorkItem) -> Dict[str, Any]:
-    return {
-        "id": str(item.id),
-        "parent_id": str(item.parent_id) if item.parent_id else None,
-        "project_id": str(item.project_id) if item.project_id else None,
-        "sprint_id": str(item.sprint_id) if item.sprint_id else None,
-        "goal_id": str(item.goal_id) if item.goal_id else None,
-        "type": item.type,
-        "title": item.title,
-        "description": item.description,
-        "status": item.status,
-        "priority": item.priority,
-        "assignee_agent_id": str(item.assignee_agent_id) if item.assignee_agent_id else None,
-        "assignee_user_id": str(item.assignee_user_id) if item.assignee_user_id else None,
-        "created_at": item.created_at.isoformat() if item.created_at else None,
-    }
-
-
-__all__ = ["PortabilityService", "TemplateImportError"]
+__all__ = ["PortabilityService", "TemplateImportError", "_scrub_adapter_config"]

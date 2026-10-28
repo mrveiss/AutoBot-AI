@@ -19,6 +19,7 @@ from autobot_shared.paths import chromadb_data_dir
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import get_ollama_url
 from constants.path_constants import PATH
+from constants.rag_graph_constants import RAG_SCORE_THRESHOLD
 
 if TYPE_CHECKING:
     from knowledge.backends import BaseClient, BaseCollection
@@ -247,7 +248,9 @@ class DocumentationSearcher:
             "metadata": dict(meta),  # #18944: the stored visibility grant, for filter_for_principal
         }
 
-    def search(self, query: str, n_results: int = 3, score_threshold: float = 0.3) -> List[Dict[str, Any]]:
+    def search(
+        self, query: str, n_results: int = 3, score_threshold: float = RAG_SCORE_THRESHOLD
+    ) -> List[Dict[str, Any]]:
         """Search documentation for relevant content.
 
         Args:

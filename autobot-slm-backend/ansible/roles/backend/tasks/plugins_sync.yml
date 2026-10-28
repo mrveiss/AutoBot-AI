@@ -1,0 +1,25 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# The ONE core-plugins sync (#10294), included by main.yml and by
+# playbooks/update-all-nodes.yml via `tasks_from: plugins_sync` (#18324): a sync
+# living only in main.yml is never run on an update and freezes at provision.
+
+# Issue #10294: plugins ship at the repo root (code_source/plugins/), a SIBLING of
+# autobot-backend/, so the autobot-backend code sync never copied them. The backend
+# resolves plugins at {{ backend_code_dir }}/plugins (AUTOBOT_BASE_DIR/plugins), which
+# did not exist → discover_plugins() found nothing and every core plugin (image/video
+# generation, kb-event, etc.) silently failed to register. Sync them into place.
+- name: Sync plugins directory from code_source (#10294)
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir }}/plugins/"
+    dest: "{{ backend_code_dir }}/plugins/"
+    rsync_opts:
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+  # Templated so an update play that restarts explicitly can opt out of the
+  # handler (handlers ignore tags); provisioning keeps the default (#18324).
+  notify: "{{ [] if not (backend_plugins_sync_notify_restart | default(true) | bool) else ['restart backend'] }}"
+  tags: ['backend', 'deploy']

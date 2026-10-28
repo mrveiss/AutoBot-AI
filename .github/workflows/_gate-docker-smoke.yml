@@ -218,7 +218,7 @@ jobs:
           done
 
           # compare_nodes ROWS: 0 when every declared service is registered at its address. The SLM
-          # registers itself under SLM_NODE_ID, not its service name, so it is matched by address.
+          # registers itself under AUTOBOT_SLM_NODE_ID (#19322), not its service name, so it is matched by address.
           compare_nodes() {
             local -A reg=()
             local id ip svc

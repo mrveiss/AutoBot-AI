@@ -17,8 +17,7 @@
 # an explicit value always overrides the auto-generated one.
 #
 # NOTE: --env-file docker/.env.docker is required when the root .env contains
-# fleet-specific paths (e.g. AUTOBOT_TLS_CERT_DIR=infrastructure/shared/certs)
-# that are invalid in a Docker context. See #2458.
+# fleet-specific values that are invalid in a Docker context. See #2458.
 #
 # Healthcheck convention (#7456):
 #   - Default to ``["CMD", ...]`` (exec form) — no shell, no env-var
@@ -130,6 +129,10 @@ services:
     container_name: autobot-chromadb
     restart: unless-stopped
     ports:
+      # #19321: two ports, two meanings. Host side = PortConfig.chromadb (8100, what
+      # bare-metal ChromaDB listens on and host clients dial). Container side = the
+      # image's own listen port (8000), which in-network clients below dial as
+      # AUTOBOT_CHROMADB_PORT. repo_tests/chromadb_port_one_home_19321_test.py pins both.
       - "127.0.0.1:8100:8000"
     volumes:
       - chroma_data:/data
@@ -222,8 +225,11 @@ services:
       - autobot_secrets:/secrets:ro
       - ./docker/with-secrets.sh:/usr/local/bin/with-secrets.sh:ro
     environment:
+      # #19316: no AUTOBOT_DEPLOYMENT_MODE -- unset is auto-detect, docker_local in a container.
       - AUTOBOT_ENVIRONMENT=production
-      - AUTOBOT_DEPLOYMENT_MODE=local
+      # #19319: production profile (FEATURE_ROUTERS_STRICT_PRODUCTION, autobot_shared/ssot_role_mirrors.py):
+      # a feature router that fails to import is logged and skipped instead of aborting startup.
+      - AUTOBOT_FEATURE_ROUTERS_STRICT=0
       # #14081/#14110 security review: with no AUTOBOT_BASE_DIR set, the
       # canonical secrets-store/JWT-key/project-state location
       # (ssot_config.path.data_path) resolved to /opt/autobot/data — the
@@ -382,7 +388,6 @@ services:
       - ./docker/with-secrets.sh:/usr/local/bin/with-secrets.sh:ro
     environment:
       - AUTOBOT_ENVIRONMENT=production
-      - AUTOBOT_DEPLOYMENT_MODE=local
       # #14081/#14110 security review: this service's working_dir differs
       # from autobot-backend's, so its own legacy CWD-relative resolver
       # would disagree with the backend's — pinning canonical here too
@@ -396,8 +401,8 @@ services:
       - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
       - AUTOBOT_REDIS_HOST=autobot-redis
       - AUTOBOT_REDIS_PORT=6379
-      - CELERY_BROKER_URL=redis://autobot-redis:6379/${AUTOBOT_REDIS_DB_CELERY_BROKER:-14}
-      - CELERY_RESULT_BACKEND=redis://autobot-redis:6379/${AUTOBOT_REDIS_DB_CELERY_RESULTS:-15}
+      # Broker/result URLs: celery_app builds them from AUTOBOT_REDIS_HOST/PORT above and
+      # redis-databases.yaml (+ AUTOBOT_REDIS_DB_CELERY_*), #19232 -- no URL or DB literal here.
       - AUTOBOT_CHROMADB_HOST=autobot-chromadb
       - AUTOBOT_CHROMADB_PORT=8000
       # #12513: shared secret for CHROMA_SERVER_AUTHN_* token auth on the
@@ -504,7 +509,6 @@ services:
       - backend_logs:/app/logs
     environment:
       - AUTOBOT_ENVIRONMENT=production
-      - AUTOBOT_DEPLOYMENT_MODE=local
       # #14081/#14110 security review: kept consistent with autobot-backend
       # and autobot-worker so any secrets-store access this process makes
       # (task modules it loads may import services.secrets_service)
@@ -517,8 +521,8 @@ services:
       - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
       - AUTOBOT_REDIS_HOST=autobot-redis
       - AUTOBOT_REDIS_PORT=6379
-      - CELERY_BROKER_URL=redis://autobot-redis:6379/${AUTOBOT_REDIS_DB_CELERY_BROKER:-14}
-      - CELERY_RESULT_BACKEND=redis://autobot-redis:6379/${AUTOBOT_REDIS_DB_CELERY_RESULTS:-15}
+      # Broker/result URLs: celery_app builds them from AUTOBOT_REDIS_HOST/PORT above and
+      # redis-databases.yaml (+ AUTOBOT_REDIS_DB_CELERY_*), #19232 -- no URL or DB literal here.
       - AUTOBOT_CHROMADB_HOST=autobot-chromadb
       - AUTOBOT_CHROMADB_PORT=8000
       # #12513: shared secret for CHROMA_SERVER_AUTHN_* token auth on the
@@ -593,9 +597,10 @@ services:
       # in the hardened overlay doesn't fail with EROFS when mkdir("logs") is
       # called relative to the /app/autobot-slm-backend working directory (#11574).
       - AUTOBOT_LOGS_DIR=/app/logs
-      # Surface each compose service container as a fleet node (#9761). Off by
-      # default so production/Ansible VM fleets are unaffected; on for compose.
-      - SLM_COMPOSE_NODES=${SLM_COMPOSE_NODES:-true}
+      # Surface each compose service container as a fleet node (#9761). The default
+      # lives in the SLM config (#19323): on here, because the SLM detects docker_local.
+      # Passed through only when set (true|false) -- never restated.
+      - SLM_COMPOSE_NODES
       - AUTOBOT_DOCKER_MGMT_PREFIX=${AUTOBOT_DOCKER_MGMT_PREFIX}  # compose_fleet node IPs (#16833)
       # Shared signing secrets so the backend node's JWT verifies on SLM —
       # without a shared secret each service generates its own and SLM rejects

@@ -102,7 +102,7 @@ jobs:
               "" \
               "**If the queue is draining normally, ignore this.** Otherwise:" \
               '1. Check whether CI is dispatching at all — see the `ci-dispatch-watchdog` status on these PRs' \
-              '2. Merge the ones whose CI has finished and review has passed: `gh pr merge <number> --squash --delete-branch`' \
+              '2. Approved PRs land through the merge train the coordinator sequences (merge commits, never squash) -- check the open `chore(merge-train)` PR is moving, not each PR on its own' \
               "3. Look for a loop opening near-identical PRs" \
               "" \
               '> Warn-only runaway detector — `.github/workflows/pr-queue-gate.yml`. It never blocks a merge.')

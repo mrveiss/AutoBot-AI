@@ -6,69 +6,10 @@
 /**
  * Debug Utilities
  *
- * Provides structured logging for the SLM Admin frontend.
- *
- * `LogLevel`'s four values are identical to @autobot/ui's canonical type
- * (#14908) — imported rather than re-declared. `createLogger()` here is NOT
- * a re-export: unlike the kit's always-log version, this one filters by
- * `import.meta.env.DEV` (debug suppressed in production) — a capability the
- * kit/main-app version does not have, so it stays local rather than being
- * collapsed into the smaller-looking shared copy.
+ * Structured logging for the SLM Admin frontend. The logger is the kit's (`@autobot/ui`):
+ * its level filtering (debug dropped in production builds) used to live only in this
+ * file and moved into the kit so both apps behave the same (#14908). This module keeps
+ * the import path the SLM's callers already use.
  */
 
-import type { LogLevel } from '@autobot/ui'
-
-interface Logger {
-  debug: (...args: unknown[]) => void
-  info: (...args: unknown[]) => void
-  warn: (...args: unknown[]) => void
-  error: (...args: unknown[]) => void
-}
-
-const LOG_LEVELS: Record<LogLevel, number> = {
-  debug: 0,
-  info: 1,
-  warn: 2,
-  error: 3,
-}
-
-// Default to 'info' in production, 'debug' in development
-const currentLevel: LogLevel = import.meta.env.DEV ? 'debug' : 'info'
-
-function shouldLog(level: LogLevel): boolean {
-  return LOG_LEVELS[level] >= LOG_LEVELS[currentLevel]
-}
-
-function formatMessage(component: string, level: LogLevel, _args: unknown[]): string {
-  const timestamp = new Date().toISOString()
-  const prefix = `[${timestamp}] [${level.toUpperCase()}] [${component}]`
-  return prefix
-}
-
-/**
- * Create a logger instance for a component
- */
-export function createLogger(componentName: string): Logger {
-  return {
-    debug: (...args: unknown[]) => {
-      if (shouldLog('debug')) {
-        console.debug(formatMessage(componentName, 'debug', args), ...args)
-      }
-    },
-    info: (...args: unknown[]) => {
-      if (shouldLog('info')) {
-        console.info(formatMessage(componentName, 'info', args), ...args)
-      }
-    },
-    warn: (...args: unknown[]) => {
-      if (shouldLog('warn')) {
-        console.warn(formatMessage(componentName, 'warn', args), ...args)
-      }
-    },
-    error: (...args: unknown[]) => {
-      if (shouldLog('error')) {
-        console.error(formatMessage(componentName, 'error', args), ...args)
-      }
-    },
-  }
-}
+export { createLogger, type LogLevel } from '@autobot/ui'

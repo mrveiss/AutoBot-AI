@@ -277,7 +277,7 @@ export interface AutoBotConfig {
   // Computed URLs (readonly getters)
   readonly backendUrl: string;
   readonly frontendUrl: string;
-  readonly redisUrl: string;
+  // No redisUrl: a browser never dials Redis, and the backend owns the one Redis URL builder (#19232).
   readonly ollamaUrl: string;
   /** @deprecated #14822 — legacy broadcast socket base; use `liveEventsUrl`. */
   readonly websocketUrl: string;
@@ -448,15 +448,15 @@ function buildConfig(): AutoBotConfig {
   const vnc: VNCConfig = {
     desktop: {
       host: getEnv('VITE_DESKTOP_VNC_HOST', vm.main),
-      port: getEnvNumber('VITE_DESKTOP_VNC_PORT', 6080),
+      port: getEnvNumber('VITE_DESKTOP_VNC_PORT', PORT_DEFAULTS.vnc),
     },
     terminal: {
       host: getEnv('VITE_TERMINAL_VNC_HOST', vm.main),
-      port: getEnvNumber('VITE_TERMINAL_VNC_PORT', 6080),
+      port: getEnvNumber('VITE_TERMINAL_VNC_PORT', PORT_DEFAULTS.vnc),
     },
     playwright: {
       host: getEnv('VITE_PLAYWRIGHT_VNC_HOST', vm.browser),
-      port: getEnvNumber('VITE_PLAYWRIGHT_VNC_PORT', 6081),
+      port: getEnvNumber('VITE_PLAYWRIGHT_VNC_PORT', PORT_DEFAULTS.vnc), // #19327: browser noVNC is port.vnc
     },
   };
 
@@ -495,10 +495,6 @@ function buildConfig(): AutoBotConfig {
 
     get frontendUrl(): string {
       return `${runtimeHttpProto()}://${vm.frontend}:${port.frontend}`;
-    },
-
-    get redisUrl(): string {
-      return `redis://${vm.redis}:${port.redis}`;
     },
 
     get ollamaUrl(): string {
@@ -624,7 +620,6 @@ export function getServiceUrl(serviceName: string): string | undefined {
   const urlMap: Record<string, string> = {
     backend: cfg.backendUrl,
     frontend: cfg.frontendUrl,
-    redis: cfg.redisUrl,
     ollama: cfg.ollamaUrl,
     websocket: cfg.websocketUrl,
     aistack: cfg.aistackUrl,

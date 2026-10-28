@@ -2,15 +2,18 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""#19548 — the branch sync merges main into every branch, and pushes only what GITHUB_TOKEN may push.
+"""#19548 — the branch sync merges main into every branch and pushes each clean merge, ``[skip ci]``.
 
 Drives ``pipeline-scripts/branch_sync.py`` through a recorded git runner and a
 recorded REST client, so each path is pinned by what it RAN, not by what its
 source looks like:
 
 * a conflict is aborted and labelled with one comment, and nothing is pushed;
-* a merge that would change ``.github/workflows/*`` is labelled, never pushed;
-* the merge commit message is exact, and the push is a plain one;
+* a merge that changes ``.github/workflows/*`` is pushed; only a refused push is labelled;
+* the merge commit message is exact and ends ``[skip ci]``, and the push is a plain one;
+* the merge is ``--no-ff``: on a real repository a fast-forwardable branch gets a merge
+  commit ending ``[skip ci]``, and a branch already 0 behind is skipped, never pushed;
+* the PAT reaches the push argv only, and leaves the script's environment first;
 * fork PRs are skipped, drafts are not, PRs into another base are left alone;
 * the comment is found by its marker, so a second run never posts a second one;
 * the sync labels clear once the branch is 0 behind;
@@ -19,8 +22,10 @@ source looks like:
 
 from __future__ import annotations
 
+import base64
 import importlib.util
 import sys
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import pytest
@@ -44,6 +49,7 @@ def _load(name: str):
 
 core = _load("branch_sync_core")
 bs = _load("branch_sync")
+issue_api = sys.modules["issue_api"]  # the instance branch_sync imported
 
 
 class Runner:
@@ -100,7 +106,7 @@ def _git(behind: str = "5", merge: Tuple[int, str] = (0, ""), unmerged: str = ""
             (("rev-parse",), (0, HEAD_SHA)),
             (("rev-list", "--count"), (0, behind)),
             (("merge", "--abort"), (0, "")),
-            (("merge", "--no-edit"), merge),
+            (("merge", "--no-ff"), merge),
             (("diff", "--name-only", "--diff-filter=U"), (0, unmerged)),
             (("diff", "--name-only"), (0, changed)),
             (("merge-base",), (0, "b" * 40)),
@@ -155,22 +161,44 @@ def test_the_conflict_comment_shows_both_sides_and_caps_counts_not_text() -> Non
 # ------------------------------------------------------- the workflow-file path
 
 
-def test_a_merge_that_changes_a_workflow_file_is_labelled_and_never_pushed() -> None:
+_PAT_REFUSAL = (
+    1,
+    " ! [remote rejected] HEAD -> issue-1-x (refusing to allow a Personal Access Token to create or update "
+    "workflow `.github/workflows/ci.yml` without `workflow` scope)\nerror: failed to push some refs",
+)
+
+
+def test_a_merge_that_changes_a_workflow_file_is_pushed_and_clears_the_label() -> None:
+    """The PAT can push workflow files (#19548 follow-up): detect the delta, name it, push anyway."""
     runner, api = _git(changed=".github/workflows/ci.yml\nsrc/a.py"), Api()
-    outcome, detail = _sync(runner, api, _target())
-    assert outcome == core.WORKFLOW and ".github/workflows/ci.yml" in detail
+    outcome, detail = _sync(runner, api, _target(labels=(core.LABEL_WORKFLOW,)))
+    assert outcome == core.SYNCED and ".github/workflows/ci.yml" in detail, "the delta is still detected and named"
     assert runner.ran("diff", "--name-only", HEAD_SHA, "HEAD"), "the delta is head-vs-merge-result"
-    assert not runner.ran("push"), "GitHub refuses this push with GITHUB_TOKEN; detect it, do not try it"
+    assert [c for c in runner.calls if c[0] == "push"] == [("push", "origin", "HEAD:refs/heads/issue-1-x")]
+    assert [(m, path.rsplit("/", 1)[-1]) for m, path, _ in api.writes()] == [("DELETE", core.LABEL_WORKFLOW)]
+
+
+def test_only_a_refused_workflow_push_is_labelled_with_the_detected_paths() -> None:
+    runner, api = _git(changed=".github/workflows/ci.yml\nsrc/a.py", push=_PAT_REFUSAL), Api()
+    outcome, detail = _sync(runner, api, _target())
+    assert outcome == core.WORKFLOW and detail == "push refused: .github/workflows/ci.yml"
+    assert runner.ran("push"), "the push is attempted; the label is the fallback for a refusal only"
     (comment,) = [p["body"] for m, path, p in api.writes() if m == "UPSERT" and path.endswith("/issues/7/comments")]
-    assert core.MARKER_WORKFLOW in comment and "`.github/workflows/ci.yml`" in comment
+    assert core.MARKER_WORKFLOW in comment and "`.github/workflows/ci.yml`" in comment and "`workflow` scope" in comment
     assert ("POST", f"/repos/{REPO}/issues/7/labels", {"labels": [core.LABEL_WORKFLOW]}) in api.writes()
 
 
-def test_a_refused_push_is_handled_as_a_workflow_skip() -> None:
-    refusal = (1, "! [remote rejected] HEAD -> x (refusing to allow a GitHub App to create or update workflow)")
-    runner, api = _git(push=refusal), Api()
-    assert _sync(runner, api, _target())[0] == core.WORKFLOW
-    assert any(path.endswith("/issues/7/labels") for _, path, _ in api.writes())
+@pytest.mark.parametrize(
+    "refusal",
+    [
+        _PAT_REFUSAL[1],
+        "! [remote rejected] HEAD -> x (refusing to allow a GitHub App to create or update workflow)",
+        "! [remote rejected] HEAD -> x (refusing to allow an OAuth App to create or update workflow "
+        "`.github/workflows/a.yml` without `workflow` scope)",
+    ],
+)
+def test_every_workflow_refusal_wording_is_classified_as_one(refusal: str) -> None:
+    assert core.classify_push(1, refusal) == core.WORKFLOW
 
 
 def test_workflow_changes_matches_the_directory_only() -> None:
@@ -185,8 +213,32 @@ def test_workflow_changes_matches_the_directory_only() -> None:
 def test_the_merge_message_and_argv_are_exact() -> None:
     runner = Runner([])
     bs.Git(runner).merge("issue-19548-x", "main")
-    assert runner.calls == [("merge", "--no-edit", "-m", "Merge main into issue-19548-x (auto-sync)", "origin/main")]
-    assert core.merge_message("b") == "Merge main into b (auto-sync)"
+    message = "Merge main into issue-19548-x (auto-sync) [skip ci]"
+    assert runner.calls == [("merge", "--no-ff", "--no-edit", "-m", message, "origin/main")]
+    assert core.merge_message("b") == "Merge main into b (auto-sync) [skip ci]"
+    assert core.merge_message("b").endswith(" [skip ci]"), "a PAT push without it starts every PR's CI"
+
+
+def test_the_pat_reaches_the_push_argv_and_no_other_git_call() -> None:
+    auth = bs.push_auth("tok")
+    header = "AUTHORIZATION: basic " + base64.b64encode(b"x-access-token:tok").decode()
+    assert auth == ("-c", f"http.https://github.com/.extraheader={header}") and bs.push_auth("") == ()
+    runner = _git()
+    assert bs.Syncer(bs.Git(runner, auth), _gh(Api()), "main").sync(_target())[0] == core.SYNCED
+    carrying = [call for call in runner.calls if any("extraheader" in arg or "tok" in arg for arg in call)]
+    assert carrying == [(*auth, "push", "origin", "HEAD:refs/heads/issue-1-x")], "the PAT reaches the push only"
+
+
+def test_the_token_leaves_the_environment_and_a_timeout_never_logs_the_header() -> None:
+    environ = {bs.PUSH_TOKEN_ENV: " tok\n", "OTHER": "1"}
+    assert bs.take_push_token(environ) == "tok" and environ == {"OTHER": "1"}, "no git child may inherit it"
+    assert bs._verb([*bs.push_auth("tok"), "push", "origin", "HEAD:refs/heads/x"]) == "push origin"
+
+
+def test_a_missing_token_refuses_a_real_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv(bs.PUSH_TOKEN_ENV, raising=False)
+    monkeypatch.setattr(bs, "build_api", lambda: pytest.fail("no REST call may run without the push token"))
+    assert bs.main([]) == 1
 
 
 def test_a_clean_sync_is_one_plain_push_and_clears_the_labels() -> None:
@@ -234,8 +286,8 @@ def test_an_up_to_date_branch_without_sync_labels_costs_no_api_call() -> None:
 
 def test_the_comment_is_deduped_by_its_marker(monkeypatch: pytest.MonkeyPatch) -> None:
     """The sync calls the ONE upsert (#12984); a bot comment carrying the marker is updated, not added."""
-    upsert = bs.load_upsert()
-    module = sys.modules[upsert.__module__]
+    module = issue_api.load_upsert()
+    upsert = module.upsert
     ours = {"id": 99, "user": {"type": "Bot"}, "body": f"{core.MARKER_CONFLICT}\nolder", "created_at": "2"}
     quoted = {"id": 5, "user": {"type": "User"}, "body": core.MARKER_CONFLICT, "created_at": "3"}
     calls: List[Tuple[str, str]] = []
@@ -250,8 +302,9 @@ def test_the_comment_is_deduped_by_its_marker(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_the_sync_reuses_the_canonical_upsert() -> None:
-    assert bs.load_upsert().__module__ == "upsert_pr_comment"
-    assert bs.UPSERT_SCRIPT.is_file(), "the canonical upsert moved; the sync would fail at its first comment"
+    """The sync holds no loader of its own: it uses issue_api's one by-path loader (#12984, #19522)."""
+    assert bs.load_upsert is issue_api.load_upsert
+    assert issue_api.UPSERT_PATH.is_file(), "the canonical upsert moved; the sync would fail at its first comment"
 
 
 def test_an_already_labelled_pr_gets_no_second_comment() -> None:
@@ -299,6 +352,27 @@ def test_dependabot_and_automation_branches_are_never_synced_pr_or_not() -> None
         "`automation/other` (no PR)",
     ):
         assert skipped in plan.skipped[core.POLICY], skipped
+
+
+def test_merge_train_branches_are_never_synced() -> None:
+    """A [skip ci] sync on a train supersedes the train's own full CI run (#19724)."""
+    pulls = [_pull(10, "train-2026-10-27-85t"), _pull(11, "issue-11")]
+    plan = core.plan_run(pulls, ["train-parked"], REPO)
+    assert [(t.branch, t.pr) for t in plan.targets] == [("issue-11", 11)]
+    assert "#10 `train-2026-10-27-85t`" in plan.skipped[core.POLICY]
+    assert "`train-parked` (no PR)" in plan.skipped[core.POLICY]
+
+
+def test_prs_are_synced_oldest_first_then_parked_branches() -> None:
+    """A run cut short by a timeout or a moved head still caught up the oldest PRs (owner rule 2026-10-26)."""
+    pulls = [_pull(30, "issue-30"), _pull(10, "issue-10"), _pull(20, "issue-20")]
+    pulls[0]["created_at"], pulls[1]["created_at"], pulls[2]["created_at"] = (
+        "2026-10-21T08:00:00Z",
+        "2026-10-25T08:00:00Z",
+        "2026-10-21T08:00:00Z",
+    )
+    plan = core.plan_run(pulls, ["parked-b", "parked-a"], REPO)
+    assert [t.branch for t in plan.targets] == ["issue-20", "issue-30", "issue-10", "parked-a", "parked-b"]
 
 
 @pytest.mark.parametrize(
@@ -352,8 +426,14 @@ def test_a_secondary_rate_limit_honours_retry_after() -> None:
 
 def test_open_pulls_paginates_and_fails_closed() -> None:
     page1 = [{"number": n} for n in range(bs.PAGE_SIZE)]
-    api = Api([("GET", f"/repos/{REPO}/pulls?state=open&per_page=100&page=1", (200, page1))])
-    api.routes.append(("GET", f"/repos/{REPO}/pulls?state=open&per_page=100&page=2", (200, [{"number": 999}])))
+    api = Api([("GET", f"/repos/{REPO}/pulls?state=open&sort=created&direction=asc&per_page=100&page=1", (200, page1))])
+    api.routes.append(
+        (
+            "GET",
+            f"/repos/{REPO}/pulls?state=open&sort=created&direction=asc&per_page=100&page=2",
+            (200, [{"number": 999}]),
+        )
+    )
     assert len(_gh(api).open_pulls()) == bs.PAGE_SIZE + 1
     broken = Api([("GET", f"/repos/{REPO}/pulls", (502, {"message": "bad gateway"}))])
     with pytest.raises(bs.SyncApiError):
@@ -365,3 +445,55 @@ def test_the_summary_names_every_outcome() -> None:
     for outcome in (core.SYNCED, core.CURRENT, core.CONFLICT, core.WORKFLOW, core.HEAD_MOVED, core.FORK):
         assert f"| {outcome} |" in summary
     assert "| synced | 1 |" in summary and "- #1 `a`" in summary
+
+
+# ------------------------------------------- real git: --no-ff and 0 behind
+
+
+def _sh(cwd: Path, *args: str) -> str:
+    return bs.run_git(list(args), cwd=cwd, strict=False, check=True).stdout.strip()
+
+
+def _real_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """A bare origin whose main is one commit ahead of `behind` and equal to `current`."""
+    origin, clone = tmp_path / "origin.git", tmp_path / "clone"
+    _sh(tmp_path, "init", "--quiet", "--bare", "-b", "main", str(origin))
+    _sh(tmp_path, "clone", "--quiet", str(origin), str(clone))
+    for key, value in (("user.name", "t"), ("user.email", "t@example.invalid"), ("commit.gpgsign", "false")):
+        _sh(clone, "config", key, value)
+    _sh(clone, "checkout", "--quiet", "-b", "main")
+    _sh(clone, "commit", "--quiet", "--allow-empty", "-m", "one")
+    _sh(clone, "push", "--quiet", "origin", "main", "main:behind")
+    _sh(clone, "commit", "--quiet", "--allow-empty", "-m", "two")
+    _sh(clone, "push", "--quiet", "origin", "main", "main:current")
+    _sh(clone, "fetch", "--quiet", "origin")
+    monkeypatch.chdir(clone)
+    return origin
+
+
+class _Recording:
+    def __init__(self) -> None:
+        self.calls: List[Tuple[str, ...]] = []
+
+    def __call__(self, args: Sequence[str]) -> Tuple[int, str]:
+        self.calls.append(tuple(args))
+        return bs.git_output(args)
+
+
+def test_a_fast_forwardable_branch_gets_a_real_skip_ci_merge_commit(tmp_path: Path, monkeypatch) -> None:
+    origin = _real_repo(tmp_path, monkeypatch)
+    before = _sh(origin, "rev-parse", "behind")
+    outcome, _ = bs.Syncer(bs.Git(_Recording()), _gh(Api()), "main").sync(core.SyncTarget("behind", None, ""))
+    assert outcome == core.SYNCED
+    parents = _sh(origin, "log", "-1", "--format=%P", "behind").split()
+    assert parents == [before, _sh(origin, "rev-parse", "main")], "a fast-forward would push main's head, no marker"
+    assert _sh(origin, "log", "-1", "--format=%s", "behind") == "Merge main into behind (auto-sync) [skip ci]"
+
+
+def test_a_branch_already_zero_behind_is_skipped_and_not_pushed(tmp_path: Path, monkeypatch) -> None:
+    origin = _real_repo(tmp_path, monkeypatch)
+    before, runner = _sh(origin, "rev-parse", "current"), _Recording()
+    target = core.SyncTarget("current", None, "")
+    assert bs.Syncer(bs.Git(runner), _gh(Api()), "main").sync(target) == (core.CURRENT, "already up to date")
+    assert not [c for c in runner.calls if c[0] in ("checkout", "merge", "push")], runner.calls
+    assert _sh(origin, "rev-parse", "current") == before

@@ -1493,7 +1493,7 @@ watch(
   background: var(--color-warning-bg);
   border-bottom: 1px solid var(--color-warning-border);
 }
-.tool-approval-header i { color: var(--color-warning); font-size: 1.25rem; }
+.tool-approval-header .icon { color: var(--color-warning); font-size: 1.25rem; }
 .tool-approval-header h3 { @apply text-sm font-semibold; color: var(--text-primary); margin: var(--spacing-0); }
 .tool-approval-body { @apply flex flex-col gap-3 px-5 py-4; }
 .tool-approval-row { @apply flex flex-col gap-1; }

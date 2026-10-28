@@ -10,7 +10,7 @@ join had been absorbed into a trailing comment:
     )  # ssot-config-exempt: bootstrap before config available / ".env"
     return fallback
 
-`_parse_env_file` then hit `IsADirectoryError`, swallowed it into an empty dict
+`parse_env_file` then hit `IsADirectoryError`, swallowed it into an empty dict
 (its `except OSError` path), and every SSOT key was reported missing. A live
 host showed "194 drifted, (194 SSOT keys, 0 .env keys)" while its `.env` held
 93 keys — the drift report was an artefact, not a measurement.
@@ -51,11 +51,11 @@ def test_parser_on_a_directory_yields_nothing(tmp_path):
     This is the behaviour that turned a path bug into a plausible-looking
     "194 keys drifted" report, so it is pinned deliberately.
     """
-    assert det._parse_env_file(tmp_path) == {}
+    assert det.parse_env_file(tmp_path) == {}
 
 
 def test_parser_reads_a_real_env_file(tmp_path):
     env = tmp_path / ".env"
     env.write_text('# c\nA=1\nB="two"\nC=3 # trailing\n\n', encoding="utf-8")
 
-    assert det._parse_env_file(env) == {"A": "1", "B": "two", "C": "3"}
+    assert det.parse_env_file(env) == {"A": "1", "B": "two", "C": "3"}

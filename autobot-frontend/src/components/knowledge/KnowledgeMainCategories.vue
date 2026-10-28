@@ -301,7 +301,7 @@ const showEmptyStateHint = computed(
   font-size: var(--text-xs);
 }
 
-.populate-btn i {
+.populate-btn .icon {
   font-size: var(--text-xs);
 }
 

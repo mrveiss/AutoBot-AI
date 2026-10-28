@@ -783,15 +783,7 @@
     "logging": "Protokollierung",
     "prompts": "Aufforderungen",
     "backend": "Backend",
-    "save": "Einstellungen speichern",
     "reset": "Auf Standardeinstellungen zurücksetzen",
-    "panelLoadFailed": "Das Einstellungsfenster konnte nicht geladen werden",
-    "loadingSettings": "Einstellungen werden geladen...",
-    "backendOffline": "Backend offline – zeigt zwischengespeicherte Einstellungen an",
-    "saving": "Sparen...",
-    "discardChanges": "Änderungen verwerfen",
-    "cacheApiUnavailable": "Cache-API nicht verfügbar",
-    "cachedSettings": "Zwischengespeicherte Einstellungen verwenden (Backend offline)",
     "appearanceDesc": "Passen Sie das Erscheinungsbild Ihres Arbeitsbereichs individuell an",
     "voiceDesc": "Konfigurieren Sie Text-to-Speech-Stimme und Sprachprofile",
     "languageDesc": "Wählen Sie Ihre bevorzugte Sprache für die Benutzeroberfläche und die KI-Antworten",
@@ -801,31 +793,11 @@
     "languageChanged": "Sprache erfolgreich aktualisiert",
     "languageChangeFailed": "Die Sprache konnte nicht aktualisiert werden",
     "webResearch": {
-      "maxResultsHint": "Maximum number of search results to retrieve (1–50)",
       "title": "Web Research",
-      "methodLabel": "Search method",
-      "confirmationLabel": "Require confirmation",
-      "rateLimitRequests": "Requests",
-      "timeoutLabel": "Timeout (seconds)",
-      "enabledLabel": "Enable web research",
       "methodBasic": "Basic",
-      "thresholdLabel": "Auto-research threshold",
       "methodAdvanced": "Advanced",
       "desc": "Configure automated web research behaviour and privacy settings",
-      "rateLimitLabel": "Rate limiting",
-      "methodHint": "Choose how web searches are performed",
-      "maxResultsLabel": "Max results",
-      "confirmationHint": "Ask before performing a web search on your behalf",
-      "methodApiBased": "API-based",
-      "storeInKbHint": "Save research results to the knowledge base",
-      "filterAdultHint": "Filter adult content from search results",
-      "enabledHint": "Allow AutoBot to search the web when answering questions",
-      "privacyLabel": "Privacy & storage",
-      "anonymizeHint": "Anonymize requests before sending to search engines",
-      "timeoutHint": "Maximum time to wait for search results (5–120 s)",
-      "rateLimitWindow": "Window (s)",
-      "thresholdHint": "Confidence level below which AutoBot triggers an automatic search",
-      "rateLimitHint": "Limit how many requests are sent in a given time window"
+      "methodApiBased": "API-based"
     },
     "apiKeys": {
       "enterKey": "Enter API key...",
@@ -4243,6 +4215,9 @@
       "errorEnterBoth": "Bitte geben Sie sowohl eine Quell- als auch eine Zielentität ein.",
       "notInGraph": "Diese Entitäten sind noch nicht im Beziehungsgraphen.",
       "notInGraphHint": "Sie existieren, haben aber keine Graphverknüpfungen — daher lässt sich keine Verbindung verfolgen. Führen Sie die Entitätsextraktion erneut aus."
+    },
+    "chromaExplorer": {
+      "subtitle": "Vektorsammlungen durchsuchen und erkunden"
     }
   },
   "workflow": {

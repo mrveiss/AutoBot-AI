@@ -992,7 +992,6 @@ _ALNUM_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")  # Mixed case: IDs, categories, c
 _LOWERCASE_TAG_RE = re.compile(r"^[a-z0-9_-]+$")  # Lowercase: tags
 
 # Issue #380: Module-level tuples for search mode and sort validation
-_VALID_SEARCH_MODES = ("semantic", "keyword", "hybrid", "auto")
 _VALID_SORT_OPTIONS = ("newest", "oldest", "longest")
 
 
@@ -1206,8 +1205,8 @@ class SearchRequest(BaseModel):
     @classmethod
     def validate_mode(cls, v):
         """Validate search mode."""
-        if v not in _VALID_SEARCH_MODES:  # Issue #380: use module constant
-            raise ValueError(f"Invalid mode: {v}. Must be one of {_VALID_SEARCH_MODES}")
+        if v not in CategoryDefaults.SEARCH_MODES:  # the one allow-list (#19335)
+            raise ValueError(f"Invalid mode: {v}. Must be one of {CategoryDefaults.SEARCH_MODES}")
         return v
 
     @field_validator("created_after", "created_before")
@@ -2072,12 +2071,6 @@ class EmbeddingSettingsData(BaseModel):
 
 class EmbeddingUpdateData(BaseModel):
     """data payload for PUT /settings."""
-
-    model_config = {"extra": "allow"}
-
-
-class EmbeddingModelsData(BaseModel):
-    """data payload for GET /models."""
 
     model_config = {"extra": "allow"}
 
@@ -4978,8 +4971,8 @@ class ScopedSearchRequest(BaseModel):
     query: str = Field(..., min_length=1, description="Search query")
     top_k: int = Field(default=10, ge=1, le=100, description="Maximum results")
     mode: str = Field(
-        default="hybrid",
-        pattern=r"^(semantic|keyword|hybrid|auto)\z",
+        default=CategoryDefaults.SEARCH_MODE_HYBRID,
+        pattern=r"^(" + "|".join(CategoryDefaults.SEARCH_MODES) + r")\z",
         description="Search mode",
     )
     category: str | None = Field(default=None, description="Filter by category")

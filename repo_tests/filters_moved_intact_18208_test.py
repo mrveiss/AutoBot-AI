@@ -116,8 +116,9 @@ def test_every_pattern_a_changes_job_read_is_still_read(case):
 ISSUE_17822_FIXTURE = Path(__file__).parent / "fixtures" / "issue_17822_migration_gate_entries.json"
 #: 16 = the eleven #17822 entries plus `services/__init__.py`, `services/approval_gate_service.py` and
 #: `llc/services/workspace_lease.py` (#17996), and `llc/services/company.py` + `company_ceo.py` (#15907's
-#: concurrent-move test), which the migration tests import.
-ISSUE_17822_COUNT = 16
+#: concurrent-move test), which the migration tests import, plus `company_move_lock.py`, `authz.py`,
+#: `membership_service.py`, `scheduler/run_status.py` and `autobot_shared/db_errors.py` (#19634's move tests).
+ISSUE_17822_COUNT = 21
 
 
 def test_the_issue_17822_migration_entries_are_still_read():

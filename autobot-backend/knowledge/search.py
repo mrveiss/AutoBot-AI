@@ -31,6 +31,7 @@ from typing import TYPE_CHECKING, Any, Dict, List, Set
 from autobot_shared.error_boundaries import error_boundary
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults
+from knowledge.embedding_space_binding import current_space, snapshot
 from knowledge.quarantine import gate_response, require_audit_actor, store_side_where
 
 # Issue #5064: prompt-injection sanitizer applied pre-embedding.
@@ -169,14 +170,13 @@ class SearchMixin(BasicVectorSearchMixin):
         filters: Dict[str, Any] | None = None,
     ) -> List[Dict[str, Any]]:
         """Execute vector search and deduplicate results (Issue #398: extracted)."""
-        query_embedding = await self._get_query_embedding(query)
-        results_data = await self._query_chromadb(query_embedding, similarity_top_k, where=filters)
-        results = self._deduplicate_results(results_data, similarity_top_k)
-        logger.info(
-            "ChromaDB search returned %d unique documents for query: %s...",
-            len(results),
-            query[:50],
+        space = await current_space(self)  # #19379: the query's model and the store it meets, one snapshot
+        query_embedding = await self._get_query_embedding(query, space.model)
+        results_data = await self._query_chromadb(
+            query_embedding, similarity_top_k, where=filters, store=space.vector_store
         )
+        results = self._deduplicate_results(results_data, similarity_top_k)
+        logger.info("ChromaDB search returned %d unique documents for query: %s...", len(results), query[:50])
         return results
 
     async def basic_vector_search(
@@ -227,7 +227,7 @@ class SearchMixin(BasicVectorSearchMixin):
         top_k: int = 10,
         similarity_top_k: int = None,
         filters: Dict[str, Any] | None = None,
-        mode: str = "auto",
+        mode: str = CategoryDefaults.SEARCH_MODE_AUTO,
         # ---- Enhanced params (formerly enhanced_search) ----
         limit: int | None = None,
         offset: int = 0,
@@ -286,7 +286,7 @@ class SearchMixin(BasicVectorSearchMixin):
 
         if advanced or enhanced:
             eff_limit = limit if limit is not None else top_k
-            eff_mode = mode if mode != "auto" else CategoryDefaults.SEARCH_MODE_HYBRID
+            eff_mode = mode if mode != CategoryDefaults.SEARCH_MODE_AUTO else CategoryDefaults.SEARCH_MODE_HYBRID
             ctx = SearchContext.from_params(
                 query=query,
                 limit=eff_limit,
@@ -328,25 +328,24 @@ class SearchMixin(BasicVectorSearchMixin):
         where = store_side_where(filters, include_unservable, include_quarantined)
         return await self._search_basic(query, top_k, similarity_top_k, where)
 
-    async def _get_query_embedding(self, query: str) -> List[float]:
+    async def _get_query_embedding(self, query: str, model: str | None = None) -> List[float]:
         """Get embedding for query, using cache when available.
 
         Issue #281: Extracted helper.
         Issue #165: Uses NPU worker for hardware-accelerated embedding generation.
         """
-        from autobot_shared.embedding_model import active_embedding_model
         from knowledge.embedding_cache import get_embedding_cache
         from knowledge.facts import _generate_embedding_with_npu_fallback
 
-        # Issue #12251/#18143: cache key is (model, text); the generator resolves
-        # the same model through the same resolver, so key and vector agree.
-        model = active_embedding_model()
+        # Issue #12251/#18143: cache key is (model, text) and the generator is given the same model,
+        # so key and vector agree. #19379: the model is the bound space's, not the record's.
+        model = model or snapshot(self).model
         _embedding_cache = get_embedding_cache()
         query_embedding = await _embedding_cache.get(query, model=model)
 
         if query_embedding is None:
             # Cache miss - compute embedding using NPU worker with fallback
-            query_embedding = await _generate_embedding_with_npu_fallback(query)
+            query_embedding = await _generate_embedding_with_npu_fallback(query, model_name=model)
             await _embedding_cache.put(query, query_embedding, model=model)
 
         return query_embedding
@@ -356,14 +355,15 @@ class SearchMixin(BasicVectorSearchMixin):
         query_embedding: List[float],
         similarity_top_k: int,
         where: Dict[str, Any] | None = None,
+        store: Any = None,
     ) -> Dict[str, Any]:
         """Query ChromaDB directly with embedding. Issue #281: Extracted helper.
 
-        Issue #934: Accepts optional where filter for permission-based pre-filtering.
-        Issue #8392: Records access for CollectionTierManager hot/warm/cold promotion.
+        Issue #934: optional where filter for permission pre-filtering; #8392: tier access recording.
         """
-        chroma_collection = self.vector_store._collection
-
+        chroma_collection = self.vector_store._collection  # the KB-read guard counts this read (kept a plain assign)
+        if store is not None:
+            chroma_collection = store._collection  # #19379: the caller's snapshot
         # Issue #8392: Record collection access for tiering promotions (non-critical).
         try:
             from knowledge.tiering import get_tier_manager
@@ -491,9 +491,9 @@ class SearchMixin(BasicVectorSearchMixin):
         if filter_parts:
             base_filters = filter_parts
 
-        if mode == "keyword":
+        if mode == CategoryDefaults.SEARCH_MODE_KEYWORD:
             return await self._keyword_search(processed_query, fetch_limit, category)
-        elif mode == "semantic":
+        elif mode == CategoryDefaults.SEARCH_MODE_SEMANTIC:
             return await self._dispatch_search(
                 processed_query,
                 top_k=fetch_limit,
@@ -578,7 +578,7 @@ class SearchMixin(BasicVectorSearchMixin):
         category: str | None = None,
         tags: List[str] | None = None,
         tags_match_any: bool = False,
-        mode: str = "hybrid",
+        mode: str = CategoryDefaults.SEARCH_MODE_HYBRID,
         enable_reranking: bool = False,
         min_score: float = 0.0,
         board_id: str | None = None,

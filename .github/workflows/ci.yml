@@ -811,7 +811,7 @@ jobs:
     - name: Setup Node.js
       uses: actions/setup-node@v7
       with:
-        node-version: '22'
+        node-version-file: .nvmrc
         cache: 'npm'
         cache-dependency-path: autobot-frontend/package-lock.json
 
@@ -1279,8 +1279,7 @@ jobs:
                 ollama:
                   selected_model: "mock-embed"
 
-        deployment:
-          mode: "local"
+        # #19316: no deployment.mode -- AUTOBOT_DEPLOYMENT_MODE is the one home; unset is auto-detect.
 
         data:
           reliability_stats_file: "data/reliability_stats.json"

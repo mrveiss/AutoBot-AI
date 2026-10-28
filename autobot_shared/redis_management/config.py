@@ -25,6 +25,9 @@ from typing import Any, Dict
 import yaml
 
 from autobot_shared.network_constants import NetworkConstants
+from autobot_shared.redis_management.database_names import database_number
+from autobot_shared.redis_management.endpoint import redis_tls_port, resolve_redis_endpoint
+from autobot_shared.redis_management.types import resolve_databases_yaml
 
 logger = logging.getLogger(__name__)
 
@@ -86,10 +89,12 @@ class RedisDbConfig:
         if self.username is None:
             # Same precedence as the password (#16626)
             self.username = os.getenv("REDIS_USERNAME") or os.getenv("AUTOBOT_REDIS_USERNAME")
-        # Auto-load TLS settings from SSOT config - Issue #164
-        if os.getenv("AUTOBOT_REDIS_TLS_ENABLED", "").lower() == "true":
+        # Auto-load TLS settings - Issue #164. The on/off rule and the port are the
+        # endpoint resolver's, so a client and a URL agree on TLS too (#19232).
+        tls_port = redis_tls_port()
+        if tls_port is not None:
             self.ssl = True
-            self.port = int(os.getenv("AUTOBOT_REDIS_TLS_PORT", "6380"))
+            self.port = tls_port
 
             # Check for explicit cert paths first (set by SLM enable-tls playbook)
             self.ssl_ca_certs = os.getenv("AUTOBOT_TLS_CA_PATH")
@@ -100,11 +105,23 @@ class RedisDbConfig:
             if not self.ssl_ca_certs or not self.ssl_certfile or not self.ssl_keyfile:
                 from pathlib import Path
 
-                cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", "certs")  # ssot-config-exempt: TLS cert dir
+                from autobot_shared.env_registry_tls import DEFAULT_TLS_CERT_DIR
+
+                cert_dir = os.getenv("AUTOBOT_TLS_CERT_DIR", DEFAULT_TLS_CERT_DIR)  # the one default (#19317)
                 project_root = Path(__file__).parent.parent.parent
                 self.ssl_ca_certs = str(project_root / cert_dir / "ca" / "ca-cert.pem")
                 self.ssl_certfile = str(project_root / cert_dir / "main-host" / "server-cert.pem")
                 self.ssl_keyfile = str(project_root / cert_dir / "main-host" / "server-key.pem")
+
+
+#: Keys a YAML database entry may not set: the endpoint has one resolution path (#19232).
+_ENDPOINT_KEYS = frozenset({"host", "port", "password", "username"})
+
+
+def _resolved_endpoint() -> Dict[str, Any]:
+    """The shared endpoint as the loader's plain dict."""
+    resolved = resolve_redis_endpoint()
+    return {"host": resolved.host, "port": resolved.port, "password": resolved.password, "username": resolved.username}
 
 
 class RedisConfigLoader:
@@ -112,8 +129,7 @@ class RedisConfigLoader:
     Load Redis configurations from multiple sources.
 
     Supports loading from:
-    - YAML configuration files
-    - Service registry
+    - YAML configuration files (per-database tuning)
     - Centralized timeout configuration
     """
 
@@ -122,43 +138,34 @@ class RedisConfigLoader:
         """
         Resolve the YAML configuration file path.
 
-        Checks container and host paths if no explicit path provided.
-        Issue #620.
+        An explicit path, else ``types.resolve_databases_yaml`` -- the one candidate
+        list the number table also reads (#19232). Issue #620.
         """
         if yaml_path is not None:
             return yaml_path if os.path.exists(yaml_path) else None
-
-        from autobot_shared.ssot_config import config as ssot_config
-
-        possible_paths = [
-            "/app/config/redis-databases.yaml",  # Container
-            "./config/redis-databases.yaml",  # Host relative
-            os.path.join(
-                ssot_config.path.base_dir,
-                "config/redis-databases.yaml",
-            ),  # Host absolute
-        ]
-
-        for path in possible_paths:
-            if os.path.exists(path):
-                return path
-
-        return None
+        return resolve_databases_yaml()
 
     @staticmethod
-    def _parse_database_config(db_name: str, db_config: Dict[str, Any]) -> RedisDbConfig:
+    def _parse_database_config(db_name: str, db_config: Dict[str, Any], endpoint: Dict[str, Any]) -> RedisDbConfig:
         """
-        Parse a single database configuration from YAML data.
+        One YAML entry's pool and timeout tuning, on the shared number and endpoint.
 
+        The database number comes from ``database_number`` (the YAML plus any
+        ``AUTOBOT_REDIS_DB_*`` override) and host/port/credentials from *endpoint*,
+        the connection manager's one resolution (#19232). A per-entry
+        host/port/password/username would be a second path to a different server.
         Issue #620.
         """
+        ignored = sorted(_ENDPOINT_KEYS & db_config.keys())
+        if ignored:
+            logger.warning("redis-databases.yaml %r: ignoring %s (#19232: one endpoint)", db_name, ignored)
         return RedisDbConfig(
             name=db_name,
-            db=db_config.get("db", 0),
-            host=db_config.get("host", NetworkConstants.REDIS_VM_IP),
-            port=db_config.get("port", NetworkConstants.REDIS_PORT),
-            password=db_config.get("password"),
-            username=db_config.get("username"),
+            db=database_number(db_name),
+            host=endpoint["host"],
+            port=endpoint["port"],
+            password=endpoint.get("password"),
+            username=endpoint.get("username"),
             decode_responses=db_config.get("decode_responses", True),
             max_connections=db_config.get("max_connections", 100),
             socket_timeout=db_config.get("socket_timeout", 5.0),
@@ -171,18 +178,18 @@ class RedisConfigLoader:
         )
 
     @staticmethod
-    def load_from_yaml(yaml_path: str | None = None) -> Dict[str, RedisDbConfig]:
+    def load_from_yaml(
+        yaml_path: str | None = None, endpoint: Dict[str, Any] | None = None
+    ) -> Dict[str, RedisDbConfig]:
         """
         Load configurations from YAML file.
 
-        Priority paths (container-aware):
-        1. Provided yaml_path
-        2. /app/config/redis-databases.yaml (container)
-        3. ./config/redis-databases.yaml (host relative)
-        4. $AUTOBOT_BASE_DIR/config/redis-databases.yaml (host absolute)
+        Path: the provided yaml_path, else ``types.resolve_databases_yaml()``.
 
         Args:
             yaml_path: Optional explicit path to YAML config file
+            endpoint: host/port/password/username every entry connects with;
+                default: ``endpoint.resolve_redis_endpoint()`` (#19232)
 
         Returns:
             Dict mapping database names to RedisDbConfig objects
@@ -199,8 +206,9 @@ class RedisConfigLoader:
 
             databases = config_data.get("redis_databases", config_data.get("databases", {}))
 
+            shared = endpoint if endpoint is not None else _resolved_endpoint()
             configs = {
-                db_name: RedisConfigLoader._parse_database_config(db_name, db_config)
+                db_name: RedisConfigLoader._parse_database_config(db_name, db_config, shared)
                 for db_name, db_config in databases.items()
             }
 
@@ -214,37 +222,6 @@ class RedisConfigLoader:
         except Exception as e:
             logger.error("Error loading YAML config from %s: %s", resolved_path, e)
             return {}
-
-    @staticmethod
-    def load_from_service_registry() -> Dict[str, RedisDbConfig]:
-        """
-        Load configurations from service registry.
-
-        Returns:
-            Dict mapping database names to RedisDbConfig objects
-        """
-        try:
-            from utils.service_registry import get_service_registry
-
-            registry = get_service_registry()
-            redis_config = registry.get_service_config("redis")
-
-            if redis_config:
-                # Convert service registry format to RedisDbConfig
-                return {
-                    "main": RedisDbConfig(
-                        name="main",
-                        db=0,
-                        host=redis_config.host,
-                        port=redis_config.port,
-                        password=(redis_config.password if hasattr(redis_config, "password") else None),
-                        username=getattr(redis_config, "username", None),
-                    )
-                }
-        except (ImportError, Exception) as e:
-            logger.debug("Could not load from service registry: %s", e)
-
-        return {}
 
     @staticmethod
     def load_timeout_config() -> Dict[str, Any]:

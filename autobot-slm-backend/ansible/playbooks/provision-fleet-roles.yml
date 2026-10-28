@@ -859,6 +859,15 @@
       become: false
       tags: ['mark-synced']
 
+    - name: "Mark-synced | Resolve the SLM admin password (#19318)"
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/read_slm_admin_password.yml
+        apply:
+          tags: ['mark-synced']
+      vars:
+        require_slm_admin_password: false
+      tags: ['mark-synced']
+
     - name: "Mark-synced | Login to SLM API"
       ansible.builtin.uri:
         url: "https://{{ _slm_api_host }}/slm/api/auth/login"
@@ -866,7 +875,7 @@
         body_format: json
         body:
           username: "admin"
-          password: "{{ slm_admin_password | default(lookup('env', 'SLM_ADMIN_PASSWORD')) | default('admin', true) }}"
+          password: "{{ slm_admin_password }}"
         validate_certs: false
         status_code: [200, 401, 403]
         timeout: 10
@@ -903,6 +912,7 @@
       ignore_errors: true
       when: _slm_login.status == 200
       tags: ['mark-synced']
+      no_log: true  # #19764: credentials in the request or response
 
 # -------------------------------------------------------------------
 # Phase 7: Summary

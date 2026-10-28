@@ -30,6 +30,7 @@ from pathlib import Path
 
 import pytest
 import repo_tests.ansible_concept_forks_17856_test as _ansible_forks_guard  # noqa: F401 -- registers its scope
+import repo_tests.ansible_credentials_never_logged_19764_test as _credentials_logged_guard  # noqa: F401 -- registers its scope
 import repo_tests.anti_pattern_type_emitted_18189_test as _anti_pattern_guard  # noqa: F401 -- registers its scope
 import repo_tests.audit_writer_single_source_17225_test as _audit_writer_guard  # noqa: F401 -- registers its scope
 import repo_tests.chat_history_async_calls_awaited_18316_test as _chat_async_guard  # noqa: F401 -- registers its scope
@@ -217,6 +218,8 @@ def test_a_declared_scope_that_the_sweep_does_not_reach_is_refused() -> None:
 #: Compared as a SET in both directions. Adding a scoped declaration means adding a line here,
 #: and that is the point -- the scope is a decision, so it is written twice on purpose.
 _DECLARED_SCOPES = {
+    "dead-icon-selector-vue-files": ("autobot-frontend/src",),
+    "kit-shadow-ts-files-scanned-14908": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "v-html-sanitiser-sinks": (
         "autobot-frontend/src",
         "autobot-slm-frontend/src",
@@ -234,11 +237,14 @@ _DECLARED_SCOPES = {
     "semantic-chunker-fork-scan": ("autobot-backend", "autobot_shared"),
     "migration-gate-test-import-sweep": ("autobot-backend/tests/migrations",),
     "paths-filter-workflow-sweep": (".github/workflows",),
+    "workflow-visible-name-sweep": (".github/workflows",),
     "anti-pattern-type-emitters": ("autobot-backend/code_analysis", "autobot-backend/code_intelligence"),
     "compat-module-needs-importer": ("autobot-backend",),
+    "compose-nodes-restated-default": ("autobot-slm-backend", "autobot-infrastructure", "docker", "docker-compose.yml"),
     "chat-history-async-calls-awaited": ("autobot-backend/api",),
     "chat-single-delete-implementation": ("autobot-backend/api",),
     "ai-line-single-policy": ("autobot-backend", "autobot_shared"),
+    "no-literal-secret-default": ("autobot-slm-backend", "autobot-backend", "autobot_shared"),
     "hardcoded-ui-literal-scan": ("autobot-frontend/src/", "autobot-slm-frontend/src/"),
     "shadowed-literal-routes": ("autobot-backend", "autobot-slm-backend"),
     "conversation-turn-single-store": ("autobot-backend", "autobot_shared", "autobot-infrastructure"),
@@ -263,10 +269,17 @@ _DECLARED_SCOPES = {
     "embedding-model-literal-sites": (
         "autobot-backend",
         "autobot_shared",
-        "autobot-infrastructure/shared/scripts/populate_kb_chromadb.py",
         "autobot-infrastructure/shared/tools/index_documentation.py",
     ),
     "single-attribute-writer-scan": ("autobot-frontend/src",),
+    "torch-pair-literals": (
+        ".github",
+        "docker",
+        "autobot-infrastructure",
+        "autobot-slm-backend/ansible",
+        "scripts",
+        "install.sh",
+    ),
     "tool-effect-table-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "deployment-mode-detector-scan": ("autobot-backend/", "autobot-infrastructure/"),
     "egress-default-outbound-call-sites": (
@@ -286,6 +299,7 @@ _DECLARED_SCOPES = {
         "pipeline-scripts/",
     ),
     "ansible-concept-forks-17856-scan": ("autobot-slm-backend/ansible",),
+    "ansible-status-queries-check-mode-sweep": ("autobot-slm-backend/ansible",),
     "defined-twice-18094-scan": (
         "autobot-backend",
         "autobot-slm-backend",
@@ -312,6 +326,7 @@ _DECLARED_SCOPES = {
     ),
     "backend-migrations-resume-safe-18729": ("autobot-backend/migrations/versions",),
     "opt-autobot-literal-ratchet-18880": ("autobot-slm-backend/ansible",),
+    "disaster-recovery-deployed-units": ("autobot-slm-backend/ansible/roles",),
     "concept-forks-17856-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "gateway-adapter-package-scan": ("autobot-backend/services/gateway",),
     "architecture-family-definition-scan": (
@@ -340,6 +355,30 @@ _DECLARED_SCOPES = {
     ),
     "llc-actor-id-scan": ("autobot-backend/llc",),
     "docker-smoke-context-publishers": (".github/workflows",),
+    "cache-never-in-repo": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
+    "node-major-literals": (
+        ".github",
+        "autobot-slm-backend/ansible",
+        "autobot-infrastructure/shared/scripts",
+        "install.sh",
+    ),
+    "service-port-homes-scan": (
+        "autobot-backend",
+        "autobot-slm-backend",
+        "autobot_shared",
+        "autobot-infrastructure",
+        "autobot-npu-worker",
+        "scripts",
+        "autobot-frontend",
+        ".env.example",
+    ),
+    "generated-type-redeclarations": ("autobot-frontend/src",),
+    "severity-order-copies": ("autobot-backend", "autobot-slm-backend", "autobot_shared", "pipeline-scripts"),
+    "llc-sigterm-grace-copies": ("autobot-backend/llc",),
+    "frontend-http-transports": ("autobot-frontend/src", "autobot-slm-frontend/src"),
+    "frontend-local-formatter-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
+    "search-mode-copies": ("autobot-backend",),
+    "redaction-placeholder-literals": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "one-system-knowledge-template-tree": ("autobot-backend",),
     "one-static-data-copy-scan": (
         "autobot-backend",
@@ -396,8 +435,10 @@ _DECLARED_SCOPES = {
     "severity-enum-fork-scan": ("autobot-backend", "autobot_shared", "autobot-infrastructure"),
     "session-ownership-validator-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "knowledge-metadata-parse-canonical": ("autobot-backend/api",),
+    "monitoring-version-literals": ("docker-compose.yml", "autobot-infrastructure", "autobot-slm-backend/ansible"),
     "model-tier-map-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "embedding-model-render-sites": ("autobot-slm-backend/ansible",),
+    "ansible-credentials-never-logged": ("autobot-slm-backend/ansible",),
     "frontend-model-literal-scan": ("autobot-frontend/src",),
     "one-bm25-formula": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "one-hybrid-search": ("autobot-backend", "autobot_shared"),
@@ -416,6 +457,7 @@ _DECLARED_SCOPES = {
     "direct-secrets-service-callers": ("autobot-backend", "autobot_shared"),
     "data-db-path-production-python": ("autobot-backend", "autobot_shared"),
     "jekyll-processed-docs": ("docs",),
+    "kb-populate-doc-patterns": ("autobot-infrastructure",),
     "kb-admin-read-bypass": ("autobot-backend/", "autobot_shared/"),
     "kb-construction-18122-scan": (
         "autobot-backend/",
@@ -448,6 +490,14 @@ _DECLARED_SCOPES = {
     ),
     "store-fact-chokepoint": ("autobot-backend/", "autobot_shared/"),
     "ssh-restart-executor-scan": ("autobot-slm-backend",),
+    "ssot-rehardcode-scan-19730": ("autobot-backend", "autobot_shared", "autobot-slm-backend"),
+    "browser-service-routes-scan-19490": (
+        "autobot-backend",
+        "autobot_shared",
+        "autobot-infrastructure",
+        "autobot-slm-backend",
+        "scripts",
+    ),
 }
 
 

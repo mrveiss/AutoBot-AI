@@ -1,0 +1,73 @@
+# A PR with any merge conflict fails CI at once (#19769)
+#
+# Maintainer decision (2026-10-27): "if there is a single conflict in pr ci should
+# autofail". A push to main can put an open PR into conflict while its CI is mid-run;
+# those runs measure a tree that can never merge and hold runner slots.
+#
+# On pull_request (opened, reopened, synchronize, ready_for_review) it checks that PR;
+# on push to main it checks every open PR into main, `train-*` branches included
+# (branch sync skips them, #19724). A CONFLICTING PR gets its queued and in-progress
+# runs cancelled (this run excepted) and `no-merge-conflicts` set to failure; a
+# MERGEABLE one gets success. UNKNOWN after the bounded retry is `pending`, never green.
+#
+# WHY THERE IS A SCHEDULE. GitHub starts no pull_request run on a head that conflicts
+# with its base, so a PR that is pushed already conflicting never triggers the
+# pull_request path above. Every 10 minutes (and on workflow_dispatch) the same full
+# open-PR sweep as a push to main runs, which fails such a PR and cancels its runs.
+# The sweep also re-checks PRs left `pending` as UNKNOWN, so they are not stuck.
+#
+# GITHUB_TOKEN only, minimal scopes; no PAT. The checkout is main, never the PR's code:
+# a conflicting PR has no merge ref, and the script that runs must be main's.
+# Making `no-merge-conflicts` a required status on main is a branch-protection setting
+# (maintainer), recorded on #19769.
+
+name: pr-merge-conflict-gate
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches: [ main ]
+    types: [ opened, reopened, synchronize, ready_for_review ]
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+# Per PR on pull_request; one group for main pushes. A newer run supersedes an older
+# one: the status is recomputed from live state each time.
+concurrency:
+  group: pr-merge-conflict-gate-${{ github.event_name }}-${{ github.event.pull_request.number || 'main' }}
+  # A scheduled sweep queues behind the active one: cancelling it mid-list leaves later PRs unchecked.
+  cancel-in-progress: ${{ github.event_name != 'schedule' }}
+
+permissions: {}
+
+jobs:
+  gate:
+    name: no-merge-conflicts gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      statuses: write
+      actions: write
+      pull-requests: read
+    steps:
+      # The event's own commit: main on push/schedule/dispatch, the PR's merge commit on
+      # pull_request. This is `pull_request`, not `pull_request_target`, so a fork's run
+      # gets a read-only token and its code never runs with write access. Pinning `ref: main`
+      # made the gate's introducing PR fail -- the script is not on main until it merges.
+      - name: Check out the event's commit
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Publish no-merge-conflicts and cancel runs of conflicting PRs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          BASE_BRANCH: main
+          PYTHONPATH: ${{ github.workspace }}
+        run: python3 pipeline-scripts/pr_conflict_gate.py

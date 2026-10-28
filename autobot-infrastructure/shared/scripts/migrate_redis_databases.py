@@ -21,6 +21,7 @@ if str(_REPO_ROOT) not in sys.path:
 # #14518: `utils.redis_database_manager` exists nowhere; the RedisDatabase enum
 # is re-exported by autobot_shared/redis_client.py (see its __all__).
 from autobot_shared.redis_client import RedisDatabase, require_redis_client  # noqa: E402
+from autobot_shared.redis_management.database_names import database_number  # noqa: E402
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -38,9 +39,9 @@ class RedisMigrator:
                 # Test connection
                 client.ping()
                 self.connections[db_enum.name] = client
-                logger.info("Connected to Redis database %s (%s)", db_enum.value, db_enum.name)
+                logger.info("Connected to Redis database %s (%s)", database_number(db_enum), db_enum.name)
             except Exception as e:
-                logger.error("Failed to connect to Redis database %s: %s", db_enum.value, e)
+                logger.error("Failed to connect to Redis database %s: %s", database_number(db_enum), e)
 
         self.source_db = self.connections.get("MAIN")  # Database 0
 
@@ -234,8 +235,8 @@ class RedisMigrator:
             if db_name in self.connections:
                 client = self.connections[db_name]
                 key_count = client.dbsize()
-                results[f"db_{db_enum.value}_{db_name}"] = key_count
-                logger.info("Database %s (%s): %s keys", db_enum.value, db_name, key_count)
+                results[f"db_{database_number(db_enum)}_{db_name}"] = key_count
+                logger.info("Database %s (%s): %s keys", database_number(db_enum), db_name, key_count)
 
         return results
 

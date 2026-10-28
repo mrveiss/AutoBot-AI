@@ -1,9 +1,11 @@
 # Copyright 2025-2026 mrveiss
 # SPDX-License-Identifier: Apache-2.0
-"""RAG graph-retrieval and KB-ingest extraction AUTOBOT_* environment variable registrations (#18141, #18826).
+"""RAG, KB-ingest and LLM-call budget AUTOBOT_* environment variable registrations (#18141, #18826, #16924).
 
 Sibling of ``env_registry_ai.py`` (which sits at the 600-line ceiling), imported by
 ``env_registry`` itself like every split module, so registration happens whenever it loads.
+The LLM-call budgets (transcript-analysis output tokens, the spend-record wait) are the
+ai-component overflow that would otherwise belong in ``env_registry_ai.py``.
 """
 
 from __future__ import annotations
@@ -23,10 +25,34 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_RAG_SCORE_THRESHOLD",
+        type=float,
+        default=0.3,
+        description=(
+            "Minimum relevance score a knowledge-retrieval result needs to be kept "
+            "(constants.rag_graph_constants.RAG_SCORE_THRESHOLD, the one default, #19354)."
+        ),
+        component="rag",
+        range=(0.0, 1.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_RAG_GRAPH_TIMEOUT_SECONDS",
         type=float,
         default=10.0,
         description="Default graph-RAG search deadline in seconds (RAGConfig.graph_timeout_seconds, #18141).",
+        component="rag",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_DOC_HASH_CACHE_TTL_SECONDS",
+        type=float,
+        default=60.0,
+        description="Seconds the shared stale filter reuses the doc hash cache before re-reading it (#4723, #19280).",
         component="rag",
     )
 )
@@ -74,5 +100,36 @@ register_env_var(
         ),
         component="knowledge",
         range=(256, 65536),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_TRANSCRIPT_ANALYSIS_MAX_TOKENS",
+        type=int,
+        default=4096,
+        description=(
+            "Output-token budget for one transcript analysis: the transcripts analysis WebSocket "
+            "and the transcriber ai/ask route (transcriber/ai/prompts.py, #16924). Set explicitly "
+            "because LLMService.stream() otherwise applies the general task default of 1024, which "
+            "cut long summaries and protocols off mid-answer."
+        ),
+        component="ai",
+        range=(256, 32768),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_SPEND_RECORD_TIMEOUT_SECONDS",
+        type=float,
+        default=10.0,
+        description=(
+            "How long an ended LLM stream waits for its spend record to be stored before letting "
+            "go (services/llm_usage_recording.py, #16924). The record keeps running in the "
+            "background past this, and a failure is still logged; only the wait is bounded."
+        ),
+        component="ai",
+        range=(0.1, 120.0),
     )
 )

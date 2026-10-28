@@ -106,6 +106,8 @@ python:
   # #15360: the one reusable `changes` job every converted workflow calls; the
   # equivalence and one-job guards under repo_tests read it, so editing it must
   # run them rather than take the shim's green.
+  # #19769: the conflict gate's guard reads its workflow, so editing it runs the suite.
+  - '.github/workflows/pr-merge-conflict-gate.yml'
   # A change here changes what "python" means for both workflows.
   - '.github/filters/python-paths.yml'
   # #17822: migration_gate_filter_covers_what_its_tests_import_test reads this workflow
@@ -113,6 +115,9 @@ python:
   # import. Editing the workflow without running that guard is how the filter drifted
   # in the first place -- the gate skipped on the code under test and merged green.
   # #18467: pr_comment_upsert_12984_test reads it by concrete literal -- the sticky PR-comment helper's caller.
+  # #19523: dependabot_root_coverage_19523_test reads it by concrete literal. Deleting a
+  # block's `directory` is the regression it catches, and that edit touches no .py file.
+  - '.github/dependabot.yml'
   # #14544/#14575: repo_tests/deployment_declares_project_root_14544_test.py
   # asserts each of these five non-.py deployment sources still declares
   # AUTOBOT_PROJECT_ROOT. Without an explicit entry here, editing only one of
@@ -280,6 +285,11 @@ python:
   # green while the guard that reads it never runs.
   - '.github/workflows/sync-main-to-release.yml'
   - 'autobot-frontend/package.json'
+  # #19328/#14725: node_major_one_home_19328_test.py reads the Node home and checks the
+  # frontend engines floor against every locked dependency -- a lock bump that needs a
+  # newer Node, or an edit to the home, must run that guard.
+  - '.nvmrc'
+  - 'autobot-frontend/package-lock.json'
   # #19324: browser_port_single_home_19324_test.py pins this file's browser-port
   # fallback to ssot_config.port.browser; an edit confined to it must run that guard.
   - 'autobot-frontend/vite.config.js'
@@ -341,6 +351,12 @@ python:
   # confined to the guide -- documenting a name that resolves to nothing -- skips
   # the guard written to catch exactly that.
   - 'docs/guides/CONFIGURATION_GUIDE.md'
+  # #19459: `disaster_recovery_names_real_units_19459_test.py` reads this runbook by concrete
+  # literal to check every unit it tells an operator to start is one a role deploys.
+  - 'docs/operations/disaster-recovery.md'
+  # #19279: `landing_page_claims_19279_test.py` reads the public landing page by concrete literal
+  # for the libraries it names and any placeholder it renders.
+  - 'docs/index.html'
   # #16427: `secretsmanager_template_names_match_vault_registry_16427_test.py`
   # reads this component's `credentialTemplates` array by concrete literal, to
   # assert its provider names still match the vault registry. Without an entry
@@ -448,6 +464,9 @@ python:
   - 'docs/architecture/PLATFORM_MODEL.md'
   - 'docs/features/CATALOG.md'
   - 'docs/llc/_index.md'
+  # #19611: `operational_docs_name_real_playbooks_19611_test.py` reads this guide by concrete
+  # literal for its one declared exemption. One file, not `docs/**`.
+  - 'docs/guides/slm-docker-ansible-deployment.md'
   # #18266: `social_preview_18266_test.py` pins the repository social-preview
   # image's dimensions and size. A change confined to the image -- replacing it
   # with one of the wrong shape -- is exactly what the guard exists to catch.

@@ -11,6 +11,7 @@ from typing import Any, Dict, List
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
+from autobot_shared.ssot_config import config
 from models.session_collaboration import PermissionLevel
 from services.personality_service import SUPPORTED_LANGUAGES
 from skills.models import GovernanceMode, SkillActivationLevel
@@ -295,13 +296,6 @@ class LLMCurrentResponse(BaseModel):
 
     model: str
     provider: str
-
-
-class LLMEmbeddingModelsResponse(BaseModel):
-    """Response for GET /llm/embedding/models."""
-
-    models: List[Any]
-    total_count: int
 
 
 # ---------------------------------------------------------------------------
@@ -1776,10 +1770,9 @@ class InferenceOptimizationSettings(BaseModel):
     prompt_compression_min_length: int = 100
     prompt_compression_preserve_code: bool = True
     prompt_compression_aggressive: bool = False
-
     cache_enabled: bool = True
-    cache_l1_size: int = 100
-    cache_l2_ttl: int = 300
+    cache_l1_size: int = config.misc.cache_l1_size  # #19730
+    cache_l2_ttl: int = config.misc.cache_l2_ttl
 
     cloud_connection_pool_size: int = 100
     cloud_batch_window_ms: int = 50
@@ -1965,7 +1958,7 @@ class AgentModelUpdate(BaseModel):
 
     agent_id: str
     model: str
-    provider: str | None = "ollama"
+    provider: str | None = config.llm.provider  # #19730
 
 
 # ---------------------------------------------------------------------------

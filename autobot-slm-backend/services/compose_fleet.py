@@ -17,9 +17,9 @@ Public API (wired from main.py's lifespan):
 
 import asyncio
 import logging
-import os
 from datetime import datetime, timedelta, timezone
 
+from autobot_shared.chromadb_endpoints import CHROMADB_HEARTBEAT_PATH
 from autobot_shared.env_registry import env
 from autobot_shared.env_utils import env_int_clamped
 from config import settings
@@ -159,8 +159,8 @@ async def _heartbeat_self_managed_nodes() -> None:
 
 # Compose fleet nodes (#9761): in a single-host docker compose stack each service
 # container is surfaced as a fleet node, using the SAME Node model + heartbeat path
-# as VM nodes. Gated by SLM_COMPOSE_NODES so production (Ansible/VM) fleets are
-# unaffected. port=None => liveness can't be TCP-probed, so it's assumed up.
+# as VM nodes. Gated by settings.compose_nodes_enabled (#19323): on in a compose stack,
+# off on production (Ansible/VM) fleets. port=None => liveness can't be TCP-probed, so it's assumed up.
 # Every mandatory AutoBot role (all canonical roles except optional vnc/docker) is
 # assigned to exactly one node — roles are single-node, so the fleet wizard hides a
 # role duplicated across nodes. "running" = the role has a live container here
@@ -251,14 +251,14 @@ _COMPOSE_NODE_SPECS: list[dict] = [
         "host": 12,
         "port": 8000,
         "protocol": "http",
-        "path": "/api/v2/heartbeat",
+        "path": CHROMADB_HEARTBEAT_PATH,  # #19413
     },
 ]
 
 
 def _compose_nodes_enabled() -> bool:
-    """True when each compose container should be surfaced as a fleet node."""
-    return os.getenv("SLM_COMPOSE_NODES", "false").strip().lower() in ("1", "true", "yes")
+    """True when each compose container should be surfaced as a fleet node (default: config, #19323)."""
+    return settings.compose_nodes_enabled
 
 
 def is_manager_node(node_id: str) -> bool:

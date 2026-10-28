@@ -95,7 +95,7 @@ def _jobs(root: Path = _REPO_ROOT) -> list[tuple]:
 REACH = declare(
     "workflow-job-parse-sweep",
     discover=_jobs,
-    floor=92,
+    floor=97,  # mid-window: population 102, window (92, 102)
     growth=10,
     skips=0,
     what="parsed workflow jobs",

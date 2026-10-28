@@ -66,7 +66,7 @@ _KNOWN_UNSCOPED_FALLBACKS: frozenset[str] = frozenset(
         "autobot-backend/api/codebase_analytics/endpoints/cross_language_patterns.py:43",
         "autobot-backend/api/codebase_analytics/endpoints/duplicates.py:230",
         "autobot-backend/api/codebase_analytics/endpoints/duplicates.py:285",
-        "autobot-backend/api/codebase_analytics/endpoints/environment.py:45",
+        "autobot-backend/api/codebase_analytics/endpoints/environment.py:46",
         "autobot-backend/api/codebase_analytics/endpoints/ownership.py:312",
         "autobot-backend/api/codebase_analytics/endpoints/ownership.py:329",
         "autobot-backend/api/codebase_analytics/endpoints/ownership.py:423",
