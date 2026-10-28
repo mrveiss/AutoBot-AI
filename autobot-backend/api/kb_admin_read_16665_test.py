@@ -129,3 +129,25 @@ async def test_the_claim_verifier_cache_does_not_share_a_partition_between_admin
         verifier._build_cache_key(claim, "root"),
     }
     assert len(keys) == 2  # admin partition differs; a scoped reader and a bare id share one on purpose
+
+
+def _mcp_reads():
+    return {
+        "summarize": lambda u: knowledge_mcp.mcp_summarize_knowledge_topic({"topic": "t"}, u),
+        "vector": lambda u: knowledge_mcp.mcp_vector_similarity_search({"query": "q", "threshold": 0.1}, u),
+        "qa": lambda u: knowledge_mcp.mcp_langchain_qa_chain({"question": "q", "context_size": 5}, u),
+        "resource": lambda u: knowledge_mcp.read_kb_resource({"uri": "kb://doc/f-a"}, u),
+    }
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool", ["summarize", "vector", "qa", "resource"])
+async def test_every_mcp_read_tool_gives_an_admin_another_users_private_fact(tool, audit):
+    read = _mcp_reads()[tool]
+    with (
+        patch.object(knowledge_mcp, "get_knowledge_base", return_value=FakeKB()),
+        patch.object(knowledge_mcp, "_get_chat_ollama", return_value=None),
+    ):
+        as_admin, as_bob = text_of(await read(ADMIN)), text_of(await read(BOB))
+
+    assert PRIVATE_A in as_admin and PRIVATE_A not in as_bob

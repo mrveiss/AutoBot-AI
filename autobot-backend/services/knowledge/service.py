@@ -15,6 +15,7 @@ from typing import Any, Dict, List, Tuple
 from advanced_rag_optimizer import RankedResult
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.ssot_config import config
+from constants.rag_graph_constants import RAG_SCORE_THRESHOLD
 from knowledge.search_filters import KbPrincipal, require_kb_principal
 from knowledge.serving import servable
 from security.content_firewall import inspect_rag_context
@@ -292,7 +293,7 @@ class ChatKnowledgeService(DocumentationRetrievalMixin):
         self,
         query: str,
         top_k: int = 5,
-        score_threshold: float = 0.3,
+        score_threshold: float = RAG_SCORE_THRESHOLD,
         categories: List[str] | None = None,
         *,
         principal: KbPrincipal,
@@ -321,7 +322,6 @@ class ChatKnowledgeService(DocumentationRetrievalMixin):
             context, citations = await service.retrieve_relevant_knowledge(
                 "How do I configure Redis?",
                 top_k=5,
-                score_threshold=0.3,
                 categories=["system_knowledge"]
             )
         """
@@ -539,7 +539,7 @@ class ChatKnowledgeService(DocumentationRetrievalMixin):
         self,
         query: str,
         top_k: int = 5,
-        score_threshold: float = 0.3,
+        score_threshold: float = RAG_SCORE_THRESHOLD,
         force_retrieval: bool = False,
         categories: List[str] | None = None,
         enable_smart_categories: bool = True,
@@ -698,7 +698,7 @@ class ChatKnowledgeService(DocumentationRetrievalMixin):
         query: str,
         conversation_history: List[Dict[str, str]],
         top_k: int = 5,
-        score_threshold: float = 0.3,
+        score_threshold: float = RAG_SCORE_THRESHOLD,
         force_retrieval: bool = False,
         categories: List[str] | None = None,
         enable_smart_categories: bool = True,
@@ -762,7 +762,7 @@ class ChatKnowledgeService(DocumentationRetrievalMixin):
         query: str,
         top_k: int = 5,
         doc_results: int = 3,
-        score_threshold: float = 0.3,
+        score_threshold: float = RAG_SCORE_THRESHOLD,
         doc_threshold: float = 0.6,
         categories: List[str] | None = None,
         *,

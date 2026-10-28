@@ -413,7 +413,7 @@ class AntiPatternSuiteAnalyzer(SemanticAnalysisMixin):
             for py_file in all_files:
                 should_exclude = False
                 for exclude_dir in self.exclude_dirs:
-                    if exclude_dir in py_file.parts:
+                    if exclude_dir in py_file.relative_to(dir_path).parts:
                         should_exclude = True
                         break
                 if not should_exclude:
