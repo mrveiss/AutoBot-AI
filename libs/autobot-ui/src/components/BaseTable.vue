@@ -29,6 +29,7 @@ import EmptyState from './EmptyState.vue'
 import BaseTableColumnsMenu from './BaseTableColumnsMenu.vue'
 import type { SemanticVariant } from '../types/semantic'
 import BasePagination, { type PaginationLabels } from './BasePagination.vue'
+import { useTableSelection } from '../composables/useTableSelection'
 import { sortRows, type SortOrder } from '../utils/tableSort'
 import {
   cellText,
@@ -36,6 +37,7 @@ import {
   filterRows,
   pageCountOf,
   pageRows,
+  shownColumnsOf,
   type TableFilters,
 } from '../utils/tableView'
 
@@ -157,7 +159,6 @@ const emit = defineEmits<{
 const slots = useSlots()
 const localKey = ref('')
 const localOrder = ref<SortOrder>('asc')
-const selected = ref<Set<TableRowKey>>(new Set())
 
 const controlled = computed(() => props.sortKey !== undefined)
 const activeKey = computed(() => (controlled.value ? props.sortKey : localKey.value))
@@ -166,13 +167,7 @@ const localPage = ref(1)
 // Explicit show/hide choices only; other columns follow `hidden`, so a column added after mount appears.
 const toggled = ref<Map<string, boolean>>(new Map())
 
-const shownColumns = computed(() => {
-  if (props.visibleColumns) {
-    const on = new Set(props.visibleColumns)
-    return props.columns.filter((c) => c.hideable === false || on.has(c.key))
-  }
-  return props.columns.filter((c) => c.hideable === false || (toggled.value.get(c.key) ?? !c.hidden))
-})
+const shownColumns = computed(() => shownColumnsOf(props.columns, props.visibleColumns, toggled.value))
 const menuItems = computed(() =>
   props.columns
     .filter((c) => c.hideable !== false)
@@ -190,15 +185,14 @@ const effectiveSize = computed(() => (paged.value ? props.pageSize : undefined))
 const pageCount = computed(() => pageCountOf(sortedRows.value.length, effectiveSize.value))
 const activePage = computed(() => clampPage(props.page ?? localPage.value, pageCount.value))
 const shownRows = computed(() => pageRows(sortedRows.value, activePage.value, effectiveSize.value))
+const { selected, allSelected, rowKeyOf, toggleRow, toggleAll } = useTableSelection(
+  () => props.rows,
+  () => filteredRows.value,
+  () => props.rowKey,
+  (keys) => emit('selection-change', keys),
+)
 const noMatches = computed(() => props.rows.length > 0 && filteredRows.value.length === 0)
 const colspan = computed(() => shownColumns.value.length + (props.selectable ? 1 : 0) + (slots.actions ? 1 : 0))
-// The same key rows render with (identity fallback included), so select-all never collects undefined.
-const keysOf = (rows: TableRow[]): TableRowKey[] => rows.map((r) => rowKeyOf(r))
-// Select-all covers the filtered set (every page of the current filter), never hidden rows.
-const allSelected = computed(() => {
-  const keys = keysOf(filteredRows.value)
-  return keys.length > 0 && keys.every((k) => selected.value.has(k))
-})
 
 function ariaSortOf(col: BaseTableColumn): 'ascending' | 'descending' | 'none' | undefined {
   if (!col.sortable) return undefined
@@ -227,27 +221,6 @@ function onSort(key: string): void {
     localOrder.value = order
   }
   emit('sort', key, order)
-}
-
-function commitSelection(next: Set<TableRowKey>): void {
-  selected.value = next
-  emit('selection-change', Array.from(next))
-}
-
-function toggleRow(key: TableRowKey): void {
-  const next = new Set(selected.value)
-  if (!next.delete(key)) next.add(key)
-  commitSelection(next)
-}
-
-function toggleAll(): void {
-  const scope = keysOf(filteredRows.value)
-  const next = new Set(selected.value)
-  for (const k of scope) {
-    if (allSelected.value) next.delete(k)
-    else next.add(k)
-  }
-  commitSelection(next)
 }
 
 function alignOf(col: BaseTableColumn): 'left' | 'center' | 'right' {
@@ -288,34 +261,6 @@ watch(
   },
 )
 
-// A row without its `rowKey` field is keyed by its object identity, never its position:
-// `rows` and the sorted `shownRows` order differ, so a positional key would select a
-// different row after a sort. The keys are negative so they cannot collide with ids.
-const identityKeys = new WeakMap<TableRow, number>()
-let nextIdentityKey = -1
-
-function rowKeyOf(row: TableRow): TableRowKey {
-  const own = row[props.rowKey] as TableRowKey | undefined
-  if (own !== undefined && own !== null) return own
-  let key = identityKeys.get(row)
-  if (key === undefined) {
-    key = nextIdentityKey--
-    identityKeys.set(row, key)
-  }
-  return key
-}
-
-// Rows the app removed stop being selected, so a later toggle never re-emits their keys.
-// The source is the key list, not the array reference, so an in-place splice prunes too.
-watch(
-  () => keysOf(props.rows),
-  (keys) => {
-    const present = new Set(keys)
-    const kept = new Set([...selected.value].filter((k) => present.has(k)))
-    if (kept.size !== selected.value.size) commitSelection(kept)
-  },
-)
-
 watchEffect(() => {
   if (props.pageSize && !paged.value) {
     warn('BaseTable: `pageSize` needs `paginationLabels` and `paginationLabel`; without the pager every row is shown.')
@@ -328,14 +273,9 @@ watchEffect(() => {
 
 <template>
   <div class="aui-table" :class="`aui-table--${size}`">
-    <div v-if="$slots.controls || columnsMenuLabel" class="aui-table__controls">
-      <slot name="controls" />
-      <BaseTableColumnsMenu
-        v-if="columnsMenuLabel && menuItems.length"
-        :label="columnsMenuLabel"
-        :items="menuItems"
-        @toggle="toggleColumn"
-      />
+    <div v-if="$slots.controls" class="aui-table__controls"><slot name="controls" /></div>
+    <div v-if="columnsMenuLabel && menuItems.length" class="aui-table__tools">
+      <BaseTableColumnsMenu :label="columnsMenuLabel" :items="menuItems" @toggle="toggleColumn" />
     </div>
     <div v-if="loading && loadingLabel" class="aui-table__sr" role="status">{{ loadingLabel }}</div>
     <div class="aui-table__scroll">
@@ -460,16 +400,17 @@ watchEffect(() => {
 }
 
 .aui-table__controls,
+.aui-table__tools,
 .aui-table__footer {
   padding: var(--aui-space-3) var(--aui-space-4);
 }
 
-.aui-table__controls {
+.aui-table__controls,
+.aui-table__tools { border-bottom: var(--aui-table-border); }
+
+.aui-table__tools {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--aui-space-3);
-  border-bottom: var(--aui-table-border);
+  justify-content: flex-end;
 }
 
 .aui-table__footer { border-top: var(--aui-table-border); }

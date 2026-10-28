@@ -69,3 +69,32 @@ export function pageRows<T>(rows: readonly T[], page: number, pageSize: number |
 export function defaultVisibleKeys(columns: readonly ViewColumn[]): string[] {
   return columns.filter((c) => !c.hidden).map((c) => c.key)
 }
+
+/**
+ * Columns shown: `visible` (a controlled list) when given, else each column's explicit `toggled`
+ * choice, else its default. A column with `hideable: false` is always shown.
+ */
+export function shownColumnsOf<C extends ViewColumn>(
+  columns: readonly C[],
+  visible: readonly string[] | undefined,
+  toggled: ReadonlyMap<string, boolean>,
+): C[] {
+  const on = new Set(visible ?? defaultVisibleKeys(columns))
+  return columns.filter(
+    (c) => c.hideable === false || (visible ? on.has(c.key) : (toggled.get(c.key) ?? on.has(c.key))),
+  )
+}
+
+/**
+ * Selection after select-all: every key of `scope` is added, or (when `scope` is already fully
+ * selected) removed. Keys outside `scope` (other filters) are kept.
+ */
+export function toggleAllSelection<K>(selected: ReadonlySet<K>, scope: readonly K[]): Set<K> {
+  const next = new Set(selected)
+  const all = scope.length > 0 && scope.every((k) => next.has(k))
+  for (const k of scope) {
+    if (all) next.delete(k)
+    else next.add(k)
+  }
+  return next
+}

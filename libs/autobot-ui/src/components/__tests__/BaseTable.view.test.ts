@@ -7,7 +7,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import BaseTable, { type BaseTableColumn } from '../BaseTable.vue'
-import { clampPage, filterRows, pageCountOf, pageRows } from '../../utils/tableView'
+import { clampPage, defaultVisibleKeys, filterRows, pageCountOf, pageRows, toggleAllSelection } from '../../utils/tableView'
 
 const COLUMNS: BaseTableColumn[] = [
   { key: 'name', label: 'Name', searchable: true, hideable: false },
@@ -48,6 +48,18 @@ describe('tableView helpers', () => {
     expect(clampPage(0, 3)).toBe(1)
     expect(pageRows([1, 2, 3, 4, 5], 3, 2)).toEqual([5])
     expect(pageRows([1, 2, 3], 1, undefined)).toEqual([1, 2, 3])
+  })
+})
+
+describe('tableView selection and columns helpers', () => {
+  it('select-all adds the scope, keeps keys outside it, and removes only the scope when all selected', () => {
+    expect([...toggleAllSelection(new Set([9]), [1, 2])]).toEqual([9, 1, 2])
+    expect([...toggleAllSelection(new Set([9, 1, 2]), [1, 2])]).toEqual([9])
+    expect([...toggleAllSelection(new Set([1]), [])]).toEqual([1])
+  })
+
+  it('lists every column not flagged hidden as visible by default', () => {
+    expect(defaultVisibleKeys([{ key: 'a' }, { key: 'b', hidden: true }, { key: 'c' }])).toEqual(['a', 'c'])
   })
 })
 
@@ -182,5 +194,41 @@ describe('BaseTable view config', () => {
     await details.trigger('keydown', { key: 'Escape' })
     expect((details.element as HTMLDetailsElement).open).toBe(false)
     w.unmount()
+  })
+
+  it('clamps the page when `pageSize` grows while on a later page', async () => {
+    const w = make({ pageSize: 2, page: 3, paginationLabels: LABELS, paginationLabel: 'Pages', paginationSummary: (p: number, n: number) => `${p}/${n}` })
+    expect(names(w)).toEqual(['Echo'])
+    await w.setProps({ pageSize: 10 })
+    expect(names(w)).toHaveLength(5)
+    expect(w.text()).toContain('1/1')
+  })
+
+  it('shows one page over an empty table without crashing', () => {
+    const w = make({ rows: [], pageSize: 2, paginationLabels: LABELS, paginationLabel: 'Pages', paginationSummary: (p: number, n: number) => `${p}/${n}` })
+    expect(w.text()).toContain('1/1')
+  })
+
+  it('select-all after rows were removed never re-emits their keys', async () => {
+    const w = make({ selectable: true, selectAllLabel: 'All', selectRowLabel: (n: number) => `Row ${n}` })
+    const head = () => w.find('thead input[type="checkbox"]')
+    await head().setValue(true)
+    expect(w.emitted('selection-change')?.at(-1)).toEqual([[1, 2, 3, 4, 5]])
+    await w.setProps({ rows: ROWS.slice(0, 2) })
+    expect(w.emitted('selection-change')?.at(-1)).toEqual([[1, 2]])
+    await w.setProps({ rows: ROWS.slice(0, 3) })
+    expect((head().element as HTMLInputElement).checked).toBe(false)
+    await head().setValue(true)
+    expect(w.emitted('selection-change')?.at(-1)).toEqual([[1, 2, 3]])
+  })
+
+  it('keeps the controls slot in its own wrapper, apart from the columns menu', () => {
+    const w = mount(BaseTable, {
+      props: { columns: COLUMNS, rows: ROWS, columnsMenuLabel: 'Columns' },
+      slots: { controls: '<div class="mine">x</div>' },
+    })
+    expect(w.find('.aui-table__controls > .mine').exists()).toBe(true)
+    expect(w.find('.aui-table__controls').text()).toBe('x')
+    expect(w.find('.aui-table__tools').text()).toContain('Columns')
   })
 })

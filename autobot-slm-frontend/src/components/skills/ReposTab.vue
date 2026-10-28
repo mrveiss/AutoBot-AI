@@ -21,7 +21,10 @@
       :actions-label="$t('skills.reposTab.sync')"
     >
       <template #cell-repo_type="{ value }">
-        <BaseBadge size="sm" :variant="repoBadgeVariant(String(value))">{{ value }}</BaseBadge>
+        <BaseBadge size="sm" :variant="repoBadgeVariant(String(value))" :tone="repoBadgeTone(String(value))">{{ value }}</BaseBadge>
+      </template>
+      <template #cell-url="{ value }">
+        <span class="repo-url" :title="String(value)">{{ value }}</span>
       </template>
       <template #actions="{ row }">
         <button
@@ -101,7 +104,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { SkillRepo } from '@/composables/useSkills'
 import { formatDateTime } from '@/composables/useTimezone'
-import { BaseBadge, BaseModal, BaseTable, type BadgeVariant, type BaseTableColumn } from '@autobot/ui'
+import { BaseBadge, BaseModal, BaseTable, type BadgeTone, type BadgeVariant, type BaseTableColumn } from '@autobot/ui'
 
 const props = defineProps<{ repos: readonly SkillRepo[] }>()
 const { t } = useI18n()
@@ -117,8 +120,10 @@ const newRepo = ref<Omit<SkillRepo, 'id' | 'skill_count' | 'status' | 'last_sync
   repo_type: 'git',
 })
 
-const BADGE_VARIANT: Record<string, BadgeVariant> = { git: 'primary', local: 'neutral', http: 'info', mcp: 'warning' }
+const BADGE_VARIANT: Record<string, BadgeVariant> = { git: 'primary', local: 'neutral', http: 'info', mcp: 'info' }
 const repoBadgeVariant = (repoType: string): BadgeVariant => BADGE_VARIANT[repoType] ?? 'neutral'
+// mcp shares http's colour, told apart by an outline instead of a tint; no status colour implies a state.
+const repoBadgeTone = (repoType: string): BadgeTone => (repoType === 'mcp' ? 'outline' : 'subtle')
 
 // BaseTable rows are plain records; SkillRepo carries no index signature.
 const rows = computed(() => props.repos.map((repo) => ({ ...repo })))
@@ -136,3 +141,13 @@ function submitAdd(): void {
   newRepo.value = { name: '', url: '', repo_type: 'git' }
 }
 </script>
+
+<style scoped>
+.repo-url {
+  display: block;
+  max-width: 20rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>
