@@ -412,3 +412,15 @@ def test_a_bool_under_a_credential_noun_is_masked_at_every_caller_of_the_canonic
         assert is_credential_entry("verify_cert", True, policy, exempt_counts=True) is True
     assert redact_value("verify_cert", True) == "**********"
     assert redact_mapping({"verify_cert": True}) == {"verify_cert": "***"}
+
+
+@pytest.mark.parametrize(
+    ("stem", "data_file", "expected"),
+    [
+        ("key", True, True), ("key", False, False), ("keys", True, True), ("key-concepts", True, False),
+        ("ssh_key", False, True), ("pass_word", False, True), ("pass word", False, True), ("pass_wd", False, True),
+        ("apikeys", False, True), ("seed_data", True, False), ("pass_through", True, False),
+    ],
+)  # fmt: skip
+def test_a_file_stem_is_judged_by_the_shared_vocabulary(stem: str, data_file: bool, expected: bool) -> None:
+    assert sr.is_credential_file_stem(stem, data_file=data_file) is expected

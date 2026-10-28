@@ -1697,9 +1697,10 @@ Defaults are in the generated registry table, `docs/developer/ENV_VARS.md`.
 
 ### Score Threshold Alignment
 
-The knowledge-retrieval paths share one `score_threshold` default (Issue #1532 aligned it). It
-has no single home yet: it is a literal at each call site, tracked in #19354. Read the signature
-of the function you call. Adjust it to control result quality:
+The knowledge-retrieval paths share one `score_threshold` default (Issue #1532 aligned it):
+`RAG_SCORE_THRESHOLD` in `autobot-backend/constants/rag_graph_constants.py`, set per host with
+`AUTOBOT_RAG_SCORE_THRESHOLD` (#19354). Pass `score_threshold` to one call to override it there.
+To control result quality:
 
 - **0.1-0.2**: Broad recall, includes tangentially relevant results
 - **0.3-0.4**: Balanced precision and recall
