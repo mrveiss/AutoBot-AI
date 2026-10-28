@@ -48,6 +48,11 @@ def _old_scripts(explicit, in_container):
 )
 def test_matches_old_backend_detector(explicit, in_container, kubernetes, distributed):
     got = detect_deployment_mode(explicit, in_container, kubernetes, distributed)
+    if kubernetes and not in_container and not explicit:
+        # #19658: the one deliberate change -- the old body answered LOCAL for a pod with no
+        # Docker marker (containerd), so a Kubernetes deployment was detected as a bare host.
+        assert got == M.KUBERNETES
+        return
     assert got == _old_backend(explicit, in_container, kubernetes, distributed)
 
 
@@ -58,11 +63,16 @@ def test_matches_old_scripts_detector(explicit, in_container):
 
 
 def test_literal_expectations() -> None:
-    assert detect_deployment_mode(None, False, True, True) is M.LOCAL
+    assert detect_deployment_mode(None, False, True, True) is M.KUBERNETES  # no Docker marker in a pod (#19658)
+    assert detect_deployment_mode(None, False, False, True) is M.LOCAL
     assert detect_deployment_mode(None, True, True, True) is M.KUBERNETES
     assert detect_deployment_mode(None, True, False, True) is M.DISTRIBUTED
     assert detect_deployment_mode(None, True, False, False) is M.DOCKER_LOCAL
     assert detect_deployment_mode(M.CLOUD, True, True, True) is M.CLOUD
+
+
+#: The shared functions a thin ``_detect_deployment_mode`` may delegate to (#19372 added the resolver).
+_DELEGATES = {"detect_deployment_mode", "resolve_deployment_mode"}
 
 
 def _forking_detectors(source: str) -> list[str]:
@@ -81,7 +91,7 @@ def _forking_detectors(source: str) -> list[str]:
             )
             for r in ast.walk(node)
         )
-        if "detect_deployment_mode" not in calls or decides:
+        if not calls & _DELEGATES or decides:
             bad.append(node.name)
     return bad
 
@@ -96,7 +106,7 @@ def _scanned_files(root: Path) -> list[str]:
 SCAN_REACH = declare(
     "deployment-mode-detector-scan",
     discover=_scanned_files,
-    floor=5139,  # re-pinned mid-window (train 82 on main)
+    floor=5200,  # re-pinned mid-window (train 82 on main)
     growth=150,
     what="python files scanned for a second deployment-mode decision body",
     roots=("autobot-backend/", "autobot-infrastructure/"),

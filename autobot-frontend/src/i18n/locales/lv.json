@@ -783,15 +783,7 @@
     "logging": "Mežizstrāde",
     "prompts": "Uzvednes",
     "backend": "Aizmugursistēma",
-    "save": "Saglabāt iestatījumus",
     "reset": "Atiestatīt uz noklusējuma iestatījumiem",
-    "panelLoadFailed": "Neizdevās ielādēt iestatījumu paneli",
-    "loadingSettings": "Notiek iestatījumu ielāde...",
-    "backendOffline": "Aizmugursistēma bezsaistē — tiek rādīti kešatmiņā saglabātie iestatījumi",
-    "saving": "Notiek saglabāšana...",
-    "discardChanges": "Atmest izmaiņas",
-    "cacheApiUnavailable": "Kešatmiņas API nav pieejama",
-    "cachedSettings": "Kešatmiņā saglabāto iestatījumu izmantošana (aizmugursistēma bezsaistē)",
     "appearanceDesc": "Pielāgojiet savas darbvietas izskatu un sajūtu",
     "voiceDesc": "Konfigurējiet teksta pārvēršanas runā balsi un balss profilus",
     "languageDesc": "Izvēlieties vēlamo valodu saskarnei un AI atbildēm",
@@ -801,31 +793,11 @@
     "languageChanged": "Valoda ir veiksmīgi atjaunināta",
     "languageChangeFailed": "Neizdevās atjaunināt valodu",
     "webResearch": {
-      "maxResultsHint": "Maximum number of search results to retrieve (1–50)",
       "title": "Web Research",
-      "methodLabel": "Search method",
-      "confirmationLabel": "Require confirmation",
-      "rateLimitRequests": "Requests",
-      "timeoutLabel": "Timeout (seconds)",
-      "enabledLabel": "Enable web research",
       "methodBasic": "Basic",
-      "thresholdLabel": "Auto-research threshold",
       "methodAdvanced": "Advanced",
       "desc": "Configure automated web research behaviour and privacy settings",
-      "rateLimitLabel": "Rate limiting",
-      "methodHint": "Choose how web searches are performed",
-      "maxResultsLabel": "Max results",
-      "confirmationHint": "Ask before performing a web search on your behalf",
-      "methodApiBased": "API-based",
-      "storeInKbHint": "Save research results to the knowledge base",
-      "filterAdultHint": "Filter adult content from search results",
-      "enabledHint": "Allow AutoBot to search the web when answering questions",
-      "privacyLabel": "Privacy & storage",
-      "anonymizeHint": "Anonymize requests before sending to search engines",
-      "timeoutHint": "Maximum time to wait for search results (5–120 s)",
-      "rateLimitWindow": "Window (s)",
-      "thresholdHint": "Confidence level below which AutoBot triggers an automatic search",
-      "rateLimitHint": "Limit how many requests are sent in a given time window"
+      "methodApiBased": "API-based"
     },
     "apiKeys": {
       "enterKey": "Enter API key...",
@@ -4243,6 +4215,9 @@
       "errorEnterBoth": "Lūdzu, ievadiet gan sākuma, gan mērķa entītiju.",
       "notInGraph": "Šīs entītijas vēl nav attiecību grafā.",
       "notInGraphHint": "Tās pastāv, bet tām nav grafa saišu, tāpēc savienojumu nevar izsekot. Palaidiet entītiju izguvi vēlreiz."
+    },
+    "chromaExplorer": {
+      "subtitle": "Pārlūkot un meklēt vektoru kolekcijas"
     }
   },
   "workflow": {
@@ -5455,7 +5430,7 @@
   "knowledge.promptEditor.versionNumber": "v{version}",
   "knowledge.promptEditor.previewVersion": "Priekšskatījums - Versija {version}",
   "knowledge.promptEditor.errorLoadPrompts": "Neizdevās ielādēt uzveicinājumus",
-  "knowledge.promptEditor.confirmDiscardChanges": "Jums ir nesaglābātas izmaiņas. Atgriezties?",
+  "knowledge.promptEditor.confirmDiscardChanges": "Jums ir nesaglabātas izmaiņas. Vai tās atmest?",
   "knowledge.promptEditor.successSaved": "Uzveicinājums veiksmīgi saglabāts",
   "knowledge.promptEditor.errorSavePrompt": "Neizdevās saglabāt uzveicinājumu",
   "knowledge.promptEditor.successReverted": "Uzveicinājums veiksmīgi atjaunots",

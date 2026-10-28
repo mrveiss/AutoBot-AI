@@ -26,6 +26,7 @@ sys.path.insert(0, str(project_root() / "autobot-backend"))
 
 from knowledge_factory import get_knowledge_base_async
 from knowledge_sync_incremental import run_incremental_sync
+from populate_knowledge_base import DOC_PATTERNS  # the one documentation set (#19339)
 
 
 def _determine_doc_category(rel_path: str) -> str:
@@ -51,10 +52,8 @@ def _collect_documentation_files(project_root: str) -> list:
 
     Issue #281: Extracted from sync_docs to reduce function length.
     """
-    doc_patterns = ["README.md", "CLAUDE.md", "docs/**/*.md"]
-
     all_files = []
-    for pattern in doc_patterns:
+    for pattern in DOC_PATTERNS:
         files = glob.glob(os.path.join(project_root, pattern), recursive=True)
         all_files.extend(files)
 

@@ -23,6 +23,7 @@ from typing import Any, Callable, Coroutine, Dict, TypeVar
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.rate_limiter import RateLimiter as _SharedRateLimiter
 from autobot_shared.retry_mechanism import RetryStrategy
+from autobot_shared.ssot_constants import model_config
 
 logger = get_logger(__name__)
 
@@ -55,7 +56,7 @@ class RateLimitError(Exception):
 class RateLimitConfig:
     """Configuration for rate limit handling."""
 
-    max_retries: int = 3
+    max_retries: int = model_config.MAX_RETRIES  # LLM retry budget (#19730)
     base_delay: float = 1.0  # Base delay in seconds
     max_delay: float = 60.0  # Maximum delay cap
     jitter_factor: float = 0.5  # Random jitter (0-1)

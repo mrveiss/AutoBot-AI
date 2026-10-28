@@ -51,6 +51,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "autobot_shared"))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+from autobot_shared.deployment_profile import environment_name  # noqa: E402
 from autobot_shared.time_utils import parse_utc_iso  # noqa: E402
 from autobot_shared.tls import MIN_TLS_VERSION  # noqa: E402
 
@@ -948,7 +949,7 @@ class LogForwarder:
             properties={
                 "Host": self.hostname,
                 "Application": "AutoBot",
-                "Environment": os.getenv("AUTOBOT_ENV", "development"),
+                "Environment": environment_name(),  # #19315: one setting, AUTOBOT_ENV is its alias
                 **(properties or {}),
             },
         )

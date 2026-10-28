@@ -145,7 +145,7 @@ jobs:
         if: steps.filter.outputs.code == 'true'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
-          node-version: '22'
+          node-version-file: .nvmrc
 
       # #15358: pre-commit builds an isolated environment per hook — its own
       # virtualenvs, plus a node env for the `canonical_check.mjs` hook — under

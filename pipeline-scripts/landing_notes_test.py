@@ -75,9 +75,9 @@ class FakeApi:
         return 200, {}
 
 
-def _client(data: dict) -> tuple[ln.Client, FakeApi]:
+def _client(data: dict) -> tuple[ln.LandingClient, FakeApi]:
     fake = FakeApi(data)
-    return ln.Client(fake, comments=fake.comments), fake
+    return ln.LandingClient(fake, comments=fake.comments), fake
 
 
 def _posts(fake: FakeApi) -> dict[int, str]:
@@ -203,6 +203,43 @@ def test_the_body_table_fallback_skips_an_unmerged_member() -> None:
     client, _ = _client(data)
     members = ln.resolve_members(client, ln.landing_from_pr(data["event_pr"]))
     assert [m.number for m in members] == [901, 902]
+
+
+def _closed_unmerged_903(subject: str | None) -> dict:
+    """#903 closed unmerged on GitHub and unresolvable by head; ``subject`` on its train merge."""
+    data = _train()
+    data["search"].pop("cccccccccccccccccccccccccccccccccccccccc")
+    del data["pulls"]["903"]["merged_at"]
+    if subject is not None:
+        data["commits"][2]["commit"] = {"message": subject + "\n\nfrozen head re-merged in train"}
+    return data
+
+
+def test_a_closed_member_the_train_merged_is_landed_and_its_own_refs_are_noted() -> None:
+    data = _closed_unmerged_903("Merge #903 @ cccccccccc into train-2026-10-25-99")
+    client, fake = _client(data)
+    members = ln.resolve_members(client, ln.landing_from_pr(data["event_pr"]))
+    assert [(m.number, m.source) for m in members][-1] == (903, ln.SOURCE_TRAIN_MERGE)
+    ln.run_merged(client, ln.landing_from_pr(data["event_pr"]))
+    assert "via #903" in _posts(fake)[105]  # #105 is referenced only in #903's own body
+
+
+@pytest.mark.parametrize(
+    "subject",
+    [
+        None,  # pulled from the train: no merge commit names it
+        "Merge #904 @ cccccccccc into train-2026-10-25-99",  # another member's merge
+        "Merge #903 @ cccccccccc into train-2026-10-25-98",  # another train's merge
+        "Merge branch 'main' into issue-903",
+    ],
+)
+def test_a_closed_member_without_its_train_merge_commit_is_still_skipped(subject: str | None) -> None:
+    data = _closed_unmerged_903(subject)
+    client, fake = _client(data)
+    members = ln.resolve_members(client, ln.landing_from_pr(data["event_pr"]))
+    assert [m.number for m in members] == [901, 902]
+    ln.run_merged(client, ln.landing_from_pr(data["event_pr"]))
+    assert 105 not in _posts(fake)
 
 
 def test_a_member_pr_that_landed_in_a_train_defers_to_the_train_run() -> None:

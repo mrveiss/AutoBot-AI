@@ -195,6 +195,9 @@ def _receivers(text: str) -> dict[str, str]:
     axios_create = r"(?:const|let)\s+(\w+)[^=\n]*=\s*axios\.create\(\{[^}]*baseURL:\s*(getSlmApiBase|getBackendUrl)\(\)"
     for match in re.finditer(axios_create, text, re.S):
         found[match.group(1)] = "slm" if match.group(2) == "getSlmApiBase" else "main"
+    # #19217: the main-backend client is built by the one shared factory, not inline.
+    for match in re.finditer(r"(?:const|let)\s+(\w+)[^=\n]*=\s*createAutobotBackendClient\(\)", text):
+        found[match.group(1)] = "main"
     return found
 
 
@@ -204,12 +207,17 @@ def _template_pattern(bases: dict[str, str]) -> re.Pattern[str]:
     return re.compile(r"`(?:\$\{[^{}]*\})*\$\{(" + "|".join(heads) + r")\}([^`]*)`")
 
 
+# `<T>` type arguments, nested two deep: `get<Record<string, unknown>>(` and
+# `get<{ files: Array<FileItem> }>(` are calls too (#12363).
+_TYPE_ARGS = r"<(?:[^<>()]|<(?:[^<>()]|<[^<>()]*>)*>)*>"
+
+
 def _call_pattern(receivers: dict[str, str]) -> re.Pattern[str] | None:
     """Match `<client>.<verb>('<literal>'` for the clients resolved in this file."""
     if not receivers:
         return None
     names = "|".join(re.escape(name) for name in receivers)
-    return re.compile(r"\b(" + names + r")\.(?:" + _VERBS + r")(?:<[^>(]*>)?\(\s*(['\"`])([^'\"`]*)\2")
+    return re.compile(r"\b(" + names + r")\.(?:" + _VERBS + r")(?:" + _TYPE_ARGS + r")?\(\s*(['\"`])([^'\"`]*)\2")
 
 
 def _service_of(head: str, bases: dict[str, str]) -> str:
@@ -306,3 +314,24 @@ def test_the_known_unserved_baseline_is_exact() -> None:
         "_KNOWN_UNSERVED in the commit that fixed them:\n"
         + "\n".join(f"  {f} -> [{service}] {path}" for f, service, path in fixed)
     )
+
+
+def test_a_client_from_the_shared_factory_is_resolved_as_the_main_backend() -> None:
+    """#19217: `createAutobotBackendClient()` builds the main-backend client; a sweep that
+    knew only an inline `axios.create` lost every call made through it."""
+    text = "const client = createAutobotBackendClient() // shared\nconst other = makeSomething()"
+    assert _receivers(text) == {"client": "main"}
+
+
+def test_a_call_with_nested_type_arguments_is_matched() -> None:
+    """#12363: typed calls such as `client.get<Record<string, unknown>>('/x')` were
+    invisible to a pattern that stopped at the first `>`."""
+    pattern = _call_pattern({"client": "main"})
+    assert pattern is not None
+    for text in (
+        "client.get<Record<string, unknown>>('/system/metrics')",
+        "client.get<{ files: Array<FileItem> }>(`/files?${params}`)",
+        "client.post('/plain')",
+    ):
+        assert pattern.search(text), text
+    assert not pattern.search("other.get<Record<string, unknown>>('/x')")

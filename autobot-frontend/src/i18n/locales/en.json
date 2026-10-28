@@ -785,15 +785,7 @@
     "logging": "Logging",
     "prompts": "Prompts",
     "backend": "Backend",
-    "save": "Save Settings",
     "reset": "Reset to Defaults",
-    "panelLoadFailed": "Failed to load settings panel",
-    "loadingSettings": "Loading settings...",
-    "backendOffline": "Backend offline — showing cached settings",
-    "saving": "Saving...",
-    "discardChanges": "Discard Changes",
-    "cacheApiUnavailable": "Cache API not available",
-    "cachedSettings": "Using cached settings (backend offline)",
     "apiKeys": {
       "wizardTitle": "API Key Setup",
       "selectRolesDescription": "Select the roles deployed on your nodes to see which API keys are needed.",
@@ -830,29 +822,9 @@
     "webResearch": {
       "title": "Web Research",
       "desc": "Configure automated web research behaviour and privacy settings",
-      "enabledLabel": "Enable web research",
-      "enabledHint": "Allow AutoBot to search the web when answering questions",
-      "confirmationLabel": "Require confirmation",
-      "confirmationHint": "Ask before performing a web search on your behalf",
-      "methodLabel": "Search method",
-      "methodHint": "Choose how web searches are performed",
       "methodBasic": "Basic",
       "methodAdvanced": "Advanced",
-      "methodApiBased": "API-based",
-      "maxResultsLabel": "Max results",
-      "maxResultsHint": "Maximum number of search results to retrieve (1–50)",
-      "timeoutLabel": "Timeout (seconds)",
-      "timeoutHint": "Maximum time to wait for search results (5–120 s)",
-      "thresholdLabel": "Auto-research threshold",
-      "thresholdHint": "Confidence level below which AutoBot triggers an automatic search",
-      "rateLimitLabel": "Rate limiting",
-      "rateLimitHint": "Limit how many requests are sent in a given time window",
-      "rateLimitRequests": "Requests",
-      "rateLimitWindow": "Window (s)",
-      "privacyLabel": "Privacy & storage",
-      "storeInKbHint": "Save research results to the knowledge base",
-      "anonymizeHint": "Anonymize requests before sending to search engines",
-      "filterAdultHint": "Filter adult content from search results"
+      "methodApiBased": "API-based"
     },
     "connection": {
       "title": "Connection",
@@ -4273,6 +4245,19 @@
         "submitLabel": "Get Data",
         "emptyState": "Enter a URL and a JSON Schema, then click Get Data to extract structured information.",
         "resultTitle": "Extracted Data"
+      },
+      "status": {
+        "title": "Web research status",
+        "desc": "Web research is configured once for the whole platform, in the SLM admin console. This is a read-only view.",
+        "enabled": "Enabled",
+        "method": "Search method",
+        "cacheSize": "Cache size",
+        "availability": "Researcher",
+        "yes": "Yes",
+        "no": "No",
+        "available": "Available",
+        "notAvailable": "Not available",
+        "configureLink": "Configure web research in the SLM console"
       }
     },
     "watchFolders": {
@@ -4346,6 +4331,9 @@
     },
     "chroma": {
       "quarantined": "Research quarantine"
+    },
+    "chromaExplorer": {
+      "subtitle": "Browse and search vector collections"
     }
   },
   "workflow": {
@@ -4760,10 +4748,12 @@
       "channelSlack": "Slack",
       "channelWebhook": "Webhook",
       "channelInApp": "In-App",
+      "channelTelegram": "Telegram",
       "eventCompleted": "Workflow Completed",
       "eventFailed": "Workflow Failed",
       "eventStepFailed": "Step Failed",
       "eventApprovalNeeded": "Approval Needed",
+      "eventServiceFailed": "Service Failed",
       "save": "Save",
       "saving": "Saving...",
       "saved": "Saved successfully"

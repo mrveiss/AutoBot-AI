@@ -548,6 +548,17 @@
       vars:
         db_env_prefix: SLM
       tags: [slm, slm-backend, credentials]
+    #
+    # #19848: the role's postgresql.conf, so a change to a rendered setting (#19421's
+    # listen_addresses) reaches an existing host. config_file skips a host without PostgreSQL,
+    # needs no db_user and never touches pg_hba; PostgreSQL restarts only if the file changed.
+    - name: "[PLAY 1] SLM | Apply PostgreSQL's server config (#19848)"
+      ansible.builtin.include_role:
+        name: postgresql
+        tasks_from: config_file
+        apply:
+          become: true
+      tags: [slm, postgresql]
 
     # --- SLM custom migrations (#1630) ---
     - name: "[PLAY 1] SLM | Load db credentials for migration (#2293)"
@@ -701,6 +712,17 @@
       delegate_to: localhost
       tags: [always]
 
+    # #19318: resolved by the one shared reader -- never a default password. Best-effort:
+    # unresolved leaves it empty and the login below is refused, skipping sync tracking.
+    - name: "[PLAY 1] SLM | Resolve the SLM admin password (#19318)"
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/read_slm_admin_password.yml
+        apply:
+          tags: [always]
+      vars:
+        require_slm_admin_password: false
+      tags: [always]
+
     - name: "[PLAY 1] SLM | Login to get auth token"
       uri:
         url: "https://{{ ansible_host }}/slm/api/auth/login"
@@ -708,7 +730,7 @@
         body_format: json
         body:
           username: "admin"
-          password: "{{ slm_admin_password | default('admin') }}"
+          password: "{{ slm_admin_password }}"
         validate_certs: false
         status_code: [200, 401, 403]
       register: slm_login_play1
@@ -746,6 +768,7 @@
       ignore_errors: true
       when: slm_login_play1.status == 200
       tags: [always]
+      no_log: true  # #19764: credentials in the request or response
 
     - name: "[PLAY 1] SLM Update Complete"
       debug:
@@ -780,8 +803,18 @@
 
   vars:
     deploy_tmp: "/tmp/autobot-deploy"
+    node_cert_dir: "{{ autobot_tls_remote_cert_dir | default('/etc/autobot/certs') }}"  # #19366
 
   pre_tasks:
+    - name: "[PLAY 2] Resolve the SLM admin password (#19318)"
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/read_slm_admin_password.yml
+        apply:
+          tags: [always]
+      vars:
+        require_slm_admin_password: false
+      tags: [always]
+
     - name: "[PLAY 2] Login to SLM API"
       uri:
         url: "https://{{ slm_host }}/slm/api/auth/login"
@@ -789,7 +822,7 @@
         body_format: json
         body:
           username: "admin"
-          password: "{{ slm_admin_password | default('admin') }}"
+          password: "{{ slm_admin_password }}"
         validate_certs: false
         status_code: [200, 401, 403]
       register: slm_login
@@ -877,8 +910,8 @@
         owner: autobot
         group: autobot
       loop:
-        - /etc/autobot/certs/server-key.pem
-        - /etc/autobot/certs/server-cert.pem
+        - "{{ node_cert_dir }}/server-key.pem"
+        - "{{ node_cert_dir }}/server-cert.pem"
       become: true
       when: "'backend' in group_names"
       tags: [backend]
@@ -1020,6 +1053,17 @@
       when: "'backend' in group_names"
       tags: [backend, env, credentials]
 
+    # #19848: as in PLAY 1 -- the backend role installs PostgreSQL for user management (#2953),
+    # so its postgresql.conf follows the role on every Code Sync too.
+    - name: "[PLAY 2] Backend | Apply PostgreSQL's server config (#19848)"
+      ansible.builtin.include_role:
+        name: postgresql
+        tasks_from: config_file
+        apply:
+          become: true
+      when: "'backend' in group_names"
+      tags: [backend, postgresql]
+
     # Migrations moved AFTER the .env regen so they run with the fresh
     # credentials and BEFORE the service restart — see the
     # "Database migration sequence" block below (#10001/#10026; replaces the
@@ -1105,18 +1149,13 @@
     # autobot_users at startup ONLY when this is set (#10636). Installer writes
     # AUTOBOT_ADMIN_PASSWORD alongside SLM_ADMIN_PASSWORD; fall back to the SLM
     # admin password so the user app and SLM share one admin credential.
-    - name: "[PLAY 2] Backend | Read admin password for full-user-management seed (#10636)"
-      ansible.builtin.shell:
-        cmd: >-
-          grep -oP '^AUTOBOT_ADMIN_PASSWORD=\K.*' /etc/autobot/slm-secrets.env 2>/dev/null
-          || grep -oP '^SLM_ADMIN_PASSWORD=\K.*' /etc/autobot/slm-secrets.env 2>/dev/null
-          || true
-      register: existing_admin_password
-      become: true
+    - name: "[PLAY 2] Backend | Read admin password for full-user-management seed (#10636, #19370)"
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/read_admin_seed_password.yml
+        apply:
+          become: true
+          tags: [backend, env]
       when: "'backend' in group_names"
-      failed_when: false
-      changed_when: false
-      no_log: true
       tags: [backend, env]
 
     - name: "[PLAY 2] Backend | Load shared backend env vars (#2727)"
@@ -1197,7 +1236,7 @@
         autobot_internal_api_key: "{{ existing_internal_api_key.stdout | default('') | trim }}"
         backend_postgres_password: "{{ existing_autobot_db_password.stdout | default('') | trim }}"
         # #10636: seed the default platform admin on first boot (full user mgmt).
-        autobot_admin_password: "{{ existing_admin_password.stdout | default('') | trim }}"
+        autobot_admin_password: "{{ _admin_seed_password_read | default('') }}"
       tags: [backend, env]
 
     - name: "[PLAY 2] Backend | Read backend user mode (#10001)"
@@ -1236,6 +1275,33 @@
         tasks_from: unit_only
       when: "'backend' in group_names"
       tags: [backend, systemd, unit]
+
+    # #18324: the deployed docs/ (read by the knowledge import) was synced only by
+    # the role's main.yml, which this playbook never runs, so it froze at the last
+    # provision. `tasks_from` the SAME file main.yml includes -- never a second
+    # rsync -- and it ends with a recorded-commit vs code_source check.
+    - name: "[PLAY 2] Backend | Refresh the deployed docs/ from code_source (#18324, #4100)"
+      ansible.builtin.include_role:
+        name: backend
+        tasks_from: docs_sync
+        apply:
+          tags: [backend, docs]
+      when: "'backend' in group_names"
+      tags: [backend, docs]
+
+    # #18324: same class as docs/ -- the core plugins/ sync lived only in main.yml.
+    - name: "[PLAY 2] Backend | Refresh the core plugins/ from code_source (#18324, #10294)"
+      ansible.builtin.include_role:
+        name: backend
+        tasks_from: plugins_sync
+        apply:
+          tags: [backend, plugins]
+      # The role's `notify: restart backend` ignores --skip-tags; this play
+      # restarts explicitly below, so suppress the handler here (#18324).
+      vars:
+        backend_plugins_sync_notify_restart: false
+      when: "'backend' in group_names"
+      tags: [backend, plugins]
 
     # #14866: seed the access control enforcement posture on every update.
     # Provisioning alone is not enough: every host in the fleet was provisioned
@@ -1359,7 +1425,7 @@
     # for the full reasoning.
     - name: "[PLAY 2] Frontend | Set TLS key permissions"
       file:
-        path: /etc/autobot/certs/server-key.pem
+        path: "{{ node_cert_dir }}/server-key.pem"
         mode: "0640"
         owner: root
         group: autobot
@@ -1537,6 +1603,8 @@
         'npu' in group_names
       failed_when: false
       tags: [npu, npu-worker, restart]
+      check_mode: false
+      changed_when: false
 
     - name: "[PLAY 2] NPU | Warn if service not active (#1633)"
       debug:
@@ -1929,6 +1997,7 @@
       ignore_errors: true
       when: slm_token | default('') | length > 0
       tags: [always]
+      no_log: true  # #19764: credentials in the request or response
 
     # =========================================================================
     # #12959: post-update delivery assertions
@@ -2161,6 +2230,15 @@
         apply:
           become: true
       tags: [database, redis, chromadb, deploy]
+
+    # #19848: as in PLAY 1 -- the database node's postgresql.conf, before the handler flush below.
+    - name: "[PLAY 2b] Database | Apply PostgreSQL's server config (#19848)"
+      ansible.builtin.include_role:
+        name: postgresql
+        tasks_from: config_file
+        apply:
+          become: true
+      tags: [database, postgresql]
 
     # Flush here rather than letting the handlers fall to the end of the play.
     # #12886 recorded both halves of why that matters: queued handlers are

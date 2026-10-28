@@ -1,0 +1,73 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+---
+# The ONE docs sync (#4100), included by main.yml (fresh install) and by
+# playbooks/update-all-nodes.yml via `tasks_from: docs_sync` (#18324). update-all
+# pulls this role only through tasks_from files, so a sync that lived inline in
+# main.yml never ran on an update and the deployed docs/ froze at the last
+# provision. A second copy of the rsync would drift, so there is none.
+- name: "Backend | Sync docs directory from code_source (#4100)"
+  ansible.posix.synchronize:
+    src: "{{ code_source_dir }}/docs/"
+    dest: "{{ backend_install_dir }}/../docs/"
+    delete: true
+    rsync_opts:
+      - "--exclude=__pycache__"
+      - "--exclude=*.pyc"
+      - "--exclude=.git"
+      - "--exclude=archives"
+      # Host-generated state, mirrored from HOST_STATE_EXCLUDES in
+      # services/deploy_artifacts.py (#14231). Anchored entries cannot match
+      # anything here, and cost nothing -- carrying the whole vocabulary is what
+      # keeps the delete-style syncs from disagreeing with each other again.
+      - "--exclude=.env"
+      - "--exclude=.env.*"
+      - "--exclude=data"
+      - "--exclude=logs"
+      - "--exclude=/config/"
+      - "--exclude=/.deployed_commit"
+      - "--exclude=/.autobot_sync_deletions_commit"
+      - "--exclude=/ansible/enroll.yml"
+  tags: ['backend', 'deploy']
+
+# Recorded-commit check (#18324): the marker is written from the code_source HEAD
+# by the shared record task, then read back and compared with code_source HEAD, so
+# a sync that "succeeded" onto a stale or unwritable tree fails the update instead
+# of passing silently. docs/ is a delete-sync, so the marker is excluded above.
+- name: "Backend | Record the docs commit marker (#18324)"
+  ansible.builtin.include_tasks:
+    file: ../../_shared/tasks/record_slm_deployed_commit.yml
+    apply:
+      tags: ['backend', 'docs', 'deploy']
+  vars:
+    deployed_commit_label: "Backend docs"
+    deployed_commit_dir: "{{ backend_install_dir }}/../docs"
+    deployed_commit_owner: "{{ backend_user }}"
+  tags: ['backend', 'deploy']
+
+- name: "Backend | Read back the docs commit marker (#18324)"
+  ansible.builtin.slurp:
+    src: "{{ backend_install_dir }}/../docs/.deployed_commit"
+  register: _docs_marker
+  tags: ['backend', 'deploy']
+
+- name: "Backend | Resolve the code_source commit the docs must match (#18324)"
+  ansible.builtin.command:
+    cmd: >-
+      git -c safe.directory={{ code_source_dir }} -C {{ code_source_dir }} rev-parse HEAD
+  register: _docs_code_source_head
+  changed_when: false
+  delegate_to: localhost
+  become: false
+  tags: ['backend', 'deploy']
+
+- name: "Backend | Fail when the deployed docs commit differs from code_source (#18324)"
+  ansible.builtin.assert:
+    that:
+      - (_docs_marker.content | b64decode | trim) == (_docs_code_source_head.stdout | trim)
+    fail_msg: >-
+      Deployed docs/ records commit {{ _docs_marker.content | b64decode | trim }}
+      but code_source is at {{ _docs_code_source_head.stdout | trim }}.
+  tags: ['backend', 'deploy']

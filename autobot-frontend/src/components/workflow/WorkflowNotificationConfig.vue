@@ -237,6 +237,7 @@ function channelLabel(ch: NotificationChannel): string {
     slack: t('workflow.notifications.channelSlack'),
     webhook: t('workflow.notifications.channelWebhook'),
     in_app: t('workflow.notifications.channelInApp'),
+    telegram: t('workflow.notifications.channelTelegram'),
   };
   return map[ch] ?? ch;
 }
@@ -247,6 +248,7 @@ function eventLabel(ev: NotificationEvent): string {
     workflow_failed: t('workflow.notifications.eventFailed'),
     step_failed: t('workflow.notifications.eventStepFailed'),
     approval_needed: t('workflow.notifications.eventApprovalNeeded'),
+    service_failed: t('workflow.notifications.eventServiceFailed'),
   };
   return map[ev] ?? ev;
 }

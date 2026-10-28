@@ -18,7 +18,9 @@ import { formatDateTime as formatDateTimeTz } from '@/composables/useTimezone'
 import { createLogger } from '@/utils/debugUtils'
 import type { Deployment, BlueGreenDeployment, BlueGreenDeploymentCreate, BlueGreenStatus, NodeRole } from '@/types/slm'
 import { BaseAlert, BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const logger = createLogger('DeploymentsView')
 const api = useSlmApi()
 const ws = useSlmWebSocket()
@@ -142,43 +144,43 @@ const roleCategories = computed(() => {
     roles: Array<{ name: string; description: string; dependencies: string[] }>
   }> = {
     core: {
-      label: 'Core Infrastructure',
-      description: 'Required base components for all nodes',
+      label: t('deploymentsView.categoryCoreLabel'),
+      description: t('deploymentsView.categoryCoreDescription'),
       roles: [],
     },
     data: {
-      label: 'Data Layer',
-      description: 'Database and caching services',
+      label: t('deploymentsView.categoryDataLabel'),
+      description: t('deploymentsView.categoryDataDescription'),
       roles: [],
     },
     application: {
-      label: 'Application Layer',
-      description: 'Backend API and frontend web servers',
+      label: t('deploymentsView.categoryApplicationLabel'),
+      description: t('deploymentsView.categoryApplicationDescription'),
       roles: [],
     },
     ai: {
-      label: 'AI/ML Services',
-      description: 'LLM inference and AI processing',
+      label: t('deploymentsView.categoryAiLabel'),
+      description: t('deploymentsView.categoryAiDescription'),
       roles: [],
     },
     automation: {
-      label: 'Automation',
-      description: 'Browser automation and scripting',
+      label: t('deploymentsView.categoryAutomationLabel'),
+      description: t('deploymentsView.categoryAutomationDescription'),
       roles: [],
     },
     observability: {
-      label: 'Observability',
-      description: 'Monitoring and logging stack',
+      label: t('deploymentsView.categoryObservabilityLabel'),
+      description: t('deploymentsView.categoryObservabilityDescription'),
       roles: [],
     },
     'remote-access': {
-      label: 'Remote Access',
-      description: 'VNC and remote desktop services',
+      label: t('deploymentsView.categoryRemoteAccessLabel'),
+      description: t('deploymentsView.categoryRemoteAccessDescription'),
       roles: [],
     },
     infrastructure: {
-      label: 'Infrastructure',
-      description: 'Shared libraries and agents deployed to all nodes',
+      label: t('deploymentsView.categoryInfrastructureLabel'),
+      description: t('deploymentsView.categoryInfrastructureDescription'),
       roles: [],
     },
   }
@@ -258,7 +260,7 @@ onMounted(async () => {
       nodeId,
       deploymentId: data.deployment_id,
       success: data.success ?? false,
-      message: data.message ?? 'Rollback completed',
+      message: data.message ?? t('deploymentsView.rollbackCompletedMessage'),
     }
 
     setTimeout(() => {
@@ -291,14 +293,14 @@ async function handleRetry(deploymentId: string): Promise<void> {
     await fetchDeployments()
   } catch (err) {
     logger.error('Failed to retry deployment:', err)
-    alert('Failed to retry deployment')
+    alert(t('deploymentsView.failedToRetryDeployment'))
   } finally {
     isRetrying.value = null
   }
 }
 
 async function handleCancel(deploymentId: string): Promise<void> {
-  if (!confirm('Are you sure you want to cancel this deployment?')) {
+  if (!confirm(t('deploymentsView.areYouSureYouWantToCancel'))) {
     return
   }
 
@@ -308,14 +310,14 @@ async function handleCancel(deploymentId: string): Promise<void> {
     await fetchDeployments()
   } catch (err) {
     logger.error('Failed to cancel deployment:', err)
-    alert('Failed to cancel deployment')
+    alert(t('deploymentsView.failedToCancelDeployment'))
   } finally {
     isCancelling.value = null
   }
 }
 
 async function handleRollback(deploymentId: string): Promise<void> {
-  if (!confirm('Are you sure you want to rollback this deployment? This will revert the node to its previous state.')) {
+  if (!confirm(t('deploymentsView.areYouSureYouWantToRollback'))) {
     return
   }
 
@@ -326,7 +328,7 @@ async function handleRollback(deploymentId: string): Promise<void> {
     await fetchDeployments()
   } catch (err) {
     logger.error('Failed to rollback deployment:', err)
-    alert('Failed to rollback deployment')
+    alert(t('deploymentsView.failedToRollbackDeployment'))
   } finally {
     isRollingBack.value = null
   }
@@ -375,15 +377,15 @@ async function fetchEligibleNodes(roles: string[]): Promise<void> {
 
 async function handleCreateBgDeployment(): Promise<void> {
   if (!newBgDeployment.value.blue_node_id) {
-    alert('Please select a blue (source) node')
+    alert(t('deploymentsView.pleaseSelectABlueSourceNode'))
     return
   }
   if (!newBgDeployment.value.green_node_id) {
-    alert('Please select a green (target) node')
+    alert(t('deploymentsView.pleaseSelectAGreenTargetNode'))
     return
   }
   if (newBgDeployment.value.roles.length === 0) {
-    alert('Please select at least one role to migrate')
+    alert(t('deploymentsView.pleaseSelectRoleToMigrate'))
     return
   }
 
@@ -401,9 +403,9 @@ async function handleCreateBgDeployment(): Promise<void> {
     const detail = axiosError?.response?.data?.detail || errorMessage
     const status = axiosError?.response?.status
     if (status === 403) {
-      alert('Access denied: Blue-green deployments require admin privileges')
+      alert(t('deploymentsView.accessDeniedBlueGreenDeploymentsRequireAdmin'))
     } else {
-      alert(`Failed to create blue-green deployment: ${detail}`)
+      alert(t('deploymentsView.failedToCreateBlueGreenDeployment', { detail }))
     }
   } finally {
     isCreatingBg.value = false
@@ -411,7 +413,7 @@ async function handleCreateBgDeployment(): Promise<void> {
 }
 
 async function handleBgSwitch(deploymentId: string): Promise<void> {
-  if (!confirm('Are you sure you want to switch traffic to the green node?')) {
+  if (!confirm(t('deploymentsView.areYouSureYouWantToSwitch'))) {
     return
   }
 
@@ -420,12 +422,12 @@ async function handleBgSwitch(deploymentId: string): Promise<void> {
     await fetchBgDeployments()
   } catch (err) {
     logger.error('Failed to switch traffic:', err)
-    alert('Failed to switch traffic')
+    alert(t('deploymentsView.failedToSwitchTraffic'))
   }
 }
 
 async function handleBgRollback(deploymentId: string): Promise<void> {
-  if (!confirm('Are you sure you want to rollback to the blue node?')) {
+  if (!confirm(t('deploymentsView.confirmRollbackToBlue'))) {
     return
   }
 
@@ -434,12 +436,12 @@ async function handleBgRollback(deploymentId: string): Promise<void> {
     await fetchBgDeployments()
   } catch (err) {
     logger.error('Failed to rollback:', err)
-    alert('Failed to rollback')
+    alert(t('deploymentsView.failedToRollback'))
   }
 }
 
 async function handleBgCancel(deploymentId: string): Promise<void> {
-  if (!confirm('Are you sure you want to cancel this deployment?')) {
+  if (!confirm(t('deploymentsView.areYouSureYouWantToCancel'))) {
     return
   }
 
@@ -448,12 +450,12 @@ async function handleBgCancel(deploymentId: string): Promise<void> {
     await fetchBgDeployments()
   } catch (err) {
     logger.error('Failed to cancel deployment:', err)
-    alert('Failed to cancel')
+    alert(t('deploymentsView.failedToCancel'))
   }
 }
 
 async function handleBgRetry(deploymentId: string): Promise<void> {
-  if (!confirm('Are you sure you want to retry this deployment?')) {
+  if (!confirm(t('deploymentsView.areYouSureYouWantToRetry'))) {
     return
   }
 
@@ -463,7 +465,7 @@ async function handleBgRetry(deploymentId: string): Promise<void> {
     await fetchBgDeployments()
   } catch (err) {
     logger.error('Failed to retry deployment:', err)
-    alert('Failed to retry deployment')
+    alert(t('deploymentsView.failedToRetryDeployment'))
   } finally {
     isRetryingBg.value = null
   }
@@ -505,11 +507,11 @@ function toggleRole(role: NodeRole): void {
 // ===== STANDARD DEPLOYMENT CREATE METHODS =====
 async function handleCreateDeployment(): Promise<void> {
   if (!newDeployment.value.node_id) {
-    alert('Please select a target node')
+    alert(t('deploymentsView.pleaseSelectATargetNode'))
     return
   }
   if (newDeployment.value.roles.length === 0) {
-    alert('Please select at least one role to deploy')
+    alert(t('deploymentsView.pleaseSelectRoleToDeploy'))
     return
   }
 
@@ -534,7 +536,7 @@ async function handleCreateDeployment(): Promise<void> {
     const errorMessage = err instanceof Error ? err.message : String(err)
     const axiosError = err as { response?: { data?: { detail?: string } } }
     const detail = axiosError?.response?.data?.detail || errorMessage
-    alert(`Failed to create deployment: ${detail}`)
+    alert(t('deploymentsView.failedToCreateDeployment', { detail }))
   } finally {
     isCreatingDeployment.value = false
   }
@@ -1257,8 +1259,8 @@ function getNodeHostname(nodeId: string): string {
         </div>
 
         <!-- Selected Roles Summary -->
-        <div v-if="newDeployment.roles.length > 0" class="bg-green-50 border border-green-200 rounded-md p-3">
-          <p class="text-sm font-medium text-green-800 mb-1">{{ $t('deploymentsView.selectedRolesCount', { count: newDeployment.roles.length }) }}</p>
+        <BaseAlert v-if="newDeployment.roles.length > 0" variant="success" size="compact" :icon="false">
+          <p class="text-sm font-medium mb-1">{{ $t('deploymentsView.selectedRolesCount', { count: newDeployment.roles.length }) }}</p>
           <div class="flex flex-wrap gap-1">
             <span
               v-for="role in newDeployment.roles"
@@ -1268,7 +1270,7 @@ function getNodeHostname(nodeId: string): string {
               {{ role }}
             </span>
           </div>
-        </div>
+        </BaseAlert>
 
         <!-- Force Option -->
         <div class="flex items-center gap-2">
@@ -1282,9 +1284,7 @@ function getNodeHostname(nodeId: string): string {
         </div>
 
         <!-- Info Box -->
-        <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
-          <p class="text-sm text-blue-700">{{ $t('deploymentsView.thisWillDeployTheSelectedRoles') }}</p>
-        </div>
+        <BaseAlert variant="info" size="compact" :message="$t('deploymentsView.thisWillDeployTheSelectedRoles')" />
       </div>
       <template #actions>
         <button
@@ -1427,9 +1427,7 @@ function getNodeHostname(nodeId: string): string {
         </div>
 
         <!-- Info Box -->
-        <div class="bg-blue-50 border border-blue-200 rounded-md p-3">
-          <p class="text-sm text-blue-700">{{ $t('deploymentsView.theGreenNodeWillTemporarilyBorrow') }}</p>
-        </div>
+        <BaseAlert variant="info" size="compact" :message="$t('deploymentsView.theGreenNodeWillTemporarilyBorrow')" />
       </div>
       <template #actions>
         <button

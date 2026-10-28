@@ -128,10 +128,13 @@ HOST_GENERATED_PATHS: dict[str, frozenset[str]] = {
         {
             # rendered by roles/backend/tasks/main.yml (#9084), read by startup_validation.py
             ".validation_vars",
-            # written by roles/backend/tasks/main.yml via scripts/build-filtered-requirements.sh (#11134)
-            "filtered-requirements.txt",
+            # written by roles/backend/tasks/main.yml via scripts/build-filtered-requirements.sh (#11134),
+            # plus its GPU variants (-gpu, -gpu-torch, -gpu-faiss; #17243)
+            "filtered-requirements*.txt",
         }
     ),
+    # written by roles/ai-stack/tasks/main.yml through the same script (#17242)
+    "autobot-ai-stack": frozenset({"filtered-requirements-ai.txt"}),
 }
 
 

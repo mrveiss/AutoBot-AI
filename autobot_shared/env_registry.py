@@ -15,6 +15,8 @@ import os
 from dataclasses import dataclass, field
 from typing import Any
 
+from autobot_shared import deployment_profile as _profile  # #19315: env/mode defaults live there
+
 
 @dataclass(frozen=True)
 class EnvVarSpec:
@@ -63,7 +65,6 @@ def env(name: str, default: Any = None) -> Any:
 # ---------------------------------------------------------------------------
 # Per-component siblings split off at the size ceiling (#14236; ledger #18391). Imported after
 # REGISTRY/register_env_var exist and before anything below reads the registry.
-
 from autobot_shared import env_registry_agent_runtime  # noqa: E402,F401
 from autobot_shared import env_registry_ai  # noqa: E402,F401
 from autobot_shared import env_registry_backend  # noqa: E402,F401
@@ -77,10 +78,12 @@ from autobot_shared import env_registry_security  # noqa: E402,F401
 from autobot_shared import env_registry_slm  # noqa: E402,F401
 from autobot_shared import env_registry_tls  # noqa: E402,F401
 from autobot_shared import (  # noqa: E402,F401
+    env_registry_agent_tools,
     env_registry_analytics,
     env_registry_batch,
     env_registry_gateway,
     env_registry_ledger,
+    env_registry_postgres,
     env_registry_rag,
     env_registry_terminal,
     env_registry_testing,
@@ -192,8 +195,8 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_DEPLOYMENT_MODE",
         type=str,
-        default="distributed",
-        description="Topology. Unset: the backend assumes 'distributed'; deploy scripts detect it from /.dockerenv.",
+        default=_profile.DEPLOYMENT_MODE_DEFAULT,
+        description="Topology. Unset: auto-detect -- docker_local in a container, else local (#19316).",
         component="system",
     )
 )
@@ -202,8 +205,8 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_ENV",
         type=str,
-        default="production",
-        description="Short environment label used in logs and traces (e.g. 'development', 'production').",
+        default=_profile.ENVIRONMENT_DEFAULT,
+        description="Legacy spelling of AUTOBOT_ENVIRONMENT, read only when that is unset (#19315).",
         component="system",
     )
 )
@@ -212,10 +215,8 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_ENVIRONMENT",
         type=str,
-        default="development",
-        description=(
-            "Full environment name for OTel deployment.environment attribute. " "Prefer AUTOBOT_ENV for new code."
-        ),
+        default=_profile.ENVIRONMENT_DEFAULT,
+        description="Deployment environment (production/development/test); profiles in deployment_profile.py.",
         component="system",
     )
 )
@@ -335,71 +336,6 @@ register_env_var(
     )
 )
 
-# --- postgres ---------------------------------------------------------------
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_POSTGRES_DB",
-        type=str,
-        default="autobot_users",
-        description="PostgreSQL database name.",
-        component="postgres",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_POSTGRES_HOST",
-        type=str,
-        default="127.0.0.1",
-        description="PostgreSQL server hostname or IP.",
-        component="postgres",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_POSTGRES_PASSWORD",
-        type=str,
-        default="",
-        description="PostgreSQL user password.",
-        component="postgres",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_POSTGRES_PORT",
-        type=str,
-        default="5432",
-        description="PostgreSQL server port.",
-        component="postgres",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_POSTGRES_USER",
-        type=str,
-        default="slm_app",
-        description="PostgreSQL login role.",
-        component="postgres",
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
-        name="AUTOBOT_USERS_DATABASE_URL",
-        type=str,
-        default=None,
-        description=(
-            "Full SQLAlchemy connection URL for the users database. "
-            "Overrides AUTOBOT_POSTGRES_* individual vars when set."
-        ),
-        component="postgres",
-    )
-)
-
 # --- monitoring -------------------------------------------------------------
 
 register_env_var(
@@ -418,8 +354,8 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_REDIS_DB_ANALYTICS",
         type=int,
-        default=11,
-        description="Redis logical database number for analytics data.",
+        default=None,
+        description="Redis DB number for analytics data; unset uses redis-databases.yaml (#19232).",
         component="redis",
         range=(0, 15),
     )
@@ -429,8 +365,8 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_REDIS_DB_KNOWLEDGE",
         type=int,
-        default=1,
-        description="Redis logical database number for knowledge-base vectors.",
+        default=None,
+        description="Redis DB number for knowledge-base vectors; unset uses redis-databases.yaml (#19232).",
         component="redis",
         range=(0, 15),
     )
@@ -440,8 +376,8 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_REDIS_DB_MAIN",
         type=int,
-        default=0,
-        description="Redis logical database number for primary application data.",
+        default=None,
+        description="Redis DB number for primary application data; unset uses redis-databases.yaml (#19232).",
         component="redis",
         range=(0, 15),
     )

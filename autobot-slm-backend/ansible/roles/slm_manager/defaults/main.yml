@@ -23,7 +23,7 @@ slm_backend_env_file: "{{ slm_base_dir }}/autobot-backend/.env"
 slm_frontend_dir: "{{ slm_base_dir }}/autobot-slm-frontend"
 slm_shared_dir: "{{ slm_base_dir }}/autobot_shared"
 slm_log_dir: "{{ slm_base_dir }}/logs"
-slm_certs_dir: /etc/autobot/certs
+slm_certs_dir: "{{ autobot_tls_remote_cert_dir | default('/etc/autobot/certs') }}"  # #19366
 slm_credentials_dir: /etc/autobot
 slm_credentials_file: slm-secrets.env
 
@@ -158,8 +158,9 @@ grafana_configure: "{{ grafana_mode == 'local' }}"
 # Deploy dashboards (both local and external modes)
 grafana_deploy_dashboards: true
 
-# Grafana version (only used when grafana_install is true)
-grafana_version: latest
+# Grafana version (only used when grafana_install is true). A pinned copy of the
+# monitoring role's grafana_version (#19329), held equal by a guard.
+grafana_version: "11.1.0"
 
 # Prometheus URL for Grafana data source
 # When Grafana is external, this must be accessible from the external host

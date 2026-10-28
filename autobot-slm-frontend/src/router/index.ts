@@ -255,6 +255,12 @@ const router = createRouter({
           meta: { title: 'Log Forwarding', parent: 'settings', admin: true }
         },
         {
+          path: 'admin/web-research',
+          name: 'settings-admin-web-research',
+          component: () => import('@/views/settings/admin/WebResearchSettings.vue'),
+          meta: { title: 'Web Research', parent: 'settings', admin: true }
+        },
+        {
           // Consolidated to Fleet Overview /fleet/npu Worker Registry sub-tab
           path: 'admin/npu-workers',
           name: 'settings-admin-npu-workers',

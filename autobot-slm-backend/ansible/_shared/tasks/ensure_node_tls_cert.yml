@@ -31,9 +31,17 @@
 #
 # Discoverable: grep -rn "ensure_node_tls_cert.yml" lists all consumers.
 
+# #19366: the directory resolves once, from the group_vars home or its pinned fallback.
+# A role whose own setting may differ passes it as `node_tls_cert_dir_override` -- a
+# distinct name, because re-defining autobot_tls_remote_cert_dir from a role default that
+# is itself derived from it is a recursive template.
+- name: "TLS | Resolve the shared cert directory"
+  ansible.builtin.set_fact:
+    autobot_node_cert_dir: "{{ node_tls_cert_dir_override | default(autobot_tls_remote_cert_dir | default('/etc/autobot/certs')) }}"
+
 - name: "TLS | Ensure the shared cert directory exists"
   ansible.builtin.file:
-    path: /etc/autobot/certs
+    path: "{{ autobot_node_cert_dir }}"
     state: directory
     mode: "0755"
     owner: root
@@ -42,13 +50,13 @@
 
 - name: "TLS | Stat the shared node certificate"
   ansible.builtin.stat:
-    path: /etc/autobot/certs/server-cert.pem
+    path: "{{ autobot_node_cert_dir }}/server-cert.pem"
   register: autobot_node_cert_stat
   become: true
 
 - name: "TLS | Check the shared node certificate is not about to expire"
   ansible.builtin.command:
-    cmd: openssl x509 -checkend 604800 -noout -in /etc/autobot/certs/server-cert.pem
+    cmd: openssl x509 -checkend 604800 -noout -in {{ autobot_node_cert_dir }}/server-cert.pem
   register: autobot_node_cert_valid
   changed_when: false
   # (#2872) Intentional: openssl exits rc=1 when the cert expires inside the
@@ -62,8 +70,8 @@
   vars:
     cert_label: node
     _cert_days: 365
-    _key_file: /etc/autobot/certs/server-key.pem
-    _cert_file: /etc/autobot/certs/server-cert.pem
+    _key_file: "{{ autobot_node_cert_dir }}/server-key.pem"
+    _cert_file: "{{ autobot_node_cert_dir }}/server-cert.pem"
     _cert_subject: "/C=US/ST=State/L=City/O=AutoBot/CN={{ inventory_hostname }}.autobot.internal"
   when: >-
     not autobot_node_cert_stat.stat.exists
@@ -75,22 +83,22 @@
 # original symptom, one step downstream of where the real cause would be.
 - name: "TLS | Confirm the shared node certificate now exists"
   ansible.builtin.stat:
-    path: /etc/autobot/certs/server-cert.pem
+    path: "{{ autobot_node_cert_dir }}/server-cert.pem"
   register: autobot_node_cert_confirmed
   become: true
 
 - name: "TLS | Fail loudly if generation did not produce the certificate"
   ansible.builtin.fail:
     msg: >-
-      /etc/autobot/certs/server-cert.pem is still missing after
+      {{ autobot_node_cert_dir }}/server-cert.pem is still missing after
       "TLS | Generate the shared node keypair when missing or expiring" ran.
       That task's own openssl command did not report an error, so check disk
-      space and /etc/autobot/certs permissions on this node.
+      space and {{ autobot_node_cert_dir }} permissions on this node.
   when: not autobot_node_cert_confirmed.stat.exists
 
 - name: "TLS | Ensure the certificate is world-readable"
   ansible.builtin.file:
-    path: /etc/autobot/certs/server-cert.pem
+    path: "{{ autobot_node_cert_dir }}/server-cert.pem"
     mode: "0644"
     owner: root
     group: root

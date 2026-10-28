@@ -116,6 +116,95 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_EMBEDDING_SPACE_CHECK_SECONDS",
+        type=float,
+        default=5.0,
+        description=(
+            "Seconds between a knowledge-base process's checks for an embedding-model switch made "
+            "in another process; on a newer generation it rebinds its collection, write buffer and "
+            "embed model (knowledge/embedding_space_binding.py, #19379)."
+        ),
+        component="knowledge",
+        range=(0.0, 300.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_EMBEDDING_SWITCH_BATCH_SIZE",
+        type=int,
+        default=64,
+        description=(
+            "Facts re-embedded per call to the embedding provider while an embedding-model switch "
+            "rebuilds the knowledge base into a new collection (knowledge/embedding_switch.py, #19379)."
+        ),
+        component="knowledge",
+        range=(1, 1000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_EMBEDDING_SWITCH_STALE_SECONDS",
+        type=float,
+        default=300.0,
+        description=(
+            "Seconds without a heartbeat after which a running embedding-model switch is stale (its "
+            "worker presumed dead): its Redis lock expires, the status reads stale, and a new start or a "
+            "cancel recovers (knowledge/embedding_switch.py, #19379)."
+        ),
+        component="knowledge",
+        range=(30.0, 86400.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_EMBEDDING_SWITCH_DEADLINE_SECONDS",
+        type=float,
+        default=21600.0,
+        description=(
+            "Overall deadline for an embedding-model switch, from start to cutover; a build past it fails"
+            " and leaves the active model and collection unchanged (knowledge/embedding_switch.py, "
+            "#19379)."
+        ),
+        component="knowledge",
+        range=(60.0, 604800.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_EMBEDDING_SWITCH_SETTLE_MARGIN_SECONDS",
+        type=float,
+        default=2.0,
+        description=(
+            "Seconds added to the override cache and space-check windows while an embedding-model switch "
+            "waits, after cutover, for every process to rebind before its final replay "
+            "(knowledge/embedding_switch.py, #19379)."
+        ),
+        component="knowledge",
+        range=(0.0, 300.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_EMBEDDING_SWITCH_REPLAY_ROUNDS",
+        type=int,
+        default=5,
+        description=(
+            "Rounds an embedding-model switch replays writes made during the build, until none are "
+            "pending and the new collection holds one vector per fact, before it gives up without "
+            "switching (knowledge/embedding_switch.py, #19379)."
+        ),
+        component="knowledge",
+        range=(1, 100),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_EMBEDDING_PROBE_TIMEOUT_SECONDS",
         type=int,
         default=60,
@@ -141,5 +230,69 @@ register_env_var(
         ),
         component="knowledge",
         range=(10, 86400),
+    )
+)
+
+# Where the knowledge indexers (and every other regenerable cache) keep their caches (#19553).
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CACHE_DIR",
+        type=str,
+        default=None,
+        description=(
+            "Root for every regenerable cache (autobot_shared.paths.cache_root, #19553). Unset: "
+            "$XDG_CACHE_HOME/autobot, else ~/.cache/autobot; a value inside the code tree is skipped. "
+            "A container whose HOME is under the project root should mount a volume here."
+        ),
+        component="backend",
+    )
+)
+
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_TENANT_GROUPS_TTL_SECONDS",
+        type=int,
+        default=60,
+        description=(
+            "Seconds a user's team memberships, resolved for the KB visibility principal of a "
+            "tenant-context route, are reused before the team service is asked again; a membership "
+            "removal or team delete bumps the organisation's membership epoch and drops every "
+            "worker's entries at once; an epoch that cannot be read re-resolves and neither serves nor "
+            "fills the cache, so this window bounds staleness only after a bump exhausts its "
+            "retries; 0 disables the cache; read by "
+            "knowledge/tenant_groups.py (#19007, #19630)."
+        ),
+        component="knowledge",
+        range=(0, 3600),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MEMBERSHIP_EPOCH_BUMP_ATTEMPTS",
+        type=int,
+        default=3,
+        description=(
+            "Tries the post-commit bump of an organisation's team-membership epoch gets before the "
+            "failure is raised; every failed try is logged at error level; read by "
+            "autobot_shared/membership_epoch.py (#19630)."
+        ),
+        component="knowledge",
+        range=(1, 10),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_MEMBERSHIP_EPOCH_BUMP_BACKOFF_SECONDS",
+        type=float,
+        default=0.2,
+        description=(
+            "Seconds before the second try of a failed team-membership epoch bump; doubles on each "
+            "further try; read by autobot_shared/membership_epoch.py (#19630)."
+        ),
+        component="knowledge",
+        range=(0.0, 10.0),
     )
 )

@@ -15,7 +15,9 @@ import { ref, computed } from 'vue'
 import { useFleetStore } from '@/stores/fleet'
 import type { SLMNode } from '@/types/slm'
 import { BaseAlert, BaseModal } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
 
+const { t } = useI18n()
 const props = defineProps<{
   visible: boolean
   availableNodes: SLMNode[]
@@ -52,7 +54,7 @@ function close(): void {
 
 async function assignRole(): Promise<void> {
   if (!selectedNodeId.value) {
-    error.value = 'Please select a node'
+    error.value = t('fleet.assignNPURoleModal.pleaseSelectANode')
     return
   }
 
@@ -64,7 +66,7 @@ async function assignRole(): Promise<void> {
     emit('assigned')
     close()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to assign NPU role'
+    error.value = e instanceof Error ? e.message : t('fleet.assignNPURoleModal.failedToAssignNpuRole')
   } finally {
     loading.value = false
   }
@@ -132,30 +134,9 @@ async function assignRole(): Promise<void> {
       </div>
 
       <!-- Info Box -->
-      <div class="flex items-start gap-3 p-4 bg-blue-50 rounded-lg">
-        <svg class="w-5 h-5 text-blue-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <div class="text-sm text-blue-700">
-          <p class="font-medium">{{ $t('fleet.assignNPURoleModal.autoDetection') }}</p>
-          <p class="mt-1">
-            {{ $t('fleet.assignNPURoleModal.afterAssigningTheRole') }}
-          </p>
-        </div>
-      </div>
-
+      <BaseAlert variant="info" :title="$t('fleet.assignNPURoleModal.autoDetection')" :message="$t('fleet.assignNPURoleModal.afterAssigningTheRole')" />
       <!-- No Eligible Nodes Warning -->
-      <div v-if="eligibleNodes.length === 0" class="flex items-start gap-3 p-4 bg-yellow-50 rounded-lg">
-        <svg class="w-5 h-5 text-yellow-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-        </svg>
-        <div class="text-sm text-yellow-700">
-          <p class="font-medium">{{ $t('fleet.assignNPURoleModal.noEligibleNodes') }}</p>
-          <p class="mt-1">
-            {{ $t('fleet.assignNPURoleModal.allAvailableNodesEither') }}
-          </p>
-        </div>
-      </div>
+      <BaseAlert v-if="eligibleNodes.length === 0" variant="warning" :title="$t('fleet.assignNPURoleModal.noEligibleNodes')" :message="$t('fleet.assignNPURoleModal.allAvailableNodesEither')" />
     </div>
     <template #actions>
       <button

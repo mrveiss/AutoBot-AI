@@ -10,11 +10,12 @@
  * Provides management of distributed NPU workers for AI processing.
  */
 
-import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAutobotApi, type NPUWorker } from '@/composables/useAutobotApi'
+import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { createLogger } from '@/utils/debugUtils'
-import { BaseAlert, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseModal, PollingPausedAlert } from '@autobot/ui'
 
 const logger = createLogger('NPUWorkersSettings')
 
@@ -64,7 +65,6 @@ const workerForm = reactive({
 const showMetrics = ref(false)
 const selectedWorkerMetrics = ref<NPUWorker | null>(null)
 
-let refreshInterval: ReturnType<typeof setInterval> | null = null
 
 // Computed
 const healthyWorkers = computed(() =>
@@ -80,14 +80,16 @@ const offlineWorkers = computed(() =>
 )
 
 // Methods
-async function fetchWorkers(): Promise<void> {
+async function fetchWorkers(): Promise<boolean> {
   loading.value = true
   error.value = null
 
   try {
     workers.value = await api.getNPUWorkers()
+    return true
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load workers'
+    error.value = e instanceof Error ? e.message : t('settings.admin.nPUWorkersSettings.failedToLoadWorkers')
+    return false
   } finally {
     loading.value = false
   }
@@ -120,10 +122,10 @@ async function saveLoadBalancingConfig(): Promise<void> {
 
   try {
     await api.updateNPULoadBalancingConfig(loadBalancingConfig)
-    success.value = 'Load balancing configuration saved'
+    success.value = t('settings.admin.nPUWorkersSettings.loadBalancingSaved')
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save configuration'
+    error.value = e instanceof Error ? e.message : t('settings.admin.nPUWorkersSettings.failedToSaveConfiguration')
   } finally {
     saving.value = false
   }
@@ -188,12 +190,12 @@ async function saveWorker(): Promise<void> {
       await api.pairNPUWorker({ url, name: workerForm.name, enabled: workerForm.enabled })
     }
 
-    success.value = `Worker ${editingWorker.value ? 'updated' : 'paired'} successfully`
+    success.value = t(editingWorker.value ? 'settings.admin.nPUWorkersSettings.workerUpdated' : 'settings.admin.nPUWorkersSettings.workerPaired')
     closeModal()
     await fetchWorkers()
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save worker'
+    error.value = e instanceof Error ? e.message : t('settings.admin.nPUWorkersSettings.failedToSaveWorker')
   } finally {
     saving.value = false
   }
@@ -209,10 +211,10 @@ async function testWorker(worker: NPUWorker): Promise<void> {
       error.value = result.error_message || t('settings.admin.nPUWorkersSettings.connectionTestFailed')
       return
     }
-    success.value = `Connection to ${worker.hostname} successful`
+    success.value = t('settings.admin.nPUWorkersSettings.connectionSuccessful', { hostname: worker.hostname })
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Connection test failed'
+    error.value = e instanceof Error ? e.message : t('settings.admin.nPUWorkersSettings.connectionTestFailed')
   } finally {
     testingWorker.value[worker.id] = false
   }
@@ -232,12 +234,12 @@ async function deleteWorker(): Promise<void> {
 
   try {
     await api.removeNPUWorker(deleteTarget.value.id)
-    success.value = 'Worker removed successfully'
+    success.value = t('settings.admin.nPUWorkersSettings.workerRemoved')
     deleteTarget.value = null
     await fetchWorkers()
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to remove worker'
+    error.value = e instanceof Error ? e.message : t('settings.admin.nPUWorkersSettings.failedToRemoveWorker')
   } finally {
     saving.value = false
   }
@@ -274,30 +276,23 @@ function getLoadColor(load: number): string {
   return 'bg-red-500'
 }
 
-// Initialize
-onMounted(async () => {
-  await Promise.all([fetchWorkers(), fetchLoadBalancingConfig()])
-  refreshInterval = setInterval(fetchWorkers, 30000)
-})
-
-onUnmounted(() => {
-  if (refreshInterval) {
-    clearInterval(refreshInterval)
-  }
+// #19482: shared dashboard policy; fetchWorkers() is false on a failed read, which the poller counts
+const workersPoller = useDashboardPoller(async () => {
+  throwUnlessLoaded(await fetchWorkers())
+}, 30000)
+onMounted(() => {
+  void fetchLoadBalancingConfig()
+  workersPoller.start('')
 })
 </script>
 
 <template>
   <div class="p-6 space-y-6">
     <!-- Messages -->
+    <PollingPausedAlert :poller="workersPoller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" @retry="workersPoller.start('')" />
     <BaseAlert v-if="error" variant="error" :message="error" dismissible :dismiss-label="$t('settings.admin.nPUWorkersSettings.dismissError')" @dismiss="error = null" />
 
-    <div v-if="success" class="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 flex items-center gap-3">
-      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      {{ success }}
-    </div>
+    <BaseAlert v-if="success" variant="success" :message="success" />
 
     <!-- Header -->
     <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6">
@@ -398,7 +393,7 @@ onUnmounted(() => {
       <div class="p-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
         <h3 class="font-semibold text-gray-900">{{ $t('settings.admin.nPUWorkersSettings.registeredWorkersCount', { count: workers.length }) }}</h3>
         <button
-          @click="fetchWorkers"
+          @click="workersPoller.start('')"
           :disabled="loading"
           class="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-sm"
           :aria-label="$t('settings.admin.nPUWorkersSettings.refreshWorkers')"

@@ -37,8 +37,15 @@ _CALL = re.compile(r"\bsetInterval\s*\(")
 _COMMENT = re.compile(r"^\s*(//|\*|/\*)")
 
 # 35 measured on 129148ebe9; 29 after the first batch (BatchTool, InfrastructureWizard,
-# SystemUpdatesTab, #19482). Lower it by exactly what a PR migrates.
-PINS = {"raw_setinterval_calls": 29}
+# SystemUpdatesTab); 23 after the second (RedisServicePanel, NPUPerformanceMetrics,
+# NPUWorkerMonitor, LLMFallbacksView, Sidebar, CodeSyncBadge); 4 after the third (AgentsTool,
+# MCPTool, NPUWorkersSettings, LogViewer, PerformanceOverview, usePerformanceMonitoring,
+# AlertsMonitor, MetricsDetailsView, useFleetMetrics, ErrorMonitor, OrchestrationView,
+# AdminMonitoringView, LoadBalancingView, NodeServicesPanel, NodeLifecyclePanel's event
+# poller, the provision store's status poller; #19482). The 4 left are the 3 non-pollers
+# plus ``composables/useSkills.ts``, deferred because an open PR holds that file; the pin
+# reaches FLOOR once it moves. Lower it by exactly what a PR migrates.
+PINS = {"raw_setinterval_calls": 4}
 
 # The non-poller calls that keep setInterval; the count cannot go below these.
 FLOOR = 3

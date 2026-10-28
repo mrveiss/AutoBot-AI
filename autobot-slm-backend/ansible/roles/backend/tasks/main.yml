@@ -115,7 +115,7 @@
 - name: "Backend | Stat SLM TLS certs (#6677/#7272)"
   ansible.builtin.include_tasks: ../../../_shared/tasks/stat_tls_certs.yml
   vars:
-    tls_cert_dir: /etc/autobot/certs
+    tls_cert_dir: "{{ backend_tls_cert_dir }}"
   tags: ['backend', 'config']
 
 # #7689: Read SLM_AUTH_TOKEN from /etc/autobot/slm-secrets.env on the target
@@ -455,6 +455,7 @@
     - claude
   changed_when: false
   tags: ['backend', 'packages', 'llc']
+  when: not ansible_check_mode
 
 
 - name: "Backend | Restart-guarded env-update + heavy-work window (#12139)"
@@ -670,19 +671,8 @@
     notify: restart backend
     tags: ['backend', 'deploy']
 
-  # Issue #10294: plugins ship at the repo root (code_source/plugins/), a SIBLING of
-  # autobot-backend/, so the autobot-backend code sync never copied them. The backend
-  # resolves plugins at {{ backend_code_dir }}/plugins (AUTOBOT_BASE_DIR/plugins), which
-  # did not exist → discover_plugins() found nothing and every core plugin (image/video
-  # generation, kb-event, etc.) silently failed to register. Sync them into place.
-  - name: Sync plugins directory from code_source (#10294)
-    ansible.posix.synchronize:
-      src: "{{ code_source_dir }}/plugins/"
-      dest: "{{ backend_code_dir }}/plugins/"
-      rsync_opts:
-        - "--exclude=__pycache__"
-        - "--exclude=*.pyc"
-    notify: restart backend
+  - name: "Backend | Sync the core plugins directory (#10294, #18324)"
+    ansible.builtin.include_tasks: plugins_sync.yml
     tags: ['backend', 'deploy']
 
   # Issue #10020: The old rsync task created a real directory copy of autobot_shared
@@ -758,28 +748,8 @@
       group: "{{ backend_group }}"
       recurse: true
 
-  - name: "Backend | Sync docs directory from code_source (#4100)"
-    ansible.posix.synchronize:
-      src: "{{ code_source_dir }}/docs/"
-      dest: "{{ backend_install_dir }}/../docs/"
-      delete: true
-      rsync_opts:
-        - "--exclude=__pycache__"
-        - "--exclude=*.pyc"
-        - "--exclude=.git"
-        - "--exclude=archives"
-        # Host-generated state, mirrored from HOST_STATE_EXCLUDES in
-        # services/deploy_artifacts.py (#14231). Anchored entries cannot match
-        # anything here, and cost nothing -- carrying the whole vocabulary is what
-        # keeps the delete-style syncs from disagreeing with each other again.
-        - "--exclude=.env"
-        - "--exclude=.env.*"
-        - "--exclude=data"
-        - "--exclude=logs"
-        - "--exclude=/config/"
-        - "--exclude=/.deployed_commit"
-        - "--exclude=/.autobot_sync_deletions_commit"
-        - "--exclude=/ansible/enroll.yml"
+  - name: "Backend | Sync and record the docs directory (#4100, #18324)"
+    ansible.builtin.include_tasks: docs_sync.yml
     tags: ['backend', 'deploy']
 
   # Issue #10020: backend_install_dir/autobot_shared is now a symlink to
@@ -1064,8 +1034,9 @@
   #
   # Filtered through the canonical script rather than copied raw: a file copied
   # out of the repo lands at a different depth, so any relative -c/-r include it
-  # gains later would resolve somewhere else (#14272). None of the three carries
-  # one today, which makes this cheap now and correct if that changes.
+  # gains later would resolve somewhere else (#14272). requirements-gpu-torch.txt
+  # carries `-c constraints/shared.txt` since #19330, so the rewrite is load-bearing:
+  # it points that include at the staged constraints file on the node.
   #
   # One task per manifest, not a loop: a loop renders the destination as a
   # template, and the manifest-resolution guard cannot tie that back to the
@@ -1300,6 +1271,8 @@
   # ==========================================================
   - name: "Backend | Ensure the shared node TLS keypair exists (#16020)"
     ansible.builtin.include_tasks: ../../../_shared/tasks/ensure_node_tls_cert.yml
+    vars:
+      node_tls_cert_dir_override: "{{ backend_tls_cert_dir }}"
     tags: ['backend', 'tls']
 
   # #16020: the shared task has no restart handler of its own -- it also
@@ -1323,8 +1296,8 @@
       owner: "{{ backend_user }}"
       group: "{{ backend_group }}"
     loop:
-      - /etc/autobot/certs/server-key.pem
-      - /etc/autobot/certs/server-cert.pem
+      - "{{ backend_tls_cert_dir }}/server-key.pem"
+      - "{{ backend_tls_cert_dir }}/server-cert.pem"
 
   # #10636: full-user-management secrets for the runtime .env. The DB password
   # is created by the postgresql role above (db_password); the initial-admin
@@ -1333,16 +1306,11 @@
   # key is read earlier from the same file (#11507) so both env files carry one key.
   # Without these the clean-install .env has no DB password / admin → /login has
   # no account, matching the deploy-path wiring in update-all-nodes.yml.
-  - name: "Backend | Read admin seed password (AUTOBOT_ADMIN_PASSWORD, fallback SLM_ADMIN_PASSWORD) (#10636)"
-    ansible.builtin.shell:
-      cmd: >-
-        grep -oP '^AUTOBOT_ADMIN_PASSWORD=\K.*' /etc/autobot/slm-secrets.env 2>/dev/null
-        || grep -oP '^SLM_ADMIN_PASSWORD=\K.*' /etc/autobot/slm-secrets.env 2>/dev/null
-        || true
-    register: _backend_admin_password
-    changed_when: false
-    failed_when: false
-    no_log: true
+  - name: "Backend | Read admin seed password (AUTOBOT_ADMIN_PASSWORD, fallback SLM_ADMIN_PASSWORD) (#10636, #19370)"
+    ansible.builtin.include_tasks:
+      file: ../../../_shared/tasks/read_admin_seed_password.yml
+      apply:
+        tags: ['backend', 'config']
     tags: ['backend', 'config']
 
   # #10636 / #12520: autobot-db-credentials.env is the SINGLE role-managed
@@ -1372,7 +1340,7 @@
     ansible.builtin.set_fact:
       # autobot_internal_api_key is set earlier from slm-secrets.env (#11507) so both
       # env files render one value; do not re-set (and never blank) it here.
-      autobot_admin_password: "{{ _backend_admin_password.stdout | default('') | trim }}"
+      autobot_admin_password: "{{ _admin_seed_password_read | default('') }}"
       # #12520: role-managed creds file FIRST (the value actually applied to
       # Postgres), then the in-memory db_password from this run, then a deliberate
       # external override (a genuinely remote DB has no local creds file, so the

@@ -365,13 +365,13 @@ function handleClickOutside(event: MouseEvent): void {
   background: var(--bg-hover);
 }
 
-.dropdown-item i {
+.dropdown-item .icon {
   width: 1rem;
   text-align: center;
   color: var(--text-secondary);
 }
 
-.dropdown-item:hover i {
+.dropdown-item:hover .icon {
   color: var(--color-primary);
 }
 

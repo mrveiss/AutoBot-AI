@@ -8,12 +8,15 @@
  * (DashboardGrid) fixes the height, so the heading stays put and the body scrolls.
  * Colours come from the design tokens and kit variants, never the raw palette (#14580).
  */
-import { BaseBadge, BaseButton, type BadgeVariant } from '@autobot/ui'
+import { BaseBadge, BaseButton, BaseTable, type BadgeVariant, type BaseTableColumn } from '@autobot/ui'
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { formatDuration } from '@/utils/formatHelpers'
 import { agentStatusColor, type RunDisplayStatus } from '@/composables/llc/llcStatus'
 import type { CompanyWidgetType } from '@/composables/dashboard/companyOsDashboard'
 import type { BudgetInfo, CompanyDashboardData } from '@/views/llc/companyDashboardTypes'
 
-defineProps<{ type: CompanyWidgetType; data: CompanyDashboardData }>()
+const props = defineProps<{ type: CompanyWidgetType; data: CompanyDashboardData }>()
 const emit = defineEmits<{ approve: [approvalId: string] }>()
 
 const RUN_VARIANT: Record<RunDisplayStatus, BadgeVariant> = { done: 'success', running: 'info', failed: 'error' }
@@ -33,16 +36,30 @@ function budgetBarColor(b: BudgetInfo): string {
   return 'bg-autobot-success'
 }
 
-function formatDuration(ms: number | null): string {
-  if (ms === null) return '—'
-  if (ms < 1000) return `${ms}ms`
-  return `${(ms / 1000).toFixed(1)}s`
-}
+const DURATION_OPTIONS = { style: 'msSeconds1dp' } as const
 
 function formatTime(ts: string): string {
   if (!ts) return '—'
   return new Date(ts).toLocaleTimeString()
 }
+
+const { t } = useI18n()
+// #17562: the runs list is the kit table; time and duration are formatted before they reach it.
+const runColumns = computed<BaseTableColumn[]>(() => [
+  { key: 'agent_name', label: t('llc.dashboard.colAgent') },
+  { key: 'status', label: t('llc.dashboard.colStatus') },
+  { key: 'started', label: t('llc.dashboard.colStarted') },
+  { key: 'duration', label: t('llc.dashboard.colDuration'), numeric: true },
+])
+const runRows = computed(() =>
+  props.data.runs.map((run) => ({
+    id: run.run_id,
+    agent_name: run.agent_name,
+    status: run.status,
+    started: formatTime(run.started_at),
+    duration: formatDuration(run.duration_ms, DURATION_OPTIONS),
+  })),
+)
 </script>
 
 <template>
@@ -108,27 +125,11 @@ function formatTime(ts: string): string {
     <template v-else-if="type === 'company-runs'">
       <h2 class="text-lg font-semibold text-autobot-text-primary">{{ $t('llc.dashboard.recentRuns') }}</h2>
       <div class="min-h-0 flex-1 overflow-auto rounded-lg border border-autobot-border">
-        <table class="min-w-full divide-y divide-autobot-border text-sm">
-          <thead class="bg-autobot-bg-surface">
-            <tr>
-              <th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-autobot-text-secondary">{{ $t('llc.dashboard.colAgent') }}</th>
-              <th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-autobot-text-secondary">{{ $t('llc.dashboard.colStatus') }}</th>
-              <th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-autobot-text-secondary">{{ $t('llc.dashboard.colStarted') }}</th>
-              <th class="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wider text-autobot-text-secondary">{{ $t('llc.dashboard.colDuration') }}</th>
-            </tr>
-          </thead>
-          <tbody class="divide-y divide-autobot-border bg-autobot-bg-card">
-            <tr v-for="run in data.runs" :key="run.run_id">
-              <td class="px-4 py-2 font-medium text-autobot-text-primary">{{ run.agent_name }}</td>
-              <td class="px-4 py-2"><BaseBadge size="sm" :rounded="false" :variant="RUN_VARIANT[run.status]">{{ $t(RUN_LABEL_KEY[run.status]) }}</BaseBadge></td>
-              <td class="px-4 py-2 text-autobot-text-muted">{{ formatTime(run.started_at) }}</td>
-              <td class="px-4 py-2 text-autobot-text-muted">{{ formatDuration(run.duration_ms) }}</td>
-            </tr>
-            <tr v-if="data.runs.length === 0">
-              <td colspan="4" class="px-4 py-4 text-center text-sm text-autobot-text-muted">{{ $t('llc.dashboard.noRuns') }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <BaseTable :columns="runColumns" :rows="runRows" size="compact" :aria-label="$t('llc.dashboard.colAgent')" :empty-title="$t('llc.dashboard.noRuns')">
+          <template #cell-status="{ row }">
+            <BaseBadge size="sm" :rounded="false" :variant="RUN_VARIANT[row.status as RunDisplayStatus]">{{ $t(RUN_LABEL_KEY[row.status as RunDisplayStatus]) }}</BaseBadge>
+          </template>
+        </BaseTable>
       </div>
     </template>
 

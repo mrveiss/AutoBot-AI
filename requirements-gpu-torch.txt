@@ -19,5 +19,6 @@
 #
 # Requires: CUDA-compatible GPU, Python 3.12.
 
-torch==2.14.0
-torchvision==0.29.0
+-c constraints/shared.txt  # the torch/torchvision pair lives once there (#19330); `==` matches the +cuNNN build
+torch
+torchvision

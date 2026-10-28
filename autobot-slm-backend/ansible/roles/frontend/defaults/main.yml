@@ -18,7 +18,7 @@ frontend_deploy_from_git: true
 frontend_build_production: false
 
 # Node.js
-nodejs_version: "20.x"
+nodejs_version: "{{ node_major }}"
 
 # Server settings
 frontend_port: 443
@@ -42,7 +42,7 @@ backend_max_fails: 3
 backend_fail_timeout: "30s"
 
 # TLS Configuration
-frontend_tls_cert_dir: /etc/autobot/certs
+frontend_tls_cert_dir: "{{ autobot_tls_remote_cert_dir | default('/etc/autobot/certs') }}"  # #19366
 frontend_tls_cert: "{{ frontend_tls_cert_dir }}/server-cert.pem"
 frontend_tls_key: "{{ frontend_tls_cert_dir }}/server-key.pem"
 

@@ -185,6 +185,9 @@ const PYTHON_ONLY_PORTS = [
   // per-session `vnc_port` API-response mock (AdvancedControlApiClient), a
   // dynamic runtime value with no static SSOT default on either side (#14173)
   'vnc_server',
+  // The Windows NPU worker (#19325): the backend pairs and dials it; the frontend never
+  // addresses it, and reads only the Linux worker's port ('npu' above).
+  'npu_windows',
 ] as const
 const TS_ONLY_PORTS = ['slmAdmin'] as const
 
@@ -211,7 +214,8 @@ describe('Python source parser (self-check)', () => {
   })
 })
 
-const PYTHON_SHARED_SSOT_RELATIVE = join('autobot_shared', 'ssot_constants.py')
+// CategoryDefaults lives in its own module since #19335 (ssot_constants re-exports it).
+const PYTHON_SHARED_SSOT_RELATIVE = join('autobot_shared', 'category_defaults.py')
 
 function findPythonSharedSsotPath(): string {
   let dir = resolve(process.cwd())

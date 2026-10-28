@@ -261,7 +261,7 @@ function emitConfig(): void {
   margin: var(--spacing-0);
 }
 
-.config-header h4 i {
+.config-header h4 .icon {
   color: var(--color-primary);
 }
 
@@ -281,7 +281,7 @@ h5 {
   margin: 0 0 var(--spacing-md) 0;
 }
 
-h5 i {
+h5 .icon {
   color: var(--color-primary);
 }
 
@@ -330,7 +330,7 @@ h5 i {
   gap: var(--spacing-sm);
 }
 
-.toggle-label i {
+.toggle-label .icon {
   color: var(--color-primary);
 }
 

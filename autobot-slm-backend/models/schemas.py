@@ -10,6 +10,8 @@ from typing import Any, Dict, List, Literal
 
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
+from autobot_shared.ssot_config import config
+from autobot_shared.ssot_constants import model_config
 from services.ssh_utils import SshHost, SshPassword, SshUser
 
 from .database import BackupServiceType, NodeStatus, ScheduleTargetType  # noqa: F401  (re-exported)
@@ -166,7 +168,7 @@ class NodeCreate(BaseModel):
     ip_address: SshHost
     node_id: str | None = None  # Custom node_id; if not provided, derived from hostname
     roles: List[str] = Field(default_factory=list)
-    ssh_user: SshUser | None = "autobot"
+    ssh_user: SshUser | None = config.path.ssh_user  # #19730
     ssh_port: int | None = 22
     ssh_password: SshPassword | None = None
     auth_method: str | None = "password"
@@ -195,7 +197,7 @@ class NodeResponse(BaseModel):
     status: str
     roles: List[str] | None = []
     detected_roles: List[str] = Field(default_factory=list)
-    ssh_user: str | None = "autobot"
+    ssh_user: str | None = config.path.ssh_user
     ssh_port: int | None = 22
     auth_method: str | None = "key"
     cpu_percent: float
@@ -494,7 +496,7 @@ class ConnectionTestRequest(BaseModel):
     """SSH connection test request."""
 
     ip_address: SshHost
-    ssh_user: SshUser = "autobot"
+    ssh_user: SshUser = config.path.ssh_user
     ssh_port: int = 22
     auth_method: str = "password"
     password: str | None = None
@@ -1988,30 +1990,28 @@ class ServiceConflictListResponse(BaseModel):
 # =============================================================================
 
 
+#: Max agent LLM timeout (s); the configured default is clamped into it, pydantic skips defaults (#19730).
+_LLM_TIMEOUT_MAX = 300
+
+
 class AgentLLMConfig(BaseModel):
     """LLM configuration for an agent (excludes API key)."""
 
     llm_provider: str
     llm_endpoint: str | None = None
     llm_model: str
-    llm_timeout: int = 30
-    llm_temperature: float = 0.7
+    llm_timeout: int = config.llm_timeout  # #19730
+    llm_temperature: float = model_config.DEFAULT_TEMPERATURE
     llm_max_tokens: int | None = None
 
 
-class AgentResponse(BaseModel):
-    """Agent response with LLM config."""
+class AgentResponse(AgentLLMConfig):
+    """Agent response with LLM config (the LLM fields are AgentLLMConfig's, #19730)."""
 
     id: int
     agent_id: str
     name: str
     description: str | None = None
-    llm_provider: str
-    llm_endpoint: str | None = None
-    llm_model: str
-    llm_timeout: int = 30
-    llm_temperature: float = 0.7
-    llm_max_tokens: int | None = None
     is_default: bool = False
     is_active: bool = True
     created_at: datetime
@@ -2030,8 +2030,8 @@ class AgentCreateRequest(BaseModel):
     llm_endpoint: str | None = None
     llm_model: str = Field(..., min_length=1, max_length=64)
     llm_api_key: str | None = None  # Will be encrypted before storage
-    llm_timeout: int = Field(default=30, ge=1, le=300)
-    llm_temperature: float = Field(default=0.7, ge=0.0, le=2.0)
+    llm_timeout: int = Field(default=min(max(config.llm_timeout, 1), _LLM_TIMEOUT_MAX), ge=1, le=_LLM_TIMEOUT_MAX)
+    llm_temperature: float = Field(default=model_config.DEFAULT_TEMPERATURE, ge=0.0, le=2.0)
     llm_max_tokens: int | None = Field(default=None, ge=1, le=128000)
     is_default: bool = False
     is_active: bool = True
@@ -2046,7 +2046,7 @@ class AgentUpdateRequest(BaseModel):
     llm_endpoint: str | None = None
     llm_model: str | None = Field(default=None, min_length=1, max_length=64)
     llm_api_key: str | None = None  # Will be encrypted before storage
-    llm_timeout: int | None = Field(default=None, ge=1, le=300)
+    llm_timeout: int | None = Field(default=None, ge=1, le=_LLM_TIMEOUT_MAX)
     llm_temperature: float | None = Field(default=None, ge=0.0, le=2.0)
     llm_max_tokens: int | None = Field(default=None, ge=1, le=128000)
     is_default: bool | None = None

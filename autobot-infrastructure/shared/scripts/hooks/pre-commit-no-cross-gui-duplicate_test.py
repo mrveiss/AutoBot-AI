@@ -155,11 +155,12 @@ def test_type_name_reexport_is_not_a_declaration(tmp_path: Path) -> None:
 
 def test_type_name_collision_respects_allowlist(tmp_path: Path) -> None:
     # A name still on TYPE_NAME_ALLOWLIST. This used HealthStatus until #15401
-    # renamed the main GUI's copy and took it off the list, which turned the
-    # test's own example into the one collision the allowlist no longer excuses.
+    # and FormatBytesOptions until #19671 took each off the list; read the name
+    # from the allowlist so the example cannot go stale again.
+    name = sorted(guard.TYPE_NAME_ALLOWLIST)[0]
     repo = _make_repo(tmp_path)
     for app in guard.APPS:
-        _write(repo, f"{app}/src/types/format.ts", "export type FormatBytesOptions = { unit?: string }\n")
+        _write(repo, f"{app}/src/types/format.ts", f"export type {name} = {{ unit?: string }}\n")
 
     violations, _scanned = guard.collect_type_violations(repo)
 
