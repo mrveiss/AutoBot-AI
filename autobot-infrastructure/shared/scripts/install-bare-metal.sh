@@ -203,8 +203,8 @@ install_prerequisites() {
 
     # Node.js for frontend build
     if ! command -v node &>/dev/null; then
-        log_info "Installing Node.js 20.x"
-        curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+        source "$(dirname "${BASH_SOURCE[0]}")/lib/ssot-config.sh" && log_info "Installing Node.js ${NODE_MAJOR:?no .nvmrc}.x"
+        curl -fsSL "${AUTOBOT_NODESOURCE_BASE_URL}/setup_${NODE_MAJOR}.x" | bash -
         apt-get install -y -qq nodejs
     fi
 

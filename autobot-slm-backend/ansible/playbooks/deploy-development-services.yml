@@ -23,12 +23,12 @@
       block:
         - name: Add NodeSource GPG key
           apt_key:
-            url: https://deb.nodesource.com/gpgkey/nodesource.gpg.key
+            url: "{{ nodesource_base_url }}/gpgkey/nodesource.gpg.key"
             state: present
 
         - name: Add NodeSource repository
           apt_repository:
-            repo: "deb https://deb.nodesource.com/node_20.x {{ ansible_facts['distribution_release'] }} main"
+            repo: "deb {{ nodesource_base_url }}/node_{{ node_major }}.x {{ ansible_facts['distribution_release'] }} main"
             state: present
 
         - name: Install Node.js and npm

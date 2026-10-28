@@ -248,7 +248,7 @@ install_nodejs() {
     log "Installing Node.js..."
 
     if ! command -v node &>/dev/null; then
-        curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+        curl -fsSL ${AUTOBOT_NODESOURCE_BASE_URL}/setup_${NODE_MAJOR:?NODE_MAJOR unset: .nvmrc not found}.x | bash -
         apt-get install -y -qq nodejs
     fi
 
