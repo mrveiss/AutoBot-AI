@@ -262,6 +262,7 @@
   failed_when: false
   when: slm_requirements_stat.stat.exists
   tags: ['slm', 'backend']
+  check_mode: false
 
 - name: "SLM | Remove stale venv if not Python 3.14"
   ansible.builtin.file:
@@ -1158,6 +1159,7 @@
   changed_when: false
   failed_when: false
   tags: ['slm', 'service']
+  check_mode: false
 
 - name: "SLM | Collect startup logs when service is not starting (#7920)"
   ansible.builtin.shell:

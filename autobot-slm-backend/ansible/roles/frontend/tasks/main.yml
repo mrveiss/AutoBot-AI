@@ -57,6 +57,7 @@
   register: node_version
   changed_when: false
   tags: ['frontend', 'validation']
+  when: not ansible_check_mode
 
 - name: "Frontend | Ensure frontend directory exists"
   file:
@@ -370,7 +371,7 @@
   debug:
     msg:
       - "=== Frontend Configuration Complete ==="
-      - "Node.js: {{ node_version.stdout }}"
+      - "Node.js: {{ node_version.stdout | default('not probed under --check') }}"
       - "Frontend URL: https://{{ ansible_facts['default_ipv4'].address | default(ansible_host) }}"
       - "TLS: Enabled ({{ frontend_tls_cert }})"
       - "API Proxy: {{ backend_host | default(ansible_host) }}:{{ backend_port | default(8443) }}"

@@ -21,14 +21,30 @@ import ast
 import re
 
 from repo_tests._paths import repo_root
+from repo_tests._reach import declare
 
-from tools.lint._scan_helpers import tracked_paths
+from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _SERVER = "autobot-browser-worker/playwright-server.js"
 _ROUTE = re.compile(r"""\bapp\.(?:get|post|put|delete)\(\s*['"](/[^'"]*)['"]""")
 _ROOTS = ("autobot-backend", "autobot_shared", "autobot-infrastructure", "autobot-slm-backend", "scripts")
-#: Tracked non-vendored Python under the roots; a sweep far below this read the wrong set.
-MIN_FILES = 3000
+
+
+def _live_paths(root) -> list[str]:
+    try:
+        return list(tracked_paths(root, *(f"{r}/*.py" for r in _ROOTS)))
+    except EmptyEnumeration:
+        return []
+
+
+REACH = declare(
+    "browser-service-routes-scan-19490",
+    discover=_live_paths,
+    floor=6365,  # measured at 6515 tracked files, pinned mid-window (#15928)
+    growth=300,
+    what="tracked Python files swept for a browser-port URL path (#19490)",
+    roots=_ROOTS,
+)
 
 
 def worker_routes(text: str) -> set[str]:
@@ -93,8 +109,7 @@ def test_every_python_browser_client_calls_a_registered_route() -> None:
     root = repo_root()
     routes = worker_routes((root / _SERVER).read_text(encoding="utf-8"))
     assert {"/health", "/automation", "/navigate"} <= routes, "the route reader no longer sees the worker"
-    paths = tracked_paths(root, *(f"{r}/*.py" for r in _ROOTS))
-    assert len(paths) >= MIN_FILES, f"only {len(paths)} Python files swept -- the enumeration lost its reach"
+    paths = REACH.examined(root)
     missing, seen = [], 0
     for rel in paths:
         source = (root / rel).read_text(encoding="utf-8")
