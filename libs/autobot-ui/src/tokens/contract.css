@@ -64,6 +64,11 @@
   --aui-risk-high-contrast: var(--aui-color-error-contrast);
   --aui-risk-critical: var(--aui-color-error);
   --aui-risk-critical-contrast: var(--aui-color-error-contrast);
+  /* Label ink per tier: 40% tier colour, 60% theme text (contrast rationale in RiskBadge.vue). */
+  --aui-risk-low-ink: color-mix(in srgb, var(--aui-risk-low) 40%, var(--aui-color-text));
+  --aui-risk-medium-ink: color-mix(in srgb, var(--aui-risk-medium) 40%, var(--aui-color-text));
+  --aui-risk-high-ink: color-mix(in srgb, var(--aui-risk-high) 40%, var(--aui-color-text));
+  --aui-risk-critical-ink: color-mix(in srgb, var(--aui-risk-critical) 40%, var(--aui-color-text));
 
   /* ---- Color: overlay (modal/dialog backdrop scrim) ------------------ */
   --aui-color-overlay: rgb(0 0 0 / 0.5);
