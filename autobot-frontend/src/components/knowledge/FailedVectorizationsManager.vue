@@ -189,11 +189,12 @@ onMounted(() => {
   color: var(--text-secondary);
 }
 
-.loading-state i,
-.error-state i {
+.loading-state .icon,
+.error-state .icon {
   font-size: var(--text-4xl);
   margin-bottom: var(--spacing-4);
   display: block;
+  margin-inline: auto;
 }
 
 .error-state {
@@ -258,7 +259,7 @@ onMounted(() => {
   color: var(--color-error);
 }
 
-.job-error i {
+.job-error .icon {
   flex-shrink: 0;
   margin-top: var(--spacing-px);
 }
