@@ -13,6 +13,7 @@
  * cleanup, no timeout).
  */
 
+import { useI18n } from 'vue-i18n'
 import { ref, watch } from 'vue'
 import {
   useAutobotApi,
@@ -20,6 +21,7 @@ import {
   type ConfigRevision,
 } from '@/composables/useAutobotApi'
 
+const { t } = useI18n()
 const api = useAutobotApi()
 const revisions = ref<ConfigRevision[]>([])
 const loading = ref(false)
@@ -46,7 +48,7 @@ async function fetchRevisions() {
   try {
     revisions.value = await api.getConfigRevisions(entityType.value, entityId.value, 50)
   } catch (err) {
-    error.value = autobotApiErrorMessage(err, 'Failed to load revisions')
+    error.value = autobotApiErrorMessage(err, t('agents.configHistoryTab.loadFailed'))
     revisions.value = []
   } finally {
     loading.value = false
@@ -61,7 +63,7 @@ async function rollback(revisionId: string) {
     selectedRevision.value = null
     await fetchRevisions()
   } catch (err) {
-    error.value = autobotApiErrorMessage(err, 'Rollback failed')
+    error.value = autobotApiErrorMessage(err, t('agents.configHistoryTab.rollbackFailed'))
   } finally {
     rollbackLoading.value = false
   }
