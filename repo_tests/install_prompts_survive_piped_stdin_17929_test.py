@@ -31,6 +31,7 @@ import re
 import subprocess
 from pathlib import Path
 
+import pytest
 from repo_tests._paths import repo_root
 
 from tools.lint._comment_syntax import code_text
@@ -228,7 +229,8 @@ def _run_config_step(tmp_path: Path, stdin) -> subprocess.CompletedProcess:
             'YELLOW="" CYAN="" NC=""',
             'info() { echo "INFO: $*"; }',
             'warn() { echo "WARN: $*"; }',
-            'UNATTENDED=false GIT_BRANCH="" ADMIN_PASSWORD="" DEFAULT_BRANCH="main"',
+            'UNATTENDED=false ADMIN_PASSWORD="" DEFAULT_BRANCH="main"',
+            _initial(source, "GIT_BRANCH"),
             _function(source, "prompt_from_tty"),
             _function(source, "generate_admin_password"),
             config,
@@ -247,6 +249,26 @@ def _run_config_step(tmp_path: Path, stdin) -> subprocess.CompletedProcess:
     )
 
 
+def _initial(source: str, name: str) -> str:
+    """The script's own top-level initialisation of *name* -- never a hand-written stand-in.
+
+    #19403: this harness once seeded GIT_BRANCH="" itself while the script set it to the default,
+    so the branch prompt was tested reachable here and was unreachable in every real run.
+    """
+    lines = re.findall(rf"^{name}=.*$", source, re.MULTILINE)
+    assert len(lines) == 1, f"install.sh initialises {name} {len(lines)} times at top level"
+    return lines[0]
+
+
+@pytest.mark.parametrize(
+    "source", ["#!/bin/bash\nOTHER=1\n", "#!/bin/bash\nGIT_BRANCH=main\nGIT_BRANCH=dev\n"], ids=["missing", "duplicate"]
+)
+def test_the_initialisation_reader_rejects_a_missing_or_duplicate_assignment(source: str) -> None:
+    """The contrast pair for _initial: it must refuse, not pick one, when the script's shape changes."""
+    with pytest.raises(AssertionError, match="initialises GIT_BRANCH"):
+        _initial(source, "GIT_BRANCH")
+
+
 def _values(out: str) -> dict[str, str]:
     return dict(line.split("=", 1) for line in out.splitlines() if line.startswith(("BRANCH=", "PASSWORD=")))
 
@@ -259,6 +281,7 @@ def test_the_configuration_step_completes_with_stdin_closed(tmp_path: Path) -> N
     assert values["BRANCH"] == "main"
     assert re.fullmatch(r"[A-Za-z0-9]{20}", values["PASSWORD"]), "no usable password was generated"
     assert "No terminal available to read a password" in done.stdout, "the no-terminal path was silent"
+    assert "No terminal — using main" in done.stdout, "the branch prompt was never reached (#19403)"
 
 
 def test_piped_stdin_never_becomes_the_password(tmp_path: Path) -> None:
