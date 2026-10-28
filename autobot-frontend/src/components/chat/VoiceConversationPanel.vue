@@ -344,7 +344,7 @@ onMounted(async () => {
   letter-spacing: 0.04em;
 }
 
-.voice-panel__lang-badge i {
+.voice-panel__lang-badge .icon {
   font-size: 0.5625rem;
   opacity: 0.7;
 }

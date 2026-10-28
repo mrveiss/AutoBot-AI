@@ -2757,14 +2757,14 @@ function runContextMenuAction(action: CanvasContextMenuAction): void {
 }
 
 .empty-state { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; padding: var(--spacing-10); }
-.empty-state i { font-size: var(--text-5xl); color: var(--text-muted); margin-bottom: var(--spacing-4); }
+.empty-state .icon { font-size: var(--text-5xl); color: var(--text-muted); margin-bottom: var(--spacing-4); }
 .empty-state h3 { margin: var(--spacing-0) var(--spacing-0) var(--spacing-2); color: var(--text-primary); }
 .empty-state p { margin: var(--spacing-0) var(--spacing-0) var(--spacing-5); color: var(--text-tertiary); }
 
 .dialog-overlay { position: fixed; inset: 0; background: var(--bg-overlay); display: flex; align-items: center; justify-content: center; z-index: var(--z-modal-backdrop); }
 .dialog { width: 400px; background: var(--bg-secondary); border-radius: var(--radius-xl); padding: var(--spacing-6); }
 .dialog h3 { margin: var(--spacing-0) var(--spacing-0) var(--spacing-5); display: flex; align-items: center; gap: var(--spacing-2-5); color: var(--text-primary); }
-.dialog h3 i { color: var(--color-primary); }
+.dialog h3 .icon { color: var(--color-primary); }
 .dialog input, .dialog textarea { width: 100%; padding: var(--spacing-2-5) var(--spacing-3); margin-bottom: var(--spacing-3); background: var(--bg-primary); border: 1px solid var(--border-default); border-radius: var(--radius-md); color: var(--text-primary); font-size: var(--text-sm); font-family: inherit; }
 .dialog input:focus, .dialog textarea:focus { outline: none; border-color: var(--color-primary); }
 .dialog input:focus-visible, .dialog textarea:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
