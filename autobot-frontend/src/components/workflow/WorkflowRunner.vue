@@ -222,13 +222,13 @@ function formatResult(result: Record<string, unknown>): string {
 .runner-sidebar { width: 300px; min-width: 300px; background: var(--bg-secondary); border-right: 1px solid var(--border-default); display: flex; flex-direction: column; }
 .sidebar-header { display: flex; justify-content: space-between; align-items: center; padding: var(--spacing-4); border-bottom: 1px solid var(--border-default); }
 .sidebar-header h4 { margin: var(--spacing-0); font-size: var(--text-sm); color: var(--text-primary); display: flex; align-items: center; gap: var(--spacing-2); }
-.sidebar-header h4 i { color: var(--color-primary); }
+.sidebar-header h4 .icon { color: var(--color-primary); }
 .btn-refresh { padding: var(--spacing-1-5); background: transparent; border: none; color: var(--text-tertiary); cursor: pointer; border-radius: var(--radius-default); }
 .btn-refresh:hover:not(:disabled) { background: var(--bg-hover); }
 .btn-refresh:disabled { opacity: 0.5; }
 
 .empty-list { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted); padding: var(--spacing-5); }
-.empty-list i { font-size: 32px; margin-bottom: var(--spacing-3); }
+.empty-list .icon { font-size: 32px; margin-bottom: var(--spacing-3); }
 
 .workflow-list { flex: 1; overflow-y: auto; padding: var(--spacing-2); }
 .workflow-item { padding: var(--spacing-3); background: var(--bg-tertiary); border-radius: var(--radius-lg); margin-bottom: var(--spacing-2); cursor: pointer; transition: all 0.15s; }
@@ -249,7 +249,7 @@ function formatResult(result: Record<string, unknown>): string {
 
 .runner-main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .no-selection { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-tertiary); padding: var(--spacing-10); }
-.no-selection i { font-size: var(--text-5xl); margin-bottom: var(--spacing-4); }
+.no-selection .icon { font-size: var(--text-5xl); margin-bottom: var(--spacing-4); }
 .no-selection h3 { margin: var(--spacing-0) var(--spacing-0) var(--spacing-2); color: var(--text-primary); }
 
 .workflow-header { display: flex; justify-content: space-between; align-items: flex-start; padding: var(--spacing-5); background: var(--bg-secondary); border-bottom: 1px solid var(--border-default); }
@@ -290,7 +290,7 @@ function formatResult(result: Record<string, unknown>): string {
 
 .steps-container { flex: 1; overflow-y: auto; padding: var(--spacing-5); }
 .steps-container h4 { margin: var(--spacing-0) var(--spacing-0) var(--spacing-4); font-size: var(--text-sm); color: var(--text-primary); display: flex; align-items: center; gap: var(--spacing-2); }
-.steps-container h4 i { color: var(--color-primary); }
+.steps-container h4 .icon { color: var(--color-primary); }
 
 .steps-list { display: flex; flex-direction: column; }
 .step-item { display: flex; gap: var(--spacing-4); padding-bottom: var(--spacing-4); }
