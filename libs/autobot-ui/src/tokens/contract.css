@@ -139,6 +139,7 @@
   --aui-table-row-selected: var(--aui-color-surface-raised);
   --aui-table-row-selected-edge: 3px solid var(--aui-color-primary);
   --aui-table-zebra-bg: var(--aui-color-surface-raised);
+  --aui-table-row-tint: 8%;
   --aui-table-check-w: 44px;
   --aui-table-min-col: 96px;
   --aui-table-num: tabular-nums;

@@ -19,12 +19,15 @@
 import { computed, ref, useSlots, warn, watch, watchEffect } from 'vue'
 import BaseTooltip from './BaseTooltip.vue'
 import EmptyState from './EmptyState.vue'
+import type { SemanticVariant } from '../types/semantic'
 import { sortRows, type SortOrder } from '../utils/tableSort'
 
 export type { SortOrder }
 export type TableRow = Record<string, unknown>
 export type TableRowKey = string | number
 export type TableSize = 'compact' | 'comfortable'
+/** A row's state, tinted from the status tokens (#19640). */
+export type TableRowVariant = Extract<SemanticVariant, 'success' | 'warning' | 'error' | 'info'>
 
 export interface BaseTableColumn {
   key: string
@@ -67,6 +70,8 @@ const props = withDefaults(
     selectRowLabel?: (rowNumber: number) => string
     /** Header text of the `actions` slot column. */
     actionsLabel?: string
+    /** Per-row state, e.g. a denied audit entry -> 'error'; undefined leaves the row plain. */
+    rowVariant?: (row: TableRow) => TableRowVariant | undefined
   }>(),
   {
     rowKey: 'id',
@@ -84,6 +89,7 @@ const props = withDefaults(
     selectAllLabel: undefined,
     selectRowLabel: undefined,
     actionsLabel: undefined,
+    rowVariant: undefined,
   },
 )
 
@@ -116,6 +122,15 @@ function ariaSortOf(col: BaseTableColumn): 'ascending' | 'descending' | 'none' |
   if (!col.sortable) return undefined
   if (activeKey.value !== col.key) return 'none'
   return activeOrder.value === 'asc' ? 'ascending' : 'descending'
+}
+
+function rowClasses(row: TableRow, index: number): Record<string, boolean> {
+  const variant = props.rowVariant?.(row)
+  return {
+    'aui-table__row--zebra': props.zebra && index % 2 === 1,
+    [`aui-table__row--${variant}`]: variant !== undefined,
+    'aui-table__row--selected': selected.value.has(rowKeyOf(row)),
+  }
 }
 
 function arrowClasses(key: string): Record<string, boolean> {
@@ -272,7 +287,7 @@ watchEffect(() => {
               v-for="(row, index) in shownRows"
               :key="rowKeyOf(row)"
               class="aui-table__row"
-              :class="{ 'aui-table__row--zebra': zebra && index % 2 === 1, 'aui-table__row--selected': selected.has(rowKeyOf(row)) }"
+              :class="rowClasses(row, index)"
             >
               <td v-if="selectable" class="aui-table__check">
                 <input
@@ -393,6 +408,11 @@ tbody .aui-table__check { background: transparent; }
 
 /* Zebra first, so hover and selection (same specificity, later) win over it. */
 .aui-table__row--zebra { background: var(--aui-table-zebra-bg); }
+/* Row state (#19640): a light mix of the status colour, so it reads in both themes; hover and selection still win. */
+.aui-table__row--success { background: color-mix(in srgb, var(--aui-color-success) var(--aui-table-row-tint), transparent); }
+.aui-table__row--warning { background: color-mix(in srgb, var(--aui-color-warning) var(--aui-table-row-tint), transparent); }
+.aui-table__row--error { background: color-mix(in srgb, var(--aui-color-error) var(--aui-table-row-tint), transparent); }
+.aui-table__row--info { background: color-mix(in srgb, var(--aui-color-info) var(--aui-table-row-tint), transparent); }
 .aui-table__row:hover { background: var(--aui-table-row-hover); }
 .aui-table__row--selected { background: var(--aui-table-row-selected); }
 .aui-table__row--selected > :first-child { border-left: var(--aui-table-row-selected-edge); }

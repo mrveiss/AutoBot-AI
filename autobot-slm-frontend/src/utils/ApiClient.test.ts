@@ -134,6 +134,30 @@ describe('SlmApiClient', () => {
     expect(window.location.href).toBe(`/login?redirect=${encodeURIComponent('/fleet')}`)
   })
 
+  it('keeps the session on a 401 when the caller asked to (a connectivity probe, #12363)', async () => {
+    sessionStorage.setItem(TOKEN_KEY, 'live-jwt')
+    fetchMock.mockResolvedValue(jsonResponse({ detail: 'unauthorized' }, 401))
+    const client = new SlmApiClient()
+
+    const response = await client.rawRequest('/health', { keepSessionOn401: true })
+
+    expect(response.status).toBe(401)
+    expect(sessionStorage.getItem(TOKEN_KEY)).toBe('live-jwt')
+    expect(window.location.href).toBe('')
+  })
+
+  it('keeps the session on every 401 from a client set to keep it (#10193, #12363)', async () => {
+    sessionStorage.setItem(TOKEN_KEY, 'live-jwt')
+    fetchMock.mockResolvedValue(jsonResponse({ detail: 'unauthorized' }, 401))
+    const client = new SlmApiClient()
+    client.setKeepSessionOn401(true)
+
+    await expect(client.get('/settings', { maxRetries: 1 })).rejects.toThrow('HTTP 401')
+
+    expect(sessionStorage.getItem(TOKEN_KEY)).toBe('live-jwt')
+    expect(window.location.href).toBe('')
+  })
+
   it('redirects to the base-aware login with the current route as redirect (#18892)', async () => {
     vi.stubEnv('BASE_URL', '/slm/')
     Object.defineProperty(window, 'location', {
