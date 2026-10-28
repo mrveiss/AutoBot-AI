@@ -52,14 +52,14 @@ def _run(bash: str, script: str, tmp: Path) -> subprocess.CompletedProcess:
 def test_ansible_gets_the_password_from_an_owner_only_file_not_argv(tmp_path: Path) -> None:
     bash = _require_tools()
     text = _INSTALL.read_text(encoding="utf-8")
-    m = re.search(r"    local vars_file=.*?_ansible_exit=\$\{PIPESTATUS\[0\]\}\n", text, re.S)
+    m = re.search(r"    local vars_file=.*?_ansible_exit=\$\{PIPESTATUS\[0\]\}[^\n]*\n", text, re.S)
     assert m, "install.sh no longer builds the ansible vars file before ansible-playbook"
     _stub(
         tmp_path / "bin",
         "ansible-playbook",
         'printf "%s\\n" "$@" > "$LOG.argv"\n'
         'for a in "$@"; do case "$a" in @*) f="${a#@}"; cp "$f" "$LOG.vars"; stat -c %a "$f" > "$LOG.mode";; esac; done\n'
-        'echo "PLAY RECAP"\n',  # the installer filters ansible output through grep, which needs a line
+        'echo "PLAY RECAP"\n',  # a progress line, so the run also streams something (#19493 made one optional)
     )
     script = "\n".join(
         [
