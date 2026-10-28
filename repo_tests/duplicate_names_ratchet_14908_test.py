@@ -35,7 +35,7 @@ from repo_tests.kit_export_shadow_ratchet_14908_test import _COMMENTS, _EXCLUDED
 _APPS = ("autobot-frontend/src", "autobot-slm-frontend/src")
 _UTILS = tuple(f"{app}/utils" for app in _APPS)
 _KIT = "libs/autobot-ui"
-_TYPE_DECL = re.compile(r"^export\s+(?:declare\s+)?(?:type|interface)\s+([A-Za-z_]\w*)", re.M)
+_TYPE_DECL = re.compile(r"^[ \t]*export\s+(?:declare\s+)?(?:type|interface)\s+([A-Za-z_$][\w$]*)", re.M)
 _MODULE_STMT = re.compile(r"\b(?:import|export)\b[^;'\"]*?\bfrom\s*['\"]([^'\"]+)['\"]\s*;?")
 _KIT_SPEC = re.compile(r"^@autobot/ui(/|$)")
 _SKIPPED_DIRS = {"node_modules", "dist"}
@@ -125,6 +125,20 @@ class TestTheDetectorsWorkBeforeTheirOutputIsRead:
         self._w(tmp_path / "b", "u.ts", "export type Row = { id: number }\n")
         first, second = declared_types([tmp_path / "a"]), declared_types([tmp_path / "b"])
         assert type_name_overlaps(first, second) == ["Row"]
+
+    def test_declare_generic_multiline_and_indented_forms_all_count(self, tmp_path: Path) -> None:
+        self._w(
+            tmp_path / "a",
+            "t.ts",
+            "export declare interface A {}\nexport type B<T> = T[]\nexport\n  interface C {\n}\n  export type $D = 1\n",
+        )
+        self._w(
+            tmp_path / "b",
+            "u.ts",
+            "export declare interface A {}\nexport type B<T> = T\nexport\n  interface C {\n}\nexport type $D = 2\n",
+        )
+        first, second = declared_types([tmp_path / "a"]), declared_types([tmp_path / "b"])
+        assert type_name_overlaps(first, second) == ["$D", "A", "B", "C"]
 
     def test_a_reexport_or_a_distinct_name_is_not_an_overlap(self, tmp_path: Path) -> None:
         self._w(tmp_path / "a", "t.ts", "export interface Row { id: string }\n")
