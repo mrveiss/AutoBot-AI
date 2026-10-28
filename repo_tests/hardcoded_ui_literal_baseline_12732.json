@@ -652,10 +652,6 @@
   "e806316c",
   "e9d6d3d5"
  ],
- "autobot-frontend/src/components/settings/SettingsPanel.vue": [
-  "39f92f56",
-  "fc10feaf"
- ],
  "autobot-frontend/src/components/settings/TelegramSettingsPanel.vue": [
   "a9d9ae21"
  ],

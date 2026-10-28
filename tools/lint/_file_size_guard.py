@@ -113,7 +113,7 @@ class FileSizeGuard:
     """The shared ratchet logic, configured by the owning script's namespace.
 
     *namespace* is the script's ``globals()``. It must hold the configuration
-    (``MAX_LINES``, ``KNOWN_LARGE``, ``SELF_REL``, ``RATCHET_REL``,
+    (``MAX_LINES``, ``KNOWN_LARGE``, ``SELF_REL``,
     ``EXCLUDED_PREFIXES``, ``logger``, ``repo_root``) and the script-level
     bindings of the methods below under their historical names
     (``verdict``, ``audit_ceilings``, ``_scan_tracked_files``, ...), so a
@@ -133,13 +133,12 @@ class FileSizeGuard:
 
     def grandfathered_verdict(self, rel: str, line_count: int, ceiling: int) -> str | None:
         """Violation message for a KNOWN_LARGE file, or None when it is at ceiling."""
-        max_lines, self_rel, ratchet = self._get("MAX_LINES"), self._get("SELF_REL"), self._get("RATCHET_REL")
+        max_lines, self_rel = self._get("MAX_LINES"), self._get("SELF_REL")
         if line_count <= max_lines:
             return (
                 f"{rel}: {line_count} lines — now within the {max_lines}-line limit. "
-                f"Delete its KNOWN_LARGE entry in {self_rel} and its RATCHET_BASELINE "
-                f"entry in {ratchet}: an entry naming a compliant file exempts "
-                "nothing while looking authoritative."
+                f"Delete its KNOWN_LARGE entry in {self_rel}: an entry naming a compliant "
+                "file exempts nothing while looking authoritative."
             )
         if line_count > ceiling:
             return (
@@ -150,9 +149,8 @@ class FileSizeGuard:
         if line_count < ceiling:
             return (
                 f"{rel}: {line_count} lines, under its recorded ceiling of {ceiling}. "
-                f"Lower the ceiling to {line_count} in {self_rel} and the matching "
-                f"RATCHET_BASELINE entry in {ratchet} — the ratchet only turns "
-                "down, and an unlowered ceiling re-licenses the lines just cut."
+                f"Lower the ceiling to {line_count} in {self_rel} — the ratchet only "
+                "turns down, and an unlowered ceiling re-licenses the lines just cut."
             )
         return None
 
@@ -175,7 +173,7 @@ class FileSizeGuard:
         return (
             f"{rel}: not found by the tracked-file walk under {root} — this entry "
             f"(ceiling {self._get('KNOWN_LARGE')[rel]}) names a file that moved or was deleted. "
-            f"Remove it from {self._get('SELF_REL')} and its RATCHET_BASELINE entry in {self._get('RATCHET_REL')}."
+            f"Remove it from {self._get('SELF_REL')}."
         )
 
     def report_unmeasured(self, rel: str, seen: set[str], problems: list[str]) -> None:

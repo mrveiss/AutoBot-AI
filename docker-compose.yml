@@ -597,9 +597,10 @@ services:
       # in the hardened overlay doesn't fail with EROFS when mkdir("logs") is
       # called relative to the /app/autobot-slm-backend working directory (#11574).
       - AUTOBOT_LOGS_DIR=/app/logs
-      # Surface each compose service container as a fleet node (#9761). Off by
-      # default so production/Ansible VM fleets are unaffected; on for compose.
-      - SLM_COMPOSE_NODES=${SLM_COMPOSE_NODES:-true}
+      # Surface each compose service container as a fleet node (#9761). The default
+      # lives in the SLM config (#19323): on here, because the SLM detects docker_local.
+      # Passed through only when set (true|false) -- never restated.
+      - SLM_COMPOSE_NODES
       - AUTOBOT_DOCKER_MGMT_PREFIX=${AUTOBOT_DOCKER_MGMT_PREFIX}  # compose_fleet node IPs (#16833)
       # Shared signing secrets so the backend node's JWT verifies on SLM —
       # without a shared secret each service generates its own and SLM rejects
