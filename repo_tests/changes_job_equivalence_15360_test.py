@@ -157,6 +157,8 @@ ALLOWED_ADDITIONS = {
             f"{WORKFLOWS}/_changes.yml",
             f"{WORKFLOWS}/migration-gate.yml",
             f"{WORKFLOWS}/ai-security-review.yml",
+            # #19523: dependabot_root_coverage_19523_test reads dependabot.yml by concrete literal.
+            ".github/dependabot.yml",
             # #19769: pr_conflict_gate_19769_test.py reads the conflict gate workflow.
             f"{WORKFLOWS}/pr-merge-conflict-gate.yml",
             # #17856: frontend_api_timeout_ssot_17856_test reads both .env.example files.

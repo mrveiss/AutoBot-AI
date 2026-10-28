@@ -217,6 +217,7 @@ def test_a_declared_scope_that_the_sweep_does_not_reach_is_refused() -> None:
 #: Compared as a SET in both directions. Adding a scoped declaration means adding a line here,
 #: and that is the point -- the scope is a decision, so it is written twice on purpose.
 _DECLARED_SCOPES = {
+    "dead-icon-selector-vue-files": ("autobot-frontend/src",),
     "kit-shadow-ts-files-scanned-14908": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "v-html-sanitiser-sinks": (
         "autobot-frontend/src",

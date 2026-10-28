@@ -244,7 +244,7 @@ onMounted(() => {
   gap: var(--spacing-sm);
 }
 
-.placeholder-content i {
+.placeholder-content .icon {
   font-size: 48px;
   color: var(--text-tertiary);
 }
@@ -297,7 +297,7 @@ onMounted(() => {
   color: var(--color-success);
 }
 
-.copy-button i {
+.copy-button .icon {
   font-size: var(--text-sm);
 }
 

@@ -49,6 +49,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "NOT_PATHS",
         "Call sites, not paths: one id per literal-fallback env read in the sweep roots, a subset of tracked Python.",
     ),
+    "dead-icon-selector-vue-files": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "One frontend tree's `.vue` files, against all tracked `.vue` including the other frontend and the kit.",
+    ),
     "deployment-mode-detector-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

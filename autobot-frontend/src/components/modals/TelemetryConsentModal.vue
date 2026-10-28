@@ -194,7 +194,7 @@ async function updateConsent(enabled: boolean) {
   margin: 0 0 var(--spacing-sm) 0;
 }
 
-.summary-title i {
+.summary-title .icon {
   color: var(--color-info);
 }
 
@@ -222,7 +222,7 @@ async function updateConsent(enabled: boolean) {
   color: var(--text-primary);
 }
 
-.privacy-note i {
+.privacy-note .icon {
   color: var(--color-success);
   flex-shrink: 0;
   margin-top: 2px;

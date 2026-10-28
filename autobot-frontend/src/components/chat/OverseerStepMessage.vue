@@ -255,7 +255,7 @@ const copyCommand = () => {
   @apply flex items-center gap-2 text-autobot-text-secondary mb-4;
 }
 
-.step-description i {
+.step-description .icon {
   @apply text-indigo-400;
 }
 
@@ -342,7 +342,7 @@ const copyCommand = () => {
   @apply flex items-center gap-2 px-3 py-2 bg-autobot-bg-secondary border-b border-autobot-border;
 }
 
-.output-header i {
+.output-header .icon {
   @apply text-green-400;
 }
 
@@ -382,7 +382,7 @@ const copyCommand = () => {
   @apply flex items-start gap-2 text-sm text-autobot-text-secondary;
 }
 
-.key-findings li i {
+.key-findings li .icon {
   @apply text-teal-400 mt-0.5;
 }
 
