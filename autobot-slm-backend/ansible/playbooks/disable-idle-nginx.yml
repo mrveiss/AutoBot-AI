@@ -26,6 +26,7 @@
       register: _nginx_installed
       changed_when: false
       failed_when: false
+      check_mode: false
 
     - name: "Stop and disable nginx"
       ansible.builtin.systemd:

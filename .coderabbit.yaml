@@ -70,7 +70,6 @@ reviews:
     # invariants are enforced by tests that already exist.
     - "!**/*_baseline.txt"
     - "!pipeline-scripts/hardcoded_values_baseline.txt"
-    - "!repo_tests/python_file_size_ratchet_baseline.py"
     - "!scripts/python_file_size_known_large.py"
     - "!**/.test_durations*"
     - "!**/package-lock.json"
