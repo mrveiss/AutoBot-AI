@@ -12,12 +12,14 @@ import { BaseAlert, BaseSwitch } from '@autobot/ui'
 
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useToast } from '@/composables/useToast'
 import { getGrafanaUrl, getPrometheusUrl } from '@/config/ssot-config'
 import { listSettings, upsertSetting } from '@/utils/slmSettingsApi'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('MonitoringSettings')
 const { t } = useI18n()
+const { showToast } = useToast()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -76,7 +78,7 @@ async function saveSetting(key: string, value: string): Promise<void> {
 }
 
 async function deployMonitoringRole(): Promise<void> {
-  alert(t('settings.monitoringSettings.deployViaAnsible'))
+  showToast(t('settings.monitoringSettings.deployViaAnsible'), 'error')
 }
 
 async function testPrometheusConnection(): Promise<void> {

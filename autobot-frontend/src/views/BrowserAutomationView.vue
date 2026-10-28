@@ -12,11 +12,13 @@
 
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useToast } from '@/composables/useToast'
 import { useBrowserAutomation } from '@/composables/useBrowserAutomation'
 import { createLogger } from '@/utils/debugUtils'
 import Icon from '@/components/ui/Icon.vue'
 
 const { t } = useI18n()
+const { showToast } = useToast()
 const logger = createLogger('BrowserAutomationView')
 
 // Each flag returns with its route (#18747); no backend route serves these controls yet.
@@ -110,14 +112,14 @@ async function handleExecuteScript() {
   if (!currentSession.value || !scriptInput.value.trim()) return
   const result = await executeScript(currentSession.value.id, scriptInput.value)
   logger.debug('Script result:', result)
-  alert(`${t('views.browserAutomation.scriptResult')}:\n\n${JSON.stringify(result, null, 2)}`)
+  showToast(`${t('views.browserAutomation.scriptResult')}: ${JSON.stringify(result)}`, 'success')
 }
 
 async function handleRunAutomation() {
   if (!automationScriptInput.value.trim()) return
   const result = await runAutomationScript(automationScriptInput.value)
   logger.debug('Automation result:', result)
-  alert(`${t('views.browserAutomation.automationCompleted')}:\n\n${JSON.stringify(result, null, 2)}`)
+  showToast(`${t('views.browserAutomation.automationCompleted')}: ${JSON.stringify(result)}`, 'success')
 }
 
 function selectSession(session: typeof sessions.value[0]) {
