@@ -325,6 +325,7 @@ _DECLARED_SCOPES = {
     ),
     "backend-migrations-resume-safe-18729": ("autobot-backend/migrations/versions",),
     "opt-autobot-literal-ratchet-18880": ("autobot-slm-backend/ansible",),
+    "disaster-recovery-deployed-units": ("autobot-slm-backend/ansible/roles",),
     "concept-forks-17856-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "gateway-adapter-package-scan": ("autobot-backend/services/gateway",),
     "architecture-family-definition-scan": (

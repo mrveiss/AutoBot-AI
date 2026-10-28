@@ -421,6 +421,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test Python under thirteen source roots, a subset of tracked Python; the test-file share drifts.",
     ),
+    "disaster-recovery-deployed-units": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Ansible role task files, a subset of tracked YAML; workflows and inventories grow on their own.",
+    ),
     "landing-page-declared-dependencies": (
         ABSOLUTE,
         "FIXED_INVENTORY",

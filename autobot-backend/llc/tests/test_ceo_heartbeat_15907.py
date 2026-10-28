@@ -27,14 +27,17 @@ import pytest_asyncio
 import sqlalchemy as sa
 
 from llc.models.company import CompanyCreate, CompanyUpdate
-from llc.models.enums import ActivityEventType, LLCAgentStatus
+from llc.models.enums import ActivityEventType, LLCAgentStatus, MembershipRole
 from llc.services.company import CompanyService
 from llc.services.company_ceo import DORMANT_CEO_STATUS, CompanyCEOService, default_ceo_slug
 from llc.services.controls_service import AgentNotFoundError, AgentNotSchedulableError, ControlsService
+from llc.services.membership_service import MembershipService
 from llc.tests import test_llc_org_chart as _org_chart_harness
 from models.agent_org import AgentOrgNode
 
 _CRON = "*/5 * * * *"
+#: Owner of every company the tests create.
+_ACTOR = uuid.uuid4()
 
 # The SQLite harness fixtures, re-exported so pytest finds them in this module.
 engine = _org_chart_harness.engine
@@ -42,10 +45,19 @@ session_factory = _org_chart_harness.session_factory
 
 
 async def _create(session_factory, name: str, parent: uuid.UUID | None = None) -> uuid.UUID:  # noqa: ANN001
+    """Create a company owned by ``_ACTOR``, as ``create_company`` makes its creator the OWNER."""
     async with session_factory() as session:
         org = await CompanyService(session).create(CompanyCreate(name=name, slug=name.lower(), parent_org_id=parent))
+        await MembershipService().add_member(session, str(org.id), str(_ACTOR), MembershipRole.OWNER)
         await session.commit()
         return org.id
+
+
+async def _demote(session_factory, company_id: uuid.UUID, parent: uuid.UUID) -> None:  # noqa: ANN001
+    """Move through the update path as the owner of both orgs (a move is admin-only, #19634)."""
+    async with session_factory() as session:
+        await CompanyService(session).update(company_id, CompanyUpdate(parent_org_id=parent), actor_user_id=_ACTOR)
+        await session.commit()
 
 
 async def _ceo_nodes(session_factory, company_id: uuid.UUID) -> list[AgentOrgNode]:  # noqa: ANN001
@@ -116,9 +128,7 @@ async def test_demoting_a_company_retires_its_ceo_and_keeps_the_node(session_fac
     [ceo] = await _ceo_nodes(session_factory, company_id)
     await _toggle(session_factory, company_id, ceo.agent_id, True)
 
-    async with session_factory() as session:
-        await CompanyService(session).update(company_id, CompanyUpdate(parent_org_id=parent))
-        await session.commit()
+    await _demote(session_factory, company_id, parent)
 
     assert await _designation(session_factory, company_id) is None
     [node] = await _ceo_nodes(session_factory, company_id)
@@ -133,9 +143,7 @@ async def test_promoting_back_reuses_the_retired_node(session_factory):  # noqa:
     parent = await _create(session_factory, "Parent")
     company_id = await _create(session_factory, "Acme")
     [original] = await _ceo_nodes(session_factory, company_id)
-    async with session_factory() as session:
-        await CompanyService(session).update(company_id, CompanyUpdate(parent_org_id=parent))
-        await session.commit()
+    await _demote(session_factory, company_id, parent)
 
     async with session_factory() as session:
         await CompanyCEOService().sync_with_parent(session, company_id, None)
@@ -146,12 +154,6 @@ async def test_promoting_back_reuses_the_retired_node(session_factory):  # noqa:
     assert nodes[0].status == LLCAgentStatus.AVAILABLE.value
     assert nodes[0].heartbeat_enabled is False
     assert (await _designation(session_factory, company_id)).holder_agent_id == original.id
-
-
-async def _demote(session_factory, company_id: uuid.UUID, parent: uuid.UUID) -> None:  # noqa: ANN001
-    async with session_factory() as session:
-        await CompanyService(session).update(company_id, CompanyUpdate(parent_org_id=parent))
-        await session.commit()
 
 
 async def _set_status(session_factory, company_id: uuid.UUID, status: str) -> None:  # noqa: ANN001
@@ -265,9 +267,7 @@ async def test_another_companys_agent_is_not_found(session_factory):  # noqa: AN
 async def test_a_dormant_ceo_cannot_be_put_on_the_heartbeat(session_factory):  # noqa: ANN001
     parent = await _create(session_factory, "Parent")
     company_id = await _create(session_factory, "Acme")
-    async with session_factory() as session:
-        await CompanyService(session).update(company_id, CompanyUpdate(parent_org_id=parent))
-        await session.commit()
+    await _demote(session_factory, company_id, parent)
     with pytest.raises(AgentNotSchedulableError):
         await _toggle(session_factory, company_id, default_ceo_slug(company_id), True)
 

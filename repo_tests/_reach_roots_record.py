@@ -63,6 +63,7 @@ REACH_ROOTS = {
         "scripts",
     ),
     "repo_tests/direct_secrets_service_callers_17773_test.py": ("autobot-backend", "autobot_shared"),
+    "repo_tests/disaster_recovery_names_real_units_19459_test.py": ("autobot-slm-backend/ansible/roles",),
     "repo_tests/docker_admin_seed_18729_test.py": (
         ".env",
         "autobot-backend/migrations/versions",
