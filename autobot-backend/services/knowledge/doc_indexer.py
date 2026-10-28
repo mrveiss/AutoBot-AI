@@ -31,8 +31,8 @@ from autobot_shared.doc_chunking import estimate_tokens as _estimate_tokens
 from autobot_shared.doc_chunking import process_h2_sections as _process_h2_sections
 from autobot_shared.frontmatter import split_frontmatter
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.paths import shared_cache_path
 from autobot_shared.slug import sanitize_token
+from services.knowledge.index_cache_paths import doc_index_hashes
 
 if TYPE_CHECKING:
     from services.knowledge.sync_queue import SyncQueueEntry, SyncReason  # noqa: F401
@@ -377,9 +377,8 @@ def _discover_files(root_dir: Path, tier: int | None = None) -> List[Tuple[str, 
 # HASH CACHE for incremental indexing
 # ============================================================================
 
-# #16934: shared git-common-dir, not per-checkout PATH.DATA_DIR -- one shared collection.
-_HASH_CACHE_FALLBACK = PATH.DATA_DIR / ".doc_index_hashes.json"
-HASH_CACHE_FILE = shared_cache_path("autobot-doc-index", ".doc_index_hashes.json", fallback=_HASH_CACHE_FALLBACK)
+# None: the shared user cache, resolved on use, never at import (index_cache_paths, #19553); tests pin a path.
+HASH_CACHE_FILE: Path | None = None
 
 
 def _compute_file_hash(file_path: str) -> str:
@@ -401,9 +400,9 @@ def _compute_file_hash(file_path: str) -> str:
 
 def _load_hash_cache() -> Dict[str, str]:
     """Load cached file hashes from disk."""
-    if HASH_CACHE_FILE.exists():
+    if doc_index_hashes(HASH_CACHE_FILE).exists():
         try:
-            with open(HASH_CACHE_FILE, "r", encoding="utf-8") as f:
+            with open(doc_index_hashes(HASH_CACHE_FILE), "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
             logger.warning("Could not load hash cache: %s", e)
@@ -413,8 +412,8 @@ def _load_hash_cache() -> Dict[str, str]:
 def _save_hash_cache(hashes: Dict[str, str]) -> None:
     """Save file hashes to disk."""
     try:
-        HASH_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with open(HASH_CACHE_FILE, "w", encoding="utf-8") as f:
+        doc_index_hashes(HASH_CACHE_FILE).parent.mkdir(parents=True, exist_ok=True)
+        with open(doc_index_hashes(HASH_CACHE_FILE), "w", encoding="utf-8") as f:
             json.dump(hashes, f, indent=2)
     except Exception as e:
         logger.warning("Could not save hash cache: %s", e)
