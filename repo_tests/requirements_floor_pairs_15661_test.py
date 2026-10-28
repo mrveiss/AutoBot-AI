@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Two non-shipping manifests must track their shipped fastapi/uvicorn floor (#15661).
+"""fastapi left this guard for constraints/shared.txt (#18060); only uvicorn is compared.
+
+Two non-shipping manifests must track their shipped fastapi/uvicorn floor (#15661).
 
 `docs/guides/requirements-local.txt` and
 `autobot-npu-worker/resources/windows-npu-worker/requirements.txt` both fell
@@ -37,12 +39,12 @@ _PAIRS = (
     (
         "docs/guides/requirements-local.txt",
         "autobot-backend/requirements.txt",
-        ("fastapi", "uvicorn"),
+        ("uvicorn",),
     ),
     (
         "autobot-npu-worker/resources/windows-npu-worker/requirements.txt",
         "autobot-infrastructure/autobot-npu-worker/docker/requirements-npu.txt",
-        ("fastapi", "uvicorn"),
+        ("uvicorn",),
     ),
 )
 
