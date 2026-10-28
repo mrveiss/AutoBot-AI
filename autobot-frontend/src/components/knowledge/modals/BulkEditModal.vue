@@ -425,7 +425,7 @@ watch(() => props.modelValue, (newValue) => {
   color: var(--text-primary);
 }
 
-.preview-header i {
+.preview-header .icon {
   color: var(--color-primary);
 }
 
@@ -490,7 +490,7 @@ watch(() => props.modelValue, (newValue) => {
   color: var(--text-primary);
 }
 
-.form-label i {
+.form-label .icon {
   color: var(--text-secondary);
 }
 
@@ -576,7 +576,7 @@ watch(() => props.modelValue, (newValue) => {
   border-color: var(--color-success);
 }
 
-.tag-chip.add i {
+.tag-chip.add .icon {
   font-size: 0.5rem;
 }
 
@@ -586,7 +586,7 @@ watch(() => props.modelValue, (newValue) => {
   border-color: var(--color-error);
 }
 
-.tag-chip.remove i {
+.tag-chip.remove .icon {
   font-size: 0.5rem;
 }
 
