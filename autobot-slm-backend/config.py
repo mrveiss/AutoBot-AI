@@ -24,9 +24,13 @@ from pydantic_settings import BaseSettings
 from autobot_shared import postgres_identity as pg
 from autobot_shared.fleet_constants import DEFAULT_HEARTBEAT_INTERVAL
 from autobot_shared.secret_redaction import RedactedReprMixin
+from autobot_shared.service_registry_core import DeploymentMode, resolve_deployment_mode
 from user_management.config import get_autobot_db_config, get_slm_db_config
 
 logger = logging.getLogger(__name__)
+
+#: The boolean spellings pydantic accepts for a ``bool`` setting.
+_BOOL_WORDS = frozenset({"1", "0", "true", "false", "yes", "no", "on", "off", "t", "f", "y", "n"})
 
 # Filename for the auto-generated persistent keys file inside data_dir.
 # Issue #1726 — keeps keys stable across restarts when env vars are absent.
@@ -452,6 +456,35 @@ class Settings(RedactedReprMixin, BaseSettings):
 
     # Reconciliation
     reconcile_interval: int = 60  # seconds
+
+    # Compose fleet nodes (#9761): surface each compose container as a fleet node. The one
+    # default (#19323): unset follows the deployment mode -- on in a container (docker_local,
+    # the compose stack, and a dev checkout run inside a container), off on a bare-metal/VM
+    # fleet and in a dev checkout on the host.
+    # SLM_COMPOSE_NODES=true|false overrides it; compose passes it through, never restates it.
+    compose_nodes: bool | None = None
+
+    @field_validator("compose_nodes", mode="before")
+    @classmethod
+    def _unreadable_compose_nodes_is_unset(cls, raw: object) -> object:
+        """A blank or unrecognised value means unset (follow the deployment mode), never an import crash.
+
+        Compose passes the name through, so a blank arrives as ``""``; a typo is warned about once.
+        """
+        if not isinstance(raw, str):
+            return raw
+        value = raw.strip().lower()
+        if value in _BOOL_WORDS:
+            return value
+        if value:
+            logger.warning("SLM_COMPOSE_NODES value %r is not true/false; following the deployment mode (#19323)", raw)
+        return None
+
+    @property
+    def compose_nodes_enabled(self) -> bool:
+        if self.compose_nodes is not None:
+            return self.compose_nodes
+        return resolve_deployment_mode() is DeploymentMode.DOCKER_LOCAL
 
     # CORS settings
     cors_origins: list = _get_cors_origins()
