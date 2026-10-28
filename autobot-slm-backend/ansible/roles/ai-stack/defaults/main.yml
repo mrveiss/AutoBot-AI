@@ -77,7 +77,7 @@ ai_classification_model: "gemma2:2b"
 ai_sentiment_analysis_model: "gemma2:2b"
 # System tier (dolphin-llama3:8b) -- the failsafe matches the backend's (#19332)
 ai_system_commands_model: "dolphin-llama3:8b"
-ai_llm_failsafe_model: "dolphin-llama3:8b"
+ai_llm_failsafe_model: "{{ ai_system_commands_model }}"
 
 # #13870: which role owns /etc/systemd/system/autobot-chromadb.service.
 #

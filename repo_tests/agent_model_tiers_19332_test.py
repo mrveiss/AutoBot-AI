@@ -40,6 +40,21 @@ def _read(rel: str) -> str:
     return (_ROOT / rel).read_text(encoding="utf-8")
 
 
+#: An ai-stack value that names another of the file's own model variables, e.g. the failsafe
+#: pointing at the system tier, so the model is written once.
+_AI_STACK_SELF_REF = re.compile(r"\{\{\s*ai_(\w+)_model\s*\}\}")
+
+
+def ai_stack_models(text: str) -> dict[str, str]:
+    """``{agent: model}`` from the ai-stack defaults, with references to its own variables resolved."""
+    stated = dict(re.findall(r"^ai_(\w+)_model:\s*\"([^\"]+)\"", text, re.M))
+    resolved = {}
+    for agent, value in stated.items():
+        ref = _AI_STACK_SELF_REF.fullmatch(value)
+        resolved[agent] = stated.get(ref.group(1), value) if ref else value
+    return resolved
+
+
 def stated_models() -> dict[str, dict[str, str]]:
     """Plane -> {agent id: model it states}."""
     backend = {}
@@ -48,7 +63,7 @@ def stated_models() -> dict[str, dict[str, str]]:
         backend[agent.lower()] = TIER_MODELS[BACKEND_VAR_TIERS[var]]
     return {
         _DOCKER: {a.lower(): m for a, m in re.findall(r"^AUTOBOT_(\w+)_MODEL=(\S+)", _read(_DOCKER), re.M)},
-        _AI_STACK: dict(re.findall(r"^ai_(\w+)_model:\s*\"([^\"]+)\"", _read(_AI_STACK), re.M)),
+        _AI_STACK: ai_stack_models(_read(_AI_STACK)),
         _AGENTS: dict(yaml.safe_load(_read(_AGENTS))["llm"]["models"]),
         _BACKEND: backend,
     }
@@ -130,3 +145,10 @@ def test_no_doc_pulls_one_hand_picked_model_into_the_docker_ollama() -> None:
 def test_the_literal_pull_shape_is_flagged_and_the_derived_one_is_not() -> None:
     assert _LITERAL_PULL.findall("docker compose exec autobot-ollama ollama pull qwen3.5:9b")
     assert not _LITERAL_PULL.findall(f"{_DERIVED_PULL} | xargs -n1 docker compose exec -T autobot-ollama ollama pull")
+
+
+def test_an_ai_stack_reference_to_its_own_model_variable_resolves() -> None:
+    text = 'ai_system_commands_model: "dolphin-llama3:8b"\nai_llm_failsafe_model: "{{ ai_system_commands_model }}"\n'
+    assert ai_stack_models(text)["llm_failsafe"] == "dolphin-llama3:8b"
+    # A reference to a name the file does not define stays as written, so it reads as a mismatch.
+    assert ai_stack_models('ai_x_model: "{{ ai_missing_model }}"\n')["x"] == "{{ ai_missing_model }}"

@@ -6,8 +6,7 @@
 
 Split out of ``schemas_agent.py`` (#15527). That module sits exactly on its
 file-size ceiling, and the ratchet holding it (``scripts/python_file_size_
-known_large.py`` with ``repo_tests/python_file_size_ratchet_baseline.py``)
-only ever shrinks, so it could not take one more model. The five payloads
+known_large.py``) only ever shrinks, so it could not take one more model. The five payloads
 below moved here verbatim — they are the ones ``api/agent.py`` binds to a
 request body — and ``CommandExecutePayload`` joins them as the sixth.
 
