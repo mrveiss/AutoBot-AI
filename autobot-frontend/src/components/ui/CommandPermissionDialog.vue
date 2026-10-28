@@ -449,7 +449,7 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
   font-size: var(--font-size-sm);
 }
 
-.warning-message i {
+.warning-message .icon {
   font-size: var(--font-size-base);
 }
 
@@ -473,7 +473,7 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
   font-size: var(--font-size-xs);
 }
 
-.security-note i {
+.security-note .icon {
   font-size: var(--font-size-sm);
 }
 

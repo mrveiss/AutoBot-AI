@@ -668,7 +668,7 @@ onMounted(() => {
   color: var(--text-on-primary);
 }
 
-.tab-btn i {
+.tab-btn .icon {
   margin-right: var(--spacing-2);
 }
 

@@ -41,6 +41,9 @@ UNSCOPED = frozenset(
         # #19310: every tracked text file in the repository, so a runtime-dir literal written
         # anywhere is seen; no roots= list could name "wherever someone writes it".
         "system-knowledge-runtime-literal-scan",
+        # #19523: items are (ecosystem, directory) pairs from every tracked file name, at any
+        # depth -- a new package root can appear anywhere, so no roots= list could name it.
+        "dependabot-package-roots",
         "ansible-inventory-shell-sweep",
         "audio-extension-allowlist",
         "blanket-skip-test-module-sweep",
