@@ -25,3 +25,31 @@ class EmbeddingModelsData(BaseModel):
     models: List[EmbeddingModelOption]
     total_count: int
     providers_errored: List[str] = Field(default_factory=list)
+
+
+class EmbeddingSwitchRequest(BaseModel):
+    """Start an embedding-model switch (#19379): the model to rebuild the knowledge base with."""
+
+    model: str = Field(min_length=1)
+
+
+class EmbeddingSwitchData(BaseModel):
+    """The current or last switch.
+
+    ``state``: idle, building, settling, completed, completed_with_warnings, failed, cancelled, or
+    stale (an active build whose heartbeat stopped). ``previous_vectors`` is the active collection's
+    count when the build started; the rebuild writes one vector per fact.
+    """
+
+    state: str
+    model: str | None = None
+    collection: str | None = None
+    done: int = 0
+    total: int = 0
+    failed: int = 0
+    failed_ids: List[str] = Field(default_factory=list)
+    previous_vectors: int | None = None
+    reason: str | None = None
+    started: str | None = None
+    heartbeat: str | None = None
+    finished: str | None = None
