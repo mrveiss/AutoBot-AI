@@ -229,6 +229,8 @@
 :root {
   /* Neutral constant (white text on coloured surfaces). */
   --color-white: #ffffff;
+  /* Ink for text on a light status fill (#19872). */
+  --color-black: #000000;
   /* Blue action shades used by the setup wizard's buttons/badges — distinct
    * from the sky --color-primary; captured verbatim pending palette
    * consolidation (#11515). */

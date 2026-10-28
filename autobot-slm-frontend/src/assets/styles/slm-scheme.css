@@ -43,9 +43,12 @@
   --color-primary-hover: var(--color-primary-600);
   --color-primary-active: var(--color-primary-700);
   --text-on-primary: var(--color-white);
-  --text-on-success: var(--color-white);
-  --text-on-warning: var(--color-white);
-  --text-on-error: var(--color-white);
+  /* #19872: white on the SLM status fills was 2.28 / 1.92 / 3.76:1; black
+     clears AA on all four (9.22 / 10.95 / 5.58 / 7.58:1). */
+  --text-on-success: var(--color-black);
+  --text-on-warning: var(--color-black);
+  --text-on-error: var(--color-black);
+  --text-on-info: var(--color-black);
   --border-strong: var(--a11y-text-muted);
   --border-focus: var(--a11y-focus-ring);
   --focus-ring-width: var(--a11y-focus-width);

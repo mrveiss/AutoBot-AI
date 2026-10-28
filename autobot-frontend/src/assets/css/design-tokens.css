@@ -54,7 +54,12 @@
      uses for the other light fill, --text-on-warning. */
   --text-on-success: #000000;
   --text-on-warning: #000000;
-  --text-on-error: #ffffff;
+  /* #19872: --text-on-error was #ffffff = 3.76:1 on --color-error and there was
+     no --text-on-info (the kit fell back to --text-on-primary, 3.68:1 on
+     --color-info). Black clears AA on both (5.58:1 / 5.71:1) and matches the
+     treatment of the other light fills above. */
+  --text-on-error: #000000;
+  --text-on-info: #000000;
 
   /* Secondary Colors */
   --color-secondary: #64748b;
@@ -1595,7 +1600,8 @@
        treatment already used for --text-on-warning below. */
     --text-on-success: oklch(0% 0 0);
     --text-on-warning: oklch(0% 0 0);
-    --text-on-error: oklch(100% 0 0);
+    --text-on-error: oklch(0% 0 0);
+    --text-on-info: oklch(0% 0 0);
 
     /* Secondary Colors */
     --color-secondary: oklch(55.4% 0.041 257.4);

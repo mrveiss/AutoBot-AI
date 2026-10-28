@@ -49,7 +49,7 @@
   --aui-color-error: var(--color-error);
   --aui-color-error-contrast: var(--text-on-error);
   --aui-color-info: var(--color-info);
-  --aui-color-info-contrast: var(--text-on-primary);
+  --aui-color-info-contrast: var(--text-on-info);
 
   /* ---- Overlay (modal backdrop) -------------------------------------- */
   --aui-color-overlay: var(--bg-overlay);

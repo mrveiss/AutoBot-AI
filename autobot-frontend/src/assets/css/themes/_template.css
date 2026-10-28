@@ -85,6 +85,13 @@
   --color-error: #ef4444;
   --color-info: #3b82f6;
 
+  /* Text on a solid status fill. Each pair must reach 4.5:1 (#19872);
+     scripts/check_token_contrast.py fails the build otherwise. */
+  --text-on-success: #000000;
+  --text-on-warning: #000000;
+  --text-on-error: #000000;
+  --text-on-info: #000000;
+
   /* ============================================
    * CHART COLORS
    * Customize for brand data visualizations

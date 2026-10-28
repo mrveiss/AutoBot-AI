@@ -44,13 +44,13 @@
 
   /* ---- Color: status ------------------------------------------------- */
   --aui-color-success: #16a34a;
-  --aui-color-success-contrast: #ffffff;
+  --aui-color-success-contrast: #000000;
   --aui-color-warning: #d97706;
-  --aui-color-warning-contrast: #ffffff;
+  --aui-color-warning-contrast: #000000;
   --aui-color-error: #dc2626;
   --aui-color-error-contrast: #ffffff;
   --aui-color-info: #0284c7;
-  --aui-color-info-contrast: #ffffff;
+  --aui-color-info-contrast: #000000;
 
   /* ---- Color: risk tier (#13422) -------------------------------------
    * The four-rung RiskTier ladder (autobot_shared/risk_tier.py). Aliases of the
