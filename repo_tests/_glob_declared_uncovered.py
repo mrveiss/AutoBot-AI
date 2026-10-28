@@ -123,6 +123,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     "*.ts": (
         {
             "repo_tests/browser_port_single_home_19324_test.py",
+            "repo_tests/duplicate_names_ratchet_14908_test.py",
             "repo_tests/kit_export_shadow_ratchet_14908_test.py",
             "repo_tests/slm_frontend_calls_reach_served_routes_test.py",
             "repo_tests/v_html_sanitiser_guard_19118_test.py",
