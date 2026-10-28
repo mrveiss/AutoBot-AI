@@ -23,7 +23,7 @@ from api.schemas_playwright import (  # noqa: F401 - re-exported for existing im
 from autobot_shared.git_refs import is_safe_ref, is_safe_rev_pathspec
 from autobot_shared.ssot_config import PROJECT_ROOT
 from autobot_shared.ssot_config import config as _ssot_config
-from constants.threshold_constants import QueryDefaults
+from constants.threshold_constants import LLMDefaults, QueryDefaults
 from type_defs.common import JSONObject
 
 # ---------------------------------------------------------------------------
@@ -2352,7 +2352,7 @@ class OAIStreamOptions(BaseModel):
 class ChatCompletionRequest(BaseModel):
     model: str = "autobot-default"
     messages: List[OAIMessage]
-    temperature: float = 0.7
+    temperature: float = LLMDefaults.DEFAULT_TEMPERATURE  # #19730: a constant, no parse at import
     max_tokens: int | None = None
     top_p: float = 1.0
     frequency_penalty: float = 0.0
