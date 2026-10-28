@@ -144,6 +144,22 @@ register_env_var(
     )
 )
 
+# Where the knowledge indexers (and every other regenerable cache) keep their caches (#19553).
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CACHE_DIR",
+        type=str,
+        default=None,
+        description=(
+            "Root for every regenerable cache (autobot_shared.paths.cache_root, #19553). Unset: "
+            "$XDG_CACHE_HOME/autobot, else ~/.cache/autobot; a value inside the code tree is skipped. "
+            "A container whose HOME is under the project root should mount a volume here."
+        ),
+        component="backend",
+    )
+)
+
+
 register_env_var(
     EnvVarSpec(
         name="AUTOBOT_KB_TENANT_GROUPS_TTL_SECONDS",
