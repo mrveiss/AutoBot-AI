@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from api.knowledge_grounding import router as grounding_router
 from auth_middleware import get_current_user
 from knowledge.ownership import KnowledgeOwnership
+from knowledge.read_path_fakes_16665 import QuarantineGatedKB, quarantined_fact
 from services.grounded_agent import GroundedAgent
 from services.knowledge_grounding_models import Claim, ClaimStatus
 
@@ -126,3 +127,65 @@ def test_ground_response_route_does_not_ground_on_another_users_private_fact():
     assert len(for_bob.json()["data"]["verified_claims"]) == 0
     assert len(for_alice.json()["data"]["verified_claims"]) == 1
     assert nobody.status_code == 401
+
+
+ADMIN = {"user_id": "root", "role": "admin"}
+USERS = [{"user_id": "alice", "role": "user"}, {"user_id": "bob", "role": "user"}, ADMIN]
+
+
+def _ground_response_as(user: dict, kb):
+    agent = GroundedAgent()
+    agent.kb = kb
+    agent.llm_service = AsyncMock()
+    agent.llm_service.chat = AsyncMock(
+        return_value=MagicMock(content=json.dumps([{"claim_text": "latency up", "confidence": 0.9}]))
+    )
+    app = _build_grounding_test_app()
+    app.dependency_overrides[get_current_user] = lambda: user
+    with (
+        patch("api.knowledge_grounding.get_grounded_agent", return_value=agent),
+        patch("services.audit_logger.audit_log", new=AsyncMock(return_value=True)),
+    ):
+        return TestClient(app).post("/ground-response", json={"query": "latency?", "agent_response": "latency up"})
+
+
+def test_verify_claim_route_grounds_an_admin_on_another_users_private_fact():
+    with patch("services.audit_logger.audit_log", new=AsyncMock(return_value=True)):
+        response = _verify_claim_as(ADMIN, _alices_private_kb())
+
+    assert response.status_code == 200 and response.json()["kb_status"] == "in_kb"
+
+
+def test_ground_response_route_does_not_ground_an_admin_on_another_users_private_fact():
+    """A grounding pass reads by the caller's normal rules, with no admin bypass (scoped_reader, #16665)."""
+    response = _ground_response_as(ADMIN, _alices_private_kb())
+
+    assert response.status_code == 200 and len(response.json()["data"]["verified_claims"]) == 0
+    assert "alices private" not in response.text and "fact-a" not in response.text
+
+
+def _quarantine_only_kb():
+    """A KB whose only fact is quarantined; the control twin hands the same fact over ungated."""
+    kb = QuarantineGatedKB(only_quarantined=True)
+    ungated = QuarantineGatedKB(only_quarantined=True)
+    ungated.search = AsyncMock(return_value=[quarantined_fact()])
+    return kb, ungated
+
+
+@pytest.mark.parametrize("user", USERS)
+def test_verify_claim_never_grounds_on_a_quarantined_research_fact(user):
+    kb, ungated = _quarantine_only_kb()
+    with patch("services.audit_logger.audit_log", new=AsyncMock(return_value=True)):
+        gated, control = _verify_claim_as(user, kb), _verify_claim_as(user, ungated)
+
+    assert control.json()["kb_status"] == "in_kb", "control: the same fact ungated must ground the claim"
+    assert gated.status_code == 200 and gated.json()["kb_status"] == "unknown"
+
+
+@pytest.mark.parametrize("user", USERS)
+def test_ground_response_never_grounds_on_a_quarantined_research_fact(user):
+    kb, ungated = _quarantine_only_kb()
+    gated, control = _ground_response_as(user, kb), _ground_response_as(user, ungated)
+
+    assert len(control.json()["data"]["verified_claims"]) == 1, "control: ungated, the fact grounds the claim"
+    assert len(gated.json()["data"]["verified_claims"]) == 0

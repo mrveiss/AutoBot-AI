@@ -51,7 +51,7 @@ value `section` takes. 0 false positives with known blind spots beats 5.7% false
 positives with better reach.
 
 **The baseline is exact and shrink-only**, like
-`repo_tests/python_file_size_ratchet_baseline.py`. Every entry is a call that is broken
+`scripts/python_file_size_known_large.py`. Every entry is a call that is broken
 today, with the issue that fixes it. Removing one without doing the work fails, and so
 does doing the work without removing the entry.
 """
