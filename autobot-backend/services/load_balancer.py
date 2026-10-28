@@ -27,10 +27,10 @@ import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from enum import Enum
 from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import CircuitState
 from constants.threshold_constants import RetryConfig, TimingConstants
 from events.bus import PersistStrategy, publish_event
 from models.npu_models import WorkerStatus
@@ -43,14 +43,6 @@ logger = get_logger(__name__)
 # ==============================================
 # MODELS AND ENUMS
 # ==============================================
-
-
-class CircuitBreakerState(str, Enum):
-    """Circuit breaker states for fault tolerance"""
-
-    CLOSED = "closed"  # Normal operation
-    OPEN = "open"  # Failing, reject requests
-    HALF_OPEN = "half_open"  # Testing recovery
 
 
 @dataclass
@@ -87,7 +79,7 @@ class Worker:
     consecutive_failures: int = 0
     last_health_check: datetime | None = None
     last_success: datetime | None = None
-    circuit_breaker_state: CircuitBreakerState = CircuitBreakerState.CLOSED
+    circuit_breaker_state: CircuitState = CircuitState.CLOSED
     circuit_open_until: datetime | None = None
 
     def is_available(self) -> bool:
@@ -96,7 +88,7 @@ class Worker:
             self.enabled
             and self.status == WorkerStatus.ONLINE
             and self.current_load < self.max_concurrent_tasks
-            and self.circuit_breaker_state == CircuitBreakerState.CLOSED
+            and self.circuit_breaker_state == CircuitState.CLOSED
         )
 
     def can_accept_task(self) -> bool:
@@ -105,7 +97,7 @@ class Worker:
             self.enabled
             and self.status in (WorkerStatus.ONLINE, WorkerStatus.BUSY)
             and self.current_load < self.max_concurrent_tasks
-            and self.circuit_breaker_state in (CircuitBreakerState.CLOSED, CircuitBreakerState.HALF_OPEN)
+            and self.circuit_breaker_state in (CircuitState.CLOSED, CircuitState.HALF_OPEN)
         )
 
     def record_success(self) -> None:
@@ -115,8 +107,8 @@ class Worker:
         self.consecutive_failures = 0
         self.last_success = datetime.now(tz=timezone.utc)
         # Close circuit breaker on success
-        if self.circuit_breaker_state == CircuitBreakerState.HALF_OPEN:
-            self.circuit_breaker_state = CircuitBreakerState.CLOSED
+        if self.circuit_breaker_state == CircuitState.HALF_OPEN:
+            self.circuit_breaker_state = CircuitState.CLOSED
             self.circuit_open_until = None
 
     def record_failure(self, circuit_breaker_threshold: int = 3, circuit_breaker_timeout: int = 300) -> None:
@@ -127,7 +119,7 @@ class Worker:
 
         # Open circuit breaker if threshold reached
         if self.consecutive_failures >= circuit_breaker_threshold:
-            self.circuit_breaker_state = CircuitBreakerState.OPEN
+            self.circuit_breaker_state = CircuitState.OPEN
             self.circuit_open_until = datetime.now(tz=timezone.utc) + timedelta(seconds=circuit_breaker_timeout)
             self.status = WorkerStatus.ERROR
             logger.warning(
@@ -137,9 +129,9 @@ class Worker:
 
     def check_circuit_breaker_recovery(self) -> None:
         """Check if circuit breaker can transition from OPEN to HALF_OPEN"""
-        if self.circuit_breaker_state == CircuitBreakerState.OPEN:
+        if self.circuit_breaker_state == CircuitState.OPEN:
             if self.circuit_open_until and datetime.now(tz=timezone.utc) >= self.circuit_open_until:
-                self.circuit_breaker_state = CircuitBreakerState.HALF_OPEN
+                self.circuit_breaker_state = CircuitState.HALF_OPEN
                 logger.info(f"Circuit breaker HALF_OPEN for worker {self.worker_id}, allowing test requests")
 
     def handle_healthy_check(self) -> bool:
@@ -153,8 +145,8 @@ class Worker:
         self.consecutive_failures = 0
 
         # Close circuit breaker if in HALF_OPEN state
-        if self.circuit_breaker_state == CircuitBreakerState.HALF_OPEN:
-            self.circuit_breaker_state = CircuitBreakerState.CLOSED
+        if self.circuit_breaker_state == CircuitState.HALF_OPEN:
+            self.circuit_breaker_state = CircuitState.CLOSED
             self.circuit_open_until = None
             return True
         return False
@@ -171,7 +163,7 @@ class Worker:
 
         if self.consecutive_failures >= circuit_breaker_threshold:
             self.status = WorkerStatus.ERROR
-            self.circuit_breaker_state = CircuitBreakerState.OPEN
+            self.circuit_breaker_state = CircuitState.OPEN
             self.circuit_open_until = datetime.now(tz=timezone.utc) + timedelta(seconds=circuit_breaker_timeout)
         else:
             self.status = WorkerStatus.OFFLINE
@@ -622,7 +614,7 @@ class NPULoadBalancer:
             worker.handle_unhealthy_check(self._circuit_breaker_threshold, self._circuit_breaker_timeout)
 
             # Emit event if circuit breaker opened
-            if worker.circuit_breaker_state == CircuitBreakerState.OPEN and previous_status != worker.status:
+            if worker.circuit_breaker_state == CircuitState.OPEN and previous_status != worker.status:
                 await self._emit_worker_status_change(worker, "circuit_breaker_opened")
 
         finally:

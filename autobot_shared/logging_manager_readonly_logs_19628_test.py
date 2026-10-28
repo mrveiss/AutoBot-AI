@@ -98,7 +98,14 @@ def test_a_writable_logs_dir_still_gets_a_file_handler() -> None:
         _close(logger)
 
 
-def test_rotate_logs_is_a_no_op_when_file_logging_is_off(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_rotate_logs_is_a_no_op_when_file_logging_is_off(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """A log file exists to rotate, so only the early return keeps it in place (#19660)."""
+    log_file = tmp_path / "backend.log"
+    log_file.write_text("x", encoding="utf-8")
+    renamed: list[tuple[object, object]] = []
+    monkeypatch.setattr(logging_manager, "_configured_log_file", lambda log_type: str(log_file))
+    monkeypatch.setattr(logging_manager.os, "rename", lambda src, dst: renamed.append((src, dst)))
     monkeypatch.setattr(LoggingManager, "_file_logging_disabled", True)
     monkeypatch.setattr(Path, "mkdir", _read_only_logs_mkdir)
-    LoggingManager.rotate_logs()  # must not try to create the backup dir
+    LoggingManager.rotate_logs()
+    assert renamed == [], "file logging is off, so there is no backup dir to rotate into"

@@ -151,7 +151,7 @@ async function clearRedisCache(database: string): Promise<void> {
     await fetchCacheStats()
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = autobotApiErrorMessage(e, 'Failed to clear Redis database')
+    error.value = autobotApiErrorMessage(e, t('settings.admin.cacheSettings.failedToClearRedisDatabase'))
   } finally {
     clearing.value = false
   }
