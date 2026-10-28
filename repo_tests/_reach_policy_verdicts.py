@@ -338,6 +338,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Tracked ansible yml/yaml files, of which only those naming a template that carries the variable are parsed.",
     ),
+    "ansible-credentials-never-logged": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Tracked ansible yml/yaml files; every one is parsed, but only task lists carry http tasks to judge.",
+    ),
     "frontend-model-literal-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
