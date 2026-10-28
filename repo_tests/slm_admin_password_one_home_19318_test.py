@@ -64,6 +64,7 @@ _READERS = {
     "install.sh": "the installer writes the store and preserves it on reinstall",
     "docker-compose.yml": "compose passes it to the container, required with :? (#17793)",
     _SEED_READER: "the one read of the main-app admin seed, which falls back to this password (#19370)",
+    "scripts/ci/clean_install_check.sh": "the clean-install check logs in with the stored password to prove it works (#19403)",
 }
 
 _NAMES = re.compile(r"\b[A-Z0-9_]*SLM_ADMIN_PASS[A-Z0-9_]*\b")
