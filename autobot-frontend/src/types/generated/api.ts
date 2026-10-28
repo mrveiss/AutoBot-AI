@@ -6406,7 +6406,8 @@ export interface paths {
          *     - Metadata about retrieved content
          *
          *     #16665: every fact entering the context is filtered to what the calling
-         *     user may see -- this feeds an LLM prompt, not just a display list.
+         *     user may see -- this feeds an LLM prompt, not just a display list. Owner ruling
+         *     2026-10-26: an admin is an ordinary caller here, with no visibility bypass.
          */
         post: operations["get_llm_context_api_knowledge_base_multi_source_context_post"];
         delete?: never;
@@ -33480,6 +33481,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/embeddings/switch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Embedding Switch
+         * @description Rebuild the knowledge base with another embedding model, then cut over (#19379, admins only).
+         *
+         *     The rebuild runs in the background into a new collection; search and writes keep the active
+         *     one until a complete, zero-failure build. 409 when a switch is already running or the model
+         *     is already active; 400 for a model that is not an embedding model.
+         */
+        post: operations["start_embedding_switch_api_embeddings_switch_post"];
+        /**
+         * Cancel Embedding Switch
+         * @description Stop a running switch at its next batch, or force-close a stale one; the active space stays (#19379).
+         */
+        delete: operations["cancel_embedding_switch_api_embeddings_switch_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/embeddings/switch/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Embedding Switch Status
+         * @description Progress of the current or last embedding-model switch: done/total, failures, reason (#19379).
+         */
+        get: operations["get_embedding_switch_status_api_embeddings_switch_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/multimodal/process/image": {
         parameters: {
             query?: never;
@@ -45953,6 +46002,8 @@ export interface paths {
          * @description Knowledge search combining local KB and AI Stack capabilities.
          *
          *     Issue #744: Requires admin authentication.
+         *     Issue #16665: an explicit read API, not prompt grounding -- local KB hits are
+         *     scoped to the caller (an admin reads any fact, audited).
          */
         post: operations["knowledge_search_api_ai_stack_knowledge_search_post"];
         delete?: never;
@@ -50369,16 +50420,7 @@ export interface paths {
         put?: never;
         /**
          * Create Company
-         * @description Create a company (root, or a sub-company under an owned parent).
-         *
-         *     Tenant scope (#12233): previously unauthenticated — any caller could create
-         *     a company and, by supplying ``parent_org_id``, graft one under *another*
-         *     tenant's company. Now authenticated; a non-admin may only create a
-         *     sub-company under a parent they belong to (cross-tenant parent → 404, so the
-         *     parent's existence is not disclosed). Root creation (no ``parent_org_id``,
-         *     the creation-wizard flow) is open to any authenticated user. The creator is
-         *     recorded as the company ``OWNER`` so they can immediately access it and it
-         *     surfaces in their tenant-scoped ``list_companies``.
+         * @description Create a root company, or one under a parent the caller owns/admins (#12233, #19634); creator is OWNER.
          */
         post: operations["create_company_api_llc_companies__post"];
         delete?: never;
@@ -70295,6 +70337,21 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** DataResponse[EmbeddingSwitchData] */
+        DataResponse_EmbeddingSwitchData_: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            data?: components["schemas"]["EmbeddingSwitchData"] | null;
+            /** Message */
+            message?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** DataResponse[EnterpriseBulkEnableResponse] */
         DataResponse_EnterpriseBulkEnableResponse_: {
             /**
@@ -74194,6 +74251,61 @@ export interface components {
          * @description data payload for GET /status.
          */
         EmbeddingStatusData: {
+            [key: string]: unknown;
+        };
+        /**
+         * EmbeddingSwitchData
+         * @description The current or last switch.
+         *
+         *     ``state``: idle, building, settling, completed, completed_with_warnings, failed, cancelled, or
+         *     stale (an active build whose heartbeat stopped). ``previous_vectors`` is the active collection's
+         *     count when the build started; the rebuild writes one vector per fact.
+         */
+        EmbeddingSwitchData: {
+            /** State */
+            state: string;
+            /** Model */
+            model?: string | null;
+            /** Collection */
+            collection?: string | null;
+            /**
+             * Done
+             * @default 0
+             */
+            done: number;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Failed
+             * @default 0
+             */
+            failed: number;
+            /** Failed Ids */
+            failed_ids?: string[];
+            /** Previous Vectors */
+            previous_vectors?: number | null;
+            /** Reason */
+            reason?: string | null;
+            /** Started */
+            started?: string | null;
+            /** Heartbeat */
+            heartbeat?: string | null;
+            /** Finished */
+            finished?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * EmbeddingSwitchRequest
+         * @description Start an embedding-model switch (#19379): the model to rebuild the knowledge base with.
+         */
+        EmbeddingSwitchRequest: {
+            /** Model */
+            model: string;
+        } & {
             [key: string]: unknown;
         };
         /**
@@ -87028,7 +87140,7 @@ export interface components {
          *       "name": "Primary NPU Worker",
          *       "platform": "linux",
          *       "priority": 8,
-         *       "url": "http://127.0.0.1:8081",
+         *       "url": "http://127.0.0.1:8082",
          *       "weight": 2
          *     }
          */
@@ -87092,7 +87204,7 @@ export interface components {
          *         "name": "Primary NPU Worker",
          *         "platform": "linux",
          *         "priority": 8,
-         *         "url": "http://127.0.0.1:8081",
+         *         "url": "http://127.0.0.1:8082",
          *         "weight": 2
          *       },
          *       "metrics": {
@@ -150537,6 +150649,79 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DataResponse_EmbeddingStatusData_"];
+                };
+            };
+        };
+    };
+    start_embedding_switch_api_embeddings_switch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmbeddingSwitchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_EmbeddingSwitchData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_embedding_switch_api_embeddings_switch_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_EmbeddingSwitchData_"];
+                };
+            };
+        };
+    };
+    get_embedding_switch_status_api_embeddings_switch_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_EmbeddingSwitchData_"];
                 };
             };
         };

@@ -27,11 +27,8 @@ ai_stack_port: 8080
 # ==========================================
 # CHROMADB HEARTBEAT PATH (#19413)
 # ==========================================
-# The ONE ansible literal for the ChromaDB liveness path. Mirrors
-# autobot_shared/chromadb_endpoints.py CHROMADB_HEARTBEAT_PATH; chromadb 1.x serves only the v2
-# heartbeat (v1 answers 410, /health 404). Kept equal by
-# repo_tests/chromadb_heartbeat_one_home_19413_test.py.
-chromadb_heartbeat_path: "/api/v2/heartbeat"
+# chromadb_heartbeat_path lives in vars/chromadb_endpoints.yml, loaded by the plays that probe
+# ChromaDB (#19413).
 
 # ==========================================
 # AUTOBOT APPLICATION CONFIGURATION
@@ -312,12 +309,18 @@ debug:
   log_level: "debug"
   verbose_output: false
 
+# Node.js major for every fleet install path: pinned to the repo-root .nvmrc by
+# repo_tests/node_major_one_home_19328_test.py (#19328). Roles and playbooks read this, never a literal.
+node_major: "22"
+# The NodeSource base URL has one home, read by every play (env-backed like the shell SSOT, #19662).
+nodesource_base_url: "{{ lookup('env', 'AUTOBOT_NODESOURCE_BASE_URL') | default('https://deb.nodesource.com', true) }}"
+
 # Package repositories
 repositories:
   # Add NodeSource for Node.js
   nodejs:
-    key_url: "https://deb.nodesource.com/gpgkey/nodesource.gpg.key"
-    repo: "deb https://deb.nodesource.com/node_20.x {{ ansible_facts['distribution_release'] }} main"
+    key_url: "{{ nodesource_base_url }}/gpgkey/nodesource.gpg.key"
+    repo: "deb {{ nodesource_base_url }}/node_{{ node_major }}.x {{ ansible_facts['distribution_release'] }} main"
 
   # Add Redis repository
   redis:

@@ -109,7 +109,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/api/knowledge_mcp.py": 1441,
     "autobot-backend/api/knowledge_population.py": 1425,
     "autobot-backend/api/knowledge_search.py": 809,  # #16665: analytics endpoints moved out
-    "autobot-backend/api/knowledge_search_aggregator.py": 951,  # #16665: doc-search moved out
+    "autobot-backend/api/knowledge_search_aggregator.py": 950,  # #16665: doc-search moved out
     "autobot-backend/api/knowledge_tags.py": 887,
     "autobot-backend/api/knowledge_vectorization.py": 1690,
     "autobot-backend/api/knowledge_vectorization_test.py": 601,
@@ -152,7 +152,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/chat_history/session.py": 923,
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
     "autobot-backend/chat_workflow/graph.py": 1643,  # train 50: #18993 on main's 1652
-    "autobot-backend/chat_workflow/llm_handler.py": 1301,
+    "autobot-backend/chat_workflow/llm_handler.py": 1300,
     "autobot-backend/chat_workflow/manager.py": 3885,  # #17273: graph turn lifecycle moved to turn_control
     "autobot-backend/chat_workflow/tool_handler.py": 3697,  # #11542 dispatch merge + #14068 mirror
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
@@ -191,7 +191,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/code_intelligence/typescript_analyzer.py": 609,
     "autobot-backend/command_manual_manager.py": 908,
     "autobot-backend/computer_vision/screen_analyzer.py": 662,
-    "autobot-backend/conftest.py": 1498,  # #16483: _make_pkg_stub/_real_load_and_bind moved to testkit/module_stubs.py
+    "autobot-backend/conftest.py": 1459,  # #16483, #19582: stubs moved to testkit/
     "autobot-backend/context_aware_decision/decision_engine.py": 815,
     "autobot-backend/context_aware_decision/tests/test_counterfactual_reasoner.py": 663,
     "autobot-backend/context_window_manager.py": 626,
@@ -217,7 +217,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/judges/multi_agent_arbitrator.py": 611,
     "autobot-backend/judges/security_risk_judge.py": 842,
     "autobot-backend/knowledge/adapters/okf_adapter.py": 770,
-    "autobot-backend/knowledge/base.py": 704,
+    "autobot-backend/knowledge/base.py": 683,
     "autobot-backend/knowledge/bulk.py": 1983,
     "autobot-backend/knowledge/categories.py": 965,
     "autobot-backend/knowledge/collections.py": 728,
@@ -226,7 +226,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/knowledge/connectors/gdrive.py": 660,
     "autobot-backend/knowledge/connectors/gitlab.py": 873,
     "autobot-backend/knowledge/connectors/tests/test_credential_store.py": 1021,
-    "autobot-backend/knowledge/facts.py": 1729,
+    "autobot-backend/knowledge/facts.py": 1727,
     "autobot-backend/knowledge/ownership.py": 757,
     "autobot-backend/knowledge/pipeline/cognifiers/cognifiers_test.py": 806,
     "autobot-backend/knowledge/rag_benchmarks.py": 1607,
@@ -239,14 +239,13 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/knowledge/tags.py": 834,
     "autobot-backend/knowledge_sync_incremental.py": 883,
     "autobot-backend/llc/adapters/tests/test_claude_code_adapter.py": 602,
-    "autobot-backend/llc/api/companies.py": 1719,
+    "autobot-backend/llc/api/companies.py": 1718,
     "autobot-backend/llc/api/roles.py": 713,
     "autobot-backend/llc/api/sprints.py": 1223,
-    "autobot-backend/llc/api/work_items.py": 1416,
-    "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 1028,  # #16818 onto #17726
-    "autobot-backend/llc/services/portability.py": 920,
+    "autobot-backend/llc/api/work_items.py": 1399,
+    "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 1023,  # #16818 onto #17726
     "autobot-backend/llc/services/template.py": 643,
-    "autobot-backend/llc/services/work_item_service.py": 1100,
+    "autobot-backend/llc/services/work_item_service.py": 1086,
     "autobot-backend/llc/tests/conftest.py": 832,
     "autobot-backend/llc/tests/test_autobot_agent_adapter.py": 663,
     "autobot-backend/llc/tests/test_heartbeat_scheduler.py": 1042,
@@ -256,7 +255,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/llc/tests/test_work_items_idor.py": 602,
     "autobot-backend/llm_self_awareness.py": 708,
     "autobot-backend/llm_shared/optimization/attention_backend_test.py": 801,
-    "autobot-backend/llm_shared/optimization/flash_attention.py": 669,
+    "autobot-backend/llm_shared/optimization/flash_attention.py": 643,
     "autobot-backend/llm_shared/optimization/kv_cache_test.py": 675,
     "autobot-backend/llm_shared/optimization/layer_inference.py": 869,
     "autobot-backend/llm_shared/optimization/layer_inference_test.py": 715,
@@ -333,15 +332,15 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/services/graph_rag_service.py": 647,
     "autobot-backend/services/graph_rag_service_test.py": 890,
     "autobot-backend/services/knowledge/autonomous_loop.py": 798,
-    "autobot-backend/services/knowledge/code_indexer.py": 1179,
-    "autobot-backend/services/knowledge/doc_indexer.py": 1259,
+    "autobot-backend/services/knowledge/code_indexer.py": 1176,
+    "autobot-backend/services/knowledge/doc_indexer.py": 1258,
     "autobot-backend/services/knowledge/service.py": 849,  # train 48: #18935 merged onto #18945
     "autobot-backend/services/knowledge/test_autonomous_loop.py": 708,
     "autobot-backend/services/knowledge/test_doc_indexer.py": 1466,
     "autobot-backend/services/knowledge/test_kb_synthesizer.py": 802,
     "autobot-backend/services/llm_cost_tracker.py": 1166,  # #16230: MODEL_PRICING table removed
     "autobot-backend/services/llm_service.py": 1199,  # #16845: _track_usage delegated to llm_usage_recording
-    "autobot-backend/services/load_balancer.py": 685,
+    "autobot-backend/services/load_balancer.py": 677,
     "autobot-backend/services/nl_database_service.py": 775,
     "autobot-backend/services/notification_service.py": 614,
     "autobot-backend/services/npu_worker_manager.py": 1419,
@@ -403,7 +402,6 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/utils/error_catalog.py": 775,
     "autobot-backend/utils/file_categorization.py": 724,
     "autobot-backend/utils/gpu_vector_search.py": 1227,
-    "autobot-backend/utils/graceful_degradation.py": 704,
     "autobot-backend/utils/hardware_metrics.py": 1267,
     "autobot-backend/utils/monitoring_alerts.py": 858,
     "autobot-backend/utils/operation_timeout_integration.py": 730,
@@ -456,7 +454,7 @@ RATCHET_BASELINE: dict[str, int] = {
     # as a live violation, not #5060 backlog -- see #14630.
     "autobot-slm-backend/services/reconciler_remediation_tracker_expiry_14465_test.py": 783,
     "autobot-slm-backend/services/replication.py": 785,
-    "autobot-slm-backend/services/role_registry.py": 711,
+    "autobot-slm-backend/services/role_registry.py": 704,
     "autobot-slm-backend/services/service_orchestrator.py": 913,
     "autobot-slm-backend/slm/agent/agent.py": 630,
     "autobot-slm-backend/tests/api/test_code_sync_deploy_bugs.py": 1990,  # #18052: resolver test moved out
@@ -472,7 +470,6 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot_shared/circuit_breaker.py": 689,
     "autobot_shared/env_registry.py": 1061,  # #19320: postgres block -> env_registry_postgres (was 1125)
     "autobot_shared/monitoring/prometheus_metrics.py": 949,
-    "autobot_shared/network_constants.py": 605,  # #19315 deployment_profile; #19232 one Redis resolver
     "autobot_shared/npu/integration.py": 929,
     "autobot_shared/plugin_sdk/loader.py": 690,
     "autobot_shared/plugin_sdk/plugin_load_visibility_test.py": 750,
@@ -484,7 +481,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot_shared/ssot_config.py": 3221,  # #19319 split to ssot_role_mirrors; #15501 to ssot_hosted_models
     "autobot_shared/ssot_config_test.py": 776,
     "autobot_shared/ssot_constants.py": 861,
-    "autobot_shared/user_management/team_service.py": 724,
+    "autobot_shared/user_management/team_service.py": 659,
     "pipeline-scripts/check-pre-commit-hook-pr_test.py": 747,
     "pipeline-scripts/ci_dispatch_watchdog.py": 1244,  # #13439: supersession split to ci_run_supersession.py
     "pipeline-scripts/detect-hardcoded-values_test.py": 653,

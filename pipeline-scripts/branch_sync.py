@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import argparse
 import base64
-import importlib.util
 import os
 import subprocess  # nosec B404  # TimeoutExpired only; git runs through git_probe
 import sys
@@ -37,6 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(1, str(Path(__file__).resolve().parent.parent))
 import branch_sync_core as core  # noqa: E402
 from github_api import GitHubApi, WatchdogError, build_api  # noqa: E402
+from issue_api import load_upsert  # noqa: E402  # the ONE by-path loader for the comment upsert (#12984, #19522)
 
 from autobot_shared.git_probe import run_git  # noqa: E402  # scrubbed-env git (#15783)
 
@@ -49,18 +49,6 @@ PAGE_SIZE = 100
 LABEL_COLOURS = {core.LABEL_CONFLICT: "d93f0b", core.LABEL_WORKFLOW: "fbca04"}
 
 Runner = Callable[[Sequence[str]], Tuple[int, str]]
-
-#: The ONE marker-comment upsert (#12984): reads every page, matches a Bot author plus the marker.
-UPSERT_SCRIPT = Path(__file__).resolve().parent.parent / ".github/actions/upsert-pr-comment/upsert_pr_comment.py"
-
-
-def load_upsert() -> Callable[..., Tuple[str, int]]:
-    """``upsert_pr_comment.upsert``, loaded by path: a second copy here is what #12984 removed."""
-    spec = importlib.util.spec_from_file_location("upsert_pr_comment", UPSERT_SCRIPT)
-    module = importlib.util.module_from_spec(spec)
-    sys.modules.setdefault("upsert_pr_comment", module)
-    spec.loader.exec_module(module)
-    return module.upsert
 
 
 class SyncApiError(WatchdogError):
@@ -167,7 +155,7 @@ class SyncApi:
     ) -> None:
         self.api, self._sleep, self._labels_ready = api, sleep, set()
         self.repo = api.repository
-        self._upsert = upsert or load_upsert()
+        self._upsert = upsert or load_upsert().upsert
 
     def call(self, method: str, path: str, payload: Optional[Dict[str, Any]] = None) -> Tuple[int, Any]:
         for _ in range(MAX_RATE_LIMIT_RETRIES):

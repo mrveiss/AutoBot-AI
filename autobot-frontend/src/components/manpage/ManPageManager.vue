@@ -733,7 +733,7 @@ export default {
   margin-bottom: var(--spacing-2);
 }
 
-.title i {
+.title .icon {
   margin-right: var(--spacing-2);
   color: var(--color-info);
 }
@@ -823,7 +823,7 @@ export default {
   border-left: 4px solid var(--color-info);
 }
 
-.not-integrated i {
+.not-integrated .icon {
   color: var(--color-info);
   font-size: var(--text-2xl);
 }
@@ -832,7 +832,7 @@ export default {
   border-left: 4px solid var(--color-error);
 }
 
-.error i {
+.error .icon {
   color: var(--color-error);
   font-size: var(--text-2xl);
 }
@@ -874,7 +874,7 @@ export default {
   margin-bottom: var(--spacing-5);
 }
 
-.integration-date i {
+.integration-date .icon {
   margin-right: var(--spacing-2);
 }
 
@@ -1034,7 +1034,7 @@ export default {
   background: var(--color-error);
 }
 
-.progress-message i {
+.progress-message .icon {
   margin-right: var(--spacing-2);
 }
 
@@ -1050,8 +1050,8 @@ export default {
   font-style: italic;
 }
 
-.loading i,
-.no-data i {
+.loading .icon,
+.no-data .icon {
   font-size: var(--text-xl);
 }
 

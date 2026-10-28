@@ -49,6 +49,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "NOT_PATHS",
         "Call sites, not paths: one id per literal-fallback env read in the sweep roots, a subset of tracked Python.",
     ),
+    "dead-icon-selector-vue-files": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "One frontend tree's `.vue` files, against all tracked `.vue` including the other frontend and the kit.",
+    ),
     "deployment-mode-detector-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -75,6 +80,12 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Ansible variable files are a subset of tracked YAML; workflow and compose YAML grow "
         "independently of the ansible tree, so a share of all YAML sinks with nothing wrong.",
+    ),
+    "ansible-status-queries-check-mode-sweep": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Ansible YAML is a subset of all tracked YAML under the SLM backend; templates, scripts and "
+        "docs beside it grow independently, so a share of the tree sinks with nothing wrong.",
     ),
     "ansible-inventory-shell-sweep": (
         ABSOLUTE,
@@ -138,6 +149,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test modules under `autobot-backend/api`; the api package's tests grow at their own "
         "rate, so a share of all its `.py` files would drift with nothing wrong (#18316).",
+    ),
+    "compose-nodes-restated-default": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test SLM, infrastructure and docker files plus the root compose file; drifts.",
     ),
     "compat-module-needs-importer": (
         ABSOLUTE,
@@ -226,6 +242,12 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "Non-test source is a subset of tracked .py under two detector packages; the test-file share drifts.",
+    ),
+    "cache-never-in-repo": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test modules of both backends and autobot_shared, against all tracked .py under them; "
+        "the test-file share drifts.",
     ),
     "generated-type-redeclarations": (
         ABSOLUTE,
@@ -327,6 +349,16 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Tracked ansible yml/yaml files, of which only those naming a template that carries the variable are parsed.",
     ),
+    "ansible-credentials-never-logged": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Tracked ansible yml/yaml files; every one is parsed, but only task lists carry http tasks to judge.",
+    ),
+    "frontend-local-formatter-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Both GUIs' component, view and composable .ts/.vue, excluding tests, against all tracked frontend source.",
+    ),
     "frontend-model-literal-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -368,6 +400,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Python under the infrastructure tree, against all tracked Python; the backend grows independently.",
     ),
+    "kb-populate-doc-patterns": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test infrastructure Python, against all tracked .py under autobot-infrastructure; drifts.",
+    ),
     "kb-admin-read-bypass": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -404,6 +441,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "Non-test Python under thirteen source roots, a subset of tracked Python; the test-file share drifts.",
+    ),
+    "disaster-recovery-deployed-units": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Ansible role task files, a subset of tracked YAML; workflows and inventories grow on their own.",
     ),
     "landing-page-declared-dependencies": (
         ABSOLUTE,

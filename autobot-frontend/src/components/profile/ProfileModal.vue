@@ -350,7 +350,7 @@ function formatDate(dateValue: Date | string | undefined | null): string {
   border-bottom-color: var(--color-primary);
 }
 
-.tab-btn i {
+.tab-btn .icon {
   font-size: var(--text-sm);
 }
 

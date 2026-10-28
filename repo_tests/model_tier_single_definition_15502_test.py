@@ -11,7 +11,8 @@ needs from the backend (owner decision 2026-10-10). This guard parses (never imp
 canonical file and asserts that
 
 * each of the nine names is assigned exactly once at module level;
-* every recorded mirror equals the tier it mirrors;
+* every recorded mirror equals the tier it mirrors (per-AGENT models -- the ai-stack vars, agents.yaml,
+  docker env, the backend template -- are `agent_model_tiers_19332_test.py`'s, against one assignment);
 * no TypeScript or Vue source under `autobot-frontend/src` holds a local-model string literal;
 * `complete.yaml` names no model at all (owner decision 2026-10-10: its model sections were dead
   and are deleted), with a contrast fixture proving the scan sees a model key when one exists;
@@ -32,9 +33,11 @@ from typing import Any
 
 import pytest
 import yaml
+from repo_tests._ansible_tasks import loop_items, play_vars, resolved_vars
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
+from autobot_shared.agent_model_tiers import BACKEND_VAR_TIERS, TIER_MODELS
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _SSOT = "autobot_shared/ssot_config.py"
@@ -60,14 +63,6 @@ _PULL_PLAYBOOKS = (
     "autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml",
 )
 _SETTINGS_JSON = "autobot-infrastructure/shared/config/settings.json"
-#: The `# <Tier> tier (<model>)` comment ai-stack puts above each group of vars -> the constant it names.
-_COMMENT_TIER = {
-    "Quality": "QUALITY_MODEL",
-    "Instruction": "INSTRUCTION_MODEL",
-    "Classification": "CLASSIFICATION_MODEL",
-    "Light": "LIGHT_PROCESSING_MODEL",
-    "System": "SYSTEM_MODEL",
-}
 #: env_registry's two hand-copied defaults (they cannot import ssot_config) -> the constant they copy.
 _ENV_MIRRORS = {"AUTOBOT_CLASSIFICATION_MODEL": "CLASSIFICATION_MODEL", "AUTOBOT_ORCHESTRATOR_MODEL": "ROUTING_MODEL"}
 
@@ -138,32 +133,9 @@ def test_the_assignment_counter_sees_a_second_definition() -> None:
 # --- (b) mirrors -----------------------------------------------------------
 
 
-def _ai_stack_vars() -> list[tuple[str, str, str]]:
-    """`(var, value, tier constant)` for every `ai_*_model`, tier read from the file's own comment."""
-    out: list[tuple[str, str, str]] = []
-    tier = ""
-    for line in _read(_AI_STACK).splitlines():
-        comment = re.match(r"# (\w+) tier \(([^)]+)\)", line)
-        if comment:
-            assert _canonical()[_COMMENT_TIER[comment.group(1)]] == comment.group(2), f"stale comment: {line}"
-            tier = _COMMENT_TIER[comment.group(1)]
-        var = re.match(r'(ai_\w+_model):\s*"([^"]+)"', line)
-        if var:
-            out.append((var.group(1), var.group(2), tier))
-    return out
-
-
-def test_ai_stack_model_vars_equal_their_tier() -> None:
-    """Mirror: Ansible defaults cannot import ssot_config; the file's own tier comments map var -> tier."""
-    rows = _ai_stack_vars()
-    assert len(rows) == 15, f"expected 15 ai_*_model vars, parsed {len(rows)}"
-    bad = {v: (val, _canonical()[t]) for v, val, t in rows if val != _canonical()[t]}
-    assert not bad, f"#15502: ai-stack vars differ from their tier (var: (value, canonical)): {bad}"
-
-
 def test_agent_config_ollama_models_are_the_canonical_local_models() -> None:
     """Mirror: the provisioning list must pull exactly the models the tiers can select."""
-    assert set(_load_yaml(_AGENT_CONFIG_ROLE)["ollama_models"]) == _local_models()
+    assert set(resolved_vars(repo_root() / _AGENT_CONFIG_ROLE)["ollama_models"]) == _local_models()
 
 
 def _env_registry_defaults() -> dict[str, str]:
@@ -207,10 +179,6 @@ def _model_key_paths(doc: Any, prefix: str = "") -> list[str]:
     return found
 
 
-def _ai_stack_value(role: str) -> str:
-    return {v: val for v, val, _ in _ai_stack_vars()}[f"ai_{role}_model"]
-
-
 def test_complete_yaml_names_no_model() -> None:
     """The tier map is the only model authority; complete.yaml carries no model selection (#15502)."""
     # The whole document (#19430): the old exemption for knowledge_base.semantic_chunking.model
@@ -236,14 +204,8 @@ def test_the_model_key_scan_sees_a_model_when_one_exists() -> None:
     assert _model_key_paths({"llm": {"embedding": {"dimensions": 768}}}) == []
 
 
-_KB_ROLES = ("kb_librarian", "knowledge_extraction", "knowledge_retrieval")
-
-
-@pytest.mark.parametrize("role", _KB_ROLES)
-def test_agents_yaml_kb_roles_are_on_the_instruction_tier(role: str) -> None:
-    """Owner decision 2026-10-10: agents.yaml agrees with the deployed ai-stack role -> tier assignment."""
-    assert _load_yaml(_AGENTS_YAML)["llm"]["models"][role] == _ai_stack_value(role)
-    assert _ai_stack_value(role) == _canonical()["INSTRUCTION_MODEL"]
+# Per-agent tiers -- ai-stack vars, agents.yaml, docker env, the backend template -- are held to the
+# ONE assignment by repo_tests/agent_model_tiers_19332_test.py (#19332).
 
 
 # --- (d) no new hand-written tier map --------------------------------------
@@ -508,23 +470,25 @@ def test_the_node_classes_together_cover_every_canonical_local_tier_model() -> N
     assert not set(defaults["llm_cpu_models"]) & set(defaults["llm_gpu_models"]), "a model sits in both classes"
 
 
-def _pull_loops(node: Any) -> list[list[str]]:
-    """The `loop:` of every task named `Pull required Ollama models...`, at any depth of a play."""
+def _pull_loops(node: Any, names: dict | None = None) -> list[list[str]]:
+    """The `loop:` of every `Pull required Ollama models...` task at any depth; a `{{ name }}` loop via `names`."""
     found: list[list[str]] = []
     if isinstance(node, dict):
-        if str(node.get("name", "")).startswith("Pull required Ollama models") and isinstance(node.get("loop"), list):
-            found.append(node["loop"])
+        if str(node.get("name", "")).startswith("Pull required Ollama models"):
+            found += loop_items(node.get("loop"), names or {})
         for value in node.values():
-            found += _pull_loops(value)
+            found += _pull_loops(value, names)
     elif isinstance(node, list):
         for item in node:
-            found += _pull_loops(item)
+            found += _pull_loops(item, names)
     return found
 
 
 @pytest.mark.parametrize("rel", _PULL_PLAYBOOKS)
 def test_a_deploy_playbook_inline_pull_list_is_the_canonical_local_models(rel: str) -> None:
-    loops = [loop for doc in yaml.safe_load_all(_read(rel)) for loop in _pull_loops(doc)]
+    playbook = repo_root() / rel
+    plays = [play for doc in yaml.safe_load_all(_read(rel)) if doc for play in doc]
+    loops = [loop for play in plays for loop in _pull_loops(play, play_vars(play, playbook))]
     assert len(loops) == 1, f"{rel}: expected one inline Ollama pull list, found {len(loops)}"
     assert sorted(loops[0]) == sorted(_local_models()), f"#15502: {rel} pulls {sorted(loops[0])}"
 
@@ -546,16 +510,6 @@ def test_the_pull_list_finder_sees_a_nested_loop_and_ignores_other_tasks() -> No
 _BACKEND_ENV_TEMPLATE = "autobot-slm-backend/ansible/roles/backend/templates/backend.env.j2"
 _BACKEND_ENV_VARS = "autobot-slm-backend/ansible/playbooks/vars/backend-env.yml"
 _BACKEND_ROLE_DEFAULTS = "autobot-slm-backend/ansible/roles/backend/defaults/main.yml"
-#: Ansible var -> the tier constant its inline default must equal.
-_BACKEND_VAR_TIER = {
-    "backend_llm_model": "DEFAULT_LLM_MODEL",
-    "backend_routing_model": "ROUTING_MODEL",
-    "backend_classification_model": "CLASSIFICATION_MODEL",
-    "backend_light_model": "LIGHT_PROCESSING_MODEL",
-    "backend_instruction_model": "INSTRUCTION_MODEL",
-    "backend_system_model": "SYSTEM_MODEL",
-    "backend_embedding_model": "DEFAULT_EMBEDDING_MODEL",
-}
 _TEMPLATE_DEFAULT = re.compile(r"^AUTOBOT_\w+_MODEL=\{\{ (\w+) \| default\('([^']+)'\) \}\}$", re.M)
 _VARS_DEFAULT = re.compile(r"^(\w+): \"\{\{ lookup\('env', '\w+'\) \| default\('([^']+)', true\) \}\}\"$", re.M)
 
@@ -567,25 +521,14 @@ def _template_defaults(text: str) -> list[tuple[str, str]]:
 def test_backend_env_template_inline_defaults_equal_their_tier() -> None:
     pairs = _template_defaults(_read(_BACKEND_ENV_TEMPLATE))
     assert len(pairs) >= 12, "the scan found almost nothing: the template line shape changed"
-    bad = [(v, d) for v, d in pairs if d != _canonical()[_BACKEND_VAR_TIER[v]]]
+    bad = [(v, d) for v, d in pairs if d != TIER_MODELS[BACKEND_VAR_TIERS[v]]]
     assert bad == [], f"#15502: {_BACKEND_ENV_TEMPLATE} defaults diverge from the tier map: {bad}"
-
-
-def test_backend_env_template_kb_roles_and_embedding_use_their_own_tier() -> None:
-    """The KB roles are INSTRUCTION-tier (not LIGHT) and the embedding alias is not a chat model."""
-    got = {
-        m.group(1): m.group(2)
-        for m in re.finditer(r"^AUTOBOT_(\w+)_MODEL=\{\{ (\w+) \|", _read(_BACKEND_ENV_TEMPLATE), re.M)
-    }
-    for role in ("KB_LIBRARIAN", "KNOWLEDGE_EXTRACTION", "KNOWLEDGE_RETRIEVAL"):
-        assert got[role] == "backend_instruction_model", role
-    assert got["EMBEDDING"] == "backend_embedding_model"
 
 
 def test_backend_env_vars_file_and_role_default_equal_their_tier() -> None:
     found = dict(_VARS_DEFAULT.findall(_read(_BACKEND_ENV_VARS)))
-    assert set(found) == set(_BACKEND_VAR_TIER), f"unexpected model vars: {sorted(found)}"
-    assert {v: found[v] for v in found} == {v: _canonical()[t] for v, t in _BACKEND_VAR_TIER.items()}
+    assert set(found) == set(BACKEND_VAR_TIERS), f"unexpected model vars: {sorted(found)}"
+    assert {v: found[v] for v in found} == {v: TIER_MODELS[t] for v, t in BACKEND_VAR_TIERS.items()}
     role = _load_yaml(_BACKEND_ROLE_DEFAULTS)
     assert role["backend_llm_model"] == _canonical()["DEFAULT_LLM_MODEL"]
 

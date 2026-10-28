@@ -455,6 +455,7 @@
     - claude
   changed_when: false
   tags: ['backend', 'packages', 'llc']
+  when: not ansible_check_mode
 
 
 - name: "Backend | Restart-guarded env-update + heavy-work window (#12139)"
@@ -1270,6 +1271,8 @@
   # ==========================================================
   - name: "Backend | Ensure the shared node TLS keypair exists (#16020)"
     ansible.builtin.include_tasks: ../../../_shared/tasks/ensure_node_tls_cert.yml
+    vars:
+      node_tls_cert_dir_override: "{{ backend_tls_cert_dir }}"
     tags: ['backend', 'tls']
 
   # #16020: the shared task has no restart handler of its own -- it also

@@ -113,6 +113,13 @@ if [ "$MODE" = "--commit-msg" ]; then
   if ! printf '%s' "$SUBJECT" | grep -qE '#[0-9]{3,}'; then
     echo "  FAIL  subject carries no issue reference (#NNNN)"; exit 1
   fi
+  # #19645: no automation session ids or internal process roles. The one detector
+  # lives in scripts/lib/outward_wording.py (also behind the PR body and issue checks).
+  # Resolved beside the subject rule, which is already an absolute path.
+  WORDING_PY="$(dirname "$SUBJECT_ERE_FILE")/outward_wording.py"
+  [ -r "$WORDING_PY" ] || die "cannot read the wording check at lib/outward_wording.py"
+  command -v python3 >/dev/null 2>&1 || die "python3 not found -- cannot run lib/outward_wording.py"
+  python3 "$WORDING_PY" subject "$SUBJECT" || exit 1
   echo "lint-conventions: subject ok"; exit 0
 fi
 

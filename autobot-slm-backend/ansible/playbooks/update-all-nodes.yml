@@ -548,6 +548,17 @@
       vars:
         db_env_prefix: SLM
       tags: [slm, slm-backend, credentials]
+    #
+    # #19848: the role's postgresql.conf, so a change to a rendered setting (#19421's
+    # listen_addresses) reaches an existing host. config_file skips a host without PostgreSQL,
+    # needs no db_user and never touches pg_hba; PostgreSQL restarts only if the file changed.
+    - name: "[PLAY 1] SLM | Apply PostgreSQL's server config (#19848)"
+      ansible.builtin.include_role:
+        name: postgresql
+        tasks_from: config_file
+        apply:
+          become: true
+      tags: [slm, postgresql]
 
     # --- SLM custom migrations (#1630) ---
     - name: "[PLAY 1] SLM | Load db credentials for migration (#2293)"
@@ -757,6 +768,7 @@
       ignore_errors: true
       when: slm_login_play1.status == 200
       tags: [always]
+      no_log: true  # #19764: credentials in the request or response
 
     - name: "[PLAY 1] SLM Update Complete"
       debug:
@@ -1041,6 +1053,17 @@
       when: "'backend' in group_names"
       tags: [backend, env, credentials]
 
+    # #19848: as in PLAY 1 -- the backend role installs PostgreSQL for user management (#2953),
+    # so its postgresql.conf follows the role on every Code Sync too.
+    - name: "[PLAY 2] Backend | Apply PostgreSQL's server config (#19848)"
+      ansible.builtin.include_role:
+        name: postgresql
+        tasks_from: config_file
+        apply:
+          become: true
+      when: "'backend' in group_names"
+      tags: [backend, postgresql]
+
     # Migrations moved AFTER the .env regen so they run with the fresh
     # credentials and BEFORE the service restart — see the
     # "Database migration sequence" block below (#10001/#10026; replaces the
@@ -1261,6 +1284,8 @@
       ansible.builtin.include_role:
         name: backend
         tasks_from: docs_sync
+        apply:
+          tags: [backend, docs]
       when: "'backend' in group_names"
       tags: [backend, docs]
 
@@ -1269,6 +1294,12 @@
       ansible.builtin.include_role:
         name: backend
         tasks_from: plugins_sync
+        apply:
+          tags: [backend, plugins]
+      # The role's `notify: restart backend` ignores --skip-tags; this play
+      # restarts explicitly below, so suppress the handler here (#18324).
+      vars:
+        backend_plugins_sync_notify_restart: false
       when: "'backend' in group_names"
       tags: [backend, plugins]
 
@@ -1572,6 +1603,8 @@
         'npu' in group_names
       failed_when: false
       tags: [npu, npu-worker, restart]
+      check_mode: false
+      changed_when: false
 
     - name: "[PLAY 2] NPU | Warn if service not active (#1633)"
       debug:
@@ -1964,6 +1997,7 @@
       ignore_errors: true
       when: slm_token | default('') | length > 0
       tags: [always]
+      no_log: true  # #19764: credentials in the request or response
 
     # =========================================================================
     # #12959: post-update delivery assertions
@@ -2196,6 +2230,15 @@
         apply:
           become: true
       tags: [database, redis, chromadb, deploy]
+
+    # #19848: as in PLAY 1 -- the database node's postgresql.conf, before the handler flush below.
+    - name: "[PLAY 2b] Database | Apply PostgreSQL's server config (#19848)"
+      ansible.builtin.include_role:
+        name: postgresql
+        tasks_from: config_file
+        apply:
+          become: true
+      tags: [database, postgresql]
 
     # Flush here rather than letting the handlers fall to the end of the play.
     # #12886 recorded both halves of why that matters: queued handlers are

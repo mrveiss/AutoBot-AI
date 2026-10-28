@@ -240,9 +240,12 @@ def _python_paths() -> list[str]:
 
 
 def test_no_python_file_carries_a_literal_postgres_default() -> None:
-    found = []
-    for rel in _python_paths():
+    paths, found = _python_paths(), []
+    for rel in paths:
         found += python_findings(rel, (_ROOT / rel).read_text(encoding="utf-8"))
+    # Floor (#19660): 4009 tracked non-test Python files on main at c1312f2eec; a sweep that read
+    # almost nothing is a broken enumeration, not a clean tree.
+    assert len(paths) >= 3000, f"only {len(paths)} Python files swept -- the enumeration lost its reach"
     assert found == [], "import the value from autobot_shared.postgres_identity:\n" + "\n".join(found)
 
 

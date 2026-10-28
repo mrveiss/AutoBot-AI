@@ -67,16 +67,17 @@ def detect_deployment_mode(
 ) -> DeploymentMode:
     """The one deployment-mode decision; callers only gather the signals (#12771).
 
-    An explicit, valid mode wins. Otherwise a container resolves to KUBERNETES, then
-    DISTRIBUTED, else DOCKER_LOCAL; a bare host is LOCAL. The deploy scripts have no
-    cluster signals and pass ``kubernetes=False, distributed=False``.
+    An explicit, valid mode wins. Otherwise the Kubernetes signal resolves to KUBERNETES
+    with or without the Docker container marker (a pod under containerd has no ``/.dockerenv``,
+    #19658); a container resolves to DISTRIBUTED, else DOCKER_LOCAL; a bare host is LOCAL.
+    The deploy scripts have no cluster signals and pass ``kubernetes=False, distributed=False``.
     """
     if explicit:
         return explicit
-    if not in_container:
-        return DeploymentMode.LOCAL
     if kubernetes:
         return DeploymentMode.KUBERNETES
+    if not in_container:
+        return DeploymentMode.LOCAL
     return DeploymentMode.DISTRIBUTED if distributed else DeploymentMode.DOCKER_LOCAL
 
 

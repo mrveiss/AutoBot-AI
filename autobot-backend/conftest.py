@@ -22,6 +22,7 @@ import pytest
 
 from autobot_shared.ssot_config import config
 from testkit.auth_middleware_stub import install_auth_middleware_stub
+from testkit.celery_stub import install_celery_stub
 
 # Ensure autobot-backend and autobot_shared are importable
 project_root = Path(__file__).parent.parent
@@ -113,49 +114,9 @@ if isinstance(_torch_stub, MagicMock):
     _torch_stub.cuda.get_device_capability.return_value = (0, 0)
     sys.modules["torch.cuda"] = _torch_stub.cuda
 
-# Celery stub — issue #4455. When celery isn't installed in the dev venv,
-# provide a tiny shim so modules that do ``@celery_app.task`` import cleanly.
-# The real package is used on production nodes; tests never rely on Beat.
-try:
-    import celery as _celery_real  # noqa: F401
-except ImportError:
-    _celery_stub = types.ModuleType("celery")
-
-    class _StubCelery:
-        def __init__(self, *args, **kwargs) -> None:
-            self.conf = types.SimpleNamespace(
-                update=lambda **_k: None,
-                beat_schedule={},
-            )
-
-        def task(self, *_args, **_kwargs):
-            def decorator(fn):
-                fn.update_state = lambda *a, **k: None
-                return fn
-
-            return decorator
-
-        def autodiscover_tasks(self, *_args, **_kwargs) -> None:
-            return None
-
-    _celery_stub.Celery = _StubCelery
-    sys.modules["celery"] = _celery_stub
-
-    _schedules_stub = types.ModuleType("celery.schedules")
-
-    class _StubCrontab:
-        def __init__(self, **fields) -> None:
-            def _parse(v):
-                try:
-                    return {int(v)}
-                except (TypeError, ValueError):
-                    return set()
-
-            self.minute = _parse(fields.get("minute", 0))
-            self.hour = _parse(fields.get("hour", 0))
-
-    _schedules_stub.crontab = _StubCrontab
-    sys.modules["celery.schedules"] = _schedules_stub
+# Celery stub — issue #4455; the shim lives in testkit/celery_stub.py (it grew past this
+# file's ceiling when `shared_task` and `Task` joined it, #19582).
+install_celery_stub()
 
 # celery_app stub — issue #7766.  The production celery_app.py pulls in the
 # full Redis / config dependency chain which causes a circular import in the

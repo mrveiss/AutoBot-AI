@@ -18,6 +18,7 @@
  * it as a plain success.
  */
 
+import { isHttpError } from '@autobot/ui'
 import { createAutobotBackendClient } from '@/composables/useAutobotApi'
 import type {
   WebResearchCacheClearData,
@@ -43,7 +44,7 @@ export const WEB_RESEARCH_UNAVAILABLE_STATUS = 503
 
 /** True when the backend says the researcher failed to initialise (503 on status/clear/reset). */
 export function isWebResearcherUnavailable(err: unknown): boolean {
-  return (err as { response?: { status?: number } })?.response?.status === WEB_RESEARCH_UNAVAILABLE_STATUS
+  return isHttpError(err) && err.status === WEB_RESEARCH_UNAVAILABLE_STATUS
 }
 
 /** True when a write was saved but the running researcher did not take it. */
@@ -56,39 +57,40 @@ export function useWebResearchAdminApi() {
 
   async function getSettings(): Promise<WebResearchSettings> {
     const response = await client.get<WebResearchSettingsData>('/web-research/settings')
-    return response.data.settings
+    return response.settings
   }
 
   /** Sends only the fields present in `changes`. */
   async function updateSettings(changes: WebResearchSettingsUpdate): Promise<WebResearchSettingsUpdateData> {
     const response = await client.put<WebResearchSettingsUpdateData>('/web-research/settings', changes)
-    return response.data
+    return response
   }
 
   async function enable(): Promise<WebResearchToggleData> {
     const response = await client.post<WebResearchToggleData>('/web-research/enable')
-    return response.data
+    return response
   }
 
   async function disable(): Promise<WebResearchToggleData> {
     const response = await client.post<WebResearchToggleData>('/web-research/disable')
-    return response.data
+    return response
   }
 
   /** Rejects with a 503 (see isWebResearcherUnavailable) when the researcher is not running. */
   async function getStatus(): Promise<WebResearchStatusData> {
-    const response = await client.get<WebResearchStatusData>('/web-research/status')
-    return response.data
+    // One attempt: a down researcher answers 503 at once, and the view says so (#12363)
+    const response = await client.get<WebResearchStatusData>('/web-research/status', { maxRetries: 1 })
+    return response
   }
 
   async function clearCache(): Promise<WebResearchCacheClearData> {
     const response = await client.post<WebResearchCacheClearData>('/web-research/clear-cache')
-    return response.data
+    return response
   }
 
   async function resetCircuitBreakers(): Promise<WebResearchCacheClearData> {
     const response = await client.post<WebResearchCacheClearData>('/web-research/reset-circuit-breakers')
-    return response.data
+    return response
   }
 
   return { getSettings, updateSettings, enable, disable, getStatus, clearCache, resetCircuitBreakers }

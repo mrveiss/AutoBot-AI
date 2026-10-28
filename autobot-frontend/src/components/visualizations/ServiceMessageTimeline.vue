@@ -179,7 +179,7 @@ onMounted(() => refresh())
 .smt-dot.t-notification { background:var(--timeline-notification); }
 .smt-info { flex:1; min-width:0; }
 .smt-route { display:flex; align-items:center; gap:var(--spacing-1); font-size: var(--text-sm); font-weight:500; color:var(--text-primary); }
-.smt-route i { font-size: var(--text-xs); color:var(--text-secondary); }
+.smt-route .icon { font-size: var(--text-xs); color:var(--text-secondary); }
 .smt-meta { font-size: var(--text-xs); color:var(--text-muted); margin-top:var(--spacing-0-5); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .smt-badge { font-size: var(--text-xs); padding:var(--spacing-px) var(--spacing-1-5); border-radius: var(--radius-default); font-weight:500; margin-left:auto; }
 .smt-badge.t-task { background:rgba(74,144,217,.2); color:var(--timeline-task); } .smt-badge.t-result { background:rgba(76,175,80,.2); color:var(--timeline-result); }
