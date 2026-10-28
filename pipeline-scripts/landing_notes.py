@@ -44,7 +44,6 @@ read by the one comment reader, ``.github/actions/upsert-pr-comment`` (#12984).
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import logging
 import re
@@ -52,10 +51,11 @@ import sys
 import urllib.parse
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from github_api import build_api  # noqa: E402
+from github_api import TRUSTED_ASSOCIATIONS, build_api  # noqa: E402
+from issue_api import IssueApiError, IssueClient, ensure_label, load_upsert  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -69,26 +69,13 @@ COMMITS_MAX_PAGES = 3  # pulls/{n}/commits stops at 250 commits
 SOURCE_COMMIT_PULLS = "commit-pulls"
 SOURCE_COMMIT_SEARCH = "commit-search"
 SOURCE_BODY_TABLE = "body-table"
+SOURCE_TRAIN_MERGE = "train-merge-commit"
 SOURCE_SELF = "self"
-TRUSTED_ASSOCIATIONS = frozenset({"OWNER", "MEMBER", "COLLABORATOR"})
 
-_UPSERT_PATH = Path(__file__).resolve().parent.parent / ".github/actions/upsert-pr-comment/upsert_pr_comment.py"
-
-
-def _load_upsert() -> Any:
-    """The one comment reader and bot-marker rule (#12984), loaded by path: its dir has a hyphen."""
-    spec = importlib.util.spec_from_file_location("_upsert_pr_comment_19520", _UPSERT_PATH)
-    if spec is None or spec.loader is None:
-        raise ImportError(f"cannot load {_UPSERT_PATH}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+_UPSERT = load_upsert()
 
 
-_UPSERT = _load_upsert()
-
-
-class LandingNoteError(RuntimeError):
+class LandingNoteError(IssueApiError):
     """The API answered with something this script cannot act on."""
 
 
@@ -148,6 +135,24 @@ class Member:
 def merge_second_parents(commits: Iterable[Dict[str, Any]]) -> List[str]:
     """The second parent of every merge commit, in commit order."""
     return [c["parents"][1]["sha"] for c in commits if len(c.get("parents") or []) >= 2]
+
+
+def merged_in_train(commits: Iterable[Dict[str, Any]], branch: str) -> Set[int]:
+    """Members the train merged itself: ``Merge #N @ <sha> into <branch>`` merge commits (#19572).
+
+    A member the trainmaster landed at a re-frozen head is closed unmerged on GitHub, yet
+    its merge commit is in the train's range. A member pulled from the train has none.
+    """
+    pattern = re.compile(rf"^Merge #(\d+) @ [0-9a-f]{{7,40}} into {re.escape(branch)}$")
+    found: Set[int] = set()
+    for commit in commits:
+        if len(commit.get("parents") or []) < 2:
+            continue
+        subject = ((commit.get("commit") or {}).get("message") or "").split("\n", 1)[0].strip()
+        match = pattern.match(subject)
+        if match:
+            found.add(int(match.group(1)))
+    return found
 
 
 def pick_head_match(prs: Iterable[Dict[str, Any]], sha: str, exclude: int) -> Optional[Dict[str, Any]]:
@@ -267,19 +272,10 @@ def should_clear_label(event: Dict[str, Any]) -> bool:
 # ---- the thin API layer ---------------------------------------------------------------------
 
 
-class Client:
-    """`GitHubApi.request` plus the one comment reader; tests pass a fake ``api``/``comments``."""
+class LandingClient(IssueClient):
+    """The shared issue client, raising ``LandingNoteError``, plus a soft GET."""
 
-    def __init__(self, api: Any, comments: Optional[Callable[[int], List[Dict[str, Any]]]] = None) -> None:
-        self.api = api
-        self.repo = api.repository
-        self._comments = comments
-
-    def call(self, method: str, path: str, payload: Optional[Dict[str, Any]] = None, ok=(200,)) -> Any:
-        status, body = self.api.request(method, path, payload)
-        if status not in ok:
-            raise LandingNoteError(f"{method} {path}: HTTP {status}: {body}")
-        return body
+    error = LandingNoteError
 
     def try_get(self, path: str) -> Optional[Any]:
         status, body = self.api.request("GET", path, None)
@@ -288,13 +284,8 @@ class Client:
             return None
         return body
 
-    def comments(self, number: int) -> List[Dict[str, Any]]:
-        if self._comments is not None:
-            return self._comments(number)
-        return list(_UPSERT.iter_comments(self.api.api_root, self.repo, number, self.api.token))
 
-
-def pr_commits(client: Client, number: int) -> List[Dict[str, Any]]:
+def pr_commits(client: LandingClient, number: int) -> List[Dict[str, Any]]:
     commits: List[Dict[str, Any]] = []
     for page in range(1, COMMITS_MAX_PAGES + 1):
         query = urllib.parse.urlencode({"per_page": COMMITS_PAGE_SIZE, "page": page})
@@ -305,12 +296,12 @@ def pr_commits(client: Client, number: int) -> List[Dict[str, Any]]:
     return commits
 
 
-def _member_by_commit_pulls(client: Client, sha: str, train: int) -> Optional[Dict[str, Any]]:
+def _member_by_commit_pulls(client: LandingClient, sha: str, train: int) -> Optional[Dict[str, Any]]:
     prs = client.try_get(f"/repos/{client.repo}/commits/{sha}/pulls")
     return pick_head_match(prs or [], sha, train)
 
 
-def _member_by_search(client: Client, sha: str, train: int) -> Optional[Dict[str, Any]]:
+def _member_by_search(client: LandingClient, sha: str, train: int) -> Optional[Dict[str, Any]]:
     query = urllib.parse.urlencode({"q": f"repo:{client.repo} is:pr sha:{sha}", "per_page": 20})
     found = client.try_get(f"/search/issues?{query}") or {}
     for item in found.get("items") or []:
@@ -322,7 +313,7 @@ def _member_by_search(client: Client, sha: str, train: int) -> Optional[Dict[str
     return None
 
 
-def _member_for_head(client: Client, sha: str, train: int) -> Optional[Member]:
+def _member_for_head(client: LandingClient, sha: str, train: int) -> Optional[Member]:
     pr = _member_by_commit_pulls(client, sha, train)
     if pr is not None:
         return Member(int(pr["number"]), pr.get("body") or "", SOURCE_COMMIT_PULLS)
@@ -333,25 +324,38 @@ def _member_for_head(client: Client, sha: str, train: int) -> Optional[Member]:
     return None
 
 
-def _table_fallback(client: Client, landing: Landing, known: Dict[int, Member]) -> List[Member]:
+def _table_member(client: LandingClient, number: int, in_train: Set[int]) -> Optional[Member]:
+    """A table member that landed: merged on GitHub, or merged by the train itself (#19572)."""
+    pr = client.call("GET", f"/repos/{client.repo}/pulls/{number}")
+    if pr.get("merged_at") or pr.get("merged"):
+        return Member(number, pr.get("body") or "", SOURCE_BODY_TABLE)
+    if number in in_train:
+        logger.info("table member #%s is closed unmerged but the train merged it; landed", number)
+        return Member(number, pr.get("body") or "", SOURCE_TRAIN_MERGE)
+    logger.warning("table member #%s is not merged and has no train merge commit; skipped", number)
+    return None
+
+
+def _table_fallback(
+    client: LandingClient, landing: Landing, known: Dict[int, Member], in_train: Set[int]
+) -> List[Member]:
     extra = []
     for number in table_members(landing.body):
         if number not in known and number != landing.pr_number:
-            pr = client.call("GET", f"/repos/{client.repo}/pulls/{number}")
-            if not pr.get("merged_at") and not pr.get("merged"):
-                logger.warning("table member #%s is not merged; skipped", number)
-                continue
-            extra.append(Member(number, pr.get("body") or "", SOURCE_BODY_TABLE))
+            member = _table_member(client, number, in_train)
+            if member is not None:
+                extra.append(member)
     return extra
 
 
-def resolve_members(client: Client, landing: Landing) -> List[Member]:
+def resolve_members(client: LandingClient, landing: Landing) -> List[Member]:
     """The PRs a merge carried. A train from its merge commits, else the body table."""
     if not landing.is_train:
         return [Member(landing.pr_number, landing.body, SOURCE_SELF)]
+    commits = pr_commits(client, landing.pr_number)
     resolved: Dict[int, Member] = {}
     unresolved = 0
-    for sha in merge_second_parents(pr_commits(client, landing.pr_number)):
+    for sha in merge_second_parents(commits):
         member = _member_for_head(client, sha, landing.pr_number)
         if member is None:
             unresolved += 1
@@ -359,7 +363,7 @@ def resolve_members(client: Client, landing: Landing) -> List[Member]:
             resolved.setdefault(member.number, member)
     members = list(resolved.values())
     if unresolved or not members:
-        members += _table_fallback(client, landing, resolved)
+        members += _table_fallback(client, landing, resolved, merged_in_train(commits, landing.branch))
     for member in members:
         logger.info("member #%s (source: %s)", member.number, member.source)
     return members
@@ -383,7 +387,7 @@ def collect_targets(landing: Landing, members: Sequence[Member], repo: str) -> D
     return targets
 
 
-def landed_via_train(client: Client, landing: Landing) -> Optional[int]:
+def landed_via_train(client: LandingClient, landing: Landing) -> Optional[int]:
     """The train a plain PR landed inside, whose own run posts the notes."""
     for pr in client.try_get(f"/repos/{client.repo}/commits/{landing.merge_sha}/pulls") or []:
         head = (pr.get("head") or {}).get("ref", "")
@@ -392,22 +396,14 @@ def landed_via_train(client: Client, landing: Landing) -> Optional[int]:
     return None
 
 
-def ensure_label(client: Client) -> None:
-    name = urllib.parse.quote(EVIDENCE_LABEL)
-    status, _ = client.api.request("GET", f"/repos/{client.repo}/labels/{name}", None)
-    if status == 404:
-        payload = {"name": EVIDENCE_LABEL, "color": EVIDENCE_LABEL_COLOR, "description": EVIDENCE_LABEL_DESCRIPTION}
-        client.call("POST", f"/repos/{client.repo}/labels", payload, ok=(201, 422))
-    elif status != 200:
-        raise LandingNoteError(f"cannot read label {EVIDENCE_LABEL}: HTTP {status}")
-
-
-def apply_label(client: Client, number: int) -> None:
-    ensure_label(client)
+def apply_label(client: LandingClient, number: int) -> None:
+    ensure_label(client, EVIDENCE_LABEL, EVIDENCE_LABEL_COLOR, EVIDENCE_LABEL_DESCRIPTION)
     client.call("POST", f"/repos/{client.repo}/issues/{number}/labels", {"labels": [EVIDENCE_LABEL]})
 
 
-def _note_present(client: Client, number: int, label: bool, comments: List[Dict[str, Any]], dry_run: bool) -> str:
+def _note_present(
+    client: LandingClient, number: int, label: bool, comments: List[Dict[str, Any]], dry_run: bool
+) -> str:
     """The note landed earlier; a label that failed then is re-applied unless evidence cleared it."""
     if not label or any(is_trusted_evidence(c) for c in comments):
         return "skipped (note present)"
@@ -417,7 +413,7 @@ def _note_present(client: Client, number: int, label: bool, comments: List[Dict[
     return "label re-applied (note present)"
 
 
-def land_issue(client: Client, landing: Landing, number: int, target: Target, dry_run: bool) -> str:
+def land_issue(client: LandingClient, landing: Landing, number: int, target: Target, dry_run: bool) -> str:
     """Label first, then note: each step is safe to retry, and a rerun repairs a missing label."""
     issue = client.call("GET", f"/repos/{client.repo}/issues/{number}")
     if issue.get("pull_request"):
@@ -435,7 +431,7 @@ def land_issue(client: Client, landing: Landing, number: int, target: Target, dr
     return "posted + label" if label else "posted"
 
 
-def run_merged(client: Client, landing: Landing, dry_run: bool = False) -> Dict[int, str]:
+def run_merged(client: LandingClient, landing: Landing, dry_run: bool = False) -> Dict[int, str]:
     """Issue number -> outcome. Raises after the loop if any issue failed."""
     if not landing.is_train:
         train = landed_via_train(client, landing)
@@ -456,7 +452,7 @@ def run_merged(client: Client, landing: Landing, dry_run: bool = False) -> Dict[
     return outcomes
 
 
-def run_evidence(client: Client, event: Dict[str, Any]) -> bool:
+def run_evidence(client: LandingClient, event: Dict[str, Any]) -> bool:
     """Remove ``needs-ac-evidence`` when the comment holds an AC evidence table."""
     if not should_clear_label(event):
         return False
@@ -467,7 +463,7 @@ def run_evidence(client: Client, event: Dict[str, Any]) -> bool:
     return True
 
 
-def _landing_for(client: Client, args: argparse.Namespace) -> Landing:
+def _landing_for(client: LandingClient, args: argparse.Namespace) -> Landing:
     if args.pr:
         return landing_from_pr(client.call("GET", f"/repos/{client.repo}/pulls/{args.pr}"))
     with open(args.event, encoding="utf-8") as handle:
@@ -482,7 +478,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser.add_argument("--dry-run", action="store_true", help="merged only: read, resolve and print; write nothing")
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
-    client = Client(build_api())
+    client = LandingClient(build_api())
     if args.command == "evidence":
         with open(args.event, encoding="utf-8") as handle:
             run_evidence(client, json.load(handle))
