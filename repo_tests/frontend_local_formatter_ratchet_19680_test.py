@@ -22,10 +22,10 @@ duplication this class measures. Both folders are simply not scanned.
 (including ``(`` on the next line); object or class methods ``formatDuration(x) {``; and
 properties ``formatDuration: (x) =>``.
 
-**What stays, and why the pin is 2 and not 0.** ``MessageAttachments`` (``formatSize``) and
-``WorkflowHistory`` (``formatDuration(workflow)``) were held by open PRs when this landed, so
-their migration is deferred to the PR that releases them. Whoever migrates one lowers the pin
-by one in the same PR; the exact check below makes that mandatory.
+**Nothing is deferred any more.** ``MessageAttachments`` (``formatSize``) and
+``WorkflowHistory`` (``formatDuration(workflow)``) were the last two, held by open PRs when
+this landed; both now call the kit formatters, so the pin is 0 and the exact check below keeps
+it there.
 
 **One number, not a per-file table**, for the reason given in
 ``slm_raw_setinterval_ratchet_19482_test.py``. The pin is down-only against the base (#19283).
@@ -58,8 +58,8 @@ _DECLARATION = re.compile(
 )
 _COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
 
-# 16 measured on ee1bfa15dc; 2 after this migration (the two held files above).
-PINS = {"local_formatter_declarations": 2}
+# 16 measured on ee1bfa15dc; 0 after the last two migrated.
+PINS = {"local_formatter_declarations": 0}
 
 
 def _sources(src: Path) -> list[Path]:
