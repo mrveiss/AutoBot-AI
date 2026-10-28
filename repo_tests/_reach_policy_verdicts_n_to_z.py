@@ -322,4 +322,10 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
         "Docs and deployment files by extension, minus the history trees; the code share of the tree grows "
         "at its own rate, so a share of all tracked files would sink with nothing wrong.",
     ),
+    "browser-service-routes-scan-19490": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Tracked Python under five code roots, a subset of tracked Python; the other trees grow at their "
+        "own rate, so a share of all Python would sink with nothing wrong.",
+    ),
 }

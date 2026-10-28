@@ -8,7 +8,7 @@ SQLAlchemy Core, not an ORM class on ``models.database.Base``, for two
 independent reasons:
 
 * ``models/database.py`` sits at its file-size ratchet ceiling
-  (``repo_tests/python_file_size_ratchet_baseline.py``), so a new concept
+  (``scripts/python_file_size_known_large.py``), so a new concept
   cannot become a new column there -- the same move ``service_status.py``
   made for the same reason (#16019).
 * The SLM test suite's ``conftest.py`` stubs ``models.database`` globally
