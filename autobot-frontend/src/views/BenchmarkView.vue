@@ -127,33 +127,19 @@
         </div>
       </div>
 
-      <p v-if="!history.length" class="history-empty">{{ $t('benchmark.noRuns') }}</p>
-      <table v-else class="history-table">
-        <thead>
-          <tr>
-            <th>{{ $t('benchmark.date') }}</th>
-            <th>{{ $t('benchmark.type') }}</th>
-            <th>{{ $t('benchmark.modelsCol') }}</th>
-            <th>{{ $t('benchmark.avgQuality') }}</th>
-            <th>{{ $t('benchmark.totalCost') }}</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="run in history" :key="run.id">
-            <td>{{ formatDate(run.createdAt) }}</td>
-            <td>{{ run.promptType }}</td>
-            <td>{{ run.models.join(', ') }}</td>
-            <td>{{ avgQuality(run).toFixed(1) }}</td>
-            <td>{{ formatCost(totalCost(run)) }}</td>
-            <td>
-              <button class="btn btn-sm btn-danger" @click="deleteRun(run.id)">
-                {{ $t('benchmark.delete') }}
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <BaseTable
+        :columns="historyColumns"
+        :rows="historyRows"
+        :aria-label="$t('benchmark.history')"
+        :empty-title="$t('benchmark.noRuns')"
+        :actions-label="$t('benchmark.delete')"
+      >
+        <template #actions="{ row }">
+          <button class="btn btn-sm btn-danger" @click="deleteRun(String(row.id))">
+            {{ $t('benchmark.delete') }}
+          </button>
+        </template>
+      </BaseTable>
     </section>
   </div>
 </template>
@@ -168,6 +154,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { useMultiModelCompare } from '@/composables/useMultiModelCompare'
 import { useModelPicker } from '@/composables/useModelPicker'
 import BaseChart from '@/components/charts/BaseChart.vue'
+import { BaseTable, type BaseTableColumn } from '@autobot/ui'
 import {
   type BenchmarkResultRow,
   type BenchmarkRun,
@@ -192,6 +179,23 @@ const ratings = ref<Record<string, number>>({})
 const runStartedAt = ref<number>(0)
 
 const history = ref<BenchmarkRun[]>([])
+const historyRows = computed(() =>
+  history.value.map((run) => ({
+    id: run.id,
+    createdAt: run.createdAt,
+    promptType: run.promptType,
+    models: run.models.join(', '),
+    quality: avgQuality(run),
+    cost: totalCost(run),
+  })),
+)
+const historyColumns = computed<BaseTableColumn[]>(() => [
+  { key: 'createdAt', label: t('benchmark.date'), sortable: true, formatter: (v) => formatDate(String(v)) },
+  { key: 'promptType', label: t('benchmark.type'), sortable: true },
+  { key: 'models', label: t('benchmark.modelsCol'), wrap: true },
+  { key: 'quality', label: t('benchmark.avgQuality'), numeric: true, sortable: true, formatter: (v) => (v as number).toFixed(1) },
+  { key: 'cost', label: t('benchmark.totalCost'), numeric: true, sortable: true, formatter: (v) => formatCost(v as number) },
+])
 const filterModel = ref('')
 const filterPromptType = ref('')
 const filterSince = ref('')
@@ -521,24 +525,5 @@ onMounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-2);
-}
-.history-empty {
-  color: var(--text-secondary);
-}
-.history-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--text-sm);
-}
-.history-table th,
-.history-table td {
-  text-align: left;
-  padding: var(--spacing-2) var(--spacing-3);
-  border-bottom: 1px solid var(--border-subtle);
-  color: var(--text-primary);
-}
-.history-table th {
-  color: var(--text-secondary);
-  font-weight: var(--font-semibold);
 }
 </style>
