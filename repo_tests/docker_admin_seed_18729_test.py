@@ -118,13 +118,25 @@ def test_runnable_pulls_contrast() -> None:
     assert runnable_pulls("prose: ollama pull a:1\n") == set()
 
 
+#: The doc's derived pull (#19332); `agent_model_tiers_19332_test` guards that it covers every tier.
+_DERIVED_PULL_SED = "sed -n 's/^AUTOBOT_[A-Z_]*_MODEL=//p' docker/.env.docker | sort -u"
+
+
 def test_install_md_pulls_the_models_docker_env_names() -> None:
     names = dict(
         line.split("=", 1)
         for line in (_ROOT / "docker" / ".env.docker").read_text(encoding="utf-8").splitlines()
         if line.startswith(("AUTOBOT_DEFAULT_LLM_MODEL=", "AUTOBOT_EMBEDDING_MODEL="))
     )
-    pulled = runnable_pulls((_ROOT / "INSTALL.md").read_text(encoding="utf-8"))
+    install = (_ROOT / "INSTALL.md").read_text(encoding="utf-8")
+    pulled = runnable_pulls(install)
+    if _DERIVED_PULL_SED in install:
+        # The pull reads the env file itself (#19332): it names every model that file's sed matches.
+        pulled |= set(
+            re.findall(
+                r"^AUTOBOT_[A-Z_]*_MODEL=(.*)$", (_ROOT / "docker" / ".env.docker").read_text(encoding="utf-8"), re.M
+            )
+        )
     assert len(names) == 2 and set(names.values()) <= pulled, (names, pulled)
 
 

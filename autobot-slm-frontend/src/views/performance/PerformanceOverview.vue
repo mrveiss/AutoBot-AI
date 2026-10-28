@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, PollingPausedAlert } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -12,7 +12,8 @@ import { BaseAlert } from '@autobot/ui'
  * Issue #752 - Comprehensive performance monitoring.
  */
 
-import { onMounted, onUnmounted, computed } from 'vue'
+import { onMounted, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { formatDuration } from '@/utils/formatHelpers'
 import { usePerformanceMonitoring } from '@/composables/usePerformanceMonitoring'
 import { formatDateTime } from '@/composables/useTimezone'
@@ -21,23 +22,14 @@ const {
   overview,
   loading,
   error,
-  fetchOverview,
+  startPolling,
+  poller,
 } = usePerformanceMonitoring()
 
-let refreshTimer: ReturnType<typeof setInterval> | null = null
-const REFRESH_INTERVAL = 30000
+const { t } = useI18n()
 
-onMounted(() => {
-  fetchOverview()
-  refreshTimer = setInterval(fetchOverview, REFRESH_INTERVAL)
-})
-
-onUnmounted(() => {
-  if (refreshTimer) {
-    clearInterval(refreshTimer)
-    refreshTimer = null
-  }
-})
+// #19482: the composable's poller carries the shared dashboard policy (30s default)
+onMounted(() => startPolling())
 
 const avgLatency = computed(() => overview.value?.avg_latency_ms ?? 0)
 const p95Latency = computed(() => overview.value?.p95_latency_ms ?? 0)
@@ -99,6 +91,8 @@ function formatDate(dateStr: string): string {
 
 <template>
   <div class="p-6">
+    <PollingPausedAlert :poller="poller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mb-4" @retry="poller.start('')" />
+
     <!-- Error Banner -->
     <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
 
@@ -109,7 +103,7 @@ function formatDate(dateStr: string): string {
         <span v-if="activeSlos > 0" class="ml-4">{{ $t('performance.performanceOverview.value0ActiveSLOs', { value0: activeSlos }) }}</span>
       </div>
       <button
-        @click="fetchOverview"
+        @click="poller.start('')"
         :disabled="loading"
         class="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
       >

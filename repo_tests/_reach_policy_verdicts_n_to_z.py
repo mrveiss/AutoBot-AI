@@ -310,4 +310,22 @@ N_TO_Z: dict[str, tuple[str, str, str]] = {
         "files; the test "
         "share and the other extensions grow at their own rate.",
     ),
+    "ssot-rehardcode-scan-19730": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test Python under the backends and shared, a subset of tracked Python; the test share and "
+        "the other trees grow at their own rate, so a share of all Python would sink with nothing wrong.",
+    ),
+    "user-mode-values-sweep-19437": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Docs and deployment files by extension, minus the history trees; the code share of the tree grows "
+        "at its own rate, so a share of all tracked files would sink with nothing wrong.",
+    ),
+    "browser-service-routes-scan-19490": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Tracked Python under five code roots, a subset of tracked Python; the other trees grow at their "
+        "own rate, so a share of all Python would sink with nothing wrong.",
+    ),
 }

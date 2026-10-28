@@ -14,18 +14,19 @@
  */
 
 import { computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
+import TabbedRouteLayout from '@/components/common/TabbedRouteLayout.vue'
 import { useFleetStore } from '@/stores/fleet'
 import { useAuthStore } from '@/stores/auth'
 import { useFleetMetrics } from '@/composables/useFleetMetrics'
 
-const route = useRoute()
-const router = useRouter()
+const { t } = useI18n()
 const fleetStore = useFleetStore()
 
 const {
   systemHealth,
   activeAlertCount,
+  poller,
 } = useFleetMetrics({ autoFetch: true, pollInterval: 30000 })
 
 // Navigation tabs for monitoring sub-routes (all SLM monitoring - Issue #729)
@@ -48,19 +49,11 @@ const tabs = [
 const authStore = useAuthStore()
 const visibleTabs = computed(() => tabs.filter(t => !t.admin || authStore.isAdmin))
 
-// Get active tab based on current route
-const activeTab = computed(() => {
-  const path = route.path
-  const tab = tabs.find(t => path.startsWith(t.path))
-  return tab?.id ?? 'system'
-})
+// Tabs as the shared layout takes them (labels resolved here)
+const layoutTabs = computed(() => visibleTabs.value.map(tab => ({ ...tab, label: t(tab.nameKey) })))
 
 // Check if there are critical alerts
 const hasCriticalAlerts = computed(() => activeAlertCount.value > 0)
-
-function navigateTo(path: string) {
-  router.push(path)
-}
 
 function getStatusColor(status: string): string {
   switch (status) {
@@ -74,76 +67,49 @@ function getStatusColor(status: string): string {
 </script>
 
 <template>
-  <div class="h-full flex flex-col overflow-hidden bg-gray-50">
-    <!-- Header -->
-    <div class="bg-white border-b border-gray-200 px-6 py-4">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-4">
-          <h1 class="text-2xl font-bold text-gray-900">{{ $t('monitoringView.monitoring') }}</h1>
-          <div class="flex items-center gap-2" role="status" :aria-label="$t('monitoringView.systemHealthStatusAria', { status: systemHealth })">
-            <span
-              :class="['w-2.5 h-2.5 rounded-full', getStatusColor(systemHealth)]"
-              aria-hidden="true"
-            ></span>
-            <span class="text-sm text-gray-600 capitalize">{{ systemHealth }}</span>
-          </div>
-        </div>
-
-        <!-- Quick Stats -->
-        <div class="flex items-center gap-4 text-sm">
-          <div class="flex items-center gap-2 text-gray-600">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
-            </svg>
-            <span>{{ $t('monitoringView.countNodes', { count: fleetStore.nodeList.length }) }}</span>
-          </div>
-          <div v-if="hasCriticalAlerts" class="flex items-center gap-2 text-error-600" role="alert">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-            </svg>
-            <span>{{ $t('monitoringView.value0AlertPlural', { value0: activeAlertCount, plural: activeAlertCount !== 1 ? 's' : '' }) }}</span>
-          </div>
-        </div>
+  <TabbedRouteLayout
+    :title="t('monitoringView.monitoring')"
+    :tabs-label="t('monitoringView.monitoringSections')"
+    :tabs="layoutTabs"
+    default-tab="system"
+    :poller="poller"
+  >
+    <template #title-extra>
+      <div class="flex items-center gap-2" role="status" :aria-label="$t('monitoringView.systemHealthStatusAria', { status: systemHealth })">
+        <span
+          :class="['w-2.5 h-2.5 rounded-full', getStatusColor(systemHealth)]"
+          aria-hidden="true"
+        ></span>
+        <span class="text-sm text-gray-600 capitalize">{{ systemHealth }}</span>
       </div>
+    </template>
 
-      <!-- Tab Navigation -->
-      <div
-        class="flex gap-1 mt-4 -mb-4 overflow-x-auto"
-        role="tablist"
-        :aria-label="$t('monitoringView.monitoringSections')"
-      >
-        <button
-          v-for="tab in visibleTabs"
-          :key="tab.id"
-          @click="navigateTo(tab.path)"
-          role="tab"
-          :aria-selected="activeTab === tab.id"
-          :aria-current="activeTab === tab.id ? 'page' : undefined"
-          :class="[
-            'px-4 py-2.5 text-sm font-medium rounded-t-lg transition-colors flex items-center gap-2 whitespace-nowrap',
-            activeTab === tab.id
-              ? 'bg-gray-50 text-primary-600 border-t border-x border-gray-200 -mb-px'
-              : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-          ]"
-        >
+    <template #header-end>
+      <!-- Quick Stats -->
+      <div class="flex items-center gap-4 text-sm">
+        <div class="flex items-center gap-2 text-gray-600">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" :d="tab.icon" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2" />
           </svg>
-          {{ $t(tab.nameKey) }}
-          <span
-            v-if="tab.id === 'alerts' && activeAlertCount > 0"
-            class="px-1.5 py-0.5 text-xs font-bold bg-error-500 text-white rounded-full"
-            :aria-label="$t('monitoringView.activeAlertsCountAria', { count: activeAlertCount })"
-          >
-            {{ activeAlertCount }}
-          </span>
-        </button>
+          <span>{{ $t('monitoringView.countNodes', { count: fleetStore.nodeList.length }) }}</span>
+        </div>
+        <div v-if="hasCriticalAlerts" class="flex items-center gap-2 text-error-600" role="alert">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <span>{{ $t('monitoringView.value0AlertPlural', { value0: activeAlertCount, plural: activeAlertCount !== 1 ? 's' : '' }) }}</span>
+        </div>
       </div>
-    </div>
+    </template>
 
-    <!-- Content Area -->
-    <div class="flex-1 overflow-auto">
-      <router-view />
-    </div>
-  </div>
+    <template #tab-badge="{ tab }">
+      <span
+        v-if="tab.id === 'alerts' && activeAlertCount > 0"
+        class="px-1.5 py-0.5 text-xs font-bold bg-error-500 text-white rounded-full"
+        :aria-label="$t('monitoringView.activeAlertsCountAria', { count: activeAlertCount })"
+      >
+        {{ activeAlertCount }}
+      </span>
+    </template>
+  </TabbedRouteLayout>
 </template>

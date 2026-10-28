@@ -16,6 +16,7 @@ from typing import Any, Awaitable, Callable
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.tool_catalogue import ToolEffect, tools_with_all
+from autobot_shared.tool_timeouts import TOOL_CALL_TIMEOUT_MS, TOOL_GROUP_TIMEOUT_MS
 from autobot_shared.tracing import tool_span
 from code_intelligence.code_generation.diff import DiffGenerator
 from constants.status_enums import TaskStatus
@@ -72,8 +73,8 @@ class ParallelExecutorConfig:
     """
 
     max_parallel_calls: int = BatchConfig.DEFAULT_CONCURRENCY  # 10
-    per_call_timeout_ms: int = 30000  # Tool-specific timeout, kept as-is
-    group_timeout_ms: int = 60000  # Group-specific timeout, kept as-is
+    per_call_timeout_ms: int = TOOL_CALL_TIMEOUT_MS  # #19729
+    group_timeout_ms: int = TOOL_GROUP_TIMEOUT_MS  # #19729
     retry_failed: bool = True
     max_retries: int = RetryConfig.MIN_RETRIES  # 2
     collect_metrics: bool = True

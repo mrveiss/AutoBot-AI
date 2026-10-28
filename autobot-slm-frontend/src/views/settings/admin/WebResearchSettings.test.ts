@@ -12,6 +12,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { HttpError } from '@autobot/ui'
 import { createI18n } from 'vue-i18n'
 import WebResearchSettings from './WebResearchSettings.vue'
 import en from '@/locales/en.json'
@@ -152,7 +153,7 @@ describe('WebResearchSettings (SLM, #19217)', () => {
   })
 
   it('a 503 status is an unavailable researcher, and the page still renders', async () => {
-    api.getStatus.mockRejectedValue({ response: { status: 503 } })
+    api.getStatus.mockRejectedValue(new HttpError(503, 'Service Unavailable'))
     const wrapper = await mountView()
     expect(wrapper.find('[data-test="researcher-unavailable"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="card-researcher"]').text()).toBe(copy.researcher_unavailable)

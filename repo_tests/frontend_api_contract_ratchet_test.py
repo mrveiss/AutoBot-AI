@@ -31,7 +31,7 @@ not a style rule: it says nothing about any individual file, only that the
 totals must move one way.
 
 **This ratchet fails in BOTH directions**, matching
-`repo_tests/python_file_size_ratchet_baseline.py`. Growth is a regression.
+`scripts/python_file_size_known_large.py`. Growth is a regression.
 An unrecorded *shrink* is also a failure, because a baseline that silently
 drifts below the real number stops being evidence of anything — the fix is to
 lower the constant in the same commit that does the work, so the number stays
@@ -89,15 +89,15 @@ _BASELINES = {
         # tree, combined with the other cuts already on main.
         # train-35: useBackgroundTask clear-stuck drops its `apiClient.post<unknown>` (-1).
         # #19217: the web-research settings move to the SLM admin editor (-4).
-        "inline_generics": 556,
+        # #19532: the unmounted main-GUI SettingsPanel retired; the SLM admin views are the home (-3).
+        "inline_generics": 553,
     },
     "autobot-slm-frontend": {
         "clients": 1,
         "raw_fetch": 3,
-        # One holdout: `composables/useAutobotApi.ts` — a composable, not the
-        # transport client, so this one is a real bypass and should reach 0.
-        # The main frontend is already there.
-        "axios": 1,
+        # #12363 step 2: `composables/useAutobotApi.ts`, the last holdout, now builds
+        # an SlmApiClient, so the SLM matches the main frontend at 0.
+        "axios": 0,
         # #13139: 31 -> 29. Giving `/mfa/verify-login` and `/auth/sso/ldap/login`
         # a `response_model` retired `interface MFAVerifyResponse` (useMfaApi.ts)
         # and `interface LDAPLoginResponse` (useSsoApi.ts); both are now derived
@@ -274,7 +274,7 @@ def test_the_tree_this_guard_reads_is_present(app: str) -> None:
 def test_contract_sprawl_only_shrinks(app: str, dimension: str) -> None:
     """Growth is a regression; an unrecorded shrink is a stale baseline.
 
-    Both directions fail, matching `python_file_size_ratchet_baseline.py`. A
+    Both directions fail, matching `python_file_size_known_large.py`. A
     baseline that silently drifts below the real number stops being evidence of
     anything, so the constant must be lowered in the same commit that does the
     work — that keeps it a claim someone made on purpose.
