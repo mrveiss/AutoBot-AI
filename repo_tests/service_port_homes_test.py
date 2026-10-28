@@ -87,7 +87,7 @@ PINNED: tuple[Pin, ...] = (
     Pin(
         "npu_windows",
         "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/constants/network.ts",
-        r"NPU_WORKER_WINDOWS_PORT \|\| '(\d+)'",
+        r"'NPU_WORKER_WINDOWS_PORT', '(\d+)'",
         1,
     ),
     Pin(
