@@ -343,7 +343,7 @@ BASELINE: dict[str, int] = {
     "autobot-infrastructure/shared/config/grafana/dashboards/autobot-multi-machine.json": 44,
     "autobot-infrastructure/shared/config/grafana/grafana.ini": 1,
     "autobot-infrastructure/shared/mcp/tools/knowledge-base-mcp/README.md": 3,
-    "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/README.md": 5,
+    "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/README.md": 3,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/correlate-unfinished-tasks.cjs": 1,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/generate-insights.cjs": 2,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/ingest-conversation.cjs": 1,
