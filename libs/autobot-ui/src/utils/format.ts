@@ -52,6 +52,25 @@ function formatDurationValue(
       if (value < 1000) return `${value}ms`
       if (value < 60000) return `${(value / 1000).toFixed(1)}s`
       return `${roundFn(value / 60000)}m`
+    case 'msSeconds1dp':
+      if (value < 1000) return `${Math.round(value)}ms`
+      return `${(value / 1000).toFixed(1)}s`
+    case 'msSecondsMinutes': {
+      if (value < 1000) return `${Math.round(value)}ms`
+      if (value < 60000) return `${(value / 1000).toFixed(1)}s`
+      return `${Math.floor(value / 60000)}m ${Math.floor((value % 60000) / 1000)}s`
+    }
+    case 'msMinutesSeconds': {
+      const secs = Math.max(0, Math.round(value / 1000))
+      return secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`
+    }
+    case 'msCompound': {
+      const secs = Math.max(0, Math.floor(value / 1000))
+      if (secs < 60) return `${secs}s`
+      const mins = Math.floor(secs / 60)
+      if (mins < 60) return `${mins}m ${secs % 60}s`
+      return `${Math.floor(mins / 60)}h ${mins % 60}m`
+    }
     default:
       return nullText
   }
@@ -68,13 +87,26 @@ export function formatDuration(
   endTime: string | null | undefined
 ): string
 export function formatDuration(
+  startTime: string | null | undefined,
+  endTime: string | null | undefined,
+  options: FormatDurationOptions
+): string
+export function formatDuration(
   value: number | null | undefined,
   options: FormatDurationOptions
 ): string
 export function formatDuration(
   a: string | number | null | undefined,
-  b?: string | null | undefined | FormatDurationOptions
+  b?: string | null | undefined | FormatDurationOptions,
+  c?: FormatDurationOptions
 ): string {
+  if (c) {
+    // Range form in a numeric style: a missing start reads as the null text, a negative
+    // span (clock skew) as zero.
+    if (!a) return c.nullText ?? '-'
+    const to = b ? new Date(b as string).getTime() : Date.now()
+    return formatDurationValue(Math.max(0, to - new Date(a as string).getTime()), c)
+  }
   if (b !== null && typeof b === 'object') {
     return formatDurationValue(a as number | null | undefined, b)
   }
@@ -141,8 +173,8 @@ export function formatUptime(
 
 /** Options for {@link formatFileSize} / {@link formatBytes}. */
 export interface FormatBytesOptions {
-  /** Decimal places for scaled units (default `2`). */
-  decimals?: number
+  /** Decimal places for scaled units, or one per unit tier (default `2`). */
+  decimals?: number | readonly number[]
   /** Unit ladder (default `['Bytes','KB','MB','GB','TB','PB']`). */
   units?: readonly string[]
   /** Text for a zero-byte value (default `'0 ' + units[0]`). */
@@ -151,6 +183,8 @@ export interface FormatBytesOptions {
   invalidText?: string
   /** Text for null / undefined input (default same as `invalidText`). */
   nullText?: string
+  /** Separator between the number and the unit (default `' '`). */
+  separator?: string
   /** Keep trailing zeros instead of trimming via `parseFloat` (default `false`). */
   keepTrailingZeros?: boolean
   /** Render the base unit (`units[0]`) as an integer with no decimals (default `false`). */
@@ -178,11 +212,12 @@ export function formatFileSize(
   if (bytes < 0) return invalidText
 
   const k = 1024
-  const decimals = opts.decimals ?? 2
-  const dm = decimals < 0 ? 0 : decimals
-
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   const sizeIndex = Math.min(i, units.length - 1)
+  const decimals = Array.isArray(opts.decimals)
+    ? (opts.decimals[sizeIndex] ?? 2)
+    : ((opts.decimals as number | undefined) ?? 2)
+  const dm = decimals < 0 ? 0 : decimals
   const value = bytes / Math.pow(k, sizeIndex)
 
   let text: string
@@ -194,7 +229,7 @@ export function formatFileSize(
     text = String(parseFloat(value.toFixed(dm)))
   }
 
-  return `${text} ${units[sizeIndex]}`
+  return `${text}${opts.separator ?? ' '}${units[sizeIndex]}`
 }
 
 /** Alias for formatFileSize (backward compatibility). */
