@@ -23,6 +23,8 @@ models_dir: "/var/lib/autobot/models"
 install_openvino: true
 openvino_version: "2023.3.0"
 install_ollama: true
+# The embedding role's model, named so the kind check (#19736) knows which entry must embed.
+ollama_embedding_model: "nomic-embed-text:latest"
 # Required Ollama models — 6-tier agent mapping (#2553)
 ollama_models:
   - "llama3.2:1b"           # Routing tier (orchestrator)
@@ -31,7 +33,7 @@ ollama_models:
   - "mistral:7b-instruct"   # Instruction following tier
   - "dolphin-llama3:8b"     # System/uncensored tier
   - "qwen3.5:9b"            # Quality/tools tier (all tool-using agents)
-  - "nomic-embed-text:latest"  # Embeddings
+  - "{{ ollama_embedding_model }}"  # Embeddings
 
 # Node.js configuration
 install_nodejs: true

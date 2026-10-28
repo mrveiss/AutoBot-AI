@@ -18,6 +18,7 @@ reassembled below as helpers that take what they read and return what they
 produce, keeping every step the extraction had preserved.
 """
 
+import argparse
 import asyncio
 import fnmatch
 import glob
@@ -59,6 +60,7 @@ EXCLUDE_PATTERNS = [
     "**/test-results/**",
     "**/playwright-report/**",
     "**/.pytest_cache/**",
+    "**/system-state.md",  # generated run state, not documentation (kept from populate_docs_knowledge, #19339)
 ]
 
 # Queries used to smoke-test retrieval once the base has been populated.
@@ -103,13 +105,13 @@ def determine_category(rel_path: str) -> str:
     return "documentation"
 
 
-def collect_documentation_files(root: Path) -> List[str]:
-    """Expand DOC_PATTERNS under *root*, de-duplicate, and drop excluded paths."""
+def collect_documentation_files(root: Path, patterns: List[str] | None = None) -> List[str]:
+    """Expand *patterns* (default DOC_PATTERNS) under *root*, de-duplicate, and drop excluded paths."""
     all_files: List[str] = []
-    for pattern in DOC_PATTERNS:
+    for pattern in patterns or DOC_PATTERNS:
         all_files.extend(glob.glob(str(root / pattern), recursive=True))
 
-    unique_files = set(all_files)
+    unique_files = sorted(set(all_files))  # sorted: a caller that takes the first N gets the same N every run
     return [fp for fp in unique_files if os.path.isfile(fp) and not should_exclude_file(fp, EXCLUDE_PATTERNS)]
 
 
@@ -163,8 +165,8 @@ async def run_search_smoke_tests(kb) -> None:
             logger.info(f"  First result: {results[0].get('metadata', {}).get('relative_path', 'Unknown')}")
 
 
-async def add_documentation_to_kb():
-    """Add all project documentation to the knowledge base."""
+async def add_documentation_to_kb(patterns: List[str] | None = None):
+    """Add the project documentation matching *patterns* (default DOC_PATTERNS) to the knowledge base."""
     # Imported here rather than at module scope: ``knowledge/__init__`` loads
     # the composed class lazily (#1514), so a module-scope import would pull
     # redis, chromadb and llama_index in merely to inspect this script.
@@ -175,7 +177,7 @@ async def add_documentation_to_kb():
         raise RuntimeError("Knowledge base unavailable: initialization failed or retry cooldown active")
 
     root = project_root()
-    filtered_files = collect_documentation_files(root)
+    filtered_files = collect_documentation_files(root, patterns)
     logger.info(f"Found {len(filtered_files)} documentation files to add to knowledge base")
 
     success_count, error_count = await add_files_to_kb(filtered_files, root, kb)
@@ -187,5 +189,18 @@ async def add_documentation_to_kb():
     await run_search_smoke_tests(kb)
 
 
+def _parse_args(argv: List[str] | None = None) -> argparse.Namespace:
+    """The one KB populate entry point (#19339): the retired copies' variants are its options."""
+    parser = argparse.ArgumentParser(description="Add the project documentation to the knowledge base.")
+    parser.add_argument(
+        "--patterns",
+        nargs="+",
+        metavar="GLOB",
+        help=f"globs under the project root to add instead of the defaults ({', '.join(DOC_PATTERNS)}); "
+        "e.g. --patterns 'docs/**/*.md' for the docs tree only",
+    )
+    return parser.parse_args(argv)
+
+
 if __name__ == "__main__":
-    asyncio.run(add_documentation_to_kb())
+    asyncio.run(add_documentation_to_kb(_parse_args().patterns))

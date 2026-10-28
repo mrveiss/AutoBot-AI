@@ -41,6 +41,7 @@
   # (#2872) Intentional: status check for display only; non-zero rc
   # just means the service is inactive, reported below.
   failed_when: false
+  check_mode: false
 
 - name: Display dnsmasq status
   debug:

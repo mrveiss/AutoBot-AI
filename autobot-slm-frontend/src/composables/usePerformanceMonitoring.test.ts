@@ -29,6 +29,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { POLL_CONSECUTIVE_ERROR_LIMIT } from '@/constants/api-timeouts'
 import { usePerformanceMonitoring } from './usePerformanceMonitoring'
 
 const TOKEN_KEY = 'slm_access_token'
@@ -180,5 +181,50 @@ describe('usePerformanceMonitoring transport', () => {
     await fetchTraces({ hours: 24, page: 2 })
 
     expect(fetchMock.mock.calls[0][0]).toBe('/api/performance/traces?hours=24&page=2')
+  })
+})
+
+describe('usePerformanceMonitoring shared dashboard poller (#19482)', () => {
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    sessionStorage.clear()
+    localStorage.clear()
+    fetchMock = vi.fn(async () => jsonResponse({ avg_latency_ms: 1 }))
+    vi.stubGlobal('fetch', fetchMock)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+  })
+
+  it('reads the overview on startPolling() without waiting a full interval', async () => {
+    const { startPolling, stopPolling, poller } = usePerformanceMonitoring({ pollInterval: 1000 })
+
+    startPolling()
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(poller.isPolling.value).toBe(true)
+    stopPolling()
+  })
+
+  it('pauses after the consecutive error limit and Retry restarts it', async () => {
+    fetchMock.mockImplementation(async () => textResponse('down', 500))
+    const { poller } = usePerformanceMonitoring({ pollInterval: 1000 })
+
+    poller.start('')
+    await vi.advanceTimersByTimeAsync(1000 * POLL_CONSECUTIVE_ERROR_LIMIT)
+    expect(poller.pausedOnErrors.value).toBe(true)
+    expect(poller.isPolling.value).toBe(false)
+
+    fetchMock.mockImplementation(async () => jsonResponse({ avg_latency_ms: 1 }))
+    poller.start('')
+    await vi.advanceTimersByTimeAsync(0)
+    expect(poller.pausedOnErrors.value).toBe(false)
+    expect(poller.isPolling.value).toBe(true)
+    poller.stop()
   })
 })

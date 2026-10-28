@@ -476,11 +476,11 @@ async def get_llm_context(req: Request, body: ContextRequest, current_user: Dict
     - Metadata about retrieved content
 
     #16665: every fact entering the context is filtered to what the calling
-    user may see -- this feeds an LLM prompt, not just a display list.
+    user may see -- this feeds an LLM prompt, not just a display list. Owner ruling
+    2026-10-26: an admin is an ordinary caller here, with no visibility bypass.
     """
     kb = await get_or_create_knowledge_base(req.app, force_refresh=False)
     user_id, user_org_id, user_group_ids = extract_user_context_from_request(current_user)
-    is_admin = is_admin_role(current_user.get("role"))
 
     context_parts: List[str] = []
     citations: List[Dict] = []
@@ -497,7 +497,6 @@ async def get_llm_context(req: Request, body: ContextRequest, current_user: Dict
                 user_org_id=user_org_id,
                 user_group_ids=user_group_ids,
                 ownership_manager=getattr(kb, "ownership_manager", None),
-                is_admin=is_admin,
             )
             total_length = _process_fact_results(
                 fact_results,
@@ -521,7 +520,7 @@ async def get_llm_context(req: Request, body: ContextRequest, current_user: Dict
                 user_id,
                 user_org_id,
                 user_group_ids,
-                is_admin,
+                is_admin=False,
             )
         except Exception as e:
             logger.warning("Relation context failed: %s", e)
