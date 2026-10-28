@@ -43,7 +43,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_utils import decode_redis_value
 from constants.threshold_constants import QueryDefaults
-from knowledge.search_filters import caller_reader
+from knowledge.search_filters import caller_reader, scoped_reader
 from services.grounded_agent import get_grounded_agent
 from services.knowledge_grounding_models import Claim, VerificationMethod
 
@@ -129,7 +129,9 @@ async def ground_response(
         request.query[:80],
     )
 
-    user_id = caller_reader(current_user)  # #16665: 401 when the caller cannot be resolved
+    # #16665: a grounding pass runs on the caller's behalf, so it reads by the caller's normal
+    # rules even for an admin (scoped_reader); 401 when the caller cannot be resolved.
+    user_id = scoped_reader(current_user)
     agent = get_grounded_agent(req.app if req else None)
     grounded = await agent.respond_with_grounding(
         user_query=request.query,
