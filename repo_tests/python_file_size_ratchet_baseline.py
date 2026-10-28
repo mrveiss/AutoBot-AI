@@ -256,7 +256,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/llc/tests/test_work_items_idor.py": 602,
     "autobot-backend/llm_self_awareness.py": 708,
     "autobot-backend/llm_shared/optimization/attention_backend_test.py": 801,
-    "autobot-backend/llm_shared/optimization/flash_attention.py": 669,
+    "autobot-backend/llm_shared/optimization/flash_attention.py": 643,
     "autobot-backend/llm_shared/optimization/kv_cache_test.py": 675,
     "autobot-backend/llm_shared/optimization/layer_inference.py": 869,
     "autobot-backend/llm_shared/optimization/layer_inference_test.py": 715,
@@ -341,7 +341,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-backend/services/knowledge/test_kb_synthesizer.py": 802,
     "autobot-backend/services/llm_cost_tracker.py": 1166,  # #16230: MODEL_PRICING table removed
     "autobot-backend/services/llm_service.py": 1199,  # #16845: _track_usage delegated to llm_usage_recording
-    "autobot-backend/services/load_balancer.py": 685,
+    "autobot-backend/services/load_balancer.py": 677,
     "autobot-backend/services/nl_database_service.py": 775,
     "autobot-backend/services/notification_service.py": 614,
     "autobot-backend/services/npu_worker_manager.py": 1419,
