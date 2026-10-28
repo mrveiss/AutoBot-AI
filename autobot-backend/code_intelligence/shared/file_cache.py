@@ -47,7 +47,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
 from constants.path_constants import PATH
-from utils.file_categorization import is_skipped_path
+from utils.file_categorization import HTML_EXTENSIONS, is_skipped_path
 
 logger = get_logger(__name__)
 
@@ -61,7 +61,6 @@ TYPESCRIPT_EXTENSIONS: FrozenSet[str] = frozenset({".ts", ".tsx"})
 JAVASCRIPT_EXTENSIONS: FrozenSet[str] = frozenset({".js", ".jsx", ".mjs"})
 VUE_EXTENSIONS: FrozenSet[str] = frozenset({".vue"})
 CSS_EXTENSIONS: FrozenSet[str] = frozenset({".css", ".scss", ".sass", ".less"})
-HTML_EXTENSIONS: FrozenSet[str] = frozenset({".html", ".htm"})
 CONFIG_EXTENSIONS: FrozenSet[str] = frozenset({".json", ".yaml", ".yml", ".toml", ".ini"})
 SHELL_EXTENSIONS: FrozenSet[str] = frozenset({".sh", ".bash", ".zsh"})
 
