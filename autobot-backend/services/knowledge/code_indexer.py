@@ -44,6 +44,7 @@ from utils.file_categorization import (
     ALL_CODE_EXTENSIONS,
     JS_EXTENSIONS,
     PYTHON_EXTENSIONS,
+    SKIP_DIRS,
     TS_EXTENSIONS,
     VUE_EXTENSIONS,
 )
@@ -803,7 +804,6 @@ class CodeIndexer:
         indexer report full coverage of a corpus it had never fully seen.
         """
         root = Path(root_dir)
-        skip_dirs = {".git", "node_modules", "venv", ".venv", "__pycache__", ".mypy_cache"}
 
         def _walk() -> "tuple[list[Path], list[Path]]":
             found: list[Path] = []
@@ -814,7 +814,7 @@ class CodeIndexer:
                 # under `.worktrees/`, a home directory, a `.cache` — matched the
                 # hidden-directory rule and the walk silently collected nothing.
                 relative_parts = path.relative_to(root).parts
-                if path.is_dir() or any(part.startswith(".") or part in skip_dirs for part in relative_parts):
+                if path.is_dir() or any(part.startswith(".") or part in SKIP_DIRS for part in relative_parts):
                     continue
                 suffix = path.suffix.lower()
                 if suffix in _EXTRACTORS:
