@@ -81,12 +81,13 @@ ISSUE_17822_ENTRIES = tuple(
         (Path(__file__).parent / "fixtures" / "issue_17822_migration_gate_entries.json").read_text(encoding="utf-8")
     )
 )
-# 16 = the eleven #17822 entries plus `services/__init__.py`, `services/approval_gate_service.py` and
-# `llc/services/workspace_lease.py` (#17996), and `llc/services/company.py` + `company_ceo.py` (#15907's
-# concurrent-move test), which the migration tests import.
+# 17 = the eleven #17822 entries plus `services/__init__.py`, `services/approval_gate_service.py` and
+# `llc/services/workspace_lease.py` (#17996), `llc/services/company.py` + `company_ceo.py` (#15907's
+# concurrent-move test) and `llc/scheduler/run_status.py` (#19582's concurrent-claim test), which the
+# migration tests import.
 assert (
-    len(ISSUE_17822_ENTRIES) == 16
-), "the pinned migration-gate set is 16 entries; an emptied fixture would pin nothing"
+    len(ISSUE_17822_ENTRIES) == 17
+), "the pinned migration-gate set is 17 entries; an emptied fixture would pin nothing"
 ISSUE_17822_WORKFLOW = "migration-gate"
 EVENTS = ("push", "pull_request", "merge_group", "schedule", "workflow_dispatch")
 MG_SHA = "merge-group-base-sha"  # a stand-in value; only its presence or absence is compared
@@ -235,6 +236,9 @@ ALLOWED_ADDITIONS = {
             ".github/duplication-pins.json",
             # #19324: browser_port_single_home_19324_test.py pins this file's browser-port fallback.
             "autobot-frontend/vite.config.js",
+            # #19328: node_major_one_home_19328_test.py reads the Node home and the frontend lock.
+            ".nvmrc",
+            "autobot-frontend/package-lock.json",
         ]
     },
     # frontend_path_filter_mirror_test pins frontend-test.yml's on.push.paths to this file, so the
