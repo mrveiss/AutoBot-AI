@@ -6,65 +6,29 @@
 /**
  * #13079 — BackendSettings' "Test connection" probe.
  *
- * `probeBackendHealth` passes `validateStatus: () => true`, so a 4xx/5xx
- * resolves with its status instead of throwing. These tests pin that a 401
- * backend reports "failed" (reachable, not authorised) rather than erroring.
+ * `probeBackendHealth` uses the client's `rawRequest` with `keepSessionOn401`, so a
+ * 4xx/5xx resolves with its status instead of throwing (and does not end the session).
+ * These tests pin that a 401 backend reports "failed" (reachable, not authorised)
+ * rather than erroring.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
-import axios from 'axios'
+import { backendClient } from '@/testing/mockAutobotBackendClient'
 import BackendSettings from './BackendSettings.vue'
 import en from '@/locales/en.json'
-
-// #15761 review: BackendSettings.vue itself no longer imports useAuthStore,
-// but useAutobotApi() (its connection-probe transport, #13079) does -- it
-// reads authStore.token for the Authorization header. Without this mock,
-// that's a real Pinia store with no active Pinia instance in this test file,
-// which throws "getActivePinia() was called but there was no active Pinia"
-// on mount. token is the only field either caller still reads (getApiUrl,
-// the field the old version of this mock carried, no longer exists).
-vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({ token: 'tok' }),
-}))
 
 vi.mock('@/utils/slmSettingsApi', () => ({
   listSettings: vi.fn(async () => []),
   upsertSetting: vi.fn(async () => true),
 }))
 
-vi.mock('axios', () => {
-  // The real response interceptor is registered here so the probe can be shown
-  // NOT to trip it: `validateStatus` keeps a 401 on the success path.
-  const instance = {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    interceptors: {
-      request: { use: () => undefined },
-      response: {
-        use: (_ok: unknown, onError: (e: unknown) => Promise<unknown>) => {
-          ;(instance as unknown as { onError?: unknown }).onError = onError
-        },
-      },
-    },
-  }
-  return { default: { create: () => instance } }
-})
+vi.mock('@/utils/ApiClient', async (importOriginal) =>
+  (await import('@/testing/mockAutobotBackendClient')).withMockedBackendClient(importOriginal),
+)
 
 const i18n = createI18n({ legacy: true, locale: 'en', fallbackLocale: 'en', messages: { en } })
-
-type MockedClient = {
-  get: ReturnType<typeof vi.fn>
-  onError?: (e: unknown) => Promise<unknown>
-}
-
-function client(): MockedClient {
-  return (axios.create as unknown as () => MockedClient)()
-}
 
 type Vm = {
   connectionStatus: 'unknown' | 'connected' | 'failed'
@@ -79,25 +43,24 @@ function mountView(): Vm {
 describe('BackendSettings connection probe (#13079)', () => {
   beforeEach(() => {
     localStorage.clear()
-    const c = client()
-    c.get.mockReset()
-    c.get.mockResolvedValue({ data: { status: 'ok' }, status: 200 })
+    backendClient.rawRequest.mockReset()
+    backendClient.rawRequest.mockResolvedValue({ ok: true, status: 200 })
   })
 
-  it('probes GET /health through the shared client and reports connected', async () => {
+  it('probes /health through the shared client and reports connected', async () => {
     const vm = mountView()
     await flushPromises()
-    client().get.mockClear()
+    backendClient.rawRequest.mockClear()
 
     await vm.testConnection()
 
-    expect(client().get.mock.calls[0][0]).toBe('/health')
+    expect(backendClient.rawRequest.mock.calls[0][0]).toBe('/health')
     expect(vm.connectionStatus).toBe('connected')
     expect(vm.responseTime).not.toBeNull()
   })
 
   it('reports failed on a 401', async () => {
-    client().get.mockResolvedValue({ data: {}, status: 401 })
+    backendClient.rawRequest.mockResolvedValue({ ok: false, status: 401 })
 
     const vm = mountView()
     await flushPromises()
@@ -107,7 +70,7 @@ describe('BackendSettings connection probe (#13079)', () => {
   })
 
   it('reports failed when the backend is unreachable', async () => {
-    client().get.mockRejectedValue(new Error('Network Error'))
+    backendClient.rawRequest.mockRejectedValue(new Error('Network Error'))
 
     const vm = mountView()
     await flushPromises()

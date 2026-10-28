@@ -123,3 +123,35 @@ def test_readable_env_file_is_kept(tmp_path):
         tmp_path,
     )
     assert str(readable) in result.stdout, result.stdout + result.stderr
+
+
+# The compose-fleet-nodes default has ONE home: ``Settings.compose_nodes_enabled`` (#19323). Unset
+# ``SLM_COMPOSE_NODES`` follows the deployment mode -- on for docker_local (the compose stack), off
+# on a bare host -- and an explicit value wins. It lives here for the real-config subprocess above.
+@pytest.mark.parametrize(
+    "mode,flag,expected",
+    [
+        ("docker_local", None, "True"),
+        ("local", None, "False"),
+        ("docker_local", "false", "False"),
+        ("local", "true", "True"),
+        ("docker_local", "", "True"),  # an empty pass-through is unset, never an import crash
+        ("local", "  ", "False"),
+        ("docker_local", "maybe", "True"),  # a typo follows the mode with a warning, never a crash
+        ("local", "maybe", "False"),
+        ("local", " TRUE ", "True"),
+    ],
+)
+def test_the_default_follows_the_deployment_mode_and_an_explicit_value_wins(tmp_path, mode, flag, expected):
+    set_flag = (
+        "os.environ.pop('SLM_COMPOSE_NODES', None)" if flag is None else f"os.environ['SLM_COMPOSE_NODES'] = {flag!r}"
+    )
+    snippet = f"""
+        import os
+        os.environ['AUTOBOT_DEPLOYMENT_MODE'] = {mode!r}
+        {set_flag}
+        import config
+        print('ENABLED', config.settings.compose_nodes_enabled)
+    """
+    result = _run_in_subprocess(snippet, tmp_path)
+    assert f"ENABLED {expected}" in result.stdout, result.stderr

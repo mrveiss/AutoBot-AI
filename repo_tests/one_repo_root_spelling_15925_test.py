@@ -197,11 +197,14 @@ def test_a_ratchet_exemption_is_still_blocked() -> None:
     Without this the set above is a wish list: a file could shrink, the reason
     evaporate, and the entry sit there exempting a migration nothing prevents.
     """
-    from repo_tests.python_file_size_ratchet_baseline import RATCHET_BASELINE
+    from tools.lint._file_size_guard import load_known_large
 
     root = repo_root()
+    known_large = load_known_large(
+        str(root / "scripts" / "check_python_file_size.py"), "python_file_size_known_large.py"
+    )
     for rel in sorted(_RATCHET_BLOCKED):
-        ceiling = RATCHET_BASELINE.get(rel)
+        ceiling = known_large.get(rel)
         assert ceiling is not None, f"{rel} is exempted for the ratchet but carries no ceiling"
         lines = len((root / rel).read_text(encoding="utf-8").splitlines())
         assert lines >= ceiling, (
