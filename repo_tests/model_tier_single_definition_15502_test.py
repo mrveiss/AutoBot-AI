@@ -32,6 +32,7 @@ from typing import Any
 
 import pytest
 import yaml
+from repo_tests._ansible_tasks import loop_items, play_vars, resolved_vars
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
@@ -163,7 +164,7 @@ def test_ai_stack_model_vars_equal_their_tier() -> None:
 
 def test_agent_config_ollama_models_are_the_canonical_local_models() -> None:
     """Mirror: the provisioning list must pull exactly the models the tiers can select."""
-    assert set(_load_yaml(_AGENT_CONFIG_ROLE)["ollama_models"]) == _local_models()
+    assert set(resolved_vars(repo_root() / _AGENT_CONFIG_ROLE)["ollama_models"]) == _local_models()
 
 
 def _env_registry_defaults() -> dict[str, str]:
@@ -508,23 +509,25 @@ def test_the_node_classes_together_cover_every_canonical_local_tier_model() -> N
     assert not set(defaults["llm_cpu_models"]) & set(defaults["llm_gpu_models"]), "a model sits in both classes"
 
 
-def _pull_loops(node: Any) -> list[list[str]]:
-    """The `loop:` of every task named `Pull required Ollama models...`, at any depth of a play."""
+def _pull_loops(node: Any, names: dict | None = None) -> list[list[str]]:
+    """The `loop:` of every `Pull required Ollama models...` task at any depth; a `{{ name }}` loop via `names`."""
     found: list[list[str]] = []
     if isinstance(node, dict):
-        if str(node.get("name", "")).startswith("Pull required Ollama models") and isinstance(node.get("loop"), list):
-            found.append(node["loop"])
+        if str(node.get("name", "")).startswith("Pull required Ollama models"):
+            found += loop_items(node.get("loop"), names or {})
         for value in node.values():
-            found += _pull_loops(value)
+            found += _pull_loops(value, names)
     elif isinstance(node, list):
         for item in node:
-            found += _pull_loops(item)
+            found += _pull_loops(item, names)
     return found
 
 
 @pytest.mark.parametrize("rel", _PULL_PLAYBOOKS)
 def test_a_deploy_playbook_inline_pull_list_is_the_canonical_local_models(rel: str) -> None:
-    loops = [loop for doc in yaml.safe_load_all(_read(rel)) for loop in _pull_loops(doc)]
+    playbook = repo_root() / rel
+    plays = [play for doc in yaml.safe_load_all(_read(rel)) if doc for play in doc]
+    loops = [loop for play in plays for loop in _pull_loops(play, play_vars(play, playbook))]
     assert len(loops) == 1, f"{rel}: expected one inline Ollama pull list, found {len(loops)}"
     assert sorted(loops[0]) == sorted(_local_models()), f"#15502: {rel} pulls {sorted(loops[0])}"
 

@@ -12,6 +12,7 @@
 
 import { ref, computed, readonly, onUnmounted } from 'vue'
 import { useAutobotApi, autobotApiErrorMessage } from '@/composables/useAutobotApi'
+import i18n from '@/i18n'
 import { SKILL_APPROVAL_POLL_TIMEOUT_MS } from '@/constants/api-timeouts'
 
 // =============================================================================
@@ -214,11 +215,13 @@ export function useSkills() {
 // Helpers
 // =============================================================================
 
+const t = i18n.global.t.bind(i18n.global)
+
 function _extractError(err: unknown): string {
   // `autobotApiErrorMessage` is the one implementation of the FastAPI
   // `{ detail }` unwrap this used to hand-roll via `axios.isAxiosError`. Its
-  // fallback chain is identical: `response.data.detail`, then `err.message`.
-  return autobotApiErrorMessage(err, String(err))
+  // fallback chain is the `HttpError` detail, then `err.message`.
+  return autobotApiErrorMessage(err, t('skills.errors.generic'))
 }
 
 // =============================================================================
@@ -245,7 +248,7 @@ export function useSkillGovernance() {
     try {
       repos.value = await api.getSkillRepos()
     } catch (e: unknown) {
-      error.value = autobotApiErrorMessage(e, 'Failed to fetch repos')
+      error.value = autobotApiErrorMessage(e, t('skills.errors.fetchReposFailed'))
     } finally {
       loading.value = false
     }
@@ -259,7 +262,7 @@ export function useSkillGovernance() {
       await fetchRepos()
       return data
     } catch (e: unknown) {
-      error.value = autobotApiErrorMessage(e, 'Failed to add repo')
+      error.value = autobotApiErrorMessage(e, t('skills.errors.addRepoFailed'))
       throw e
     }
   }
@@ -270,7 +273,7 @@ export function useSkillGovernance() {
       await fetchRepos()
       return data
     } catch (e: unknown) {
-      error.value = autobotApiErrorMessage(e, 'Failed to sync repo')
+      error.value = autobotApiErrorMessage(e, t('skills.errors.syncRepoFailed'))
       throw e
     }
   }
@@ -287,7 +290,7 @@ export function useSkillGovernance() {
     try {
       approvals.value = await api.getSkillApprovals(timeoutMs)
     } catch (e: unknown) {
-      error.value = autobotApiErrorMessage(e, 'Failed to fetch approvals')
+      error.value = autobotApiErrorMessage(e, t('skills.errors.fetchApprovalsFailed'))
     }
   }
 
@@ -305,7 +308,7 @@ export function useSkillGovernance() {
       })
       await fetchApprovals()
     } catch (e: unknown) {
-      error.value = autobotApiErrorMessage(e, 'Failed to process approval')
+      error.value = autobotApiErrorMessage(e, t('skills.errors.processApprovalFailed'))
     }
   }
 
@@ -314,7 +317,7 @@ export function useSkillGovernance() {
       const data = await api.getSkillDrafts()
       drafts.value = Array.isArray(data) ? data : []
     } catch (e: unknown) {
-      error.value = autobotApiErrorMessage(e, 'Failed to fetch drafts')
+      error.value = autobotApiErrorMessage(e, t('skills.errors.fetchDraftsFailed'))
     }
   }
 
@@ -322,7 +325,7 @@ export function useSkillGovernance() {
     try {
       return await api.testSkillDraft(skillId)
     } catch (e: unknown) {
-      error.value = autobotApiErrorMessage(e, 'Test draft failed')
+      error.value = autobotApiErrorMessage(e, t('skills.errors.testDraftFailed'))
       throw e
     }
   }
@@ -333,7 +336,7 @@ export function useSkillGovernance() {
       await fetchDrafts()
       return data
     } catch (e: unknown) {
-      error.value = autobotApiErrorMessage(e, 'Failed to promote draft')
+      error.value = autobotApiErrorMessage(e, t('skills.errors.promoteDraftFailed'))
       throw e
     }
   }
@@ -342,7 +345,7 @@ export function useSkillGovernance() {
     try {
       governanceConfig.value = await api.getSkillGovernance()
     } catch (e: unknown) {
-      error.value = autobotApiErrorMessage(e, 'Failed to fetch governance config')
+      error.value = autobotApiErrorMessage(e, t('skills.errors.fetchGovernanceFailed'))
     }
   }
 
@@ -351,7 +354,7 @@ export function useSkillGovernance() {
       await api.updateSkillGovernanceMode(mode)
       await fetchGovernance()
     } catch (e: unknown) {
-      error.value = autobotApiErrorMessage(e, 'Failed to update governance mode')
+      error.value = autobotApiErrorMessage(e, t('skills.errors.updateGovernanceModeFailed'))
     }
   }
 

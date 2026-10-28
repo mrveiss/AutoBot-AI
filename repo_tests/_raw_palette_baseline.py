@@ -208,12 +208,12 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:bg-emerald-500/20": 2,
     "slm:bg-emerald-600": 3,
     "slm:bg-emerald-700": 1,
-    "slm:bg-gray-100": 198,  # #14780 BaseDrawer: 199 -> 198
+    "slm:bg-gray-100": 197,  # #14780 BaseDrawer: 199 -> 198; TabbedRouteLayout (#19858): 198 -> 197
     "slm:bg-gray-200": 99,  # #14780 BaseSwitch: 118 -> 100, LoadBalancingView 100 -> 99
     "slm:bg-gray-300": 9,
     "slm:bg-gray-400": 41,
     "slm:bg-gray-400/15": 1,
-    "slm:bg-gray-50": 237,  # #14780 BasePagination: 249 -> 237
+    "slm:bg-gray-50": 235,  # #14780 BasePagination: 249 -> 237; TabbedRouteLayout (#19858): 237 -> 235
     "slm:bg-gray-500": 4,
     "slm:bg-gray-500/20": 4,
     "slm:bg-gray-600": 8,  # #14777 batch 2: 9 -> 8
@@ -283,7 +283,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:border-cyan-500/30": 2,
     "slm:border-emerald-500/30": 2,
     "slm:border-gray-100": 55,
-    "slm:border-gray-200": 309,  # #14780 BaseDrawer: 313 -> 309
+    "slm:border-gray-200": 307,  # #14780 BaseDrawer: 313 -> 309; TabbedRouteLayout (#19858): 309 -> 307
     "slm:border-gray-300": 322,  # #14780 BaseSwitch: 340 -> 322
     "slm:border-gray-50": 4,
     "slm:border-gray-500": 2,
@@ -343,10 +343,10 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:text-gray-300": 50,  # #14777 batch 2: 51 -> 50
     "slm:text-gray-400": 214,  # #14780 BaseDrawer: 217 -> 214
     "slm:text-gray-500": 869,  # #14780 BasePagination: 874 -> 869
-    "slm:text-gray-600": 265,  # #14780 BaseDrawer: 268 -> 265
+    "slm:text-gray-600": 264,  # #14780 BaseDrawer: 268 -> 265; TabbedRouteLayout (#19858): 265 -> 264
     "slm:text-gray-700": 428,  # #18734: 431 -> 428
     "slm:text-gray-800": 41,  # #14777: 43 -> 41, SLM dialogs moved onto the kit BaseModal
-    "slm:text-gray-900": 439,  # #14780 BaseDrawer: 442 -> 439
+    "slm:text-gray-900": 437,  # #14780 BaseDrawer: 442 -> 439; TabbedRouteLayout (#19858): 439 -> 437
     "slm:text-green-300": 4,
     "slm:text-green-400": 4,
     "slm:text-green-500": 2,  # #18863 SLM notices onto BaseAlert (5 -> 2)
