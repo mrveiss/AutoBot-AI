@@ -582,7 +582,7 @@
         "type": "object"
       },
       "AgentResponse": {
-        "description": "Agent response with LLM config.",
+        "description": "Agent response with LLM config (the LLM fields are AgentLLMConfig's, #19730).",
         "properties": {
           "agent_id": {
             "title": "Agent Id",
@@ -669,11 +669,11 @@
           }
         },
         "required": [
+          "llm_provider",
+          "llm_model",
           "id",
           "agent_id",
           "name",
-          "llm_provider",
-          "llm_model",
           "created_at",
           "updated_at"
         ],
@@ -7655,9 +7655,9 @@
             "type": "string"
           },
           "timeout": {
-            "default": 30,
+            "default": 30.0,
             "title": "Timeout",
-            "type": "integer"
+            "type": "number"
           }
         },
         "required": [
