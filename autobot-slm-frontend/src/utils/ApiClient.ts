@@ -69,6 +69,12 @@ export interface RequestOptions {
    */
   suppressErrorLog?: boolean
   /**
+   * When true, a 401 is returned to the caller without clearing the session: for
+   * connectivity diagnostics, which report a status instead of acting on it (#12363).
+   * Defaults to the client's `setKeepSessionOn401` setting.
+   */
+  keepSessionOn401?: boolean
+  /**
    * Query parameters, appended URL-encoded to the endpoint (#12363). `null` and
    * `undefined` values are left out, so an optional filter needs no branching.
    */
@@ -97,6 +103,7 @@ export class SlmApiClient {
   private baseUrlOverride: string | null = null
   private defaultHeaders: Record<string, string>
   private defaultTimeout: number
+  private defaultKeepSessionOn401 = false
 
   constructor() {
     this.defaultHeaders = {
@@ -113,6 +120,12 @@ export class SlmApiClient {
   // Public setter for default timeout.
   setTimeout(timeout: number): void {
     this.defaultTimeout = timeout
+  }
+
+  // A client whose 401 does not mean the SLM session is gone (the main backend until
+  // one identity spans both backends, #10193) surfaces the 401 instead of logging out.
+  setKeepSessionOn401(keep: boolean): void {
+    this.defaultKeepSessionOn401 = keep
   }
 
   getConfiguration(): Record<string, unknown> {
@@ -177,6 +190,7 @@ export class SlmApiClient {
       timeout = this.defaultTimeout,
       signal: externalSignal,
       params,
+      keepSessionOn401 = this.defaultKeepSessionOn401,
     } = options
 
     const baseUrl = this.resolveBaseUrl()
@@ -238,7 +252,7 @@ export class SlmApiClient {
       // Handle 401 — redirect to login (skip for auth/mfa endpoints). Pass
       // whether THIS request carried a bearer token so we only clear + redirect
       // on a genuine rejection of an authenticated request.
-      if (response.status === 401 && !this.isAuthEndpoint(endpoint)) {
+      if (response.status === 401 && !this.isAuthEndpoint(endpoint) && !keepSessionOn401) {
         this.handleUnauthorized(endpoint, authToken != null)
       }
 
