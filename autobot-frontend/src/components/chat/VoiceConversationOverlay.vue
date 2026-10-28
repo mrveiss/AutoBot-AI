@@ -465,7 +465,7 @@ onBeforeUnmount(() => {
   letter-spacing: 0.04em;
 }
 
-.voice-overlay__lang-badge i {
+.voice-overlay__lang-badge .icon {
   font-size: 0.625rem;
   opacity: 0.7;
 }

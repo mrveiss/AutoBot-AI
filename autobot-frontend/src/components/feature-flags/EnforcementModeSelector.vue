@@ -151,7 +151,7 @@ const selectMode = (mode: EnforcementMode) => {
   gap: var(--spacing-2-5);
 }
 
-.selector-header h3 i {
+.selector-header h3 .icon {
   color: var(--color-primary);
 }
 
@@ -328,8 +328,8 @@ const selectMode = (mode: EnforcementMode) => {
   color: var(--color-info);
 }
 
-.mode-warning i,
-.mode-info i {
+.mode-warning .icon,
+.mode-info .icon {
   font-size: var(--text-lg);
   flex-shrink: 0;
   margin-top: var(--spacing-0-5);
