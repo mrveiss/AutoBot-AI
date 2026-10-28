@@ -548,6 +548,17 @@
       vars:
         db_env_prefix: SLM
       tags: [slm, slm-backend, credentials]
+    #
+    # #19848: the role's postgresql.conf, so a change to a rendered setting (#19421's
+    # listen_addresses) reaches an existing host. config_file skips a host without PostgreSQL,
+    # needs no db_user and never touches pg_hba; PostgreSQL restarts only if the file changed.
+    - name: "[PLAY 1] SLM | Apply PostgreSQL's server config (#19848)"
+      ansible.builtin.include_role:
+        name: postgresql
+        tasks_from: config_file
+        apply:
+          become: true
+      tags: [slm, postgresql]
 
     # --- SLM custom migrations (#1630) ---
     - name: "[PLAY 1] SLM | Load db credentials for migration (#2293)"
@@ -1041,6 +1052,17 @@
         db_env_prefix: AUTOBOT
       when: "'backend' in group_names"
       tags: [backend, env, credentials]
+
+    # #19848: as in PLAY 1 -- the backend role installs PostgreSQL for user management (#2953),
+    # so its postgresql.conf follows the role on every Code Sync too.
+    - name: "[PLAY 2] Backend | Apply PostgreSQL's server config (#19848)"
+      ansible.builtin.include_role:
+        name: postgresql
+        tasks_from: config_file
+        apply:
+          become: true
+      when: "'backend' in group_names"
+      tags: [backend, postgresql]
 
     # Migrations moved AFTER the .env regen so they run with the fresh
     # credentials and BEFORE the service restart — see the
@@ -1581,6 +1603,8 @@
         'npu' in group_names
       failed_when: false
       tags: [npu, npu-worker, restart]
+      check_mode: false
+      changed_when: false
 
     - name: "[PLAY 2] NPU | Warn if service not active (#1633)"
       debug:
@@ -2206,6 +2230,15 @@
         apply:
           become: true
       tags: [database, redis, chromadb, deploy]
+
+    # #19848: as in PLAY 1 -- the database node's postgresql.conf, before the handler flush below.
+    - name: "[PLAY 2b] Database | Apply PostgreSQL's server config (#19848)"
+      ansible.builtin.include_role:
+        name: postgresql
+        tasks_from: config_file
+        apply:
+          become: true
+      tags: [database, postgresql]
 
     # Flush here rather than letting the handlers fall to the end of the play.
     # #12886 recorded both halves of why that matters: queued handlers are

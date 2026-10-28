@@ -23,6 +23,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.slug import sanitize_token
 from autobot_shared.ssot_config import QUALITY_MODEL, config
 from autobot_shared.ssot_constants import TTL_1_HOUR
+from utils.file_categorization import SKIP_DIRS
 from utils.line_index import LineIndex  # #12884
 
 # Issue #542: Handle imports for both standalone execution and backend import
@@ -126,36 +127,28 @@ def _is_private_ip(value: str) -> bool:
 
 
 # Issue #632: Directories to skip during analysis (aligned with shell script)
-_SKIP_DIRECTORIES = (
-    "__pycache__",
-    ".git",
-    "node_modules",
-    ".venv",
-    "venv",
-    "env",
-    "tests",
-    "test",
-    "testing",
+# Canonical skip dirs plus extras: tests, fixtures and static assets hold no deployable config (#632, aligned with the shell script).
+# bin/ stays scanned: deploy scripts there are where hardcoded IPs hide.
+_SKIP_DIRECTORIES = (SKIP_DIRS - {"bin"}) | {
+    ".eggs",
+    ".mypy_cache",
+    "__tests__",
+    "archive",
+    "assets",
     "benchmark",
     "benchmarks",
-    ".pytest_cache",
-    ".mypy_cache",
-    ".tox",
-    "htmlcov",
-    "dist",
-    "build",
     "egg-info",
-    ".eggs",
-    "migrations",
+    "env",
     "fixtures",
+    "migrations",
     "mocks",
+    "static",
     "stubs",
     "templates",
-    "static",
-    "assets",
-    "archive",
-    "__tests__",  # Issue #632: Added from shell script
-)
+    "test",
+    "testing",
+    "tests",
+}
 
 # Issue #632: File patterns to skip (aligned with shell script)
 _SKIP_FILE_PATTERNS = (
@@ -486,13 +479,15 @@ class EnvironmentAnalyzer:
 
         for pattern in patterns:
             for file_path in root.glob(pattern):
-                await self._process_file_for_values(file_path, hardcoded_values)
+                await self._process_file_for_values(file_path, hardcoded_values, root)
 
         return hardcoded_values
 
-    async def _process_file_for_values(self, file_path: Path, hardcoded_values: list[HardcodedValue]) -> None:
+    async def _process_file_for_values(
+        self, file_path: Path, hardcoded_values: list[HardcodedValue], root: Path | None = None
+    ) -> None:
         """Process a single file for hardcoded values (Issue #340 - extracted)"""
-        if not file_path.is_file() or self._should_skip_file(file_path):
+        if not file_path.is_file() or self._should_skip_file(file_path, root):
             return
 
         try:
@@ -501,9 +496,16 @@ class EnvironmentAnalyzer:
         except Exception as e:
             logger.warning(f"Failed to scan {file_path}: {e}")
 
-    def _should_skip_file(self, file_path: Path) -> bool:
-        """Issue #632: Check if file should be skipped (aligned with shell script)"""
-        path_str = str(file_path)
+    def _should_skip_file(self, file_path: Path, root: Path | None = None) -> bool:
+        """Issue #632: Check if file should be skipped (aligned with shell script).
+
+        Directory names are matched below ``root`` when given, so a scan rooted
+        inside a skipped directory (a worktree checkout) still sees its files.
+        """
+        try:
+            path_str = str(file_path.relative_to(root)) if root is not None else str(file_path)
+        except ValueError:
+            path_str = str(file_path)
         file_name = file_path.name
 
         # Check directory-based exclusions
