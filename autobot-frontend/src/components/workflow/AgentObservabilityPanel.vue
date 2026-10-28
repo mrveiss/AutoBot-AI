@@ -198,7 +198,7 @@ function formatPercent(score: number): string {
   gap: var(--spacing-2-5);
 }
 
-.panel-header h3 i {
+.panel-header h3 .icon {
   color: var(--color-primary);
 }
 
@@ -237,8 +237,8 @@ function formatPercent(score: number): string {
   text-align: center;
 }
 
-.empty-state i,
-.loading-state i {
+.empty-state .icon,
+.loading-state .icon {
   font-size: var(--text-4xl);
   margin-bottom: var(--spacing-2-5);
 }

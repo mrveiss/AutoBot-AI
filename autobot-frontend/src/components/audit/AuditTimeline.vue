@@ -222,7 +222,7 @@ function toggleDetails(id: string) {
   gap: var(--spacing-2);
 }
 
-.header-content h3 i {
+.header-content h3 .icon {
   color: var(--color-primary);
 }
 
@@ -265,8 +265,8 @@ function toggleDetails(id: string) {
   gap: var(--spacing-2);
 }
 
-.loading-state i,
-.empty-state i {
+.loading-state .icon,
+.empty-state .icon {
   font-size: var(--text-3xl);
 }
 
@@ -394,7 +394,7 @@ function toggleDetails(id: string) {
   color: var(--text-secondary);
 }
 
-.meta-item i {
+.meta-item .icon {
   color: var(--text-tertiary);
 }
 

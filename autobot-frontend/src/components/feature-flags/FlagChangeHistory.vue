@@ -180,7 +180,7 @@ const formatRelativeTime = (timestamp: string) => {
   gap: var(--spacing-2-5);
 }
 
-.section-header h3 i {
+.section-header h3 .icon {
   color: var(--color-primary);
 }
 

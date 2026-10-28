@@ -475,15 +475,15 @@ onUnmounted(() => {
   min-width: 140px;
 }
 
-.stat-chip i {
+.stat-chip .icon {
   font-size: var(--text-base);
   color: var(--text-secondary);
 }
 
-.stat-chip:nth-child(1) i { color: var(--color-success); }
-.stat-chip:nth-child(2) i { color: var(--color-warning); }
-.stat-chip:nth-child(3) i { color: var(--color-info); }
-.stat-chip:nth-child(4) i { color: var(--color-error); }
+.stat-chip:nth-child(1) .icon { color: var(--color-success); }
+.stat-chip:nth-child(2) .icon { color: var(--color-warning); }
+.stat-chip:nth-child(3) .icon { color: var(--color-info); }
+.stat-chip:nth-child(4) .icon { color: var(--color-error); }
 
 .stat-value {
   font-size: var(--text-lg);
@@ -513,7 +513,7 @@ onUnmounted(() => {
   gap: var(--spacing-2-5);
 }
 
-.section-header h3 i {
+.section-header h3 .icon {
   color: var(--color-primary);
 }
 
@@ -552,8 +552,8 @@ onUnmounted(() => {
   text-align: center;
 }
 
-.empty-state i,
-.loading-state i {
+.empty-state .icon,
+.loading-state .icon {
   font-size: 40px;
   margin-bottom: var(--spacing-3);
 }

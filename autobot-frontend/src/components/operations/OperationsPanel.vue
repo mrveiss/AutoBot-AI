@@ -165,7 +165,7 @@ function handleClearFilter() {
   color: var(--text-tertiary);
 }
 
-.empty-placeholder i {
+.empty-placeholder .icon {
   font-size: var(--text-4xl);
   color: var(--text-tertiary);
 }

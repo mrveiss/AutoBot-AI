@@ -299,7 +299,7 @@ const getPhaseIcon = (status: string): IconName => {
   font-size: var(--text-sm);
 }
 
-.stat-item i {
+.stat-item .icon {
   color: var(--chart-cyan);
 }
 </style>

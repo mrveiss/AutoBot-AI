@@ -299,7 +299,7 @@ const closeModal = () => {
   gap: var(--spacing-2-5);
 }
 
-.header-info h3 i {
+.header-info h3 .icon {
   color: var(--color-primary);
 }
 
@@ -380,7 +380,7 @@ const closeModal = () => {
   margin-bottom: var(--spacing-2);
 }
 
-.global-mode-banner i {
+.global-mode-banner .icon {
   color: var(--color-primary);
 }
 

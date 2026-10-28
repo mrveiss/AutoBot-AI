@@ -232,7 +232,7 @@ async function handleSubmit(): Promise<void> {
   margin: var(--spacing-0);
 }
 
-.runner-header h4 i {
+.runner-header h4 .icon {
   color: var(--color-primary);
 }
 

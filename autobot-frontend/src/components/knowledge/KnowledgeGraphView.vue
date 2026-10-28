@@ -176,7 +176,7 @@ function navigateTo(path: string): void {
   gap: var(--spacing-sm);
 }
 
-.sidebar-header h3 i {
+.sidebar-header h3 .icon {
   color: var(--color-primary);
 }
 
@@ -196,7 +196,7 @@ function navigateTo(path: string): void {
   font-size: var(--text-sm);
 }
 
-.stat-row i {
+.stat-row .icon {
   color: var(--color-primary);
   width: 16px;
   text-align: center;
@@ -243,7 +243,7 @@ function navigateTo(path: string): void {
   border-left: 3px solid var(--color-primary);
 }
 
-.nav-item i {
+.nav-item .icon {
   width: 18px;
   text-align: center;
   font-size: var(--text-sm);
@@ -304,7 +304,7 @@ function navigateTo(path: string): void {
   margin: 0 0 var(--spacing-sm) 0;
 }
 
-.welcome-card h2 i {
+.welcome-card h2 .icon {
   color: var(--color-primary);
 }
 

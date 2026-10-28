@@ -447,7 +447,7 @@ const closeDialog = async () => {
   background-color: var(--bg-secondary);
 }
 
-.search-result-item i {
+.search-result-item .icon {
   color: var(--text-muted);
 }
 
@@ -501,7 +501,7 @@ const closeDialog = async () => {
   flex: 1;
 }
 
-.access-info i {
+.access-info .icon {
   color: var(--text-muted);
 }
 
