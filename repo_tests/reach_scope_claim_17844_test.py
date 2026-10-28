@@ -352,6 +352,13 @@ _DECLARED_SCOPES = {
         "tools",
     ),
     "llc-actor-id-scan": ("autobot-backend/llc",),
+    "cache-never-in-repo": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
+    "node-major-literals": (
+        ".github",
+        "autobot-slm-backend/ansible",
+        "autobot-infrastructure/shared/scripts",
+        "install.sh",
+    ),
     "service-port-homes-scan": (
         "autobot-backend",
         "autobot-slm-backend",
