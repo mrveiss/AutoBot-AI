@@ -9,8 +9,10 @@
  * Displays logs from all services with real-time updates and filtering.
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { PollingPausedAlert } from '@autobot/ui'
+import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
 import { createLogger } from '@/utils/debugUtils'
@@ -53,7 +55,6 @@ const searchQuery = ref('')
 const selectedLevel = ref<string>('all')
 const selectedSource = ref<string>('all')
 
-let refreshInterval: ReturnType<typeof setInterval> | null = null
 
 // Available log levels and sources
 const logLevels = ['all', 'debug', 'info', 'warning', 'error', 'critical']
@@ -127,7 +128,7 @@ const severityToLevel: Record<string, LogRow['level']> = {
   critical: 'critical',
 }
 
-async function fetchLogs() {
+async function fetchLogs(): Promise<boolean> {
   isLoading.value = true
   try {
     const data = await getMonitoringLogs({ per_page: 200 })
@@ -139,9 +140,11 @@ async function fetchLogs() {
       event_id: entry.event_id,
       node_id: entry.node_id,
     }))
+    return true
   } catch (err) {
     logger.error('Failed to fetch logs:', err)
     logs.value = []
+    return false
   } finally {
     isLoading.value = false
   }
@@ -151,25 +154,21 @@ function clearLogs() {
   logs.value = []
 }
 
+// #19482: shared dashboard policy (stop on unmount and after repeated failures, paused alert)
+const logsPoller = useDashboardPoller(async () => {
+  throwUnlessLoaded(await fetchLogs())
+}, 5000)
+
+// Refresh restarts the poller (also a paused one); with auto-refresh off it is a one-off read
+function refreshLogs() {
+  if (isAutoRefresh.value) logsPoller.start('')
+  else void fetchLogs()
+}
+
 function toggleAutoRefresh() {
   isAutoRefresh.value = !isAutoRefresh.value
-  if (isAutoRefresh.value) {
-    startAutoRefresh()
-  } else {
-    stopAutoRefresh()
-  }
-}
-
-function startAutoRefresh() {
-  if (refreshInterval) return
-  refreshInterval = setInterval(fetchLogs, 5000)
-}
-
-function stopAutoRefresh() {
-  if (refreshInterval) {
-    clearInterval(refreshInterval)
-    refreshInterval = null
-  }
+  if (isAutoRefresh.value) logsPoller.start('')
+  else logsPoller.stop()
 }
 
 // =============================================================================
@@ -252,20 +251,14 @@ function switchSubTab(tab: LogSubTab) {
 }
 
 onMounted(() => {
-  fetchLogs()
-  if (isAutoRefresh.value) {
-    startAutoRefresh()
-  }
+  refreshLogs()
   fleetStore.fetchNodes()
-})
-
-onUnmounted(() => {
-  stopAutoRefresh()
 })
 </script>
 
 <template>
   <div class="p-6">
+    <PollingPausedAlert :poller="logsPoller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mb-6" @retry="logsPoller.start('')" />
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <h2 class="text-xl font-bold text-gray-900">{{ $t('monitoring.logViewer.logViewer') }}</h2>
@@ -283,7 +276,7 @@ onUnmounted(() => {
           {{ isAutoRefresh ? $t('monitoring.logViewer.live') : $t('monitoring.logViewer.paused') }}
         </button>
         <button
-          @click="fetchLogs"
+          @click="refreshLogs"
           :disabled="isLoading"
           class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
         >

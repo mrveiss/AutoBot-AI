@@ -2750,7 +2750,7 @@ class NodeExecRequest(BaseModel):
     """Request body for executing a command on a node."""
 
     command: str
-    timeout: int = 30
+    timeout: float = config.timeout.subprocess  # #19730: fractional budgets kept
 
 
 class NodeExecResponse(BaseModel):

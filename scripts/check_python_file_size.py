@@ -88,14 +88,6 @@ MAX_LINES = 600
 #: Repo-relative path of this hook, quoted in the messages that ask for an edit.
 SELF_REL = "scripts/check_python_file_size.py"
 
-#: The ratchet test holding RATCHET_BASELINE, the second copy of these numbers.
-#: Every message that asks for an edit here names it too: a ceiling lowered in
-#: one file alone leaves the other holding the old size (#14498).
-RATCHET_REL = "repo_tests/python_file_size_ratchet_baseline.py"  # the DATA module, not the
-#: test that re-exports it (#17377): a developer told to lower "the matching RATCHET_BASELINE
-#: entry" in the test file opens a file whose RATCHET_BASELINE is one re-export line, with no
-#: entries to edit -- the wrong-copy failure #17872 exists to prevent, emitted by the gate.
-
 #: Repo-relative path prefixes the guard does not cover, mirrored from this
 #: hook's own entry in ``.pre-commit-config.yaml`` (its ``exclude:``,
 #: currently ``^(\.worktrees/|autobot-infrastructure/|autobot-backend/code_analysis/)``).
@@ -123,10 +115,9 @@ MIN_TRACKED_PY_FILES = 3000
 # mapped to the line count recorded for each. THIS MAPPING ONLY SHRINKS —
 # entries leave when the file reaches MAX_LINES, and a ceiling may be lowered
 # but never raised. Never add an entry to make a new file pass; split the
-# file instead. See ``python_file_size_known_large.py`` for the full dict and
-# ``repo_tests/python_file_size_ratchet_baseline.py`` for its mirror: lower
-# an entry in both in the same commit (#14498), or the lines just cut stay
-# spendable in the gap between the two.
+# file instead. See ``python_file_size_known_large.py`` for the full dict, the ONE
+# place a ceiling is recorded (#19544): ``python_file_size_ratchet_test.py`` checks it
+# against the same table at the base commit, so no second copy is kept.
 KNOWN_LARGE: dict[str, int] = load_known_large(__file__, "python_file_size_known_large.py")
 
 

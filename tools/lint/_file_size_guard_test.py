@@ -46,7 +46,6 @@ def _guard(root: Path, known_large=None, tracked=None, floor=0):
         "MAX_LINES": MAX,
         "KNOWN_LARGE": dict(known_large or {}),
         "SELF_REL": "scripts/fake.py",
-        "RATCHET_REL": "repo_tests/fake_baseline.py",
         "EXCLUDED_PREFIXES": ("skip/",),
         "MIN_FAKE": floor,
         "logger": _Log(),

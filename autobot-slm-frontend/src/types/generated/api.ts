@@ -7618,7 +7618,7 @@ export interface components {
         };
         /**
          * AgentResponse
-         * @description Agent response with LLM config.
+         * @description Agent response with LLM config (the LLM fields are AgentLLMConfig's, #19730).
          */
         AgentResponse: {
             /** Agent Id */
