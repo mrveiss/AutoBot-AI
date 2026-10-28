@@ -14,6 +14,7 @@ import { createLogger } from '@/utils/debugUtils';
 import { getApiBase, getApiTimeout, PORT_DEFAULTS } from '@/config/ssot-config';
 
 const logger = createLogger('AppConfig');
+
 export class AppConfigService {
   constructor() {
     this.serviceDiscovery = new ServiceDiscovery();
