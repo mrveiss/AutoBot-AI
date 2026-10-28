@@ -111,6 +111,7 @@
   register: _ai_venv_python_version
   changed_when: false
   failed_when: false
+  check_mode: false
 
 - name: Remove stale venv if not Python 3.14 (#3534)
   ansible.builtin.file:

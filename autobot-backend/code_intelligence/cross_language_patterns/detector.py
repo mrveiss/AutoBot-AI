@@ -32,6 +32,7 @@ from autobot_shared.ssot_constants import TTL_1_HOUR
 # that module imports analytics_infrastructure, so the dependency would be a cycle.
 from code_intelligence.similarity_thresholds import SIMILARITY_MEDIUM
 from knowledge.index_embedding_space import index_embedding_space
+from utils.file_categorization import SKIP_DIRS
 
 from .extractors import PythonPatternExtractor, TypeScriptPatternExtractor
 from .models import (
@@ -49,26 +50,8 @@ from .models import (
 logger = get_logger(__name__)
 
 # Default directories to skip
-_SKIP_DIRS: frozenset = frozenset(
-    {
-        "node_modules",
-        "__pycache__",
-        ".git",
-        ".venv",
-        "venv",
-        "dist",
-        "build",
-        ".next",
-        ".nuxt",
-        "coverage",
-        ".pytest_cache",
-        "archive",
-        "archives",
-        "backup",
-        "backups",
-        ".mypy_cache",
-    }
-)
+# Canonical skip dirs plus extras: archives and backups duplicate live code; mypy's cache is not source.
+_SKIP_DIRS: frozenset = frozenset(SKIP_DIRS | {".mypy_cache", "archive", "archives", "backup", "backups"})
 
 # ChromaDB collection name
 PATTERNS_COLLECTION = "cross_language_patterns"
@@ -338,8 +321,12 @@ class CrossLanguagePatternDetector(AsyncRedisClientLockedMixin):
         return f"{pattern_type.value if hasattr(pattern_type, 'value') else pattern_type}: {name}"
 
     def _should_skip_directory(self, path: Path) -> bool:
-        """Check if directory should be skipped."""
-        return any(skip in path.parts for skip in _SKIP_DIRS)
+        """Check if directory should be skipped (root-relative, #13602)."""
+        try:
+            parts = path.relative_to(self.project_root).parts
+        except ValueError:
+            parts = path.parts
+        return not _SKIP_DIRS.isdisjoint(parts)
 
     async def _collect_files(self) -> Tuple[List[Path], List[Path], List[Path]]:
         """Collect files to analyze by language.
