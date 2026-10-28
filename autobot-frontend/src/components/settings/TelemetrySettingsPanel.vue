@@ -190,7 +190,7 @@ function announceChange(message: string): void {
   margin: var(--spacing-0);
 }
 
-.panel-title i {
+.panel-title .icon {
   color: var(--color-primary);
 }
 
@@ -217,7 +217,7 @@ function announceChange(message: string): void {
   margin-bottom: var(--spacing-sm);
 }
 
-.preference-label i {
+.preference-label .icon {
   color: var(--color-primary);
 }
 
@@ -312,7 +312,7 @@ input:checked + .toggle-slider:before {
   display: none;
 }
 
-.disclosure-summary i {
+.disclosure-summary .icon {
   color: var(--color-info);
 }
 

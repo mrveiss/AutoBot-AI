@@ -1248,7 +1248,7 @@ watch(() => currentView.value, () => {
   color: var(--text-primary);
 }
 
-.header-content h3 i {
+.header-content h3 .icon {
   color: var(--color-primary);
 }
 

@@ -258,7 +258,7 @@ defineExpose({ fetchAgentCosts })
   font-weight: var(--font-semibold);
 }
 
-.section-header h3 i {
+.section-header h3 .icon {
   margin-right: var(--spacing-2);
   color: var(--color-primary);
 }
@@ -279,7 +279,7 @@ defineExpose({ fetchAgentCosts })
   border-radius: var(--radius-md);
 }
 
-.summary-card > i {
+.summary-card > .icon {
   font-size: var(--text-xl);
   color: var(--color-primary);
   opacity: 0.8;
