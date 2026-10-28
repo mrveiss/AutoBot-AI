@@ -912,6 +912,7 @@
       ignore_errors: true
       when: _slm_login.status == 200
       tags: ['mark-synced']
+      no_log: true  # #19764: credentials in the request or response
 
 # -------------------------------------------------------------------
 # Phase 7: Summary
