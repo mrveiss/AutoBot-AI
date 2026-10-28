@@ -84,13 +84,14 @@ async def _indexed_paths() -> dict:
     """The doc indexer's hash cache, memoised for :data:`HASH_CACHE_TTL_SECONDS`."""
     try:
         from services.knowledge.doc_indexer import HASH_CACHE_FILE
+        from services.knowledge.index_cache_paths import doc_index_hashes
     except ImportError as exc:
         logger.debug("Doc indexer unavailable (skipping provenance check): %s", exc)
         return {}
     now = time.monotonic()
     loaded_at = _cache["loaded_at"]
     if loaded_at is None or now - loaded_at > HASH_CACHE_TTL_SECONDS:
-        _cache.update(paths=await asyncio.to_thread(_read_hash_cache, HASH_CACHE_FILE), loaded_at=now)
+        _cache.update(paths=await asyncio.to_thread(_read_hash_cache, doc_index_hashes(HASH_CACHE_FILE)), loaded_at=now)
     return _cache["paths"]
 
 

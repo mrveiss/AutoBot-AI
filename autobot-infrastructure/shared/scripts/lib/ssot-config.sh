@@ -261,6 +261,15 @@ fi
 : "${AUTOBOT_VNC_SERVER_HOST:=${AUTOBOT_BACKEND_HOST}}"
 : "${AUTOBOT_VNC_SERVER_PORT:=5901}"
 
+# NodeSource: the base URL and the Node major each have one home (#19662). The major is
+# the repo-root .nvmrc; a checkout that does not ship it leaves NODE_MAJOR unset and the
+# installers refuse rather than guess.
+: "${AUTOBOT_NODESOURCE_BASE_URL:=https://deb.nodesource.com}"
+if [ -z "${NODE_MAJOR:-}" ] && [ -r "${PROJECT_ROOT}/.nvmrc" ]; then
+    NODE_MAJOR="$(sed -e 's/^v//' -e 's/[^0-9].*$//' -e q "${PROJECT_ROOT}/.nvmrc")"
+fi
+export AUTOBOT_NODESOURCE_BASE_URL NODE_MAJOR
+
 export AUTOBOT_BACKEND_HOST AUTOBOT_FRONTEND_HOST AUTOBOT_NPU_WORKER_HOST \
     AUTOBOT_REDIS_HOST AUTOBOT_AI_STACK_HOST AUTOBOT_BROWSER_SERVICE_HOST \
     AUTOBOT_SLM_HOST AUTOBOT_OLLAMA_HOST AUTOBOT_CHROMADB_HOST \
