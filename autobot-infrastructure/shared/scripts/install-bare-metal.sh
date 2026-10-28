@@ -855,7 +855,7 @@ print_summary() {
 # =============================================================================
 
 main() {
-    parse_args "$@"
+    parse_args "$@"; cd /  # the service user cannot read the caller's cwd, and git aborts in it (#19403)
     check_root
 
     echo -e "${BLUE}AutoBot Bare-Metal Installer v${SCRIPT_VERSION}${NC}"
