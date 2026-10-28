@@ -368,7 +368,7 @@ function formatTime(timestamp?: number): string {
   margin: var(--spacing-0);
 }
 
-.extractor-header h4 i {
+.extractor-header h4 .icon {
   color: var(--color-primary);
 }
 
@@ -399,7 +399,7 @@ function formatTime(timestamp?: number): string {
   margin-bottom: var(--spacing-sm);
 }
 
-.form-group label i {
+.form-group label .icon {
   color: var(--text-tertiary);
 }
 
@@ -688,7 +688,7 @@ function formatTime(timestamp?: number): string {
   margin: 0 0 var(--spacing-md) 0;
 }
 
-.history-section h5 i {
+.history-section h5 .icon {
   color: var(--text-tertiary);
 }
 
