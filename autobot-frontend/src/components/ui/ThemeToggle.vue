@@ -142,7 +142,7 @@ function handleThemeChange(): void {
   color: var(--text-secondary);
 }
 
-.theme-toggle__label i {
+.theme-toggle__label .icon {
   font-size: var(--text-base);
 }
 

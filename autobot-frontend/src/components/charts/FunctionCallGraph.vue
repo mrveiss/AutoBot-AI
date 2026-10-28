@@ -2086,7 +2086,7 @@ watch(viewMode, async (newMode) => {
   color: var(--text-muted);
 }
 
-.orphaned-item-details i {
+.orphaned-item-details .icon {
   margin-right: var(--spacing-1);
   opacity: 0.7;
 }
@@ -2122,7 +2122,7 @@ watch(viewMode, async (newMode) => {
   color: var(--text-muted);
 }
 
-.orphaned-empty i {
+.orphaned-empty .icon {
   font-size: 2rem;
   margin-bottom: var(--spacing-3);
   color: var(--color-success);

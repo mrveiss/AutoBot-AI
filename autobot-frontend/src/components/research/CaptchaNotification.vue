@@ -228,7 +228,7 @@ const {
   opacity: 1;
 }
 
-.preview-overlay i {
+.preview-overlay .icon {
   font-size: var(--text-2xl);
 }
 

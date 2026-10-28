@@ -326,7 +326,7 @@ onUnmounted(() => {
   gap: var(--spacing-3);
 }
 
-.empty-state i {
+.empty-state .icon {
   font-size: 2.5rem;
   opacity: 0.5;
 }
@@ -349,7 +349,7 @@ onUnmounted(() => {
   color: var(--text-secondary);
 }
 
-.meta-item i {
+.meta-item .icon {
   color: var(--text-muted);
 }
 
@@ -357,7 +357,7 @@ onUnmounted(() => {
   color: var(--color-success);
 }
 
-.meta-item.relevance i {
+.meta-item.relevance .icon {
   color: var(--color-success);
 }
 

@@ -228,7 +228,7 @@ const formatSimilarityGroup = (similarity: string): string => {
   font-size: var(--text-sm);
 }
 
-.section-loading i {
+.section-loading .icon {
   color: var(--color-info);
 }
 

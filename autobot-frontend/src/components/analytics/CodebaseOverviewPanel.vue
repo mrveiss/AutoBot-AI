@@ -319,7 +319,7 @@ const getQualityClass = (score: number): string => {
   border-color: var(--color-info);
 }
 
-.export-btn i {
+.export-btn .icon {
   font-size: 0.7rem;
 }
 
