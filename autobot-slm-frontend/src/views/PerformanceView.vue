@@ -79,6 +79,7 @@ function complianceColor(): string {
     :tabs-label="t('performanceView.performanceSections')"
     :tabs="tabs"
     default-tab="overview"
+    nested
     :poller="poller"
   >
     <template #header-end>

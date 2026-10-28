@@ -21,9 +21,8 @@ import { createMemoryHistory, createRouter, RouterView, type Router } from 'vue-
 import { POLL_CONSECUTIVE_ERROR_LIMIT } from '@/constants/api-timeouts'
 import en from '@/locales/en.json'
 import MonitoringView from './MonitoringView.vue'
-import PerformanceView from './PerformanceView.vue'
+import { monitoringChildren } from '@/router/monitoringRoutes'
 import SystemMonitor from './monitoring/SystemMonitor.vue'
-import PerformanceOverview from './performance/PerformanceOverview.vue'
 
 vi.mock('@/stores/auth', () => ({ useAuthStore: () => ({ isAdmin: false }) }))
 vi.mock('@/stores/fleet', () => ({ useFleetStore: () => ({ nodeList: [] }) }))
@@ -39,18 +38,7 @@ function routerFor(): Router {
   return createRouter({
     history: createMemoryHistory(),
     routes: [
-      {
-        path: '/monitoring',
-        component: MonitoringView,
-        children: [
-          { path: 'system', component: SystemMonitor },
-          {
-            path: 'performance',
-            component: PerformanceView,
-            children: [{ path: 'overview', component: PerformanceOverview }],
-          },
-        ],
-      },
+      { path: '/monitoring', component: MonitoringView, children: monitoringChildren },
       { path: '/standalone', component: SystemMonitor },
     ],
   })
@@ -66,12 +54,13 @@ describe('monitoring routes poll once and show one paused notice (#19851)', () =
   const calls = (needle: string) =>
     fetchMock.mock.calls.filter(([url]) => String(url).includes(needle)).length
 
-  async function open(path: string): Promise<void> {
+  async function open(path: string): Promise<Router> {
     const router = routerFor()
     await router.push(path)
     await router.isReady()
     wrapper = mount(App, { global: { plugins: [i18n, router] } })
     await flushPromises()
+    return router
   }
 
   async function tick(): Promise<void> {
@@ -133,5 +122,43 @@ describe('monitoring routes poll once and show one paused notice (#19851)', () =
     expect(calls('/monitoring/dashboard')).toBe(1)
     await tick()
     expect(calls('/monitoring/dashboard')).toBe(2)
+  })
+
+  it('the monitoring-performance route name lands on the overview', async () => {
+    const router = await open('/monitoring/system')
+    await router.push({ name: 'monitoring-performance' })
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/monitoring/performance/overview')
+  })
+
+  it('/monitoring/performance redirects and fetches the overview once', async () => {
+    const router = await open('/monitoring/performance')
+    expect(router.currentRoute.value.path).toBe('/monitoring/performance/overview')
+    expect(calls('/performance/overview')).toBe(1)
+  })
+
+  it('switching traces to overview starts no extra poll', async () => {
+    const router = await open('/monitoring/performance/traces')
+    expect(calls('/performance/overview')).toBe(1)
+    await router.push('/monitoring/performance/overview')
+    await flushPromises()
+    expect(calls('/performance/overview')).toBe(1)
+    await tick()
+    expect(calls('/performance/overview')).toBe(2)
+  })
+
+  it('the fetch count stays flat after unmount', async () => {
+    await open('/monitoring/performance/overview')
+    wrapper!.unmount()
+    wrapper = null
+    const before = fetchMock.mock.calls.length
+    await tick()
+    await tick()
+    expect(fetchMock.mock.calls.length).toBe(before)
+  })
+
+  it('a performance page renders exactly one h1', async () => {
+    await open('/monitoring/performance/overview')
+    expect(wrapper!.findAll('h1')).toHaveLength(1)
   })
 })

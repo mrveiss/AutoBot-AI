@@ -73,7 +73,8 @@ export const monitoringChildren: RouteRecordRaw[] = [
       {
         path: '',
         name: 'monitoring-performance',
-        redirect: '/monitoring/performance/overview'
+        redirect: '/monitoring/performance/overview',
+        meta: { title: 'Performance' }
       },
       {
         path: 'overview',
