@@ -74,6 +74,9 @@ class VectorWriteBuffer:
         self._bg_task: Optional[asyncio.Task] = None
         self._flush_count = 0
         self._write_count = 0
+        # #19379: set by stop(); a stopped buffer refuses writes, so a caller holding it from before
+        # an embedding-space rebind writes to its own store instead of a buffer nobody flushes.
+        self._stopped = False
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -87,8 +90,14 @@ class VectorWriteBuffer:
                 "VectorWriteBuffer started (flush_size=%d, interval=%.1fs)", self._flush_size, self._flush_interval
             )
 
+    @property
+    def stopped(self) -> bool:
+        return self._stopped
+
     async def stop(self) -> None:
-        """Flush remaining entries and stop the background task."""
+        """Flush remaining entries and stop the background task; later writes are refused."""
+        async with self._lock:
+            self._stopped = True
         if self._bg_task and not self._bg_task.done():
             self._bg_task.cancel()
             try:
@@ -127,6 +136,8 @@ class VectorWriteBuffer:
             )
             return False
         async with self._lock:
+            if self._stopped:
+                return False
             self._buffer[id] = BufferedWrite(
                 id=id,
                 embedding=embedding,

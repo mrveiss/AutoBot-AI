@@ -792,7 +792,7 @@ main() {
                 die "Unknown option: $1"
                 ;;
         esac
-    done
+    done; cd /  # the service user cannot read the caller's cwd, and git aborts in it (#19403)
 
     print_banner
     check_prerequisites
