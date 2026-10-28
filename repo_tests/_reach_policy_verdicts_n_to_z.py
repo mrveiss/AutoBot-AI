@@ -13,6 +13,11 @@ ABSOLUTE = "ABSOLUTE"
 CONVERTIBLE = "CONVERTIBLE"
 
 N_TO_Z: dict[str, tuple[str, str, str]] = {
+    "node-major-literals": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Workflow, Ansible and install-script files (yml/yaml/sh/j2), against all tracked files there; drifts.",
+    ),
     "severity-order-copies": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

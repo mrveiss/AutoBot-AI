@@ -18,7 +18,7 @@ frontend_deploy_from_git: true
 frontend_build_production: false
 
 # Node.js
-nodejs_version: "20.x"
+nodejs_version: "{{ node_major }}"
 
 # Server settings
 frontend_port: 443
