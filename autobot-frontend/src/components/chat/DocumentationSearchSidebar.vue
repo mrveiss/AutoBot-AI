@@ -664,7 +664,7 @@ onMounted(() => {
   color: var(--text-tertiary);
 }
 
-.empty-state i {
+.empty-state .icon {
   font-size: var(--text-3xl);
   margin-bottom: var(--spacing-3);
   opacity: 0.5;
@@ -734,7 +734,7 @@ onMounted(() => {
   color: var(--text-primary);
 }
 
-.recent-item i {
+.recent-item .icon {
   color: var(--text-secondary);
   font-size: 0.625rem;
 }
