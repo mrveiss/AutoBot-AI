@@ -50,6 +50,7 @@ on:
       - 'repo_tests/docs_liquid_tags_are_defined_17930_test.py'
       - 'repo_tests/research_doc_linked_issues_18967_test.py'
       - 'repo_tests/doc_model_tags_15219_test.py'
+      - 'repo_tests/kb_populate_one_home_19339_test.py'
       - 'README.md'
       - 'INSTALL.md'
       - 'autobot-slm-backend/ansible/roles/agent_config/defaults/main.yml'
@@ -62,6 +63,7 @@ on:
       - 'repo_tests/docs_liquid_tags_are_defined_17930_test.py'
       - 'repo_tests/research_doc_linked_issues_18967_test.py'
       - 'repo_tests/doc_model_tags_15219_test.py'
+      - 'repo_tests/kb_populate_one_home_19339_test.py'
       - 'README.md'
       - 'INSTALL.md'
       - 'autobot-slm-backend/ansible/roles/agent_config/defaults/main.yml'
@@ -112,3 +114,8 @@ jobs:
       # model list, so a docs-only pull request must run it here too.
       - name: Docs name only provisioned model tags
         run: python3 -m pytest repo_tests/doc_model_tags_15219_test.py -q
+
+      # #19339: the knowledge-base populate guard reads the documentation set under docs/**/*.md,
+      # so a docs-only pull request must run it here for the same reason as above.
+      - name: The knowledge base populates from one documentation set
+        run: python3 -m pytest repo_tests/kb_populate_one_home_19339_test.py -q

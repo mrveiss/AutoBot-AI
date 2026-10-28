@@ -98,7 +98,7 @@ _PINNED: dict[str, tuple[str, ...]] = {
     "autobot-frontend/vite.config.js": (r"VITE_BROWSER_PORT \|\| '(\d+)'",),
     "autobot-browser-worker/playwright-server.js": (r"process\.env\.PLAYWRIGHT_PORT \|\| '(\d+)'",),
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/constants/network.ts": (
-        r"process\.env\.BROWSER_SERVICE_PORT \|\| '(\d+)'",
+        r"port\('AUTOBOT_BROWSER_SERVICE_PORT', 'BROWSER_SERVICE_PORT', '(\d+)'\)",
     ),
     "autobot-infrastructure/shared/scripts/utilities/test_console_using_browser_vm.js": (
         r"process\.env\.AUTOBOT_BROWSER_SERVICE_PORT \|\| '(\d+)'",

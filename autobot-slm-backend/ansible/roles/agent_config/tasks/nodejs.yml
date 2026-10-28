@@ -12,6 +12,7 @@
   # the result gates conditional installation below.
   failed_when: false
   changed_when: false
+  check_mode: false
 
 - name: Download NodeSource setup script
   get_url:
@@ -44,12 +45,15 @@
   command: node --version
   register: node_version_output
   changed_when: false
+  when: not ansible_check_mode
 
 - name: Verify npm installation
   command: npm --version
   register: npm_version_output
   changed_when: false
+  when: not ansible_check_mode
 
 - name: Display Node.js and npm versions
   debug:
     msg: "Node.js {{ node_version_output.stdout }}, npm {{ npm_version_output.stdout }}"
+  when: not ansible_check_mode
