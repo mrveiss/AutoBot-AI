@@ -202,6 +202,6 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-slm-frontend/src/views/settings/admin/DataHygieneView.vue": 656,  # #18819 + #14777: 669 -> 662
     "autobot-slm-frontend/src/views/settings/admin/LogForwardingSettings.vue": 650,  # #14780: 664 -> 655 (BaseSwitch)
     "autobot-slm-frontend/src/views/settings/admin/NPUWorkersSettings.vue": 716,  # #18819 + #14777: 733 -> 721
-    "autobot-slm-frontend/src/views/settings/admin/SSOSettings.vue": 824,  # #18819 + #14777: 869 -> 824
+    "autobot-slm-frontend/src/views/settings/admin/SSOSettings.vue": 822,  # #18819 + #14777: 869 -> 824
     "autobot-slm-frontend/src/views/settings/admin/UserManagementSettings.vue": 1062,  # #18819 + #14777: 1099 -> 1088
 }

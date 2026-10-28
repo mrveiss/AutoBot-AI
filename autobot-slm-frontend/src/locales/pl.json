@@ -2628,6 +2628,11 @@
         "areYouSureYouWantToRevert": "Are you sure you want to revert this prompt to its default content?"
       },
       "sSOSettings": {
+        "connectionTestFailed": "Connection test failed",
+        "failedToDeleteProvider": "Failed to delete provider",
+        "failedToLoadProviders": "Failed to load SSO providers",
+        "failedToSaveProvider": "Failed to save provider",
+        "failedToToggleProvider": "Failed to toggle provider",
         "aCSURLAssertionConsumerService": "ACS URL (Assertion Consumer Service)",
         "addProvider": "Add Provider",
         "addYourFirstProvider": "Add your first provider",
