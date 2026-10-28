@@ -354,7 +354,7 @@ async function initializeRbac(): Promise<void> {
     showRbacModal.value = false
     await checkRbacStatus()
   } catch (e) {
-    error.value = autobotApiErrorMessage(e, 'Failed to initialize RBAC')
+    error.value = autobotApiErrorMessage(e, t('settings.admin.userManagementSettings.failedToInitializeRbac'))
   } finally {
     isInitializingRbac.value = false
   }

@@ -116,7 +116,9 @@
       "rollingBack": "Rolling back...",
       "select": "Select...",
       "source": "Source:",
-      "yesRollback": "Yes, rollback"
+      "yesRollback": "Yes, rollback",
+      "loadFailed": "Failed to load revisions",
+      "rollbackFailed": "Rollback failed"
     },
     "orgChartTab": {
       "agentHierarchy": "Agent Hierarchy",
@@ -135,7 +137,9 @@
       "selectReport": "Select report...",
       "submit": "Submit",
       "task": "Task",
-      "total": "Total"
+      "total": "Total",
+      "loadFailed": "Failed to load org tree",
+      "delegationFailed": "Delegation failed"
     },
     "orgTreeNode": {
       "value0Reports": "{value0} reports"
@@ -174,7 +178,10 @@
       "timedOut": "Timed Out",
       "timeoutS": "Timeout (s)",
       "usrBinPython3": "/usr/bin/python3",
-      "viewFullLog": "View Full Log"
+      "viewFullLog": "View Full Log",
+      "loadFailed": "Failed to load processes",
+      "signalFailed": "Signal failed",
+      "spawnFailed": "Spawn failed"
     }
   },
   "agentsView": {
@@ -437,6 +444,10 @@
       "paused": "Updates paused: the backend did not answer several times in a row, so the figures shown may be out of date.",
       "readFailed": "A dashboard read did not load.",
       "retry": "Retry"
+    },
+    "errors": {
+      "withStatus": "{message} (HTTP {status})",
+      "withCause": "{message}: {cause}"
     }
   },
   "deploymentLogViewer": {
@@ -2284,7 +2295,8 @@
         "failedToClearCache": "Failed to clear cache",
         "failedToWarmUpCaches": "Failed to warm up caches",
         "confirmClearRedisDatabase": "Are you sure you want to clear the {database} Redis database?",
-        "confirmClearCache": "Are you sure you want to clear the {type} cache?"
+        "confirmClearCache": "Are you sure you want to clear the {type} cache?",
+        "failedToClearRedisDatabase": "Failed to clear Redis database"
       },
       "configDefaultsSettings": {
         "actions": "Actions",
@@ -2883,7 +2895,8 @@
         "confirmDeleteTeam": "Are you sure you want to delete this team?",
         "confirmDeleteSsoProvider": "Are you sure you want to delete this SSO provider?",
         "confirmDeleteSlmAdmin": "Are you sure you want to delete this SLM admin?",
-        "checkingRbacStatus": "Checking RBAC status..."
+        "checkingRbacStatus": "Checking RBAC status...",
+        "failedToInitializeRbac": "Failed to initialize RBAC"
       },
       "webResearchSettings": {
         "title": "Web Research",
@@ -3351,6 +3364,19 @@
       "sync": "Sync",
       "type": "Type",
       "uRL": "URL"
+    },
+    "errors": {
+      "generic": "Skills request failed",
+      "fetchReposFailed": "Failed to fetch repos",
+      "addRepoFailed": "Failed to add repo",
+      "syncRepoFailed": "Failed to sync repo",
+      "fetchApprovalsFailed": "Failed to fetch approvals",
+      "processApprovalFailed": "Failed to process approval",
+      "fetchDraftsFailed": "Failed to fetch drafts",
+      "testDraftFailed": "Test draft failed",
+      "promoteDraftFailed": "Failed to promote draft",
+      "fetchGovernanceFailed": "Failed to fetch governance config",
+      "updateGovernanceModeFailed": "Failed to update governance mode"
     }
   },
   "skillsView": {
@@ -3576,7 +3602,12 @@
           "disconnected": "disconnected",
           "unknown": "unknown"
         },
-        "takeScreenshot": "Take Screenshot"
+        "takeScreenshot": "Take Screenshot",
+        "startFailed": "Failed to start browser",
+        "navigateFailed": "Navigation failed",
+        "backFailed": "Failed to go back",
+        "forwardFailed": "Failed to go forward",
+        "refreshFailed": "Failed to refresh"
       },
       "fileBrowserTool": {
         "actions": "Actions",
