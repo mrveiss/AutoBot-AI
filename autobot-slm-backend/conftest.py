@@ -25,10 +25,19 @@ Issue: #3499
 
 import ast
 import importlib
+
+# #19878: the class every module stub is built from; loaded by path (`tests/` is not a package root).
+import importlib.util as _ilu  # noqa: E402
 import sys
 import types
 from pathlib import Path
 from unittest.mock import MagicMock
+
+_ms_spec = _ilu.spec_from_file_location("_slm_module_stub", Path(__file__).parent / "tests" / "_module_stub.py")
+_ms_mod = _ilu.module_from_spec(_ms_spec)
+_ms_spec.loader.exec_module(_ms_mod)
+sys.modules["_slm_module_stub"] = _ms_mod
+ModuleStub = _ms_mod.ModuleStub
 
 # ---------------------------------------------------------------------------
 # Hollow api package — prevents api/__init__.py from executing
@@ -139,7 +148,7 @@ def _stub(name: str) -> MagicMock:
         # ones starting with `assert` (e.g. services.fleet_sync_guard.
         # assert_no_running_sync) which safe mocks block as typo-protection
         # and turn into collection-time ImportError (#10023).
-        mod = MagicMock(unsafe=True)
+        mod = ModuleStub(unsafe=True)
         mod.__name__ = name
         mod.__package__ = name.split(".")[0]
         mod.__spec__ = None

@@ -65,7 +65,6 @@ def env(name: str, default: Any = None) -> Any:
 # ---------------------------------------------------------------------------
 # Per-component siblings split off at the size ceiling (#14236; ledger #18391). Imported after
 # REGISTRY/register_env_var exist and before anything below reads the registry.
-
 from autobot_shared import env_registry_agent_runtime  # noqa: E402,F401
 from autobot_shared import env_registry_ai  # noqa: E402,F401
 from autobot_shared import env_registry_backend  # noqa: E402,F401
@@ -79,6 +78,7 @@ from autobot_shared import env_registry_security  # noqa: E402,F401
 from autobot_shared import env_registry_slm  # noqa: E402,F401
 from autobot_shared import env_registry_tls  # noqa: E402,F401
 from autobot_shared import (  # noqa: E402,F401
+    env_registry_agent_tools,
     env_registry_analytics,
     env_registry_batch,
     env_registry_gateway,

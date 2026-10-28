@@ -45,7 +45,7 @@
             </span>
           </td>
           <td>{{ file.is_dir ? $t('fileBrowser.fileList.directory') : getFileType(file.name) }}</td>
-          <td>{{ file.is_dir ? '-' : formatSize(file.size) }}</td>
+          <td>{{ file.is_dir ? '-' : formatFileSize(file.size, FILE_BROWSER_SIZE_OPTIONS) }}</td>
           <td>{{ formatDate(file.last_modified) }}</td>
           <td>
             <div class="action-buttons">
@@ -108,7 +108,7 @@
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, nextTick } from 'vue'
-import { formatDateTime } from '@/utils/formatHelpers'
+import { formatDateTime, formatFileSize, FILE_BROWSER_SIZE_OPTIONS } from '@/utils/formatHelpers'
 import { getFileIconName } from '@/utils/iconMappings'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { BaseButton } from '@autobot/ui'
@@ -249,14 +249,6 @@ const getFileType = (filename: string): string => {
   }
 
   return typeMap[extension] || extension.toUpperCase() + ' File'
-}
-
-const formatSize = (bytes: number = 0): string => {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const sizes = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
 }
 
 // NOTE: formatDate removed - now using formatDateTime from @/utils/formatHelpers

@@ -227,7 +227,6 @@ knowledge:
 
     # Reranking configuration
     enable_reranking: true       # Enable cross-encoder reranking
-    reranking_model: "cross-encoder/ms-marco-MiniLM-L-6-v2"  # Model for reranking
 
     # Performance and caching
     cache_ttl_seconds: 300       # Cache time-to-live (5 minutes)
