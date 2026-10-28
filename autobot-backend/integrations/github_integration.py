@@ -19,6 +19,7 @@ import aiohttp
 
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_constants import RetryConfig
 from autobot_shared.time_utils import now_utc
 from integrations.base import (
     BaseIntegration,
@@ -61,7 +62,7 @@ class GitHubIntegration(BaseIntegration):
     """
 
     _RETRY_STATUS_CODES = {500, 502, 503, 504}
-    _MAX_RETRIES = 3
+    _MAX_RETRIES = RetryConfig.DEFAULT_RETRIES  # #19730
 
     def __init__(self, config: IntegrationConfig) -> None:
         super().__init__(config)

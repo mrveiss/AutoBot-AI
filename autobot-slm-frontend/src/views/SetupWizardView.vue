@@ -382,6 +382,7 @@
         </p>
 
         <!-- Phase & status bar -->
+        <PollingPausedAlert :poller="provisionPoller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" @retry="provisionStore.retryPolling()" />
         <div v-if="provisioning || provisionComplete || provisionFailed" class="provision-status-bar">
           <span class="provision-stage">{{ provisionStage }}</span>
           <span class="provision-elapsed">{{ formatElapsed(provisionElapsed) }}</span>
@@ -515,6 +516,7 @@ import type { NodeRole } from '@/types/slm'
 import { createLogger } from '@/utils/debugUtils'
 import { useToast } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
+import { PollingPausedAlert } from '@autobot/ui'
 
 const logger = createLogger('SetupWizard')
 
@@ -773,9 +775,9 @@ async function saveSecrets() {
 
 // ── Provisioning ──────────────────────────────────────────────────────────
 
-// #7096: provision state proxied from store (survives component unmount).
-// Names preserved to minimize template churn; the underlying refs live in
-// useProvisionStore() and persist across navigation.
+// #7096: provision state proxied from store (survives unmount); names kept to minimize template churn.
+// #19482: the alert only needs to know the store's status poller paused.
+const provisionPoller = { pausedOnErrors: computed(() => provisionStore.pollingPaused) }
 const provisioning = computed(() => provisionStore.isRunning)
 const provisionComplete = computed(() => provisionStore.isComplete)
 // #15825: failure was unrepresented in this view. The store has carried both
@@ -1072,9 +1074,7 @@ async function provisionFleet() {
   try {
     await provisionWizardFleet(nodes.value.map(n => n.node_id))
   } catch (err: unknown) {
-    const detail =
-      (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-      'Unknown error'
+    const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Unknown error'
     provisionStore.logs.push({ type: 'error', message: `ERROR: ${detail}` })
     provisionStore.disconnectWs()
   }

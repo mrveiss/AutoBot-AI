@@ -3,7 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { BaseAlert, BaseSwitch } from '@autobot/ui'
+import { BaseAlert, BaseSwitch, PollingPausedAlert } from '@autobot/ui'
 /**
  * LoadBalancingView - NPU Worker Load Balancing Visualization
  *
@@ -16,9 +16,10 @@ import { BaseAlert, BaseSwitch } from '@autobot/ui'
  * Related to Issue #590 (NPU Dashboard Improvements).
  */
 
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFleetStore } from '@/stores/fleet'
+import { throwIfFailed, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { createLogger } from '@/utils/debugUtils'
 import type {
   NPULoadBalancingConfig,
@@ -40,7 +41,7 @@ const saving = ref(false)
 const error = ref<string | null>(null)
 const notification = ref<string | null>(null)
 const autoRebalance = ref(false)
-const refreshIntervalId = ref<ReturnType<typeof setInterval> | null>(null)
+const REFRESH_INTERVAL_MS = 10_000
 
 const selectedStrategy = ref<NPULoadBalancingConfig['strategy']>('round-robin')
 
@@ -155,6 +156,8 @@ function showNotification(message: string): void {
 
 /**
  * Load all data: fleet metrics, load balancing config, worker configs.
+ * The poller's tick follows the dashboard (nodes) read: only fetchNodes throws, the store's
+ * NPU fetches swallow their errors, so an NPU-only outage does not pause the poller.
  */
 async function refreshData(): Promise<void> {
   loading.value = true
@@ -255,17 +258,10 @@ const autoRebalanceRecommendation = computed(() => {
 // Lifecycle
 // ============================================================
 
-onMounted(() => {
-  refreshData()
-  refreshIntervalId.value = setInterval(refreshData, 10_000)
-})
+// #19482: the shared dashboard policy (stop on unmount and after repeated failures, paused alert)
+const refreshPoller = useDashboardPoller(throwIfFailed(refreshData, error), REFRESH_INTERVAL_MS)
 
-onBeforeUnmount(() => {
-  if (refreshIntervalId.value !== null) {
-    clearInterval(refreshIntervalId.value)
-    refreshIntervalId.value = null
-  }
-})
+onMounted(() => refreshPoller.start(''))
 </script>
 
 <template>
@@ -281,6 +277,8 @@ onBeforeUnmount(() => {
     >
       <BaseAlert v-if="notification" variant="success" size="compact" :message="notification" />
     </Transition>
+
+    <PollingPausedAlert :poller="refreshPoller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" @retry="refreshPoller.start('')" />
 
     <!-- Error Banner -->
     <BaseAlert v-if="error" variant="error" :message="error" />

@@ -63,7 +63,8 @@ _REASON = re.compile(r"^\s*(?://|\*|/\*)\s*(?!eslint|@ts-|prettier)(?:\S+\s+){3,
 _TRAILING_COMMENT = re.compile(r"/\*.*?\*/|(?<![:'\"\w])//.*$")
 
 # Measured on b07673947b; the SLM's Prometheus/Grafana probes are eslint-exempted with a reason. Lower an app's pin by exactly what a PR removes (#12363 phase 2).
-PINS = {"autobot-frontend": 14, "autobot-slm-frontend": 1}
+# #12363 step 2: the SLM's main-backend calls moved onto SlmApiClient, 1 -> 0.
+PINS = {"autobot-frontend": 14, "autobot-slm-frontend": 0}
 
 
 def _countable(app: Path, path: Path) -> bool:

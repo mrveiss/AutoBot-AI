@@ -95,10 +95,9 @@ _BASELINES = {
     "autobot-slm-frontend": {
         "clients": 1,
         "raw_fetch": 3,
-        # One holdout: `composables/useAutobotApi.ts` — a composable, not the
-        # transport client, so this one is a real bypass and should reach 0.
-        # The main frontend is already there.
-        "axios": 1,
+        # #12363 step 2: `composables/useAutobotApi.ts`, the last holdout, now builds
+        # an SlmApiClient, so the SLM matches the main frontend at 0.
+        "axios": 0,
         # #13139: 31 -> 29. Giving `/mfa/verify-login` and `/auth/sso/ldap/login`
         # a `response_model` retired `interface MFAVerifyResponse` (useMfaApi.ts)
         # and `interface LDAPLoginResponse` (useSsoApi.ts); both are now derived
