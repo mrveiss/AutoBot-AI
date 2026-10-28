@@ -42,6 +42,8 @@ export { default as BaseCard } from './src/components/BaseCard.vue'
 // The one data table (#14778) -- retires the main app's BaseTable and DataTable forks.
 export { default as BaseTable } from './src/components/BaseTable.vue'
 export type { BaseTableColumn, TableRow, TableRowKey, TableSize, TableRowVariant, SortOrder } from './src/components/BaseTable.vue'
+export { filterRows, pageRows, pageCountOf, clampPage, defaultVisibleKeys } from './src/utils/tableView'
+export type { TableFilters } from './src/utils/tableView'
 
 export { default as EmptyState } from './src/components/EmptyState.vue'
 

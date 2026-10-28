@@ -7,10 +7,17 @@
   table scrolls instead of squeezing. Token-only (--aui-table-*); no shadows.
 
   Columns: { key, label, align?, numeric?, monospace?, wrap?, width?, sortable?,
-  tooltip?, formatter? }. Numeric cells are right-aligned, monospace and
+  tooltip?, formatter?, searchable?, hidden?, hideable? }. Numeric cells are right-aligned, monospace and
   tabular-nums; only `wrap` columns wrap. Sorting is uncontrolled (rows are
   sorted here) unless `sortKey` is passed, then the app owns the order and
   reacts to `sort`. The kit holds no text: caption/labels come from the app.
+
+  View config, applied once here (#17562): rows -> filter (`search` over `searchable`
+  columns, `filters` as column-key equality) -> sort -> page (`pageSize`, v-model:page).
+  Column visibility: `hidden` columns start off; with `columnsMenuLabel` a menu lets the
+  user toggle every `hideable` column (v-model:visibleColumns to own the state). Two empty
+  states: no rows at all (`emptyTitle`/`emptyDescription`, slot `empty`) and rows that
+  the filter removed (`noMatchesTitle`/`noMatchesDescription`, slot `no-matches`).
 
   Slots: caption, controls, cell-<key> ({ row, value }), actions ({ row }),
   empty, loading, footer. Header tooltips reuse BaseTooltip and open downwards.
@@ -19,8 +26,19 @@
 import { computed, ref, useSlots, warn, watch, watchEffect } from 'vue'
 import BaseTooltip from './BaseTooltip.vue'
 import EmptyState from './EmptyState.vue'
+import BaseTableColumnsMenu from './BaseTableColumnsMenu.vue'
 import type { SemanticVariant } from '../types/semantic'
+import BasePagination, { type PaginationLabels } from './BasePagination.vue'
 import { sortRows, type SortOrder } from '../utils/tableSort'
+import {
+  cellText,
+  clampPage,
+  defaultVisibleKeys,
+  filterRows,
+  pageCountOf,
+  pageRows,
+  type TableFilters,
+} from '../utils/tableView'
 
 export type { SortOrder }
 export type TableRow = Record<string, unknown>
@@ -43,6 +61,12 @@ export interface BaseTableColumn {
   /** Header tooltip text. */
   tooltip?: string
   formatter?: (value: unknown) => string
+  /** `search` matches this column's displayed text. */
+  searchable?: boolean
+  /** Not shown until the user turns it on in the columns menu. */
+  hidden?: boolean
+  /** `false` keeps the column out of the menu, so it can never be hidden. */
+  hideable?: boolean
 }
 
 const props = withDefaults(
@@ -72,6 +96,26 @@ const props = withDefaults(
     actionsLabel?: string
     /** Per-row state, e.g. a denied audit entry -> 'error'; undefined leaves the row plain. */
     rowVariant?: (row: TableRow) => TableRowVariant | undefined
+    /** Case-insensitive text matched against the `searchable` columns. */
+    search?: string
+    /** Column key -> wanted value (or any of an array); blank values are inactive. */
+    filters?: TableFilters
+    /** Shown when `search`/`filters` removed every row (rows exist, none match). */
+    noMatchesTitle?: string
+    noMatchesDescription?: string
+    /** Rows per page; unset shows every row. */
+    pageSize?: number
+    /** Controlled page (1-based); pair with `update:page`. */
+    page?: number
+    paginationLabels?: PaginationLabels
+    /** Names the pagination landmark. */
+    paginationLabel?: string
+    /** "Page 2 of 7" text, composed by the app. */
+    paginationSummary?: (page: number, pageCount: number) => string
+    /** Controlled visible column keys; pair with `update:visibleColumns`. */
+    visibleColumns?: string[]
+    /** Renders the columns menu, named by this text. */
+    columnsMenuLabel?: string
   }>(),
   {
     rowKey: 'id',
@@ -90,12 +134,25 @@ const props = withDefaults(
     selectRowLabel: undefined,
     actionsLabel: undefined,
     rowVariant: undefined,
+    search: undefined,
+    filters: undefined,
+    noMatchesTitle: undefined,
+    noMatchesDescription: undefined,
+    pageSize: undefined,
+    page: undefined,
+    paginationLabels: undefined,
+    paginationLabel: undefined,
+    paginationSummary: undefined,
+    visibleColumns: undefined,
+    columnsMenuLabel: undefined,
   },
 )
 
 const emit = defineEmits<{
   sort: [key: string, order: SortOrder]
   'selection-change': [keys: TableRowKey[]]
+  'update:page': [page: number]
+  'update:visibleColumns': [keys: string[]]
 }>()
 
 const slots = useSlots()
@@ -106,11 +163,31 @@ const selected = ref<Set<TableRowKey>>(new Set())
 const controlled = computed(() => props.sortKey !== undefined)
 const activeKey = computed(() => (controlled.value ? props.sortKey : localKey.value))
 const activeOrder = computed(() => (controlled.value ? props.sortOrder : localOrder.value))
-const shownRows = computed(() =>
-  controlled.value || !activeKey.value ? props.rows : sortRows(props.rows, activeKey.value, activeOrder.value),
+const localPage = ref(1)
+const localVisible = ref<string[]>(defaultVisibleKeys(props.columns))
+
+const shownColumns = computed(() => {
+  const on = new Set(props.visibleColumns ?? localVisible.value)
+  return props.columns.filter((c) => c.hideable === false || on.has(c.key))
+})
+const menuItems = computed(() =>
+  props.columns
+    .filter((c) => c.hideable !== false)
+    .map((c) => ({ key: c.key, label: c.label, shown: shownColumns.value.some((s) => s.key === c.key) })),
 )
+const filteredRows = computed(() => filterRows(props.rows, props.columns, props.search, props.filters))
+const sortedRows = computed(() =>
+  controlled.value || !activeKey.value
+    ? filteredRows.value
+    : sortRows(filteredRows.value, activeKey.value, activeOrder.value),
+)
+const pageCount = computed(() => pageCountOf(sortedRows.value.length, props.pageSize))
+const activePage = computed(() => clampPage(props.page ?? localPage.value, pageCount.value))
+const shownRows = computed(() => pageRows(sortedRows.value, activePage.value, props.pageSize))
+const paged = computed(() => !!props.pageSize && props.pageSize > 0 && !!props.paginationLabels && !!props.paginationLabel)
+const noMatches = computed(() => props.rows.length > 0 && filteredRows.value.length === 0)
 const colspan = computed(
-  () => props.columns.length + (props.selectable ? 1 : 0) + (slots.actions ? 1 : 0),
+  () => shownColumns.value.length + (props.selectable ? 1 : 0) + (slots.actions ? 1 : 0),
 )
 // The same key rows render with (identity fallback included), so select-all never collects undefined.
 const keysOf = (rows: TableRow[]): TableRowKey[] => rows.map((r) => rowKeyOf(r))
@@ -176,10 +253,29 @@ function cellClasses(col: BaseTableColumn): Record<string, boolean> {
 }
 
 function formatCell(row: TableRow, col: BaseTableColumn): string {
-  const value = row[col.key]
-  if (col.formatter) return col.formatter(value)
-  return value === null || value === undefined ? '' : String(value)
+  return cellText(row[col.key], col.formatter)
 }
+
+function setPage(next: number): void {
+  localPage.value = next
+  emit('update:page', next)
+}
+
+function toggleColumn(key: string): void {
+  const current = props.visibleColumns ?? localVisible.value
+  const next = current.includes(key) ? current.filter((k) => k !== key) : [...current, key]
+  localVisible.value = next
+  emit('update:visibleColumns', next)
+}
+
+// A new search/filter starts from the first page, so the user is never left on a page that no longer exists.
+watch(
+  () => [props.search, props.filters],
+  () => {
+    if (activePage.value !== 1 || localPage.value !== 1) setPage(1)
+  },
+  { deep: true },
+)
 
 // A row without its `rowKey` field is keyed by its object identity, never its position:
 // `rows` and the sorted `shownRows` order differ, so a positional key would select a
@@ -218,7 +314,15 @@ watchEffect(() => {
 
 <template>
   <div class="aui-table" :class="`aui-table--${size}`">
-    <div v-if="$slots.controls" class="aui-table__controls"><slot name="controls" /></div>
+    <div v-if="$slots.controls || columnsMenuLabel" class="aui-table__controls">
+      <slot name="controls" />
+      <BaseTableColumnsMenu
+        v-if="columnsMenuLabel && menuItems.length"
+        :label="columnsMenuLabel"
+        :items="menuItems"
+        @toggle="toggleColumn"
+      />
+    </div>
     <div v-if="loading && loadingLabel" class="aui-table__sr" role="status">{{ loadingLabel }}</div>
     <div class="aui-table__scroll">
       <table class="aui-table__table" :aria-label="caption ? undefined : ariaLabel" :aria-busy="loading">
@@ -237,7 +341,7 @@ watchEffect(() => {
               />
             </th>
             <th
-              v-for="col in columns"
+              v-for="col in shownColumns"
               :key="col.key"
               scope="col"
               class="aui-table__th"
@@ -277,7 +381,10 @@ watchEffect(() => {
           </tr>
           <tr v-else-if="shownRows.length === 0">
             <td :colspan="colspan" class="aui-table__state">
-              <slot name="empty">
+              <slot v-if="noMatches" name="no-matches">
+                <EmptyState :title="noMatchesTitle ?? emptyTitle" :description="noMatchesDescription ?? emptyDescription" />
+              </slot>
+              <slot v-else name="empty">
                 <EmptyState :title="emptyTitle" :description="emptyDescription" />
               </slot>
             </td>
@@ -298,7 +405,7 @@ watchEffect(() => {
                   @change="toggleRow(rowKeyOf(row))"
                 />
               </td>
-              <td v-for="col in columns" :key="col.key" class="aui-table__cell" :class="cellClasses(col)">
+              <td v-for="col in shownColumns" :key="col.key" class="aui-table__cell" :class="cellClasses(col)">
                 <slot :name="`cell-${col.key}`" :row="row" :value="row[col.key]">{{ formatCell(row, col) }}</slot>
               </td>
               <td v-if="$slots.actions" class="aui-table__cell aui-table__cell--right">
@@ -309,7 +416,19 @@ watchEffect(() => {
         </tbody>
       </table>
     </div>
-    <div v-if="$slots.footer" class="aui-table__footer"><slot name="footer" /></div>
+    <div v-if="paged || $slots.footer" class="aui-table__footer">
+      <BasePagination
+        v-if="paged"
+        :page="activePage"
+        :total-pages="pageCount"
+        :labels="paginationLabels!"
+        :label="paginationLabel!"
+        @update:page="setPage"
+      >
+        <template #summary>{{ paginationSummary?.(activePage, pageCount) }}</template>
+      </BasePagination>
+      <slot name="footer" />
+    </div>
   </div>
 </template>
 
@@ -331,7 +450,14 @@ watchEffect(() => {
   padding: var(--aui-space-3) var(--aui-space-4);
 }
 
-.aui-table__controls { border-bottom: var(--aui-table-border); }
+.aui-table__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--aui-space-3);
+  border-bottom: var(--aui-table-border);
+}
+
 .aui-table__footer { border-top: var(--aui-table-border); }
 
 .aui-table__sr {
