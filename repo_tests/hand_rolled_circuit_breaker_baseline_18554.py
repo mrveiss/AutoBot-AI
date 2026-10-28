@@ -32,10 +32,6 @@ ALLOWLIST: dict[str, str] = {
     + "services/load_balancer.py::NPULoadBalancer::CLASS": (
         "KEEP-EXCEPTION B5: threads the per-worker threshold/timeout into each Worker"
     ),
-    _P
-    + "services/load_balancer.py::CircuitBreakerState::ENUM": (
-        "B5 private enum with the same members as CircuitState; MIGRATE to CircuitState in a later slice"
-    ),
     _S
     + "npu/integration.py::NPUWorkerPool::CLASS": (
         "KEEP-EXCEPTION B7: per-worker state; CIRCUIT_FAILURE_THRESHOLD / COOLDOWN, enum already canonical"
@@ -80,4 +76,4 @@ ALLOWLIST: dict[str, str] = {
 }
 
 #: The ceiling. Lower it with the list; raising it needs the guard's contrast pair re-read.
-FROZEN_TOTAL = 15
+FROZEN_TOTAL = 14  # load_balancer CircuitBreakerState migrated to CircuitState (#19730)

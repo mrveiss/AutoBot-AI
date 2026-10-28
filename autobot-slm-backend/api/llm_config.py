@@ -21,6 +21,7 @@ from typing_extensions import Annotated
 
 from autobot_shared.auth.permissions import Permission
 from autobot_shared.ssot_config import config as _ssot_config
+from autobot_shared.ssot_constants import model_config
 from models.database import Node, Setting
 from services.auth import require_permission
 from services.database import get_db
@@ -52,8 +53,8 @@ class LLMProviderConfig(BaseModel):
     api_key: str = ""
     endpoint: str = ""
     model: str = ""
-    temperature: float = Field(default=0.7, ge=0.0, le=2.0)
-    max_tokens: int = Field(default=2048, ge=1, le=128000)
+    temperature: float = Field(default=model_config.DEFAULT_TEMPERATURE, ge=0.0, le=2.0)  # #19730
+    max_tokens: int = Field(default=model_config.DEFAULT_MAX_TOKENS, ge=1, le=128000)  # #19730
 
 
 class SlmLLMConfig(BaseModel):
