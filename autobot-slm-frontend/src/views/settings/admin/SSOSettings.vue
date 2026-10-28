@@ -358,7 +358,7 @@ async function testConnection(provider: SSOProviderResponse): Promise<void> {
 }
 
 async function deleteProvider(provider: SSOProviderResponse): Promise<void> {
-  if (!confirm(`Delete SSO provider "${provider.name}"? This cannot be undone.`)) {
+  if (!confirm(t('settings.admin.sSOSettings.confirmDeleteProvider', { name: provider.name }))) {
     return
   }
 

@@ -2628,6 +2628,7 @@
         "areYouSureYouWantToRevert": "Are you sure you want to revert this prompt to its default content?"
       },
       "sSOSettings": {
+        "confirmDeleteProvider": "Delete SSO provider \"{name}\"? This cannot be undone.",
         "providerCreated": "Provider created successfully",
         "providerDeleted": "Provider deleted successfully",
         "providerDisabled": "Provider disabled",
