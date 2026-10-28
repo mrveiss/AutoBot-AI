@@ -14,17 +14,15 @@ import { createLogger } from '@/utils/debugUtils'
 const logger = createLogger('WebResearchStore')
 
 /**
- * Canonical web-research settings API paths (#11665) — single source for every
- * consumer. The backend registers api/web_research_settings.py with an empty
- * registry prefix, so the live paths are /api/web-research/*.
+ * Web-research READ paths (#11665). The backend registers
+ * api/web_research_settings.py with an empty registry prefix, so the live paths
+ * are /api/web-research/*. Every write (enable, disable, settings PUT, clear
+ * cache, reset circuit breakers) is admin-only and global, so the one editor
+ * lives in the SLM admin console (#19217) and this app only reads.
  */
 export const WEB_RESEARCH_API = {
   settings: '/web-research/settings',
-  status: '/web-research/status',
-  enable: '/web-research/enable',
-  disable: '/web-research/disable',
-  clearCache: '/web-research/clear-cache',
-  resetCircuitBreakers: '/web-research/reset-circuit-breakers'
+  status: '/web-research/status'
 } as const
 
 export interface RateLimiter {
@@ -104,6 +102,7 @@ export const useWebResearchStore = defineStore('webResearch', () => {
   )
 
   // Actions
+  // Internal: hydrates the state from the backend read in loadFromBackend.
   function updateSettings(newSettings: Partial<WebResearchSettings>) {
     settings.value = { ...settings.value, ...newSettings }
   }
@@ -160,44 +159,6 @@ export const useWebResearchStore = defineStore('webResearch', () => {
     status.value = { ...status.value, ...newStatus }
   }
 
-  function toggleWebResearch() {
-    settings.value.enabled = !settings.value.enabled
-    // Issue #821: Clear stale error when toggling
-    lastError.value = null
-  }
-
-  function setEnabled(enabled: boolean) {
-    settings.value.enabled = enabled
-  }
-
-  function setLoading(loading: boolean) {
-    isLoading.value = loading
-  }
-
-  function setError(error: string | null) {
-    lastError.value = error
-  }
-
-  function clearError() {
-    lastError.value = null
-  }
-
-  function resetSettings() {
-    settings.value = {
-      enabled: false,
-      require_user_confirmation: true,
-      preferred_method: 'basic',
-      max_results: 5,
-      timeout_seconds: 30,
-      auto_research_threshold: 0.3,
-      rate_limit_requests: 5,
-      rate_limit_window: 60,
-      store_results_in_kb: true,
-      anonymize_requests: true,
-      filter_adult_content: true
-    }
-  }
-
   return {
     // State
     settings,
@@ -212,16 +173,9 @@ export const useWebResearchStore = defineStore('webResearch', () => {
     cacheSize,
     rateLimiterStatus,
 
-    // Actions
-    updateSettings,
+    // Actions (reads only: the writes live in the SLM admin console, #19217)
     updateStatus,
-    loadFromBackend,
-    toggleWebResearch,
-    setEnabled,
-    setLoading,
-    setError,
-    clearError,
-    resetSettings
+    loadFromBackend
   }
 }, {
   persist: {

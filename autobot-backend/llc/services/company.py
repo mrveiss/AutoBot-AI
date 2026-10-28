@@ -24,8 +24,10 @@ from llc.models.contact import LLCContact
 from llc.models.enums import LLCCompanyStatus
 from user_management.models.organization import Organization
 
+from .authz import NotAuthorisedError, may_attach_under, require_company_admin
 from .base import LLCServiceBase
 from .company_ceo import CompanyCEOService
+from .company_move_lock import CompanyCycleError, CompanyMoveLockMixin, deadlock_is_contention
 
 logger = get_logger(__name__)
 
@@ -34,8 +36,23 @@ class CompanyNotFoundError(Exception):
     """Raised when the requested company does not exist."""
 
 
-class CompanyCycleError(Exception):
-    """Raised when a parent_org_id assignment would create a hierarchy cycle."""
+class CompanyMoveForbiddenError(NotAuthorisedError):
+    """A move refused for lack of the deciding role (#19634).
+
+    Its text is fixed and safe to show; the ids and roles behind it are logged, never
+    returned. ``public_detail`` is what the route puts in the 403.
+    """
+
+    @property
+    def public_detail(self) -> str:
+        return str(self)
+
+
+#: The fixed 403 texts, keyed by "is the deciding org the moved org itself".
+_MOVE_DETAIL = {
+    True: "Only an owner/admin of this company may attach it under a parent",
+    False: "Moving this company out of its parent must be done by an owner/admin of the parent org",
+}
 
 
 class CompanyBudgetError(Exception):
@@ -50,7 +67,7 @@ class CompanyHasChildrenError(Exception):
     """Raised when attempting to delete a company that still has active child companies."""
 
 
-class CompanyService(LLCServiceBase):
+class CompanyService(CompanyMoveLockMixin, LLCServiceBase):
     """LLC service for company CRUD + lifecycle operations.
 
     All methods accept an ``AsyncSession`` so they can participate in the
@@ -88,51 +105,184 @@ class CompanyService(LLCServiceBase):
         self.session.add(org)
         await self.session.flush()
 
-        if data.parent_org_id is not None:
-            await self._assert_no_cycle(org.id, data.parent_org_id)
-
-        # #15770: a company with no CEO is a disconnected forest -- every member
-        # with no explicit reporting line has nothing to default to. Provision
-        # here rather than lazily on first read, so the hierarchy is whole from
-        # the moment the company exists.
-        await CompanyCEOService().provision_default(self.session, org.id)
+        await self._place_in_hierarchy(org)
 
         logger.info("LLC company created: %s (id=%s)", org.name, org.id)
         return org
+
+    async def _place_in_hierarchy(self, org: Organization) -> None:
+        """Cycle-check a sub-organization; give a company -- and only a company -- its CEO.
+
+        #15770: a company with no CEO is a disconnected forest, so it is provisioned
+        here rather than lazily on first read. #15907: a sub-organization gets none
+        (migration 20260907_090, #15892). A soft-deleted org never reaches this:
+        ``deleted_at`` is unset on a row this transaction has just inserted.
+        """
+        if org.parent_org_id is not None:
+            await self._assert_no_cycle(org.id, org.parent_org_id)
+        await CompanyCEOService().sync_with_parent(self.session, org.id, org.parent_org_id)
 
     async def get(self, company_id: uuid.UUID) -> Organization:
         """Return the company or raise CompanyNotFoundError."""
         return await self._get_or_404(company_id)
 
-    async def update(self, company_id: uuid.UUID, data: CompanyUpdate) -> Organization:
-        """Apply partial update to a company."""
-        org = await self._get_or_404(company_id)
+    async def update(
+        self,
+        company_id: uuid.UUID,
+        data: CompanyUpdate,
+        *,
+        actor_user_id: Optional[uuid.UUID] = None,
+        platform_admin: bool = False,
+    ) -> Organization:
+        """Apply a partial update; a changed ``parent_org_id`` goes through :meth:`move`.
 
-        if data.issue_prefix is not None and data.issue_prefix != org.issue_prefix:
-            await self._assert_prefix_unique(data.issue_prefix)
-
-        if data.parent_org_id is not None:
-            await self._assert_no_cycle(company_id, data.parent_org_id)
-
-        if data.budget_monthly_cents is not None and org.parent_org_id is not None:
-            parent = await self._get_or_404(org.parent_org_id)
-            await self._assert_budget_fits(parent, data.budget_monthly_cents, exclude_id=company_id)
-
-        update_fields = data.model_dump(exclude_none=True)
-        for field, value in update_fields.items():
-            if field == "llc_status":
-                setattr(org, field, value.value if isinstance(value, LLCCompanyStatus) else value)
-            else:
-                setattr(org, field, value)
-
+        ``parent_org_id`` alone distinguishes absent from null (#19589): an explicit
+        ``null`` promotes to top level, an omitted field leaves the parent alone.
+        Every other field keeps "``None`` means unchanged".
+        """
+        org = await self._apply_parent_change(await self._get_or_404(company_id), data, actor_user_id, platform_admin)
+        await self._assert_fields_fit(org, data)
+        for field, value in data.model_dump(exclude_none=True, exclude={"parent_org_id"}).items():
+            setattr(org, field, value.value if isinstance(value, LLCCompanyStatus) else value)
+        # #12322: ``updated_at`` comes back inline from the UPDATE's RETURNING
+        # (``eager_defaults=True``), so the router's sync serialization is safe.
         await self.session.flush()
-        # #12322: `updated_at` is populated inline by the UPDATE's RETURNING
-        # clause (Base sets ``eager_defaults=True``), so it is never expired
-        # after flush() and the router's sync response serialization is safe.
-        # The previous per-call ``session.refresh(org, ["updated_at"])`` (#12309)
-        # is now redundant and removed.
         logger.info("LLC company updated: %s (id=%s)", org.name, org.id)
         return org
+
+    async def _apply_parent_change(
+        self,
+        org: Organization,
+        data: CompanyUpdate,
+        actor_user_id: Optional[uuid.UUID],
+        platform_admin: bool,
+    ) -> Organization:
+        """Move first, so a caller without move rights gets 403 before any field check (#19634)."""
+        if "parent_org_id" not in data.model_fields_set or data.parent_org_id == org.parent_org_id:
+            return org
+        return await self.move(org.id, data.parent_org_id, actor_user_id=actor_user_id, platform_admin=platform_admin)
+
+    async def _assert_fields_fit(self, org: Organization, data: CompanyUpdate) -> None:
+        """Prefix uniqueness, and the budget against the parent the org now has (after any move)."""
+        if data.issue_prefix is not None and data.issue_prefix != org.issue_prefix:
+            await self._assert_prefix_unique(data.issue_prefix)
+        if data.budget_monthly_cents is not None and org.parent_org_id is not None:
+            parent = await self._get_or_404(org.parent_org_id)
+            await self._assert_budget_fits(parent, data.budget_monthly_cents, exclude_id=org.id)
+
+    async def move(
+        self,
+        company_id: uuid.UUID,
+        parent_org_id: Optional[uuid.UUID],
+        *,
+        actor_user_id: Optional[uuid.UUID],
+        platform_admin: bool = False,
+    ) -> Organization:
+        """Re-parent *company_id* (``None`` = top level); the CEO follows the move (#15907).
+
+        Authorized here so every caller inherits it (#19634): an org with a parent is
+        moved by an owner/admin of that parent, a top-level org by its own owner/admin,
+        and a new parent needs owner/admin there (else not found); a platform admin
+        passes every check. The moved org and the new parent's ancestor chain are
+        locked first (#19593), so the cycle check and the CEO sync read a tree no
+        concurrent move can change before this transaction ends.
+        """
+        await self._authorize_move_target(company_id, parent_org_id, actor_user_id, platform_admin)
+        await self._lock_move_rows(company_id, parent_org_id)
+        # Everything from here on runs under the move's locks and can still lose a lock
+        # race (the relock, the flush, the CEO sync's writes): a deadlock is a 409.
+        async with deadlock_is_contention():
+            # Already locked above; ``for_update`` is a no-op relock kept for its
+            # ``populate_existing``, which replaces any pre-lock copy in the identity map.
+            org = await self._get_or_404(company_id, for_update=True)
+            await self._authorize_locked_move(org, parent_org_id, actor_user_id, platform_admin)
+            if parent_org_id is not None:
+                await self._get_or_404(parent_org_id)
+                await self._assert_no_cycle(company_id, parent_org_id)
+            was_company = org.parent_org_id is None
+            org.parent_org_id = parent_org_id
+            await self.session.flush()
+            if (parent_org_id is None) != was_company:
+                await CompanyCEOService().sync_with_parent(self.session, org.id, parent_org_id)
+        return org
+
+    async def _authorize_move_target(
+        self,
+        company_id: uuid.UUID,
+        parent_org_id: Optional[uuid.UUID],
+        actor_user_id: Optional[uuid.UUID],
+        platform_admin: bool,
+    ) -> None:
+        """Before any lock, on an unlocked read: the move's authority, then the new parent.
+
+        Checked first so a caller with no rights never takes a row lock.
+        :meth:`_authorize_locked_move` repeats both under the lock.
+        """
+        if platform_admin:
+            return
+        org = await self._get_or_404(company_id)
+        for target_id in self._move_check_order(org, parent_org_id):
+            await self._require_move_role(org, target_id, parent_org_id, actor_user_id, for_update=False)
+
+    async def _authorize_locked_move(
+        self,
+        org: Organization,
+        parent_org_id: Optional[uuid.UUID],
+        actor_user_id: Optional[uuid.UUID],
+        platform_admin: bool,
+    ) -> None:
+        """Under the org locks: both checks again, each deciding membership row ``FOR UPDATE``.
+
+        Lock order is the org rows by id (taken already), then memberships by
+        ``(company_id, user_id)`` -- one actor, so by company id. A revoke of either
+        deciding role then waits for this move, and a deadlock is a retryable 409.
+        """
+        if platform_admin:
+            return
+        async with deadlock_is_contention():
+            for target_id in sorted(self._move_check_order(org, parent_org_id)):
+                await self._require_move_role(org, target_id, parent_org_id, actor_user_id, for_update=True)
+
+    @staticmethod
+    def _move_check_order(org: Organization, parent_org_id: Optional[uuid.UUID]) -> List[uuid.UUID]:
+        """The orgs whose role decides a move, authority first (maintainer ruling, 2026-10-26).
+
+        The authority: an org with a parent is moved from that parent (promotion or
+        sideways), needing no role in the sub-org; a top-level org decides itself.
+        Then the new parent, if any. A platform admin skips both. "403 before 404"
+        holds for the unlocked pre-check, which keeps this order. The under-lock check
+        sorts it into lock order, so if a role changes in between, a caller can get
+        404 where the pre-check would have said 403: still a refusal, never a pass.
+        """
+        leaving = org.parent_org_id is not None and org.parent_org_id != parent_org_id
+        authority = org.parent_org_id if leaving else org.id
+        return [authority] + ([parent_org_id] if parent_org_id is not None else [])
+
+    async def _require_move_role(
+        self,
+        org: Organization,
+        target_id: uuid.UUID,
+        parent_org_id: Optional[uuid.UUID],
+        actor_user_id: Optional[uuid.UUID],
+        *,
+        for_update: bool,
+    ) -> None:
+        """Owner/admin on *target_id*; refusals carry a fixed public text, the detail is logged.
+
+        The new parent goes through :func:`may_attach_under`, #12233's rule shared with
+        create, and refuses as not found so an unadministered parent reads as missing.
+        """
+        if target_id == parent_org_id:
+            if not await may_attach_under(
+                self.session, target_id, actor_user_id, platform_admin=False, for_update=for_update
+            ):
+                raise CompanyNotFoundError("Company not found")
+            return
+        try:
+            await require_company_admin(self.session, target_id, actor_user_id, for_update=for_update)
+        except NotAuthorisedError as exc:
+            logger.info("Company move of %s refused at %s: %s", org.id, target_id, exc)
+            raise CompanyMoveForbiddenError(_MOVE_DETAIL[target_id == org.id]) from exc
 
     async def list_root_companies(self, include_archived: bool = False) -> List[Organization]:
         """Return all top-level companies (parent_org_id IS NULL).
@@ -330,10 +480,13 @@ class CompanyService(LLCServiceBase):
     # Internal helpers
     # ------------------------------------------------------------------
 
-    async def _get_or_404(self, company_id: uuid.UUID) -> Organization:
-        result = await self.session.execute(
-            select(Organization).where(Organization.id == company_id).where(Organization.deleted_at.is_(None))
-        )
+    async def _get_or_404(self, company_id: uuid.UUID, for_update: bool = False) -> Organization:
+        stmt = select(Organization).where(Organization.id == company_id).where(Organization.deleted_at.is_(None))
+        if for_update:
+            # Re-read under the lock: a row already in the identity map would otherwise
+            # keep the value read before the lock was granted.
+            stmt = stmt.with_for_update().execution_options(populate_existing=True)
+        result = await self.session.execute(stmt)
         org = result.scalar_one_or_none()
         if org is None:
             raise CompanyNotFoundError(f"Company {company_id} not found")
@@ -405,11 +558,5 @@ class CompanyService(LLCServiceBase):
 
     async def _assert_no_cycle(self, target_id: uuid.UUID, new_parent_id: uuid.UUID) -> None:
         """Raise CompanyCycleError if setting new_parent_id would create a cycle."""
-        visited: set[uuid.UUID] = {target_id}
-        current_id: Optional[uuid.UUID] = new_parent_id
-        while current_id is not None:
-            if current_id in visited:
-                raise CompanyCycleError(f"Setting parent_org_id={new_parent_id} would create a hierarchy cycle")
-            visited.add(current_id)
-            result = await self.session.execute(select(Organization.parent_org_id).where(Organization.id == current_id))
-            current_id = result.scalar_one_or_none()
+        if target_id in await self._chain_ids(new_parent_id):
+            raise CompanyCycleError(f"Setting parent_org_id={new_parent_id} would create a hierarchy cycle")

@@ -17,6 +17,7 @@
   # the result gates conditional installation below.
   failed_when: false
   tags: ['deps', 'nodejs']
+  check_mode: false
 
 - name: "nodejs | Install prerequisites"
   ansible.builtin.apt:
@@ -37,7 +38,7 @@
 
 - name: "nodejs | Add NodeSource repository"
   ansible.builtin.shell: |
-    curl -fsSL https://deb.nodesource.com/setup_{{ nodejs_major_version }}.x | bash -
+    curl -fsSL {{ nodesource_base_url }}/setup_{{ nodejs_major_version }}.x | bash -
   become: true
   when:
     - _node_check.rc != 0
@@ -70,3 +71,4 @@
     cmd: node --version
   changed_when: false
   tags: ['deps', 'nodejs']
+  when: not ansible_check_mode

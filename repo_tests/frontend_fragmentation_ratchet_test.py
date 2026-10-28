@@ -88,7 +88,7 @@ BASELINE = {
     # `.vue` components carrying their own <style> rules. Target is a small
     # number of shared stylesheets, not 381 components each with a private
     # copy of the design system.
-    "components_declaring_styles": 366,  # #14780 OrgChart drawer: 367 -> 366 (the slide transition CSS left for BaseDrawer); #14778: -1, the local BaseInput fork retired into the kit (on main's 368); #18849: -1, the local BaseButton fork retired into the kit; #18819: -2 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-2);  #14776: the local BaseBadge fork left for the kit (376 -> 375), then the local BaseCard + BasePanel (375 -> 373); #18240: App.vue's scoped <style> went with the header split (lowered from 379).; #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit
+    "components_declaring_styles": 365,  # #19217: the retired main-app web research editors (366 -> 365); #14780 OrgChart drawer: 367 -> 366 (the slide transition CSS left for BaseDrawer); #14778: -1, the local BaseInput fork retired into the kit (on main's 368); #18849: -1, the local BaseButton fork retired into the kit; #18819: -2 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-2);  #14776: the local BaseBadge fork left for the kit (376 -> 375), then the local BaseCard + BasePanel (375 -> 373); #18240: App.vue's scoped <style> went with the header split (lowered from 379).; #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit
     # Earlier #17020: Terminal.vue removed (dead, zero live callers)
     # Distinct class names declared anywhere in the frontend.
     #
@@ -100,7 +100,7 @@ BASELINE = {
     # cross-referencing sibling admin views) -- this pair is documented above
     # as measuring page SIZE, not duplication, and is interim until #15455
     # replaces them with a real duplication measure.
-    "distinct_class_names": 5476,  # train-85b: #12741 show-more rules moved to TruncationNotice (-3) on main's 5479; train-84: #14780 BaseAvatar (-2) on main's 5481; #17829: the chat input status bar classes became utilities (-3); #14780 drawer adoption: 5492 -> 5484 (SourcePreviewPanel, WorkItemDetail on BaseDrawer); #14778: -10, the local BaseInput fork retired into the kit (on main's 5502); #18242: -1 on main's 5503 (CustomDashboard onto DashboardGrid); #18849: -14, the local BaseButton fork retired into the kit; #18819: -14 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-26);  #14776: local BaseBadge retired (5594 -> 5585), then local BaseCard + BasePanel (5585 -> 5557); #17565: App.vue's hand-rolled .skip-links/.skip-link
+    "distinct_class_names": 5431,  # #19217: the retired main-app web research editors (-23) on main's 5454; #17562: six hand-rolled tables onto the kit BaseTable (-12) on main's 5466; #13422: risk-badge, risk-pill, cost-pill and the level-* risk classes left for the kit RiskBadge (-3) on main's 5476; train-85b: #12741 show-more rules moved to TruncationNotice (-3) on main's 5479; train-84: #14780 BaseAvatar (-2) on main's 5481; #17829: the chat input status bar classes became utilities (-3); #14780 drawer adoption: 5492 -> 5484 (SourcePreviewPanel, WorkItemDetail on BaseDrawer); #14778: -10, the local BaseInput fork retired into the kit (on main's 5502); #18242: -1 on main's 5503 (CustomDashboard onto DashboardGrid); #18849: -14, the local BaseButton fork retired into the kit; #18819: -14 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-26);  #14776: local BaseBadge retired (5594 -> 5585), then local BaseCard + BasePanel (5585 -> 5557); #17565: App.vue's hand-rolled .skip-links/.skip-link; train-85h merge: main's 5469 + this train's -3
     # replaced by the shared kit SkipLink (lowered from 5615). Earlier: #17020,
     # Terminal.vue removed -- pure deletion of dead code, lowered, not held.
     # #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit (5611 -> 5594).
@@ -109,7 +109,7 @@ BASELINE = {
     # so PRs that each remove rules never edit a shared line.
     # Files declaring at least one `.btn-*` CSS rule. Target is 1 — a single
     # shared stylesheet.
-    "button_definition_files": 100,  # #18849: 101 -> 100, the local BaseButton fork retired into the kit; Distinct `.btn-*` class names declared anywhere.
+    "button_definition_files": 99,  # #19217: the retired main-app web research editors (100 -> 99); #18849: 101 -> 100, the local BaseButton fork retired into the kit; Distinct `.btn-*` class names declared anywhere.
     "button_class_names": 103,  # #18849: 115 -> 103, the local BaseButton fork retired into the kit; Distinct notification entry points. Target is 1 canonical API, the rest
     # thin shims or removed.
     "notification_entry_points": 4,
@@ -136,7 +136,7 @@ FAMILY_BASELINE = {
     "progress": 47,
     "stat": 38,
     "panel": 19,  # #14780 drawer adoption: 23 -> 19 (SourcePreviewPanel, WorkItemDetail on BaseDrawer); #14776: local BaseCard + BasePanel merged into the kit card (34 -> 23)
-    "form": 27,
+    "form": 26,  # #19217: the retired main-app web research editors (27 -> 26)
     "action": 27,
     "modal": 25,
     "empty": 22,  # #14778: DataTable empty-cell left (23 -> 22)
@@ -144,14 +144,14 @@ FAMILY_BASELINE = {
     "section": 23,
     "summary": 27,
     "text": 28,
-    "toggle": 24,
-    "field": 20,
+    "toggle": 22,  # #19217: the retired main-app web research editors (24 -> 22)
+    "field": 17,  # #19217: the retired main-app web research editors (20 -> 17)
     "icon": 12,  # #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit (16 -> 12)
     "checkbox": 9,
     "sidebar": 9,
     "dropdown": 9,
     "nav": 7,
-    "breadcrumb": 7,
+    "breadcrumb": 6,
     "chip": 5,
     "pagination": 2,  # #14778: DataTable pagination left (4 -> 2)
     # Three vocabularies for "the user is waiting": 60 distinct names across

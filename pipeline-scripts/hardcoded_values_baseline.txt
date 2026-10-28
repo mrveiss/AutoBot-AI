@@ -175,8 +175,6 @@
 1|other|autobot-backend/api/telegram_bot.py|"user"
 1|other|autobot-backend/api/terminal.py|30
 1|other|autobot-backend/api/terminal_handlers.py|"user"
-2|other|autobot-backend/api/transcripts.py|"system"
-1|other|autobot-backend/api/transcripts.py|"user"
 1|other|autobot-backend/api/user_management/users.py|50
 1|other|autobot-backend/api/user_management/users.py|offset=0
 1|other|autobot-backend/api/verbatim_memory.py|100
@@ -602,7 +600,6 @@
 1|other|autobot-frontend/src/components/file-browser/FilePathNavigation.stories.ts|'/opt/autobot/autobot-frontend/src/components/file-browser
 1|other|autobot-frontend/src/components/file-browser/FilePreview.stories.ts|https://via.placeholder.com/400x300
 1|other|autobot-frontend/src/components/knowledge/EntityExtractor.vue|'user'
-1|other|autobot-frontend/src/components/knowledge/WebResearchSettings.vue|30
 1|other|autobot-frontend/src/components/knowledge/connectors/ConnectorConfigModal.vue|"postgresql://<redacted>@host:5432/db"
 4|other|autobot-frontend/src/components/knowledge/connectors/ConnectorConfigModal.vue|https://gitlab.com
 1|other|autobot-frontend/src/components/knowledge/connectors/ConnectorConfigModal.vue|https://www.googleapis.com/auth/drive.readonly
@@ -612,7 +609,6 @@
 1|other|autobot-frontend/src/components/settings/ApiKeySetupWizard.vue|https://console.anthropic.com/
 1|other|autobot-frontend/src/components/settings/ApiKeySetupWizard.vue|https://huggingface.co/kyutai/pocket-tts
 1|other|autobot-frontend/src/components/settings/ApiKeySetupWizard.vue|https://platform.openai.com/api-keys
-1|other|autobot-frontend/src/components/settings/WebResearchSettingsPanel.vue|120
 1|other|autobot-frontend/src/components/terminal/AdvancedStepConfirmationModal.stories.ts|https://github.com/example/repo.git
 2|other|autobot-frontend/src/components/ui/LoadingSpinner.vue|offset=0
 1|ssot|autobot-frontend/src/components/ui/SystemStatusNotification.stories.ts|:8001
@@ -638,7 +634,7 @@
 1|other|autobot-frontend/src/models/repositories/KnowledgeRepository.ts|offset=0
 1|other|autobot-frontend/src/services/TerminalService.ts|100
 1|other|autobot-frontend/src/services/TerminalService.ts|50
-2|other|autobot-frontend/src/stores/useWebResearchStore.ts|30
+1|other|autobot-frontend/src/stores/useWebResearchStore.ts|30
 1|other|autobot-frontend/src/test/config/test-config.ts|30
 1|other|autobot-frontend/src/test/mocks/api-client-mock.ts|10
 1|other|autobot-frontend/src/test/utils/test-setup-helpers.ts|'user'
@@ -724,8 +720,6 @@
 1|other|autobot-infrastructure/shared/config/security/threat_detection.yaml|https://urlhaus.abuse.ch/downloads/text/
 1|other|autobot-infrastructure/shared/docker/compose/docker-compose.playwright-vnc.yml|/home/autobot
 1|other|autobot-infrastructure/shared/docker/compose/docker-compose.playwright-vnc.yml|https://github.com/novnc/noVNC/archive/refs/tags/v1.7.0.tar.gz
-1|ssot|autobot-infrastructure/shared/docker/compose/docker-compose.playwright-vnc.yml|:3000
-1|ssot|autobot-infrastructure/shared/docker/compose/docker-compose.playwright.yml|:3000
 1|other|autobot-infrastructure/shared/mcp/tools/knowledge-base-mcp/autobot_knowledge_mcp/embedded.py|10
 1|other|autobot-infrastructure/shared/mcp/tools/knowledge-base-mcp/autobot_knowledge_mcp/server.py|10
 1|other|autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/real-time-ingestion.ts|'assistant'
@@ -772,7 +766,6 @@
 1|ssot|autobot-infrastructure/shared/scripts/deployment/deploy_hybrid.sh|:5173
 1|ssot|autobot-infrastructure/shared/scripts/deployment/deploy_hybrid.sh|:8001
 3|ssot|autobot-infrastructure/shared/scripts/deployment/deploy_hybrid.sh|:8080
-2|ssot|autobot-infrastructure/shared/scripts/deployment/start_all_containers.sh|:3000
 1|ssot|autobot-infrastructure/shared/scripts/deployment/start_all_containers.sh|:6379
 2|ssot|autobot-infrastructure/shared/scripts/deployment/start_all_containers.sh|:8080
 2|ssot|autobot-infrastructure/shared/scripts/deployment/start_all_containers.sh|:8081
@@ -780,12 +773,10 @@
 1|other|autobot-infrastructure/shared/scripts/deployment_rollback.py|300
 1|ssot|autobot-infrastructure/shared/scripts/environment/set-env-deepseek.sh|:8001
 1|ssot|autobot-infrastructure/shared/scripts/export_service_keys.py|:6379
-1|ssot|autobot-infrastructure/shared/scripts/infrastructure/deploy_browser_vnc_services.sh|:3000
 1|ssot|autobot-infrastructure/shared/scripts/infrastructure/deploy_browser_vnc_services.sh|:6080
 1|other|autobot-infrastructure/shared/scripts/install-bare-metal.sh|"/opt/autobot
 2|other|autobot-infrastructure/shared/scripts/install-bare-metal.sh|http://backend;
 1|other|autobot-infrastructure/shared/scripts/install-bare-metal.sh|http://slm/;
-1|other|autobot-infrastructure/shared/scripts/install-bare-metal.sh|https://deb.nodesource.com/setup_20.x
 1|other|autobot-infrastructure/shared/scripts/install-bare-metal.sh|https://github.com/mrveiss/AutoBot-AI
 1|other|autobot-infrastructure/shared/scripts/install-bare-metal.sh|https://github.com/mrveiss/AutoBot-AI.git
 1|other|autobot-infrastructure/shared/scripts/install-bare-metal.sh|https://ollama.com/install.sh
@@ -796,7 +787,6 @@
 5|other|autobot-infrastructure/shared/scripts/install-slm.sh|chown autobot:autobot
 1|other|autobot-infrastructure/shared/scripts/install-slm.sh|https://apt.grafana.com
 1|other|autobot-infrastructure/shared/scripts/install-slm.sh|https://apt.grafana.com/gpg.key
-1|other|autobot-infrastructure/shared/scripts/install-slm.sh|https://deb.nodesource.com/setup_20.x
 1|other|autobot-infrastructure/shared/scripts/install-slm.sh|https://github.com/mrveiss/AutoBot-AI.git
 1|ssot|autobot-infrastructure/shared/scripts/install-slm.sh|:3000
 2|ssot|autobot-infrastructure/shared/scripts/install-slm.sh|:8001
@@ -817,26 +807,20 @@
 1|ssot|autobot-infrastructure/shared/scripts/network/test-dns-resolution.sh|:8001
 1|other|autobot-infrastructure/shared/scripts/performance_dashboard.py|https://cdn.jsdelivr.net/npm/chart.js
 1|ssot|autobot-infrastructure/shared/scripts/security/mtls-migrate.py|:6379
-2|ssot|autobot-infrastructure/shared/scripts/setup/setup_repair.sh|:3000
 2|ssot|autobot-infrastructure/shared/scripts/setup/setup_repair.sh|:8081
 2|other|autobot-infrastructure/shared/scripts/setup/setup_tier2_research.sh|https://playwright.dev/python/docs/browsers#system-requirements
 1|other|autobot-infrastructure/shared/scripts/setup/system/setup_passwordless_sudo.sh|"/opt/autobot/bin/autobot-cleanup-port
-1|ssot|autobot-infrastructure/shared/scripts/setup/verify_installation.sh|:3000
 1|ssot|autobot-infrastructure/shared/scripts/setup/verify_installation.sh|llama3.2-uncensored:1b
 1|ssot|autobot-infrastructure/shared/scripts/setup/verify_installation.sh|llama3.2-uncensored:3b
 4|other|autobot-infrastructure/shared/scripts/setup_browser_vnc.sh|/home/autobot
-1|ssot|autobot-infrastructure/shared/scripts/setup_browser_vnc.sh|:3000
 2|ssot|autobot-infrastructure/shared/scripts/setup_browser_vnc.sh|:6080
-1|ssot|autobot-infrastructure/shared/scripts/simple_populate.py|:8001
 1|other|autobot-infrastructure/shared/scripts/test_startup_coordinator.sh|http://127.0.0.3:8001/api/system/health
 1|ssot|autobot-infrastructure/shared/scripts/test_startup_coordinator.sh|:8001
-5|ssot|autobot-infrastructure/shared/scripts/testing/manage_playwright.sh|:3000
 1|ssot|autobot-infrastructure/shared/scripts/testing/test_desktop_setup.sh|:5173
 1|ssot|autobot-infrastructure/shared/scripts/testing/test_desktop_setup.sh|:6080
 1|other|autobot-infrastructure/shared/scripts/testing/test_file_upload.sh|"/tmp/autobot_upload_test.txt
 2|ssot|autobot-infrastructure/shared/scripts/testing/test_file_upload.sh|:3000
 5|ssot|autobot-infrastructure/shared/scripts/testing/test_file_upload.sh|:8001
-1|ssot|autobot-infrastructure/shared/scripts/upload_docs.py|:8001
 1|ssot|autobot-infrastructure/shared/scripts/utilities/activate-mcp-bridges.sh|:5173
 1|ssot|autobot-infrastructure/shared/scripts/utilities/browser_settings_utility.js|:11434
 3|ssot|autobot-infrastructure/shared/scripts/utilities/browser_settings_utility.js|:8001
@@ -858,7 +842,6 @@
 1|other|autobot-infrastructure/shared/scripts/utilities/run_unit_tests.py|60
 1|ssot|autobot-infrastructure/shared/scripts/utilities/settings_diagnostic_utility.py|qwen3.5:9b
 4|other|autobot-infrastructure/shared/scripts/utilities/sync-frontend.sh|/home/autobot
-2|ssot|autobot-infrastructure/shared/scripts/utilities/sync-npu-worker-to-windows.sh|:8082
 1|other|autobot-infrastructure/shared/scripts/utilities/sync-to-slm.sh|"/opt/autobot
 3|other|autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh|/home/autobot
 1|other|autobot-infrastructure/shared/scripts/utilities/system_monitor.py|30
@@ -884,7 +867,6 @@
 1|ssot|autobot-infrastructure/shared/tests/results/comprehensive_testing_20250909_150149/system_assessment_report.py|:8001
 1|ssot|autobot-infrastructure/shared/tests/run-frontend-test.js|:5173
 1|ssot|autobot-infrastructure/shared/tests/run_phase9_tests.sh|:6080
-2|ssot|autobot-infrastructure/shared/tests/screenshots/test-browser-console-errors.js|:3000
 2|ssot|autobot-infrastructure/shared/tests/screenshots/test-browser-console-errors.js|:5173
 1|ssot|autobot-infrastructure/shared/tests/screenshots/test-chat-delete-complete-fix.js|:3000
 1|ssot|autobot-infrastructure/shared/tests/screenshots/test-chat-delete-complete-fix.js|:5173
@@ -902,19 +884,16 @@
 1|ssot|autobot-infrastructure/shared/tests/screenshots/test-final-security-implementation.js|:8001
 1|ssot|autobot-infrastructure/shared/tests/screenshots/test-final-system-status.js|:5173
 4|ssot|autobot-infrastructure/shared/tests/screenshots/test-final-system-status.js|:8001
-2|ssot|autobot-infrastructure/shared/tests/screenshots/test-frontend-edge-error.js|:3000
 2|ssot|autobot-infrastructure/shared/tests/screenshots/test-frontend-edge-error.js|:5173
 1|ssot|autobot-infrastructure/shared/tests/screenshots/test-frontend-edge-simple.js|:3000
 2|ssot|autobot-infrastructure/shared/tests/screenshots/test-frontend-edge-simple.js|:5173
 1|ssot|autobot-infrastructure/shared/tests/screenshots/test-frontend-navigation.js|:5173
-1|ssot|autobot-infrastructure/shared/tests/screenshots/test-frontend-via-docker.js|:3000
 2|ssot|autobot-infrastructure/shared/tests/screenshots/test-frontend-via-docker.js|:5173
 1|ssot|autobot-infrastructure/shared/tests/screenshots/test-frontend-via-docker.js|:8001
 1|ssot|autobot-infrastructure/shared/tests/screenshots/test-network-scanning-question.js|:3000
 1|ssot|autobot-infrastructure/shared/tests/screenshots/test-network-scanning-question.js|:5173
 1|ssot|autobot-infrastructure/shared/tests/screenshots/test-send-network-question.js|:3000
 1|ssot|autobot-infrastructure/shared/tests/screenshots/test-send-network-question.js|:5173
-1|ssot|autobot-infrastructure/shared/tests/screenshots/test-silent-chat-deletion.js|:3000
 1|ssot|autobot-infrastructure/shared/tests/screenshots/test-silent-chat-deletion.js|:5173
 2|ssot|autobot-infrastructure/shared/tests/screenshots/test-silent-chat-deletion.js|:8001
 1|ssot|autobot-infrastructure/shared/tests/screenshots/test-terminal-chat-session.js|:3000
@@ -927,7 +906,6 @@
 2|ssot|autobot-infrastructure/shared/tests/screenshots/test-terminal-fixed.js|:8001
 1|ssot|autobot-infrastructure/shared/tests/screenshots/test-terminal-specific.js|:3000
 1|ssot|autobot-infrastructure/shared/tests/screenshots/test-terminal-specific.js|:5173
-1|ssot|autobot-infrastructure/shared/tests/screenshots/test-visible-browser.js|:3000
 1|ssot|autobot-infrastructure/shared/tests/screenshots/test-visible-browser.js|:5173
 1|ssot|autobot-infrastructure/shared/tests/screenshots/test-workflow-approval-ui.js|:3000
 1|ssot|autobot-infrastructure/shared/tests/screenshots/test-workflow-approval-ui.js|:5173
@@ -970,8 +948,6 @@
 1|other|autobot-slm-backend/ansible/inventory/group_vars/all.yml|/home/autobot
 1|other|autobot-slm-backend/ansible/inventory/group_vars/all.yml|https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
 1|other|autobot-slm-backend/ansible/inventory/group_vars/all.yml|https://apt.repos.intel.com/openvino/2024
-1|other|autobot-slm-backend/ansible/inventory/group_vars/all.yml|https://deb.nodesource.com/gpgkey/nodesource.gpg.key
-1|other|autobot-slm-backend/ansible/inventory/group_vars/all.yml|https://deb.nodesource.com/node_20.x
 1|other|autobot-slm-backend/ansible/inventory/group_vars/all.yml|https://packages.redis.io/deb
 1|other|autobot-slm-backend/ansible/inventory/group_vars/all.yml|https://packages.redis.io/gpg
 1|other|autobot-slm-backend/ansible/inventory/group_vars/backend.yml|"/var/lib/autobot/backend
@@ -981,7 +957,6 @@
 1|other|autobot-slm-backend/ansible/inventory/group_vars/browser.yml|30
 1|other|autobot-slm-backend/ansible/inventory/group_vars/browser.yml|300
 2|other|autobot-slm-backend/ansible/inventory/group_vars/browser.yml|60
-1|ssot|autobot-slm-backend/ansible/inventory/group_vars/browser.yml|:3000
 1|other|autobot-slm-backend/ansible/inventory/group_vars/database.yml|"/tmp/autobot/models
 1|other|autobot-slm-backend/ansible/inventory/group_vars/database.yml|"/var/lib/autobot/models
 1|other|autobot-slm-backend/ansible/inventory/group_vars/database.yml|"/var/lib/autobot/models/cache
@@ -1021,8 +996,6 @@
 1|other|autobot-slm-backend/ansible/playbooks/deploy-development-services.yml|60
 1|other|autobot-slm-backend/ansible/playbooks/deploy-development-services.yml|Group=autobot
 1|other|autobot-slm-backend/ansible/playbooks/deploy-development-services.yml|User=autobot
-1|other|autobot-slm-backend/ansible/playbooks/deploy-development-services.yml|https://deb.nodesource.com/gpgkey/nodesource.gpg.key
-1|other|autobot-slm-backend/ansible/playbooks/deploy-development-services.yml|https://deb.nodesource.com/node_20.x
 2|other|autobot-slm-backend/ansible/playbooks/deploy-full.yml|60
 3|other|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|120
 1|other|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|60
@@ -1030,23 +1003,14 @@
 1|other|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|https://download.docker.com/linux/ubuntu/gpg
 1|other|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|https://github.com/autobot/autobot.git
 1|other|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|https://github.com/docker/compose/releases/download/v{{
-2|ssot|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|:3000
 2|ssot|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|:5173
 2|ssot|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|:8080
 2|ssot|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|:8081
-1|ssot|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|dolphin-llama3:8b
-1|ssot|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|gemma2:2b
-1|ssot|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|llama3.2:1b
-1|ssot|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|mistral:7b-instruct
-1|ssot|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|phi3:mini
-1|ssot|autobot-slm-backend/ansible/playbooks/deploy-hybrid-docker.yml|qwen3.5:9b
 1|other|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|'/tmp/autobot-deployment
 1|other|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|/home/autobot
 1|other|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|120
 1|other|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|Group=autobot
 7|other|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|User=autobot
-1|other|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|https://deb.nodesource.com/gpgkey/nodesource.gpg.key
-1|other|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|https://deb.nodesource.com/node_20.x
 1|other|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|https://download.redisinsight.redis.com/latest/RedisInsight-v2-linux-x64-latest.deb
 1|other|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|https://ollama.com/install.sh
 1|other|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|https://packages.redis.io/deb
@@ -1054,7 +1018,6 @@
 1|other|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|https://repositories.intel.com/graphics/intel-graphics.key
 1|other|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|https://repositories.intel.com/graphics/ubuntu
 2|ssot|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|:11434
-1|ssot|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|:3000
 1|ssot|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|:8080
 1|ssot|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|:8081
 1|ssot|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|dolphin-llama3:8b
@@ -1071,7 +1034,6 @@
 1|other|autobot-slm-backend/ansible/playbooks/enroll-local.yml|/home/autobot
 1|other|autobot-slm-backend/ansible/playbooks/enroll-node.yml|"/var/lib/autobot
 1|other|autobot-slm-backend/ansible/playbooks/enroll-node.yml|/home/autobot
-1|other|autobot-slm-backend/ansible/playbooks/enroll-node.yml|https://deb.nodesource.com/setup_20.x
 1|other|autobot-slm-backend/ansible/playbooks/enroll-node.yml|https://packages.redis.io/deb
 1|other|autobot-slm-backend/ansible/playbooks/enroll-node.yml|https://packages.redis.io/gpg
 1|ssot|autobot-slm-backend/ansible/playbooks/fix-backend-clean-restart.yml|:8443
@@ -1079,7 +1041,6 @@
 1|ssot|autobot-slm-backend/ansible/playbooks/fix-backend-symlink.yml|:8443
 2|other|autobot-slm-backend/ansible/playbooks/health-check.yml|"/var/lib/autobot/models
 2|other|autobot-slm-backend/ansible/playbooks/health-check.yml|30
-1|ssot|autobot-slm-backend/ansible/playbooks/health-check.yml|:3000
 1|ssot|autobot-slm-backend/ansible/playbooks/health-check.yml|:8080
 2|ssot|autobot-slm-backend/ansible/playbooks/health-check.yml|:8081
 2|ssot|autobot-slm-backend/ansible/playbooks/health-check.yml|:8443
@@ -1110,7 +1071,6 @@
 1|other|autobot-slm-backend/ansible/requirements.yml|https://github.com/dev-sec/ansible-os-hardening
 1|other|autobot-slm-backend/ansible/roles/access_control/defaults/main.yml|300
 1|other|autobot-slm-backend/ansible/roles/agent_config/defaults/main.yml|"/var/lib/autobot/models
-1|other|autobot-slm-backend/ansible/roles/agent_config/tasks/nodejs.yml|https://deb.nodesource.com/setup_{{
 1|other|autobot-slm-backend/ansible/roles/agent_config/tasks/ollama.yml|https://ollama.ai/install.sh
 1|other|autobot-slm-backend/ansible/roles/agent_config/tasks/openvino.yml|300
 1|other|autobot-slm-backend/ansible/roles/agent_config/tasks/openvino.yml|https://apt.repos.intel.com/intel-gpg-keys/GPG-PUB-KEY-INTEL-SW-PRODUCTS.PUB
@@ -1121,7 +1081,6 @@
 1|ssot|autobot-slm-backend/ansible/roles/ai-stack/defaults/main.yml|dolphin-llama3:8b
 2|ssot|autobot-slm-backend/ansible/roles/ai-stack/defaults/main.yml|gemma2:2b
 7|ssot|autobot-slm-backend/ansible/roles/ai-stack/defaults/main.yml|mistral:7b-instruct
-1|ssot|autobot-slm-backend/ansible/roles/ai-stack/defaults/main.yml|phi3:mini
 4|ssot|autobot-slm-backend/ansible/roles/ai-stack/defaults/main.yml|qwen3.5:9b
 1|other|autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml|120
 1|other|autobot-slm-backend/ansible/roles/backend/defaults/main.yml|https://github.com/mrveiss/AutoBot-AI.git
@@ -1164,7 +1123,6 @@
 2|other|autobot-slm-backend/ansible/roles/monitoring/tasks/grafana.yml|https://apt.grafana.com/gpg.key
 1|other|autobot-slm-backend/ansible/roles/monitoring/tasks/node_exporter.yml|https://github.com/prometheus/node_exporter/releases/download/v{{
 1|other|autobot-slm-backend/ansible/roles/monitoring/tasks/prometheus.yml|https://github.com/prometheus/prometheus/releases/download/v{{
-1|other|autobot-slm-backend/ansible/roles/nodejs/tasks/main.yml|https://deb.nodesource.com/setup_{{
 1|other|autobot-slm-backend/ansible/roles/npu-worker/tasks/main.yml|120
 1|other|autobot-slm-backend/ansible/roles/postgresql/tasks/install.yml|https://apt.postgresql.org/pub/repos/apt
 1|other|autobot-slm-backend/ansible/roles/postgresql/tasks/install.yml|https://www.postgresql.org/media/keys/ACCC4CF8.asc
@@ -1217,9 +1175,6 @@
 1|other|autobot-slm-backend/services/backup.py|60
 1|other|autobot-slm-backend/services/blue_green.py|30
 1|other|autobot-slm-backend/services/blue_green.py|300
-1|other|autobot-slm-backend/services/code_distributor.py|120
-3|other|autobot-slm-backend/services/code_distributor.py|30
-1|other|autobot-slm-backend/services/code_distributor.py|60
 1|other|autobot-slm-backend/services/hf_token_validator.py|https://huggingface.co/api/whoami-v2
 1|other|autobot-slm-backend/services/jwks_verifier.py|"user"
 1|other|autobot-slm-backend/services/replication.py|120

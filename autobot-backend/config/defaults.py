@@ -13,6 +13,7 @@ SSOT Migration (Issue #639):
 
 from typing import Any, Dict
 
+from autobot_shared import deployment_profile
 from autobot_shared.embedding_model import active_embedding_model
 from autobot_shared.ssot_config import config
 from config.registry import ConfigRegistry
@@ -67,6 +68,13 @@ def _get_backend_config(llm_host: str, llm_port: int, bind_host: str, backend_po
     }
 
 
+def _db_number(name: str) -> int:
+    """*name*'s Redis DB number from the one table (#19232); imported late, config loads first."""
+    from autobot_shared.redis_management.database_names import database_number
+
+    return database_number(name)
+
+
 def _get_memory_config(redis_host: str, redis_port: int) -> Dict[str, Any]:
     """Get memory (Redis + ChromaDB) configuration."""
     return {
@@ -74,7 +82,7 @@ def _get_memory_config(redis_host: str, redis_port: int) -> Dict[str, Any]:
             "enabled": True,
             "host": redis_host,
             "port": redis_port,
-            "db": config.redis.db_knowledge,
+            "db": _db_number("knowledge"),
             "password": config.redis.password,
             "username": config.redis.username,
         },
@@ -284,7 +292,7 @@ def _get_deployment_config(redis_host: str, backend_port: int) -> Dict[str, Any]
         backend_port: Backend API port
     """
     return {
-        "mode": "local",
+        "mode": deployment_profile.deployment_mode(),  # #19316: the one home; "" = auto-detect
         "host": redis_host,
         "port": config.port.backend,
     }
@@ -302,7 +310,7 @@ def _get_redis_config(redis_host: str, redis_port: int) -> Dict[str, Any]:
     return {
         "host": redis_host,
         "port": redis_port,
-        "db": config.redis.db_main,
+        "db": _db_number("main"),
         "password": config.redis.password,
         "username": config.redis.username,
     }
@@ -337,7 +345,7 @@ def _get_task_transport_config(redis_host: str, redis_port: int) -> Dict[str, An
             "port": redis_port,
             "password": config.redis.password,
             "username": config.redis.username,
-            "db": config.redis.db_tasks,
+            "db": _db_number("workflows"),
         },
     }
 

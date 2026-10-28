@@ -40,7 +40,6 @@ autobot-backend/requirements.txt::apscheduler
 autobot-backend/requirements.txt::asyncssh
 autobot-backend/requirements.txt::beautifulsoup4
 autobot-backend/requirements.txt::celery
-autobot-backend/requirements.txt::chromadb
 autobot-backend/requirements.txt::fastapi
 autobot-backend/requirements.txt::greenlet
 autobot-backend/requirements.txt::httpx

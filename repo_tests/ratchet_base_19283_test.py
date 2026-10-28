@@ -45,12 +45,16 @@ def _repo(tmp_path: Path, commits: int) -> Path:
 def test_in_ci_a_missing_head_parent_refuses_instead_of_passing(tmp_path, monkeypatch) -> None:
     """A depth-1 checkout has no HEAD^1: the ratchet must say so, never report 'nothing rose'."""
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    # CI itself may export the base (a push, or a PR into release, #19466); this test owns it
+    monkeypatch.delenv("AUTOBOT_RATCHET_BASE_SHA", raising=False)
     with pytest.raises(BaseUnavailable, match="fetch-depth: 2"):
         base_commit(_repo(tmp_path, commits=1))
 
 
 def test_in_ci_the_base_is_head_parent_and_reads_its_table(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    # CI itself may export the base (a push, or a PR into release, #19466); this test owns it
+    monkeypatch.delenv("AUTOBOT_RATCHET_BASE_SHA", raising=False)
     repo = _repo(tmp_path, commits=2)
     assert literal_in(base_text(repo, "table.py"), "KNOWN_LARGE") == {"x.py": 700}
     assert base_text(repo, "not-there.py") is None
@@ -77,6 +81,8 @@ def _history(tmp_path: Path, *tables: str, path: str = "table.py") -> tuple[Path
 
 def _ci(monkeypatch, *, base_sha: str = "") -> None:
     monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    # CI itself may export the base (a push, or a PR into release, #19466); this test owns it
+    monkeypatch.delenv("AUTOBOT_RATCHET_BASE_SHA", raising=False)
     monkeypatch.setenv("AUTOBOT_RATCHET_BASE_SHA", base_sha)
 
 

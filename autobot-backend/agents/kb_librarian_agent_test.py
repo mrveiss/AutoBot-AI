@@ -46,6 +46,7 @@ import pytest
 import agents.kb_librarian_agent as kb_agent_module
 from agents.kb_librarian_agent import KBLibrarianAgent
 from autobot_shared.ssot_config import config as ssot_config
+from knowledge.ownership import KnowledgeOwnership
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
 from knowledge_base import KnowledgeBase
 
@@ -54,6 +55,7 @@ def _agent_with_mock_kb(results):
     agent = object.__new__(KBLibrarianAgent)
     agent.knowledge_base = create_autospec(KnowledgeBase, instance=True)
     agent.knowledge_base.search.return_value = results
+    agent.knowledge_base.ownership_manager = KnowledgeOwnership(None)  # #16665: the real visibility decision
     return agent
 
 
@@ -91,16 +93,51 @@ def test_init_reads_runtime_defaults_via_config_manager():
 @pytest.mark.asyncio
 async def test_search_knowledge_returns_real_content_not_empty_list():
     agent = _agent_with_mock_kb(
-        [{"content": "AutoBot uses Redis for caching", "metadata": {"source": "docs"}, "score": 0.87}]
+        [
+            {
+                "content": "AutoBot uses Redis for caching",
+                "metadata": {"source": "docs", "owner_id": "alice", "visibility": "private"},
+                "score": 0.87,
+            }
+        ]
     )
 
-    results = await agent.search_knowledge("how does autobot cache", limit=5)
+    results = await agent.search_knowledge("how does autobot cache", limit=5, user_id="alice")
 
     assert results != []
     assert results[0]["content"] == "AutoBot uses Redis for caching"
     assert results[0]["source"] == "docs"
     agent.knowledge_base.search.assert_called_once_with(
         "how does autobot cache", top_k=5, filters=RESEARCH_QUARANTINE_FILTER
+    )
+
+
+@pytest.mark.asyncio
+async def test_search_knowledge_never_returns_another_users_private_fact():
+    """#16665: user B's search does not see user A's private fact; A and a platform fact are unaffected."""
+    private = {"content": "alice only", "metadata": {"owner_id": "alice", "visibility": "private"}, "score": 0.9}
+    platform = {"content": "for everyone", "metadata": {"owner_id": "admin", "visibility": "system"}, "score": 0.8}
+    agent = _agent_with_mock_kb([private, platform])
+
+    for_bob = await agent.search_knowledge("q", user_id="bob")
+    for_alice = await agent.search_knowledge("q", user_id="alice")
+    for_nobody = await agent.search_knowledge("q")
+
+    assert [r["content"] for r in for_bob] == ["for everyone"]
+    assert [r["content"] for r in for_alice] == ["alice only", "for everyone"]
+    assert for_nobody == []
+
+
+@pytest.mark.asyncio
+async def test_process_query_and_answer_question_are_scoped_to_the_user():
+    private = {"content": "alice only", "metadata": {"owner_id": "alice", "visibility": "private"}, "score": 0.9}
+    agent = _agent_with_mock_kb([private])
+    agent.enabled, agent.max_results, agent.auto_summarize = True, 5, False
+
+    assert (await agent.process_query("q", user_id="bob"))["documents"] == []
+    assert len((await agent.process_query("q", user_id="alice"))["documents"]) == 1
+    assert (
+        await agent.get_context_for_question("q", user_id="bob") == "No relevant information found in knowledge base."
     )
 
 

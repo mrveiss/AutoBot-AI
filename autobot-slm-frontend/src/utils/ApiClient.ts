@@ -30,7 +30,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { getSlmApiBase } from '@/config/ssot-config'
 import { clearSlmSession, readSlmToken } from '@/utils/authStorage'
 import { buildLoginUrl, isLoginPathname } from '@/utils/loginRedirect'
-import { backoffDelay, RETRY_BACKOFF, type GetPath, type GetResponse } from '@autobot/ui'
+import { backoffDelay, httpErrorFrom, isHttpClientError, parseJsonBody, RETRY_BACKOFF, type GetPath, type GetResponse } from '@autobot/ui'
 import type { paths } from '@/types/generated/api'
 
 const logger = createLogger('SlmApiClient')
@@ -68,12 +68,34 @@ export interface RequestOptions {
    * (optional widgets, health probes) so they don't generate console noise.
    */
   suppressErrorLog?: boolean
+  /**
+   * When true, a 401 is returned to the caller without clearing the session: for
+   * connectivity diagnostics, which report a status instead of acting on it (#12363).
+   * Defaults to the client's `setKeepSessionOn401` setting.
+   */
+  keepSessionOn401?: boolean
+  /**
+   * Query parameters, appended URL-encoded to the endpoint (#12363). `null` and
+   * `undefined` values are left out, so an optional filter needs no branching.
+   */
+  params?: Record<string, string | number | boolean | null | undefined>
 }
 
-export interface ErrorInfo {
-  status: number
-  message: string
-  details: Record<string, unknown> | null
+/** GET only: `'text'` returns the body as a string instead of parsing JSON (#12363). */
+export interface GetOptions extends RequestOptions {
+  responseType?: 'json' | 'text'
+}
+
+/** Append `params` to `endpoint`, skipping null/undefined; keeps an existing `?query`. Scalars only (no arrays). */
+export function withQuery(endpoint: string, params: RequestOptions['params']): string {
+  if (!params) return endpoint
+  const query = new URLSearchParams()
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== null && value !== undefined) query.append(key, String(value))
+  }
+  const text = query.toString()
+  if (!text) return endpoint
+  return `${endpoint}${endpoint.includes('?') ? '&' : '?'}${text}`
 }
 
 export class SlmApiClient {
@@ -81,6 +103,7 @@ export class SlmApiClient {
   private baseUrlOverride: string | null = null
   private defaultHeaders: Record<string, string>
   private defaultTimeout: number
+  private defaultKeepSessionOn401 = false
 
   constructor() {
     this.defaultHeaders = {
@@ -97,6 +120,12 @@ export class SlmApiClient {
   // Public setter for default timeout.
   setTimeout(timeout: number): void {
     this.defaultTimeout = timeout
+  }
+
+  // A client whose 401 does not mean the SLM session is gone (the main backend until
+  // one identity spans both backends, #10193) surfaces the 401 instead of logging out.
+  setKeepSessionOn401(keep: boolean): void {
+    this.defaultKeepSessionOn401 = keep
   }
 
   getConfiguration(): Record<string, unknown> {
@@ -160,10 +189,13 @@ export class SlmApiClient {
       body,
       timeout = this.defaultTimeout,
       signal: externalSignal,
+      params,
+      keepSessionOn401 = this.defaultKeepSessionOn401,
     } = options
 
     const baseUrl = this.resolveBaseUrl()
-    const url = baseUrl ? `${baseUrl}${endpoint}` : endpoint
+    const path = withQuery(endpoint, params)
+    const url = baseUrl ? `${baseUrl}${path}` : path
 
     const controller = new AbortController()
     let timedOut = false
@@ -220,7 +252,7 @@ export class SlmApiClient {
       // Handle 401 — redirect to login (skip for auth/mfa endpoints). Pass
       // whether THIS request carried a bearer token so we only clear + redirect
       // on a genuine rejection of an authenticated request.
-      if (response.status === 401 && !this.isAuthEndpoint(endpoint)) {
+      if (response.status === 401 && !this.isAuthEndpoint(endpoint) && !keepSessionOn401) {
         this.handleUnauthorized(endpoint, authToken != null)
       }
 
@@ -246,38 +278,8 @@ export class SlmApiClient {
   // CONVENIENCE METHODS — return parsed JSON data (not Response)
   // ==================================================================================
 
-  private async extractErrorInfo(response: Response): Promise<ErrorInfo> {
-    try {
-      const errorData = await response.json()
-      return {
-        status: response.status,
-        message: (() => {
-          const raw = errorData.error || errorData.message || errorData.detail
-          if (raw == null) return JSON.stringify(errorData) || 'Unknown error'
-          return typeof raw === 'string' ? raw : JSON.stringify(raw)
-        })(),
-        details: errorData,
-      }
-    } catch {
-      return {
-        status: response.status,
-        message: response.statusText || 'Unknown error',
-        details: null,
-      }
-    }
-  }
-
-  private async parseJsonBody<T>(response: Response): Promise<T> {
-    if (response.status === 204) return {} as T
-    const contentType = response.headers.get('content-type')
-    if (contentType && contentType.includes('application/json')) {
-      return (await response.json()) as T
-    }
-    return {} as T
-  }
-
   // GET with retry logic and exponential backoff.
-  async get<T = unknown>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+  async get<T = unknown>(endpoint: string, options: GetOptions = {}): Promise<T> {
     let lastError: Error | undefined
     const maxRetries = options.maxRetries !== undefined ? options.maxRetries : 3
     let attemptsMade = 0
@@ -293,17 +295,17 @@ export class SlmApiClient {
           if (response.status === SERVICE_UNAVAILABLE_STATUS) {
             retryAfterMs = parseRetryAfterMs(response.headers.get('retry-after'))
           }
-          const errorData = await this.extractErrorInfo(response)
-          throw new Error(`HTTP ${response.status}: ${errorData.message}`)
+          throw await httpErrorFrom(response)
         }
 
+        if (options.responseType === 'text') return (await response.text()) as T
         return (await response.json()) as T
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error))
         logger.debug(`GET attempt ${attempt} failed for ${endpoint}: ${lastError.message}`)
 
         // Don't retry 4xx client errors — they won't succeed on retry.
-        if (lastError.message.includes('HTTP 4')) {
+        if (isHttpClientError(lastError)) {
           break
         }
 
@@ -341,40 +343,37 @@ export class SlmApiClient {
   async post<T = unknown>(endpoint: string, data?: unknown, options: RequestOptions = {}): Promise<T> {
     const response = await this.rawRequest(endpoint, { method: 'POST', body: data, ...options })
     if (!response.ok) {
-      const errorData = await this.extractErrorInfo(response)
-      throw new Error(`HTTP ${response.status}: ${errorData.message}`)
+      throw await httpErrorFrom(response)
     }
-    return this.parseJsonBody<T>(response)
+    return parseJsonBody<T>(response)
   }
 
   // PUT — returns parsed JSON (handles 204 No Content).
   async put<T = unknown>(endpoint: string, data?: unknown, options: RequestOptions = {}): Promise<T> {
     const response = await this.rawRequest(endpoint, { method: 'PUT', body: data, ...options })
     if (!response.ok) {
-      const errorData = await this.extractErrorInfo(response)
-      throw new Error(`HTTP ${response.status}: ${errorData.message}`)
+      throw await httpErrorFrom(response)
     }
-    return this.parseJsonBody<T>(response)
+    return parseJsonBody<T>(response)
   }
 
   // PATCH — partial update, returns parsed JSON (handles 204 No Content).
   async patch<T = unknown>(endpoint: string, data?: unknown, options: RequestOptions = {}): Promise<T> {
     const response = await this.rawRequest(endpoint, { method: 'PATCH', body: data, ...options })
     if (!response.ok) {
-      const errorData = await this.extractErrorInfo(response)
-      throw new Error(`HTTP ${response.status}: ${errorData.message}`)
+      throw await httpErrorFrom(response)
     }
-    return this.parseJsonBody<T>(response)
+    return parseJsonBody<T>(response)
   }
 
   // DELETE — returns parsed JSON (handles empty responses).
-  async delete<T = unknown>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+  /** `body` is for the few APIs that take one on DELETE (#12363); most send none. */
+  async delete<T = unknown>(endpoint: string, options: RequestOptions & { body?: unknown } = {}): Promise<T> {
     const response = await this.rawRequest(endpoint, { method: 'DELETE', ...options })
     if (!response.ok) {
-      const errorData = await this.extractErrorInfo(response)
-      throw new Error(`HTTP ${response.status}: ${errorData.message}`)
+      throw await httpErrorFrom(response)
     }
-    return this.parseJsonBody<T>(response)
+    return parseJsonBody<T>(response)
   }
 
   // ==================================================================================

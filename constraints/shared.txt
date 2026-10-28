@@ -24,7 +24,20 @@ openvino>=2026.4.1
 # routine scheduler and the SLM schedule executor (#18449). Was declared in two files.
 croniter>=6.2.4
 
+# chromadb: the vector store client in the backend, the ai-stack container and code_analysis,
+# plus the standalone server venvs the ansible redis role and install-bare-metal.sh build.
+# Was declared in 6 places with 4 specs, one a live conflict (>=0.5) (#19478). The cap
+# guards against breaking API changes; 1.5.5+ regenerated its protos for protobuf 5.x (#4053).
+chromadb>=1.5.9,<2.0.0
+
 # filelock: runtime dependency via torch (unbounded `filelock` requirement) and the HF stack.
 # Floor at the release fixing CVE-2026-112940, CVE-2026-112913 and CVE-2026-112907 (#19426).
 # Was also a stale 3.20.1 floor in ansible dependency_patching; that restatement is removed.
 filelock>=4.2.1
+
+# torch / torchvision: ONE coupled pair (#19330, maintainer decision 2026-10-26). torchvision 0.29.x
+# is built against torch 2.14.x -- move them together, never one alone. Was pinned in 7 places at
+# three patch levels (2.12.1 in the backend image, #19072; 2.14.0 on GPU hosts; 2.14.1 elsewhere).
+# `==2.14.1` also matches the CPU index's `2.14.1+cpu` and CUDA builds' `2.14.1+cuNNN` local versions.
+torch==2.14.1
+torchvision==0.29.1

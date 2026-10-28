@@ -28,6 +28,7 @@ from autobot_shared.ssot_config import (
 from config import config_manager
 from constants.path_constants import PATH
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
+from knowledge.search_filters import filter_for_user_id
 from knowledge_factory import get_knowledge_base_async
 from services.llm_service import get_llm_service
 
@@ -117,14 +118,16 @@ class KBLibrarianAgent(StandardizedAgent):
         """Handle search action via StandardizedAgent routing."""
         query = request.payload["query"]
         limit = request.payload.get("limit", 5)
-        results = await self.search_knowledge(query, limit=limit)
+        # The distributed path has no local principal yet (#19810): read as nobody, i.e. deny.
+        results = await self.search_knowledge(query, limit=limit, user_id=None)
         return {"results": results, "count": len(results)}
 
     async def _handle_answer(self, request) -> Dict[str, Any]:
         """Handle answer action via StandardizedAgent routing."""
         question = request.payload["question"]
         context_limit = request.payload.get("context_limit", 3)
-        return await self.answer_question(question, context_limit=context_limit)
+        # No local principal on the distributed path yet (#19810): read as nobody, i.e. deny.
+        return await self.answer_question(question, context_limit=context_limit, user_id=None)
 
     def declared_scopes(self, request) -> List[str]:
         """The knowledge-base entry this run will write, if it writes one (#15950).
@@ -166,15 +169,18 @@ class KBLibrarianAgent(StandardizedAgent):
             raise KnowledgeBaseUnavailable("Knowledge base unavailable (init failed or cooling down)")
         return kb
 
-    async def search_knowledge(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
-        """Search the knowledge base for relevant information ([] on any error)."""
+    async def search_knowledge(self, query: str, limit: int = 5, user_id: str | None = None) -> List[Dict[str, Any]]:
+        """Search the knowledge base for relevant information ([] on any error).
+
+        #16665: only facts *user_id* may read; with no user id the search returns nothing.
+        """
         try:
-            return await self._search_formatted(query, limit)
+            return await self._search_formatted(query, limit, user_id)
         except Exception as e:
             logger.error("KB-LIBRARIAN: Search error for '%s': %s", query, e)
             return []
 
-    async def _search_formatted(self, query: str, limit: int) -> List[Dict[str, Any]]:
+    async def _search_formatted(self, query: str, limit: int, user_id: str | None = None) -> List[Dict[str, Any]]:
         """Search and format results; raises KnowledgeBaseUnavailable while the KB is down."""
         logger.debug("KB-LIBRARIAN: Searching for '%s'", query)
         # Issue #13025: limit= routes search() to the "Enhanced" path which
@@ -183,6 +189,7 @@ class KBLibrarianAgent(StandardizedAgent):
         # Issue #13009: exclude quarantined research facts (#12622).
         kb = await self._resolve_kb()
         results = await kb.search(query, top_k=limit, filters=RESEARCH_QUARANTINE_FILTER)
+        results = await filter_for_user_id(results or [], kb, user_id)  # #16665
 
         if results:
             logger.info("KB-LIBRARIAN: Found %s results for '%s'", len(results), query)
@@ -202,9 +209,9 @@ class KBLibrarianAgent(StandardizedAgent):
             logger.info("KB-LIBRARIAN: No results found for '%s'", query)
             return []
 
-    async def get_context_for_question(self, question: str) -> str:
-        """Get relevant context from knowledge base for a question."""
-        results = await self.search_knowledge(question, limit=3)
+    async def get_context_for_question(self, question: str, user_id: str | None = None) -> str:
+        """Get relevant context from knowledge base for a question (#16665: as *user_id*)."""
+        results = await self.search_knowledge(question, limit=3, user_id=user_id)
 
         if not results:
             return "No relevant information found in knowledge base."
@@ -222,7 +229,9 @@ class KBLibrarianAgent(StandardizedAgent):
             ("what", "who", "where", "when", "why", "how", "is", "are", "can", "does")
         )
 
-    async def process_query(self, query: str, context: Dict[str, Any] = None) -> Dict[str, Any]:
+    async def process_query(
+        self, query: str, context: Dict[str, Any] = None, user_id: str | None = None
+    ) -> Dict[str, Any]:
         """Process a KB query and return results compatible with KBQueryResponse.
 
         This is the primary entry-point used by api/kb_librarian.py,
@@ -231,16 +240,17 @@ class KBLibrarianAgent(StandardizedAgent):
         Args:
             query: Natural-language query string.
             context: Optional context dict (currently unused, reserved for future use).
+            user_id: The user the KB is read as (#16665); none means no facts are returned.
 
         Returns:
             Dict with keys: enabled, is_question, query, documents_found,
             documents, summary, response, knowledge_base_results, sources.
         """
-        documents = await self.search_knowledge(query, limit=self.max_results)
+        documents = await self.search_knowledge(query, limit=self.max_results, user_id=user_id)
 
         summary: str = ""
         if self.auto_summarize and documents:
-            answer_result = await self.answer_question(query, context_limit=self.max_results)
+            answer_result = await self.answer_question(query, context_limit=self.max_results, user_id=user_id)
             summary = answer_result.get("answer", "")
 
         return {
@@ -256,12 +266,14 @@ class KBLibrarianAgent(StandardizedAgent):
             "sources": [doc.get("source", "Unknown") for doc in documents],
         }
 
-    async def answer_question(self, question: str, context_limit: int = 3) -> Dict[str, Any]:
+    async def answer_question(
+        self, question: str, context_limit: int = 3, user_id: str | None = None
+    ) -> Dict[str, Any]:
         """Answer a question using knowledge base context."""
         # Search for relevant knowledge
         kb_unavailable = False
         try:
-            kb_results = await self._search_formatted(question, context_limit)
+            kb_results = await self._search_formatted(question, context_limit, user_id)
         except KnowledgeBaseUnavailable as e:
             logger.warning("KB-LIBRARIAN: %s -- skipping auto-learning", e)
             kb_results, kb_unavailable = [], True

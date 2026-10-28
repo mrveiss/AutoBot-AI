@@ -69,9 +69,10 @@ cd .worktrees/issue-XXXX && git branch --unset-upstream
 git merge-base --is-ancestor <your-sha> origin/issue-XXXX && echo "safe to force"
 ```
 
-The `auto-update-pr-branches` workflow merges base into PR branches, so "my local
-is behind my own branch" is normal. Force-pushing over it discards the bot's
-merge.
+The `sync-branches-with-main` workflow (#19548) merges main into every branch on
+each push to main, so "my local is behind my own branch" is normal. Force-pushing
+over it discards the bot's merge: `git pull` (a fast-forward) first. A PR labelled
+`sync-conflict` or `sync-needs-workflow-token` was not synced; merge main yourself.
 
 ---
 

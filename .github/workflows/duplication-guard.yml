@@ -3,13 +3,22 @@
 #
 # Duplication regression guard (#9794).
 #
-# Runs the copy-paste detector (jscpd, the `cpd` 5.x CLI) over two scopes with
+# Runs the copy-paste detector (jscpd, the `cpd` 5.x CLI) over five scopes with
 # the exact flags used for the 2026-06-10 dedup sweep. A scope fails when its
 # duplicated-line COUNT exceeds its pin. This is a ratchet, not a "zero
 # duplication" gate: the repo carries known clusters still being worked down
 # (the Vue SFC CSS/HTML mass, #18551, and the dedup programme under #17312;
 # #9856 and #9859, named here before, are closed). The gate ensures no PR
 # grows duplication.
+#
+# The five scopes (#18559, #18461): the two original ones, the tooling trees
+# (scripts, tools, pipeline-scripts), and two CROSS-TREE scopes, one per side
+# of the stack. jscpd only finds a clone between trees it scans together, so a
+# fork of the main GUI inside the SLM GUI, the plugins or the UI kit (or a
+# backend module copied into the SLM backend or shared) was invisible to a
+# guard that scanned them apart. A cross-tree scope re-counts what its trees
+# already contribute alone, so its pin is its own number and is not summed with
+# the others.
 #
 # #16319: the pins are absolute counts, not percentages. A percentage pinned a
 # hair above its measurement fails a PR that deletes unique code. #16308 kept
@@ -19,6 +28,12 @@
 # to absorb, and each pin sits exactly at its measurement. When a PR lowers a
 # count, lower the pin in the same PR so the ratchet only ever goes down; the
 # gate prints the figure to use.
+#
+# #16324: a PR that lands UNDER its pin stays advisory, so two dedup PRs never
+# conflict on a pin line. After a merge to main, the `lower-pins` job below lowers
+# every pin that sits above its measured count, in ONE bot PR that edits only
+# .github/duplication-pins.json (scripts/duplication_pin_lowering.py). It only ever lowers; a raise is a
+# declared, reviewed scope change.
 #
 # scripts/duplication_gate.py reads jscpd's Total row and applies the pin. It is
 # the only parser: the gate steps and "Explain failure" both call it.
@@ -43,10 +58,28 @@ on:
       # `autobot_shared/` did not trigger this workflow at all, so the
       # guard reported nothing rather than reporting clean.
       - 'autobot_shared/**/*.py'
+      - 'autobot_shared/**/*.vue'
       - 'autobot-slm-backend/**/*.py'
       - 'autobot-slm-frontend/src/**/*.ts'
       - 'autobot-slm-frontend/src/**/*.js'
       - 'autobot-slm-frontend/src/**/*.vue'
+      # #18559, #18461: the tooling trees, the plugins and the UI kit.
+      - 'scripts/**/*.py'
+      - 'tools/**/*.py'
+      - 'tools/**/*.ts'
+      - 'tools/**/*.js'
+      - 'pipeline-scripts/**/*.py'
+      - 'plugins/**/*.py'
+      - 'autobot-plugins/**/*.ts'
+      - 'autobot-plugins/**/*.vue'
+      - 'libs/autobot-ui/**/*.ts'
+      - 'libs/autobot-ui/**/*.vue'
+      - 'scripts/**/*.ts'
+      - 'scripts/**/*.js'
+      - 'pipeline-scripts/**/*.ts'
+      - 'pipeline-scripts/**/*.js'
+      - 'autobot-plugins/**/*.js'
+      - '.github/duplication-pins.json'
       - '.github/workflows/duplication-guard.yml'
   push:
     branches: [main]
@@ -56,10 +89,28 @@ on:
       - 'autobot-frontend/src/**/*.js'
       - 'autobot-frontend/src/**/*.vue'
       - 'autobot_shared/**/*.py'
+      - 'autobot_shared/**/*.vue'
       - 'autobot-slm-backend/**/*.py'
       - 'autobot-slm-frontend/src/**/*.ts'
       - 'autobot-slm-frontend/src/**/*.js'
       - 'autobot-slm-frontend/src/**/*.vue'
+      # #18559, #18461: the tooling trees, the plugins and the UI kit.
+      - 'scripts/**/*.py'
+      - 'tools/**/*.py'
+      - 'tools/**/*.ts'
+      - 'tools/**/*.js'
+      - 'pipeline-scripts/**/*.py'
+      - 'plugins/**/*.py'
+      - 'autobot-plugins/**/*.ts'
+      - 'autobot-plugins/**/*.vue'
+      - 'libs/autobot-ui/**/*.ts'
+      - 'libs/autobot-ui/**/*.vue'
+      - 'scripts/**/*.ts'
+      - 'scripts/**/*.js'
+      - 'pipeline-scripts/**/*.ts'
+      - 'pipeline-scripts/**/*.js'
+      - 'autobot-plugins/**/*.js'
+      - '.github/duplication-pins.json'
 
 # #14434: without this, every push left its predecessors queued. 42 of a 271-run
 # sample were for commits no longer at their branch tip - work nothing would ever
@@ -84,6 +135,8 @@ jobs:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
     env:
+      # Pins live in .github/duplication-pins.json, the ONE home of every pin (the
+      # "Load the pins" step exports them). The history below is why each moved.
       # Pins: duplicated lines per scope, measured on main run 34581036896
       # (2026-09-11, base d5a0c6dcb, jscpd 5.0.6). Ratchet DOWN only (#16319).
       #
@@ -104,7 +157,6 @@ jobs:
       # 11231 -> 11197 (#18819): measured on the #18819 branch with this workflow's flags
       # and jscpd 5.0.6 (654 clones, 4464 files); the main GUI's ErrorBanner and
       # ui/BaseAlert are retired into the kit's BaseAlert.
-      MAX_DUP_LINES: '11197'
       # #13044: the three trees this guard used to skip get their OWN pin rather
       # than being folded into the one above. When first scanned they carried
       # 2.4x the duplication ratio of the gated trees, and averaging would hide
@@ -132,14 +184,33 @@ jobs:
       # 2617 -> 1964 (#18819): measured on the #18819 branch at its final head, same
       # flags (105 clones, 918 files); every hand-rolled SLM error banner is now the
       # kit's BaseAlert.
-      SLM_MAX_DUP_LINES: '1964'
+      # #18559, #18461, #16324: three scopes added, each pinned at the count jscpd 5.0.6
+      # measured on main 7f3ee47071 with this workflow's exact flags, run from a
+      # `git archive` copy of that commit (the same file population as CI's checkout).
+      # The pins of the two scopes above are unchanged by this: they are measured at
+      # 10910 and 1832, i.e. under their pins, and the `lower-pins` job lowers them
+      # after this merges (#16324) instead of this PR editing them.
+      #
+      # scripts + tools + pipeline-scripts: 230 duplicated lines, 12 clones, 36,478
+      # lines in 151 files. A NEW scope (#18461), so the rise is exactly these files:
+      # the old two scopes total 10910 + 1832 = 12742, the three together 12972.
+      # autobot-frontend/src + autobot-slm-frontend/src + autobot-plugins + libs/autobot-ui:
+      # 9,616 duplicated lines, 487 clones, 966,016 lines in 2,641 files. Counts the
+      # clones BETWEEN the GUIs and the kit as well as the ones inside each (#18559).
+      # autobot-backend + autobot-slm-backend + autobot_shared + plugins: 4,107 duplicated
+      # lines, 274 clones, 933,488 lines in 3,003 files (#18559).
       JSCPD_VERSION: '5.0.6'
     steps:
       - uses: actions/checkout@v7
 
+      # #16324: the pins are data, so the bot that lowers them edits only that file (a
+      # workflow-file push needs a `workflows` scope no GITHUB_TOKEN has).
+      - name: Load the pins
+        run: python3 scripts/duplication_pin_lowering.py --export .github/duplication-pins.json >> "$GITHUB_ENV"
+
       - uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version-file: .nvmrc
 
       - name: Run duplication detector
         id: main_scope
@@ -173,11 +244,67 @@ jobs:
             -r console 2>&1 | tee /tmp/slm-gate.log
           python3 scripts/duplication_gate.py /tmp/slm-gate.log "${SLM_MAX_DUP_LINES}"
 
+      - name: Gate the tooling trees (#18461)
+        id: tooling_scope
+        run: |
+          set -o pipefail
+          npx --yes "jscpd@${JSCPD_VERSION}" \
+            scripts tools pipeline-scripts \
+            -k 70 -l 8 --skip-comments \
+            -f python,typescript,javascript,vue \
+            -i "**/node_modules/**,**/__pycache__/**,**/tests/**,**/test_*,**/*_test.py,**/*.test.ts,**/__tests__/**,**/*.stories.*,**/generated/**,**/migrations/**,**/mocks/**,**/i18n/**" \
+            -r console 2>&1 | tee /tmp/tooling-gate.log
+          python3 scripts/duplication_gate.py /tmp/tooling-gate.log "${TOOLING_MAX_DUP_LINES}"
+
+      - name: Gate the GUIs and the UI kit together (#18559)
+        id: cross_gui_scope
+        run: |
+          set -o pipefail
+          npx --yes "jscpd@${JSCPD_VERSION}" \
+            autobot-frontend/src autobot-slm-frontend/src autobot-plugins libs/autobot-ui \
+            -k 70 -l 8 --skip-comments \
+            -f python,typescript,javascript,vue \
+            -i "**/node_modules/**,**/__pycache__/**,**/tests/**,**/test_*,**/*_test.py,**/*.test.ts,**/__tests__/**,**/*.stories.*,**/generated/**,**/migrations/**,**/mocks/**,**/i18n/**" \
+            -r console 2>&1 | tee /tmp/cross-gui-gate.log
+          python3 scripts/duplication_gate.py /tmp/cross-gui-gate.log "${CROSS_GUI_MAX_DUP_LINES}"
+
+      - name: Gate the backends and shared together (#18559)
+        id: cross_backend_scope
+        run: |
+          set -o pipefail
+          npx --yes "jscpd@${JSCPD_VERSION}" \
+            autobot-backend autobot-slm-backend autobot_shared plugins \
+            -k 70 -l 8 --skip-comments \
+            -f python,typescript,javascript,vue \
+            -i "**/node_modules/**,**/__pycache__/**,**/tests/**,**/test_*,**/*_test.py,**/*.test.ts,**/__tests__/**,**/*.stories.*,**/generated/**,**/migrations/**,**/mocks/**,**/i18n/**" \
+            -r console 2>&1 | tee /tmp/cross-backend-gate.log
+          python3 scripts/duplication_gate.py /tmp/cross-backend-gate.log "${CROSS_BACKEND_MAX_DUP_LINES}"
+
+      # #16324: hand the measured logs to the `lower-pins` job. Only on a push to main,
+      # where the count is the merged tree's; a PR run measures a tree that may not land.
+      - name: Keep the measured logs for the pin-lowering job
+        if: ${{ github.event_name == 'push' }}
+        run: |
+          mkdir -p dup-logs
+          cp /tmp/main-dup.log /tmp/slm-gate.log /tmp/tooling-gate.log /tmp/cross-gui-gate.log /tmp/cross-backend-gate.log dup-logs/
+
+      - name: Upload the measured logs
+        if: ${{ github.event_name == 'push' }}
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: duplication-logs
+          path: dup-logs/
+          if-no-files-found: error
+          retention-days: 2
+
       - name: Explain failure
         if: failure()
         env:
           MAIN_OUTCOME: ${{ steps.main_scope.outcome }}
           SLM_OUTCOME: ${{ steps.slm_scope.outcome }}
+          TOOLING_OUTCOME: ${{ steps.tooling_scope.outcome }}
+          CROSS_GUI_OUTCOME: ${{ steps.cross_gui_scope.outcome }}
+          CROSS_BACKEND_OUTCOME: ${{ steps.cross_backend_scope.outcome }}
         run: |
           # #16163: this step used to say it could not tell WHICH of the two
           # scopes failed, and send the reader to scroll a ~2000-line log. Each
@@ -213,10 +340,26 @@ jobs:
             report "The shared/SLM duplication scope" "${SLM_LOG:-/tmp/slm-gate.log}" "${SLM_MAX_DUP_LINES}" \
               "autobot_shared + autobot-slm-backend + autobot-slm-frontend/src" SLM_MAX_DUP_LINES
           fi
+          if [ "${TOOLING_OUTCOME}" = "failure" ]; then
+            failed=1
+            report "The tooling duplication scope" "${TOOLING_LOG:-/tmp/tooling-gate.log}" "${TOOLING_MAX_DUP_LINES}" \
+              "scripts + tools + pipeline-scripts" TOOLING_MAX_DUP_LINES
+          fi
+          if [ "${CROSS_GUI_OUTCOME}" = "failure" ]; then
+            failed=1
+            report "The cross-GUI duplication scope" "${CROSS_GUI_LOG:-/tmp/cross-gui-gate.log}" "${CROSS_GUI_MAX_DUP_LINES}" \
+              "autobot-frontend/src + autobot-slm-frontend/src + autobot-plugins + libs/autobot-ui" CROSS_GUI_MAX_DUP_LINES
+          fi
+          if [ "${CROSS_BACKEND_OUTCOME}" = "failure" ]; then
+            failed=1
+            report "The cross-backend duplication scope" "${CROSS_BACKEND_LOG:-/tmp/cross-backend-gate.log}" "${CROSS_BACKEND_MAX_DUP_LINES}" \
+              "autobot-backend + autobot-slm-backend + autobot_shared + plugins" CROSS_BACKEND_MAX_DUP_LINES
+          fi
           if [ "${failed}" = "0" ]; then
-            echo "::error::This job failed outside both duplication gates."
-            echo "  main_scope=${MAIN_OUTCOME}  slm_scope=${SLM_OUTCOME}"
-            echo "Neither detector reported failure, so the cause is a step before"
+            echo "::error::This job failed outside every duplication gate."
+            echo "  main_scope=${MAIN_OUTCOME}  slm_scope=${SLM_OUTCOME}  tooling_scope=${TOOLING_OUTCOME}"
+            echo "  cross_gui_scope=${CROSS_GUI_OUTCOME}  cross_backend_scope=${CROSS_BACKEND_OUTCOME}"
+            echo "No detector reported failure, so the cause is a step before"
             echo "them -- checkout, node setup, or npx fetching jscpd. Saying so is"
             echo "the point: a duplication error here would be a guess."
           fi
@@ -224,3 +367,96 @@ jobs:
           echo "duplication is unavoidable and justified, raise the pin that failed"
           echo "in .github/workflows/duplication-guard.yml with a documented reason."
           echo "See docs/reports/DEDUP_REPORT.md and the dedup methodology in #9794."
+
+  # #16324: after a merge to main, lower every pin that sits above its measured count.
+  # A separate job, as in test-durations.yml: the job that runs jscpd stays read-only, and
+  # the write token lives only where no scanned code executes. It never pushes to main --
+  # one bot branch, one PR, opened or updated in place.
+  lower-pins:
+    name: Lower pins that main has moved under
+    needs: duplication-guard
+    # The draft clause mirrors the dependency's own gate (#17957); on a push it is vacuous.
+    if: ${{ (github.event_name != 'pull_request' || github.event.pull_request.draft == false) && github.event_name == 'push' && needs.duplication-guard.result == 'success' }}
+    runs-on: ubuntu-latest
+    # One bot branch, one PR: two pushes to main must not race on it.
+    concurrency: duplication-pins
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      # No credentials are left in .git/config: the push below passes its token explicitly.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: duplication-logs
+          path: dup-logs
+
+      - name: Open or update the pin-lowering PR
+        env:
+          # A PAT, deliberately not GITHUB_TOKEN: a PR opened with GITHUB_TOKEN triggers no
+          # workflow run, so its required checks would never report and it could never merge.
+          GH_TOKEN: ${{ secrets.AUTOBOT_PUSH_TOKEN }}
+          BRANCH: automation/duplication-pins
+          PINS: .github/duplication-pins.json
+        run: |
+          set -euo pipefail
+          SHORT_SHA="$(git rev-parse --short=10 HEAD)"
+          CHANGES="$(python3 scripts/duplication_pin_lowering.py "${PINS}" dup-logs)"
+          if [ -z "${CHANGES}" ]; then
+            echo "::notice::no pin sits above its measured count -- nothing to lower"
+            exit 0
+          fi
+          echo "${CHANGES}"
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "::error::AUTOBOT_PUSH_TOKEN not set -- bot PR would never trigger CI. A pin is above its measured count (above), so the ratchet is leaking slack until an owner adds the secret (Settings > Secrets and variables > Actions) or lowers the pin by hand."
+            exit 1
+          fi
+
+          REMOTE="https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add "${PINS}"
+          git commit -m "ci(duplication-guard): lower the pins main has moved under (#16324)"
+          # The bot branch is regenerated from main every time, so an update replaces it.
+          # The lease names what the remote holds right now (empty when it does not exist).
+          REMOTE_HEAD="$(git ls-remote "${REMOTE}" "refs/heads/${BRANCH}" | cut -f1)"
+          git push --force-with-lease="${BRANCH}:${REMOTE_HEAD}" "${REMOTE}" "$BRANCH"
+
+          if gh pr view "$BRANCH" --json number >/dev/null 2>&1; then
+            echo "::notice::updated the existing pin-lowering PR"
+          else
+            BODY_FILE="$(mktemp)"
+            {
+              echo "## Thinking Path"
+              echo
+              echo "Generated by \`duplication-guard.yml\` (\`lower-pins\`). A PR under its pin stays advisory, so the difference is slack a later PR could spend on new clones. This lowers each pin to the count the guard measured on main ${SHORT_SHA}."
+              echo
+              echo "## What Changed"
+              echo
+              echo "\`.github/duplication-pins.json\` only:"
+              echo
+              echo '```'
+              echo "${CHANGES}"
+              echo '```'
+              echo
+              echo "## Verification"
+              echo
+              echo "Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+              echo
+              echo "## Model Used"
+              echo
+              echo "None -- generated by CI."
+              echo
+              echo "## Issue Link"
+              echo
+              echo "Refs #16324"
+            } > "$BODY_FILE"
+            gh pr create --base main --head "$BRANCH" \
+              --title "ci(duplication-guard): lower the pins main has moved under (#16324)" \
+              --body-file "$BODY_FILE"
+            rm -f "$BODY_FILE"
+          fi

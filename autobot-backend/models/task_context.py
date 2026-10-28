@@ -13,6 +13,8 @@ passed together, improving code maintainability and type safety.
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any, Dict, List
 
+from autobot_shared.ssot_constants import CategoryDefaults
+
 if TYPE_CHECKING:
     from worker_node import WorkerNode
 
@@ -131,6 +133,7 @@ class WorkflowStepContext:
         orchestrator: The orchestrator instance managing the workflow
         action: The action to perform in this step
         metadata: Optional additional metadata
+        user_id: The user who started the workflow; KB reads in a step run as them
     """
 
     workflow_id: str
@@ -138,6 +141,7 @@ class WorkflowStepContext:
     orchestrator: Any  # Orchestrator instance
     action: str
     metadata: Dict[str, Any] = field(default_factory=dict)
+    user_id: str | None = None  # the user who started the workflow (#16665); none means KB reads deny
 
 
 @dataclass
@@ -360,7 +364,7 @@ class SearchOptions:
         track_analytics: Track search analytics
     """
 
-    mode: str = "hybrid"
+    mode: str = CategoryDefaults.SEARCH_MODE_HYBRID
     enable_reranking: bool = False
     min_score: float = 0.0
     enable_query_expansion: bool = False
@@ -398,7 +402,7 @@ class SearchContext:
         category: str | None = None,
         tags: List[str] | None = None,
         tags_match_any: bool = False,
-        mode: str = "hybrid",
+        mode: str = CategoryDefaults.SEARCH_MODE_HYBRID,
         enable_reranking: bool = False,
         min_score: float = 0.0,
         enable_query_expansion: bool = False,

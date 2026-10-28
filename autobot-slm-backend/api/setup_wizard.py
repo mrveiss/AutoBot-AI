@@ -25,6 +25,7 @@ from pydantic import BaseModel
 from api.websocket import ws_manager
 from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.role_group_ownership import split_node_role_rows, warn_stale_detected_roles, withhold_unowned_groups
+from autobot_shared.ssot_config import config
 from config import settings
 from services.auth import get_current_user
 from services.database import db_service
@@ -256,18 +257,14 @@ _ROLE_INFRA_VARS: dict[str, tuple[str, int]] = {
     "frontend": ("frontend_host", 5173),
     "ai-stack": ("ai_stack_host", 8080),
     "npu-worker": ("npu_worker_host", 8081),
-    "browser-service": ("browser_host", 3000),
-    "tts-worker": (
-        "tts_host",
-        8083,
-    ),  # Issue #3431: 8082 is WSL2/Hyper-V reserved (Windows NPU)
+    "browser-service": ("browser_host", config.port.browser),  # #19324: was Grafana's 3000
+    "tts-worker": ("tts_host", 8083),  # Issue #3431: 8082 is WSL2/Hyper-V reserved (Windows NPU)
 }
 
-# ChromaDB runs on the AI stack VM but is NOT a separately-routed role, so it
-# has no entry in _ROLE_INFRA_VARS.  This constant must match chromadb_port in
-# ansible/roles/ai-stack/defaults/main.yml and backend_chromadb_port in
-# ansible/roles/backend/defaults/main.yml (#3526).
-_CHROMADB_PORT = 8100
+# ChromaDB runs on the AI stack VM but is NOT a separately-routed role, so it has no
+# _ROLE_INFRA_VARS entry (#3526). Its port is the SSOT's (#19321); the ansible
+# chromadb_port / backend_chromadb_port defaults are pinned to it by a repo test.
+_CHROMADB_PORT = config.port.chromadb
 
 
 def _build_infra_vars(

@@ -618,9 +618,8 @@ def _resolve_cache_directories() -> list:
     """Return list of cache/temp directory Paths that cleanup_generated_files manages.
 
     Covered directories and the modules that write to them:
-    - ``DATA_DIR/cache`` — ``utils/graceful_degradation.py`` writes
-      ``data/cache/claude_responses/*.json`` via ``GracefulDegradationManager``;
-      rglob covers all subdirectories recursively.
+    - ``response_cache_dir()`` — ``GracefulDegradationManager``'s ``*.json`` fallback responses,
+      in the user cache, never the repo (#19553); rglob covers subdirectories.
     - ``TEMP_DIR`` — miscellaneous temporary scratch space.
 
     Directories intentionally excluded:
@@ -635,9 +634,10 @@ def _resolve_cache_directories() -> list:
     from pathlib import Path
 
     from constants.path_constants import PATH
+    from utils.degradation_cache import response_cache_dir
 
     candidates = [
-        PATH.DATA_DIR / "cache",
+        response_cache_dir(),
         PATH.TEMP_DIR,
     ]
 

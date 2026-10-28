@@ -44,18 +44,28 @@ import os
 from enum import Enum
 from functools import lru_cache
 from pathlib import Path
-from typing import ClassVar, Dict, FrozenSet, List
-from urllib.parse import quote
+from typing import Annotated, ClassVar, Dict, FrozenSet, List
 
-from pydantic import AliasChoices, Field, field_validator
+from pydantic import AliasChoices, BeforeValidator, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from autobot_shared import deployment_profile as _profile  # #19315/#19316: environment/mode/debug home
+from autobot_shared import postgres_identity as _pg
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.paths import install_base_dir, project_root
 from autobot_shared.secret_redaction import RedactedReprMixin
 from autobot_shared.ssot_llm_oauth_config import LlmOAuthConfig
+from autobot_shared.ssot_role_mirrors import (  # #19319: SSOT defaults an Ansible role mirrors
+    FEATURE_ROUTERS_STRICT_DEFAULT,
+    SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE_DEFAULT,
+    SERVICE_AUTH_ENFORCEMENT_MODE_DEFAULT,
+    SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES_DEFAULT,
+    SERVICE_AUTH_RATE_LIMIT_WINDOW_DEFAULT,
+    SERVICE_AUTH_TIMESTAMP_WINDOW_DEFAULT,
+)
 from autobot_shared.ssot_tls import TLSConfig, TLSMode
 
+_Env = Annotated[str, BeforeValidator(_profile.env_field), Field(validation_alias=AliasChoices(*_profile.ENV_NAMES))]
 # Determine project root for .env file location.
 #
 # The resolution itself lives in ``autobot_shared.paths`` (#13149) so that the
@@ -124,32 +134,6 @@ SUBAGENT_REFLECTION_ENABLED: bool = (
 )
 
 
-# Service-auth failure rate limiting (#13326).
-# These mirror the values the service_auth Ansible role has always written to
-# .env; the Pydantic fields previously defaulted to 0, which made
-# ``len(failures) >= max_failures`` true on the very first request and rejected
-# every SERVICE_ONLY_PATHS call on a default install.
-SERVICE_AUTH_RATE_LIMIT_MAX_FAILURES_DEFAULT = 10
-SERVICE_AUTH_RATE_LIMIT_WINDOW_DEFAULT = 300
-
-# Service-auth enforcement gate (#13335) - the third drift in this same block.
-# The Ansible role has always written ``true``/``100``; the Pydantic fields
-# defaulted to ``""``/``0.0``, so every install that did not go through Ansible
-# ran the service-auth middleware in LOGGING MODE with the circuit breaker
-# sampling 0% of requests. Unlike #13326 (which failed closed and was loud),
-# this pair failed OPEN and was silent. ``tests/test_service_auth_default_parity``
-# now pins each of these to the Ansible role default.
-SERVICE_AUTH_ENFORCEMENT_MODE_DEFAULT = "true"
-SERVICE_AUTH_CIRCUIT_BREAKER_PERCENTAGE_DEFAULT = 100.0
-
-# Replay window for HMAC-signed service requests (#13335). The Ansible role and
-# ``export_service_keys.py`` have always written ``AUTH_TIMESTAMP_WINDOW``, but
-# no Pydantic field claimed the alias, so ``ServiceAuthManager`` hard-coded 300
-# and the operator-facing knob did nothing. The default matches the role so
-# wiring it in cannot change behaviour on an existing install.
-SERVICE_AUTH_TIMESTAMP_WINDOW_DEFAULT = 300
-
-
 class RedactedSettings(RedactedReprMixin, BaseSettings):
     """Base for every SSOT settings model.
 
@@ -198,11 +182,7 @@ class VMConfig(RedactedSettings):
 class PortConfig(RedactedSettings):
     """Service port configuration."""
 
-    model_config = SettingsConfigDict(
-        env_file=str(PROJECT_ROOT / ".env"),
-        env_file_encoding="utf-8",
-        extra="ignore",
-    )
+    model_config = SettingsConfigDict(env_file=str(PROJECT_ROOT / ".env"), env_file_encoding="utf-8", extra="ignore")
 
     backend: int = Field(default=8001, alias="AUTOBOT_BACKEND_PORT")
     frontend: int = Field(default=5173, alias="AUTOBOT_FRONTEND_PORT")
@@ -217,6 +197,10 @@ class PortConfig(RedactedSettings):
     aistack: int = Field(default=8080, alias="AUTOBOT_AI_STACK_PORT")
     chromadb: int = Field(default=8100, alias="AUTOBOT_CHROMADB_PORT")  # Issue #3094: 8100 matches Ansible deploy
     npu: int = Field(default=8081, alias="AUTOBOT_NPU_WORKER_PORT")
+    # The Windows NPU worker (autobot-npu-worker/resources/windows-npu-worker) is a separate service
+    # from the Linux worker above, on 8082 by design. Its bundle cannot import this module, so it
+    # pins one copy of its own, held equal to this field by repo_tests/service_port_homes_test.py (#19325).
+    npu_windows: int = Field(default=8082, alias="AUTOBOT_NPU_WORKER_WINDOWS_PORT")
     tts: int = Field(default=8083, alias="AUTOBOT_TTS_WORKER_PORT")  # Issue #928; #3431: 8082 WSL2/Hyper-V reserved
     slm: int = Field(default=8000, alias="AUTOBOT_SLM_PORT")  # Issue #768
     prometheus: int = Field(default=9090, alias="AUTOBOT_PROMETHEUS_PORT")
@@ -725,22 +709,9 @@ class RedisConfig(RedactedSettings):
     # Enable/disable Redis
     enabled: bool = Field(default=True, alias="AUTOBOT_REDIS_ENABLED")
 
-    # Database assignments — defaults match redis-databases.yaml SSOT (#2670)
-    db_main: int = Field(default=0, alias="AUTOBOT_REDIS_DB_MAIN")
-    db_knowledge: int = Field(default=1, alias="AUTOBOT_REDIS_DB_KNOWLEDGE")
-    db_prompts: int = Field(default=2, alias="AUTOBOT_REDIS_DB_PROMPTS")
-    db_agents: int = Field(default=3, alias="AUTOBOT_REDIS_DB_AGENTS")
-    db_metrics: int = Field(default=4, alias="AUTOBOT_REDIS_DB_METRICS")
-    db_cache: int = Field(default=5, alias="AUTOBOT_REDIS_DB_CACHE")
-    db_sessions: int = Field(default=6, alias="AUTOBOT_REDIS_DB_SESSIONS")
-    db_tasks: int = Field(default=7, alias="AUTOBOT_REDIS_DB_TASKS")
-    db_logs: int = Field(default=8, alias="AUTOBOT_REDIS_DB_LOGS")
-    db_temp: int = Field(default=9, alias="AUTOBOT_REDIS_DB_TEMP")
-    db_audit: int = Field(default=10, alias="AUTOBOT_REDIS_DB_AUDIT")
-    db_analytics: int = Field(default=11, alias="AUTOBOT_REDIS_DB_ANALYTICS")
-    db_celery_broker: int = Field(default=14, alias="AUTOBOT_REDIS_DB_CELERY_BROKER")
-    db_celery_results: int = Field(default=15, alias="AUTOBOT_REDIS_DB_CELERY_RESULTS")
-    db_testing: int = Field(default=13, alias="AUTOBOT_REDIS_DB_TESTING")
+    # Database numbers are NOT here (#19232): redis-databases.yaml plus the
+    # AUTOBOT_REDIS_DB_<NAME> overrides form the one table, read through
+    # autobot_shared.redis_management.database_names.database_number.
 
     # LangGraph checkpoint TTL (#1481, #3231)
     checkpoint_ttl_minutes: int = Field(
@@ -1167,12 +1138,9 @@ class PermissionConfig(RedactedSettings):
         description="How long to remember approved commands (seconds)",
     )
 
-    # Redis database for permission storage
-    redis_db: int = Field(
-        default=11,
-        alias="AUTOBOT_REDIS_DB_PERMISSIONS",
-        description="Redis database for permission rules and memory",
-    )
+    # No Redis database number here (#19232): approval memory stores in the "main"
+    # database through the canonical client (services/approval_memory.py). The retired
+    # redis_db=11 field named analytics' DB, and nothing read it.
 
     # Permission rules file path (relative to project root)
     rules_file: str = Field(
@@ -1599,7 +1567,6 @@ class MiscConfig(RedactedSettings):
         default="",
         validation_alias=AliasChoices("AUTOBOT_ENCRYPTION_KEY", "ENCRYPTION_KEY"),
     )
-    env: str = Field(default="development", alias="AUTOBOT_ENV")  # #13264 batch 3
     error_resolved_ttl_seconds: str = Field(
         default="",
         alias="AUTOBOT_ERROR_RESOLVED_TTL_SECONDS",
@@ -1610,7 +1577,7 @@ class MiscConfig(RedactedSettings):
             "See utils/error_metrics.py."
         ),
     )
-    feature_routers_strict: str = Field(default="1", alias="AUTOBOT_FEATURE_ROUTERS_STRICT")
+    feature_routers_strict: str = Field(default=FEATURE_ROUTERS_STRICT_DEFAULT, alias="AUTOBOT_FEATURE_ROUTERS_STRICT")
     gc_threshold_0: int = Field(default=700, alias="AUTOBOT_GC_THRESHOLD_0")  # #13264 batch 3
     gc_threshold_1: int = Field(default=10, alias="AUTOBOT_GC_THRESHOLD_1")  # #13264 batch 3
     gc_threshold_2: int = Field(default=10, alias="AUTOBOT_GC_THRESHOLD_2")  # #13264 batch 3
@@ -1725,18 +1692,17 @@ class MiscConfig(RedactedSettings):
     memory_log_threshold_mb: int = Field(default=1, alias="AUTOBOT_MEMORY_LOG_THRESHOLD_MB")
     memory_pool_size: int = Field(default=100, alias="AUTOBOT_MEMORY_POOL_SIZE")
     memory_threshold_mb: int = Field(default=500, alias="AUTOBOT_MEMORY_THRESHOLD_MB")
-    # #11834: restore pre-#7437 meta-agent defaults (see #11681 pattern);
-    # llm_model default stays "" — backend falls back to its model constant.
+    # #11834: pre-#7437 meta-agent defaults (#11681); llm_model "" -> backend falls back to its model constant.
     meta_agent_approval_threshold: float = Field(default=0.1, alias="AUTOBOT_META_AGENT_APPROVAL_THRESHOLD")
     meta_agent_llm_model: str = Field(default="", alias="AUTOBOT_META_AGENT_LLM_MODEL")
     meta_agent_max_module_lines: int = Field(default=500, alias="AUTOBOT_META_AGENT_MAX_MODULE_LINES")
     meta_agent_test_timeout: int = Field(default=60, alias="AUTOBOT_META_AGENT_TEST_TIMEOUT")
     ollama_url: str = Field(default="", alias="AUTOBOT_OLLAMA_URL")
-    postgres_db: str = Field(default="autobot", alias="AUTOBOT_POSTGRES_DB")  # #13264 batch 3
-    postgres_host: str = Field(default="", alias="AUTOBOT_POSTGRES_HOST")
+    postgres_db: str = Field(default=_pg.USERS_DB_NAME, alias="AUTOBOT_POSTGRES_DB")  # #19320
+    postgres_host: str = Field(default=_pg.USERS_DB_HOST, alias="AUTOBOT_POSTGRES_HOST")  # #19320
     postgres_password: str = Field(default="", alias="AUTOBOT_POSTGRES_PASSWORD")
-    postgres_port: int = Field(default=5432, alias="AUTOBOT_POSTGRES_PORT")  # #13264 batch 3
-    postgres_user: str = Field(default="autobot", alias="AUTOBOT_POSTGRES_USER")  # #13264 batch 3
+    postgres_port: int = Field(default=_pg.DB_PORT, alias="AUTOBOT_POSTGRES_PORT")  # #19320
+    postgres_user: str = Field(default=_pg.USERS_DB_ROLE, alias="AUTOBOT_POSTGRES_USER")  # #19320
     project_root: str = Field(default="", alias="AUTOBOT_PROJECT_ROOT")
     project_state_db_path: str = Field(default="", alias="AUTOBOT_PROJECT_STATE_DB_PATH")
     prompt_compression_enabled: bool = Field(default=False, alias="AUTOBOT_PROMPT_COMPRESSION_ENABLED")
@@ -1967,7 +1933,6 @@ class MiscConfig(RedactedSettings):
     mcp_worker_nofile: str = Field(default="", alias="MCP_WORKER_NOFILE")
     mistral_api_base_url: str = Field(default="", alias="MISTRAL_API_BASE_URL")
     mistral_api_key: str = Field(default="", alias="MISTRAL_API_KEY")
-    mistral_default_model: str = Field(default="", alias="MISTRAL_DEFAULT_MODEL")
     network_subnet: str = Field(default="", alias="NETWORK_SUBNET")
     nous_api_base_url: str = Field(default="", alias="NOUS_API_BASE_URL")
     nous_api_key: str = Field(default="", alias="NOUS_API_KEY")
@@ -1977,7 +1942,6 @@ class MiscConfig(RedactedSettings):
     openai_api_base_url: str = Field(default="", alias="OPENAI_API_BASE_URL")
     openrouter_api_base_url: str = Field(default="", alias="OPENROUTER_API_BASE_URL")
     openrouter_api_key: str = Field(default="", alias="OPENROUTER_API_KEY")
-    openrouter_default_model: str = Field(default="gpt-3.5-turbo", alias="OPENROUTER_DEFAULT_MODEL")
     password: str = Field(default="", alias="PASSWORD")
     pytest_current_test: str = Field(default="", alias="PYTEST_CURRENT_TEST")
     pytest_running: str = Field(default="", alias="PYTEST_RUNNING")
@@ -2049,8 +2013,8 @@ class MiscConfig(RedactedSettings):
     # node; this default matches the inventory default (slm_server host in
     # autobot-slm-backend/ansible/inventory/slm-nodes.yml) and the Ansible
     # fact derived from it (inventory/group_vars/all.yml slm_manager_node_id).
-    # Overridable per-deployment via AUTOBOT_SLM_NODE_ID; no SSOT source
-    # existed under this name before this field.
+    # Overridable per-deployment via AUTOBOT_SLM_NODE_ID. #19322: the one home --
+    # the SLM backend (config._resolve_slm_node_id) and sync-to-slm.sh read it.
     slm_node_id: str = Field(default="00-SLM-Manager", alias="AUTOBOT_SLM_NODE_ID")
     slm_url: str = Field(default="", alias="SLM_URL")
     skill_hub_url: str = Field(default="", alias="AUTOBOT_SKILL_HUB_URL")
@@ -2090,7 +2054,6 @@ class MiscConfig(RedactedSettings):
     username: str = Field(default="", alias="USERNAME")
     virustotal_api_key: str = Field(default="", alias="VIRUSTOTAL_API_KEY")
     virustotal_rate_limit: int = Field(default=0, alias="VIRUSTOTAL_RATE_LIMIT")
-    vertex_ai_default_model: str = Field(default="gemini-2.5-flash", alias="VERTEX_AI_DEFAULT_MODEL")
     vertex_ai_location: str = Field(default="us-central1", alias="VERTEX_AI_LOCATION")
     vertex_ai_project: str = Field(default="", alias="VERTEX_AI_PROJECT")
     vertex_ai_service_account_json: str = Field(default="", alias="VERTEX_AI_SERVICE_ACCOUNT_JSON")
@@ -2367,10 +2330,9 @@ class AutoBotConfig(RedactedSettings):
     telemetry: TelemetryConfig = Field(default_factory=TelemetryConfig)  # Issue #9035
     cost_model: CostModelConfig = Field(default_factory=CostModelConfig)  # Issue #10720
 
-    # Top-level settings
-    deployment_mode: str = Field(default="distributed", alias="AUTOBOT_DEPLOYMENT_MODE")
-    environment: str = Field(default="development", alias="AUTOBOT_ENVIRONMENT")
-    debug: bool = Field(default=False, alias="AUTOBOT_DEBUG")
+    deployment_mode: str = Field(default=_profile.DEPLOYMENT_MODE_DEFAULT, alias="AUTOBOT_DEPLOYMENT_MODE")
+    environment: _Env = _profile.ENVIRONMENT_DEFAULT  # #19315: one normalisation, deployment_profile.env_field
+    debug: bool = Field(default=_profile.DEBUG_DEFAULT, alias="AUTOBOT_DEBUG")
     log_level: str = Field(default="INFO", alias="AUTOBOT_LOG_LEVEL")
 
     # GH#8995: Data-hygiene TTL settings (retention OFF by default — 0 means disabled)
@@ -2497,21 +2459,21 @@ class AutoBotConfig(RedactedSettings):
 
     @property
     def redis_url(self) -> str:
-        """Get the full Redis URL (without password)."""
-        if self.tls.redis_tls_enabled:
-            return f"rediss://{self.vm.redis}:{self.tls.redis_tls_port}"
-        return f"redis://{self.vm.redis}:{self.port.redis}"
+        """The Redis URL without credentials, from the one endpoint resolver (#19232)."""
+        from autobot_shared.redis_management.endpoint import resolve_redis_endpoint
+
+        return resolve_redis_endpoint(self).url(with_auth=False)
 
     @property
     def redis_url_with_auth(self) -> str:
-        """Get the full Redis URL with credentials if configured (URL-encoded)."""
-        tls = self.tls.redis_tls_enabled
-        scheme, port = ("rediss", self.tls.redis_tls_port) if tls else ("redis", self.port.redis)
-        if self.redis.password:
-            # #16626: userinfo carries the ACL username when set; unset keeps ":<password>"
-            userinfo = f"{quote(self.redis.username or '', safe='')}:{quote(self.redis.password, safe='')}"
-            return f"{scheme}://{userinfo}@{self.vm.redis}:{port}"
-        return f"{scheme}://{self.vm.redis}:{port}"
+        """The Redis URL with URL-encoded credentials (#16626), from the one endpoint resolver.
+
+        #19232: the canonical client resolves through the same function, so this URL
+        names the host, port and credentials ``get_redis_client`` dials.
+        """
+        from autobot_shared.redis_management.endpoint import resolve_redis_endpoint
+
+        return resolve_redis_endpoint(self).url()
 
     @property
     def ollama_url(self) -> str:
@@ -2618,9 +2580,8 @@ class AutoBotConfig(RedactedSettings):
         return f"http://{self.vm.slm}:{self.port.slm}"
 
     def get_redis_url_for_db(self, db_number: int) -> str:
-        """Get Redis URL for a specific database number."""
-        base = self.redis_url_with_auth
-        return f"{base}/{db_number}"
+        """The authenticated Redis URL for *db_number* (resolve a name with ``database_number``)."""
+        return f"{self.redis_url_with_auth}/{db_number}"
 
     def get_service_url(self, service_name: str) -> str | None:
         """

@@ -62,7 +62,7 @@ class ConflictSeverity(Enum):
     @property
     def rank(self) -> int:
         """Position in the severity order, low to high."""
-        return _SEVERITY_ORDER.index(self.value)
+        return _CONFLICT_COMPLEXITY_ORDER.index(self.value)
 
     def __lt__(self, other: "ConflictSeverity") -> bool:
         if not isinstance(other, ConflictSeverity):
@@ -73,7 +73,7 @@ class ConflictSeverity(Enum):
 #: Severity order, low to high. Defined beside the enum so adding a level
 #: without ranking it fails loudly (ValueError) rather than sorting silently
 #: wrong.
-_SEVERITY_ORDER = ("trivial", "simple", "moderate", "complex", "critical")
+_CONFLICT_COMPLEXITY_ORDER = ("trivial", "simple", "moderate", "complex", "critical")
 
 
 class ResolutionStrategy(Enum):

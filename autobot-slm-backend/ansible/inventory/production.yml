@@ -47,7 +47,7 @@ all:
     redis_port: 6379
     ai_stack_host: "{{ hostvars['autobot-aiml']['ansible_host'] }}"
     browser_host: "{{ hostvars['autobot-browser']['ansible_host'] }}"
-    browser_port: 3000
+    browser_port: 9001  # #19324: the browser role binds 9001 (roles/browser/vars); 3000 is Grafana
 
   children:
     slm:
@@ -84,7 +84,7 @@ all:
         frontend_port: 5173
         nginx_port: 80
         nginx_ssl_port: 443
-        nodejs_version: "20"
+        nodejs_version: "{{ node_major }}"
         vue_build_mode: "production"
 
     backend:
@@ -228,7 +228,7 @@ all:
             - browser-automation
       vars:
         # Browser-specific configuration
-        playwright_port: 3000
+        playwright_port: 9001  # #19324: roles/browser/vars/main.yml overrides this anyway
         browser_timeout: 30
         headless_mode: true
 

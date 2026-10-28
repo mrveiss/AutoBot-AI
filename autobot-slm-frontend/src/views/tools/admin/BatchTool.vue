@@ -13,10 +13,16 @@ const logger = createLogger('BatchTool')
  * Migrated from main AutoBot frontend - Issue #729.
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAutobotApi } from '@/composables/useAutobotApi'
 import { formatDateTime } from '@/composables/useTimezone'
-import { BaseAlert, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseModal, PollingPausedAlert } from '@autobot/ui'
+import { formatDuration } from '@/utils/formatHelpers'
+import { useDashboardPoller } from '@/composables/useDashboardPoller'
+import { POLL_CONSECUTIVE_ERROR_LIMIT } from '@/constants/api-timeouts'
+
+const DURATION_OPTIONS = { style: 'msCompound' } as const
 
 const api = useAutobotApi()
 
@@ -60,11 +66,16 @@ const newJob = ref({
   options: {}
 })
 
-let refreshInterval: ReturnType<typeof setInterval> | null = null
-// Issue #1092: Stop polling on repeated auth failures
-let consecutiveErrors = 0
-const MAX_CONSECUTIVE_ERRORS = 3
-const backendAvailable = ref(true)
+const { t } = useI18n()
+
+// Issue #1092: polling stops after repeated failures. Since #19482 that is the shared SLM
+// dashboard policy (useDashboardPoller, POLL_CONSECUTIVE_ERROR_LIMIT); Retry restarts it.
+const POLL_INTERVAL_MS = 10_000
+
+/** Message of a thrown value, or the translated fallback. */
+function errorText(e: unknown, fallbackKey: string): string {
+  return e instanceof Error && e.message ? e.message : t(fallbackKey)
+}
 
 // Computed
 const filteredJobs = computed(() => {
@@ -98,28 +109,19 @@ function formatDate(dateStr: string | null): string {
   return formatDateTime(dateStr)
 }
 
-function formatDuration(start: string | null, end: string | null): string {
-  if (!start) return '-'
-  const startDate = new Date(start)
-  const endDate = end ? new Date(end) : new Date()
-  const diff = Math.floor((endDate.getTime() - startDate.getTime()) / 1000)
-
-  if (diff < 60) return `${diff}s`
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ${diff % 60}s`
-  return `${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m`
+async function fetchJobs(): Promise<void> {
+  const data = await api.listBatchJobs()
+  jobs.value = (data.jobs as BatchJob[]) || []
 }
 
+/** Reload after an action; the error is shown, not thrown. */
 async function loadJobs(): Promise<void> {
   loading.value = true
   error.value = null
-
   try {
-    const data = await api.listBatchJobs()
-    jobs.value = (data.jobs as BatchJob[]) || []
-    consecutiveErrors = 0
-    backendAvailable.value = true
+    await fetchJobs()
   } catch (e) {
-    handlePollError(e)
+    error.value = errorText(e, 'tools.admin.batchTool.failedToLoadJobs')
   } finally {
     loading.value = false
   }
@@ -139,45 +141,38 @@ async function loadStats(): Promise<void> {
   }
 }
 
-// Issue #1092: Stop polling after repeated failures
-function handlePollError(e: unknown): void {
-  consecutiveErrors++
-  if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-    stopPolling()
-    backendAvailable.value = false
-    error.value = 'AutoBot backend unreachable. Polling paused.'
-    logger.warn(
-      'Batch polling stopped after %d consecutive errors',
-      consecutiveErrors,
-    )
-  } else {
-    error.value = e instanceof Error ? e.message : 'Failed to load jobs'
+/** One poll tick; a failure throws, so usePollingJob counts it. */
+async function pollTick(): Promise<void> {
+  loading.value = true
+  try {
+    await Promise.all([fetchJobs(), loadStats()])
+    error.value = null
+  } finally {
+    loading.value = false
   }
 }
 
-function stopPolling(): void {
-  if (refreshInterval) {
-    clearInterval(refreshInterval)
-    refreshInterval = null
-  }
-}
+const poller = useDashboardPoller(pollTick, POLL_INTERVAL_MS)
 
-function resumePolling(): void {
-  consecutiveErrors = 0
-  backendAvailable.value = true
+watch(poller.error, (e) => {
+  if (e) error.value = errorText(e, 'tools.admin.batchTool.failedToLoadJobs')
+})
+// The shared PollingPausedAlert says it on screen; the per-tick error then steps aside.
+watch(poller.pausedOnErrors, (paused) => {
+  if (!paused) return
   error.value = null
-  refreshData()
-  refreshInterval = setInterval(() => refreshData(), 10000)
-}
+  logger.warn('Batch polling stopped after %d consecutive errors', POLL_CONSECUTIVE_ERROR_LIMIT)
+})
 
-async function refreshData(): Promise<void> {
-  if (!backendAvailable.value) return
-  await Promise.all([loadJobs(), loadStats()])
+/** Refresh now, and restart polling if it had paused (Refresh and Retry both). */
+function refreshData(): void {
+  error.value = null
+  poller.start('')
 }
 
 async function createJob(): Promise<void> {
   if (!newJob.value.name) {
-    error.value = 'Please enter a job name'
+    error.value = t('tools.admin.batchTool.enterJobName')
     return
   }
 
@@ -189,7 +184,7 @@ async function createJob(): Promise<void> {
     newJob.value = { name: '', type: 'file_processing', items: [], options: {} }
     await loadJobs()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to create job'
+    error.value = errorText(e, 'tools.admin.batchTool.failedToCreateJob')
   } finally {
     loading.value = false
   }
@@ -201,7 +196,7 @@ async function cancelJob(jobId: string): Promise<void> {
     await api.cancelBatchJob(jobId)
     await loadJobs()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to cancel job'
+    error.value = errorText(e, 'tools.admin.batchTool.failedToCancelJob')
   }
 }
 
@@ -214,12 +209,12 @@ async function retryJob(jobId: string): Promise<void> {
     }
     await loadJobs()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to retry job'
+    error.value = errorText(e, 'tools.admin.batchTool.failedToRetryJob')
   }
 }
 
 async function deleteJob(jobId: string): Promise<void> {
-  if (!confirm('Are you sure you want to delete this job?')) return
+  if (!confirm(t('tools.admin.batchTool.confirmDeleteJob'))) return
 
   try {
     // Issue #835 - use cancelBatchJob (DELETE endpoint)
@@ -229,18 +224,12 @@ async function deleteJob(jobId: string): Promise<void> {
     }
     await loadJobs()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to delete job'
+    error.value = errorText(e, 'tools.admin.batchTool.failedToDeleteJob')
   }
 }
 
-onMounted(() => {
-  refreshData()
-  refreshInterval = setInterval(() => refreshData(), 10000)
-})
-
-onUnmounted(() => {
-  stopPolling()
-})
+// usePollingJob stops itself when the component's scope is disposed.
+onMounted(() => poller.start(''))
 </script>
 
 <template>
@@ -344,19 +333,17 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Issue #1092: Backend unavailable banner with retry -->
-    <div v-if="!backendAvailable" class="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
-      <span class="text-amber-800">{{ $t('tools.admin.batchTool.autoBotBackendUnreachablePolling') }}</span>
-      <button
-        @click="resumePolling"
-        class="px-3 py-1.5 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700"
-      >
-        {{ $t('tools.admin.batchTool.retry') }}
-      </button>
-    </div>
+    <!-- Issue #1092 / #19482: polling paused after repeated failures, with Retry -->
+    <PollingPausedAlert
+      class="mb-6"
+      :poller="poller"
+      :message="$t('tools.admin.batchTool.autoBotBackendUnreachablePolling')"
+      :retry-label="$t('tools.admin.batchTool.retry')"
+      @retry="refreshData"
+    />
 
     <!-- Error Message -->
-    <BaseAlert v-if="error && backendAvailable" variant="error" class="mb-6" :message="error" />
+    <BaseAlert v-if="error" variant="error" class="mb-6" :message="error" />
 
     <!-- Jobs List -->
     <div v-if="loading && !jobs.length" class="text-center py-12">
@@ -444,7 +431,7 @@ onUnmounted(() => {
           </div>
           <div>
             <p class="text-gray-500">{{ $t('tools.admin.batchTool.duration') }}</p>
-            <p class="text-gray-900">{{ formatDuration(job.started_at, job.completed_at) }}</p>
+            <p class="text-gray-900">{{ formatDuration(job.started_at, job.completed_at, DURATION_OPTIONS) }}</p>
           </div>
           <div>
             <p class="text-gray-500">{{ $t('tools.admin.batchTool.failedItems') }}</p>

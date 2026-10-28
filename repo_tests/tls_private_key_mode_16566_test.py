@@ -57,7 +57,7 @@ _ALLOWED_GROUP_READABLE = {
     ("autobot-slm-backend/ansible/roles/frontend/tasks/main.yml", "{{ frontend_tls_key }}"): _FRONTEND_KEY_REASON,
     (
         "autobot-slm-backend/ansible/playbooks/update-all-nodes.yml",
-        "/etc/autobot/certs/server-key.pem",
+        "{{ node_cert_dir }}/server-key.pem",  # #19366: the play's one spelling of the node cert dir
     ): _FRONTEND_KEY_REASON,
 }
 

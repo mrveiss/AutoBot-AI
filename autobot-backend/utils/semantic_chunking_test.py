@@ -15,6 +15,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from utils.semantic_chunker import AutoBotSemanticChunker, SemanticChunk
+from utils.semantic_chunker_base import SENTENCE_EMBEDDING_MODEL
 
 
 class TestSemanticChunking:
@@ -27,7 +28,7 @@ class TestSemanticChunking:
     # runs before each test, which is what this body always meant.
     def setup_method(self):
         self.chunker = AutoBotSemanticChunker(
-            embedding_model="all-MiniLM-L6-v2",
+            embedding_model=SENTENCE_EMBEDDING_MODEL,
             percentile_threshold=95.0,
             min_chunk_size=50,
             max_chunk_size=500,

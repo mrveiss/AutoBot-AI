@@ -37,6 +37,7 @@ REGISTRY_DEFAULTS = {
     "vm.browser": _ssot.vm.browser,
     "vm.slm": _ssot.vm.slm,  # Issue #768: SLM admin server
     "vm.ollama": _ssot.vm.ollama,
+    "vm.chromadb": _ssot.vm.chromadb,  # #19321: ChromaDB is not the AI-stack service
     # Provider-agnostic LLM service — autobot-llm-gpu (.20) hosts Ollama for GPU (#1193)
     "vm.llm": _ssot.vm.main,  # autobot-llm-gpu (Main Backend, RTX 4070)
     # Convenience aliases — sourced from SSOT VMConfig + PortConfig
@@ -63,8 +64,9 @@ REGISTRY_DEFAULTS = {
     "port.vnc": str(_ssot.port.vnc),
     "port.browser": str(_ssot.port.browser),
     "port.aistack": str(_ssot.port.aistack),
+    "port.chromadb": str(_ssot.port.chromadb),  # #19321
     "port.npu": str(_ssot.port.npu),
-    "port.npu_windows": str(_ssot.port.npu),
+    "port.npu_windows": str(_ssot.port.npu_windows),  # #19325: was port.npu (8081), not the Windows worker
     "port.slm": str(_ssot.port.slm),  # Issue #768: SLM admin server
     "port.prometheus": str(_ssot.port.prometheus),
     "port.grafana": str(_ssot.port.grafana),

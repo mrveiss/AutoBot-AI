@@ -68,13 +68,10 @@ MIN_VOCAB_FILES_SCANNED = 15
 APPS = ("autobot-frontend", "autobot-slm-frontend")
 VOCAB_SUBDIRS = ("utils", "types")
 
-# Composable FILENAMES known to collide and already tracked.
-FILENAME_ALLOWLIST = {
-    # #14907: shared TYPES extracted to the kit (prometheus-metrics.ts); the
-    # composable itself stays per-app — polling/transport logic legitimately
-    # differs (main uses useApiClient + useWebSocket, SLM uses slmApiClient).
-    "usePrometheusMetrics.ts",
-}
+# Composable FILENAMES known to collide and already tracked. Empty since #18225:
+# the two usePrometheusMetrics.ts became useInstallMetrics (main) and
+# useFleetMetrics (SLM), whose shared numbers come from the kit's useMetricsSummary.
+FILENAME_ALLOWLIST: set[str] = set()
 
 # Exported TYPE NAMES (in src/utils/*.ts + src/types/*.ts, top-level) known
 # to collide and already tracked.
@@ -83,13 +80,8 @@ TYPE_NAME_ALLOWLIST = {
     # review required) — not folded into the composables/types sweep.
     "ErrorInfo",
     "RequestOptions",
-    # #14908: DurationStyle (the identical one) already moved to the kit;
-    # these three remain per-app pending a full formatHelpers.ts diff/merge
-    # (577 vs 215 lines) — tracked under #14908's own acceptance criteria,
-    # not silently permitted.
-    "FormatBytesOptions",
-    "FormatDurationOptions",
-    "FormatUptimeOptions",
+    # FormatBytesOptions / FormatDurationOptions / FormatUptimeOptions left this list in #14908:
+    # the formatters moved to the kit and each app's formatHelpers.ts only re-exports them.
     # HealthStatus / ServiceHealth / ServiceStatus left this list in #15401: the
     # main GUI's copies were renamed (the SLM keeps the names, as the owner of
     # deep-settings vocabulary), so none of the three collides any more.

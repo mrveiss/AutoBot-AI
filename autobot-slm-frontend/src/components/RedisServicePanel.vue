@@ -16,14 +16,15 @@
  * Related to Issue #3381
  */
 
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { formatBytes } from '@/utils/formatHelpers'
 import i18n from '@/i18n'
 import { createLogger } from '@/utils/debugUtils'
 import { useSlmApi } from '@/composables/useSlmApi'
 import type { NodeService, ServiceActionResponse } from '@/types/slm'
 import ServiceLogsModal from '@/components/fleet/ServiceLogsModal.vue'
-import { BaseAlert, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseModal, PollingPausedAlert } from '@autobot/ui'
+import { useDashboardPoller } from '@/composables/useDashboardPoller'
 
 type RedisServiceAction = 'start' | 'stop' | 'restart'
 
@@ -62,7 +63,6 @@ const successMessage = ref<string | null>(null)
 const showStopConfirm = ref(false)
 const logsServiceName = ref<string | null>(null)
 
-let pollInterval: ReturnType<typeof setInterval> | null = null
 
 const hasTarget = computed(() => Boolean(props.nodeId && props.serviceName))
 const isRunning = computed(() => service.value?.status === 'running')
@@ -112,7 +112,11 @@ function statusTextClass(status: string | undefined): string {
 // API calls
 // -----------------------------------------------------------------------
 
+/** Whether the last status read failed; the poller counts this, not the shared errorMessage. */
+const statusFailed = ref(false)
+
 async function fetchStatus(): Promise<void> {
+  statusFailed.value = false
   if (!props.nodeId || !props.serviceName) {
     service.value = null
     return
@@ -127,12 +131,20 @@ async function fetchStatus(): Promise<void> {
     logger.error('Failed to fetch Redis status:', err)
     // A failed read says nothing about the unit now, so drop the last value
     service.value = null
+    statusFailed.value = true
     errorMessage.value = t('redisServicePanel.fetchStatusFailed')
   } finally {
     isLoading.value = false
     hasFetched.value = true
   }
 }
+
+// #19482: the shared dashboard policy (stop on unmount and after repeated failures, paused alert)
+// errorMessage is shared with performAction, so the tick reads its own statusFailed flag.
+const statusPoller = useDashboardPoller(async () => {
+  await fetchStatus()
+  if (statusFailed.value) throw new Error(errorMessage.value ?? 'status read failed')
+}, POLL_INTERVAL_MS)
 
 async function performAction(action: RedisServiceAction): Promise<void> {
   if (isActionInProgress.value || !props.nodeId || !props.serviceName) return
@@ -185,22 +197,20 @@ watch(
   () => [props.nodeId, props.serviceName],
   () => {
     hasFetched.value = false
-    fetchStatus()
+    statusPoller.start(`${props.nodeId}:${props.serviceName}`)
   },
   { immediate: true },
 )
-
-onMounted(() => {
-  pollInterval = setInterval(fetchStatus, POLL_INTERVAL_MS)
-})
-
-onUnmounted(() => {
-  if (pollInterval) clearInterval(pollInterval)
-})
 </script>
 
 <template>
   <div class="bg-white rounded-lg shadow-xs border border-gray-200">
+    <PollingPausedAlert
+      :poller="statusPoller"
+      :message="t('common.polling.paused')"
+      :retry-label="t('common.polling.retry')"
+      @retry="statusPoller.start(`${props.nodeId}:${props.serviceName}`)"
+    />
     <!-- Header -->
     <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200">
       <div class="flex items-center gap-3">
@@ -233,7 +243,7 @@ onUnmounted(() => {
 
       <!-- Refresh button -->
       <button
-        @click="fetchStatus"
+        @click="statusPoller.start(`${props.nodeId}:${props.serviceName}`)"
         :disabled="!hasTarget || isLoading || isActionInProgress"
         class="p-1.5 text-gray-400 hover:text-gray-600 disabled:opacity-40 transition-colors"
         :title="$t('redisServicePanel.refreshStatus')"
@@ -256,14 +266,15 @@ onUnmounted(() => {
     </div>
 
     <!-- Success / Error banners -->
-    <div v-if="successMessage" class="px-4 py-2 bg-green-50 border-b border-green-100 text-sm text-green-700 flex items-center justify-between">
-      <span>{{ successMessage }}</span>
-      <button @click="successMessage = null" class="text-green-500 hover:text-green-700" :aria-label="$t('redisServicePanel.dismiss')">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-    </div>
+    <BaseAlert
+      v-if="successMessage"
+      variant="success"
+      size="compact"
+      :message="successMessage"
+      dismissible
+      :dismiss-label="$t('redisServicePanel.dismiss')"
+      @dismiss="successMessage = null"
+    />
     <BaseAlert
       v-if="errorMessage"
       variant="error"

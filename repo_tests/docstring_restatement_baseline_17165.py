@@ -126,7 +126,6 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
             "execute_system_command",
             "list_system_services",
             "query_system_information",
-            "search_knowledge_base",
         }
     ),
     "autobot-backend/utils/advanced_cache_manager.py": frozenset({"get_cached_system_status"}),
@@ -135,7 +134,6 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
     "autobot-backend/utils/gpu_optimization/monitoring.py": frozenset(
         {"calculate_memory_efficiency", "calculate_power_efficiency", "calculate_thermal_efficiency"}
     ),
-    "autobot-backend/utils/graceful_degradation.py": frozenset({"get_strategy_name"}),
     "autobot-backend/utils/hardware_metrics.py": frozenset({"get_phase9_performance_dashboard"}),
     "autobot-backend/utils/hot_reload_manager.py": frozenset({"get_hot_reload_status"}),
     "autobot-backend/utils/monitoring_alerts.py": frozenset({"add_notification_channel", "remove_alert_rule"}),
@@ -159,9 +157,6 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
         {"provider_name", "supported_languages"}
     ),
     "autobot-infrastructure/shared/docker/ai-stack/ai_api_server.py": frozenset({"global_exception_handler"}),
-    "autobot-infrastructure/shared/scripts/analysis/redis_final_analysis.py": frozenset(
-        {"test_langchain_db0_workaround"}
-    ),
     "autobot-infrastructure/shared/scripts/apply_memory_optimizations.py": frozenset(
         {"apply_global_memory_optimizations", "save_optimization_report"}
     ),
@@ -172,7 +167,6 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
         {"backup_docker_volume", "create_backup_metadata"}
     ),
     "autobot-infrastructure/shared/scripts/monitor_services.py": frozenset({"stop_monitoring"}),
-    "autobot-infrastructure/shared/scripts/populate_kb_fixed.py": frozenset({"populate_knowledge_base_chromadb"}),
     "autobot-infrastructure/shared/scripts/run_code_analysis.py": frozenset(
         {"run_architecture_analysis", "run_code_quality_analysis"}
     ),

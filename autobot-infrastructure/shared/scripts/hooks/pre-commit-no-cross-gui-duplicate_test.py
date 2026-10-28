@@ -94,14 +94,27 @@ def test_composable_collision_passes_when_both_sides_are_kit_shims(tmp_path: Pat
     assert violations == []
 
 
-def test_composable_collision_respects_filename_allowlist(tmp_path: Path) -> None:
+def test_composable_collision_respects_filename_allowlist(tmp_path: Path, monkeypatch) -> None:
+    repo = _make_repo(tmp_path)
+    monkeypatch.setattr(guard, "FILENAME_ALLOWLIST", {"useTracked.ts"})
+    for app in guard.APPS:
+        _write(repo, f"{app}/src/composables/useTracked.ts", "export function x() {}\n")
+
+    violations, _scanned = guard.collect_composable_violations(repo)
+
+    assert violations == []
+
+
+def test_the_former_prometheus_collision_is_no_longer_allowed(tmp_path: Path) -> None:
+    """#18225: a usePrometheusMetrics.ts in both apps again is a violation."""
     repo = _make_repo(tmp_path)
     for app in guard.APPS:
         _write(repo, f"{app}/src/composables/usePrometheusMetrics.ts", "export function x() {}\n")
 
     violations, _scanned = guard.collect_composable_violations(repo)
 
-    assert violations == []
+    assert violations
+    assert all("usePrometheusMetrics.ts" in str(v) for v in violations), violations
 
 
 def test_composable_no_collision_when_only_one_side_has_the_file(tmp_path: Path) -> None:
@@ -142,11 +155,12 @@ def test_type_name_reexport_is_not_a_declaration(tmp_path: Path) -> None:
 
 def test_type_name_collision_respects_allowlist(tmp_path: Path) -> None:
     # A name still on TYPE_NAME_ALLOWLIST. This used HealthStatus until #15401
-    # renamed the main GUI's copy and took it off the list, which turned the
-    # test's own example into the one collision the allowlist no longer excuses.
+    # and FormatBytesOptions until #19671 took each off the list; read the name
+    # from the allowlist so the example cannot go stale again.
+    name = sorted(guard.TYPE_NAME_ALLOWLIST)[0]
     repo = _make_repo(tmp_path)
     for app in guard.APPS:
-        _write(repo, f"{app}/src/types/format.ts", "export type FormatBytesOptions = { unit?: string }\n")
+        _write(repo, f"{app}/src/types/format.ts", f"export type {name} = {{ unit?: string }}\n")
 
     violations, _scanned = guard.collect_type_violations(repo)
 

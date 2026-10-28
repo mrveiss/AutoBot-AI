@@ -28,6 +28,12 @@
   gather_facts: true
   become: true
 
+  # node_major (the Node.js major, #19328) comes from its single definition by
+  # name: a run with a bare `-i "<host>,"` loads no group_vars, the same reason
+  # deploy.yml and enroll-slm-agent.yml load it (#15348).
+  vars_files:
+    - ../inventory/group_vars/all.yml
+
   vars:
     enrollment_timestamp: "{{ ansible_facts['date_time'].iso8601 }}"
     autobot_user: "autobot"
@@ -35,7 +41,7 @@
     autobot_home: "/home/autobot"
     autobot_data_dir: "/var/lib/autobot"
     autobot_log_dir: "/var/log/autobot"
-    autobot_cert_dir: "/etc/autobot/certs"
+    autobot_cert_dir: "{{ autobot_tls_remote_cert_dir | default('/etc/autobot/certs') }}"  # #19366
 
     # Emergency admin user for fallback access when SSH keys fail
     emergency_admin_user: "autobot_admin"
@@ -65,7 +71,7 @@
       browser:
         services: ['playwright-service', 'vnc-server']
         packages: ['python3', 'xvfb', 'tigervnc-standalone-server']
-        ports: [3000, 5900]
+        ports: [9001, 5900]
       vnc:
         services: ['vnc-server', 'vnc-websockify']
         # #13069: 'novnc' deliberately absent — the distro package is 1.0.0 (2018)
@@ -232,7 +238,7 @@
           block:
             - name: "Add NodeSource repository"
               shell: |
-                curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+                curl -fsSL {{ nodesource_base_url }}/setup_{{ node_major }}.x | bash -
               args:
                 creates: /etc/apt/sources.list.d/nodesource.list
 

@@ -19,6 +19,7 @@
   changed_when: false
   failed_when: false
   when: ansible_facts['os_family'] == "Debian"
+  check_mode: false
 
 - name: Remove legacy Grafana APT key from trusted keyring
   ansible.builtin.apt_key:
@@ -84,7 +85,7 @@
 
 - name: Install Grafana
   ansible.builtin.apt:
-    name: grafana
+    name: "grafana={{ grafana_version }}"
     state: present
   when:
     - ansible_facts['os_family'] == "Debian"

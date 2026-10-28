@@ -11,12 +11,15 @@
  */
 
 import { ref, computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { PollingPausedAlert } from '@autobot/ui'
 import GrafanaDashboard from '@/components/monitoring/GrafanaDashboard.vue'
 import MetricsDetailsView from './MetricsDetailsView.vue'
 import NodeGpuSummary from '@/components/monitoring/NodeGpuSummary.vue'
 import { useFleetStore } from '@/stores/fleet'
-import { usePrometheusMetrics } from '@/composables/usePrometheusMetrics'
+import { useFleetMetrics } from '@/composables/useFleetMetrics'
 
+const { t } = useI18n()
 const fleetStore = useFleetStore()
 const {
   cpuUsage,
@@ -25,7 +28,8 @@ const {
   systemHealth,
   gpuNodes,
   gpuUnavailable,
-} = usePrometheusMetrics({ autoFetch: true, pollInterval: 30000 })
+  poller,
+} = useFleetMetrics({ autoFetch: true, pollInterval: 30000 })
 
 // #15226: each node's GPUs, matched to its card by node_id
 const gpuByNode = computed(() => new Map(gpuNodes.value.map((gpuNode) => [gpuNode.node_id, gpuNode])))
@@ -76,6 +80,7 @@ function getMetricColor(value: number): string {
 
 <template>
   <div class="p-6">
+    <PollingPausedAlert :poller="poller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mb-6" @retry="poller.start('')" />
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <h2 class="text-xl font-bold text-gray-900">{{ $t('monitoring.systemMonitor.systemMonitoring') }}</h2>

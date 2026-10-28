@@ -160,7 +160,7 @@ Environment variables skip the matching interactive prompt:
 | Variable | Effect |
 |----------|--------|
 | `AUTOBOT_INSTALL_BRANCH=<branch>` | Same as `--branch=` |
-| `AUTOBOT_SLM_ADMIN_PASSWORD=<pass>` | The admin password itself, not a file path (unlike `--admin-pass-file=`, which names a file) |
+| `SLM_ADMIN_PASSWORD=<pass>` | The admin password itself, not a file path (unlike `--admin-pass-file=`, which names a file). `AUTOBOT_SLM_ADMIN_PASSWORD` still works but is a deprecated alias (#19318) |
 | `AUTOBOT_INSTALL_INTERFACE=<iface>` | Pick the network interface by name instead of the menu |
 | `OVERRIDE_IP=<ip>` | Skip IP detection and use this address |
 | `NETWORK_SUBNET=<cidr>` / `NETWORK_GATEWAY=<ip>` | Use this network instead of detecting it. The subnet is the source the firewall rules allow, so if it cannot be detected the installer stops and asks for these instead of guessing |
@@ -285,8 +285,9 @@ provider in **SLM Admin > Settings > LLM**. With the `ollama` profile, Ollama st
 pull the models `docker/.env.docker` names, or the ones you set there instead:
 
 ```bash
-docker compose --env-file docker/.env.docker --env-file docker/.env.secrets exec autobot-ollama ollama pull qwen3.5:9b
-docker compose --env-file docker/.env.docker --env-file docker/.env.secrets exec autobot-ollama ollama pull nomic-embed-text:latest
+# every model docker/.env.docker names, read from the file itself (about 21 GB with the defaults)
+sed -n 's/^AUTOBOT_[A-Z_]*_MODEL=//p' docker/.env.docker | sort -u | \
+  xargs -n1 docker compose --env-file docker/.env.docker --env-file docker/.env.secrets exec -T autobot-ollama ollama pull
 ```
 
 ### Exposed Services

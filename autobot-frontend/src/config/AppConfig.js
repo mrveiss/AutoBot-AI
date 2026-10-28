@@ -10,7 +10,7 @@
 import ServiceDiscovery from './ServiceDiscovery.js';
 import { NetworkConstants } from '../constants/network.ts';
 import { createLogger } from '@/utils/debugUtils';
-import { getApiBase, getApiTimeout } from '@/config/ssot-config';
+import { getApiBase, getApiTimeout, PORT_DEFAULTS } from '@/config/ssot-config';
 
 const logger = createLogger('AppConfig');
 
@@ -37,28 +37,24 @@ export class AppConfigService {
           port: import.meta.env.VITE_BACKEND_PORT || '8001',
           protocol: import.meta.env.VITE_HTTP_PROTOCOL || 'http'
         },
-        redis: {
-          host: import.meta.env.VITE_REDIS_HOST,
-          port: import.meta.env.VITE_REDIS_PORT || '6379',
-          protocol: 'redis'
-        },
+        // No redis entry (#19232): a browser never dials Redis; the backend owns its URL.
         // DORMANT: VNC browser path replaced by screenshot panel (#1130). Preserved for #5136 re-integration.
         // #16299: no password fields -- the backend authenticates to the real VNC server
         // itself and offers the browser security-type "None" (api/vnc_handshake_bridge.py).
         vnc: {
           desktop: {
             host: import.meta.env.VITE_DESKTOP_VNC_HOST,
-            port: import.meta.env.VITE_DESKTOP_VNC_PORT || '6080',
+            port: import.meta.env.VITE_DESKTOP_VNC_PORT || String(PORT_DEFAULTS.vnc),
             protocol: 'http'
           },
           terminal: {
             host: import.meta.env.VITE_TERMINAL_VNC_HOST,
-            port: import.meta.env.VITE_TERMINAL_VNC_PORT || '6080',
+            port: import.meta.env.VITE_TERMINAL_VNC_PORT || String(PORT_DEFAULTS.vnc),
             protocol: 'http'
           },
           playwright: {
             host: import.meta.env.VITE_PLAYWRIGHT_VNC_HOST,
-            port: import.meta.env.VITE_PLAYWRIGHT_VNC_PORT || '6081',
+            port: import.meta.env.VITE_PLAYWRIGHT_VNC_PORT || String(PORT_DEFAULTS.vnc), // #19327: was 6081, unserved
             protocol: 'http'
           }
         },
@@ -76,7 +72,7 @@ export class AppConfigService {
         },
         playwright: {
           host: import.meta.env.VITE_PLAYWRIGHT_HOST,
-          port: import.meta.env.VITE_PLAYWRIGHT_PORT || '3000',
+          port: import.meta.env.VITE_PLAYWRIGHT_PORT || String(PORT_DEFAULTS.browser), // #19324: was 3000 (Grafana)
           protocol: 'http'
         }
       },
@@ -535,7 +531,7 @@ export class AppConfigService {
    * Get all service URLs for debugging
    */
   async getAllServiceUrls() {
-    const services = ['backend', 'redis', 'vnc_desktop', 'vnc_terminal', 'vnc_playwright', 'npu_worker', 'ollama', 'playwright'];
+    const services = ['backend', 'vnc_desktop', 'vnc_terminal', 'vnc_playwright', 'npu_worker', 'ollama', 'playwright'];
     const urls = {};
 
     for (const service of services) {

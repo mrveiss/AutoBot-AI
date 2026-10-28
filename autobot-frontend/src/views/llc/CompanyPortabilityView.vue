@@ -113,22 +113,13 @@
           <!-- Collisions -->
           <div v-if="importPreview.collisions.length > 0" class="preview-collisions">
             <h5>{{ t('llc.portability.collisionsDetected') }}</h5>
-            <table class="preview-table">
-              <thead>
-                <tr><th>{{ t('llc.portability.colType') }}</th><th>{{ t('llc.portability.colName') }}</th><th>{{ t('llc.portability.colResolution') }}</th></tr>
-              </thead>
-              <tbody>
-                <tr
-                  v-for="(c, i) in importPreview.collisions"
-                  :key="i"
-                  class="row-collision"
-                >
-                  <td>{{ c.type }}</td>
-                  <td>{{ c.name }}</td>
-                  <td>{{ c.resolution }}</td>
-                </tr>
-              </tbody>
-            </table>
+            <BaseTable
+              :columns="collisionColumns"
+              :rows="collisionRows"
+              :row-variant="() => 'warning'"
+              size="compact"
+              :aria-label="t('llc.portability.collisionsDetected')"
+            />
           </div>
 
           <!-- Will create summary -->
@@ -212,6 +203,7 @@
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { BaseTable, type BaseTableColumn } from '@autobot/ui'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { getApiBase } from '@/config/ssot-config'
 import { useNotificationBus } from '@/composables/useNotificationBus'
@@ -239,6 +231,14 @@ const importFile = ref<File | null>(null)
 const isDragOver = ref(false)
 const loadingPreview = ref(false)
 const importPreview = ref<ImportPreview | null>(null)
+
+// #17562: the kit table for the import collisions
+const collisionColumns = computed<BaseTableColumn[]>(() => [
+  { key: 'type', label: t('llc.portability.colType') },
+  { key: 'name', label: t('llc.portability.colName') },
+  { key: 'resolution', label: t('llc.portability.colResolution') },
+])
+const collisionRows = computed(() => (importPreview.value?.collisions ?? []).map((c, i) => ({ ...c, id: i })))
 const previewPayload = ref<unknown>(null)
 const secretMapping = ref<Record<string, string>>({})
 const executingImport = ref(false)
@@ -632,28 +632,6 @@ async function executeImport(): Promise<void> {
   color: var(--text-primary);
 }
 
-.export-table,
-.preview-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: var(--font-size-sm);
-}
-
-.export-table th,
-.export-table td,
-.preview-table th,
-.preview-table td {
-  text-align: left;
-  padding: var(--spacing-xs) var(--spacing-sm);
-  border-bottom: 1px solid var(--border-default);
-}
-
-.export-table th,
-.preview-table th {
-  font-weight: var(--font-weight-semibold);
-  color: var(--text-secondary);
-}
-
 .download-link {
   color: var(--color-primary);
   text-decoration: underline;
@@ -750,10 +728,6 @@ async function executeImport(): Promise<void> {
 
 .preview-collisions {
   margin-bottom: var(--spacing-md);
-}
-
-.row-collision {
-  background: var(--color-warning-bg);
 }
 
 .preview-summary {

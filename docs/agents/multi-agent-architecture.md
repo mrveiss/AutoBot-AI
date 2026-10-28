@@ -388,7 +388,7 @@ agent.health_check()  # Returns status and capabilities
    - Screen understanding and interaction
 
 4. **Specialized Code Agent**
-   - CodeLlama integration
+   - CodeLlama integration (planned; not provisioned)
    - Advanced code analysis and generation
 
 ### Scalability Considerations

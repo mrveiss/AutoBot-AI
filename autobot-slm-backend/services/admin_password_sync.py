@@ -10,15 +10,12 @@ The API path (UserService.change_password) already records the epoch (#12924); t
 the same, and only when the password actually changed -- not on every start.
 """
 
-import logging
-
 from autobot_shared.auth.jwt_core import verify_password
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.user_management.password_epoch import set_password_epoch
 from services.auth import auth_service
 
-# Stdlib logging, as in the other SLM services: the SLM test conftest mocks config, which
-# autobot_shared.logging_manager reads at import (CLAUDE.md's stated exception).
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 class EpochNotRecordedError(RuntimeError):

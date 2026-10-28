@@ -1,6 +1,6 @@
 # Implement a real-time monitoring task that triggers a notification when a specific Linux service enters a failed state
 
-AutoBot monitors systemd services across your fleet and fires a notification the moment a service transitions to `failed` or `crash-loop` state.  No polling loop is required in your code — the SLM HealthCollector handles discovery; you only need to create a workflow that reacts to the Redis pub/sub event it emits.
+AutoBot monitors systemd services across AutoBot's own nodes and fires a notification the moment a service transitions to `failed` or `crash-loop` state.  No polling loop is required in your code — the SLM HealthCollector handles discovery; you only need to create a workflow that reacts to the Redis pub/sub event it emits.
 
 ## How it works
 

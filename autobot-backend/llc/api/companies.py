@@ -45,7 +45,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import QueryDefaults
 from autobot_shared.user_management.models.user import resolve_display_name
 from llc.deps import assert_company_access, get_session, service_dep
-from llc.kb.collections import KbCollectionManager
+from llc.kb.collections import KbCollectionManager, company_id_of
 from llc.models.company import (
     CompanyAncestor,
     CompanyCreate,
@@ -62,6 +62,7 @@ from llc.models.enums import (
     WorkItemStatus,
 )
 from llc.models.membership import LLCCompanyMembership
+from llc.services.authz import NotAuthorisedError, may_attach_under
 from llc.services.backlog import BacklogService
 from llc.services.company import (
     CompanyBudgetError,
@@ -71,6 +72,7 @@ from llc.services.company import (
     CompanyNotFoundError,
     CompanyService,
 )
+from llc.services.company_move_lock import CompanyMoveContendedError
 from llc.services.membership_service import (
     MemberAlreadyExistsError,
     MemberNotFoundError,
@@ -200,6 +202,35 @@ async def list_companies(
     return [_to_read(c) for c in visible]
 
 
+async def _assert_may_create_under(
+    svc: CompanyService, parent_org_id: Optional[uuid.UUID], user_id: str, current_user: dict
+) -> None:
+    """404 unless the caller may attach under *parent_org_id*: "not mine" reads as "doesn't exist" (#12238)."""
+    admin = _is_platform_admin_claim(current_user)
+    allowed = parent_org_id is None or await may_attach_under(
+        svc.session, parent_org_id, uuid.UUID(user_id), platform_admin=admin
+    )
+    if not allowed:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+
+
+async def _create_and_commit(
+    svc: CompanyService, membership_svc: MembershipService, body: CompanyCreate, user_id: str
+) -> CompanyRead:
+    """Insert, record the creator as OWNER, ensure the KB collections, THEN commit (GH#12323).
+
+    A failure in any step is rolled back by the route, so no committed-but-unreported row;
+    ``ensure_collection`` is idempotent, so a rollback leaves only reusable empty collections.
+    """
+    org = await svc.create(body)
+    await membership_svc.add_member(svc.session, str(org.id), user_id, MembershipRole.OWNER)
+    read = _to_read(org)
+    for suffix in (None, KbCollectionManager.AGENTS_SUFFIX, KbCollectionManager.DECISIONS_SUFFIX):
+        await _kb_manager.ensure_collection(KbCollectionManager.COMPANY_PREFIX, org.id, suffix)
+    await svc.session.commit()
+    return read
+
+
 @router.post("/", response_model=CompanyRead, status_code=status.HTTP_201_CREATED)
 async def create_company(
     body: CompanyCreate,
@@ -207,48 +238,15 @@ async def create_company(
     current_user: dict = Depends(get_current_user),
     membership_svc: MembershipService = Depends(_get_membership_service),
 ) -> CompanyRead:
-    """Create a company (root, or a sub-company under an owned parent).
-
-    Tenant scope (#12233): previously unauthenticated — any caller could create
-    a company and, by supplying ``parent_org_id``, graft one under *another*
-    tenant's company. Now authenticated; a non-admin may only create a
-    sub-company under a parent they belong to (cross-tenant parent → 404, so the
-    parent's existence is not disclosed). Root creation (no ``parent_org_id``,
-    the creation-wizard flow) is open to any authenticated user. The creator is
-    recorded as the company ``OWNER`` so they can immediately access it and it
-    surfaces in their tenant-scoped ``list_companies``.
-    """
+    """Create a root company, or one under a parent the caller owns/admins (#12233, #19634); creator is OWNER."""
     user_id = _current_user_id(current_user)
-    if body.parent_org_id is not None and not _is_platform_admin_claim(current_user):
-        if not await membership_svc.is_member(svc.session, str(body.parent_org_id), user_id):
-            # 404 (not 403): a cross-tenant caller must not distinguish "not my
-            # company" from "doesn't exist" — identical semantics to
-            # assert_company_access (#12238).
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found")
+    await _assert_may_create_under(svc, body.parent_org_id, user_id, current_user)
     try:
-        org = await svc.create(body)
-        await membership_svc.add_member(svc.session, str(org.id), user_id, MembershipRole.OWNER)
-        # GH#12323: serialize the response AND ensure the KB collections BEFORE
-        # commit — mirroring the #12309/#12321 "serialize before commit" invariant
-        # the transition handlers use. If either step fails the except handler's
-        # rollback undoes the INSERT, so a 500 never leaves a committed-but-
-        # unreported company (previously commit() ran first, stranding the row).
-        # ensure_collection is idempotent (get_or_create), so a rollback after a
-        # partial KB pass — or a commit failure after a full one — leaves only
-        # harmless empty collections that the next create call reuses. create()'s
-        # INSERT populates updated_at via RETURNING, so no refresh is needed here.
-        read = _to_read(org)
-        for suffix in (None, KbCollectionManager.AGENTS_SUFFIX, KbCollectionManager.DECISIONS_SUFFIX):
-            await _kb_manager.ensure_collection(KbCollectionManager.COMPANY_PREFIX, org.id, suffix)
-        await svc.session.commit()
-        return read
+        return await _create_and_commit(svc, membership_svc, body, user_id)
     except CompanyIssuePrefixConflictError:
         await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
-    except CompanyBudgetError:
-        await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
-    except CompanyCycleError:
+    except (CompanyBudgetError, CompanyCycleError):
         await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
     except CompanyNotFoundError:
@@ -281,16 +279,15 @@ async def update_company(
     company_id: uuid.UUID,
     body: CompanyUpdate,
     svc: CompanyService = Depends(_get_service),
-    _current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyRead:
-    # Issue #12233: tenant authz — caller's org must match company_id unless admin.
+    # #12233: tenant authz (caller's org must match unless admin); a move is authorized again in move() (#19634)
     assert_company_access(ctx, company_id)  # shared guard (#12238)
+    actor = uuid.UUID(_current_user_id(current_user))
     try:
-        org = await svc.update(company_id, body)
-        # GH#12309: serialize BEFORE commit so that if response building ever
-        # fails the except handler's rollback still undoes the change — never
-        # leave a committed-but-500 state where the DB and caller disagree.
+        org = await svc.update(company_id, body, actor_user_id=actor, platform_admin=ctx.is_platform_admin)
+        # GH#12309: serialize BEFORE commit, so a failed response build is rolled back (never committed-but-500).
         read = _to_read(org)
         await svc.session.commit()
         return read
@@ -300,12 +297,15 @@ async def update_company(
     except CompanyIssuePrefixConflictError:
         await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
-    except CompanyBudgetError:
+    except CompanyMoveContendedError:  # lost a lock race, nothing changed (#19593)
+        await svc.session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Concurrent move in progress; try again")
+    except (CompanyBudgetError, CompanyCycleError):
         await svc.session.rollback()
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
-    except CompanyCycleError:
+    except NotAuthorisedError as exc:  # fixed public text only; the ids/roles are logged by the service (#19634)
         await svc.session.rollback()
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Internal server error")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.public_detail)
     except Exception:
         await svc.session.rollback()
         raise
@@ -364,8 +364,7 @@ async def activate_company(
     assert_company_access(ctx, company_id)  # shared guard (#12238)
     try:
         org = await svc.activate(company_id)
-        # GH#12309: serialize BEFORE commit so a failed response never persists
-        # a partial transition (commit only lands on the success path).
+        # GH#12309: serialize BEFORE commit so a failed response never persists a partial transition.
         read = _to_read(org)
         await svc.session.commit()
         return read
@@ -551,7 +550,7 @@ async def get_kb_ancestry_collections(
             collection_name=collection_name,
             # False positive: the ValueError above is caught and
             # re-raised as a generic HTTPException; no exception data flows into this response.
-            company_id=collection_name.split(":")[0],
+            company_id=company_id_of(collection_name),
             weight=weight,
         )
         for collection_name, weight in chain
@@ -880,6 +879,7 @@ class OrgChartNode(BaseModel):
     # user-management lifecycle at all -- so a bare `False` default would
     # quietly assert every agent is inactive.
     is_active: Optional[bool] = None
+    heartbeat_enabled: Optional[bool] = None  # #15907: periodic schedule on/off; None for a person
     last_heartbeat: Optional[str]
     budget_spent: float
     budget_total: float
@@ -1110,14 +1110,12 @@ def _compose_agent_node(
         # heartbeat status — see `_resolve_org_status` for the precedence
         # rule and why every other lifecycle value falls through to it.
         status=_resolve_org_status(row.status, run.status if run else None),
-        # #14109: the real ``adapter_type`` column, not ``org_role``. Falls
-        # back to "" (not the role) when NULL: the hire flow
-        # (agent_hires.py) always sets a concrete adapter — "claude_code"
-        # by default — so a NULL here means a legacy/manually-seeded row
-        # with genuinely no configured adapter, and reusing ``org_role``
-        # is exactly the dishonest substitution this fix removes.
+        # #14109: the real ``adapter_type`` column, not ``org_role``. "" when
+        # NULL (a provisioned CEO or a legacy row, no adapter configured): substituting
+        # ``org_role`` is exactly the dishonest substitution this fix removes.
         adapter_type=row.adapter_type or "",
         is_human=False,
+        heartbeat_enabled=row.heartbeat_enabled,
         # Liveness: latest run is picked by created_at; a just-queued run
         # may have no started_at, so fall back to created_at.
         last_heartbeat=(

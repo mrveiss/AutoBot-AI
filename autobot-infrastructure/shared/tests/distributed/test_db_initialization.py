@@ -11,7 +11,7 @@ Environment Setup:
 - VM2 NPU Worker: 10.0.0.3:8081 - Hardware AI acceleration
 - VM3 Redis: 10.0.0.4:6379 - Data layer
 - VM4 AI Stack: 10.0.0.5:8080 - AI processing
-- VM5 Browser: 10.0.0.6:3000 - Web automation
+- VM5 Browser: 10.0.0.6:9001 - Web automation
 
 These tests validate:
 - Fresh VM deployment creates database automatically

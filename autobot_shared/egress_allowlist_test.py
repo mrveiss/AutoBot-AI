@@ -97,7 +97,7 @@ def test_cdp_and_websocket_origins_are_dropped_with_distinct_ports(monkeypatch):
         aistack_url="http://10.0.0.1:8080",
         npu_worker_url="http://10.0.0.1:8081",
         tts_worker_url="http://10.0.0.1:8083",
-        browser_service_url="http://10.0.0.1:3000",
+        browser_service_url="http://10.0.0.1:9001",
         slm_url="http://10.0.0.1:8000",
         chrome_cdp_url="http://10.0.0.1:9222",
         vnc_url="http://10.0.0.1:6080/vnc.html",

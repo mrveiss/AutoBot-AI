@@ -11,6 +11,8 @@ from typing import Any, Dict, List
 
 from pydantic import BaseModel
 
+from autobot_shared.ssot_config import config
+
 # ---------------------------------------------------------------------------
 # Terminal schemas
 # ---------------------------------------------------------------------------
@@ -475,7 +477,7 @@ class CommandRequest(BaseModel):
     command: str
     description: str | None = None
     require_confirmation: bool | None = True
-    timeout: float | None = 30.0
+    timeout: float | None = config.timeout.subprocess  # #19730
     working_directory: str | None = None
     environment: Dict[str, str] | None = None
 

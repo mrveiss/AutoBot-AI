@@ -8,8 +8,11 @@
  * Issue #896 - SLM Metrics Dashboard
  */
 
-import { onMounted, onUnmounted, ref } from 'vue'
-import { usePrometheusMetrics } from '@/composables/usePrometheusMetrics'
+import { onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { PollingPausedAlert } from '@autobot/ui'
+import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
+import { useFleetMetrics } from '@/composables/useFleetMetrics'
 import FleetMetricsCard from '@/components/monitoring/FleetMetricsCard.vue'
 import NodeMetricsGrid from '@/components/monitoring/NodeMetricsGrid.vue'
 import { createLogger } from '@/utils/debugUtils'
@@ -26,17 +29,20 @@ const {
   lastUpdate,
   refreshMetrics,
   fetchPrometheusExport,
-} = usePrometheusMetrics({ autoFetch: false })
+} = useFleetMetrics({ autoFetch: false, pollInterval: 0 })
+
+const { t } = useI18n()
 
 const showNPUMetrics = ref(false)
-let refreshInterval: ReturnType<typeof setInterval> | null = null
+const REFRESH_INTERVAL_MS = 30000
 
 async function loadMetrics() {
-  await refreshMetrics()
+  const loaded = await refreshMetrics()
   // Check if NPU nodes exist
   if (npuFleetMetrics.value && npuFleetMetrics.value.total_npu_nodes > 0) {
     showNPUMetrics.value = true
   }
+  return loaded
 }
 
 async function downloadPrometheusMetrics() {
@@ -58,21 +64,23 @@ function handleNodeSelect(nodeId: string) {
   // TODO: Implement node detail view
 }
 
-onMounted(async () => {
-  await loadMetrics()
-  // Auto-refresh every 30 seconds
-  refreshInterval = setInterval(loadMetrics, 30000)
-})
+// #19482: the shared dashboard policy (stop on unmount and after repeated failures, paused alert)
+const metricsPoller = useDashboardPoller(async () => {
+  throwUnlessLoaded(await loadMetrics())
+}, REFRESH_INTERVAL_MS)
 
-onUnmounted(() => {
-  if (refreshInterval) {
-    clearInterval(refreshInterval)
-  }
-})
+/** Refresh and Retry: clear the shown error, then restart (also a paused) poller. */
+function restartPolling() {
+  error.value = null
+  metricsPoller.start('')
+}
+
+onMounted(() => metricsPoller.start(''))
 </script>
 
 <template>
   <div class="p-6 space-y-6">
+    <PollingPausedAlert :poller="metricsPoller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" @retry="restartPolling" />
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
@@ -84,7 +92,7 @@ onUnmounted(() => {
       </div>
       <div class="flex gap-2">
         <button
-          @click="loadMetrics"
+          @click="restartPolling"
           :disabled="isLoading"
           class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
         >

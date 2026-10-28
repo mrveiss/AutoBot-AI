@@ -538,6 +538,15 @@ SPECIFIC_REASONS: dict[BaselineKey, str] = {
         "the audited verdict carries over unchanged because the value is the same "
         "display heading either way."
     ),
+    (
+        "autobot-slm-frontend/src/locales/en.json",
+        "Secret Keyword",
+        "1e3732aec487906e739333e586f2b6ff9e9f1a96",  # pragma: allowlist secret
+    ): (
+        "the i18n display label `Secrets` (settings.nav.secrets, the SLM settings nav entry "
+        "#19217 moved out of hard-coded English), not a credential; the key `secrets` trips the "
+        "Secret Keyword denylist. Plain SHA1 of the literal label reproduces this hash."
+    ),
 }
 
 
@@ -575,3 +584,7 @@ SPECIFIC_REASONS[
     "into i18n), not a credential; `Password` in the key trips the Secret Keyword denylist. Plain SHA1 "
     "of the literal label reproduces this hash."
 )
+
+from repo_tests.secrets_baseline_reason_entries_slm_labels import SLM_LABEL_REASONS  # noqa: E402  (#18863)
+
+SPECIFIC_REASONS.update(SLM_LABEL_REASONS)

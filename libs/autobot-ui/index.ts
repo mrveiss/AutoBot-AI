@@ -28,6 +28,10 @@ export type { InputSize, InputType } from './src/components/BaseInput.vue'
 
 export { default as BaseBadge } from './src/components/BaseBadge.vue'
 export type { BadgeVariant, BadgeSize } from './src/components/BaseBadge.vue'
+// The one risk-tier badge (#13422): RiskTier is the backend's ladder, sent as risk_tier.
+export { default as RiskBadge } from './src/components/RiskBadge.vue'
+export { RISK_TIERS } from './src/types/riskTier'
+export type { RiskTier } from './src/types/riskTier'
 
 // The one inline alert/banner for both apps (#18819).
 export { default as BaseAlert } from './src/components/BaseAlert.vue'
@@ -37,7 +41,7 @@ export { default as BaseCard } from './src/components/BaseCard.vue'
 
 // The one data table (#14778) -- retires the main app's BaseTable and DataTable forks.
 export { default as BaseTable } from './src/components/BaseTable.vue'
-export type { BaseTableColumn, TableRow, TableRowKey, TableSize, SortOrder } from './src/components/BaseTable.vue'
+export type { BaseTableColumn, TableRow, TableRowKey, TableSize, TableRowVariant, SortOrder } from './src/components/BaseTable.vue'
 
 export { default as EmptyState } from './src/components/EmptyState.vue'
 
@@ -63,6 +67,11 @@ export { default as BasePagination } from './src/components/BasePagination.vue'
 export type { PaginationLabels } from './src/components/BasePagination.vue'
 
 export { default as BaseFormField } from './src/components/BaseFormField.vue'
+
+// Page title row and trail (#17563).
+export { default as PageHeader } from './src/components/PageHeader.vue'
+export { default as Breadcrumb } from './src/components/Breadcrumb.vue'
+export type { BreadcrumbItem } from './src/components/Breadcrumb.vue'
 
 export { default as BrandMark } from './src/components/BrandMark.vue'
 
@@ -112,7 +121,7 @@ export {
 export type { ToastType, Toast, UseToastReturn } from './src/composables/useToast'
 
 // Shared Prometheus/monitoring metric shapes (#14907) — the eight type names
-// both apps' usePrometheusMetrics.ts declared identically-named. Domain
+// both apps' metrics composables declared identically-named (#14907). Domain
 // logic and domain-only types stay per-app; see the file's own doc comment.
 export type {
   GPUMetrics,
@@ -124,13 +133,28 @@ export type {
   OptimizationRecommendation,
   UsePrometheusMetricsOptions,
 } from './src/types/prometheus-metrics'
+// The headline monitoring numbers both apps derive from those shapes (#18225).
+export { useMetricsSummary } from './src/composables/useMetricsSummary'
+export type {
+  SystemHealth,
+  MetricsSummary,
+  MetricsSummarySources,
+  MetricsSummaryDashboard,
+} from './src/composables/useMetricsSummary'
 
-// Shared duration-formatting vocabulary (#14908).
+// Shared duration, uptime and byte formatting (#14908).
 export type { DurationStyle } from './src/utils/duration'
+export { formatDuration, formatUptime, formatFileSize, formatBytes } from './src/utils/format'
+export type { FormatDurationOptions, FormatUptimeOptions, FormatBytesOptions } from './src/utils/format'
 
 // Scoped console logger (#14908) — canonical LogLevel/log/createLogger; both
 // apps' utils/debugUtils.ts re-export these rather than re-declaring them.
 export { log, createLogger } from './src/utils/logger'
+// Managed polling with scoped disposal and a consecutive-error stop (#19482).
+export { usePollingJob } from './src/composables/usePollingJob'
+export type { UsePollingJobOptions, UsePollingJobReturn } from './src/composables/usePollingJob'
+// The one "updates have stopped" notice for a poller paused on errors (#19482).
+export { default as PollingPausedAlert } from './src/components/PollingPausedAlert.vue'
 
 // One DOMPurify-backed sanitiser for every v-html binding in both apps (#2847, #19118).
 export { sanitizeChatHtml, sanitizeKnowledgeHtml, sanitizeHtml, escapeHtml } from './src/utils/sanitize'
@@ -140,6 +164,9 @@ export type { LogLevel } from './src/utils/logger'
 // The one exponential-backoff formula for reconnects and retries (#15402).
 export { backoffDelay, RETRY_BACKOFF } from './src/utils/backoff'
 export type { BackoffOptions } from './src/utils/backoff'
+
+// What a canonical API client throws for a non-2xx response: status and details kept (#12363).
+export { HttpError, isHttpError, isHttpClientError, extractErrorInfo, httpErrorFrom, parseJsonBody, type ErrorInfo } from './src/utils/httpError'
 
 export { default as SchedulePicker } from './src/components/SchedulePicker.vue'
 export * from './src/schedule'

@@ -15,6 +15,8 @@ Binary files are NOT indexed — only text/markdown/code content is ingested.
 import logging
 from typing import Any, Dict, List, Optional
 
+from .collections import kb_chroma_client, work_item_collection
+
 logger = logging.getLogger(__name__)
 
 _TEXT_MIME_PREFIXES = ("text/", "application/json", "application/xml")
@@ -46,7 +48,7 @@ _TEXT_EXTENSIONS = {
 
 
 def _collection_name(work_item_id: str) -> str:
-    return f"work_item:{work_item_id}"
+    return work_item_collection(work_item_id)
 
 
 def _is_text_indexable(filename: Optional[str], mime_type: Optional[str]) -> bool:
@@ -138,9 +140,9 @@ class WorkItemKB:
             List of dicts with ``id``, ``document``, and ``metadata`` keys.
         """
         try:
-            from utils.async_chromadb_client import get_async_chromadb_client
-
-            client = await get_async_chromadb_client()
+            # #19519: the KB client maps ``:`` to a ChromaDB-valid name; the raw
+            # client passes ``work_item:<id>`` through and ChromaDB rejects it.
+            client = await kb_chroma_client()
             collection_name = _collection_name(work_item_id)
             try:
                 collection = await client.get_collection(collection_name)
@@ -186,9 +188,9 @@ class WorkItemKB:
         metadata: Dict[str, Any],
     ) -> None:
         try:
-            from utils.async_chromadb_client import get_async_chromadb_client
-
-            client = await get_async_chromadb_client()
+            # #19519: the KB client maps ``:`` to a ChromaDB-valid name; the raw
+            # client passes ``work_item:<id>`` through and ChromaDB rejects it.
+            client = await kb_chroma_client()
             collection = await client.get_or_create_collection(_collection_name(work_item_id))
             await collection.upsert(
                 ids=[doc_id],

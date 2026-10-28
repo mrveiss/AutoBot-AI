@@ -45,7 +45,6 @@ class RAGConfig:
 
     # Reranking
     enable_reranking: bool = True
-    reranking_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     # Issue #2004: Configurable blend weights; defaults preserve legacy 0.8/0.2 behaviour.
     rerank_weights: RerankWeights = field(default_factory=RerankWeights)
     # Issue #2090: MMR diversity pass lambda (0.0 = disabled, backward-compatible).
@@ -246,7 +245,6 @@ class RAGConfig:
             "default_context_length": self.default_context_length,
             "max_context_length": self.max_context_length,
             "enable_reranking": self.enable_reranking,
-            "reranking_model": self.reranking_model,
             # Issue #2004: serialise as a plain dict for YAML round-trips.
             # Issue #2111: staleness weight added.
             "rerank_weights": {

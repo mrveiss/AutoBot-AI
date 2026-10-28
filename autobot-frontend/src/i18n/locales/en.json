@@ -93,6 +93,7 @@
     "toggleLayout": "Toggle layout",
     "fullscreen": "Fullscreen",
     "exitFullscreen": "Exit fullscreen",
+    "breadcrumb": "Breadcrumb",
     "expand": "Expand",
     "collapse": "Collapse",
     "copyToClipboard": "Copy to clipboard",
@@ -103,7 +104,13 @@
     "exportCsv": "Export as CSV",
     "download": "Download",
     "filterByCategory": "Filter by category",
-    "copied": "Copied"
+    "copied": "Copied",
+    "riskTier": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "critical": "Critical"
+    }
   },
   "chat": {
     "contextWindow": {
@@ -823,29 +830,9 @@
     "webResearch": {
       "title": "Web Research",
       "desc": "Configure automated web research behaviour and privacy settings",
-      "enabledLabel": "Enable web research",
-      "enabledHint": "Allow AutoBot to search the web when answering questions",
-      "confirmationLabel": "Require confirmation",
-      "confirmationHint": "Ask before performing a web search on your behalf",
-      "methodLabel": "Search method",
-      "methodHint": "Choose how web searches are performed",
       "methodBasic": "Basic",
       "methodAdvanced": "Advanced",
-      "methodApiBased": "API-based",
-      "maxResultsLabel": "Max results",
-      "maxResultsHint": "Maximum number of search results to retrieve (1–50)",
-      "timeoutLabel": "Timeout (seconds)",
-      "timeoutHint": "Maximum time to wait for search results (5–120 s)",
-      "thresholdLabel": "Auto-research threshold",
-      "thresholdHint": "Confidence level below which AutoBot triggers an automatic search",
-      "rateLimitLabel": "Rate limiting",
-      "rateLimitHint": "Limit how many requests are sent in a given time window",
-      "rateLimitRequests": "Requests",
-      "rateLimitWindow": "Window (s)",
-      "privacyLabel": "Privacy & storage",
-      "storeInKbHint": "Save research results to the knowledge base",
-      "anonymizeHint": "Anonymize requests before sending to search engines",
-      "filterAdultHint": "Filter adult content from search results"
+      "methodApiBased": "API-based"
     },
     "connection": {
       "title": "Connection",
@@ -4266,6 +4253,19 @@
         "submitLabel": "Get Data",
         "emptyState": "Enter a URL and a JSON Schema, then click Get Data to extract structured information.",
         "resultTitle": "Extracted Data"
+      },
+      "status": {
+        "title": "Web research status",
+        "desc": "Web research is configured once for the whole platform, in the SLM admin console. This is a read-only view.",
+        "enabled": "Enabled",
+        "method": "Search method",
+        "cacheSize": "Cache size",
+        "availability": "Researcher",
+        "yes": "Yes",
+        "no": "No",
+        "available": "Available",
+        "notAvailable": "Not available",
+        "configureLink": "Configure web research in the SLM console"
       }
     },
     "watchFolders": {
@@ -4339,6 +4339,9 @@
     },
     "chroma": {
       "quarantined": "Research quarantine"
+    },
+    "chromaExplorer": {
+      "subtitle": "Browse and search vector collections"
     }
   },
   "workflow": {
@@ -4753,10 +4756,12 @@
       "channelSlack": "Slack",
       "channelWebhook": "Webhook",
       "channelInApp": "In-App",
+      "channelTelegram": "Telegram",
       "eventCompleted": "Workflow Completed",
       "eventFailed": "Workflow Failed",
       "eventStepFailed": "Step Failed",
       "eventApprovalNeeded": "Approval Needed",
+      "eventServiceFailed": "Service Failed",
       "save": "Save",
       "saving": "Saving...",
       "saved": "Saved successfully"
@@ -5031,6 +5036,10 @@
       "reconnect": "Reconnect",
       "clear": "Clear",
       "closeWindow": "Close Window",
+      "kill": "Kill",
+      "pause": "Pause",
+      "resume": "Resume",
+      "interrupt": "Interrupt",
       "session": "Session:",
       "lines": "Lines:",
       "shortcutHint": "Press Ctrl+C to interrupt, Ctrl+D to exit",
@@ -8684,6 +8693,7 @@
       "hireAgent": "Hire Agent",
       "loading": "Loading…",
       "empty": "No people or agents found.",
+      "companyUnresolved": "Could not determine which company this org chart belongs to.",
       "retry": "Retry",
       "agentDetail": "Agent Detail",
       "personDetail": "Person Detail",
@@ -8702,6 +8712,12 @@
       "terminateAgent": "Terminate Agent",
       "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
       "terminatedNote": "This agent has been terminated.",
+      "heartbeat": {
+        "label": "Run on heartbeat",
+        "on": "On: wakes on its schedule.",
+        "off": "Off: no scheduled wakes.",
+        "saveFailed": "Could not change the heartbeat: {detail}"
+      },
       "viewMode": "View mode",
       "viewTree": "Tree",
       "viewCanvas": "Canvas",
@@ -9661,6 +9677,9 @@
     "roleCoordinator": "Coordinator",
     "roleManager": "Manager",
     "adapter": "Adapter",
+    "runOnHeartbeat": "Run on heartbeat",
+    "runOnHeartbeatHint": "Wake this agent on a fixed schedule. Leave off for an agent you wake yourself.",
+    "failed": "Failed to hire agent.",
     "hiring": "Hiring…",
     "hire": "Hire"
   },

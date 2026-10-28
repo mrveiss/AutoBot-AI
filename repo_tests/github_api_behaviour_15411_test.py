@@ -25,8 +25,10 @@ import github_api as ga  # noqa: E402
 
 
 class _Response:
-    def __init__(self, status: int, body: object) -> None:
+    def __init__(self, status: int, body: object, headers: dict | None = None) -> None:
         self.status = status
+        # urllib's response carries headers; GitHubApi records them as last_headers (#19548).
+        self.headers = headers or {}
         self._raw = json.dumps(body).encode("utf-8") if body is not None else b""
 
     def read(self) -> bytes:
@@ -118,3 +120,60 @@ def test_the_old_import_location_is_the_same_object() -> None:
     import ci_dispatch_watchdog as wd
 
     assert wd.GitHubApi is ga.GitHubApi and wd.WatchdogApiError is ga.WatchdogApiError
+
+
+# ---- rate-limit backoff (#19522) ------------------------------------------------------------
+
+
+def _limited(status: int, headers: dict, message: str = "") -> urllib.error.HTTPError:
+    body = json.dumps({"message": message}).encode("utf-8")
+    return urllib.error.HTTPError("u", status, "limited", headers, io.BytesIO(body))  # type: ignore[arg-type]
+
+
+def _sequence(monkeypatch: pytest.MonkeyPatch, outcomes: list) -> list:
+    """urlopen answers ``outcomes`` in order; sleeps are recorded, never taken."""
+    slept: list = []
+
+    def urlopen(request, timeout):  # noqa: ANN001
+        outcome = outcomes.pop(0)
+        if isinstance(outcome, BaseException):
+            raise outcome
+        return outcome
+
+    monkeypatch.setattr(ga.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(ga.GitHubApi, "sleep", staticmethod(slept.append))
+    return slept
+
+
+@pytest.mark.parametrize(
+    ("status", "headers", "message", "wait"),
+    [
+        (429, {"Retry-After": "7"}, "", 7.0),
+        (403, {"Retry-After": "3"}, "", 3.0),
+        (403, {}, "You have exceeded a secondary rate limit", ga.SECONDARY_LIMIT_WAIT_SECONDS),
+        (403, {"x-ratelimit-remaining": "0", "x-ratelimit-reset": "1030"}, "API rate limit exceeded", 30.0),
+        (429, {}, "", ga.SECONDARY_LIMIT_WAIT_SECONDS),
+    ],
+)
+def test_a_rate_limited_answer_waits_what_github_asks(status, headers, message, wait) -> None:
+    assert ga.rate_limit_wait(status, {"message": message}, headers, 1000.0) == wait
+
+
+@pytest.mark.parametrize(("status", "message"), [(403, "Resource not accessible by integration"), (404, ""), (200, "")])
+def test_a_permission_or_other_answer_is_not_retried(status, message) -> None:
+    assert ga.rate_limit_wait(status, {"message": message}, {}, 1000.0) is None
+
+
+def test_request_retries_after_retry_after_then_returns_the_answer(monkeypatch: pytest.MonkeyPatch) -> None:
+    slept = _sequence(monkeypatch, [_limited(429, {"Retry-After": "5"}), _Response(200, {"ok": 1})])
+    assert ga.GitHubApi("t", "o/r").request("GET", "/x") == (200, {"ok": 1})
+    assert slept == [5.0]
+
+
+def test_request_gives_up_after_the_retry_budget_and_caps_each_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    outcomes = [
+        _limited(403, {"Retry-After": "9999"}, "secondary rate limit") for _ in range(ga.RATE_LIMIT_RETRIES + 1)
+    ]
+    slept = _sequence(monkeypatch, outcomes)
+    status, _ = ga.GitHubApi("t", "o/r").request("GET", "/x")
+    assert status == 403 and slept == [ga.RATE_LIMIT_MAX_WAIT_SECONDS] * ga.RATE_LIMIT_RETRIES

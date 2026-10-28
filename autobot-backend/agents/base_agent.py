@@ -282,6 +282,7 @@ class BaseAgent(ABC):
                     request.request_id,
                     _diary_entry,
                     topic="turn",
+                    user_id=(request.metadata or {}).get("user_id"),  # #16665: the entry is owned by the session's user
                 )
             )
 

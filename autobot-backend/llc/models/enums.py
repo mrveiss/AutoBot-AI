@@ -186,12 +186,20 @@ _NONTERMINAL_RUN_STATUSES = frozenset({LLCRunStatus.QUEUED, LLCRunStatus.RUNNING
 
 
 class HeartbeatInvocationSource(str, Enum):
-    """How a heartbeat run was triggered (GH#8225, GH#9624)."""
+    """How a heartbeat run was triggered (GH#8225, GH#9624, #19582).
+
+    The four ``WORK_ITEM_*`` / ``AGENT_MENTIONED`` / ``APPROVAL_DECIDED`` members are
+    the event wakes: they start a run through ``llc.scheduler.event_wake.wake_agent``
+    whether or not the agent's periodic heartbeat is on.
+    """
 
     SCHEDULER = "scheduler"
     MANUAL = "manual"
     CALLBACK = "callback"
     WORK_ITEM_COMMENTED = "work_item_commented"
+    WORK_ITEM_ASSIGNED = "work_item_assigned"
+    AGENT_MENTIONED = "agent_mentioned"
+    APPROVAL_DECIDED = "approval_decided"
 
 
 class ContextMode(str, Enum):
@@ -446,6 +454,8 @@ class ActivityEventType(str, Enum):
     CONTROL_AGENT_PAUSED = "control.agent_paused"
     CONTROL_AGENT_RESUMED = "control.agent_resumed"
     CONTROL_AGENT_TERMINATED = "control.agent_terminated"
+    # #15907: the periodic heartbeat switched on or off for one agent.
+    CONTROL_AGENT_HEARTBEAT_SET = "control.agent_heartbeat_set"
     CONTROL_SPRINT_PAUSED = "control.sprint_paused"
     CONTROL_SPRINT_RESUMED = "control.sprint_resumed"
     CONTROL_COMPANY_PAUSED = "control.company_paused"
