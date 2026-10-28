@@ -61,9 +61,6 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  NODE_VERSION: '22'
-
 jobs:
   # Always runs so the check reports a conclusion even when nothing matched.
   changes:
@@ -105,7 +102,7 @@ jobs:
         if: needs.changes.outputs.slm_frontend == 'true'
         uses: actions/setup-node@v7
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: 'npm'
           cache-dependency-path: autobot-slm-frontend/package-lock.json
 

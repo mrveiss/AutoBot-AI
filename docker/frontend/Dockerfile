@@ -16,7 +16,9 @@ ARG NPM_FETCH_RETRY_MINTIMEOUT=20000
 ARG NPM_FETCH_RETRY_MAXTIMEOUT=120000
 
 # ---- Build main frontend ----
-FROM node:20-bookworm-slim AS builder
+# Node.js major: pinned to the repo-root .nvmrc by repo_tests/node_major_one_home_19328_test.py (#19328).
+ARG NODE_MAJOR=22
+FROM node:${NODE_MAJOR}-bookworm-slim AS builder
 
 ARG NPM_FETCH_RETRIES
 ARG NPM_FETCH_RETRY_MINTIMEOUT
@@ -51,7 +53,7 @@ RUN npm run build
 
 
 # ---- Build SLM frontend ----
-FROM node:20-bookworm-slim AS slm-builder
+FROM node:${NODE_MAJOR}-bookworm-slim AS slm-builder
 
 # Same retry posture as the main builder (#13783) — a stage does not inherit
 # another stage's ENV, so the ARGs are re-declared rather than assumed.
