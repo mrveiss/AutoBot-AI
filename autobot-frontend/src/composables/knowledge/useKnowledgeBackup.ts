@@ -16,6 +16,7 @@
  */
 
 import { ref, readonly, type Ref } from 'vue'
+import { HttpError } from '@autobot/ui'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { useLoadingState } from '@/composables/useLoadingState'
@@ -123,7 +124,7 @@ export function useKnowledgeBackup(): UseKnowledgeBackupReturn {
         { method: 'DELETE', body: { backup_file: backupName } },
       )
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
+        throw new HttpError(response.status, response.statusText)
       }
       return (await response.json()) as BackupActionResponse
     })

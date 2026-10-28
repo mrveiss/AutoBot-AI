@@ -249,7 +249,7 @@ import type { Role } from '@/types/_generated/workflow'
 import { createLogger } from '@/utils/debugUtils'
 import apiClient from '@/utils/ApiClient'
 import Icon from '@/components/ui/Icon.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, HttpError } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import {
   useAdminVoiceBundle,
@@ -344,7 +344,7 @@ async function loadUsers(): Promise<void> {
     const res = await apiClient.rawRequest(`/api/user-management/users?${params}`)
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      throw new Error((body as { detail?: string }).detail ?? `HTTP ${res.status}`)
+      throw (body as { detail?: string }).detail != null ? new Error((body as { detail?: string }).detail) : new HttpError(res.status, res.statusText)
     }
     const data = await res.json() as { users: UserRecord[]; total: number }
     users.value = data.users
@@ -442,7 +442,7 @@ async function onRoleChange(user: UserRecord, role: string): Promise<void> {
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      throw new Error((body as { detail?: string }).detail ?? `HTTP ${res.status}`)
+      throw (body as { detail?: string }).detail != null ? new Error((body as { detail?: string }).detail) : new HttpError(res.status, res.statusText)
     }
     await loadUsers()
   } catch (err) {
@@ -459,7 +459,7 @@ async function toggleActive(user: UserRecord, activate: boolean): Promise<void> 
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      throw new Error((body as { detail?: string }).detail ?? `HTTP ${res.status}`)
+      throw (body as { detail?: string }).detail != null ? new Error((body as { detail?: string }).detail) : new HttpError(res.status, res.statusText)
     }
     await loadUsers()
   } catch (err) {
@@ -480,7 +480,7 @@ async function deleteUser(): Promise<void> {
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      throw new Error((body as { detail?: string }).detail ?? `HTTP ${res.status}`)
+      throw (body as { detail?: string }).detail != null ? new Error((body as { detail?: string }).detail) : new HttpError(res.status, res.statusText)
     }
     deleteTarget.value = null
     await loadUsers()
@@ -506,7 +506,7 @@ async function createUser(): Promise<void> {
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({}))
-      throw new Error((body as { detail?: string }).detail ?? `HTTP ${res.status}`)
+      throw (body as { detail?: string }).detail != null ? new Error((body as { detail?: string }).detail) : new HttpError(res.status, res.statusText)
     }
     showCreateModal.value = false
     newUser.value = { email: '', username: '', password: '', display_name: '' }

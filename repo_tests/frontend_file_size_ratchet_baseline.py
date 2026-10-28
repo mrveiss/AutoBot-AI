@@ -136,7 +136,7 @@ RATCHET_BASELINE: dict[str, int] = {
     "autobot-frontend/src/config/ssot-config.ts": 834,
     "autobot-frontend/src/models/controllers/ChatController.ts": 1156,
     "autobot-frontend/src/models/controllers/KnowledgeController.ts": 645,
-    "autobot-frontend/src/models/repositories/ChatRepository.ts": 675,
+    "autobot-frontend/src/models/repositories/ChatRepository.ts": 674,
     "autobot-frontend/src/models/repositories/KnowledgeRepository.ts": 897,
     "autobot-frontend/src/router/index.ts": 1495,
     "autobot-frontend/src/services/GlobalWebSocketService.ts": 905,

@@ -12,6 +12,7 @@
 
 import { ref } from 'vue'
 import type { InjectionKey, Ref } from 'vue'
+import { HttpError } from '@autobot/ui'
 import apiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -58,7 +59,7 @@ export function useVoiceBundle() {
       const res = await apiClient.rawRequest(`/api/voice/realtime/bundle/me`)
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        throw new Error((body as { detail?: string }).detail ?? `HTTP ${res.status}`)
+        throw (body as { detail?: string }).detail != null ? new Error((body as { detail?: string }).detail) : new HttpError(res.status, res.statusText)
       }
       bundleInfo.value = (await res.json()) as UserBundleInfo
     } catch (err) {
@@ -90,7 +91,7 @@ export function useAdminVoiceBundle() {
       })
       if (!res.ok) {
         const body = await res.json().catch(() => ({}))
-        throw new Error((body as { detail?: string }).detail ?? `HTTP ${res.status}`)
+        throw (body as { detail?: string }).detail != null ? new Error((body as { detail?: string }).detail) : new HttpError(res.status, res.statusText)
       }
       return true
     } catch (err) {

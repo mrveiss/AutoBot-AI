@@ -15,6 +15,7 @@
  * authentication, retries, and error serialisation are handled centrally.
  */
 
+import { HttpError, isHttpError } from '@autobot/ui'
 import { ref, readonly, type Ref } from 'vue'
 import apiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
@@ -283,10 +284,10 @@ export function useKnowledgeGraphRAG(): UseKnowledgeGraphRAGReturn {
           logger.info(`Connection path: unresolved entities ${pathResult.value.missing_entities}`)
           return
         }
-        throw new Error('HTTP 404: /graph-rag/path is not available on this backend')
+        throw new HttpError(404, '/graph-rag/path is not available on this backend')
       }
 
-      throw new Error(`HTTP ${response.status}: ${response.statusText || 'Request failed'}`)
+      throw new HttpError(response.status, response.statusText || 'Request failed')
     })
   }
 
@@ -307,7 +308,7 @@ export function useKnowledgeGraphRAG(): UseKnowledgeGraphRAGReturn {
       } catch (error) {
         // #10011: a 503 means the service is legitimately unavailable — treat it
         // as a calm degraded state (no retry spam, no red "unhealthy" alarm).
-        if (error instanceof Error && error.message.includes('HTTP 503')) {
+        if (isHttpError(error) && error.status === 503) {
           logger.info('Graph-RAG service unavailable (503) — degraded mode')
           healthStatus.value = {
             status: 'unavailable',
