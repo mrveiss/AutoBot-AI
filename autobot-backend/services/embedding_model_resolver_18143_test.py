@@ -46,8 +46,12 @@ def test_changing_configured_model_moves_key_and_generator_together() -> None:
 
 
 def test_search_cache_key_model_is_the_resolver_value() -> None:
+    # #19379: search keys the cache by the bound space's model, which the binding resolves via the
+    # resolver whenever the KB carries none -- so the key is still the resolver value.
     source = (_BACKEND / "knowledge" / "search.py").read_text(encoding="utf-8")
-    assert "model = active_embedding_model()" in source
+    assert "model = model or snapshot(self).model" in source
+    binding = (_BACKEND / "knowledge" / "embedding_space_binding.py").read_text(encoding="utf-8")
+    assert 'getattr(kb, "embedding_model_name", None) or active_embedding_model()' in binding
 
 
 def _str_defaults_on_model_name(path: Path) -> list[str]:
