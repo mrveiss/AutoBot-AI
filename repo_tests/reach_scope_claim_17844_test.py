@@ -353,6 +353,7 @@ _DECLARED_SCOPES = {
         "scripts",
         "tools",
     ),
+    "file-type-sets-one-home-19339": ("autobot-backend",),
     "llc-actor-id-scan": ("autobot-backend/llc",),
     "cache-never-in-repo": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "node-major-literals": (
