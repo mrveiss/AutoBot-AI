@@ -27,6 +27,8 @@ pytestmark = [pytest.mark.asyncio, pytest.mark.migration_gate, requires_postgres
 
 #: Long enough that a move which is NOT waiting on the lock has finished.
 _BLOCKED_PROBE_SECONDS = 1.0
+#: Owner of both orgs: a move is owner/admin-only on the org and any parent it leaves (#19634).
+_ACTOR = uuid.uuid4()
 
 
 @pytest.fixture()
@@ -39,15 +41,19 @@ async def maker(fresh_db_url):
 
 async def _seed(maker, *, start_as_sub_org: bool) -> tuple[uuid.UUID, uuid.UUID]:  # noqa: ANN001
     from llc.models.company import CompanyCreate
+    from llc.models.enums import MembershipRole
     from llc.services.company import CompanyService
+    from llc.services.membership_service import MembershipService
 
     tag = uuid.uuid4().hex[:6]
     async with maker() as session:
         svc = CompanyService(session)
         parent = await svc.create(CompanyCreate(name=f"Parent {tag}", slug=f"parent-{tag}"))
         org = await svc.create(CompanyCreate(name=f"Acme {tag}", slug=f"acme-{tag}"))
+        for company in (parent, org):
+            await MembershipService().add_member(session, str(company.id), str(_ACTOR), MembershipRole.OWNER)
         if start_as_sub_org:
-            await svc.move(org.id, parent.id)
+            await svc.move(org.id, parent.id, actor_user_id=_ACTOR)
         await session.commit()
         return parent.id, org.id
 
@@ -57,8 +63,8 @@ async def _race(maker, org_id: uuid.UUID, first, second) -> None:  # noqa: ANN00
     from llc.services.company import CompanyService
 
     async with maker() as a, maker() as b:
-        await CompanyService(a).move(org_id, first)
-        late = asyncio.create_task(CompanyService(b).move(org_id, second))
+        await CompanyService(a).move(org_id, first, actor_user_id=_ACTOR)
+        late = asyncio.create_task(CompanyService(b).move(org_id, second, actor_user_id=_ACTOR))
         done, _ = await asyncio.wait({late}, timeout=_BLOCKED_PROBE_SECONDS)
         assert not done, "the second move did not wait for the first one's row lock"
         await a.commit()

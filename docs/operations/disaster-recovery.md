@@ -138,42 +138,55 @@ It is not a Vite dev server.
 
 ---
 
-### Scenario 4: AI Stack Failure (<aiml-ip>)
+### Scenario 4: AI Stack or LLM Failure (<aiml-ip>, LLM node)
 
 **Impact**: LLM responses fail, embeddings unavailable
 
+Two services, deployed by different roles. Check both:
+
+| Service | Unit | Port and health path | Deployed by |
+|---|---|---|---|
+| Ollama (LLM inference) | `ollama` | `11434`, `/api/version` | `roles/llm` (SLM roles **LLM CPU Node** / **LLM GPU Node**) |
+| AI Stack API | `autobot-ai-stack` | `8080`, `/health` | `roles/ai-stack` |
+| ChromaDB (the AI Stack starts after it) | `autobot-chromadb` | `8100`, `/api/v2/heartbeat` | `roles/ai-stack` |
+
 **Symptoms**:
-- Chat responses timeout
-- `curl http://<aiml-ip>:8080/api/tags` fails
+- Chat responses time out
+- `curl http://<llm-ip>:11434/api/version` fails (Ollama), or `curl http://<aiml-ip>:8080/health` fails (AI Stack)
 - Backend logs show Ollama connection errors
 
 **Recovery Steps**:
 
-1. **Check Ollama status**
+1. **Check the services**
    ```bash
+   ssh autobot@<llm-ip>
+   sudo systemctl status ollama --no-pager
    ssh autobot@<aiml-ip>
-   sudo systemctl status ollama
+   sudo systemctl status autobot-chromadb autobot-ai-stack --no-pager
    ```
 
-2. **Restart Ollama**
+2. **Restart what is down** (ChromaDB before the AI Stack)
    ```bash
-   sudo systemctl restart ollama
+   sudo systemctl restart ollama                              # on the LLM node
+   sudo systemctl restart autobot-chromadb autobot-ai-stack   # on the AI Stack node
    ```
 
-3. **Verify models are loaded**
+3. **Verify the models are present**
    ```bash
-   curl http://<aiml-ip>:8080/api/tags
+   curl http://<llm-ip>:11434/api/tags
    ```
+   Compare with the models the role pulls: `llm_cpu_models` on every LLM node and `llm_gpu_models`
+   on GPU nodes, both in `autobot-slm-backend/ansible/roles/llm/defaults/main.yml`. That file is
+   the list; it is not copied here, so it cannot drift.
 
-4. **Pull models if missing**
-   ```bash
-   ollama pull llama3.2
-   ollama pull nomic-embed-text
-   ```
+4. **If models are missing**, re-run the LLM role through the SLM: the **Roles** page, **Redeploy** on
+   **LLM CPU Node** or **LLM GPU Node** for that node. Redeploy re-runs the role's playbook, which pulls
+   the models and then checks that each one it meant to pull is present. **Code Sync does not do
+   this**: it updates code and never runs the `llm` role. Don't pull by hand on the node.
 
 **Estimated Recovery Time**: 5-20 minutes
 
-**Fallback**: Backend automatically falls back to cloud LLM if configured.
+**Fallback**: Without an LLM node, inference falls back to cloud providers if any are configured.
 
 ---
 
@@ -184,23 +197,24 @@ It is not a Vite dev server.
 **Symptoms**:
 - Embedding generation slower
 - Backend logs show NPU connection warnings
+- `curl http://<npu-ip>:8081/health` fails
 
-**Recovery Steps**:
+**Recovery Steps** (unit, port and path from `roles/npu-worker`):
 
 1. **Check NPU worker status**
    ```bash
    ssh autobot@<npu-ip>
-   sudo systemctl status npu-worker
+   sudo systemctl status autobot-npu-worker --no-pager
    ```
 
 2. **Restart NPU service**
    ```bash
-   sudo systemctl restart npu-worker
+   sudo systemctl restart autobot-npu-worker
    ```
 
-3. **Verify OpenVINO**
+3. **Verify OpenVINO** with the worker's own interpreter, the one its unit runs
    ```bash
-   python3 -c "from openvino.runtime import Core; print(Core().available_devices)"
+   /opt/autobot/autobot-npu-worker/venv/bin/python -c "import openvino.runtime as ov; print(ov.Core().available_devices)"
    ```
 
 **Estimated Recovery Time**: 5-10 minutes
@@ -216,24 +230,26 @@ It is not a Vite dev server.
 **Symptoms**:
 - Playwright operations fail
 - Browser automation workflows error
+- `curl http://<browser-ip>:9001/health` fails (`playwright_port` in `roles/browser/defaults/main.yml`)
 
 **Recovery Steps**:
 
-1. **Check VM and Playwright**
+1. **Check Playwright**
    ```bash
    ssh autobot@<browser-ip>
-   sudo systemctl status playwright-server
+   sudo systemctl status autobot-playwright --no-pager
    ```
 
 2. **Restart Playwright**
    ```bash
-   sudo systemctl restart playwright-server
+   sudo systemctl restart autobot-playwright
    ```
 
-3. **Verify browser**
-   ```bash
-   npx playwright install chromium
-   ```
+3. **If Chromium is missing**, re-run the browser role through the SLM: the **Roles** page, **Redeploy**
+   on **Browser Automation** for that node. The `browser` role installs Chromium into
+   `/var/lib/autobot/playwright-browsers`, the path the service reads. Code Sync reinstalls it only
+   when the browser worker's Node.js dependencies changed. A hand-run `npx playwright install chromium`
+   installs into the invoking user's cache instead, where the service never looks.
 
 **Estimated Recovery Time**: 5-15 minutes
 
@@ -245,27 +261,33 @@ It is not a Vite dev server.
 
 **Recovery Steps**:
 
-1. **Start VMs in order**
-   ```powershell
-   # On Hyper-V host
-   Start-VM -Name "AutoBot-Redis"      # Start first
-   Start-VM -Name "AutoBot-AI"
-   Start-VM -Name "AutoBot-NPU"
-   Start-VM -Name "AutoBot-Browser"
-   Start-VM -Name "AutoBot-Frontend"   # Start last
+1. **Power the nodes on in dependency order**, with your hypervisor's own tools (or the host
+   itself, on bare metal). The order follows the systemd units' `After=` lines:
+
+   | Order | Node | Units | Why this position |
+   |---|---|---|---|
+   | 1 | Database node and SLM node | `redis-stack-server`, `postgresql` | `autobot-backend` and `autobot-celery` start `After=redis-stack-server.service` |
+   | 2 | AI Stack, LLM, NPU, browser nodes (any order) | `autobot-chromadb` → `autobot-ai-stack`, `ollama`, `autobot-npu-worker`, `autobot-playwright` | Nothing below waits on them at boot, but the backend degrades until they answer |
+   | 3 | Backend node | `autobot-backend`, then `autobot-celery` | Celery starts `After=autobot-backend.service` |
+   | 4 | Frontend node | `nginx` (`roles/frontend` installs the `autobot-frontend` site) | Serves the UI that calls the backend |
+
+   **Single host** (every role on one machine): power it on. The units are enabled, and systemd
+   applies the same `After=` order itself.
+
+2. **Wait for the nodes to boot** (2-3 minutes), then check for units that did not come up:
+   ```bash
+   systemctl --failed --no-pager
    ```
 
-2. **Wait for VMs to boot** (2-3 minutes)
-
-3. **Start AutoBot**
+3. **Start anything that failed**, in the table's order, for example:
    ```bash
-   cd /opt/autobot
    sudo systemctl start autobot-backend
    ```
 
-4. **Verify all services**
+4. **Verify the backend**
    ```bash
    sudo systemctl status autobot-backend --no-pager
+   curl http://localhost:8001/api/health
    ```
 
 **Estimated Recovery Time**: 15-30 minutes
@@ -382,7 +404,7 @@ than `AUTOBOT_SECRETS_BACKUP_MAX_AGE_S` (default one day), and refuses otherwise
 # health_check.sh - Run every 5 minutes via cron
 
 check_service() {
-    if ! curl -s --max-time 5 "$1" > /dev/null 2>&1; then
+    if ! curl -sk --max-time 5 "$1" > /dev/null 2>&1; then  # -k: the frontend's certificate may be self-signed
         echo "ALERT: $2 is DOWN at $(date)" | mail -s "AutoBot Alert: $2" admin@example.com
         return 1
     fi
@@ -390,8 +412,9 @@ check_service() {
 }
 
 check_service "http://localhost:8001/api/health" "Backend API"
-check_service "http://<frontend-ip>:5173" "Frontend"
-check_service "http://<aiml-ip>:8080/api/tags" "Ollama"
+check_service "https://<frontend-ip>/" "Frontend"   # nginx, frontend_port 443 (roles/frontend)
+check_service "http://<llm-ip>:11434/api/version" "Ollama"
+check_service "http://<aiml-ip>:8080/health" "AI Stack"
 
 # Redis check
 if ! redis-cli -h <database-ip> ping > /dev/null 2>&1; then
