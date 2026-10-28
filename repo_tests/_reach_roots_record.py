@@ -87,6 +87,13 @@ REACH_ROOTS = {
         "docker/",
     ),
     "repo_tests/docs_liquid_tags_are_defined_17930_test.py": ("docs",),
+    "repo_tests/duplicate_names_ratchet_14908_test.py": (
+        "autobot-frontend/src",
+        "autobot-frontend/src/utils",
+        "autobot-slm-frontend/src",
+        "autobot-slm-frontend/src/utils",
+        "libs/autobot-ui",
+    ),
     "repo_tests/egress_default_guard_17576_test.py": (
         "autobot-",
         "autobot_shared/",
