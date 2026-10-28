@@ -4,7 +4,7 @@
 // BaseTable view config (#17562): search/filters, paging, column visibility and the two
 // distinct empty states are implemented once in the primitive.
 
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import BaseTable, { type BaseTableColumn } from '../BaseTable.vue'
 import { clampPage, filterRows, pageCountOf, pageRows } from '../../utils/tableView'
@@ -130,5 +130,57 @@ describe('BaseTable view config', () => {
 
   it('renders no menu without a menu label', () => {
     expect(make().find('details').exists()).toBe(false)
+  })
+
+  it('shows a column added after mount, and starts a late `hidden` one off', async () => {
+    // fails if visibility is captured once at mount
+    const w = make()
+    await w.setProps({
+      columns: [...COLUMNS, { key: 'extra', label: 'Extra' }, { key: 'late', label: 'Late', hidden: true }],
+    })
+    expect(w.findAll('thead th').map((t) => t.text())).toEqual(['Name', 'Role', 'Extra'])
+  })
+
+  it('does not slice rows when no pager can render, and warns', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const w = make({ pageSize: 2 })
+    expect(names(w)).toHaveLength(5)
+    expect(warn.mock.calls.flat().join(' ')).toContain('pageSize')
+    warn.mockRestore()
+  })
+
+  it('selects all of the filtered set only, across pages, and clears only that set', async () => {
+    const w = make({
+      selectable: true,
+      selectAllLabel: 'All',
+      selectRowLabel: (n: number) => `Row ${n}`,
+      filters: { role: 'db' },
+      pageSize: 1,
+      paginationLabels: LABELS,
+      paginationLabel: 'Pages',
+    })
+    const head = () => w.find('thead input[type="checkbox"]')
+    await head().setValue(true)
+    expect(w.emitted('selection-change')?.at(-1)).toEqual([[2, 5]])
+    expect((head().element as HTMLInputElement).checked).toBe(true)
+    await head().setValue(false)
+    expect(w.emitted('selection-change')?.at(-1)).toEqual([[]])
+  })
+
+  it('does not reset the page when `filters` is re-created with the same content', async () => {
+    const w = make({ pageSize: 2, page: 2, filters: { role: '' }, paginationLabels: LABELS, paginationLabel: 'Pages' })
+    await w.setProps({ filters: { role: '' } })
+    expect(w.emitted('update:page')).toBeUndefined()
+  })
+
+  it('labels the columns list and closes the menu on Escape', async () => {
+    const w = mount(BaseTable, { props: { columns: COLUMNS, rows: ROWS, columnsMenuLabel: 'Columns' }, attachTo: document.body })
+    expect(w.find('ul').attributes('role')).toBe('group')
+    expect(w.find('ul').attributes('aria-label')).toBe('Columns')
+    const details = w.find('details')
+    ;(details.element as HTMLDetailsElement).open = true
+    await details.trigger('keydown', { key: 'Escape' })
+    expect((details.element as HTMLDetailsElement).open).toBe(false)
+    w.unmount()
   })
 })

@@ -14,10 +14,10 @@
 
   View config, applied once here (#17562): rows -> filter (`search` over `searchable`
   columns, `filters` as column-key equality) -> sort -> page (`pageSize`, v-model:page).
-  Column visibility: `hidden` columns start off; with `columnsMenuLabel` a menu lets the
-  user toggle every `hideable` column (v-model:visibleColumns to own the state). Two empty
-  states: no rows at all (`emptyTitle`/`emptyDescription`, slot `empty`) and rows that
-  the filter removed (`noMatchesTitle`/`noMatchesDescription`, slot `no-matches`).
+  Select-all and its header state cover the filtered set (all pages of the current filter).
+  Column visibility: `hidden` columns start off; `columnsMenuLabel` shows a menu to toggle every
+  `hideable` one (v-model:visibleColumns to own it). Two empty states: no rows (`emptyTitle`,
+  slot `empty`) and rows the filter removed (`noMatchesTitle`, slot `no-matches`).
 
   Slots: caption, controls, cell-<key> ({ row, value }), actions ({ row }),
   empty, loading, footer. Header tooltips reuse BaseTooltip and open downwards.
@@ -33,7 +33,6 @@ import { sortRows, type SortOrder } from '../utils/tableSort'
 import {
   cellText,
   clampPage,
-  defaultVisibleKeys,
   filterRows,
   pageCountOf,
   pageRows,
@@ -164,11 +163,15 @@ const controlled = computed(() => props.sortKey !== undefined)
 const activeKey = computed(() => (controlled.value ? props.sortKey : localKey.value))
 const activeOrder = computed(() => (controlled.value ? props.sortOrder : localOrder.value))
 const localPage = ref(1)
-const localVisible = ref<string[]>(defaultVisibleKeys(props.columns))
+// Explicit show/hide choices only; other columns follow `hidden`, so a column added after mount appears.
+const toggled = ref<Map<string, boolean>>(new Map())
 
 const shownColumns = computed(() => {
-  const on = new Set(props.visibleColumns ?? localVisible.value)
-  return props.columns.filter((c) => c.hideable === false || on.has(c.key))
+  if (props.visibleColumns) {
+    const on = new Set(props.visibleColumns)
+    return props.columns.filter((c) => c.hideable === false || on.has(c.key))
+  }
+  return props.columns.filter((c) => c.hideable === false || (toggled.value.get(c.key) ?? !c.hidden))
 })
 const menuItems = computed(() =>
   props.columns
@@ -181,19 +184,21 @@ const sortedRows = computed(() =>
     ? filteredRows.value
     : sortRows(filteredRows.value, activeKey.value, activeOrder.value),
 )
-const pageCount = computed(() => pageCountOf(sortedRows.value.length, props.pageSize))
-const activePage = computed(() => clampPage(props.page ?? localPage.value, pageCount.value))
-const shownRows = computed(() => pageRows(sortedRows.value, activePage.value, props.pageSize))
+// Sliced only when the pager renders, or rows past page 1 would be unreachable.
 const paged = computed(() => !!props.pageSize && props.pageSize > 0 && !!props.paginationLabels && !!props.paginationLabel)
+const effectiveSize = computed(() => (paged.value ? props.pageSize : undefined))
+const pageCount = computed(() => pageCountOf(sortedRows.value.length, effectiveSize.value))
+const activePage = computed(() => clampPage(props.page ?? localPage.value, pageCount.value))
+const shownRows = computed(() => pageRows(sortedRows.value, activePage.value, effectiveSize.value))
 const noMatches = computed(() => props.rows.length > 0 && filteredRows.value.length === 0)
-const colspan = computed(
-  () => shownColumns.value.length + (props.selectable ? 1 : 0) + (slots.actions ? 1 : 0),
-)
+const colspan = computed(() => shownColumns.value.length + (props.selectable ? 1 : 0) + (slots.actions ? 1 : 0))
 // The same key rows render with (identity fallback included), so select-all never collects undefined.
 const keysOf = (rows: TableRow[]): TableRowKey[] => rows.map((r) => rowKeyOf(r))
-const allSelected = computed(
-  () => props.rows.length > 0 && keysOf(props.rows).every((k) => selected.value.has(k)),
-)
+// Select-all covers the filtered set (every page of the current filter), never hidden rows.
+const allSelected = computed(() => {
+  const keys = keysOf(filteredRows.value)
+  return keys.length > 0 && keys.every((k) => selected.value.has(k))
+})
 
 function ariaSortOf(col: BaseTableColumn): 'ascending' | 'descending' | 'none' | undefined {
   if (!col.sortable) return undefined
@@ -236,7 +241,13 @@ function toggleRow(key: TableRowKey): void {
 }
 
 function toggleAll(): void {
-  commitSelection(allSelected.value ? new Set() : new Set(keysOf(props.rows)))
+  const scope = keysOf(filteredRows.value)
+  const next = new Set(selected.value)
+  for (const k of scope) {
+    if (allSelected.value) next.delete(k)
+    else next.add(k)
+  }
+  commitSelection(next)
 }
 
 function alignOf(col: BaseTableColumn): 'left' | 'center' | 'right' {
@@ -262,19 +273,19 @@ function setPage(next: number): void {
 }
 
 function toggleColumn(key: string): void {
-  const current = props.visibleColumns ?? localVisible.value
-  const next = current.includes(key) ? current.filter((k) => k !== key) : [...current, key]
-  localVisible.value = next
-  emit('update:visibleColumns', next)
+  const was = shownColumns.value.some((c) => c.key === key)
+  const next = shownColumns.value.map((c) => c.key).filter((k) => k !== key)
+  toggled.value = new Map(toggled.value).set(key, !was)
+  emit('update:visibleColumns', was ? next : [...next, key])
 }
 
 // A new search/filter starts from the first page, so the user is never left on a page that no longer exists.
+// Watched by value, so an inline `filters` literal does not reset the page on every re-render.
 watch(
-  () => [props.search, props.filters],
+  [() => props.search, () => JSON.stringify(props.filters ?? {})],
   () => {
     if (activePage.value !== 1 || localPage.value !== 1) setPage(1)
   },
-  { deep: true },
 )
 
 // A row without its `rowKey` field is keyed by its object identity, never its position:
@@ -306,6 +317,9 @@ watch(
 )
 
 watchEffect(() => {
+  if (props.pageSize && !paged.value) {
+    warn('BaseTable: `pageSize` needs `paginationLabels` and `paginationLabel`; without the pager every row is shown.')
+  }
   if (props.selectable && (!props.selectAllLabel || !props.selectRowLabel)) {
     warn('BaseTable: `selectable` needs `selectAllLabel` and `selectRowLabel`, or its checkboxes have no accessible name.')
   }

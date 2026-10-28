@@ -117,7 +117,7 @@ const newRepo = ref<Omit<SkillRepo, 'id' | 'skill_count' | 'status' | 'last_sync
   repo_type: 'git',
 })
 
-const BADGE_VARIANT: Record<string, BadgeVariant> = { git: 'primary', http: 'info', mcp: 'info' }
+const BADGE_VARIANT: Record<string, BadgeVariant> = { git: 'primary', local: 'neutral', http: 'info', mcp: 'warning' }
 const repoBadgeVariant = (repoType: string): BadgeVariant => BADGE_VARIANT[repoType] ?? 'neutral'
 
 // BaseTable rows are plain records; SkillRepo carries no index signature.

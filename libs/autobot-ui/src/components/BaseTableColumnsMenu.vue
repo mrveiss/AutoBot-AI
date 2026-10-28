@@ -7,6 +7,8 @@
   menu's name comes in as `label`.
 -->
 <script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref } from 'vue'
+
 export interface ColumnsMenuItem {
   key: string
   label: string
@@ -15,12 +17,31 @@ export interface ColumnsMenuItem {
 
 defineProps<{ label: string; items: ColumnsMenuItem[] }>()
 const emit = defineEmits<{ toggle: [key: string] }>()
+
+const root = ref<HTMLDetailsElement | null>(null)
+
+function close(): void {
+  if (root.value) root.value.open = false
+}
+
+function onKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || !root.value?.open) return
+  close()
+  root.value.querySelector('summary')?.focus()
+}
+
+function onOutside(event: MouseEvent): void {
+  if (root.value?.open && !root.value.contains(event.target as Node)) close()
+}
+
+onMounted(() => document.addEventListener('mousedown', onOutside))
+onBeforeUnmount(() => document.removeEventListener('mousedown', onOutside))
 </script>
 
 <template>
-  <details class="aui-columns">
+  <details ref="root" class="aui-columns" @keydown="onKeydown">
     <summary class="aui-columns__toggle">{{ label }}</summary>
-    <ul class="aui-columns__list">
+    <ul class="aui-columns__list" role="group" :aria-label="label">
       <li v-for="item in items" :key="item.key">
         <label class="aui-columns__item">
           <input type="checkbox" class="aui-columns__checkbox" :checked="item.shown" @change="emit('toggle', item.key)" />
