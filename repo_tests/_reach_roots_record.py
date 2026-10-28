@@ -103,6 +103,7 @@ REACH_ROOTS = {
         "autobot_shared",
         "scripts",
     ),
+    "repo_tests/frontend_local_formatter_ratchet_19680_test.py": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "repo_tests/frontend_single_api_client_12363_test.py": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "repo_tests/generated_type_names_not_redeclared_19334_test.py": ("autobot-frontend/src",),
     "repo_tests/github_api_single_module_15411_test.py": ("pipeline-scripts", "scripts"),
@@ -318,6 +319,7 @@ REACH_ROOTS = {
     "repo_tests/single_attribute_writer_18240_test.py": ("autobot-frontend/src",),
     "repo_tests/slm_backend_no_embedded_playbook_18606_test.py": ("autobot-slm-backend",),
     "repo_tests/slm_node_enum_members_exist_test.py": ("autobot-slm-backend",),
+    "repo_tests/ssot_rehardcode_19730_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "repo_tests/store_fact_chokepoint_guard_test.py": ("autobot-backend/", "autobot_shared/"),
     "repo_tests/tool_effect_single_source_18294_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "repo_tests/torch_pair_one_home_19330_test.py": (
