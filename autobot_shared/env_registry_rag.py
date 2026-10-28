@@ -25,6 +25,20 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_RAG_SCORE_THRESHOLD",
+        type=float,
+        default=0.3,
+        description=(
+            "Minimum relevance score a knowledge-retrieval result needs to be kept "
+            "(constants.rag_graph_constants.RAG_SCORE_THRESHOLD, the one default, #19354)."
+        ),
+        component="rag",
+        range=(0.0, 1.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_RAG_GRAPH_TIMEOUT_SECONDS",
         type=float,
         default=10.0,

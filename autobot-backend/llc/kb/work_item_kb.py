@@ -15,36 +15,13 @@ Binary files are NOT indexed — only text/markdown/code content is ingested.
 import logging
 from typing import Any, Dict, List, Optional
 
+from utils.file_types import TEXT_FILE_EXTENSIONS
+
 from .collections import kb_chroma_client, work_item_collection
 
 logger = logging.getLogger(__name__)
 
 _TEXT_MIME_PREFIXES = ("text/", "application/json", "application/xml")
-_TEXT_EXTENSIONS = {
-    ".md",
-    ".txt",
-    ".py",
-    ".js",
-    ".ts",
-    ".go",
-    ".rs",
-    ".java",
-    ".c",
-    ".cpp",
-    ".h",
-    ".rb",
-    ".sh",
-    ".yaml",
-    ".yml",
-    ".toml",
-    ".ini",
-    ".cfg",
-    ".sql",
-    ".html",
-    ".css",
-    ".jsx",
-    ".tsx",
-}
 
 
 def _collection_name(work_item_id: str) -> str:
@@ -61,7 +38,7 @@ def _is_text_indexable(filename: Optional[str], mime_type: Optional[str]) -> boo
         import os
 
         ext = os.path.splitext(filename)[1].lower()
-        if ext in _TEXT_EXTENSIONS:
+        if ext in TEXT_FILE_EXTENSIONS:
             return True
     return False
 

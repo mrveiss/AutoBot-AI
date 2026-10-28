@@ -1,0 +1,42 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# postgresql.conf only (#19848). configure.yml includes it on install; the builtin updater
+# (playbooks/update-all-nodes.yml) includes it on every Code Sync, so a change to a rendered
+# setting such as postgresql_listen_addresses reaches an existing host. It needs no db_user and
+# never touches pg_hba.conf. PostgreSQL restarts only when the rendered file changes.
+---
+
+- name: PostgreSQL's config directory (only hosts that run PostgreSQL are configured)
+  ansible.builtin.stat:
+    path: "{{ postgresql_config_dir }}"
+  register: _postgresql_config_dir
+  become: true
+
+- name: Render postgresql.conf where PostgreSQL is installed
+  when: _postgresql_config_dir.stat.exists
+  block:
+    - name: A host serving the fleet knows its own address (#19239)
+      ansible.builtin.assert:
+        that:
+          - postgresql_fleet_address | length > 0
+        fail_msg: >-
+          {{ inventory_hostname }} serves PostgreSQL to the fleet (groups {{ group_names | intersect(postgresql_fleet_groups) }})
+          but no non-loopback address of its own was found: neither slm_host nor ansible_host is assigned here
+          and there is no default route. Listening on loopback only would cut every remote client --
+          set SLM_HOST in the SLM secrets file or ansible_host in the inventory.
+        quiet: true
+      when: postgresql_serves_fleet | bool
+
+    - name: Deploy postgresql.conf
+      ansible.builtin.template:
+        src: postgresql.conf.j2
+        dest: "{{ postgresql_config_dir }}/postgresql.conf"
+        owner: postgres
+        group: postgres
+        mode: '0644'
+        backup: true
+      become: true
+      notify: Restart PostgreSQL
