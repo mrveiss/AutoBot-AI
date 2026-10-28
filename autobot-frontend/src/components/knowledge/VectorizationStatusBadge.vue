@@ -110,11 +110,11 @@ import Icon from '@/components/ui/Icon.vue'
   font-size: 0.6875rem;
 }
 
-.vectorization-badge i {
+.vectorization-badge .icon {
   font-size: var(--text-sm);
 }
 
-.vectorization-badge.compact i {
+.vectorization-badge.compact .icon {
   font-size: var(--text-xs);
 }
 
@@ -125,7 +125,7 @@ import Icon from '@/components/ui/Icon.vue'
   border: 1px solid var(--color-success-border);
 }
 
-.status-vectorized i {
+.status-vectorized .icon {
   color: var(--color-success);
 }
 
@@ -140,7 +140,7 @@ import Icon from '@/components/ui/Icon.vue'
   border: 1px solid var(--color-warning-border);
 }
 
-.status-pending i {
+.status-pending .icon {
   color: var(--color-warning);
 }
 
@@ -156,7 +156,7 @@ import Icon from '@/components/ui/Icon.vue'
   cursor: pointer;
 }
 
-.status-failed i {
+.status-failed .icon {
   color: var(--color-error);
 }
 
@@ -172,7 +172,7 @@ import Icon from '@/components/ui/Icon.vue'
   border: 1px solid var(--border-default);
 }
 
-.status-unknown i {
+.status-unknown .icon {
   color: var(--text-tertiary);
 }
 

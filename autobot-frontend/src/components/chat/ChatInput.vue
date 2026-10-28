@@ -1349,7 +1349,7 @@ onUnmounted(() => {
   @apply bg-autobot-bg-tertiary text-autobot-primary;
 }
 
-.knowledge-toggle.active i {
+.knowledge-toggle.active .icon {
   @apply text-autobot-primary;
 }
 
@@ -1370,7 +1370,7 @@ onUnmounted(() => {
   @apply bg-purple-100 text-purple-600;
 }
 
-.overseer-toggle.active i {
+.overseer-toggle.active .icon {
   @apply text-purple-600;
 }
 
