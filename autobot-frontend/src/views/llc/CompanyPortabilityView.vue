@@ -116,6 +116,7 @@
             <BaseTable
               :columns="collisionColumns"
               :rows="collisionRows"
+              :row-variant="() => 'warning'"
               size="compact"
               :aria-label="t('llc.portability.collisionsDetected')"
             />
@@ -728,7 +729,6 @@ async function executeImport(): Promise<void> {
 .preview-collisions {
   margin-bottom: var(--spacing-md);
 }
-
 
 .preview-summary {
   margin-bottom: var(--spacing-md);
