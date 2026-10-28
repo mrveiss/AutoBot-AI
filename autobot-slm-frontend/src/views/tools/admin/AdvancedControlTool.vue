@@ -3,7 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, isHttpError } from '@autobot/ui'
 /**
  * AdvancedControlTool - Agent desktop streaming + human takeover admin panel.
  *
@@ -100,12 +100,11 @@ async function loadAll(): Promise<void> {
 }
 
 /**
- * Render an axios/network failure the way the previous raw-fetch transport did
+ * Render an HTTP or network failure the way the previous raw-fetch transport did
  * (`HTTP <status>`), so the banner text and its test assertion are unchanged.
  */
 function describeError(e: unknown): string {
-  const status = (e as { response?: { status?: number } })?.response?.status
-  if (typeof status === 'number') return `HTTP ${status}`
+  if (isHttpError(e)) return `HTTP ${e.status}`
   if (e instanceof Error && e.message) return e.message
   return t('tools.admin.advancedControlTool.genericError')
 }
