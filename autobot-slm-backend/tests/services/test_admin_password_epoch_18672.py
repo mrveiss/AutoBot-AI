@@ -204,7 +204,7 @@ def test_cli_reads_env_files_with_the_one_shared_parser(monkeypatch, tmp_path) -
     from autobot_shared import env_file
 
     module = _admin_module(monkeypatch, [])
-    assert module.parse_env_file is env_file.parse_env_file
+    assert module.parse_env_text is env_file.parse_env_text
     env = tmp_path / "slm.env"
     env.write_text('A="2" # note\nB=a#b\nC=x # c\nD="q\n\n# skip\n', encoding="utf-8")
     assert module.load_env_file(str(env)) == env_file.parse_env_text(env.read_text(encoding="utf-8"))

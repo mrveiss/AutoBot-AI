@@ -111,8 +111,9 @@ git log --since="2025-01-01" --name-only --pretty=format: -- "*.md" "docs/" | so
 
 #### Manual Update (Current Method)
 ```bash
-# Re-run population script
-python scripts/direct_kb_populate.py
+# Re-run the population script (the one KB populate entry point, #19339;
+# --patterns 'docs/**/*.md' limits it to the docs tree)
+python autobot-infrastructure/shared/scripts/populate_knowledge_base.py
 
 # Or use API approach
 python scripts/fix_search.py
@@ -213,8 +214,9 @@ async def sync_docs():
     print(f"Removed {removed_count} outdated documentation entries")
 
     # Re-add all current documentation
-    from scripts.direct_kb_populate import populate_directly
-    success = await populate_directly()
+    from populate_knowledge_base import add_documentation_to_kb  # the one populate entry point (#19339)
+    await add_documentation_to_kb()
+    success = True
 
     if success:
         # Save sync timestamp

@@ -26,11 +26,9 @@ from repo_tests._reach import declare
 from autobot_shared.embedding_model import is_embedding_model_id
 from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
-# The two infra collection builders sit outside the package roots, so they are named by file (#18328).
-_INFRA_BUILDERS = (
-    "autobot-infrastructure/shared/scripts/populate_kb_chromadb.py",
-    "autobot-infrastructure/shared/tools/index_documentation.py",
-)
+# The infra collection builder sits outside the package roots, so it is named by file (#18328). The
+# second one, populate_kb_chromadb.py, was a raw-Chroma fork of the KB populate script, retired (#19339).
+_INFRA_BUILDERS = ("autobot-infrastructure/shared/tools/index_documentation.py",)
 _ROOTS = ("autobot-backend", "autobot_shared", *_INFRA_BUILDERS)
 _TEST_PART = re.compile(r"(^|/)(tests?|test_[^/]*|[^/]*_test\.py|conftest\.py)(/|$)")
 _SPACE_TABLE = "autobot-backend/knowledge/index_embedding_space.py"
