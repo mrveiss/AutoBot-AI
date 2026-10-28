@@ -369,8 +369,9 @@ export function useSkillGovernance() {
     const curr = approvals.value.length
     if (curr > prev) {
       const newest = approvals.value[approvals.value.length - 1]
-      newDraftNotification.value =
-        `AutoBot generated a new skill: "${newest?.skill_id ?? 'unknown'}" — pending approval`
+      newDraftNotification.value = t('skills.newDraftNotification', {
+        skillId: newest?.skill_id ?? t('skills.unknownSkill'),
+      })
     }
   }
 

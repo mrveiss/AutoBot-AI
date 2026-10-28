@@ -3370,6 +3370,8 @@
       "type": "Tipo",
       "uRL": "URL"
     },
+    "unknownSkill": "desconhecido",
+    "newDraftNotification": "AutoBot generated a new skill: \"{skillId}\" — pending approval",
     "errors": {
       "generic": "Skills request failed",
       "fetchReposFailed": "Failed to fetch repos",
