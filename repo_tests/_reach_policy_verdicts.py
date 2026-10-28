@@ -338,6 +338,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Tracked ansible yml/yaml files, of which only those naming a template that carries the variable are parsed.",
     ),
+    "ansible-credentials-never-logged": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Tracked ansible yml/yaml files; every one is parsed, but only task lists carry http tasks to judge.",
+    ),
     "frontend-model-literal-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -420,6 +425,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "Non-test Python under thirteen source roots, a subset of tracked Python; the test-file share drifts.",
+    ),
+    "disaster-recovery-deployed-units": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Ansible role task files, a subset of tracked YAML; workflows and inventories grow on their own.",
     ),
     "landing-page-declared-dependencies": (
         ABSOLUTE,

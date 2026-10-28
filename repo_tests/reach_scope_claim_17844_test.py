@@ -30,6 +30,7 @@ from pathlib import Path
 
 import pytest
 import repo_tests.ansible_concept_forks_17856_test as _ansible_forks_guard  # noqa: F401 -- registers its scope
+import repo_tests.ansible_credentials_never_logged_19764_test as _credentials_logged_guard  # noqa: F401 -- registers its scope
 import repo_tests.anti_pattern_type_emitted_18189_test as _anti_pattern_guard  # noqa: F401 -- registers its scope
 import repo_tests.audit_writer_single_source_17225_test as _audit_writer_guard  # noqa: F401 -- registers its scope
 import repo_tests.chat_history_async_calls_awaited_18316_test as _chat_async_guard  # noqa: F401 -- registers its scope
@@ -323,6 +324,7 @@ _DECLARED_SCOPES = {
     ),
     "backend-migrations-resume-safe-18729": ("autobot-backend/migrations/versions",),
     "opt-autobot-literal-ratchet-18880": ("autobot-slm-backend/ansible",),
+    "disaster-recovery-deployed-units": ("autobot-slm-backend/ansible/roles",),
     "concept-forks-17856-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "gateway-adapter-package-scan": ("autobot-backend/services/gateway",),
     "architecture-family-definition-scan": (
@@ -432,6 +434,7 @@ _DECLARED_SCOPES = {
     "monitoring-version-literals": ("docker-compose.yml", "autobot-infrastructure", "autobot-slm-backend/ansible"),
     "model-tier-map-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "embedding-model-render-sites": ("autobot-slm-backend/ansible",),
+    "ansible-credentials-never-logged": ("autobot-slm-backend/ansible",),
     "frontend-model-literal-scan": ("autobot-frontend/src",),
     "one-bm25-formula": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "one-hybrid-search": ("autobot-backend", "autobot_shared"),

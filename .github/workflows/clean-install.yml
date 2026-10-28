@@ -1,0 +1,132 @@
+name: Clean install
+
+# #19403 (part of #19267): run the one-line installer exactly as INSTALL.md documents it on a
+# fresh Ubuntu runner, then prove the SLM is usable. Two runs:
+#   no-tty -- the piped one-liner with no terminal, the auto-generated-password path (#17929);
+#   tty    -- under a pty, the two prompts answered as a person would.
+# A failure names its step: install, health, login or node.
+#
+# Scheduled and dispatched runs execute the command extracted from INSTALL.md
+# (scripts/ci/install_oneliner.py) verbatim, so they install main exactly as a reader's copy does.
+# A pull request BYPASSES that pinned command on purpose: the one-liner fetches main, so it could
+# never test the PR's installer. On a PR the checked-out install.sh is piped to `sudo bash` the
+# same way and installs the PR's branch; the doc test still pins the documented command.
+
+on:
+  schedule:
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+  # An installer, install-doc or pipeline change gets a clean-host run before it merges.
+  pull_request:
+    paths:
+      - install.sh
+      - INSTALL.md
+      - .github/workflows/clean-install.yml
+      - scripts/ci/install_oneliner.py
+      - scripts/ci/install_oneliner.expected
+      - scripts/ci/clean_install_check.sh
+      - scripts/ci/clean_install_tty.exp
+      - scripts/ci/mask_install_summary.sh
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clean-install-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  install:
+    name: install (${{ matrix.mode }})
+    # A fork's branch is not on this repository, so the installer could not clone it.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [no-tty, tty]
+    env:
+      SLM_URL: https://localhost
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Choose the command
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          MODE: ${{ matrix.mode }}
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_EVENT_NAME}" != pull_request ]]; then
+            cmd=$(python3 scripts/ci/install_oneliner.py INSTALL.md)
+          elif [[ "${MODE}" == tty ]]; then
+            cmd="cat install.sh | sudo bash"  # the branch is typed at its prompt
+            echo "INSTALL_BRANCH=${HEAD_REF}" >> "${GITHUB_ENV}"
+          else
+            cmd="cat install.sh | sudo bash -s -- --branch=$(printf '%q' "${HEAD_REF}")"
+          fi
+          echo "INSTALL_CMD=${cmd}" >> "${GITHUB_ENV}"
+          echo "running: ${cmd}"
+
+      # The runner image is not a blank host: it ships Docker, whose docker0 bridge is a second
+      # interface a blank Ubuntu does not have, and the installer asks which interface to use.
+      - name: Make the runner a blank host
+        run: |
+          sudo systemctl stop docker.socket docker.service containerd.service || true
+          sudo ip link delete docker0 2>/dev/null || true
+          ip -4 -o addr show | awk '{print $2, $4}'
+          # #19503: the runner image gives /opt a default ACL (other::rwx, user:runner:rwx), which
+          # overrides the umask, so everything the installer creates under it was 777 and Ansible
+          # ignored the world-writable tree's ansible.cfg. A blank host's /opt has no such ACL.
+          sudo setfacl -b -k /opt
+          stat -c '%a %U:%G %n' /opt
+
+      # The installer's summary prints a generated credential. The runner is discarded, but the
+      # log is public, so that line is masked on its way to the log.
+      - name: "Step: install (no tty)"
+        if: matrix.mode == 'no-tty'
+        run: |
+          set -euo pipefail
+          setsid bash -c "${INSTALL_CMD}" </dev/null 2>&1 | bash scripts/ci/mask_install_summary.sh \
+            || { echo "::error title=clean install: step 'install' failed::the no-tty one-liner exited non-zero"; exit 1; }
+
+      - name: "Step: install (tty)"
+        if: matrix.mode == 'tty'
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y -qq expect >/dev/null
+          typed="${RUNNER_TEMP}/typed-at-prompt"
+          # #19236 AC2: spaces and both quote kinds, so a green login proves the exact string round-trips.
+          python3 -c 'import secrets; print(secrets.token_urlsafe(12) + " with " + chr(34) + "dq" + chr(34) + " and " + chr(39) + "sq" + chr(39))' > "${typed}"
+          echo "::add-mask::$(cat "${typed}")"
+          echo "EXPECT_PASSWORD_FILE=${typed}" >> "${GITHUB_ENV}"
+          EXPECT_PASSWORD_FILE="${typed}" expect -f scripts/ci/clean_install_tty.exp 2>&1 \
+            | bash scripts/ci/mask_install_summary.sh \
+            || { echo "::error title=clean install: step 'install' failed::the tty one-liner exited non-zero"; exit 1; }
+
+      - name: "Steps: health, login, node"
+        run: sudo --preserve-env=SLM_URL,EXPECT_PASSWORD_FILE bash scripts/ci/clean_install_check.sh
+
+      - name: Service logs on failure
+        if: failure()
+        run: |
+          for unit in autobot-slm-backend nginx; do
+            echo "== ${unit}"; sudo journalctl -u "${unit}" -n 80 --no-pager 2>&1 | bash scripts/ci/mask_install_summary.sh || true
+          done
+          # #19503: where a world-writable bit on the code tree comes from -- modes, ACLs, and the umask
+          # each account actually gets here (Ansible ignores an ansible.cfg in a world-writable dir).
+          echo "== code tree modes"
+          for d in /opt /opt/autobot /opt/autobot/code_source /opt/autobot/code_source/autobot-slm-backend \
+                   /opt/autobot/code_source/autobot-slm-backend/ansible; do
+            sudo stat -c '%a %U:%G %n' "${d}" 2>&1 || true
+            sudo getfacl -p "${d}" 2>/dev/null | grep -vE '^(#|$)' | sed 's/^/    /' || true
+          done
+          echo "umask: runner=$(umask) root=$(sudo sh -c umask) autobot=$(sudo -u autobot sh -c umask 2>&1 || true)"
+          sudo grep -rhE '^\s*Defaults.*umask' /etc/sudoers /etc/sudoers.d 2>/dev/null || echo "sudoers: no umask default"
+          # #19493: the console shows only the filtered Ansible progress; the error is in the install log.
+          for log in /var/log/autobot/install-*.log; do
+            [ -e "${log}" ] || continue
+            echo "== ${log} (last 150 lines)"; sudo tail -n 150 "${log}" | bash scripts/ci/mask_install_summary.sh || true
+          done
