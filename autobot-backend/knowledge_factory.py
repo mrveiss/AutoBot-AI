@@ -226,11 +226,19 @@ async def get_or_create_knowledge_base(app: "FastAPI", force_refresh: bool = Fal
         if not force_refresh:
             ready = await _ready_app_state_kb(app)
             if ready is not None:
-                return ready
+                return await _in_current_space(ready)
         return await _create_under_lock(app, force_refresh)
     except Exception as e:
         logger.error("❌ Failed to get or create knowledge base: %s", e)
         return None
+
+
+async def _in_current_space(kb):
+    """*kb*, rebound first if another process cut over to a newer embedding space (#19379)."""
+    from knowledge.embedding_space_binding import ensure_current_space
+
+    await ensure_current_space(kb)
+    return kb
 
 
 def peek_knowledge_base() -> "KnowledgeBase" | None:  # noqa: F821
@@ -266,7 +274,7 @@ async def get_knowledge_base_async() -> "KnowledgeBase" | None:  # noqa: F821
         existing = peek_knowledge_base()
         if existing is not None:
             logger.debug("Using existing knowledge base singleton")
-            return existing
+            return await _in_current_space(existing)
         return await _create_under_lock(None)
     except Exception as e:
         logger.error("❌ Failed to create knowledge base singleton: %s", e)

@@ -757,6 +757,7 @@
       ignore_errors: true
       when: slm_login_play1.status == 200
       tags: [always]
+      no_log: true  # #19764: credentials in the request or response
 
     - name: "[PLAY 1] SLM Update Complete"
       debug:
@@ -1972,6 +1973,7 @@
       ignore_errors: true
       when: slm_token | default('') | length > 0
       tags: [always]
+      no_log: true  # #19764: credentials in the request or response
 
     # =========================================================================
     # #12959: post-update delivery assertions

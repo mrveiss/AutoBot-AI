@@ -49,3 +49,22 @@ async def delete_if_value(redis: Any, key: str, expected: str) -> bool:
     Redis errors propagate: whether a failed release is fatal is the caller's call.
     """
     return bool(await redis.eval(COMPARE_AND_DELETE_LUA, 1, key, expected))
+
+
+#: The heartbeat twin of COMPARE_AND_DELETE_LUA: a GET -> compare -> EXPIRE from the client lets the
+#: key expire and be re-taken in the gap, and the EXPIRE then extends the new holder's key.
+COMPARE_AND_PEXPIRE_LUA = """
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+  return redis.call('PEXPIRE', KEYS[1], ARGV[2])
+end
+return 0
+"""
+
+
+async def expire_if_value(redis: Any, key: str, expected: str, ttl_ms: int) -> bool:
+    """Reset *key*'s TTL to *ttl_ms* only while it still holds *expected*; True when it was extended.
+
+    The heartbeat-if-owner for a lock whose value names its holder. False means the caller no
+    longer holds it (expired, force-closed or re-taken). Redis errors propagate.
+    """
+    return bool(await redis.eval(COMPARE_AND_PEXPIRE_LUA, 1, key, expected, int(ttl_ms)))
