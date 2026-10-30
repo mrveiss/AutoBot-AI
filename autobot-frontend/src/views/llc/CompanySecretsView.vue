@@ -367,7 +367,7 @@ onMounted(() => void loadSecrets())
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 50;
+  z-index: var(--z-50);
 }
 
 .modal {

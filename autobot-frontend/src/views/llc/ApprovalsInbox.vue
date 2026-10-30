@@ -67,27 +67,24 @@
           </div>
 
           <div class="card-actions">
-            <button
-              class="btn-approve"
+            <BaseButton variant="success" size="sm"
               :disabled="processing.has(item.id)"
               @click="decide(item.id, 'approved')"
             >
               {{ $t('llc.approvals.approve') }}
-            </button>
-            <button
-              class="btn-reject"
+            </BaseButton>
+            <BaseButton variant="error" size="sm"
               :disabled="processing.has(item.id)"
               @click="openDecisionNote(item.id, 'rejected')"
             >
               {{ $t('llc.approvals.reject') }}
-            </button>
-            <button
-              class="btn-changes"
+            </BaseButton>
+            <BaseButton variant="warning" size="sm"
               :disabled="processing.has(item.id)"
               @click="openDecisionNote(item.id, 'changes_requested')"
             >
               {{ $t('llc.approvals.requestChanges') }}
-            </button>
+            </BaseButton>
           </div>
 
           <div v-if="noteTarget?.id === item.id" class="note-form">
@@ -98,14 +95,13 @@
               rows="3"
             />
             <div class="note-actions">
-              <button class="btn-secondary" @click="noteTarget = null">{{ $t('llc.approvals.cancel') }}</button>
-              <button
-                class="btn-primary"
+              <BaseButton variant="secondary" @click="noteTarget = null">{{ $t('llc.approvals.cancel') }}</BaseButton>
+              <BaseButton
                 :disabled="!decisionNote.trim() || processing.has(item.id)"
                 @click="submitWithNote(item.id)"
               >
                 {{ $t('llc.approvals.confirm') }}
-              </button>
+              </BaseButton>
             </div>
           </div>
         </div>
@@ -139,6 +135,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
@@ -461,29 +458,6 @@ onUnmounted(() => {
   gap: 0.5rem;
 }
 
-.btn-approve,
-.btn-reject,
-.btn-changes {
-  padding: 0.4rem 0.875rem;
-  border: none;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-
-.btn-approve { background: var(--color-success); color: white; }
-.btn-reject { background: var(--color-error-solid); color: white; }
-.btn-changes { background: var(--color-warning); color: white; }
-
-.btn-approve:disabled,
-.btn-reject:disabled,
-.btn-changes:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .note-form {
   display: flex;
   flex-direction: column;
@@ -506,32 +480,5 @@ onUnmounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
-}
-
-.btn-primary {
-  padding: 0.4rem 1rem;
-  background: var(--color-primary);
-  color: white;
-  border: none;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  padding: 0.4rem 1rem;
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
 }
 </style>

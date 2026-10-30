@@ -1223,7 +1223,7 @@ export default {
   top: var(--spacing-5);
   right: var(--spacing-5);
   width: 300px;
-  z-index: 20;
+  z-index: var(--z-20);
 }
 
 </style>
