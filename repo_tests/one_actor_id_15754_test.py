@@ -149,7 +149,7 @@ REACH = declare(
     "llc-actor-id-scan",
     discover=_population,
     # Mid-window, from REACH.window() = (106, 206, 156) against 206 files, growth=100.
-    floor=156,
+    floor=199,  # mid-window: population 249, window (149, 249)
     what="non-test python source",
     roots=("autobot-backend/llc",),
     growth=100,

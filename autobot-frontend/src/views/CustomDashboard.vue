@@ -714,7 +714,7 @@ defineExpose({ stopDashboardPolling })
 }
 
 .widget-actions button.remove-btn:hover {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-error);
 }
 

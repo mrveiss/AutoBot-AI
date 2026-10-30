@@ -598,7 +598,7 @@ async function executeImport(): Promise<void> {
   align-items: center;
   gap: var(--spacing-xs);
   padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--coportability-on-accent);
   border: none;
   border-radius: var(--radius-md);

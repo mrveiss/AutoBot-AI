@@ -1541,7 +1541,6 @@ class MiscConfig(RedactedSettings):
     coqui_model: str = Field(default="", alias="AUTOBOT_COQUI_MODEL")
     database_url: str = Field(default="", alias="AUTOBOT_DATABASE_URL")
     data_db: str = Field(default="", alias="AUTOBOT_DATA_DB")
-    db_host: str = Field(default="", alias="AUTOBOT_DB_HOST")
     db_path: str = Field(default="", alias="AUTOBOT_DB_PATH")
     default_agent_model: str = Field(default="", alias="AUTOBOT_DEFAULT_AGENT_MODEL")
     default_choice: str = Field(default="", alias="AUTOBOT_DEFAULT_CHOICE")

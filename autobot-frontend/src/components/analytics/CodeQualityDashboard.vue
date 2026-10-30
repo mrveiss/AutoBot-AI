@@ -1125,7 +1125,7 @@ watch(selectedPeriod, () => {
 }
 
 .btn-export {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   border: none;
   color: var(--text-on-primary);
 }
@@ -1447,7 +1447,7 @@ watch(selectedPeriod, () => {
 }
 
 .severity-filter button.active {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   border-color: var(--color-info);
   color: var(--text-on-primary);
 }
@@ -1684,7 +1684,7 @@ watch(selectedPeriod, () => {
 }
 
 .period-selector button.active {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   border-color: var(--color-info);
   color: var(--text-on-primary);
 }
