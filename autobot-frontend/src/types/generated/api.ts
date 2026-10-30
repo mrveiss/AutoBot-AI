@@ -52437,7 +52437,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List Comments
+         * @description List a work item's comments, oldest first, in the caller's tenant.
+         */
+        get: operations["list_comments_api_llc_work_items__work_item_id__comments_get"];
         put?: never;
         /** Add Comment */
         post: operations["add_comment_api_llc_work_items__work_item_id__comments_post"];
@@ -178329,6 +178333,42 @@ export interface operations {
                 "application/json": components["schemas"]["CoworkerRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_comments_api_llc_work_items__work_item_id__comments_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                work_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
