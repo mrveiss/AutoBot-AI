@@ -5,7 +5,7 @@
 """
 AutoBot Team Management API
 
-Manages teams in the remote AutoBot database (AUTOBOT_DB_HOST:5432/autobot_users).
+Manages teams in the remote AutoBot database (AUTOBOT_POSTGRES_HOST:5432/autobot_users).
 Teams group application users for collaboration and shared resources.
 """
 
