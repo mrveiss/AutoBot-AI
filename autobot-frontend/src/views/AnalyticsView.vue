@@ -178,7 +178,7 @@ const showMore = ref(false)
   background-color: var(--bg-primary);
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: var(--z-10);
 }
 
 .nav-tabs {
@@ -210,14 +210,14 @@ const showMore = ref(false)
 .more-tabs-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 20;
+  z-index: var(--z-20);
 }
 
 .more-tabs-menu {
   position: absolute;
   top: 100%;
   right: 0;
-  z-index: 30;
+  z-index: var(--z-30);
   min-width: 12rem;
   padding: var(--spacing-1) 0;
   background: var(--bg-secondary);
