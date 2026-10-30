@@ -357,7 +357,7 @@ setup_code() {
         fi
     else
         log "Syncing from dev machine ($DEV_HOST)..."
-        rsync -avz --delete \
+        rsync -avz --chmod=o-w --delete \
             --exclude 'node_modules/' \
             --exclude 'venv/' \
             --exclude '__pycache__/' \
