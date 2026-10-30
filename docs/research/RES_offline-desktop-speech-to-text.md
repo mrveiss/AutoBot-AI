@@ -178,4 +178,6 @@ In priority order:
 - #20098 fix(voice): check for clipped first syllables on the full-duplex path and add pre-roll if needed
 - #20099 feat(speech): user vocabulary for names and project terms
 - #20100 feat(voice): keyboard shortcut for voice input in the web app
+- #20110 feat(speech): local Latvian speech recognition that works without the LATE binary
+- #20111 privacy(speech): audio reaches a system outside AutoBot only by explicit user choice
 - #16807 Server-side VAD in speech_recognition.py is a placeholder, not real detection
