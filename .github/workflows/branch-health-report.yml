@@ -86,10 +86,9 @@ jobs:
           # re-prefixed to the unresolvable `origin/<remote>/<branch>`. Every
           # git question about it failed, and the branch was classified from
           # those failures rather than skipped.
-          # Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
           all_branches=$(git for-each-ref --format='%(refname:short)' refs/remotes/origin/ \
             | sed 's|^origin/||' \
-            | grep -vx "HEAD\|release\|master\|main\|Dev_new_gui" || true)
+            | grep -vx "HEAD\|release\|master\|main" || true)
 
           while IFS= read -r branch; do
             [ -z "$branch" ] && continue
