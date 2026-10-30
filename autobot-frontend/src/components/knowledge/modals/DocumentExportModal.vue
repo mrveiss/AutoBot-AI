@@ -376,7 +376,7 @@ watch(() => props.modelValue, (isOpen) => {
 }
 
 .format-option.selected .format-icon {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: var(--text-on-primary);
 }
 
