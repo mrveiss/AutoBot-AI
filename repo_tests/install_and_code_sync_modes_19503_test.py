@@ -98,7 +98,7 @@ def test_every_python_rsync_sets_the_mode() -> None:
         lists = _rsync_lists(path.read_text(encoding="utf-8"))
         total += len(lists)
         assert all(_sets_mode(args) for args in lists), f"{rel}: an rsync copies source modes as they are"
-    assert total >= 7, f"expected at least the 7 known rsync commands, read {total}"
+    assert total >= 8, f"expected at least the 8 known rsync commands, read {total}"
 
 
 def test_every_code_synchronize_task_sets_the_mode() -> None:

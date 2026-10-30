@@ -11,12 +11,11 @@ from __future__ import annotations
 
 import re
 import shlex
-import subprocess
 
 import pytest
 from repo_tests._paths import repo_root
 
-from autobot_shared.isolated_git import isolated_git_env
+from autobot_shared.isolated_git import git, make_repo
 
 _PLAYBOOK = repo_root() / "autobot-slm-backend" / "ansible" / "playbooks" / "update-all-nodes.yml"
 
@@ -27,14 +26,6 @@ def _shipped_pathspec() -> list[str]:
     match = re.search(r"^\s+-- (.+)$", task, re.M)
     assert match, "the pre-flight no longer has a pathspec line"
     return shlex.split(match.group(1))
-
-
-def _git(cwd, *args: str) -> str:
-    identity = ["-c", "user.name=t", "-c", "user.email=t@example.invalid"]
-    done = subprocess.run(
-        ["git", *identity, *args], cwd=cwd, env=isolated_git_env(), capture_output=True, text=True, check=True
-    )
-    return done.stdout
 
 
 @pytest.mark.parametrize(
@@ -51,10 +42,10 @@ def test_pathspec_decides_on_the_changed_file(tmp_path, path: str, watched: bool
     target = tmp_path / path
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text("a\n", encoding="utf-8")
-    _git(tmp_path, "init", "-q")
-    _git(tmp_path, "add", "-A")
-    _git(tmp_path, "commit", "-qm", "base")
+    make_repo(tmp_path)
+    git(tmp_path, "add", "-A")
+    git(tmp_path, "commit", "-qm", "base")
     target.write_text("b\n", encoding="utf-8")
-    _git(tmp_path, "commit", "-qam", "change")
-    changed = _git(tmp_path, "diff", "--name-only", "HEAD~1", "HEAD", "--", *_shipped_pathspec())
+    git(tmp_path, "commit", "-qam", "change")
+    changed = git(tmp_path, "diff", "--name-only", "HEAD~1", "HEAD", "--", *_shipped_pathspec()).stdout
     assert bool(changed.strip()) is watched, (path, _shipped_pathspec())
