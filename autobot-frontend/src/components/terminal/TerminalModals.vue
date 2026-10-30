@@ -666,7 +666,7 @@ const handleTakeManualControl = () =>
 }
 
 .step-counter {
-  background-color: var(--color-info);
+  background-color: var(--color-info-solid);
   color: var(--text-on-primary);
   padding: var(--spacing-2) var(--spacing-4);
   border-radius: var(--radius-full);

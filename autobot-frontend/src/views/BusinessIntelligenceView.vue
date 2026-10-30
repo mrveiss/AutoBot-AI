@@ -643,7 +643,7 @@ onMounted(() => {
 }
 
 .tab-badge.critical {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: white;
 }
 
@@ -754,9 +754,9 @@ onMounted(() => {
   font-weight: var(--font-semibold);
 }
 
-.priority-badge.critical { background: var(--color-error); color: white; }
+.priority-badge.critical { background: var(--color-error-solid); color: white; }
 .priority-badge.high { background: var(--color-warning); color: white; }
-.priority-badge.medium { background: var(--color-info); color: white; }
+.priority-badge.medium { background: var(--color-info-solid); color: white; }
 .priority-badge.low { background: var(--bg-tertiary); color: var(--text-secondary); }
 
 .category {
@@ -862,12 +862,12 @@ onMounted(() => {
 .metric-icon { flex-shrink: 0; }
 
 .resource-type.llm_tokens { background: var(--color-primary); color: white; }
-.resource-type.agent_tasks { background: var(--color-info); color: white; }
+.resource-type.agent_tasks { background: var(--color-info-solid); color: white; }
 .resource-type.cache { background: var(--color-success); color: white; }
 
 .effort-badge.low { background: var(--color-success); color: white; }
 .effort-badge.medium { background: var(--color-warning); color: white; }
-.effort-badge.high { background: var(--color-error); color: white; }
+.effort-badge.high { background: var(--color-error-solid); color: white; }
 
 /* Insights specific */
 .insight-type.maintenance { background: var(--color-warning); color: white; }
