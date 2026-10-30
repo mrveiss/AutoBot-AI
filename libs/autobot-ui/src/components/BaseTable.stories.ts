@@ -45,6 +45,33 @@ export const NumericColumns: Story = { args: { columns: NUMERIC } }
 export const Sortable: Story = { args: { columns: NUMERIC, caption: 'Sortable hosts' } }
 export const Empty: Story = { args: { rows: [], emptyTitle: 'No hosts', emptyDescription: 'Nothing is registered yet.' } }
 export const Loading: Story = { args: { loading: true, loadingLabel: 'Loading hosts' } }
+export const Populated: Story = { args: { columns: NUMERIC, caption: 'Populated hosts', zebra: true } }
+// Rows exist but the search removed them all: distinct copy from `Empty` (#17562).
+export const NoMatches: Story = {
+  args: {
+    columns: [{ key: 'host', label: 'Host', searchable: true }, ...NUMERIC.slice(1)],
+    search: 'zzz',
+    emptyTitle: 'No hosts',
+    emptyDescription: 'Nothing is registered yet.',
+    noMatchesTitle: 'No matching hosts',
+    noMatchesDescription: 'Change the search to see more.',
+  },
+}
+export const Paged: Story = {
+  args: {
+    columns: NUMERIC,
+    pageSize: 2,
+    paginationLabel: 'Hosts pages',
+    paginationLabels: { previous: 'Previous', next: 'Next' },
+    paginationSummary: (page: number, count: number) => `Page ${page} of ${count}`,
+  },
+}
+export const ColumnMenu: Story = {
+  args: {
+    columns: NUMERIC.map((c) => (c.key === 'errors' ? { ...c, hidden: true } : c)),
+    columnsMenuLabel: 'Columns',
+  },
+}
 export const Wide: Story = {
   args: { columns: WIDE, rows: WIDE_ROWS },
   render: (args) => ({
