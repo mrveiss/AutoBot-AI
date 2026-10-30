@@ -196,7 +196,7 @@ REACH = declare(
     "concept-forks-17856-scan",
     discover=_population,
     # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=3100,  # re-pinned mid-window (train 73): population 3250, window [2950, 3250] (#17844)
+    floor=3221,  # re-pinned mid-window (train 73): population 3250, window [2950, 3250] (#17844)
     what="non-test python source",
     roots=("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     growth=300,
