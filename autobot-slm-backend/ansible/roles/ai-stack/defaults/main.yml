@@ -40,8 +40,8 @@ chromadb_auth_token: ""
 chromadb_authn_env_file: /etc/autobot/chromadb.env
 
 # Ollama: the LLM node when the wizard placed one (#19861), else the backend's node
-ollama_host: "{{ llm_host | default(backend_host | default(ansible_host)) }}"
-ollama_port: 11434
+ollama_host: "{{ ai_stack_ollama_host | default(backend_host | default(ansible_host)) }}"
+ollama_port: "{{ ai_stack_ollama_port | default(11434) }}"
 
 # Agent LLM endpoints — injected into ai-stack.env; default to Ollama (#4661)
 ai_chat_endpoint: "http://{{ ollama_host }}:{{ ollama_port }}"
