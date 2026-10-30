@@ -11,6 +11,8 @@
  */
 
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { autobotApiErrorMessage } from '@/composables/useAutobotApi'
 import {
   useSsoApi,
   type SSOProviderResponse,
@@ -21,6 +23,7 @@ import {
 import { getStatusBadgeClass, getStatusLabel } from '@/utils/node-status'
 import { BaseAlert, BaseModal } from '@autobot/ui'
 
+const { t } = useI18n()
 const api = useSsoApi()
 
 const loading = ref(false)
@@ -150,8 +153,7 @@ async function fetchProviders(): Promise<void> {
     providers.value = listResponse.providers
     healthMap.value = Object.fromEntries(healthItems.map((h) => [h.provider_id, h]))
   } catch (e: unknown) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    error.value = err.response?.data?.detail || 'Failed to load SSO providers'
+    error.value = autobotApiErrorMessage(e, t('settings.admin.sSOSettings.failedToLoadProviders'))
   } finally {
     loading.value = false
   }
@@ -245,7 +247,7 @@ function editProvider(provider: SSOProviderResponse) {
 
 async function saveProvider(): Promise<void> {
   if (!formData.name) {
-    error.value = 'Provider name is required'
+    error.value = t('settings.admin.sSOSettings.providerNameRequired')
     return
   }
 
@@ -298,7 +300,7 @@ async function saveProvider(): Promise<void> {
         config,
       }
       await api.updateProvider(editingProvider.value.id, updateData)
-      showSuccessMsg('Provider updated successfully')
+      showSuccessMsg(t('settings.admin.sSOSettings.providerUpdated'))
     } else {
       // Create new provider
       const createData: SSOProviderCreate = {
@@ -313,14 +315,13 @@ async function saveProvider(): Promise<void> {
         config,
       }
       await api.createProvider(createData)
-      showSuccessMsg('Provider created successfully')
+      showSuccessMsg(t('settings.admin.sSOSettings.providerCreated'))
     }
 
     closeForm()
     await fetchProviders()
   } catch (e: unknown) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    error.value = err.response?.data?.detail || 'Failed to save provider'
+    error.value = autobotApiErrorMessage(e, t('settings.admin.sSOSettings.failedToSaveProvider'))
   } finally {
     saving.value = false
   }
@@ -332,10 +333,9 @@ async function toggleProvider(provider: SSOProviderResponse): Promise<void> {
       is_active: !provider.is_active,
     })
     provider.is_active = !provider.is_active
-    showSuccessMsg(`Provider ${provider.is_active ? 'enabled' : 'disabled'}`)
+    showSuccessMsg(t(provider.is_active ? 'settings.admin.sSOSettings.providerEnabled' : 'settings.admin.sSOSettings.providerDisabled'))
   } catch (e: unknown) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    showErrorMsg(err.response?.data?.detail || 'Failed to toggle provider')
+    showErrorMsg(autobotApiErrorMessage(e, t('settings.admin.sSOSettings.failedToToggleProvider')))
   }
 }
 
@@ -348,10 +348,9 @@ async function testConnection(provider: SSOProviderResponse): Promise<void> {
     const result = await api.testProvider(provider.id)
     testResult.value = result
   } catch (e: unknown) {
-    const err = e as { response?: { data?: { detail?: string } } }
     testResult.value = {
       success: false,
-      message: err.response?.data?.detail || 'Connection test failed',
+      message: autobotApiErrorMessage(e, t('settings.admin.sSOSettings.connectionTestFailed')),
     }
   } finally {
     testing.value = false
@@ -359,17 +358,16 @@ async function testConnection(provider: SSOProviderResponse): Promise<void> {
 }
 
 async function deleteProvider(provider: SSOProviderResponse): Promise<void> {
-  if (!confirm(`Delete SSO provider "${provider.name}"? This cannot be undone.`)) {
+  if (!confirm(t('settings.admin.sSOSettings.confirmDeleteProvider', { name: provider.name }))) {
     return
   }
 
   try {
     await api.deleteProvider(provider.id)
-    showSuccessMsg('Provider deleted successfully')
+    showSuccessMsg(t('settings.admin.sSOSettings.providerDeleted'))
     await fetchProviders()
   } catch (e: unknown) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    showErrorMsg(err.response?.data?.detail || 'Failed to delete provider')
+    showErrorMsg(autobotApiErrorMessage(e, t('settings.admin.sSOSettings.failedToDeleteProvider')))
   }
 }
 
