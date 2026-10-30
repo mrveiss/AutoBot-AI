@@ -52,7 +52,10 @@
     <CaptchaNotification />
 
     <!-- Toast Notifications Container (Issue #502) -->
-    <ToastContainer />
+    <ToastContainer
+      :label="$t('ui.toastContainer.notifications')"
+      :dismiss-label="$t('ui.toastContainer.dismissNotification')"
+    />
 
     <!-- Host Selection Dialog for Agent SSH Actions -->
     <HostSelectionDialog
@@ -114,7 +117,7 @@ import { useGlobalShortcuts } from '@/composables/useGlobalShortcuts'
 import AppHeader from '@/components/layout/AppHeader.vue'
 import SystemStatusModal from '@/components/layout/SystemStatusModal.vue'
 import CommandPalette from '@/components/CommandPalette.vue'
-import { SkipLink } from '@autobot/ui'
+import { SkipLink, ToastContainer } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { cacheBuster } from '@/utils/CacheBuster.js';
 import { healthMonitor } from '@/utils/HealthMonitor.js';
@@ -124,7 +127,6 @@ import { smartMonitoringController, getAdaptiveInterval } from '@/config/Optimiz
 import { clearAllSystemNotifications, resetHealthMonitor } from '@/utils/ClearNotifications.js';
 import SystemStatusNotification from '@/components/ui/SystemStatusNotification.vue';
 import CaptchaNotification from '@/components/research/CaptchaNotification.vue';
-import ToastContainer from '@/components/ui/ToastContainer.vue';
 import HostSelectionDialog from '@/components/ui/HostSelectionDialog.vue';
 import ConfirmDialog from '@/components/ui/ConfirmDialog.vue';
 import LoadingBoundary from '@/components/ui/LoadingBoundary.vue';
