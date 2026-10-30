@@ -11,25 +11,21 @@
  */
 import { ref } from 'vue'
 import { useApiClient } from '@/plugins/api'
+import { planRequest } from '@/composables/llc/workflowPlanRequest'
 import { describeApiError } from '@/composables/llc/apiErrorMessage'
 import {
   isNotFoundError,
   type BreakdownBody,
-  type GateResponse,
   type MapBody,
-  type MapResponse,
   type OneNumberBody,
-  type Plan,
   type PlanCreate,
   type PlanSummary,
   type Label,
 } from '@/composables/llc/workflowPlanTypes'
 
-const BASE = '/api/llc/company-os/workflow-plans'
+const ROOT = '/api/llc/company-os/workflow-plans'
 
 export type PlanListState = 'loading' | 'ready' | 'unavailable' | 'error'
-
-const planUrl = (key: string, tail = '') => `${BASE}/${encodeURIComponent(key)}${tail}`
 
 export function useWorkflowPlans() {
   const api = useApiClient()
@@ -40,7 +36,7 @@ export function useWorkflowPlans() {
   async function load(fallback: string): Promise<void> {
     state.value = 'loading'
     try {
-      plans.value = (await api.get<PlanSummary[]>(BASE)) ?? []
+      plans.value = (await planRequest(api, 'get', ROOT)) ?? []
       state.value = 'ready'
     } catch (err: unknown) {
       state.value = isNotFoundError(err) ? 'unavailable' : 'error'
@@ -48,22 +44,24 @@ export function useWorkflowPlans() {
     }
   }
 
-  const create = (body: PlanCreate) => api.post<Plan>(BASE, body)
-  const get = (key: string) => api.get<Plan>(planUrl(key))
-  const gate = (key: string) => api.get<GateResponse>(planUrl(key, '/gate'))
-  const putMap = (key: string, body: MapBody) => api.put<MapResponse>(planUrl(key, '/map'), body)
+  const create = (body: PlanCreate) => planRequest(api, 'post', ROOT, {}, body)
+  const get = (key: string) => planRequest(api, 'get', '/api/llc/company-os/workflow-plans/{plan_key}', { plan_key: key })
+  const gate = (key: string) => planRequest(api, 'get', '/api/llc/company-os/workflow-plans/{plan_key}/gate', { plan_key: key })
+  const putMap = (key: string, body: MapBody) => planRequest(api, 'put', '/api/llc/company-os/workflow-plans/{plan_key}/map', { plan_key: key }, body)
   const setWaitNote = (key: string, handoff: string, note: string | null) =>
-    api.patch<Plan>(planUrl(key, `/handoffs/${encodeURIComponent(handoff)}`), { wait_note: note })
+    planRequest(api, 'patch', '/api/llc/company-os/workflow-plans/{plan_key}/handoffs/{handoff_key}', { plan_key: key, handoff_key: handoff }, { wait_note: note })
   const putMetric = (key: string, step: string, body: unknown) =>
-    api.put<Plan>(planUrl(key, `/steps/${encodeURIComponent(step)}/metric`), body)
+    planRequest(api, 'put', '/api/llc/company-os/workflow-plans/{plan_key}/steps/{step_key}/metric', { plan_key: key, step_key: step }, body)
   const deleteMetric = (key: string, step: string) =>
-    api.delete<Plan>(planUrl(key, `/steps/${encodeURIComponent(step)}/metric`))
-  const putOneNumber = (key: string, body: OneNumberBody) => api.put<Plan>(planUrl(key, '/one-number'), body)
+    planRequest(api, 'delete', '/api/llc/company-os/workflow-plans/{plan_key}/steps/{step_key}/metric', { plan_key: key, step_key: step })
+  const putOneNumber = (key: string, body: OneNumberBody) =>
+    planRequest(api, 'put', '/api/llc/company-os/workflow-plans/{plan_key}/one-number', { plan_key: key }, body)
   const putBreakdown = (key: string, step: string, body: BreakdownBody) =>
-    api.put<Plan>(planUrl(key, `/steps/${encodeURIComponent(step)}/breakdown`), body)
+    planRequest(api, 'put', '/api/llc/company-os/workflow-plans/{plan_key}/steps/{step_key}/breakdown', { plan_key: key, step_key: step }, body)
   const classifySubStep = (key: string, sub: string, classification: Label | null) =>
-    api.patch<Plan>(planUrl(key, `/sub-steps/${encodeURIComponent(sub)}`), { classification })
-  const acknowledgeByHand = (key: string) => api.post<Plan>(planUrl(key, '/by-hand-acknowledgement'))
+    planRequest(api, 'patch', '/api/llc/company-os/workflow-plans/{plan_key}/sub-steps/{sub_step_key}', { plan_key: key, sub_step_key: sub }, { classification })
+  const acknowledgeByHand = (key: string) =>
+    planRequest(api, 'post', '/api/llc/company-os/workflow-plans/{plan_key}/by-hand-acknowledgement', { plan_key: key })
 
   return {
     plans,
