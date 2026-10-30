@@ -237,7 +237,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llc/api/companies.py": 1671,
     "autobot-backend/llc/api/roles.py": 713,
     "autobot-backend/llc/api/sprints.py": 1223,
-    "autobot-backend/llc/api/work_items.py": 1399,  # #19582: comment wake moved into the service
+    "autobot-backend/llc/api/work_items.py": 1392,  # #19582: comment wake moved into the service
     "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 1023,  # #19582 (shared run finder)
     "autobot-backend/llc/services/template.py": 643,
     "autobot-backend/llc/services/work_item_service.py": 1086,  # #19582: approval-category check moved out
@@ -256,7 +256,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llm_shared/optimization/layer_inference_test.py": 715,
     "autobot-backend/llm_shared/tests/test_provider_auth.py": 1145,
     "autobot-backend/markdown_reference_system.py": 707,
-    "autobot-backend/mcp_server/autobot_server.py": 790,
+    "autobot-backend/mcp_server/autobot_server.py": 778,
     "autobot-backend/mcp_server/mcp_security_test.py": 812,
     "autobot-backend/media/link/pipeline_test.py": 963,
     "autobot-backend/memory/manager.py": 979,
@@ -298,7 +298,7 @@ KNOWN_LARGE: dict[str, int] = {
     # #16354: invisible-char table moved to security/unicode_normalization.py
     "autobot-backend/security/prompt_injection_detector.py": 703,
     "autobot-backend/security/security_edge_cases_test.py": 613,
-    "autobot-backend/security/session_ownership.py": 815,
+    "autobot-backend/security/session_ownership.py": 814,
     "autobot-backend/security/threat_detection_refactor_test.py": 880,
     "autobot-backend/security/threat_intelligence.py": 762,
     "autobot-backend/security_layer.py": 715,
@@ -320,7 +320,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/command_approval_manager.py": 633,
     "autobot-backend/services/config_service.py": 605,
     "autobot-backend/services/docker_task_workspace.py": 673,
-    "autobot-backend/services/execution/claude_code_backend.py": 661,
     "autobot-backend/services/execution/docker_backend.py": 604,
     "autobot-backend/services/fact_extraction_service.py": 870,
     "autobot-backend/services/fast_document_scanner.py": 653,
