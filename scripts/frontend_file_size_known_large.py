@@ -164,7 +164,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/llc/RolesView.vue": 1026,  # #18819 1029->1027; #18849 one kit import on the merge (-1)
     "autobot-frontend/src/views/llc/RoutinesView.vue": 688,
     "autobot-frontend/src/views/llc/SprintBoardView.vue": 666,
-    "autobot-frontend/src/views/llc/WorkItemDetail.vue": 996,  # #14780: 1046 -> 1013 (kit BaseDrawer)
+    "autobot-frontend/src/views/llc/WorkItemDetail.vue": 994,  # #18750: 996 -> 994 (tab flag removed)
     "autobot-infrastructure/shared/ide-extensions/vscode-autobot/src/extension.ts": 741,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/background-monitor.ts": 713,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/index.ts": 957,
