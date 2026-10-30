@@ -22,14 +22,14 @@ export const FIX_HINT =
 const WAIVED_FILES = new Map([
   ["autobot-frontend/src/components/audit/AuditLogTable.vue", { count: 1, pr: "#20000" }],
   ["autobot-frontend/src/components/charts/ImportTreeChart.vue", { count: 3, pr: "#20018" }],
-  ["autobot-frontend/src/components/chat/ChatInput.vue", { count: 2, pr: "#19949, #19991" }],
+  ["autobot-frontend/src/components/chat/ChatInput.vue", { count: 2, pr: "#19949" }],
   ["autobot-frontend/src/components/chat/MCPPromptTemplatePicker.vue", { count: 1, pr: "#20018" }],
   ["autobot-frontend/src/components/chat/PresetFormBody.vue", { count: 1, pr: "#20018" }],
   ["autobot-frontend/src/components/knowledge/KnowledgeGraph.vue", { count: 2, pr: "#20000" }],
   ["autobot-frontend/src/components/plugins/CapabilityApprovalDialog.vue", { count: 1, pr: "#20018" }],
   ["autobot-frontend/src/views/llc/HeartbeatMonitor.vue", { count: 1, pr: "#20000" }],
-  ["autobot-slm-frontend/src/components/common/ToastContainer.vue", { count: 1, pr: "#19949, #19991" }],
   ["autobot-slm-frontend/src/components/monitoring/GrafanaDashboard.vue", { count: 2, pr: "#20018" }],
+  ["libs/autobot-ui/src/components/ToastContainer.vue", { count: 1, pr: "#19949" }],
 ]);
 
 export const waivedFilesForTest = () => new Map(WAIVED_FILES);
