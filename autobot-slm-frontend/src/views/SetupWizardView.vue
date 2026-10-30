@@ -767,7 +767,7 @@ async function saveSecrets() {
     secretsSaved.value = true
   } catch (err) {
     logger.error('Failed to save secrets:', err)
-    alert('Failed to save API keys. Check the console for details.')
+    showToast(t('setupWizardView.failedToSaveKeys'), 'error')
   } finally {
     savingSecrets.value = false
   }
@@ -914,8 +914,8 @@ async function addNode() {
     newNode.value = { hostname: '', ip_address: '', ssh_user: 'autobot', auth_method: 'key', ssh_password: '' }
     await loadNodes()
   } catch (err: unknown) {
-    const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Failed to add node'
-    alert(msg)
+    const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || t('setupWizardView.failedToAddNode')
+    showToast(msg, 'error')
   } finally {
     addingNode.value = false
   }

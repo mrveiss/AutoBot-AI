@@ -17,7 +17,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
-import { BaseAlert, BaseModal, usePagination, BasePagination } from '@autobot/ui'
+import { BaseAlert, BaseModal, usePagination, BasePagination, useToast } from '@autobot/ui'
 import type { TLSEndpointResponse, FleetCert } from '@/types/api-responses'
 import { createLogger } from '@/utils/debugUtils'
 import { formatRelativeTime } from '@/utils/dateUtils'
@@ -32,6 +32,7 @@ import type {
 } from '@/types/slm'
 
 const { t } = useI18n()
+const { showToast } = useToast()
 const logger = createLogger('SecurityView')
 const slmApi = useSlmApi()
 const route = useRoute()
@@ -43,7 +44,6 @@ type AuditLog = AuditLogResponse
 type SecurityPolicy = SecurityPolicyResponse
 type SecurityOverview = SecurityOverviewResponse
 type ThreatSummary = ThreatSummaryType
-
 
 // Active tab — route-based
 type SecurityTab = 'overview' | 'tls-settings' | 'certificates' | 'audit' | 'threats' | 'policies'
@@ -309,7 +309,7 @@ async function deleteTlsCertificate(credentialId: string) {
     logger.info('TLS certificate deleted:', credentialId)
   } catch (err) {
     logger.error('Failed to delete TLS certificate:', err)
-    alert(t('securityView.failedToDeleteCertificate'))
+    showToast(t('securityView.failedToDeleteCertificate'), 'error')
   }
 }
 
@@ -337,10 +337,10 @@ async function renewTlsCertificate(credentialId: string) {
     const result = await slmApi.renewTlsCertificate(credentialId, true)
     await fetchTlsEndpoints()
     logger.info('TLS certificate renewed:', result)
-    alert(t('securityView.certificateRenewed', { expiry: result.expires_at || t('securityView.unknownExpiry') }))
+    showToast(t('securityView.certificateRenewed', { expiry: result.expires_at || t('securityView.unknownExpiry') }), 'success')
   } catch (err) {
     logger.error('Failed to renew TLS certificate:', err)
-    alert(t('securityView.failedToRenewCertificate'))
+    showToast(t('securityView.failedToRenewCertificate'), 'error')
   } finally {
     renewingCredentialId.value = null
   }
@@ -356,10 +356,10 @@ async function rotateTlsCertificate(credentialId: string) {
     const result = await slmApi.rotateTlsCertificate(credentialId, true, true)
     await fetchTlsEndpoints()
     logger.info('TLS certificate rotated:', result)
-    alert(t('securityView.certificateRotated', { expiry: result.expires_at || t('securityView.unknownExpiry') }))
+    showToast(t('securityView.certificateRotated', { expiry: result.expires_at || t('securityView.unknownExpiry') }), 'success')
   } catch (err) {
     logger.error('Failed to rotate TLS certificate:', err)
-    alert(t('securityView.failedToRotateCertificate'))
+    showToast(t('securityView.failedToRotateCertificate'), 'error')
   } finally {
     rotatingCredentialId.value = null
   }
@@ -375,10 +375,10 @@ async function bulkRenewExpiring() {
     const result = await slmApi.bulkRenewExpiringCertificates(30, true)
     await fetchTlsEndpoints()
     logger.info('Bulk renewal completed:', result)
-    alert(t('securityView.bulkRenewalCompleteRenewedFailed', { renewed: result.renewed, failed: result.failed }))
+    showToast(t('securityView.bulkRenewalCompleteRenewedFailed', { renewed: result.renewed, failed: result.failed }), 'warning')
   } catch (err) {
     logger.error('Failed to bulk renew certificates:', err)
-    alert(t('securityView.failedToBulkRenewCertificates'))
+    showToast(t('securityView.failedToBulkRenewCertificates'), 'error')
   } finally {
     bulkRenewing.value = false
   }
@@ -392,11 +392,11 @@ function openUploadModal() {
 
 async function uploadTlsCertificate() {
   if (!selectedNodeId.value) {
-    alert(t('securityView.pleaseSelectANode'))
+    showToast(t('securityView.pleaseSelectANode'), 'warning')
     return
   }
   if (!uploadForm.value.ca_cert || !uploadForm.value.server_cert || !uploadForm.value.server_key) {
-    alert(t('securityView.pleaseProvideAllCertificateFiles'))
+    showToast(t('securityView.pleaseProvideAllCertificateFiles'), 'warning')
     return
   }
 
@@ -407,7 +407,7 @@ async function uploadTlsCertificate() {
     logger.info('TLS certificate uploaded for node:', selectedNodeId.value)
   } catch (err) {
     logger.error('Failed to upload TLS certificate:', err)
-    alert(t('securityView.failedToUploadCertificate'))
+    showToast(t('securityView.failedToUploadCertificate'), 'error')
   }
 }
 
@@ -473,7 +473,7 @@ function toggleTlsService(serviceName: string) {
 
 async function enableTlsOnSelectedServices() {
   if (selectedTlsServices.value.length === 0) {
-    alert(t('securityView.pleaseSelectAtLeastOneServiceTo'))
+    showToast(t('securityView.pleaseSelectAtLeastOneServiceTo'), 'warning')
     return
   }
 
