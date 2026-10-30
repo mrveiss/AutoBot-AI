@@ -82,7 +82,9 @@ def test_install_sh_does_not_skip_the_postgresql_role() -> None:
     install = (_ROOT / "install.sh").read_text(encoding="utf-8")
     run = _deploy_slm_manager_command(install)
     assert run, "install.sh no longer runs deploy-slm-manager.yml"
-    skipped = re.findall(r'--skip-tags\s+"?([\w,]+)"?', run)
+    assert '--skip-tags "${skip_tags}"' in run, "the run no longer takes its skip set from skip_tags"
+    skipped = re.findall(r'skip_tags="([\w,]+)"', install)
+    assert skipped, "skip_tags is not assigned a literal, so this test reads nothing"
     assert all("postgresql" not in s.split(",") for s in skipped), f"install.sh skips the database: {skipped}"
 
 
@@ -90,4 +92,4 @@ def test_contrast_the_detectors_fire() -> None:
     assert store_backends("from services.database import db_service\n") == {"slm-db"}
     assert store_backends("from autobot_shared.redis_client import get_redis_client\n") == {"redis"}
     assert store_backends('"""Moved off Redis."""\nfrom services.database import db_service\n') == {"slm-db"}
-    assert re.findall(r'--skip-tags\s+"?([\w,]+)"?', '--skip-tags "seed,postgresql"') == ["seed,postgresql"]
+    assert re.findall(r'skip_tags="([\w,]+)"', 'local skip_tags="seed,postgresql"') == ["seed,postgresql"]

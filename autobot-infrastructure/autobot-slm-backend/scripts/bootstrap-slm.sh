@@ -180,7 +180,7 @@ build_ssh_cmd() {
 }
 
 build_rsync_cmd() {
-    local cmd="rsync -avz --delete"
+    local cmd="rsync -avz --chmod=o-w --delete"
     if [[ -n "$SSH_KEY" ]]; then
         cmd="$cmd -e 'ssh -i $SSH_KEY -o StrictHostKeyChecking=accept-new'"
     else
@@ -357,7 +357,7 @@ code_deployment() {
     fi
 
     info "Deploying autobot-slm-backend..."
-    rsync -avz --delete \
+    rsync -avz --chmod=o-w --delete \
         -e "ssh -o StrictHostKeyChecking=accept-new ${SSH_KEY:+-i $SSH_KEY}" \
         "${PROJECT_ROOT}/autobot-slm-backend/" \
         "${SSH_USER}@${TARGET_HOST}:${REMOTE_BACKEND}/" \
@@ -365,7 +365,7 @@ code_deployment() {
     success "Backend deployed"
 
     info "Deploying autobot-slm-frontend..."
-    rsync -avz --delete \
+    rsync -avz --chmod=o-w --delete \
         -e "ssh -o StrictHostKeyChecking=accept-new ${SSH_KEY:+-i $SSH_KEY}" \
         "${PROJECT_ROOT}/autobot-slm-frontend/" \
         "${SSH_USER}@${TARGET_HOST}:${REMOTE_FRONTEND}/" \
@@ -373,7 +373,7 @@ code_deployment() {
     success "Frontend deployed"
 
     info "Deploying autobot_shared..."
-    rsync -avz --delete \
+    rsync -avz --chmod=o-w --delete \
         -e "ssh -o StrictHostKeyChecking=accept-new ${SSH_KEY:+-i $SSH_KEY}" \
         "${PROJECT_ROOT}/autobot_shared/" \
         "${SSH_USER}@${TARGET_HOST}:${REMOTE_SHARED}/" \
