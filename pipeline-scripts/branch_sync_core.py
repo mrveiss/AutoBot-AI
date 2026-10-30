@@ -24,8 +24,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from autobot_shared.git_refs import is_safe_ref  # noqa: E402  # the one argv ref validator (#18125)
 
 #: Never a target, whatever else changes: the base and the protected trunks.
-#: Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
-NEVER_TARGET = frozenset({"main", "release", "master", "develop", "HEAD", "Dev_new_gui"})
+NEVER_TARGET = frozenset({"main", "release", "master", "develop", "HEAD"})
 
 #: Never synced, PR or not:
 #: ``rescued/`` -- a stash snapshot, not a line of work (#15306); merging base into it
