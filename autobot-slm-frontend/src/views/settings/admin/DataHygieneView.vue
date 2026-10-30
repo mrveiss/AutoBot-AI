@@ -43,8 +43,8 @@ import {
   type OrphanResource,
   type OrphanStorageCandidate,
   type OrphanStorageListResponse,
-  type UserResponse,
 } from '@/composables/useAutobotApi'
+import type { SlmUserResponse } from '@/composables/useSlmUserApi'
 import { formatFileSize } from '@/utils/formatHelpers'
 import { formatRelativeTime } from '@/utils/dateUtils'
 import { createLogger } from '@/utils/debugUtils'
@@ -186,7 +186,7 @@ const resourceType = ref<ResourceType>('knowledge_fact')
 const orphans = ref<OrphanResource[]>([])
 const orphansLoading = ref(false)
 const orphansError = ref('')
-const users = ref<UserResponse[]>([])
+const users = ref<SlmUserResponse[]>([])
 const newOwnerByResource = ref<Record<string, string>>({})
 const repairingResource = ref<Record<string, boolean>>({})
 
