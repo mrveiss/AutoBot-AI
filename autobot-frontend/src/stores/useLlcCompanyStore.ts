@@ -9,6 +9,7 @@
 
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
+import { isHttpError } from '@autobot/ui'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -71,7 +72,7 @@ export const useLlcCompanyStore = defineStore('llcCompany', () => {
       const message = err instanceof Error ? err.message : ''
       // HTTP 503 = LLC data layer disabled in this deployment (no company mode).
       // Treat as "unavailable", not a user-facing error.
-      if (message.startsWith('HTTP 503')) {
+      if (isHttpError(err) && err.status === 503) {
         unavailable.value = true
       } else {
         error.value = message || 'Failed to load companies'
