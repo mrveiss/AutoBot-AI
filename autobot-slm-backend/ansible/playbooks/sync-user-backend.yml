@@ -39,7 +39,7 @@
 
     - name: Sync code using direct sudo rsync
       ansible.builtin.shell: |
-        sudo rsync -a --delete \
+        sudo rsync -a --chmod=o-w --delete \
           --exclude=.git \
           --exclude=__pycache__ \
           --exclude='*.pyc' \
@@ -51,7 +51,7 @@
           {{ local_autobot_root }}/autobot-backend/ \
           {{ backend_deployed_root }}/autobot-backend/
 
-        sudo rsync -a --delete \
+        sudo rsync -a --chmod=o-w --delete \
           --exclude=.git \
           --exclude=__pycache__ \
           --exclude='*.pyc' \
