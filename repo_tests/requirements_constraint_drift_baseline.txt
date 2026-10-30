@@ -40,7 +40,6 @@ autobot-backend/requirements.txt::apscheduler
 autobot-backend/requirements.txt::asyncssh
 autobot-backend/requirements.txt::beautifulsoup4
 autobot-backend/requirements.txt::celery
-autobot-backend/requirements.txt::fastapi
 autobot-backend/requirements.txt::greenlet
 autobot-backend/requirements.txt::httpx
 autobot-backend/requirements.txt::jsonschema
@@ -67,7 +66,6 @@ autobot-slm-backend/requirements.txt::aiofiles
 autobot-slm-backend/requirements.txt::aiohttp
 autobot-slm-backend/requirements.txt::aiosqlite
 autobot-slm-backend/requirements.txt::cryptography
-autobot-slm-backend/requirements.txt::fastapi
 autobot-slm-backend/requirements.txt::greenlet
 autobot-slm-backend/requirements.txt::httpx
 autobot-slm-backend/requirements.txt::jinja2
