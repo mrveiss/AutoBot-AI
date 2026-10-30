@@ -98,7 +98,6 @@ async def create_organization(
             slug=org_data.slug,
             description=org_data.description,
             settings=org_data.settings,
-            subscription_tier=org_data.subscription_tier,
             max_users=org_data.max_users,
         )
 
@@ -180,7 +179,6 @@ async def update_organization(
             name=org_data.name,
             description=org_data.description,
             settings=org_data.settings,
-            subscription_tier=org_data.subscription_tier,
             max_users=org_data.max_users,
         )
 
@@ -295,7 +293,6 @@ def _org_to_response(org) -> OrganizationResponse:
         slug=org.slug,
         description=org.description,
         settings=org.settings or {},
-        subscription_tier=org.subscription_tier or "free",
         max_users=org.max_users if org.max_users is not None else -1,
         is_active=org.is_active,
         created_at=org.created_at.isoformat() if org.created_at else "",
