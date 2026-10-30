@@ -16,7 +16,7 @@ import subprocess
 import yaml
 from repo_tests._paths import repo_root
 
-from autobot_shared.isolated_git import isolated_git_env
+from tools.lint._scan_helpers import tracked_paths
 
 _ROOT = repo_root()
 _INSTALL = (_ROOT / "install.sh").read_text(encoding="utf-8")
@@ -122,9 +122,7 @@ def _loose_copies(text: str) -> list[str]:
 
 
 def test_every_shell_rsync_sets_the_mode_or_is_exempt() -> None:
-    listed = subprocess.run(
-        ["git", "ls-files", "*.sh"], cwd=_ROOT, env=isolated_git_env(), capture_output=True, text=True, check=True
-    ).stdout.splitlines()
+    listed = tracked_paths(_ROOT, "*.sh")
     assert len(listed) > 50, f"git listed {len(listed)} shell files; this test reads nothing"
     loose = {rel for rel in listed if _loose_copies((_ROOT / rel).read_text(encoding="utf-8", errors="replace"))}
     assert loose == set(_SHELL_EXEMPT), loose ^ set(_SHELL_EXEMPT)
