@@ -32,3 +32,24 @@ def test_a_scan_rooted_inside_a_worktree_keeps_its_own_files(tmp_path: Path) -> 
 
 def test_a_name_that_merely_contains_a_skip_dir_is_not_excluded(tmp_path: Path) -> None:
     assert not _analyzer()._should_exclude(tmp_path / "object_model" / "binary_io.py", tmp_path)
+
+
+def test_the_test_name_globs_exclude_by_file_name(tmp_path: Path) -> None:
+    analyzer = _analyzer()
+    assert analyzer._should_exclude(tmp_path / "pkg" / "test_foo.py", tmp_path)
+    assert analyzer._should_exclude(tmp_path / "pkg" / "foo_test.py", tmp_path)
+    assert analyzer._should_exclude(tmp_path / "pkg" / "foo.pyc", tmp_path)
+
+
+def test_a_name_or_dir_that_merely_contains_the_glob_text_is_kept(tmp_path: Path) -> None:
+    analyzer = _analyzer()
+    assert not analyzer._should_exclude(tmp_path / "pkg" / "latest_foo.py", tmp_path)
+    assert not analyzer._should_exclude(tmp_path / "test_data" / "foo.py", tmp_path)
+
+
+def test_a_custom_pattern_with_a_slash_still_matches_the_path_text(tmp_path: Path) -> None:
+    analyzer = _analyzer()
+    analyzer.exclude_patterns = ["*/gen/x.py", "vendored"]
+    assert analyzer._should_exclude(tmp_path / "gen" / "x.py", tmp_path)
+    assert analyzer._should_exclude(tmp_path / "vendored_lib" / "y.py", tmp_path)
+    assert not analyzer._should_exclude(tmp_path / "gen" / "y.py", tmp_path)

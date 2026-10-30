@@ -21,8 +21,6 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 WORKTREES_DIR="${REPO_ROOT}/.worktrees"
 DRY_RUN=false
 BRANCHES_ONLY=false
-# Dev_new_gui: excluded from every deletion filter below -- temporary mirror
-# of main for the live updater; remove the exclusion with #16461.
 BASE_BRANCH="main"
 
 for arg in "$@"; do
@@ -158,7 +156,7 @@ fi
 
 # Delete local branches already merged into base branch
 merged_local=$(git -C "$REPO_ROOT" branch --merged "$BASE_BRANCH" \
-    | grep -v "${BASE_BRANCH}\|release\|master\|Dev_new_gui" \
+    | grep -v "${BASE_BRANCH}\|release\|master" \
     | sed 's/^[* +]*//' || true)
 
 if [ -n "$merged_local" ]; then
@@ -199,7 +197,7 @@ if ! git -C "$REPO_ROOT" fetch --prune 2>/dev/null; then
 fi
 
 # Check local branches with issue numbers for closed issues
-local_branches=$(git -C "$REPO_ROOT" branch | sed 's/^[* +]*//' | grep -v "${BASE_BRANCH}\|release\|master\|Dev_new_gui" || true)
+local_branches=$(git -C "$REPO_ROOT" branch | sed 's/^[* +]*//' | grep -v "${BASE_BRANCH}\|release\|master" || true)
 
 if [ -n "$local_branches" ]; then
     while IFS= read -r branch; do
@@ -234,7 +232,7 @@ fi
 
 # Check remote branches with issue numbers for closed issues
 remote_branches=$(git -C "$REPO_ROOT" branch -r | sed 's|^ *origin/||' \
-    | grep -v "HEAD\|${BASE_BRANCH}\|release\|master\|Dev_new_gui" || true)
+    | grep -v "HEAD\|${BASE_BRANCH}\|release\|master" || true)
 
 if [ -n "$remote_branches" ]; then
     while IFS= read -r branch; do
