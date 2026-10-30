@@ -204,10 +204,7 @@ const logger = createLogger('SystemKnowledgeManager');
 
 export default {
   name: 'SystemKnowledgeManager',
-  components: {
-    BaseButton,
-    BaseCard
-  },
+  components: { BaseButton, BaseCard, BaseSpinner },
 
   setup() {
     const { t } = useI18n();

@@ -36,6 +36,14 @@ _SKIPPED = re.compile(r"(/node_modules/|/dist/|\.test\.|\.spec\.|\.stories\.|/__
 _KEYFRAMES = re.compile(r"@keyframes\s+spin(?![\w-])")
 _UTILITY = re.compile(r"\b(?:animate-spin|fa-spin)(?![\w-])")
 _COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*|<!--).*$", re.M)
+_BLOCK_COMMENT = re.compile(r"/\*.*?\*/|<!--.*?-->", re.S)
+
+
+def _code_only(text: str) -> str:
+    """*text* with block comments blanked (newlines kept) and comment lines dropped."""
+    blanked = _BLOCK_COMMENT.sub(lambda m: re.sub(r"[^\n]", " ", m.group(0)), text)
+    return _COMMENT_LINE.sub("", blanked)
+
 
 # 30 and 321 measured on bb5f0299e0; 15 and 317 after the first batch.
 PINS = {"local_keyframes_spin": 15, "utility_spin_lines": 317}
@@ -54,7 +62,7 @@ def counts(base: Path) -> tuple[int, int]:
     """Return (local ``@keyframes spin``, ``animate-spin``/``fa-spin`` lines) under ``base``."""
     keyframes = utility = 0
     for path in _sources(base):
-        text = _COMMENT_LINE.sub("", path.read_text(encoding="utf-8"))
+        text = _code_only(path.read_text(encoding="utf-8"))
         keyframes += len(_KEYFRAMES.findall(text))
         utility += sum(1 for line in text.splitlines() if _UTILITY.search(line))
     return keyframes, utility
@@ -96,20 +104,41 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
         self._w(tmp_path, "node_modules/x/B.vue", "@keyframes spin { }\n")
         assert counts(tmp_path) == (0, 0)
 
+    def test_a_multiline_block_comment_and_a_trailing_comment_are_not_counted(self, tmp_path: Path) -> None:
+        self._w(tmp_path, "A.vue", '/*\n@keyframes spin {\n}\n  animate-spin\n*/\n<!--\n<i class="fa-spin"></i>\n-->\n')
+        self._w(tmp_path, "b.css", "/* @keyframes spin */\n")
+        assert counts(tmp_path) == (0, 0)
+
+    def test_the_pin_check_fails_on_a_planted_copy(self, tmp_path: Path) -> None:
+        self._w(tmp_path, "A.vue", '<style>@keyframes spin { }</style>\n<i class="fa-spin"></i>\n')
+        planted = counts(tmp_path)
+        assert planted == (1, 1)
+        assert violations(planted, {"local_keyframes_spin": 0, "utility_spin_lines": 1})  # over the pin
+        assert violations(planted, {"local_keyframes_spin": 1, "utility_spin_lines": 2})  # under: lower it
+        assert not violations(planted, {"local_keyframes_spin": 1, "utility_spin_lines": 1})
+
+
+def violations(now: tuple[int, int], pins: dict[str, int]) -> list[str]:
+    """What is wrong with the measured (keyframes, utility) counts against *pins*; empty when exact."""
+    found = []
+    for key, value in zip(("local_keyframes_spin", "utility_spin_lines"), now):
+        pinned = pins[key]
+        if value > pinned:
+            found.append(
+                f"{value} {key}, pin allows {pinned} (#19906). "
+                "Use BaseSpinner / BaseSkeleton from @autobot/ui, or BaseButton :loading in an action."
+            )
+        elif value < pinned:
+            found.append(f"{value} {key}, pin says {pinned}: lower PINS to {value} in this PR (#19906).")
+    return found
+
 
 def test_the_apps_do_not_hand_roll_more_spinners_than_pinned() -> None:
     root = repo_root()
     for rel in _ROOTS:
         assert (root / rel).is_dir(), f"{rel} has moved; this guard reads it by path"
-    now = [sum(c) for c in zip(*(counts(root / rel) for rel in _ROOTS))]
-    keyframes, utility = now
-    for key, value in (("local_keyframes_spin", keyframes), ("utility_spin_lines", utility)):
-        pinned = PINS[key]
-        assert value <= pinned, (
-            f"{value} {key}, pin allows {pinned} (#19906). "
-            "Use BaseSpinner / BaseSkeleton from @autobot/ui, or BaseButton :loading in an action."
-        )
-        assert value == pinned, f"{value} {key}, pin says {pinned}: lower PINS to {value} in this PR (#19906)."
+    now = tuple(sum(c) for c in zip(*(counts(root / rel) for rel in _ROOTS)))
+    assert not violations(now, PINS)
 
 
 def test_the_pin_was_not_raised_against_the_base() -> None:

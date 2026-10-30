@@ -27,6 +27,7 @@ withDefaults(defineProps<{ size?: SpinnerSize; label?: string }>(), { size: 'md'
 
 <style scoped>
 .aui-spinner {
+  position: relative;
   display: inline-block;
   flex-shrink: 0;
   box-sizing: border-box;
@@ -58,7 +59,7 @@ withDefaults(defineProps<{ size?: SpinnerSize; label?: string }>(), { size: 'md'
 
 @media (prefers-reduced-motion: reduce) {
   .aui-spinner {
-    animation-duration: 1.6s;
+    animation: none;
   }
 }
 </style>

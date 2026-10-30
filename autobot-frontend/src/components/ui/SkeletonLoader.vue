@@ -87,7 +87,14 @@ const containerClass = computed(() => ({
   'skeleton-rounded': props.rounded
 }))
 
-const LINE_WIDTHS: Record<string, string> = { full: '100%', '3/4': '75%', '1/2': '50%', '1/4': '25%' }
+const LINE_WIDTHS: Record<string, string> = {
+  full: '100%',
+  '3/4': '75%',
+  '2/3': '66.666667%',
+  '1/2': '50%',
+  '1/3': '33.333333%',
+  '1/4': '25%'
+}
 const lineWidth = computed(() => LINE_WIDTHS[props.width] ?? '100%')
 </script>
 
@@ -124,6 +131,23 @@ const lineWidth = computed(() => LINE_WIDTHS[props.width] ?? '100%')
 .skeleton-rounded .skeleton-file-icon,
 .skeleton-rounded .skeleton-stat-icon {
   border-radius: 50%;
+}
+
+/* The default fallback is the kit's BaseSkeleton: keep animated/theme/rounded in force on it. */
+.skeleton-custom :deep(.aui-skeleton) {
+  background: var(--skeleton-bg);
+}
+
+.skeleton-custom :deep(.aui-skeleton::after) {
+  background: linear-gradient(90deg, transparent, var(--skeleton-shimmer), transparent);
+}
+
+.skeleton-loader:not(.skeleton-animated) .skeleton-custom :deep(.aui-skeleton::after) {
+  display: none;
+}
+
+.skeleton-loader:not(.skeleton-rounded) .skeleton-custom :deep(.aui-skeleton) {
+  border-radius: 0;
 }
 
 /* Animation */

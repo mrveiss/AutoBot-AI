@@ -123,7 +123,7 @@ onMounted(() => metricsPoller.start(''))
           :key="i"
           class="bg-white rounded-lg shadow-xs border border-gray-200 p-4"
         >
-          <div class="flex items-center gap-3" aria-busy="true">
+          <div class="flex items-center gap-3" role="status" aria-busy="true" :aria-label="t('fleet.loadBalancingView.loadingNPUFleetData')">
             <div class="w-10 shrink-0"><BaseSkeleton shape="block" height="2.5rem" /></div>
             <div class="flex-1"><BaseSkeleton :lines="2" /></div>
           </div>
@@ -137,7 +137,7 @@ onMounted(() => metricsPoller.start(''))
           :key="i"
           class="bg-white rounded-lg shadow-xs border border-gray-200 p-4"
         >
-          <div aria-busy="true"><BaseSkeleton :lines="3" /></div>
+          <div role="status" aria-busy="true" :aria-label="t('fleet.loadBalancingView.loadingNPUFleetData')"><BaseSkeleton :lines="3" /></div>
         </div>
       </div>
     </template>
