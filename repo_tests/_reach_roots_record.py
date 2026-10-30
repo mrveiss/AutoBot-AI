@@ -122,6 +122,7 @@ REACH_ROOTS = {
     "repo_tests/frontend_local_formatter_ratchet_19680_test.py": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "repo_tests/frontend_single_api_client_12363_test.py": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "repo_tests/frontend_url_served_by_19326_test.py": (
+        ".env",
         "autobot-backend",
         "autobot-infrastructure",
         "autobot-npu-worker",

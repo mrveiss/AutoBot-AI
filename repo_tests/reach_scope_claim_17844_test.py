@@ -473,6 +473,7 @@ _DECLARED_SCOPES = {
         "autobot-infrastructure",
         "autobot-npu-worker",
         "scripts",
+        ".env",
     ),
     "kb-admin-read-bypass": ("autobot-backend/", "autobot_shared/"),
     "kb-construction-18122-scan": (
