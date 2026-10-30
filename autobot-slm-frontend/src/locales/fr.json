@@ -2628,6 +2628,18 @@
         "areYouSureYouWantToRevert": "Are you sure you want to revert this prompt to its default content?"
       },
       "sSOSettings": {
+        "confirmDeleteProvider": "Delete SSO provider \"{name}\"? This cannot be undone.",
+        "providerCreated": "Provider created successfully",
+        "providerDeleted": "Provider deleted successfully",
+        "providerDisabled": "Provider disabled",
+        "providerEnabled": "Provider enabled",
+        "providerNameRequired": "Provider name is required",
+        "providerUpdated": "Provider updated successfully",
+        "connectionTestFailed": "Connection test failed",
+        "failedToDeleteProvider": "Failed to delete provider",
+        "failedToLoadProviders": "Failed to load SSO providers",
+        "failedToSaveProvider": "Failed to save provider",
+        "failedToToggleProvider": "Failed to toggle provider",
         "aCSURLAssertionConsumerService": "ACS URL (Assertion Consumer Service)",
         "addProvider": "Add Provider",
         "addYourFirstProvider": "Add your first provider",
@@ -3362,9 +3374,12 @@
       "noRepositoriesRegisteredAdd": "No repositories registered. Add a skill repo to install community skills.",
       "skills": "Skills",
       "sync": "Synchroniser",
+      "tableLabel": "Skill repositories",
       "type": "Taper",
       "uRL": "URL"
     },
+    "unknownSkill": "inconnu",
+    "newDraftNotification": "AutoBot generated a new skill: \"{skillId}\" — pending approval",
     "errors": {
       "generic": "Skills request failed",
       "fetchReposFailed": "Failed to fetch repos",
