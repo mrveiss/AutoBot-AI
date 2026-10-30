@@ -61,7 +61,10 @@ def net(monkeypatch):
     session = MagicMock()
     session.request = AsyncMock(return_value=resp)
     mgr = HTTPClientManager()
-    monkeypatch.setattr(mgr, "get_session", AsyncMock(return_value=session))
+    # On the CLASS, not the instance (#19527): HTTPClientManager() is the process
+    # singleton, and undoing an instance setattr leaves the old bound method in its
+    # __dict__, where it shadows every later class-level patch in the same worker.
+    monkeypatch.setattr(HTTPClientManager, "get_session", AsyncMock(return_value=session))
     for attr in ("_active_requests", "_request_count", "_error_count"):
         monkeypatch.setattr(mgr, attr, getattr(mgr, attr))
     monkeypatch.setattr(al, "_ssot_service_urls", lambda: [INTERNAL])
@@ -359,13 +362,14 @@ async def test_ai_stack_refusal_makes_exactly_one_attempt(net, monkeypatch):
 
     def counting(self, *a, **k):
         real(self, *a, **k)
-        original = self.http_client.request
+        original = type(self.http_client).request
 
-        async def request(*args, **kwargs):
+        async def request(manager, *args, **kwargs):
             calls.append(args)
-            return await original(*args, **kwargs)
+            return await original(manager, *args, **kwargs)
 
-        monkeypatch.setattr(self.http_client, "request", request)
+        # The class, for the singleton reason given on the `net` fixture (#19527).
+        monkeypatch.setattr(type(self.http_client), "request", request)
 
     monkeypatch.setattr(ai_stack_client.AIStackClient, "__init__", counting)
     client = ai_stack_client.AIStackClient(base_url=PRIVATE, enabled=True)
