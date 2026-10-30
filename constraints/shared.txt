@@ -35,7 +35,11 @@ chromadb>=1.5.9,<2.0.0
 # Was also a stale 3.20.1 floor in ansible dependency_patching; that restatement is removed.
 filelock>=4.2.4
 
-# fastapi: the security floor (requires starlette >=0.52.1, the O(n^2) Range-header DoS fix).
+# starlette: the security floor for the O(n^2) Range-header DoS. fastapi itself only requires
+# starlette>=0.46.0, so its floor does not imply this one and it is declared here for every manifest.
+starlette>=1.9.0
+
+# fastapi: the shared floor.
 # Was restated in 11 places at two versions (>=0.147.0 in 8 manifests, ==0.147.0 in
 # requirements-ci/framework.txt, 0.147.0 in dependency_patching and an inline ansible spec), so every
 # dependabot bump left the others behind (#18060). 0.162.0 changes how an omitted bool Form field

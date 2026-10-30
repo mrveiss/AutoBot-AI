@@ -12,6 +12,7 @@
  */
 
 import { ref, onMounted } from 'vue'
+import { HttpError } from '@autobot/ui'
 import { throwIfFailed, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { createLogger } from '@/utils/debugUtils'
 import { slmApiClient } from '@/utils/ApiClient'
@@ -142,7 +143,7 @@ export function usePerformanceMonitoring(options: {
     const response = await slmApiClient.rawRequest(endpoint, options)
     if (!response.ok) {
       const body = await response.text().catch(() => '')
-      throw new Error(`HTTP ${response.status}: ${body || response.statusText}`)
+      throw new HttpError(response.status, body || response.statusText)
     }
     if (response.status === 204) {
       return undefined as unknown as T
