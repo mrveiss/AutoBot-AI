@@ -130,6 +130,7 @@ class _World:
     def request(self):
         return SimpleNamespace(
             app=SimpleNamespace(state=SimpleNamespace()),
+            method="POST",
             client=None,
             headers={},
             url=SimpleNamespace(path="/api/chat/sessions/x"),

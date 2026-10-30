@@ -19,25 +19,9 @@
         - nginx
       ignore_errors: true
 
-    - name: Install Node.js 20 for development
-      block:
-        - name: Add NodeSource GPG key
-          apt_key:
-            url: "{{ nodesource_base_url }}/gpgkey/nodesource.gpg.key"
-            state: present
-
-        - name: Add NodeSource repository
-          apt_repository:
-            repo: "deb {{ nodesource_base_url }}/node_{{ node_major }}.x {{ ansible_facts['distribution_release'] }} main"
-            state: present
-
-        - name: Install Node.js and npm
-          apt:
-            name:
-              - nodejs
-              - npm
-            state: present
-            update_cache: true
+    - name: Install Node.js
+      ansible.builtin.include_role:
+        name: nodejs
 
     - name: Copy frontend source files from deployment directory
       copy:
