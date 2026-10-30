@@ -84,7 +84,7 @@ import os
 from datetime import datetime
 
 class DocumentChangeDetector:
-    def __init__(self, sync_state_file="data/kb_sync_state.json"):
+    def __init__(self, sync_state_file="data/incremental_sync_state.json"):
         self.sync_state_file = sync_state_file
         self.last_sync_times = self.load_sync_state()
 
@@ -174,71 +174,17 @@ async def update_knowledge_base():
 
 ## Recommended Immediate Actions
 
-### 1. Create Sync Script
-```python
-# scripts/sync_kb_docs.py
-#!/usr/bin/env python3
-"""Sync documentation changes to knowledge base"""
+### 1. Run the Sync Script
+`scripts/sync_kb_docs.py` is the one command-line entry point to the backend's incremental sync (`autobot-backend/knowledge_sync_incremental.py`, #19701):
 
-import os
-import sys
-import asyncio
-import json
-from datetime import datetime
-
-# Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-from src.knowledge_base import KnowledgeBase
-
-async def sync_docs():
-    """Re-sync all documentation to ensure KB is current"""
-
-    print("=== Knowledge Base Documentation Sync ===")
-
-    # Clear existing project docs
-    kb = KnowledgeBase()
-    await kb.ainit()
-
-    # Get all current facts
-    all_facts = await kb.get_all_facts()
-    removed_count = 0
-
-    # Remove old project documentation facts
-    for fact in all_facts:
-        metadata = fact.get("metadata", {})
-        if metadata.get("source") in ["project-docs", "project-documentation"]:
-            await kb.delete_fact(fact["id"])
-            removed_count += 1
-
-    print(f"Removed {removed_count} outdated documentation entries")
-
-    # Re-add all current documentation
-    from populate_knowledge_base import add_documentation_to_kb  # the one populate entry point (#19339)
-    await add_documentation_to_kb()
-    success = True
-
-    if success:
-        # Save sync timestamp
-        sync_data = {
-            "last_sync": datetime.now().isoformat(),
-            "documents_synced": "all",
-            "method": "full-resync"
-        }
-
-        with open("data/kb_sync_state.json", "w") as f:
-            json.dump(sync_data, f, indent=2)
-
-        print("✅ Knowledge base documentation sync completed")
-        return True
-    else:
-        print("❌ Knowledge base documentation sync failed")
-        return False
-
-if __name__ == "__main__":
-    success = asyncio.run(sync_docs())
-    sys.exit(0 if success else 1)
+```bash
+python scripts/sync_kb_docs.py            # sync what changed
+python scripts/sync_kb_docs.py --dry-run  # list what would be indexed, removed and expired
+python scripts/sync_kb_docs.py --status   # show the recorded sync state
+python scripts/sync_kb_docs.py --watch    # sync now, then every --interval minutes
 ```
+
+The documentation set is defined once, in `autobot_shared/kb_doc_set.py`. The sync removes a file's facts only when the file is gone from a directory that still exists. A failed run exits non-zero and deletes nothing.
 
 ### 2. Add KB Status Endpoint
 ```python
@@ -248,7 +194,7 @@ async def get_kb_sync_status():
     """Get knowledge base synchronization status"""
     try:
         # Check if sync state file exists
-        sync_state_path = "data/kb_sync_state.json"
+        sync_state_path = "data/incremental_sync_state.json"
         if os.path.exists(sync_state_path):
             with open(sync_state_path, "r") as f:
                 sync_data = json.load(f)
