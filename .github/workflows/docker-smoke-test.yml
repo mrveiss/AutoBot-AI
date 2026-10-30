@@ -109,86 +109,19 @@ jobs:
       - name: Free disk space
         uses: ./.github/actions/free-disk-space
         with:
-          min-free-gb: '15'  # Increased from 10GB due to MVA-2869
+          # The run itself consumes ~17 GB (images, layer cache, service images);
+          # 30 leaves headroom, and the toolchain removal runs only below it (#19527).
+          min-free-gb: '30'
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4
-
-      - name: Cache Docker layers
-        # #19308: keyed on what the image layers are built from, not on the commit. A
-        # per-commit key saved a new ~1.2 GB entry on every run and pushed the repo's
-        # Actions cache over its 10 GB limit, evicting the small caches CI depends on. An
-        # exact hit skips the save, so a commit that changes no dependency adds nothing.
-        id: buildx-cache
-        uses: actions/cache/restore@v6
         with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ hashFiles('docker/**', 'requirements*.txt', 'constraints/**', 'autobot-backend/requirements*.txt', 'autobot-slm-backend/requirements*.txt', 'package-lock.json', 'autobot-frontend/package-lock.json', 'autobot-slm-frontend/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
+          # #19527: tearing the builder down cost 30-60s per run on a runner that is
+          # discarded anyway. A persistent self-hosted runner still cleans up.
+          cleanup: ${{ runner.environment == 'self-hosted' }}
 
       - name: Create .env from .env.example
         run: cp .env.example .env
-
-      - name: Ensure cache directory exists
-        run: mkdir -p /tmp/.buildx-cache
-
-      - name: Build images with layer cache
-        run: |
-          echo "=== Building backend image ==="
-          docker buildx build \
-            --cache-from type=local,src=/tmp/.buildx-cache \
-            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
-            --file docker/backend/Dockerfile \
-            --tag autobot/backend:latest \
-            --load \
-            .
-          echo "Backend build complete. Disk space:"
-          df -h / | grep -v Filesystem
-
-          echo ""
-          echo "=== Building SLM image ==="
-          docker buildx build \
-            --cache-from type=local,src=/tmp/.buildx-cache \
-            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
-            --file docker/slm/Dockerfile \
-            --tag autobot/slm:latest \
-            --load \
-            .
-          echo "SLM build complete. Disk space:"
-          df -h / | grep -v Filesystem
-
-          echo ""
-          echo "=== Building frontend image ==="
-          docker buildx build \
-            --cache-from type=local,src=/tmp/.buildx-cache \
-            --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
-            --file docker/frontend/Dockerfile \
-            --tag autobot/frontend:latest \
-            --load \
-            .
-          echo "Frontend build complete. Disk space:"
-          df -h / | grep -v Filesystem
-
-          echo ""
-          echo "=== Rotating cache ==="
-          # Rotate cache so next run gets the freshest layers (mode=min keeps only
-          # final exported layers; mode=max kept all intermediate layers and exhausted disk)
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
-
-          echo "Final disk space:"
-          df -h
-
-
-      # #19308 review: restored everywhere, saved only from main. A save from every PR -- each
-      # dependency PR has a new key -- brought the eviction back under dependabot load.
-      - name: Save Docker layers (main only)
-        if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'schedule') && steps.buildx-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ hashFiles('docker/**', 'requirements*.txt', 'constraints/**', 'autobot-backend/requirements*.txt', 'autobot-slm-backend/requirements*.txt', 'package-lock.json', 'autobot-frontend/package-lock.json', 'autobot-slm-frontend/package-lock.json') }}
 
       - name: Pick the management network range (#16833)
         # docker-compose.yml has no default autobot-mgmt range; this is the pick
@@ -209,6 +142,15 @@ jobs:
             echo "::add-mask::${value}"
             echo "${key}=${value}" >> "$GITHUB_ENV"
           done
+
+      - name: Build images
+        # Concurrent bake with a per-image layer cache, pulling the service images
+        # meanwhile -- which is why the two compose-environment steps above now
+        # run first (#19527).
+        uses: ./.github/actions/build-smoke-images
+        with:
+          group: smoke
+          cache-key-prefix: buildx-bake-smoke
 
       - name: Start services with Docker Compose
         # GH#9905: no manual secret step — the stack auto-provisions unique

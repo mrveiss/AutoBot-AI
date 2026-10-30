@@ -469,6 +469,16 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "The scanned .ts files are every non-test file under two app trees; no reference count co-moves with it.",
     ),
+    "duplicate-type-names-ts-files-scanned-14908": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Every non-test .ts file under two app trees and the kit; no reference count co-moves with it.",
+    ),
+    "duplicate-util-filenames-scanned-14908": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test .ts/.js files under the two apps' src/utils; the test-file share and other trees drift on their own.",
+    ),
 }
 
 #: Rows whose name sorts n-z live in the sibling module (600-line ceiling); one table, one name.

@@ -38,7 +38,7 @@
           <span class="item-desc">{{ wf.description }}</span>
           <div class="item-meta">
             <span><Icon name="list-ol" /> {{ $t('workflow.history.stepsCount', { count: wf.total_steps }) }}</span>
-            <span><Icon name="clock" /> {{ formatDuration(wf) }}</span>
+            <span><Icon name="clock" /> {{ workflowDuration(wf) }}</span>
             <span><Icon name="calendar" /> {{ formatDate(wf.created_at) }}</span>
           </div>
         </div>
@@ -72,6 +72,7 @@
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue';
+import { formatDuration } from '@/utils/formatHelpers';
 import type { ActiveWorkflow } from '@/composables/useWorkflowBuilder';
 
 const props = defineProps<{
@@ -168,13 +169,12 @@ function getSkippedCount(wf: ActiveWorkflow): number {
   return wf.steps.filter(s => s.status === 'skipped').length;
 }
 
-function formatDuration(wf: ActiveWorkflow): string {
+// Whole seconds, floored, as 'Ns' or 'Nm Ns'; '-' unless the run has both a start and an end.
+const DURATION_FORMAT = { style: 'msMinutesSeconds', rounding: 'floor', nullText: '-' } as const
+
+function workflowDuration(wf: ActiveWorkflow): string {
   if (!wf.started_at || !wf.completed_at) return '-';
-  const ms = new Date(wf.completed_at).getTime() - new Date(wf.started_at).getTime();
-  const sec = Math.floor(ms / 1000);
-  if (sec < 60) return `${sec}s`;
-  const min = Math.floor(sec / 60);
-  return `${min}m ${sec % 60}s`;
+  return formatDuration(wf.started_at, wf.completed_at, DURATION_FORMAT);
 }
 
 function formatDate(date?: string): string {
