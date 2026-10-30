@@ -381,7 +381,7 @@ const downloadImage = (url: string, index: number) => {
 .image-lightbox {
   position: fixed;
   inset: 0;
-  z-index: 9999;
+  z-index: var(--z-maximum);
   background: rgba(0, 0, 0, 0.85);
   display: flex;
   align-items: center;
