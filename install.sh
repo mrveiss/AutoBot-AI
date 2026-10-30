@@ -268,11 +268,9 @@ detect_local_ip() {
             echo -e "    ${CYAN}[$((i+1))]${NC} ${ifaces[$i]}: ${ips[$i]}" >&2
         done
         local choice=""  # /dev/tty, never stdin: under curl | bash stdin is the script itself (#17929)
-        prompt_from_tty choice "  Select interface for AutoBot [1-${#ips[@]}]: " || fatal "No terminal to choose an interface: rerun with AUTOBOT_INSTALL_INTERFACE=<name> (one of: ${ifaces[*]})."
+        prompt_from_tty choice "  Select interface for AutoBot [1-${#ips[@]}]: " || fatal "No terminal to choose an interface. sudo drops variables set before it, so pass the choice after it: curl -fsSL <installer-url> | sudo AUTOBOT_INSTALL_INTERFACE=<name> bash (one of: ${ifaces[*]}), or | sudo bash -s -- --ip=<address>."
         [[ "${choice}" =~ ^[0-9]+$ ]] || fatal "Invalid selection"; choice=$((choice - 1))
-        if [[ $choice -lt 0 || $choice -ge ${#ips[@]} ]]; then
-            fatal "Invalid selection"
-        fi
+        [[ $choice -ge 0 && $choice -lt ${#ips[@]} ]] || fatal "Invalid selection"
         detected_ip="${ips[$choice]}"
         success "Using ${ifaces[$choice]}: ${detected_ip}" >&2
     fi
@@ -502,6 +500,7 @@ system_setup() {
         success "  User '${AUTOBOT_USER}' already exists"
     fi
 
+    local fresh_base=false; [[ -d "${AUTOBOT_BASE}" ]] || fresh_base=true
     run_ok "Creating directory structure" \
         mkdir -p \
             "${AUTOBOT_BASE}" \
@@ -513,6 +512,7 @@ system_setup() {
             /etc/autobot \
             /etc/autobot/ssh
 
+    if ${fresh_base} && command -v setfacl >/dev/null 2>&1; then setfacl -R -b -k "${AUTOBOT_BASE}" || warn "Could not clear inherited ACLs on ${AUTOBOT_BASE}"; fi  # #19503: a parent's default ACL overrides the umask; only a tree created just now
     chown -R "${AUTOBOT_USER}:${AUTOBOT_USER}" "${AUTOBOT_BASE}"
     success "  Directory ownership set"
 
@@ -593,7 +593,7 @@ code_deployment() {
     for dir in "${CRITICAL_DIRS[@]}"; do
         if [[ -d "${CODE_SOURCE}/${dir}" ]]; then
             run_ok "Copying ${dir} to ${AUTOBOT_BASE}/${dir}" \
-                sudo -u "${AUTOBOT_USER}" rsync -a --delete "${CODE_SOURCE}/${dir}/" "${AUTOBOT_BASE}/${dir}/"
+                sudo -u "${AUTOBOT_USER}" rsync -a --chmod=o-w --delete "${CODE_SOURCE}/${dir}/" "${AUTOBOT_BASE}/${dir}/"
             if [[ ! -d "${AUTOBOT_BASE}/${dir}" ]]; then
                 fatal "Distribution of ${dir} failed — destination directory not created"
             fi
@@ -713,10 +713,9 @@ EOF
     chown "${AUTOBOT_USER}:${AUTOBOT_USER}" /tmp/ansible_fact_cache /tmp/ansible-retry /tmp/.ansible-cp
 
     info "Running Ansible deployment (this may take several minutes)..."
-    # #6600: keep `provision` so backend role applies to the SLM manager node in
-    # single-host mode. Skip only `seed` — fleet seeding requires SLM DB
-    # rows that don't exist yet on a fresh install.
-    log "  Playbook: deploy-slm-manager.yml --skip-tags seed"
+    # #6600: keep `provision` so backend role applies to the SLM manager node in single-host mode. Skip only
+    # `seed` — fleet seeding requires SLM DB rows absent on a fresh install. #19867: the re-run hint shares this set.
+    local skip_tags="seed"; log "  Playbook: deploy-slm-manager.yml --skip-tags ${skip_tags}"
     info "  Live progress below — full output also in ${LOG_FILE}"
     echo
 
@@ -726,7 +725,7 @@ EOF
     ansible-playbook \
         -i "${inventory}" \
         playbooks/deploy-slm-manager.yml \
-        --skip-tags "seed" \
+        --skip-tags "${skip_tags}" \
         -e "@${vars_file}" \
         -e "target_host=localhost" \
         2>&1 | tee -a "${LOG_FILE}" | \
@@ -741,7 +740,7 @@ EOF
     else
         error "Ansible deployment failed (exit ${_ansible_exit})"
         error "Check ${LOG_FILE} for details"
-        error "Re-run: cd ${ansible_dir} && ansible-playbook -i ${inventory} playbooks/deploy-slm-manager.yml --skip-tags seed,provision"
+        error "Re-run: cd ${ansible_dir} && ansible-playbook -i ${inventory} playbooks/deploy-slm-manager.yml --skip-tags ${skip_tags}"
         exit 1
     fi
 }
@@ -1064,6 +1063,11 @@ prompt_config() {
 # Distribution Validation (#4130)
 # =============================================================================
 
+report_world_writable_code() {
+    local found; found="$(find "${CODE_SOURCE}" "${CRITICAL_DIRS[@]/#/${AUTOBOT_BASE}/}" -xdev \( -type d -o -type f \) -perm -0002 -print 2>/dev/null | wc -l)" || true  # #19503: read-only, approval changes a live tree (#17038); a missing dir must not end --validate
+    [[ "${found}" -eq 0 ]] || warn "${found} world-writable paths in the code tree: any local account can change what root runs. List them: find ${CODE_SOURCE} ${AUTOBOT_BASE} -xdev -perm -0002"
+}
+
 validate_distributions() {
     # Verify all critical service directories are present in AUTOBOT_BASE.
     # Called standalone via --validate or at the end of code_deployment().
@@ -1104,7 +1108,7 @@ parse_args() {
             --yes|-y)         CONFIRM_YES=true;        shift ;;
             --branch=*)       GIT_BRANCH="${1#*=}";    shift ;;
             --admin-pass-file=*) read_admin_pass_file "${1#*=}"; shift ;;
-            --admin-pass=*)   arg_error "--admin-pass= puts the password on the command line, readable by every local user (#19236). Use --admin-pass-file=PATH, AUTOBOT_SLM_ADMIN_PASSWORD, or the prompt." ;;
+            --admin-pass=*)   arg_error "--admin-pass= puts the password on the command line, readable by every local user (#19236). Use --admin-pass-file=PATH, SLM_ADMIN_PASSWORD, or the prompt." ;;
             --ip=*)           OVERRIDE_IP="${1#*=}";    shift ;;
             --rotate-secrets) ROTATE_SECRETS=true;     shift ;;
             --help|-h)        print_usage; exit 0 ;;
@@ -1143,11 +1147,7 @@ main() {
         exit 0
     fi
 
-    if ${VALIDATE}; then
-        _log_init
-        validate_distributions
-        exit 0
-    fi
+    if ${VALIDATE}; then _log_init; validate_distributions; report_world_writable_code; exit 0; fi
 
     _log_init
     # #19236: one owner-only temp dir for the run, removed however it ends -- exit, fatal, Ctrl-C.

@@ -165,6 +165,13 @@ Environment variables skip the matching interactive prompt:
 | `OVERRIDE_IP=<ip>` | Skip IP detection and use this address |
 | `NETWORK_SUBNET=<cidr>` / `NETWORK_GATEWAY=<ip>` | Use this network instead of detecting it. The subnet is the source the firewall rules allow, so if it cannot be detected the installer stops and asks for these instead of guessing |
 
+**Headless host with more than one interface** (a Docker bridge counts): the installer cannot show its menu without a terminal, and `sudo` drops variables set before it. Pass the choice after `sudo`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mrveiss/AutoBot-AI/main/install.sh | sudo AUTOBOT_INSTALL_INTERFACE=eth0 bash
+curl -fsSL https://raw.githubusercontent.com/mrveiss/AutoBot-AI/main/install.sh | sudo bash -s -- --ip=<address>
+```
+
 ### Log Files
 
 All output is logged to `/var/log/autobot/install-<timestamp>.log`.
@@ -341,6 +348,7 @@ login the setup wizard launches automatically and guides you through:
 | Test Connections | Verify SSH connectivity to every node |
 | Enroll Agents | Install the AutoBot agent on each node |
 | Assign Roles | Choose which role(s) each node performs |
+| API Keys | Configure the secrets the fleet needs |
 | Provision Fleet | Run Ansible provisioning across the fleet |
 | Verify Health | Confirm all nodes and required roles are healthy |
 | Complete | Setup finished — redirects to Fleet Overview |
