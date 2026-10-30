@@ -89,22 +89,33 @@ async def _record_event(
 
 
 def _cost_of(model: str, agent_id: str, tokens_in: int, tokens_out: int) -> Decimal:
-    """Dollar cost of one call; ``UnpricedModel`` if it cannot be priced (#15860, #16230, #16316)."""
+    """Dollar cost of one call; ``UnpricedModel`` if it cannot be priced (moved out of ``ingest_cost_event``)."""
     if is_local_model(model):
-        # #16316: free by construction -- a local model never appears in a hosted-API
-        # catalogue, and that absence is not "nobody has priced this yet". Checked before
-        # the cache, so a cold snapshot can never affect a local model's cost.
+        # #16316: free by construction -- a local model was never going to
+        # appear in a hosted-API price catalogue, and that absence is not
+        # the same fact as "nobody has priced this yet". Checked before the
+        # cache is consulted at all, so a cold or unpopulated snapshot can
+        # never affect a local model's cost.
         return Decimal("0")
     try:
         pricing = get_cached_price(model)
     except PricingCacheCold:
-        # #16316: the mirror has not completed its first read yet. "Cannot compute now"
-        # and "genuinely unpriced" both mean refuse, do not guess; only the log differs.
-        logger.warning("ingest_cost_event: pricing cache cold for model=%r agent=%s -- refusing", model, agent_id)
+        # #16316: the local mirror has not completed its first read from
+        # Redis yet. "Cannot compute right now" and "genuinely unpriced"
+        # both mean the same thing to a caller -- refuse, do not guess --
+        # so both raise the same exception; only the log line differs,
+        # because this one is transient and the other is not.
+        logger.warning(
+            "ingest_cost_event: pricing cache cold for model=%r agent=%s -- refusing rather than guessing",
+            model,
+            agent_id,
+        )
         raise UnpricedModel(model=model, agent_id=agent_id) from None
     if pricing is None:
-        # #15860: this used to charge zero, and 0 and "could not be computed" are the same
-        # number of which only one is a fact -- dollar budgets went silently inapplicable.
+        # #15860: this used to log and charge zero. A cost of 0 and a cost
+        # that could not be computed are the same number, and only one of
+        # them is a fact -- so an unpriced model made dollar budgets
+        # silently inapplicable rather than visibly broken.
         raise UnpricedModel(model=model, agent_id=agent_id)
     return Decimal(str((tokens_in * pricing.input_per_1m + tokens_out * pricing.output_per_1m) / 1_000_000))
 

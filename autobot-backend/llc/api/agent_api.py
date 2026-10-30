@@ -29,6 +29,7 @@ from autobot_shared.logging_manager import get_logger
 from security.upload_filename_policy import require_safe_upload
 
 from ._common import agent_context, agent_node_uuid, assert_item_in_company
+from ._peer_search import fetch_peer_rows
 
 logger = get_logger(__name__)
 
@@ -170,14 +171,20 @@ class CostEvent(BaseModel):
 
 @router.post("/cost-events")
 async def ingest_cost_event(body: CostEvent, request: Request) -> Dict[str, Any]:
-    """Record an agent's token cost against its budget and, per event, its work item (#15859, #16016).
+    """Record an agent's token cost against its budget (#15859).
 
-    This used to return ``{"recorded": True}`` without calling anything, so a budget
-    was never charged and the hard stop could not fire. ``BudgetExhausted`` is 402,
-    not swallowed: exceeding the limit is what stops the agent. ``UnpricedModel`` is
-    422 -- well-formed, but charging zero is what #15860 was. A ``work_item_id`` that
-    is unknown or in another company is 404 and charges nothing, so a ``200`` means
-    the cost landed on the item named.
+    This used to return ``{"recorded": True}`` without calling anything. A
+    budget that is never charged is never exceeded, so the hard stop could not
+    fire -- and the response carried no marker, so a caller could not tell
+    "recorded" from "discarded".
+
+    ``BudgetExhausted`` is propagated as 402 rather than swallowed: the whole
+    point of ingesting the event is that exceeding the limit stops the agent.
+    ``UnpricedModel`` is 422 -- the event is well-formed but its cost cannot be
+    computed, and charging zero is what #15860 was.
+
+    A ``work_item_id`` that is unknown, or belongs to another company, is 404 and
+    charges nothing: a ``200`` means the cost landed on the item named (#16016).
     """
     from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
@@ -479,43 +486,20 @@ async def search_peer_agents(
     """
     agent_id, company_id = agent_context(request)
     try:
-        from autobot_shared.logging_manager import get_logger
-        from knowledge import get_knowledge_base
-
-        from ..kb import AgentCapabilityIndexer
-
-        logger_inner = get_logger(__name__)
-        indexer = AgentCapabilityIndexer()
-        kb = await get_knowledge_base()
-        collection_name = indexer._collection_name(company_id)
-
-        try:
-            collection = await kb._async_chroma_client.get_collection(collection_name)
-        except Exception:
+        rows = await fetch_peer_rows(company_id, q, limit)
+        if rows is None:
             return {"agents": [], "count": 0, "query": q}
-
-        results = await collection.query(
-            query_texts=[q],
-            n_results=min(limit, 50),
-            include=["documents", "metadatas"],
-        )
-
-        agents = []
-        if results.get("ids") and len(results["ids"]) > 0:
-            docs = results.get("documents", [[]])[0] if results.get("documents") else []
-            metadatas = results.get("metadatas", [[]])[0] if results.get("metadatas") else []
-            for idx, (doc_id, metadata) in enumerate(zip(results["ids"][0], metadatas)):
-                agents.append(
-                    PeerAgent(
-                        agent_id=metadata.get("agent_id", ""),
-                        agent_name=metadata.get("agent_name", ""),
-                        title=metadata.get("title", ""),
-                        role=metadata.get("role", ""),
-                        capabilities=docs[idx] if idx < len(docs) else "",
-                        manager_name=metadata.get("manager_name"),
-                    )
-                )
-
+        agents = [
+            PeerAgent(
+                agent_id=metadata.get("agent_id", ""),
+                agent_name=metadata.get("agent_name", ""),
+                title=metadata.get("title", ""),
+                role=metadata.get("role", ""),
+                capabilities=doc,
+                manager_name=metadata.get("manager_name"),
+            )
+            for metadata, doc in rows
+        ]
         return {"agents": agents, "count": len(agents), "query": q, "querying_agent": agent_id}
     except Exception as e:
         from autobot_shared.logging_manager import get_logger
