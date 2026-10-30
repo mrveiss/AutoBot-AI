@@ -87,7 +87,7 @@ import { BaseModal } from '@autobot/ui'
 import { useApiClient } from '@/plugins/api'
 import { useKanbanBoardsApi, type BoardSummary } from '@/composables/llc/useKanbanBoardsApi'
 import { createLogger } from '@/utils/debugUtils'
-import { formatDate as fmtDate } from '@/utils/formatHelpers'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 interface ProjectOption {
   id: string
@@ -109,9 +109,7 @@ const selectedProjectId = ref('')
 const creating = ref(false)
 const createError = ref('')
 
-function formatDate(value: string): string {
-  return fmtDate(value) || '—'
-}
+const formatDate = createDateFormatter({ kind: 'date', emptyText: '—', invalidText: '—' })
 
 function openBoard(b: BoardSummary): void {
   const name = b.type === 'sprint' ? 'llc-sprint-board' : 'llc-kanban-board'

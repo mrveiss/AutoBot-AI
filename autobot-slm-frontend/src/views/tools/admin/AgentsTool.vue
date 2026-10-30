@@ -93,10 +93,6 @@ function getStatusDot(status: string): string {
   }
 }
 
-function formatDate(dateStr: string): string {
-  return formatDateTime(dateStr)
-}
-
 async function loadAgents(): Promise<void> {
   loading.value = true
   error.value = null
@@ -347,7 +343,7 @@ onMounted(() => refreshPoller.start(''))
 
         <!-- Last Activity -->
         <div class="flex items-center justify-between text-xs text-gray-500 pt-4 border-t border-gray-200">
-          <span>{{ $t('tools.admin.agentsTool.lastActivityValue0', { value0: formatDate(agent.last_activity) }) }}</span>
+          <span>{{ $t('tools.admin.agentsTool.lastActivityValue0', { value0: formatDateTime(agent.last_activity) }) }}</span>
         </div>
 
         <!-- Actions -->

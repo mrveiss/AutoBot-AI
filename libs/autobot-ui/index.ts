@@ -146,6 +146,16 @@ export type {
 export type { DurationStyle } from './src/utils/duration'
 export { formatDuration, formatUptime, formatFileSize, formatBytes } from './src/utils/format'
 export type { FormatDurationOptions, FormatUptimeOptions, FormatBytesOptions } from './src/utils/format'
+export {
+  formatDate,
+  formatTime,
+  formatDateTime,
+  formatISOString,
+  formatTimeAgo,
+  createDateFormatter,
+  DEFAULT_DATE_TIME_INTL
+} from './src/utils/format'
+export type { DateInput, DateFormatterOptions } from './src/utils/format'
 
 // Scoped console logger (#14908) — canonical LogLevel/log/createLogger; both
 // apps' utils/debugUtils.ts re-export these rather than re-declaring them.
