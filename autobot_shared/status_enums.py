@@ -150,15 +150,12 @@ class Severity(Enum):
         than the enum, so #14956 adding vocabulary members did not silently
         add three always-zero keys to a shipped API response.
         """
-        return (
-            cls.UNKNOWN,
-            cls.INFO,
-            cls.MINIMAL,
-            cls.LOW,
-            cls.MEDIUM,
-            cls.HIGH,
-            cls.CRITICAL,
-        )
+        return (cls.UNKNOWN, cls.INFO, cls.MINIMAL, cls.LOW, cls.MEDIUM, cls.HIGH, cls.CRITICAL)
+
+    @classmethod
+    def triage_ladder(cls) -> tuple["Severity", ...]:
+        """LOW, MEDIUM, HIGH ascending; endpoints derive "high, medium, low" listings from it, reversed (#19336)."""
+        return (cls.LOW, cls.MEDIUM, cls.HIGH)
 
     @classmethod
     def finding_ladder(cls) -> tuple["Severity", ...]:

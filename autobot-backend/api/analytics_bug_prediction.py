@@ -42,6 +42,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.git_probe import start_git
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
+from autobot_shared.status_enums import Severity
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_5_MINUTES
 from tasks.analytics_tasks import run_bug_prediction_analysis
@@ -652,10 +653,9 @@ def _calculate_risk_level_trends(history: List[Dict[str, Any]]) -> Dict[str, Any
     if not history:
         return {}
 
-    risk_levels = ["critical", "high", "medium", "low", "minimal"]
     trends = {}
 
-    for level in risk_levels:
+    for level in [s.value for s in (Severity.CRITICAL, *reversed(Severity.triage_ladder()), Severity.MINIMAL)]:
         counts = [h.get(f"{level}_count", h.get("risk_distribution", {}).get(level, 0)) for h in history]
         if counts:
             avg = sum(counts) / len(counts)
