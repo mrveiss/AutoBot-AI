@@ -139,7 +139,7 @@ backend_slm_auth_tok: ""
 
 # LLM Configuration (Issue #858)
 backend_llm_provider: "ollama"  # Default LLM provider for all agents
-backend_llm_endpoint: "http://127.0.0.1:11434"  # Default Ollama endpoint
+backend_llm_endpoint: "http://{{ backend_ollama_host | default('127.0.0.1') }}:{{ backend_ollama_port | default(11434) }}"  # #19861: backend_ollama_host from the wizard
 backend_llm_model: "qwen3.5:9b"  # Default LLM model
 
 # Browser Worker connection (Playwright VM — leave empty for single-host deploys)
