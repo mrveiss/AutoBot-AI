@@ -235,7 +235,7 @@
       shell: >-
         git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} diff --name-only
         {{ deps_diff_base }} HEAD
-        -- '*/requirements.txt' 'autobot_shared/pyproject.toml'
+        -- '*/requirements.txt' 'requirements.txt' 'constraints/' 'autobot_shared/pyproject.toml'
       when: deps_diff_base | length > 0
       register: python_deps_diff
       changed_when: false
@@ -600,6 +600,17 @@
       tags: [slm, slm-backend, migrate]
 
     # --- Dependency install (#1603) ---
+    # #19973: pip stops at a husk (uninstall-no-record-file) and cannot reach the update that fixes it.
+    - name: "[PLAY 1] SLM | Clear venv husks before pip (#17339)"
+      ansible.builtin.include_tasks:
+        file: ../roles/_shared/tasks/clear_venv_husks.yml
+        apply:
+          tags: [slm, deps]
+      vars:
+        husk_venv_dir: "{{ autobot.base_dir }}/autobot-slm-backend/venv"
+      when: hostvars['localhost']['python_deps_changed'] | bool
+      tags: [slm, deps]
+
     - name: "[PLAY 1] SLM | Install Python dependencies"
       command:
         cmd: >-
@@ -1009,6 +1020,19 @@
       become: true
       when: "'backend' in group_names"
       tags: [backend]
+
+    # #19973: pip stops at a husk (uninstall-no-record-file) and cannot reach the update that fixes it.
+    - name: "[PLAY 2] Backend | Clear venv husks before pip (#17339)"
+      ansible.builtin.include_tasks:
+        file: ../roles/_shared/tasks/clear_venv_husks.yml
+        apply:
+          tags: [backend, deps]
+      vars:
+        husk_venv_dir: "{{ autobot.base_dir }}/autobot-backend/venv"
+      when:
+        - "'backend' in group_names"
+        - hostvars['localhost']['python_deps_changed'] | bool
+      tags: [backend, deps]
 
     - name: "[PLAY 2] Backend | Install Python dependencies"
       command:

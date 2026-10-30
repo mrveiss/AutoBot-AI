@@ -416,6 +416,8 @@
         recursive: true
         owner: false
         group: false
+        rsync_opts:
+          - "--chmod=o-w"  # #19503
       delegate_to: localhost
 
     - name: Set ownership of source code for NPU Worker
@@ -613,6 +615,8 @@
         recursive: true
         owner: false
         group: false
+        rsync_opts:
+          - "--chmod=o-w"  # #19503
       delegate_to: localhost
 
     - name: Set ownership of source code
@@ -821,6 +825,8 @@
         recursive: true
         owner: false
         group: false
+        rsync_opts:
+          - "--chmod=o-w"  # #19503
       delegate_to: localhost
 
     - name: Set ownership of source code
