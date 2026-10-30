@@ -270,15 +270,18 @@
 
     # #20002: the Python half of the same recovery. The marker advances even when a run's pip step then
     # fails, so the bump leaves the diff window and no later run installs it. Only "Would install" counts:
-    # a dry run that fails (no network, say) must not make an offline host's update depend on pip.
+    # a dry run that fails (no network, say) must not make an offline host's update depend on pip. It runs
+    # from the component's directory because a manifest's editable is relative (#15733), and that editable
+    # is always listed, so it is dropped or a healthy host would run pip on every update.
     # Reaches the venvs on this controller; a fleet node's venv still relies on the diff.
     - name: "[PRE-FLIGHT] Check the installed venvs satisfy their manifests (#20002)"
       ansible.builtin.shell: >-
         for c in autobot-slm-backend autobot-backend; do
         [ -x "{{ autobot.base_dir }}/$c/venv/bin/pip" ] || continue;
+        cd "{{ git_repo_root }}/$c" || continue;
         "{{ autobot.base_dir }}/$c/venv/bin/pip" install --dry-run --disable-pip-version-check --retries 0
-        -r "{{ git_repo_root }}/$c/requirements.txt"
-        -c "{{ git_repo_root }}/constraints/shared.txt" 2>/dev/null;
+        -r requirements.txt 2>/dev/null
+        | grep '^Would install' | sed -E 's/ autobot[_-]shared-[^ ]+//' | grep -v '^Would install$';
         done
       register: python_tree_check
       changed_when: false

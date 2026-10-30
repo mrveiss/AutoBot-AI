@@ -41,6 +41,46 @@ def test_the_python_flag_also_asks_the_installed_venv() -> None:
     assert "'Would install' in" in expression and "python_tree_check" in expression
 
 
+def _run_shipped_check(tmp_path, pip_body: str, manifest_cwd_needs_editable: bool = True) -> str:
+    """The shipped shell over fake venvs whose pip behaves like the real one on a relative editable."""
+    base, repo = tmp_path / "base", tmp_path / "repo"
+    (repo / "autobot_shared").mkdir(parents=True)
+    for component in ("autobot-slm-backend", "autobot-backend"):
+        (repo / component).mkdir()
+        (repo / component / "requirements.txt").write_text("-e ../autobot_shared\n", encoding="utf-8")
+        pip = base / component / "venv" / "bin" / "pip"
+        pip.parent.mkdir(parents=True)
+        guard = '[ -d ../autobot_shared ] || { echo "not a valid editable" >&2; exit 1; }\n'
+        pip.write_text("#!/bin/sh\n" + (guard if manifest_cwd_needs_editable else "") + pip_body, encoding="utf-8")
+        pip.chmod(0o755)
+    task = next(t for t in _preflight() if "installed venvs satisfy" in str(t.get("name")))
+    script = task["ansible.builtin.shell"].replace("{{ autobot.base_dir }}", str(base))
+    script = script.replace("{{ git_repo_root }}", str(repo))
+    done = subprocess.run(["bash", "-c", script], capture_output=True, text=True, cwd=tmp_path, timeout=30)
+    return done.stdout
+
+
+def test_an_outstanding_package_is_seen_from_a_relative_editable_manifest(tmp_path) -> None:
+    out = _run_shipped_check(tmp_path, 'echo "Would install autobot_shared-1.0.0 fastapi-0.162.0"\n')
+    assert "Would install" in out and "fastapi-0.162.0" in out and "autobot_shared" not in out
+
+
+def test_a_healthy_venv_lists_only_the_editable_and_reads_as_satisfied(tmp_path) -> None:
+    assert "Would install" not in _run_shipped_check(tmp_path, 'echo "Would install autobot_shared-1.0.0"\n')
+
+
+def test_a_dry_run_that_fails_reads_as_satisfied(tmp_path) -> None:
+    assert "Would install" not in _run_shipped_check(tmp_path, 'echo "no network" >&2; exit 1\n')
+
+
+def test_contrast_without_the_component_directory_the_editable_breaks_it(tmp_path) -> None:
+    """Run the same fake from the wrong directory: this is the failure #15733 names."""
+    pip = tmp_path / "pip"
+    pip.write_text('#!/bin/sh\n[ -d ../autobot_shared ] || exit 1\necho "Would install x-1"\n', encoding="utf-8")
+    pip.chmod(0o755)
+    assert subprocess.run([str(pip)], capture_output=True, cwd=tmp_path, check=False).returncode == 1
+
+
 def test_a_listen_address_the_server_is_not_running_notifies_the_restart() -> None:
     block = next(task for task in yaml.safe_load(_CONFIG.read_text(encoding="utf-8")) if "block" in task)["block"]
     task = next(t for t in block if "running listen_addresses" in str(t.get("name")))
