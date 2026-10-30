@@ -1509,7 +1509,7 @@ watch(
 .tool-approval-btn { @apply flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors; }
 .tool-approval-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .tool-approval-btn--deny { background: var(--color-error-bg); color: var(--color-error); border: 1px solid var(--color-error-border); }
-.tool-approval-btn--deny:hover:not(:disabled) { background: var(--color-error); color: var(--text-on-error); }
+.tool-approval-btn--deny:hover:not(:disabled) { background: var(--color-error-solid); color: var(--text-on-error); }
 .tool-approval-btn--approve { background: var(--color-success-bg); color: var(--color-success); border: 1px solid var(--color-success-border); }
 .tool-approval-btn--approve:hover:not(:disabled) { background: var(--color-success); color: var(--text-on-success); }
 /* Issue #4960: countdown timer */

@@ -355,7 +355,7 @@ onUnmounted(() => {
 }
 
 .btn-primary {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: white;
 }
 

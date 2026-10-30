@@ -424,7 +424,7 @@ onMounted(() => {
 .setup-guide-btn {
   display: inline-block;
   padding: var(--spacing-3) var(--spacing-6);
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: var(--text-on-primary);
   text-decoration: none;
   border-radius: var(--radius-md);
@@ -593,7 +593,7 @@ onMounted(() => {
   align-items: center;
   gap: var(--spacing-2);
   padding: var(--spacing-3) var(--spacing-6);
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-md);
