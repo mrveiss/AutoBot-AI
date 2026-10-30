@@ -364,7 +364,7 @@ onUnmounted(() => {
 }
 
 .btn-clear-all:hover:not(:disabled) {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: white;
 }
 
@@ -750,7 +750,7 @@ onUnmounted(() => {
 }
 
 .btn-danger:hover {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: white;
 }
 
@@ -828,7 +828,7 @@ onUnmounted(() => {
 .btn-confirm {
   flex: 1;
   padding: var(--spacing-2-5) var(--spacing-4);
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: white;
   border: none;
   border-radius: var(--radius-lg);
@@ -838,6 +838,6 @@ onUnmounted(() => {
 }
 
 .btn-confirm:hover {
-  background: var(--color-error-dark, #c0392b);
+  background: var(--color-error-dark);
 }
 </style>
