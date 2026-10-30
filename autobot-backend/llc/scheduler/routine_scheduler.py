@@ -164,7 +164,7 @@ class RoutineScheduler:
                 # FR-GOV-05: skip if company or assignee agent is paused/terminated
                 company_id = str(routine.company_id) if hasattr(routine, "company_id") and routine.company_id else ""
                 agent_id = str(routine.assignee_agent_id) if routine.assignee_agent_id else None
-                reason = await agent_ref_block_reason(session, agent_id, company_id) if company_id else None
+                reason = await agent_ref_block_reason(session, agent_id, company_id)
                 if reason is not None:
                     logger.info("RoutineScheduler: skipping %s — %s (FR-GOV-05)", routine_id_str, reason)
                     # Re-queue at next fire time so the routine resumes automatically when unpaused

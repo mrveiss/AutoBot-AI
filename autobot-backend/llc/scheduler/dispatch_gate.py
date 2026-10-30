@@ -69,10 +69,10 @@ async def resolve_agent(session: AsyncSession, company_id: Any, agent_ref: Any) 
 
 
 async def _pause_flag_reason(slug: Optional[str], company_id: Optional[Any]) -> Optional[str]:
-    """The controls keys. Redis down leaves the status column, which every pause also writes."""
+    """The controls keys. A company pause is written only here, so an unread flag is not "not paused"."""
     redis = await get_async_redis_client()
     if redis is None:
-        return None
+        return "pause state is unreadable" if company_id else None
     if company_id and await redis.exists(f"llc:company:{company_id}:paused"):
         return "company is paused"
     if slug and await redis.exists(f"llc:agent:{slug}:paused"):
@@ -99,7 +99,9 @@ async def dispatch_block_reason(
     if status in blocked:
         return f"agent status is {status}"
     reason = await _pause_flag_reason(agent_id, None if deliberate_only else company_id)
-    if reason is None and not deliberate_only and company_id:
+    if reason is None and not deliberate_only and not company_id:
+        return "agent has no company, so its budget cannot be read"
+    if reason is None and not deliberate_only:
         _, over_limit, _ = await BudgetService().check_budget(session, agent_id, str(company_id))
         reason = BUDGET_EXHAUSTED if over_limit else None
     return reason
@@ -115,6 +117,8 @@ async def agent_ref_block_reason(
     """:func:`dispatch_block_reason` for a caller holding a slug, a node PK, or no agent at all."""
     company_uuid = as_uuid(company_id)
     row = await resolve_agent(session, company_uuid, agent_ref) if agent_ref and company_uuid else None
+    if row is None and agent_ref and not deliberate_only:
+        return "assigned agent was not found in this company"
     if row is None:  # no agent to judge: only the flags remain
         slug = str(agent_ref) if agent_ref else None
         return await _pause_flag_reason(slug, None if deliberate_only else company_id)

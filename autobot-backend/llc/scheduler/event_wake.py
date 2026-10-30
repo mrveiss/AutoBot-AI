@@ -104,8 +104,11 @@ async def wake_agent(
 
     try:
         run, agent = await get_heartbeat_scheduler().trigger_manual(session, slug, source=reason)
-    except ValueError as exc:  # unconfigured agent: the user's write still stands
+    except ValueError as exc:  # unconfigured or refused by the gate: the user's write still stands
         logger.warning("Event wake skipped: agent %s (%s) could not be woken: %s", slug, reason.value, exc)
+        return None
+    except Exception:  # the gate could not read its inputs: no run starts, and the write still stands
+        logger.exception("Event wake skipped: agent %s (%s) could not be judged", slug, reason.value)
         return None
     wake_context = {**(context or {}), "wake_reason": reason.value}
     run.context_snapshot = dict(wake_context)

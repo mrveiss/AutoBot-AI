@@ -209,3 +209,129 @@ class TestTriggerManual:
         with patch.object(scheduler, "_get_agent_config", new=AsyncMock(return_value=None)):
             with pytest.raises(ValueError, match="not found"):
                 await scheduler.trigger_manual(mock_session, "agent-unknown")
+
+
+@pytest.mark.asyncio
+async def test_missing_redis_refuses_because_a_company_pause_lives_only_there():
+    with patch(f"{_GATE}.get_async_redis_client", AsyncMock(return_value=None)):
+        assert await dispatch_block_reason(AsyncMock(), _SLUG, _COMPANY_ID, "available") == "pause state is unreadable"
+
+
+@pytest.mark.asyncio
+async def test_missing_redis_still_lets_liveness_recover_a_dead_run():
+    with patch(f"{_GATE}.get_async_redis_client", AsyncMock(return_value=None)):
+        assert await dispatch_block_reason(AsyncMock(), _SLUG, _COMPANY_ID, "available", deliberate_only=True) is None
+
+
+@pytest.mark.asyncio
+async def test_an_agent_with_no_company_is_refused_rather_than_run_unbudgeted():
+    with patch(f"{_GATE}.get_async_redis_client", AsyncMock(return_value=_redis())):
+        assert "no company" in await dispatch_block_reason(AsyncMock(), _SLUG, None, "available")
+
+
+@pytest.mark.asyncio
+async def test_a_routine_whose_assignee_is_not_in_the_company_is_refused():
+    session = AsyncMock()
+    session.execute.return_value = MagicMock(first=MagicMock(return_value=None))
+    assert "not found" in await agent_ref_block_reason(session, uuid.uuid4(), _COMPANY_ID)
+
+
+async def _due(reason=None, gate_error=None):
+    """One due-agent tick; hands back the spies."""
+    scheduler = LLCHeartbeatScheduler()
+    session = AsyncMock()
+    context = MagicMock(__aenter__=AsyncMock(return_value=session), __aexit__=AsyncMock(return_value=False))
+    agent = {"agent_id": _SLUG, "heartbeat_cron": "* * * * *", "company_id": _COMPANY_ID, "status": "available"}
+    create_run, reschedule = AsyncMock(), AsyncMock()
+    gate = AsyncMock(return_value=reason, side_effect=gate_error)
+    with (
+        patch.object(scheduler, "_get_agent_config", AsyncMock(return_value=agent)),
+        patch.object(scheduler, "_create_run", create_run),
+        patch.object(scheduler, "_reschedule", reschedule),
+        patch(f"{_HBS}.dispatch_block_reason", gate),
+        patch(f"{_HBS}.get_async_session_factory", return_value=MagicMock(return_value=context)),
+    ):
+        await scheduler._handle_due_agent(_SLUG, AsyncMock())
+    return create_run, reschedule
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("reason", ["company is paused", "agent is paused", "budget is exhausted"])
+async def test_the_due_path_skips_on_each_gate_reason(reason):
+    create_run, reschedule = await _due(reason)
+    create_run.assert_not_called()
+    reschedule.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_the_due_path_requeues_when_the_gate_cannot_answer():
+    scheduler = LLCHeartbeatScheduler()
+    redis = AsyncMock()
+    redis.zrangebyscore = AsyncMock(return_value=[_SLUG.encode()])
+    redis.zrem = AsyncMock(return_value=1)
+    with (
+        patch(f"{_HBS}.get_async_redis_client", AsyncMock(return_value=redis)),
+        patch.object(scheduler, "_handle_due_agent", AsyncMock(side_effect=RuntimeError("redis lost"))),
+    ):
+        await scheduler._dispatch_due()
+    redis.zadd.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_a_wake_the_gate_cannot_judge_leaves_the_users_write_standing():
+    from llc.models.enums import HeartbeatInvocationSource
+    from llc.scheduler import event_wake
+
+    scheduler = MagicMock(trigger_manual=AsyncMock(side_effect=RuntimeError("redis lost")))
+    with (
+        patch.object(event_wake, "_wakeable_slug", AsyncMock(return_value=_SLUG)),
+        patch("llc.scheduler.heartbeat_scheduler.get_heartbeat_scheduler", return_value=scheduler),
+    ):
+        woken = await event_wake.wake_agent(
+            AsyncMock(),
+            company_id=_COMPANY_ID,
+            agent_ref=_SLUG,
+            reason=HeartbeatInvocationSource.AGENT_MENTIONED,
+        )
+    assert woken is None
+
+
+async def _trigger(company_id, org_id):
+    from fastapi import HTTPException
+
+    from llc.api import agents
+
+    scheduler = MagicMock(trigger_manual=AsyncMock(side_effect=AgentNotDispatchable(_SLUG, company_id, "x")))
+    with (
+        patch.object(agents, "get_heartbeat_scheduler", return_value=scheduler),
+        pytest.raises(HTTPException) as raised,
+    ):
+        await agents.trigger_heartbeat(_SLUG, AsyncMock(), {}, MagicMock(org_id=org_id))
+    return raised.value.status_code
+
+
+@pytest.mark.asyncio
+async def test_a_blocked_trigger_is_409_for_the_owner_and_404_across_tenants():
+    own, other = uuid.uuid4(), uuid.uuid4()
+    assert await _trigger(own, own) == 409
+    assert await _trigger(other, own) == 404
+
+
+@pytest.mark.asyncio
+async def test_a_paused_routine_is_not_recorded_and_stays_queued():
+    from llc.scheduler.routine_scheduler import RoutineScheduler
+
+    routine = MagicMock(status="active", company_id=uuid.UUID(_COMPANY_ID), assignee_agent_id=None)
+    routine.cron_schedule = "* * * * *"
+    service = MagicMock(get=AsyncMock(return_value=routine), record_run=AsyncMock())
+    context = MagicMock(__aenter__=AsyncMock(return_value=AsyncMock()), __aexit__=AsyncMock(return_value=False))
+    requeue = AsyncMock()
+    with (
+        patch("user_management.database.get_async_session_factory", return_value=MagicMock(return_value=context)),
+        patch("llc.services.routine_service.RoutineService", return_value=service),
+        patch(f"{_GATE}.get_async_redis_client", AsyncMock(return_value=_redis(f"llc:company:{_COMPANY_ID}:paused"))),
+        patch("llc.scheduler.routine_scheduler.get_async_redis_client", AsyncMock(return_value=requeue)),
+    ):
+        await RoutineScheduler()._dispatch_routine(str(uuid.uuid4()))
+    service.record_run.assert_not_awaited()
+    requeue.zadd.assert_awaited_once()
