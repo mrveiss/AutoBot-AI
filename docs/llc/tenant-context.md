@@ -9,9 +9,9 @@ aliases:
 status: current
 ---
 
-# LLC API tenant-context resolution (#12215)
+# Company OS API tenant-context resolution (#12215)
 
-Every LLC API endpoint that reads or mutates company-scoped data must know
+Every Company OS API endpoint that reads or mutates company-scoped data must know
 *which company* (tenant) the request is for. This document is the single
 source of truth for how that tenant context is derived and enforced —
 previously this was undocumented and callers only discovered the contract via
@@ -19,7 +19,7 @@ opaque `400` responses (#12215).
 
 ## Canonical mechanism: `TenantContext`
 
-Human-facing LLC routes (i.e. everything under `/api/llc/*` except the
+Human-facing Company OS routes (i.e. everything under `/api/llc/*` except the
 agent-bearer surface described below) resolve tenant context through a single
 FastAPI dependency chain, defined in
 [`api/user_management/dependencies.py`](../../autobot-backend/api/user_management/dependencies.py):
@@ -86,14 +86,14 @@ routes keyed by a different resource id (e.g. `/goals/{goal_id}`,
 caller **must** send `X-Organization-Id` (or rely on the JWT `org_id`
 fallback) — otherwise `require_org_context` returns `400`.
 
-This is expected, not a bug: **when calling any flat-resource LLC endpoint,
+This is expected, not a bug: **when calling any flat-resource Company OS endpoint,
 always send `X-Organization-Id`.** It is safe to send it unconditionally on
-every LLC request (nested routes simply ignore it in favour of the path
+every Company OS request (nested routes simply ignore it in favour of the path
 value, per the precedence above).
 
 ## Legitimate variants (not deviations)
 
-A few LLC routers intentionally use a different mechanism because the caller
+A few Company OS routers intentionally use a different mechanism because the caller
 is not a human session:
 
 - **Agent bearer auth** (`/api/llc/agent/*`) — `LLCAgentAuthMiddleware`
@@ -124,7 +124,7 @@ is not a human session:
   company's activity log, or read/update/delete/trigger another company's
   routines by UUID. Both now use `require_org_context` +
   `assert_company_access`/an owned-row loader, consistent with every other
-  LLC router.
+  Company OS router.
 - **#12184/#10148**: introduced the shared `assert_company_access` /
   `load_authorized` / `load_owned_project` helpers, consolidating ~9
   near-identical per-router IDOR checks.
