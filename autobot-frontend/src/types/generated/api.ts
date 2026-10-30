@@ -88078,11 +88078,6 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             /**
-             * Subscription Tier
-             * @default free
-             */
-            subscription_tier: string;
-            /**
              * Max Users
              * @default -1
              */
@@ -88187,8 +88182,6 @@ export interface components {
             settings: {
                 [key: string]: unknown;
             };
-            /** Subscription Tier */
-            subscription_tier: string;
             /** Max Users */
             max_users: number;
             /** Is Active */
@@ -88208,8 +88201,6 @@ export interface components {
             name: string;
             /** Slug */
             slug: string;
-            /** Subscription Tier */
-            subscription_tier: string;
             /** Users */
             users: {
                 [key: string]: unknown;
@@ -88235,8 +88226,6 @@ export interface components {
             settings?: {
                 [key: string]: unknown;
             } | null;
-            /** Subscription Tier */
-            subscription_tier?: string | null;
             /** Max Users */
             max_users?: number | null;
         } & {
