@@ -50,7 +50,9 @@ const DEFAULT_TIMEOUT_MS = (() => {
   return Number.isNaN(parsed) ? 30_000 : parsed
 })()
 
-export type RequestOptions = TransportRequestOptions
+// The kit owns the options type; callers keep importing it from here under its old name.
+export type { TransportRequestOptions as RequestOptions }
+type RequestOptions = TransportRequestOptions
 
 /** GET only: `'text'` returns the body as a string instead of parsing JSON (#12363). */
 export interface GetOptions extends RequestOptions {

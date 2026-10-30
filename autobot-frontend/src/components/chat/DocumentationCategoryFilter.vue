@@ -429,7 +429,7 @@ const selectDocumentation = () => {
 }
 
 .quick-filter-btn.active {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   border-color: var(--color-info);
   color: var(--text-on-primary);
 }

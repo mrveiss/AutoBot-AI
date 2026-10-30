@@ -19,7 +19,7 @@ export interface UploadProgressEvent {
   lengthComputable?: boolean;
 }
 
-export interface RequestOptions extends TransportRequestOptions {
+export interface ApiRequestOptions extends TransportRequestOptions {
   onUploadProgress?: (progressEvent: UploadProgressEvent) => void;
   /** Opt in to fail-fast circuit breaking, keyed by the dependency name (#11682). */
   circuitBreaker?: string;
@@ -70,6 +70,10 @@ export interface ChatMessageResponse {
 // Issue #598: All timeouts sourced from AppConfig (SINGLE SOURCE OF TRUTH)
 // Convenience methods (get/post/put/delete) return parsed JSON data.
 // Use rawRequest() for raw Response access (streaming, blobs).
+// Callers keep importing the options type from here under its old name.
+export type { ApiRequestOptions as RequestOptions };
+type RequestOptions = ApiRequestOptions;
+
 export class ApiClient extends ApiClientBase<RequestOptions> {
   private baseUrl: string;
   private baseUrlPromise: Promise<string> | null;

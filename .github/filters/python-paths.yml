@@ -67,6 +67,8 @@ python:
   - '.github/workflows/co-located-smoke.yml'
   # #17500, #18729: compose_exposure_and_credentials_17500_test.py and docker_admin_seed_18729_test.py read the secrets generator.
   - 'docker/generate-secrets.sh'
+  # #19408: compose_db_names_19408_test.py checks the script creates the users database compose names.
+  - 'docker/postgres/init-databases.sh'
   # #18556: one_static_data_copy_18556_test.py reads the canonical static data files.
   - 'autobot-backend/config/permission_rules.yaml'
   - 'autobot-backend/static/error_messages.yaml'
@@ -278,6 +280,7 @@ python:
   # is exactly the change that skips the suite guarding it -- the guard would be
   # bypassable by touching the one file it exists to watch.
   - 'sync-frontend.sh'
+  - 'autobot-slm-frontend/scripts/sync-to-admin.sh'
   # #15900: seven more of the same shape, found once the coverage detector
   # stopped keying on how a guard binds its repo root. Each is read by a
   # repo_tests guard; without an entry here, a change confined to one of them

@@ -160,6 +160,8 @@ ALLOWED_ADDITIONS = {
             f"{WORKFLOWS}/_changes.yml",
             f"{WORKFLOWS}/migration-gate.yml",
             f"{WORKFLOWS}/ai-security-review.yml",
+            # #19503: install_and_code_sync_modes_19503_test reads this shell sync by concrete literal.
+            "autobot-slm-frontend/scripts/sync-to-admin.sh",
             # #19523: dependabot_root_coverage_19523_test reads dependabot.yml by concrete literal.
             ".github/dependabot.yml",
             # #19769: pr_conflict_gate_19769_test.py reads the conflict gate workflow.
@@ -218,6 +220,7 @@ ALLOWED_ADDITIONS = {
             f"{WORKFLOWS}/co-located-smoke.yml",
             # #17500, #18729: both guards read the secrets generator, so editing it must run the suite.
             "docker/generate-secrets.sh",
+            "docker/postgres/init-databases.sh",
             # #19178: user_docs_stay_consistent_19178_test.py reads docs/README.md.
             "docs/README.md",
             # #18266: social_preview_18266_test.py pins the rendered preview image.

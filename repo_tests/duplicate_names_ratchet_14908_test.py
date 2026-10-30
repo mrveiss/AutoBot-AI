@@ -40,11 +40,12 @@ _MODULE_STMT = re.compile(r"\b(?:import|export)\b[^;'\"]*?\bfrom\s*['\"]([^'\"]+
 _KIT_SPEC = re.compile(r"^@autobot/ui(/|$)")
 _SKIPPED_DIRS = {"node_modules", "dist"}
 
-# Measured on e71921c5fe: 28 type names declared in both apps (SystemHealthStatus is one of them
-# until the SLM's useAutobotApi.ts, held by an open PR, renames its probe vocabulary), 2 declared
-# in an app and the kit (RiskTier, ServiceHealth, the two documented in the sibling guard), 1 util
-# filename implemented twice (ApiClient.ts).
-PINS = {"type_names_in_both_apps": 28, "type_names_in_app_and_kit": 2, "util_filenames_in_both_apps": 1}
+# Measured on e71921c5fe: 28 type names declared in both apps, 2 declared in an app and the kit
+# (RiskTier, ServiceHealth, the two documented in the sibling guard), 1 util filename implemented
+# twice (ApiClient.ts). #19910 resolved 14 both-apps names by renaming the one that is a different
+# concept (14 left, 13 after #14908 moved the ApiClient options type into the kit: the ledger rows and the audit, permission and TLS shapes that are one concept
+# and wait for the kit export in the PRs holding libs/autobot-ui/index.ts).
+PINS = {"type_names_in_both_apps": 13, "type_names_in_app_and_kit": 2, "util_filenames_in_both_apps": 1}
 
 # Stated exceptions: a util filename implemented in both apps until its own PR lands.
 UTIL_EXCEPTIONS = {
