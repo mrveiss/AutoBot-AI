@@ -674,7 +674,7 @@ onMounted(() => {
 
 .analyze-btn {
   padding: var(--spacing-3) var(--spacing-6);
-  background: var(--color-info);
+  background: var(--color-info-solid);
   border: none;
   border-radius: var(--radius-md);
   /* #11515 tokenisation: was a hardcoded #fff. Pre-existing, surfaced because

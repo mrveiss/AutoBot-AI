@@ -704,7 +704,7 @@ onMounted(async () => {
 
 /* ---- Install Button — Issue #6464 ---- */
 .btn-install {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   border: 1px solid var(--color-info);
   color: white;
   border-radius: var(--radius-md);
