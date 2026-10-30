@@ -70,6 +70,21 @@ def _status_for_return_code(return_code: Any) -> str:
         return "error"
 
 
+def command_params(tool_call: dict[str, Any]) -> tuple[str, str, str]:
+    """``(command, host, description)`` from an ``execute_command`` call (Issue #620)."""
+    params = tool_call["params"]
+    return params.get("command"), params.get("host", "main"), tool_call.get("description", "")
+
+
+def approval_result_of(last_command: dict[str, Any]) -> dict[str, Any]:
+    """The finished command's result; a denial keeps its reason in ``denial_reason``, outside the result (#19951)."""
+    result = dict(last_command.get("result", {}))
+    reason = last_command.get("denial_reason")
+    if reason and not result.get("error"):
+        result["error"] = reason
+    return result
+
+
 def _unsuccessful_approval_record(
     command: str, host: str, approval_result: Optional[dict[str, Any]], explanation: str
 ) -> dict[str, Any]:

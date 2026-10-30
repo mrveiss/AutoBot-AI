@@ -86,6 +86,7 @@ def test_these_only_read(command):
         "du --files0=/dev/stdin",
         "wc --files=-",
         "cat //dev/zero",
+        "cat /sys/kernel/debug/tracing/trace_pipe",
         "cat /./proc/self/environ",
         "cat ../proc/self/environ",
         "cat ../../etc/hosts",

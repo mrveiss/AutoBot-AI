@@ -55,7 +55,7 @@ _READ_ONLY_GIT_SUBCOMMANDS: FrozenSet[str] = frozenset({"diff", "log", "show", "
 _GIT_FORBIDDEN_PREFIXES = ("--ou", "--ex", "--te")
 
 #: Paths with no end, or with reads that have effects.
-_UNBOUNDED_PATHS = ("/dev/", "/proc/")
+_UNBOUNDED_PATHS = ("/dev/", "/proc/", "/sys/")
 
 #: Reads its file list from stdin or a path, so the arguments do not say what it reads.
 #: GNU tools accept any unique abbreviation of it.

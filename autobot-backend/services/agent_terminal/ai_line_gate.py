@@ -22,7 +22,7 @@ from user_management.models.user import User
 from .approval_handler import ApprovalHandler
 from .models import AgentTerminalSession
 
-__all__ = ["Outcome", "decide_command", "resolve_command_line"]
+__all__ = ["Outcome", "decide_command", "permission_refusal", "resolve_command_line"]
 
 logger = get_logger(__name__)
 
@@ -85,3 +85,12 @@ async def decide_command(
     if is_auto_approved:
         logger.info("Command auto-approved by rule: %s (user: %s, risk: %s)", command, user_id, risk.value)
     return is_auto_approved, None
+
+
+def permission_refusal(approval_handler: ApprovalHandler, session: AgentTerminalSession, command: str, risk):
+    """The role policy's error response when this role may not run *risk*, else ``None``."""
+    allowed, reason = approval_handler.check_agent_permission(session.agent_role, risk)
+    if allowed:
+        return None
+    logger.warning("Agent %s denied command execution: %s", session.agent_id, reason)
+    return session.get_permission_denied_response(reason, command, risk.value)

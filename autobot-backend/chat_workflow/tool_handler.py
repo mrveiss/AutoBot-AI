@@ -39,6 +39,8 @@ from chat_workflow.browser_tool_handler import (
 from chat_workflow.command_execution_record import (
     _create_execution_result,
     _unsuccessful_approval_record,
+    approval_result_of,
+    command_params,
 )
 from chat_workflow.compose_tool_handler import (
     build_compose_dispatch,
@@ -1481,7 +1483,7 @@ class ToolHandlerMixin:
         if mismatch_result is not None:
             return mismatch_result
 
-        approval_result = last_command.get("result", {})
+        approval_result = approval_result_of(last_command)
         logger.info(
             "Completion detected! Command: %s, Status: %s, Approved by: %s",
             command,
@@ -1957,10 +1959,7 @@ class ToolHandlerMixin:
 
     def _extract_command_params(self, tool_call: dict[str, Any]) -> tuple[str, str, str]:
         """Extract command parameters from tool call dict. Issue #620."""
-        command = tool_call["params"].get("command")
-        host = tool_call["params"].get("host", "main")
-        description = tool_call.get("description", "")
-        return command, host, description
+        return command_params(tool_call)
 
     async def _dispatch_command_by_status(
         self,

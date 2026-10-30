@@ -10,6 +10,8 @@ Any other held tool ends the turn: it has no result, so another model call could
 
 from __future__ import annotations
 
+import asyncio
+from functools import partial
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -17,10 +19,15 @@ import pytest
 
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.ai_lines import AiLine
+from autobot_shared.status_enums import CommandRisk
+from chat_workflow.command_execution_record import approval_result_of
 from chat_workflow.tool_dispatch_guards import COMMAND_FORCE_APPROVAL_KEY, enforce_ai_line
 from chat_workflow.tool_handler import ToolHandlerMixin
 from services.agent_terminal.ai_line_gate import PENDING_APPROVAL_REFUSAL, decide_command
+from services.agent_terminal.models import AgentTerminalSession
+from services.agent_terminal.service import AgentTerminalService
 from services.ai_line_enforcement import Outcome, resolve_action_line
+from services.command_approval_manager import AgentRole
 
 _ENF = "services.ai_line_enforcement"
 _USER = "11111111-1111-1111-1111-111111111111"
@@ -202,8 +209,10 @@ async def test_an_approved_command_that_failed_is_not_reported_as_rejected():
 
 @pytest.mark.asyncio
 async def test_a_rejection_reaches_the_models_next_prompt():
-    results = await _failed_approval({"status": "denied", "error": "the user said no"})
-    assert results[0]["status"] == "denied" and "the user said no" in results[0]["stderr"]
+    # The shape a real denial leaves in command_history: the reason sits beside the result.
+    last_command = {"result": {"status": "denied_by_user"}, "denial_reason": "the user said no"}
+    results = await _failed_approval(approval_result_of(last_command))
+    assert results[0]["status"] == "denied_by_user" and "the user said no" in results[0]["stderr"]
 
 
 @pytest.mark.asyncio
@@ -268,3 +277,38 @@ async def test_a_turn_that_started_without_a_terminal_session_uses_the_one_the_c
     with patch("chat_workflow.tool_handler._emit_before_tool_execute", AsyncMock(return_value=True)):
         [_ async for _ in handler._process_single_command(call, "chat-1", "", "e", "m", [], [])]
     assert seen == [("pending_approval", "agent-session")]
+
+
+@pytest.mark.asyncio
+async def test_two_overlapping_commands_cannot_replace_each_others_pending_approval():
+    """The check and the write have no await between them, so the second caller is refused and never queued."""
+    service = AgentTerminalService.__new__(AgentTerminalService)
+    entered = asyncio.Event()
+    release = asyncio.Event()
+
+    async def add_command(_command):
+        entered.set()
+        await release.wait()
+
+    service.command_queue = MagicMock(add_command=add_command)
+    service.redis_client = None
+    service.terminal_logger = MagicMock(log_command=AsyncMock())
+    session = AgentTerminalSession(session_id="s", agent_id="a", agent_role=AgentRole.CHAT_AGENT, conversation_id=None)
+    queue = partial(
+        service._queue_command_for_approval,
+        session,
+        description=None,
+        risk=CommandRisk.HIGH,
+        reasons=[],
+        is_interactive=False,
+        interactive_reasons=[],
+    )
+    first = asyncio.create_task(queue(command="rm first"))
+    await entered.wait()
+    second = await queue(command="rm second")
+    release.set()
+    await first
+
+    assert session.pending_approval["command"] == "rm first"
+    assert second["status"] == "error"
+    assert PENDING_APPROVAL_REFUSAL in second["error"]

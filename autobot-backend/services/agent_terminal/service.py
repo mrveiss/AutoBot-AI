@@ -20,7 +20,7 @@ from services.command_approval_manager import AgentRole, CommandApprovalManager
 from services.command_execution_queue import get_command_queue
 from type_defs.common import Metadata
 
-from .ai_line_gate import decide_command
+from .ai_line_gate import PENDING_APPROVAL_REFUSAL, decide_command, permission_refusal
 from .approval_handler import ApprovalHandler
 from .command_executor import CommandExecutor
 from .errors import PostExecutionError, execution_failed_response, post_execution_failed_response, post_execution_guard
@@ -202,8 +202,9 @@ class AgentTerminalService:
             interactive_reasons=interactive_reasons,
         )
 
-        await self.command_queue.add_command(cmd_execution)
-        logger.info("✅ [QUEUE] Added command %s to queue", cmd_execution.command_id)
+        # #19951: no await between this check and the write below, so overlapping calls cannot both pass it.
+        if session.has_pending_approval():
+            return session.get_permission_denied_response(PENDING_APPROVAL_REFUSAL, command, risk.value)
 
         # #14955 review: session.pending_approval["risk"] (read back via
         # get_pending_risk_level()) feeds the auto-approve rules engine
@@ -229,6 +230,13 @@ class AgentTerminalService:
             is_interactive=is_interactive,
             interactive_reasons=interactive_reasons,
         )
+
+        try:
+            await self.command_queue.add_command(cmd_execution)
+        except Exception:
+            session.pending_approval = None  # nothing was queued, so nothing may hold the session
+            raise
+        logger.info("✅ [QUEUE] Added command %s to queue", cmd_execution.command_id)
 
         if self.redis_client:
             await self.session_manager._persist_session(session)
@@ -633,30 +641,9 @@ class AgentTerminalService:
     # Command Execution (delegated to CommandExecutor)
     # ============================================================================
 
-    def _check_agent_permission(
-        self,
-        session: AgentTerminalSession,
-        command: str,
-        risk,
-    ) -> Metadata | None:
-        """
-        Check if agent has permission to execute command at given risk level.
-
-        Issue #665: Extracted from execute_command for single responsibility.
-
-        Args:
-            session: Terminal session containing agent role
-            command: Command being executed
-            risk: Assessed risk level of the command
-
-        Returns:
-            Error response if permission denied, None if allowed
-        """
-        allowed, permission_reason = self.approval_handler.check_agent_permission(session.agent_role, risk)
-        if not allowed:
-            logger.warning(f"Agent {session.agent_id} denied command execution: {permission_reason}")
-            return session.get_permission_denied_response(permission_reason, command, risk.value)
-        return None
+    def _check_agent_permission(self, session: AgentTerminalSession, command: str, risk) -> Metadata | None:
+        """Error response if the role may not run *risk*, else ``None`` (Issue #665)."""
+        return permission_refusal(self.approval_handler, session, command, risk)
 
     async def _check_auto_approval_or_queue(
         self,
