@@ -50,9 +50,9 @@ SLM_USERS_DB_NAME = "slm_users"
 #: Login role the SLM uses on ``SLM_DB_NAME``, ``SLM_USERS_DB_NAME`` and ``USERS_DB_NAME``.
 SLM_DB_ROLE = "slm_app"
 
-#: Docker compose: the postgres image's owner role (``AUTOBOT_DB_USER``), reused as the app role.
+#: Docker compose: the postgres image's owner role (``AUTOBOT_POSTGRES_USER``), reused as the app role.
 COMPOSE_OWNER_ROLE = "autobot"
-#: Docker compose: the SLM control-plane database (``AUTOBOT_DB_NAME``).
+#: Docker compose: the SLM control-plane database (``SLM_DB_NAME``).
 COMPOSE_SLM_DB_NAME = "autobot_slm"
 #: Docker compose: the postgres service name.
 COMPOSE_DB_HOST = "autobot-postgres"
