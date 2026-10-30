@@ -13,9 +13,7 @@
 # Uses pull_request_target (base-branch workflow definition, token with write
 # scope). Safe: PR code is never checked out or executed.
 #
-# Dev_new_gui: the retarget base is hardcoded 'main' -- this never PATCHes a
-# PR onto the temporary Dev_new_gui mirror (kept for the live updater; remove
-# with #16461).
+# The retarget base is hardcoded 'main'.
 #
 # See: https://github.com/mrveiss/AutoBot-AI/issues/11696
 
