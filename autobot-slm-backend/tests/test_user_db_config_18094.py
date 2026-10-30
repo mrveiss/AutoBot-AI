@@ -170,3 +170,23 @@ def test_an_empty_canonical_role_falls_through(monkeypatch: pytest.MonkeyPatch, 
     if legacy:
         monkeypatch.setenv("AUTOBOT_POSTGRES_USER", legacy)
     assert get_autobot_db_config().url.startswith(f"postgresql+asyncpg://{expected}@")
+
+
+def test_compose_legacy_names_warn_once_and_list_each_name(monkeypatch, caplog) -> None:
+    """#19408: compose reports the deprecated names; fleet hosts never set this variable."""
+    caplog.set_level("WARNING")
+    monkeypatch.setattr(_mod, "_WARNED", set())
+    monkeypatch.setenv("AUTOBOT_USERS_DATABASE_URL", "postgresql+asyncpg://h:5432/d")
+    monkeypatch.setenv("AUTOBOT_COMPOSE_LEGACY_DB_VARS", "AUTOBOT_DB_USER AUTOBOT_DB_NAME ")
+    _mod.get_autobot_db_config()
+    _mod.get_autobot_db_config()
+    warnings = [r.getMessage() for r in caplog.records if "Deprecated compose" in r.getMessage()]
+    assert len(warnings) == 1 and "AUTOBOT_DB_USER, AUTOBOT_DB_NAME" in warnings[0]
+
+
+def test_no_compose_report_means_no_warning(monkeypatch, caplog) -> None:
+    monkeypatch.setattr(_mod, "_WARNED", set())
+    monkeypatch.setenv("AUTOBOT_USERS_DATABASE_URL", "postgresql+asyncpg://h:5432/d")
+    monkeypatch.delenv("AUTOBOT_COMPOSE_LEGACY_DB_VARS", raising=False)
+    _mod.get_autobot_db_config()
+    assert not [r for r in caplog.records if "Deprecated compose" in r.getMessage()]
