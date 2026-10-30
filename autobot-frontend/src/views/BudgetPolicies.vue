@@ -788,7 +788,7 @@ onMounted(loadPolicies)
   align-items: center;
   gap: var(--spacing-2);
   padding: var(--spacing-2) var(--spacing-4);
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: white;
   border: none;
   border-radius: var(--radius-md);
