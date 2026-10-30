@@ -246,6 +246,8 @@
         dest: /tmp/autobot/
         delete: false
         recursive: true
+        rsync_opts:
+          - "--chmod=o-w"  # #19503
       delegate_to: localhost
 
     - name: Build and start Frontend
@@ -376,6 +378,8 @@
         dest: /tmp/autobot/
         delete: false
         recursive: true
+        rsync_opts:
+          - "--chmod=o-w"  # #19503
       delegate_to: localhost
 
     - name: Build and start AI Stack and NPU Worker
