@@ -608,7 +608,7 @@ onMounted(() => {
   box-shadow: -4px 0 24px rgba(0, 0, 0, 0.2);
   display: flex;
   flex-direction: column;
-  z-index: 100;
+  z-index: var(--z-dropdown);
 }
 
 .preview-header {
