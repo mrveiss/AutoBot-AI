@@ -563,7 +563,7 @@ onMounted(() => {
   inset: 0;
   background: rgba(0, 0, 0, 0.4);
   display: flex;
-  z-index: 50;
+  z-index: var(--z-50);
 }
 
 .modal-overlay {
