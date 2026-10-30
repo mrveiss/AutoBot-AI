@@ -14,6 +14,17 @@ from autobot_shared.env_registry import EnvVarSpec, register_env_var
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_CHAT_TRACE_OUTPUT_MAX_CHARS",
+        type=int,
+        default=2000,
+        description="Characters of one tool result kept in a chat session trace (session_trace.py, #19963).",
+        component="backend",
+        range=(1, 100000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_DUPLICATE_ORPHAN_LEASE_SECONDS",
         type=float,
         default=300.0,
