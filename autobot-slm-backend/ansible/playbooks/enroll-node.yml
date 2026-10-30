@@ -239,6 +239,8 @@
             - name: Install Node.js
               ansible.builtin.include_role:
                 name: nodejs
+                apply:
+                  tags: ['role-setup']
 
         # Redis-specific setup
         - name: "Setup Redis Stack"

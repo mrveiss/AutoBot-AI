@@ -20,6 +20,16 @@
   tags: ['deps', 'nodejs']
   check_mode: false
 
+# NodeSource's nodejs package carries npm, so install.yml also repairs a host missing it.
+- name: "nodejs | Read the installed npm version"
+  ansible.builtin.command:
+    cmd: npm --version
+  register: _npm_check
+  changed_when: false
+  failed_when: false
+  tags: ['deps', 'nodejs']
+  check_mode: false
+
 - name: "nodejs | Compare the installed major with node_major"
   ansible.builtin.set_fact:
     _nodejs_upgraded: false
@@ -36,5 +46,7 @@
 
 - name: "nodejs | Install or upgrade"
   ansible.builtin.include_tasks: install.yml
-  when: _nodejs_installed_major | int < nodejs_major_version | int
+  when: >-
+    _nodejs_installed_major | int < nodejs_major_version | int
+    or (_nodejs_installed_major | int == nodejs_major_version | int and _npm_check.rc != 0)
   tags: ['deps', 'nodejs']

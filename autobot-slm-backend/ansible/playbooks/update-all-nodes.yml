@@ -1847,7 +1847,7 @@
       when:
         - >-
           'browser' in group_names
-        - hostvars['localhost']['node_deps_changed'] | bool
+        - (hostvars['localhost']['node_deps_changed'] | bool) or (_nodejs_upgraded | default(false) | bool)
       tags: [browser, browser-worker, deps]
 
     # #5085: a root-run install produces browser files the `autobot` service
@@ -1863,7 +1863,7 @@
       when:
         - >-
           'browser' in group_names
-        - hostvars['localhost']['node_deps_changed'] | bool
+        - (hostvars['localhost']['node_deps_changed'] | bool) or (_nodejs_upgraded | default(false) | bool)
       failed_when: false
       tags: [browser, browser-worker, deps]
 
@@ -1879,7 +1879,7 @@
       when:
         - >-
           'browser' in group_names
-        - hostvars['localhost']['node_deps_changed'] | bool
+        - (hostvars['localhost']['node_deps_changed'] | bool) or (_nodejs_upgraded | default(false) | bool)
         - browser_playwright_install.rc | default(0) != 0
       tags: [browser, browser-worker, deps]
 

@@ -161,7 +161,7 @@ def test_a_comment_naming_the_definition_does_not_count_as_loading_it() -> None:
 
 
 #: The NodeSource repository named by a task: its setup script or an apt line.
-_NODESOURCE_INSTALL = re.compile(r"nodesource_base_url \}\}/(?:setup_|node_)")
+_NODESOURCE_INSTALL = re.compile(r"(?:nodesource_base_url \}\}|deb\.nodesource\.com)/(?:setup_|node_)")
 _NODE_INSTALL_HOME = "autobot-slm-backend/ansible/roles/nodejs/tasks/install.yml"
 _APT_MODULES = frozenset({"apt", "package", "ansible.builtin.apt", "ansible.builtin.package"})
 
@@ -189,6 +189,19 @@ def test_one_ansible_task_file_installs_node() -> None:
     }
     assert _NODE_INSTALL_HOME in found, "the sweep found no install at all; its pattern has drifted"
     assert found == {_NODE_INSTALL_HOME}, "use the nodejs role (#19661)"
+
+
+@pytest.mark.parametrize(
+    ("text", "flagged"),
+    [
+        ("url: https://deb.nodesource.com/setup_22.x", True),
+        ("url: {{ nodesource_base_url }}/setup_{{ node_major }}.x", True),
+        ('repo: "deb {{ nodesource_base_url }}/node_22.x jammy main"', True),
+        ("url: {{ nodesource_base_url }}/gpgkey/nodesource.gpg.key", False),
+    ],
+)
+def test_a_nodesource_install_is_recognised_however_its_url_is_written(text: str, flagged: bool) -> None:
+    assert bool(_NODESOURCE_INSTALL.search(text)) is flagged
 
 
 def test_only_the_role_installs_the_nodejs_package() -> None:

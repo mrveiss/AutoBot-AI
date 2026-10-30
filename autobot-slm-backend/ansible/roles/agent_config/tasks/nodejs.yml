@@ -7,6 +7,8 @@
 - name: Install Node.js
   ansible.builtin.include_role:
     name: nodejs
+    apply:
+      tags: ['agent', 'agent_config']
 
 - name: Verify Node.js installation
   command: node --version
