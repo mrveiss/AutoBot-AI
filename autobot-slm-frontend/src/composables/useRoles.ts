@@ -71,7 +71,7 @@ export interface NodeRolesInfo {
   roles: NodeRoleItem[]
 }
 
-export interface SyncResult {
+export interface RoleSyncResult {
   success: boolean
   message: string
   role_name?: string
@@ -268,13 +268,13 @@ export function useRoles() {
     roleName: string,
     nodeIds?: string[],
     restart: boolean = true
-  ): Promise<SyncResult> {
+  ): Promise<RoleSyncResult> {
     try {
       const params: Record<string, unknown> = { restart }
       if (nodeIds && nodeIds.length > 0) {
         params.node_ids = nodeIds
       }
-      const response = await client.post<SyncResult>(
+      const response = await client.post<RoleSyncResult>(
         `/code-sync/roles/${roleName}/sync`,
         null,
         { params }
