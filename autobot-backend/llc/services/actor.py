@@ -58,3 +58,21 @@ def resolve_actor_as(actor_type: str, actor_id: Optional[str]) -> Actor:
     if actor_type == ActorType.USER.value:
         return resolve_actor(user_id=actor_id)
     return resolve_actor(agent_id=actor_id)
+
+
+class ActivityRecordError(RuntimeError):
+    """The audit write failed. Deliberately not a ``ValueError``: routes read that as the caller's error."""
+
+
+async def audit(log: Optional[Any], session: Any, **entry: Any) -> None:
+    """Write one activity record in the caller's transaction, if there is a log.
+
+    A failure propagates as :class:`ActivityRecordError` so the operation fails with it and the
+    caller's transaction is rolled back, rather than surfacing as a not-found or bad-request.
+    """
+    if not log:
+        return
+    try:
+        await log.record(session, **entry)
+    except Exception as exc:
+        raise ActivityRecordError(f"activity record failed: {exc}") from exc

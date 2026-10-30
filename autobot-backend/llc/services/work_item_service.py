@@ -47,11 +47,11 @@ from ..models.enums import (
     WorkItemType,
 )
 from ..models.label import LLCWorkItemLabel
-from ..models.membership import LLCCompanyMembership
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
-from .actor import resolve_actor, resolve_actor_as
+from .actor import ActivityRecordError, audit, resolve_actor, resolve_actor_as
 from .base import LLCServiceBase
 from .wake_events import wake_for_comment, wake_for_item_changes
+from .work_item_actor_role import resolve_actor_role  # noqa: F401 -- re-exported for the API and tests
 from .work_item_approval_categories import validated_approval_categories as _validated_approval_categories
 from .work_item_relations import WorkItemRelationService
 
@@ -101,13 +101,6 @@ class CoWorkingPermissionError(Exception):
 
 _COWORKING_ALLOWED_ROLES: frozenset = frozenset({"owner", "admin", "lead"})
 
-_AGENT_ORG_ROLE_TO_COWORKER_ROLE: Dict[str, str] = {
-    "manager": "admin",
-    "coordinator": "lead",
-    "specialist": "member",
-    "worker": "member",
-}
-
 
 def _coworking_state(item: LLCWorkItem) -> dict:
     """The co-worker fields of *item*, as the activity log's before/after snapshot."""
@@ -117,56 +110,6 @@ def _coworking_state(item: LLCWorkItem) -> dict:
         "co_worker_user_id": str(item.co_worker_user_id) if item.co_worker_user_id else None,
         "co_working_enabled": item.co_working_enabled,
     }
-
-
-async def resolve_actor_role(session: AsyncSession, actor_id: Optional[str], company_id: str) -> str:
-    """Resolve the effective coworker-permission role for actor_id (GH#8583).
-
-    Tries LLCCompanyMembership first (human user identified by UUID), then
-    AgentOrgNode (agent identified by string key).  Returns "member" when the
-    actor is unknown — this is the safest default and will be rejected by
-    enable_coworking / disable_coworking permission checks.
-    """
-    if not actor_id:
-        return "member"
-
-    # Human user path: actor_id must be a valid UUID.
-    try:
-        actor_uuid = uuid.UUID(actor_id)
-        company_uuid = uuid.UUID(company_id)
-        result = await session.execute(
-            select(LLCCompanyMembership).where(
-                LLCCompanyMembership.user_id == actor_uuid,
-                LLCCompanyMembership.company_id == company_uuid,
-            )
-        )
-        membership = result.scalar_one_or_none()
-        if membership is not None:
-            return membership.role.value if hasattr(membership.role, "value") else str(membership.role)
-    except (ValueError, AttributeError):
-        pass
-
-    # Agent path: look up AgentOrgNode by string agent_id.
-    try:
-        from models.agent_org import AgentOrgNode
-
-        company_uuid = uuid.UUID(company_id)
-        result = await session.execute(
-            select(AgentOrgNode).where(
-                AgentOrgNode.agent_id == actor_id,
-                AgentOrgNode.company_id == company_uuid,
-            )
-        )
-        node = result.scalar_one_or_none()
-        if node is not None:
-            org_role = node.org_role.value if hasattr(node.org_role, "value") else str(node.org_role)
-            return _AGENT_ORG_ROLE_TO_COWORKER_ROLE.get(org_role, "member")
-    except ImportError as exc:
-        logger.warning("AgentOrgNode model unavailable; defaulting actor_role to member: %s", exc)
-    except (ValueError, AttributeError):
-        pass
-
-    return "member"
 
 
 async def _run_intent_similarity(work_intent: str, item_title: str, work_item_id: str) -> None:
@@ -616,8 +559,9 @@ class WorkItemService(LLCServiceBase):
 
         await session.flush()
 
-        if self.activity_log:
-            await self.activity_log.record(
+        try:
+            await audit(
+                self.activity_log,
                 session,
                 company_id=company_id,
                 actor_type=ActorType.USER,
@@ -627,6 +571,10 @@ class WorkItemService(LLCServiceBase):
                 entity_id=work_item_id,
                 after={"assignee_user_id": user_id, "assignee_type": AssigneeType.USER.value},
             )
+        except ActivityRecordError:
+            if redis is not None:  # the DB claim rolls back; the lock taken above must not outlive it
+                await redis.delete(redis_key)
+            raise
 
         return item
 
@@ -659,22 +607,23 @@ class WorkItemService(LLCServiceBase):
         item.version += 1
         await session.flush()
 
+        await audit(
+            self.activity_log,
+            session,
+            company_id=company_id,
+            actor_type=ActorType.USER,
+            actor_id=user_id,
+            event_type=ActivityEventType.WORK_ITEM_STATUS_CHANGED,
+            entity_type="work_item",
+            entity_id=work_item_id,
+            before={"assignee_user_id": user_id},
+            after={"assignee_user_id": None, "status": WorkItemStatus.READY.value},
+        )
+
+        # Only once the release is audited: a failed audit rolls the DB back and the lock must survive it.
         redis = await get_async_redis_client()
         if redis is not None:
             await redis.delete(f"llc:checkout:{work_item_id}")
-
-        if self.activity_log:
-            await self.activity_log.record(
-                session,
-                company_id=company_id,
-                actor_type=ActorType.USER,
-                actor_id=user_id,
-                event_type=ActivityEventType.WORK_ITEM_STATUS_CHANGED,
-                entity_type="work_item",
-                entity_id=work_item_id,
-                before={"assignee_user_id": user_id},
-                after={"assignee_user_id": None, "status": WorkItemStatus.READY.value},
-            )
 
         return item
 
@@ -736,20 +685,20 @@ class WorkItemService(LLCServiceBase):
         item.version += 1
         await session.flush()
 
-        if self.activity_log:
-            actor = resolve_actor_as(actor_type, actor_id)
-            await self.activity_log.record(
-                session,
-                company_id=company_id,
-                actor_type=actor.type,
-                actor_id=actor.id,
-                metadata=actor.metadata(),
-                event_type=ActivityEventType.WORK_ITEM_COWORKER_SET,
-                entity_type="work_item",
-                entity_id=work_item_id,
-                before=before,
-                after=_coworking_state(item),
-            )
+        actor = resolve_actor_as(actor_type, actor_id)
+        await audit(
+            self.activity_log,
+            session,
+            company_id=company_id,
+            actor_type=actor.type,
+            actor_id=actor.id,
+            metadata=actor.metadata(),
+            event_type=ActivityEventType.WORK_ITEM_COWORKER_SET,
+            entity_type="work_item",
+            entity_id=work_item_id,
+            before=before,
+            after=_coworking_state(item),
+        )
 
         return item
 
@@ -790,20 +739,20 @@ class WorkItemService(LLCServiceBase):
         item.version += 1
         await session.flush()
 
-        if self.activity_log:
-            actor = resolve_actor_as(actor_type, actor_id)
-            await self.activity_log.record(
-                session,
-                company_id=company_id,
-                actor_type=actor.type,
-                actor_id=actor.id,
-                metadata=actor.metadata(),
-                event_type=ActivityEventType.WORK_ITEM_COWORKER_CLEARED,
-                entity_type="work_item",
-                entity_id=work_item_id,
-                before=before,
-                after={"co_working_enabled": False},
-            )
+        actor = resolve_actor_as(actor_type, actor_id)
+        await audit(
+            self.activity_log,
+            session,
+            company_id=company_id,
+            actor_type=actor.type,
+            actor_id=actor.id,
+            metadata=actor.metadata(),
+            event_type=ActivityEventType.WORK_ITEM_COWORKER_CLEARED,
+            entity_type="work_item",
+            entity_id=work_item_id,
+            before=before,
+            after={"co_working_enabled": False},
+        )
 
         return item
 
@@ -959,25 +908,25 @@ class WorkItemService(LLCServiceBase):
         except Exception:
             logger.warning("workspace release skipped for task=%s", work_item_id, exc_info=True)
 
-        if self.activity_log:
-            actor = resolve_actor(actor_agent_id, actor_user_id)
-            meta: dict = {}
-            if is_board_override:
-                meta["board_override"] = True
-                meta["actor_user_id"] = actor_user_id
+        actor = resolve_actor(actor_agent_id, actor_user_id)
+        meta: dict = {}
+        if is_board_override:
+            meta["board_override"] = True
+            meta["actor_user_id"] = actor_user_id
 
-            await self.activity_log.record(
-                session,
-                company_id=company_id,
-                actor_type=actor.type,
-                actor_id=actor.id,
-                metadata=actor.metadata(),
-                event_type=ActivityEventType.WORK_ITEM_COMPLETED,
-                entity_type="work_item",
-                entity_id=work_item_id,
-                before={"status": current.value},
-                after={"status": WorkItemStatus.DONE.value, **meta},
-            )
+        await audit(
+            self.activity_log,
+            session,
+            company_id=company_id,
+            actor_type=actor.type,
+            actor_id=actor.id,
+            metadata=actor.metadata(),
+            event_type=ActivityEventType.WORK_ITEM_COMPLETED,
+            entity_type="work_item",
+            entity_id=work_item_id,
+            before={"status": current.value},
+            after={"status": WorkItemStatus.DONE.value, **meta},
+        )
 
         return item
 

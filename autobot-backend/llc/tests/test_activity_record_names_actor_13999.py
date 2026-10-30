@@ -11,7 +11,8 @@ spread over several lines counts the same as a one-liner.
 
 A call is flagged when it has no ``actor_type`` keyword and fewer than three positional
 arguments, or passes ``actor_type=None``. ``**kwargs`` forwarding is accepted only inside
-``record_bulk`` itself. Only calls whose receiver looks like an activity log are examined.
+``record_bulk`` itself. Only calls whose receiver looks like an activity log are examined. ``audit(log, session, ...)``
+(``services/actor.py``) is held to the same rule, and is the one other place ``**entry`` may be forwarded.
 
 What this still cannot see: a call through an alias (``rec = log.record; rec(...)``), a
 receiver named something else, and the entries handed to ``record_bulk`` (each is a dict
@@ -30,7 +31,7 @@ LLC_ROOT = Path(__file__).resolve().parent.parent
 # Positional order of LLCActivityLogService.record: session, company_id, actor_type, ...
 ACTOR_TYPE_POSITION = 2
 MIN_CALLS_EXPECTED = 40
-FORWARDING_FUNCTION = "record_bulk"
+FORWARDING_FUNCTIONS = {"record_bulk", "audit"}  # forward **entry on purpose; their callers are checked
 _LOG_RECEIVER = re.compile(r"(^|\.|_)(activity_log|log)$|^(svc|self)$")
 
 EXEMPT = {
@@ -49,8 +50,20 @@ def _omits_actor_type(call: ast.Call, enclosing: Optional[str]) -> bool:
         if kw.arg == "actor_type":
             return _is_none(kw.value)
     if any(kw.arg is None for kw in call.keywords):  # **entry
-        return enclosing != FORWARDING_FUNCTION
-    return len(call.args) <= ACTOR_TYPE_POSITION
+        return enclosing not in FORWARDING_FUNCTIONS
+    offset = 1 if isinstance(call.func, ast.Name) else 0  # audit(log, session, ...) has the log first
+    return len(call.args) <= ACTOR_TYPE_POSITION + offset
+
+
+def _is_record_call(node: ast.Call) -> bool:
+    """``<activity log>.record(...)`` or the ``audit(log, session, ...)`` wrapper around it."""
+    if isinstance(node.func, ast.Name):
+        return node.func.id == "audit"
+    return (
+        isinstance(node.func, ast.Attribute)
+        and node.func.attr == "record"
+        and bool(_LOG_RECEIVER.search(ast.unparse(node.func.value)))
+    )
 
 
 def _record_calls(tree: ast.AST) -> list[tuple[ast.Call, Optional[str]]]:
@@ -60,9 +73,8 @@ def _record_calls(tree: ast.AST) -> list[tuple[ast.Call, Optional[str]]]:
     def visit(node: ast.AST, enclosing: Optional[str]) -> None:
         if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             enclosing = node.name
-        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr == "record":
-            if _LOG_RECEIVER.search(ast.unparse(node.func.value)):
-                found.append((node, enclosing))
+        if isinstance(node, ast.Call) and _is_record_call(node):
+            found.append((node, enclosing))
         for child in ast.iter_child_nodes(node):
             visit(child, enclosing)
 
@@ -109,7 +121,9 @@ def test_population_is_not_empty_and_matches_a_second_derivation():
         total += len(calls)
         if calls:
             ast_files.add(path)
-    text_files = {p for p in _llc_files() if p != this_file and re.search(r"\.record\(", p.read_text(encoding="utf-8"))}
+    text_files = {
+        p for p in _llc_files() if p != this_file and re.search(r"\.record\(|\baudit\(", p.read_text(encoding="utf-8"))
+    }
     assert total >= MIN_CALLS_EXPECTED, f"only {total} record() calls found; the walk is broken"
     assert text_files == ast_files, f"text/AST disagree: {sorted(p.name for p in text_files ^ ast_files)}"
 
@@ -122,12 +136,15 @@ CONTROLS_OMITTING = {
         "async def f(s):\n    if self.activity_log:\n        await self.activity_log.record(session=s)\n"
     ),
     "actor_type None": "async def f(s):\n    await log.record(s, actor_type=None)\n",
+    "audit() without an actor": "async def f(s):\n    await audit(log, s, company_id='c')\n",
     "forwarding outside record_bulk": "async def f(s, **e):\n    await log.record(session=s, **e)\n",
 }
 CONTROLS_NAMING = {
     "keyword": "async def f(s):\n    await log.record(s, actor_type=ActorType.USER)\n",
     "positional": "async def f(s):\n    await log.record(s, 'c', ActorType.USER, 'a')\n",
     "forwarding inside record_bulk": "async def record_bulk(s, **e):\n    await self.record(session=s, **e)\n",
+    "audit() naming the actor": "async def f(s):\n    await audit(log, s, actor_type=ActorType.USER)\n",
+    "forwarding inside audit": "async def audit(log, s, **e):\n    await log.record(s, **e)\n",
     "receiver is not a log": "async def f(s):\n    metrics.record(s)\n",
 }
 

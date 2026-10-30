@@ -240,7 +240,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llc/api/work_items.py": 1399,  # #19582: comment wake moved into the service
     "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 1023,  # #19582 (shared run finder)
     "autobot-backend/llc/services/template.py": 643,
-    "autobot-backend/llc/services/work_item_service.py": 1077,  # #19582: approval-category check moved out
+    "autobot-backend/llc/services/work_item_service.py": 1026,  # #19582: approval-category check moved out
     "autobot-backend/llc/tests/conftest.py": 832,
     "autobot-backend/llc/tests/test_autobot_agent_adapter.py": 663,
     "autobot-backend/llc/tests/test_heartbeat_scheduler.py": 1042,
