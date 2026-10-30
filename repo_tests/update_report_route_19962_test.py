@@ -5,14 +5,14 @@
 from __future__ import annotations
 
 import ast
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from repo_tests._paths import repo_root
 from sqlalchemy import Column, DateTime, Integer, select
 from sqlalchemy.orm import declarative_base
 
-_SOURCE = Path(__file__).resolve().parents[1] / "autobot-slm-backend" / "api" / "update_report.py"
+_SOURCE = repo_root() / "autobot-slm-backend" / "api" / "update_report.py"
 _Base = declarative_base()
 
 
