@@ -126,6 +126,8 @@
   --aui-z-dropdown: 100;
   --aui-z-modal: 1000;
   --aui-z-tooltip: 1200;
+  --aui-z-raised: 1;
+  --aui-z-skip-link: calc(var(--aui-z-modal) + 1);
 
   /* ---- Tooltip (BaseTooltip) ----------------------------------------- */
   --aui-tooltip-delay: 500ms;
