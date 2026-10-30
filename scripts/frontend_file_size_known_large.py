@@ -61,7 +61,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/desktop/PopoutChromiumBrowser.vue": 1229,
     "autobot-frontend/src/components/examples/ThemingPatternExample.vue": 603,
     "autobot-frontend/src/components/feature-flags/AccessMetrics.vue": 729,
-    "autobot-frontend/src/components/feature-flags/EndpointEnforcement.vue": 701,
+    "autobot-frontend/src/components/feature-flags/EndpointEnforcement.vue": 639,
     "autobot-frontend/src/components/file-browser/FileBrowser.vue": 736,
     "autobot-frontend/src/components/knowledge/ChromaDBExplorer.vue": 1155,
     "autobot-frontend/src/components/knowledge/DocumentChangeFeed.vue": 601,
@@ -88,13 +88,11 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/manpage/ManPageManager.vue": 1213,  # #18849: 1214 -> 1213
     "autobot-frontend/src/components/security/SecretsManager.vue": 2775,
     "autobot-frontend/src/components/security/ThreatIntelligenceDashboard.vue": 838,
-    "autobot-frontend/src/components/security/ThreatIntelligenceSettings.vue": 652,
-    "autobot-frontend/src/components/settings/ApiKeySetupWizard.vue": 614,
     "autobot-frontend/src/components/terminal/AdvancedStepConfirmationModal.vue": 615,  # #18849: 616 -> 615
     "autobot-frontend/src/components/terminal/BaseXTerminal.vue": 825,
     "autobot-frontend/src/components/terminal/TerminalModals.vue": 742,  # #18849: 743 -> 742
     "autobot-frontend/src/components/terminal/TerminalWindow.vue": 1612,
-    "autobot-frontend/src/components/ui/HostSelectionDialog.vue": 965,
+    "autobot-frontend/src/components/ui/HostSelectionDialog.vue": 924,
     "autobot-frontend/src/components/vision/GUIAutomationControls.vue": 793,
     "autobot-frontend/src/components/vision/MediaGallery.vue": 843,
     "autobot-frontend/src/components/vision/ScreenCaptureViewer.vue": 836,
@@ -134,7 +132,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/services/TerminalService.ts": 1137,
     "autobot-frontend/src/stores/useChatStore.ts": 1176,
     "autobot-frontend/src/stores/useKnowledgeStore.ts": 809,
-    "autobot-frontend/src/utils/ApiClient.ts": 782,
     "autobot-frontend/src/utils/RumAgent.ts": 857,
     "autobot-frontend/src/utils/VisionMultimodalApiClient.ts": 663,
     "autobot-frontend/src/utils/debugUtils.ts": 620,
@@ -148,14 +145,14 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/EvolutionView.vue": 781,
     "autobot-frontend/src/views/FailureAnalysisDashboard.vue": 782,  # #13422: 799 -> 782 (kit badges)
     "autobot-frontend/src/views/MarketplaceView.vue": 711,
-    "autobot-frontend/src/views/OnboardingWizard.vue": 884,
+    "autobot-frontend/src/views/OnboardingWizard.vue": 836,
     "autobot-frontend/src/views/PluginsView.vue": 1094,
     "autobot-frontend/src/views/SettingsView.vue": 739,
     "autobot-frontend/src/views/VisionAutomationView.vue": 873,
     "autobot-frontend/src/views/WorkflowBuilderView.vue": 2267,  # #13422: 2300 -> 2267 (kit RiskBadge)
     "autobot-frontend/src/views/llc/BacklogView.vue": 823,
     "autobot-frontend/src/views/llc/CompanyCreationWizard.vue": 909,
-    "autobot-frontend/src/views/llc/CompanyPortabilityView.vue": 841,
+    "autobot-frontend/src/views/llc/CompanyPortabilityView.vue": 761,
     "autobot-frontend/src/views/llc/CostDashboard.vue": 1017,
     "autobot-frontend/src/views/llc/GanttTimelineView.vue": 817,
     "autobot-frontend/src/views/llc/HeartbeatMonitor.vue": 807,
@@ -169,7 +166,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/background-monitor.ts": 713,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/index.ts": 957,
     "autobot-slm-frontend/src/components/AddNodeModal.vue": 1067,  # #14777 batch 2: 1111 -> 1067
-    "autobot-slm-frontend/src/components/fleet/DecommissionModal.vue": 619,  # #14777: 699 -> 621; 619 (#18941 review)
     "autobot-slm-frontend/src/components/fleet/NodeLifecyclePanel.vue": 934,
     "autobot-slm-frontend/src/composables/useAutobotApi.ts": 1973,  # #19217 factory in; #12363 formatter out
     "autobot-slm-frontend/src/composables/useCodeSync.ts": 1078,
@@ -185,7 +181,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-frontend/src/views/OrchestrationView.vue": 2189,
     "autobot-slm-frontend/src/views/ReplicationView.vue": 704,  # #18819 + #14777: 731 -> 706
     "autobot-slm-frontend/src/views/SecurityView.vue": 1368,  # #14780 BasePagination: 1386 -> 1374
-    "autobot-slm-frontend/src/views/SetupWizardView.vue": 1834,
+    "autobot-slm-frontend/src/views/SetupWizardView.vue": 1790,
     "autobot-slm-frontend/src/views/SkillsView.vue": 631,  # #18819 + #14777: 645 -> 633; #19482: -> 631
     "autobot-slm-frontend/src/views/SystemUpdatesTab.vue": 626,  # #18819: 638 -> 635; #19482: -> 632; #18863: -> 626
     "autobot-slm-frontend/src/views/monitoring/ErrorMonitor.vue": 608,  # #14780: 617 -> 609; #19482: -> 608
