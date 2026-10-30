@@ -65,6 +65,7 @@
     src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-browser-worker/"
     dest: "{{ autobot.base_dir }}/autobot-browser-worker/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=node_modules"
       - "--exclude=__pycache__"
       - "--exclude=.git"
