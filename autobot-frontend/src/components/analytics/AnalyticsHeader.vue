@@ -398,7 +398,7 @@ function handleSourceChange(event: Event) {
 }
 
 .btn-cancel {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-primary);
 }
 
