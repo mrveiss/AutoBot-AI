@@ -44,6 +44,12 @@ from __future__ import annotations
 #: uncovered dependency pass — that is the decision this record exists to keep
 #: visible rather than to rubber-stamp.
 GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
+    "Dockerfile*": (
+        {"repo_tests/slm_admin_password_one_home_19318_test.py", "repo_tests/user_mode_values_19437_test.py"},
+        "the guards sweep Dockerfiles anywhere, for the SLM admin password default and for the user-mode values; "
+        "the reads became visible when the detector learned dotless named-file globs (#19575). Covering them needs "
+        "`**/Dockerfile*` in the python filter (#19817)",
+    ),
     "*.conf": (
         {"repo_tests/slm_frontend_atomic_publish_15610_test.py"},
         "root-relative `*.conf` sweep; the matching files live outside the python filter's trees",
@@ -99,7 +105,6 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     ),
     "*.sh": (
         {
-            "repo_tests/operational_docs_name_real_playbooks_19611_test.py",
             "repo_tests/ansible_inventory_path_exists_test.py",
             "repo_tests/browser_port_single_home_19324_test.py",
             "repo_tests/chromadb_bind_not_hardcoded_15317_test.py",
@@ -109,7 +114,9 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/git_repo_root_calls_are_guarded_17418_test.py",
             "repo_tests/hook_decision_exit_codes_15956_test.py",
             "repo_tests/hooks_path_override_15961_test.py",
+            "repo_tests/install_and_code_sync_modes_19503_test.py",
             "repo_tests/one_git_enumeration_15926_test.py",
+            "repo_tests/operational_docs_name_real_playbooks_19611_test.py",
             "repo_tests/python_filter_covers_tested_shell_wrappers_test.py",
             "repo_tests/redis_password_literal_guard_test.py",
             "repo_tests/shell_lib_test.py",
@@ -178,6 +185,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/hook_suites_run_in_ci_test.py",
             "repo_tests/hooks_path_override_15961_test.py",
             "repo_tests/infra_libs_test_wiring_guard_15051_test.py",
+            "repo_tests/install_and_code_sync_modes_19503_test.py",
             "repo_tests/job_name_names_what_it_runs_test.py",
             "repo_tests/nginx_sites_enabled_link_enforced_16979_test.py",
             "repo_tests/no_private_copy_of_a_shared_helper_test.py",
@@ -195,11 +203,11 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/test_agent_venv_isolation_14278.py",
             "repo_tests/test_ci_import_smoke_paths_14252.py",
             "repo_tests/test_deploy_constraint_rewrite_14272.py",
+            "repo_tests/user_mode_values_19437_test.py",
             "repo_tests/workflow_action_version_regression_test.py",
             "repo_tests/workflow_closed_reference_guard_test.py",
             "repo_tests/workflow_concurrency_guard_test.py",
             "repo_tests/workflow_names_say_company_os_19546_test.py",
-            "repo_tests/user_mode_values_19437_test.py",
         },
         "root-relative `*.yml` sweep; the matching files live outside the python filter's trees",
     ),
