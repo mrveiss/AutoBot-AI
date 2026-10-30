@@ -40,9 +40,11 @@ class _Redis:
             self.hashes[key]["cancel"] = "1"
             return 1
         if script == sw._SETTLE_UNLESS_CANCELLED_LUA:
+            if self.hashes.get(key, {}).get("owner") != args[0]:
+                return sw._SETTLE_LOST_RECORD
             if self.hashes.get(key, {}).get("cancel") == "1":
                 return 0
-            self.hashes.setdefault(key, {})["state"] = "settling"
+            self.hashes[key]["state"] = "settling"
             return 1
         raise AssertionError(f"unexpected script {script!r}")
 
@@ -383,6 +385,21 @@ async def test_a_cancel_accepted_during_convergence_stops_before_the_record_is_w
     assert status["state"] == "cancelled" and not _overrides(env)
 
 
+async def test_a_state_record_lost_during_convergence_never_cuts_over(env, monkeypatch):
+    """#19849: the heartbeat recreates a vanished hash without an owner, so the script checks the owner."""
+    real_converge = sw._converge
+
+    async def _expire_then_converge(store, run, failed_ids):
+        env.redis.hashes.pop(sw.STATE_KEY)
+        return await real_converge(store, run, failed_ids)
+
+    monkeypatch.setattr(sw, "_converge", _expire_then_converge)
+    await _run(env)
+    assert not _overrides(env), "the record was written by a run that lost its state"
+    assert env.claims.holder() is None
+    assert env.redis.hashes.get(sw.STATE_KEY, {}).get("state") != "settling"
+
+
 async def test_a_start_without_a_knowledge_base_is_refused_before_the_lock(env):
     with pytest.raises(sw.SwitchRefused, match="not available"):
         await sw.start_switch(None, MODEL)
@@ -446,25 +463,37 @@ async def test_cancel_and_cutover_cannot_both_win(env):
     """code review on PR #19641: the flag and the transition are one step each, so one side refuses."""
     env.claims.hold("owner-1")  # a live build, not a stale one
     await sw._set_state(state="building", owner="owner-1")
-    assert await env.redis.eval(sw._SETTLE_UNLESS_CANCELLED_LUA, 1, sw.STATE_KEY) == 1
+    assert await env.redis.eval(sw._SETTLE_UNLESS_CANCELLED_LUA, 1, sw.STATE_KEY, "owner-1") == 1
     assert await sw.request_switch_cancel(actor="admin") == "too_late"
     await sw._set_state(state="building", cancel="")
     assert await env.redis.eval(sw._CANCEL_IF_BUILDING_LUA, 1, sw.STATE_KEY) == 1
-    assert await env.redis.eval(sw._SETTLE_UNLESS_CANCELLED_LUA, 1, sw.STATE_KEY) == 0
+    assert await env.redis.eval(sw._SETTLE_UNLESS_CANCELLED_LUA, 1, sw.STATE_KEY, "owner-1") == 0
 
 
 async def test_the_cancel_and_settle_scripts_on_a_real_lua_engine():
     import fakeredis
 
     redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
-    await redis.hset("s", mapping={"state": "building"})
+    await redis.hset("s", mapping={"state": "building", "owner": "me"})
     assert await redis.eval(sw._CANCEL_IF_BUILDING_LUA, 1, "s") == 1
-    assert await redis.eval(sw._SETTLE_UNLESS_CANCELLED_LUA, 1, "s") == 0, "an accepted cancel blocks cutover"
+    assert await redis.eval(sw._SETTLE_UNLESS_CANCELLED_LUA, 1, "s", "me") == 0, "an accepted cancel blocks cutover"
     assert await redis.hget("s", "state") == "building"
     await redis.hset("s", mapping={"cancel": ""})
-    assert await redis.eval(sw._SETTLE_UNLESS_CANCELLED_LUA, 1, "s") == 1
+    assert await redis.eval(sw._SETTLE_UNLESS_CANCELLED_LUA, 1, "s", "me") == 1
     assert await redis.eval(sw._CANCEL_IF_BUILDING_LUA, 1, "s") == 0, "once settling, a cancel is refused"
     assert await redis.hget("s", "cancel") == ""
+
+
+async def test_settling_a_vanished_or_foreign_record_writes_nothing():
+    """#19849: HSET used to recreate an expired hash as settling with no owner."""
+    import fakeredis
+
+    redis = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    assert await redis.eval(sw._SETTLE_UNLESS_CANCELLED_LUA, 1, "s", "me") == sw._SETTLE_LOST_RECORD
+    assert await redis.exists("s") == 0, "the expired record came back"
+    await redis.hset("s", mapping={"state": "building", "owner": "newer"})
+    assert await redis.eval(sw._SETTLE_UNLESS_CANCELLED_LUA, 1, "s", "me") == sw._SETTLE_LOST_RECORD
+    assert await redis.hget("s", "state") == "building", "a newer switch's record was moved to settling"
 
 
 async def test_a_write_is_not_noted_when_no_switch_runs(env):
