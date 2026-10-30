@@ -1569,8 +1569,8 @@ onUnmounted(() => {
 
 .message-wrapper.type-overseer_step::after {
   content: 'Step';
-  background: var(--color-info);
-  color: var(--text-inverse);
+  background: var(--color-info-solid);
+  color: var(--text-on-info);
 }
 
 .message-wrapper.type-overseer_plan,
