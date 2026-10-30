@@ -19,6 +19,7 @@ import {
   type LLMProviderConfig,
   type LLMTestResponse,
 } from '@/composables/useLlmConfigApi'
+import { autobotApiErrorMessage } from '@/composables/useAutobotApi'
 import ssotConfig from '@/config/ssot-config'
 
 const { t } = useI18n()
@@ -79,8 +80,7 @@ async function fetchConfig(): Promise<void> {
     Object.assign(config, resp.config)
     hasUnsavedChanges.value = false
   } catch (e: unknown) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    error.value = err.response?.data?.detail || t('settings.admin.lLMSettings.failedToLoadLlmConfig')
+    error.value = autobotApiErrorMessage(e, t('settings.admin.lLMSettings.failedToLoadLlmConfig'))
   } finally {
     loading.value = false
   }
@@ -95,8 +95,7 @@ async function saveConfig(): Promise<void> {
     hasUnsavedChanges.value = false
     showSuccessMsg(t('settings.admin.lLMSettings.configurationSaved'))
   } catch (e: unknown) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    error.value = err.response?.data?.detail || t('settings.admin.lLMSettings.failedToSaveLlmConfig')
+    error.value = autobotApiErrorMessage(e, t('settings.admin.lLMSettings.failedToSaveLlmConfig'))
   } finally {
     saving.value = false
   }
@@ -113,8 +112,7 @@ async function testProvider(provider: LLMProviderConfig): Promise<void> {
       model: provider.model,
     })
   } catch (e: unknown) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    error.value = err.response?.data?.detail || t('settings.admin.lLMSettings.connectionTestFailed')
+    error.value = autobotApiErrorMessage(e, t('settings.admin.lLMSettings.connectionTestFailed'))
   }
 }
 
@@ -133,8 +131,7 @@ async function applyToFleet(): Promise<void> {
       error.value = resp.message || t('settings.admin.lLMSettings.applyFailed')
     }
   } catch (e: unknown) {
-    const err = e as { response?: { data?: { detail?: string } } }
-    error.value = err.response?.data?.detail || t('settings.admin.lLMSettings.failedToApplyConfigToFleet')
+    error.value = autobotApiErrorMessage(e, t('settings.admin.lLMSettings.failedToApplyConfigToFleet'))
   } finally {
     applying.value = false
   }
