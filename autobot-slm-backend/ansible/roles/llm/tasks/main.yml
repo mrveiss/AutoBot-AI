@@ -200,6 +200,15 @@
 # Phase 4: Model Pulling (conditional on hardware)
 # -----------------------------------------------------------------
 
+# #19862: "All 0 models present" read as success when Apply sent empty lists.
+- name: "Models | There is something to pull"
+  ansible.builtin.assert:
+    that:
+      - _llm_models_to_pull | length > 0
+    fail_msg: "No models to pull: llm_cpu_models and llm_gpu_models are empty for this node."
+    quiet: true
+  when: llm_pull_models | default(true)
+
 - name: "Models | Pull models appropriate for this node"
   ansible.builtin.command:
     cmd: "ollama pull {{ item }}"
