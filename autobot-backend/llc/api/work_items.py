@@ -51,7 +51,6 @@ from ..kb.collections import KbCollectionManager
 from ..models.enums import (
     AssigneeType,
     WorkItemPriority,
-    WorkItemRelationType,
     WorkItemStatus,
     WorkItemType,
 )
@@ -68,7 +67,6 @@ from ..services.handoff import (
     HandoffNotAuthorized,
     HandoffService,
 )
-from ..services.work_item_relations import RelationConflict, WorkItemRelationService
 from ..services.work_item_service import (
     CheckoutConflict,
     CoWorkingPermissionError,
@@ -116,7 +114,6 @@ router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
 _get_product_service = lazy_singleton(WorkProductService)
 _get_handoff_service = lazy_singleton(HandoffService)
 _kb_manager = KbCollectionManager()
-_get_relation_service = lazy_singleton(WorkItemRelationService)
 _get_attachment_service = lazy_singleton(AttachmentService)
 _get_activity_service = lazy_singleton(LLCActivityLogService)
 _get_ac_suggester = lazy_singleton(AcSuggester)
@@ -126,10 +123,6 @@ _service = service_dep(WorkItemService)
 
 def _handoff_service() -> HandoffService:
     return _get_handoff_service()
-
-
-def _relation_service() -> WorkItemRelationService:
-    return _get_relation_service()
 
 
 def _attachment_service() -> AttachmentService:
@@ -247,19 +240,6 @@ class ReviewChangesRequest(BaseModel):
     company_id: str
     change_request: str
     return_to_agent_id: Optional[str] = None
-
-
-class RelationCreate(BaseModel):
-    company_id: str
-    target_id: str
-    relation_type: WorkItemRelationType
-    created_by_agent_id: Optional[str] = None
-    created_by_user_id: Optional[str] = None
-
-
-class RelationDelete(BaseModel):
-    actor_agent_id: Optional[str] = None
-    actor_user_id: Optional[str] = None
 
 
 async def _assignee_display(item: Any, session: AsyncSession) -> Optional[Dict[str, Any]]:
@@ -1109,75 +1089,6 @@ async def list_work_item_activity(
         total=result.total,
         has_next=result.has_next,
     )
-
-
-# ------------------------------------------------------------------
-# Relation endpoints (GH#8252)
-# ------------------------------------------------------------------
-
-
-@router.post("/{work_item_id}/relations", status_code=201)
-async def add_relation(
-    work_item_id: str,
-    body: RelationCreate,
-    session: AsyncSession = Depends(get_session),
-    _current_user: dict = Depends(get_current_user),
-    ctx: TenantContext = Depends(require_org_context),
-) -> Dict[str, Any]:
-    # IDOR guard (M4/GH#9861).
-    existing = await _service().get(session, work_item_id)
-    if existing is None or str(existing.company_id) != str(ctx.org_id):
-        raise HTTPException(status_code=404, detail="Work item not found")
-    try:
-        rel = await _relation_service().add(
-            company_id=body.company_id,
-            source_id=work_item_id,
-            target_id=body.target_id,
-            relation_type=body.relation_type,
-            created_by_agent_id=body.created_by_agent_id,
-            created_by_user_id=body.created_by_user_id,
-        )
-        await session.commit()
-        return {
-            "id": str(rel.id),
-            "source_id": work_item_id,
-            "target_id": body.target_id,
-            "relation_type": rel.relation_type,
-        }
-    except RelationConflict as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=409, detail="Internal server error")
-    except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=404, detail="Internal server error")
-
-
-@router.delete("/{work_item_id}/relations/{relation_id}", status_code=204)
-async def remove_relation(
-    work_item_id: str,
-    relation_id: str,
-    company_id: str = Query(...),
-    actor_agent_id: Optional[str] = Query(None),
-    actor_user_id: Optional[str] = Query(None),
-    session: AsyncSession = Depends(get_session),
-    _current_user: dict = Depends(get_current_user),
-    ctx: TenantContext = Depends(require_org_context),
-) -> None:
-    # IDOR guard (M4/GH#9861).
-    existing = await _service().get(session, work_item_id)
-    if existing is None or str(existing.company_id) != str(ctx.org_id):
-        raise HTTPException(status_code=404, detail="Work item not found")
-    try:
-        await _relation_service().remove(
-            company_id=company_id,
-            relation_id=relation_id,
-            actor_agent_id=actor_agent_id,
-            actor_user_id=actor_user_id,
-        )
-        await session.commit()
-    except ValueError as exc:
-        logger.error("Exception in API handler: %s", exc, exc_info=True)
-        raise HTTPException(status_code=404, detail="Internal server error")
 
 
 # ---------------------------------------------------------------------------
