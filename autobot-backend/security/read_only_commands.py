@@ -10,23 +10,18 @@ a second risk classification: a command must be SAFE first, and then every segme
 this allowlist. Anything not recognised counts as not read-only, so it is held for a person.
 """
 
+import re
 import shlex
-from typing import FrozenSet, List, Mapping, Optional
+from typing import FrozenSet, List, Optional
 
 from security.command_segments import command_segments
 
 _READ_ONLY_BASES: FrozenSet[str] = frozenset(
     {
         "basename",
-        "cat",
         "df",
         "dirname",
         "du",
-        "egrep",
-        "fgrep",
-        "file",
-        "grep",
-        "head",
         "id",
         "ls",
         "ps",
@@ -35,20 +30,30 @@ _READ_ONLY_BASES: FrozenSet[str] = frozenset(
         "realpath",
         "stat",
         "uname",
-        "wc",
         "which",
         "whoami",
     }
 )
 
-#: Commands that read only with the right arguments, and the arguments that stop them reading.
-_FORBIDDEN_FLAGS: Mapping[str, FrozenSet[str]] = {
-    "find": frozenset({"-delete", "-exec", "-execdir", "-ok", "-okdir", "-fprint", "-fprint0", "-fprintf", "-fls"}),
-    "tail": frozenset({"-f", "-F", "--follow", "--retry"}),
-}
+#: These block on stdin without a file to read, unless a pipe feeds them.
+_FILE_READERS: FrozenSet[str] = frozenset({"cat", "head", "tail", "wc"})
+_PATTERN_READERS: FrozenSet[str] = frozenset({"egrep", "fgrep", "grep"})
 
-#: ``git`` subcommands that only read. ``--output`` makes them write a file.
+#: The only flags ``tail`` may carry: any other could be a form of ``--follow``, which never returns.
+_TAIL_FLAGS = re.compile(r"^(-n\d*|-\d+|--lines(=\d+)?)$")
+
+#: ``find`` predicates that write or run something.
+_FIND_FORBIDDEN: FrozenSet[str] = frozenset(
+    {"-delete", "-exec", "-execdir", "-ok", "-okdir", "-fprint", "-fprint0", "-fprintf", "-fls"}
+)
+
+#: ``git`` subcommands that only read, and the options that make them write or run a program.
+#: A diff program already set in the repo's own config still runs: that takes an earlier approved write.
 _READ_ONLY_GIT_SUBCOMMANDS: FrozenSet[str] = frozenset({"diff", "log", "show", "status"})
+_GIT_FORBIDDEN_PREFIXES = ("--output", "--ext-diff", "--textconv")
+
+#: Paths with no end, or with reads that have effects.
+_UNBOUNDED_PATHS = ("/dev/", "/proc/")
 
 _SHELL_OPERATOR_CHARS = frozenset("<>&;|()")
 
@@ -66,21 +71,44 @@ def _tokens(segment: str) -> Optional[List[str]]:
     return words
 
 
-def _segment_is_read_only(segment: str) -> bool:
+def _operands(args: List[str]) -> List[str]:
+    """The arguments that are not flags and not a flag's numeric value."""
+    return [arg for arg in args if not arg.startswith("-") and not arg.isdigit()]
+
+
+def _reads_bounded_input(base: str, args: List[str], piped: bool) -> bool:
+    """Whether this reader has something to read that ends: a file, or a pipe into it."""
+    if piped:
+        return True
+    if base in _PATTERN_READERS:
+        return len([arg for arg in args if not arg.startswith("-")]) >= 2
+    return bool(_operands(args))
+
+
+def _segment_is_read_only(segment: str, piped: bool) -> bool:
     words = _tokens(segment)
     if words is None:
         return False
     base, args = words[0], words[1:]
+    if any(arg == "-" or arg.startswith(_UNBOUNDED_PATHS) for arg in args):
+        return False
     if base in _READ_ONLY_BASES:
         return True
-    if base in _FORBIDDEN_FLAGS:
-        return not any(arg.split("=", 1)[0] in _FORBIDDEN_FLAGS[base] for arg in args)
+    if base in _FILE_READERS or base in _PATTERN_READERS:
+        flags_ok = base != "tail" or all(_TAIL_FLAGS.match(arg) for arg in args if arg.startswith("-"))
+        return flags_ok and _reads_bounded_input(base, args, piped)
+    if base == "find":
+        return not any(arg in _FIND_FORBIDDEN for arg in args)
     if base == "git":
-        return bool(args) and args[0] in _READ_ONLY_GIT_SUBCOMMANDS and not any(a.startswith("--output") for a in args)
+        return (
+            bool(args)
+            and args[0] in _READ_ONLY_GIT_SUBCOMMANDS
+            and not any(arg.startswith(_GIT_FORBIDDEN_PREFIXES) for arg in args)
+        )
     return False
 
 
 def is_read_only_command(command: str) -> bool:
-    """Whether every segment of *command* only reads. Unknown means no."""
+    """Whether every segment of *command* only reads, and ends. Unknown means no."""
     segments = command_segments(command)
-    return bool(segments) and all(_segment_is_read_only(segment) for segment in segments)
+    return bool(segments) and all(_segment_is_read_only(segment, index > 0) for index, segment in enumerate(segments))
