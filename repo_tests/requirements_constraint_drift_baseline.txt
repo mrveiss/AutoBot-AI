@@ -76,6 +76,5 @@ autobot-slm-backend/requirements.txt::pydantic
 autobot-slm-backend/requirements.txt::python-multipart
 autobot-slm-backend/requirements.txt::redis
 autobot-slm-backend/requirements.txt::sqlalchemy
-autobot-slm-backend/requirements.txt::starlette
 autobot-slm-backend/requirements.txt::uvicorn
 autobot-slm-backend/requirements.txt::websockets
