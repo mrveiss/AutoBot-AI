@@ -169,7 +169,6 @@ def _stub_org(**attrs):
         name="acme",
         description=None,
         settings={},
-        subscription_tier="free",
         max_users=10,
         updated_at=None,
         **attrs,
@@ -187,7 +186,7 @@ def test_tracked_changes_carry_none_and_int_values_unconverted():
     """
     org = _stub_org()
     changes = OrganizationService._apply_organization_updates(
-        None, org, name=None, description="now set", settings=None, subscription_tier=None, max_users=25
+        None, org, name=None, description="now set", settings=None, max_users=25
     )
 
     assert changes["description"] == {"old": None, "new": "now set"}
@@ -201,7 +200,7 @@ def test_untouched_fields_are_absent_from_the_tracked_changes():
     """Only fields actually supplied are recorded — the caller keys audit on it."""
     org = _stub_org()
     changes = OrganizationService._apply_organization_updates(
-        None, org, name=None, description=None, settings=None, subscription_tier=None, max_users=None
+        None, org, name=None, description=None, settings=None, max_users=None
     )
 
     assert changes == {}
