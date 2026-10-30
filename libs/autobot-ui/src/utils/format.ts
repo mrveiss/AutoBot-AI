@@ -20,7 +20,7 @@ export interface FormatDurationOptions {
   nullText?: string
   /** Text for an exact zero value; when omitted, zero follows the normal ladder. */
   zeroText?: string
-  /** Rounding for the top tier of `clock` / `msMinutes` styles (default `'round'`). */
+  /** Rounding for the top tier of `clock` / `msMinutes` styles and the seconds of `msMinutesSeconds` (default `'round'`). */
   rounding?: 'round' | 'floor'
 }
 
@@ -61,7 +61,7 @@ function formatDurationValue(
       return `${Math.floor(value / 60000)}m ${Math.floor((value % 60000) / 1000)}s`
     }
     case 'msMinutesSeconds': {
-      const secs = Math.max(0, Math.round(value / 1000))
+      const secs = Math.max(0, roundFn(value / 1000))
       return secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`
     }
     case 'msCompound': {

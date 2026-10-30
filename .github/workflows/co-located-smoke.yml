@@ -55,6 +55,9 @@ on:
       - 'autobot-frontend/src/assets/**'
       # the gate itself
       - '.github/workflows/co-located-smoke.yml'
+      # #19527: the image build and disk guard it runs
+      - '.github/actions/build-smoke-images/**'
+      - '.github/actions/free-disk-space/**'
       - 'scripts/check_colocated_csp.py'
       - 'autobot-slm-backend/tests/api/test_collect_outdated_node_ids.py'
       - 'autobot-backend/transcriber/tests/test_multiuser_authz.py'
@@ -131,47 +134,19 @@ jobs:
       - name: Free disk space
         uses: ./.github/actions/free-disk-space
         with:
-          min-free-gb: '15'
+          # The run itself consumes ~17 GB (images, layer cache, service images);
+          # 30 leaves headroom, and the toolchain removal runs only below it (#19527).
+          min-free-gb: '30'
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4
-
-      - name: Cache Docker layers
-        # Shares the docker-smoke-test cache prefix so layers stay warm. Restore only: this
-        # workflow never runs on a main push, so the entries it reads are docker-smoke-test's.
-        # #19308: keyed on what the image layers are built from, not on the commit. A
-        # per-commit key saved a new ~1.2 GB entry on every run and pushed the repo's
-        # Actions cache over its 10 GB limit, evicting the small caches CI depends on. An
-        # exact hit skips the save, so a commit that changes no dependency adds nothing.
-        id: buildx-cache
-        uses: actions/cache/restore@v6
         with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-colocated-${{ hashFiles('docker/**', 'requirements*.txt', 'constraints/**', 'autobot-backend/requirements*.txt', 'autobot-slm-backend/requirements*.txt', 'package-lock.json', 'autobot-frontend/package-lock.json', 'autobot-slm-frontend/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-
+          # #19527: tearing the builder down cost 30-60s per run on a runner that is
+          # discarded anyway. A persistent self-hosted runner still cleans up.
+          cleanup: ${{ runner.environment == 'self-hosted' }}
 
       - name: Create .env from .env.example
         run: cp .env.example .env
-
-      - name: Ensure cache directory exists
-        run: mkdir -p /tmp/.buildx-cache
-
-      - name: Build images with layer cache
-        run: |
-          for component in backend slm frontend; do
-            echo "=== Building ${component} image ==="
-            docker buildx build \
-              --cache-from type=local,src=/tmp/.buildx-cache \
-              --cache-to   type=local,dest=/tmp/.buildx-cache-new,mode=min \
-              --file "docker/${component}/Dockerfile" \
-              --tag "autobot/${component}:latest" \
-              --load \
-              .
-            df -h / | grep -v Filesystem
-          done
-          rm -rf /tmp/.buildx-cache
-          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
 
       - name: Pick the management network range (#16833)
         # docker-compose.yml has no default autobot-mgmt range; this is the pick
@@ -192,6 +167,14 @@ jobs:
             echo "::add-mask::${value}"
             echo "${key}=${value}" >> "$GITHUB_ENV"
           done
+
+      - name: Build images
+        # Same images and cache namespace as docker-smoke-test. This workflow never
+        # runs on a main push, so it only ever restores what docker-smoke-test saved.
+        uses: ./.github/actions/build-smoke-images
+        with:
+          group: smoke
+          cache-key-prefix: buildx-bake-smoke
 
       - name: Start co-located stack
         run: docker compose --env-file docker/.env.docker up -d
