@@ -5,7 +5,7 @@
 """
 AutoBot Application User Management API
 
-Manages users in the remote AutoBot database (AUTOBOT_DB_HOST:5432/autobot_users).
+Manages users in the remote AutoBot database (AUTOBOT_POSTGRES_HOST:5432/autobot_users).
 These are application users who access AutoBot features (chat, workflows, etc.).
 """
 
