@@ -662,6 +662,19 @@ jobs:
         fi
         exit "$status"
 
+    # #19647: autobot-backend/conftest.py leaves a hollow chromadb stub in sys.modules, so in a shared
+    # session a test of the real library skips itself and reads as green. Its own session, and a skip fails.
+    - name: Run the real-ChromaDB tests in their own session
+      if: matrix.shard == 1
+      run: |
+        out=$(python -m pytest repo_tests/backup_embeddings_on_real_chroma_19647_test.py \
+          repo_tests/chromadb_missing_key_serving_where_18820_test.py -q -rs) || { echo "$out"; exit 1; }
+        echo "$out"
+        if grep -q SKIPPED <<< "$out"; then
+          echo "::error::a real-ChromaDB test was skipped"
+          exit 1
+        fi
+
     # RETIRED (#15051). This step named `infrastructure/shared/tests/integration`,
     # a path #734 moved to `autobot-infrastructure/shared/tests/integration`
     # without updating this reference — so the `if [ -d "$TEST_DIR" ]` guard
