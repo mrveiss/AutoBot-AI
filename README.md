@@ -488,7 +488,7 @@ the support contact path live in **[FUNDING.md](FUNDING.md)**.
 ### Under Consideration
 - Cloud deployment templates
 - Managed hosting option
-- Enterprise features (SAML)
+- SAML Single Logout
 
 ---
 

@@ -1,5 +1,6 @@
 {
   "common": {
+    "appName": "AutoBot",
     "submit": "Iesniegt",
     "cancel": "Atcelt",
     "save": "Saglabāt",
@@ -5860,6 +5861,7 @@
       "dismiss": "Dismiss"
     },
     "themeToggle": {
+      "accentPurpleDescription": "Violets — radošs un elegants",
       "system": "Sistēma",
       "highContrast": "Augsts kontrasts",
       "monochrome": "Melnbalts",
