@@ -297,3 +297,31 @@ env_registry.register_env_var(
         component="memory",
     )
 )
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_TRANSCRIPT_MAX_RETAINED_BYTES",
+        type=int,
+        default=268435456,
+        description=(
+            "Most source-line bytes behind the events or entries one transcript or history read retains; "
+            "over it the read stops and reports itself truncated "
+            "(services/execution/transcript_normalizer.py, #11137)."
+        ),
+        component="memory",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_MEMORY_SESSION_READ_MAX_BYTES",
+        type=int,
+        default=262144,
+        description=(
+            "Most text bytes one memory.session_read call returns after redaction; "
+            "over it the result carries truncated=true "
+            "(memory/verbatim_sessions.py, #11137)."
+        ),
+        component="memory",
+    )
+)

@@ -22,6 +22,7 @@ logger = get_logger(__name__)
 
 #: Most chunks one session read returns, and the most a listing scans (env-tunable).
 SESSION_READ_MAX_CHUNKS: int = env_int_clamped("AUTOBOT_MEMORY_SESSION_READ_MAX_CHUNKS", 500, min_v=1, max_v=100_000)
+SESSION_READ_MAX_BYTES: int = env_int_clamped("AUTOBOT_MEMORY_SESSION_READ_MAX_BYTES", 256 * 1024, min_v=1)
 SESSION_LIST_MAX_SCAN: int = env_int_clamped("AUTOBOT_MEMORY_SESSION_LIST_MAX_SCAN", 5000, min_v=1, max_v=1_000_000)
 SESSION_LIST_DEFAULT_LIMIT: int = env_int_clamped("AUTOBOT_MEMORY_SESSION_LIST_LIMIT", 50, min_v=1, max_v=10_000)
 

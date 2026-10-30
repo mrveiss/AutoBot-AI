@@ -12,6 +12,11 @@ import pytest
 from services.execution import claude_code_backend as backend
 from services.execution import transcript_normalizer as tn
 
+
+def ROOTS(tmp_path):
+    return [str(tmp_path)]
+
+
 CLAUDE_LINES = [
     {"type": "assistant", "message": {"content": [{"type": "text", "text": "hello"}]}},
     {
@@ -157,7 +162,9 @@ class TestFiles:
     def test_plain_and_gzip_identical(self, tmp_path):
         self._write(tmp_path / "a.jsonl", _saved_claude())
         self._write(tmp_path / "b.jsonl.gz", _saved_claude(), gz=True)
-        plain, gz = tn.read_transcript(tmp_path / "a.jsonl"), tn.read_transcript(tmp_path / "b.jsonl.gz")
+        plain, gz = tn.read_transcript(tmp_path / "a.jsonl", ROOTS(tmp_path)), tn.read_transcript(
+            tmp_path / "b.jsonl.gz", ROOTS(tmp_path)
+        )
         assert plain.items == gz.items and len(plain.items) == 4
         assert plain.skipped == 1 and not plain.truncated
 
@@ -165,14 +172,14 @@ class TestFiles:
         self._write(tmp_path / "a.jsonl", _saved_claude())
         self._write(tmp_path / "b.jsonl.gz", _codex(), gz=True)
         (tmp_path / "skip.txt").write_text("x", encoding="utf-8")
-        batch = tn.read_transcripts([tmp_path])
+        batch = tn.read_transcripts([tmp_path], ROOTS(tmp_path))
         assert sorted(p.rsplit("/", 1)[1] for p in batch.results) == ["a.jsonl", "b.jsonl.gz"]
         assert batch.failed == {}
 
     def test_history_file_gzip(self, tmp_path):
         path = tmp_path / "history.jsonl.gz"
         self._write(path, [{"display": "p1", "project": "/x", "timestamp": 0}, {"display": ""}], gz=True)
-        assert [e.prompt for e in tn.read_history(path).items] == ["p1"]
+        assert [e.prompt for e in tn.read_history(path, ROOTS(tmp_path)).items] == ["p1"]
 
 
 class TestBadInputDoesNotLoseTheBatch:
@@ -184,13 +191,13 @@ class TestBadInputDoesNotLoseTheBatch:
         path = tmp_path / "history.jsonl"
         lines = ['{"display": "ok1", "timestamp": 0}', '{"display": "bad", "timestamp": 1e300}', '{"display": "ok2"}']
         path.write_text("\n".join(lines) + "\n", encoding="utf-8")
-        result = tn.read_history(path)
+        result = tn.read_history(path, ROOTS(tmp_path))
         assert [e.prompt for e in result.items] == ["ok1", "ok2"] and result.skipped == 1
 
     def test_invalid_utf8_line_is_counted_not_fatal(self, tmp_path):
         path = tmp_path / "a.jsonl"
         path.write_bytes(b'\xff\xfe{"type":"user"}\n' + json.dumps(_saved_claude()[0]).encode() + b"\n")
-        result = tn.read_transcript(path)
+        result = tn.read_transcript(path, ROOTS(tmp_path))
         assert len(result.items) == 1 and result.skipped == 1
 
     def test_corrupt_gzip_fails_alone(self, tmp_path):
@@ -199,7 +206,7 @@ class TestBadInputDoesNotLoseTheBatch:
         whole = gzip.compress(b"x" * 5000)
         (tmp_path / "b.jsonl.gz").write_bytes(whole[: len(whole) // 2])  # truncated
         (tmp_path / "c.jsonl.gz").write_bytes(b"not gzip at all")
-        batch = tn.read_transcripts([tmp_path])
+        batch = tn.read_transcripts([tmp_path], ROOTS(tmp_path))
         assert list(batch.results) == [str(good)]
         assert {k.rsplit("/", 1)[1] for k in batch.failed} == {"b.jsonl.gz", "c.jsonl.gz"}
         assert all(v.isidentifier() for v in batch.failed.values())  # class names only
@@ -216,7 +223,7 @@ class TestBounds:
         monkeypatch.setattr(tn, "MAX_LINE_BYTES", 200)
         path = tmp_path / "a.jsonl"
         path.write_bytes(json.dumps(_saved_claude()[0]).encode() + b"\n" + b"y" * 10_000)
-        result = tn.read_transcript(path)
+        result = tn.read_transcript(path, ROOTS(tmp_path))
         assert len(result.items) == 1
         assert (result.truncated, result.truncated_reason) == (True, "line_length")
 
@@ -225,7 +232,7 @@ class TestBounds:
         line = json.dumps(_saved_claude()[0]) + "\n"
         with gzip.open(tmp_path / "bomb.jsonl.gz", "wt", encoding="utf-8") as fh:
             fh.write(line * 1000)
-        result = tn.read_transcript(tmp_path / "bomb.jsonl.gz")
+        result = tn.read_transcript(tmp_path / "bomb.jsonl.gz", ROOTS(tmp_path))
         assert (result.truncated, result.truncated_reason) == (True, "decompressed_bytes")
         assert 0 < len(result.items) < 1000
 
@@ -233,14 +240,78 @@ class TestBounds:
         path = tmp_path / "a.jsonl"
         path.write_text("".join(json.dumps(r) + "\n" for r in _saved_claude()), encoding="utf-8")  # 4 events
         monkeypatch.setattr(tn, "MAX_EVENTS", 4)
-        assert tn.read_transcript(path).truncated is False
+        assert tn.read_transcript(path, ROOTS(tmp_path)).truncated is False
         monkeypatch.setattr(tn, "MAX_EVENTS", 3)
-        cut = tn.read_transcript(path)
+        cut = tn.read_transcript(path, ROOTS(tmp_path))
         assert (len(cut.items), cut.truncated, cut.truncated_reason) == (3, True, "events")
 
     def test_history_event_bound(self, tmp_path, monkeypatch):
         monkeypatch.setattr(tn, "MAX_EVENTS", 2)
         path = tmp_path / "history.jsonl"
         path.write_text("".join(json.dumps({"display": f"p{i}"}) + "\n" for i in range(5)), encoding="utf-8")
-        result = tn.read_history(path)
+        result = tn.read_history(path, ROOTS(tmp_path))
         assert len(result.items) == 2 and result.truncated
+
+
+class TestHostileInputAndPaths:
+    def test_deep_nesting_is_a_skipped_line_everywhere(self, tmp_path):
+        deep = "[" * 200_000
+        assert tn.parse_cli_line(deep) is None
+        assert tn.parse_history_line(deep) is None
+        path = tmp_path / "a.jsonl"
+        path.write_text(deep + "\n" + json.dumps(_saved_claude()[0]) + "\n", encoding="utf-8")
+        result = tn.read_transcript(path, ROOTS(tmp_path))
+        assert result.skipped == 1 and len(result.items) == 1
+        hist = tmp_path / "history.jsonl"
+        hist.write_text(deep + '\n{"display": "ok"}\n', encoding="utf-8")
+        assert tn.read_history(hist, ROOTS(tmp_path)).skipped == 1
+
+    def test_retained_bytes_bound_stops_and_reports(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(tn, "MAX_RETAINED_BYTES", 300)
+        path = tmp_path / "a.jsonl"
+        path.write_text("".join(json.dumps(_saved_claude()[0]) + "\n" for _ in range(20)), encoding="utf-8")
+        result = tn.read_transcript(path, ROOTS(tmp_path))
+        assert (result.truncated, result.truncated_reason) == (True, "retained_bytes")
+        assert 0 < len(result.items) < 20 and result.retained_bytes <= 300
+
+    def test_symlink_escaping_the_root_is_refused(self, tmp_path):
+        outside, root = tmp_path / "outside", tmp_path / "root"
+        outside.mkdir()
+        root.mkdir()
+        (outside / "secret.jsonl").write_text(json.dumps(_saved_claude()[0]) + "\n", encoding="utf-8")
+        (root / "link.jsonl").symlink_to(outside / "secret.jsonl")
+        (root / "ok.jsonl").write_text(json.dumps(_saved_claude()[0]) + "\n", encoding="utf-8")
+        with pytest.raises(ValueError):
+            tn.read_transcript(root / "link.jsonl", [str(root)])
+        with pytest.raises(ValueError):
+            tn.read_history(root / "link.jsonl", [str(root)])
+        batch = tn.read_transcripts([root], [str(root)])
+        assert [k.rsplit("/", 1)[1] for k in batch.results] == ["ok.jsonl"]
+        assert [k.rsplit("/", 1)[1] for k in batch.failed] == ["link.jsonl"]
+
+    def test_path_outside_root_and_missing_path_are_refused_in_a_batch(self, tmp_path):
+        root = tmp_path / "root"
+        root.mkdir()
+        (tmp_path / "elsewhere.jsonl").write_text("{}\n", encoding="utf-8")
+        batch = tn.read_transcripts([tmp_path / "elsewhere.jsonl", root / "nope.jsonl"], [str(root)])
+        assert batch.results == {} and set(batch.failed.values()) == {"ValueError"} and len(batch.failed) == 2
+        with pytest.raises(ValueError):
+            list(tn.iter_lines(tmp_path / "elsewhere.jsonl", tn.ReadResult(), [str(root)]))
+
+
+class TestCliParserToleratesOddShapes:
+    @pytest.mark.parametrize(
+        "obj",
+        [
+            {"type": "assistant", "message": "just a string"},
+            {"type": "assistant", "message": None},
+            {"type": "assistant", "message": {"content": 5}},
+            {"type": "assistant", "message": {"content": ["x", 3, None]}},
+        ],
+    )
+    def test_no_exception_and_no_event(self, obj):
+        assert tn.parse_cli_line(json.dumps(obj)) is None
+
+    def test_non_dict_block_is_skipped_for_a_following_valid_one(self):
+        obj = {"type": "assistant", "message": {"content": ["x", {"type": "text", "text": "hi"}]}}
+        assert tn.parse_cli_line(json.dumps(obj)).content == {"text": "hi"}
