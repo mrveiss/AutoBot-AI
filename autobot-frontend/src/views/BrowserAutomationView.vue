@@ -329,12 +329,12 @@ function selectSession(session: typeof sessions.value[0]) {
       </div>
 
       <!-- Last script / automation result -->
-      <div v-if="lastResult" class="card result-card">
+      <div v-if="lastResult" class="card">
         <div class="card-header">
           <span class="card-title">{{ lastResult.title }}</span>
         </div>
         <div class="card-body">
-          <pre class="result-output">{{ lastResult.output }}</pre>
+          <div class="script-block"><pre>{{ lastResult.output }}</pre></div>
         </div>
       </div>
     </div>
@@ -392,5 +392,5 @@ function selectSession(session: typeof sessions.value[0]) {
   .input-action-row { flex-direction: column; }
   .screenshots-grid { grid-template-columns: 1fr 1fr; }
 }
-.result-output { margin: 0; padding: var(--spacing-3); max-height: 24rem; overflow: auto; font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text-primary); background: var(--bg-secondary); border-radius: var(--radius-md); white-space: pre-wrap; word-break: break-word; user-select: text; }
+.script-block pre { margin: 0; padding: var(--spacing-3); max-height: 24rem; overflow: auto; font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text-primary); background: var(--bg-secondary); border-radius: var(--radius-md); white-space: pre-wrap; word-break: break-word; user-select: text; }
 </style>
