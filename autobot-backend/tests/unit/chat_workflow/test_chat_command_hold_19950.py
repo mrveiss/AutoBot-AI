@@ -312,3 +312,36 @@ async def test_two_overlapping_commands_cannot_replace_each_others_pending_appro
     assert session.pending_approval["command"] == "rm first"
     assert second["status"] == "error"
     assert PENDING_APPROVAL_REFUSAL in second["error"]
+
+
+@pytest.mark.asyncio
+async def test_a_turn_cancelled_during_the_queue_write_does_not_strand_the_session():
+    """Nothing was queued, so no pending approval may stay behind and refuse every later command."""
+    service = AgentTerminalService.__new__(AgentTerminalService)
+    entered = asyncio.Event()
+
+    async def add_command(_command):
+        entered.set()
+        await asyncio.Event().wait()
+
+    service.command_queue = MagicMock(add_command=add_command)
+    service.redis_client = None
+    service.terminal_logger = MagicMock(log_command=AsyncMock())
+    session = AgentTerminalSession(session_id="s", agent_id="a", agent_role=AgentRole.CHAT_AGENT, conversation_id=None)
+    task = asyncio.create_task(
+        service._queue_command_for_approval(
+            session,
+            command="rm x",
+            description=None,
+            risk=CommandRisk.HIGH,
+            reasons=[],
+            is_interactive=False,
+            interactive_reasons=[],
+        )
+    )
+    await entered.wait()
+    assert session.has_pending_approval()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert not session.has_pending_approval()

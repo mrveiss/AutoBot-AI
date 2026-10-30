@@ -233,8 +233,8 @@ class AgentTerminalService:
 
         try:
             await self.command_queue.add_command(cmd_execution)
-        except Exception:
-            session.pending_approval = None  # nothing was queued, so nothing may hold the session
+        except BaseException:  # a cancelled turn too: nothing was queued, so nothing may hold the session
+            session.pending_approval = None
             raise
         logger.info("✅ [QUEUE] Added command %s to queue", cmd_execution.command_id)
 
