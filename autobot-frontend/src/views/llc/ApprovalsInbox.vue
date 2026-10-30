@@ -321,7 +321,7 @@ onUnmounted(() => {
   min-width: 1.5rem;
   height: 1.5rem;
   padding: 0 0.4rem;
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: white;
   font-size: 0.75rem;
   font-weight: 700;
@@ -474,7 +474,7 @@ onUnmounted(() => {
 }
 
 .btn-approve { background: var(--color-success); color: white; }
-.btn-reject { background: var(--color-error); color: white; }
+.btn-reject { background: var(--color-error-solid); color: white; }
 .btn-changes { background: var(--color-warning); color: white; }
 
 .btn-approve:disabled,
