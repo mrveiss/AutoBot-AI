@@ -77,3 +77,36 @@ register_env_var(
         component="postgres",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_COMPOSE_LEGACY_DB_VARS",
+        type=str,
+        default="",
+        description=(
+            "Set by docker-compose.yml only: the deprecated database variable names the operator still sets, "
+            "so the SLM can warn about them (#19408). Holds names, never values."
+        ),
+        component="postgres",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="SLM_DB_NAME",
+        type=str,
+        default=postgres_identity.SLM_DB_NAME,
+        description="SLM control-plane database name; compose has its own default (see postgres_identity).",
+        component="postgres",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="SLM_POSTGRES_USER",
+        type=str,
+        default=postgres_identity.SLM_DB_ROLE,
+        description="The SLM's login role; on compose a non-default role must already exist (#19408).",
+        component="postgres",
+    )
+)

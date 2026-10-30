@@ -1084,7 +1084,7 @@ onMounted(loadTakeovers)
   font-size: var(--text-sm);
   font-weight: 600;
   border: 1px solid var(--color-error);
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-primary);
   cursor: pointer;
   white-space: nowrap;

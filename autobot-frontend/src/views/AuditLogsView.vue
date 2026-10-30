@@ -371,7 +371,7 @@ async function performCleanup() {
   font-size: var(--text-sm);
   font-weight: var(--font-medium);
   color: var(--text-on-error);
-  background: var(--color-error);
+  background: var(--color-error-solid);
   border: none;
   border-radius: var(--radius-md);
   cursor: pointer;
