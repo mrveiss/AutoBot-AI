@@ -88,7 +88,7 @@
 
 <script setup lang="ts">
 import { ref, computed, reactive, onMounted } from 'vue'
-import { BaseAlert, BrandMark } from '@autobot/ui'
+import { BaseAlert, BrandMark, isHttpError } from '@autobot/ui'
 import type { Role } from '@/types/_generated/workflow'
 import { DEFAULT_ROLE } from '@/constants/roles'
 import { useI18n } from 'vue-i18n'
@@ -255,9 +255,8 @@ async function handleLogin() {
   } catch (error) {
     logger.error('Login error:', error)
 
-    // ApiClient throws Error with message like "HTTP 401: Invalid username or password"
-    const statusMatch = (error as Error).message?.match(/HTTP (\d+)/)
-    const status = statusMatch ? parseInt(statusMatch[1]) : 0
+    // ApiClient throws the kit HttpError, which carries the response status
+    const status = isHttpError(error) ? error.status : 0
     if (status === 401) {
       loginError.value = t('auth.login.invalidCredentials')
     } else if (status === 423) {
