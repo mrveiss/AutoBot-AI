@@ -80,14 +80,7 @@ class SessionOwnershipValidator:
     """
 
     def __init__(self, redis_client, feature_flags=None, metrics_service=None):
-        """
-        Initialize session ownership validator.
-
-        Args:
-            redis_client: Async Redis client for ownership data
-            feature_flags: Optional feature flags service for enforcement mode
-            metrics_service: Optional metrics service for violation tracking
-        """
+        """Take the async Redis client, and the optional flag (enforcement mode) and metrics services."""
         self.redis = redis_client
         self.ownership_ttl = 86400  # 24 hours (match conversation TTL)
         self.feature_flags = feature_flags

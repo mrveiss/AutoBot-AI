@@ -11,7 +11,6 @@ the same IDOR guard (GH#9861): another company's item is indistinguishable
 from a missing one.
 """
 
-import os
 import uuid
 from typing import Any, Dict
 
@@ -20,6 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from llc.deps import get_session, service_dep
 from user_management.services import TenantContext
@@ -30,8 +30,8 @@ from ..services.work_item_service import WorkItemService
 logger = get_logger(__name__)
 
 # Page-size bounds, env-backed so an operator can tune them without a deploy.
-COMMENTS_PAGE_DEFAULT = int(os.environ.get("LLC_COMMENTS_PAGE_DEFAULT", "100"))
-COMMENTS_PAGE_MAX = int(os.environ.get("LLC_COMMENTS_PAGE_MAX", "500"))
+COMMENTS_PAGE_DEFAULT = env_int("LLC_COMMENTS_PAGE_DEFAULT", 100)
+COMMENTS_PAGE_MAX = env_int("LLC_COMMENTS_PAGE_MAX", 500)
 
 router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
 _service = service_dep(WorkItemService)

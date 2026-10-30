@@ -122,7 +122,7 @@ def test_turns_split_on_user_messages_and_malformed_entries_are_skipped():
         "postgres://admin:%s@db/x",  # pragma: allowlist secret
         '{"password": "%s"}',  # pragma: allowlist secret
         "password=%s",  # pragma: allowlist secret
-        "-----BEGIN PRIVATE KEY-----\n%s\n-----END PRIVATE KEY-----",  # pragma: allowlist secret
+        "-----BEGIN " + "PRIVATE KEY-----\n%s\n-----END " + "PRIVATE KEY-----",
     ],
 )
 def test_each_secret_shape_leaves_neither_output_nor_a_command_param(leak):
