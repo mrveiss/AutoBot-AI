@@ -151,7 +151,7 @@ def _scanned_ts_files(root: Path) -> list[str]:
 KIT_NAMES_REACH = declare(
     "kit-export-names-14908",
     discover=_kit_names,
-    floor=173,  # mid-window: population 183, window (163, 183)
+    floor=182,  # mid-window: population 192, window (172, 192)
     growth=20,
     what="names the shared kit exports",
 )
