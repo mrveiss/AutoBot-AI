@@ -64,7 +64,7 @@ async def _seed(maker, roles: dict) -> tuple:  # noqa: ANN001
 
 async def _change_role(session, company, actor, target, new_role) -> None:  # noqa: ANN001
     """The route's sequence in ``llc/api/company_members.py::change_member_role``, minus HTTP."""
-    from llc.services import membership_policy
+    import llc.services.membership_policy as membership_policy
     from llc.services.authz import require_company_admin_unless_platform
     from llc.services.membership_service import MemberNotFoundError, MembershipService
 
@@ -185,7 +185,7 @@ async def test_an_admin_demotion_waits_then_reads_the_committed_owner_role(maker
 
 async def test_control_without_the_lock_the_admin_demotes_the_new_owner(maker, monkeypatch):  # noqa: ANN001
     """Same race, lock patched out: B reads ``member``, passes, and overwrites A's promotion."""
-    from llc.services import membership_policy
+    import llc.services.membership_policy as membership_policy
 
     monkeypatch.setattr(membership_policy, "lock_company_members", _no_lock)
 
@@ -212,7 +212,7 @@ async def test_two_owners_demoting_themselves_the_second_waits_then_gets_last_ow
 
 async def test_control_without_the_lock_two_owners_demote_themselves_to_no_owner(maker, monkeypatch):  # noqa: ANN001
     """Lock patched out: B counts two owners while A is uncommitted, so both land and none is left."""
-    from llc.services import membership_policy
+    import llc.services.membership_policy as membership_policy
 
     monkeypatch.setattr(membership_policy, "lock_company_members", _no_lock)
 
