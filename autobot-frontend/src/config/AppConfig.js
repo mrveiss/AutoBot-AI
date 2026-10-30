@@ -7,13 +7,13 @@
  * Single source of truth for all frontend configuration needs.
  */
 
+import { HttpError } from '@autobot/ui';
 import ServiceDiscovery from './ServiceDiscovery.js';
 import { NetworkConstants } from '../constants/network.ts';
 import { createLogger } from '@/utils/debugUtils';
 import { getApiBase, getApiTimeout, PORT_DEFAULTS } from '@/config/ssot-config';
 
 const logger = createLogger('AppConfig');
-
 export class AppConfigService {
   constructor() {
     this.serviceDiscovery = new ServiceDiscovery();
@@ -393,7 +393,7 @@ export class AppConfigService {
         this.log('Remote configuration endpoint not available, using local defaults');
         this.configLoaded = true; // Mark as loaded to prevent retries
       } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        throw new HttpError(response.status, response.statusText);
       }
     } catch (error) {
       this.log('Failed to load remote configuration, using defaults:', error.message);
