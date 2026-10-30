@@ -28,6 +28,7 @@ from repo_tests._reach import declare
 _ROOT = repo_root()
 _HOME = "autobot_shared/kb_doc_set.py"
 _ENGINE = "autobot-backend/knowledge_sync_incremental.py"
+_CLI = "autobot-infrastructure/shared/scripts/sync_kb_docs.py"
 _ROOTS = ("autobot-infrastructure",)
 _MARKER = "docs/**/*.md"
 #: A documentation glob however it is spelled: "docs/**/*.md", "docs/*.md", "docs/guides/**/*.md" ...
@@ -90,6 +91,13 @@ def test_no_module_restates_the_documentation_set() -> None:
     found = [h for p in files for h in pattern_lists(p.read_text(encoding="utf-8"), p.relative_to(_ROOT).as_posix())]
     REACH.completed(files)
     assert not found, f"import DOC_PATTERNS from {_HOME} (#19339): {found}"
+
+
+def test_the_sync_cli_never_deletes_facts_itself() -> None:
+    """The retired full sync bulk-deleted before collecting anything, and ran as a fallback (#19701)."""
+    tree = ast.parse((_ROOT / _CLI).read_text(encoding="utf-8"))
+    calls = {n.func.attr for n in ast.walk(tree) if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)}
+    assert "delete_fact" not in calls
 
 
 def test_the_sync_engine_reads_the_one_documentation_set() -> None:

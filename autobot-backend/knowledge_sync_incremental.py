@@ -384,6 +384,10 @@ class IncrementalKnowledgeSync:
             await self._classify_and_append_file(file_path, changed_files, new_files)
 
         self._scanned_paths = current_files
+        if not current_files and self.file_metadata:
+            # An unmounted or empty root reads as every file deleted; that is never evidence (#19701).
+            logger.warning("Scan found no files under %s; removing nothing", self.project_root)
+            return changed_files + new_files, [], new_files
 
         # Find removed files: gone from disk. A file still on disk but outside the doc set keeps
         # its facts, because narrowing the set must not delete stored knowledge (#19701).
@@ -641,20 +645,20 @@ class IncrementalKnowledgeSync:
             elif isinstance(result, Exception):
                 logger.error("Failed to process %s: %s", file_path, result)
 
+    def _expired_paths(self) -> List[str]:
+        """Scanned files past their TTL; expiry re-indexes, and outside the scan nothing would."""
+        if not self.auto_invalidation_enabled:
+            return []
+        oldest_allowed = time.time() - self.knowledge_ttl_hours * 3600
+        return [
+            path
+            for path, metadata in self.file_metadata.items()
+            if path in self._scanned_paths and metadata.sync_time and metadata.sync_time < oldest_allowed
+        ]
+
     async def _invalidate_expired_knowledge(self):
         """Remove knowledge that has exceeded TTL."""
-        if not self.auto_invalidation_enabled:
-            return
-
-        current_time = time.time()
-        ttl_seconds = self.knowledge_ttl_hours * 3600
-        expired_files = []
-
-        for file_path, metadata in self.file_metadata.items():
-            in_doc_set = file_path in self._scanned_paths  # expiry re-indexes; outside the set nothing would
-            if in_doc_set and metadata.sync_time and (current_time - metadata.sync_time) > ttl_seconds:
-                expired_files.append(file_path)
-
+        expired_files = self._expired_paths()
         if expired_files:
             logger.info("Invalidating %d expired knowledge entries", len(expired_files))
             await self._remove_obsolete_knowledge(expired_files)
@@ -739,11 +743,11 @@ class IncrementalKnowledgeSync:
         logger.info("Chunks processed: %d", metrics.total_chunks_processed)
         logger.info("Performance: %.1f chunks/sec", metrics.avg_chunks_per_second)
 
-    async def preview_changes(self) -> Tuple[List[Path], List[str]]:
-        """What a sync would index and remove, with nothing applied and no KB connection (#19701)."""
+    async def preview_changes(self) -> Tuple[List[Path], List[str], List[str]]:
+        """What a sync would index, remove and expire, with nothing applied and no KB connection (#19701)."""
         await self._load_sync_state()
         changed_files, removed_files, _new_files = await self._analyze_file_changes(await self._scan_files())
-        return changed_files, removed_files
+        return changed_files, removed_files, self._expired_paths()
 
     async def perform_incremental_sync(self) -> SyncMetrics:
         """

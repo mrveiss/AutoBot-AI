@@ -245,7 +245,9 @@ class TestIncrementalKnowledgeSyncChangedFiles:
         sync.file_metadata[missing] = _make_file_metadata(missing, _sha256("x"), 0.0)
 
         # Pass empty file list — file is gone
-        changed, removed, new = await sync._analyze_file_changes([])
+        other = tmp_path / "other.md"
+        await asyncio.to_thread(other.write_text, "x", encoding="utf-8")
+        changed, removed, new = await sync._analyze_file_changes([other])
         assert missing in removed
 
     @pytest.mark.asyncio
@@ -509,3 +511,36 @@ class TestTheDocSetNarrowing19701:
         sync = self._sync(root)
         sync.doc_patterns = ["docs/**/*.md"]
         assert await sync._scan_files() == [kept]
+
+    @pytest.mark.asyncio
+    async def test_an_empty_scan_of_a_missing_root_removes_nothing(self, tmp_path):
+        sync = self._sync(tmp_path / "unmounted")
+        gone = tmp_path / "unmounted" / "doc.md"
+        sync.file_metadata[str(gone)] = self._tracked(gone)
+        sync.doc_patterns = ["docs/**/*.md"]
+        _changed, removed, _new = await sync._analyze_file_changes(await sync._scan_files())
+        assert removed == []
+        await sync._invalidate_expired_knowledge()
+        sync.kb.delete_fact.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_file_gone_from_disk_is_still_removed_beside_a_live_scan(self, tmp_path):
+        live = tmp_path / "live.md"
+        await asyncio.to_thread(live.write_text, "x", encoding="utf-8")
+        gone = tmp_path / "gone.md"
+        sync = self._sync(tmp_path)
+        sync.file_metadata[str(gone)] = self._tracked(gone)
+        _changed, removed, _new = await sync._analyze_file_changes([live])
+        assert removed == [str(gone)]
+
+    @pytest.mark.asyncio
+    async def test_the_preview_names_expiry_and_applies_nothing(self, tmp_path):
+        doc = tmp_path / "doc.md"
+        await asyncio.to_thread(doc.write_text, "x", encoding="utf-8")
+        sync = self._sync(tmp_path)
+        sync.doc_patterns = ["*.md"]
+        sync.file_metadata_path = tmp_path / "absent.json"
+        sync.file_metadata[str(doc)] = self._tracked(doc)
+        _changed, _removed, expired = await sync.preview_changes()
+        assert expired == [str(doc)]
+        sync.kb.delete_fact.assert_not_awaited()
