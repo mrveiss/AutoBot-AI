@@ -736,7 +736,7 @@ onMounted(() => {
 
 .recent-item .icon {
   color: var(--text-secondary);
-  width: 0.625rem; height: 0.625rem;
+  width: var(--text-xs); height: var(--text-xs);
 }
 
 .recent-title {

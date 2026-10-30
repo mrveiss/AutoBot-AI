@@ -577,7 +577,7 @@ watch(() => props.modelValue, (newValue) => {
 }
 
 .tag-chip.add .icon {
-  width: 0.5rem; height: 0.5rem;
+  width: var(--text-xs); height: var(--text-xs);
 }
 
 .tag-chip.remove {
@@ -587,7 +587,7 @@ watch(() => props.modelValue, (newValue) => {
 }
 
 .tag-chip.remove .icon {
-  width: 0.5rem; height: 0.5rem;
+  width: var(--text-xs); height: var(--text-xs);
 }
 
 .common-indicator {
