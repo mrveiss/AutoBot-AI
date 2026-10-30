@@ -31,14 +31,14 @@ import uuid
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Union
 
-from sqlalchemy import event, or_, select
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session, SessionTransaction
 
 from autobot_shared.logging_manager import get_logger
-from models.agent_org import AgentOrgNode
 
-from ..models.enums import HeartbeatInvocationSource, LLCAgentStatus
+from ..models.enums import UNDISPATCHABLE_AGENT_STATUSES, HeartbeatInvocationSource
+from .dispatch_gate import as_uuid, resolve_agent
 from .run_status import active_run
 
 logger = get_logger(__name__)
@@ -53,11 +53,6 @@ EVENT_WAKE_SOURCES = frozenset(
     }
 )
 
-#: Agent statuses an event never wakes. ``paused`` is the dormant state.
-UNWAKEABLE_STATUSES = frozenset(
-    {LLCAgentStatus.PAUSED.value, LLCAgentStatus.INACTIVE.value, LLCAgentStatus.TERMINATED.value}
-)
-
 _PENDING_KEY = "llc_event_wake_pending"
 _HOOKED_KEY = "llc_event_wake_hooked"
 
@@ -70,35 +65,14 @@ class _PendingDispatch:
     transaction: Optional[SessionTransaction]
 
 
-def _as_uuid(value: Union[str, uuid.UUID, None]) -> Optional[uuid.UUID]:
-    if value is None or isinstance(value, uuid.UUID):
-        return value
-    try:
-        return uuid.UUID(str(value))
-    except ValueError:
-        return None
-
-
-async def _resolve_agent(session: AsyncSession, company_id: uuid.UUID, agent_ref: Any) -> Optional[Any]:
-    """The agent's ``(agent_id, status)`` by slug or node PK, inside *company_id* only."""
-    match = AgentOrgNode.agent_id == str(agent_ref)
-    node_pk = _as_uuid(agent_ref)
-    if node_pk is not None:
-        match = or_(match, AgentOrgNode.id == node_pk)
-    result = await session.execute(
-        select(AgentOrgNode.agent_id, AgentOrgNode.status).where(AgentOrgNode.company_id == company_id, match).limit(1)
-    )
-    return result.first()
-
-
 async def _wakeable_slug(session: AsyncSession, company_id: Any, agent_ref: Any) -> Optional[str]:
     """The slug to wake, or ``None`` when the agent is absent, not wakeable, or busy."""
-    cid = _as_uuid(company_id)
-    row = await _resolve_agent(session, cid, agent_ref) if cid is not None and agent_ref else None
+    cid = as_uuid(company_id)
+    row = await resolve_agent(session, cid, agent_ref) if cid is not None and agent_ref else None
     if row is None:
         logger.debug("Event wake: no agent %r in company %s", agent_ref, company_id)
         return None
-    if (row.status or "") in UNWAKEABLE_STATUSES:
+    if (row.status or "") in UNDISPATCHABLE_AGENT_STATUSES:
         logger.info("Event wake skipped: agent %s is %s", row.agent_id, row.status)
         return None
     active = await active_run(session, row.agent_id)  # a stale (crashed) run does not count
@@ -184,4 +158,4 @@ def _on_rollback(sync: Session, previous_transaction: SessionTransaction) -> Non
     pending[:] = [wake for wake in pending if not _within(wake.transaction, previous_transaction)]
 
 
-__all__ = ["EVENT_WAKE_SOURCES", "UNWAKEABLE_STATUSES", "wake_agent"]
+__all__ = ["EVENT_WAKE_SOURCES", "wake_agent"]

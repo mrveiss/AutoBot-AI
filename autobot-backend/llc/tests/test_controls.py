@@ -20,6 +20,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from llc.models.enums import ActivityEventType, LLCAgentStatus
+from llc.scheduler.dispatch_gate import agent_ref_block_reason
 from llc.services.activity_log import LLCActivityLogService
 from llc.services.controls_service import (
     AgentNotFoundError,
@@ -37,6 +38,7 @@ def _mock_session(rows: Optional[list] = None):
     session = AsyncMock()
     result = MagicMock()
     result.fetchone.return_value = rows[0] if rows else None
+    result.first.return_value = rows[0] if rows else None
     result.fetchall.return_value = rows or []
     result.scalars.return_value.all.return_value = rows or []
     session.execute.return_value = result
@@ -284,38 +286,32 @@ async def test_resume_company_deletes_redis_flag():
 @pytest.mark.asyncio
 async def test_routine_scheduler_skips_paused_company():
     """Scheduler must not fire routines when company pause flag is set."""
-    from llc.scheduler.routine_scheduler import RoutineScheduler
-
-    scheduler = RoutineScheduler()
     company_id = str(uuid.uuid4())
     agent_id = str(uuid.uuid4())
 
-    with patch("llc.scheduler.routine_scheduler.get_async_redis_client") as mock_redis:
+    with patch("llc.scheduler.dispatch_gate.get_async_redis_client") as mock_redis:
         redis = AsyncMock()
         redis.exists = AsyncMock(return_value=True)  # company paused
         mock_redis.return_value = redis
 
-        result = await scheduler._company_or_agent_paused(company_id, agent_id)
+        result = await agent_ref_block_reason(_mock_session(), agent_id, company_id)
 
-    assert result is True
+    assert result
 
 
 @pytest.mark.asyncio
 async def test_routine_scheduler_fires_when_not_paused():
     """Scheduler must fire when no pause flag is set."""
-    from llc.scheduler.routine_scheduler import RoutineScheduler
-
-    scheduler = RoutineScheduler()
     company_id = str(uuid.uuid4())
 
-    with patch("llc.scheduler.routine_scheduler.get_async_redis_client") as mock_redis:
+    with patch("llc.scheduler.dispatch_gate.get_async_redis_client") as mock_redis:
         redis = AsyncMock()
         redis.exists = AsyncMock(return_value=False)  # not paused
         mock_redis.return_value = redis
 
-        result = await scheduler._company_or_agent_paused(company_id, None)
+        result = await agent_ref_block_reason(_mock_session(), None, company_id)
 
-    assert result is False
+    assert result is None
 
 
 # ---------------------------------------------------------------------------
@@ -326,42 +322,36 @@ async def test_routine_scheduler_fires_when_not_paused():
 @pytest.mark.asyncio
 async def test_liveness_monitor_skips_paused_agent():
     """Liveness monitor must not create recovery items for paused agents."""
-    from llc.scheduler.liveness_monitor import LivenessMonitor
-
-    monitor = LivenessMonitor()
     agent_id = str(uuid.uuid4())
     company_id = str(uuid.uuid4())
     session = _mock_session()
 
-    with patch("llc.scheduler.liveness_monitor.get_async_redis_client") as mock_redis:
+    with patch("llc.scheduler.dispatch_gate.get_async_redis_client") as mock_redis:
         redis = AsyncMock()
         redis.exists = AsyncMock(return_value=True)  # agent paused flag
         mock_redis.return_value = redis
 
-        result = await monitor._agent_deliberately_paused(session, agent_id, company_id)
+        result = await agent_ref_block_reason(session, agent_id, company_id, deliberate_only=True)
 
-    assert result is True
+    assert result
 
 
 @pytest.mark.asyncio
 async def test_liveness_monitor_recovers_non_paused_agent():
     """Liveness monitor proceeds normally when no pause flag is set."""
-    from llc.scheduler.liveness_monitor import LivenessMonitor
-
-    monitor = LivenessMonitor()
     agent_id = str(uuid.uuid4())
     company_id = str(uuid.uuid4())
     # Redis says not paused; DB also returns no matching row
     session = _mock_session(rows=[])
 
-    with patch("llc.scheduler.liveness_monitor.get_async_redis_client") as mock_redis:
+    with patch("llc.scheduler.dispatch_gate.get_async_redis_client") as mock_redis:
         redis = AsyncMock()
         redis.exists = AsyncMock(return_value=False)
         mock_redis.return_value = redis
 
-        result = await monitor._agent_deliberately_paused(session, agent_id, company_id)
+        result = await agent_ref_block_reason(session, agent_id, company_id, deliberate_only=True)
 
-    assert result is False
+    assert result is None
 
 
 # ---------------------------------------------------------------------------
@@ -372,21 +362,18 @@ async def test_liveness_monitor_recovers_non_paused_agent():
 @pytest.mark.asyncio
 async def test_liveness_monitor_db_fallback_skips_terminated():
     """When Redis is unavailable, DB fallback must catch terminated agents."""
-    from llc.scheduler.liveness_monitor import LivenessMonitor
-
-    monitor = LivenessMonitor()
     agent_id = str(uuid.uuid4())
     company_id = str(uuid.uuid4())
 
     # Redis unavailable
-    session = _mock_session(rows=[("terminated",)])
+    session = _mock_session(rows=[(agent_id, "terminated")])
 
-    with patch("llc.scheduler.liveness_monitor.get_async_redis_client") as mock_redis:
+    with patch("llc.scheduler.dispatch_gate.get_async_redis_client") as mock_redis:
         mock_redis.return_value = None  # Redis down
 
-        result = await monitor._agent_deliberately_paused(session, agent_id, company_id)
+        result = await agent_ref_block_reason(session, agent_id, company_id, deliberate_only=True)
 
-    assert result is True
+    assert result
 
 
 # ---------------------------------------------------------------------------
@@ -414,6 +401,7 @@ async def test_routine_scheduler_pause_requeue_raises_on_redis_none():
 
     # Async context manager for session factory
     mock_session = AsyncMock()
+    mock_session.execute.return_value = MagicMock(first=MagicMock(return_value=None))
     mock_session_cm = AsyncMock()
     mock_session_cm.__aenter__ = AsyncMock(return_value=mock_session)
     mock_session_cm.__aexit__ = AsyncMock(return_value=False)
@@ -424,28 +412,20 @@ async def test_routine_scheduler_pause_requeue_raises_on_redis_none():
     mock_svc_instance.record_run = AsyncMock()
     mock_svc_cls = MagicMock(return_value=mock_svc_instance)
 
-    # Redis call counter:
-    #  call 1 — _company_or_agent_paused: company paused flag → True
-    #  call 2 — pause re-queue: returns None → raises RuntimeError
-    #  call 3 — outer except re-add handler
+    # The gate sees the company paused; the re-queue that follows finds Redis down,
+    # and the outer except handler gets it back on the third call.
+    paused_redis = AsyncMock()
+    paused_redis.exists = AsyncMock(return_value=True)
     re_add_redis = AsyncMock()
     re_add_redis.zadd = AsyncMock()
-    redis_call_count = 0
-
-    async def redis_side_effect():
-        nonlocal redis_call_count
-        redis_call_count += 1
-        if redis_call_count == 1:
-            r = AsyncMock()
-            r.exists = AsyncMock(return_value=True)
-            return r
-        if redis_call_count == 2:
-            return None
-        return re_add_redis
+    redis_side_effect = AsyncMock(side_effect=[None, re_add_redis])
 
     with patch("user_management.database.get_async_session_factory", return_value=mock_factory):
         with patch("llc.services.routine_service.RoutineService", mock_svc_cls):
-            with patch("llc.scheduler.routine_scheduler.get_async_redis_client", side_effect=redis_side_effect):
+            with (
+                patch("llc.scheduler.routine_scheduler.get_async_redis_client", side_effect=redis_side_effect),
+                patch("llc.scheduler.dispatch_gate.get_async_redis_client", AsyncMock(return_value=paused_redis)),
+            ):
                 await scheduler._dispatch_routine(routine_id_str)
 
     re_add_redis.zadd.assert_called_once()
