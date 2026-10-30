@@ -232,7 +232,7 @@ const showEmptyStateHint = computed(
   cursor: pointer;
   font-size: var(--text-sm);
   transition: all var(--duration-150) var(--ease-in-out);
-  z-index: 1;
+  z-index: var(--z-raised);
 }
 
 .category-edit-btn:hover {

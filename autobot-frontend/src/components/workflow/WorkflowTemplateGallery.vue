@@ -375,7 +375,7 @@ onMounted(async () => {
 .btn-run { width: 32px; height: 32px; background: var(--color-success); border: none; border-radius: var(--radius-md); color: white; cursor: pointer; }
 .btn-run:hover { filter: brightness(1.1); }
 
-.preview-panel { position: fixed; right: 0; top: 0; bottom: 0; width: 400px; background: var(--bg-secondary); border-left: 1px solid var(--border-default); display: flex; flex-direction: column; z-index: 50; box-shadow: -4px 0 20px rgba(0,0,0,0.1); }
+.preview-panel { position: fixed; right: 0; top: 0; bottom: 0; width: 400px; background: var(--bg-secondary); border-left: 1px solid var(--border-default); display: flex; flex-direction: column; z-index: var(--z-50); box-shadow: -4px 0 20px rgba(0,0,0,0.1); }
 .preview-header { display: flex; justify-content: space-between; align-items: center; padding: var(--spacing-5); border-bottom: 1px solid var(--border-default); }
 .preview-header h3 { margin: var(--spacing-0); font-size: var(--text-base); color: var(--text-primary); }
 .preview-header button { padding: var(--spacing-1-5); background: transparent; border: none; color: var(--text-tertiary); cursor: pointer; }
