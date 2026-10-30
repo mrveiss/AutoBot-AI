@@ -148,7 +148,7 @@ defineEmits<Emits>()
 
 /* Emergency control button styles */
 .control-button.emergency-kill {
-  background-color: var(--color-error);
+  background-color: var(--color-error-solid);
   color: var(--text-on-error);
   font-weight: var(--font-bold);
   border-color: var(--color-error-hover);
@@ -173,7 +173,7 @@ defineEmits<Emits>()
 }
 
 .control-button.takeover {
-  background-color: var(--color-info);
+  background-color: var(--color-info-solid);
   color: var(--text-on-primary);
   border-color: var(--color-info-hover);
   font-weight: var(--font-semibold);
