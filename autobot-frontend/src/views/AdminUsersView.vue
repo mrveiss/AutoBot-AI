@@ -794,7 +794,7 @@ onMounted(loadUsers)
 }
 
 .btn-action-danger {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-error);
 }
 
