@@ -201,6 +201,20 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "last_accessed before it reaches the response -- fact content never leaves (#16665)"
     ),
     (
+        "autobot-backend/knowledge/backup_embeddings.py",
+        "fetch_backup_embeddings",
+    ): (
+        "NOT_USER_FACING: adds only the vector and its model name to facts the backup and export "
+        "serialisers already read through read_every_fact; no document or other metadata is kept (#19647)"
+    ),
+    (
+        "autobot-backend/knowledge/backup_embeddings.py",
+        "restore_backup_embedding",
+    ): (
+        "NOT_USER_FACING: a restore asking whether the fact already has a vector; reads ids only, "
+        "and nothing reaches a chat or prompt (#19647)"
+    ),
+    (
         "autobot-backend/knowledge/quarantine.py",
         "read_every_fact",
     ): (
