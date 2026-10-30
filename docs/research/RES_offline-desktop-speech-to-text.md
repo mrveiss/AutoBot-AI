@@ -12,9 +12,9 @@ Status: Phase 1 and Phase 2 complete; scoped to AutoBot voice functionality, rea
 ### What It Is
 
 A cross-platform desktop application: press a shortcut, speak, and the transcript is pasted into
-whichever application has focus. All speech processing runs on the local machine. It is MIT
-licensed, written in Rust with a React/TypeScript UI on a desktop webview shell, and pre-1.0
-(v0.9.8, 2026-10-03) with commits as recent as 2026-10-27.
+whichever application has focus. All speech processing runs on the local machine. It is
+permissively licensed, has a compiled native backend with a web-technology UI, and is pre-1.0 and
+actively maintained.
 
 ### Architecture & Key Patterns
 
@@ -27,7 +27,7 @@ licensed, written in Rust with a React/TypeScript UI on a desktop webview shell,
   paste into the focused application, history stored in SQLite.
 - **One decode-policy module.** Model traits and settings choose between streaming, chunked and
   single-run decoding in one place.
-- **Model catalog.** A bundled JSON catalog (about 190 KB) drives model download and selection.
+- **Model catalog.** A bundled JSON catalog drives model download and selection.
 
 ### Notable Implementation Details
 
@@ -63,8 +63,8 @@ licensed, written in Rust with a React/TypeScript UI on a desktop webview shell,
   and Wayland support is described as limited. The project's own notes say one tool fails on a current
   Ubuntu release.
 - **Reliable paste is partial.** It is debug-gated and has no Linux implementation.
-- **Very large modules.** Model manager about 136 KB, transcription about 88 KB, settings about 76 KB,
-  supervisor about 74 KB.
+- **Very large modules.** The model, transcription, settings and supervisor modules are each very
+  large single files.
 - **Desktop only.** No server or multi-user mode appears in the material read.
 - **Limited extension evidence.** "Extensible" is claimed. The evidence seen is CLI flags and one
   third-party launcher integration; no plugin API was found in the material read, though it was not
@@ -72,12 +72,12 @@ licensed, written in Rust with a React/TypeScript UI on a desktop webview shell,
 
 ### Visible vs Hidden Metrics
 
-- **Visible:** about 35,000 stars and 3,350 forks (GitHub counts, independently visible, measuring
-  popularity rather than quality); "works completely offline" and "excellent performance" (both
+- **Visible:** tens of thousands of stars (independently visible, measuring popularity rather than
+  quality); "works completely offline" and "excellent performance" (both
   self-reported, not verified here).
 - **Hidden:** native GPU and driver exposure across three operating systems, which is what forced the
-  supervisor; a per-platform input and permissions matrix; model catalog upkeep; about 1.2 MB of
-  bundled detector model; 203 open issues and pull requests combined.
+  supervisor; a per-platform input and permissions matrix; model catalog upkeep; a bundled detector
+  model; a large open issue backlog.
 - **Weighing:** the hidden costs are high for anyone adopting the product, because most of the code
   handles desktop integration. They are low for anyone borrowing individual techniques. The isolation,
   chunking and detector-smoothing patterns are portable, while the input-injection layer only pays off
@@ -102,8 +102,8 @@ and no crash, latency or accuracy figure was measured on either side.
 
 | # | Candidate | Already-exists audit | Visible benefit | Hidden cost | Verdict | Effort |
 |---|---|---|---|---|---|---|
-| 1 | Supervised speech worker process | `media/audio/pipeline.py:175-184` loads in-process; one lock serialises all inference (`:47`, `:204`); no `wait_for` in the provider, voice route or transcriber paths searched; NPU and TTS workers set a precedent | A native fault or hang stops taking chat with it | A new service in every install method and the fleet; audio passed over IPC; recovery code to own | Adopt with conditions: after #17778 consolidates the engines, reusing the existing worker pattern, and once an incident or fault test shows the need | Significant |
-| 2 | Retry on CPU when GPU load fails | `pipeline.py:190-193` retries the same device after 60 s; `OutOfMemoryError` has 0 hits across the speech paths | Speech survives a bad driver or full GPU | Slower transcription that needs to be visible to users | Adopt | Trivial to moderate |
+| 1 | Supervised speech worker process | `media/audio/pipeline.py:175-184` loads in-process; one lock serialises all inference (`:47`, `:204`); the multimodal processor has an `asyncio.wait_for` timeout (`multimodal_processor/processors/voice.py`), but a timeout abandons the worker thread rather than stopping it, so a hung inference would keep the lock; NPU and TTS workers set a precedent | A native fault or hang stops taking chat with it | A new service in every install method and the fleet; audio passed over IPC; recovery code to own | Adopt with conditions: after #17778 consolidates the engines, reusing the existing worker pattern, and once an incident or fault test shows the need | Significant |
+| 2 | Retry on CPU when GPU load fails | on load failure, `pipeline.py:190-193` retries the same device (after 60 s by default); `OutOfMemoryError` has 0 hits across the speech paths | Speech survives a bad driver or full GPU | Slower transcription that needs to be visible to users | Adopt | Trivial to moderate |
 | 3 | Release the model when idle | The only `_whisper_pipeline = None` is the load-failure path (`pipeline.py:192`); no unload found | Returns memory on shared hosts | Cold start on the next voice turn; only a worker guarantees full release | Adopt with conditions: measure resident memory first | Moderate |
 | 4 | Server-side voice detection before decoding | Filtering runs after inference (`whisper_provider.py`, `hallucination_filter.py`); `speech_recognition.py:375-379` is the placeholder tracked in #16807 | Avoids decoding silence and removes a source of phantom text | Another pinned model to provision; risk of clipping quiet speech | Adopt with conditions: deliver inside #16807, and measure on silence-heavy recordings | Moderate |
 | 5 | Pre-roll on the energy-based full-duplex path | `public/audio-vad-processor.js:15-23` has an RMS threshold and onset frames, with no pre-roll in that file; callers not checked | Keeps first syllables | Small buffer; barge-in interaction | Adopt with conditions: first confirm clipping occurs | Trivial |
