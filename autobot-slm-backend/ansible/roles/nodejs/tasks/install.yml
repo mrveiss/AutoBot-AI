@@ -30,6 +30,14 @@
   ansible.builtin.command:
     cmd: bash /root/nodesource_setup.sh
   become: true
+  changed_when: true
+  tags: ['deps', 'nodejs']
+
+- name: "nodejs | Remove the setup script"
+  ansible.builtin.file:
+    path: /root/nodesource_setup.sh
+    state: absent
+  become: true
   tags: ['deps', 'nodejs']
 
 # #6719: bounded shell apt-get update -- see roles/nginx/tasks/main.yml for
@@ -74,3 +82,4 @@
   ansible.builtin.set_fact:
     _nodejs_upgraded: true
   tags: ['deps', 'nodejs']
+  when: not ansible_check_mode

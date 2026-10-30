@@ -6,7 +6,6 @@
 # Shared dependency role: Node.js (NodeSource)
 # Installs Node.js and npm, and upgrades a host below node_major (#19661). The one
 # NodeSource install in Ansible; repo_tests/node_major_one_home_19328_test.py holds that.
-# nodejs_upgrade_only: true (the updater) leaves a host without Node alone.
 # npm install / npm build stays in service roles.
 ---
 
@@ -37,7 +36,5 @@
 
 - name: "nodejs | Install or upgrade"
   ansible.builtin.include_tasks: install.yml
-  when: >-
-    (_nodejs_installed_major | int == 0 and not (nodejs_upgrade_only | bool))
-    or (0 < _nodejs_installed_major | int < nodejs_major_version | int)
+  when: _nodejs_installed_major | int < nodejs_major_version | int
   tags: ['deps', 'nodejs']

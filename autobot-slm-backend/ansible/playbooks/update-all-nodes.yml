@@ -346,6 +346,15 @@
           - "======================================================="
           - "  Target: {{ inventory_hostname }} ({{ ansible_host }})"
 
+    # #19661: every host here runs npm, so it needs node_major. This comes before any code lands
+    # on the host, and a failure stops the update here: the build needs this Node.js anyway.
+    - name: "[PLAY 1] Ensure Node.js is on node_major"
+      ansible.builtin.include_role:
+        name: nodejs
+        apply:
+          tags: [slm, slm-frontend, deps]
+      tags: [slm, slm-frontend, deps]
+
     # #16522/#16566 review: see [PLAY 2] Backend's identical note further
     # down -- the shared TLS cert-ensure task must be reachable from the
     # routine fleet updater, not just full provisioning. slm_manager needs
@@ -627,15 +636,6 @@
       register: slm_pip_install
       tags: [slm, slm-backend, deps]
 
-    # #19661: a host on an older major reaches node_major here, before its npm steps.
-    - name: "[PLAY 1] Upgrade an installed Node.js below node_major"
-      ansible.builtin.include_role:
-        name: nodejs
-        tasks_from: upgrade_installed.yml
-        apply:
-          tags: [slm, slm-frontend, deps]
-      tags: [slm, slm-frontend, deps]
-
     - name: "[PLAY 1] SLM | Install Node.js dependencies"
       command:
         cmd: npm ci --ignore-scripts
@@ -867,6 +867,16 @@
       tags: [always]
 
   tasks:
+    # #19661: every host here runs npm, so it needs node_major. This comes before any code lands
+    # on the host, and a failure stops the update here: the build needs this Node.js anyway.
+    - name: "[PLAY 2] Ensure Node.js is on node_major"
+      ansible.builtin.include_role:
+        name: nodejs
+        apply:
+          tags: [frontend, browser, browser-worker, deps]
+      when: "'frontend' in group_names or 'browser' in group_names"
+      tags: [frontend, browser, browser-worker, deps]
+
     # #17243: the pip steps below constrain against constraints/shared.txt, but
     # they used to reference it inside `code_source` -- the git checkout, which
     # exists only on the manager. On an infrastructure node that path is absent
@@ -1511,16 +1521,6 @@
         sync_deletions_owner: autobot
       when: "'frontend' in group_names"
       tags: [frontend]
-
-    # #19661: a host on an older major reaches node_major here, before its npm steps.
-    - name: "[PLAY 2] Upgrade an installed Node.js below node_major"
-      ansible.builtin.include_role:
-        name: nodejs
-        tasks_from: upgrade_installed.yml
-        apply:
-          tags: [frontend, browser, browser-worker, deps]
-      when: "'frontend' in group_names or 'browser' in group_names"
-      tags: [frontend, browser, browser-worker, deps]
 
     - name: "[PLAY 2] Frontend | Install Node.js dependencies"
       command:

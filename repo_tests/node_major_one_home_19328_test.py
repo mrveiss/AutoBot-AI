@@ -163,7 +163,21 @@ def test_a_comment_naming_the_definition_does_not_count_as_loading_it() -> None:
 #: The NodeSource repository named by a task: its setup script or an apt line.
 _NODESOURCE_INSTALL = re.compile(r"nodesource_base_url \}\}/(?:setup_|node_)")
 _NODE_INSTALL_HOME = "autobot-slm-backend/ansible/roles/nodejs/tasks/install.yml"
-_NODE_REPO_DATA = "autobot-slm-backend/ansible/inventory/group_vars/all.yml"  # data, not a task
+_APT_MODULES = frozenset({"apt", "package", "ansible.builtin.apt", "ansible.builtin.package"})
+
+
+def _installs_node(node: object) -> bool:
+    """A task anywhere in *node* that installs the ``nodejs`` package; removing it is allowed."""
+    if isinstance(node, list):
+        return any(_installs_node(item) for item in node)
+    if not isinstance(node, dict):
+        return False
+    for key in _APT_MODULES & node.keys():
+        args = node[key] if isinstance(node[key], dict) else {}
+        names = args.get("name")
+        if "nodejs" in (names if isinstance(names, list) else [names]) and args.get("state") != "absent":
+            return True
+    return any(_installs_node(value) for value in node.values())
 
 
 def test_one_ansible_task_file_installs_node() -> None:
@@ -174,7 +188,35 @@ def test_one_ansible_task_file_installs_node() -> None:
         if _NODESOURCE_INSTALL.search(p.read_text(encoding="utf-8"))
     }
     assert _NODE_INSTALL_HOME in found, "the sweep found no install at all; its pattern has drifted"
-    assert found - {_NODE_INSTALL_HOME, _NODE_REPO_DATA} == set(), "use the nodejs role (#19661)"
+    assert found == {_NODE_INSTALL_HOME}, "use the nodejs role (#19661)"
+
+
+def test_only_the_role_installs_the_nodejs_package() -> None:
+    root = _ROOT / "autobot-slm-backend/ansible"
+    found, parsed = set(), 0
+    for path in root.rglob("*.yml"):
+        try:
+            document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except yaml.YAMLError:  # a vault-tagged inventory file holds no tasks
+            continue
+        parsed += 1
+        if _installs_node(document):
+            found.add(path.relative_to(_ROOT).as_posix())
+    assert parsed > 100, f"only {parsed} files parsed; an empty sweep finds nothing"
+    assert found == {_NODE_INSTALL_HOME}, "use the nodejs role (#19661)"
+
+
+@pytest.mark.parametrize(
+    ("task", "flagged"),
+    [
+        ({"apt": {"name": "nodejs", "state": "present"}}, True),
+        ({"block": [{"ansible.builtin.apt": {"name": ["nginx", "nodejs"]}}]}, True),
+        ({"apt": {"name": "nodejs", "state": "absent"}}, False),
+        ({"apt": {"name": "nginx"}}, False),
+    ],
+)
+def test_a_distro_install_is_flagged(task: dict, flagged: bool) -> None:
+    assert _installs_node([task]) is flagged
 
 
 def test_a_bare_inventory_playbook_that_reads_node_major_loads_its_definition() -> None:
