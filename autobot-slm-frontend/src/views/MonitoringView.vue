@@ -105,7 +105,7 @@ function getStatusColor(status: string): string {
     <template #tab-badge="{ tab }">
       <span
         v-if="tab.id === 'alerts' && activeAlertCount > 0"
-        class="px-1.5 py-0.5 text-xs font-bold bg-error-500 text-white rounded-full"
+        class="px-1.5 py-0.5 text-xs font-bold bg-(--color-error-solid) text-(--text-on-error) rounded-full"
         :aria-label="$t('monitoringView.activeAlertsCountAria', { count: activeAlertCount })"
       >
         {{ activeAlertCount }}
