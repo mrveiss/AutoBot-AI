@@ -5,6 +5,7 @@
  * Provides graceful fallback handling and caching for API endpoint calls
  */
 
+import { HttpError } from '@autobot/ui';
 import { createLogger } from '@/utils/debugUtils';
 import { fetchWithAuth } from '@/utils/fetchWithAuth';
 
@@ -53,7 +54,7 @@ class ApiEndpointMapper {
       clearTimeout(timeoutId)
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        throw new HttpError(response.status, response.statusText)
       }
 
       // Clone response to cache it
