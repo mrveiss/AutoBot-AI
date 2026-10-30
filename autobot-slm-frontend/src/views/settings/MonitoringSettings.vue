@@ -78,7 +78,7 @@ async function saveSetting(key: string, value: string): Promise<void> {
 }
 
 async function deployMonitoringRole(): Promise<void> {
-  showToast(t('settings.monitoringSettings.deployViaAnsible'), 'error')
+  showToast(t('settings.monitoringSettings.deployViaAnsible'), 'info')
 }
 
 async function testPrometheusConnection(): Promise<void> {
