@@ -60,7 +60,6 @@ from ..exceptions import (
 from ..models.enums import HeartbeatInvocationSource, LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
 from ..org_role_authority import apply_org_role_bound
-from ..services.api_key import ApiKeyService
 from ..services.budget import BudgetService
 from ..services.controls_service import ControlsService
 from ..services.work_item_queue import has_pending_work
@@ -68,8 +67,12 @@ from ..services.work_item_queue import has_pending_work
 # Aliased to the name `_run_adapter` already calls (#17726). Renaming the call
 # site would put that unrelated 82-line function in scope for the function-length
 # guard, and refactoring it is not this change.
+from .dispatch_gate import dispatch_block_reason, require_dispatchable
 from .replay_recording import record_run_for_replay as _record_run_for_replay
 from .run_context import enrich_run_context
+from .run_key import ADAPTER_MAX_WAIT_SECONDS
+from .run_key import issue_run_key as _issue_run_key
+from .run_key import revoke_run_key as _revoke_run_key
 from .run_status import RunSuperseded, latest_run_in, mark_running
 from .run_workspace import acquire_run_workspace, release_run_workspace, release_workspace_best_effort
 
@@ -86,10 +89,7 @@ _MAX_RATE_LIMIT_RETRIES = 10  # demote to failed after this many consecutive ret
 
 # Registry-adapter (e.g. claude_code) completion polling (GH#9622, GH#9623).
 _ADAPTER_POLL_INTERVAL = env_float("LLC_ADAPTER_POLL_INTERVAL_SECONDS", 5.0)
-_ADAPTER_MAX_WAIT_SECONDS = env_float("LLC_ADAPTER_MAX_WAIT_SECONDS", 7200.0)
-# Ephemeral run-key TTL backstop — must exceed the max wait so a key never
-# expires mid-run; revocation still happens promptly when the run finishes.
-_RUN_KEY_TTL_SECONDS = env_float("LLC_RUN_KEY_TTL_SECONDS", _ADAPTER_MAX_WAIT_SECONDS + 600.0)
+_ADAPTER_MAX_WAIT_SECONDS = ADAPTER_MAX_WAIT_SECONDS
 
 #: #17726: a short-circuited wake writes no run row, so these two keys are the
 #: only evidence it happened. Without them "the queue was empty" and "the
@@ -309,6 +309,12 @@ class LLCHeartbeatScheduler:
                 await redis.zrem(_SCHEDULE_KEY, agent_id)
                 return
 
+            reason = await dispatch_block_reason(session, agent_id, agent.get("company_id"), agent.get("status"))
+            if reason is not None:
+                logger.info("Heartbeat skipped for agent %s: %s", agent_id, reason)
+                await self._reschedule(agent_id, cron_expr, redis)
+                return
+
             # Check for an active rate-limited run to resume.
             rate_limited_run = await self._find_rate_limited_run(session, agent_id)
 
@@ -467,6 +473,7 @@ class LLCHeartbeatScheduler:
         if agent is None:
             raise ValueError(f"Agent {agent_id!r} not found or not configured")
 
+        await require_dispatchable(session, agent)
         run = await self._create_run(session, agent=agent, source=source)
         await session.flush()
         return run, agent
@@ -970,38 +977,6 @@ async def _safe_cancel(adapter: Any, agent_config: Dict[str, Any], run_id: str) 
         await adapter.cancel(agent_config, run_id)
     except Exception:
         logger.exception("Failed to cancel adapter run %s", run_id)
-
-
-async def _issue_run_key(agent_id: str, company_id: str) -> tuple[Any, Optional[str]]:
-    """Issue an ephemeral run-scoped LLC API key. Returns (record, plaintext).
-
-    Best-effort: on failure the agent still runs, just without a key (returns
-    ``(None, None)``) — the run is logged rather than blocked.
-    """
-    factory = get_async_session_factory()
-    try:
-        async with factory() as session:
-            record, raw = await ApiKeyService().issue_key(
-                session,
-                agent_id=agent_id,
-                company_id=company_id,
-                name=f"heartbeat-{agent_id}-{uuid.uuid4().hex[:8]}",
-                expires_at=datetime.now(tz=timezone.utc) + timedelta(seconds=_RUN_KEY_TTL_SECONDS),
-            )
-        return record, raw
-    except Exception:
-        logger.exception("Failed to issue ephemeral heartbeat key for agent %s", agent_id)
-        return None, None
-
-
-async def _revoke_run_key(agent_id: str, key_id: uuid.UUID, company_id: Optional[str] = None) -> None:
-    """Revoke an ephemeral run-scoped key, company-scoped (#13771, #15930)."""
-    factory = get_async_session_factory()
-    try:
-        async with factory() as session:
-            await ApiKeyService().revoke_key(session, agent_id=agent_id, key_id=key_id, company_id=company_id)
-    except Exception:
-        logger.exception("Failed to revoke ephemeral heartbeat key %s for agent %s", key_id, agent_id)
 
 
 async def _await_adapter_completion(adapter: Any, agent_config: Dict[str, Any], run_id: str) -> AdapterRunStatus:
