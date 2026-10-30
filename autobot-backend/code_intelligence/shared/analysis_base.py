@@ -21,6 +21,7 @@ the class.
 from __future__ import annotations
 
 import ast
+import fnmatch
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List
@@ -69,6 +70,15 @@ DEFAULT_EXCLUDE_PATTERNS: List[str] = [
     "/.github/",
     "/.gitlab/",
 ]
+
+
+def _pattern_matches(pattern: str, path_str: str) -> bool:
+    """A slash-free glob matches the file name; a pattern with a slash matches the path text (#19695)."""
+    if "/" not in pattern and any(char in pattern for char in "*?["):
+        return fnmatch.fnmatchcase(path_str.rsplit("/", 1)[-1], pattern)
+    if pattern.startswith("*"):
+        return path_str.endswith(pattern[1:])
+    return pattern in path_str
 
 
 class BaseCodeAnalyzer(SemanticAnalysisMixin):
@@ -193,13 +203,7 @@ class BaseCodeAnalyzer(SemanticAnalysisMixin):
         except ValueError:
             rel = str(path)
         path_str = "/" + rel.lstrip("/")
-        for pattern in self.exclude_patterns:
-            if pattern.startswith("*"):
-                if path_str.endswith(pattern[1:]):
-                    return True
-            elif pattern in path_str:
-                return True
-        return False
+        return any(_pattern_matches(pattern, path_str) for pattern in self.exclude_patterns)
 
     async def _find_semantic_duplicates(self, items: List[Any]) -> List[Dict[str, Any]]:
         """Hook: domain-specific semantic duplicate-finder (``metadata_keys`` differ)."""
