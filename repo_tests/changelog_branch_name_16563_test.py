@@ -70,7 +70,7 @@ def test_the_sweep_recognises_the_changelog_branch_as_archival():
 #
 # Long-lived names are read from the repository rather than hardcoded, so a
 # future rename does not leave this guard asserting against a name nobody uses.
-_LONG_LIVED = ("main", "release", "Dev_new_gui", "develop")
+_LONG_LIVED = ("main", "release", "develop")
 
 #: Every shape a workflow uses to name a new branch. Each must expose the branch
 #: name as group 1. Missing a shape makes this guard silently narrower, which is
