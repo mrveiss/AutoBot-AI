@@ -17,7 +17,7 @@ status: current
 **Document status:** Draft v1.0  
 **Date:** 2026-05-19  
 **Owner:** mrveiss  
-**Target branch:** Dev_new_gui  
+**Target branch:** main  
 
 > **Read first:** [The AutoBot Platform Model](../architecture/PLATFORM_MODEL.md) and the
 > [LLC module overview](../llc/_index.md). This PRD assumes the platform model — a small
