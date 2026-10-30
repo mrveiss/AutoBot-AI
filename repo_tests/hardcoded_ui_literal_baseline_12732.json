@@ -313,10 +313,7 @@
   "11f7ab8c",
   "1d33149c",
   "56797029",
-  "58626ccc",
-  "64bbaf1e",
-  "afc2986b",
-  "b16d7296"
+  "64bbaf1e"
  ],
  "autobot-frontend/src/components/chat/ChatInterface.vue": [
   "0486524d",
@@ -673,8 +670,7 @@
   "dc74facd"
  ],
  "autobot-frontend/src/components/terminal/TerminalWindow.vue": [
-  "21bb664d",
-  "a1c16083"
+  "21bb664d"
  ],
  "autobot-frontend/src/components/theme/EmberThemeToggle.vue": [
   "447f10c7",
@@ -720,10 +716,6 @@
  "autobot-frontend/src/components/visualizations/ServiceMessageTimeline.vue": [
   "60bf428e",
   "9c27a1b0"
- ],
- "autobot-frontend/src/components/workflow/NotificationConfigModal.vue": [
-  "9b686dff",
-  "eb4ef51f"
  ],
  "autobot-frontend/src/components/workflow/PhaseProgressionIndicator.vue": [
   "109e39f2"
@@ -960,13 +952,8 @@
  ],
  "autobot-slm-frontend/src/views/MaintenanceView.vue": [
   "0e60ef7d",
-  "5430c541",
-  "84f431d9",
   "94ff0825",
-  "a107393e",
-  "ac093d35",
   "ac8c3243",
-  "c678d6fe",
   "e8f55a31"
  ],
  "autobot-slm-frontend/src/views/OrchestrationView.vue": [
@@ -974,7 +961,6 @@
   "9657932e"
  ],
  "autobot-slm-frontend/src/views/SetupWizardView.vue": [
-  "8298e52f",
   "8dae3e12",
   "efbd2d46"
  ],
