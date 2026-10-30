@@ -460,7 +460,7 @@ async function saveKeys(keys: KeyEntry[]): Promise<void> {
 }
 
 .key-badge.required {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-error);
 }
 
