@@ -49,8 +49,10 @@ from chat_workflow.compose_tool_handler import (
     poll_compose_approval,
     reject_delegated_compose,
 )
+from chat_workflow.mcp_approval_message import build_mcp_approval_message as _build_mcp_approval_message
 from chat_workflow.tool_call_grammar import TOOL_CALL_PATTERN
 from chat_workflow.tool_dispatch_guards import (
+    COMMAND_FORCE_APPROVAL_KEY,
     enforce_ai_line,
     enforce_config_protection,
     enforce_fact_forcing,
@@ -957,43 +959,6 @@ def _status_for_return_code(return_code: Any) -> str:
         return "error"
 
 
-def _build_mcp_approval_message(
-    tool_name: str,
-    bridge: str,
-    raw_result: dict,
-    execution_results: list[dict[str, Any]],
-) -> WorkflowMessage:
-    """Build a WorkflowMessage for MCP bridge approval requests (Issue #2622)."""
-    approval_msg = raw_result.get("message", "This operation requires approval.")
-    execution_results.append(
-        {
-            "tool": tool_name,
-            "bridge": bridge,
-            "result": approval_msg,
-            "status": "approval_required",
-        }
-    )
-    logger.info(
-        "[Issue #2622] MCP approval required: tool=%s bridge=%s",
-        tool_name,
-        bridge,
-    )
-    return WorkflowMessage(
-        type="tool_result",
-        content=(
-            f"[{bridge}] **Approval required:** {approval_msg}\n"
-            "Ask the user to confirm, then retry with `approved: true` "
-            "in the arguments."
-        ),
-        metadata={
-            "tool_name": tool_name,
-            "bridge": bridge,
-            "mcp_dispatch": True,
-            "approval_required": True,
-        },
-    )
-
-
 def _build_schema_validation_error(
     tool_name: str,
     tool: dict[str, Any],
@@ -1449,7 +1414,7 @@ class ToolHandlerMixin:
             )
 
     async def _execute_terminal_command(
-        self, session_id: str, command: str, host: str = "main", description: str = ""
+        self, session_id: str, command: str, host: str = "main", description: str = "", force_approval: bool = False
     ) -> dict[str, Any]:
         """
         Execute terminal command via terminal tool.
@@ -1459,6 +1424,7 @@ class ToolHandlerMixin:
             command: Command to execute
             host: Target host
             description: Command description
+            force_approval: The AI line held this call: a person decides it (#19951)
 
         Returns:
             Execution result
@@ -1478,7 +1444,7 @@ class ToolHandlerMixin:
                 return session_result
 
         result = await self.terminal_tool.execute_command(
-            conversation_id=session_id, command=command, description=description
+            conversation_id=session_id, command=command, description=description, force_approval=force_approval
         )
 
         return result
@@ -2152,7 +2118,11 @@ class ToolHandlerMixin:
 
         try:
             result = await self._execute_terminal_command(
-                session_id=session_id, command=command, host=host, description=description
+                session_id=session_id,
+                command=command,
+                host=host,
+                description=description,
+                force_approval=bool(tool_call.get(COMMAND_FORCE_APPROVAL_KEY)),
             )
 
             # Issue #4261: Wire AFTER_TOOL_EXECUTE hook for execute_command on success
@@ -3663,6 +3633,7 @@ class ToolHandlerMixin:
         execution_results = []
         additional_response_parts = []
         break_loop_requested = False
+        held = False
         respond_content = None
 
         # #13821: forward the authenticated role. #2629 wired `role` as far as
@@ -3690,8 +3661,12 @@ class ToolHandlerMixin:
                     break_loop_requested, respond_content = result
                 else:
                     yield result
+                    # #19951: a held call has no result, so another model call could only guess at one.
+                    held = held or getattr(result, "type", None) == "approval_required"
+            if held:
+                break
 
         if execution_results:
             yield self._build_execution_summary(execution_results)
 
-        yield (break_loop_requested, respond_content)
+        yield (break_loop_requested or held, respond_content)

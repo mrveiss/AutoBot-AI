@@ -299,6 +299,10 @@ def _call_params(tool_call: dict[str, Any]) -> dict[str, Any]:
     return params if isinstance(params, dict) else {"value": repr(params)}
 
 
+#: Set on a held ``execute_command`` call: the terminal queues it whatever its own rules say (#19951).
+COMMAND_FORCE_APPROVAL_KEY = "force_approval"
+
+
 async def enforce_ai_line(
     tool_call: dict[str, Any],
     ctx: "LLMIterationContext | None",
@@ -311,9 +315,10 @@ async def enforce_ai_line(
     Line 1 -> ``None`` (the call runs; the point reports it). Line 2 -> held with a pending approval.
     Line 3 -> refused. A missing ``ctx`` still enforces, with no company and no declared categories.
     """
-    from services.ai_line_enforcement import Outcome, enforce_line
+    from services.ai_line_enforcement import TERMINAL_TOOL, Outcome, enforce_line
 
     tool_name = tool_call.get("name", "")
+    is_command = tool_name == TERMINAL_TOOL
     context = getattr(ctx, "context", None) or {}
     verdict = await enforce_line(
         tool_name=tool_name,
@@ -324,8 +329,15 @@ async def enforce_ai_line(
         surface="chat_tool",
         declared_categories=getattr(ctx, "requires_approval_before", None) or (),
         approved_fingerprints=getattr(ctx, "approved_fingerprints", frozenset()),
+        hold_in_approvals=not is_command,
     )
     if verdict.outcome is Outcome.RUN:
+        return None
+    if is_command and verdict.outcome is Outcome.HOLD:
+        # #19951: the terminal's queue is the hold that can run the command: its approval card, its
+        # execution, its output back to the model. This key can only tighten, so a model setting it
+        # itself merely asks for a person.
+        tool_call[COMMAND_FORCE_APPROVAL_KEY] = True
         return None
     refused = verdict.outcome is Outcome.REFUSE
     meta = {

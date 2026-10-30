@@ -15,17 +15,15 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from autobot_shared.logging_manager import get_logger
-from services.ai_line_enforcement import LineVerdict, Outcome, enforce_line
+from services.ai_line_enforcement import TERMINAL_TOOL, LineVerdict, Outcome, enforce_line
 from user_management.database import get_async_session_factory
 from user_management.models.user import User
 
 from .approval_handler import ApprovalHandler
 from .models import AgentTerminalSession
 
-__all__ = ["Outcome", "resolve_command_line"]
+__all__ = ["Outcome", "decide_command", "resolve_command_line"]
 
-#: The tool name the terminal's commands carry in the tool-effect catalogue.
-TERMINAL_TOOL = "execute_command"
 logger = get_logger(__name__)
 
 
@@ -57,3 +55,29 @@ async def resolve_command_line(
         role_requires_approval=approval_handler.needs_approval(session.agent_role, risk),
         hold_in_approvals=False,
     )
+
+
+async def decide_command(
+    approval_handler: ApprovalHandler, session: AgentTerminalSession, command: str, risk, *, force_approval: bool
+) -> tuple[bool, str | None]:
+    """``(runs without a person, refusal)``: line 3 refuses, line 1 runs, line 2 asks the user's rules.
+
+    ``force_approval`` sends the command to a person whatever line 1 or a learned rule would say.
+    Nothing lifts line 3.
+    """
+    verdict = await resolve_command_line(approval_handler, session, command, risk)
+    if verdict.outcome is Outcome.REFUSE:
+        return False, verdict.message
+    if force_approval:
+        return False, None
+    if verdict.outcome is Outcome.RUN:
+        return True, None
+    user_id = session.get_user_id()
+    is_auto_approved = await approval_handler.check_auto_approve_rules(
+        user_id=user_id,
+        command=command,
+        risk_level=risk.value,
+    )
+    if is_auto_approved:
+        logger.info("Command auto-approved by rule: %s (user: %s, risk: %s)", command, user_id, risk.value)
+    return is_auto_approved, None

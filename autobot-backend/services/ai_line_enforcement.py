@@ -56,6 +56,7 @@ from autobot_shared.ai_lines import (
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secret_redaction import redact_nested
 from autobot_shared.ssot_config import config as ssot_config
+from autobot_shared.status_enums import CommandRisk
 from autobot_shared.tool_catalogue import approval_category_for, valid_approval_categories
 from llc.services.ai_lines import stored_line
 from models.approval import Approval, ApprovalStatus, ApprovalType
@@ -69,6 +70,9 @@ logger = get_logger(__name__)
 #: handler; a held tool call has nothing to execute on approval (HOOK for #18404 is in ``_file_hold``).
 KIND_HOLD = "ai_line_hold"
 REQUESTER_PREFIX = "ai-line"
+
+#: The tool name a shell command carries in the tool-effect catalogue.
+TERMINAL_TOOL = "execute_command"
 
 
 class Outcome(str, Enum):
@@ -120,6 +124,25 @@ async def _stored(scope: Optional[LineScope], key: str) -> tuple[Optional[AiLine
         return None, True
 
 
+def _is_read_only_command(tool_name: str, params: Optional[Mapping[str, Any]]) -> bool:
+    """Whether this call is a shell command the one risk classifier rates SAFE (#19950).
+
+    The tool name says only "runs a command", so the command decides. No command, or a classifier that
+    cannot answer, is not read-only: the call keeps the tool's own line.
+    """
+    command = (params or {}).get("command") if tool_name == TERMINAL_TOOL else None
+    if not command or not isinstance(command, str):
+        return False
+    try:
+        from secure_command_executor import SecureCommandExecutor
+
+        risk, _reasons = SecureCommandExecutor(use_docker_sandbox=False).assess_command_risk(command)
+    except Exception as exc:  # noqa: BLE001 - fail closed on an unreadable verdict
+        logger.error("Command risk unreadable (%s); the command keeps its tool's line", exc)
+        return False
+    return risk is CommandRisk.SAFE
+
+
 async def resolve_action_line(
     tool_name: str,
     params: Optional[Mapping[str, Any]],
@@ -137,11 +160,14 @@ async def resolve_action_line(
     key = action_key(tool_name, params)
     scope = resolve_scope(company_id, user_id)
     stored, unavailable = await _stored(scope, key)
-    category = approval_category_for(tool_name, await gated_categories(declared_categories))
+    read_only = _is_read_only_command(tool_name, params)
+    # A work item's own declared gate still applies to a read; the baseline's "destructive" one cannot.
+    gated = list(declared_categories) if read_only else await gated_categories(declared_categories)
+    category = approval_category_for(tool_name, gated)
     return resolve_line(
         key,
         stored=stored,
-        mutating=is_mutating(tool_name),
+        mutating=not read_only and is_mutating(tool_name),
         baseline_category=category,
         role_requires_approval=role_requires_approval,
         store_unavailable=unavailable,

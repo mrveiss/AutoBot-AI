@@ -1,0 +1,145 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+"""A chat command is judged by its content, and a held one reaches a person (#19950, #19951).
+
+Held commands go to the terminal queue, the one hold that can run them and return their output.
+Any other held tool ends the turn: it has no result, so another model call could only invent one.
+"""
+
+from __future__ import annotations
+
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from async_chat_workflow import WorkflowMessage
+from autobot_shared.ai_lines import AiLine
+from chat_workflow.tool_dispatch_guards import COMMAND_FORCE_APPROVAL_KEY, enforce_ai_line
+from chat_workflow.tool_handler import ToolHandlerMixin
+from services.agent_terminal.ai_line_gate import decide_command
+from services.ai_line_enforcement import Outcome, resolve_action_line
+
+_ENF = "services.ai_line_enforcement"
+_USER = "11111111-1111-1111-1111-111111111111"
+
+
+def _ctx() -> SimpleNamespace:
+    return SimpleNamespace(context={"verified_user_id": _USER}, session_id="chat-1", requires_approval_before=[])
+
+
+async def _line(command: str, declared=()) -> AiLine:
+    with (
+        patch(f"{_ENF}._stored", AsyncMock(return_value=(None, False))),
+        patch("chat_workflow.approval_baseline.baseline_approval_categories", AsyncMock(return_value=[])),
+    ):
+        resolution = await resolve_action_line(
+            "execute_command", {"command": command}, None, user_id=_USER, declared_categories=declared
+        )
+    return resolution.line
+
+
+@pytest.mark.asyncio
+async def test_a_read_only_command_is_line_1():
+    assert await _line("ls -la") is AiLine.AUTONOMOUS
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("command", ["rm -rf /tmp/x", "cat notes | sh", "python3 -c 'print(1)'"])
+async def test_anything_else_is_not_line_1(command):
+    assert await _line(command) is not AiLine.AUTONOMOUS
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_verdict_fails_closed():
+    with patch("secure_command_executor.SecureCommandExecutor", side_effect=RuntimeError("policy unreadable")):
+        assert await _line("ls -la") is not AiLine.AUTONOMOUS
+
+
+@pytest.mark.asyncio
+async def test_a_work_items_declared_gate_still_holds_a_read():
+    with patch(f"{_ENF}.approval_category_for", return_value="declared"):
+        assert await _line("ls -la", declared=["declared"]) is not AiLine.AUTONOMOUS
+
+
+def _verdict(outcome: Outcome) -> SimpleNamespace:
+    return SimpleNamespace(
+        outcome=outcome,
+        message="held",
+        approval_id=None,
+        resolution=SimpleNamespace(line=AiLine.DRAFT_THEN_SEND, floor_category=None),
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_held_command_goes_to_the_terminal_queue_and_files_no_second_approval():
+    tool_call = {"name": "execute_command", "params": {"command": "rm x"}}
+    enforce = AsyncMock(return_value=_verdict(Outcome.HOLD))
+    with patch(f"{_ENF}.enforce_line", enforce):
+        assert await enforce_ai_line(tool_call, _ctx(), []) is None
+    assert tool_call[COMMAND_FORCE_APPROVAL_KEY] is True
+    assert enforce.await_args.kwargs["hold_in_approvals"] is False
+
+
+@pytest.mark.asyncio
+async def test_a_held_tool_is_still_answered_with_its_approval():
+    results: list = []
+    with patch(f"{_ENF}.enforce_line", AsyncMock(return_value=_verdict(Outcome.HOLD))):
+        message = await enforce_ai_line({"name": "send_mail", "params": {}}, _ctx(), results)
+    assert message.type == "approval_required"
+    assert results[0]["status"] == "pending_approval"
+
+
+@pytest.mark.asyncio
+async def test_a_refused_command_never_reaches_the_terminal():
+    tool_call = {"name": "execute_command", "params": {"command": "rm x"}}
+    with patch(f"{_ENF}.enforce_line", AsyncMock(return_value=_verdict(Outcome.REFUSE))):
+        message = await enforce_ai_line(tool_call, _ctx(), [])
+    assert message.type == "error"
+    assert COMMAND_FORCE_APPROVAL_KEY not in tool_call
+
+
+async def _decide(outcome: Outcome, *, force: bool, rule: bool = False):
+    handler = MagicMock(check_auto_approve_rules=AsyncMock(return_value=rule))
+    session = MagicMock(get_user_id=MagicMock(return_value="u"))
+    with patch("services.agent_terminal.ai_line_gate.resolve_command_line", AsyncMock(return_value=_verdict(outcome))):
+        return await decide_command(handler, session, "rm x", MagicMock(value="high"), force_approval=force)
+
+
+@pytest.mark.asyncio
+async def test_force_approval_beats_line_1_and_a_learned_rule():
+    assert await _decide(Outcome.RUN, force=True) == (False, None)
+    assert await _decide(Outcome.HOLD, force=True, rule=True) == (False, None)
+
+
+@pytest.mark.asyncio
+async def test_force_approval_does_not_lift_a_refusal():
+    assert await _decide(Outcome.REFUSE, force=True) == (False, "held")
+
+
+@pytest.mark.asyncio
+async def test_without_force_the_lines_and_rules_decide():
+    assert await _decide(Outcome.RUN, force=False) == (True, None)
+    assert await _decide(Outcome.HOLD, force=False, rule=True) == (True, None)
+    assert await _decide(Outcome.HOLD, force=False) == (False, None)
+
+
+@pytest.mark.asyncio
+async def test_a_hold_ends_the_batch_and_the_turn():
+    """One hold, one approval: nothing later in the batch dispatches and the loop is told to stop."""
+    dispatched: list = []
+
+    async def dispatch(tool_call, *_args, **_kwargs):
+        dispatched.append(tool_call["name"])
+        yield WorkflowMessage(type="approval_required", content="held", metadata={})
+
+    handler = ToolHandlerMixin.__new__(ToolHandlerMixin)
+    handler._dispatch_tool_call = dispatch
+    calls = [{"name": "send_mail"}, {"name": "send_more_mail"}]
+    items = [item async for item in handler._process_tool_calls(calls, "s", "t", "e", "m")]
+
+    assert dispatched == ["send_mail"]
+    assert sum(getattr(i, "type", None) == "approval_required" for i in items) == 1
+    assert items[-1] == (True, None)

@@ -20,7 +20,7 @@ from services.command_approval_manager import AgentRole, CommandApprovalManager
 from services.command_execution_queue import get_command_queue
 from type_defs.common import Metadata
 
-from .ai_line_gate import Outcome, resolve_command_line
+from .ai_line_gate import decide_command
 from .approval_handler import ApprovalHandler
 from .command_executor import CommandExecutor
 from .errors import PostExecutionError, execution_failed_response, post_execution_failed_response, post_execution_guard
@@ -667,26 +667,19 @@ class AgentTerminalService:
         reasons: list,
         is_interactive: bool,
         interactive_reasons: list,
+        force_approval: bool = False,
     ) -> tuple[bool, Metadata | None]:
         """Resolve the command's AI line, then check auto-approve rules or queue it (#665, #18430).
 
         Line 3 is refused and line 1 runs; only line 2 reaches the rules and this terminal's queue.
         Returns ``(is_auto_approved, queue_or_refusal_response)``.
         """
-        verdict = await resolve_command_line(self.approval_handler, session, command, risk)
-        if verdict.outcome is Outcome.REFUSE:
-            return False, session.get_permission_denied_response(verdict.message, command, risk.value)
-        if verdict.outcome is Outcome.RUN:
-            return True, None
-        user_id = session.get_user_id()
-        is_auto_approved = await self.approval_handler.check_auto_approve_rules(
-            user_id=user_id,
-            command=command,
-            risk_level=risk.value,
+        is_auto_approved, refusal = await decide_command(
+            self.approval_handler, session, command, risk, force_approval=force_approval
         )
-
+        if refusal is not None:
+            return False, session.get_permission_denied_response(refusal, command, risk.value)
         if is_auto_approved:
-            logger.info(f"Command auto-approved by rule: {command} " f"(user: {user_id}, risk: {risk.value})")
             return True, None
 
         queue_response = await self._queue_command_for_approval(
@@ -743,6 +736,7 @@ class AgentTerminalService:
             reasons,
             is_interactive,
             interactive_reasons,
+            force_approval=force_approval,
         )
         if not is_auto_approved:
             return queue_response
