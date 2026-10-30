@@ -211,10 +211,9 @@ source_is_own_branch() {
 }
 
 # release/master/main, local or through origin.
-# Dev_new_gui: temporary mirror of main for the live updater; remove with #16461.
 is_protected_ref() {
   case "${1#origin/}" in
-    release | master | main | Dev_new_gui) return 0 ;;
+    release | master | main) return 0 ;;
   esac
   return 1
 }
