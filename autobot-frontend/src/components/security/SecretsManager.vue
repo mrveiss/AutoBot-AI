@@ -1761,7 +1761,7 @@ watch(selectedScope, () => {
 }
 
 .category-item.alert .count.alert {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-error);
 }
 
@@ -2660,7 +2660,7 @@ watch(selectedScope, () => {
 
 .btn-danger {
   padding: var(--spacing-2-5) var(--spacing-5);
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-error);
   border: none;
   border-radius: var(--radius-lg);
