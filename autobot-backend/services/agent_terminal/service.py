@@ -20,7 +20,7 @@ from services.command_approval_manager import AgentRole, CommandApprovalManager
 from services.command_execution_queue import get_command_queue
 from type_defs.common import Metadata
 
-from .ai_line_gate import PENDING_APPROVAL_REFUSAL, decide_command, permission_refusal
+from .ai_line_gate import PENDING_APPROVAL_REFUSAL, decide_command, permission_refusal, release_reservation
 from .approval_handler import ApprovalHandler
 from .command_executor import CommandExecutor
 from .errors import PostExecutionError, execution_failed_response, post_execution_failed_response, post_execution_guard
@@ -233,8 +233,8 @@ class AgentTerminalService:
 
         try:
             await self.command_queue.add_command(cmd_execution)
-        except BaseException:  # a cancelled turn too: nothing was queued, so nothing may hold the session
-            session.pending_approval = None
+        except BaseException:  # a cancelled turn too: nothing may hold the session for a write that did not finish
+            release_reservation(session, cmd_execution.command_id, self.command_queue)
             raise
         logger.info("✅ [QUEUE] Added command %s to queue", cmd_execution.command_id)
 

@@ -41,6 +41,7 @@ from chat_workflow.command_execution_record import (
     _unsuccessful_approval_record,
     approval_result_of,
     command_params,
+    current_terminal_session,
 )
 from chat_workflow.compose_tool_handler import (
     build_compose_dispatch,
@@ -1957,10 +1958,6 @@ class ToolHandlerMixin:
         async for msg in self._collect_workflow_results(workflow_gen, execution_results, additional_response_parts):
             yield msg
 
-    def _extract_command_params(self, tool_call: dict[str, Any]) -> tuple[str, str, str]:
-        """Extract command parameters from tool call dict. Issue #620."""
-        return command_params(tool_call)
-
     async def _dispatch_command_by_status(
         self,
         status: str,
@@ -2031,7 +2028,7 @@ class ToolHandlerMixin:
         Yields:
             WorkflowMessage items
         """
-        command, host, description = self._extract_command_params(tool_call)
+        command, host, description = command_params(tool_call)
         logger.info("[ChatWorkflowManager] Executing command: %s on %s", command, host)
 
         # Issue #4261/#14469: Wire BEFORE_TOOL_EXECUTE hook for execute_command,
@@ -2076,8 +2073,8 @@ class ToolHandlerMixin:
                 stdout = result.get("stdout", "")
                 stdout = await _emit_after_tool_execute("execute_command", stdout, session_id, {})
 
-            # The call above may have created the session this turn started without: it owns the approval card.
-            terminal_session_id = terminal_session_id or self.terminal_tool.active_sessions.get(session_id, "")
+            # The call above may have created or recreated the session: the live one owns the approval card.
+            terminal_session_id = current_terminal_session(self.terminal_tool, session_id, terminal_session_id)
             async for msg in self._dispatch_command_by_status(
                 result.get("status"),
                 session_id,

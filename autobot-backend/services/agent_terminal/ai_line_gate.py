@@ -14,7 +14,9 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
+from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
+from models.command_execution import CommandState
 from services.ai_line_enforcement import TERMINAL_TOOL, LineVerdict, Outcome, enforce_line
 from user_management.database import get_async_session_factory
 from user_management.models.user import User
@@ -22,7 +24,7 @@ from user_management.models.user import User
 from .approval_handler import ApprovalHandler
 from .models import AgentTerminalSession
 
-__all__ = ["Outcome", "decide_command", "permission_refusal", "resolve_command_line"]
+__all__ = ["Outcome", "decide_command", "permission_refusal", "release_reservation", "resolve_command_line"]
 
 logger = get_logger(__name__)
 
@@ -85,6 +87,24 @@ async def decide_command(
     if is_auto_approved:
         logger.info("Command auto-approved by rule: %s (user: %s, risk: %s)", command, user_id, risk.value)
     return is_auto_approved, None
+
+
+def release_reservation(session: AgentTerminalSession, command_id: str, queue) -> None:
+    """Undo a pending approval whose queue write did not finish, if it is still this operation's.
+
+    A cancelled await does not stop the worker thread, so the row may exist anyway: it is closed in the
+    background rather than awaited here, because this runs while the cancellation is unwinding.
+    """
+    if (session.pending_approval or {}).get("command_id") == command_id:
+        session.pending_approval = None
+    fire_and_forget(_close_queued_command(queue, command_id), name=f"close-queued-{command_id}")
+
+
+async def _close_queued_command(queue, command_id: str) -> None:
+    command = await queue.get_command(command_id)
+    if command is not None:
+        command.state = CommandState.CANCELLED
+        await queue.update_command(command)
 
 
 def permission_refusal(approval_handler: ApprovalHandler, session: AgentTerminalSession, command: str, risk):

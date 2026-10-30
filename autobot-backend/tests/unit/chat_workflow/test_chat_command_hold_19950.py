@@ -20,10 +20,11 @@ import pytest
 from async_chat_workflow import WorkflowMessage
 from autobot_shared.ai_lines import AiLine
 from autobot_shared.status_enums import CommandRisk
-from chat_workflow.command_execution_record import approval_result_of
+from chat_workflow.command_execution_record import approval_result_of, current_terminal_session
 from chat_workflow.tool_dispatch_guards import COMMAND_FORCE_APPROVAL_KEY, enforce_ai_line
 from chat_workflow.tool_handler import ToolHandlerMixin
-from services.agent_terminal.ai_line_gate import PENDING_APPROVAL_REFUSAL, decide_command
+from models.command_execution import CommandState
+from services.agent_terminal.ai_line_gate import PENDING_APPROVAL_REFUSAL, decide_command, release_reservation
 from services.agent_terminal.models import AgentTerminalSession
 from services.agent_terminal.service import AgentTerminalService
 from services.ai_line_enforcement import Outcome, resolve_action_line
@@ -218,7 +219,7 @@ async def test_a_rejection_reaches_the_models_next_prompt():
 @pytest.mark.asyncio
 async def test_a_turn_that_stopped_waiting_tells_the_model_the_command_did_not_run():
     results = await _failed_approval(None)
-    assert results[0]["status"] == "awaiting_approval"
+    assert results[0]["status"] == "outcome_unknown"
 
 
 @pytest.mark.asyncio
@@ -345,3 +346,27 @@ async def test_a_turn_cancelled_during_the_queue_write_does_not_strand_the_sessi
     with pytest.raises(asyncio.CancelledError):
         await task
     assert not session.has_pending_approval()
+
+
+def test_a_recreated_session_beats_the_stale_id_the_turn_started_with():
+    tool = MagicMock(active_sessions={"chat-1": "new-session"})
+    assert current_terminal_session(tool, "chat-1", "stale-session") == "new-session"
+    assert current_terminal_session(tool, "other-chat", "stale-session") == "stale-session"
+    assert current_terminal_session(None, "chat-1", "stale-session") == "stale-session"
+
+
+@pytest.mark.asyncio
+async def test_a_cancelled_write_clears_only_its_own_reservation_and_closes_its_row():
+    row = MagicMock(state=None)
+    queue = MagicMock(get_command=AsyncMock(return_value=row), update_command=AsyncMock())
+    session = AgentTerminalSession(session_id="s", agent_id="a", agent_role=AgentRole.CHAT_AGENT, conversation_id=None)
+    session.pending_approval = {"command_id": "someone-else"}
+    release_reservation(session, "mine", queue)
+    await asyncio.sleep(0)
+    await asyncio.sleep(0)
+    assert session.pending_approval == {"command_id": "someone-else"}
+    assert row.state is CommandState.CANCELLED
+    queue.update_command.assert_awaited_once_with(row)
+    session.pending_approval = {"command_id": "mine"}
+    release_reservation(session, "mine", queue)
+    assert session.pending_approval is None

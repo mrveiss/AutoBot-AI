@@ -15,6 +15,7 @@ import re
 import shlex
 from typing import FrozenSet, List, Optional
 
+from autobot_shared.secret_file_names import is_secret_file_name
 from security.command_segments import command_segments
 
 _READ_ONLY_BASES: FrozenSet[str] = frozenset(
@@ -66,6 +67,7 @@ _SHORTEST_FILES_FROM_ABBREVIATION = len("--fi")
 _SHELL_EXPANSION_CHARS = frozenset("$*?[{~")
 
 #: ``grep`` pattern flags: their value is not a file, so counting arguments would mistake it for one.
+_RECURSIVE_FLAGS = re.compile(r"^(-[a-zA-Z]*[rR]|--(dereference-)?rec)")
 _GREP_PATTERN_FLAGS = re.compile(r"^(-[a-zA-Z]*[ef]|--regexp|--file)")
 
 _SHELL_OPERATOR_CHARS = frozenset("<>&;|()")
@@ -87,7 +89,7 @@ def _tokens(segment: str) -> Optional[List[str]]:
 def _arg_reads_unbounded(arg: str) -> bool:
     """Whether this argument may read stdin, an endless device, or somewhere the text cannot show."""
     flag, _, value = arg.partition("=")
-    if arg == "-" or (len(flag) >= _SHORTEST_FILES_FROM_ABBREVIATION and _FILES_FROM_FLAG.startswith(flag)):
+    if "-" in (arg, value) or (len(flag) >= _SHORTEST_FILES_FROM_ABBREVIATION and _FILES_FROM_FLAG.startswith(flag)):
         return True
     path = value or arg
     if "$" in path or (path.startswith(("/", "~")) and _SHELL_EXPANSION_CHARS & set(path)):
@@ -95,6 +97,16 @@ def _arg_reads_unbounded(arg: str) -> bool:
     if ".." in path.split("/"):  # relative to a directory this check cannot see
         return True
     return ("/" + os.path.normpath(path).lstrip("/") + "/").startswith(_UNBOUNDED_PATHS) if path[0] == "/" else False
+
+
+def _names_a_secret(arg: str) -> bool:
+    """Whether any path segment of this argument, or an option's value, is a secret file's name."""
+    return any(is_secret_file_name(part) for part in arg.partition("=")[2 if "=" in arg else 0].split("/") if part)
+
+
+def _reads_files_unseen(args: List[str]) -> bool:
+    """A glob or a recursive grep reads files this check never gets to name, ``.env`` among them."""
+    return any(_SHELL_EXPANSION_CHARS & set(arg) or _RECURSIVE_FLAGS.match(arg) for arg in args)
 
 
 def _operands(args: List[str]) -> List[str]:
@@ -116,13 +128,13 @@ def _segment_is_read_only(segment: str, piped: bool) -> bool:
     if words is None:
         return False
     base, args = words[0], words[1:]
-    if any(_arg_reads_unbounded(arg) for arg in args):
+    if any(_arg_reads_unbounded(arg) or _names_a_secret(arg) for arg in args):
         return False
     if base in _READ_ONLY_BASES:
         return True
     if base in _FILE_READERS or base in _PATTERN_READERS:
         flags_ok = base != "tail" or all(_TAIL_FLAGS.match(arg) for arg in args if arg.startswith("-"))
-        return flags_ok and _reads_bounded_input(base, args, piped)
+        return flags_ok and not _reads_files_unseen(args) and _reads_bounded_input(base, args, piped)
     if base == "find":
         return not any(arg in _FIND_FORBIDDEN for arg in args)
     if base == "git":

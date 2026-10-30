@@ -70,6 +70,12 @@ def _status_for_return_code(return_code: Any) -> str:
         return "error"
 
 
+def current_terminal_session(terminal_tool: Any, session_id: str, turn_start_id: str) -> str:
+    """The session now live for this chat: the turn's own id may be gone if the PTY was recreated."""
+    live = terminal_tool.active_sessions.get(session_id) if terminal_tool else None
+    return live or turn_start_id
+
+
 def command_params(tool_call: dict[str, Any]) -> tuple[str, str, str]:
     """``(command, host, description)`` from an ``execute_command`` call (Issue #620)."""
     params = tool_call["params"]
@@ -91,13 +97,13 @@ def _unsuccessful_approval_record(
     """What the model is told when an approval did not end in a success (#19951).
 
     A rejected command and an approved one that failed report their own status and output. With no
-    decision yet the command has not run, and the record says so.
+    result this turn saw no outcome: still waiting, or a poll that lost track of it. The record claims neither.
     """
     result = approval_result or {}
     return {
         "command": command,
         "host": host,
-        "status": result.get("status") or ("denied" if approval_result else "awaiting_approval"),
+        "status": result.get("status") or ("denied" if approval_result else "outcome_unknown"),
         "stdout": result.get("stdout", ""),
         "stderr": result.get("stderr") or explanation,
     }
