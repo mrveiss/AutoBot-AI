@@ -838,6 +838,6 @@ onUnmounted(() => {
 }
 
 .btn-confirm:hover {
-  background: var(--color-error-dark, #c0392b);
+  background: var(--color-error-dark);
 }
 </style>
