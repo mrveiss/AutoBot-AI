@@ -435,7 +435,7 @@ onMounted(() => {
 }
 .btn-primary {
   background: var(--color-primary);
-  color: var(--text-on-primary, #fff);
+  color: var(--text-on-primary);
   border-color: var(--color-primary);
 }
 .btn-sm {
@@ -443,7 +443,7 @@ onMounted(() => {
   font-size: var(--text-sm);
 }
 .btn-danger {
-  color: var(--color-error, #ef4444);
+  color: var(--color-error);
 }
 
 .benchmark-results {
@@ -479,7 +479,7 @@ onMounted(() => {
   color: var(--text-primary);
 }
 .result-error {
-  color: var(--color-error, #ef4444);
+  color: var(--color-error);
   margin: 0;
 }
 .result-rating {
@@ -494,13 +494,13 @@ onMounted(() => {
 .star {
   background: none;
   border: none;
-  color: var(--text-tertiary, #64748b);
+  color: var(--text-tertiary);
   font-size: 1.25rem;
   cursor: pointer;
   line-height: 1;
 }
 .star-filled {
-  color: var(--chart-yellow, #f59e0b);
+  color: var(--chart-yellow);
 }
 
 .benchmark-history {
