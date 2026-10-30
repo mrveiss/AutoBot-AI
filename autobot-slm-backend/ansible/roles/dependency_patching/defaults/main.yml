@@ -70,7 +70,6 @@ python_security_updates:
   langchain-core: "1.6.11,<2.0.0"   # Serialization injection + template injection + SSRF
   nltk: "3.10.3"                   # Zip slip vulnerability
   # High
-  starlette: "1.9.0"               # O(n^2) DoS via Range header
   aiohttp: "3.14.3"                # Zip bomb + DoS + payload + chunked
   python-multipart: "0.0.32"       # Arbitrary file write
   cryptography: "50.0.2"           # Subgroup attack on SECT curves
