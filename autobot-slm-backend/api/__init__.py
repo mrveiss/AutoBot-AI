@@ -53,6 +53,7 @@ from .sso import router as sso_router
 from .sso_auth import router as sso_auth_router
 from .stateful import router as stateful_router
 from .tls import node_tls_router, tls_router
+from .update_report import router as update_report_router
 from .updates import router as updates_router
 from .vnc import node_vnc_router, vnc_router
 from .websocket import router as websocket_router
@@ -85,6 +86,7 @@ nodes_router.include_router(capability_profile_router)
 # which sit at their file-size ceilings.
 nodes_router.include_router(node_post_sync_router)
 code_sync_router.include_router(post_sync_runs_router)
+code_sync_router.include_router(update_report_router)
 
 __all__ = [
     "agents_router",
