@@ -29,7 +29,14 @@ from security.enforcement_mode import (
     resolve_enforcement_mode,
     resolve_enforcement_mode_for_request,
 )
-from security.session_posture import SessionPosture, authenticated_user, read_owner, require_posture, validate_strict
+from security.session_posture import (
+    SessionPosture,
+    authenticated_user,
+    read_owner,
+    require_posture,
+    unowned_access,
+    validate_strict,
+)
 
 logger = get_logger(__name__)
 
@@ -509,13 +516,10 @@ class SessionOwnershipValidator:
     ) -> "tuple[str | None, Dict | None]":
         """Resolve ownership when Redis has no record (#14018).
 
-        An absent Redis record does NOT mean the session is unowned: the key
-        carries a TTL, so it also goes absent for any session whose owner has not
-        touched it recently. Claiming it here handed that session to whoever
-        accessed it next, authorized — ownership expiring into a takeover.
-
-        The session file's ``metadata.owner`` does not expire, so it is asked
-        first. Redis is a cache in front of it, not the record of truth.
+        An absent Redis record does NOT mean the session is unowned: the key carries a TTL.
+        Claiming it here handed that session to whoever accessed it next, authorized —
+        ownership expiring into a takeover. The session file's ``metadata.owner`` does not
+        expire, so it is asked first. Redis is a cache in front of it, not the record of truth.
 
         Returns ``(owner, early_result)``. A non-None *early_result* is the
         caller's return value; otherwise *owner* continues the normal comparison.
@@ -527,6 +531,8 @@ class SessionOwnershipValidator:
                 await self.set_session_owner(session_id, durable_owner, org_id=user_data.get("org_id"), team_id=None)
             return durable_owner, None
 
+        if (decided := await unowned_access(session_id, user_data, request)) is not None:
+            return username, decided
         logger.warning("Session %s... has no owner anywhere (legacy session)", session_id[:8])
         await self.set_session_owner(session_id, username, org_id=user_data.get("org_id"), team_id=None)
         return username, {"authorized": True, "user_data": user_data, "reason": "legacy_migration"}
