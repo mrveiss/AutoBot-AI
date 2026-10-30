@@ -3981,7 +3981,9 @@
       "loading": "Loading configuration...",
       "emailHint": "Comma-separated email addresses",
       "selectWorkflow": "Workflow",
-      "channelMappingHint": "Select which channels receive notifications for each event type."
+      "channelMappingHint": "Select which channels receive notifications for each event type.",
+      "invalidEmail": "ای میل ایڈریس غلط ہے: {emails}",
+      "invalidUrl": "URL کا فارمیٹ غلط ہے"
     },
     "modal": {
       "saveWorkflowAriaLabel": "Save workflow",
@@ -4281,7 +4283,8 @@
       "emergencyKillFailed": "❌ ہنگامی بندش ناکام: {message}",
       "interrupted": "^C (صارف نے عمل روک دیا)",
       "error": "خرابی: {error}"
-    }
+    },
+    "urlCopied": "ٹرمینل URL کلپ بورڈ پر کاپی ہو گیا!"
   },
   "manpage": {
     "manager": {
@@ -5514,7 +5517,10 @@
       "thinkingOffLabel": "thinking Off",
       "thinkingOn": "Thinking on",
       "thinkingOnLabel": "thinking On",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "fileTooLarge": "فائل \"{name}\" بہت بڑی ہے (زیادہ سے زیادہ {max})",
+      "voiceUnsupported": "صوتی ان پٹ کے لیے Chrome، Edge یا Safari 15+ درکار ہے۔ اس براؤزر میں ٹرانسکرپشن دستیاب نہیں ہے۔",
+      "micDenied": "مائیکروفون تک رسائی مسترد کر دی گئی۔ براہ کرم براؤزر کی ترتیبات میں مائیکروفون تک رسائی کی اجازت دیں۔"
     },
     "visualBrowser": {
       "disconnected": "Disconnected",
@@ -7291,7 +7297,8 @@
       "listView": "List View",
       "refreshAriaLabel": "Refresh files",
       "errorRenamingFile": "Error renaming file",
-      "errorLoadingContents": "Error loading contents"
+      "errorLoadingContents": "Error loading contents",
+      "uploadFailedHint": "براہ کرم فائل کے سائز کی حدود اور فارمیٹ کی ضروریات چیک کریں"
     },
     "fileTypes": {
       "shell": "Shell Script",

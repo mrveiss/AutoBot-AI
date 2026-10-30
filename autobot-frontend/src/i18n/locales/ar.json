@@ -306,7 +306,10 @@
       "thinkingOffLabel": "thinking Off",
       "thinkingOn": "Thinking on",
       "thinkingOnLabel": "thinking On",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "fileTooLarge": "الملف \"{name}\" كبير جدًا (الحد الأقصى {max})",
+      "voiceUnsupported": "يتطلب الإدخال الصوتي Chrome أو Edge أو Safari 15+. النسخ الصوتي غير متاح في هذا المتصفح.",
+      "micDenied": "تم رفض الوصول إلى الميكروفون. يرجى السماح بالوصول إلى الميكروفون في إعدادات المتصفح."
     },
     "translate": {
       "title": "Translate Text",
@@ -4652,7 +4655,9 @@
       "channelSlack": "Slack",
       "emailHint": "Comma-separated email addresses",
       "channelWebhook": "Webhook",
-      "sectionDesc": "Configure per-workflow notification routing"
+      "sectionDesc": "Configure per-workflow notification routing",
+      "invalidEmail": "عنوان بريد إلكتروني غير صالح: {emails}",
+      "invalidUrl": "تنسيق URL غير صالح"
     },
     "liveDashboard": {
       "activeExecutions": "Active Executions",
@@ -4987,7 +4992,8 @@
       "emergencyKillFailed": "❌ فشل الإيقاف الطارئ: {message}",
       "interrupted": "^C (قاطع المستخدم العملية)",
       "error": "خطأ: {error}"
-    }
+    },
+    "urlCopied": "تم نسخ عنوان URL الخاص بالطرفية إلى الحافظة!"
   },
   "llm": {
     "unavailable": "Unavailable",
@@ -7376,7 +7382,8 @@
       "errorDeletingFile": "Error deleting file",
       "errorRenamingFile": "Error renaming file",
       "refreshAriaLabel": "Refresh files",
-      "toggleViewAriaLabel": "Toggle view mode"
+      "toggleViewAriaLabel": "Toggle view mode",
+      "uploadFailedHint": "يرجى التحقق من حدود حجم الملف ومتطلبات التنسيق"
     },
     "header": {
       "title": "File Browser",
