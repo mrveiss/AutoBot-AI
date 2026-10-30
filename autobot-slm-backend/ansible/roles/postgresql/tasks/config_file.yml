@@ -32,3 +32,18 @@
         backup: true
       become: true
       notify: Restart PostgreSQL
+
+    # #20001: a handler notified above dies with a run that fails before handlers run, and later runs see
+    # no file change. So ask the server, and restart when what it is running is not what the file says.
+    - name: The running listen_addresses matches the rendered value
+      ansible.builtin.command:
+        cmd: psql -Atc "SHOW listen_addresses"
+      become: true
+      become_user: postgres
+      register: _postgresql_running_listen
+      check_mode: false
+      failed_when: false
+      changed_when: >-
+        _postgresql_running_listen.rc == 0
+        and _postgresql_running_listen.stdout | trim != postgresql_listen_addresses | trim
+      notify: Restart PostgreSQL

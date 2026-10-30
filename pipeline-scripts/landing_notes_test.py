@@ -115,7 +115,7 @@ def test_a_train_posts_exactly_one_note_per_referenced_issue() -> None:
     assert len([w for w in fake.writes if w[1].endswith("/comments")]) == 6
     assert outcomes[950] == "skipped (a pull request)"
     marker = "<!-- landing-note:9999999999999999999999999999999999999999 -->"
-    head = f"{marker}\nLanded in train train-2026-10-25-99 (#900, merge `9999999999`)"
+    head = f"{marker}\nLanded via the merge train (#900, merge `9999999999`)"
     assert posts[101] == f"{head} via #901, #903"
     assert posts[102] == f"{head} via #901, #902"
     assert posts[105] == f"{head} via #903"
