@@ -878,32 +878,32 @@ async function createCompany() {
 
 /* Template Icon Categories */
 .category-software-team {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--color-primary);
   color: white;
 }
 
 .category-marketing-agency {
-  background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  background: var(--color-error-solid);
   color: white;
 }
 
 .category-consulting-firm {
-  background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+  background: var(--color-info-solid);
   color: white;
 }
 
 .category-research-lab {
-  background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+  background: var(--color-success);
   color: white;
 }
 
 .category-startup {
-  background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+  background: var(--color-warning);
   color: white;
 }
 
 .category-custom {
-  background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+  background: var(--bg-tertiary);
   color: white;
 }
 </style>
