@@ -7,9 +7,9 @@
           {{ $t('featureFlags.enforcement.description') }}
         </p>
       </div>
-      <button @click="showAddModal = true" class="btn-add">
+      <BaseButton @click="showAddModal = true">
         <Icon name="plus" /> {{ $t('featureFlags.enforcement.addOverride') }}
-      </button>
+      </BaseButton>
     </div>
 
     <!-- Empty State -->
@@ -19,9 +19,9 @@
       </div>
       <h4>{{ $t('featureFlags.enforcement.noOverrides') }}</h4>
       <p>{{ $t('featureFlags.enforcement.noOverridesDesc') }}</p>
-      <button @click="showAddModal = true" class="btn-primary">
+      <BaseButton @click="showAddModal = true">
         <Icon name="plus" /> {{ $t('featureFlags.enforcement.addOverride') }}
-      </button>
+      </BaseButton>
     </div>
 
     <!-- Overrides List -->
@@ -113,16 +113,15 @@
       </form>
 
       <template #actions>
-        <button type="button" @click="closeModal" class="btn-secondary">{{ $t('featureFlags.enforcement.cancel') }}</button>
-        <button
+        <BaseButton variant="secondary" type="button" @click="closeModal">{{ $t('featureFlags.enforcement.cancel') }}</BaseButton>
+        <BaseButton
           type="submit"
           @click="saveOverride"
-          class="btn-primary"
           :disabled="!isFormValid || loading"
         >
           <Icon name="spinner" class="animate-spin" v-if="loading" />
           {{ $t('featureFlags.enforcement.save') }}
-        </button>
+        </BaseButton>
       </template>
     </BaseModal>
 
@@ -144,11 +143,11 @@
       </div>
 
       <template #actions>
-        <button @click="showRemoveModal = false" class="btn-secondary">{{ $t('featureFlags.enforcement.cancel') }}</button>
-        <button @click="removeOverride" class="btn-primary" :disabled="loading">
+        <BaseButton variant="secondary" @click="showRemoveModal = false">{{ $t('featureFlags.enforcement.cancel') }}</BaseButton>
+        <BaseButton @click="removeOverride" :disabled="loading">
           <Icon name="spinner" class="animate-spin" v-if="loading" />
           {{ $t('featureFlags.enforcement.remove') }}
-        </button>
+        </BaseButton>
       </template>
     </BaseModal>
   </div>
@@ -160,7 +159,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, reactive } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { EnforcementMode } from '@/utils/FeatureFlagsApiClient';
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 
 const { t } = useI18n();
 
@@ -308,25 +307,6 @@ const closeModal = () => {
   font-size: var(--text-sm);
   color: var(--text-tertiary);
   max-width: 500px;
-}
-
-.btn-add {
-  padding: var(--spacing-2-5) var(--spacing-4);
-  background: var(--color-primary);
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  transition: all var(--duration-200);
-}
-
-.btn-add:hover {
-  background: var(--color-primary-hover);
 }
 
 /* Empty State */
@@ -643,48 +623,6 @@ const closeModal = () => {
   background: var(--bg-tertiary);
   padding: var(--spacing-0-5) var(--spacing-1-5);
   border-radius: var(--radius-default);
-}
-
-/* Buttons */
-.btn-primary {
-  padding: var(--spacing-2-5) var(--spacing-5);
-  background: var(--color-primary);
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-2);
-  transition: all var(--duration-200);
-}
-
-.btn-primary:hover {
-  background: var(--color-primary-hover);
-}
-
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  padding: var(--spacing-2-5) var(--spacing-5);
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  border: none;
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--duration-200);
-}
-
-.btn-secondary:hover {
-  background: var(--bg-hover);
 }
 
 /* Responsive */

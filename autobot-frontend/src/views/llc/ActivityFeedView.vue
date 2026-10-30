@@ -21,9 +21,9 @@
           <input type="checkbox" :checked="autoRefresh" @change="toggleAutoRefresh" />
           {{ $t('llc.activity.autoRefresh') }}
         </label>
-        <button class="btn-sm" :disabled="isLoading" @click="reload">
+        <BaseButton variant="secondary" size="sm" :disabled="isLoading" @click="reload">
           {{ isLoading ? $t('llc.activity.refreshing') : $t('llc.activity.refresh') }}
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -55,10 +55,10 @@
           @keyup.enter="applyFilters"
         />
       </label>
-      <button class="btn-sm" @click="applyFilters">{{ $t('llc.activity.applyFilters') }}</button>
-      <button v-if="hasActiveFilters" class="btn-sm btn-ghost" @click="clearFilters">
+      <BaseButton variant="secondary" size="sm" @click="applyFilters">{{ $t('llc.activity.applyFilters') }}</BaseButton>
+      <BaseButton variant="ghost" size="sm" v-if="hasActiveFilters" @click="clearFilters">
         {{ $t('llc.activity.clearFilters') }}
-      </button>
+      </BaseButton>
     </div>
 
     <div v-if="isLoading && entries.length === 0" class="state-msg">{{ $t('llc.activity.loading') }}</div>
@@ -80,18 +80,19 @@
     <div v-if="entries.length > 0" class="feed-pagination">
       <span class="page-info">{{ $t('llc.activity.pageInfo', { page, total }) }}</span>
       <div class="page-buttons">
-        <button class="btn-sm" :disabled="page <= 1 || isLoading" @click="goToPage(page - 1)">
+        <BaseButton variant="secondary" size="sm" :disabled="page <= 1 || isLoading" @click="goToPage(page - 1)">
           {{ $t('llc.activity.prev') }}
-        </button>
-        <button class="btn-sm" :disabled="!hasNext || isLoading" @click="goToPage(page + 1)">
+        </BaseButton>
+        <BaseButton variant="secondary" size="sm" :disabled="!hasNext || isLoading" @click="goToPage(page + 1)">
           {{ $t('llc.activity.next') }}
-        </button>
+        </BaseButton>
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
@@ -373,25 +374,5 @@ onUnmounted(() => {
 .page-buttons {
   display: flex;
   gap: 0.5rem;
-}
-
-.btn-sm {
-  padding: 0.3125rem 0.75rem;
-  font-size: 0.8125rem;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--border-default);
-  background: var(--bg-input);
-  color: var(--text-primary);
-  cursor: pointer;
-}
-
-.btn-sm:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-ghost {
-  border-color: transparent;
-  color: var(--color-accent-text, var(--actfeed-accent-text));
 }
 </style>
