@@ -161,7 +161,15 @@ def _is_covered(path: str, patterns: list[str]) -> bool:
             return True
         if fnmatch.fnmatch(path, pattern.replace("**/", "*/").replace("**", "*")):
             return True
+        if pattern.startswith("**/") and fnmatch.fnmatch(path, pattern[3:].replace("**", "*")):
+            return True  # the real filter's `**/` also matches zero directories (#19817)
     return False
+
+
+def test_a_leading_double_star_covers_the_repository_root_too() -> None:
+    assert _is_covered("Dockerfile.x", ["**/Dockerfile*"])
+    assert _is_covered("docker/slm/Dockerfile", ["**/Dockerfile*"])
+    assert not _is_covered("notes/Dockerfile.md", ["**/*.Dockerfile"])
 
 
 def _record(candidate: str, guard: str, patterns: list[str], reads: dict[str, set[str]]) -> None:
