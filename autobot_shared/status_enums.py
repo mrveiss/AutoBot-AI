@@ -153,6 +153,11 @@ class Severity(Enum):
         return (cls.UNKNOWN, cls.INFO, cls.MINIMAL, cls.LOW, cls.MEDIUM, cls.HIGH, cls.CRITICAL)
 
     @classmethod
+    def risk_ladder(cls) -> "tuple[Severity, ...]":
+        """Risk levels, most severe first, as the risk reports list them (#19336)."""
+        return (cls.CRITICAL, *reversed(cls.triage_ladder()), cls.MINIMAL)
+
+    @classmethod
     def triage_ladder(cls) -> tuple["Severity", ...]:
         """LOW, MEDIUM, HIGH ascending; endpoints derive "high, medium, low" listings from it, reversed (#19336)."""
         return (cls.LOW, cls.MEDIUM, cls.HIGH)

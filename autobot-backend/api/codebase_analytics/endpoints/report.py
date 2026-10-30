@@ -355,7 +355,7 @@ def _generate_risk_distribution(prediction: PredictionResult) -> List[str]:
         "| Risk Level | Files |",
         "|------------|-------|",
     ]
-    for level in (s.value for s in (Severity.CRITICAL, *reversed(Severity.triage_ladder()), Severity.MINIMAL)):
+    for level in (s.value for s in Severity.risk_ladder()):
         count = prediction.risk_distribution.get(level, 0)
         emoji = _get_risk_emoji(level)
         lines.append(f"| {emoji} {level.capitalize()} | {count} |")

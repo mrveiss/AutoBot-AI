@@ -156,3 +156,7 @@ def test_triage_ladder_derives_the_orderings_the_endpoints_used_to_spell_out() -
     assert [s.value for s in risk] == ["critical", "high", "medium", "low", "minimal"]
     assert [s.value for s in reversed(Severity.finding_ladder())] == ["critical", "high", "medium", "low", "info"]
     assert [s.value for s in reversed(Severity.triage_ladder())] == ["high", "medium", "low"]
+
+
+def test_the_risk_ladder_is_the_listing_the_risk_reports_used_to_spell_out() -> None:
+    assert [s.value for s in Severity.risk_ladder()] == ["critical", "high", "medium", "low", "minimal"]

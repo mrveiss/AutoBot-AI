@@ -655,7 +655,7 @@ def _calculate_risk_level_trends(history: List[Dict[str, Any]]) -> Dict[str, Any
 
     trends = {}
 
-    for level in [s.value for s in (Severity.CRITICAL, *reversed(Severity.triage_ladder()), Severity.MINIMAL)]:
+    for level in [s.value for s in Severity.risk_ladder()]:
         counts = [h.get(f"{level}_count", h.get("risk_distribution", {}).get(level, 0)) for h in history]
         if counts:
             avg = sum(counts) / len(counts)
