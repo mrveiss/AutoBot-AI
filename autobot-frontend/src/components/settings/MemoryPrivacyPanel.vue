@@ -90,6 +90,7 @@ Issue #10554: Per-user memory transparency + edit/forget-everywhere + export
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { isHttpError } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
@@ -203,7 +204,7 @@ async function forgetEverywhere(item: MemoryItem) {
     // #13739: a 409 means this id exists in more than one store, so the backend
     // refuses to guess which one was meant rather than deleting both. The row's
     // own per-store delete is the way out, so say that instead of "failed".
-    const ambiguous = err instanceof Error && err.message.includes('HTTP 409')
+    const ambiguous = isHttpError(err) && err.status === 409
     showToast(
       t(
         ambiguous

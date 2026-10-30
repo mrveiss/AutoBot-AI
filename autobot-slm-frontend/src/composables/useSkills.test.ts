@@ -221,7 +221,6 @@ describe('useSkillGovernance — migrated onto useAutobotApi (#13079)', () => {
 
     const g = useSkillGovernance()
     g.startApprovalPolling()
-    vi.advanceTimersByTime(30_000)
 
     const [url, config] = calls('get')[0] as [string, { timeout: number; maxRetries: number }]
     expect(url).toBe('/skills/governance/approvals')
@@ -230,6 +229,18 @@ describe('useSkillGovernance — migrated onto useAutobotApi (#13079)', () => {
     // GET retries would stretch one failing tick past the interval (#12363)
     expect(config.maxRetries).toBe(1)
 
+    g.stopApprovalPolling()
+  })
+
+  it('pauses the approval poll after repeated failures instead of polling a down backend', async () => {
+    vi.useFakeTimers()
+    backendClient.get.mockRejectedValue(detailError(503, 'down'))
+
+    const g = useSkillGovernance()
+    g.startApprovalPolling()
+    await vi.advanceTimersByTimeAsync(30_000 * 6)
+
+    expect(g.approvalPoller.pausedOnErrors.value).toBe(true)
     g.stopApprovalPolling()
   })
 

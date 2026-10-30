@@ -37,40 +37,27 @@
         {{ t('llcMembers.empty') }}
       </BaseCard>
 
-      <BaseCard v-else>
-        <table class="members-table">
-          <thead>
-            <tr>
-              <th scope="col">{{ t('llcMembers.colName') }}</th>
-              <th scope="col">{{ t('llcMembers.colRole') }}</th>
-              <th scope="col" class="members-col-actions">{{ t('llcMembers.colActions') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="member in members" :key="member.user_id">
-              <td>
-                <span class="members-name">{{ member.display_name }}</span>
-              </td>
-              <td>
-                <BaseBadge size="sm" :variant="roleBadgeVariant(member.role)">
-                  {{ roleLabel(member.role) }}
-                </BaseBadge>
-              </td>
-              <td class="members-col-actions">
-                <BaseButton
-                  variant="error"
-                  size="sm"
-                  :loading="pendingUserId === member.user_id"
-                  :disabled="pendingUserId !== null"
-                  @click="confirmRemove(member)"
-                >
-                  {{ t('llcMembers.remove') }}
-                </BaseButton>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </BaseCard>
+      <BaseTable v-else :columns="columns" :rows="rows" row-key="user_id" :aria-label="t('llcMembers.title')" :actions-label="t('llcMembers.colActions')">
+        <template #cell-display_name="{ value }">
+          <span class="members-name">{{ value }}</span>
+        </template>
+        <template #cell-role="{ value }">
+          <BaseBadge size="sm" :variant="roleBadgeVariant(String(value))">
+            {{ roleLabel(String(value)) }}
+          </BaseBadge>
+        </template>
+        <template #actions="{ row }">
+          <BaseButton
+            variant="error"
+            size="sm"
+            :loading="pendingUserId === row.user_id"
+            :disabled="pendingUserId !== null"
+            @click="confirmRemove(row as unknown as Member)"
+          >
+            {{ t('llcMembers.remove') }}
+          </BaseButton>
+        </template>
+      </BaseTable>
     </template>
 
     <!-- Add member modal -->
@@ -141,7 +128,7 @@ import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useCollaborationInvite } from '@/composables/collaboration/useCollaborationInvite'
-import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseModal, BaseTable, type BaseTableColumn } from '@autobot/ui'
 
 // Backend MembershipRole enum (autobot-backend/llc/models/enums.py).
 const MEMBERSHIP_ROLES = ['owner', 'admin', 'member', 'guest', 'lead'] as const
@@ -163,6 +150,12 @@ const props = defineProps<{ companyId?: string }>()
 const companyId = computed(() => (route.params.companyId as string) ?? props.companyId ?? '')
 
 const members = ref<Member[]>([])
+// BaseTable rows are plain records; Member carries no index signature.
+const rows = computed(() => members.value.map((m) => ({ ...m })))
+const columns = computed<BaseTableColumn[]>(() => [
+  { key: 'display_name', label: t('llcMembers.colName') },
+  { key: 'role', label: t('llcMembers.colRole') },
+])
 const isLoading = ref(false)
 const errorMessage = ref('')
 const pendingUserId = ref<string | null>(null)
@@ -333,33 +326,6 @@ onMounted(() => {
 
 .members-error {
   margin-bottom: 0.5rem;
-}
-
-.members-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.members-table th,
-.members-table td {
-  text-align: left;
-  padding: 0.625rem 0.75rem;
-  border-bottom: 1px solid var(--border-default);
-  font-size: 0.875rem;
-}
-
-.members-table th {
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-size: 0.6875rem;
-}
-
-.members-col-actions {
-  text-align: right;
-  width: 1%;
-  white-space: nowrap;
 }
 
 .members-name {
