@@ -90,3 +90,23 @@ register_env_var(
         component="postgres",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="SLM_DB_NAME",
+        type=str,
+        default=postgres_identity.SLM_DB_NAME,
+        description="SLM control-plane database name; compose has its own default (see postgres_identity).",
+        component="postgres",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="SLM_POSTGRES_USER",
+        type=str,
+        default=postgres_identity.SLM_DB_ROLE,
+        description="The SLM's login role on a fleet host; compose has one login role and ignores it (#19408).",
+        component="postgres",
+    )
+)

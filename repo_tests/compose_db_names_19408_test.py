@@ -36,14 +36,17 @@ def _slm_environment(text: str) -> dict[str, str]:
 
 
 def _users_url_faults(text: str) -> list[str]:
-    url = _slm_environment(text).get("AUTOBOT_USERS_DATABASE_URL", "")
-    if not url:
+    raw = _slm_environment(text).get("AUTOBOT_USERS_DATABASE_URL", "")
+    if not raw:
         return ["AUTOBOT_USERS_DATABASE_URL is missing from the SLM service"]
+    url = urlsplit(_resolve(raw, {}))
     faults = []
-    if "@autobot-postgres:5432/" not in url:
-        faults.append("does not point at autobot-postgres")
-    if "autobot_users" not in url or "${SLM_POSTGRES_USER:-" not in url:
-        faults.append("is not the SLM role on the autobot_users database")
+    if url.hostname != "autobot-postgres":
+        faults.append(f"host is {url.hostname}")
+    if url.username != "autobot":
+        faults.append(f"role is {url.username}")
+    if url.path != "/autobot_users":
+        faults.append(f"database is {url.path}")
     return faults
 
 
@@ -65,8 +68,12 @@ def test_the_compose_slm_gets_a_working_users_database_url() -> None:
 
 @pytest.mark.parametrize(
     "environment",
-    ["- SLM_DATA_DIR=/app/data", "- AUTOBOT_USERS_DATABASE_URL=postgresql+asyncpg://slm_app:x@127.0.0.1:5432/slm"],
-    ids=["missing", "loopback-and-wrong-database"],
+    [
+        "- SLM_DATA_DIR=/app/data",
+        "- AUTOBOT_USERS_DATABASE_URL=postgresql+asyncpg://slm_app:${P:?x}@127.0.0.1:5432/slm",
+        "- AUTOBOT_USERS_DATABASE_URL=postgresql+asyncpg://autobot:${P:?x}@autobot-postgres:5432/wrong_autobot_users",
+    ],
+    ids=["missing", "loopback-and-wrong-database", "database-name-only-contains-it"],
 )
 def test_a_missing_or_wrong_users_url_is_flagged(environment: str) -> None:
     text = f"services:\n  autobot-slm:\n    environment:\n      {environment}\n"
@@ -160,3 +167,21 @@ def test_every_environment_keeps_the_slm_on_the_role_and_databases_compose_creat
 def test_the_resolver_handles_each_operator() -> None:
     assert _resolve("${A:-${B:-c}}", {"B": "b"}) == "b"
     assert _resolve("${A:+A }${B:+B}", {"A": "1"}) == "A "
+
+
+def test_the_slm_does_not_read_a_role_compose_never_creates() -> None:
+    plain = _connection({})
+    assert _connection({"SLM_POSTGRES_USER": "slm_app"}) == plain
+
+
+@pytest.mark.parametrize(
+    ("env", "database"),
+    [({}, "autobot_users"), ({"AUTOBOT_USERS_DB_NAME": "o_u"}, "o_u"), ({"AUTOBOT_POSTGRES_DB": "n_u"}, "n_u")],
+    ids=["fresh", "old-name", "canonical"],
+)
+def test_the_database_the_slm_reads_is_the_one_postgres_is_told_to_create(env: dict[str, str], database: str) -> None:
+    services = yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))["services"]
+    pg = dict(item.split("=", 1) for item in services["autobot-postgres"]["environment"])
+    assert _resolve(pg["AUTOBOT_POSTGRES_DB"], env) == database
+    script = (REPO_ROOT / "docker" / "postgres" / "init-databases.sh").read_text(encoding="utf-8")
+    assert 'users_db="${AUTOBOT_POSTGRES_DB:?' in script and 'CREATE DATABASE :"users_db";' in script

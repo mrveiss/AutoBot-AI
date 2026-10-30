@@ -560,3 +560,20 @@ derived as `{{ autobot.base_dir | dirname }}/<svc>`.
 **Revisit when:** the platform decides to relocate service state under the install root.
 
 **Grep check:** `grep -n "_config_dir\|_data_dir" autobot-slm-backend/ansible/roles/monitoring/defaults/main.yml` -- if no `/etc` or `/var` literal remains, this exception is obsolete.
+
+## Compose Postgres Variables — Same Concept, Compose's Own Values
+
+**Files:** `docker-compose.yml`, `autobot_shared/postgres_identity.py`
+**Canonical it does not use:** the fleet values of `AUTOBOT_POSTGRES_USER` and `SLM_DB_NAME`
+**Issue:** #19408
+
+**Reason:** Each name means one concept everywhere: `AUTOBOT_POSTGRES_USER` is the login role
+on the user-management database, and `SLM_DB_NAME` is the SLM control-plane database. Only
+the values differ. The postgres image creates one role, so compose uses the owner role
+(`COMPOSE_OWNER_ROLE`) where a fleet host has `autobot_app`, and keeps its existing database
+(`COMPOSE_SLM_DB_NAME`) where a fleet host has `slm`. Renaming either would move existing
+compose volumes. For the same one-role reason, the compose SLM logs in as that owner role
+and does not read `SLM_POSTGRES_USER`.
+
+**Enforced by:** `COMPOSE_KEY_VALUES` in `repo_tests/postgres_identity_one_source_19320_test.py`
+allows these values in compose files only.

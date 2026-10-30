@@ -30,6 +30,7 @@ from __future__ import annotations
 import ast
 import re
 
+import pytest
 import yaml
 from repo_tests._paths import repo_root
 
@@ -40,29 +41,35 @@ _ROOT = repo_root()
 
 _USERS_HOSTS = {pg.USERS_DB_HOST, pg.COMPOSE_DB_HOST}
 _SLM_HOSTS = {pg.SLM_DB_HOST, pg.COMPOSE_DB_HOST}
-#: Postgres key -> the values the identity table allows for it. Compose has one owner role and its
-#: own SLM DB name; AUTOBOT_DB_USER/NAME as literals are its deprecated aliases for them (#19408).
+#: Postgres key -> the values the identity table allows for it. AUTOBOT_DB_USER/NAME as
+#: literals exist only in compose files, as deprecated aliases (#19408).
 KEY_VALUES: dict[str, set[str]] = {
     "AUTOBOT_POSTGRES_DB": {pg.USERS_DB_NAME},
     "AUTOBOT_USERS_DB_NAME": {pg.USERS_DB_NAME},
     "backend_postgres_db": {pg.USERS_DB_NAME},
     "autobot_db_name": {pg.USERS_DB_NAME},
-    "AUTOBOT_POSTGRES_USER": {pg.USERS_DB_ROLE, pg.COMPOSE_OWNER_ROLE},
+    "AUTOBOT_POSTGRES_USER": {pg.USERS_DB_ROLE},
     "backend_postgres_user": {pg.USERS_DB_ROLE},
     "autobot_db_user": {pg.USERS_DB_ROLE},
     "AUTOBOT_POSTGRES_HOST": _USERS_HOSTS,
     "backend_postgres_host": {pg.USERS_DB_HOST},
     "AUTOBOT_DB_HOST": {pg.USERS_DB_HOST},
-    "SLM_POSTGRES_USER": {pg.SLM_DB_ROLE, pg.COMPOSE_OWNER_ROLE},
+    "SLM_POSTGRES_USER": {pg.SLM_DB_ROLE},
     "SLM_DB_USER": {pg.SLM_DB_ROLE},
     "SLM_POSTGRES_DB": {pg.SLM_USERS_DB_NAME},
-    "SLM_DB_NAME": {pg.SLM_DB_NAME, pg.COMPOSE_SLM_DB_NAME},
+    "SLM_DB_NAME": {pg.SLM_DB_NAME},
     "SLM_POSTGRES_HOST": _SLM_HOSTS,
     "SLM_DB_HOST": {pg.SLM_DB_HOST},
     "AUTOBOT_DB_USER": {pg.COMPOSE_OWNER_ROLE},
     "AUTOBOT_DB_NAME": {pg.COMPOSE_SLM_DB_NAME},
     "db_user": {pg.SLM_DB_ROLE, pg.USERS_DB_ROLE},
 }
+#: The same concept with compose's value, allowed in compose files ONLY (ARCHITECTURE_EXCEPTIONS.md, #19408).
+COMPOSE_KEY_VALUES: dict[str, set[str]] = {
+    "AUTOBOT_POSTGRES_USER": {pg.COMPOSE_OWNER_ROLE},
+    "SLM_DB_NAME": {pg.COMPOSE_SLM_DB_NAME},
+}
+_COMPOSE_PREFIXES = ("docker-compose", "docker/")
 _PORT_KEYS = {"AUTOBOT_POSTGRES_PORT", "SLM_POSTGRES_PORT", "SLM_DB_PORT", "AUTOBOT_DB_PORT"}
 DBS = {pg.USERS_DB_NAME, pg.SLM_DB_NAME, pg.SLM_USERS_DB_NAME, pg.COMPOSE_SLM_DB_NAME, "postgres"}
 ROLES = {pg.USERS_DB_ROLE, pg.SLM_DB_ROLE, pg.COMPOSE_OWNER_ROLE, "postgres"}
@@ -169,12 +176,13 @@ _SQL_DB = re.compile(r"CREATE DATABASE\s+(\w+)")
 _SHELL_LIST = re.compile(r"\b(DATABASES|DB_ROLES)=\(([^)]*)\)")
 
 
-def _key_findings(text: str) -> tuple[int, list[str]]:
+def _key_findings(text: str, compose: bool = False) -> tuple[int, list[str]]:
     seen, bad = 0, []
     for _, rule in _TEXT_RULES:
         for m in rule.finditer(text):
             seen += 1
-            if m.group(2) and "{{" not in m.group(2) and m.group(2) not in KEY_VALUES[m.group(1)]:
+            allowed = KEY_VALUES[m.group(1)] | (COMPOSE_KEY_VALUES.get(m.group(1), set()) if compose else set())
+            if m.group(2) and "{{" not in m.group(2) and m.group(2) not in allowed:
                 bad.append(f"{m.group(1)}={m.group(2)!r}")
     return seen, bad
 
@@ -219,7 +227,7 @@ def _yaml_checks(node: dict) -> list[tuple[str, set[str]]]:
 
 def text_findings(rel: str, text: str) -> tuple[int, list[str]]:
     """(sites examined, conflicting literals) for one non-Python provisioning file."""
-    results = [_key_findings(text), _name_findings(text)]
+    results = [_key_findings(text, rel.startswith(_COMPOSE_PREFIXES)), _name_findings(text)]
     if rel.endswith((".yml", ".yaml")) and rel.startswith("autobot-slm-backend/ansible/"):
         results.append(_yaml_findings(text))
     return sum(n for n, _ in results), [f"{rel}: {b}" for _, found in results for b in found]
@@ -321,3 +329,13 @@ def test_yaml_detector_flags_a_wrong_pg_hba_role() -> None:
     text = "pg_hba_remote_access:\n  - database: autobot_users\n    user: autobot_svc\n    address: 10.0.0.0/24\n"
     n, bad = text_findings(rel, text)
     assert n >= 2 and bad == [f"{rel}: name 'autobot_svc'"], (n, bad)
+
+
+@pytest.mark.parametrize(
+    "line", [f"AUTOBOT_POSTGRES_USER={pg.COMPOSE_OWNER_ROLE}", f"SLM_DB_NAME={pg.COMPOSE_SLM_DB_NAME}"]
+)
+def test_a_compose_value_passes_in_compose_and_fails_on_the_fleet(line: str) -> None:
+    """#19408: the allowance is scoped to the file, or a fleet template could adopt compose's value."""
+    assert text_findings("docker/.env.docker", line + "\n")[1] == []
+    rel = "autobot-slm-backend/ansible/roles/x/templates/x.env.j2"
+    assert text_findings(rel, line + "\n")[1] != []
