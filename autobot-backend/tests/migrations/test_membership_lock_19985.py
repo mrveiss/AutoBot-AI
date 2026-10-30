@@ -11,9 +11,13 @@ authorize, write) against Postgres:
 
 * an admin demoting a user another session is promoting to owner waits for that session,
   then reads ``owner`` and is refused -- it never acts on the role it would have read before;
-* two owners demoting each other, or themselves, concurrently: one change lands, the other
-  is refused, nobody deadlocks and the company keeps an owner;
-* the same race with the lock patched to a no-op ends differently, so the test can fail.
+* two owners demoting each other, or themselves: the second change is held behind the first
+  one's open transaction (confirmed through ``pg_blocking_pids``, so the overlap is forced),
+  then refused once the first commits, and the company keeps an owner;
+* the same races with the lock patched to a no-op end differently (promotion race, and the
+  two-owner self-demotion), so those tests can fail. The mutual-demotion race has no
+  deterministic control: each actor's own row lock already serializes it, and the unlocked
+  deadlock needs a specific interleaving inside one call that a test cannot force.
 
 Real Postgres only (``AUTOBOT_MIGRATION_TEST_ADMIN_URL``).
 """
@@ -62,12 +66,15 @@ async def _change_role(session, company, actor, target, new_role) -> None:  # no
     """The route's sequence in ``llc/api/company_members.py::change_member_role``, minus HTTP."""
     from llc.services import membership_policy
     from llc.services.authz import require_company_admin_unless_platform
-    from llc.services.membership_service import MembershipService
+    from llc.services.membership_service import MemberNotFoundError, MembershipService
 
     svc = MembershipService()
     await membership_policy.lock_company_members(session, company)
     await require_company_admin_unless_platform(session, company, actor, platform_admin=False)
-    current = (await svc.get_member(session, str(company), str(target))).role
+    existing = await svc.get_member(session, str(company), str(target))
+    if existing is None:
+        raise MemberNotFoundError(f"User {target} is not a member of company {company}")
+    current = existing.role
     await membership_policy.authorize_member_change(
         session, company, actor, platform_admin=False, current_role=current, new_role=new_role
     )
@@ -119,19 +126,54 @@ async def _wait_until_blocked_on(maker, pid: int, task: asyncio.Task) -> None:  
         await asyncio.sleep(_POLL_SECONDS)
 
 
-async def _promote_then_race_a_demotion(maker) -> tuple:  # noqa: ANN001
+async def _race_held_change(maker, company, held: tuple, racing: tuple, *, blocks: bool = True) -> str:  # noqa: ANN001
+    """Session A applies *held* (actor, target, role) and keeps its transaction open while B tries *racing*.
+
+    With *blocks*, B must be seen waiting on A through ``pg_blocking_pids`` before A commits; without it
+    (the no-lock controls) B must finish on its own. Returns B's outcome.
+    """
+    async with maker() as a:
+        await _change_role(a, company, *held)
+        pid = await _backend_pid(a)
+        late = asyncio.create_task(_attempt(maker, company, *racing))
+        try:
+            if blocks:
+                await _wait_until_blocked_on(maker, pid, late)
+            else:
+                await asyncio.wait_for(asyncio.shield(late), _DEADLINE_SECONDS)
+            await a.commit()
+            return await late
+        finally:
+            if not late.done():
+                late.cancel()
+                await asyncio.gather(late, return_exceptions=True)
+
+
+async def _no_lock(session, company_id):  # noqa: ANN001, ARG001
+    return None
+
+
+async def _promote_then_race_a_demotion(maker, *, blocks: bool = True) -> tuple:  # noqa: ANN001
     """A promotes ``u`` to owner and holds; admin B tries to demote ``u``. Returns (B's outcome, u's role)."""
     from llc.models.enums import MembershipRole as R
 
     company, ids = await _seed(maker, {"owner": R.OWNER, "admin": R.ADMIN, "u": R.MEMBER})
-    async with maker() as a:
-        await _change_role(a, company, ids["owner"], ids["u"], R.OWNER)
-        pid = await _backend_pid(a)
-        late = asyncio.create_task(_attempt(maker, company, ids["admin"], ids["u"], R.GUEST))
-        await _wait_until_blocked_on(maker, pid, late)
-        await a.commit()
-        outcome = await late
+    held, racing = (ids["owner"], ids["u"], R.OWNER), (ids["admin"], ids["u"], R.GUEST)
+    outcome = await _race_held_change(maker, company, held, racing, blocks=blocks)
     return outcome, await _role_of(maker, company, ids["u"])
+
+
+async def _two_owner_race(maker, *, mutual: bool, blocks: bool = True) -> tuple:  # noqa: ANN001
+    """Two owners each demote ``mutual`` ly the other or themselves; A holds first. Returns (B outcome, roles)."""
+    from llc.models.enums import MembershipRole as R
+
+    company, ids = await _seed(maker, {"o1": R.OWNER, "o2": R.OWNER})
+    t1, t2 = (ids["o2"], ids["o1"]) if mutual else (ids["o1"], ids["o2"])
+    outcome = await _race_held_change(
+        maker, company, (ids["o1"], t1, R.MEMBER), (ids["o2"], t2, R.MEMBER), blocks=blocks
+    )
+    roles = [await _role_of(maker, company, ids["o1"]), await _role_of(maker, company, ids["o2"])]
+    return outcome, sorted(roles)
 
 
 async def test_an_admin_demotion_waits_then_reads_the_committed_owner_role(maker):  # noqa: ANN001
@@ -145,42 +187,35 @@ async def test_control_without_the_lock_the_admin_demotes_the_new_owner(maker, m
     """Same race, lock patched out: B reads ``member``, passes, and overwrites A's promotion."""
     from llc.services import membership_policy
 
-    async def _no_lock(session, company_id):  # noqa: ANN001, ARG001
-        return None
-
     monkeypatch.setattr(membership_policy, "lock_company_members", _no_lock)
 
+    # B still waits, but at its row write (A's promotion holds that row), after the stale read.
     outcome, role = await _promote_then_race_a_demotion(maker)
 
     assert (outcome, role) == ("changed", "guest")
 
 
-async def test_two_owners_demoting_each_other_commit_one_change_without_deadlock(maker):  # noqa: ANN001
-    from llc.models.enums import MembershipRole as R
-
-    company, ids = await _seed(maker, {"o1": R.OWNER, "o2": R.OWNER})
-
-    outcomes = await asyncio.gather(
-        _attempt(maker, company, ids["o1"], ids["o2"], R.MEMBER),
-        _attempt(maker, company, ids["o2"], ids["o1"], R.MEMBER),
-    )
+async def test_two_owners_demoting_each_other_the_second_waits_then_is_refused(maker):  # noqa: ANN001
+    outcome, roles = await _two_owner_race(maker, mutual=True)
 
     # The loser is no longer an owner once the winner commits, so the actor check refuses it.
-    assert sorted(outcomes) == ["changed", "refused"]
-    roles = sorted([await _role_of(maker, company, ids["o1"]), await _role_of(maker, company, ids["o2"])])
+    assert outcome == "refused"
     assert roles == ["member", "owner"]
 
 
-async def test_two_owners_demoting_themselves_leave_one_and_the_other_gets_last_owner(maker):  # noqa: ANN001
-    from llc.models.enums import MembershipRole as R
+async def test_two_owners_demoting_themselves_the_second_waits_then_gets_last_owner(maker):  # noqa: ANN001
+    outcome, roles = await _two_owner_race(maker, mutual=False)
 
-    company, ids = await _seed(maker, {"o1": R.OWNER, "o2": R.OWNER})
-
-    outcomes = await asyncio.gather(
-        _attempt(maker, company, ids["o1"], ids["o1"], R.MEMBER),
-        _attempt(maker, company, ids["o2"], ids["o2"], R.MEMBER),
-    )
-
-    assert sorted(outcomes) == ["changed", "last_owner"]
-    roles = sorted([await _role_of(maker, company, ids["o1"]), await _role_of(maker, company, ids["o2"])])
+    assert outcome == "last_owner"
     assert roles == ["member", "owner"]
+
+
+async def test_control_without_the_lock_two_owners_demote_themselves_to_no_owner(maker, monkeypatch):  # noqa: ANN001
+    """Lock patched out: B counts two owners while A is uncommitted, so both land and none is left."""
+    from llc.services import membership_policy
+
+    monkeypatch.setattr(membership_policy, "lock_company_members", _no_lock)
+
+    outcome, roles = await _two_owner_race(maker, mutual=False, blocks=False)
+
+    assert (outcome, roles) == ("changed", ["member", "member"])
