@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from knowledge_sync_incremental import FileMetadata, IncrementalKnowledgeSync, SyncMetrics
+from knowledge_sync_incremental import FileMetadata, IncrementalKnowledgeSync, SyncMetrics, _delete_fact_safe
 
 
 class TestAChangedFileReplacesItsFacts20026:
@@ -56,5 +56,17 @@ class TestAChangedFileReplacesItsFacts20026:
         sync.auto_invalidation_enabled = False
         sync.file_metadata[str(doc)] = self._metadata(doc, ["old"])
         sync._process_file_with_gpu_chunking = AsyncMock(return_value=self._metadata(doc, ["new"]))
+        calls = MagicMock()
+        sync._save_sync_state = AsyncMock(side_effect=lambda: calls.saved())
+        sync.kb.delete_fact = AsyncMock(side_effect=lambda fid: calls.deleted(fid))
         await sync._process_sync_changes([doc], [], SyncMetrics())
+        assert [c[0] for c in calls.mock_calls] == ["saved", "deleted"], "state is saved before anything is deleted"
         sync.kb.delete_fact.assert_awaited_once_with("old")
+
+    @pytest.mark.asyncio
+    async def test_a_delete_the_kb_reports_as_failed_is_not_counted_as_done(self):
+        kb = MagicMock()
+        kb.delete_fact = AsyncMock(return_value={"status": "error", "message": "boom"})
+        assert await _delete_fact_safe(kb, "old") is False
+        kb.delete_fact = AsyncMock(return_value={"status": "success"})
+        assert await _delete_fact_safe(kb, "old") is True

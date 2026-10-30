@@ -52,7 +52,11 @@ PROJECT_ROOT_FILES = {"README.md", "CLAUDE.md"}
 async def _delete_fact_safe(kb: "KnowledgeBase", fact_id: str) -> bool:
     """Safely delete a fact from knowledge base (Issue #315 - extracted helper)."""
     try:
-        await kb.delete_fact(fact_id)
+        result = await kb.delete_fact(fact_id)
+        # delete_fact reports a failure in its result, it does not raise (#20026).
+        if isinstance(result, dict) and result.get("status") == "error":
+            logger.warning("Failed to delete fact %s: %s", fact_id, result.get("message"))
+            return False
         return True
     except Exception as e:
         logger.warning("Failed to delete fact %s: %s", fact_id, e)
@@ -343,7 +347,6 @@ class IncrementalKnowledgeSync:
                 ):
                     all_files.append(path_obj)
 
-        # Remove duplicates and sort
         unique_files = sorted(list(set(all_files)))
         logger.info("Found %d files to analyze", len(unique_files))
 
@@ -632,10 +635,7 @@ class IncrementalKnowledgeSync:
         await asyncio.gather(*[_delete_fact_safe(self.kb, fid) for fid in fact_ids], return_exceptions=True)
 
     def _update_metadata_from_results(
-        self,
-        changed_files: List[Path],
-        results: List[Any],
-        metrics: SyncMetrics,
+        self, changed_files: List[Path], results: List[Any], metrics: SyncMetrics
     ) -> List[str]:
         """Record each stored result; returns the fact ids it replaced, now safe to delete (#20026)."""
         replaced: List[str] = []
@@ -694,15 +694,17 @@ class IncrementalKnowledgeSync:
                 len(changed_files),
             )
 
-            # Process files in parallel batches for maximum performance
             semaphore = asyncio.Semaphore(self.max_concurrent_files)
 
-            # Process files concurrently using extracted helper (Issue #315)
             tasks = [_process_file_with_semaphore(semaphore, self, fp) for fp in changed_files]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             # Update metadata for successful results
-            await self._delete_facts(self._update_metadata_from_results(changed_files, results, metrics))
+            replaced = self._update_metadata_from_results(changed_files, results, metrics)
+            # Saved first: a crash before the delete leaves stray facts, never a state naming deleted ones.
+            if replaced:
+                await self._save_sync_state()
+                await self._delete_facts(replaced)
             metrics.gpu_acceleration_used = True
         else:
             logger.info("No files to process - all up to date!")
