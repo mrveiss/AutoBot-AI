@@ -131,27 +131,27 @@
     </div>
 
     <div class="filter-actions">
-      <button class="btn btn-primary" @click="applyFilters">
+      <BaseButton @click="applyFilters">
         <Icon name="search" />
         {{ $t('audit.filters.applyFilters') }}
-      </button>
-      <button class="btn btn-secondary" @click="resetFilters">
+      </BaseButton>
+      <BaseButton variant="secondary" @click="resetFilters">
         <Icon name="undo" />
         {{ $t('audit.filters.reset') }}
-      </button>
-      <button
+      </BaseButton>
+      <BaseButton variant="ghost"
         v-if="hasActiveFilters"
-        class="btn btn-ghost"
         @click="clearFilters"
       >
         <Icon name="times" />
         {{ $t('audit.filters.clearAll') }}
-      </button>
+      </BaseButton>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import type { AuditFilter, AuditResult } from '@/types/audit'
@@ -328,48 +328,6 @@ function clearFilters() {
   border-top: 1px solid var(--border-subtle);
 }
 
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-2) var(--spacing-4);
-  border-radius: var(--radius-default);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  cursor: pointer;
-  transition: all var(--duration-200) var(--ease-in-out);
-  border: none;
-}
-
-.btn-primary {
-  background: var(--color-primary);
-  color: white;
-}
-
-.btn-primary:hover {
-  background: var(--color-primary-hover);
-}
-
-.btn-secondary {
-  background: var(--bg-secondary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-default);
-}
-
-.btn-secondary:hover {
-  background: var(--bg-hover);
-}
-
-.btn-ghost {
-  background: transparent;
-  color: var(--text-secondary);
-}
-
-.btn-ghost:hover {
-  background: var(--bg-hover);
-  color: var(--text-primary);
-}
-
 @media (max-width: 768px) {
   .filter-row {
     flex-direction: column;
@@ -385,11 +343,6 @@ function clearFilters() {
 
   .filter-actions {
     flex-wrap: wrap;
-  }
-
-  .btn {
-    flex: 1;
-    justify-content: center;
   }
 }
 </style>

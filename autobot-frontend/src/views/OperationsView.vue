@@ -14,23 +14,22 @@
         <p class="page-subtitle">{{ $t('operations.view.subtitle') }}</p>
       </div>
       <div class="header-actions">
-        <button class="btn-action-secondary" :disabled="loading" @click="loadOperations()">
+        <BaseButton variant="secondary" :disabled="loading" @click="loadOperations()">
           <Icon name="sync-alt" :spin="loading" />
           {{ $t('operations.view.refresh') }}
-        </button>
+        </BaseButton>
       </div>
     </div>
 
     <div v-if="error" class="error-banner">
       <Icon name="exclamation-circle" />
       <span>{{ error }}</span>
-      <button
-        class="btn-dismiss"
+      <BaseButton variant="ghost" size="sm"
         :aria-label="$t('common.dismiss')"
         @click="error = null"
       >
         <Icon name="times" />
-      </button>
+      </BaseButton>
     </div>
 
     <OperationsPanel
@@ -48,6 +47,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 import { ref, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
@@ -155,30 +155,6 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-.btn-action-secondary {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-2) var(--spacing-4);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  background-color: var(--bg-card);
-  color: var(--text-primary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: background-color var(--duration-200);
-}
-
-.btn-action-secondary:hover:not(:disabled) {
-  background-color: var(--bg-hover);
-}
-
-.btn-action-secondary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .error-banner {
   display: flex;
   align-items: center;
@@ -193,14 +169,5 @@ onMounted(() => {
 
 .error-banner span {
   flex: 1;
-}
-
-.btn-dismiss {
-  background: none;
-  border: none;
-  color: currentColor;
-  cursor: pointer;
-  padding: var(--spacing-0);
-  flex-shrink: 0;
 }
 </style>
