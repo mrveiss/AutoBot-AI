@@ -18,13 +18,17 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TabbedRouteLayout from '@/components/common/TabbedRouteLayout.vue'
 import { usePerformanceMonitoring } from '@/composables/usePerformanceMonitoring'
+import { providePerformanceMonitoring } from '@/composables/monitoringPollContext'
 
 const { t } = useI18n()
 
-const { overview, loading, poller } = usePerformanceMonitoring({
+// #19851: this layout owns the route's one performance poll; child routes read it
+const performance = usePerformanceMonitoring({
   autoFetch: true,
   pollInterval: 30000,
 })
+providePerformanceMonitoring(performance)
+const { overview, loading, poller } = performance
 
 // Navigation tabs for performance sub-routes (Issue #752)
 const tabs = [
@@ -75,6 +79,7 @@ function complianceColor(): string {
     :tabs-label="t('performanceView.performanceSections')"
     :tabs="tabs"
     default-tab="overview"
+    nested
     :poller="poller"
   >
     <template #header-end>

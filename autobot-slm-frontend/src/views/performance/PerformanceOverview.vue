@@ -16,20 +16,26 @@ import { onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { formatDuration } from '@/utils/formatHelpers'
 import { usePerformanceMonitoring } from '@/composables/usePerformanceMonitoring'
+import { injectPerformanceMonitoring } from '@/composables/monitoringPollContext'
 import { formatDateTime } from '@/composables/useTimezone'
 
+// #19851: PerformanceView owns the poll and shows the paused notice; this view only
+// polls (and shows its own notice) when rendered without that layout.
+const { state: performance, ownsPoll } = injectPerformanceMonitoring(() => usePerformanceMonitoring())
 const {
   overview,
   loading,
   error,
   startPolling,
   poller,
-} = usePerformanceMonitoring()
+} = performance
 
 const { t } = useI18n()
 
 // #19482: the composable's poller carries the shared dashboard policy (30s default)
-onMounted(() => startPolling())
+onMounted(() => {
+  if (ownsPoll) startPolling()
+})
 
 const avgLatency = computed(() => overview.value?.avg_latency_ms ?? 0)
 const p95Latency = computed(() => overview.value?.p95_latency_ms ?? 0)
@@ -91,7 +97,7 @@ function formatDate(dateStr: string): string {
 
 <template>
   <div class="p-6">
-    <PollingPausedAlert :poller="poller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mb-4" @retry="poller.start('')" />
+    <PollingPausedAlert v-if="ownsPoll" :poller="poller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mb-4" @retry="poller.start('')" />
 
     <!-- Error Banner -->
     <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
