@@ -468,7 +468,7 @@ async function postComment() {
   isPosting.value = true
   try {
     const comment = await api.post<Comment>(`/api/llc/work-items/${props.item.id}/comments`, {
-      body: newComment.value,
+      company_id: props.companyId, body: newComment.value,
     })
     comments.value.push(comment)
     newComment.value = ''

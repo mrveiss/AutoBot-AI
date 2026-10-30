@@ -838,7 +838,7 @@ async def add_comment(
     comment = await _service().add_comment(
         session,
         work_item_id=work_item_id,
-        company_id=body.company_id,
+        company_id=str(ctx.org_id),
         body=body.body,
         author_agent_id=body.author_agent_id,
         author_user_id=body.author_user_id,

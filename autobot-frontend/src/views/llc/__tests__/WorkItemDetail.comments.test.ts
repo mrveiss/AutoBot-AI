@@ -15,7 +15,8 @@ const get = vi.fn(async (url: string) =>
     ? { comments: [{ id: 'c1', work_item_id: 'w1', body: 'first note', author_user_id: 'u1', created_at: '2026-01-01T00:00:00+00:00' }] }
     : [],
 )
-vi.mock('@/plugins/api', () => ({ useApiClient: () => ({ get, post: vi.fn(), patch: vi.fn() }) }))
+const post = vi.fn(async () => ({ id: 'c2', body: 'second note' }))
+vi.mock('@/plugins/api', () => ({ useApiClient: () => ({ get, post, patch: vi.fn() }) }))
 vi.mock('@/utils/debugUtils', () => ({ createLogger: () => ({ warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() }) }))
 vi.mock('@/composables/llc/useCompanyPeople', () => ({
   useCompanyPeople: () => ({ agents: { value: [] }, humans: { value: [] }, isLoading: { value: false }, load: vi.fn() }),
@@ -45,6 +46,22 @@ describe('WorkItemDetail comments tab', () => {
     expect(get).toHaveBeenCalledWith('/api/llc/work-items/w1/comments')
     expect(w.findAll('.comment-item')).toHaveLength(1)
     expect(w.find('.comment-body').text()).toContain('first note')
+    w.unmount()
+  })
+
+  it('posts a comment with the company the route requires', async () => {
+    const w = mount(WorkItemDetail, {
+      props: { item: { ...ITEM }, companyId: 'c1' },
+      global: { plugins: [i18n], stubs: { Teleport: true, WorkItemBadge: Stub, HandoffModal: Stub } },
+      attachTo: document.body,
+    })
+    await flushPromises()
+    await w.findAll('.tab-btn').find((b) => b.text() === en.llc.workItem.tabComments)!.trigger('click')
+    await flushPromises()
+    await w.findAll('textarea').at(-1)!.setValue('second note')
+    await w.findAll('button.btn-primary').find((b) => !b.attributes('disabled'))!.trigger('click')
+    await flushPromises()
+    expect(post).toHaveBeenCalledWith('/api/llc/work-items/w1/comments', { company_id: 'c1', body: 'second note' })
     w.unmount()
   })
 })
