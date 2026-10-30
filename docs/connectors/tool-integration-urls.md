@@ -19,5 +19,5 @@ Every request is egress-checked and **redirects are refused, not followed**. Ent
 | Integration | Allowed targets |
 |---|---|
 | Jenkins, GitLab, CircleCI Server, GitHub Enterprise, Jira (admin-configured) | Public addresses; RFC-1918 addresses only when `AUTOBOT_CONNECTOR_PRIVATE_NETWORK_EGRESS=true`. Loopback and link-local (cloud metadata) are never allowed. |
-| Jira configured per company (LLC `pm-config`) | Public addresses only, whatever the flag says: the URL is tenant-editable. |
+| Jira configured per company (Company OS `pm-config`) | Public addresses only, whatever the flag says: the URL is tenant-editable. |
 | Bitbucket (Cloud API only), Slack, Discord, Teams, Trello, Asana, Notion, Microsoft 365, Datadog, New Relic, AWS, Azure, GCP | Public addresses only. |
