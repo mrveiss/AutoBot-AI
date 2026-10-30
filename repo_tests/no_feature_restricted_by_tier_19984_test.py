@@ -20,8 +20,6 @@ _TIER_NAMES = frozenset(
     {"subscription_tier", "license_tier", "license_key", "plan_tier", "paid_plan", "is_premium", "is_pro", "is_paid"}
 )
 _ROOTS = ("autobot-backend/*.py", "autobot-slm-backend/*.py", "autobot_shared/*.py")
-#: A branch that only records what changed, without deciding anything about the feature.
-_EXEMPT = {"autobot_shared/user_management/organization_service.py": 1}
 
 
 def _names_in(node: ast.AST) -> set[str]:
@@ -54,7 +52,7 @@ def test_no_branch_reads_a_tier_or_licence() -> None:
             lines = _tier_branches((_ROOT / rel).read_text(encoding="utf-8"))
         except SyntaxError:
             continue
-        if len(lines) > _EXEMPT.get(rel, 0):
+        if lines:
             found[rel] = lines
     assert not found, found
 
