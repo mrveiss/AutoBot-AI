@@ -169,9 +169,11 @@ def test_the_resolver_handles_each_operator() -> None:
     assert _resolve("${A:+A }${B:+B}", {"A": "1"}) == "A "
 
 
-def test_the_slm_does_not_read_a_role_compose_never_creates() -> None:
-    plain = _connection({})
-    assert _connection({"SLM_POSTGRES_USER": "slm_app"}) == plain
+def test_slm_postgres_user_moves_only_the_slm_and_outranks_every_other_name() -> None:
+    """The #19408 decision names it canonical; only the SLM's three URLs read it."""
+    resolved = _connection({"SLM_POSTGRES_USER": "slm_x", "AUTOBOT_POSTGRES_USER": "new", "AUTOBOT_DB_USER": "old"})
+    assert resolved["owner"] == "new"
+    assert resolved["slm_url"].startswith("slm_x/") and resolved["users_url"].startswith("slm_x/")
 
 
 @pytest.mark.parametrize(

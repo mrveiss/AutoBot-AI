@@ -106,7 +106,7 @@ register_env_var(
         name="SLM_POSTGRES_USER",
         type=str,
         default=postgres_identity.SLM_DB_ROLE,
-        description="The SLM's login role on a fleet host; compose has one login role and ignores it (#19408).",
+        description="The SLM's login role; on compose a non-default role must already exist (#19408).",
         component="postgres",
     )
 )

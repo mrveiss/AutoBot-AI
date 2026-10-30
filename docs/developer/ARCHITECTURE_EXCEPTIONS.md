@@ -572,8 +572,8 @@ on the user-management database, and `SLM_DB_NAME` is the SLM control-plane data
 the values differ. The postgres image creates one role, so compose uses the owner role
 (`COMPOSE_OWNER_ROLE`) where a fleet host has `autobot_app`, and keeps its existing database
 (`COMPOSE_SLM_DB_NAME`) where a fleet host has `slm`. Renaming either would move existing
-compose volumes. For the same one-role reason, the compose SLM logs in as that owner role
-and does not read `SLM_POSTGRES_USER`.
+compose volumes. The compose SLM defaults to that owner role too; a non-default
+`SLM_POSTGRES_USER` must already exist, because compose creates only the owner role.
 
 **Enforced by:** `COMPOSE_KEY_VALUES` in `repo_tests/postgres_identity_one_source_19320_test.py`
 allows these values in compose files only.
