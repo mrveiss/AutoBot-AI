@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { Tool } from "@modelcontextprotocol/sdk/types.js";
-import { zodToJsonSchema } from 'zod-to-json-schema';
 
 // Define schemas for the tool parameters
 export const captureThoughtSchema = z.object({
@@ -30,8 +29,8 @@ type InputSchema = {
 };
 
 // Utility function to convert Zod schema to inputSchema format
-const zodToInputSchema = (schema: z.ZodType<any>): InputSchema => {
-  return zodToJsonSchema(schema) as InputSchema;
+const zodToInputSchema = (schema: z.ZodType): InputSchema => {
+  return z.toJSONSchema(schema, { target: "draft-7" }) as unknown as InputSchema;
 };
 
 export const retrieveRelevantThoughtsSchema = z.object({
