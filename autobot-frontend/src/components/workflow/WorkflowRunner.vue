@@ -140,26 +140,31 @@
     </div>
 
     <!-- Notification Config Modal (#3139) -->
-    <NotificationConfigModal
+    <BaseModal
       v-if="currentWorkflow"
-      :visible="showNotifConfig"
-      :workflow-id="currentWorkflow.workflow_id"
-      @close="showNotifConfig = false"
-      @saved="$emit('refresh')"
-    />
+      v-model="showNotifConfig"
+      :title="$t('workflow.notifications.title')"
+      :close-label="$t('common.close')"
+    >
+      <WorkflowNotificationConfig
+        v-if="showNotifConfig"
+        :workflow-id="currentWorkflow.workflow_id"
+        @saved="onNotifSaved"
+      />
+    </BaseModal>
   </div>
 </template>
 
 <script setup lang="ts">
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
-import { BaseBadge, RiskBadge } from '@autobot/ui'
+import { BaseBadge, BaseModal, RiskBadge } from '@autobot/ui'
 import { ref, computed } from 'vue';
 import type { ActiveWorkflow } from '@/composables/useWorkflowBuilder';
-import NotificationConfigModal from './NotificationConfigModal.vue';
+import WorkflowNotificationConfig from './WorkflowNotificationConfig.vue';
 
 const props = defineProps<{ workflows: ActiveWorkflow[]; currentWorkflow: ActiveWorkflow | null; loading: boolean }>();
-defineEmits<{
+const emit = defineEmits<{
   (e: 'start-workflow', id: string): void;
   (e: 'pause-workflow', id: string): void;
   (e: 'resume-workflow', id: string): void;
@@ -170,6 +175,11 @@ defineEmits<{
 }>();
 
 const showNotifConfig = ref(false);
+
+function onNotifSaved(): void {
+  showNotifConfig.value = false;
+  emit('refresh');
+}
 
 const completedSteps = computed(() => props.currentWorkflow?.steps.filter(s => s.status === 'completed').length ?? 0);
 const failedSteps = computed(() => props.currentWorkflow?.steps.filter(s => s.status === 'failed').length ?? 0);
