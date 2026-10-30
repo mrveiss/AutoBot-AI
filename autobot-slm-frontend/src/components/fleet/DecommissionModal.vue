@@ -14,7 +14,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoles, type DecommissionPreflight } from '@/composables/useRoles'
 import { createLogger } from '@/utils/debugUtils'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 
 const logger = createLogger('DecommissionModal')
 
@@ -166,13 +166,12 @@ function handleMigrateClick() {
               {{ role.reason }}
             </span>
           </div>
-          <button
-            class="btn btn-sm btn-migrate"
+          <BaseButton size="sm"
             :title="$t('fleet.decommissionModal.closeThisModalAndUseRole')"
             @click="handleMigrateClick"
           >
             {{ $t('fleet.decommissionModal.migrate') }}
-          </button>
+          </BaseButton>
         </div>
       </div>
 
@@ -301,21 +300,18 @@ function handleMigrateClick() {
     </div>
     <template v-if="state !== 'running'" #actions>
       <template v-if="state === 'complete'">
-        <button
-          class="btn btn-primary"
+        <BaseButton
           @click="emit('decommissioned')"
-        >{{ $t('fleet.decommissionModal.close') }}</button>
+        >{{ $t('fleet.decommissionModal.close') }}</BaseButton>
       </template>
       <template v-else>
-        <button
-          class="btn btn-cancel"
+        <BaseButton variant="outline"
           @click="emit('close')"
-        >{{ $t('fleet.decommissionModal.cancel') }}</button>
-        <button
-          class="btn btn-error"
+        >{{ $t('fleet.decommissionModal.cancel') }}</BaseButton>
+        <BaseButton variant="error"
           :disabled="!canDecommission"
           @click="handleDecommission"
-        >{{ $t('fleet.decommissionModal.decommission') }}</button>
+        >{{ $t('fleet.decommissionModal.decommission') }}</BaseButton>
       </template>
     </template>
   </BaseModal>
@@ -526,48 +522,6 @@ function handleMigrateClick() {
 .status-block--error {
   color: var(--color-error);
   font-weight: 500;
-}
-
-/* Buttons */
-.btn {
-  padding: var(--spacing-2) var(--spacing-5);
-  border: none;
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  font-weight: 500;
-  font-size: var(--text-sm);
-  transition: opacity 0.15s;
-}
-
-.btn-sm {
-  padding: var(--spacing-1) var(--spacing-3);
-  font-size: var(--text-xs);
-}
-
-.btn-primary {
-  background: var(--primary-color);
-  color: white;
-}
-
-.btn-error {
-  background: var(--color-error-solid);
-  color: white;
-}
-
-.btn-error:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-cancel {
-  background: transparent;
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
-}
-
-.btn-migrate {
-  background: var(--primary-color);
-  color: white;
 }
 
 /* Log output (#2678) */
