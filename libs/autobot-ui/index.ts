@@ -85,7 +85,7 @@ export type { AnnouncePriority } from './src/composables/useAnnounce'
 // Dialog-a11y composables — the focus-trap / scroll-lock / focus-restore /
 // initial-focus primitives shared by every dialog and modal consumer.
 export { useFocusTrap, isTabbable, FOCUSABLE_SELECTOR } from './src/composables/useFocusTrap'
-export type { UseFocusTrapReturn } from './src/composables/useFocusTrap'
+export type { UseFocusTrapOptions, UseFocusTrapReturn } from './src/composables/useFocusTrap'
 
 export { useFocusRestore } from './src/composables/useFocusRestore'
 

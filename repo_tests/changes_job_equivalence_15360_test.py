@@ -222,6 +222,8 @@ ALLOWED_ADDITIONS = {
             "docs/README.md",
             # #18266: social_preview_18266_test.py pins the rendered preview image.
             "docs/assets/social-preview.png",
+            # #19527: this test checks the docker filter's declared additions, so editing it must run the suite.
+            ".github/filters/docker-paths.yml",
             # #19184: the same 19178 guard reads the five Company OS docs (_COMPANY_OS_DOCS).
             "docs/GLOSSARY.md",
             "docs/INDEX.md",
@@ -246,6 +248,11 @@ ALLOWED_ADDITIONS = {
     # frontend_path_filter_mirror_test pins frontend-test.yml's on.push.paths to this file, so the
     # `_changes.yml` entry the workflow gained has to be here too.
     ".github/filters/frontend-paths.yml": {"frontend": [f"{WORKFLOWS}/_changes.yml"]},
+    # #19527: the smoke job builds through this composite action and sizes its disk with the other,
+    # so editing either one must run the smoke test it can break.
+    ".github/filters/docker-paths.yml": {
+        "docker": [".github/actions/build-smoke-images/**", ".github/actions/free-disk-space/**"]
+    },
 }
 
 

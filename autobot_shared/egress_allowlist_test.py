@@ -180,7 +180,10 @@ def manager(monkeypatch):
     mgr = HTTPClientManager()
     session = MagicMock()
     session.request = AsyncMock(return_value="response")
-    monkeypatch.setattr(mgr, "get_session", AsyncMock(return_value=session))
+    # On the CLASS, not the instance (#19527): HTTPClientManager() is the process
+    # singleton, and undoing an instance setattr leaves the old bound method in its
+    # __dict__, where it shadows every later class-level patch in the same worker.
+    monkeypatch.setattr(HTTPClientManager, "get_session", AsyncMock(return_value=session))
     # request() hands the active-request slot to the caller; restore the counters so a shared
     # manager instance does not leak this module's in-flight count into later tests.
     for attr in ("_active_requests", "_request_count", "_error_count"):
