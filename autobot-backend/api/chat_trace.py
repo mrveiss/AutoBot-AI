@@ -32,7 +32,7 @@ from chat_history.session_trace import (
 )
 from models.command_execution import CommandExecution
 from security.session_ownership import validate_session_ownership
-from security.session_posture import SessionPosture
+from security.session_posture import UNREADABLE_OWNER_DETAIL, SessionPosture
 from utils.chat_utils import get_chat_history_manager
 
 router = APIRouter(tags=["chat"])
@@ -55,26 +55,25 @@ async def _terminal_states(session_id: str, refs: List[ApprovalRef]) -> Dict[App
     return {(KIND_TERMINAL, ident): cmd.state.value for ident, cmd in latest.items()}
 
 
-async def _gate_state(ident: str) -> str:
+async def _gate_states(refs: List[ApprovalRef]) -> Dict[ApprovalRef, str]:
+    """State per gate approval over one session; one unreadable approval reads as unknown, never fails the trace."""
     import uuid
 
     from services.approval_gate_service import ApprovalGateService
     from user_management.database import get_async_session_factory
 
-    async with get_async_session_factory()() as db:
-        approval = await ApprovalGateService(db).get(uuid.UUID(ident))
-    return str(approval.status) if approval is not None else UNKNOWN
-
-
-async def _gate_states(refs: List[ApprovalRef]) -> Dict[ApprovalRef, str]:
+    gates = [ident for kind, ident in refs if kind == KIND_GATE]
     states: Dict[ApprovalRef, str] = {}
-    for kind, ident in refs:
-        if kind != KIND_GATE:
-            continue
-        try:
-            states[(kind, ident)] = await _gate_state(ident)
-        except Exception as exc:  # one unreadable approval reads as unknown, never fails the trace
-            logger.warning("Approval %s state unreadable for trace: %s", ident[:8], exc)
+    if not gates:
+        return states
+    async with get_async_session_factory()() as db:
+        service = ApprovalGateService(db)
+        for ident in gates:
+            try:
+                approval = await service.get(uuid.UUID(ident))
+                states[(KIND_GATE, ident)] = str(approval.status) if approval is not None else UNKNOWN
+            except Exception as exc:
+                logger.warning("Approval %s state unreadable for trace: %s", ident[:8], exc)
     return states
 
 
@@ -93,7 +92,7 @@ async def _require_readable(session_id: str, request: Request) -> None:
     try:
         await validate_session_ownership(session_id, request, posture=SessionPosture.STRICT)
     except HTTPException as exc:
-        if exc.status_code != 403:
+        if exc.status_code != 403 or exc.detail == UNREADABLE_OWNER_DETAIL:
             raise
         raise HTTPException(status_code=404, detail=_NOT_FOUND) from None
 

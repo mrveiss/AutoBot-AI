@@ -86,3 +86,25 @@ async def test_a_non_owner_gets_the_response_a_missing_session_gets(monkeypatch)
 
     assert not_yours.status_code == missing.status_code == 404
     assert not_yours.content == missing.content
+
+
+@pytest.mark.asyncio
+async def test_an_ownerless_session_is_a_404_for_a_non_admin(monkeypatch):
+    """STRICT used to let anyone read it (legacy_unowned), which here would be the full trace (#20025)."""
+    _as_user(monkeypatch, "bob", None, HELD_TURN)
+    monkeypatch.setattr("chat_history.session_file.session_file_exists", AsyncMock(return_value=True))
+
+    response = await _get("ownerless")
+
+    assert response.status_code == 404 and "held" not in response.text
+
+
+@pytest.mark.asyncio
+async def test_a_store_outage_is_not_told_as_no_such_session(monkeypatch):
+    _as_user(monkeypatch, "alice", "alice", HELD_TURN)
+    from chat_history.session import SessionOwnerUnreadable
+
+    broken = MagicMock(get_session_owner=AsyncMock(side_effect=SessionOwnerUnreadable("s")))
+    monkeypatch.setattr("utils.chat_utils.get_chat_history_manager", lambda _r: broken)
+
+    assert (await _get("s")).status_code == 403

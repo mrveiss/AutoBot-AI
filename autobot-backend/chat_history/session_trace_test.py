@@ -4,6 +4,8 @@
 # Author: mrveiss
 """The pure session-trace projection (#19963): holds, refusals, runs, and what is unknown."""
 
+import pytest
+
 from chat_history import session_trace
 from chat_history.session_trace import approval_refs, project_session_trace
 
@@ -112,3 +114,24 @@ def test_turns_split_on_user_messages_and_malformed_entries_are_skipped():
     turns = project_session_trace(messages)
     assert [t["turn"] for t in turns] == [1, 2]
     assert all(t["iterations"][0]["replied"] for t in turns)
+
+
+@pytest.mark.parametrize(
+    "leak",
+    [
+        "postgres://admin:%s@db/x",  # pragma: allowlist secret
+        '{"password": "%s"}',  # pragma: allowlist secret
+        "password=%s",  # pragma: allowlist secret
+        "-----BEGIN PRIVATE KEY-----\n%s\n-----END PRIVATE KEY-----",  # pragma: allowlist secret
+    ],
+)
+def test_each_secret_shape_leaves_neither_output_nor_a_command_param(leak):
+    secret = "hunter2-very-secret"  # pragma: allowlist secret
+    text = leak % secret
+    message = {
+        "sender": "assistant",
+        "messageType": "tool_result",
+        "text": text,
+        "metadata": {"tool": "t", "iteration": 1, "command": text},
+    }
+    assert secret not in str(project_session_trace([{"sender": "user", "text": "go"}, message], {}))

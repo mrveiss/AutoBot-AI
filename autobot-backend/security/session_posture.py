@@ -11,7 +11,7 @@
   ``log_only`` rollout, org-admin and shared-session grants, legacy claim of an unowned session.
 * ``STRICT`` -- the conversation-file posture, which never consults a flag: a role is required,
   a global admin is allowed, everyone else must be the recorded owner, and there are no shared or
-  org grants. An unowned (pre-ownership) session is allowed and is NOT claimed.
+  org grants. An existing session with no owner is admin-only and is NOT claimed (#20025).
 
 Any failure of the durable owner lookup denies under both postures (#14033), with 403 and nothing
 claimed: ``SessionOwnerUnreadable``, any other exception, a missing chat-history manager, and a
@@ -57,10 +57,14 @@ async def authenticated_user(session_id: str, request: Request) -> Dict:
     return user_data
 
 
+#: A store failure, which a route must not present as "no such session" to the real owner.
+UNREADABLE_OWNER_DETAIL = "Cannot verify session ownership"
+
+
 def deny_unreadable_owner(session_id: str, username: str | None) -> HTTPException:
     """The one denial for an owner that cannot be read: not evidence of "unowned" (#14033)."""
     logger.warning("Ownership unreadable for session %s... - denying %s", session_id[:8], username)
-    return HTTPException(status_code=403, detail="Cannot verify session ownership")
+    return HTTPException(status_code=403, detail=UNREADABLE_OWNER_DETAIL)
 
 
 def require_posture(posture: object) -> SessionPosture:
@@ -115,7 +119,7 @@ async def unowned_access(session_id: str, user_data: Dict, request: Request) -> 
 
 
 async def _strict_owner_check(session_id: str, user_data: Dict, request: Request) -> Dict:
-    """Admin passes; otherwise the recorded owner must be the caller. Unowned is legacy-allowed."""
+    """Admin passes; otherwise the recorded owner must be the caller. Unowned goes to unowned_access."""
     username = user_data.get("username")
     owner = await read_owner(session_id, request, username)
     if owner is None:

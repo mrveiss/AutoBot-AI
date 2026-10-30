@@ -25,10 +25,10 @@ What the stored shape can and cannot say, stated rather than guessed:
   in as *approval_states*. An id with no entry there reads ``unknown``.
 """
 
-import os
 from typing import Any, Dict, List, Mapping, Tuple
 
-from autobot_shared.secret_redaction import redact_nested, redact_text
+from autobot_shared.env_utils import env_int_clamped
+from autobot_shared.secret_redaction import redact_content, redact_nested, redact_text
 from chat_history.message_schema import message_type
 
 UNKNOWN = "unknown"
@@ -41,7 +41,7 @@ KIND_GATE = "gate"
 KIND_TERMINAL = "terminal"
 
 #: Longest tool output a trace carries, after redaction. Env-backed; the trace is for diagnosis.
-TRACE_OUTPUT_MAX_CHARS = int(os.environ.get("AUTOBOT_CHAT_TRACE_OUTPUT_MAX_CHARS", "2000"))
+TRACE_OUTPUT_MAX_CHARS = env_int_clamped("AUTOBOT_CHAT_TRACE_OUTPUT_MAX_CHARS", 2000, 1, 100000)
 
 #: Approval states from which the call has not run and will not run without a new decision.
 _NO_OUTPUT_STATES = frozenset(
@@ -92,6 +92,17 @@ def approval_refs(messages: List[Dict[str, Any]]) -> List[ApprovalRef]:
     return refs
 
 
+def _scrub(value: Any) -> Any:
+    """Name-keyed and content-shaped redaction, into every string: a `command` param can hold `password=x`."""
+    if isinstance(value, str):
+        return redact_content(redact_text(value))
+    if isinstance(value, dict):
+        return {key: _scrub(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_scrub(item) for item in value]
+    return value
+
+
 def _result_returned(verdict: str, state: str) -> str:
     if verdict == VERDICT_REFUSED:
         return "no"
@@ -107,14 +118,14 @@ def _tool_call(message: Dict[str, Any], states: Mapping[ApprovalRef, str]) -> Di
     tool, verdict, ref = found
     meta = _meta(message)
     state = states.get(ref, UNKNOWN) if ref else UNKNOWN
-    params = redact_nested({k: meta[k] for k in _PARAM_KEYS if k in meta})
+    params = _scrub(redact_nested({k: meta[k] for k in _PARAM_KEYS if k in meta}))
     return {
         "id": message.get("id"),
         "timestamp": message.get("timestamp"),
         "tool": tool,
         "verdict": verdict,
         "params": params,
-        "output": redact_text(str(message.get("text") or ""))[:TRACE_OUTPUT_MAX_CHARS],
+        "output": _scrub(str(message.get("text") or ""))[:TRACE_OUTPUT_MAX_CHARS],
         "approval": {"id": ref[1], "kind": ref[0], "state": state} if ref else None,
         "result_returned": _result_returned(verdict, state),
     }
