@@ -111,7 +111,7 @@ def _warn_legacy_compose_names() -> None:
         _warn_once(
             "compose-legacy",
             f"Deprecated compose variables {', '.join(names)}: use AUTOBOT_POSTGRES_USER, SLM_DB_NAME and "
-            "AUTOBOT_POSTGRES_DB. The old names stop working after one release (#19408)",
+            "AUTOBOT_POSTGRES_DB. The old names stop working after one release (#19948)",
         )
 
 

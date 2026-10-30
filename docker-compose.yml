@@ -593,6 +593,7 @@ services:
       - SLM_DATABASE_URL=postgresql+asyncpg://${SLM_POSTGRES_USER:-${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}}}:${AUTOBOT_DB_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}@autobot-postgres:5432/${SLM_DB_NAME:-${AUTOBOT_DB_NAME:-autobot_slm}}
       - SLM_USERS_DATABASE_URL=postgresql+asyncpg://${SLM_POSTGRES_USER:-${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}}}:${AUTOBOT_DB_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}@autobot-postgres:5432/slm_users
       # #19406: without this the SLM falls back to 127.0.0.1 and role slm_app for autobot_users.
+      # Setting SLM_POSTGRES_USER makes the SLM log in as that role: compose creates only the owner role, so create it first.
       - AUTOBOT_USERS_DATABASE_URL=postgresql+asyncpg://${SLM_POSTGRES_USER:-${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}}}:${AUTOBOT_DB_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}@autobot-postgres:5432/${AUTOBOT_POSTGRES_DB:-${AUTOBOT_USERS_DB_NAME:-autobot_users}}
       - AUTOBOT_COMPOSE_LEGACY_DB_VARS=${AUTOBOT_DB_USER:+AUTOBOT_DB_USER }${AUTOBOT_DB_NAME:+AUTOBOT_DB_NAME }${AUTOBOT_USERS_DB_NAME:+AUTOBOT_USERS_DB_NAME}
       - SLM_POSTGRES_HOST=autobot-postgres

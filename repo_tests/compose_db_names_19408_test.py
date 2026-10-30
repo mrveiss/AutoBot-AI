@@ -13,6 +13,7 @@ container connects to a different database or role. #19406: the SLM needs its ow
 from __future__ import annotations
 
 import re
+from urllib.parse import urlsplit
 
 import pytest
 import yaml
@@ -91,3 +92,71 @@ def test_the_shipped_env_file_sets_no_name_that_would_outrank_an_operator_alias(
     text = (REPO_ROOT / "docker" / ".env.docker").read_text(encoding="utf-8")
     assigned = {line.split("=", 1)[0] for line in text.splitlines() if re.match(r"[A-Z_]+=", line)}
     assert not assigned & {*LEGACY, "AUTOBOT_POSTGRES_USER", "AUTOBOT_POSTGRES_DB", "SLM_POSTGRES_USER", "SLM_DB_NAME"}
+
+
+def _resolve(value: str, env: dict[str, str]) -> str:
+    """Compose's `${A:-default}`, `${A:+text}` and `${A:?error}`, innermost first; empty counts as unset.
+
+    A `:?` variable resolves to a stand-in: these tests are about roles and databases.
+    """
+    inner = re.compile(r"\$\{([A-Z_]+):([-+?])([^${}]*)\}")
+
+    def one(match: re.Match[str]) -> str:
+        name, op, rest = match.groups()
+        current = env.get(name, "")
+        if op == "+":
+            return rest if current else ""
+        return current or ("required" if op == "?" else rest)
+
+    while inner.search(value):
+        value = inner.sub(one, value)
+    return value
+
+
+def _connection(env: dict[str, str]) -> dict[str, str]:
+    """Role and database each container ends up with under *env*."""
+    services = yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))["services"]
+    pg = dict(item.split("=", 1) for item in services["autobot-postgres"]["environment"])
+    slm = _slm_environment(COMPOSE.read_text(encoding="utf-8"))
+    resolved = {
+        "owner": _resolve(pg["POSTGRES_USER"], env),
+        "slm_db": _resolve(pg["POSTGRES_DB"], env),
+        "slm_url": _resolve(slm["SLM_DATABASE_URL"], env),
+        "users_url": _resolve(slm["AUTOBOT_USERS_DATABASE_URL"], env),
+    }
+    for key in ("slm_url", "users_url"):
+        url = urlsplit(resolved[key])
+        assert url.hostname == "autobot-postgres", f"{key} did not resolve: {url.hostname}"
+        resolved[key] = f"{url.username}{url.path}"
+    return resolved
+
+
+@pytest.mark.parametrize(
+    ("env", "owner", "slm_db", "users_db"),
+    [
+        ({}, "autobot", "autobot_slm", "autobot_users"),
+        ({"AUTOBOT_DB_USER": "old", "AUTOBOT_DB_NAME": "o_slm", "AUTOBOT_USERS_DB_NAME": "o_u"}, "old", "o_slm", "o_u"),
+        ({"AUTOBOT_POSTGRES_USER": "new", "SLM_DB_NAME": "n_slm", "AUTOBOT_POSTGRES_DB": "n_u"}, "new", "n_slm", "n_u"),
+        (
+            {"AUTOBOT_DB_USER": "old", "AUTOBOT_POSTGRES_USER": "new", "AUTOBOT_DB_NAME": "o", "SLM_DB_NAME": "n"},
+            "new",
+            "n",
+            "autobot_users",
+        ),
+    ],
+    ids=["fresh", "old-names-carry-over", "canonical", "canonical-beats-old"],
+)
+def test_every_environment_keeps_the_slm_on_the_role_and_databases_compose_created(
+    env: dict[str, str], owner: str, slm_db: str, users_db: str
+) -> None:
+    assert _connection(env) == {
+        "owner": owner,
+        "slm_db": slm_db,
+        "slm_url": f"{owner}/{slm_db}",
+        "users_url": f"{owner}/{users_db}",
+    }
+
+
+def test_the_resolver_handles_each_operator() -> None:
+    assert _resolve("${A:-${B:-c}}", {"B": "b"}) == "b"
+    assert _resolve("${A:+A }${B:+B}", {"A": "1"}) == "A "
