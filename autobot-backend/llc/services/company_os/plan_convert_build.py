@@ -52,6 +52,7 @@ class ConversionFacts:
 
     known_roles: frozenset
     person_roles: frozenset
+    agent_roles: frozenset
     taken_process_keys: frozenset
     taken_workflow_ids: frozenset
     wait_seconds: int
@@ -90,6 +91,8 @@ def _chain_errors(plan: CompanyWorkflowPlan, chain: Sequence[SubStep], facts: Co
             errors.append(f"lane {lane.key!r} links a role that no longer exists in this company")
         elif s.classification is Label.BY_HAND and lane.role_id not in facts.person_roles:
             errors.append(f"By Hand sub-step {s.key!r} sits in lane {lane.key!r}, whose role has no person holder")
+        elif s.classification is Label.BY_HAND and lane.role_id in facts.agent_roles:
+            errors.append(f"By Hand sub-step {s.key!r} sits in lane {lane.key!r}, whose role an agent also holds")
         if process_key_of(plan, s) in facts.taken_process_keys:
             errors.append(f"process {process_key_of(plan, s)!r} already exists: new workflows only")
     return errors
@@ -239,5 +242,6 @@ def build_conversion(plan: CompanyWorkflowPlan, facts: ConversionFacts) -> PlanC
         handoff_treatments=_handoff_treatments(plan, segments),
         edge_case_treatments=_edge_case_treatments(plan, branches),
         ai_line_proposals=_ai_line_proposals(subs, errors),
+        approval_policies=list(plan.approval_policies),
         contract_errors=errors,
     )

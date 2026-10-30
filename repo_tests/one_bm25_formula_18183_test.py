@@ -64,7 +64,7 @@ REACH = declare(
     "one-bm25-formula",
     discover=_source_population,
     # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=3100,  # re-pinned mid-window (train 73): population 3250, window [2950, 3250] (#17844)
+    floor=3224,  # re-pinned mid-window (train 73): population 3250, window [2950, 3250] (#17844)
     what="non-test python source",
     roots=("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     growth=300,

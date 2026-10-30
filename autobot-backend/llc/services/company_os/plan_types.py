@@ -244,7 +244,13 @@ class PlanApprovalTimeout(str, Enum):
 
 
 class PlanApprovalPolicy(_Doc):
-    """Covers the AI sub-steps it names. ``wait_limit`` adds a timeout whose length is a setting, never a literal."""
+    """Covers the AI sub-steps it names. ``wait_limit`` adds a timeout whose length is a setting, never a literal.
+
+    The gate is recorded, not enforced: nothing executes workflows yet and no approval-gate model exists, so G5
+    only checks that the plan carries a policy for every AI sub-step. It is enforced once an executor reads the
+    policies kept in the committed conversion. ``hold`` waits indefinitely, so it never yields a timeout
+    transition; ``remind`` and ``escalate`` do, when ``wait_limit`` is set.
+    """
 
     key: str = Field(..., min_length=1, max_length=64, pattern=KEY_PATTERN)
     approval_type: PlanApprovalType = PlanApprovalType.WORKFLOW_GATE
@@ -319,10 +325,21 @@ class EdgeCaseTreatment(_Doc):
     treatment: EdgeCaseTreatmentKind
 
 
+class ProposalOutcome(str, Enum):
+    UNFILED = "unfiled"
+    FILED = "filed"
+    FAILED = "failed"
+
+
 class AiLineProposal(_Doc):
+    """One proposed AI-line change and what happened when it was filed in Approvals (after the commit)."""
+
     tool_action: str
     line: str
     sub_step_key: str
+    outcome: ProposalOutcome = ProposalOutcome.UNFILED
+    approval_id: Optional[str] = None
+    error: Optional[str] = Field(None, max_length=500)
 
 
 class PlanConversion(_Doc):
@@ -340,6 +357,8 @@ class PlanConversion(_Doc):
     handoff_treatments: List[HandoffTreatment] = Field(default_factory=list)
     edge_case_treatments: List[EdgeCaseTreatment] = Field(default_factory=list)
     ai_line_proposals: List[AiLineProposal] = Field(default_factory=list)
+    #: The approval policies this conversion was built under, kept for a future executor to read (D13).
+    approval_policies: List[PlanApprovalPolicy] = Field(default_factory=list)
     contract_errors: List[str] = Field(default_factory=list)
     preview_errors: List[str] = Field(default_factory=list)
     preview_warnings: List[str] = Field(default_factory=list)

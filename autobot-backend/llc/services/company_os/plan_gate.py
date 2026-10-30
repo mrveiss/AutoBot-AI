@@ -168,7 +168,10 @@ def _g4_labeled(plan: CompanyWorkflowPlan) -> List[Missing]:
 
 
 def _g5_people_safe(plan: CompanyWorkflowPlan) -> List[Missing]:
-    """By Hand is acknowledged; every AI sub-step waits for a person (FR-6.2). ``send`` is not a value."""
+    """By Hand is acknowledged; every AI sub-step has a policy that waits for a person (FR-6.2). No ``send``.
+
+    This checks the plan's policies only. The gate is enforced once an executor exists to read them.
+    """
     step = plan.one_number.step_key if plan.one_number else None
     proposed = _chosen_sub_steps(plan, SubStepState.PROPOSED)
     found: List[Missing] = []

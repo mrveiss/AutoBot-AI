@@ -342,7 +342,8 @@ async def approve_conversion(
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
-    """G7: an owner or admin approves the stored preview. Any later edit clears it."""
+    """G7: an owner or admin approves the stored preview. Any later edit clears it. A person, not an agent."""
+    require_interactive_human(user, "workflow plan approval")
     return await _write(session, _conversion.approve(session, ctx.org_id, plan_key, actor=actor_id(user)))
 
 
@@ -360,3 +361,17 @@ async def convert_plan(
     """
     require_interactive_human(user, "workflow plan conversion")
     return await _write(session, _conversion.convert(session, ctx.org_id, plan_key, actor=actor_id(user)))
+
+
+@router.post("/{plan_key}/convert/retry-ai-line-proposals", response_model=CompanyWorkflowPlan)
+async def retry_ai_line_proposals(
+    plan_key: str,
+    session: AsyncSession = Depends(get_session),
+    user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> CompanyWorkflowPlan:
+    """File the AI-line proposals that failed or were never filed. The only write a converted plan accepts."""
+    require_interactive_human(user, "workflow plan AI-line proposals")
+    return await _write(
+        session, _conversion.retry_ai_line_proposals(session, ctx.org_id, plan_key, actor=actor_id(user))
+    )

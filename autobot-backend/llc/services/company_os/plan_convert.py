@@ -23,7 +23,6 @@ from typing import Optional, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from autobot_shared.ai_lines import SCOPE_COMPANY, AiLine, LineScope
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_24_HOURS
@@ -35,14 +34,14 @@ from llc.services._role_guard import role_exists_in_company
 from llc.services.authz import require_company_admin
 from llc.services.base import LLCServiceBase
 from models.workflow import Workflow
-from services.ai_line_change_proposal import propose_line_change
 
 from . import plan_store
-from .errors import ConversionBlocked
+from .errors import CompanyOsConflict, ConversionBlocked
 from .graph_types import GraphContext, GraphSpec, HandoffTarget
 from .graph_validation import validate_graph
 from .graphs import GraphService
 from .plan_convert_build import ConversionFacts, build_conversion
+from .plan_convert_lines import file_proposals
 from .plan_gate import Missing, evaluate_plan_gate
 from .plan_types import CompanyWorkflowPlan, ConversionStatus, PlanConversion, WorkflowPlanStatus
 from .processes import ProcessService
@@ -88,13 +87,13 @@ class PlanConversionService(LLCServiceBase):
         role_ids = {ln.role_id for ln in plan.lanes if ln.role_id is not None}
         known = frozenset([r for r in role_ids if await role_exists_in_company(session, company_id, r)])
         held = await session.execute(
-            select(LLCRoleAssignment.role_id).where(
+            select(LLCRoleAssignment.role_id, LLCRoleAssignment.holder_type).where(
                 LLCRoleAssignment.company_id == company_id,
                 LLCRoleAssignment.role_id.in_(role_ids),
-                LLCRoleAssignment.holder_type.in_(_PERSON_HOLDERS),
                 LLCRoleAssignment.ended_at.is_(None),
             )
         )
+        holders = held.all()
         prefix = f"{plan.key}."
         procs = await session.execute(
             select(LLCProcess.process_key).where(
@@ -108,7 +107,8 @@ class PlanConversionService(LLCServiceBase):
         )
         return ConversionFacts(
             known,
-            frozenset(held.scalars()),
+            frozenset(r for r, t in holders if t in _PERSON_HOLDERS),
+            frozenset(r for r, t in holders if t == RoleHolderType.AGENT.value),
             frozenset(procs.scalars()),
             frozenset(wfs.scalars()),
             APPROVAL_WAIT_SECONDS,
@@ -188,17 +188,36 @@ class PlanConversionService(LLCServiceBase):
             )
         try:
             await self._create_rows(session, company_id, plan, fresh, actor)
-            await self._propose_lines(company_id, plan, fresh, actor)
             fresh.status, fresh.converted_at, fresh.converted_by = (
                 ConversionStatus.COMMITTED,
                 datetime.now(timezone.utc),
                 actor,
             )
             plan.conversion = fresh
-            return await plan_store.save_plan(session, row, plan, actor=actor, clears_approval=False)
+            await plan_store.save_plan(session, row, plan, actor=actor, clears_approval=False)
+            await session.commit()  # rows and `converted` are durable before anything leaves the transaction
         except Exception:
             await session.rollback()
             raise
+        return await self.file_ai_line_proposals(session, company_id, plan_key, actor=actor)
+
+    async def retry_ai_line_proposals(
+        self, session: AsyncSession, company_id: uuid.UUID, plan_key: str, *, actor: Optional[uuid.UUID]
+    ) -> CompanyWorkflowPlan:
+        """File the failed or unfiled proposals of a converted plan. Safe to run twice: a filed one is skipped."""
+        await require_company_admin(session, company_id, actor)
+        return await self.file_ai_line_proposals(session, company_id, plan_key, actor=actor)
+
+    async def file_ai_line_proposals(
+        self, session: AsyncSession, company_id: uuid.UUID, plan_key: str, *, actor: Optional[uuid.UUID]
+    ) -> CompanyWorkflowPlan:
+        """The one write a converted plan still accepts: the outcome of each AI-line proposal, nothing else."""
+        row = await plan_store.load_row(session, company_id, plan_key, lock=True)
+        plan = plan_store.read_plan(row)
+        if plan.conversion is None or plan.conversion.status is not ConversionStatus.COMMITTED:
+            raise CompanyOsConflict("this plan has not been converted: there is nothing to file")
+        await file_proposals(company_id, plan.key, plan.conversion.ai_line_proposals, actor)
+        return await plan_store.save_plan(session, row, plan, actor=actor, clears_approval=False)
 
     # ------------------------------------------------------------ the writes
 
@@ -232,18 +251,3 @@ class PlanConversionService(LLCServiceBase):
         for wid in conv.creation_order:
             spec = GraphSpec(nodes=drafts[wid].nodes, transitions=drafts[wid].transitions)
             await self._graphs.replace(session, company_id, wid, spec, actor=actor)
-
-    async def _propose_lines(
-        self, company_id: uuid.UUID, plan: CompanyWorkflowPlan, conv: PlanConversion, actor: Optional[uuid.UUID]
-    ) -> None:
-        for prop in conv.ai_line_proposals:
-            await propose_line_change(
-                scope=LineScope(SCOPE_COMPANY, company_id),
-                key=prop.tool_action,
-                line=AiLine(prop.line),
-                requested_by=str(actor),
-                reason=f"Workflow plan {plan.key!r}, sub-step {prop.sub_step_key!r}",
-            )
-            logger.info(
-                "workflow_plan.ai_line_proposed plan=%s action=%s line=%s", plan.key, prop.tool_action, prop.line
-            )

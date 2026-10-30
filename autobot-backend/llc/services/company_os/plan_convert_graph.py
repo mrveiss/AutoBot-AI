@@ -18,7 +18,7 @@ from typing import Dict, List, Optional
 from llc.models.company_os_enums import EndOutcome, NodeKind, TransitionKind
 
 from .graph_types import NodeSpec, TransitionSpec
-from .plan_types import EdgeCase, Label, PlanApprovalPolicy, SubStep
+from .plan_types import EdgeCase, Label, PlanApprovalPolicy, PlanApprovalTimeout, SubStep
 
 START, DONE, FAILED = "_start", "_done", "_failed"
 RESERVED_NODE_KEYS = (START, DONE, FAILED)
@@ -57,7 +57,8 @@ def _forward(source: str, target: str, cases: List[EdgeCase]) -> List[Transition
 def _node_exits(chain: LaneChain, sub: SubStep) -> List[TransitionSpec]:
     out = [TransitionSpec(from_node=sub.key, kind=TransitionKind.FAILURE, to_node=FAILED)]
     policy = chain.policies.get(sub.key)
-    if sub.classification is Label.AI and policy is not None and policy.wait_limit:
+    waits_out = policy is not None and policy.wait_limit and policy.on_timeout is not PlanApprovalTimeout.HOLD
+    if sub.classification is Label.AI and waits_out:
         out.append(
             TransitionSpec(
                 from_node=sub.key, kind=TransitionKind.TIMEOUT, to_node=FAILED, timeout_seconds=chain.wait_seconds

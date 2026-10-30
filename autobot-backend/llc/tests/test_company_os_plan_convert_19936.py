@@ -130,11 +130,13 @@ async def _role(maker, company: uuid.UUID, name: str, holder: str | None = "user
         return role.id
 
 
-async def _count(maker, model, company: uuid.UUID = COMPANY_A) -> int:
+async def _count(maker, model, company: uuid.UUID | None = COMPANY_A) -> int:
+    """Rows of *model* in *company*; ``None`` counts every company's."""
     async with maker() as s:
         col = getattr(model, "company_id", None)
         stmt = select(func.count()).select_from(model)
-        return (await s.execute(stmt.where(col == company) if col is not None else stmt)).scalar_one()
+        scoped = company is not None and col is not None
+        return (await s.execute(stmt.where(col == company) if scoped else stmt)).scalar_one()
 
 
 def _map(role_id, office_role=None) -> dict:
