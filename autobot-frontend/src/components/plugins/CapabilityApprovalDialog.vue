@@ -32,14 +32,7 @@
       </div>
 
       <div v-if="loading" class="dialog-loading">
-        <svg class="spinner" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-          <path
-            class="opacity-75"
-            fill="currentColor"
-            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-          />
-        </svg>
+        <BaseSpinner size="md" />
         <span>{{ $t('plugins.capabilities.loading') }}</span>
       </div>
 
@@ -116,6 +109,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseSpinner } from '@autobot/ui'
 import { ref, watch } from 'vue'
 import { usePlugins, type CapabilityInfo } from '@/composables/usePlugins'
 
@@ -311,17 +305,6 @@ watch(() => props.open, (isOpen) => {
 
 .dialog-error {
   color: var(--color-error);
-}
-
-.spinner {
-  width: 24px;
-  height: 24px;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
 }
 
 .dialog-body {

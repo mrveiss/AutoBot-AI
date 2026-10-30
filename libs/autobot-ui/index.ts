@@ -185,3 +185,9 @@ export {
 export type { LedgerSection, LedgerSectionStatus, LedgerAskOutcome } from './src/utils/ledger'
 export { default as LedgerSectionState } from './src/components/LedgerSectionState.vue'
 export type { LedgerStateLabels } from './src/components/LedgerSectionState.vue'
+
+// The one spinner and the one skeleton for every loading state (#19906).
+export { default as BaseSpinner } from './src/components/BaseSpinner.vue'
+export type { SpinnerSize } from './src/components/BaseSpinner.vue'
+export { default as BaseSkeleton } from './src/components/BaseSkeleton.vue'
+export type { SkeletonShape } from './src/components/BaseSkeleton.vue'

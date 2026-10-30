@@ -131,7 +131,7 @@
     <!-- Progress Display -->
     <div v-if="progressMessage" class="progress-display">
       <div class="progress-content">
-        <div class="spinner"></div>
+        <BaseSpinner size="md" />
         <p>{{ progressMessage }}</p>
       </div>
       <div v-if="progressPercent > 0" class="progress-bar">
@@ -185,7 +185,7 @@
 </template>
 
 <script>
-import { BaseButton, BaseCard } from '@autobot/ui';
+import { BaseButton, BaseCard, BaseSpinner } from '@autobot/ui';
 import { ref, onMounted, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useConfirmDialog } from '@/composables/useConfirmDialog';
@@ -893,19 +893,6 @@ export default {
 
 .progress-content p {
   color: var(--text-primary);
-}
-
-.spinner {
-  width: 24px;
-  height: 24px;
-  border: 3px solid var(--bg-tertiary);
-  border-top-color: var(--color-info);
-  border-radius: var(--radius-full);
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .progress-bar {

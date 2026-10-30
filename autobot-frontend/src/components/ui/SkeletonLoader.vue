@@ -48,13 +48,14 @@
     <div v-else class="skeleton-custom">
       <slot>
         <!-- Default skeleton -->
-        <div v-for="i in count" :key="i" class="skeleton-line mb-2" :class="lineClass"></div>
+        <BaseSkeleton :lines="count" :width="lineWidth" />
       </slot>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { BaseSkeleton } from '@autobot/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -86,12 +87,8 @@ const containerClass = computed(() => ({
   'skeleton-rounded': props.rounded
 }))
 
-const lineClass = computed(() => ({
-  'w-full': props.width === 'full',
-  'w-3/4': props.width === '3/4',
-  'w-1/2': props.width === '1/2',
-  'w-1/4': props.width === '1/4'
-}))
+const LINE_WIDTHS: Record<string, string> = { full: '100%', '3/4': '75%', '1/2': '50%', '1/4': '25%' }
+const lineWidth = computed(() => LINE_WIDTHS[props.width] ?? '100%')
 </script>
 
 <style scoped>
