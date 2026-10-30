@@ -1,5 +1,6 @@
 {
   "common": {
+    "appName": "AutoBot",
     "submit": "Submit",
     "cancel": "Cancel",
     "save": "Save",
@@ -6010,7 +6011,7 @@
       "dark": "Dark",
       "accentBlueDescription": "Electric Blue — Technical Precision",
       "accentGreenDescription": "Emerald — Growth & Success",
-      "accentPurpleDescription": "Violet — Creative & Premium",
+      "accentPurpleDescription": "Violet — Creative & Elegant",
       "accentOrangeDescription": "Amber — Energy & Innovation",
       "accentPinkDescription": "Rose — Friendly & Approachable",
       "accentTealDescription": "Cyan — Modern & Professional",
