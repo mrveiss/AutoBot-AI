@@ -91,3 +91,21 @@ def test_a_clean_run_names_no_failure_and_a_missing_log_says_so(tmp_path):
     assert first_failure("PLAY [x] ****\nTASK [y] ****\nok: [n]\n") is None
     report = build_update_report(tmp_path / "absent.log", None, [])
     assert report["log_present"] is False and report["failed_task"] is None
+
+
+def test_the_shapes_a_raw_error_can_carry_do_not_leave():
+    for leak, secret in (
+        ("postgres://admin:%s@db/x" % _SECRET, _SECRET),  # pragma: allowlist secret
+        ('{"password": "%s"}' % _SECRET, _SECRET),  # pragma: allowlist secret
+        ("-----BEGIN PRIVATE KEY-----\n%s\n-----END PRIVATE KEY-----" % _SECRET, _SECRET),  # pragma: allowlist secret
+        ("api_key=%s" % _SECRET, _SECRET),
+    ):
+        log = "TASK [t] ****\nfatal: [n]: FAILED! => not json " + leak.replace("\n", " ") + "\n"
+        failure = first_failure(log)
+        assert secret not in failure["error"], leak
+
+
+def test_redaction_runs_before_the_cut_so_a_secret_at_the_edge_cannot_survive():
+    padding = "x" * _report._ERROR_LIMIT
+    error = _report._safe("api_key=%s %s" % (_SECRET, padding))
+    assert _SECRET not in error and len(error) == _report._ERROR_LIMIT
