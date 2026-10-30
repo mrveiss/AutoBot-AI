@@ -53,10 +53,12 @@
   --color-autobot-warning-light: var(--color-warning-light);
   --color-autobot-warning-bg: var(--color-warning-bg);
   --color-autobot-error: var(--color-error);
+  --color-autobot-error-solid: var(--color-error-solid);
   --color-autobot-error-hover: var(--color-error-hover);
   --color-autobot-error-light: var(--color-error-light);
   --color-autobot-error-bg: var(--color-error-bg);
   --color-autobot-info: var(--color-info);
+  --color-autobot-info-solid: var(--color-info-solid);
   --color-autobot-info-hover: var(--color-info-hover);
   --color-autobot-info-light: var(--color-info-light);
   --color-autobot-info-bg: var(--color-info-bg);
