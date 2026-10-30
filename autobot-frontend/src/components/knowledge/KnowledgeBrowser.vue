@@ -1469,7 +1469,7 @@ watch(() => props.mode, () => {
 .batch-toolbar {
   position: sticky;
   top: 0;
-  z-index: 100;
+  z-index: var(--z-dropdown);
   background: var(--color-primary);
   box-shadow: 0 4px 12px var(--color-primary-alpha-30);
   padding: var(--spacing-3) var(--spacing-6);
