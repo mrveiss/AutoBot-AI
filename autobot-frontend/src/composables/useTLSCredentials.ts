@@ -66,7 +66,7 @@ export interface TLSCredentialUpdate {
   is_active?: boolean
 }
 
-export interface SLMNode {
+export interface TlsCredentialNode {
   id: number
   node_id: string
   hostname: string
@@ -81,7 +81,7 @@ export interface SLMNode {
 
 const credentials = ref<TLSCredential[]>([])
 const endpoints = ref<TLSEndpoint[]>([])
-const nodes = ref<SLMNode[]>([])
+const nodes = ref<TlsCredentialNode[]>([])
 const { isLoading, wrap } = useLoadingState()
 const error = ref<string | null>(null)
 const authToken = ref<string | null>(null)
@@ -171,11 +171,11 @@ function isAuthenticated(): boolean {
 /**
  * Fetch all nodes from SLM.
  */
-async function fetchNodes(): Promise<SLMNode[]> {
+async function fetchNodes(): Promise<TlsCredentialNode[]> {
   error.value = null
   return wrap(async () => {
     try {
-      const data = await slm.get<{ nodes?: SLMNode[] }>(`${getApiBase()}/nodes`)
+      const data = await slm.get<{ nodes?: TlsCredentialNode[] }>(`${getApiBase()}/nodes`)
       nodes.value = data.nodes || []
       return nodes.value
     } catch (err: unknown) {
