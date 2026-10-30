@@ -88,6 +88,11 @@ class TestPairDerivation:
 
         assert ("--text-on-success", "--color-success", contrast.AA_NORMAL) in contrast.build_pairs(tokens)
 
+    def test_status_pair_prefers_the_solid_fill_when_declared(self):
+        tokens = {"--text-on-error": "#ffffff", "--color-error": "#ef4444", "--color-error-solid": "#da3535"}
+
+        assert ("--text-on-error", "--color-error-solid", contrast.AA_NORMAL) in contrast.build_pairs(tokens)
+
     def test_non_status_fill_keeps_the_ui_component_threshold(self):
         tokens = {"--text-on-primary": "#ffffff", "--color-primary": "#3b82f6"}
 
@@ -199,13 +204,21 @@ class TestPerThemeStatusPairs:
     PASSING = """
     [data-theme="fx"] {
       --palette-red: #cb3326;
-      --color-error: var(--palette-red);
+      --color-error: #ef4444;
+      --color-error-solid: var(--palette-red);
       --text-on-error: #ffffff;
     }
     """
     FAILING = """
     [data-theme="fx"] {
       --color-error: #ef4444;
+      --color-error-solid: #ef4444;
+      --text-on-error: #ffffff;
+    }
+    """
+    MISSING_SOLID = """
+    [data-theme="fx"] {
+      --color-error: #cb3326;
       --text-on-error: #ffffff;
     }
     """
@@ -227,7 +240,19 @@ class TestPerThemeStatusPairs:
     def test_failing_fixture_pair_is_reported_under_4_5(self, tmp_path):
         _, failures = self._run(tmp_path, self.FAILING)
 
-        assert any("--text-on-error on --color-error = 3.76:1 < 4.5" in f for f in failures)
+        assert any("--text-on-error on --color-error-solid = 3.76:1 < 4.5" in f for f in failures)
+
+    def test_pair_is_measured_against_the_solid_token_not_the_text_colour(self, tmp_path):
+        """--color-error alone is 3.76:1 under white; only the -solid shade is held to AA."""
+        lines, failures = self._run(tmp_path, self.PASSING)
+
+        assert not [f for f in failures if "--text-on-error" in f]
+        assert any("--text-on-error #ffffff on --color-error-solid #cb3326" in line for line in lines)
+
+    def test_theme_without_a_solid_token_fails(self, tmp_path):
+        _, failures = self._run(tmp_path, self.MISSING_SOLID)
+
+        assert any("cannot evaluate --text-on-error on --color-error-solid" in f for f in failures)
 
     def test_undeclared_status_pair_fails_rather_than_passing_silently(self, tmp_path):
         _, failures = self._run(tmp_path, self.PASSING)

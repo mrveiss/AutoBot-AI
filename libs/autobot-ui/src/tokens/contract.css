@@ -49,8 +49,12 @@
   --aui-color-warning-contrast: #000000;
   --aui-color-error: #dc2626;
   --aui-color-error-contrast: #ffffff;
+  /* Solid-fill shades behind the white contrast (#19872): the status fill itself
+     for error, a darker sky for info (white on #0284c7 is 4.10:1). */
+  --aui-color-error-solid: #dc2626;
   --aui-color-info: #0284c7;
-  --aui-color-info-contrast: #000000;
+  --aui-color-info-contrast: #ffffff;
+  --aui-color-info-solid: #0369a1;
 
   /* ---- Color: risk tier (#13422) -------------------------------------
    * The four-rung RiskTier ladder (autobot_shared/risk_tier.py). Aliases of the

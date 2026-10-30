@@ -18,7 +18,9 @@ no browser, so it can gate every PR cheaply.
 Pairs are derived by naming convention rather than hand-listed, so a new
 ``--text-on-<x>`` token is covered the moment it is added:
 
-    --text-on-<x>  against  --color-<x>          (foreground on a semantic fill)
+    --text-on-<x>  against  --color-<x>          (foreground on a semantic fill;
+                                                  --color-<x>-solid for a status <x>
+                                                  that declares one, #19872)
     --text-<y>     against  --bg-primary         (body text on the app background)
 
 Status pairs (success/warning/error/info) are held to 4.5:1 and are checked in
@@ -52,6 +54,13 @@ AA_LARGE = 3.0
 # Status fills carry real label text (badges, buttons, toasts), so they are held
 # to the normal-text ratio, not the large-text one (#19872).
 STATUS_SEMANTICS = ("success", "warning", "error", "info")
+
+# Error and info keep white label text on a darker solid-fill shade of the same
+# hue (``--color-error-solid``): ``--color-error`` / ``--color-info`` themselves
+# stay the text, border and icon colour. These two must declare ``-solid`` in
+# every theme (a theme without it fails). Success and warning use dark ink on
+# their own fill; they are measured against ``-solid`` only if a theme declares one.
+SOLID_REQUIRED = ("error", "info")
 
 # Body-text tokens are read against the app background. --text-inverse is
 # excluded by design: it exists precisely to sit on an inverted surface, so
@@ -187,6 +196,8 @@ def build_pairs(tokens: Dict[str, str]) -> List[Tuple[str, str, float]]:
             continue
         semantic = name[len("--text-on-") :]
         background = f"--color-{semantic}"
+        if semantic in STATUS_SEMANTICS and f"{background}-solid" in tokens:
+            background = f"{background}-solid"
         if background in tokens:
             # Status fills carry real label text (#19872); other fills (primary)
             # stay at the large-text/UI-component threshold.
@@ -210,7 +221,7 @@ KIT_TOKENS = REPO_ROOT / "libs" / "autobot-ui" / "src" / "tokens"
 _DECL = re.compile(r"(--[a-zA-Z0-9-]+)\s*:\s*([^;{}]+);")
 _VAR = re.compile(r"^var\(\s*(--[a-zA-Z0-9-]+)\s*(?:,\s*(.+))?\)$")
 _HEX_VALUE = re.compile(r"^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?([0-9a-fA-F]{2})?$")
-_STATUS_TOKEN = re.compile(r"^--(?:aui-)?(?:color|text-on)-(?:success|warning|error|info)(?:-contrast)?$")
+_STATUS_TOKEN = re.compile(r"^--(?:aui-)?(?:color|text-on)-(?:success|warning|error|info)(?:-contrast|-solid)?$")
 
 
 def _strip_comments(css: str) -> str:
@@ -371,6 +382,9 @@ def check_status_themes(themes: List[ThemeSpec] = THEMES, required: float = AA_N
         lines.append(f"[contrast] -- status pairs: {theme.name}")
         for semantic in STATUS_SEMANTICS:
             on_tok, fill_tok = theme.on.format(s=semantic), theme.fill.format(s=semantic)
+            solid_tok = f"{fill_tok}-solid"
+            if semantic in SOLID_REQUIRED or solid_tok in decls:
+                fill_tok = solid_tok
             on_hex, fill_hex = resolve_colour(on_tok, decls), resolve_colour(fill_tok, decls)
             if on_hex is None or fill_hex is None:
                 lines.append(f"  FAIL   n/a    {on_tok} on {fill_tok}")

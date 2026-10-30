@@ -85,12 +85,15 @@
   --color-error: #ef4444;
   --color-info: #3b82f6;
 
-  /* Text on a solid status fill. Each pair must reach 4.5:1 (#19872);
-     scripts/check_token_contrast.py fails the build otherwise. */
+  /* Solid-fill shades: the fill behind --text-on-* (#19872). Every pair must reach
+     4.5:1; scripts/check_token_contrast.py fails the build otherwise. A theme
+     that repaints --color-error / --color-info must repaint these too. */
+  --color-error-solid: #da3535;
+  --color-info-solid: #306eeb;
   --text-on-success: #000000;
   --text-on-warning: #000000;
-  --text-on-error: #000000;
-  --text-on-info: #000000;
+  --text-on-error: #ffffff;
+  --text-on-info: #ffffff;
 
   /* ============================================
    * CHART COLORS

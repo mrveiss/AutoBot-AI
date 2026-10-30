@@ -331,7 +331,7 @@ async function onDelete(id: string) {
 }
 
 .btn-primary {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: white;
 }
 
@@ -340,7 +340,7 @@ async function onDelete(id: string) {
 }
 
 .btn-danger {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: white;
 }
 

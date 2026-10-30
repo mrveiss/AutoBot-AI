@@ -16,9 +16,10 @@
   Contrast: the label ink is 40% tier colour, 60% theme text, over the tier
   colour at 15% on the surface. That holds >= 4.5:1 in dark, light, contrast,
   mono and both ember schemes (the 70% mix BaseBadge uses fell to 3.2-3.8:1 for
-  low/medium in light, contrast, mono and ember-light). Critical is not a solid
-  fill because --text-on-error on --color-error is only 3.76:1 (2.73:1 in
-  ember-dark), below AA for badge-sized text.
+  low/medium in light, contrast, mono and ember-light). Critical is the outline
+  tone, not a solid fill, so it differs from `high` in more than hue. A solid
+  error fill would paint --color-error-solid (white label ink 4.5:1 or better
+  in every theme, #19872), never --color-error, which is 3.76:1 under white.
 -->
 <script setup lang="ts">
 import { computed } from 'vue'

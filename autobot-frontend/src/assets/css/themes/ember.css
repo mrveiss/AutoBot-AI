@@ -152,14 +152,16 @@
   --color-warning: var(--gold-500);
   --color-info: var(--wine-500);
   --color-info-bg: #f3e2ea;
-  /* #19872: ember repaints the status fills, so the base --text-on-* (tuned for
-     the base fills) no longer applies. Dark ink on the mid green and gold,
-     light ink on the deep red and wine. Plum-975 on the green is 4.48:1, so the
-     green takes pure black (4.92:1). */
+  /* #19872: ember repaints the status fills, so the base --text-on-* no longer
+     applies. Dark ink on the mid green and gold; the deep red and wine already
+     clear 4.5:1 under white, so their solid-fill shade is the fill itself. The
+     green takes pure black (4.92:1); plum-975 on it is 4.48:1. */
   --text-on-success: #000000;
   --text-on-warning: var(--plum-975);
   --text-on-error: var(--wax-0);
   --text-on-info: var(--wax-0);
+  --color-error-solid: var(--color-error);
+  --color-info-solid: var(--color-info);
 
   --color-ring: color-mix(in srgb, var(--orange-600) 42%, transparent);
 
@@ -291,12 +293,16 @@
   --color-warning: var(--gold-400);
   --color-info: var(--wine-300);
   --color-info-bg: #2e1822;
-  /* #19872: every dark-ember status fill is a light tint, so all four take the
-     darkest plum as ink. */
+  /* #19872: dark ember's red and wine are light tints, so white on them fails.
+     Success and warning are light tints too and keep dark ink (plum-975). The
+     error and info solid fills reuse the light variant's deep red and wine,
+     which carry white at 5.20:1 and 8.00:1. */
   --text-on-success: var(--plum-975);
   --text-on-warning: var(--plum-975);
-  --text-on-error: var(--plum-975);
-  --text-on-info: var(--plum-975);
+  --text-on-error: var(--wax-0);
+  --text-on-info: var(--wax-0);
+  --color-error-solid: var(--red-500);
+  --color-info-solid: var(--wine-500);
 
   --color-ring: color-mix(in srgb, var(--orange-400) 55%, transparent);
 

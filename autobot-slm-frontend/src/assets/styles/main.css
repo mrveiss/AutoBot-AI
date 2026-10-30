@@ -65,11 +65,11 @@
 }
 
 @utility btn-success {
-  @apply bg-success-500 text-white hover:bg-success-600;
+  @apply bg-success-500 text-(--text-on-success) hover:bg-success-600;
 }
 
 @utility btn-error {
-  @apply bg-error-500 text-white hover:bg-error-600;
+  @apply bg-(--color-error-solid) text-(--text-on-error) hover:bg-error-600;
 }
 
 @utility card {

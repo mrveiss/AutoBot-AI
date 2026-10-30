@@ -115,7 +115,7 @@ const {
   align-items: center;
   gap: var(--spacing-3);
   padding: var(--spacing-4);
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-error);
 }
 
@@ -261,7 +261,7 @@ const {
 }
 
 .btn-vnc {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: var(--text-on-primary);
 }
 
