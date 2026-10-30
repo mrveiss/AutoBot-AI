@@ -16,6 +16,7 @@ import subprocess
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_lines
 from tools.lint._scan_helpers import tracked_paths
 
 _ROOT = repo_root()
@@ -115,9 +116,9 @@ def test_every_code_synchronize_task_sets_the_mode() -> None:
 def _loose_copies(text: str) -> list[str]:
     """Archive-mode rsync lines that keep source modes."""
     return [
-        line
-        for line in text.splitlines()
-        if _ARCHIVE_RSYNC.search(line) and _FLAG not in line and not line.lstrip().startswith(("#", "echo"))
+        line.text
+        for line in code_lines(text, name="script.sh")
+        if _ARCHIVE_RSYNC.search(line.text) and _FLAG not in line.text and not line.text.lstrip().startswith("echo")
     ]
 
 
