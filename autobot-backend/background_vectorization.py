@@ -222,28 +222,19 @@ class BackgroundVectorizer:
         if not fact_data:
             return result
 
-        content, metadata = self._extract_fact_content(fact_data)
+        content, _metadata = self._extract_fact_content(fact_data)
         fact_id = fact_key.split(":")[-1] if ":" in fact_key else fact_key
 
-        if not kb.vector_index:
-            logger.warning("Vector index not available")
-            return result
-
-        try:
-            from llama_index.core import Document
-
-            document = Document(text=content, metadata=metadata, doc_id=fact_id)
-            await asyncio.to_thread(kb.vector_index.insert, document)
+        # #20007: vector_index is never built (KB init skips it), so this always failed. The KB's own path
+        # embeds with the bound model and writes to the bound store, and it reports a failure it recorded.
+        outcome = await kb.vectorize_existing_fact(fact_id)
+        if outcome.get("status") == "success":
             result["success"] = True
             result["tokens"] = int(len(content.split()) * 1.3)
             logger.debug("Vectorized fact %s", fact_id)
             await self._mark_vectorization_complete(kb, fact_key)
-        except Exception as doc_error:
-            if "already exists" in str(doc_error).lower():
-                result["skipped"] = True
-                await self._mark_vectorization_complete(kb, fact_key)
-            else:
-                logger.error("Failed to vectorize %s: %s", fact_id, doc_error)
+        else:
+            logger.error("Failed to vectorize %s: %s", fact_id, outcome.get("message"))
 
         return result
 
