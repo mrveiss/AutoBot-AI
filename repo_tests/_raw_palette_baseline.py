@@ -196,14 +196,13 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:bg-blue-200": 4,
     "slm:bg-blue-50": 17,  # #18863 SLM notices onto BaseAlert (19 -> 17)
     "slm:bg-blue-500": 11,  # #14777 batch 2: 12 -> 11
-    "slm:bg-blue-500/20": 1,
     "slm:bg-blue-600": 36,
     "slm:bg-blue-700": 25,
     "slm:bg-blue-900/30": 1,
     "slm:bg-cyan-100": 1,
     "slm:bg-cyan-50": 1,
     "slm:bg-cyan-500": 2,
-    "slm:bg-cyan-500/20": 2,
+    "slm:bg-cyan-500/20": 1,  # #17562: 2 -> 1
     "slm:bg-emerald-400": 1,
     "slm:bg-emerald-500/20": 2,
     "slm:bg-emerald-600": 3,
@@ -212,14 +211,12 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:bg-gray-200": 99,  # #14780 BaseSwitch: 118 -> 100, LoadBalancingView 100 -> 99
     "slm:bg-gray-300": 9,
     "slm:bg-gray-400": 41,
-    "slm:bg-gray-400/15": 1,
     "slm:bg-gray-50": 235,  # #14780 BasePagination: 249 -> 237; TabbedRouteLayout (#19858): 237 -> 235
     "slm:bg-gray-500": 4,
-    "slm:bg-gray-500/20": 4,
+    "slm:bg-gray-500/20": 2,  # #17562: 4 -> 2
     "slm:bg-gray-600": 8,  # #14777 batch 2: 9 -> 8
     "slm:bg-gray-700": 10,  # #14777 batch 2: 12 -> 10
     "slm:bg-gray-800": 22,  # #14777: 26 -> 22, SLM dialogs moved onto the kit BaseModal
-    "slm:bg-gray-800/50": 1,
     "slm:bg-gray-900": 30,  # #14777 batch 2: 31 -> 30
     "slm:bg-gray-950": 1,
     "slm:bg-green-100": 62,  # #18819 + #14777: 64 -> 62, kit BaseAlert notices and BaseModal dialogs
@@ -244,7 +241,6 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:bg-purple-200": 3,
     "slm:bg-purple-50": 3,
     "slm:bg-purple-500": 4,
-    "slm:bg-purple-500/20": 1,
     "slm:bg-purple-600": 5,
     "slm:bg-purple-700": 4,
     "slm:bg-purple-900/30": 1,
@@ -278,20 +274,20 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:border-blue-300": 2,
     "slm:border-blue-400": 1,
     "slm:border-blue-500": 32,
-    "slm:border-blue-500/30": 2,
+    "slm:border-blue-500/30": 1,  # #17562: 2 -> 1
     "slm:border-blue-600": 4,
-    "slm:border-cyan-500/30": 2,
+    "slm:border-cyan-500/30": 1,  # #17562: 2 -> 1
     "slm:border-emerald-500/30": 2,
-    "slm:border-gray-100": 55,
-    "slm:border-gray-200": 307,  # #14780 BaseDrawer: 313 -> 309; TabbedRouteLayout (#19858): 309 -> 307
+    "slm:border-gray-100": 54,  # #17562: 55 -> 54
+    "slm:border-gray-200": 305,  # #14780: 313 -> 309; #19858: -> 307; #17562: -> 305
     "slm:border-gray-300": 322,  # #14780 BaseSwitch: 340 -> 322
     "slm:border-gray-50": 4,
     "slm:border-gray-500": 2,
-    "slm:border-gray-500/30": 4,
+    "slm:border-gray-500/30": 2,  # #17562: 4 -> 2
     "slm:border-gray-600": 14,
-    "slm:border-gray-700": 26,  # #14777 batch 2: 27 -> 26
+    "slm:border-gray-700": 23,  # #14777 batch 2: 27 -> 26  # #17562: 26 -> 23
     "slm:border-gray-700/50": 1,
-    "slm:border-gray-800": 5,
+    "slm:border-gray-800": 3,  # #17562: 5 -> 3
     "slm:border-green-200": 3,  # #18863 SLM notices onto BaseAlert (4 -> 3)
     "slm:border-green-300": 6,
     "slm:border-green-500": 2,
@@ -304,7 +300,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:border-l-purple-500": 1,
     "slm:border-orange-200": 4,
     "slm:border-purple-200": 2,
-    "slm:border-purple-500/30": 2,
+    "slm:border-purple-500/30": 1,  # #17562: 2 -> 1
     "slm:border-red-200": 6,  # #18819: 77 -> 6, hand-rolled notices moved to the kit BaseAlert
     "slm:border-red-300": 10,
     "slm:border-red-500": 2,
@@ -324,14 +320,14 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:text-amber-600": 18,  # #18863 SLM notices onto BaseAlert (22 -> 18)
     "slm:text-amber-700": 19,  # #18863 SLM notices onto BaseAlert (25 -> 19)
     "slm:text-amber-800": 6,  # #18863 SLM notices onto BaseAlert (8 -> 6)
-    "slm:text-blue-300": 2,
+    "slm:text-blue-300": 1,  # #17562: 2 -> 1
     "slm:text-blue-400": 4,
     "slm:text-blue-500": 5,  # #18863 SLM notices onto BaseAlert (9 -> 5)
     "slm:text-blue-600": 44,  # #18863 SLM notices onto BaseAlert (48 -> 44)
     "slm:text-blue-700": 37,  # #18863 SLM notices onto BaseAlert (39 -> 37)
     "slm:text-blue-800": 23,  # #18863 SLM notices onto BaseAlert (24 -> 23)
     "slm:text-blue-900": 1,  # #18863 SLM notices onto BaseAlert (2 -> 1)
-    "slm:text-cyan-300": 2,
+    "slm:text-cyan-300": 1,  # #17562: 2 -> 1
     "slm:text-cyan-400": 4,
     "slm:text-cyan-600": 1,
     "slm:text-cyan-800": 2,
@@ -339,13 +335,13 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:text-emerald-300": 2,
     "slm:text-emerald-400": 2,
     "slm:text-gray-100": 12,  # #14777: 14 -> 12, SLM dialogs moved onto the kit BaseModal
-    "slm:text-gray-200": 6,
-    "slm:text-gray-300": 50,  # #14777 batch 2: 51 -> 50
-    "slm:text-gray-400": 214,  # #14780 BaseDrawer: 217 -> 214
-    "slm:text-gray-500": 869,  # #14780 BasePagination: 874 -> 869
+    "slm:text-gray-200": 5,  # #17562: 6 -> 5
+    "slm:text-gray-300": 46,  # #14777 batch 2: 51 -> 50  # #17562: 50 -> 46
+    "slm:text-gray-400": 208,  # #14780 BaseDrawer: 217 -> 214  # #17562: 214 -> 208
+    "slm:text-gray-500": 866,  # #14780 BasePagination: 874 -> 869  # #17562: 869 -> 866
     "slm:text-gray-600": 264,  # #14780 BaseDrawer: 268 -> 265; TabbedRouteLayout (#19858): 265 -> 264
     "slm:text-gray-700": 428,  # #18734: 431 -> 428
-    "slm:text-gray-800": 41,  # #14777: 43 -> 41, SLM dialogs moved onto the kit BaseModal
+    "slm:text-gray-800": 40,  # #14777: 43 -> 41, SLM dialogs moved onto the kit BaseModal  # #17562: 41 -> 40
     "slm:text-gray-900": 437,  # #14780 BaseDrawer: 442 -> 439; TabbedRouteLayout (#19858): 439 -> 437
     "slm:text-green-300": 4,
     "slm:text-green-400": 4,
@@ -359,7 +355,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:text-orange-700": 8,
     "slm:text-orange-800": 6,
     "slm:text-pink-700": 1,
-    "slm:text-purple-300": 2,
+    "slm:text-purple-300": 1,  # #17562: 2 -> 1
     "slm:text-purple-400": 2,
     "slm:text-purple-500": 1,
     "slm:text-purple-600": 7,
