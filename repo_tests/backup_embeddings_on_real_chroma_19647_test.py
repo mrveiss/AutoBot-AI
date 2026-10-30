@@ -15,9 +15,12 @@ import uuid
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from llama_index.vector_stores.chroma import ChromaVectorStore
 
 from knowledge import backup_embeddings as be
 from knowledge.bulk import BulkOperationsMixin
+from knowledge.facts import FactsMixin
+from knowledge.write_buffer import VectorWriteBuffer, make_chromadb_flush_fn
 
 chromadb = pytest.importorskip("chromadb")
 if not list(getattr(chromadb, "__path__", []) or []):
@@ -133,3 +136,51 @@ async def test_export_reads_in_batches():
     with _patched(kb), patch.object(be, "EXPORT_BATCH_SIZE", 2):
         await kb._fetch_embeddings_from_vector_store(["a", "b", "c", "d", "e"])
     assert [call.kwargs["ids"] for call in collection.get.call_args_list] == [["a", "b"], ["c", "d"], ["e"]]
+
+
+class _RealPathKB(FactsMixin, BulkOperationsMixin):
+    """The real _write_vector, real LlamaIndex store and real write buffer over one in-memory collection."""
+
+    def __init__(self):
+        self.collection = chromadb.EphemeralClient().get_or_create_collection(f"t-{uuid.uuid4().hex}")
+        self.vector_store = ChromaVectorStore(chroma_collection=self.collection)
+        self.buffer = VectorWriteBuffer(flush_fn=make_chromadb_flush_fn(self.vector_store))
+        self._get_fact_for_vectorization = AsyncMock(return_value=dict(_STORED))
+        self._mark_vectorization_succeeded = AsyncMock()
+
+
+@pytest.mark.asyncio
+async def test_real_path_a_vector_still_queued_by_store_fact_is_seen_and_kept():
+    """The look at the collection would miss a queued write without the flush, and report a false restore."""
+    kb = _RealPathKB()
+    space = types.SimpleNamespace(model=MODEL, vector_store=kb.vector_store, write_buffer=kb.buffer)
+    await kb.buffer.write("f1", [1.0, 0.0], "fresh", {"k": "v"})
+    assert kb.collection.get(ids=["f1"])["ids"] == [], "the buffer flushed early; this test proves nothing"
+    with patch("knowledge.backup_embeddings.current_space", new=AsyncMock(return_value=space)):
+        result = await kb._restore_fact_embedding("f1", {"embedding": [0.0, 1.0], "embedding_model": MODEL})
+    assert result == {"action": "restored", "embedding": False}
+    assert kb.collection.get(ids=["f1"], include=["embeddings"])["embeddings"][0].tolist() == [1.0, 0.0]
+    kb._mark_vectorization_succeeded.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_real_path_a_gap_is_filled_through_the_real_write_buffer():
+    kb = _RealPathKB()
+    space = types.SimpleNamespace(model=MODEL, vector_store=kb.vector_store, write_buffer=kb.buffer)
+    with patch("knowledge.backup_embeddings.current_space", new=AsyncMock(return_value=space)):
+        result = await kb._restore_fact_embedding("f1", {"embedding": [0.1, 0.2], "embedding_model": MODEL})
+    assert result == {"action": "restored", "embedding": True}
+    await kb.buffer.flush_now()
+    stored = kb.collection.get(ids=["f1"], include=["documents", "metadatas"])
+    assert stored["documents"] == ["stored text"] and stored["metadatas"][0]["collection"] == "research_quarantine"
+
+
+@pytest.mark.asyncio
+async def test_real_path_a_gap_is_filled_when_the_buffer_has_stopped():
+    """A rebind stops the buffer mid-operation; _write_vector then goes straight to the store."""
+    kb = _RealPathKB()
+    await kb.buffer.stop()
+    space = types.SimpleNamespace(model=MODEL, vector_store=kb.vector_store, write_buffer=kb.buffer)
+    with patch("knowledge.backup_embeddings.current_space", new=AsyncMock(return_value=space)):
+        result = await kb._restore_fact_embedding("f1", {"embedding": [0.1, 0.2], "embedding_model": MODEL})
+    assert result["embedding"] is True and kb.collection.get(ids=["f1"])["ids"] == ["f1"]

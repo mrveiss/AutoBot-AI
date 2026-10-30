@@ -53,6 +53,8 @@ async def restore_backup_embedding(kb, fact_id: str, fact_data: Dict[str, Any]) 
         space = await current_space(kb)
         if fact_data.get("embedding_model") != space.model:
             return not_restored
+        if space.write_buffer is not None:
+            await space.write_buffer.flush_now()  # store_fact's vector may still be queued; the look must see it
         existing = await asyncio.to_thread(space.vector_store._collection.get, ids=[fact_id], include=[])
         if existing["ids"]:
             return not_restored  # store_fact embedded it with the bound model, and add() would change nothing
