@@ -232,8 +232,8 @@ class DeploymentService:
         ssh_user = node.ssh_user or "autobot"
         ssh_port = node.ssh_port or 22
         ssh_password = None
-
-        if node.extra_data:
+        # #19483: a key-auth node keeps its stored password until a human removes it, but never logs in with it.
+        if node.extra_data and node.auth_method != "key":
             encrypted_password = node.extra_data.get("ssh_password")
             if encrypted_password:
                 # Check if password is encrypted (new format) or plaintext (legacy)
@@ -443,7 +443,7 @@ class DeploymentService:
             return encrypted_password
 
     async def _handle_enrollment_success(self, db: AsyncSession, node: Node, output: str) -> None:
-        """Update node status and clear password after successful enrollment.
+        """Update node status after successful enrollment; the stored password stays (#19483).
 
         Helper for enroll_node (Issue #665).
 
@@ -458,11 +458,7 @@ class DeploymentService:
         # Update auth method to key-based (SSH keys deployed during enrollment)
         node.auth_method = "key"
 
-        # Clear stored password from extra_data (no longer needed)
-        if node.extra_data and "ssh_password" in node.extra_data:
-            extra_data = dict(node.extra_data)
-            del extra_data["ssh_password"]
-            node.extra_data = extra_data
+        # #19483: no automated path deletes a stored credential (#17038); proposing it is #20046.
 
         await db.commit()
 
@@ -518,7 +514,7 @@ class DeploymentService:
                 ssh_password=effective_password,
             )
 
-            # Handle success: update status, clear password, commit
+            # Handle success: update status, commit; the stored password stays (#19483)
             await self._handle_enrollment_success(db, node, output)
 
             return True, f"Agent deployed successfully. Output:\n{output}"
