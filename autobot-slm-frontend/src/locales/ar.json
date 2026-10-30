@@ -1152,11 +1152,11 @@
     "editMaintenanceWindow": "Edit Maintenance Window",
     "editWindow": "Edit window",
     "endTime": "End Time",
-    "failedToActivateWindow": "فشل تفعيل نافذة الصيانة",
-    "failedToCompleteWindow": "فشل إكمال نافذة الصيانة",
-    "failedToDeleteWindow": "فشل حذف نافذة الصيانة",
-    "failedToDrainNode": "فشل استنزاف العقدة. يرجى المحاولة مرة أخرى.",
-    "failedToResumeNode": "فشل استئناف العقدة. يرجى المحاولة مرة أخرى.",
+    "failedToActivateWindow": "Failed to activate maintenance window",
+    "failedToCompleteWindow": "Failed to complete maintenance window",
+    "failedToDeleteWindow": "Failed to delete maintenance window",
+    "failedToDrainNode": "Failed to drain node. Please try again.",
+    "failedToResumeNode": "Failed to resume node. Please try again.",
     "fleetWideMaintenance": "Fleet-Wide Maintenance",
     "leaveEmptyForFleet": "Leave empty for fleet-wide maintenance",
     "loadingMaintenanceWindows": "Loading maintenance windows...",
@@ -3342,8 +3342,8 @@
     "yourSLMServiceLifecycle": "Your SLM (Service Lifecycle Manager) is up and running. This wizard\n          will guide you through adding and configuring your fleet nodes.",
     "provisioningFailed": "Provisioning failed",
     "retryProvisioning": "Retry provisioning",
-    "failedToSaveKeys": "فشل حفظ مفاتيح API. تحقق من وحدة التحكم للحصول على التفاصيل.",
-    "failedToAddNode": "فشلت إضافة العقدة"
+    "failedToSaveKeys": "Failed to save API keys. Check the console for details.",
+    "failedToAddNode": "Failed to add node"
   },
   "skills": {
     "approvalsTab": {
