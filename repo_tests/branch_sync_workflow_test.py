@@ -48,7 +48,7 @@ _SECRET = re.compile(r"\bsecrets\.([A-Za-z_][A-Za-z0-9_]*)")
 #: argv tokens that rewrite history or overwrite a remote ref.
 _FORBIDDEN_ARGV = {"rebase", "--force", "--force-with-lease", "-f", "--force-if-includes", "reset"}
 
-_PROTECTED = ("main", "release", "master", "Dev_new_gui")  # Dev_new_gui: temporary mirror; remove with #16461
+_PROTECTED = ("main", "release", "master")
 
 
 def _spec() -> dict:
