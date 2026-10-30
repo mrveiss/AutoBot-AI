@@ -7,12 +7,9 @@
 """Sync documentation changes to knowledge base"""
 
 import asyncio
-import glob
 import json
 import logging
-import os
 import sys
-from datetime import datetime
 
 from autobot_shared.paths import project_root
 
@@ -25,182 +22,7 @@ logger = logging.getLogger(__name__)
 sys.path.insert(0, str(project_root() / "autobot-backend"))
 
 from knowledge_factory import get_knowledge_base_async
-from knowledge_sync_incremental import run_incremental_sync
-from populate_knowledge_base import DOC_PATTERNS  # the one documentation set (#19339)
-
-
-def _determine_doc_category(rel_path: str) -> str:
-    """
-    Determine document category from relative path.
-
-    Issue #281: Extracted from sync_docs to reduce function length.
-    """
-    if "user_guide" in rel_path:
-        return "user-guide"
-    elif "developer" in rel_path:
-        return "developer-docs"
-    elif "reports" in rel_path:
-        return "reports"
-    elif rel_path in ["README.md", "CLAUDE.md"]:
-        return "project-overview"
-    return "documentation"
-
-
-def _collect_documentation_files(project_root: str) -> list:
-    """
-    Find all documentation files to sync.
-
-    Issue #281: Extracted from sync_docs to reduce function length.
-    """
-    all_files = []
-    for pattern in DOC_PATTERNS:
-        files = glob.glob(os.path.join(project_root, pattern), recursive=True)
-        all_files.extend(files)
-
-    # Remove duplicates and filter
-    unique_files = list(set(all_files))
-    return [f for f in unique_files if os.path.isfile(f) and "node_modules" not in f]
-
-
-async def _remove_outdated_entries(kb, all_facts: list) -> int:
-    """
-    Remove outdated documentation entries from KB.
-
-    Issue #281: Extracted from sync_docs to reduce function length.
-    """
-    logger.info("Removing outdated documentation entries...")
-    removed_count = 0
-    for fact in all_facts:
-        metadata = fact.get("metadata", {})
-        if metadata.get("source") in ["project-docs", "project-documentation"]:
-            await kb.delete_fact(fact["id"])
-            removed_count += 1
-    logger.info(f"✓ Removed {removed_count} outdated documentation entries")
-    return removed_count
-
-
-async def _sync_single_file(kb, file_path: str, project_root: str) -> bool:
-    """
-    Sync a single documentation file to the KB.
-
-    Issue #281: Extracted from sync_docs to reduce function length.
-    Returns True on success, False on failure.
-    """
-    rel_path = os.path.relpath(file_path, project_root)
-
-    # Read file content
-    with open(file_path, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    if not content.strip():
-        return False
-
-    # Create enhanced searchable content
-    searchable_text = f"FILE: {rel_path}\\nTITLE: {os.path.basename(file_path)}\\nCONTENT:\\n{content}"
-
-    category = _determine_doc_category(rel_path)
-    metadata = {
-        "source": "project-documentation",
-        "category": category,
-        "relative_path": rel_path,
-        "filename": os.path.basename(file_path),
-        "sync_time": datetime.now().isoformat(),
-        "file_size": len(content),
-    }
-
-    # Store as searchable fact
-    result = await kb.store_fact(searchable_text, metadata)
-
-    if result["status"] == "success":
-        logger.info(f"✓ Synced: {rel_path} [{category}]")
-        return True
-    else:
-        logger.error(f"❌ Failed to sync {rel_path}: {result['message']}")
-        return False
-
-
-def _save_sync_state(success_count: int, removed_count: int, total_files: int) -> None:
-    """
-    Save sync state to JSON file.
-
-    Issue #281: Extracted from sync_docs to reduce function length.
-    """
-    sync_data = {
-        "last_sync": datetime.now().isoformat(),
-        "documents_synced": success_count,
-        "method": "full-resync",
-        "removed_outdated": removed_count,
-        "total_files_found": total_files,
-    }
-
-    os.makedirs("data", exist_ok=True)
-    with open("data/kb_sync_state.json", "w", encoding="utf-8") as f:
-        json.dump(sync_data, f, indent=2)
-
-    logger.info("✅ Sync state saved to data/kb_sync_state.json")
-
-
-async def _test_search_functionality(kb) -> None:
-    """
-    Test KB search functionality after sync.
-
-    Issue #281: Extracted from sync_docs to reduce function length.
-    """
-    logger.info("\\n=== Testing Search Functionality ===")
-    test_queries = ["debian", "installation", "autobot", "configuration"]
-
-    for query in test_queries:
-        try:
-            results = await kb.search(query=query)  # #16710: get_fact() never took a query
-            logger.info(f"Search '{query}': {len(results)} results found")
-        except Exception as e:
-            logger.error(f"Search '{query}': error - {str(e)}")
-
-
-async def sync_docs():
-    """Re-sync all documentation to ensure KB is current."""
-    logger.info("=== Knowledge Base Documentation Sync ===")
-
-    # Initialize KB
-    kb = await get_knowledge_base_async()
-    if kb is None:
-        raise RuntimeError("Knowledge base unavailable: initialization failed or retry cooldown active")
-
-    # Remove outdated entries
-    all_facts = await kb.get_all_facts()
-    removed_count = await _remove_outdated_entries(kb, all_facts)
-
-    # Collect documentation files
-    # #14517: was a shell placeholder in a plain string literal, so the collection
-    # below globbed a directory that cannot exist and the sync reported a clean
-    # zero. Named ``root``: assigning to the imported ``project_root`` would make
-    # it a function-local name and raise UnboundLocalError on the call itself.
-    root = str(project_root())
-    filtered_files = _collect_documentation_files(root)
-    logger.info(f"Found {len(filtered_files)} documentation files to sync")
-
-    # Sync each file
-    success_count = 0
-    for file_path in sorted(filtered_files):
-        try:
-            if await _sync_single_file(kb, file_path, root):
-                success_count += 1
-        except Exception as e:
-            logger.error(f"❌ Error syncing {file_path}: {str(e)}")
-
-    # Report results
-    logger.info("\\n=== Sync Results ===")
-    logger.info(f"✓ Successfully synced: {success_count} documents")
-
-    if success_count > 0:
-        _save_sync_state(success_count, removed_count, len(filtered_files))
-        await _test_search_functionality(kb)
-        logger.info("\\n🎉 Knowledge base documentation sync completed successfully!")
-        logger.info("Users can now search for updated documentation content.")
-        return True
-    else:
-        logger.error("\\n💥 Knowledge base documentation sync failed!")
-        return False
+from knowledge_sync_incremental import IncrementalKnowledgeSync, run_incremental_sync, start_background_sync_daemon
 
 
 async def incremental_sync():
@@ -256,8 +78,29 @@ async def incremental_sync():
 
     except Exception as e:
         logger.error(f"❌ Incremental sync failed: {e}")
-        logger.info("Falling back to legacy full sync...")
-        return await sync_docs()
+        return False
+
+
+async def print_sync_preview() -> bool:
+    """Print what an incremental sync would change, applying nothing (#19701)."""
+    changed, removed, expired = await IncrementalKnowledgeSync().preview_changes()
+    print(json.dumps({"would_index": [str(path) for path in changed], "would_remove": removed, "would_expire": expired}, indent=2))  # noqa: print  # canonical: ignore py-print-smoke
+    return True
+
+
+async def show_status() -> bool:
+    """Print the engine's recorded sync status; reads its state file, no KB connection (#19701)."""
+    sync = IncrementalKnowledgeSync()
+    await sync._load_sync_state()
+    print(json.dumps(sync.get_sync_status(), indent=2))  # noqa: print  # canonical: ignore py-print-smoke
+    return True
+
+
+async def watch_sync(interval_minutes: int) -> bool:
+    """Sync now, then keep syncing every *interval_minutes* until stopped (#19701)."""
+    await run_incremental_sync()
+    await start_background_sync_daemon(check_interval_minutes=interval_minutes)
+    return True
 
 
 if __name__ == "__main__":
@@ -270,21 +113,22 @@ if __name__ == "__main__":
         action="store_true",
         help="Perform incremental sync (10-50x faster, default)",
     )
-    parser.add_argument(
-        "--force-full",
-        "-f",
-        action="store_true",
-        help="Force full sync (legacy method)",
-    )
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--dry-run", action="store_true", help="Preview changes without applying them")
+    mode.add_argument("--watch", "--daemon", "-d", action="store_true", help="Keep syncing until stopped")
+    mode.add_argument("--status", "-s", action="store_true", help="Show sync status")
+    parser.add_argument("--interval", type=int, default=15, help="Minutes between syncs with --watch")
     parser.add_argument("--test", "-t", action="store_true", help="Test search functionality after sync")
 
     args = parser.parse_args()
 
-    if args.force_full:
-        logger.warning("⚠️  WARNING: Using legacy full sync method (much slower)")
-        success = asyncio.run(sync_docs())
+    if args.dry_run:
+        success = asyncio.run(print_sync_preview())
+    elif args.watch:
+        success = asyncio.run(watch_sync(args.interval))
+    elif args.status:
+        success = asyncio.run(show_status())
     else:
-        # Default to incremental sync (much faster)
         success = asyncio.run(incremental_sync())
 
     sys.exit(0 if success else 1)
