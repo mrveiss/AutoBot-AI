@@ -1,5 +1,6 @@
+-c ../../constraints/shared.txt  # single source of truth for shared versions (#10524)
 # Core AutoBot Local Dependencies (minimal for orchestrator)
-fastapi>=0.147.0                # SECURITY UPDATE - requires starlette >=0.52.1 (#15661)
+fastapi  # version from constraints/shared.txt (#18060)
 uvicorn[standard]>=0.54.0
 python-dotenv>=1.1.0
 redis>=8.1.0
