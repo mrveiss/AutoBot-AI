@@ -26,6 +26,7 @@ import re
 from pathlib import Path
 
 import pytest
+import yaml
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
@@ -143,6 +144,94 @@ def test_the_floor_has_one_value_across_package_lock_and_installer() -> None:
     assert installer and f">={installer.group(1)}" == declared, f"install.sh NODE_MIN_VERSION vs engines {declared}"
 
 
+def _loads_the_group_vars(text: str) -> bool:
+    """A play's ``vars_files`` names the definition; a comment naming the path does not count (#19661)."""
+    plays = yaml.safe_load(text)
+    return isinstance(plays, list) and any(
+        str(entry).endswith("inventory/group_vars/all.yml")
+        for play in plays
+        if isinstance(play, dict)
+        for entry in play.get("vars_files") or []
+    )
+
+
+def test_a_comment_naming_the_definition_does_not_count_as_loading_it() -> None:
+    assert _loads_the_group_vars("- hosts: all\n  vars_files:\n    - ../inventory/group_vars/all.yml\n")
+    assert not _loads_the_group_vars("# ../inventory/group_vars/all.yml\n- hosts: all\n")
+
+
+#: The NodeSource repository named by a task: its setup script or an apt line.
+_NODESOURCE_INSTALL = re.compile(r"(?:nodesource_base_url \}\}|deb\.nodesource\.com)/(?:setup_|node_)")
+_NODE_INSTALL_HOME = "autobot-slm-backend/ansible/roles/nodejs/tasks/install.yml"
+_APT_MODULES = frozenset({"apt", "package", "ansible.builtin.apt", "ansible.builtin.package"})
+
+
+def _installs_node(node: object) -> bool:
+    """A task anywhere in *node* that installs the ``nodejs`` package; removing it is allowed."""
+    if isinstance(node, list):
+        return any(_installs_node(item) for item in node)
+    if not isinstance(node, dict):
+        return False
+    for key in _APT_MODULES & node.keys():
+        args = node[key] if isinstance(node[key], dict) else {}
+        names = args.get("name")
+        if "nodejs" in (names if isinstance(names, list) else [names]) and args.get("state") != "absent":
+            return True
+    return any(_installs_node(value) for value in node.values())
+
+
+def test_one_ansible_task_file_installs_node() -> None:
+    root = _ROOT / "autobot-slm-backend/ansible"
+    found = {
+        p.relative_to(_ROOT).as_posix()
+        for p in root.rglob("*.yml")
+        if _NODESOURCE_INSTALL.search(p.read_text(encoding="utf-8"))
+    }
+    assert _NODE_INSTALL_HOME in found, "the sweep found no install at all; its pattern has drifted"
+    assert found == {_NODE_INSTALL_HOME}, "use the nodejs role (#19661)"
+
+
+@pytest.mark.parametrize(
+    ("text", "flagged"),
+    [
+        ("url: https://deb.nodesource.com/setup_22.x", True),
+        ("url: {{ nodesource_base_url }}/setup_{{ node_major }}.x", True),
+        ('repo: "deb {{ nodesource_base_url }}/node_22.x jammy main"', True),
+        ("url: {{ nodesource_base_url }}/gpgkey/nodesource.gpg.key", False),
+    ],
+)
+def test_a_nodesource_install_is_recognised_however_its_url_is_written(text: str, flagged: bool) -> None:
+    assert bool(_NODESOURCE_INSTALL.search(text)) is flagged
+
+
+def test_only_the_role_installs_the_nodejs_package() -> None:
+    root = _ROOT / "autobot-slm-backend/ansible"
+    found, parsed = set(), 0
+    for path in root.rglob("*.yml"):
+        try:
+            document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        except yaml.YAMLError:  # a vault-tagged inventory file holds no tasks
+            continue
+        parsed += 1
+        if _installs_node(document):
+            found.add(path.relative_to(_ROOT).as_posix())
+    assert parsed > 100, f"only {parsed} files parsed; an empty sweep finds nothing"
+    assert found == {_NODE_INSTALL_HOME}, "use the nodejs role (#19661)"
+
+
+@pytest.mark.parametrize(
+    ("task", "flagged"),
+    [
+        ({"apt": {"name": "nodejs", "state": "present"}}, True),
+        ({"block": [{"ansible.builtin.apt": {"name": ["nginx", "nodejs"]}}]}, True),
+        ({"apt": {"name": "nodejs", "state": "absent"}}, False),
+        ({"apt": {"name": "nginx"}}, False),
+    ],
+)
+def test_a_distro_install_is_flagged(task: dict, flagged: bool) -> None:
+    assert _installs_node([task]) is flagged
+
+
 def test_a_bare_inventory_playbook_that_reads_node_major_loads_its_definition() -> None:
     """A play run with ``-i "<host>,"`` (it targets ``target_host``) loads no group_vars (#15348)."""
     missing = [
@@ -150,7 +239,7 @@ def test_a_bare_inventory_playbook_that_reads_node_major_loads_its_definition() 
         for p in sorted((_ROOT / "autobot-slm-backend/ansible").rglob("*.yml"))
         if "node_major" in (text := p.read_text(encoding="utf-8"))
         and "target_host" in text
-        and "inventory/group_vars/all.yml" not in text
+        and not _loads_the_group_vars(text)
     ]
     assert not missing, f"load ../inventory/group_vars/all.yml via vars_files (#19328): {missing}"
 
