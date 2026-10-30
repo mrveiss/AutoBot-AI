@@ -82,6 +82,11 @@ async def _read_file_content(file_path: Path) -> str | None:
         return None
 
 
+def _gone_from_a_live_directory(path: str) -> bool:
+    """Whether *path* is missing while its parent directory is still present (#19701)."""
+    return not Path(path).exists() and Path(path).parent.is_dir()
+
+
 def _classify_file_change(
     file_metadata: Dict[str, "FileMetadata"],
     str_path: str,
@@ -389,11 +394,12 @@ class IncrementalKnowledgeSync:
             logger.warning("Scan found no files under %s; removing nothing", self.project_root)
             return changed_files + new_files, [], new_files
 
-        # Find removed files: gone from disk. A file still on disk but outside the doc set keeps
-        # its facts, because narrowing the set must not delete stored knowledge (#19701).
+        # Find removed files: gone from a directory that is still there. A file on disk outside
+        # the doc set, or below a directory that vanished (an unmounted tree), keeps its facts,
+        # because neither is evidence the document was deleted (#19701).
         removed_files = []
         for stored_path in list(self.file_metadata.keys()):
-            if stored_path not in current_files and not await asyncio.to_thread(Path(stored_path).exists):
+            if stored_path not in current_files and await asyncio.to_thread(_gone_from_a_live_directory, stored_path):
                 removed_files.append(stored_path)
                 logger.debug("Removed file: %s", Path(stored_path).relative_to(self.project_root))
 

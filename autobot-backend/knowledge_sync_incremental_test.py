@@ -244,7 +244,7 @@ class TestIncrementalKnowledgeSyncChangedFiles:
         missing = str(tmp_path / "gone.md")
         sync.file_metadata[missing] = _make_file_metadata(missing, _sha256("x"), 0.0)
 
-        # Pass empty file list — file is gone
+        # The scan finds another file, and this one is gone
         other = tmp_path / "other.md"
         await asyncio.to_thread(other.write_text, "x", encoding="utf-8")
         changed, removed, new = await sync._analyze_file_changes([other])
@@ -479,7 +479,9 @@ class TestTheDocSetNarrowing19701:
         await asyncio.to_thread(kept.write_text, "x", encoding="utf-8")
         sync = self._sync(tmp_path)
         sync.file_metadata[str(kept)] = self._tracked(kept)
-        _changed, removed, _new = await sync._analyze_file_changes([])
+        live = tmp_path / "live.md"
+        await asyncio.to_thread(live.write_text, "x", encoding="utf-8")
+        _changed, removed, _new = await sync._analyze_file_changes([live])
         assert removed == []
 
     @pytest.mark.asyncio
@@ -544,3 +546,13 @@ class TestTheDocSetNarrowing19701:
         _changed, _removed, expired = await sync.preview_changes()
         assert expired == [str(doc)]
         sync.kb.delete_fact.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_file_below_a_vanished_directory_is_not_removed(self, tmp_path):
+        live = tmp_path / "live.md"
+        await asyncio.to_thread(live.write_text, "x", encoding="utf-8")
+        unmounted = tmp_path / "docs" / "doc.md"
+        sync = self._sync(tmp_path)
+        sync.file_metadata[str(unmounted)] = self._tracked(unmounted)
+        _changed, removed, _new = await sync._analyze_file_changes([live])
+        assert removed == []
