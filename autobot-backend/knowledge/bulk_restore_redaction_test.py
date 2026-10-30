@@ -63,12 +63,13 @@ async def _restore(content: str, fact_id: str) -> tuple[dict, dict]:
     kb._write_vector = AsyncMock(side_effect=_write)
     kb._mark_vectorization_succeeded = AsyncMock()
     space = MagicMock(model="test-embed")
+    space.vector_store._collection.get.return_value = {"ids": []}
     fact_data = {"embedding": [0.1, 0.2, 0.3], "embedding_model": "test-embed"}
     with (
         patch("knowledge.fact_store.persist_fact", new=AsyncMock()),
         patch.object(type(kb), "_project_fact_to_redis", new=AsyncMock()),
         patch.object(type(kb), "_vectorize_fact_in_chromadb", new=AsyncMock(side_effect=_vectorize)),
-        patch("knowledge.bulk.current_space", new=AsyncMock(return_value=space)),
+        patch("knowledge.backup_embeddings.current_space", new=AsyncMock(return_value=space)),
     ):
         result = await kb._store_restored_fact(fact_data, content, {}, fact_id, restore_embeddings=True)
     return result, captured
