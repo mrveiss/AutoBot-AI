@@ -1006,19 +1006,15 @@
   # silently kept the CPU-only torch from requirements.txt. vllm itself stays
   # opt-in (#10251/#10287) since it drags the CUDA toolkit + extra wheels, but
   # CUDA torch/torchvision install whenever a GPU is present, vLLM or not.
-  - name: "Backend | Detect NVIDIA GPU (#10288, #15162)"
-    ansible.builtin.command:
-      cmd: nvidia-smi --query-gpu=name --format=csv,noheader
-    register: backend_nvidia_smi_result
-    changed_when: false
-    # nvidia-smi exits rc != 0 when no GPU is present; the result only gates the
-    # optional GPU-reqs installs below, so a non-zero rc is expected on CPU nodes.
-    failed_when: false
+  # nvidia-smi exits rc != 0 when no GPU is present; the result only gates the
+  # optional GPU-reqs installs below, so a non-zero rc is expected on CPU nodes.
+  - name: "Backend | Detect NVIDIA GPU (#10288, #15162, #19731)"
+    ansible.builtin.include_tasks: ../../_shared/tasks/detect_nvidia_gpu.yml
     when: backend_has_gpu == "auto"
 
   - name: "Backend | Resolve GPU availability (#10288, #15162)"
     ansible.builtin.set_fact:
-      backend_gpu_available: "{{ (backend_nvidia_smi_result.rc | default(1)) == 0 and (backend_nvidia_smi_result.stdout | default('') | trim | length > 0) if backend_has_gpu == 'auto' else (backend_has_gpu | bool) }}"
+      backend_gpu_available: "{{ (nvidia_smi_probe.rc | default(1)) == 0 and (nvidia_smi_probe.stdout | default('') | trim | length > 0) if backend_has_gpu == 'auto' else (backend_has_gpu | bool) }}"
 
   # Install CUDA-built torch/torchvision whenever a GPU is present, regardless
   # of vLLM. This is the fix for #15162: a GPU host that does not opt into
