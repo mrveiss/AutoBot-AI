@@ -14,6 +14,7 @@ Issue #15651: the untrusted-text sanitize/frame pair, moved here from
 ``orchestration/orchestrator_prompts.py`` once a third caller needed it.
 """
 
+import re
 from typing import Any, List
 
 LEDGER_VS_EXECUTOR_RULE = """
@@ -45,6 +46,19 @@ def sanitize_injected(text: Any, limit: int) -> str:
     """
     collapsed = " ".join(str(text).split()).replace("<<<", "").replace(">>>", "")
     return collapsed[:limit]
+
+
+_FRAME_MARKER_RE = re.compile(r"<<<(?=(?:BEGIN|END)_)")
+
+
+def neutralize_frame_markers(text: str) -> str:
+    """Defuse only the ``<<<BEGIN_`` / ``<<<END_`` markers of :func:`frame_untrusted_block`; keep everything else.
+
+    For untrusted text whose shape matters (code, logs): newlines, indentation and other ``<<<`` / ``>>>``
+    (heredocs, REPL prompts) survive, while the text cannot forge a closing delimiter. Unlike
+    :func:`sanitize_injected` it neither flattens whitespace nor truncates; callers cap size themselves.
+    """
+    return _FRAME_MARKER_RE.sub("&lt;&lt;&lt;", text)
 
 
 def frame_untrusted_block(label: str, warning_lines: List[str], body_lines: List[str]) -> str:
