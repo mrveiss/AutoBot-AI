@@ -578,6 +578,7 @@
         "pending": "Pending",
         "running": "Running",
         "streaming": "Streaming",
+        "waiting_explanation": "Waiting for explanation",
         "explaining": "Explaining",
         "completed": "Completed",
         "failed": "Failed"

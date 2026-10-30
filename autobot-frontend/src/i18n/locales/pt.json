@@ -525,6 +525,7 @@
         "pending": "Pendente",
         "running": "Correndo",
         "streaming": "A transmitir",
+        "waiting_explanation": "Aguardando explicação",
         "explaining": "Explicando",
         "completed": "Concluído",
         "failed": "Fracassado"
