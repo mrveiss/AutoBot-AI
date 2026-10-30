@@ -1549,11 +1549,16 @@
       tags: [frontend]
 
     # #19661: a running process keeps the old Node.js until restarted. try-restart
-    # leaves the unit alone on a host where it is not running.
+    # leaves the unit alone on a host where it is not running. The browser worker
+    # needs no equivalent: its restart step below runs on every update.
     - name: "[PLAY 2] Frontend | Restart the frontend service onto the new Node.js"
       ansible.builtin.command:
         cmd: systemctl try-restart autobot-frontend
       become: true
+      register: _frontend_try_restart
+      changed_when: _frontend_try_restart.rc == 0
+      # rc 5: the unit is not installed, which is normal here (roles/frontend/handlers/main.yml).
+      failed_when: _frontend_try_restart.rc not in [0, 5]
       when:
         - "'frontend' in group_names"
         - _nodejs_upgraded | default(false) | bool
