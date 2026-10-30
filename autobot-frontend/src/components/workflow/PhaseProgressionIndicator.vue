@@ -611,7 +611,7 @@ function formatStatus(status: string): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10;
+  z-index: var(--z-10);
 }
 
 .loading-spinner {
