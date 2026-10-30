@@ -49,3 +49,9 @@ def test_a_legacy_record_without_a_collection_keeps_the_stored_rule(monkeypatch)
     monkeypatch.setattr(res, "active_embedding_space", lambda: EmbeddingSpace("bge-m3:latest", None, 0))
     monkeypatch.setattr(res, "active_embedding_model", lambda: "bge-m3:latest")
     assert res.resolve_kb_embedding_model("nomic-embed-text:latest") == "nomic-embed-text:latest"
+
+
+def test_a_stored_name_that_is_not_an_embedding_model_is_not_protected(monkeypatch):
+    """#20007: phi3:mini was only stamped on metadata; keeping it stopped every write."""
+    monkeypatch.setattr(res, "active_embedding_model", lambda: "nomic-embed-text:latest")
+    assert res.resolve_kb_embedding_model("phi3:mini") == "nomic-embed-text:latest"
