@@ -110,7 +110,7 @@ everything else fans out. U2 is two issues but is the keystone — **dispatch it
 | U9 | — | sustainable throughput for all |
 | U10 | #9019 (OAuth→secrets, internal gate) | — |
 | U11 | U4 (contract) | — |
-| U12 | **U2 #9759 (RBAC)** | enterprise tier |
+| U12 | **U2 #9759 (RBAC)** | identity and access |
 | U13 | — | feeds U5/U10/U11 on recovered finds |
 
 ---
@@ -137,7 +137,7 @@ everything else fans out. U2 is two issues but is the keystone — **dispatch it
 - **U10 #9928** — integrations (gate on internal #9019 first).
 - **U11 #9929** — product-features (needs U4 contract).
 
-**Wave 4 — enterprise tier (serial tail of the critical path):**
+**Wave 4 — identity and access (serial tail of the critical path):**
 - **U12 #9930** — SSO/OIDC (needs U2 → RBAC).
 
 > Parallelism budget: Waves 0+1 run **six umbrellas concurrently**. There is no cap on
