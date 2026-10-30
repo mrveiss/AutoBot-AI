@@ -19,7 +19,7 @@ with their literal values so this module has no backend dependencies.
 
 import logging
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict
 
 import yaml
@@ -58,8 +58,10 @@ class RedisDbConfig:
 
     name: str
     db: int
-    host: str = NetworkConstants.REDIS_VM_IP
-    port: int = NetworkConstants.REDIS_PORT
+    # #20008: read when an instance is made. In the class body they resolved through the config registry
+    # while redis_client was still importing this module, and the registry imported redis_client back.
+    host: str = field(default_factory=lambda: NetworkConstants.REDIS_VM_IP)
+    port: int = field(default_factory=lambda: NetworkConstants.REDIS_PORT)
     password: str | None = None
     # #16626: ACL username sent with the password as `AUTH <username> <password>`.
     # None keeps today's password-only AUTH.
