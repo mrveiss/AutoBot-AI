@@ -131,6 +131,20 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_KB_BACKUP_EMBEDDING_BATCH_SIZE",
+        type=int,
+        default=500,
+        description=(
+            "Facts read from the vector collection per call while a knowledge backup or export "
+            "includes their embeddings (knowledge/backup_embeddings.py, #19647)."
+        ),
+        component="knowledge",
+        range=(1, 5000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_EMBEDDING_SWITCH_BATCH_SIZE",
         type=int,
         default=64,
