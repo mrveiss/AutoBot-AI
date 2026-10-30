@@ -170,22 +170,19 @@ class CostEvent(BaseModel):
 
 @router.post("/cost-events")
 async def ingest_cost_event(body: CostEvent, request: Request) -> Dict[str, Any]:
-    """Record an agent's token cost against its budget (#15859).
+    """Record an agent's token cost against its budget and, per event, its work item (#15859, #16016).
 
-    This used to return ``{"recorded": True}`` without calling anything. A
-    budget that is never charged is never exceeded, so the hard stop could not
-    fire -- and the response carried no marker, so a caller could not tell
-    "recorded" from "discarded".
-
-    ``BudgetExhausted`` is propagated as 402 rather than swallowed: the whole
-    point of ingesting the event is that exceeding the limit stops the agent.
-    ``UnpricedModel`` is 422 -- the event is well-formed but its cost cannot be
-    computed, and charging zero is what #15860 was.
+    This used to return ``{"recorded": True}`` without calling anything, so a budget
+    was never charged and the hard stop could not fire. ``BudgetExhausted`` is 402,
+    not swallowed: exceeding the limit is what stops the agent. ``UnpricedModel`` is
+    422 -- well-formed, but charging zero is what #15860 was. A ``work_item_id`` that
+    is unknown or in another company is 404 and charges nothing, so a ``200`` means
+    the cost landed on the item named.
     """
     from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
 
-    from ..exceptions import BudgetExhausted, UnpricedModel
+    from ..exceptions import BudgetExhausted, UnpricedModel, WorkItemNotInCompany
     from ..services.budget import BudgetService
 
     agent_id, company_id = agent_context(request)
@@ -199,8 +196,11 @@ async def ingest_cost_event(body: CostEvent, request: Request) -> Dict[str, Any]
                 tokens_in=body.tokens_in,
                 tokens_out=body.tokens_out,
                 model=body.model,
+                work_item_id=body.work_item_id,
             )
             await session.commit()
+    except WorkItemNotInCompany as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except BudgetExhausted as exc:
         raise HTTPException(status_code=402, detail=str(exc)) from exc
     except UnpricedModel as exc:
