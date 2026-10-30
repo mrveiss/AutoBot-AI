@@ -7,6 +7,7 @@
 
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
+import { isHttpError } from '@autobot/ui'
 import ApiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
@@ -144,7 +145,7 @@ export const useWebResearchStore = defineStore('webResearch', () => {
       researcherAvailable.value = true
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
-      if (msg.includes('HTTP 503')) {
+      if (isHttpError(err) && err.status === 503) {
         researcherAvailable.value = false
       } else {
         logger.warn('Failed to load web research status from backend:', msg)
