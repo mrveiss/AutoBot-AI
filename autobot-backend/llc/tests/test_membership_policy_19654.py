@@ -12,6 +12,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import HTTPException
+from sqlalchemy.exc import IntegrityError
 
 from llc.api import company_members as routes
 from llc.models.activity import ActorType
@@ -97,6 +98,8 @@ def _ctx(admin=False) -> MagicMock:
 async def test_the_role_route_answers_the_policys_refusal_and_rolls_back(error, status_code):
     session, svc = AsyncMock(), MagicMock(get_member=AsyncMock(return_value=MagicMock(role=Role.OWNER)))
     with (
+        patch.object(routes, "lock_company_members", AsyncMock()),
+        patch.object(routes, "require_company_admin_unless_platform", AsyncMock()),
         patch.object(routes, "authorize_member_change", AsyncMock(side_effect=error)),
         pytest.raises(HTTPException) as raised,
     ):
@@ -128,3 +131,109 @@ def test_the_role_route_exists_and_its_router_is_mounted():
     assert "/companies/{company_id}/members/{user_id}" in paths
     mount = Path(routes.__file__).with_name("__init__.py").read_text(encoding="utf-8")
     assert "router.include_router(company_members_router)" in mount
+
+
+def _member_routes():
+    """Each write route, ready to call with (session, svc, ctx)."""
+    add = routes.MemberAddRequest(user_id=_TARGET, role=Role.MEMBER)
+    change = routes.MemberRoleRequest(role=Role.MEMBER)
+    return {
+        "add": lambda session, svc, ctx: routes.add_member(_COMPANY, add, session, svc, {}, ctx),
+        "change": lambda session, svc, ctx: routes.change_member_role(_COMPANY, _TARGET, change, session, svc, {}, ctx),
+        "remove": lambda session, svc, ctx: routes.remove_member(_COMPANY, _TARGET, session, svc, {}, ctx),
+    }
+
+
+def _member_service() -> MagicMock:
+    member = MagicMock(role=Role.MEMBER, id=uuid.uuid4(), company_id=_COMPANY, user_id=_TARGET, created_at=None)
+    return MagicMock(
+        get_member=AsyncMock(return_value=member),
+        add_member=AsyncMock(return_value=member),
+        change_role=AsyncMock(return_value=member),
+        remove_member=AsyncMock(),
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name", ["add", "change", "remove"])
+async def test_the_lock_is_taken_before_any_role_is_read_or_judged(name):
+    order: list = []
+    svc = _member_service()
+    member = svc.get_member.return_value
+
+    async def read(*_args):
+        order.append("read")
+        return member
+
+    svc.get_member = read
+
+    def step(label):
+        async def record(*_args, **_kwargs):
+            order.append(label)
+
+        return record
+
+    with (
+        patch.object(routes, "lock_company_members", step("lock")),
+        patch.object(routes, "require_company_admin_unless_platform", step("gate")),
+        patch.object(routes, "authorize_member_change", step("authorize")),
+    ):
+        await _member_routes()[name](AsyncMock(), svc, _ctx())
+    assert order[0] == "lock"
+    assert "authorize" in order
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name", ["add", "change", "remove"])
+async def test_a_plain_member_gets_403_on_every_write_route(name):
+    session = AsyncMock()
+    with (
+        patch.object(routes, "lock_company_members", AsyncMock()),
+        patch(f"{_POLICY}.require_company_admin", AsyncMock(side_effect=NotAuthorisedError("ids"))),
+        patch("llc.services.authz.require_company_admin", AsyncMock(side_effect=NotAuthorisedError("ids"))),
+        pytest.raises(HTTPException) as raised,
+    ):
+        await _member_routes()[name](session, _member_service(), _ctx())
+    assert raised.value.status_code == 403
+    session.commit.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name", ["change", "remove"])
+async def test_a_plain_member_cannot_probe_who_belongs(name):
+    """The 403 comes before the target is read, so a missing target is not a 404 they can tell apart."""
+    svc = _member_service()
+    svc.get_member.return_value = None
+    with (
+        patch.object(routes, "lock_company_members", AsyncMock()),
+        patch("llc.services.authz.require_company_admin", AsyncMock(side_effect=NotAuthorisedError("ids"))),
+        pytest.raises(HTTPException) as raised,
+    ):
+        await _member_routes()[name](AsyncMock(), svc, _ctx())
+    assert raised.value.status_code == 403
+    svc.get_member.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("name", ["add", "change", "remove"])
+async def test_another_companys_caller_gets_404_on_every_write_route(name):
+    ctx = MagicMock(org_id=uuid.uuid4(), user_id=_ACTOR, is_platform_admin=False)
+    session = AsyncMock()
+    with pytest.raises(HTTPException) as raised:
+        await _member_routes()[name](session, _member_service(), ctx)
+    assert raised.value.status_code == 404
+    session.execute.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_superadmins_add_to_a_missing_company_is_404_not_500():
+    svc = _member_service()
+    svc.add_member.side_effect = IntegrityError("insert", {}, Exception("fk"))
+    session = AsyncMock()
+    with (
+        patch.object(routes, "lock_company_members", AsyncMock()),
+        pytest.raises(HTTPException) as raised,
+    ):
+        await _member_routes()["add"](session, svc, _ctx(admin=True))
+    assert raised.value.status_code == 404
+    session.rollback.assert_awaited_once()

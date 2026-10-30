@@ -14,13 +14,14 @@ from typing import Any, Dict, NoReturn
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
 from llc.deps import assert_company_access
 from llc.models.enums import MembershipRole
 from llc.services.activity_log import LLCActivityLogService
-from llc.services.authz import NotAuthorisedError
+from llc.services.authz import NotAuthorisedError, require_company_admin_unless_platform
 from llc.services.membership_policy import LastOwnerError, authorize_member_change, lock_company_members
 from llc.services.membership_service import MemberAlreadyExistsError, MemberNotFoundError, MembershipService
 from user_management.database import get_async_session
@@ -91,6 +92,9 @@ async def add_member(
         return _to_member_read(membership)
     except (NotAuthorisedError, MemberAlreadyExistsError) as exc:
         await _refuse(session, exc)
+    except IntegrityError:  # a superadmin passes without a membership, so no earlier read proved the company exists
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company or user not found")
 
 
 @router.patch("/{company_id}/members/{user_id}")
@@ -106,6 +110,9 @@ async def change_member_role(
     assert_company_access(ctx, company_id)
     try:
         await lock_company_members(session, company_id)
+        await require_company_admin_unless_platform(
+            session, company_id, ctx.user_id, platform_admin=ctx.is_platform_admin
+        )
         current = await _current_role(session, svc, company_id, user_id)
         await authorize_member_change(
             session,
@@ -134,6 +141,9 @@ async def remove_member(
     assert_company_access(ctx, company_id)
     try:
         await lock_company_members(session, company_id)
+        await require_company_admin_unless_platform(
+            session, company_id, ctx.user_id, platform_admin=ctx.is_platform_admin
+        )
         current = await _current_role(session, svc, company_id, user_id)
         await authorize_member_change(
             session,
