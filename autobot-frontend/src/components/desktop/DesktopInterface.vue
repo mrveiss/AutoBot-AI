@@ -203,6 +203,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, watch } from 'vue'
+import { HttpError } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 // MIGRATED: Removed environment.js, using AppConfig.js only
 import appConfig from '@/config/AppConfig.js'
@@ -429,7 +430,6 @@ const checkConnectionFn = async () => {
     method: 'HEAD',
     signal: controller.signal
   });
-
   clearTimeout(timeoutId);
 
   if (response.ok) {
@@ -437,7 +437,7 @@ const checkConnectionFn = async () => {
     loading.value = false
     error.value = null
   } else {
-    throw new Error(`HTTP ${response.status}`)
+    throw new HttpError(response.status)
   }
 }
 
