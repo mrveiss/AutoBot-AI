@@ -516,7 +516,7 @@ async function createCompany() {
   font-weight: 600;
   margin-bottom: var(--spacing-2);
   transition: all var(--duration-300);
-  z-index: 1;
+  z-index: var(--z-raised);
 }
 
 .step-item.active .step-circle {
@@ -548,7 +548,7 @@ async function createCompany() {
   width: 100%;
   height: 2px;
   background: var(--border-color);
-  z-index: 0;
+  z-index: var(--z-0);
 }
 
 .wizard-content {

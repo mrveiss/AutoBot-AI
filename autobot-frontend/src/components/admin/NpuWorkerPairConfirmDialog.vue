@@ -290,7 +290,7 @@ function cancel() {
   white-space: nowrap;
   max-width: 280px;
   white-space: normal;
-  z-index: var(--z-tooltip, 9999);
+  z-index: var(--z-tooltip);
   pointer-events: none;
 }
 
