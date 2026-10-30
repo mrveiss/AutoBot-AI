@@ -307,7 +307,7 @@ function formatResult(result: Record<string, unknown>): string {
 .step-indicator { display: flex; flex-direction: column; align-items: center; }
 .step-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: var(--text-xs); font-weight: 600; background: var(--bg-tertiary); color: var(--text-tertiary); }
 .step-icon.completed { background: var(--color-success); color: white; }
-.step-icon.failed { background: var(--color-error); color: white; }
+.step-icon.failed { background: var(--color-error-solid); color: var(--text-on-error); }
 .step-icon.executing { background: var(--color-primary); color: white; }
 .step-icon.waiting_approval { background: var(--color-warning); color: white; }
 .step-icon.skipped { background: var(--bg-tertiary); color: var(--text-muted); }
@@ -341,8 +341,8 @@ function formatResult(result: Record<string, unknown>): string {
 .btn-success:hover { filter: brightness(1.1); }
 .btn-warning { padding: var(--spacing-2) var(--spacing-4); background: var(--color-warning); color: white; border: none; border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: var(--spacing-1-5); }
 .btn-warning:hover { filter: brightness(1.1); }
-.btn-danger { padding: var(--spacing-2) var(--spacing-4); background: var(--color-error); color: white; border: none; border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: var(--spacing-1-5); }
-.btn-danger:hover { filter: brightness(1.1); }
+.btn-danger { padding: var(--spacing-2) var(--spacing-4); background: var(--color-error-solid); color: var(--text-on-error); border: none; border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: var(--spacing-1-5); }
+.btn-danger:hover { filter: brightness(0.9); }
 .btn-secondary { padding: var(--spacing-2) var(--spacing-4); background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); font-size: var(--text-sm); cursor: pointer; display: inline-flex; align-items: center; gap: var(--spacing-1-5); }
 .btn-secondary:hover { background: var(--bg-hover); }
 .btn-sm { padding: var(--spacing-1-5) var(--spacing-3); font-size: var(--text-xs); }
