@@ -83,6 +83,7 @@ appears outside the known overlays.
 | `AUTOBOT_CHANNEL_STREAM_TTL_SECONDS` | events | int | `86400` | Idle expiry for a per-channel replay stream, so session and chat channels do not accumulate. Range: 60–2592000. |
 | `AUTOBOT_CHATS_DIRECTORY` | chat | str | `'data/chats'` | Filesystem path where chat session files are stored. |
 | `AUTOBOT_CHAT_LLM_CALL_TIMEOUT_SECONDS` | backend | float | `600.0` | Total timeout for a single streaming chat LLM request, connect included (chat_workflow/turn_control.py, #17273). The request previously set a connect timeout only, so a model that accepted the connection and then stalled held the turn forever. |
+| `AUTOBOT_CHAT_TRACE_OUTPUT_MAX_CHARS` | backend | int | `2000` | Characters of one tool result kept in a chat session trace (session_trace.py, #19963). Range: 1–100000. |
 | `AUTOBOT_CHAT_TRAJECTORY_CAPTURE_CONCURRENCY` | ai | int | `2` | Concurrent trajectory judge calls. Bounded so a burst of turns cannot stampede the LLM. |
 | `AUTOBOT_CHAT_TRAJECTORY_CONTEXT` | ai | bool | true | Search past trajectories before answering. Defaults on because the search is one vector query; capture is gated separately since it spends a judge call. |
 | `AUTOBOT_CHAT_TRAJECTORY_TIMEOUT_S` | ai | float | `0.15` | Seconds the pre-answer trajectory search may take. It rides the response hot path, so a cold or slow collection must never delay first token. |
