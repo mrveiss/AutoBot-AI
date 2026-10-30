@@ -21014,6 +21014,63 @@
         ]
       }
     },
+    "/api/code-sync/update-all/report": {
+      "get": {
+        "description": "The last update's target, stage, result, failed task, error and role deploys.",
+        "operationId": "get_update_report_api_code_sync_update_all_report_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Update Report Api Code Sync Update All Report Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Update Report",
+        "tags": [
+          "code-sync"
+        ]
+      }
+    },
     "/api/code-sync/update-all/status": {
       "get": {
         "description": "Return status of the current or most-recently-completed update-all job (#9971).\n\nC3-a: Returns the last job even after it completes (terminal jobs stay visible).\nWhen no in-memory job exists but a persisted plan does (SLM restarting after\nstage 3), synthesizes a status response so polling during the restart window\ngets a meaningful stage-3-running response instead of 404.\nReturns 404 only when no job has ever run this process AND no plan exists.",
