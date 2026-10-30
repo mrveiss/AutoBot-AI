@@ -45,6 +45,7 @@ from .secrets import router as secrets_router
 from .sprints import router as sprints_router
 from .templates import router as templates_router
 from .tools import router as tools_router
+from .work_item_comments import router as work_item_comments_router
 from .work_items import router as work_items_router
 from .workflows import router as workflows_router
 
@@ -73,6 +74,7 @@ router.include_router(roles_router)
 router.include_router(tools_router)
 router.include_router(sprints_router)
 router.include_router(work_items_router)
+router.include_router(work_item_comments_router)
 router.include_router(github_webhooks_router)
 router.include_router(api_keys_router)
 router.include_router(agent_router)
