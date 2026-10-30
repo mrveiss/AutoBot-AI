@@ -40,11 +40,6 @@ export interface SettingsResponse {
   last_modified: string
 }
 
-/**
- * The main backend's /api/user-management/users item. It is the same shared
- * autobot_shared UserResponse the SLM backend serves, so the generated type is reused (#15536).
- */
-export type UserResponse = SlmUserResponse
 export type UserCreate = components['schemas']['UserCreate']
 export type UserUpdate = components['schemas']['UserUpdate']
 
@@ -434,11 +429,11 @@ export interface ConfigRevision {
  * `status` of GET /system/health/detailed: the backend's probe vocabulary
  * (`HealthStatus` in `api/system_health.py`, #6909).
  */
-export type SystemHealthStatus = 'ok' | 'degraded' | 'down' | 'not_applicable' | 'idle'
+export type ProbeHealthStatus = 'ok' | 'degraded' | 'down' | 'not_applicable' | 'idle'
 
 /** GET /system/health/detailed as AdminMonitoringView reads it (#997 flattens the percentages). */
 export interface SystemHealthReport {
-  status: SystemHealthStatus
+  status: ProbeHealthStatus
   cpu_percent?: number
   memory_percent?: number
   disk_percent?: number
@@ -449,7 +444,7 @@ export interface SystemHealthReport {
 
 /** GET /system/health/detailed: metrics arrive as "12.5%" strings under `components` (#997). */
 interface DetailedHealthBody {
-  status: SystemHealthStatus
+  status: ProbeHealthStatus
   components?: Record<string, string>
   uptime_seconds?: number
   services?: { name: string; status: string }[]
@@ -637,18 +632,18 @@ export function useAutobotApi() {
   // User Management API
   // =============================================================================
 
-  async function getUsers(): Promise<UserResponse[]> {
-    const response = await client.get<{ users: UserResponse[] }>('/user-management/users')
+  async function getUsers(): Promise<SlmUserResponse[]> {
+    const response = await client.get<{ users: SlmUserResponse[] }>('/user-management/users')
     return response.users
   }
 
-  async function createUser(userData: UserCreate): Promise<UserResponse> {
-    const response = await client.post<{ user: UserResponse }>('/user-management/users', userData)
+  async function createUser(userData: UserCreate): Promise<SlmUserResponse> {
+    const response = await client.post<{ user: SlmUserResponse }>('/user-management/users', userData)
     return response.user
   }
 
-  async function updateUser(userId: string, data: UserUpdate): Promise<UserResponse> {
-    const response = await client.patch<UserResponse>(`/user-management/users/${userId}`, data)
+  async function updateUser(userId: string, data: UserUpdate): Promise<SlmUserResponse> {
+    const response = await client.patch<SlmUserResponse>(`/user-management/users/${userId}`, data)
     return response
   }
 
