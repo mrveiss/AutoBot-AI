@@ -363,7 +363,7 @@ const route = useRoute()
 const sourceId = computed(() => route.params.sourceId as string | undefined)
 
 /** Return params object merged with source_id when a sourceId is available. */
-function withSourceIdParams(params: Record<string, unknown> = {}): Record<string, unknown> {
+function withSourceIdParams(params: Record<string, string> = {}): Record<string, string> {
   const id = sourceId.value
   if (!id) return params
   return { ...params, source_id: id }
