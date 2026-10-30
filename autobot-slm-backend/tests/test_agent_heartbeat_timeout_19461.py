@@ -70,6 +70,7 @@ async def test_heartbeat_timeout_is_a_warning_and_buffers_the_event(tmp_path, ca
         assert await agent._send_heartbeat_request({"x": 1}) is False
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert len(warnings) == 1 and "Failed to send heartbeat" in warnings[0].getMessage()
+    assert warnings[0].getMessage().split("heartbeat:", 1)[1].strip()  # says what happened
     assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
     assert len(event_buffer.read_unsynced(agent.buffer_db)) == 1
 
@@ -99,6 +100,7 @@ async def test_sync_timeout_is_a_warning_not_an_error(tmp_path, caplog):
         await agent.sync_buffered_events()
     warnings = [r for r in caplog.records if r.levelno == logging.WARNING]
     assert len(warnings) == 1 and "Failed to sync events" in warnings[0].getMessage()
+    assert warnings[0].getMessage().split("events:", 1)[1].strip()
     assert len(event_buffer.read_unsynced(agent.buffer_db)) == 1
 
 
@@ -143,3 +145,41 @@ async def test_run_loop_continues_after_a_timeout_without_the_catch_all(tmp_path
         await agent.run()
     assert session.calls == 2  # the loop went round again after the timeout
     assert not [r for r in caplog.records if "Unhandled error" in r.getMessage()]
+
+
+@pytest.mark.parametrize("bad", ["0", "nan", "inf", "-5", "abc"])
+def test_timeout_env_cannot_disable_the_timer(bad, monkeypatch):
+    import importlib
+
+    from slm.agent import request_timeouts
+
+    monkeypatch.setenv("SLM_HEARTBEAT_TIMEOUT", bad)
+    monkeypatch.setenv("SLM_EVENT_SYNC_TIMEOUT", bad)
+    try:
+        mod = importlib.reload(request_timeouts)
+        assert (mod.HEARTBEAT_TIMEOUT_SECONDS, mod.EVENT_SYNC_TIMEOUT_SECONDS) == (10.0, 30.0)
+    finally:
+        monkeypatch.undo()
+        importlib.reload(request_timeouts)
+
+
+@pytest.mark.asyncio
+async def test_real_server_delay_past_the_timeout_is_a_missed_heartbeat(tmp_path, monkeypatch, caplog):
+    from aiohttp import web
+    from aiohttp.test_utils import TestServer
+
+    async def slow(_request):
+        await asyncio.sleep(2)
+        return web.json_response({})
+
+    app = web.Application()
+    app.router.add_post("/api/nodes/n1/heartbeat", slow)
+    monkeypatch.setattr(agent_mod.request_timeouts, "HEARTBEAT_TIMEOUT_SECONDS", 0.2)
+    async with TestServer(app) as server:
+        async with agent_mod.aiohttp.ClientSession() as session:
+            agent = _agent(tmp_path, session)
+            agent.admin_url = str(server.make_url("")).rstrip("/")
+            with caplog.at_level(logging.DEBUG, logger=agent_mod.logger.name):
+                assert await agent._send_heartbeat_request({"x": 1}) is False
+    assert len([r for r in caplog.records if r.levelno == logging.WARNING]) == 1
+    assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
