@@ -878,6 +878,10 @@ onUnmounted(() => {
   margin-bottom: var(--spacing-3);
 }
 
+.button-group :deep(.aui-btn) {
+  flex: 1;
+}
+
 .security-note {
   display: flex;
   align-items: center;

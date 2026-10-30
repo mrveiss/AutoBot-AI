@@ -92,7 +92,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/terminal/BaseXTerminal.vue": 825,
     "autobot-frontend/src/components/terminal/TerminalModals.vue": 742,  # #18849: 743 -> 742
     "autobot-frontend/src/components/terminal/TerminalWindow.vue": 1612,
-    "autobot-frontend/src/components/ui/HostSelectionDialog.vue": 920,
+    "autobot-frontend/src/components/ui/HostSelectionDialog.vue": 924,
     "autobot-frontend/src/components/vision/GUIAutomationControls.vue": 793,
     "autobot-frontend/src/components/vision/MediaGallery.vue": 843,
     "autobot-frontend/src/components/vision/ScreenCaptureViewer.vue": 836,
@@ -182,7 +182,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-frontend/src/views/OrchestrationView.vue": 2189,
     "autobot-slm-frontend/src/views/ReplicationView.vue": 704,  # #18819 + #14777: 731 -> 706
     "autobot-slm-frontend/src/views/SecurityView.vue": 1368,  # #14780 BasePagination: 1386 -> 1374
-    "autobot-slm-frontend/src/views/SetupWizardView.vue": 1785,
+    "autobot-slm-frontend/src/views/SetupWizardView.vue": 1790,
     "autobot-slm-frontend/src/views/SkillsView.vue": 631,  # #18819 + #14777: 645 -> 633; #19482: -> 631
     "autobot-slm-frontend/src/views/SystemUpdatesTab.vue": 626,  # #18819: 638 -> 635; #19482: -> 632; #18863: -> 626
     "autobot-slm-frontend/src/views/monitoring/ErrorMonitor.vue": 608,  # #14780: 617 -> 609; #19482: -> 608

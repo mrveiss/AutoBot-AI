@@ -1248,6 +1248,11 @@ onMounted(async () => {
   padding: 2rem;
 }
 
+.step-panel :deep(.aui-btn) {
+  margin-top: 1rem;
+  margin-right: 0.5rem;
+}
+
 .step-panel h2 {
   margin: 0 0 0.5rem;
   font-size: 1.4rem;

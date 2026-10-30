@@ -344,5 +344,9 @@ function clearFilters() {
   .filter-actions {
     flex-wrap: wrap;
   }
+
+  .filter-actions :deep(.aui-btn) {
+    flex: 1;
+  }
 }
 </style>
