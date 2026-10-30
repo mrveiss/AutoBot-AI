@@ -47,6 +47,10 @@ export type { TableFilters } from './src/utils/tableView'
 
 export { default as EmptyState } from './src/components/EmptyState.vue'
 
+// The one toast host for both apps (#19903); the caller supplies the translated labels.
+export { default as ToastContainer } from './src/components/ToastContainer.vue'
+export type { ToastContainerProps } from './src/components/ToastContainer.vue'
+
 export { default as SkipLink } from './src/components/SkipLink.vue'
 // One language picker for both apps (#18354); endonym labels live with it.
 export { default as LanguageSwitcher } from './src/components/LanguageSwitcher.vue'

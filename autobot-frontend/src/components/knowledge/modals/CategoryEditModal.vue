@@ -563,7 +563,7 @@ function selectIcon(icon: string): void {
 
 .icon-option.selected {
   border-color: var(--color-info);
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: var(--text-on-primary);
 }
 

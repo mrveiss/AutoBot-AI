@@ -712,7 +712,7 @@ onUnmounted(() => {
 }
 
 .timeline-dot.failed {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   border-color: var(--color-error);
   color: white;
 }
