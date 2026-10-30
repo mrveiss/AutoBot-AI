@@ -976,7 +976,7 @@ onUnmounted(() => {
 
 .btn-accept:hover {
   background: var(--color-success);
-  color: var(--kresearch-on-accent);
+  color: var(--text-on-success);
 }
 
 .btn-reject {
