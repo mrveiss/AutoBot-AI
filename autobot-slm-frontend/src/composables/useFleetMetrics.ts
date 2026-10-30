@@ -21,7 +21,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { slmApiClient } from '@/utils/ApiClient'
 import { POLLED_READ_MAX_RETRIES } from '@/constants/api-timeouts'
 import type { GPUNodeStatus } from '@/types/slm'
-import { useMetricsSummary } from '@autobot/ui'
+import { HttpError, useMetricsSummary } from '@autobot/ui'
 // Types and the pure summary helper live in fleetMetricsModel.ts (#18225).
 import { summariseGpus } from './fleetMetricsModel'
 import type {
@@ -366,7 +366,7 @@ export function useFleetMetrics(options: UsePrometheusMetricsOptions = {}) {
         prometheusExport.value = await response.text()
         error.value = null
       } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        throw new HttpError(response.status, response.statusText)
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch Prometheus export'
