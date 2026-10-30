@@ -180,4 +180,5 @@ In priority order:
 - #20100 feat(voice): keyboard shortcut for voice input in the web app
 - #20110 feat(speech): local Latvian speech recognition that works without the LATE binary
 - #20111 privacy(speech): audio reaches a system outside AutoBot only by explicit user choice
+- #20113 feat(voice): keep the transcript, reply and speech output of a conversation in one language
 - #16807 Server-side VAD in speech_recognition.py is a placeholder, not real detection
