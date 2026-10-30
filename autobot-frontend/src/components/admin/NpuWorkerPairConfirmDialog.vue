@@ -283,14 +283,14 @@ function cancel() {
   left: 50%;
   transform: translateX(-50%);
   background: var(--bg-overlay-dark);
-  color: var(--text-inverse, #fff);
+  color: var(--text-inverse);
   font-size: var(--text-xs);
   padding: var(--spacing-2) var(--spacing-3);
   border-radius: var(--radius-md);
   white-space: nowrap;
   max-width: 280px;
   white-space: normal;
-  z-index: var(--z-tooltip, 9999);
+  z-index: var(--z-tooltip);
   pointer-events: none;
 }
 
@@ -312,7 +312,7 @@ function cancel() {
 
 .pair-confirm-override-note {
   font-size: var(--text-xs);
-  color: var(--color-warning, #f59e0b);
+  color: var(--color-warning);
   margin: 0;
 }
 
@@ -350,7 +350,7 @@ function cancel() {
 
 .pair-confirm-btn-confirm {
   background: var(--color-primary);
-  color: var(--text-inverse, #fff);
+  color: var(--text-inverse);
 }
 
 .pair-confirm-btn-confirm:hover {
