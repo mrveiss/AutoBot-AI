@@ -27,7 +27,7 @@ from knowledge.fact_redis_codec import (  # noqa: F401 -- names stay patchable h
 )
 from knowledge.fact_sharing import FactSharingMixin
 from knowledge.ingest_sanitize import redact_url_metadata_fields, sanitize_fact_content
-from knowledge.long_fact_embedding import embed_in_windows
+from knowledge.long_fact_embedding import embed_in_windows, window_metadata
 from knowledge.ownership_index import index_ownership, ownership_changed, reindex_ownership
 from knowledge.quarantine import QuarantineAuditFailed, apply_quarantine, require_audit_actor, without_quarantine
 
@@ -652,7 +652,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         from knowledge.utils import sanitize_metadata_for_chromadb as _sanitize_metadata_for_chromadb
 
         # Sanitize metadata for ChromaDB
-        sanitized_metadata = _sanitize_metadata_for_chromadb(metadata)
+        sanitized_metadata = _sanitize_metadata_for_chromadb({**metadata, **window_metadata(content)})
 
         # Issue #165: NPU worker with fallback. #19379: the bound space's model, written to its store.
         space = await current_space(self)

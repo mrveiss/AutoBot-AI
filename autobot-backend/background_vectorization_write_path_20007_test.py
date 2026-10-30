@@ -50,41 +50,46 @@ async def test_an_embedding_that_failed_is_not_reported_as_success():
     assert result["status"] == "error"
 
 
-@pytest.mark.asyncio
-async def test_a_pass_stops_after_failures_in_a_row_and_leaves_the_rest(monkeypatch):
-    """#20019: a downed backend fails every fact the same way, each after its retries."""
-    import background_vectorization as bv
-
-    monkeypatch.setattr(bv, "MAX_CONSECUTIVE_FAILURES", 2)
+def _vectorizer(monkeypatch, facts: int, backend_up: bool) -> BackgroundVectorizer:
     vectorizer = BackgroundVectorizer()
-    keys = [f"fact:f{i}" for i in range(5)]
     monkeypatch.setattr(vectorizer, "_get_vectorization_status", AsyncMock(return_value=[]))
     monkeypatch.setattr(vectorizer, "_filter_pending_facts", lambda batch, _v: (batch, 0, []), raising=False)
     monkeypatch.setattr(vectorizer, "_sync_pending_set", AsyncMock())
     monkeypatch.setattr(
-        vectorizer, "_fetch_fact_data", AsyncMock(return_value=[{"content": "c", "metadata": "{}"}] * 5)
+        vectorizer, "_fetch_fact_data", AsyncMock(return_value=[{"content": "c", "metadata": "{}"}] * facts)
     )
+    monkeypatch.setattr(vectorizer, "_embedding_backend_answers", AsyncMock(return_value=backend_up))
+    return vectorizer
+
+
+@pytest.mark.asyncio
+async def test_a_downed_backend_stops_the_pass_at_the_first_failure(monkeypatch):
     kb = _kb("error")
-    stats = await vectorizer._process_batch(kb, keys)
-    assert stats["failed"] == 2 and stats["stopped"] is True
-    assert kb.vectorize_existing_fact.await_count == 2
+    stats = await _vectorizer(monkeypatch, 5, False)._process_batch(kb, [f"fact:f{i}" for i in range(5)])
+    assert stats["failed"] == 1 and stats["stopped"] is True
+    assert kb.vectorize_existing_fact.await_count == 1
     kb.redis.return_value.srem.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_a_success_resets_the_count(monkeypatch):
-    import background_vectorization as bv
-
-    monkeypatch.setattr(bv, "MAX_CONSECUTIVE_FAILURES", 2)
-    vectorizer = BackgroundVectorizer()
-    monkeypatch.setattr(vectorizer, "_get_vectorization_status", AsyncMock(return_value=[]))
-    monkeypatch.setattr(vectorizer, "_filter_pending_facts", lambda batch, _v: (batch, 0, []), raising=False)
-    monkeypatch.setattr(vectorizer, "_sync_pending_set", AsyncMock())
-    monkeypatch.setattr(
-        vectorizer, "_fetch_fact_data", AsyncMock(return_value=[{"content": "c", "metadata": "{}"}] * 4)
-    )
+async def test_facts_that_fail_alone_do_not_starve_those_behind_them(monkeypatch):
+    """Five permanent failures at the head of the queue must not end the pass."""
     kb = _kb("error")
-    outcomes = [{"status": s, "message": "m"} for s in ("error", "success", "error", "success")]
+    outcomes = [{"status": "error", "message": "m"}] * 5 + [{"status": "success", "message": "m"}]
     kb.vectorize_existing_fact = AsyncMock(side_effect=outcomes)
-    stats = await vectorizer._process_batch(kb, [f"fact:f{i}" for i in range(4)])
-    assert stats["failed"] == 2 and stats["success"] == 2 and "stopped" not in stats
+    stats = await _vectorizer(monkeypatch, 6, True)._process_batch(kb, [f"fact:f{i}" for i in range(6)])
+    assert stats["failed"] == 5 and stats["success"] == 1 and "stopped" not in stats
+
+
+@pytest.mark.asyncio
+async def test_a_stopped_batch_ends_the_pass_across_batches(monkeypatch):
+    vectorizer = _vectorizer(monkeypatch, 1, False)
+    vectorizer.batch_size = 1
+    process = AsyncMock(
+        return_value={"success": 0, "skipped": 0, "failed": 1, "tokens": 0, "processing_time": 0.0, "stopped": True}
+    )
+    monkeypatch.setattr(vectorizer, "_process_batch", process)
+    monkeypatch.setattr(vectorizer, "_scan_pending_set", AsyncMock(return_value=["fact:a", "fact:b", "fact:c"]))
+    vectorizer._cycle_count = 1  # not a full-scan cycle
+    await vectorizer.vectorize_pending_facts(_kb("error"))
+    assert process.await_count == 1

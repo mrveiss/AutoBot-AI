@@ -33,8 +33,6 @@ PENDING_SET_KEY = "kb:vectorize:pending"
 
 # Run the full fact:* safety-net reconcile every Nth cycle (default 12 → hourly
 # at the 5-minute check_interval). Env-tunable; never hard-coded per cadence.
-#: Failures in a row that end a pass: a backend that is down fails every fact the same way (#20019).
-MAX_CONSECUTIVE_FAILURES = env_int_clamped("AUTOBOT_KB_VECTORIZE_MAX_CONSECUTIVE_FAILURES", 5, 1, 1000)
 FULL_SCAN_EVERY_N_CYCLES = env_int_clamped("KB_VECTORIZE_FULL_SCAN_EVERY_N_CYCLES", 12, min_v=1)
 
 # How often the reconciler wakes. Env-backed rather than a literal (#17548): the
@@ -240,6 +238,18 @@ class BackgroundVectorizer:
 
         return result
 
+    async def _embedding_backend_answers(self, kb) -> bool:
+        """One short embedding, no retries: did the backend fail, or only that fact?"""
+        from knowledge.embedding_space_binding import current_space
+        from knowledge.facts import _generate_embedding_with_npu_fallback
+
+        try:
+            space = await current_space(kb)
+            return bool(await _generate_embedding_with_npu_fallback("ping", max_attempts=1, model_name=space.model))
+        except Exception as e:
+            logger.warning("Embedding backend probe failed: %s", type(e).__name__)
+            return False
+
     async def _process_batch(self, kb, batch: list) -> dict:
         """Process a batch of facts (Issue #336 - extracted helper)."""
         batch_start_time = time.time()
@@ -256,26 +266,21 @@ class BackgroundVectorizer:
 
         all_fact_data = await self._fetch_fact_data(kb, facts_to_process)
 
-        consecutive_failures = 0
         for fact_key, fact_data in zip(facts_to_process, all_fact_data):
             try:
                 result = await self._vectorize_single_fact(kb, fact_key, fact_data)
                 if result["success"]:
                     stats["success"] += 1
                     stats["tokens"] += result["tokens"]
-                    consecutive_failures = 0
-                else:
-                    stats["failed"] += 1
-                    consecutive_failures += 1
+                    continue
+                stats["failed"] += 1
             except Exception as e:
                 stats["failed"] += 1
-                consecutive_failures += 1
                 logger.error("Error vectorizing fact %s: %s", fact_key, e)
-            # #20019: each failure sleeps through its retries, so a downed backend must not cost the whole batch.
-            if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
-                logger.warning(
-                    "Stopping this pass after %d failures in a row; the rest stay pending", consecutive_failures
-                )
+            # #20019: a downed backend fails every fact, each after its retries. A fact that fails alone must
+            # not end the pass, or a few at the head of the queue would starve everything behind them.
+            if not await self._embedding_backend_answers(kb):
+                logger.warning("Embedding backend is not answering: stopping this pass; the rest stay pending")
                 stats["stopped"] = True
                 break
 

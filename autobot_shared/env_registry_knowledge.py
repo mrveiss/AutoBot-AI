@@ -36,17 +36,6 @@ register_env_var(
 
 register_env_var(
     EnvVarSpec(
-        name="AUTOBOT_KB_VECTORIZE_MAX_CONSECUTIVE_FAILURES",
-        type=int,
-        default=5,
-        description=("Failures in a row that end a background vectorization pass; the rest stay pending (#20019)."),
-        component="knowledge",
-        range=(1, 1000),
-    )
-)
-
-register_env_var(
-    EnvVarSpec(
         name="AUTOBOT_KB_CHUNK_MAX_TOKENS",
         type=int,
         default=800,

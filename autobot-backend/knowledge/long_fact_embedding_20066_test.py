@@ -53,3 +53,16 @@ async def test_past_the_window_cap_only_the_leading_ones_are_embedded(monkeypatc
     calls = []
     await lfe.embed_in_windows(_embed_recording(calls), "aabbcc")
     assert [text for text, _ in calls] == ["aa", "bb"]
+
+
+def test_an_averaged_vector_is_marked_and_a_plain_one_is_not(monkeypatch):
+    monkeypatch.setattr(lfe, "WINDOW_CHARS", 4)
+    assert lfe.window_metadata("abc") == {}
+    assert lfe.window_metadata("abcdefghi") == {"embedding_window_chars": 4, "embedding_windows": 3}
+
+
+@pytest.mark.asyncio
+async def test_a_short_last_window_counts_for_less(monkeypatch):
+    monkeypatch.setattr(lfe, "WINDOW_CHARS", 4)
+    vector = await lfe.embed_in_windows(_embed_recording([]), "aaaab")
+    assert vector[0] > vector[1] > 0
