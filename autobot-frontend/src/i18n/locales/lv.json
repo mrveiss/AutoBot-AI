@@ -306,7 +306,10 @@
       "thinkingOffLabel": "thinking Off",
       "thinkingOn": "Thinking on",
       "thinkingOnLabel": "thinking On",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "fileTooLarge": "Fails “{name}” ir pārāk liels (maks. {max})",
+      "voiceUnsupported": "Balss ievadei nepieciešama Chrome, Edge vai Safari 15+. Transkripcija šajā pārlūkprogrammā nav pieejama.",
+      "micDenied": "Piekļuve mikrofonam tika liegta. Lūdzu, atļaujiet piekļuvi mikrofonam pārlūkprogrammas iestatījumos."
     },
     "translate": {
       "title": "Tulkot tekstu",
@@ -4652,7 +4655,9 @@
       "channelSlack": "Slack",
       "emailHint": "Comma-separated email addresses",
       "channelWebhook": "Webhook",
-      "sectionDesc": "Configure per-workflow notification routing"
+      "sectionDesc": "Configure per-workflow notification routing",
+      "invalidEmail": "Nederīga e-pasta adrese: {emails}",
+      "invalidUrl": "Nederīgs URL formāts"
     },
     "liveDashboard": {
       "activeExecutions": "Active Executions",
@@ -4987,7 +4992,8 @@
       "emergencyKillFailed": "❌ Ārkārtas apturēšana neizdevās: {message}",
       "interrupted": "^C (Lietotājs pārtrauca procesu)",
       "error": "Kļūda: {error}"
-    }
+    },
+    "urlCopied": "Termināļa URL nokopēts starpliktuvē!"
   },
   "llm": {
     "unavailable": "Nav pieejams",
@@ -7376,7 +7382,8 @@
       "errorDeletingFile": "Error deleting file",
       "errorRenamingFile": "Error renaming file",
       "refreshAriaLabel": "Refresh files",
-      "toggleViewAriaLabel": "Toggle view mode"
+      "toggleViewAriaLabel": "Toggle view mode",
+      "uploadFailedHint": "Lūdzu, pārbaudiet failu izmēra ierobežojumus un formāta prasības"
     },
     "header": {
       "title": "File Browser",
