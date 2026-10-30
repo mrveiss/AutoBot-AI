@@ -1,6 +1,7 @@
+-c ../constraints/shared.txt  # every job installing this file gets the shared floors (#18060)
 # Core web framework — tightly coupled versions
 # fastapi pins starlette range; keep these in sync
-fastapi==0.147.0
+fastapi  # version from constraints/shared.txt (#18060), applied by the -c line above
 starlette==1.9.0
 python-multipart==0.0.32
 uvicorn==0.54.0
