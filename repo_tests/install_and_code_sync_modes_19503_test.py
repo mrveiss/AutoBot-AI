@@ -28,6 +28,7 @@ _CONSTANT = "RSYNC_NEVER_WORLD_WRITABLE"
 _CONSTANTS = {_CONSTANT, "RSYNC_ARCHIVE_ARGS"}
 # Copying without the flag on purpose: data rather than code, or a target with no POSIX modes.
 _SHELL_EXEMPT = {
+    ".github/workflows/wiki.yml": "generated docs in CI, not code on a node",
     "autobot-infrastructure/shared/scripts/logging/collect-application-logs.sh": "pulls logs",
     "autobot-infrastructure/shared/scripts/utilities/sync-npu-worker-to-windows.sh": "Windows target",
     "autobot-slm-backend/ansible/utils/backup.sh": "pulls backups",
@@ -123,8 +124,9 @@ def _loose_copies(text: str) -> list[str]:
 
 
 def test_every_shell_rsync_sets_the_mode_or_is_exempt() -> None:
-    listed = tracked_paths(_ROOT, "*.sh")
-    assert len(listed) > 50, f"git listed {len(listed)} shell files; this test reads nothing"
+    # YAML too: a shell task's rsync reads the same as a script's, and synchronize is checked separately.
+    listed = tracked_paths(_ROOT, "*.sh", "*.yml", "*.yaml")
+    assert len(listed) > 50, f"git listed {len(listed)} files; this test reads nothing"
     loose = {rel for rel in listed if _loose_copies((_ROOT / rel).read_text(encoding="utf-8", errors="replace"))}
     assert loose == set(_SHELL_EXEMPT), loose ^ set(_SHELL_EXEMPT)
 
@@ -200,6 +202,15 @@ def _ui_labels() -> list[str]:
     block = view[view.index("const stepLabels") :].split("}")[0]
     labels = dict(re.findall(r"^\s+(\w+): '([^']+)',$", block, re.M))
     return [labels[step] for step in steps]
+
+
+def test_readme_names_the_real_onboarding_steps() -> None:
+    """#19181: the main app's wizard was documented only as a redirect."""
+    view = (_ROOT / "autobot-frontend" / "src" / "views" / "OnboardingWizard.vue").read_text(encoding="utf-8")
+    labels = re.findall(r"\{ n: \d, label: '([^']+)' \}", view)
+    readme = (_ROOT / "README.md").read_text(encoding="utf-8")
+    assert len(labels) == 3, labels
+    assert all(f"**{label}**" in readme for label in labels), labels
 
 
 def test_wizard_table_uses_the_real_ui_labels() -> None:
