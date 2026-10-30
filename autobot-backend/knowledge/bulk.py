@@ -23,8 +23,10 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import require_path_string
 from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import CategoryDefaults
+from knowledge.embedding_space_binding import current_space
 from knowledge.export_fields import filter_fact_fields
 from knowledge.quarantine import BACKUP_AUDIT_ACTOR, EXPORT_AUDIT_ACTOR, QuarantineAuditFailed, read_every_fact
+from knowledge.utils import sanitize_metadata_for_chromadb
 
 if TYPE_CHECKING:
     import aioredis
@@ -321,12 +323,14 @@ class BulkOperationsMixin:
                 logger.warning("Failed to get fact %s: %s", fact_id, e)
         return facts
 
-    async def _fetch_embeddings_from_vector_store(self, fact_ids: List[str]) -> Dict[str, List[float]]:
-        """Fetch embeddings from vector store (Issue #398: extracted)."""
-        result = await asyncio.to_thread(self.vector_store.get, ids=fact_ids, include=["embeddings"])
-        if result and result.get("ids") and result.get("embeddings"):
-            return dict(zip(result["ids"], result["embeddings"]))
-        return {}
+    async def _fetch_embeddings_from_vector_store(self, fact_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+        """Vector and model per fact (#398); #19647: raw collection, as the store has no get(); Chroma returns numpy."""
+        space = await current_space(self)
+        result = await asyncio.to_thread(space.vector_store._collection.get, ids=fact_ids, include=["embeddings"])
+        return {
+            fid: {"embedding": [float(v) for v in vec], "embedding_model": space.model}
+            for fid, vec in zip(result["ids"], result["embeddings"])
+        }
 
     async def _add_embeddings_to_facts(self, facts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Add vector embeddings to facts from ChromaDB (Issue #398: refactored)."""
@@ -343,7 +347,7 @@ class BulkOperationsMixin:
                 for fact in facts:
                     fact_id = fact.get("fact_id")
                     if fact_id and fact_id in embeddings_map:
-                        fact["embedding"] = embeddings_map[fact_id]
+                        fact.update(embeddings_map[fact_id])
             except Exception as e:
                 logger.warning("Could not retrieve embeddings: %s", e)
         except Exception as e:
@@ -1816,32 +1820,27 @@ class BulkOperationsMixin:
         if result.get("status") != "success":
             return {"action": "error", "reason": "store_failed"}
 
-        embedding = fact_data.get("embedding")
-        if restore_embeddings and embedding and self.vector_store:
-            # #13708: use what store_fact persisted -- an unredacted backup can carry a raw credential.
-            stored_content = result.get("content", content)
-            return await self._restore_fact_embedding(result.get("fact_id", fact_id), stored_content, embedding)
+        if restore_embeddings and fact_data.get("embedding") and self.vector_store:
+            return await self._restore_fact_embedding(result.get("fact_id", fact_id), fact_data)
 
         return {"action": "restored", "embedding": False}
 
-    async def _restore_fact_embedding(self, fact_id: str, content: str, embedding: List[float]) -> Dict[str, Any]:
-        """
-        Restore embedding for a fact.
-
-        Issue #398: Extracted from _store_restored_fact.
-        """
+    async def _restore_fact_embedding(self, fact_id: str, fact_data: Dict[str, Any]) -> Dict[str, Any]:
+        """#19647: a backup's vector only if the bound model made it, with what store_fact persisted (#13708)."""
+        not_restored = {"action": "restored", "embedding": False}
         try:
-            await asyncio.to_thread(
-                self.vector_store.upsert,
-                ids=[fact_id],
-                embeddings=[embedding],
-                metadatas=[{"content": content[:1000]}],
-                documents=[content[:1000]],
-            )
+            space = await current_space(self)
+            fact = await self._get_fact_for_vectorization(fact_id)
+            if fact_data.get("embedding_model") != space.model or not fact or "error" in fact:
+                return not_restored
+            metadata = sanitize_metadata_for_chromadb(fact["metadata"])
+            if not await self._write_vector(space, fact_id, fact_data["embedding"], fact["content"], metadata, ""):
+                return not_restored
+            await self._mark_vectorization_succeeded(fact_id)
             return {"action": "restored", "embedding": True}
         except Exception as e:
             logger.warning("Embedding restore failed: %s", e)
-            return {"action": "restored", "embedding": False}
+            return not_restored
 
     def _count_restore_results(self, restore_results: List[Any]) -> Dict[str, Any]:
         """
