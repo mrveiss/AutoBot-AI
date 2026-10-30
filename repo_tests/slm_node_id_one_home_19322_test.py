@@ -29,6 +29,7 @@ from pathlib import Path
 import pytest
 import yaml
 from repo_tests._paths import repo_root
+from repo_tests._pinned_sweep import masked
 from repo_tests._reach import declare
 
 from autobot_shared.ssot_config import MiscConfig
@@ -78,30 +79,13 @@ def literal_defaults(rel: str, text: str) -> list[str]:
     return out
 
 
-def masked(text: str, pattern: str) -> str:
-    """*text* with each capture of *pattern* blanked to spaces: the pinned sites, and only them.
-
-    Spaces, because ``_FALLBACK`` reads ``_`` as part of an id; lines keep their length and number.
-    """
-
-    def _blank(m: re.Match[str]) -> str:
-        out, last = [], m.start()
-        for group in range(1, (m.re.groups or 0) + 1):
-            if m.start(group) >= 0:
-                out += [text[last : m.start(group)], " " * (m.end(group) - m.start(group))]
-                last = m.end(group)
-        return "".join(out) + text[last : m.end()]
-
-    return re.sub(pattern, _blank, text, flags=re.M)
-
-
 def unrecorded_defaults(texts: dict[str, str]) -> list[str]:
     """``path: values`` for each literal default outside a pinned site."""
     found = []
     for rel, text in texts.items():
         if _SKIP.search(rel):
             continue
-        values = literal_defaults(rel, masked(text, PINNED[rel][0]) if rel in PINNED else text)
+        values = literal_defaults(rel, masked(text, PINNED[rel][0], mask=" ") if rel in PINNED else text)
         if values:
             found.append(f"{rel}: {values}")
     return found
