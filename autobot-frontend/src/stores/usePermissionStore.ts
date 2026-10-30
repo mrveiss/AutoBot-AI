@@ -15,6 +15,7 @@
 
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
+import { HttpError } from '@autobot/ui'
 import appConfig from '@/config/AppConfig.js'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
@@ -128,7 +129,7 @@ export const usePermissionStore = defineStore('permission', () => {
       const response = await fetchWithAuth(url, { signal: getSignal() })
 
       if (!response.ok) {
-        throw new Error(`HTTP error: ${response.status}`)
+        throw new HttpError(response.status, response.statusText)
       }
 
       const data: PermissionStatus = await response.json()
@@ -161,7 +162,7 @@ export const usePermissionStore = defineStore('permission', () => {
       const response = await fetchWithAuth(url, { signal: getSignal() })
 
       if (!response.ok) {
-        throw new Error(`HTTP error: ${response.status}`)
+        throw new HttpError(response.status, response.statusText)
       }
 
       const data: PermissionModeResponse = await response.json()
@@ -198,7 +199,7 @@ export const usePermissionStore = defineStore('permission', () => {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.detail || `HTTP error: ${response.status}`)
+        throw HttpError.withDetail(response.status, response.statusText, errorData.detail || undefined)
       }
 
       const data: PermissionModeResponse = await response.json()
@@ -230,7 +231,7 @@ export const usePermissionStore = defineStore('permission', () => {
       const response = await fetchWithAuth(url, { signal: getSignal() })
 
       if (!response.ok) {
-        throw new Error(`HTTP error: ${response.status}`)
+        throw new HttpError(response.status, response.statusText)
       }
 
       const data: PermissionRulesResponse = await response.json()
@@ -276,7 +277,7 @@ export const usePermissionStore = defineStore('permission', () => {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.detail || `HTTP error: ${response.status}`)
+        throw HttpError.withDetail(response.status, response.statusText, errorData.detail || undefined)
       }
 
       // Refresh rules after adding
@@ -311,7 +312,7 @@ export const usePermissionStore = defineStore('permission', () => {
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.detail || `HTTP error: ${response.status}`)
+        throw HttpError.withDetail(response.status, response.statusText, errorData.detail || undefined)
       }
 
       // Refresh rules after removing
@@ -346,7 +347,7 @@ export const usePermissionStore = defineStore('permission', () => {
       })
 
       if (!response.ok) {
-        throw new Error(`HTTP error: ${response.status}`)
+        throw new HttpError(response.status, response.statusText)
       }
 
       return await response.json()
@@ -374,7 +375,7 @@ export const usePermissionStore = defineStore('permission', () => {
       const response = await fetchWithAuth(url)
 
       if (!response.ok) {
-        throw new Error(`HTTP error: ${response.status}`)
+        throw new HttpError(response.status, response.statusText)
       }
 
       const data: ProjectApprovalsResponse = await response.json()
@@ -423,7 +424,7 @@ export const usePermissionStore = defineStore('permission', () => {
       const response = await fetchWithAuth(url, { method: 'POST' })
 
       if (!response.ok) {
-        throw new Error(`HTTP error: ${response.status}`)
+        throw new HttpError(response.status, response.statusText)
       }
 
       logger.info('Approval stored:', { projectPath, command, riskLevel })
@@ -454,7 +455,7 @@ export const usePermissionStore = defineStore('permission', () => {
       const response = await fetchWithAuth(url, { method: 'DELETE' })
 
       if (!response.ok) {
-        throw new Error(`HTTP error: ${response.status}`)
+        throw new HttpError(response.status, response.statusText)
       }
 
       // Clear from local state
