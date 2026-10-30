@@ -393,7 +393,7 @@ defineExpose({
 }
 
 .view-toggle button.active {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: var(--text-on-primary);
 }
 
