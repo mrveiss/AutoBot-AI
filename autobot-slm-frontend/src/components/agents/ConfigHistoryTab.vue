@@ -232,7 +232,7 @@ watch([entityType, entityId], () => {
 .diff-actions { display: flex; align-items: center; gap: var(--spacing-2); }
 .btn-rollback { background: var(--slm-amber-500); color: white; border: none; padding: 6px 14px; border-radius: var(--radius-md); font-size: 13px; font-weight: 500; cursor: pointer; }
 .btn-rollback:hover { background: var(--slm-amber-600); }
-.btn-confirm { background: var(--color-error-500); color: white; border: none; padding: 6px 14px; border-radius: var(--radius-md); font-size: 13px; font-weight: 500; cursor: pointer; }
+.btn-confirm { background: var(--color-error-solid); color: white; border: none; padding: 6px 14px; border-radius: var(--radius-md); font-size: 13px; font-weight: 500; cursor: pointer; }
 .btn-cancel { background: var(--slm-gray-200); color: var(--slm-gray-700); border: none; padding: 6px 14px; border-radius: var(--radius-md); font-size: 13px; cursor: pointer; }
 .confirm-text { font-size: 13px; color: var(--color-error-500); font-weight: 500; }
 .diff-meta { display: flex; gap: var(--spacing-5); flex-wrap: wrap; font-size: 13px; color: var(--text-secondary); margin-bottom: var(--spacing-4); padding-bottom: var(--spacing-3); border-bottom: 1px solid var(--slm-gray-200); }
