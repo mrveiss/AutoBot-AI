@@ -62,7 +62,7 @@ defineEmits<Emits>()
 }
 
 .action-btn.primary {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: var(--text-on-primary);
   border-color: var(--color-info);
 }
