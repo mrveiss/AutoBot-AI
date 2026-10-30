@@ -268,6 +268,7 @@ class TestHostileInputAndPaths:
 
     def test_retained_bytes_bound_stops_and_reports(self, tmp_path, monkeypatch):
         monkeypatch.setattr(tn, "MAX_RETAINED_BYTES", 300)
+        monkeypatch.setattr(tn, "EVENT_OVERHEAD_BYTES", 10)
         path = tmp_path / "a.jsonl"
         path.write_text("".join(json.dumps(_saved_claude()[0]) + "\n" for _ in range(20)), encoding="utf-8")
         result = tn.read_transcript(path, ROOTS(tmp_path))
@@ -315,3 +316,50 @@ class TestCliParserToleratesOddShapes:
     def test_non_dict_block_is_skipped_for_a_following_valid_one(self):
         obj = {"type": "assistant", "message": {"content": ["x", {"type": "text", "text": "hi"}]}}
         assert tn.parse_cli_line(json.dumps(obj)).content == {"text": "hi"}
+
+
+class TestEveryJsonParseIsContained:
+    def _codex_line(self, arguments):
+        return json.dumps(
+            {"type": "response_item", "payload": {"type": "function_call", "name": "n", "arguments": arguments}}
+        )
+
+    @pytest.mark.parametrize("arguments", ["[" * 100_000, "1" * 10_000])
+    def test_hostile_function_call_arguments_are_kept_raw(self, arguments, tmp_path):
+        path = tmp_path / "a.jsonl"
+        path.write_text(self._codex_line(arguments) + "\n" + json.dumps(_saved_claude()[0]) + "\n", encoding="utf-8")
+        result = tn.read_transcript(path, ROOTS(tmp_path))
+        assert len(result.items) == 2 and result.items[0].content == {"input": arguments}
+
+    def test_one_such_file_does_not_abort_the_batch(self, tmp_path):
+        (tmp_path / "a.jsonl").write_text(self._codex_line("[" * 100_000) + "\n", encoding="utf-8")
+        (tmp_path / "b.jsonl").write_text(json.dumps(_saved_claude()[0]) + "\n", encoding="utf-8")
+        batch = tn.read_transcripts([tmp_path], ROOTS(tmp_path))
+        assert len(batch.results) == 2 and batch.failed == {}
+
+    def test_batch_handler_contains_a_recursion_error(self, tmp_path, monkeypatch):
+        (tmp_path / "a.jsonl").write_text("{}\n", encoding="utf-8")
+        (tmp_path / "b.jsonl").write_text("{}\n", encoding="utf-8")
+        real = tn.read_transcript
+
+        def flaky(path, roots):
+            if path.name == "a.jsonl":
+                raise RecursionError
+            return real(path, roots)
+
+        monkeypatch.setattr(tn, "read_transcript", flaky)
+        batch = tn.read_transcripts([tmp_path], ROOTS(tmp_path))
+        assert list(batch.failed.values()) == ["RecursionError"] and len(batch.results) == 1
+
+
+def test_many_small_events_from_one_line_are_charged_per_event(tmp_path, monkeypatch):
+    blocks = [{"type": "text", "text": "x"} for _ in range(300)]
+    line = json.dumps({"type": "assistant", "message": {"content": blocks}})
+    path = tmp_path / "a.jsonl"
+    path.write_text(line + "\n", encoding="utf-8")
+    monkeypatch.setattr(tn, "MAX_RETAINED_BYTES", len(line) + 1000)  # source bytes alone would fit
+    monkeypatch.setattr(tn, "EVENT_OVERHEAD_BYTES", 100)
+    result = tn.read_transcript(path, ROOTS(tmp_path))
+    assert (result.truncated, result.truncated_reason) == (True, "retained_bytes")
+    monkeypatch.setattr(tn, "EVENT_OVERHEAD_BYTES", 0)
+    assert tn.read_transcript(path, ROOTS(tmp_path)).truncated is False

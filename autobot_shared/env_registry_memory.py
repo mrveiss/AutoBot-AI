@@ -227,6 +227,7 @@ env_registry.register_env_var(
             "(memory/verbatim_sessions.py, #11137)."
         ),
         component="memory",
+        range=(1, 100_000),
     )
 )
 
@@ -240,6 +241,7 @@ env_registry.register_env_var(
             "(memory/verbatim_sessions.py, #11137)."
         ),
         component="memory",
+        range=(1, 1_000_000),
     )
 )
 
@@ -253,6 +255,7 @@ env_registry.register_env_var(
             "(memory/verbatim_sessions.py, #11137)."
         ),
         component="memory",
+        range=(1, 10_000),
     )
 )
 
@@ -321,6 +324,19 @@ env_registry.register_env_var(
             "Most text bytes one memory.session_read call returns after redaction; "
             "over it the result carries truncated=true "
             "(memory/verbatim_sessions.py, #11137)."
+        ),
+        component="memory",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_TRANSCRIPT_EVENT_OVERHEAD_BYTES",
+        type=int,
+        default=1024,
+        description=(
+            "Bytes charged per retained event, on top of its source bytes, against "
+            "AUTOBOT_TRANSCRIPT_MAX_RETAINED_BYTES (services/execution/transcript_normalizer.py, #11137)."
         ),
         component="memory",
     )

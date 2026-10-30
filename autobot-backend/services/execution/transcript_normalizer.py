@@ -41,6 +41,8 @@ MAX_DECOMPRESSED_BYTES: int = env_int_clamped("AUTOBOT_TRANSCRIPT_MAX_DECOMPRESS
 MAX_LINE_BYTES: int = env_int_clamped("AUTOBOT_TRANSCRIPT_MAX_LINE_BYTES", 16 << 20, min_v=1)
 MAX_EVENTS: int = env_int_clamped("AUTOBOT_TRANSCRIPT_MAX_EVENTS", 1_000_000, min_v=1)
 MAX_RETAINED_BYTES: int = env_int_clamped("AUTOBOT_TRANSCRIPT_MAX_RETAINED_BYTES", 256 << 20, min_v=1)
+#: Charged per retained event on top of its source bytes: the dataclass, its dicts and strings cost real memory.
+EVENT_OVERHEAD_BYTES: int = env_int_clamped("AUTOBOT_TRANSCRIPT_EVENT_OVERHEAD_BYTES", 1024, min_v=0)
 #: What a malformed line can raise from ``json.loads``: bad syntax, an oversized int, or recursion-deep nesting.
 _JSON_ERRORS = (ValueError, RecursionError)
 _GZIP_SUFFIX = ".gz"
@@ -186,7 +188,7 @@ def _codex_arguments(raw: Any) -> Any:
         return raw if raw is not None else {}
     try:
         return json.loads(raw)
-    except json.JSONDecodeError:
+    except _JSON_ERRORS:
         return raw
 
 
@@ -280,7 +282,7 @@ class ReadResult:
     truncated: bool = False
     truncated_reason: str = ""  # "decompressed_bytes" | "line_length" | "events" | "retained_bytes"
     skipped: int = 0  # malformed or undecodable lines, counted and never echoed
-    retained_bytes: int = 0  # source-line bytes behind ``items``; bounded by MAX_RETAINED_BYTES
+    retained_bytes: int = 0  # source bytes + per-event overhead behind ``items``; bounded by MAX_RETAINED_BYTES
 
 
 @dataclass
@@ -356,7 +358,8 @@ def expand_paths(paths: Iterable[Path], allowed_roots: Sequence[str]) -> Tuple[L
 
 
 def _add_bounded(result: ReadResult, new_items: List[Any], cost: int) -> bool:
-    """Append ``new_items`` (retaining ``cost`` source bytes); False once an event or memory bound is hit."""
+    """Append ``new_items`` (``cost`` source bytes plus per-event overhead); False once a bound is hit."""
+    cost += EVENT_OVERHEAD_BYTES * len(new_items)
     room = MAX_EVENTS - len(result.items)
     if len(new_items) > room:
         result.items.extend(new_items[: max(room, 0)])
@@ -402,7 +405,7 @@ def read_transcripts(paths: Iterable[Path], allowed_roots: Sequence[str]) -> Tra
     for path in files:
         try:
             batch.results[str(path)] = read_transcript(path, allowed_roots)
-        except (OSError, EOFError, zlib.error, ValueError) as exc:
+        except (OSError, EOFError, zlib.error, ValueError, RecursionError) as exc:
             batch.failed[str(path)] = type(exc).__name__
             logger.warning("transcript %s: unreadable (%s)", Path(path).name, type(exc).__name__)
     return batch

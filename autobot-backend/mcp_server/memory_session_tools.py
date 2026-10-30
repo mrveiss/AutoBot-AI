@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Tuple
 
 from pydantic import BaseModel, Field
 
-from autobot_shared.prompt_rules import frame_untrusted_block, sanitize_injected
+from autobot_shared.prompt_rules import frame_untrusted_block, neutralize_frame_markers
 from autobot_shared.secret_redaction import redact_content, redact_text
 from mcp_server.principal import current_owner
 from memory.verbatim_sessions import SESSION_LIST_DEFAULT_LIMIT, SESSION_READ_MAX_BYTES
@@ -76,22 +76,34 @@ _HISTORY_WARNING = (
 )
 
 
-def present_chunks(chunks: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], bool]:
-    """Redact, neutralise and frame each chunk's text for a model; stop at the byte cap (truncated=True).
+def _cut_to_bytes(text: str, limit: int) -> str:
+    """``text`` cut to at most ``limit`` utf-8 bytes, never mid-character."""
+    return text.encode("utf-8")[: max(limit, 0)].decode("utf-8", errors="ignore")
 
-    Redaction composes the canonical redactors (REDACTION_BOUNDARY.md) before the canonical prompt framing,
-    so a credential typed in a past chat is masked and the text cannot pose as prompt structure.
+
+def present_chunks(chunks: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], bool]:
+    """Redact, defuse the framing markers of, and frame each chunk's text; stop at the byte cap.
+
+    Redaction composes the canonical redactors (REDACTION_BOUNDARY.md) before the canonical prompt framing.
+    Newlines and code survive; only the frame markers are neutralised, so the text cannot forge a closing
+    delimiter. Over the cap the result is cut (a lone oversize chunk is shortened) and ``truncated`` is True.
     """
     out: List[Dict[str, Any]] = []
     used = 0
     for chunk in chunks:
-        body = sanitize_injected(redact_content(redact_text(str(chunk.get("text") or ""))), SESSION_READ_MAX_BYTES)
-        used += len(body.encode("utf-8"))
-        if used > SESSION_READ_MAX_BYTES:
+        body = neutralize_frame_markers(redact_content(redact_text(str(chunk.get("text") or ""))))
+        room = SESSION_READ_MAX_BYTES - used
+        if len(body.encode("utf-8")) > room:
+            if not out:  # always return something of the first chunk
+                out.append({**chunk, "text": _frame(_cut_to_bytes(body, room))})
             return out, True
-        framed = frame_untrusted_block(_HISTORY_LABEL, [_HISTORY_WARNING], [body])
-        out.append({**chunk, "text": framed})
+        used += len(body.encode("utf-8"))
+        out.append({**chunk, "text": _frame(body)})
     return out, False
+
+
+def _frame(body: str) -> str:
+    return frame_untrusted_block(_HISTORY_LABEL, [_HISTORY_WARNING], [body])
 
 
 class MemorySessionToolsMixin:
