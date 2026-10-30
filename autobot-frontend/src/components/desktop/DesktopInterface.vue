@@ -709,7 +709,7 @@ onUnmounted(() => {
 .screenshot-modal {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: var(--z-50);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -801,7 +801,7 @@ onUnmounted(() => {
 .type-dialog-modal {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: var(--z-50);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -885,7 +885,7 @@ onUnmounted(() => {
   width: 20rem;
   height: 100%;
   overflow-y: auto;
-  z-index: 10;
+  z-index: var(--z-10);
   padding: var(--spacing-4);
   background-color: var(--bg-card);
   border-left: 1px solid var(--border-default);
