@@ -40,23 +40,23 @@ _ROOT = repo_root()
 
 _USERS_HOSTS = {pg.USERS_DB_HOST, pg.COMPOSE_DB_HOST}
 _SLM_HOSTS = {pg.SLM_DB_HOST, pg.COMPOSE_DB_HOST}
-#: Postgres key -> the values the identity table allows for it. AUTOBOT_DB_USER/NAME as
-#: literals exist only in compose files, where they mean the owner role and the SLM DB.
+#: Postgres key -> the values the identity table allows for it. Compose has one owner role and its
+#: own SLM DB name; AUTOBOT_DB_USER/NAME as literals are its deprecated aliases for them (#19408).
 KEY_VALUES: dict[str, set[str]] = {
     "AUTOBOT_POSTGRES_DB": {pg.USERS_DB_NAME},
     "AUTOBOT_USERS_DB_NAME": {pg.USERS_DB_NAME},
     "backend_postgres_db": {pg.USERS_DB_NAME},
     "autobot_db_name": {pg.USERS_DB_NAME},
-    "AUTOBOT_POSTGRES_USER": {pg.USERS_DB_ROLE},
+    "AUTOBOT_POSTGRES_USER": {pg.USERS_DB_ROLE, pg.COMPOSE_OWNER_ROLE},
     "backend_postgres_user": {pg.USERS_DB_ROLE},
     "autobot_db_user": {pg.USERS_DB_ROLE},
     "AUTOBOT_POSTGRES_HOST": _USERS_HOSTS,
     "backend_postgres_host": {pg.USERS_DB_HOST},
     "AUTOBOT_DB_HOST": {pg.USERS_DB_HOST},
-    "SLM_POSTGRES_USER": {pg.SLM_DB_ROLE},
+    "SLM_POSTGRES_USER": {pg.SLM_DB_ROLE, pg.COMPOSE_OWNER_ROLE},
     "SLM_DB_USER": {pg.SLM_DB_ROLE},
     "SLM_POSTGRES_DB": {pg.SLM_USERS_DB_NAME},
-    "SLM_DB_NAME": {pg.SLM_DB_NAME},
+    "SLM_DB_NAME": {pg.SLM_DB_NAME, pg.COMPOSE_SLM_DB_NAME},
     "SLM_POSTGRES_HOST": _SLM_HOSTS,
     "SLM_DB_HOST": {pg.SLM_DB_HOST},
     "AUTOBOT_DB_USER": {pg.COMPOSE_OWNER_ROLE},
