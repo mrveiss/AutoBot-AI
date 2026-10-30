@@ -156,7 +156,8 @@ async def resolve_action_line(
 ) -> LineResolution:
     """Resolve the effective line for one action. Read-only: creates nothing, runs nothing.
 
-    LineScope: the verified company; with none, the verified user's personal scope (#18430). A company that is
+    LineScope: the verified company; with none, the verified user's personal scope (#18430). A shell command that
+    only reads gets no baseline category and counts as not mutating (#19950). A company that is
     present but malformed is not a missing one and is never replaced by the user's scope.
     """
     key = action_key(tool_name, params)

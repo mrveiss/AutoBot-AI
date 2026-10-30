@@ -36,6 +36,10 @@ from chat_workflow.browser_tool_handler import (
     record_browser_success,
     validate_browser_params,
 )
+from chat_workflow.command_execution_record import (
+    _create_execution_result,
+    _unsuccessful_approval_record,
+)
 from chat_workflow.compose_tool_handler import (
     build_compose_dispatch,
     compose_auto_approvable,
@@ -60,6 +64,7 @@ from chat_workflow.tool_dispatch_guards import (
     enforce_peer_messages,
     enforce_pre_action_verifier,
     enforce_repetition,
+    is_held_message,
     is_registered_tool,
     llc_scope_error,
     unknown_tool_error,
@@ -898,65 +903,6 @@ def _record_failed_step(
             "error": error,
         }
     )
-
-
-def _create_execution_result(command: str, host: str, result: dict[str, Any], approved: bool = False) -> dict[str, Any]:
-    """Create standardized execution result record (Issue #315: extracted).
-
-    Args:
-        command: The command that was executed
-        host: Target host
-        result: Execution result dict
-        approved: Whether user approved the command
-
-    Returns:
-        Standardized execution result dict for continuation loop
-    """
-    # #14141: `status` is derived from the exit code, not hardcoded. It used to
-    # be the literal "success" regardless of `return_code`, and this dict feeds
-    # `_format_execution_step`, which prints `- Status: {status}` straight into
-    # the model's continuation prompt. So a command that failed was reported to
-    # the model as having succeeded, with stderr as the only hint — and a test
-    # runner writes its failure report to *stdout*, so the model saw a
-    # full-looking report under "success" and no signal that the suite failed.
-    #
-    # Reachability, so nobody mistakes this for the protection: both call sites
-    # are gated on ``status == "success"`` upstream (`_handle_approved_command`
-    # at the approval branch, `_handle_successful_command` in
-    # `_dispatch_command_by_status`), so this mapping cannot currently observe a
-    # non-zero code. It is kept as a correct restatement of the invariant for
-    # the day a caller stops gating -- not deleted, because a dict feeding the
-    # model's prompt with a hardcoded "success" is exactly the defect that got
-    # filed. The single *reachable* decision is
-    # `command_executor._build_pty_result`, which every layer here propagates
-    # rather than re-derives; that is where the invariant is asserted.
-    return_code = result.get("return_code", 0)
-    return {
-        "command": command,
-        "host": host,
-        "stdout": result.get("stdout", ""),
-        "stderr": result.get("stderr", ""),
-        "return_code": return_code,
-        "status": _status_for_return_code(return_code),
-        "approved": approved,
-    }
-
-
-def _status_for_return_code(return_code: Any) -> str:
-    """Map an exit code to the status the model is shown (#14141).
-
-    Only an exit code that is *known* to be 0 reports success. `None` — the
-    shape an execution path produces when it never captured one — and anything
-    unparseable both report ``error``, because "we do not know whether that
-    worked" is far closer to failure than to success as far as the next turn is
-    concerned. Reporting an unknown outcome as success is the defect this
-    function exists to remove, and defaulting it would reintroduce it.
-    """
-    try:
-        return "success" if int(return_code) == 0 else "error"
-    except (TypeError, ValueError):
-        logger.warning("[#14141] unusable return_code %r — reporting the step as error, not success", return_code)
-        return "error"
 
 
 def _build_schema_validation_error(
@@ -1889,8 +1835,7 @@ class ToolHandlerMixin:
             error_msg, additional_text = self._handle_approval_failure(command, approval_result)
             yield error_msg
             # #19951: the model's next prompt is built from these records, so without one it cannot know.
-            outcome = "denied" if approval_result else "awaiting_approval"
-            yield ({"command": command, "host": host, "status": outcome, "stderr": additional_text}, additional_text)
+            yield (_unsuccessful_approval_record(command, host, approval_result, additional_text), additional_text)
 
     async def _handle_direct_execution(
         self,
@@ -2132,6 +2077,8 @@ class ToolHandlerMixin:
                 stdout = result.get("stdout", "")
                 stdout = await _emit_after_tool_execute("execute_command", stdout, session_id, {})
 
+            # The call above may have created the session this turn started without: it owns the approval card.
+            terminal_session_id = terminal_session_id or self.terminal_tool.active_sessions.get(session_id, "")
             async for msg in self._dispatch_command_by_status(
                 result.get("status"),
                 session_id,
@@ -3664,7 +3611,7 @@ class ToolHandlerMixin:
                 else:
                     yield result
                     # #19951: a held call has no result, so another model call could only guess at one.
-                    held = held or getattr(result, "type", None) == "approval_required"
+                    held = held or is_held_message(result)
             if held:
                 break
 

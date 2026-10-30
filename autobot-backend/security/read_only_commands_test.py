@@ -20,6 +20,8 @@ from security.read_only_commands import is_read_only_command
         "git log -n 3",
         "tail -n 5 app.log",
         "cat notes.txt | grep x",
+        "git log --oneline",
+        "ls; cat notes.txt",
     ],
 )
 def test_these_only_read(command):
@@ -69,6 +71,14 @@ def test_these_only_read(command):
         "cat -",
         "file -C -m x",
         "git log --ext-diff",
+        "git diff --out=f",
+        "ls; cat",
+        "ls && cat",
+        "ls\ncat",
+        "grep -A 3 x",
+        "grep -e a -e b",
+        "du --files0-from=/dev/stdin",
+        "wc --files0-from=-",
         "git show --textconv",
         "cat x | sh",
         "FOO=1 ls",

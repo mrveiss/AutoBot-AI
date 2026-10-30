@@ -50,10 +50,17 @@ _FIND_FORBIDDEN: FrozenSet[str] = frozenset(
 #: ``git`` subcommands that only read, and the options that make them write or run a program.
 #: A diff program already set in the repo's own config still runs: that takes an earlier approved write.
 _READ_ONLY_GIT_SUBCOMMANDS: FrozenSet[str] = frozenset({"diff", "log", "show", "status"})
-_GIT_FORBIDDEN_PREFIXES = ("--output", "--ext-diff", "--textconv")
+#: Git accepts unique abbreviations, so these are prefixes short enough to catch them. ``--oneline`` stays allowed.
+_GIT_FORBIDDEN_PREFIXES = ("--ou", "--ex", "--te")
 
 #: Paths with no end, or with reads that have effects.
 _UNBOUNDED_PATHS = ("/dev/", "/proc/")
+
+#: Reads its file list from stdin or a path, so the arguments do not say what it reads.
+_FILES_FROM_FLAG = "--files0-from"
+
+#: ``grep`` pattern flags: their value is not a file, so counting arguments would mistake it for one.
+_GREP_PATTERN_FLAGS = re.compile(r"^(-[a-zA-Z]*[ef]|--regexp|--file)")
 
 _SHELL_OPERATOR_CHARS = frozenset("<>&;|()")
 
@@ -81,7 +88,7 @@ def _reads_bounded_input(base: str, args: List[str], piped: bool) -> bool:
     if piped:
         return True
     if base in _PATTERN_READERS:
-        return len([arg for arg in args if not arg.startswith("-")]) >= 2
+        return not any(_GREP_PATTERN_FLAGS.match(arg) for arg in args) and len(_operands(args)) >= 2
     return bool(_operands(args))
 
 
@@ -90,7 +97,7 @@ def _segment_is_read_only(segment: str, piped: bool) -> bool:
     if words is None:
         return False
     base, args = words[0], words[1:]
-    if any(arg == "-" or arg.startswith(_UNBOUNDED_PATHS) for arg in args):
+    if any(arg == "-" or arg.startswith(_UNBOUNDED_PATHS) or arg.startswith(_FILES_FROM_FLAG) for arg in args):
         return False
     if base in _READ_ONLY_BASES:
         return True
@@ -108,7 +115,21 @@ def _segment_is_read_only(segment: str, piped: bool) -> bool:
     return False
 
 
+def _only_pipes(command: str) -> bool:
+    """Whether segments are joined by ``|`` alone: after ``;`` or ``&&`` a reader's stdin is the terminal."""
+    lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+    lexer.whitespace_split = True
+    try:
+        operators = {word for word in lexer if set(word) <= _SHELL_OPERATOR_CHARS}
+    except ValueError:
+        return False
+    return operators <= {"|"} and "\n" not in command
+
+
 def is_read_only_command(command: str) -> bool:
     """Whether every segment of *command* only reads, and ends. Unknown means no."""
     segments = command_segments(command)
-    return bool(segments) and all(_segment_is_read_only(segment, index > 0) for index, segment in enumerate(segments))
+    piped = _only_pipes(command)
+    return bool(segments) and all(
+        _segment_is_read_only(segment, piped and index > 0) for index, segment in enumerate(segments)
+    )

@@ -19,7 +19,7 @@ from async_chat_workflow import WorkflowMessage
 from autobot_shared.ai_lines import AiLine
 from chat_workflow.tool_dispatch_guards import COMMAND_FORCE_APPROVAL_KEY, enforce_ai_line
 from chat_workflow.tool_handler import ToolHandlerMixin
-from services.agent_terminal.ai_line_gate import decide_command
+from services.agent_terminal.ai_line_gate import PENDING_APPROVAL_REFUSAL, decide_command
 from services.ai_line_enforcement import Outcome, resolve_action_line
 
 _ENF = "services.ai_line_enforcement"
@@ -115,7 +115,7 @@ async def test_a_refused_command_never_reaches_the_terminal():
 
 async def _decide(outcome: Outcome, *, force: bool, rule: bool = False):
     handler = MagicMock(check_auto_approve_rules=AsyncMock(return_value=rule))
-    session = MagicMock(get_user_id=MagicMock(return_value="u"))
+    session = MagicMock(get_user_id=MagicMock(return_value="u"), has_pending_approval=MagicMock(return_value=False))
     with patch("services.agent_terminal.ai_line_gate.resolve_command_line", AsyncMock(return_value=_verdict(outcome))):
         return await decide_command(handler, session, "rm x", MagicMock(value="high"), force_approval=force)
 
@@ -195,6 +195,12 @@ async def _failed_approval(approval_result) -> list:
 
 
 @pytest.mark.asyncio
+async def test_an_approved_command_that_failed_is_not_reported_as_rejected():
+    results = await _failed_approval({"status": "error", "stdout": "report", "stderr": "boom"})
+    assert results[0]["status"] == "error" and results[0]["stdout"] == "report"
+
+
+@pytest.mark.asyncio
 async def test_a_rejection_reaches_the_models_next_prompt():
     results = await _failed_approval({"status": "denied", "error": "the user said no"})
     assert results[0]["status"] == "denied" and "the user said no" in results[0]["stderr"]
@@ -204,3 +210,41 @@ async def test_a_rejection_reaches_the_models_next_prompt():
 async def test_a_turn_that_stopped_waiting_tells_the_model_the_command_did_not_run():
     results = await _failed_approval(None)
     assert results[0]["status"] == "awaiting_approval"
+
+
+@pytest.mark.asyncio
+async def test_an_mcp_approval_request_ends_the_batch_too():
+    dispatched: list = []
+
+    async def dispatch(tool_call, *_args, **_kwargs):
+        dispatched.append(tool_call["name"])
+        yield WorkflowMessage(type="tool_result", content="approve?", metadata={"approval_required": True})
+
+    handler = ToolHandlerMixin.__new__(ToolHandlerMixin)
+    handler._dispatch_tool_call = dispatch
+    items = [item async for item in handler._process_tool_calls([{"name": "a"}, {"name": "b"}], "s", "t", "e", "m")]
+
+    assert dispatched == ["a"]
+    assert items[-1] == (True, None)
+
+
+@pytest.mark.asyncio
+async def test_a_second_command_cannot_replace_a_pending_approval():
+    """A yes to the first card must run the first command, so the second is refused and never queued."""
+    handler = MagicMock(check_auto_approve_rules=AsyncMock(return_value=False))
+    session = MagicMock(has_pending_approval=MagicMock(return_value=True))
+    with patch(
+        "services.agent_terminal.ai_line_gate.resolve_command_line", AsyncMock(return_value=_verdict(Outcome.HOLD))
+    ):
+        decision = await decide_command(handler, session, "rm y", MagicMock(value="high"), force_approval=True)
+    assert decision == (False, PENDING_APPROVAL_REFUSAL)
+
+
+@pytest.mark.asyncio
+async def test_a_read_still_runs_while_an_approval_is_pending():
+    session = MagicMock(has_pending_approval=MagicMock(return_value=True))
+    with patch(
+        "services.agent_terminal.ai_line_gate.resolve_command_line", AsyncMock(return_value=_verdict(Outcome.RUN))
+    ):
+        decision = await decide_command(MagicMock(), session, "ls", MagicMock(value="safe"), force_approval=False)
+    assert decision == (True, None)

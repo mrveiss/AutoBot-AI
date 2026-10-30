@@ -303,6 +303,12 @@ def _call_params(tool_call: dict[str, Any]) -> dict[str, Any]:
 COMMAND_FORCE_APPROVAL_KEY = "force_approval"
 
 
+def is_held_message(message: Any) -> bool:
+    """Whether *message* reports a call held for a person: the line's hold, or an MCP bridge's request."""
+    metadata = getattr(message, "metadata", None) or {}
+    return getattr(message, "type", None) == "approval_required" or metadata.get("approval_required") is True
+
+
 async def enforce_ai_line(
     tool_call: dict[str, Any],
     ctx: "LLMIterationContext | None",

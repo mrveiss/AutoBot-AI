@@ -26,6 +26,8 @@ __all__ = ["Outcome", "decide_command", "resolve_command_line"]
 
 logger = get_logger(__name__)
 
+PENDING_APPROVAL_REFUSAL = "An earlier command is still waiting for your decision; this one did not run"
+
 
 async def _owner_user_id(owner: str | None) -> str | None:
     """The verified creator's user id, from the username stamped on the session (#17053); ``None`` if unknown."""
@@ -68,10 +70,12 @@ async def decide_command(
     verdict = await resolve_command_line(approval_handler, session, command, risk)
     if verdict.outcome is Outcome.REFUSE:
         return False, verdict.message
+    if verdict.outcome is Outcome.RUN and not force_approval:
+        return True, None
+    if session.has_pending_approval():  # queueing would replace it, so a yes to its card would run this one
+        return False, PENDING_APPROVAL_REFUSAL
     if force_approval:
         return False, None
-    if verdict.outcome is Outcome.RUN:
-        return True, None
     user_id = session.get_user_id()
     is_auto_approved = await approval_handler.check_auto_approve_rules(
         user_id=user_id,
