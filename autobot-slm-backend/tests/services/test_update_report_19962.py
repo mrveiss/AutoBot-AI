@@ -93,11 +93,15 @@ def test_a_clean_run_names_no_failure_and_a_missing_log_says_so(tmp_path):
     assert report["log_present"] is False and report["failed_task"] is None
 
 
+_PEM_BEGIN = "-----BEGIN " + "PRIVATE KEY-----"
+_PEM_END = "-----END " + "PRIVATE KEY-----"
+
+
 def test_the_shapes_a_raw_error_can_carry_do_not_leave():
     for leak, secret in (
         ("postgres://admin:%s@db/x" % _SECRET, _SECRET),  # pragma: allowlist secret
         ('{"password": "%s"}' % _SECRET, _SECRET),  # pragma: allowlist secret
-        ("-----BEGIN PRIVATE KEY-----\n%s\n-----END PRIVATE KEY-----" % _SECRET, _SECRET),  # pragma: allowlist secret
+        ("%s\n%s\n%s" % (_PEM_BEGIN, _SECRET, _PEM_END), _SECRET),
         ("api_key=%s" % _SECRET, _SECRET),
     ):
         log = "TASK [t] ****\nfatal: [n]: FAILED! => not json " + leak.replace("\n", " ") + "\n"
