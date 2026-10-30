@@ -1,5 +1,6 @@
 {
   "common": {
+    "appName": "AutoBot",
     "submit": "שלח",
     "cancel": "ביטול",
     "save": "שמור",
@@ -4841,6 +4842,7 @@
   },
   "ui": {
     "themeToggle": {
+      "accentPurpleDescription": "סגול — יצירתי ואלגנטי",
       "system": "מערכת",
       "highContrast": "ניגודיות גבוהה",
       "monochrome": "מונוכרום",

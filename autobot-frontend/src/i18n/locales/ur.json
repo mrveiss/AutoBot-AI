@@ -1,5 +1,6 @@
 {
   "common": {
+    "appName": "AutoBot",
     "submit": "جمع کروائیں",
     "cancel": "منسوخ کریں",
     "save": "محفوظ کریں",
@@ -4841,6 +4842,7 @@
   },
   "ui": {
     "themeToggle": {
+      "accentPurpleDescription": "بنفشی — تخلیقی اور نفیس",
       "system": "سسٹم",
       "highContrast": "اعلیٰ کنٹراسٹ",
       "monochrome": "یک رنگی",
