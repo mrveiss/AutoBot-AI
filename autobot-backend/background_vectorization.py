@@ -217,7 +217,7 @@ class BackgroundVectorizer:
 
     async def _vectorize_single_fact(self, kb, fact_key: str, fact_data: dict) -> dict:
         """Vectorize a single fact (Issue #336 - extracted helper)."""
-        result = {"success": False, "skipped": False, "tokens": 0}
+        result = {"success": False, "tokens": 0}
 
         if not fact_data:
             return result
@@ -237,6 +237,18 @@ class BackgroundVectorizer:
             logger.error("Failed to vectorize %s: %s", fact_id, outcome.get("message"))
 
         return result
+
+    async def _embedding_backend_answers(self, kb) -> bool:
+        """One short embedding, no retries: did the backend fail, or only that fact?"""
+        from knowledge.embedding_space_binding import current_space
+        from knowledge.facts import _generate_embedding_with_npu_fallback
+
+        try:
+            space = await current_space(kb)
+            return bool(await _generate_embedding_with_npu_fallback("ping", max_attempts=1, model_name=space.model))
+        except Exception as e:
+            logger.warning("Embedding backend probe failed: %s", type(e).__name__)
+            return False
 
     async def _process_batch(self, kb, batch: list) -> dict:
         """Process a batch of facts (Issue #336 - extracted helper)."""
@@ -260,13 +272,17 @@ class BackgroundVectorizer:
                 if result["success"]:
                     stats["success"] += 1
                     stats["tokens"] += result["tokens"]
-                elif result["skipped"]:
-                    stats["skipped"] += 1
-                else:
-                    stats["failed"] += 1
+                    continue
+                stats["failed"] += 1
             except Exception as e:
                 stats["failed"] += 1
                 logger.error("Error vectorizing fact %s: %s", fact_key, e)
+            # #20019: a downed backend fails every fact, each after its retries. A fact that fails alone must
+            # not end the pass, or a few at the head of the queue would starve everything behind them.
+            if not await self._embedding_backend_answers(kb):
+                logger.warning("Embedding backend is not answering: stopping this pass; the rest stay pending")
+                stats["stopped"] = True
+                break
 
         stats["processing_time"] = time.time() - batch_start_time
         return stats
@@ -321,6 +337,8 @@ class BackgroundVectorizer:
                         batch_size=len(batch),
                     )
 
+                if batch_stats.get("stopped"):
+                    break
                 if batch_num < total_batches - 1:
                     await asyncio.sleep(self.batch_delay)
 
