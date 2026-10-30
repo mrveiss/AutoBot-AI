@@ -129,6 +129,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     "*.ts": (
         {
             "repo_tests/browser_port_single_home_19324_test.py",
+            "repo_tests/duplicate_names_ratchet_14908_test.py",
             "repo_tests/kit_export_shadow_ratchet_14908_test.py",
             "repo_tests/slm_frontend_calls_reach_served_routes_test.py",
             "repo_tests/v_html_sanitiser_guard_19118_test.py",
@@ -246,6 +247,16 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
     ".github/actions/*/action.yml": (
         {"repo_tests/python_version_declaration_drift_test.py"},
         "CI metadata tree; covering it runs twelve shards on almost every pull request (#15900)",
+    ),
+    ".github/actions/build-smoke-images/**": (
+        {"repo_tests/changes_job_equivalence_15360_test.py"},
+        "a docker-paths filter ENTRY the equivalence guard compares as a string (#19527); it reads "
+        "no file under the tree, so no change there can alter its verdict",
+    ),
+    ".github/actions/free-disk-space/**": (
+        {"repo_tests/changes_job_equivalence_15360_test.py"},
+        "a docker-paths filter ENTRY the equivalence guard compares as a string (#19527); it reads "
+        "no file under the tree, so no change there can alter its verdict",
     ),
     ".github/workflows/*.yaml": (
         {

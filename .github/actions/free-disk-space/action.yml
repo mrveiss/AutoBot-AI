@@ -64,12 +64,24 @@ runs:
     # GitHub-hosted runner images ship large unused toolchains (~45GB). Remove
     # them so Docker-heavy builds fit. These paths do not exist on the
     # self-hosted runner, so this step is scoped to github-hosted only.
+    #
+    # Only when they are in the way (#19527). The removal took 80-150s per job
+    # while the runner already had ~86 GB free against a 15-30 GB requirement, so
+    # it bought nothing. Below MIN_FREE_GB it still runs in full, and the assert
+    # after it is unchanged either way.
     - name: Remove unused toolchains (github-hosted)
       if: runner.environment == 'github-hosted'
       shell: bash
+      env:
+        MIN_FREE_GB: ${{ inputs.min-free-gb }}
       run: |
         echo "=== Before cleanup ==="
         df -h / | grep -v Filesystem
+        avail_gb=$(( $(df --output=avail / | tail -1) / 1024 / 1024 ))
+        if [ "${avail_gb}" -ge "${MIN_FREE_GB}" ]; then
+          echo "${avail_gb} GB free already meets the ${MIN_FREE_GB} GB minimum -- nothing to remove."
+          exit 0
+        fi
 
         echo ""
         echo "=== Removing unused toolchains ==="
