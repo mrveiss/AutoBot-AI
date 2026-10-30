@@ -17,11 +17,11 @@ import { getApiBase } from '@/config/ssot-config'
  * `idle` (lazy singleton not yet used) — neither counts toward the
  * aggregate `HealthCheckResponse.status`, which stays `ok | degraded | down`.
  */
-export type HealthStatus = 'ok' | 'degraded' | 'down'
-export type ComponentHealthStatus = HealthStatus | 'not_applicable' | 'idle'
+export type SystemHealthStatus = 'ok' | 'degraded' | 'down'
+export type ComponentHealthStatus = SystemHealthStatus | 'not_applicable' | 'idle'
 
 export interface HealthCheckResponse {
-  status: HealthStatus
+  status: SystemHealthStatus
   timestamp?: string
   initialization?: {
     status: string
