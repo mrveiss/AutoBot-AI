@@ -16,10 +16,10 @@ playwright>=1.64.0
 playwright-stealth
 
 # Web server (#15660). Both floors are the text `roles/browser` installs;
-# fastapi's is a security floor (it requires starlette >=0.52.1, the O(n^2)
+# starlette's is a security floor (the O(n^2)
 # Range-header DoS). Declared here so the floors have an anchor in the
 # component's own manifest rather than agreeing with the backend's by
 # coincidence, which is the blindness #15629 removed from the parity guard.
 fastapi  # version from constraints/shared.txt (#18060); applied by the -c the browser role passes in extra_args
-starlette==1.9.0  # security floor; fastapi itself only requires starlette>=0.46.0
+starlette  # security floor from constraints/shared.txt
 uvicorn>=0.54.0
