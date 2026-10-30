@@ -48,62 +48,49 @@
 
     <!-- Agent Cost Table -->
     <div class="agent-cost-table" v-if="agents.length > 0">
-      <table>
-        <thead>
-          <tr>
-            <th>{{ $t('analytics.bi.agentCosts.agent') }}</th>
-            <th class="text-right">{{ $t('analytics.bi.agentCosts.cost') }}</th>
-            <th class="text-right">{{ $t('analytics.bi.agentCosts.calls') }}</th>
-            <th class="text-right">{{ $t('analytics.bi.agentCosts.inputTokens') }}</th>
-            <th class="text-right">{{ $t('analytics.bi.agentCosts.outputTokens') }}</th>
-            <th>{{ $t('analytics.bi.agentCosts.budget') }}</th>
-            <th class="text-right">{{ $t('analytics.bi.agentCosts.actions') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="agent in agents" :key="agent.agent_id">
-            <td class="agent-name">
-              <Icon name="robot" class="agent-icon" />
-              {{ agent.agent_id }}
-            </td>
-            <td class="text-right cost-cell">
-              ${{ agent.cost_usd.toFixed(4) }}
-            </td>
-            <td class="text-right">{{ formatNumber(agent.call_count) }}</td>
-            <td class="text-right">{{ formatNumber(agent.input_tokens) }}</td>
-            <td class="text-right">{{ formatNumber(agent.output_tokens) }}</td>
-            <td>
-              <div class="budget-bar-container" v-if="agent.budget_monthly_usd > 0">
-                <div class="budget-bar">
-                  <div
-                    class="budget-fill"
-                    :class="{
-                      'exceeded': agent.exceeded,
-                      'warning': agent.utilization_percent >= 75 && !agent.exceeded,
-                    }"
-                    :style="{ width: Math.min(agent.utilization_percent, 100) + '%' }"
-                  ></div>
-                </div>
-                <span class="budget-text" :class="{ 'text-error': agent.exceeded }">
-                  {{ agent.utilization_percent.toFixed(0) }}%
-                  (${{ agent.budget_monthly_usd.toFixed(2) }})
-                </span>
-              </div>
-              <span v-else class="no-budget">{{ $t('analytics.bi.agentCosts.noBudget') }}</span>
-            </td>
-            <td class="text-right">
-              <BaseButton
-                variant="ghost"
-                size="xs"
-                @click="openBudgetDialog(agent.agent_id)"
-                :title="$t('analytics.bi.agentCosts.setBudget')"
-              >
-                <Icon name="edit" />
-              </BaseButton>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <BaseTable
+        :columns="columns"
+        :rows="rows"
+        row-key="agent_id"
+        :aria-label="$t('analytics.bi.agentCosts.agent')"
+        :actions-label="$t('analytics.bi.agentCosts.actions')"
+      >
+        <template #cell-agent_id="{ value }">
+          <span class="agent-name">
+            <Icon name="robot" class="agent-icon" />
+            {{ value }}
+          </span>
+        </template>
+        <template #cell-budget="{ row }">
+          <div class="budget-bar-container" v-if="(row.budget_monthly_usd as number) > 0">
+            <div class="budget-bar">
+              <div
+                class="budget-fill"
+                :class="{
+                  'exceeded': row.exceeded,
+                  'warning': (row.utilization_percent as number) >= 75 && !row.exceeded,
+                }"
+                :style="{ width: Math.min(row.utilization_percent as number, 100) + '%' }"
+              ></div>
+            </div>
+            <span class="budget-text" :class="{ 'text-error': row.exceeded }">
+              {{ (row.utilization_percent as number).toFixed(0) }}%
+              (${{ (row.budget_monthly_usd as number).toFixed(2) }})
+            </span>
+          </div>
+          <span v-else class="no-budget">{{ $t('analytics.bi.agentCosts.noBudget') }}</span>
+        </template>
+        <template #actions="{ row }">
+          <BaseButton
+            variant="ghost"
+            size="xs"
+            @click="openBudgetDialog(String(row.agent_id))"
+            :title="$t('analytics.bi.agentCosts.setBudget')"
+          >
+            <Icon name="edit" />
+          </BaseButton>
+        </template>
+      </BaseTable>
     </div>
 
     <EmptyState
@@ -146,7 +133,8 @@
 
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
-import { BaseButton } from '@autobot/ui'
+import { useI18n } from 'vue-i18n'
+import { BaseButton, BaseTable, type BaseTableColumn } from '@autobot/ui'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import api from '@/services/api'
 import { createLogger } from '@/utils/debugUtils'
@@ -166,7 +154,18 @@ interface AgentCost {
 }
 
 const loading = ref(false)
+const { t } = useI18n()
 const agents = ref<AgentCost[]>([])
+// BaseTable rows are plain records; AgentCost carries no index signature.
+const rows = computed(() => agents.value.map((agent) => ({ ...agent, budget: agent.budget_monthly_usd })))
+const columns = computed<BaseTableColumn[]>(() => [
+  { key: 'agent_id', label: t('analytics.bi.agentCosts.agent') },
+  { key: 'cost_usd', label: t('analytics.bi.agentCosts.cost'), numeric: true, formatter: (v) => `$${(v as number).toFixed(4)}` },
+  { key: 'call_count', label: t('analytics.bi.agentCosts.calls'), numeric: true, formatter: (v) => formatNumber(v as number) },
+  { key: 'input_tokens', label: t('analytics.bi.agentCosts.inputTokens'), numeric: true, formatter: (v) => formatNumber(v as number) },
+  { key: 'output_tokens', label: t('analytics.bi.agentCosts.outputTokens'), numeric: true, formatter: (v) => formatNumber(v as number) },
+  { key: 'budget', label: t('analytics.bi.agentCosts.budget') },
+])
 const budgetDialog = ref({
   visible: false,
   agentId: '',
@@ -307,38 +306,8 @@ defineExpose({ fetchAgentCosts })
   overflow: auto;
 }
 
-.agent-cost-table table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.agent-cost-table th,
-.agent-cost-table td {
-  padding: var(--spacing-3) var(--spacing-4);
-  text-align: left;
-  border-bottom: 1px solid var(--border-default);
-  font-size: var(--text-sm);
-}
-
-.agent-cost-table th {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  font-weight: var(--font-semibold);
-  font-size: var(--text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.agent-cost-table tbody tr:hover {
-  background: var(--bg-tertiary);
-}
-
-.text-right {
-  text-align: right;
-}
-
 .agent-name {
-  display: flex;
+  display: inline-flex;
   align-items: center;
   gap: var(--spacing-2);
   font-weight: var(--font-medium);
@@ -348,11 +317,6 @@ defineExpose({ fetchAgentCosts })
 .agent-icon {
   color: var(--color-primary);
   opacity: 0.7;
-}
-
-.cost-cell {
-  font-family: var(--font-mono);
-  color: var(--text-primary);
 }
 
 .budget-bar-container {
