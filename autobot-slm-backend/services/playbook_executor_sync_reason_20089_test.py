@@ -44,13 +44,13 @@ def _proc(returncode: int, stderr: bytes = b"") -> MagicMock:
 
 
 @pytest.mark.asyncio
-async def test_a_failed_step_records_its_exit_code_and_redacted_stderr(tmp_path) -> None:
+async def test_a_failed_step_returns_its_exit_code_and_redacted_stderr(tmp_path) -> None:
     executor = _executor(tmp_path)
     stderr = f"fatal: unable to access https://user:{_SECRET}@host/r".encode()  # pragma: allowlist secret
     with patch.object(pe, "start_git", new=AsyncMock(return_value=_proc(128, stderr))):
-        assert await executor._run_git(tmp_path, "fetch", "--prune", "origin") == 128
-    assert executor._git_failure.startswith("git fetch exited 128: fatal: unable to access")
-    assert _SECRET not in executor._git_failure
+        failure = await executor._run_git(tmp_path, "fetch", "--prune", "origin")
+    assert failure.startswith("git fetch exited 128: fatal: unable to access")
+    assert _SECRET not in failure
 
 
 @pytest.mark.asyncio
@@ -59,43 +59,99 @@ async def test_a_timed_out_step_says_so(tmp_path, monkeypatch) -> None:
     proc = MagicMock(communicate=AsyncMock(side_effect=asyncio.TimeoutError))
     monkeypatch.setattr(executor, "_kill_process_group", AsyncMock())
     with patch.object(pe, "start_git", new=AsyncMock(return_value=proc)):
-        assert await executor._run_git(tmp_path, "fetch") == -1
-    assert executor._git_failure == f"git fetch timed out after {pe.GIT_COMMAND_TIMEOUT_S}s"
+        assert await executor._run_git(tmp_path, "fetch") == f"git fetch timed out after {pe.GIT_COMMAND_TIMEOUT_S}s"
 
 
-@pytest.mark.asyncio
-async def test_one_failed_fetch_is_retried_and_the_sync_succeeds(tmp_path, monkeypatch) -> None:
-    executor = _executor(tmp_path)
+def _scripted_git(executor, monkeypatch, fetch_failures: list[str]) -> list[str]:
+    """_run_git answering each fetch from the list, and None for everything else."""
     monkeypatch.setattr(pe, "GIT_FETCH_RETRY_DELAY_S", 0)
     monkeypatch.setattr(executor, "_log_updated_head_commit", AsyncMock())
-    calls = []
+    calls: list[str] = []
+    remaining = list(fetch_failures)
 
     async def run_git(_dir, *args):
         calls.append(args[0])
-        return 1 if calls.count("fetch") == 1 and args[0] == "fetch" else 0
+        return (remaining.pop(0) if remaining else None) if args[0] == "fetch" else None
 
     monkeypatch.setattr(executor, "_run_git", run_git)
-    assert await executor._update_code_source() is True
+    return calls
+
+
+_LOCK = "git fetch exited 128: fatal: Unable to create '/r/.git/shallow.lock': File exists"
+_HANGUP = "git fetch exited 128: fatal: the remote end hung up unexpectedly"
+
+
+@pytest.mark.asyncio
+async def test_a_transient_fetch_failure_is_retried_and_the_sync_succeeds(tmp_path, monkeypatch) -> None:
+    executor = _executor(tmp_path)
+    calls = _scripted_git(executor, monkeypatch, [_LOCK])
+    assert await executor._update_code_source() is None
     assert calls == ["checkout", "fetch", "fetch", "reset"]
 
 
 @pytest.mark.asyncio
-async def test_a_fetch_that_fails_twice_fails_the_sync_and_does_not_reset(tmp_path, monkeypatch) -> None:
+async def test_a_fetch_that_fails_twice_returns_the_last_reason_and_does_not_reset(tmp_path, monkeypatch) -> None:
     executor = _executor(tmp_path)
-    monkeypatch.setattr(pe, "GIT_FETCH_RETRY_DELAY_S", 0)
-    calls = []
-
-    async def run_git(_dir, *args):
-        calls.append(args[0])
-        return 1 if args[0] == "fetch" else 0
-
-    monkeypatch.setattr(executor, "_run_git", run_git)
-    assert await executor._update_code_source() is False
+    calls = _scripted_git(executor, monkeypatch, [_LOCK, _HANGUP])
+    assert await executor._update_code_source() == _HANGUP
     assert calls == ["checkout", "fetch", "fetch"]
 
 
-def test_the_refusal_names_the_reason(tmp_path) -> None:
+@pytest.mark.parametrize(
+    "failure",
+    [
+        "git fetch exited 128: fatal: Authentication failed for 'https://host/r'",
+        "git fetch timed out after 30s",
+    ],
+    ids=["auth", "timeout"],
+)
+@pytest.mark.asyncio
+async def test_a_failure_a_retry_cannot_cure_is_not_retried(tmp_path, monkeypatch, failure) -> None:
     executor = _executor(tmp_path)
-    executor._git_failure = "git fetch exited 128: x"
-    result = executor._code_source_sync_failure_result("u.yml", True, False)
+    calls = _scripted_git(executor, monkeypatch, [failure])
+    assert await executor._update_code_source() == failure
+    assert calls == ["checkout", "fetch"]
+
+
+@pytest.mark.asyncio
+async def test_an_unexpected_error_gives_its_own_redacted_reason(tmp_path, monkeypatch) -> None:
+    executor = _executor(tmp_path)
+    url = f"https://user:{_SECRET}@host/r"  # pragma: allowlist secret
+    monkeypatch.setattr(executor, "_run_git", AsyncMock(side_effect=OSError(f"no such file: {url}")))
+    failure = await executor._update_code_source()
+    assert failure.startswith("unexpected error: no such file")
+    assert _SECRET not in failure
+
+
+@pytest.mark.asyncio
+async def test_concurrent_syncs_each_report_their_own_reason(tmp_path, monkeypatch) -> None:
+    """The executor is a singleton (#14570): a second caller's failure must not replace the first's."""
+    executor = _executor(tmp_path)
+    monkeypatch.setattr(executor, "_log_updated_head_commit", AsyncMock())
+    first_failed, second_done = asyncio.Event(), asyncio.Event()
+
+    async def run_git(_dir, *args):
+        if args[0] != "fetch":
+            return None
+        if not first_failed.is_set():
+            first_failed.set()
+            await second_done.wait()
+            return "git fetch exited 1: first"
+        return "git fetch exited 1: second"
+
+    monkeypatch.setattr(executor, "_run_git", run_git)
+    first = asyncio.create_task(executor._update_code_source())
+    await first_failed.wait()
+    second = await executor._update_code_source()
+    second_done.set()
+    assert await first == "git fetch exited 1: first"
+    assert second == "git fetch exited 1: second"
+
+
+def test_the_refusal_names_the_reason() -> None:
+    result = pe.PlaybookExecutor._code_source_sync_failure_result("u.yml", True, "git fetch exited 128: x")
     assert "git fetch exited 128: x" in result["output"] and result["success"] is False
+
+
+def test_a_synced_run_has_nothing_to_refuse() -> None:
+    assert pe.PlaybookExecutor._code_source_sync_failure_result("u.yml", True, None) is None
