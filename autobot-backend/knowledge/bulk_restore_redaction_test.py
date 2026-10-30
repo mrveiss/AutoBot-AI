@@ -62,7 +62,7 @@ async def _restore(content: str, fact_id: str) -> tuple[dict, dict]:
     kb._get_fact_for_vectorization = AsyncMock(side_effect=lambda _fid: captured["persisted"])
     kb._write_vector = AsyncMock(side_effect=_write)
     kb._mark_vectorization_succeeded = AsyncMock()
-    space = MagicMock(model="test-embed")
+    space = MagicMock(model="test-embed", write_buffer=None)
     space.vector_store._collection.get.return_value = {"ids": []}
     fact_data = {"embedding": [0.1, 0.2, 0.3], "embedding_model": "test-embed"}
     with (
