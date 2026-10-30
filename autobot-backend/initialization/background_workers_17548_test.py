@@ -145,29 +145,19 @@ async def test_every_cycle_is_recorded_even_when_there_is_nothing_to_do(monkeypa
 
 def test_the_interval_is_env_backed_not_a_literal(monkeypatch):
     """AC2. A literal in __init__ cannot be tuned per deployment, which is why it was one."""
-    import importlib
-
     import background_vectorization
+    from testkit.module_snapshot import reloaded
 
     monkeypatch.setenv("AUTOBOT_KB_VECTORIZE_CHECK_INTERVAL_SECONDS", "45")
-    reloaded = importlib.reload(background_vectorization)
-    try:
-        assert reloaded.CHECK_INTERVAL_SECONDS == 45
-        assert reloaded.BackgroundVectorizer().check_interval == 45, "the instance must use the constant"
-    finally:
-        monkeypatch.delenv("AUTOBOT_KB_VECTORIZE_CHECK_INTERVAL_SECONDS", raising=False)
-        importlib.reload(background_vectorization)
+    with reloaded(background_vectorization) as module:
+        assert module.CHECK_INTERVAL_SECONDS == 45
+        assert module.BackgroundVectorizer().check_interval == 45, "the instance must use the constant"
 
 
 def test_the_interval_is_floored_so_a_misconfiguration_cannot_busy_loop(monkeypatch):
-    import importlib
-
     import background_vectorization
+    from testkit.module_snapshot import reloaded
 
     monkeypatch.setenv("AUTOBOT_KB_VECTORIZE_CHECK_INTERVAL_SECONDS", "0")
-    reloaded = importlib.reload(background_vectorization)
-    try:
-        assert reloaded.CHECK_INTERVAL_SECONDS >= 30
-    finally:
-        monkeypatch.delenv("AUTOBOT_KB_VECTORIZE_CHECK_INTERVAL_SECONDS", raising=False)
-        importlib.reload(background_vectorization)
+    with reloaded(background_vectorization) as module:
+        assert module.CHECK_INTERVAL_SECONDS >= 30

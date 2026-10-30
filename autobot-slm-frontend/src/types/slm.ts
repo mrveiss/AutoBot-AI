@@ -52,7 +52,7 @@ export type NodeRole =
   | 'vnc'
   | 'docker'
 
-export type HealthStatus = 'healthy' | 'degraded' | 'unhealthy' | 'unknown'
+export type NodeHealthStatus = 'healthy' | 'degraded' | 'unhealthy' | 'unknown'
 
 export type AuthMethod = 'password' | 'key' | 'pki'
 
@@ -78,7 +78,7 @@ export type CertificateStatus = 'valid' | 'expiring_soon' | 'expired' | 'not_iss
 export type UpdateSeverity = 'low' | 'medium' | 'high' | 'critical'
 
 export interface NodeHealth {
-  status: HealthStatus
+  status: NodeHealthStatus
   cpu_percent: number
   memory_percent: number
   disk_percent: number

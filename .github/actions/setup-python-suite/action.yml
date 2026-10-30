@@ -1,7 +1,7 @@
 # Shared environment setup for every job that runs the Python test suite.
 #
-# #13316: sharding python-suite turns one copy of this block into many (twelve
-# matrix shards on the PR gate, twelve more on the nightly coverage run, plus
+# #13316: sharding python-suite turns one copy of this block into many (eight
+# matrix shards on the PR gate, twelve on the nightly coverage run, plus
 # the durations job). Duplicating an interpreter version, a dependency set and a
 # config fixture that many times guarantees they drift, and a shard that
 # installs different packages from the one that measured the durations produces
