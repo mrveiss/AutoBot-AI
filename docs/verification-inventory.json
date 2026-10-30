@@ -373,7 +373,7 @@
         }
       ],
       "status": "wired",
-      "notes": "CI smoke-tested on every PR to Dev_new_gui and weekly Sunday run"
+      "notes": "CI smoke-tested on every PR to main and weekly Sunday run"
     },
     {
       "id": "celery-beat-scheduler",

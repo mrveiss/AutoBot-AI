@@ -64,6 +64,7 @@ def get_autobot_db_config() -> DatabaseConfig:
     Reads AUTOBOT_USERS_DATABASE_URL (set by Ansible credential template).
     Falls back to component env vars for backward compatibility.
     """
+    _warn_legacy_compose_names()
     url = os.getenv("AUTOBOT_USERS_DATABASE_URL")
     if url:
         return DatabaseConfig(url=url)
@@ -97,6 +98,21 @@ def _slm_role_on_users_db() -> str:
         _warn_once("deprecated", "AUTOBOT_POSTGRES_USER as the SLM's user-DB role is deprecated; set SLM_POSTGRES_USER")
         return legacy
     return pg.SLM_DB_ROLE
+
+
+def _warn_legacy_compose_names() -> None:
+    """Name the deprecated compose variables an operator still sets (#19408).
+
+    Compose reports them in ``AUTOBOT_COMPOSE_LEGACY_DB_VARS``. Their old names mean
+    something else on a fleet host (``db-credentials.env``), so this never reads them.
+    """
+    names = os.getenv("AUTOBOT_COMPOSE_LEGACY_DB_VARS", "").split()
+    if names:
+        _warn_once(
+            "compose-legacy",
+            f"Deprecated compose variables {', '.join(names)}: use AUTOBOT_POSTGRES_USER, SLM_DB_NAME and "
+            "AUTOBOT_POSTGRES_DB. The old names stop working after one release (#19948)",
+        )
 
 
 #: Warnings already logged by this process (each fires once, never per connection).
