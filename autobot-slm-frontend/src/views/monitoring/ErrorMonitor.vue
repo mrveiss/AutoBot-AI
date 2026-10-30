@@ -17,7 +17,7 @@ import { useSlmApi } from '@/composables/useSlmApi'
 import type {
   RecentError,
   ErrorStatistics,
-  CategoryBreakdown,
+  ErrorCategoryShare,
   ComponentBreakdown,
 } from '@/types/api-responses'
 import { createLogger } from '@/utils/debugUtils'
@@ -39,7 +39,7 @@ const stats = ref<ErrorStatistics>({
   error_rate_per_hour: 0,
   trend: 'stable',
 })
-const categories = ref<CategoryBreakdown[]>([])
+const categories = ref<ErrorCategoryShare[]>([])
 const components = ref<ComponentBreakdown[]>([])
 const isLoading = ref(false)
 const selectedError = ref<RecentError | null>(null)

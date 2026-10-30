@@ -23,7 +23,7 @@
  */
 
 import { ref, computed, readonly, toRef } from 'vue'
-import { useRoles, type Role, type SyncResult } from './useRoles'
+import { useRoles, type Role, type RoleSyncResult } from './useRoles'
 import { formatCommitHash } from '@/utils/commitHashUtils'
 import slmApiClient from '@/utils/ApiClient'
 import type { components } from '@/types/generated/api'
@@ -230,7 +230,7 @@ export type ComponentSyncJobStatus = components['schemas']['ComponentSyncJobStat
 }
 
 // Re-export role types for consumers (Issue #779)
-export type { Role, SyncResult }
+export type { Role, RoleSyncResult }
 
 // Issue #9971: One-click update-all types.
 
