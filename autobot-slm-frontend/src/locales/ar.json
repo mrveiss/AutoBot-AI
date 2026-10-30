@@ -1152,6 +1152,11 @@
     "editMaintenanceWindow": "Edit Maintenance Window",
     "editWindow": "Edit window",
     "endTime": "End Time",
+    "failedToActivateWindow": "فشل تفعيل نافذة الصيانة",
+    "failedToCompleteWindow": "فشل إكمال نافذة الصيانة",
+    "failedToDeleteWindow": "فشل حذف نافذة الصيانة",
+    "failedToDrainNode": "فشل استنزاف العقدة. يرجى المحاولة مرة أخرى.",
+    "failedToResumeNode": "فشل استئناف العقدة. يرجى المحاولة مرة أخرى.",
     "fleetWideMaintenance": "Fleet-Wide Maintenance",
     "leaveEmptyForFleet": "Leave empty for fleet-wide maintenance",
     "loadingMaintenanceWindows": "Loading maintenance windows...",
@@ -3336,7 +3341,9 @@
     "yourAutoBotFleetIs": "Your AutoBot fleet is configured and ready to use.",
     "yourSLMServiceLifecycle": "Your SLM (Service Lifecycle Manager) is up and running. This wizard\n          will guide you through adding and configuring your fleet nodes.",
     "provisioningFailed": "Provisioning failed",
-    "retryProvisioning": "Retry provisioning"
+    "retryProvisioning": "Retry provisioning",
+    "failedToSaveKeys": "فشل حفظ مفاتيح API. تحقق من وحدة التحكم للحصول على التفاصيل.",
+    "failedToAddNode": "فشلت إضافة العقدة"
   },
   "skills": {
     "approvalsTab": {
