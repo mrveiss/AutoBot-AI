@@ -34,7 +34,7 @@ from security.session_posture import (
     authenticated_user,
     read_owner,
     require_posture,
-    unowned_read,
+    unowned_access,
     validate_strict,
 )
 
@@ -531,8 +531,8 @@ class SessionOwnershipValidator:
                 await self.set_session_owner(session_id, durable_owner, org_id=user_data.get("org_id"), team_id=None)
             return durable_owner, None
 
-        if (read := unowned_read(session_id, user_data, request)) is not None:
-            return username, read
+        if (decided := await unowned_access(session_id, user_data, request)) is not None:
+            return username, decided
         logger.warning("Session %s... has no owner anywhere (legacy session)", session_id[:8])
         await self.set_session_owner(session_id, username, org_id=user_data.get("org_id"), team_id=None)
         return username, {"authorized": True, "user_data": user_data, "reason": "legacy_migration"}
