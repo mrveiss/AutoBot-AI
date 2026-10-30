@@ -94,7 +94,7 @@ _BASELINES = {
     },
     "autobot-slm-frontend": {
         "clients": 1,
-        "raw_fetch": 3,
+        "raw_fetch": 2,  # #14908: the SLM transport moved into the kit ApiClientBase
         # #12363 step 2: `composables/useAutobotApi.ts`, the last holdout, now builds
         # an SlmApiClient, so the SLM matches the main frontend at 0.
         "axios": 0,
@@ -120,7 +120,6 @@ _BASELINES = {
 # `ApiClient` / `fetchWithAuth` or be added here WITH a reason; the guard also
 # fails when an entry no longer contains a raw fetch, so the list cannot rot.
 _RAW_FETCH_EXCEPTIONS: dict[str, str] = {
-    "autobot-frontend/src/utils/ApiClient.ts": "the canonical transport client itself",
     "autobot-frontend/src/utils/fetchWithAuth.ts": "the canonical auth-injecting fetch helper",
     "autobot-frontend/src/utils/slmClient.ts": "SLM-origin transport client with its own bearer token; the main-app JWT must not be sent",
     "autobot-frontend/src/config/AppConfig.js": "bootstrap config fetch; ApiClient derives its base URL from AppConfig, so it cannot depend on it",
