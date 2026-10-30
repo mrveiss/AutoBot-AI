@@ -21,11 +21,13 @@ from __future__ import annotations
 
 import gzip
 import json
+import zlib
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, Iterator, List, Optional
 
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import CategoryDefaults
 
@@ -33,6 +35,10 @@ logger = get_logger(__name__)
 
 _USER = CategoryDefaults.ROLE_USER
 _ASSISTANT = CategoryDefaults.ROLE_ASSISTANT
+#: Read bounds (env-backed): a hostile or corrupt file stops at these instead of exhausting memory.
+MAX_DECOMPRESSED_BYTES: int = env_int_clamped("AUTOBOT_TRANSCRIPT_MAX_DECOMPRESSED_BYTES", 1 << 30, min_v=1)
+MAX_LINE_BYTES: int = env_int_clamped("AUTOBOT_TRANSCRIPT_MAX_LINE_BYTES", 16 << 20, min_v=1)
+MAX_EVENTS: int = env_int_clamped("AUTOBOT_TRANSCRIPT_MAX_EVENTS", 1_000_000, min_v=1)
 _GZIP_SUFFIX = ".gz"
 _TRANSCRIPT_GLOBS = ("*.jsonl", "*.jsonl.gz")
 _CODEX_TEXT_BLOCKS = frozenset({"input_text", "output_text", "text"})
@@ -136,7 +142,7 @@ def _message_blocks(message: Any) -> List[Dict[str, Any]]:
     content = message.get("content") if isinstance(message, dict) else None
     if isinstance(content, str):
         return [{"type": "text", "text": content}]
-    return [b for b in content or [] if isinstance(b, dict)]
+    return [b for b in content if isinstance(b, dict)] if isinstance(content, list) else []
 
 
 def normalize_claude_record(obj: Dict[str, Any]) -> List[StepEvent]:
@@ -162,8 +168,10 @@ def normalize_claude_record(obj: Dict[str, Any]) -> List[StepEvent]:
 def _codex_text(content: Any) -> str:
     if isinstance(content, str):
         return content
-    parts = [b.get("text", "") for b in content or [] if isinstance(b, dict) and b.get("type") in _CODEX_TEXT_BLOCKS]
-    return "\n".join(p for p in parts if p)
+    if not isinstance(content, list):
+        return ""
+    blocks = (b for b in content if isinstance(b, dict) and b.get("type") in _CODEX_TEXT_BLOCKS)
+    return "\n".join(t for t in (b.get("text") for b in blocks) if isinstance(t, str) and t)
 
 
 def _codex_arguments(raw: Any) -> Any:
@@ -223,9 +231,13 @@ def normalize_record(obj: Dict[str, Any]) -> List[StepEvent]:
 
 
 def _iso_from_epoch_ms(value: Any) -> str:
+    """ISO-8601 UTC for an epoch-ms number; ``ValueError`` when it is out of range, NaN or infinite."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return str(value) if isinstance(value, str) else ""
-    return datetime.fromtimestamp(value / 1000, tz=timezone.utc).isoformat()
+    try:
+        return datetime.fromtimestamp(value / 1000, tz=timezone.utc).isoformat()
+    except (OverflowError, OSError, ValueError) as exc:
+        raise ValueError("timestamp out of range") from exc
 
 
 def parse_history_line(raw: str) -> Optional[EvidenceEntry]:
@@ -237,10 +249,14 @@ def parse_history_line(raw: str) -> Optional[EvidenceEntry]:
     prompt = obj.get("display") if isinstance(obj, dict) else None
     if not isinstance(prompt, str) or not prompt.strip():
         return None
+    try:
+        stamp = _iso_from_epoch_ms(obj.get("timestamp"))
+    except ValueError:
+        return None  # a malformed line: the caller counts it
     return EvidenceEntry(
         prompt=prompt,
         project=str(obj.get("project", "")),
-        timestamp=_iso_from_epoch_ms(obj.get("timestamp")),
+        timestamp=stamp,
         session_id=str(obj.get("sessionId", "")),
     )
 
@@ -250,13 +266,52 @@ def parse_history_line(raw: str) -> Optional[EvidenceEntry]:
 # ---------------------------------------------------------------------------
 
 
-def iter_lines(path: Path) -> Iterator[str]:
-    """Lines of ``path``, gunzipped when it ends in ``.gz``; always utf-8."""
-    opener = gzip.open if path.suffix == _GZIP_SUFFIX else open
-    with opener(path, "rt", encoding="utf-8") as handle:
-        for line in handle:
-            if line.strip():
-                yield line
+@dataclass
+class ReadResult:
+    """What one bounded file read produced, and whether it is the whole file."""
+
+    items: List[Any] = field(default_factory=list)
+    truncated: bool = False
+    truncated_reason: str = ""  # "decompressed_bytes" | "line_length" | "events"
+    skipped: int = 0  # malformed or undecodable lines, counted and never echoed
+
+
+@dataclass
+class BatchResult:
+    """A batch read: the files that read (each possibly truncated) and the ones that failed."""
+
+    results: Dict[str, ReadResult] = field(default_factory=dict)
+    failed: Dict[str, str] = field(default_factory=dict)  # path -> exception class name only
+
+
+def _lines_of(handle: Any, result: ReadResult) -> Iterator[str]:
+    """Decoded non-blank lines of a binary handle, stopping (and saying so) at a size bound."""
+    total = 0
+    while True:
+        raw = handle.readline(MAX_LINE_BYTES + 1)
+        if not raw:
+            return
+        total += len(raw)
+        if total > MAX_DECOMPRESSED_BYTES:
+            result.truncated, result.truncated_reason = True, "decompressed_bytes"
+            return
+        if len(raw) > MAX_LINE_BYTES and not raw.endswith(b"\n"):
+            result.truncated, result.truncated_reason = True, "line_length"
+            return
+        try:
+            line = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            result.skipped += 1
+            continue
+        if line.strip():
+            yield line
+
+
+def iter_lines(path: Path, result: ReadResult) -> Iterator[str]:
+    """Lines of ``path`` (gunzipped for ``.gz``), bounded; limit hits are recorded on ``result``."""
+    opener = gzip.open if Path(path).suffix == _GZIP_SUFFIX else open
+    with opener(path, "rb") as handle:
+        yield from _lines_of(handle, result)
 
 
 def expand_paths(paths: Iterable[Path]) -> List[Path]:
@@ -268,28 +323,59 @@ def expand_paths(paths: Iterable[Path]) -> List[Path]:
     return out
 
 
-def read_transcript(path: Path) -> List[StepEvent]:
-    """Every event of one saved transcript; malformed lines are counted, never echoed."""
-    events: List[StepEvent] = []
-    skipped = 0
-    for line in iter_lines(Path(path)):
+def _add_bounded(result: ReadResult, new_items: List[Any]) -> bool:
+    """Append ``new_items``; False (and truncated) once the event bound would be exceeded."""
+    room = MAX_EVENTS - len(result.items)
+    result.items.extend(new_items[: max(room, 0)])
+    if len(new_items) > room:
+        result.truncated, result.truncated_reason = True, "events"
+        return False
+    return True
+
+
+def read_transcript(path: Path) -> ReadResult:
+    """Events of one saved transcript. Bad lines are counted; a limit hit marks the result truncated."""
+    result = ReadResult()
+    for line in iter_lines(Path(path), result):
         try:
             obj = json.loads(line)
         except json.JSONDecodeError:
-            skipped += 1
+            result.skipped += 1
             continue
-        events.extend(normalize_record(obj) if isinstance(obj, dict) else [])
-    if skipped:
-        logger.warning("transcript %s: %d malformed line(s) skipped", Path(path).name, skipped)
-    return events
+        if isinstance(obj, dict) and not _add_bounded(result, normalize_record(obj)):
+            break
+    _log_read(path, result)
+    return result
 
 
-def read_transcripts(paths: Iterable[Path]) -> Dict[str, List[StepEvent]]:
-    """Batch read: ``{file path: events}`` for every file (directories expanded)."""
-    return {str(p): read_transcript(p) for p in expand_paths(paths)}
+def _log_read(path: Path, result: ReadResult) -> None:
+    name = Path(path).name
+    if result.skipped:
+        logger.warning("transcript %s: %d malformed line(s) skipped", name, result.skipped)
+    if result.truncated:
+        logger.warning("transcript %s: truncated (%s)", name, result.truncated_reason)
 
 
-def read_history(path: Path) -> List[EvidenceEntry]:
-    """Every prompt of a ``history.jsonl`` (plain or gzipped) as evidence entries."""
-    entries = (parse_history_line(line) for line in iter_lines(Path(path)))
-    return [e for e in entries if e is not None]
+def read_transcripts(paths: Iterable[Path]) -> BatchResult:
+    """Batch read: one corrupt file is reported in ``failed`` (class name only), the rest still read."""
+    batch = BatchResult()
+    for path in expand_paths(paths):
+        try:
+            batch.results[str(path)] = read_transcript(path)
+        except (OSError, EOFError, zlib.error, ValueError) as exc:
+            batch.failed[str(path)] = type(exc).__name__
+            logger.warning("transcript %s: unreadable (%s)", Path(path).name, type(exc).__name__)
+    return batch
+
+
+def read_history(path: Path) -> ReadResult:
+    """Prompts of a ``history.jsonl`` (plain or gzipped) as evidence entries; bad lines are counted."""
+    result = ReadResult()
+    for line in iter_lines(Path(path), result):
+        entry = parse_history_line(line)
+        if entry is None:
+            result.skipped += 1
+        elif not _add_bounded(result, [entry]):
+            break
+    _log_read(path, result)
+    return result

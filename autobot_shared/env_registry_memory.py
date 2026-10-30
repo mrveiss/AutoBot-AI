@@ -255,3 +255,45 @@ env_registry.register_env_var(
         component="memory",
     )
 )
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_TRANSCRIPT_MAX_DECOMPRESSED_BYTES",
+        type=int,
+        default=1073741824,
+        description=(
+            "Most decompressed bytes read from one transcript or history file "
+            "before the read stops and reports itself truncated "
+            "(services/execution/transcript_normalizer.py, #11137)."
+        ),
+        component="memory",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_TRANSCRIPT_MAX_LINE_BYTES",
+        type=int,
+        default=16777216,
+        description=(
+            "Longest single line a transcript or history read will load; "
+            "a longer line stops the file and reports it truncated "
+            "(services/execution/transcript_normalizer.py, #11137)."
+        ),
+        component="memory",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_TRANSCRIPT_MAX_EVENTS",
+        type=int,
+        default=1000000,
+        description=(
+            "Most events (or history entries) returned from one file "
+            "before the read stops and reports itself truncated "
+            "(services/execution/transcript_normalizer.py, #11137)."
+        ),
+        component="memory",
+    )
+)

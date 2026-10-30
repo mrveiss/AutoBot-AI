@@ -76,8 +76,8 @@ class MemorySessionToolsMixin:
 
         args = _SessionListArgs(limit=limit)
         owner = current_owner()  # fails closed without an authenticated principal
-        sessions = await list_sessions(VerbatimStore(), owner.user_id, args.limit)
-        return {"sessions": sessions, "count": len(sessions)}
+        sessions, truncated = await list_sessions(VerbatimStore(), owner.user_id, args.limit)
+        return {"sessions": sessions, "count": len(sessions), "truncated": truncated}
 
     async def _memory_session_read(self, session_id: str) -> Any:
         from memory.verbatim_sessions import read_session
@@ -85,7 +85,7 @@ class MemorySessionToolsMixin:
 
         args = _SessionReadArgs(session_id=session_id)
         owner = current_owner()
-        chunks = await read_session(VerbatimStore(), owner.user_id, args.session_id)
+        chunks, truncated = await read_session(VerbatimStore(), owner.user_id, args.session_id)
         if not chunks:
             return {"error": "Session not found", "session_id": args.session_id}
-        return {"session_id": args.session_id, "chunks": chunks, "count": len(chunks)}
+        return {"session_id": args.session_id, "chunks": chunks, "count": len(chunks), "truncated": truncated}

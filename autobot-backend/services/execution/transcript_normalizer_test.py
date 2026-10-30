@@ -157,17 +157,90 @@ class TestFiles:
     def test_plain_and_gzip_identical(self, tmp_path):
         self._write(tmp_path / "a.jsonl", _saved_claude())
         self._write(tmp_path / "b.jsonl.gz", _saved_claude(), gz=True)
-        assert tn.read_transcript(tmp_path / "a.jsonl") == tn.read_transcript(tmp_path / "b.jsonl.gz")
-        assert len(tn.read_transcript(tmp_path / "a.jsonl")) == 4
+        plain, gz = tn.read_transcript(tmp_path / "a.jsonl"), tn.read_transcript(tmp_path / "b.jsonl.gz")
+        assert plain.items == gz.items and len(plain.items) == 4
+        assert plain.skipped == 1 and not plain.truncated
 
     def test_batch_expands_directories(self, tmp_path):
         self._write(tmp_path / "a.jsonl", _saved_claude())
         self._write(tmp_path / "b.jsonl.gz", _codex(), gz=True)
         (tmp_path / "skip.txt").write_text("x", encoding="utf-8")
         batch = tn.read_transcripts([tmp_path])
-        assert sorted(p.rsplit("/", 1)[1] for p in batch) == ["a.jsonl", "b.jsonl.gz"]
+        assert sorted(p.rsplit("/", 1)[1] for p in batch.results) == ["a.jsonl", "b.jsonl.gz"]
+        assert batch.failed == {}
 
     def test_history_file_gzip(self, tmp_path):
         path = tmp_path / "history.jsonl.gz"
         self._write(path, [{"display": "p1", "project": "/x", "timestamp": 0}, {"display": ""}], gz=True)
-        assert [e.prompt for e in tn.read_history(path)] == ["p1"]
+        assert [e.prompt for e in tn.read_history(path).items] == ["p1"]
+
+
+class TestBadInputDoesNotLoseTheBatch:
+    @pytest.mark.parametrize("stamp", [1e300, float("nan"), float("inf"), -1e300, 10**30])
+    def test_out_of_range_timestamp_is_a_malformed_line(self, stamp):
+        assert tn.parse_history_line(json.dumps({"display": "p", "timestamp": stamp})) is None
+
+    def test_one_bad_history_line_does_not_abort_the_read(self, tmp_path):
+        path = tmp_path / "history.jsonl"
+        lines = ['{"display": "ok1", "timestamp": 0}', '{"display": "bad", "timestamp": 1e300}', '{"display": "ok2"}']
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        result = tn.read_history(path)
+        assert [e.prompt for e in result.items] == ["ok1", "ok2"] and result.skipped == 1
+
+    def test_invalid_utf8_line_is_counted_not_fatal(self, tmp_path):
+        path = tmp_path / "a.jsonl"
+        path.write_bytes(b'\xff\xfe{"type":"user"}\n' + json.dumps(_saved_claude()[0]).encode() + b"\n")
+        result = tn.read_transcript(path)
+        assert len(result.items) == 1 and result.skipped == 1
+
+    def test_corrupt_gzip_fails_alone(self, tmp_path):
+        good = tmp_path / "a.jsonl"
+        good.write_text(json.dumps(_saved_claude()[0]) + "\n", encoding="utf-8")
+        whole = gzip.compress(b"x" * 5000)
+        (tmp_path / "b.jsonl.gz").write_bytes(whole[: len(whole) // 2])  # truncated
+        (tmp_path / "c.jsonl.gz").write_bytes(b"not gzip at all")
+        batch = tn.read_transcripts([tmp_path])
+        assert list(batch.results) == [str(good)]
+        assert {k.rsplit("/", 1)[1] for k in batch.failed} == {"b.jsonl.gz", "c.jsonl.gz"}
+        assert all(v.isidentifier() for v in batch.failed.values())  # class names only
+
+    @pytest.mark.parametrize("content", [5, None, {"a": 1}, 1.5, True])
+    def test_codex_text_tolerates_non_iterable_content(self, content):
+        rec = {"type": "response_item", "payload": {"type": "message", "role": "user", "content": content}}
+        assert tn.normalize_record(rec)[0].content == {"text": ""}
+        assert tn._codex_text([{"type": "input_text", "text": 3}]) == ""
+
+
+class TestBounds:
+    def test_no_newline_file_is_cut_at_line_bound(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(tn, "MAX_LINE_BYTES", 200)
+        path = tmp_path / "a.jsonl"
+        path.write_bytes(json.dumps(_saved_claude()[0]).encode() + b"\n" + b"y" * 10_000)
+        result = tn.read_transcript(path)
+        assert len(result.items) == 1
+        assert (result.truncated, result.truncated_reason) == (True, "line_length")
+
+    def test_decompressed_bytes_bound_stops_a_gzip_bomb(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(tn, "MAX_DECOMPRESSED_BYTES", 2000)
+        line = json.dumps(_saved_claude()[0]) + "\n"
+        with gzip.open(tmp_path / "bomb.jsonl.gz", "wt", encoding="utf-8") as fh:
+            fh.write(line * 1000)
+        result = tn.read_transcript(tmp_path / "bomb.jsonl.gz")
+        assert (result.truncated, result.truncated_reason) == (True, "decompressed_bytes")
+        assert 0 < len(result.items) < 1000
+
+    def test_event_bound_truncates_and_exact_fit_does_not(self, tmp_path, monkeypatch):
+        path = tmp_path / "a.jsonl"
+        path.write_text("".join(json.dumps(r) + "\n" for r in _saved_claude()), encoding="utf-8")  # 4 events
+        monkeypatch.setattr(tn, "MAX_EVENTS", 4)
+        assert tn.read_transcript(path).truncated is False
+        monkeypatch.setattr(tn, "MAX_EVENTS", 3)
+        cut = tn.read_transcript(path)
+        assert (len(cut.items), cut.truncated, cut.truncated_reason) == (3, True, "events")
+
+    def test_history_event_bound(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(tn, "MAX_EVENTS", 2)
+        path = tmp_path / "history.jsonl"
+        path.write_text("".join(json.dumps({"display": f"p{i}"}) + "\n" for i in range(5)), encoding="utf-8")
+        result = tn.read_history(path)
+        assert len(result.items) == 2 and result.truncated
