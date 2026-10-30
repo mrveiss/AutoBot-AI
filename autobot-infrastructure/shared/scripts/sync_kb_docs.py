@@ -25,8 +25,9 @@ logger = logging.getLogger(__name__)
 sys.path.insert(0, str(project_root() / "autobot-backend"))
 
 from knowledge_factory import get_knowledge_base_async
-from knowledge_sync_incremental import run_incremental_sync
-from populate_knowledge_base import DOC_PATTERNS  # the one documentation set (#19339)
+from knowledge_sync_incremental import IncrementalKnowledgeSync, run_incremental_sync, start_background_sync_daemon
+
+from autobot_shared.kb_doc_set import DOC_PATTERNS  # the one documentation set (#19339, #19701)
 
 
 def _determine_doc_category(rel_path: str) -> str:
@@ -260,6 +261,28 @@ async def incremental_sync():
         return await sync_docs()
 
 
+async def preview_sync() -> bool:
+    """Print what an incremental sync would change, applying nothing (#19701)."""
+    changed, removed = await IncrementalKnowledgeSync().preview_changes()
+    print(json.dumps({"would_index": [str(path) for path in changed], "would_remove": removed}, indent=2))  # noqa: print  # canonical: ignore py-print-smoke
+    return True
+
+
+async def show_status() -> bool:
+    """Print the engine's recorded sync status; reads its state file, no KB connection (#19701)."""
+    sync = IncrementalKnowledgeSync()
+    await sync._load_sync_state()
+    print(json.dumps(sync.get_sync_status(), indent=2))  # noqa: print  # canonical: ignore py-print-smoke
+    return True
+
+
+async def watch_sync(interval_minutes: int) -> bool:
+    """Sync now, then keep syncing every *interval_minutes* until stopped (#19701)."""
+    await run_incremental_sync()
+    await start_background_sync_daemon(check_interval_minutes=interval_minutes)
+    return True
+
+
 if __name__ == "__main__":
     import argparse
 
@@ -276,11 +299,22 @@ if __name__ == "__main__":
         action="store_true",
         help="Force full sync (legacy method)",
     )
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--dry-run", action="store_true", help="Preview changes without applying them")
+    mode.add_argument("--watch", "--daemon", "-d", action="store_true", help="Keep syncing until stopped")
+    mode.add_argument("--status", "-s", action="store_true", help="Show sync status")
+    parser.add_argument("--interval", type=int, default=15, help="Minutes between syncs with --watch")
     parser.add_argument("--test", "-t", action="store_true", help="Test search functionality after sync")
 
     args = parser.parse_args()
 
-    if args.force_full:
+    if args.dry_run:
+        success = asyncio.run(preview_sync())
+    elif args.watch:
+        success = asyncio.run(watch_sync(args.interval))
+    elif args.status:
+        success = asyncio.run(show_status())
+    elif args.force_full:
         logger.warning("⚠️  WARNING: Using legacy full sync method (much slower)")
         success = asyncio.run(sync_docs())
     else:

@@ -34,8 +34,8 @@ from autobot_shared.ssot_config import config
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.content_digest import content_digest
+from autobot_shared.kb_doc_set import DOC_PATTERNS, EXCLUDE_PATTERNS, should_exclude_file
 from autobot_shared.logging_manager import get_llm_logger
 from constants.threshold_constants import TimingConstants
 from knowledge.ingestion_visibility import stamp_if_document
@@ -220,15 +220,10 @@ class IncrementalKnowledgeSync:
         self.knowledge_ttl_hours = 24 * 7  # 1 week default TTL
         self.auto_invalidation_enabled = True
 
-        # Document patterns to sync
-        self.doc_patterns = [
-            "README.md",
-            "CLAUDE.md",
-            "docs/**/*.md",
-            "reports/**/*.md",
-            "scripts/**/*.py",
-            "src/**/*.py",
-        ]
+        # Document patterns to sync: the one documentation set (#19701)
+        self.doc_patterns = list(DOC_PATTERNS)
+        # Paths the last scan found; only those may expire (#19701)
+        self._scanned_paths: set[str] = set()
 
         logger.info("IncrementalKnowledgeSync initialized")
         logger.info("Project root: %s", self.project_root)
@@ -335,7 +330,12 @@ class IncrementalKnowledgeSync:
                 path_obj = Path(file_path)
                 # Issue #358 - avoid blocking
                 is_file = await asyncio.to_thread(path_obj.is_file)
-                if is_file and "node_modules" not in str(path_obj) and ".git" not in str(path_obj):
+                if (
+                    is_file
+                    and "node_modules" not in str(path_obj)
+                    and ".git" not in str(path_obj)
+                    and not should_exclude_file(f"/{path_obj.relative_to(self.project_root)}", EXCLUDE_PATTERNS)
+                ):
                     all_files.append(path_obj)
 
         # Remove duplicates and sort
@@ -383,10 +383,13 @@ class IncrementalKnowledgeSync:
             current_files.add(str(file_path))
             await self._classify_and_append_file(file_path, changed_files, new_files)
 
-        # Find removed files
+        self._scanned_paths = current_files
+
+        # Find removed files: gone from disk. A file still on disk but outside the doc set keeps
+        # its facts, because narrowing the set must not delete stored knowledge (#19701).
         removed_files = []
         for stored_path in list(self.file_metadata.keys()):
-            if stored_path not in current_files:
+            if stored_path not in current_files and not await asyncio.to_thread(Path(stored_path).exists):
                 removed_files.append(stored_path)
                 logger.debug("Removed file: %s", Path(stored_path).relative_to(self.project_root))
 
@@ -648,7 +651,8 @@ class IncrementalKnowledgeSync:
         expired_files = []
 
         for file_path, metadata in self.file_metadata.items():
-            if metadata.sync_time and (current_time - metadata.sync_time) > ttl_seconds:
+            in_doc_set = file_path in self._scanned_paths  # expiry re-indexes; outside the set nothing would
+            if in_doc_set and metadata.sync_time and (current_time - metadata.sync_time) > ttl_seconds:
                 expired_files.append(file_path)
 
         if expired_files:
@@ -734,6 +738,12 @@ class IncrementalKnowledgeSync:
         logger.info("Total time: %.3fs", total_time)
         logger.info("Chunks processed: %d", metrics.total_chunks_processed)
         logger.info("Performance: %.1f chunks/sec", metrics.avg_chunks_per_second)
+
+    async def preview_changes(self) -> Tuple[List[Path], List[str]]:
+        """What a sync would index and remove, with nothing applied and no KB connection (#19701)."""
+        await self._load_sync_state()
+        changed_files, removed_files, _new_files = await self._analyze_file_changes(await self._scan_files())
+        return changed_files, removed_files
 
     async def perform_incremental_sync(self) -> SyncMetrics:
         """
@@ -845,39 +855,3 @@ async def start_background_sync_daemon(project_root: str = None, check_interval_
     sync = IncrementalKnowledgeSync(project_root)
     await sync.initialize()
     await sync.background_sync_daemon(check_interval_minutes)
-
-
-if __name__ == "__main__":
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Incremental Knowledge Sync")
-    parser.add_argument("--daemon", "-d", action="store_true", help="Run as background daemon")
-    parser.add_argument(
-        "--interval",
-        "-i",
-        type=int,
-        default=15,
-        help="Check interval in minutes (daemon mode)",
-    )
-    parser.add_argument("--status", "-s", action="store_true", help="Show sync status")
-
-    args = parser.parse_args()
-
-    async def main():
-        """Run sync CLI command based on parsed arguments."""
-        if args.status:
-            sync = IncrementalKnowledgeSync()
-            await sync.initialize()
-            status = sync.get_sync_status()
-            print(json.dumps(status, indent=2))  # noqa: print  # canonical: ignore py-print-smoke
-        elif args.daemon:
-            await start_background_sync_daemon(check_interval_minutes=args.interval)
-        else:
-            metrics = await run_incremental_sync()
-            logger.info(
-                "Sync completed - processed %d chunks in %.3fs",
-                metrics.total_chunks_processed,
-                metrics.total_processing_time,
-            )
-
-    run_or_schedule(main())

@@ -13,6 +13,7 @@ Acceptance criteria verified:
   - Full rebuild still available via force_full flag
 """
 
+import asyncio
 import hashlib
 import sys
 import time
@@ -201,7 +202,7 @@ class TestIncrementalKnowledgeSyncChangedFiles:
         """File whose hash matches stored metadata must not be re-processed."""
         sync = self._make_sync(tmp_path)
         doc = tmp_path / "doc.md"
-        doc.write_text("stable content", encoding="utf-8")
+        await asyncio.to_thread(doc.write_text, "stable content", encoding="utf-8")
 
         h = _sha256("stable content")
         stat = doc.stat()
@@ -217,7 +218,7 @@ class TestIncrementalKnowledgeSyncChangedFiles:
         """File whose content changed must appear in changed list."""
         sync = self._make_sync(tmp_path)
         doc = tmp_path / "doc.md"
-        doc.write_text("new content", encoding="utf-8")
+        await asyncio.to_thread(doc.write_text, "new content", encoding="utf-8")
 
         old_hash = _sha256("old content")
         sync.file_metadata[str(doc)] = _make_file_metadata(str(doc), old_hash, 0.0)
@@ -230,7 +231,7 @@ class TestIncrementalKnowledgeSyncChangedFiles:
         """File not in metadata must appear in new list."""
         sync = self._make_sync(tmp_path)
         doc = tmp_path / "new_doc.md"
-        doc.write_text("brand new", encoding="utf-8")
+        await asyncio.to_thread(doc.write_text, "brand new", encoding="utf-8")
 
         changed, removed, new = await sync._analyze_file_changes([doc])
         assert doc in new
@@ -270,7 +271,7 @@ class TestIncrementalKnowledgeSyncChangedFiles:
         # Pre-populate metadata so nothing changes
         for i in range(20):
             doc = tmp_path / f"doc{i}.md"
-            doc.write_text(f"content {i}", encoding="utf-8")
+            await asyncio.to_thread(doc.write_text, f"content {i}", encoding="utf-8")
             h = _sha256(f"content {i}")
             stat = doc.stat()
             sync.file_metadata[str(doc)] = _make_file_metadata(str(doc), h, stat.st_mtime)
@@ -331,7 +332,7 @@ class TestDurableSyncState:
         """Every chunk rejected -> no metadata, so the next run re-offers the file."""
         sync = self._make_sync(tmp_path)
         doc = tmp_path / "doc.md"
-        doc.write_text("some indexable content", encoding="utf-8")
+        await asyncio.to_thread(doc.write_text, "some indexable content", encoding="utf-8")
 
         result = await self._process(sync, doc, ["error", "error"])
 
@@ -348,7 +349,7 @@ class TestDurableSyncState:
         """One chunk rejected -> the file is retried whole rather than half-indexed."""
         sync = self._make_sync(tmp_path)
         doc = tmp_path / "doc.md"
-        doc.write_text("some indexable content", encoding="utf-8")
+        await asyncio.to_thread(doc.write_text, "some indexable content", encoding="utf-8")
 
         result = await self._process(sync, doc, ["success", "error"])
 
@@ -359,7 +360,7 @@ class TestDurableSyncState:
         """All chunks stored -> metadata recorded, chunk_count reflects stored facts."""
         sync = self._make_sync(tmp_path)
         doc = tmp_path / "doc.md"
-        doc.write_text("some indexable content", encoding="utf-8")
+        await asyncio.to_thread(doc.write_text, "some indexable content", encoding="utf-8")
 
         result = await self._process(sync, doc, ["success", "success", "success"])
 
@@ -385,14 +386,14 @@ class TestDurableSyncState:
         assert not staged.exists()
         import json as _json
 
-        assert "/a.md" in _json.loads(sync.file_metadata_path.read_text(encoding="utf-8"))
+        assert "/a.md" in _json.loads(await asyncio.to_thread(sync.file_metadata_path.read_text, encoding="utf-8"))
 
     @pytest.mark.asyncio
     async def test_failed_save_leaves_previous_manifest_intact(self, tmp_path):
         """A serialization failure must not damage the manifest already on disk."""
         sync = self._make_sync(tmp_path)
         sync.file_metadata_path.parent.mkdir(parents=True, exist_ok=True)
-        sync.file_metadata_path.write_text('{"/old.md": {}}', encoding="utf-8")
+        await asyncio.to_thread(sync.file_metadata_path.write_text, '{"/old.md": {}}', encoding="utf-8")
 
         # A field json.dumps cannot serialize aborts the write *after* the target file has
         # been opened for writing — the exact window in which an in-place write truncates
@@ -402,7 +403,7 @@ class TestDurableSyncState:
         sync.file_metadata = {"/new.md": doomed}
         await sync._save_sync_state()
 
-        assert sync.file_metadata_path.read_text(encoding="utf-8") == '{"/old.md": {}}'
+        assert await asyncio.to_thread(sync.file_metadata_path.read_text, encoding="utf-8") == '{"/old.md": {}}'
         staged = sync.file_metadata_path.with_suffix(sync.file_metadata_path.suffix + ".tmp")
         assert not staged.exists()
 
@@ -443,3 +444,68 @@ class TestForceFullRebuild:
         await service.manual_sync(force_full=False)
 
         assert service.incremental_sync.file_metadata is original_metadata
+
+
+class TestTheDocSetNarrowing19701:
+    """A file outside the doc set keeps its facts; only a file gone from disk loses them."""
+
+    def _sync(self, tmp_path):
+        sync = IncrementalKnowledgeSync.__new__(IncrementalKnowledgeSync)
+        sync.project_root = tmp_path
+        sync.file_metadata = {}
+        sync.auto_invalidation_enabled = True
+        sync.knowledge_ttl_hours = 1
+        sync._scanned_paths = set()
+        sync.kb = MagicMock()
+        sync.kb.delete_fact = AsyncMock()
+        return sync
+
+    def _tracked(self, path, sync_time=1.0):
+        return FileMetadata(
+            path=str(path),
+            relative_path=path.name,
+            content_hash="h",
+            size=1,
+            modified_time=1.0,
+            sync_time=sync_time,
+            fact_ids=["f"],
+        )
+
+    @pytest.mark.asyncio
+    async def test_a_file_on_disk_outside_the_scan_is_not_removed(self, tmp_path):
+        kept = tmp_path / "reports.md"
+        await asyncio.to_thread(kept.write_text, "x", encoding="utf-8")
+        sync = self._sync(tmp_path)
+        sync.file_metadata[str(kept)] = self._tracked(kept)
+        _changed, removed, _new = await sync._analyze_file_changes([])
+        assert removed == []
+
+    @pytest.mark.asyncio
+    async def test_a_file_outside_the_scan_does_not_expire(self, tmp_path):
+        kept = tmp_path / "reports.md"
+        sync = self._sync(tmp_path)
+        sync.file_metadata[str(kept)] = self._tracked(kept)
+        await sync._invalidate_expired_knowledge()
+        sync.kb.delete_fact.assert_not_awaited()
+        assert str(kept) in sync.file_metadata
+
+    @pytest.mark.asyncio
+    async def test_a_scanned_file_still_expires(self, tmp_path):
+        doc = tmp_path / "doc.md"
+        sync = self._sync(tmp_path)
+        sync.file_metadata[str(doc)] = self._tracked(doc)
+        sync._scanned_paths = {str(doc)}
+        await sync._invalidate_expired_knowledge()
+        sync.kb.delete_fact.assert_awaited_once_with("f")
+
+    @pytest.mark.asyncio
+    async def test_excludes_read_the_path_below_the_root_only(self, tmp_path):
+        root = tmp_path / "venv" / "checkout"
+        await asyncio.to_thread((root / "docs" / "venv").mkdir, parents=True)
+        kept = root / "docs" / "kept.md"
+        await asyncio.to_thread(kept.write_text, "x", encoding="utf-8")
+        await asyncio.to_thread((root / "docs" / "venv" / "dropped.md").write_text, "x", encoding="utf-8")
+        await asyncio.to_thread((root / "docs" / "system-state.md").write_text, "x", encoding="utf-8")
+        sync = self._sync(root)
+        sync.doc_patterns = ["docs/**/*.md"]
+        assert await sync._scan_files() == [kept]

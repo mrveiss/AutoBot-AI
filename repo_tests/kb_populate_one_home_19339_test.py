@@ -26,14 +26,15 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 _ROOT = repo_root()
-_HOME = "autobot-infrastructure/shared/scripts/populate_knowledge_base.py"
+_HOME = "autobot_shared/kb_doc_set.py"
+_ENGINE = "autobot-backend/knowledge_sync_incremental.py"
 _ROOTS = ("autobot-infrastructure",)
 _MARKER = "docs/**/*.md"
 #: A documentation glob however it is spelled: "docs/**/*.md", "docs/*.md", "docs/guides/**/*.md" ...
 _DOC_GLOB = re.compile(r"^docs/.*\*.*\.md$")
 _GLOB_CALLS = frozenset({"glob", "rglob", "iglob"})
 #: Known copies left for their own issue (path -> the issue that retires them).
-_KNOWN = {"autobot-infrastructure/shared/scripts/utilities/sync_documentation_kb.py": "#19701"}
+_KNOWN: dict[str, str] = {}
 
 
 def _sources(root: Path) -> list[Path]:
@@ -88,7 +89,13 @@ def test_no_module_restates_the_documentation_set() -> None:
     files = REACH.examined(_ROOT)
     found = [h for p in files for h in pattern_lists(p.read_text(encoding="utf-8"), p.relative_to(_ROOT).as_posix())]
     REACH.completed(files)
-    assert not found, f"import DOC_PATTERNS / collect_documentation_files from {_HOME} (#19339): {found}"
+    assert not found, f"import DOC_PATTERNS from {_HOME} (#19339): {found}"
+
+
+def test_the_sync_engine_reads_the_one_documentation_set() -> None:
+    source = (_ROOT / _ENGINE).read_text(encoding="utf-8")
+    assert "self.doc_patterns = list(DOC_PATTERNS)" in source
+    assert not pattern_lists(source, _ENGINE)
 
 
 @pytest.mark.parametrize(
