@@ -33,7 +33,6 @@ class _RestoreFakeKB(FactsMixin, BulkOperationsMixin):
     def __init__(self):
         self.redis_client = MagicMock()
         self.vector_store = MagicMock()
-        self._aioredis_client = AsyncMock()
 
     def ensure_initialized(self):
         pass
@@ -48,55 +47,46 @@ class _RestoreFakeKB(FactsMixin, BulkOperationsMixin):
         return None
 
 
-@pytest.mark.asyncio
-async def test_restore_redacts_the_embedding_upsert():
+async def _restore(content: str, fact_id: str) -> tuple[dict, dict]:
+    """Run the restore, the persisted fact being what store_fact handed to the vectorizer."""
     kb = _RestoreFakeKB()
-    captured = {}
+    captured: dict = {}
 
-    def _upsert(*, ids, embeddings, metadatas, documents):
-        captured["documents"] = documents
-        captured["metadatas"] = metadatas
+    async def _vectorize(_fid, stored, metadata, **_kw):
+        captured["persisted"] = {"content": stored, "metadata": metadata}
 
-    kb.vector_store.upsert = MagicMock(side_effect=_upsert)  # sync: real chromadb client, dispatched via to_thread
+    async def _write(_space, _fid, _vec, stored, metadata, _ctx):
+        captured.update(document=stored, metadata=metadata)
+        return True
 
-    fact_data = {"embedding": [0.1, 0.2, 0.3]}
-    content = f"your API key is {_SECRET}"
-
+    kb._get_fact_for_vectorization = AsyncMock(side_effect=lambda _fid: captured["persisted"])
+    kb._write_vector = AsyncMock(side_effect=_write)
+    kb._mark_vectorization_succeeded = AsyncMock()
+    space = MagicMock(model="test-embed", write_buffer=None)
+    space.vector_store._collection.get.return_value = {"ids": []}
+    fact_data = {"embedding": [0.1, 0.2, 0.3], "embedding_model": "test-embed"}
     with (
         patch("knowledge.fact_store.persist_fact", new=AsyncMock()),
         patch.object(type(kb), "_project_fact_to_redis", new=AsyncMock()),
-        patch.object(type(kb), "_vectorize_fact_in_chromadb", new=AsyncMock()),
-        patch("knowledge.bulk.asyncio.to_thread", new=AsyncMock(side_effect=lambda f, **kw: f(**kw))),
+        patch.object(type(kb), "_vectorize_fact_in_chromadb", new=AsyncMock(side_effect=_vectorize)),
+        patch("knowledge.backup_embeddings.current_space", new=AsyncMock(return_value=space)),
     ):
-        result = await kb._store_restored_fact(fact_data, content, {}, "fact-1", restore_embeddings=True)
+        result = await kb._store_restored_fact(fact_data, content, {}, fact_id, restore_embeddings=True)
+    return result, captured
 
+
+@pytest.mark.asyncio
+async def test_restore_redacts_what_reaches_the_vector_store():
+    result, captured = await _restore(f"your API key is {_SECRET}", "fact-1")
     assert result["action"] == "restored"
     assert result["embedding"] is True
-    assert _SECRET not in captured["documents"][0]
-    assert _SECRET not in captured["metadatas"][0]["content"]
-    assert "your API key is" in captured["documents"][0]
+    assert _SECRET not in captured["document"]
+    assert _SECRET not in str(captured["metadata"])
+    assert "your API key is" in captured["document"]
 
 
 @pytest.mark.asyncio
 async def test_restore_a_safe_body_is_unchanged():
     """Negative control: the redaction pass must not mangle ordinary content."""
-    kb = _RestoreFakeKB()
-    captured = {}
-
-    def _upsert(*, ids, embeddings, metadatas, documents):
-        captured["documents"] = documents
-
-    kb.vector_store.upsert = MagicMock(side_effect=_upsert)
-
-    fact_data = {"embedding": [0.1, 0.2, 0.3]}
-    content = "Redis listens on port 6379."
-
-    with (
-        patch("knowledge.fact_store.persist_fact", new=AsyncMock()),
-        patch.object(type(kb), "_project_fact_to_redis", new=AsyncMock()),
-        patch.object(type(kb), "_vectorize_fact_in_chromadb", new=AsyncMock()),
-        patch("knowledge.bulk.asyncio.to_thread", new=AsyncMock(side_effect=lambda f, **kw: f(**kw))),
-    ):
-        await kb._store_restored_fact(fact_data, content, {}, "fact-2", restore_embeddings=True)
-
-    assert captured["documents"][0] == "Redis listens on port 6379."
+    _, captured = await _restore("Redis listens on port 6379.", "fact-2")
+    assert captured["document"] == "Redis listens on port 6379."

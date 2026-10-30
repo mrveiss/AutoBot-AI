@@ -14,7 +14,6 @@ SSOT Migration (Issue #639):
 from typing import Any, Dict
 
 from autobot_shared import deployment_profile
-from autobot_shared.embedding_model import active_embedding_model
 from autobot_shared.ssot_config import config
 from config.registry import ConfigRegistry
 
@@ -55,7 +54,9 @@ def _get_backend_config(llm_host: str, llm_port: int, bind_host: str, backend_po
                         "endpoint": f"{llm_base_url}/api/embeddings",
                         "host": llm_base_url,
                         "models": [],
-                        "selected_model": active_embedding_model(),  # #19377
+                        # #20008: the configured default, not the override. This runs while logging starts, as early as
+                        # redis_client's import, so it cannot read Redis; readers ask active_embedding_model().
+                        "selected_model": config.llm.embedding_model,
                     }
                 },
             },

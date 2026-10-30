@@ -44,7 +44,7 @@ tiktoken>=0.14.0
 numpy  # version from constraints/shared.txt
 torch  # version from constraints/shared.txt (#19330)
 torchvision  # version from constraints/shared.txt, paired with torch (#19330)
-torchaudio>=2.11.0
+# torchaudio removed (#19682): nothing imports it, and its floor was not held to the pinned torch
 
 # Text Processing
 # #15551: not directly imported -- kept because llama-index-core (declared at the
