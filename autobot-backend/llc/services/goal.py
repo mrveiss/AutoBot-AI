@@ -16,6 +16,7 @@ from autobot_shared.async_compat import fire_and_forget
 from autobot_shared.logging_manager import get_logger
 
 from ..models.goal import GoalLevel, GoalStatus, LLCGoal
+from .actor import resolve_actor
 from .base import LLCServiceBase
 
 logger = get_logger(__name__)
@@ -116,6 +117,8 @@ class GoalService(LLCServiceBase):
         owner_agent_id: Optional[str] = None,
         due_date: Optional[Any] = None,
         status: GoalStatus = GoalStatus.DRAFT,
+        actor_user_id: Optional[str] = None,
+        actor_agent_id: Optional[str] = None,
     ) -> LLCGoal:
         # Fix #3: Validate level hierarchy when parent is set
         if parent_goal_id is not None:
@@ -148,10 +151,12 @@ class GoalService(LLCServiceBase):
         # Fix #2: Index after commit, not after flush, to avoid phantom entries on rollback
         self._schedule_post_commit_index(session, goal)
         if self.activity_log:
+            actor_type, actor_id = resolve_actor(actor_agent_id, actor_user_id)
             await self.activity_log.record(
                 session,
                 company_id=company_id,
-                actor_id=owner_agent_id or "system",
+                actor_type=actor_type,
+                actor_id=actor_id,
                 event_type="goal.created",
                 entity_type="llc_goal",
                 entity_id=str(goal.id),

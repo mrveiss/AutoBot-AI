@@ -37,6 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_constants import QueryDefaults
 
+from ..models.activity import ActorType
 from ..models.enums import (
     ActivityEventType,
     AssigneeType,
@@ -48,6 +49,7 @@ from ..models.enums import (
 from ..models.label import LLCWorkItemLabel
 from ..models.membership import LLCCompanyMembership
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
+from .actor import resolve_actor
 from .base import LLCServiceBase
 from .wake_events import wake_for_comment, wake_for_item_changes
 from .work_item_approval_categories import validated_approval_categories as _validated_approval_categories
@@ -605,18 +607,16 @@ class WorkItemService(LLCServiceBase):
         await session.flush()
 
         if self.activity_log:
-            try:
-                await self.activity_log.record(
-                    session,
-                    company_id=company_id,
-                    actor_id=user_id,
-                    event_type=ActivityEventType.WORK_ITEM_ASSIGNED,
-                    entity_type="work_item",
-                    entity_id=work_item_id,
-                    after={"assignee_user_id": user_id, "assignee_type": AssigneeType.USER.value},
-                )
-            except Exception:
-                logger.warning("Activity log failed for claim_human %s", work_item_id)
+            await self.activity_log.record(
+                session,
+                company_id=company_id,
+                actor_type=ActorType.USER,
+                actor_id=user_id,
+                event_type=ActivityEventType.WORK_ITEM_ASSIGNED,
+                entity_type="work_item",
+                entity_id=work_item_id,
+                after={"assignee_user_id": user_id, "assignee_type": AssigneeType.USER.value},
+            )
 
         return item
 
@@ -654,19 +654,17 @@ class WorkItemService(LLCServiceBase):
             await redis.delete(f"llc:checkout:{work_item_id}")
 
         if self.activity_log:
-            try:
-                await self.activity_log.record(
-                    session,
-                    company_id=company_id,
-                    actor_id=user_id,
-                    event_type=ActivityEventType.WORK_ITEM_STATUS_CHANGED,
-                    entity_type="work_item",
-                    entity_id=work_item_id,
-                    before={"assignee_user_id": user_id},
-                    after={"assignee_user_id": None, "status": WorkItemStatus.READY.value},
-                )
-            except Exception:
-                logger.warning("Activity log failed for unclaim_human %s", work_item_id)
+            await self.activity_log.record(
+                session,
+                company_id=company_id,
+                actor_type=ActorType.USER,
+                actor_id=user_id,
+                event_type=ActivityEventType.WORK_ITEM_STATUS_CHANGED,
+                entity_type="work_item",
+                entity_id=work_item_id,
+                before={"assignee_user_id": user_id},
+                after={"assignee_user_id": None, "status": WorkItemStatus.READY.value},
+            )
 
         return item
 
@@ -734,25 +732,22 @@ class WorkItemService(LLCServiceBase):
         await session.flush()
 
         if self.activity_log:
-            try:
-                await self.activity_log.record(
-                    session,
-                    company_id=company_id,
-                    actor_type=actor_type,
-                    actor_id=actor_id,
-                    event_type=ActivityEventType.WORK_ITEM_COWORKER_SET,
-                    entity_type="work_item",
-                    entity_id=work_item_id,
-                    before=before,
-                    after={
-                        "co_worker_type": item.co_worker_type,
-                        "co_worker_agent_id": str(item.co_worker_agent_id) if item.co_worker_agent_id else None,
-                        "co_worker_user_id": str(item.co_worker_user_id) if item.co_worker_user_id else None,
-                        "co_working_enabled": True,
-                    },
-                )
-            except Exception:
-                logger.warning("Activity log failed for enable_coworking %s", work_item_id)
+            await self.activity_log.record(
+                session,
+                company_id=company_id,
+                actor_type=actor_type,
+                actor_id=actor_id,
+                event_type=ActivityEventType.WORK_ITEM_COWORKER_SET,
+                entity_type="work_item",
+                entity_id=work_item_id,
+                before=before,
+                after={
+                    "co_worker_type": item.co_worker_type,
+                    "co_worker_agent_id": str(item.co_worker_agent_id) if item.co_worker_agent_id else None,
+                    "co_worker_user_id": str(item.co_worker_user_id) if item.co_worker_user_id else None,
+                    "co_working_enabled": True,
+                },
+            )
 
         return item
 
@@ -799,20 +794,17 @@ class WorkItemService(LLCServiceBase):
         await session.flush()
 
         if self.activity_log:
-            try:
-                await self.activity_log.record(
-                    session,
-                    company_id=company_id,
-                    actor_type=actor_type,
-                    actor_id=actor_id,
-                    event_type=ActivityEventType.WORK_ITEM_COWORKER_CLEARED,
-                    entity_type="work_item",
-                    entity_id=work_item_id,
-                    before=before,
-                    after={"co_working_enabled": False},
-                )
-            except Exception:
-                logger.warning("Activity log failed for disable_coworking %s", work_item_id)
+            await self.activity_log.record(
+                session,
+                company_id=company_id,
+                actor_type=actor_type,
+                actor_id=actor_id,
+                event_type=ActivityEventType.WORK_ITEM_COWORKER_CLEARED,
+                entity_type="work_item",
+                entity_id=work_item_id,
+                before=before,
+                after={"co_working_enabled": False},
+            )
 
         return item
 
@@ -969,24 +961,23 @@ class WorkItemService(LLCServiceBase):
             logger.warning("workspace release skipped for task=%s", work_item_id, exc_info=True)
 
         if self.activity_log:
-            try:
-                meta: dict = {}
-                if is_board_override:
-                    meta["board_override"] = True
-                    meta["actor_user_id"] = actor_user_id
+            actor_type, actor_id = resolve_actor(actor_agent_id, actor_user_id)
+            meta: dict = {}
+            if is_board_override:
+                meta["board_override"] = True
+                meta["actor_user_id"] = actor_user_id
 
-                await self.activity_log.record(
-                    session,
-                    company_id=company_id,
-                    actor_id=actor_user_id or actor_agent_id or work_item_id,
-                    event_type=ActivityEventType.WORK_ITEM_COMPLETED,
-                    entity_type="work_item",
-                    entity_id=work_item_id,
-                    before={"status": current.value},
-                    after={"status": WorkItemStatus.DONE.value, **meta},
-                )
-            except Exception:
-                logger.warning("Activity log failed for transition_to_done %s", work_item_id)
+            await self.activity_log.record(
+                session,
+                company_id=company_id,
+                actor_type=actor_type,
+                actor_id=actor_id,
+                event_type=ActivityEventType.WORK_ITEM_COMPLETED,
+                entity_type="work_item",
+                entity_id=work_item_id,
+                before={"status": current.value},
+                after={"status": WorkItemStatus.DONE.value, **meta},
+            )
 
         return item
 

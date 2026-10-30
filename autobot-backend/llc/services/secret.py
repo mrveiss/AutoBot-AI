@@ -28,6 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.legacy_secret_keys import derive_llc_company_fernet
 from autobot_shared.time_utils import now_utc
+from llc.models.activity import ActorType
 from llc.models.secret import LLCSecret
 from services.llc_secrets_read import llc_unified_read_enabled, read_imported_llc_secret_in_session
 
@@ -130,6 +131,7 @@ class SecretService(LLCServiceBase):
             await self.activity_log.record(
                 session=session,
                 company_id=company_id,
+                actor_type=ActorType.AGENT,
                 actor_id=actor,
                 event_type="secret.set",
                 entity_type="llc_secret",
@@ -166,12 +168,12 @@ class SecretService(LLCServiceBase):
         """
         secret = await self._fetch_active(session, company_id, name)
         if llc_unified_read_enabled():
-            unified = await self._unified_get(session, secret, company_id)
+            unified = await self._envelope_store_get(session, secret, company_id)
             if unified is not None:
                 return unified
         return self._fernet(company_id).decrypt(secret.value).decode("utf-8")
 
-    async def _unified_get(self, session: AsyncSession, secret: LLCSecret, company_id: str) -> Optional[str]:
+    async def _envelope_store_get(self, session: AsyncSession, secret: LLCSecret, company_id: str) -> Optional[str]:
         """Best-effort unified-store read for an already-resolved active secret row."""
         from autobot_shared.secrets_envelope import load_root_key
 
@@ -200,6 +202,7 @@ class SecretService(LLCServiceBase):
             await self.activity_log.record(
                 session=session,
                 company_id=company_id,
+                actor_type=ActorType.AGENT,
                 actor_id=actor,
                 event_type="secret.revoked",
                 entity_type="llc_secret",
