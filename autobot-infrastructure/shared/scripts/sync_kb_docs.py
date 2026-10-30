@@ -261,7 +261,7 @@ async def incremental_sync():
         return await sync_docs()
 
 
-async def preview_sync() -> bool:
+async def print_sync_preview() -> bool:
     """Print what an incremental sync would change, applying nothing (#19701)."""
     changed, removed = await IncrementalKnowledgeSync().preview_changes()
     print(json.dumps({"would_index": [str(path) for path in changed], "would_remove": removed}, indent=2))  # noqa: print  # canonical: ignore py-print-smoke
@@ -309,7 +309,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.dry_run:
-        success = asyncio.run(preview_sync())
+        success = asyncio.run(print_sync_preview())
     elif args.watch:
         success = asyncio.run(watch_sync(args.interval))
     elif args.status:
