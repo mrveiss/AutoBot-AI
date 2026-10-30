@@ -140,7 +140,7 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           python scripts/ci/summarize_test_durations.py \
-            --splits 12 \
+            --splits 8 \
             .test_durations .test_durations_slm >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload durations
@@ -222,6 +222,13 @@ jobs:
           git checkout -B "$BRANCH"
           git add .test_durations .test_durations_slm
           git commit -m "chore(ci): refresh per-test split durations (#17313)"
+          # The checkout fetched only the triggering ref, so with no remote-tracking ref for
+          # $BRANCH the lease had nothing to compare and every push after the first was
+          # rejected "(stale info)" -- the 2026-10-18 scheduled refresh measured and never
+          # landed (#17313, #19527). Fetch its tip first when it exists.
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null; then
+            git fetch --no-tags origin "+refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}"
+          fi
           git push --force-with-lease origin "$BRANCH"
 
           if gh pr view "$BRANCH" --json number >/dev/null 2>&1; then
