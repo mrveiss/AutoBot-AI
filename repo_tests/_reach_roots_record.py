@@ -123,10 +123,10 @@ REACH_ROOTS = {
     "repo_tests/frontend_single_api_client_12363_test.py": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "repo_tests/frontend_url_served_by_19326_test.py": (
         "autobot-backend",
-        "autobot-slm-backend",
-        "autobot_shared",
         "autobot-infrastructure",
         "autobot-npu-worker",
+        "autobot-slm-backend",
+        "autobot_shared",
         "scripts",
     ),
     "repo_tests/generated_type_names_not_redeclared_19334_test.py": ("autobot-frontend/src",),
