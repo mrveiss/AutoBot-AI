@@ -16,7 +16,7 @@ test.describe('AutoBot GUI Functionality', () => {
     await expect(page.locator('#app.min-h-screen')).toBeVisible();
 
     // Check if main navigation is present
-    await expect(page.getByText('AutoBot', { exact: true }).first()).toBeVisible();
+    await expect(page.getByTestId('app-brand')).toContainText('AutoBot');
 
     // Check navigation menu items
     await expect(page.getByText('DASHBOARD')).toBeVisible();
@@ -147,7 +147,7 @@ test.describe('AutoBot GUI Functionality', () => {
 
     // The app should gracefully handle API failures
     // It should still display the UI even when backend is down
-    await expect(page.getByText('AutoBot', { exact: true }).first()).toBeVisible();
+    await expect(page.getByTestId('app-brand')).toContainText('AutoBot');
 
     // The dashboard may show error states or fallback content
     // But the app shouldn't crash
