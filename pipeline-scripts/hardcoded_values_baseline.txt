@@ -1065,7 +1065,6 @@
 1|ssot|autobot-slm-backend/ansible/playbooks/update-all-nodes.yml|:8001
 1|other|autobot-slm-backend/ansible/playbooks/update-node.yml|60
 1|ssot|autobot-slm-backend/ansible/playbooks/update-node.yml|:8001
-1|ssot|autobot-slm-backend/ansible/playbooks/vars/backend-env.yml|:11434
 1|other|autobot-slm-backend/ansible/reboot-node.yml|300
 1|other|autobot-slm-backend/ansible/requirements.yml|https://github.com/dev-sec/ansible-os-hardening
 1|other|autobot-slm-backend/ansible/roles/access_control/defaults/main.yml|300
@@ -1083,7 +1082,6 @@
 4|ssot|autobot-slm-backend/ansible/roles/ai-stack/defaults/main.yml|qwen3.5:9b
 1|other|autobot-slm-backend/ansible/roles/ai-stack/tasks/main.yml|120
 1|other|autobot-slm-backend/ansible/roles/backend/defaults/main.yml|https://github.com/mrveiss/AutoBot-AI.git
-1|ssot|autobot-slm-backend/ansible/roles/backend/defaults/main.yml|:11434
 1|ssot|autobot-slm-backend/ansible/roles/backend/defaults/main.yml|qwen3.5:9b
 1|other|autobot-slm-backend/ansible/roles/backend/tasks/main.yml|'/var/lib/autobot/celerybeat-schedule
 4|other|autobot-slm-backend/ansible/roles/backend/tasks/main.yml|120
