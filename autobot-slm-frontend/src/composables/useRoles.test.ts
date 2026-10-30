@@ -200,7 +200,7 @@ describe('useRoles — migrated onto slmApiClient (#12420 Phase 2 batch 7)', () 
       expect(r.error).toBe('role in use')
     })
 
-    it('syncRole returns a failed SyncResult carrying the detail', async () => {
+    it('syncRole returns a failed RoleSyncResult carrying the detail', async () => {
       mockRaw.mockResolvedValue(errorResponse(500, { detail: 'sync exploded' }))
 
       const result = await useRoles().syncRole('backend', ['n1'])
