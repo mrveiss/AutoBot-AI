@@ -24,7 +24,12 @@ from chat_workflow.command_execution_record import approval_result_of, current_t
 from chat_workflow.tool_dispatch_guards import COMMAND_FORCE_APPROVAL_KEY, enforce_ai_line
 from chat_workflow.tool_handler import ToolHandlerMixin
 from models.command_execution import CommandState
-from services.agent_terminal.ai_line_gate import PENDING_APPROVAL_REFUSAL, decide_command, release_reservation
+from services.agent_terminal.ai_line_gate import (
+    PENDING_APPROVAL_REFUSAL,
+    _close_queued_command,
+    decide_command,
+    write_reservation,
+)
 from services.agent_terminal.models import AgentTerminalSession
 from services.agent_terminal.service import AgentTerminalService
 from services.ai_line_enforcement import Outcome, resolve_action_line
@@ -356,17 +361,43 @@ def test_a_recreated_session_beats_the_stale_id_the_turn_started_with():
 
 
 @pytest.mark.asyncio
-async def test_a_cancelled_write_clears_only_its_own_reservation_and_closes_its_row():
-    row = MagicMock(state=None)
-    queue = MagicMock(get_command=AsyncMock(return_value=row), update_command=AsyncMock())
+async def test_a_cancelled_write_clears_only_its_own_reservation_and_closes_its_row_after_it_lands():
+    """The close waits for the write, so the row cannot land pending after it."""
+    order: list = []
+    started, finish = asyncio.Event(), asyncio.Event()
+
+    async def add_command(_command):
+        started.set()
+        await finish.wait()
+        order.append("written")
+        return True
+
+    async def update_command(_command):
+        order.append("closed")
+        return True
+
+    queue = MagicMock(add_command=add_command, update_command=update_command)
+    command = MagicMock(command_id="mine", state=None)
     session = AgentTerminalSession(session_id="s", agent_id="a", agent_role=AgentRole.CHAT_AGENT, conversation_id=None)
     session.pending_approval = {"command_id": "someone-else"}
-    release_reservation(session, "mine", queue)
-    await asyncio.sleep(0)
-    await asyncio.sleep(0)
+    task = asyncio.create_task(write_reservation(session, command, queue))
+    await started.wait()
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
     assert session.pending_approval == {"command_id": "someone-else"}
-    assert row.state is CommandState.CANCELLED
-    queue.update_command.assert_awaited_once_with(row)
-    session.pending_approval = {"command_id": "mine"}
-    release_reservation(session, "mine", queue)
-    assert session.pending_approval is None
+    assert order == []
+    finish.set()
+    await asyncio.sleep(0.01)
+    assert order == ["written", "closed"]
+    assert command.state is CommandState.CANCELLED
+
+
+@pytest.mark.asyncio
+async def test_a_failed_close_is_logged():
+    write = asyncio.get_running_loop().create_future()
+    write.set_result(True)
+    queue = MagicMock(update_command=AsyncMock(return_value=False))
+    with patch("services.agent_terminal.ai_line_gate.logger") as logger:
+        await _close_queued_command(queue, MagicMock(command_id="mine"), write)
+    logger.error.assert_called_once()

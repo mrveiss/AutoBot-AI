@@ -12,6 +12,8 @@ terminal's own approval queue, so the point is told not to file a second approva
 
 from __future__ import annotations
 
+import asyncio
+
 from sqlalchemy import select
 
 from autobot_shared.async_compat import fire_and_forget
@@ -24,7 +26,7 @@ from user_management.models.user import User
 from .approval_handler import ApprovalHandler
 from .models import AgentTerminalSession
 
-__all__ = ["Outcome", "decide_command", "permission_refusal", "release_reservation", "resolve_command_line"]
+__all__ = ["Outcome", "decide_command", "permission_refusal", "write_reservation", "resolve_command_line"]
 
 logger = get_logger(__name__)
 
@@ -89,22 +91,27 @@ async def decide_command(
     return is_auto_approved, None
 
 
-def release_reservation(session: AgentTerminalSession, command_id: str, queue) -> None:
-    """Undo a pending approval whose queue write did not finish, if it is still this operation's.
+async def write_reservation(session: AgentTerminalSession, command, queue) -> None:
+    """Queue *command*, whose pending approval is already set; a write that fails or is cancelled undoes it.
 
-    A cancelled await does not stop the worker thread, so the row may exist anyway: it is closed in the
-    background rather than awaited here, because this runs while the cancellation is unwinding.
+    The write is shielded, because cancelling the await would not stop its worker thread. The row is
+    closed only once the write has finished, so it cannot land pending after the close.
     """
-    if (session.pending_approval or {}).get("command_id") == command_id:
-        session.pending_approval = None
-    fire_and_forget(_close_queued_command(queue, command_id), name=f"close-queued-{command_id}")
+    write = asyncio.ensure_future(queue.add_command(command))
+    try:
+        await asyncio.shield(write)
+    except BaseException:
+        if (session.pending_approval or {}).get("command_id") == command.command_id:
+            session.pending_approval = None
+        fire_and_forget(_close_queued_command(queue, command, write), name=f"close-queued-{command.command_id}")
+        raise
 
 
-async def _close_queued_command(queue, command_id: str) -> None:
-    command = await queue.get_command(command_id)
-    if command is not None:
-        command.state = CommandState.CANCELLED
-        await queue.update_command(command)
+async def _close_queued_command(queue, command, write: "asyncio.Future") -> None:
+    await asyncio.wait({write})
+    command.state = CommandState.CANCELLED
+    if not await queue.update_command(command):
+        logger.error("Could not close queued command %s after its write was abandoned", command.command_id)
 
 
 def permission_refusal(approval_handler: ApprovalHandler, session: AgentTerminalSession, command: str, risk):

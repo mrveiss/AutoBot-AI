@@ -100,8 +100,9 @@ def _arg_reads_unbounded(arg: str) -> bool:
 
 
 def _names_a_secret(arg: str) -> bool:
-    """Whether any path segment of this argument, or an option's value, is a secret file's name."""
-    return any(is_secret_file_name(part) for part in arg.partition("=")[2 if "=" in arg else 0].split("/") if part)
+    """Whether any segment of this argument, or an option's value, is a secret file's name (``HEAD:id_rsa`` too)."""
+    path = arg.partition("=")[2 if "=" in arg else 0]
+    return any(is_secret_file_name(part) for part in re.split(r"[/:]", path) if part)
 
 
 def _reads_files_unseen(args: List[str]) -> bool:

@@ -87,6 +87,8 @@ def test_these_only_read(command):
         "wc --files=-",
         "cat //dev/zero",
         "cat .env",
+        "git show HEAD:id_rsa",
+        "git show origin/main:secrets.yaml",
         "cat config/.env.local",
         "head -n 5 deploy/id_rsa",
         "grep token secrets/server.key",
