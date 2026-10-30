@@ -157,6 +157,7 @@
         dest: "{{ install_base }}/{{ item.item }}/"
         delete: false
         rsync_opts:
+          - "--chmod=o-w"  # #19503
           - "--exclude=.git"
           - "--exclude=__pycache__"
           - "--exclude=*.pyc"
