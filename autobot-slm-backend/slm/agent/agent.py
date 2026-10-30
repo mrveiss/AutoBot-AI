@@ -27,7 +27,7 @@ from aiohttp import web
 from autobot_shared import async_compat, env_utils, node_proxy, time_utils
 from autobot_shared.fleet_constants import DEFAULT_HEARTBEAT_INTERVAL
 
-from . import event_buffer
+from . import event_buffer, request_timeouts
 from .health_collector import HealthCollector
 from .heartbeat_payload import build_heartbeat_payload
 from .role_detector import RoleDetector
@@ -219,7 +219,7 @@ class SLMAgent:
             async with self._session.post(
                 url,
                 json=payload,
-                timeout=aiohttp.ClientTimeout(total=10),
+                timeout=aiohttp.ClientTimeout(total=request_timeouts.HEARTBEAT_TIMEOUT_SECONDS),
                 ssl=False,  # mTLS pending PKI setup (Issue #725)
             ) as response:
                 if response.status == 200:
@@ -263,8 +263,8 @@ class SLMAgent:
                     await response.text(),
                 )
                 return False
-        except aiohttp.ClientError as e:
-            logger.warning("Failed to send heartbeat: %s", e)
+        except (aiohttp.ClientError, TimeoutError) as e:
+            logger.warning("Failed to send heartbeat: %s", e or type(e).__name__)
             # Offloaded here, not inside `buffer_event`: its other caller is sync.
             # Hot path -- every failed heartbeat writes a row (#17647 review).
             await asyncio.to_thread(self.buffer_event, "heartbeat", payload)
@@ -319,7 +319,7 @@ class SLMAgent:
             async with self._session.post(
                 url,
                 json=payload,
-                timeout=aiohttp.ClientTimeout(total=30),
+                timeout=aiohttp.ClientTimeout(total=request_timeouts.EVENT_SYNC_TIMEOUT_SECONDS),
                 ssl=False,
             ) as response:
                 if response.status == 200:
@@ -332,8 +332,8 @@ class SLMAgent:
                         response.status,
                         body[:200],
                     )
-        except aiohttp.ClientError as e:
-            logger.warning("Failed to sync events: %s", e)
+        except (aiohttp.ClientError, TimeoutError) as e:
+            logger.warning("Failed to sync events: %s", e or type(e).__name__)
 
     async def run(self, enable_notify_server: bool = False, notify_port: int = DEFAULT_NOTIFY_PORT):
         """Main agent loop."""
