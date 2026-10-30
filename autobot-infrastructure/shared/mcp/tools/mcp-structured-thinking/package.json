@@ -19,8 +19,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.26.0",
     "luxon": "^3.3.0",
-    "zod": "^3.22.4",
-    "zod-to-json-schema": "^3.24.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",

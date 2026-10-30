@@ -16,7 +16,7 @@ chromadb                         # version from constraints/shared.txt (#19478)
 sentence-transformers>=6.1.0
 
 # Model and Tokenization
-transformers>=5.20.0
+transformers>=5.20.2
 tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a floor above that is
                           # unsatisfiable. #10416 (a grouped dependency bump) raised it back to
                           # >=0.23.1 two days after #10332 fixed it, keeping this comment, and the
@@ -65,7 +65,7 @@ nltk>=3.10.3
 # 4.0.0.dev3 sdist and tried to build it on the node.
 
 # HTTP and API
-fastapi>=0.147.0
+fastapi  # version from constraints/shared.txt (#18060)
 uvicorn[standard]>=0.54.0
 aiohttp>=3.14.5
 httpx>=0.28.1
