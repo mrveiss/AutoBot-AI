@@ -48,8 +48,10 @@
   --aui-color-warning-contrast: var(--text-on-warning);
   --aui-color-error: var(--color-error);
   --aui-color-error-contrast: var(--text-on-error);
+  --aui-color-error-solid: var(--color-error-solid);
   --aui-color-info: var(--color-info);
-  --aui-color-info-contrast: var(--text-on-primary);
+  --aui-color-info-contrast: var(--text-on-info);
+  --aui-color-info-solid: var(--color-info-solid);
 
   /* ---- Overlay (modal backdrop) -------------------------------------- */
   --aui-color-overlay: var(--bg-overlay);
