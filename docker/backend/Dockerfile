@@ -43,7 +43,7 @@ COPY constraints/shared.txt /app/constraints/shared.txt
 # torch/torchvision are excluded from the filtered list and installed explicitly from
 # the CPU index at the constraints/shared.txt pair (#19330, #19072; `==` matches `+cpu`).
 # Only that pair is read from the file: applying the whole file there also constrains
-# torch's own deps (filelock>=4.2.1), which the CPU index does not carry, so resolution
+# torch's own deps (filelock>=4.2.4), which the CPU index does not carry, so resolution
 # fails; the PyPI install below applies the full file. The default-PyPI CUDA build
 # (libtorch_cuda.so) is never pulled into
 # this CPU image (#10251). vLLM + its CUDA stack are no longer default deps; GPU
