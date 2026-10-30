@@ -452,7 +452,7 @@ import { useI18n } from 'vue-i18n'
 import { useChatStore } from '@/stores/useChatStore'
 import { useChatController } from '@/models/controllers'
 import ProgressBar from '@/components/ui/ProgressBar.vue'
-import { BaseButton } from '@autobot/ui'
+import { BaseButton, useToast } from '@autobot/ui'
 import VisionAnalysisModal from './VisionAnalysisModal.vue'
 import PresetManagementModal from './PresetManagementModal.vue'
 import TranslationShortcutPanel from './TranslationShortcutPanel.vue'
@@ -497,6 +497,7 @@ interface UploadItem {
 }
 
 const { t } = useI18n()
+const { showToast } = useToast()
 const logger = createLogger('ChatInput')
 // Issue #1146: unlock AudioContext on first user gesture so TTS can play even
 // when voice output was re-enabled from a previous session via localStorage.
@@ -658,7 +659,6 @@ const canSend = computed(() => {
 })
 
 const characterCount = computed(() => messageText.value.length)
-
 const isNearLimit = computed(() => characterCount.value > maxCharacters * 0.9)
 
 const isTypingIndicatorVisible = computed(() => {
@@ -813,7 +813,7 @@ const handleFileSelect = async (event: Event) => {
   // Validate files
   const validFiles = files.filter(file => {
     if (file.size > maxFileSize) {
-      alert(`File "${file.name}" is too large (max ${formatFileSize(maxFileSize)})`)
+      showToast(t('chat.input.fileTooLarge', { name: file.name, max: formatFileSize(maxFileSize) }), 'warning')
       return false
     }
     return true
@@ -904,7 +904,7 @@ const startVoiceRecording = async () => {
     } catch (err) {
       logger.error('Microphone access denied:', err)
     }
-    alert('Voice input requires Chrome, Edge, or Safari 15+. Transcription is not available in this browser.')
+    showToast(t('chat.input.voiceUnsupported'), 'warning')
     return
   }
 
@@ -936,7 +936,7 @@ const startVoiceRecording = async () => {
     isVoiceRecording.value = false
     _recognition = null
     if (event.error === 'not-allowed') {
-      alert('Microphone access was denied. Please allow microphone access in your browser settings.')
+      showToast(t('chat.input.micDenied'), 'error')
     }
   }
 

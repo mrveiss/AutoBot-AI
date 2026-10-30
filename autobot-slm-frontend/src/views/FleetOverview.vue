@@ -18,7 +18,6 @@ import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useNodeConnectionTest } from '@/composables/useNodeConnectionTest'
 import { useRoles } from '@/composables/useRoles'
-
 import type { SLMNode, NodeHealth } from '@/types/slm'
 import { createLogger } from '@/utils/debugUtils'
 import { formatRelativeTime } from '@/utils/dateUtils'
@@ -31,10 +30,11 @@ import NPUWorkersTab from '@/components/fleet/NPUWorkersTab.vue'
 import RoleManagementModal from '@/components/RoleManagementModal.vue'
 import DecommissionModal from '@/components/fleet/DecommissionModal.vue'
 import InfrastructureView from '@/views/InfrastructureView.vue'
-import { BaseModal, BaseDrawer } from '@autobot/ui'
+import { BaseModal, BaseDrawer, useToast } from '@autobot/ui'
 
 const logger = createLogger('FleetOverview')
 const { t } = useI18n()
+const { showToast } = useToast()
 const fleetStore = useFleetStore()
 const slmApi = useSlmApi()
 const route = useRoute()
@@ -344,7 +344,7 @@ async function handleRestart(nodeId: string): Promise<void> {
     fleetStore.updateNodeStatus(nodeId, 'rebooting')
   } catch (err) {
     logger.error('Failed to reboot node:', err)
-    alert(t('fleetOverview.failedToReboot', { message: err instanceof Error ? err.message : t('fleetOverview.unknownError') }))
+    showToast(t('fleetOverview.failedToReboot', { message: err instanceof Error ? err.message : t('fleetOverview.unknownError') }), 'error')
   } finally {
     isRestarting.value = false
   }
@@ -363,11 +363,11 @@ async function handleReenroll(nodeId: string): Promise<void> {
       logger.info('Node reset for re-enrollment:', nodeId)
       await refreshFleet()
     } else {
-      alert(t('fleetOverview.reenrollmentFailed', { message: result.message }))
+      showToast(t('fleetOverview.reenrollmentFailed', { message: result.message }), 'error')
     }
   } catch (err) {
     logger.error('Failed to re-enroll node:', err)
-    alert(t('fleetOverview.failedToReenroll', { message: err instanceof Error ? err.message : t('fleetOverview.unknownError') }))
+    showToast(t('fleetOverview.failedToReenroll', { message: err instanceof Error ? err.message : t('fleetOverview.unknownError') }), 'error')
   }
 }
 
