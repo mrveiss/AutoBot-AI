@@ -216,3 +216,128 @@ env_registry.register_env_var(
         component="filesystem_mcp",
     )
 )
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_MEMORY_SESSION_READ_MAX_CHUNKS",
+        type=int,
+        default=500,
+        description=(
+            "Most chunks one memory.session_read call returns for a single session "
+            "(memory/verbatim_sessions.py, #11137)."
+        ),
+        component="memory",
+        range=(1, 100_000),
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_MEMORY_SESSION_LIST_MAX_SCAN",
+        type=int,
+        default=5000,
+        description=(
+            "Most of the caller's chunks one memory.session_list call scans when grouping them into sessions "
+            "(memory/verbatim_sessions.py, #11137)."
+        ),
+        component="memory",
+        range=(1, 1_000_000),
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_MEMORY_SESSION_LIST_LIMIT",
+        type=int,
+        default=50,
+        description=(
+            "Default number of sessions memory.session_list returns when the caller gives no limit "
+            "(memory/verbatim_sessions.py, #11137)."
+        ),
+        component="memory",
+        range=(1, 10_000),
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_TRANSCRIPT_MAX_DECOMPRESSED_BYTES",
+        type=int,
+        default=1073741824,
+        description=(
+            "Most decompressed bytes read from one transcript or history file "
+            "before the read stops and reports itself truncated "
+            "(services/execution/transcript_normalizer.py, #11137)."
+        ),
+        component="memory",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_TRANSCRIPT_MAX_LINE_BYTES",
+        type=int,
+        default=16777216,
+        description=(
+            "Longest single line a transcript or history read will load; "
+            "a longer line stops the file and reports it truncated "
+            "(services/execution/transcript_normalizer.py, #11137)."
+        ),
+        component="memory",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_TRANSCRIPT_MAX_EVENTS",
+        type=int,
+        default=1000000,
+        description=(
+            "Most events (or history entries) returned from one file "
+            "before the read stops and reports itself truncated "
+            "(services/execution/transcript_normalizer.py, #11137)."
+        ),
+        component="memory",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_TRANSCRIPT_MAX_RETAINED_BYTES",
+        type=int,
+        default=268435456,
+        description=(
+            "Most source-line bytes behind the events or entries one transcript or history read retains; "
+            "over it the read stops and reports itself truncated "
+            "(services/execution/transcript_normalizer.py, #11137)."
+        ),
+        component="memory",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_MEMORY_SESSION_READ_MAX_BYTES",
+        type=int,
+        default=262144,
+        description=(
+            "Most text bytes one memory.session_read call returns after redaction; "
+            "over it the result carries truncated=true "
+            "(memory/verbatim_sessions.py, #11137)."
+        ),
+        component="memory",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_TRANSCRIPT_EVENT_OVERHEAD_BYTES",
+        type=int,
+        default=1024,
+        description=(
+            "Bytes charged per retained event, on top of its source bytes, against "
+            "AUTOBOT_TRANSCRIPT_MAX_RETAINED_BYTES (services/execution/transcript_normalizer.py, #11137)."
+        ),
+        component="memory",
+    )
+)
