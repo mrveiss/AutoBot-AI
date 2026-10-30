@@ -19,6 +19,21 @@ describe('HttpError', () => {
     expect(new HttpError(500, 'x').detail).toBeNull()
   })
 
+  it('withDetail shows the detail text exactly and keeps status and details', () => {
+    const e = HttpError.withDetail(409, 'Conflict', 'Name already taken')
+    expect(isHttpError(e)).toBe(true)
+    expect(e.message).toBe('Name already taken')
+    expect(e.status).toBe(409)
+    expect(e.details).toEqual({ detail: 'Name already taken' })
+    expect(e.detail).toBe('Name already taken')
+  })
+
+  it('withDetail without a detail is the usual HttpError message', () => {
+    expect(HttpError.withDetail(500, 'Server Error').message).toBe('HTTP 500: Server Error')
+    expect(HttpError.withDetail(500, undefined, null).message).toBe('HTTP 500')
+    expect(HttpError.withDetail(500, undefined, null).details).toBeNull()
+  })
+
   it('narrows only real HttpErrors', () => {
     expect(isHttpError(new HttpError(500, 'x'))).toBe(true)
     expect(isHttpError(new Error('HTTP 500: x'))).toBe(false)
@@ -28,6 +43,15 @@ describe('HttpError', () => {
 
 const res = (status: number, body: string | null, type = 'application/json', statusText = '') =>
   new Response(body, { status, statusText, headers: type ? { 'content-type': type } : {} })
+
+describe('HttpError message without a status text', () => {
+  it('renders a bare status for an empty message', () => {
+    expect(new HttpError(502, '').message).toBe('HTTP 502')
+  })
+  it('renders a bare status for an undefined message', () => {
+    expect(new HttpError(502, undefined).message).toBe('HTTP 502')
+  })
+})
 
 describe('isHttpClientError', () => {
   it('is true for 4xx HttpErrors only', () => {

@@ -10,10 +10,10 @@ dict below is what a full tree walk found already over 600 lines the day
 discovery went live, one entry per file, at the size it was measured at.
 
 THIS MAPPING ONLY SHRINKS. Never add an entry to make a new file pass; split
-the file instead. Mirrored by ``RATCHET_BASELINE`` in
-``repo_tests/python_file_size_ratchet_baseline.py`` — lower an entry here and
-lower it there in the same commit (#14498), or the lines just cut stay
-spendable in the gap between the two.
+the file instead. This is the ONLY record of
+these ceilings (#19544): the ratchet test compares it against the same table at
+the base commit, so "no entry added" and "no ceiling raised" need no second copy.
+Lower an entry here when its file shrinks; the audit fails until you do.
 """
 
 from __future__ import annotations
@@ -80,7 +80,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/api_endpoint_scanner.py": 1444,
     "autobot-backend/api/codebase_analytics/chromadb_storage.py": 1389,  # #18055: split to problem_storage.py
     "autobot-backend/api/codebase_analytics/duplicate_detector.py": 1119,
-    "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 756,
+    "autobot-backend/api/codebase_analytics/endpoints/call_graph.py": 744,
     "autobot-backend/api/codebase_analytics/endpoints/environment.py": 698,  # #13602: sanitised traversal log
     "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 817,
     "autobot-backend/api/codebase_analytics/endpoints/report.py": 2262,
@@ -121,7 +121,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/orchestration.py": 610,
     "autobot-backend/api/playwright.py": 877,
     "autobot-backend/api/redis_mcp/tools.py": 658,
-    "autobot-backend/api/schemas_agent.py": 2216,
+    "autobot-backend/api/schemas_agent.py": 2212,
     "autobot-backend/api/schemas_analytics.py": 3533,
     "autobot-backend/api/schemas_chat.py": 702,
     "autobot-backend/api/schemas_code.py": 3257,
@@ -163,8 +163,8 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/code_intelligence/code_review_engine_test.py": 1010,
     "autobot-backend/code_intelligence/conversation_analysis/analyzer.py": 906,
     "autobot-backend/code_intelligence/conversation_flow_analyzer_test.py": 900,
-    "autobot-backend/code_intelligence/cross_language_patterns/detector.py": 1212,
-    "autobot-backend/code_intelligence/cross_language_patterns/extractors.py": 903,
+    "autobot-backend/code_intelligence/cross_language_patterns/detector.py": 1199,
+    "autobot-backend/code_intelligence/cross_language_patterns/extractors.py": 891,
     "autobot-backend/code_intelligence/doc_generation/markdown_generator.py": 738,
     "autobot-backend/code_intelligence/fingerprinting/detector.py": 977,
     "autobot-backend/code_intelligence/llm_code_generator_test.py": 960,
@@ -172,8 +172,8 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/code_intelligence/log_pattern_miner.py": 1060,
     "autobot-backend/code_intelligence/log_pattern_miner_test.py": 738,
     "autobot-backend/code_intelligence/merge_conflict_resolver.py": 624,
-    "autobot-backend/code_intelligence/pattern_analysis/analyzer.py": 1082,
-    "autobot-backend/code_intelligence/pattern_analysis/complexity_analyzer.py": 765,
+    "autobot-backend/code_intelligence/pattern_analysis/analyzer.py": 1070,
+    "autobot-backend/code_intelligence/pattern_analysis/complexity_analyzer.py": 757,
     "autobot-backend/code_intelligence/pattern_analysis/refactoring_generator.py": 827,
     "autobot-backend/code_intelligence/performance_analysis/ast_visitor.py": 725,
     "autobot-backend/code_intelligence/performance_analyzer_test.py": 874,
@@ -213,13 +213,13 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/judges/security_risk_judge.py": 842,
     "autobot-backend/knowledge/adapters/okf_adapter.py": 770,
     "autobot-backend/knowledge/base.py": 683,
-    "autobot-backend/knowledge/bulk.py": 1983,
+    "autobot-backend/knowledge/bulk.py": 1963,
     "autobot-backend/knowledge/categories.py": 965,
     "autobot-backend/knowledge/collections.py": 728,
     "autobot-backend/knowledge/connectors/base.py": 663,
     "autobot-backend/knowledge/connectors/credential_store.py": 768,  # #16444: rotate() validates the merged bundle
     "autobot-backend/knowledge/connectors/gdrive.py": 660,
-    "autobot-backend/knowledge/connectors/gitlab.py": 873,
+    "autobot-backend/knowledge/connectors/gitlab.py": 836,
     "autobot-backend/knowledge/connectors/tests/test_credential_store.py": 1021,
     "autobot-backend/knowledge/facts.py": 1727,
     "autobot-backend/knowledge/ownership.py": 757,
@@ -234,7 +234,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/knowledge/tags.py": 834,
     "autobot-backend/knowledge_sync_incremental.py": 883,
     "autobot-backend/llc/adapters/tests/test_claude_code_adapter.py": 602,
-    "autobot-backend/llc/api/companies.py": 1718,
+    "autobot-backend/llc/api/companies.py": 1671,
     "autobot-backend/llc/api/roles.py": 713,
     "autobot-backend/llc/api/sprints.py": 1223,
     "autobot-backend/llc/api/work_items.py": 1399,  # #19582: comment wake moved into the service
@@ -473,7 +473,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot_shared/redis_client.py": 674,
     "autobot_shared/redis_management/connection_manager.py": 1290,
     "autobot_shared/security/ssrf_guard_test.py": 633,
-    "autobot_shared/ssot_config.py": 3221,  # #19319 split to ssot_role_mirrors; #15501 to ssot_hosted_models
+    "autobot_shared/ssot_config.py": 3220,  # #19319 split to ssot_role_mirrors; #15501 to ssot_hosted_models
     "autobot_shared/ssot_config_test.py": 776,
     "autobot_shared/ssot_constants.py": 861,
     "autobot_shared/user_management/team_service.py": 659,
@@ -485,4 +485,17 @@ KNOWN_LARGE: dict[str, int] = {
     "repo_tests/sync_deletions_ansible_wiring_16310_test.py": 674,  # #16310
     "repo_tests/sys_modules_leak_guard.py": 1151,
     "scripts/audit_api_wiring.py": 895,  # #16816: reporting moved to dead_surface.py
+}
+
+#: Entries annotated by hand as live, tracked violations rather than #5060's
+#: legacy backlog (#14630), mapped to the issue each one was created under.
+#: This sits OUTSIDE the dict literal above deliberately. A regeneration that
+#: re-measures the tree emits `"path": count` and nothing else, so it destroys
+#: every hand-written line inside the literal it rewrites -- which is exactly
+#: how the two inline annotations were lost once already. A key here cannot be
+#: erased that way, and ``test_an_entry_singled_out_as_live_keeps_its_note``
+#: fails the moment the inline comment it names goes missing.
+ANNOTATED_AS_LIVE: dict[str, str] = {
+    "autobot-backend/code_intelligence/testing_pattern_analyzer.py": "#14413",
+    "autobot-slm-backend/services/reconciler_remediation_tracker_expiry_14465_test.py": "#14465/#14548",
 }

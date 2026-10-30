@@ -27,7 +27,7 @@ export { default as BaseInput } from './src/components/BaseInput.vue'
 export type { InputSize, InputType } from './src/components/BaseInput.vue'
 
 export { default as BaseBadge } from './src/components/BaseBadge.vue'
-export type { BadgeVariant, BadgeSize } from './src/components/BaseBadge.vue'
+export type { BadgeVariant, BadgeSize, BadgeTone } from './src/components/BaseBadge.vue'
 // The one risk-tier badge (#13422): RiskTier is the backend's ladder, sent as risk_tier.
 export { default as RiskBadge } from './src/components/RiskBadge.vue'
 export { RISK_TIERS } from './src/types/riskTier'
@@ -42,8 +42,14 @@ export { default as BaseCard } from './src/components/BaseCard.vue'
 // The one data table (#14778) -- retires the main app's BaseTable and DataTable forks.
 export { default as BaseTable } from './src/components/BaseTable.vue'
 export type { BaseTableColumn, TableRow, TableRowKey, TableSize, TableRowVariant, SortOrder } from './src/components/BaseTable.vue'
+export { filterRows, pageRows, pageCountOf, clampPage, defaultVisibleKeys } from './src/utils/tableView'
+export type { TableFilters } from './src/utils/tableView'
 
 export { default as EmptyState } from './src/components/EmptyState.vue'
+
+// The one toast host for both apps (#19903); the caller supplies the translated labels.
+export { default as ToastContainer } from './src/components/ToastContainer.vue'
+export type { ToastContainerProps } from './src/components/ToastContainer.vue'
 
 export { default as SkipLink } from './src/components/SkipLink.vue'
 // One language picker for both apps (#18354); endonym labels live with it.
@@ -85,7 +91,7 @@ export type { AnnouncePriority } from './src/composables/useAnnounce'
 // Dialog-a11y composables — the focus-trap / scroll-lock / focus-restore /
 // initial-focus primitives shared by every dialog and modal consumer.
 export { useFocusTrap, isTabbable, FOCUSABLE_SELECTOR } from './src/composables/useFocusTrap'
-export type { UseFocusTrapReturn } from './src/composables/useFocusTrap'
+export type { UseFocusTrapOptions, UseFocusTrapReturn } from './src/composables/useFocusTrap'
 
 export { useFocusRestore } from './src/composables/useFocusRestore'
 

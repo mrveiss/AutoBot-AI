@@ -26,6 +26,7 @@ from autobot_shared.async_compat import run_or_schedule
 from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import scrubbed_git_env
+from utils.file_categorization import SKIP_DIRS
 
 # Issue #542: Handle imports for both standalone execution and backend import
 _project_root = Path(__file__).resolve().parents[3]
@@ -50,26 +51,8 @@ except ImportError as _e:
 logger = get_logger(__name__)
 
 # Directories to skip during analysis
-_SKIP_DIRECTORIES = (
-    "__pycache__",
-    ".git",
-    "node_modules",
-    ".venv",
-    "venv",
-    "env",
-    ".pytest_cache",
-    ".mypy_cache",
-    ".tox",
-    "htmlcov",
-    "dist",
-    "build",
-    "egg-info",
-    ".eggs",
-    # #13602: near-complete repo copies. Without these, one ownership request
-    # globbed 167,072 files where 6,967 exist, and ran `git blame` on each.
-    ".worktrees",
-    "worktrees",
-)
+# Canonical skip dirs plus extras: egg metadata and tool caches are not authored code (the worktree copies are in the canonical set, #13602).
+_SKIP_DIRECTORIES = SKIP_DIRS | {".eggs", ".mypy_cache", "egg-info", "env"}
 
 # #13602: two ceilings, because a file count alone is the wrong bound. Measured
 # on this repo, `git blame --line-porcelain` runs at a median 0.45s per file, so

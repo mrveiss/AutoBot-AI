@@ -1152,6 +1152,11 @@
     "editMaintenanceWindow": "Edit Maintenance Window",
     "editWindow": "Edit window",
     "endTime": "End Time",
+    "failedToActivateWindow": "Failed to activate maintenance window",
+    "failedToCompleteWindow": "Failed to complete maintenance window",
+    "failedToDeleteWindow": "Failed to delete maintenance window",
+    "failedToDrainNode": "Failed to drain node. Please try again.",
+    "failedToResumeNode": "Failed to resume node. Please try again.",
     "fleetWideMaintenance": "Fleet-Wide Maintenance",
     "leaveEmptyForFleet": "Leave empty for fleet-wide maintenance",
     "loadingMaintenanceWindows": "Loading maintenance windows...",
@@ -2628,6 +2633,18 @@
         "areYouSureYouWantToRevert": "Are you sure you want to revert this prompt to its default content?"
       },
       "sSOSettings": {
+        "confirmDeleteProvider": "Delete SSO provider \"{name}\"? This cannot be undone.",
+        "providerCreated": "Provider created successfully",
+        "providerDeleted": "Provider deleted successfully",
+        "providerDisabled": "Provider disabled",
+        "providerEnabled": "Provider enabled",
+        "providerNameRequired": "Provider name is required",
+        "providerUpdated": "Provider updated successfully",
+        "connectionTestFailed": "Connection test failed",
+        "failedToDeleteProvider": "Failed to delete provider",
+        "failedToLoadProviders": "Failed to load SSO providers",
+        "failedToSaveProvider": "Failed to save provider",
+        "failedToToggleProvider": "Failed to toggle provider",
         "aCSURLAssertionConsumerService": "ACS URL (Assertion Consumer Service)",
         "addProvider": "Add Provider",
         "addYourFirstProvider": "Add your first provider",
@@ -3324,7 +3341,9 @@
     "yourAutoBotFleetIs": "Your AutoBot fleet is configured and ready to use.",
     "yourSLMServiceLifecycle": "Your SLM (Service Lifecycle Manager) is up and running. This wizard\n          will guide you through adding and configuring your fleet nodes.",
     "provisioningFailed": "Provisioning failed",
-    "retryProvisioning": "Retry provisioning"
+    "retryProvisioning": "Retry provisioning",
+    "failedToSaveKeys": "Failed to save API keys. Check the console for details.",
+    "failedToAddNode": "Failed to add node"
   },
   "skills": {
     "approvalsTab": {
@@ -3362,9 +3381,12 @@
       "noRepositoriesRegisteredAdd": "No repositories registered. Add a skill repo to install community skills.",
       "skills": "Skills",
       "sync": "Synchronizuj",
+      "tableLabel": "Skill repositories",
       "type": "Typ",
       "uRL": "URL"
     },
+    "unknownSkill": "unknown",
+    "newDraftNotification": "AutoBot generated a new skill: \"{skillId}\" — pending approval",
     "errors": {
       "generic": "Skills request failed",
       "fetchReposFailed": "Failed to fetch repos",

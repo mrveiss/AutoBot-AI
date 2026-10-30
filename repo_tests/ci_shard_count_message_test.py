@@ -21,23 +21,11 @@ from __future__ import annotations
 
 import re
 
-import yaml
+from repo_tests._ci_shards import ci_document as _document
+from repo_tests._ci_shards import python_shard_count as _shard_count
 from repo_tests._paths import repo_root
 
-_CI = repo_root() / ".github" / "workflows" / "ci.yml"
-
-
-def _document() -> dict:
-    return yaml.safe_load(_CI.read_text(encoding="utf-8"))
-
-
-def _shard_count() -> int:
-    """How many shards the python-shard matrix actually runs."""
-    jobs = _document()["jobs"]
-    assert "python-shard" in jobs, "FIX THE SWEEP: no python-shard job in ci.yml"
-    shards = jobs["python-shard"]["strategy"]["matrix"]["shard"]
-    assert isinstance(shards, list) and shards, "python-shard matrix is not a non-empty list"
-    return len(shards)
+_DURATIONS_WORKFLOW = repo_root() / ".github" / "workflows" / "test-durations.yml"
 
 
 def _reported_count() -> int:
@@ -65,3 +53,18 @@ def test_the_success_message_names_the_real_shard_count():
 def test_the_matrix_is_actually_read():
     """A vacuity floor: a matrix this test could not parse would pass silently."""
     assert _shard_count() >= 2, "FIX THE SWEEP: python-shard matrix parsed as fewer than 2 shards"
+
+
+def test_the_durations_summary_describes_the_real_shard_count():
+    """#19527: the weekly durations run summarises the split for a shard count.
+
+    It is a literal in test-durations.yml because that workflow has no matrix to
+    read; this holds it to ci.yml's, so a count change cannot leave the summary
+    describing a split the PR gate no longer runs.
+    """
+    text = _DURATIONS_WORKFLOW.read_text(encoding="utf-8")
+    found = re.findall(r"--splits (\d+)", text)
+    assert found, "FIX THE SWEEP: test-durations.yml names no --splits count"
+    assert {int(n) for n in found} == {
+        _shard_count()
+    }, f"test-durations.yml summarises --splits {found} but ci.yml runs {_shard_count()} shards"

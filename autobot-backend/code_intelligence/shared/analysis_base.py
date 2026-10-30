@@ -21,12 +21,14 @@ the class.
 from __future__ import annotations
 
 import ast
+import fnmatch
 import time
 from pathlib import Path
 from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
 from code_intelligence.similarity_thresholds import SIMILARITY_MEDIUM  # noqa: F401 -- re-exported (#18094)
+from utils.file_categorization import SKIP_DIRS
 
 # Issue #554: Import analytics infrastructure for semantic analysis. Guarded
 # once here (was duplicated verbatim in both security/analyzer.py and
@@ -53,17 +55,30 @@ logger = get_logger(__name__)
 # Issue #12660: Default exclusion patterns shared by every analyzer that
 # subclasses BaseCodeAnalyzer (verbatim match of the previous per-class
 # defaults in security/analyzer.py and performance_analysis/analyzer.py).
+# Directory patterns are "/name/" so they match whole path components of the
+# "/"-prefixed, root-relative path (see ``_should_exclude``); the canonical dirs
+# come from ``SKIP_DIRS``. The globs and extras below are this family's own:
+# bytecode, test files, archives and migrations are not analysed.
 DEFAULT_EXCLUDE_PATTERNS: List[str] = [
-    "venv",
-    "node_modules",
-    ".git",
-    "__pycache__",
+    *(f"/{name}/" for name in sorted(SKIP_DIRS)),
     "*.pyc",
     "test_*",
     "*_test.py",
-    "archives",
-    "migrations",
+    "/archives/",
+    "/migrations/",
+    # The old bare ".git" substring also skipped these CI/config dirs; keep that.
+    "/.github/",
+    "/.gitlab/",
 ]
+
+
+def _pattern_matches(pattern: str, path_str: str) -> bool:
+    """A slash-free glob matches the file name; a pattern with a slash matches the path text (#19695)."""
+    if "/" not in pattern and any(char in pattern for char in "*?["):
+        return fnmatch.fnmatchcase(path_str.rsplit("/", 1)[-1], pattern)
+    if pattern.startswith("*"):
+        return path_str.endswith(pattern[1:])
+    return pattern in path_str
 
 
 class BaseCodeAnalyzer(SemanticAnalysisMixin):
@@ -167,7 +182,7 @@ class BaseCodeAnalyzer(SemanticAnalysisMixin):
         self.total_files_scanned = 0
 
         for py_file in target.rglob("*.py"):
-            if self._should_exclude(py_file):
+            if self._should_exclude(py_file, target):
                 continue
 
             self.total_files_scanned += 1
@@ -176,16 +191,19 @@ class BaseCodeAnalyzer(SemanticAnalysisMixin):
 
         return self.results
 
-    def _should_exclude(self, path: Path) -> bool:
-        """Check if path should be excluded."""
-        path_str = str(path)
-        for pattern in self.exclude_patterns:
-            if pattern.startswith("*"):
-                if path_str.endswith(pattern[1:]):
-                    return True
-            elif pattern in path_str:
-                return True
-        return False
+    def _should_exclude(self, path: Path, root: Path | None = None) -> bool:
+        """Check if path should be excluded.
+
+        Matched against the ``root``-relative path (``/``-prefixed) so the scan
+        does not depend on where the tree lives: a checkout inside a skipped
+        directory name (a worktree) would otherwise exclude every file.
+        """
+        try:
+            rel = str(path.relative_to(root)) if root is not None else str(path)
+        except ValueError:
+            rel = str(path)
+        path_str = "/" + rel.lstrip("/")
+        return any(_pattern_matches(pattern, path_str) for pattern in self.exclude_patterns)
 
     async def _find_semantic_duplicates(self, items: List[Any]) -> List[Dict[str, Any]]:
         """Hook: domain-specific semantic duplicate-finder (``metadata_keys`` differ)."""

@@ -34,6 +34,12 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test .ts/.vue/.js source is a subset of tracked files under three roots; the test-file share drifts.",
     ),
+    "ceiling-table-sweep-19544": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Tracked Python only, a subset of all tracked files; the non-Python share grows at its own rate, "
+        "so a share of all tracked files would sink with nothing wrong.",
+    ),
     "migration-gate-test-import-sweep": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -96,6 +102,18 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "step of a fraction is worth more files than the constant's own band -- 0.99 implies a "
         "floor BELOW the constant it would replace, which #17914 AC2 refuses, and 1.00 fires on "
         "a single index-versus-filesystem skew.",
+    ),
+    "autobot-has-no-pro-name": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Every tracked file minus changelogs and the guard itself (#19982); files are added in every PR, "
+        "so an exact floor would fail any new file, and the changelog share grows at its own rate.",
+    ),
+    "autobot-has-no-pro-tier-in-user-text": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "The .vue components and locale JSON of two frontends (#19982), a subset of tracked files; "
+        "every new component grows it, and the rest of the tree grows at its own rate.",
     ),
     "audio-extension-allowlist": (
         ABSOLUTE,
@@ -273,6 +291,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "All tracked files minus vendored/build parts, against the whole tracked tree; the skipped share drifts.",
+    ),
+    "file-type-sets-one-home-19339": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test Python under autobot-backend, a subset of all tracked Python; the test-file share drifts.",
     ),
     "llc-actor-id-scan": (
         ABSOLUTE,
@@ -462,6 +485,16 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "The scanned .ts files are every non-test file under two app trees; no reference count co-moves with it.",
+    ),
+    "duplicate-type-names-ts-files-scanned-14908": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Every non-test .ts file under two app trees and the kit; no reference count co-moves with it.",
+    ),
+    "duplicate-util-filenames-scanned-14908": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test .ts/.js files under the two apps' src/utils; the test-file share and other trees drift on their own.",
     ),
 }
 

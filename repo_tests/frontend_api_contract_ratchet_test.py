@@ -31,7 +31,7 @@ not a style rule: it says nothing about any individual file, only that the
 totals must move one way.
 
 **This ratchet fails in BOTH directions**, matching
-`repo_tests/python_file_size_ratchet_baseline.py`. Growth is a regression.
+`scripts/python_file_size_known_large.py`. Growth is a regression.
 An unrecorded *shrink* is also a failure, because a baseline that silently
 drifts below the real number stops being evidence of anything — the fix is to
 lower the constant in the same commit that does the work, so the number stays
@@ -90,7 +90,7 @@ _BASELINES = {
         # train-35: useBackgroundTask clear-stuck drops its `apiClient.post<unknown>` (-1).
         # #19217: the web-research settings move to the SLM admin editor (-4).
         # #19532: the unmounted main-GUI SettingsPanel retired; the SLM admin views are the home (-3).
-        "inline_generics": 553,
+        "inline_generics": 551,
     },
     "autobot-slm-frontend": {
         "clients": 1,
@@ -274,7 +274,7 @@ def test_the_tree_this_guard_reads_is_present(app: str) -> None:
 def test_contract_sprawl_only_shrinks(app: str, dimension: str) -> None:
     """Growth is a regression; an unrecorded shrink is a stale baseline.
 
-    Both directions fail, matching `python_file_size_ratchet_baseline.py`. A
+    Both directions fail, matching `python_file_size_known_large.py`. A
     baseline that silently drifts below the real number stops being evidence of
     anything, so the constant must be lowered in the same commit that does the
     work — that keeps it a claim someone made on purpose.

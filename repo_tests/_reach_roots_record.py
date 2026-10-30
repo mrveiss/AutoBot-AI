@@ -13,6 +13,7 @@ REACH_ROOTS = {
     ),
     "repo_tests/audit_action_vocabulary_18716_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "repo_tests/audit_writer_single_source_17225_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
+    "repo_tests/autobot_has_no_pro_edition_19982_test.py": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "repo_tests/browser_service_routes_exist_19490_test.py": (
         "autobot-backend",
         "autobot-infrastructure",
@@ -88,6 +89,13 @@ REACH_ROOTS = {
     ),
     "repo_tests/docker_smoke_required_context_17126_test.py": (".github/workflows",),
     "repo_tests/docs_liquid_tags_are_defined_17930_test.py": ("docs",),
+    "repo_tests/duplicate_names_ratchet_14908_test.py": (
+        "autobot-frontend/src",
+        "autobot-frontend/src/utils",
+        "autobot-slm-frontend/src",
+        "autobot-slm-frontend/src/utils",
+        "libs/autobot-ui",
+    ),
     "repo_tests/egress_default_guard_17576_test.py": (
         "autobot-",
         "autobot_shared/",
@@ -111,13 +119,13 @@ REACH_ROOTS = {
         "autobot_shared",
         "scripts",
     ),
+    "repo_tests/file_type_sets_one_home_19339_test.py": ("autobot-backend",),
     "repo_tests/frontend_local_formatter_ratchet_19680_test.py": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "repo_tests/frontend_single_api_client_12363_test.py": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "repo_tests/generated_type_names_not_redeclared_19334_test.py": ("autobot-frontend/src",),
     "repo_tests/github_api_single_module_15411_test.py": ("pipeline-scripts", "scripts"),
     "repo_tests/hardcoded_ui_literal_ratchet_12732_test.py": ("autobot-frontend/src/", "autobot-slm-frontend/src/"),
     "repo_tests/infra_scripts_no_backend_imports_18288_test.py": ("autobot-infrastructure",),
-    "repo_tests/kb_populate_one_home_19339_test.py": ("autobot-infrastructure",),
     "repo_tests/kb_admin_read_bypass_guard_test.py": ("autobot-backend/", "autobot_shared/"),
     "repo_tests/kb_construction_baseline_18122_test.py": (
         "autobot-backend/",
@@ -134,6 +142,7 @@ REACH_ROOTS = {
         "scripts/",
         "tools/",
     ),
+    "repo_tests/kb_populate_one_home_19339_test.py": ("autobot-infrastructure",),
     "repo_tests/kb_read_visibility_guard_test.py": (
         "autobot-backend/",
         "autobot-infrastructure/shared/mcp/",

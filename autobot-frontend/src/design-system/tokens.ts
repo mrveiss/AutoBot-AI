@@ -27,10 +27,10 @@ export type ClassPair = { readonly name: string; readonly cls: string }
 export const SEMANTIC_COLORS: readonly ClassPair[] = [
   { name: 'autobot-primary', cls: 'bg-autobot-primary text-white' },
   { name: 'autobot-secondary', cls: 'bg-autobot-secondary text-white' },
-  { name: 'autobot-success', cls: 'bg-autobot-success text-white' },
-  { name: 'autobot-warning', cls: 'bg-autobot-warning text-white' },
-  { name: 'autobot-error', cls: 'bg-autobot-error text-white' },
-  { name: 'autobot-info', cls: 'bg-autobot-info text-white' },
+  { name: 'autobot-success', cls: 'bg-autobot-success text-black' },
+  { name: 'autobot-warning', cls: 'bg-autobot-warning text-black' },
+  { name: 'autobot-error', cls: 'bg-autobot-error-solid text-white' },
+  { name: 'autobot-info', cls: 'bg-autobot-info-solid text-white' },
 ] as const
 
 /** Surface backgrounds — layered card / panel / input shells. */

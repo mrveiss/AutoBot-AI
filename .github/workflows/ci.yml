@@ -212,7 +212,7 @@ jobs:
           echo "languages=${langs}" >> "$GITHUB_OUTPUT"
           echo "CodeQL languages: ${langs}"
 
-  # #13316: the suite is split twelve ways here; `python-suite` below reports the
+  # #13316: the suite is split eight ways here (twelve until #19527); `python-suite` below reports the
   # combined verdict. Measured per-step baseline of the single job this replaces:
   # dependency install 162s, TEST EXECUTION 3055s, everything else ~14s — so
   # 95% of the job was the pytest run and nothing but parallelising the tests
@@ -328,13 +328,13 @@ jobs:
         if-no-files-found: ignore
 
   python-shard:
-    name: python-suite shard ${{ matrix.shard }}/12
+    name: python-suite shard ${{ matrix.shard }}/${{ strategy.job-total }}
     needs: [changes, provision-packages]
     if: ${{ needs.changes.outputs.run_python_suite == 'true' && needs.changes.outputs.ready == 'true' }}
     runs-on: ubuntu-latest
     # #16320: first in, first out across PRs.
     #
-    # Every push used to start all twelve shards at once, and GitHub interleaved
+    # Every push used to start all of its shards at once, and GitHub interleaved
     # them with every other PR's jobs, so no suite finished early. Over five PRs
     # on 2026-09-11 the median push-to-green was 132.6 min, and 44-98 min of it
     # passed before the first shard even started.
@@ -344,7 +344,7 @@ jobs:
     # through ahead of one that pushed later.
     #
     # - The shard number is in the key. One shared key would make a PR's own
-    #   twelve shards wait on each other.
+    #   shards wait on each other.
     # - Pushes and merge groups key on the ref as well, so a post-merge
     #   verification never queues behind PR work.
     # - `queue: max` can't be combined with cancel-in-progress, and doesn't need
@@ -357,7 +357,7 @@ jobs:
       group: ${{ github.event_name == 'pull_request' && format('python-suite-shard-{0}', matrix.shard) || format('python-suite-shard-{0}-{1}', matrix.shard, github.ref) }}
       queue: max
       cancel-in-progress: false
-    # A twelfth of a ~51-minute run, with generous headroom: observed runner
+    # An eighth of a ~51-minute run, with generous headroom: observed runner
     # variance on this suite is roughly 2x for identical work (12m18s and
     # 1h24m have both been recorded), and a shard whose durations have drifted
     # can run long without being broken.
@@ -393,7 +393,16 @@ jobs:
       # useless on essentially every run.
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+        # #19527: eight, not twelve. Every shard pays a fixed ~4.8 min (setup
+        # plus collecting the whole tree), so with twelve shards ~58 of a run's
+        # ~86 runner-minutes were that fixed cost, and the twelve-wide fan-out
+        # alone filled most of the ~20-job hosted-runner ceiling. With durations
+        # that match the tree, eight shards finish about as fast as the
+        # unbalanced twelve did. THIS LIST IS THE SHARD COUNT: the job name and
+        # both --shard-splits read it through `strategy.job-total`, and
+        # repo_tests/ci_shard_count_message_test.py holds the aggregate's
+        # message to it.
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
 
     # #10691: the suite has always run with no Redis, so every test needing
     # real atomic ops (rather than a `fakeredis` stub) was a standing failure
@@ -473,7 +482,7 @@ jobs:
     # since #15091, but no workflow ever called it. Gated to shard 1 only:
     # every shard restores the identical cached venv keyed off the same
     # requirements-ci.txt (see setup-python-suite's cache key), so checking
-    # all twelve would report the same drift twelve times for one PR-blocking
+    # every shard would report the same drift once per shard for one PR-blocking
     # signal.
     #
     # #16394: scoped with --roots to the files THIS (backend) venv actually
@@ -522,7 +531,7 @@ jobs:
     #
     # Version: read from the monitoring role's prometheus_version, the one
     # declaration of the Prometheus version (#18556), so CI and hosts cannot drift.
-    # Cached: the tarball is ~95.7 MB and this job runs 12 shards, so an
+    # Cached: the tarball is ~95.7 MB and this job runs 8 shards, so an
     # uncached download is ~1.15 GB per run of which ~1.05 GB is waste — the
     # promtool tests collect into exactly one shard. Not gated on the shard
     # number: which shard they land in is a function of .test_durations and
@@ -550,7 +559,7 @@ jobs:
         TARBALL="prometheus-${PROM_VERSION}.linux-amd64"
         # --retry: this step sits in front of the entire Python suite. One
         # transient CDN 5xx would redden python-shard -> python-suite ->
-        # deployment-check with a message about Prometheus, 12 times over. A PR
+        # deployment-check with a message about Prometheus, once per shard. A PR
         # about indicators whose red carries no information must not add that.
         curl -fsSL --retry 5 --retry-all-errors --retry-delay 2 --connect-timeout 10 \
           -o "/tmp/${TARBALL}.tar.gz" \
@@ -594,8 +603,8 @@ jobs:
     # a whole job. The two are wildly unequal — the backend invocation is the
     # measured ~51 minutes, while slm-backend had never executed in CI at all
     # before #13300 — so splitting per-invocation would have produced one
-    # enormous job and one short one, capping the speed-up at roughly 1x. Six
-    # shards that each run a twelfth of BOTH keeps every shard the same shape and
+    # enormous job and one short one, capping the speed-up at roughly 1x. Shards
+    # that each run an equal share of BOTH keeps every shard the same shape and
     # keeps the #13084 interpreter separation intact inside each shard.
     - name: Run unit tests — backend, shared, tts-worker, repo_tests
       run: |
@@ -670,7 +679,7 @@ jobs:
           autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks autobot-infrastructure/shared/scripts/monitoring .claude/skills/claims-audit autobot-infrastructure/shared/tests libs plugins/core-plugins \
           -n auto --dist loadscope \
           -p repo_tests.stable_shard \
-          --shard-splits 12 --shard-group ${{ matrix.shard }} \
+          --shard-splits ${{ strategy.job-total }} --shard-group ${{ matrix.shard }} \
           --shard-durations .test_durations \
           -m "not integration and not slow and not distributed and not performance" \
           --tb=short \
@@ -693,7 +702,7 @@ jobs:
         # /shard argument below is unchanged.
         SLM_PYTHON: ${{ steps.setup-python-suite.outputs.slm-venv }}/bin/python
       run: |
-        echo "Running unit tests for autobot-slm-backend (shard ${{ matrix.shard }}/12)..."
+        echo "Running unit tests for autobot-slm-backend (shard ${{ matrix.shard }}/${{ strategy.job-total }})..."
         # A SECOND durations file, not the backend one: pytest-split's
         # --clean-durations regeneration writes only the tests that ran, so a
         # shared path would have each invocation truncate the other's timings.
@@ -723,7 +732,7 @@ jobs:
           autobot-slm-backend \
           -n auto --dist loadscope \
           -p repo_tests.stable_shard \
-          --shard-splits 12 --shard-group ${{ matrix.shard }} \
+          --shard-splits ${{ strategy.job-total }} --shard-group ${{ matrix.shard }} \
           --shard-durations .test_durations_slm \
           -m "not integration and not slow and not distributed and not performance" \
           --tb=short \
@@ -734,10 +743,23 @@ jobs:
         status=$?
         set -e
         if [ "$status" -eq 5 ]; then
-          echo "::notice::autobot-slm-backend shard ${{ matrix.shard }}/12 collected no tests (pytest exit 5) — empty split group, see #13637"
+          echo "::notice::autobot-slm-backend shard ${{ matrix.shard }}/${{ strategy.job-total }} collected no tests (pytest exit 5) — empty split group, see #13637"
           exit 0
         fi
         exit "$status"
+
+    # #19647: autobot-backend/conftest.py leaves a hollow chromadb stub in sys.modules, so in a shared
+    # session a test of the real library skips itself and reads as green. Its own session, and a skip fails.
+    - name: Run the real-ChromaDB tests in their own session
+      if: matrix.shard == 1
+      run: |
+        out=$(python -m pytest repo_tests/backup_embeddings_on_real_chroma_19647_test.py \
+          repo_tests/chromadb_missing_key_serving_where_18820_test.py -q -rs) || { echo "$out"; exit 1; }
+        echo "$out"
+        if grep -q SKIPPED <<< "$out"; then
+          echo "::error::a real-ChromaDB test was skipped"
+          exit 1
+        fi
 
     # RETIRED (#15051). This step named `infrastructure/shared/tests/integration`,
     # a path #734 moved to `autobot-infrastructure/shared/tests/integration`
@@ -797,7 +819,7 @@ jobs:
           changes-result: ${{ needs.changes.result }}
           applies: ${{ needs.changes.outputs.run_python_suite }}
           work-ok: ${{ needs.python-shard.result == 'success' }}
-          work-detail: ${{ needs.python-shard.result == 'success' && 'All 12 python-suite shards passed.' || format('python-shard={0}', needs.python-shard.result) }}
+          work-detail: ${{ needs.python-shard.result == 'success' && 'All 8 python-suite shards passed.' || format('python-shard={0}', needs.python-shard.result) }}
           event: ${{ github.event_name }}
           draft: ${{ github.event.pull_request.draft == true }}
 

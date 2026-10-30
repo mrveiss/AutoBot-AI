@@ -11,8 +11,8 @@
 # Core
 apscheduler>=3.11.3             # Issue #6590: hourly LLM key rotation job
 croniter                        # GH#9027: required by LLC RoutineScheduler and routines API; version from constraints/shared.txt
-fastapi>=0.147.0                # SECURITY UPDATE - requires starlette >=0.52.1
-starlette==1.9.0               # security floor (O(n^2) Range-header DoS), same pin as CI and ansible python_security_updates; fastapi itself only requires >=0.46.0
+fastapi  # version from constraints/shared.txt (#18060)
+starlette  # security floor from constraints/shared.txt
 uvicorn>=0.54.0
 websockets>=15.0.1,<16       # Issue #3098 + #10386: CAP <16 — langgraph-sdk 0.4.2 requires websockets >=14,<16, so >=16 makes langgraph unresolvable (ResolutionImpossible). Dependabot #10997 wrongly bumped this to >=16,<17 (bypassing the <16 cap in dependabot.yml) and broke every PR's Docker build. desktop_streaming_manager + slm_client use only legacy-compat API present in 15.x; CI pins 15.0.1. DO NOT bump past <16 until langgraph-sdk widens its cap.
 python-dotenv>=1.2.3

@@ -57,6 +57,8 @@ python:
   - '.github/workflows/co-located-smoke.yml'
   # #17500, #18729: compose_exposure_and_credentials_17500_test.py and docker_admin_seed_18729_test.py read the secrets generator.
   - 'docker/generate-secrets.sh'
+  # #19408: compose_db_names_19408_test.py checks the script creates the users database compose names.
+  - 'docker/postgres/init-databases.sh'
   # #18556: one_static_data_copy_18556_test.py reads the canonical static data files.
   - 'autobot-backend/config/permission_rules.yaml'
   - 'autobot-backend/static/error_messages.yaml'
@@ -77,7 +79,10 @@ python:
   # to frontend-test.yml's push paths, so its verdict depends on the content --
   # a real dependency, covered here rather than recorded as a bypass.
   - '.github/filters/frontend-paths.yml'
-  # #17885: repo_tests/frontend_file_size_ratchet_baseline.py names 184
+  # #19527: changes_job_equivalence_15360_test.py declares the smoke-action entries
+  # of this filter and checks the file holds exactly them on top of its frozen content.
+  - '.github/filters/docker-paths.yml'
+  # #17885: scripts/frontend_file_size_known_large.py names 184
   # frontend files BY CONCRETE LITERAL and the ratchet reads each one to
   # compare it with its ceiling. Without these two trees a change confined to a
   # measured .ts/.vue takes the required-context shim's green while the guard
@@ -259,6 +264,7 @@ python:
   # is exactly the change that skips the suite guarding it -- the guard would be
   # bypassable by touching the one file it exists to watch.
   - 'sync-frontend.sh'
+  - 'autobot-slm-frontend/scripts/sync-to-admin.sh'
   # #15900: seven more of the same shape, found once the coverage detector
   # stopped keying on how a guard binds its repo root. Each is read by a
   # repo_tests guard; without an entry here, a change confined to one of them

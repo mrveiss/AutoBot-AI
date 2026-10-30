@@ -11,12 +11,15 @@
  * poller; header status goes in the `title-extra` slot, the right-hand header
  * content in `header-end`, and per-tab decoration in `tab-badge`.
  *
+ * `nested` renders the secondary form for a layout inside another one (#19851).
+ *
  * Issue #754: ARIA tablist/tab roles, aria-selected, accessible labels.
  */
 
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { PollingPausedAlert, type UsePollingJobReturn } from '@autobot/ui'
+import { registerWithOuterNotice, useRoutePausedNotice } from '@/composables/monitoringPollContext'
 import { useRoute, useRouter } from 'vue-router'
 
 export interface LayoutTab {
@@ -34,11 +37,21 @@ const props = defineProps<{
   /** Tab highlighted when the route matches none of `tabs` */
   defaultTab: string
   poller: UsePollingJobReturn<void>
+  /**
+   * Secondary layout inside another TabbedRouteLayout's content area: only the sub-tab
+   * bar (with `header-end`), the paused notice and the router-view. No page shell,
+   * no <h1>, no full-height wrapper, so the outer layout keeps the one page scroll.
+   */
+  nested?: boolean
 }>()
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
+
+// Outer layout shows the one paused notice for its own and nested pollers (#19851)
+const notice = props.nested ? null : useRoutePausedNotice(props.poller)
+const hasOuterNotice = props.nested && registerWithOuterNotice(props.poller)
 
 const activeTab = computed(() => {
   const tab = props.tabs.find(tb => route.path.startsWith(tb.path))
@@ -51,12 +64,13 @@ function navigateTo(path: string): void {
 </script>
 
 <template>
-  <div class="h-full flex flex-col overflow-hidden bg-gray-50">
-    <PollingPausedAlert :poller="poller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mx-6 mt-4" @retry="poller.start('')" />
+  <div :class="nested ? undefined : 'h-full flex flex-col overflow-hidden bg-gray-50'">
+    <PollingPausedAlert v-if="notice" :poller="notice.alertSource" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mx-6 mt-4" @retry="notice.retry" />
+    <PollingPausedAlert v-else-if="!hasOuterNotice" :poller="poller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mx-6 mt-4" @retry="poller.start('')" />
     <!-- Header -->
-    <div class="bg-white border-b border-gray-200 px-6 py-4">
-      <div class="flex items-center justify-between">
-        <div class="flex items-center gap-4">
+    <div :class="['bg-white border-b border-gray-200 px-6', nested ? 'py-2' : 'py-4']">
+      <div :class="['flex items-center', nested ? 'justify-end' : 'justify-between']">
+        <div v-if="!nested" class="flex items-center gap-4">
           <h1 class="text-2xl font-bold text-gray-900">{{ title }}</h1>
           <slot name="title-extra" />
         </div>
@@ -65,7 +79,7 @@ function navigateTo(path: string): void {
 
       <!-- Tab Navigation -->
       <div
-        class="flex gap-1 mt-4 -mb-4 overflow-x-auto"
+        :class="['flex gap-1 overflow-x-auto', nested ? 'mt-2 -mb-2' : 'mt-4 -mb-4']"
         role="tablist"
         :aria-label="tabsLabel"
       >
@@ -93,7 +107,7 @@ function navigateTo(path: string): void {
     </div>
 
     <!-- Content Area -->
-    <div class="flex-1 overflow-auto">
+    <div :class="nested ? undefined : 'flex-1 overflow-auto'">
       <router-view />
     </div>
   </div>

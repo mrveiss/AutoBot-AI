@@ -38,3 +38,6 @@ docker:
   - 'libs/**'
   - 'plugins/**'
   - '.github/filters/docker-paths.yml'
+  # #19527: the composite actions the smoke job builds and sizes its disk with.
+  - '.github/actions/build-smoke-images/**'
+  - '.github/actions/free-disk-space/**'

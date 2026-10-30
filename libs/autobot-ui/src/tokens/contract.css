@@ -44,13 +44,17 @@
 
   /* ---- Color: status ------------------------------------------------- */
   --aui-color-success: #16a34a;
-  --aui-color-success-contrast: #ffffff;
+  --aui-color-success-contrast: #000000;
   --aui-color-warning: #d97706;
-  --aui-color-warning-contrast: #ffffff;
+  --aui-color-warning-contrast: #000000;
   --aui-color-error: #dc2626;
   --aui-color-error-contrast: #ffffff;
+  /* Solid-fill shades behind the white contrast (#19872): the status fill itself
+     for error, a darker sky for info (white on #0284c7 is 4.10:1). */
+  --aui-color-error-solid: #dc2626;
   --aui-color-info: #0284c7;
   --aui-color-info-contrast: #ffffff;
+  --aui-color-info-solid: #0369a1;
 
   /* ---- Color: risk tier (#13422) -------------------------------------
    * The four-rung RiskTier ladder (autobot_shared/risk_tier.py). Aliases of the
@@ -64,6 +68,13 @@
   --aui-risk-high-contrast: var(--aui-color-error-contrast);
   --aui-risk-critical: var(--aui-color-error);
   --aui-risk-critical-contrast: var(--aui-color-error-contrast);
+  /* Label ink per tier: 40% tier colour, 60% theme text (contrast rationale in RiskBadge.vue).
+     Resolved at :root, where every theme sets its inputs; a subtree override of
+     --aui-color-text does not re-tint it (#13422). */
+  --aui-risk-low-ink: color-mix(in srgb, var(--aui-risk-low) 40%, var(--aui-color-text));
+  --aui-risk-medium-ink: color-mix(in srgb, var(--aui-risk-medium) 40%, var(--aui-color-text));
+  --aui-risk-high-ink: color-mix(in srgb, var(--aui-risk-high) 40%, var(--aui-color-text));
+  --aui-risk-critical-ink: color-mix(in srgb, var(--aui-risk-critical) 40%, var(--aui-color-text));
 
   /* ---- Color: overlay (modal/dialog backdrop scrim) ------------------ */
   --aui-color-overlay: rgb(0 0 0 / 0.5);
