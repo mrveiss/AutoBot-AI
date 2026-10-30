@@ -79,12 +79,12 @@ SYNC_TARGET="${1:-all}"
 case "$SYNC_TARGET" in
     "component"|"components")
         log_info "Syncing components directory..."
-        rsync -avz --delete -e "ssh -i $SSH_KEY" \
+        rsync -avz --chmod=o-w --delete -e "ssh -i $SSH_KEY" \
             "$LOCAL_SRC/components/" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DEST/components/"
         ;;
     "all")
         log_info "Syncing entire src directory (with deletion of removed files)..."
-        rsync -avz --delete -e "ssh -i $SSH_KEY" \
+        rsync -avz --chmod=o-w --delete -e "ssh -i $SSH_KEY" \
             --exclude 'node_modules' \
             --exclude '.DS_Store' \
             --exclude '*.log' \
@@ -94,10 +94,10 @@ case "$SYNC_TARGET" in
         log_info "Syncing specific file/directory: $SYNC_TARGET"
         if [ -f "$LOCAL_SRC/$SYNC_TARGET" ] || [ -d "$LOCAL_SRC/$SYNC_TARGET" ]; then
             if [ -d "$LOCAL_SRC/$SYNC_TARGET" ]; then
-                rsync -avz --delete -e "ssh -i $SSH_KEY" \
+                rsync -avz --chmod=o-w --delete -e "ssh -i $SSH_KEY" \
                     "$LOCAL_SRC/$SYNC_TARGET/" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DEST/$SYNC_TARGET/"
             else
-                rsync -avz -e "ssh -i $SSH_KEY" \
+                rsync -avz --chmod=o-w -e "ssh -i $SSH_KEY" \
                     "$LOCAL_SRC/$SYNC_TARGET" "$REMOTE_USER@$REMOTE_HOST:$REMOTE_DEST/$SYNC_TARGET"
             fi
         else
