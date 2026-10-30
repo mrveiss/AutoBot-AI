@@ -277,7 +277,7 @@ class ReadResult:
 
 
 @dataclass
-class BatchResult:
+class TranscriptBatchResult:
     """A batch read: the files that read (each possibly truncated) and the ones that failed."""
 
     results: Dict[str, ReadResult] = field(default_factory=dict)
@@ -356,9 +356,9 @@ def _log_read(path: Path, result: ReadResult) -> None:
         logger.warning("transcript %s: truncated (%s)", name, result.truncated_reason)
 
 
-def read_transcripts(paths: Iterable[Path]) -> BatchResult:
+def read_transcripts(paths: Iterable[Path]) -> TranscriptBatchResult:
     """Batch read: one corrupt file is reported in ``failed`` (class name only), the rest still read."""
-    batch = BatchResult()
+    batch = TranscriptBatchResult()
     for path in expand_paths(paths):
         try:
             batch.results[str(path)] = read_transcript(path)
