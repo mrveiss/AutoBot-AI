@@ -19,15 +19,15 @@ import TabbedRouteLayout from '@/components/common/TabbedRouteLayout.vue'
 import { useFleetStore } from '@/stores/fleet'
 import { useAuthStore } from '@/stores/auth'
 import { useFleetMetrics } from '@/composables/useFleetMetrics'
+import { provideFleetMetrics } from '@/composables/monitoringPollContext'
 
 const { t } = useI18n()
 const fleetStore = useFleetStore()
 
-const {
-  systemHealth,
-  activeAlertCount,
-  poller,
-} = useFleetMetrics({ autoFetch: true, pollInterval: 30000 })
+// #19851: this layout owns the route's one fleet poll; child routes read it
+const fleetMetrics = useFleetMetrics({ autoFetch: true, pollInterval: 30000 })
+provideFleetMetrics(fleetMetrics)
+const { systemHealth, activeAlertCount, poller } = fleetMetrics
 
 // Navigation tabs for monitoring sub-routes (all SLM monitoring - Issue #729)
 const tabs = [

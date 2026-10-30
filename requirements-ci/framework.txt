@@ -2,7 +2,7 @@
 # Core web framework — tightly coupled versions
 # fastapi pins starlette range; keep these in sync
 fastapi  # version from constraints/shared.txt (#18060), applied by the -c line above
-starlette==1.9.0
+starlette  # security floor from constraints/shared.txt
 python-multipart==0.0.32
 uvicorn==0.54.0
 pydantic[email]==2.14.1

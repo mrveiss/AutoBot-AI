@@ -115,7 +115,12 @@ def test_a_fleet_host_without_its_own_address_fails_before_the_config_renders() 
     guard = next(i for i, n in enumerate(names) if "knows its own address" in n)
     assert guard < names.index("Deploy postgresql.conf")
     assert tasks[guard]["when"] == "postgresql_serves_fleet | bool"
-    assert "postgresql_fleet_address | length > 0" in tasks[guard]["ansible.builtin.assert"]["that"]
+    # The assert sits in fleet_address.yml, after the facts it reads are gathered (#19944).
+    assert tasks[guard]["ansible.builtin.include_tasks"] == "fleet_address.yml"
+    address = yaml.safe_load((_ROLE / "tasks" / "fleet_address.yml").read_text(encoding="utf-8"))
+    assert any(
+        "postgresql_fleet_address | length > 0" in t.get("ansible.builtin.assert", {}).get("that", []) for t in address
+    )
     no_facts = _host(["slm"], _ip(127, 0, 0, 1), _ip(127, 0, 0, 1), [], None)
     assert _render("postgresql_fleet_address", no_facts) == ""
     assert _render("postgresql_serves_fleet", no_facts) is True
