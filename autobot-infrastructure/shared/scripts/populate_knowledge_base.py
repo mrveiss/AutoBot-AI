@@ -20,13 +20,13 @@ produce, keeping every step the extraction had preserved.
 
 import argparse
 import asyncio
-import fnmatch
 import glob
 import os
 import sys
 from pathlib import Path
 from typing import List, Tuple
 
+from autobot_shared.kb_doc_set import DOC_PATTERNS, EXCLUDE_PATTERNS, should_exclude_file
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import project_root
 
@@ -44,24 +44,6 @@ _BACKEND_DIR = Path(__file__).resolve().parents[3] / "autobot-backend"
 if str(_BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(_BACKEND_DIR))
 
-# Documentation patterns to include.
-DOC_PATTERNS = [
-    "README.md",
-    "CLAUDE.md",
-    "docs/**/*.md",
-    "autobot-backend/resources/prompts/**/*.md",
-    "*.md",  # Any markdown files in root
-]
-
-# Files to exclude (e.g., test results, node_modules).
-EXCLUDE_PATTERNS = [
-    "**/node_modules/**",
-    "**/venv/**",
-    "**/test-results/**",
-    "**/playwright-report/**",
-    "**/.pytest_cache/**",
-    "**/system-state.md",  # generated run state, not documentation (kept from populate_docs_knowledge, #19339)
-]
 
 # Queries used to smoke-test retrieval once the base has been populated.
 SEARCH_SMOKE_QUERIES = [
@@ -81,14 +63,6 @@ CATEGORY_PREFIXES = [
     ("docs/reports", "reports"),
     ("autobot-backend/resources/prompts", "prompts"),
 ]
-
-
-def should_exclude_file(file_path: str, exclude_patterns: list) -> bool:
-    """Check if file matches any exclude pattern (Issue #315: extracted helper)."""
-    for exclude in exclude_patterns:
-        if fnmatch.fnmatch(file_path, exclude):
-            return True
-    return False
 
 
 def determine_category(rel_path: str) -> str:

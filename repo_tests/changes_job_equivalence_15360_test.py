@@ -173,6 +173,9 @@ ALLOWED_ADDITIONS = {
             "INSTALL.md",
             "docker-compose.yml",
             "docker/frontend/Dockerfile",
+            # #19817: guards sweep every tracked Dockerfile, under either naming.
+            "**/Dockerfile*",
+            "**/*.Dockerfile",
             # #18556: one_static_data_copy_18556_test.py reads the canonical static data files.
             "autobot-backend/config/permission_rules.yaml",
             "autobot-backend/static/error_messages.yaml",
