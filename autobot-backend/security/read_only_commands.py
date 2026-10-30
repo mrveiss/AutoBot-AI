@@ -10,6 +10,7 @@ a second risk classification: a command must be SAFE first, and then every segme
 this allowlist. Anything not recognised counts as not read-only, so it is held for a person.
 """
 
+import os
 import re
 import shlex
 from typing import FrozenSet, List, Optional
@@ -57,7 +58,12 @@ _GIT_FORBIDDEN_PREFIXES = ("--ou", "--ex", "--te")
 _UNBOUNDED_PATHS = ("/dev/", "/proc/")
 
 #: Reads its file list from stdin or a path, so the arguments do not say what it reads.
+#: GNU tools accept any unique abbreviation of it.
 _FILES_FROM_FLAG = "--files0-from"
+_SHORTEST_FILES_FROM_ABBREVIATION = len("--fi")
+
+#: What only the shell can resolve: where these end up cannot be read from the text.
+_SHELL_EXPANSION_CHARS = frozenset("$*?[{~")
 
 #: ``grep`` pattern flags: their value is not a file, so counting arguments would mistake it for one.
 _GREP_PATTERN_FLAGS = re.compile(r"^(-[a-zA-Z]*[ef]|--regexp|--file)")
@@ -76,6 +82,19 @@ def _tokens(segment: str) -> Optional[List[str]]:
     if not words or any(set(word) <= _SHELL_OPERATOR_CHARS for word in words):
         return None
     return words
+
+
+def _arg_reads_unbounded(arg: str) -> bool:
+    """Whether this argument may read stdin, an endless device, or somewhere the text cannot show."""
+    flag, _, value = arg.partition("=")
+    if arg == "-" or (len(flag) >= _SHORTEST_FILES_FROM_ABBREVIATION and _FILES_FROM_FLAG.startswith(flag)):
+        return True
+    path = value or arg
+    if "$" in path or (path.startswith(("/", "~")) and _SHELL_EXPANSION_CHARS & set(path)):
+        return True
+    if ".." in path.split("/"):  # relative to a directory this check cannot see
+        return True
+    return ("/" + os.path.normpath(path).lstrip("/") + "/").startswith(_UNBOUNDED_PATHS) if path[0] == "/" else False
 
 
 def _operands(args: List[str]) -> List[str]:
@@ -97,7 +116,7 @@ def _segment_is_read_only(segment: str, piped: bool) -> bool:
     if words is None:
         return False
     base, args = words[0], words[1:]
-    if any(arg == "-" or arg.startswith(_UNBOUNDED_PATHS) or arg.startswith(_FILES_FROM_FLAG) for arg in args):
+    if any(_arg_reads_unbounded(arg) for arg in args):
         return False
     if base in _READ_ONLY_BASES:
         return True

@@ -248,3 +248,23 @@ async def test_a_read_still_runs_while_an_approval_is_pending():
     ):
         decision = await decide_command(MagicMock(), session, "ls", MagicMock(value="safe"), force_approval=False)
     assert decision == (True, None)
+
+
+@pytest.mark.asyncio
+async def test_a_turn_that_started_without_a_terminal_session_uses_the_one_the_command_created():
+    """Otherwise a held command is queued and its approval card cannot be reached."""
+    seen: list = []
+
+    async def dispatch(status, session_id, terminal_session_id, *_args):
+        seen.append((status, terminal_session_id))
+        if False:
+            yield
+
+    handler = ToolHandlerMixin.__new__(ToolHandlerMixin)
+    handler.terminal_tool = MagicMock(active_sessions={"chat-1": "agent-session"})
+    handler._execute_terminal_command = AsyncMock(return_value={"status": "pending_approval"})
+    handler._dispatch_command_by_status = dispatch
+    call = {"name": "execute_command", "params": {"command": "rm x"}}
+    with patch("chat_workflow.tool_handler._emit_before_tool_execute", AsyncMock(return_value=True)):
+        [_ async for _ in handler._process_single_command(call, "chat-1", "", "e", "m", [], [])]
+    assert seen == [("pending_approval", "agent-session")]
