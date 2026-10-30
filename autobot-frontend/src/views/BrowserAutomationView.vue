@@ -12,11 +12,13 @@
 
 import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useToast } from '@/composables/useToast'
 import { useBrowserAutomation } from '@/composables/useBrowserAutomation'
 import { createLogger } from '@/utils/debugUtils'
 import Icon from '@/components/ui/Icon.vue'
 
 const { t } = useI18n()
+const { showToast } = useToast()
 const logger = createLogger('BrowserAutomationView')
 
 // Each flag returns with its route (#18747); no backend route serves these controls yet.
@@ -52,6 +54,13 @@ const selectorInput = ref('')
 const textInput = ref('')
 const scriptInput = ref('')
 const automationScriptInput = ref('')
+// The full result stays readable and copyable here; the toast only reports status.
+const lastResult = ref<{ title: string; output: string } | null>(null)
+
+function showResult(title: string, result: unknown) {
+  lastResult.value = { title, output: JSON.stringify(result, null, 2) ?? '' }
+  showToast(title, 'success')
+}
 
 const statusColor = computed(() => {
   if (!workerStatus.value) return 'status-unknown'
@@ -110,14 +119,14 @@ async function handleExecuteScript() {
   if (!currentSession.value || !scriptInput.value.trim()) return
   const result = await executeScript(currentSession.value.id, scriptInput.value)
   logger.debug('Script result:', result)
-  alert(`${t('views.browserAutomation.scriptResult')}:\n\n${JSON.stringify(result, null, 2)}`)
+  showResult(t('views.browserAutomation.scriptResult'), result)
 }
 
 async function handleRunAutomation() {
   if (!automationScriptInput.value.trim()) return
   const result = await runAutomationScript(automationScriptInput.value)
   logger.debug('Automation result:', result)
-  alert(`${t('views.browserAutomation.automationCompleted')}:\n\n${JSON.stringify(result, null, 2)}`)
+  showResult(t('views.browserAutomation.automationCompleted'), result)
 }
 
 function selectSession(session: typeof sessions.value[0]) {
@@ -318,6 +327,16 @@ function selectSession(session: typeof sessions.value[0]) {
           </div>
         </div>
       </div>
+
+      <!-- Last script / automation result -->
+      <div v-if="lastResult" class="card">
+        <div class="card-header">
+          <span class="card-title">{{ lastResult.title }}</span>
+        </div>
+        <div class="card-body">
+          <div class="script-block"><pre>{{ lastResult.output }}</pre></div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -373,4 +392,5 @@ function selectSession(session: typeof sessions.value[0]) {
   .input-action-row { flex-direction: column; }
   .screenshots-grid { grid-template-columns: 1fr 1fr; }
 }
+.script-block pre { margin: 0; padding: var(--spacing-3); max-height: 24rem; overflow: auto; font-family: var(--font-mono); font-size: var(--text-sm); color: var(--text-primary); background: var(--bg-secondary); border-radius: var(--radius-md); white-space: pre-wrap; word-break: break-word; user-select: text; }
 </style>

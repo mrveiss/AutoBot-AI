@@ -305,7 +305,10 @@
       "thinkingOffLabel": "thinking Off",
       "thinkingOn": "Thinking on",
       "thinkingOnLabel": "thinking On",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "fileTooLarge": "Le fichier « {name} » est trop volumineux (max. {max})",
+      "voiceUnsupported": "La saisie vocale nécessite Chrome, Edge ou Safari 15+. La transcription n'est pas disponible dans ce navigateur.",
+      "micDenied": "L'accès au microphone a été refusé. Veuillez autoriser l'accès au microphone dans les paramètres de votre navigateur."
     },
     "translate": {
       "title": "Traduire le texte",
@@ -4651,7 +4654,9 @@
       "channelSlack": "Slack",
       "emailHint": "Comma-separated email addresses",
       "channelWebhook": "Webhook",
-      "sectionDesc": "Configure per-workflow notification routing"
+      "sectionDesc": "Configure per-workflow notification routing",
+      "invalidEmail": "Adresse e-mail invalide : {emails}",
+      "invalidUrl": "Format d'URL invalide"
     },
     "liveDashboard": {
       "activeExecutions": "Active Executions",
@@ -4986,7 +4991,8 @@
       "emergencyKillFailed": "❌ Échec de l'arrêt d'urgence : {message}",
       "interrupted": "^C (Processus interrompu par l'utilisateur)",
       "error": "Erreur : {error}"
-    }
+    },
+    "urlCopied": "URL du terminal copiée dans le presse-papiers !"
   },
   "llm": {
     "unavailable": "Indisponible",
@@ -7374,7 +7380,8 @@
       "errorDeletingFile": "Error deleting file",
       "errorRenamingFile": "Error renaming file",
       "refreshAriaLabel": "Refresh files",
-      "toggleViewAriaLabel": "Toggle view mode"
+      "toggleViewAriaLabel": "Toggle view mode",
+      "uploadFailedHint": "Veuillez vérifier les limites de taille de fichier et les exigences de format"
     },
     "header": {
       "title": "File Browser",
