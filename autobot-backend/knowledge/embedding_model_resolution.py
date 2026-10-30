@@ -17,7 +17,7 @@ the previous model in their metadata -- so the stored-model rule would undo the 
 
 from __future__ import annotations
 
-from autobot_shared.embedding_model import active_embedding_model, active_embedding_space
+from autobot_shared.embedding_model import active_embedding_model, active_embedding_space, is_embedding_model_id
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -32,6 +32,11 @@ def resolve_kb_embedding_model(stored_model: str | None) -> str:
     active = active_embedding_model()
     if not stored_model:
         logger.info("Using embedding model from config: %s", active)
+        return active
+    # #20007: fact metadata stamps the configured name whether or not a vector was written, so the name proves
+    # nothing. A chat model cannot have made vectors, and protecting it stops every write.
+    if not is_embedding_model_id(stored_model):
+        logger.warning("Ignoring stored model %r: it is not an embedding model. Using %r.", stored_model, active)
         return active
     if stored_model != active:
         logger.warning(
