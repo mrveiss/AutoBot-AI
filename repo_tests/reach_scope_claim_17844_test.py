@@ -465,6 +465,14 @@ _DECLARED_SCOPES = {
     "data-db-path-production-python": ("autobot-backend", "autobot_shared"),
     "jekyll-processed-docs": ("docs",),
     "kb-populate-doc-patterns": ("autobot-infrastructure",),
+    "frontend-url-served-by-scan": (
+        "autobot-backend",
+        "autobot-slm-backend",
+        "autobot_shared",
+        "autobot-infrastructure",
+        "autobot-npu-worker",
+        "scripts",
+    ),
     "kb-admin-read-bypass": ("autobot-backend/", "autobot_shared/"),
     "kb-construction-18122-scan": (
         "autobot-backend/",
