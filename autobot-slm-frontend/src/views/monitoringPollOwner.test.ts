@@ -117,6 +117,39 @@ describe('monitoring routes poll once and show one paused notice (#19851)', () =
     expect(wrapper!.findAll('[data-polling-paused]')).toHaveLength(1)
   })
 
+  async function pauseAll(): Promise<void> {
+    await open('/monitoring/performance/overview')
+    down = '/'
+    for (let i = 0; i < POLL_CONSECUTIVE_ERROR_LIMIT; i++) await tick()
+  }
+
+  it('a full outage on the performance overview shows one paused notice', async () => {
+    await pauseAll()
+    expect(wrapper!.findAll('[data-polling-paused]')).toHaveLength(1)
+  })
+
+  it('only the fleet poller failing on the performance overview shows one paused notice', async () => {
+    await open('/monitoring/performance/overview')
+    down = '/monitoring/'
+    for (let i = 0; i < POLL_CONSECUTIVE_ERROR_LIMIT; i++) await tick()
+    expect(wrapper!.findAll('[data-polling-paused]')).toHaveLength(1)
+  })
+
+  it('retry after a full outage restarts both pollers', async () => {
+    await pauseAll()
+    down = null
+    const fleet = calls('/monitoring/dashboard')
+    const perf = calls('/performance/overview')
+    await wrapper!.find('[data-polling-paused] button').trigger('click')
+    await flushPromises()
+    expect(calls('/monitoring/dashboard')).toBe(fleet + 1)
+    expect(calls('/performance/overview')).toBe(perf + 1)
+    expect(wrapper!.findAll('[data-polling-paused]')).toHaveLength(0)
+    await tick()
+    expect(calls('/monitoring/dashboard')).toBe(fleet + 2)
+    expect(calls('/performance/overview')).toBe(perf + 2)
+  })
+
   it('a child rendered without its layout polls for itself, once', async () => {
     await open('/standalone')
     expect(calls('/monitoring/dashboard')).toBe(1)
