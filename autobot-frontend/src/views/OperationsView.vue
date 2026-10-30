@@ -161,7 +161,7 @@ onMounted(() => {
   gap: var(--spacing-3);
   padding: var(--spacing-3) var(--spacing-4);
   background-color: var(--color-error-bg);
-  border: 1px solid var(--color-error-border, #fecaca);
+  border: 1px solid var(--color-error-border);
   border-radius: var(--radius-md);
   color: var(--color-error);
   font-size: var(--text-sm);

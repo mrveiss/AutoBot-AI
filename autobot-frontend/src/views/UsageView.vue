@@ -544,7 +544,7 @@ onMounted(load)
 }
 
 .text-warning {
-  color: var(--color-warning, #f59e0b);
+  color: var(--color-warning);
   font-weight: var(--font-medium);
 }
 </style>
