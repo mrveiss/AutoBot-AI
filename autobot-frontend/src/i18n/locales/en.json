@@ -358,7 +358,10 @@
       "thinkingOn": "Thinking on",
       "thinkingOnLabel": "thinking On",
       "moreActions": "More actions",
-      "stopFailed": "Couldn't stop the reply"
+      "stopFailed": "Couldn't stop the reply",
+      "fileTooLarge": "File \"{name}\" is too large (max {max})",
+      "voiceUnsupported": "Voice input requires Chrome, Edge, or Safari 15+. Transcription is not available in this browser.",
+      "micDenied": "Microphone access was denied. Please allow microphone access in your browser settings."
     },
     "translate": {
       "title": "Translate Text",
@@ -4756,7 +4759,9 @@
       "eventServiceFailed": "Service Failed",
       "save": "Save",
       "saving": "Saving...",
-      "saved": "Saved successfully"
+      "saved": "Saved successfully",
+      "invalidEmail": "Invalid email address: {emails}",
+      "invalidUrl": "Invalid URL format"
     },
     "liveDashboard": {
       "reconnect": "Reconnect",
@@ -5108,7 +5113,8 @@
       "emergencyKillFailed": "❌ Emergency kill failed: {message}",
       "interrupted": "^C (Process interrupted by user)",
       "error": "Error: {error}"
-    }
+    },
+    "urlCopied": "Terminal URL copied to clipboard!"
   },
   "llm": {
     "unavailable": "Unavailable",
@@ -7582,7 +7588,8 @@
       "errorDeletingFile": "Error deleting file",
       "errorRenamingFile": "Error renaming file",
       "refreshAriaLabel": "Refresh files",
-      "toggleViewAriaLabel": "Toggle view mode"
+      "toggleViewAriaLabel": "Toggle view mode",
+      "uploadFailedHint": "Please check file size limits and format requirements"
     },
     "header": {
       "title": "File Browser",
