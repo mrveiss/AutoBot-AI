@@ -211,7 +211,7 @@ function getStrategyIcon(strategy: string): string {
 .viz-node { display: flex; flex-direction: column; align-items: center; gap: var(--spacing-2); min-width: 80px; }
 .node-circle { width: 40px; height: 40px; border-radius: 50%; background: var(--bg-tertiary); display: flex; align-items: center; justify-content: center; font-size: var(--text-sm); font-weight: 600; color: var(--text-tertiary); border: 2px solid var(--border-default); }
 .viz-step.completed .node-circle { background: var(--color-success); color: white; border-color: var(--color-success); }
-.viz-step.failed .node-circle { background: var(--color-error); color: white; border-color: var(--color-error); }
+.viz-step.failed .node-circle { background: var(--color-error-solid); color: white; border-color: var(--color-error); }
 .viz-step.executing .node-circle { background: var(--color-primary); color: white; border-color: var(--color-primary); }
 .node-label { font-size: var(--text-xs); color: var(--text-secondary); text-align: center; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .viz-connector { width: 40px; height: 2px; background: var(--border-default); margin-top: var(--spacing-5); }
