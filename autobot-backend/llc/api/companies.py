@@ -16,8 +16,7 @@ Route group: /llc/companies
   POST   /{id}/suspend             — status transition -> PAUSED (GH#12211)
   POST   /{id}/offboard            — status transition -> OFFBOARDING (GH#12234)
   POST   /{id}/archive             — status transition -> ARCHIVED (GH#12211)
-  POST   /{id}/members             — add a member (GH#8223)
-  DELETE /{id}/members/{user_id}   — remove a member (GH#8223)
+  POST, PATCH, DELETE /{id}/members — membership writes: see company_members.py (#19654)
   GET    /{id}/members             — list members (GH#8223)
   GET    /{id}/teams               — list teams + their member user ids (GH#13938)
   POST   /{id}/export/template     — export structural template, secrets scrubbed (GH#8245)
@@ -74,8 +73,6 @@ from llc.services.company import (
 )
 from llc.services.company_move_lock import CompanyMoveContendedError
 from llc.services.membership_service import (
-    MemberAlreadyExistsError,
-    MemberNotFoundError,
     MembershipService,
 )
 from llc.services.org_chart_placement import apply_reporting_lines, assemble_forest
@@ -97,11 +94,6 @@ _kb_manager = KbCollectionManager()
 # ------------------------------------------------------------------
 # Member management schemas (GH#8223)
 # ------------------------------------------------------------------
-
-
-class MemberAddRequest(BaseModel):
-    user_id: uuid.UUID
-    role: MembershipRole = MembershipRole.MEMBER
 
 
 class MemberRead(BaseModel):
@@ -608,45 +600,6 @@ async def list_members(
         }
         for m in members
     ]
-
-
-@router.post("/{company_id}/members", status_code=status.HTTP_201_CREATED)
-async def add_member(
-    company_id: uuid.UUID,
-    body: MemberAddRequest,
-    session: AsyncSession = Depends(get_async_session),
-    svc: MembershipService = Depends(_get_membership_service),
-    _current_user: dict = Depends(get_current_user),
-    ctx: TenantContext = Depends(require_org_context),
-) -> Dict[str, Any]:
-    # Issue #12233: tenant authz — caller's org must match company_id unless admin.
-    assert_company_access(ctx, company_id)  # shared guard (#12238)
-    try:
-        membership = await svc.add_member(session, str(company_id), str(body.user_id), body.role)
-        await session.commit()
-        return _to_member_read(membership)
-    except MemberAlreadyExistsError:
-        await session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
-
-
-@router.delete("/{company_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_member(
-    company_id: uuid.UUID,
-    user_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
-    svc: MembershipService = Depends(_get_membership_service),
-    _current_user: dict = Depends(get_current_user),
-    ctx: TenantContext = Depends(require_org_context),
-) -> None:
-    # Issue #12233: tenant authz — caller's org must match company_id unless admin.
-    assert_company_access(ctx, company_id)  # shared guard (#12238)
-    try:
-        await svc.remove_member(session, str(company_id), str(user_id))
-        await session.commit()
-    except MemberNotFoundError:
-        await session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
 
 
 # ------------------------------------------------------------------
