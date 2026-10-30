@@ -13,7 +13,7 @@ fixtures are test data, so the sweep skips this file (``_SELF_AND_ITS_RECORD``).
 from __future__ import annotations
 
 import pytest
-from repo_tests.glob_declared_reads_15900_test import _NAMED_GLOB, _QUOTED_GLOB, glob_declarations_in
+from repo_tests.glob_declared_reads_15900_test import _NAMED_GLOB, _QUOTED_GLOB, _is_path_like, glob_declarations_in
 
 
 @pytest.mark.parametrize(
@@ -26,6 +26,8 @@ from repo_tests.glob_declared_reads_15900_test import _NAMED_GLOB, _QUOTED_GLOB,
         'x = "*Dockerfile*"',
         'x = "Dockerfile*"',
         'x = "*Containerfile"',
+        'x = "Makefile*"',
+        'x = "*Jenkinsfile"',
     ],
     ids=[
         "root-suffix",
@@ -35,6 +37,8 @@ from repo_tests.glob_declared_reads_15900_test import _NAMED_GLOB, _QUOTED_GLOB,
         "dotless-both",
         "dotless-tail",
         "dotless-head",
+        "makefile",
+        "jenkinsfile",
     ],
 )
 def test_the_detector_accepts_every_supported_glob_form(declaration: str) -> None:
@@ -100,6 +104,20 @@ def test_a_string_that_is_not_a_pathspec_never_reaches_the_filesystem(source: st
     ENAMETOOLONG on Python 3.10; the second is longer than any path component may be.
     """
     assert glob_declarations_in(source) == set()
+
+
+@pytest.mark.parametrize(
+    "candidate",
+    ["docs/*.md\nscripts/*.sh", "scripts/x *.py", "a" * 300 + "/x*.py"],
+    ids=["newline", "space", "over-long-head"],
+)
+def test_the_pathspec_filter_alone_stops_a_candidate_before_the_filesystem(candidate: str) -> None:
+    """Called below `_QUOTED_GLOB`, which excludes spaces and newlines by itself (#18800).
+
+    Without the filter the newline and space cases are accepted, because `docs` and `scripts` are
+    real directories, and the over-long head reaches `is_dir()`, which raises ENAMETOOLONG on 3.10.
+    """
+    assert not _is_path_like(candidate)
 
 
 def test_the_named_glob_pattern_stays_linear() -> None:
