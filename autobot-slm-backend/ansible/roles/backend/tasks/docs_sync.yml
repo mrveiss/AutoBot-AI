@@ -14,6 +14,7 @@
     dest: "{{ backend_install_dir }}/../docs/"
     delete: true
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=__pycache__"
       - "--exclude=*.pyc"
       - "--exclude=.git"
