@@ -1,7 +1,7 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ApiClientBase, parseRetryAfterMs, withQuery, type TransportRequestOptions } from '../ApiClientBase'
+import { AbsoluteEndpointError, ApiClientBase, parseRetryAfterMs, withQuery, type TransportRequestOptions } from '../ApiClientBase'
 import { HttpError } from '../httpError'
 
 const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }
@@ -17,6 +17,16 @@ class TestClient extends ApiClientBase<TransportRequestOptions> {
   protected isAuthEndpoint(endpoint: string) { return endpoint.includes('/auth/') }
   protected handleUnauthorized(endpoint: string, attached: boolean) { this.unauthorized(endpoint, attached) }
 }
+
+class ProxyClient extends TestClient {
+  protected resolveBaseUrl() { return '' }
+}
+
+const FOREIGN_ENDPOINTS = [
+  'https://evil.example/x', 'HTTP://evil.example/x', 'HtTpS://evil.example/x', 'ftp://evil.example/x',
+  'javascript:alert(1)', '//evil.example/x', '/\\evil.example/x', '\\\\evil.example/x', '\\/evil.example/x',
+  '  https://evil.example/x', '\thttps://evil.example/x', 'ht\ntps://evil.example/x', '\n//evil.example/x',
+]
 
 const json = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } })
@@ -104,6 +114,28 @@ describe('ApiClientBase', () => {
       return json({})
     })
     await expect(new TestClient().rawRequest('/x', { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' })
+  })
+
+  describe.each([['a proxy-mode (empty base URL) client', ProxyClient], ['a client with a base URL', TestClient]])('%s', (_name, Client) => {
+    it.each(FOREIGN_ENDPOINTS)('refuses %j without any request, so no Authorization header leaves', async (endpoint) => {
+      const client = new Client()
+      await expect(client.rawRequest(endpoint)).rejects.toBeInstanceOf(AbsoluteEndpointError)
+      await expect(client.get(endpoint)).rejects.toBeInstanceOf(AbsoluteEndpointError)
+      await expect(client.post(endpoint, {})).rejects.toBeInstanceOf(AbsoluteEndpointError)
+      await expect(client.uploadFile(endpoint, new File(['x'], 'x.txt'))).rejects.toBeInstanceOf(AbsoluteEndpointError)
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it('does not retry or log a refused GET', async () => {
+      await expect(new Client().get('//evil.example/x')).rejects.toBeInstanceOf(AbsoluteEndpointError)
+      expect(logger.warn).not.toHaveBeenCalled()
+    })
+
+    it.each(['/api/x', '/api/x?next=https://ok.example', '/a//b', '/api/x:y'])('still sends the bearer on %s', async (endpoint) => {
+      fetchMock.mockResolvedValue(json({}))
+      await new Client().rawRequest(endpoint)
+      expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer tok')
+    })
   })
 })
 

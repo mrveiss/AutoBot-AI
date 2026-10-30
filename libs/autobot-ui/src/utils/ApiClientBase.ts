@@ -46,6 +46,25 @@ export function withQuery(endpoint: string, params: TransportRequestOptions['par
   return `${endpoint}${endpoint.includes('?') ? '&' : '?'}${text}`
 }
 
+/** An endpoint naming a host of its own; the request would carry the bearer to a host the client does not own. */
+export class AbsoluteEndpointError extends Error {
+  constructor(endpoint: string) {
+    super(`Refusing to send credentials to an absolute or protocol-relative endpoint: ${endpoint}`)
+    this.name = 'AbsoluteEndpointError'
+  }
+}
+
+/**
+ * Throws unless `endpoint` is a path on the client's own origin. Mirrors what a browser's URL parser
+ * accepts as "has its own host": tab/newline are dropped anywhere and leading control/space is trimmed
+ * before a `scheme:` (any case) or two slashes/backslashes (`//x`, `/\x`, `\\x`) are looked for.
+ */
+export function assertOwnOriginPath(endpoint: string): void {
+  // eslint-disable-next-line no-control-regex
+  const seen = endpoint.replace(/[\t\n\r]/g, '').replace(/^[\u0000-\u0020]+/, '')
+  if (/^[a-z][a-z0-9+.-]*:/i.test(seen) || /^[\\/]{2}/.test(seen)) throw new AbsoluteEndpointError(endpoint)
+}
+
 /** A Retry-After header (delta-seconds or HTTP-date) in ms; missing, negative or unparseable is 0. */
 export function parseRetryAfterMs(header: string | null, now: number = Date.now()): number {
   if (!header) return 0
@@ -145,6 +164,7 @@ export abstract class ApiClientBase<O extends TransportRequestOptions = Transpor
 
   /** The Response itself, for streaming and blobs. Non-2xx is NOT thrown here. */
   async rawRequest(endpoint: string, options: RawRequestOptions<O> = {} as RawRequestOptions<O>): Promise<Response> {
+    assertOwnOriginPath(endpoint)
     const baseUrl = await this.resolveBaseUrl()
     const path = withQuery(endpoint, options.params)
     const abort = armAbort(options.timeout || this.defaultTimeout, options.signal)
@@ -177,6 +197,7 @@ export abstract class ApiClientBase<O extends TransportRequestOptions = Transpor
 
   /** GET with retry and exponential backoff; Retry-After is a floor on the delay, capped at the max backoff. */
   async get<T = unknown>(endpoint: string, options: O = {} as O): Promise<T> {
+    assertOwnOriginPath(endpoint) // a refusal is final: never retried
     const maxRetries = options.maxRetries !== undefined ? options.maxRetries : 3
     let lastError: Error | undefined
     let attemptsMade = 0
@@ -252,6 +273,7 @@ export abstract class ApiClientBase<O extends TransportRequestOptions = Transpor
     progressCallback: ((progress: number) => void) | null = null,
     options: { fields?: Record<string, string>; timeout?: number } = {}
   ): Promise<Record<string, unknown>> {
+    assertOwnOriginPath(endpoint)
     const formData = new FormData()
     formData.append('file', file)
     for (const [key, value] of Object.entries(options.fields ?? {})) formData.append(key, value)

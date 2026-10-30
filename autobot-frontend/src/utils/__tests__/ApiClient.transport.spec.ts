@@ -55,6 +55,19 @@ describe('ApiClient on the kit transport (#14908)', () => {
     expect(clearStoredAuth).not.toHaveBeenCalled();
   });
 
+  it('a 401 on a protected endpoint clears the stored session and redirects to login', async () => {
+    const original = window.location;
+    Object.defineProperty(window, 'location', { configurable: true, writable: true, value: { pathname: '/fleet', href: '', port: '' } });
+    try {
+      fetchMock.mockImplementation(async () => json({}, 401));
+      await new ApiClient().rawRequest('/nodes');
+      expect(clearStoredAuth).toHaveBeenCalledTimes(1);
+      expect(window.location.href).toBe('/login?redirect=%2Ffleet');
+    } finally {
+      Object.defineProperty(window, 'location', { configurable: true, writable: true, value: original });
+    }
+  });
+
   it('GET retries a 5xx and gives up on a 4xx at once', async () => {
     fetchMock.mockImplementation(async () => json({}, 404));
     await expect(new ApiClient().get('/x', { suppressErrorLog: true })).rejects.toMatchObject({ status: 404 });
