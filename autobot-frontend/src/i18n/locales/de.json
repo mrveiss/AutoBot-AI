@@ -1,5 +1,6 @@
 {
   "common": {
+    "appName": "AutoBot",
     "submit": "Einreichen",
     "cancel": "Stornieren",
     "save": "Speichern",
@@ -5860,6 +5861,7 @@
       "dismiss": "Dismiss"
     },
     "themeToggle": {
+      "accentPurpleDescription": "Violett – Kreativ & Elegant",
       "system": "System",
       "highContrast": "Hoher Kontrast",
       "monochrome": "Monochrom",
