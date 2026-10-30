@@ -497,7 +497,7 @@ function formatDate(dateStr: string | null): string {
 }
 
 .btn-error {
-  background: var(--error-color);
+  background: var(--color-error-solid);
   color: white;
 }
 
