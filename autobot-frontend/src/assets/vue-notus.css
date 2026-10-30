@@ -207,7 +207,7 @@ body {
   background-color: white;
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
   overflow-y: auto;
-  z-index: 10;
+  z-index: var(--z-10);
   padding: 1rem 1.5rem;
 }
 
