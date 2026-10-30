@@ -55,6 +55,7 @@
   --text-on-success: #000000;
   --text-on-warning: #000000;
   --text-on-error: #ffffff;
+  --text-on-info: #ffffff;
 
   /* Secondary Colors */
   --color-secondary: #64748b;
@@ -86,6 +87,10 @@
   --color-error-bg: rgba(239, 68, 68, 0.1);
   --color-error-bg-hover: rgba(239, 68, 68, 0.2);
   --color-error-border: rgba(239, 68, 68, 0.3);
+  /* #19872: --color-error is only 3.76:1 against white, so a solid error fill
+     carrying white text (--text-on-error) uses this darker shade of the same
+     hue (4.62:1). --color-error stays for text, border and icon uses. */
+  --color-error-solid: #da3535;
 
   --color-info: #3b82f6;
   --color-info-hover: #2563eb;
@@ -93,6 +98,8 @@
   --color-info-dark: #1d4ed8;
   --color-info-bg: rgba(59, 130, 246, 0.1);
   --color-info-bg-hover: rgba(59, 130, 246, 0.2);
+  /* #19872: solid-fill shade of --color-info for white text (3.68:1 -> 4.61:1). */
+  --color-info-solid: #306eeb;
 
   /* Danger Colors (for critical actions) */
   --color-danger: #dc2626;
@@ -1596,6 +1603,7 @@
     --text-on-success: oklch(0% 0 0);
     --text-on-warning: oklch(0% 0 0);
     --text-on-error: oklch(100% 0 0);
+    --text-on-info: oklch(100% 0 0);
 
     /* Secondary Colors */
     --color-secondary: oklch(55.4% 0.041 257.4);
@@ -1629,6 +1637,8 @@
     --color-error-bg: oklch(63.7% 0.208 25.3 / 0.1);
     --color-error-bg-hover: oklch(63.7% 0.208 25.3 / 0.2);
     --color-error-border: oklch(63.7% 0.208 25.3 / 0.3);
+    /* #19872: solid-fill shade for white text; matches the sRGB block. */
+    --color-error-solid: oklch(58.6% 0.202 26.1);
 
     /* Info Colors */
     --color-info: oklch(62.3% 0.188 259.8);
@@ -1637,6 +1647,7 @@
     --color-info-dark: oklch(48.8% 0.217 264.4);
     --color-info-bg: oklch(62.3% 0.188 259.8 / 0.1);
     --color-info-bg-hover: oklch(62.3% 0.188 259.8 / 0.2);
+    --color-info-solid: oklch(57.1% 0.200 262.2);
 
     /* Danger Colors */
     --color-danger: oklch(57.7% 0.215 27.3);

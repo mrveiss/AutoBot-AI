@@ -855,7 +855,7 @@ onMounted(loadCollections)
   align-items: center;
   gap: var(--spacing-2);
   padding: var(--spacing-2) var(--spacing-4);
-  background: var(--color-info);
+  background: var(--color-info-solid);
   border: none;
   border-radius: var(--radius-md);
   color: white;
