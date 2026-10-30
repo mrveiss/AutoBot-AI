@@ -93,6 +93,7 @@
     "minimatch": ">=9.0.7",
     "uuid": "^14.0.0",
     "qs": ">=6.15.2",
+    "systeminformation": ">=5.33.16",
     "shell-quote": ">=1.8.4",
     "openapi-typescript": {
       "typescript": "$typescript"

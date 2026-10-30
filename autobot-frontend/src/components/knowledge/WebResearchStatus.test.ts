@@ -7,6 +7,7 @@
  * and that no main-app source file can write web research settings again.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { HttpError } from '@autobot/ui'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
@@ -79,7 +80,7 @@ describe('WebResearchStatus', () => {
   })
 
   it('shows the not-available state when the researcher answers 503', async () => {
-    routeGets(new Error('HTTP 503: researcher unavailable'))
+    routeGets(new HttpError(503, 'researcher unavailable'))
     const wrapper = await mountStatus()
     expect(wrapper.get('[data-testid="status-availability"]').text()).toBe(copy.notAvailable)
   })
