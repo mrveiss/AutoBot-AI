@@ -145,7 +145,7 @@ def _family_population(root) -> list[str]:
 FAMILY_REACH = declare(
     "architecture-family-definition-scan",
     discover=_family_population,
-    floor=3326,  # re-pinned mid-window (train 71) (#17844)
+    floor=3327,  # re-pinned mid-window (train 71) (#17844)
     what="non-test python source",
     roots=_FAMILY_ROOTS,
     growth=300,
