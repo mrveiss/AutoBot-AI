@@ -222,7 +222,7 @@ async function handleToggle() {
 .toggle-btn.active {
   background: var(--color-primary);
   border-color: var(--color-primary);
-  color: var(--text-on-primary, #fff);
+  color: var(--text-on-primary);
 }
 
 .toggle-btn:disabled {
@@ -258,7 +258,7 @@ async function handleToggle() {
 
 .toggle-btn.active .toggle-thumb {
   transform: translateX(14px);
-  background: #fff;
+  background: var(--text-on-primary);
 }
 
 .toggle-text {

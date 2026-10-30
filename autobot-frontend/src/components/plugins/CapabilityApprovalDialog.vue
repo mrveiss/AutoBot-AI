@@ -336,22 +336,22 @@ watch(() => props.open, (isOpen) => {
 }
 
 .tier-official {
-  background-color: #10b981;
+  background-color: var(--color-success);
   color: white;
 }
 
 .tier-verified {
-  background-color: #3b82f6;
+  background-color: var(--color-info);
   color: white;
 }
 
 .tier-community {
-  background-color: #f59e0b;
+  background-color: var(--color-warning);
   color: white;
 }
 
 .tier-unverified {
-  background-color: #ef4444;
+  background-color: var(--color-error);
   color: white;
 }
 

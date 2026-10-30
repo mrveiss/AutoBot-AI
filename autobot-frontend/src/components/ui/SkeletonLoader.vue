@@ -101,13 +101,13 @@ const lineWidth = computed(() => LINE_WIDTHS[props.width] ?? '100%')
 <style scoped>
 /* Issue #704: Migrated to CSS design tokens */
 .skeleton-loader {
-  --skeleton-bg: var(--bg-tertiary, #f3f4f6);
-  --skeleton-shimmer: var(--border-default, #e5e7eb);
+  --skeleton-bg: var(--bg-tertiary);
+  --skeleton-shimmer: var(--border-default);
 }
 
 .skeleton-dark {
-  --skeleton-bg: var(--bg-tertiary, #374151);
-  --skeleton-shimmer: var(--border-subtle, #4b5563);
+  --skeleton-bg: var(--bg-tertiary);
+  --skeleton-shimmer: var(--border-subtle);
 }
 
 .skeleton-line,
