@@ -182,6 +182,11 @@ def rsync_host_state_args() -> list[str]:
     ]
 
 
+# #19503: -a copies source modes, so a loose source mode would reach every node.
+RSYNC_NEVER_WORLD_WRITABLE = "--chmod=o-w"
+RSYNC_ARCHIVE_ARGS = ("-avz", RSYNC_NEVER_WORLD_WRITABLE)
+
+
 def rsync_artifact_excludes() -> list[str]:
     """rsync ``--exclude`` patterns covering every build/deploy artifact.
 
