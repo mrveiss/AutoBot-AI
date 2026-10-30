@@ -79,14 +79,16 @@ NAME_REACH = declare(
     "autobot-has-no-pro-name",
     discover=_name_population,
     what="tracked non-changelog files",
-    floor=12609,  # mid-window: population 12609, window (12609, 12609)
+    floor=12410,  # mid-window: population 12610, window (12210, 12610)
+    growth=400,
 )
 
 USER_TEXT_REACH = declare(
     "autobot-has-no-pro-tier-in-user-text",
     discover=_user_text_population,
     what="frontend .vue components and locale files",
-    floor=607,  # mid-window: population 607, window (607, 607)
+    floor=407,  # mid-window: population 607, window (207, 607)
+    growth=400,
     roots=_FRONTEND_SRC,
 )
 
