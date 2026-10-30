@@ -52,7 +52,7 @@ const {
   promoteDraft,
   fetchGovernance,
   setGovernanceMode,
-  approvalPoller,
+  approvalPoller, startApprovalPolling,
   dismissDraftNotification,
 } = useSkillGovernance()
 
@@ -139,7 +139,7 @@ let unmounted = false
 onUnmounted(() => { unmounted = true })
 onMounted(async () => {
   await Promise.all([initializeSkills(), fetchGovernance(), fetchApprovals(), fetchRepos(), fetchDrafts()])
-  if (!unmounted) approvalPoller.start('')
+  if (!unmounted) startApprovalPolling()
 })
 
 watch(searchQuery, (val) => {
@@ -310,7 +310,7 @@ function categoryIcon(category: string): string {
       @promote="promoteDraft"
     />
 
-    <PollingPausedAlert :poller="approvalPoller" :message="$t('common.polling.paused')" :retry-label="$t('common.polling.retry')" @retry="approvalPoller.start('')" />
+    <PollingPausedAlert :poller="approvalPoller" :message="$t('common.polling.paused')" :retry-label="$t('common.polling.retry')" @retry="startApprovalPolling" />
 
     <!-- Error Banner (active skills tab) -->
     <template v-if="activeTab === 'active'">
