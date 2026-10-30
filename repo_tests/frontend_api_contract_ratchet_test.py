@@ -90,7 +90,10 @@ _BASELINES = {
         # train-35: useBackgroundTask clear-stuck drops its `apiClient.post<unknown>` (-1).
         # #19217: the web-research settings move to the SLM admin editor (-4).
         # #19532: the unmounted main-GUI SettingsPanel retired; the SLM admin views are the home (-3).
-        "inline_generics": 551,
+        # #19938: 551 -> 563. The Workflow Planner composable has 12 `api.<verb><Shape>` calls whose shapes are the
+        # generated `CompanyWorkflowPlan`/`PlanSummary`/`GateResponse`/`MapResponse`; still unchecked at the call
+        # site, so they are counted until a client typed over the generated `paths` exists.
+        "inline_generics": 563,
     },
     "autobot-slm-frontend": {
         "clients": 1,

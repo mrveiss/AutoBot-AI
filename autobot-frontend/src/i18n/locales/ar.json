@@ -4347,7 +4347,8 @@
       "agentsAriaLabel": "Agent capabilities",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "جارٍ فتح الأتمتة الخاصة بشركتك…",
-      "companyRequired": "اختر شركة لفتح الأتمتة."
+      "companyRequired": "اختر شركة لفتح الأتمتة.",
+      "planBeforeBuilding": "خطط قبل البناء"
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -8602,7 +8603,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "معلومات الأدوات غير متاحة حاليًا — قد تكون هذه القائمة غير مكتملة.",
       "canvasNoToolsDefined": "لا توجد أدوات مرفقة بأي دور في هذه الشركة.",
-      "deepLinkNodeNotFound": "تشير هذه الوصلة إلى عقدة تعذر العثور عليها هنا. ربما تمت إزالتها، أو قد لا تملك صلاحية الوصول إليها."
+      "deepLinkNodeNotFound": "تشير هذه الوصلة إلى عقدة تعذر العثور عليها هنا. ربما تمت إزالتها، أو قد لا تملك صلاحية الوصول إليها.",
+      "viewPlanner": "مخطط سير العمل"
     },
     "executorRollup": {
       "title": "ملخص المنفذين",
@@ -8946,6 +8948,113 @@
         "notFound": "لم تعد هذه المهمة تحتفظ بالحجز — حدّث الصفحة لترى من يحتفظ به الآن.",
         "unavailable": "تعذّر الوصول إلى السجل؛ لم يُرسل شيء.",
         "error": "حدث خطأ ولم يمكن تأكيد التسليم. حدّث الصفحة لمعرفة ما إذا كانت المطالبة لا تزال محجوزة."
+      }
+    },
+    "workflowPlanner": {
+      "title": "مخطط سير العمل",
+      "plans": "الخطط",
+      "newPlan": "خطة جديدة",
+      "open": "فتح",
+      "back": "العودة إلى الخطط",
+      "retry": "إعادة المحاولة",
+      "loading": "جارٍ تحميل الخطط...",
+      "loadFailed": "تعذّر تحميل الخطة.",
+      "saveFailed": "تعذّر حفظ التغيير.",
+      "createFailed": "تعذّر إنشاء الخطة.",
+      "emptyTitle": "لا توجد خطط بعد",
+      "emptyHint": "ابدأ خطة لرسم عملية واحدة وقياسها واختيار الرقم الواحد الذي تريد تحسينه.",
+      "unavailableTitle": "مخطط سير العمل غير متاح",
+      "unavailableHint": "هذه الميزة متوقفة في مساحة عملك، لذلك لا يوجد ما يُعرض هنا بعد.",
+      "statusFlow": "تقدّم الخطة",
+      "statusNotAvailable": "حالة هذه الخطة: {status}. الاعتماد والتحويل غير متاحين بعد، لذلك تُعرض للقراءة فقط.",
+      "convertNotAvailable": "إنشاء سير عمل من خطة غير متاح بعد.",
+      "status": {
+        "draft": "مسودة",
+        "measured": "تم القياس",
+        "labeled": "تم الوسم",
+        "approved": "معتمدة",
+        "converted": "تم التحويل"
+      },
+      "col": {
+        "name": "الخطة",
+        "revision": "المراجعة",
+        "status": "الحالة",
+        "actions": "الإجراءات"
+      },
+      "form": {
+        "name": "اسم الخطة",
+        "startsAt": "أين تبدأ العملية",
+        "endsAt": "أين تنتهي العملية",
+        "create": "إنشاء خطة"
+      },
+      "steps": {
+        "map": "ارسمها",
+        "measure": "قِس",
+        "oneNumber": "اختر رقمًا واحدًا",
+        "label": "قسّم ووسم",
+        "convert": "إنشاء سير عمل"
+      },
+      "map": {
+        "empty": "لم يُرسم شيء بعد",
+        "emptyHint": "أضف أولًا من يشارك (المسارات) ثم خطوات كل منهم.",
+        "handoffs": "{count} عمليات تسليم",
+        "waitNote": "ما الذي ينتظر عند هذا التسليم؟",
+        "laneName": "اسم المسار",
+        "addLane": "إضافة مسار",
+        "stepLabel": "خطوة",
+        "stepLane": "مسار الخطوة",
+        "addStep": "إضافة خطوة"
+      },
+      "source": {
+        "self_reported": "ذكرتَ ذلك",
+        "email": "تم التحقق عبر البريد",
+        "calendar": "تم التحقق عبر التقويم"
+      },
+      "measure": {
+        "hint": "كم مرة تحدث كل خطوة وكم تستغرق؟",
+        "needSteps": "ارسم خطوة واحدة على الأقل أولًا.",
+        "perWeek": "في الأسبوع",
+        "duration": "المدة",
+        "unit": "وحدة المدة",
+        "save": "حفظ",
+        "clear": "مسح"
+      },
+      "unit": {
+        "minutes": "دقائق",
+        "hours": "ساعات",
+        "days": "أيام"
+      },
+      "oneNumber": {
+        "hint": "الخطوات التي قسّتها، الأطول انتظارًا أولًا. أنت تقرر أيها يهم.",
+        "needMetrics": "قِس خطوة واحدة على الأقل أولًا.",
+        "rate": "{freq} في الأسبوع، {dur} {unit}",
+        "title": "سمِّ هذا الرقم",
+        "returnKind": "ما الذي تستعيده",
+        "target": "الهدف",
+        "save": "حفظ كرقمي الواحد"
+      },
+      "returnKind": {
+        "hours_back": "ساعات مستعادة",
+        "more_yeses": "موافقات أكثر",
+        "money_sooner": "مال أسرع"
+      },
+      "label": {
+        "needNumber": "اختر رقمك الواحد أولًا؛ خطوته هي ما تُقسّمه هنا.",
+        "subStep": "خطوة فرعية",
+        "addSubStep": "إضافة خطوة فرعية",
+        "unlabel": "إزالة الوسم",
+        "edgeCase": "حالة حدّية: {text}",
+        "byHandNote": "هذه تبقى للأشخاص. الذكاء الاصطناعي لا يتصرف فيها أبدًا.",
+        "acknowledge": "قرأتُ قائمة اليدوي",
+        "acknowledged": "تمت قراءة قائمة اليدوي"
+      },
+      "labels": {
+        "ai": "ذكاء اصطناعي",
+        "automation": "أتمتة",
+        "by_hand": "يدوي"
+      },
+      "gate": {
+        "missing": "لا يزال ناقصًا"
       }
     }
   },
