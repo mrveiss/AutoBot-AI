@@ -163,11 +163,14 @@ STORE_AUTHORITY: dict[str, Concept] = {
             "autobot-backend/llc/services/company_os/workflows.py",
             "autobot-backend/llc/services/company_os/graphs.py",
             "autobot-backend/llc/services/company_os/role_skills.py",
+            "autobot-backend/llc/services/company_os/plans.py",
+            "autobot-backend/llc/services/company_os/plan_store.py",
         ),
         rebuilt_by="Postgres is the only copy: roles -> workflows -> processes live in the workflows "
         "table (the existing Automation store, extended with kind, owner role and trigger) and the "
-        "llc_processes, llc_workflow_nodes, llc_workflow_transitions and llc_role_skills tables. "
-        "There is no projection to rebuild (#18390).",
+        "llc_processes, llc_workflow_nodes, llc_workflow_transitions and llc_role_skills tables; "
+        "a Workflow Planner plan is one JSONB document per revision in company_os_workflow_plans. "
+        "There is no projection to rebuild (#18390, #19934).",
     ),
     "device_credentials": Concept(
         name="device_credentials",
