@@ -534,8 +534,8 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 }
 
 .toast.error {
-  background: var(--color-error);
-  color: var(--text-inverse);
+  background: var(--color-error-solid);
+  color: var(--text-on-error);
 }
 
 @keyframes slideIn {
