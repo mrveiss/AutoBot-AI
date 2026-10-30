@@ -61,7 +61,9 @@ from repo_tests._glob_declared_uncovered import GLOB_DECLARED_UNCOVERED, GLOB_RU
 #: (#5060); it needed adding here the moment it became a second file, and the
 #: guard caught that on the first run rather than letting the record quietly
 #: become unfalsifiable.
-_SELF_AND_ITS_RECORD = frozenset({Path(__file__).name, "_glob_declared_uncovered.py"})
+_SELF_AND_ITS_RECORD = frozenset(
+    {Path(__file__).name, "_glob_declared_uncovered.py", "glob_declared_detector_15900_test.py"}
+)
 from repo_tests._paths import repo_root
 from repo_tests.python_filter_covers_its_guards_test import _filter_patterns, _is_covered
 
@@ -95,7 +97,7 @@ def _is_path_like(candidate: str) -> bool:
     the string must look like a suffix glob (`*.yml`, `?.min.js`). A bracket
     class is accepted only inside a path that already has a slash.
     """
-    if not any(ch in candidate for ch in "*?["):
+    if not any(ch in candidate for ch in "*?[") or not _PATHSPEC.fullmatch(candidate):
         return False
     if "[" in candidate and "/" not in candidate and not _SUFFIX_GLOB.match(candidate):
         return False
@@ -115,11 +117,23 @@ def _is_path_like(candidate: str) -> bool:
         if any(part in {".", ".."} for part in candidate.split("/")):
             return False
         return (REPO_ROOT / head).is_dir()
-    return bool(_SUFFIX_GLOB.match(candidate))
+    return bool(_SUFFIX_GLOB.match(candidate) or _NAMED_GLOB.match(candidate))
 
+
+#: The characters a pathspec is made of, and at most one path component's length (#18800). Prose
+#: with a `*` and a `/` (an error message naming `autobot-*` and `--color-error/-success`) otherwise
+#: reached `Path.is_dir()`, which raises ENAMETOOLONG before Python 3.12 and silently says no after.
+_PATHSPEC = re.compile(r"[A-Za-z0-9_.*?\[\]/-]{1,255}")
 
 #: `*.yml`, `?.min.js`, `*requirements*.txt` — a leading glob and a dotted suffix.
 _SUFFIX_GLOB = re.compile(r"^[*?][A-Za-z0-9_.*-]*[.][A-Za-z0-9]+$")
+
+#: `*Dockerfile*`, `Dockerfile*`, `*Containerfile`, `Makefile.*` (#19575). A glob over a well-known
+#: extensionless file name has no dotted suffix, so `_SUFFIX_GLOB` cannot see it. The name is a
+#: whitelist rather than "any word": a dotless shape alone would accept prose such as `note*`, and
+#: a bare `*` is every file, not a declared read. One optional leading wildcard, then a fixed name,
+#: then one character class: no alternation can re-split the input, so matching stays linear (#15998).
+_NAMED_GLOB = re.compile(r"^[*?]?(?:Dockerfile|Containerfile|Makefile|Jenkinsfile)[A-Za-z0-9_.*?-]*$")
 
 
 #: Floor on guards PARSED, not on declarations found. A findings floor is
@@ -409,44 +423,6 @@ def test_the_detector_ignores_what_is_not_a_glob_into_this_tree(source: str) -> 
     assert glob_declarations_in(source) == set()
 
 
-@pytest.mark.parametrize(
-    "declaration",
-    ['x = "*.toml"', 'x = "scripts/?.sh"', 'x = ".github/workflows/*.yml"', 'x = "*requirements*.txt"'],
-    ids=["root-suffix", "question-mark", "path-with-star", "embedded-star"],
-)
-def test_the_detector_accepts_every_supported_glob_form(declaration: str) -> None:
-    """Root-relative and `?`-bearing forms, which the first version required a slash and `*` for.
-
-    The review's illustrative `"config/?.yml"` is replaced by `"scripts/?.sh"`:
-    a path whose first segment is not a real directory is prose, not a read, and
-    this repository has no `config/`. Using it would have asserted the detector
-    accepts a shape it correctly rejects.
-    """
-    assert glob_declarations_in(declaration), f"missed: {declaration}"
-
-
-@pytest.mark.parametrize(
-    "source",
-    [
-        "x: list[Path] = []",
-        'x = os.environ["HOME"]',
-        'x = "[Unit]"',
-        'x = "string[]"',
-        'x = "github-actions[bot]"',
-        'x = "[A-Za-z_][A-Za-z0-9_]*"',
-    ],
-    ids=["annotation", "subscript", "ini-section", "ts-type", "bot-name", "regex"],
-)
-def test_the_detector_rejects_python_syntax_that_merely_contains_brackets(source: str) -> None:
-    """The reason `?` and `[` could not simply be added to the character class.
-
-    A naive widening reported all six of these as guard dependencies — 44
-    "uncovered" entries, mostly Python source. Brackets are subscripts and type
-    annotations far more often than they are pathspecs.
-    """
-    assert glob_declarations_in(source) == set()
-
-
 def test_the_record_cannot_rediscover_itself() -> None:
     """This module is outside its own sweep, so its keys are not declarations.
 
@@ -472,48 +448,6 @@ def test_the_detector_rejects_paths_that_leave_the_repository(source: str) -> No
     component scan cannot be limited to the first segment.
     """
     assert glob_declarations_in(source) == set()
-
-
-def test_the_declaration_pattern_does_not_backtrack_exponentially() -> None:
-    """CodeQL flagged `_QUOTED_GLOB` as exponential, and it was (#15998 review).
-
-    A separator could be matched by the literal `/` or by a class that also
-    contained `/`, and the alternatives multiply. Measured before the fix: 0.13 ms
-    at 12 repetitions of `*/`, 573 ms at 24 — roughly x4 per two repetitions.
-
-    Asserted as a TIME BUDGET rather than by inspecting the pattern, because the
-    property is about matching behaviour and a future edit could reintroduce the
-    ambiguity with different characters. Generous enough not to flake on a loaded
-    runner; the failing case took half a second at N=24 and would take minutes at
-    the N used here.
-    """
-    import time
-
-    # N=26, not larger. The ambiguous pattern takes ~2.3s here and fails this
-    # assertion cleanly; at N=40 it never returns and the mutation HANGS the
-    # suite instead of failing it. A test that hangs is worse than one that
-    # fails — it reports nothing and blocks the runner.
-    pathological = '"' + "*/" * 26 + "!"
-    started = time.perf_counter()
-    _QUOTED_GLOB.search(pathological)
-    elapsed = time.perf_counter() - started
-
-    assert elapsed < 1.0, f"the declaration pattern took {elapsed:.1f}s on a pathological input"
-
-
-def test_the_pattern_still_matches_every_declaration_form() -> None:
-    """The contrast: a pattern that matches nothing also cannot backtrack.
-
-    Without this, "fixed the ReDoS" is satisfied by breaking the detector, and
-    the record would silently stop discovering anything.
-    """
-    for source, expected in (
-        ('x = "*.toml"', {"*.toml"}),
-        ('x = ".github/workflows/*.yml"', {".github/workflows/*.yml"}),
-        ('x = "scripts/?.sh"', {"scripts/?.sh"}),
-        ('x = "*requirements*.txt"', {"*requirements*.txt"}),
-    ):
-        assert glob_declarations_in(source) == expected, source
 
 
 def test_a_glob_inside_a_string_literal_is_not_a_declaration() -> None:

@@ -65,7 +65,7 @@ def test_ansible_gets_the_password_from_an_owner_only_file_not_argv(tmp_path: Pa
         [
             "set -euo pipefail",
             f"ADMIN_PASSWORD={shlex.quote(_TRICKY)}",
-            'LOG_FILE="$LOG.out" inventory=inv INSTALL_TMP="$(mktemp -d)"',
+            'LOG_FILE="$LOG.out" inventory=inv skip_tags=seed INSTALL_TMP="$(mktemp -d)"',
             "run() {",
             m.group(0),
             "}",
