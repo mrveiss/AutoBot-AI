@@ -633,7 +633,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
 
     async def _vectorize_fact_in_chromadb(
         self, fact_id: str, content: str, metadata: Dict[str, Any], max_attempts: int = 1
-    ) -> None:
+    ) -> bool:
         """
         Vectorize and store fact in ChromaDB vector store.
 
@@ -641,15 +641,12 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         Issue #165: Uses NPU worker for hardware-accelerated embedding generation.
 
         Args:
-            fact_id: Fact identifier
-            content: Fact content text
-            metadata: Fact metadata dict
             max_attempts: Embedding attempts before giving up. Issue #12312: defaults
                 to 1 (fast-fail) for inline user-facing creates; the on-demand /
                 reconcile path (``vectorize_existing_fact``) passes a higher count.
         """
         if not self.vector_store:
-            return
+            return False
 
         # Import sanitization utility
         from knowledge.utils import sanitize_metadata_for_chromadb as _sanitize_metadata_for_chromadb
@@ -668,12 +665,13 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         # reconciler backfills it once the backend recovers.
         if not embedding:
             await self._record_failed_vectorization(fact_id, "embedding generation returned an empty result")
-            return
+            return False
 
         if not await self._write_vector(space, fact_id, embedding, content, sanitized_metadata, ""):
-            return
+            return False
         await self._mark_vectorization_succeeded(fact_id)
         logger.info("Vectorized fact %s in ChromaDB", fact_id)
+        return True
 
     async def _write_vector(self, space, fact_id, embedding, content, metadata, context: str) -> bool:
         """Into *space*, buffered while its buffer runs (#8391, #8405); False + recorded when refused (#12312)."""
@@ -822,9 +820,11 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
             # transient embedding failures with backoff here where latency is hidden.
             from services.npu_client import EMBEDDING_MAX_ATTEMPTS
 
-            await self._vectorize_fact_in_chromadb(
+            # #20007: a failed embedding is recorded, not raised; reporting success would mark it done.
+            if not await self._vectorize_fact_in_chromadb(
                 fact_id, fact_info["content"], fact_info["metadata"], max_attempts=EMBEDDING_MAX_ATTEMPTS
-            )
+            ):
+                return {"status": "error", "message": "Fact could not be vectorized"}
 
             logger.info("Vectorized existing fact %s", fact_id)
             return {
