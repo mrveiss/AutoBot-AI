@@ -121,7 +121,7 @@ REACH = declare(
     "sync-command-result-mapping-scan",
     discover=_source_population,
     # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=2483,
+    floor=2604,  # mid-window: population 2754, window (2454, 2754)
     what="non-test python source",
     roots=("autobot-backend",),
     growth=300,
