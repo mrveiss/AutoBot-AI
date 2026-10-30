@@ -396,11 +396,11 @@ function formatTime(iso: string | null): string {
 .badge-orange { background: var(--slm-orange-100); color: var(--slm-orange-600); }
 .badge-pulse { animation: pulse 2s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
-.btn-kill { background: var(--color-error-500); color: white; border: none; padding: var(--spacing-1) 10px; border-radius: var(--radius-default); font-size: var(--text-xs); font-weight: 500; cursor: pointer; }
+.btn-kill { background: var(--color-error-solid); color: white; border: none; padding: var(--spacing-1) 10px; border-radius: var(--radius-default); font-size: var(--text-xs); font-weight: 500; cursor: pointer; }
 .btn-kill:hover { background: var(--color-error-600); }
 .kill-confirm { display: flex; gap: var(--spacing-1); align-items: center; }
 .btn-confirm { background: var(--slm-amber-500); color: white; border: none; padding: var(--spacing-1) var(--spacing-2); border-radius: var(--radius-default); font-size: 11px; cursor: pointer; }
-.btn-error { background: var(--color-error-500); }
+.btn-error { background: var(--color-error-solid); }
 .btn-cancel-sm { background: var(--slm-gray-200); color: var(--slm-gray-700); border: none; padding: 2px 6px; border-radius: var(--radius-default); font-size: 11px; cursor: pointer; }
 .log-panel { background: white; border-radius: var(--radius-xl); box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: var(--spacing-5); margin-top: var(--spacing-5); }
 .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-3); }
