@@ -461,7 +461,7 @@ in #16539.
 **Reason:** these names are NOT second implementations. The behaviour has exactly one
 definition in `autobot_shared`; each service keeps a thin binding that must be a concrete,
 separately mapped class: the two services attach different SQLAlchemy relationships and
-columns (backend: activity tracking and LLC columns; SLM: none) and register in different
+columns (backend: activity tracking and Company OS columns; SLM: none) and register in different
 mapper registries, so one shared mapped class would break `configure_mappers()` on one side.
 `UserService` bindings only set `user_model` and, in the backend, two hooks. Each service's
 `OrganizationService` only binds its own concrete `Organization` and `User` mappings (two
