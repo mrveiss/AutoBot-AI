@@ -10,7 +10,7 @@ Routes:
   POST   /api/llc/work-items/{work_item_id}/checkout
   POST   /api/llc/work-items/{work_item_id}/release
   POST   /api/llc/work-items/{work_item_id}/transition
-  POST   /api/llc/work-items/{work_item_id}/comments
+  POST   /api/llc/work-items/{work_item_id}/comments  (GET lives in work_item_comments.py — GH#18750)
   POST   /api/llc/work-items/{work_item_id}/claim    (human claim — GH#8223)
   POST   /api/llc/work-items/{work_item_id}/unclaim  (human unclaim — GH#8223)
   POST   /api/llc/work-items/{work_item_id}/handoff/to-agent  (GH#8232)
