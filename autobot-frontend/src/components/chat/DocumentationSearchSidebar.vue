@@ -665,7 +665,7 @@ onMounted(() => {
 }
 
 .empty-state .icon {
-  font-size: var(--text-3xl);
+  width: var(--text-3xl); height: var(--text-3xl);
   margin-bottom: var(--spacing-3);
   opacity: 0.5;
 }
@@ -736,7 +736,7 @@ onMounted(() => {
 
 .recent-item .icon {
   color: var(--text-secondary);
-  font-size: 0.625rem;
+  width: 0.625rem; height: 0.625rem;
 }
 
 .recent-title {
