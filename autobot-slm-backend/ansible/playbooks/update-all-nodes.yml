@@ -268,6 +268,22 @@
       changed_when: false
       failed_when: false
 
+    # #20002: the Python half of the same recovery. The marker advances even when a run's pip step then
+    # fails, so the bump leaves the diff window and no later run installs it. Only "Would install" counts:
+    # a dry run that fails (no network, say) must not make an offline host's update depend on pip.
+    # Reaches the venvs on this controller; a fleet node's venv still relies on the diff.
+    - name: "[PRE-FLIGHT] Check the installed venvs satisfy their manifests (#20002)"
+      ansible.builtin.shell: >-
+        for c in autobot-slm-backend autobot-backend; do
+        [ -x "{{ autobot.base_dir }}/$c/venv/bin/pip" ] || continue;
+        "{{ autobot.base_dir }}/$c/venv/bin/pip" install --dry-run --disable-pip-version-check --retries 0
+        -r "{{ git_repo_root }}/$c/requirements.txt"
+        -c "{{ git_repo_root }}/constraints/shared.txt" 2>/dev/null;
+        done
+      register: python_tree_check
+      changed_when: false
+      failed_when: false
+
     - name: "[PRE-FLIGHT] Set dependency change flags"
       set_fact:
         # #15430: when the deployed commit is unknown — marker missing,
@@ -276,7 +292,8 @@
         # time and nothing else.
         python_deps_changed: >-
           {{ true if (deps_diff_base | length == 0)
-             else (python_deps_diff.stdout | default('') | length > 0) }}
+             else ((python_deps_diff.stdout | default('') | length > 0)
+                   or ('Would install' in (python_tree_check.stdout | default('')))) }}
         # Either the manifests changed in this deployment span, OR the tree
         # already on disk does not satisfy them. The second disjunct is what
         # makes a drifted host self-heal instead of failing every deploy.
