@@ -100,9 +100,9 @@ export interface CommandExecutionResponse {
 /**
  * A single log record from `/api/logs/recent` (#5207 audit). The backend
  * wraps these in `{entries, count, limit, source}`; `getLogs` unwraps to a
- * flat `LogEntry[]`. Extra provider-specific keys are permitted.
+ * flat `SystemLogEntry[]`. Extra provider-specific keys are permitted.
  */
-export interface LogEntry {
+export interface SystemLogEntry {
   timestamp?: string
   level?: string
   message?: string
@@ -290,7 +290,7 @@ export class SystemRepository extends ApiRepository {
 
   // Logs management
   // Issue #552: Backend uses /api/logs/* not /api/system/logs
-  async getLogs(level?: string, limit?: number): Promise<LogEntry[]> {
+  async getLogs(level?: string, limit?: number): Promise<SystemLogEntry[]> {
     const params = new URLSearchParams()
     if (level) params.append('level', level)
     if (limit) params.append('limit', limit.toString())
@@ -300,7 +300,7 @@ export class SystemRepository extends ApiRepository {
     // Previously cast the whole envelope to `any[]`, so `.map()`/`.filter()`
     // at call sites failed silently. (#5207 audit)
     const response = await this.get<{
-      entries?: LogEntry[]
+      entries?: SystemLogEntry[]
       count?: number
       limit?: number
       source?: string
