@@ -133,7 +133,6 @@ UNCLASSIFIED: frozenset[str] = frozenset(
         "autobot-infrastructure/shared/scripts/utilities/manage_system_knowledge.py",
         "autobot-infrastructure/shared/scripts/utilities/migrate_redis_to_chromadb.py",
         "autobot-infrastructure/shared/scripts/utilities/quick_test_os_context.py",
-        "autobot-infrastructure/shared/scripts/utilities/sync_documentation_kb.py",
         "autobot-infrastructure/shared/scripts/utilities/test-authentication-security.py",
         "autobot-infrastructure/shared/scripts/utilities/test_man_page_context.py",
         "autobot-infrastructure/shared/scripts/utilities/validate-security-config.py",
