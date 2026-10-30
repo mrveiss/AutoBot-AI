@@ -269,7 +269,7 @@ onUnmounted(() => {
   cursor: ew-resize;
   background: transparent;
   transition: background var(--duration-150);
-  z-index: 10;
+  z-index: var(--z-10);
 }
 
 .resize-handle:hover,
