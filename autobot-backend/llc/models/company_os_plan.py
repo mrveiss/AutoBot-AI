@@ -15,7 +15,6 @@ as in the migration so every ``create_all`` test database carries it.
 """
 
 import uuid
-from datetime import datetime
 from typing import Any
 
 import sqlalchemy as sa
@@ -42,12 +41,6 @@ class CompanyOsWorkflowPlan(Base):
     status: Mapped[str] = mapped_column(sa.String(16), nullable=False, default="draft", server_default="draft")
     document: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     created_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now(), onupdate=sa.func.now()
-    )
 
     __table_args__ = (
         sa.UniqueConstraint("company_id", "plan_key", "revision", name="uq_company_os_workflow_plans_revision"),
