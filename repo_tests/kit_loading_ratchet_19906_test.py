@@ -35,7 +35,7 @@ _ROOTS = ("autobot-frontend/src", "autobot-slm-frontend/src", "autobot-plugins")
 _SKIPPED = re.compile(r"(/node_modules/|/dist/|\.test\.|\.spec\.|\.stories\.|/__tests__/)")
 _KEYFRAMES = re.compile(r"@keyframes\s+spin(?![\w-])")
 _UTILITY = re.compile(r"\b(?:animate-spin|fa-spin)(?![\w-])")
-_COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*|<!--).*$", re.M)
+_COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
 _BLOCK_COMMENT = re.compile(r"/\*.*?\*/|<!--.*?-->", re.S)
 
 
