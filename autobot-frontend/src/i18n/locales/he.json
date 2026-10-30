@@ -1,5 +1,6 @@
 {
   "common": {
+    "appName": "AutoBot",
     "submit": "שלח",
     "cancel": "ביטול",
     "save": "שמור",
@@ -3980,7 +3981,9 @@
       "loading": "Loading configuration...",
       "emailHint": "Comma-separated email addresses",
       "selectWorkflow": "Workflow",
-      "channelMappingHint": "Select which channels receive notifications for each event type."
+      "channelMappingHint": "Select which channels receive notifications for each event type.",
+      "invalidEmail": "כתובת אימייל לא תקינה: {emails}",
+      "invalidUrl": "פורמט URL לא תקין"
     },
     "modal": {
       "saveWorkflowAriaLabel": "Save workflow",
@@ -4280,7 +4283,8 @@
       "emergencyKillFailed": "❌ עצירת החירום נכשלה: {message}",
       "interrupted": "^C (התהליך נקטע על ידי המשתמש)",
       "error": "שגיאה: {error}"
-    }
+    },
+    "urlCopied": "כתובת ה-URL של הטרמינל הועתקה ללוח!"
   },
   "manpage": {
     "manager": {
@@ -4841,6 +4845,7 @@
   },
   "ui": {
     "themeToggle": {
+      "accentPurpleDescription": "סגול — יצירתי ואלגנטי",
       "system": "מערכת",
       "highContrast": "ניגודיות גבוהה",
       "monochrome": "מונוכרום",
@@ -5512,7 +5517,10 @@
       "thinkingOffLabel": "thinking Off",
       "thinkingOn": "Thinking on",
       "thinkingOnLabel": "thinking On",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "fileTooLarge": "הקובץ \"{name}\" גדול מדי (מקסימום {max})",
+      "voiceUnsupported": "קלט קולי דורש Chrome,‏ Edge או Safari 15+. התמלול אינו זמין בדפדפן זה.",
+      "micDenied": "הגישה למיקרופון נדחתה. נא לאפשר גישה למיקרופון בהגדרות הדפדפן."
     },
     "visualBrowser": {
       "disconnected": "Disconnected",
@@ -7289,7 +7297,8 @@
       "listView": "List View",
       "refreshAriaLabel": "Refresh files",
       "errorRenamingFile": "Error renaming file",
-      "errorLoadingContents": "Error loading contents"
+      "errorLoadingContents": "Error loading contents",
+      "uploadFailedHint": "נא לבדוק את מגבלות גודל הקובץ ואת דרישות הפורמט"
     },
     "fileTypes": {
       "shell": "Shell Script",

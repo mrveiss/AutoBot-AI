@@ -50618,23 +50618,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/llc/companies/{company_id}/members/{user_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Remove Member */
-        delete: operations["remove_member_api_llc_companies__company_id__members__user_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/llc/companies/{company_id}/pm-config": {
         parameters: {
             query?: never;
@@ -50922,6 +50905,24 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/llc/companies/{company_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Member */
+        delete: operations["remove_member_api_llc_companies__company_id__members__user_id__delete"];
+        options?: never;
+        head?: never;
+        /** Change Member Role */
+        patch: operations["change_member_role_api_llc_companies__company_id__members__user_id__patch"];
         trace?: never;
     };
     "/api/llc/companies/{company_id}/ceo": {
@@ -85380,6 +85381,12 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** MemberRoleRequest */
+        MemberRoleRequest: {
+            role: components["schemas"]["MembershipRole"];
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * MembershipRole
          * @description Role of a human user within an LLC company (GH#8223).
@@ -88078,11 +88085,6 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             /**
-             * Subscription Tier
-             * @default free
-             */
-            subscription_tier: string;
-            /**
              * Max Users
              * @default -1
              */
@@ -88187,8 +88189,6 @@ export interface components {
             settings: {
                 [key: string]: unknown;
             };
-            /** Subscription Tier */
-            subscription_tier: string;
             /** Max Users */
             max_users: number;
             /** Is Active */
@@ -88208,8 +88208,6 @@ export interface components {
             name: string;
             /** Slug */
             slug: string;
-            /** Subscription Tier */
-            subscription_tier: string;
             /** Users */
             users: {
                 [key: string]: unknown;
@@ -88235,8 +88233,6 @@ export interface components {
             settings?: {
                 [key: string]: unknown;
             } | null;
-            /** Subscription Tier */
-            subscription_tier?: string | null;
             /** Max Users */
             max_users?: number | null;
         } & {
@@ -173693,36 +173689,6 @@ export interface operations {
             };
         };
     };
-    remove_member_api_llc_companies__company_id__members__user_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                company_id: string;
-                user_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     set_pm_config_api_llc_companies__company_id__pm_config_patch: {
         parameters: {
             query?: never;
@@ -174068,6 +174034,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_member_api_llc_companies__company_id__members__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_member_role_api_llc_companies__company_id__members__user_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemberRoleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
