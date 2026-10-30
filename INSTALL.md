@@ -345,13 +345,13 @@ login the setup wizard launches automatically and guides you through:
 |------|--------|
 | Welcome | Overview of the setup process |
 | Add Nodes | Enter hostname/IP and SSH credentials for each fleet node |
-| Test Connections | Verify SSH connectivity to every node |
-| Enroll Agents | Install the AutoBot agent on each node |
-| Assign Roles | Choose which role(s) each node performs |
+| Test | Verify SSH connectivity to every node |
+| Enroll | Install the AutoBot agent on each node |
+| Roles | Choose which role(s) each node performs |
 | API Keys | Configure the secrets the fleet needs |
-| Provision Fleet | Run Ansible provisioning across the fleet |
-| Verify Health | Confirm all nodes and required roles are healthy |
-| Complete | Setup finished — redirects to Fleet Overview |
+| Provision | Run Ansible provisioning across the fleet |
+| Verify | Confirm all nodes and required roles are healthy |
+| Done | Setup finished — redirects to Fleet Overview |
 
 You can skip the wizard at any time and return to it later from
 **Settings > General > Launch Wizard**.

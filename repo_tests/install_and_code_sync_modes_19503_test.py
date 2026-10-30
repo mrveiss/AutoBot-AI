@@ -11,9 +11,12 @@ from __future__ import annotations
 
 import ast
 import re
+import subprocess
 
 import yaml
 from repo_tests._paths import repo_root
+
+from autobot_shared.isolated_git import isolated_git_env
 
 _ROOT = repo_root()
 _INSTALL = (_ROOT / "install.sh").read_text(encoding="utf-8")
@@ -22,21 +25,13 @@ _SLM = _ROOT / "autobot-slm-backend"
 _FLAG = "--chmod=o-w"
 _CONSTANT = "RSYNC_NEVER_WORLD_WRITABLE"
 _CONSTANTS = {_CONSTANT, "RSYNC_ARCHIVE_ARGS"}
-_RSYNC_MODULES = (
-    "services/sync_orchestrator.py",
-    "api/code_sync.py",
-    "api/code_sync_paths.py",
-    "api/_rsync_paths.py",
-)
-_SHELL_SYNCS = (
-    "autobot-infrastructure/autobot-slm-backend/scripts/bootstrap-slm.sh",
-    "autobot-infrastructure/shared/scripts/install-slm.sh",
-    "autobot-infrastructure/shared/scripts/utilities/sync-frontend.sh",
-    "autobot-infrastructure/shared/scripts/utilities/sync-to-slm.sh",
-    "autobot-infrastructure/shared/scripts/utilities/sync-to-vm.sh",
-    "autobot-slm-frontend/scripts/sync-to-admin.sh",
-    "sync-frontend.sh",
-)
+# Copying without the flag on purpose: data rather than code, or a target with no POSIX modes.
+_SHELL_EXEMPT = {
+    "autobot-infrastructure/shared/scripts/logging/collect-application-logs.sh": "pulls logs",
+    "autobot-infrastructure/shared/scripts/utilities/sync-npu-worker-to-windows.sh": "Windows target",
+    "autobot-slm-backend/ansible/utils/backup.sh": "pulls backups",
+}
+_ARCHIVE_RSYNC = re.compile(r"\brsync\s+-[a-zA-Z]*a")
 # Carries data, certificates and logs rather than the code tree.
 _NOT_CODE = {"data-migration.yml"}
 
@@ -84,9 +79,8 @@ def test_installer_strips_an_inherited_default_acl_only_from_a_tree_it_created()
 
 
 def test_installer_copy_never_carries_a_world_writable_mode() -> None:
-    copies = [line for line in _INSTALL.splitlines() if re.search(r"\brsync -a\b", line)]
-    assert copies, "the service-directory copy moved; this test reads nothing"
-    assert all(_FLAG in line for line in copies), copies
+    assert _ARCHIVE_RSYNC.search(_INSTALL), "the service-directory copy moved; this test reads nothing"
+    assert not _loose_copies(_INSTALL)
 
 
 def test_flag_constant_is_the_value_the_ansible_tasks_use() -> None:
@@ -97,12 +91,14 @@ def test_flag_constant_is_the_value_the_ansible_tasks_use() -> None:
 
 def test_every_python_rsync_sets_the_mode() -> None:
     total = 0
-    for rel in _RSYNC_MODULES:
-        lists = _rsync_lists((_SLM / rel).read_text(encoding="utf-8"))
+    for path in sorted(_SLM.rglob("*.py")):
+        rel = path.relative_to(_SLM).as_posix()
+        if rel.startswith(("tests/", "venv/", ".venv/")) or path.name.endswith("_test.py"):
+            continue
+        lists = _rsync_lists(path.read_text(encoding="utf-8"))
         total += len(lists)
-        assert lists, f"{rel}: no rsync command found"
         assert all(_sets_mode(args) for args in lists), f"{rel}: an rsync copies source modes as they are"
-    assert total >= 8, f"expected the 8 known rsync commands, read {total}"
+    assert total >= 7, f"expected at least the 7 known rsync commands, read {total}"
 
 
 def test_every_code_synchronize_task_sets_the_mode() -> None:
@@ -116,25 +112,60 @@ def test_every_code_synchronize_task_sets_the_mode() -> None:
     assert checked >= 22, f"expected the 22 known code-tree tasks, read {checked}"
 
 
-def test_every_code_shell_sync_sets_the_mode() -> None:
-    """Backups and logs carry data, and the Windows NPU sync's target has no POSIX modes."""
-    for rel in _SHELL_SYNCS:
-        copies = [line for line in (_ROOT / rel).read_text(encoding="utf-8").splitlines() if "rsync -avz" in line]
-        assert copies, f"{rel}: no rsync found; this test reads nothing"
-        assert all(_FLAG in line for line in copies), f"{rel}: {copies}"
+def _loose_copies(text: str) -> list[str]:
+    """Archive-mode rsync lines that keep source modes."""
+    return [
+        line
+        for line in text.splitlines()
+        if _ARCHIVE_RSYNC.search(line) and _FLAG not in line and not line.lstrip().startswith(("#", "echo"))
+    ]
+
+
+def test_every_shell_rsync_sets_the_mode_or_is_exempt() -> None:
+    listed = subprocess.run(
+        ["git", "ls-files", "*.sh"], cwd=_ROOT, env=isolated_git_env(), capture_output=True, text=True, check=True
+    ).stdout.splitlines()
+    assert len(listed) > 50, f"git listed {len(listed)} shell files; this test reads nothing"
+    loose = {rel for rel in listed if _loose_copies((_ROOT / rel).read_text(encoding="utf-8", errors="replace"))}
+    assert loose == set(_SHELL_EXEMPT), loose ^ set(_SHELL_EXEMPT)
 
 
 def test_contrast_a_bare_rsync_is_caught() -> None:
     assert not all(_sets_mode(args) for args in _rsync_lists('cmd = ["rsync", "-a", src, dst]\n'))
     assert _synchronize_tasks([{"tasks": [{"ansible.posix.synchronize": {"dest": "x"}}]}]) == [{"dest": "x"}]
+    assert _loose_copies('    rsync -avz --delete "$a" "$b"\n') and _loose_copies('local cmd="rsync -a"\n')
+    assert not _loose_copies(f'rsync -avz {_FLAG} "$a" "$b"\n# rsync -a\nrsync --version\n')
 
 
-def test_existing_tree_is_only_reported() -> None:
+def _report(tmp_path) -> str:
+    """install.sh's own report function, over a tree where one critical dir is missing."""
     body = _INSTALL[_INSTALL.index("report_world_writable_code() {") :]
-    body = body[: body.index("\n}\n")]
-    assert "-perm -0002" in body and "warn " in body
-    assert "chmod" not in body, "changing a live host's modes needs approval (#17038)"
-    assert re.search(r"validate_distributions; report_world_writable_code", _INSTALL)
+    body = body[: body.index("\n}\n") + 3]
+    script = f"""set -euo pipefail
+warn() {{ echo "WARN $*"; }}
+CODE_SOURCE={tmp_path}/code_source; AUTOBOT_BASE={tmp_path}; CRITICAL_DIRS=(present absent)
+{body}
+report_world_writable_code
+echo FINISHED
+"""
+    done = subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False)
+    assert done.returncode == 0 and "FINISHED" in done.stdout, done.stdout + done.stderr
+    return done.stdout
+
+
+def test_existing_tree_is_reported_and_never_changed(tmp_path) -> None:
+    (tmp_path / "code_source").mkdir()
+    loose = tmp_path / "present"
+    loose.mkdir()
+    loose.chmod(0o755)
+    assert "WARN" not in _report(tmp_path), "a clean tree was reported"
+    loose.chmod(0o777)
+    assert "WARN 1 world-writable" in _report(tmp_path)
+    assert loose.stat().st_mode & 0o777 == 0o777, "the report changed a live tree's modes (#17038)"
+
+
+def test_validate_reports_before_a_missing_directory_can_end_it() -> None:
+    assert "report_world_writable_code; validate_distributions; exit 0" in _INSTALL
 
 
 def test_no_terminal_advice_survives_sudo() -> None:
@@ -157,10 +188,22 @@ def test_admin_pass_error_names_the_current_variable() -> None:
     assert "SLM_ADMIN_PASSWORD" in line and "AUTOBOT_SLM_ADMIN_PASSWORD" not in line
 
 
-def test_wizard_table_lists_every_step() -> None:
-    """#19181: the table had 8 rows for 9 steps; configure_secrets renders as API Keys."""
+def _wizard_rows() -> list[str]:
+    section = _DOC[_DOC.index("| Welcome |") :].split("\n\n")[0]
+    return [row.split("|")[1].strip() for row in section.splitlines()]
+
+
+def _ui_labels() -> list[str]:
+    """The labels the wizard renders, in WIZARD_STEPS order."""
     wizard = (_SLM / "api" / "setup_wizard.py").read_text(encoding="utf-8")
     steps = re.findall(r'^    "(\w+)",$', wizard[wizard.index("WIZARD_STEPS = [") :].split("]")[0], re.M)
-    section = _DOC[_DOC.index("| Welcome |") :].split("\n\n")[0]
-    assert len(steps) == 9 and len(section.splitlines()) == len(steps), (steps, section)
-    assert "| API Keys |" in section
+    view = (_ROOT / "autobot-slm-frontend" / "src" / "views" / "SetupWizardView.vue").read_text(encoding="utf-8")
+    block = view[view.index("const stepLabels") :].split("}")[0]
+    labels = dict(re.findall(r"^\s+(\w+): '([^']+)',$", block, re.M))
+    return [labels[step] for step in steps]
+
+
+def test_wizard_table_uses_the_real_ui_labels() -> None:
+    """#19181: 8 rows for 9 steps, and row names the UI does not show."""
+    assert len(_ui_labels()) == 9, _ui_labels()
+    assert _wizard_rows() == _ui_labels()

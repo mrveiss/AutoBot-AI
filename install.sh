@@ -1147,7 +1147,7 @@ main() {
         exit 0
     fi
 
-    if ${VALIDATE}; then _log_init; validate_distributions; report_world_writable_code; exit 0; fi
+    if ${VALIDATE}; then _log_init; report_world_writable_code; validate_distributions; exit 0; fi
 
     _log_init
     # #19236: one owner-only temp dir for the run, removed however it ends -- exit, fatal, Ctrl-C.
