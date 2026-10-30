@@ -1,5 +1,6 @@
 {
   "common": {
+    "appName": "AutoBot",
     "submit": "إرسال",
     "cancel": "إلغاء",
     "save": "حفظ",
@@ -5860,6 +5861,7 @@
       "dismiss": "Dismiss"
     },
     "themeToggle": {
+      "accentPurpleDescription": "بنفسجي — إبداع وأناقة",
       "system": "النظام",
       "highContrast": "تباين عالٍ",
       "monochrome": "أحادي اللون",
