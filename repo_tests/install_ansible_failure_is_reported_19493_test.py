@@ -26,7 +26,7 @@ def _deploy_block(source: str) -> str:
 
 def _run(block: str, playbook_body: str, tmp_path) -> subprocess.CompletedProcess:
     script = f"""set -euo pipefail
-LOG_FILE={tmp_path}/install.log; inventory=i; vars_file=v; ansible_dir=a
+LOG_FILE={tmp_path}/install.log; skip_tags=seed; inventory=i; vars_file=v; ansible_dir=a
 success() {{ echo "OK $*"; }}
 error() {{ echo "ERROR $*" >&2; }}
 ansible-playbook() {{ {playbook_body} }}
