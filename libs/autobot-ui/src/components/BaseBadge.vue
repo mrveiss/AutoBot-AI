@@ -134,14 +134,18 @@ function onRemove(event: MouseEvent): void {
 .aui-badge--error {
   --aui-badge-color: var(--aui-color-error);
   --aui-badge-contrast: var(--aui-color-error-contrast);
+  --aui-badge-fill: var(--aui-color-error-solid);
 }
 .aui-badge--info {
   --aui-badge-color: var(--aui-color-info);
   --aui-badge-contrast: var(--aui-color-info-contrast);
+  --aui-badge-fill: var(--aui-color-info-solid);
 }
 
 .aui-badge--solid {
-  background-color: var(--aui-badge-color);
+  /* The solid tone paints --aui-badge-fill (a darker shade where white label text
+     needs it, #19872); soft and outline tones keep --aui-badge-color. */
+  background-color: var(--aui-badge-fill, var(--aui-badge-color));
   color: var(--aui-badge-contrast);
 }
 .aui-badge--solid.aui-badge--neutral {
