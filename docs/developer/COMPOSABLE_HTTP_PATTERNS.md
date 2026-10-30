@@ -212,8 +212,6 @@ The split is deliberate and low-risk today. `ApiClient` is well-tested for mutat
 
 | Composable | Notes |
 |---|---|
-| `useWorkflowNotificationConfig` | raw `fetch()` with `getAuthToken()` header; self-contained `apiRequest` helper |
-| `useNotificationConfig` | raw `fetch()` with `localStorage` token lookup via `getAuthHeaders()` |
 | `useTLSCredentials` | raw `fetch()` via `slmFetch()`; uses a separate SLM-specific auth token |
 
 ---
