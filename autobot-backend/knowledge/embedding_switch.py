@@ -72,13 +72,20 @@ end
 return 0
 """
 #: Enter cutover only if no cancel was accepted; one step, so a cancel lands before it or is refused.
+#: -1, writing nothing, when this run no longer owns the record: it expired or a newer switch took it.
 _SETTLE_UNLESS_CANCELLED_LUA = """
+if redis.call('HGET', KEYS[1], 'owner') ~= ARGV[1] then
+  return -1
+end
 if redis.call('HGET', KEYS[1], 'cancel') == '1' then
   return 0
 end
 redis.call('HSET', KEYS[1], 'state', 'settling')
 return 1
 """
+
+
+_SETTLE_LOST_RECORD = -1
 
 
 class SwitchRefused(ValueError):
@@ -363,7 +370,11 @@ async def _cut_over(kb, store, run: _Run) -> None:
 
     try:
         await _heartbeat(run)
-        if not await (await _redis()).eval(_SETTLE_UNLESS_CANCELLED_LUA, 1, STATE_KEY):
+        settled = await (await _redis()).eval(_SETTLE_UNLESS_CANCELLED_LUA, 1, STATE_KEY, run.owner)
+        if settled == _SETTLE_LOST_RECORD:
+            await _finish(run, "failed", reason="cutover did not happen: the run no longer owns the state record")
+            return
+        if not settled:
             await _finish(run, "cancelled", reason="cancelled by request before cutover")
             return
         # settling from here: a cancel request is refused (too_late)
