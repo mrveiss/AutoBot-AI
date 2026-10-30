@@ -95,7 +95,7 @@ REACH = declare(
     "provenance-accessor-scan",
     discover=_population,
     # Mid-window, from REACH.window() at 2,510 files: (2210, 2510, 2360).
-    floor=2483,
+    floor=2604,  # mid-window: population 2754, window (2454, 2754)
     what="non-test python source",
     roots=("autobot-backend",),
     growth=300,
