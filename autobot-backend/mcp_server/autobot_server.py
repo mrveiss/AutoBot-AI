@@ -57,6 +57,7 @@ from autobot_shared.ssot_config import config
 from autobot_shared.ssot_constants import QueryDefaults
 from knowledge.search_filters import filter_non_private_results, is_non_private, non_private_where
 from mcp_server.auth_throttle import UNKNOWN_IP, get_pre_auth_throttle
+from mcp_server.memory_session_tools import SESSION_TOOLS, MemorySessionToolsMixin
 from mcp_server.memory_tools import MemoryToolsMixin
 from mcp_server.principal import STDIO_CLIENT, bind_owner, mcp_owner_scope, unbind_owner
 from services.run_jwt import validate_run_jwt
@@ -262,20 +263,6 @@ _TOOLS: Dict[str, Dict[str, Any]] = {
             "required": ["from_entity", "to_entity"],
         },
     },
-    "memory.verbatim_search": {
-        "description": "Search verbatim conversation chunks stored in the VerbatimStore.",
-        "inputSchema": {
-            "type": "object",
-            "properties": {
-                "query": {"type": "string", "description": "Search query"},
-                "session_filter": {
-                    "type": "string",
-                    "description": "Optional session_id to restrict results",
-                },
-            },
-            "required": ["query"],
-        },
-    },
     "agents.list": {
         "description": "List all known AutoBot agent IDs with their descriptions.",
         "inputSchema": {"type": "object", "properties": {}},
@@ -295,6 +282,7 @@ _TOOLS: Dict[str, Dict[str, Any]] = {
             "required": ["agent_name"],
         },
     },
+    **SESSION_TOOLS,
 }
 
 # Static agent registry — enumerate agents/ directory names + descriptions.
@@ -327,7 +315,7 @@ _AGENT_REGISTRY: List[Dict[str, str]] = [
 # ---------------------------------------------------------------------------
 
 
-class AutoBotMCPServer(MemoryToolsMixin):
+class AutoBotMCPServer(MemoryToolsMixin, MemorySessionToolsMixin):
     """MCP server that exposes AutoBot KB, memory graph, and agents.
 
     All tool implementations are thin delegation layers — they call existing
