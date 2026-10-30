@@ -733,7 +733,7 @@ onUnmounted(() => {
 .btn-primary {
   flex-shrink: 0;
   padding: var(--spacing-2) var(--spacing-3);
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: var(--kresearch-on-accent);
   border: none;
   border-radius: var(--radius-md);
@@ -772,7 +772,7 @@ onUnmounted(() => {
 }
 
 .btn-stop:hover {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--kresearch-on-accent);
 }
 
@@ -986,7 +986,7 @@ onUnmounted(() => {
 }
 
 .btn-reject:hover {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--kresearch-on-accent);
 }
 
