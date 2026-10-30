@@ -158,12 +158,13 @@ class LLCLabelService(LLCServiceBase):
         if added and self.activity_log:
             from ..models.enums import ActivityEventType
 
-            actor_type, actor_id = resolve_actor(user_id=actor_user_id)
+            actor = resolve_actor(user_id=actor_user_id)
             await self.activity_log.record(
                 session,
                 company_id=str(work_item.company_id),
-                actor_type=actor_type,
-                actor_id=actor_id,
+                actor_type=actor.type,
+                actor_id=actor.id,
+                metadata=actor.metadata(),
                 event_type=ActivityEventType.WORK_ITEM_UPDATED,
                 entity_type="work_item",
                 entity_id=work_item_id,
@@ -195,12 +196,13 @@ class LLCLabelService(LLCServiceBase):
         if self.activity_log:
             from ..models.enums import ActivityEventType
 
-            actor_type, actor_id = resolve_actor(user_id=actor_user_id)
+            actor = resolve_actor(user_id=actor_user_id)
             await self.activity_log.record(
                 session,
                 company_id=str(work_item.company_id),
-                actor_type=actor_type,
-                actor_id=actor_id,
+                actor_type=actor.type,
+                actor_id=actor.id,
+                metadata=actor.metadata(),
                 event_type=ActivityEventType.WORK_ITEM_UPDATED,
                 entity_type="work_item",
                 entity_id=work_item_id,

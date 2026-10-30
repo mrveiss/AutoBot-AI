@@ -49,7 +49,7 @@ from ..models.enums import (
 from ..models.label import LLCWorkItemLabel
 from ..models.membership import LLCCompanyMembership
 from ..models.work_item import LLCWorkItem, LLCWorkItemComment
-from .actor import resolve_actor
+from .actor import resolve_actor, resolve_actor_as
 from .base import LLCServiceBase
 from .wake_events import wake_for_comment, wake_for_item_changes
 from .work_item_approval_categories import validated_approval_categories as _validated_approval_categories
@@ -107,6 +107,16 @@ _AGENT_ORG_ROLE_TO_COWORKER_ROLE: Dict[str, str] = {
     "specialist": "member",
     "worker": "member",
 }
+
+
+def _coworking_state(item: LLCWorkItem) -> dict:
+    """The co-worker fields of *item*, as the activity log's before/after snapshot."""
+    return {
+        "co_worker_type": item.co_worker_type,
+        "co_worker_agent_id": str(item.co_worker_agent_id) if item.co_worker_agent_id else None,
+        "co_worker_user_id": str(item.co_worker_user_id) if item.co_worker_user_id else None,
+        "co_working_enabled": item.co_working_enabled,
+    }
 
 
 async def resolve_actor_role(session: AsyncSession, actor_id: Optional[str], company_id: str) -> str:
@@ -717,12 +727,7 @@ class WorkItemService(LLCServiceBase):
         if item is None:
             raise ValueError(f"Work item {work_item_id} not found")
 
-        before = {
-            "co_worker_type": item.co_worker_type,
-            "co_worker_agent_id": str(item.co_worker_agent_id) if item.co_worker_agent_id else None,
-            "co_worker_user_id": str(item.co_worker_user_id) if item.co_worker_user_id else None,
-            "co_working_enabled": item.co_working_enabled,
-        }
+        before = _coworking_state(item)
 
         item.co_worker_type = co_type.value
         item.co_worker_agent_id = uuid.UUID(co_worker_agent_id) if co_worker_agent_id else None
@@ -732,21 +737,18 @@ class WorkItemService(LLCServiceBase):
         await session.flush()
 
         if self.activity_log:
+            actor = resolve_actor_as(actor_type, actor_id)
             await self.activity_log.record(
                 session,
                 company_id=company_id,
-                actor_type=actor_type,
-                actor_id=actor_id,
+                actor_type=actor.type,
+                actor_id=actor.id,
+                metadata=actor.metadata(),
                 event_type=ActivityEventType.WORK_ITEM_COWORKER_SET,
                 entity_type="work_item",
                 entity_id=work_item_id,
                 before=before,
-                after={
-                    "co_worker_type": item.co_worker_type,
-                    "co_worker_agent_id": str(item.co_worker_agent_id) if item.co_worker_agent_id else None,
-                    "co_worker_user_id": str(item.co_worker_user_id) if item.co_worker_user_id else None,
-                    "co_working_enabled": True,
-                },
+                after=_coworking_state(item),
             )
 
         return item
@@ -779,12 +781,7 @@ class WorkItemService(LLCServiceBase):
         if item is None:
             raise ValueError(f"Work item {work_item_id} not found")
 
-        before = {
-            "co_worker_type": item.co_worker_type,
-            "co_worker_agent_id": str(item.co_worker_agent_id) if item.co_worker_agent_id else None,
-            "co_worker_user_id": str(item.co_worker_user_id) if item.co_worker_user_id else None,
-            "co_working_enabled": item.co_working_enabled,
-        }
+        before = _coworking_state(item)
 
         item.co_worker_type = None
         item.co_worker_agent_id = None
@@ -794,11 +791,13 @@ class WorkItemService(LLCServiceBase):
         await session.flush()
 
         if self.activity_log:
+            actor = resolve_actor_as(actor_type, actor_id)
             await self.activity_log.record(
                 session,
                 company_id=company_id,
-                actor_type=actor_type,
-                actor_id=actor_id,
+                actor_type=actor.type,
+                actor_id=actor.id,
+                metadata=actor.metadata(),
                 event_type=ActivityEventType.WORK_ITEM_COWORKER_CLEARED,
                 entity_type="work_item",
                 entity_id=work_item_id,
@@ -961,7 +960,7 @@ class WorkItemService(LLCServiceBase):
             logger.warning("workspace release skipped for task=%s", work_item_id, exc_info=True)
 
         if self.activity_log:
-            actor_type, actor_id = resolve_actor(actor_agent_id, actor_user_id)
+            actor = resolve_actor(actor_agent_id, actor_user_id)
             meta: dict = {}
             if is_board_override:
                 meta["board_override"] = True
@@ -970,8 +969,9 @@ class WorkItemService(LLCServiceBase):
             await self.activity_log.record(
                 session,
                 company_id=company_id,
-                actor_type=actor_type,
-                actor_id=actor_id,
+                actor_type=actor.type,
+                actor_id=actor.id,
+                metadata=actor.metadata(),
                 event_type=ActivityEventType.WORK_ITEM_COMPLETED,
                 entity_type="work_item",
                 entity_id=work_item_id,

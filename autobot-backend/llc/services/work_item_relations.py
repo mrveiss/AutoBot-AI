@@ -81,20 +81,22 @@ class WorkItemRelationService(LLCServiceBase):
         await session.flush()
 
         if self.activity_log:
-            actor_type, actor_id = resolve_actor(created_by_agent_id, created_by_user_id)
+            actor = resolve_actor(created_by_agent_id, created_by_user_id)
             await self.activity_log.record(
                 session,
                 event_type=ActivityEventType.WORK_ITEM_RELATION_ADDED,
                 company_id=company_id,
                 entity_type="work_item",
                 entity_id=source_id,
-                actor_type=actor_type,
-                actor_id=actor_id,
-                metadata={
-                    "relation_id": str(relation.id),
-                    "relation_type": relation_type.value,
-                    "target_id": target_id,
-                },
+                actor_type=actor.type,
+                actor_id=actor.id,
+                metadata=actor.metadata(
+                    {
+                        "relation_id": str(relation.id),
+                        "relation_type": relation_type.value,
+                        "target_id": target_id,
+                    }
+                ),
             )
 
         return relation
@@ -141,20 +143,18 @@ class WorkItemRelationService(LLCServiceBase):
         await session.flush()
 
         if self.activity_log:
-            actor_type, actor_id = resolve_actor(actor_agent_id, actor_user_id)
+            actor = resolve_actor(actor_agent_id, actor_user_id)
             await self.activity_log.record(
                 session,
                 event_type=ActivityEventType.WORK_ITEM_RELATION_REMOVED,
                 company_id=company_id,
                 entity_type="work_item",
                 entity_id=source_id,
-                actor_type=actor_type,
-                actor_id=actor_id,
-                metadata={
-                    "relation_id": relation_id,
-                    "relation_type": rtype.value,
-                    "target_id": target_id,
-                },
+                actor_type=actor.type,
+                actor_id=actor.id,
+                metadata=actor.metadata(
+                    {"relation_id": relation_id, "relation_type": rtype.value, "target_id": target_id}
+                ),
             )
 
     async def list_for_item(

@@ -151,12 +151,13 @@ class GoalService(LLCServiceBase):
         # Fix #2: Index after commit, not after flush, to avoid phantom entries on rollback
         self._schedule_post_commit_index(session, goal)
         if self.activity_log:
-            actor_type, actor_id = resolve_actor(actor_agent_id, actor_user_id)
+            actor = resolve_actor(actor_agent_id, actor_user_id)
             await self.activity_log.record(
                 session,
                 company_id=company_id,
-                actor_type=actor_type,
-                actor_id=actor_id,
+                actor_type=actor.type,
+                actor_id=actor.id,
+                metadata=actor.metadata(),
                 event_type="goal.created",
                 entity_type="llc_goal",
                 entity_id=str(goal.id),

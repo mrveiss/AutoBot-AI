@@ -28,8 +28,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.legacy_secret_keys import derive_llc_company_fernet
 from autobot_shared.time_utils import now_utc
-from llc.models.activity import ActorType
 from llc.models.secret import LLCSecret
+from llc.services.actor import resolve_actor
 from services.llc_secrets_read import llc_unified_read_enabled, read_imported_llc_secret_in_session
 
 from .base import LLCServiceBase
@@ -128,11 +128,13 @@ class SecretService(LLCServiceBase):
         await session.refresh(secret)
 
         if self.activity_log:
+            who = resolve_actor(user_id=actor)
             await self.activity_log.record(
                 session=session,
                 company_id=company_id,
-                actor_type=ActorType.AGENT,
-                actor_id=actor,
+                actor_type=who.type,
+                actor_id=who.id,
+                metadata=who.metadata(),
                 event_type="secret.set",
                 entity_type="llc_secret",
                 entity_id=str(secret.id),
@@ -199,11 +201,13 @@ class SecretService(LLCServiceBase):
         await session.flush()
 
         if self.activity_log:
+            who = resolve_actor(user_id=actor)
             await self.activity_log.record(
                 session=session,
                 company_id=company_id,
-                actor_type=ActorType.AGENT,
-                actor_id=actor,
+                actor_type=who.type,
+                actor_id=who.id,
+                metadata=who.metadata(),
                 event_type="secret.revoked",
                 entity_type="llc_secret",
                 entity_id=str(secret.id),
