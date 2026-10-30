@@ -594,6 +594,7 @@
       src: "{{ code_source_dir }}/autobot-backend/"
       dest: "{{ backend_code_dir }}/"
       rsync_opts:
+        - "--chmod=o-w"  # #19503
         - "--exclude=__pycache__"
         - "--exclude=*.pyc"
         - "--exclude=*.egg-info"
@@ -666,6 +667,7 @@
       src: "{{ code_source_dir }}/autobot-backend/config/"
       dest: "{{ backend_code_dir }}/config/"
       rsync_opts:
+        - "--chmod=o-w"  # #19503
         - "--exclude=__pycache__"
         - "--exclude=*.pyc"
     notify: restart backend
@@ -731,6 +733,7 @@
       src: "{{ code_source_dir }}/autobot_shared/"
       dest: "{{ backend_shared_standalone_dir }}/"
       rsync_opts:
+        - "--chmod=o-w"  # #19503
         - "--exclude=__pycache__"
         - "--exclude=*.pyc"
         - "--exclude=*.egg-info"
