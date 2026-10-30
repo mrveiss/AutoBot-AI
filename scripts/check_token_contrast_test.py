@@ -86,7 +86,17 @@ class TestPairDerivation:
     def test_text_on_x_pairs_with_color_x(self):
         tokens = {"--text-on-success": "#000000", "--color-success": "#10b981"}
 
-        assert ("--text-on-success", "--color-success", contrast.AA_LARGE) in contrast.build_pairs(tokens)
+        assert ("--text-on-success", "--color-success", contrast.AA_NORMAL) in contrast.build_pairs(tokens)
+
+    def test_status_pair_prefers_the_solid_fill_when_declared(self):
+        tokens = {"--text-on-error": "#ffffff", "--color-error": "#ef4444", "--color-error-solid": "#da3535"}
+
+        assert ("--text-on-error", "--color-error-solid", contrast.AA_NORMAL) in contrast.build_pairs(tokens)
+
+    def test_non_status_fill_keeps_the_ui_component_threshold(self):
+        tokens = {"--text-on-primary": "#ffffff", "--color-primary": "#3b82f6"}
+
+        assert ("--text-on-primary", "--color-primary", contrast.AA_LARGE) in contrast.build_pairs(tokens)
 
     def test_unpaired_token_is_not_invented(self):
         """No --color-brand means no pair — never compare against a guess."""
@@ -186,3 +196,94 @@ class TestOklchConversion:
         assert not failures, "wide-gamut pairs below AA: " + ", ".join(
             f"{fg} on {bg} = {r:.2f}:1 < {n}" for fg, bg, r, n in failures
         )
+
+
+class TestPerThemeStatusPairs:
+    """#19872: every theme's on-status pairs are measured, not only the default :root."""
+
+    PASSING = """
+    [data-theme="fx"] {
+      --palette-red: #cb3326;
+      --color-error: #ef4444;
+      --color-error-solid: var(--palette-red);
+      --text-on-error: #ffffff;
+    }
+    """
+    FAILING = """
+    [data-theme="fx"] {
+      --color-error: #ef4444;
+      --color-error-solid: #ef4444;
+      --text-on-error: #ffffff;
+    }
+    """
+    MISSING_SOLID = """
+    [data-theme="fx"] {
+      --color-error: #cb3326;
+      --text-on-error: #ffffff;
+    }
+    """
+
+    @staticmethod
+    def _run(tmp_path, css):
+        path = tmp_path / "fx.css"
+        path.write_text(css, encoding="utf-8")
+        theme = contrast.ThemeSpec("fx", [(path, '[data-theme="fx"]', "")])
+        # Only the error semantic is declared; the others are reported as unevaluable.
+        return contrast.check_status_themes([theme])
+
+    def test_passing_fixture_pair_clears_aa(self, tmp_path):
+        lines, failures = self._run(tmp_path, self.PASSING)
+
+        assert not [f for f in failures if "--text-on-error" in f]
+        assert any("ok" in line and "--text-on-error" in line for line in lines)
+
+    def test_failing_fixture_pair_is_reported_under_4_5(self, tmp_path):
+        _, failures = self._run(tmp_path, self.FAILING)
+
+        assert any("--text-on-error on --color-error-solid = 3.76:1 < 4.5" in f for f in failures)
+
+    def test_pair_is_measured_against_the_solid_token_not_the_text_colour(self, tmp_path):
+        """--color-error alone is 3.76:1 under white; only the -solid shade is held to AA."""
+        lines, failures = self._run(tmp_path, self.PASSING)
+
+        assert not [f for f in failures if "--text-on-error" in f]
+        assert any("--text-on-error #ffffff on --color-error-solid #cb3326" in line for line in lines)
+
+    def test_theme_without_a_solid_token_fails(self, tmp_path):
+        _, failures = self._run(tmp_path, self.MISSING_SOLID)
+
+        assert any("cannot evaluate --text-on-error on --color-error-solid" in f for f in failures)
+
+    def test_undeclared_status_pair_fails_rather_than_passing_silently(self, tmp_path):
+        _, failures = self._run(tmp_path, self.PASSING)
+
+        assert any("cannot evaluate --text-on-success" in f for f in failures)
+
+    def test_nested_at_rule_blocks_keep_their_ancestry(self):
+        blocks = contrast.parse_blocks("@supports (color: oklch(0% 0 0)) { :root { --a: #fff; } } :root { --b: #000; }")
+
+        assert (":root", "@supports (color: oklch(0% 0 0))", {"--a": "#fff"}) in blocks
+        assert (":root", "", {"--b": "#000"}) in blocks
+
+    def test_var_chain_and_fallback_resolve(self):
+        decls = {"--a": "var(--b)", "--b": "#ABCDEF", "--c": "var(--missing, #000000)"}
+
+        assert contrast.resolve_colour("--a", decls) == "#abcdef"
+        assert contrast.resolve_colour("--c", decls) == "#000000"
+        assert contrast.resolve_colour("--loop", {"--loop": "var(--loop)"}) is None
+
+    def test_real_themes_all_meet_aa(self):
+        lines, failures = contrast.check_status_themes()
+
+        assert len(lines) >= len(contrast.THEMES) * (1 + len(contrast.STATUS_SEMANTICS))
+        assert not failures, "; ".join(failures)
+
+    def test_every_status_block_belongs_to_a_modelled_theme(self):
+        assert contrast.unmodelled_status_blocks() == []
+
+    def test_a_block_outside_every_modelled_theme_is_not_covered(self):
+        modelled = contrast.THEMES[0]
+        blocks = contrast.parse_blocks('[data-theme="new"] { --color-error: #fff; }')
+        selector, at, _ = blocks[0]
+
+        assert not any(contrast._layer_applies((selector, at), layer) for layer in modelled.layers)

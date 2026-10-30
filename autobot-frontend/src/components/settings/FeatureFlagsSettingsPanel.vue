@@ -338,7 +338,7 @@ onMounted(() => {
   align-items: center;
   gap: var(--spacing-2);
   padding: var(--spacing-2-5) var(--spacing-4);
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-error);
   border: none;
   border-radius: var(--radius-md);
