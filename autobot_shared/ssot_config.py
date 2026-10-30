@@ -54,6 +54,7 @@ from autobot_shared import postgres_identity as _pg
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.paths import install_base_dir, project_root
 from autobot_shared.secret_redaction import RedactedReprMixin
+from autobot_shared.ssot_company_os_flags import CompanyOsFeatureFlags
 from autobot_shared.ssot_llm_oauth_config import LlmOAuthConfig
 from autobot_shared.ssot_role_mirrors import (  # #19319: SSOT defaults an Ansible role mirrors
     FEATURE_ROUTERS_STRICT_DEFAULT,
@@ -2064,7 +2065,7 @@ class MiscConfig(RedactedSettings):
     vnc_resolution: str = Field(default="", alias="VNC_RESOLUTION")
 
 
-class FeatureConfig(RedactedSettings):
+class FeatureConfig(RedactedSettings, CompanyOsFeatureFlags):
     """Feature flags configuration."""
 
     model_config = SettingsConfigDict(
@@ -2132,15 +2133,6 @@ class FeatureConfig(RedactedSettings):
     # ever run, so a company enabling the policy on an install where this is off
     # still costs nothing extra.
     cross_vendor_review_enabled: bool = Field(default=False, alias="AUTOBOT_LLC_CROSS_VENDOR_REVIEW_ENABLED")
-
-    # Issue #16950/#16974: enforce each Company OS agent's org-role tool bound at
-    # dispatch. Off by default -- copilot_local/copilot_subscription take no
-    # tool-permission flags today, so turning this on refuses every dispatch to
-    # those two adapters (codex_subscription is already a non-functional stub).
-    # Flips on once those adapters can actually enforce a bound, or the owner
-    # accepts the refusal; whether the underlying CLI even exposes such a flag
-    # is unknown and external to this repo.
-    org_role_bound_enabled: bool = Field(default=False, alias="AUTOBOT_FEATURE_ORG_ROLE_BOUND")
 
 
 class CostModelConfig(RedactedSettings):
