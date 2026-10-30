@@ -87,7 +87,6 @@ PINNED: tuple[Pin, ...] = (
     ),
     Pin("nginx", f"{_ANSIBLE}/roles/backend/templates/backend.env.j2", r"^AUTOBOT_FRONTEND_SERVED_BY=(\w+)$", 1),
     Pin("vite", ".env.example", r"^AUTOBOT_FRONTEND_SERVED_BY=(\w+)$", 1),
-    Pin("vite", ".env.base", r"^AUTOBOT_FRONTEND_SERVED_BY=(\w+)$", 1),
     Pin("vite", f"{_ANSIBLE}/deploy-hybrid.sh", r"^AUTOBOT_FRONTEND_SERVED_BY=(\w+)$", 1),
     Pin("vite", "conftest.py", r'setdefault\("AUTOBOT_FRONTEND_SERVED_BY", "(\w+)"\)', 1),
     Pin("tls_env", _ORCH, r'"frontend": ServiceDefinition\((?:.*\n)*?\s+default_port_env="(\w+)"', 1),
