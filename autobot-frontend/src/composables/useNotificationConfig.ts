@@ -102,8 +102,8 @@ function fromApi(stored: Partial<NotificationConfigData>): NotificationConfigDat
     email_recipients: stored.email_recipients ?? [],
     slack_webhook_url: stored.slack_webhook_url ?? null,
     webhook_url: stored.webhook_url ?? null,
-    channels: { ...(stored.channels ?? {}) },
-    templates: { ...(stored.templates ?? {}) },
+    channels: { ...stored.channels },
+    templates: { ...stored.templates },
   };
 }
 
