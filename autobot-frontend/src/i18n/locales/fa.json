@@ -1,5 +1,6 @@
 {
   "common": {
+    "appName": "AutoBot",
     "submit": "ارسال",
     "cancel": "لغو",
     "save": "ذخیره",
@@ -4844,6 +4845,7 @@
   },
   "ui": {
     "themeToggle": {
+      "accentPurpleDescription": "بنفش — خلاق و شیک",
       "system": "سیستمی",
       "highContrast": "کنتراست بالا",
       "monochrome": "تک‌رنگ",
