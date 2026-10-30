@@ -210,7 +210,6 @@
 - name: "TTS Worker | Install FastAPI and server dependencies"
   ansible.builtin.pip:
     name:
-      - fastapi>=0.147.0
       - uvicorn[standard]>=0.54.0
       - python-multipart>=0.0.32
       - aiofiles>=25.1.0
@@ -322,6 +321,9 @@
       # roles/npu-worker, roles/agent_config/openvino and roles/browser onto this
       # same shape, so all five pip constraint sites now agree.
       - numpy
+      # #18060: fastapi's floor lives in constraints/shared.txt, so it is installed here,
+      # in the task that carries the `-c` for it, rather than bare in the task above.
+      - fastapi
       - scipy>=1.18.1
     virtualenv: "{{ tts_install_dir }}/venv"
     # #16641: see "TTS Worker | Upgrade pip in venv" above.
