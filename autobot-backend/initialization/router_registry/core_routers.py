@@ -37,6 +37,7 @@ from api.chat import router as chat_router
 from api.chat_compare import router as chat_compare_router  # Issue #4414
 from api.chat_embed import router as chat_embed_router  # GH#9047
 from api.chat_presets import router as chat_presets_router  # GH#8595
+from api.chat_trace import router as chat_trace_router  # #19963
 from api.collaboration import router as collaboration_router
 from api.collaboration_events import router as collaboration_events_router  # #16460
 from api.config_revisions import router as config_revisions_router  # #1404
@@ -152,6 +153,7 @@ def _get_system_routers() -> list:
         (chat_router, "", ["chat"], "chat"),
         (chat_compare_router, "", ["chat", "compare"], "chat_compare"),  # Issue #4414
         (chat_presets_router, "", ["chat"], "chat_presets"),  # GH#8595
+        (chat_trace_router, "", ["chat"], "chat_trace"),  # #19963: read-only trace of one session
         (benchmarks_router, "", ["benchmarks"], "benchmarks"),  # Issue #9024
         (collaboration_router, "", ["collaboration"], "collaboration"),
         (collaboration_events_router, "", ["collaboration"], "collaboration_events"),  # #16460
