@@ -232,8 +232,8 @@ class DeploymentService:
         ssh_user = node.ssh_user or "autobot"
         ssh_port = node.ssh_port or 22
         ssh_password = None
-
-        if node.extra_data:
+        # #19483: a key-auth node keeps its stored password until a human removes it, but never logs in with it.
+        if node.extra_data and node.auth_method != "key":
             encrypted_password = node.extra_data.get("ssh_password")
             if encrypted_password:
                 # Check if password is encrypted (new format) or plaintext (legacy)
@@ -458,7 +458,7 @@ class DeploymentService:
         # Update auth method to key-based (SSH keys deployed during enrollment)
         node.auth_method = "key"
 
-        # #19483: no automated path deletes a stored credential (#17038). It stays encrypted at rest.
+        # #19483: no automated path deletes a stored credential (#17038); proposing it is #20046.
 
         await db.commit()
 
@@ -514,7 +514,7 @@ class DeploymentService:
                 ssh_password=effective_password,
             )
 
-            # Handle success: update status, clear password, commit
+            # Handle success: update status, commit; the stored password stays (#19483)
             await self._handle_enrollment_success(db, node, output)
 
             return True, f"Agent deployed successfully. Output:\n{output}"

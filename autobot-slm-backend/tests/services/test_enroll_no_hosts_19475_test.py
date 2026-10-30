@@ -137,3 +137,14 @@ def test_proven_enrollment_keeps_the_password_and_switches_to_key(deployment, mo
     assert ok is True
     assert node.extra_data == {"ssh_password": "stored-secret"}  # pragma: allowlist secret
     assert node.auth_method == "key"
+
+
+def test_a_key_auth_node_gets_no_stored_password_for_a_deployment(deployment):
+    """#19483: the password stays stored, but a deployment to a key-auth node must use the key."""
+    stored = {"ssh_password": "stored-secret"}  # pragma: allowlist secret
+    node = MagicMock(ssh_user="autobot", ssh_port=22, auth_method="key", extra_data=stored)
+    assert deployment.DeploymentService._get_ssh_credentials(None, node)[2] is None
+    node.auth_method = "password"
+    assert (
+        deployment.DeploymentService._get_ssh_credentials(None, node)[2] == "stored-secret"
+    )  # pragma: allowlist secret

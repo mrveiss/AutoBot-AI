@@ -36,3 +36,10 @@ def test_contrast_each_spelling_is_caught() -> None:
     assert _DELETES.search("extra.pop('ssh_password', None)")
     assert _DELETES.search('{k: v for k, v in d.items() if k != "ssh_password"}')
     assert not _DELETES.search('extra.get("ssh_password")')
+
+
+def test_a_key_auth_node_never_logs_in_with_its_stored_password() -> None:
+    """Before #19483 the password was gone after enrollment; keeping it must not switch deploys to sshpass."""
+    source = (_ROOT / "services" / "deployment.py").read_text(encoding="utf-8")
+    body = source[source.index("def _get_ssh_credentials") :].split("\n    async def ")[0]
+    assert 'node.auth_method != "key"' in body
