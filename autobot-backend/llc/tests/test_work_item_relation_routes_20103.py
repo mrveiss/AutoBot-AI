@@ -163,3 +163,31 @@ async def test_removing_an_unknown_relation_is_404(maker):
     async with _client(maker) as c:
         resp = await c.delete(f"{_url(a)}/{uuid.uuid4()}", params={"company_id": str(COMPANY_A)})
     assert resp.status_code == 404
+
+
+async def test_a_relation_cannot_be_removed_through_an_unrelated_item(maker):
+    a, b, other = [await _item(maker, COMPANY_A, n) for n in ("a", "b", "other")]
+    async with _client(maker) as c:
+        rel_id = (await c.post(_url(a), json=_body(b))).json()["id"]
+        resp = await c.delete(f"{_url(other)}/{rel_id}")
+    assert resp.status_code == 404
+    assert len(await _rows(maker)) == 2
+
+
+async def test_removing_from_the_target_end_deletes_both_legs(maker):
+    a, b = await _item(maker, COMPANY_A, "a"), await _item(maker, COMPANY_A, "b")
+    async with _client(maker) as c:
+        rel_id = (await c.post(_url(a), json=_body(b))).json()["id"]
+        resp = await c.delete(f"{_url(b)}/{rel_id}")
+    assert resp.status_code == 204, resp.text
+    assert await _rows(maker) == []
+
+
+async def test_removing_through_the_mirror_leg_id_deletes_both_legs(maker):
+    a, b = await _item(maker, COMPANY_A, "a"), await _item(maker, COMPANY_A, "b")
+    async with _client(maker) as c:
+        await c.post(_url(a), json=_body(b))
+        mirror = next(r for r in await _rows(maker) if str(r.source_id) == b)
+        resp = await c.delete(f"{_url(a)}/{mirror.id}")
+    assert resp.status_code == 204, resp.text
+    assert await _rows(maker) == []

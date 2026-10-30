@@ -12,10 +12,13 @@ is ``ctx.org_id`` and the acting user is ``actor_id(current_user)``. ``company_i
 start failing with a 422, and are ignored.
 """
 
+import uuid
 from typing import Any, Dict, Optional
 
+import sqlalchemy as sa
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
@@ -25,6 +28,7 @@ from llc.deps import get_session, service_dep
 from user_management.services import TenantContext
 
 from ..models.enums import WorkItemRelationType
+from ..models.work_item import LLCWorkItemRelation
 from ..services.work_item_relations import RelationConflict, WorkItemRelationService
 from ..services.work_item_service import WorkItemService
 from ._common import actor_id
@@ -35,6 +39,7 @@ _get_relation_service = lazy_singleton(WorkItemRelationService)
 _service = service_dep(WorkItemService)
 
 _NOT_FOUND = "Work item not found"
+_REL_NOT_FOUND = "Relation not found"
 
 
 class RelationCreate(BaseModel):
@@ -59,6 +64,29 @@ async def _require_item(session: AsyncSession, item_id: str, ctx: TenantContext)
         item = None
     if item is None or str(item.company_id) != str(ctx.org_id):
         raise HTTPException(status_code=404, detail=_NOT_FOUND)
+
+
+async def _require_relation_of(session: AsyncSession, relation_id: str, item_id: str, ctx: TenantContext) -> None:
+    """404 unless the relation is in the caller's company and touches ``item_id`` (#20114).
+
+    Either end qualifies: a relation and its mirror leg join the same two items, so
+    removing through either item reaches the pair.
+    """
+    try:
+        rid, iid = uuid.UUID(relation_id), uuid.UUID(item_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail=_REL_NOT_FOUND)
+    rel = (
+        await session.execute(
+            select(LLCWorkItemRelation).where(
+                LLCWorkItemRelation.id == rid,
+                LLCWorkItemRelation.company_id == ctx.org_id,
+                sa.or_(LLCWorkItemRelation.source_id == iid, LLCWorkItemRelation.target_id == iid),
+            )
+        )
+    ).scalar_one_or_none()
+    if rel is None:
+        raise HTTPException(status_code=404, detail=_REL_NOT_FOUND)
 
 
 @router.post("/{work_item_id}/relations", status_code=201)
@@ -107,6 +135,7 @@ async def remove_relation(
     ctx: TenantContext = Depends(require_org_context),
 ) -> None:
     await _require_item(session, work_item_id, ctx)
+    await _require_relation_of(session, relation_id, work_item_id, ctx)
     try:
         await _relation_service().remove(
             session,
@@ -117,4 +146,4 @@ async def remove_relation(
         await session.commit()
     except ValueError as exc:
         logger.info("Relation remove rejected on %s: %s", work_item_id, exc)
-        raise HTTPException(status_code=404, detail="Relation not found")
+        raise HTTPException(status_code=404, detail=_REL_NOT_FOUND)
