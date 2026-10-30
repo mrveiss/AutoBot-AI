@@ -19,6 +19,7 @@ import uuid
 from typing import Any, Optional
 
 from sqlalchemy import or_, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
@@ -57,15 +58,21 @@ def as_uuid(value: Any) -> Optional[uuid.UUID]:
 
 
 async def resolve_agent(session: AsyncSession, company_id: Any, agent_ref: Any) -> Any:
-    """The ``(agent_id, status)`` row for a slug or node PK within *company_id*, or ``None``."""
+    """The ``(agent_id, status)`` row for a slug or node PK within *company_id*, or ``None``.
+
+    A reference matching two agents (one's slug is another's PK) names neither.
+    """
     match = AgentOrgNode.agent_id == str(agent_ref)
     node_pk = as_uuid(agent_ref)
     if node_pk is not None:
         match = or_(match, AgentOrgNode.id == node_pk)
     result = await session.execute(
-        select(AgentOrgNode.agent_id, AgentOrgNode.status).where(AgentOrgNode.company_id == company_id, match).limit(1)
+        select(AgentOrgNode.agent_id, AgentOrgNode.status).where(AgentOrgNode.company_id == company_id, match).limit(2)
     )
-    return result.first()
+    rows = result.all()
+    if len(rows) > 1:
+        logger.warning("Agent reference %s in company %s matches two agents", agent_ref, company_id)
+    return rows[0] if len(rows) == 1 else None
 
 
 async def _pause_flag_reason(slug: Optional[str], company_id: Optional[Any]) -> Optional[str]:
@@ -128,6 +135,12 @@ async def agent_ref_block_reason(
 async def require_dispatchable(session: AsyncSession, agent: dict) -> None:
     """Raise :class:`AgentNotDispatchable` when *agent*'s config row may not run."""
     company_id = agent.get("company_id")
-    reason = await dispatch_block_reason(session, agent["agent_id"], company_id, agent.get("status"))
+    try:
+        reason = await dispatch_block_reason(session, agent["agent_id"], company_id, agent.get("status"))
+    except SQLAlchemyError:  # the caller's transaction is gone: pretending otherwise loses its write silently
+        raise
+    except Exception:
+        logger.exception("Dispatch state of agent %s could not be read", agent["agent_id"])
+        reason = "dispatch state could not be read"
     if reason is not None:
         raise AgentNotDispatchable(agent["agent_id"], company_id, reason)

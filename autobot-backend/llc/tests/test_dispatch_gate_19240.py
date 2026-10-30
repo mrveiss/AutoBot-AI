@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.exc import SQLAlchemyError
 
 from llc.models.enums import LLCRunStatus
 from llc.models.heartbeat_run import LLCHeartbeatRun
@@ -20,8 +21,10 @@ from llc.scheduler.dispatch_gate import (
     agent_ref_block_reason,
     dispatch_block_reason,
     require_dispatchable,
+    resolve_agent,
 )
 from llc.scheduler.heartbeat_scheduler import LLCHeartbeatScheduler
+from llc.scheduler.run_key import _run_key_ttl
 
 _GATE = "llc.scheduler.dispatch_gate"
 _HBS = "llc.scheduler.heartbeat_scheduler"
@@ -104,7 +107,7 @@ async def test_a_routine_holding_the_node_uuid_reads_the_slugs_pause_flag():
     """Routines hold ``AgentOrgNode.id``; controls write the flag under the slug."""
     node_pk = str(uuid.uuid4())
     session = AsyncMock()
-    session.execute.return_value = MagicMock(first=MagicMock(return_value=(_SLUG, "available")))
+    session.execute.return_value = MagicMock(all=MagicMock(return_value=[(_SLUG, "available")]))
     with patch(
         f"{_GATE}.get_async_redis_client",
         AsyncMock(return_value=_redis(f"llc:agent:{_SLUG}:paused")),
@@ -232,7 +235,7 @@ async def test_an_agent_with_no_company_is_refused_rather_than_run_unbudgeted():
 @pytest.mark.asyncio
 async def test_a_routine_whose_assignee_is_not_in_the_company_is_refused():
     session = AsyncMock()
-    session.execute.return_value = MagicMock(first=MagicMock(return_value=None))
+    session.execute.return_value = MagicMock(all=MagicMock(return_value=[]))
     assert "not found" in await agent_ref_block_reason(session, uuid.uuid4(), _COMPANY_ID)
 
 
@@ -277,23 +280,64 @@ async def test_the_due_path_requeues_when_the_gate_cannot_answer():
     redis.zadd.assert_awaited_once()
 
 
-@pytest.mark.asyncio
-async def test_a_wake_the_gate_cannot_judge_leaves_the_users_write_standing():
+async def _wake_when_trigger_raises(error):
     from llc.models.enums import HeartbeatInvocationSource
     from llc.scheduler import event_wake
 
-    scheduler = MagicMock(trigger_manual=AsyncMock(side_effect=RuntimeError("redis lost")))
+    scheduler = MagicMock(trigger_manual=AsyncMock(side_effect=error))
     with (
         patch.object(event_wake, "_wakeable_slug", AsyncMock(return_value=_SLUG)),
         patch("llc.scheduler.heartbeat_scheduler.get_heartbeat_scheduler", return_value=scheduler),
     ):
-        woken = await event_wake.wake_agent(
+        return await event_wake.wake_agent(
             AsyncMock(),
             company_id=_COMPANY_ID,
             agent_ref=_SLUG,
             reason=HeartbeatInvocationSource.AGENT_MENTIONED,
         )
-    assert woken is None
+
+
+@pytest.mark.asyncio
+async def test_a_wake_the_gate_refuses_leaves_the_users_write_standing():
+    assert await _wake_when_trigger_raises(AgentNotDispatchable(_SLUG, _COMPANY_ID, "x")) is None
+
+
+@pytest.mark.asyncio
+async def test_a_database_error_in_a_wake_is_not_reported_as_a_write_that_stands():
+    with pytest.raises(SQLAlchemyError):
+        await _wake_when_trigger_raises(SQLAlchemyError("flush failed"))
+
+
+@pytest.mark.asyncio
+async def test_an_unreadable_gate_becomes_a_refusal_so_a_foreign_agent_cannot_be_told_apart():
+    agent = {"agent_id": _SLUG, "company_id": _COMPANY_ID, "status": "available"}
+    with (
+        patch(f"{_GATE}.dispatch_block_reason", AsyncMock(side_effect=RuntimeError("redis lost"))),
+        pytest.raises(AgentNotDispatchable),
+    ):
+        await require_dispatchable(AsyncMock(), agent)
+
+
+@pytest.mark.asyncio
+async def test_a_database_error_in_the_gate_is_not_turned_into_a_refusal():
+    agent = {"agent_id": _SLUG, "company_id": _COMPANY_ID, "status": "available"}
+    with (
+        patch(f"{_GATE}.dispatch_block_reason", AsyncMock(side_effect=SQLAlchemyError("gone"))),
+        pytest.raises(SQLAlchemyError),
+    ):
+        await require_dispatchable(AsyncMock(), agent)
+
+
+@pytest.mark.asyncio
+async def test_a_reference_matching_two_agents_names_neither():
+    session = AsyncMock()
+    session.execute.return_value = MagicMock(all=MagicMock(return_value=[("a", "available"), ("b", "paused")]))
+    assert await resolve_agent(session, uuid.uuid4(), "a") is None
+
+
+def test_a_short_configured_run_key_ttl_cannot_expire_the_key_mid_run():
+    assert _run_key_ttl(10.0, 100.0) == 700.0
+    assert _run_key_ttl(5000.0, 100.0) == 5000.0
 
 
 async def _trigger(company_id, org_id):
@@ -315,6 +359,7 @@ async def test_a_blocked_trigger_is_409_for_the_owner_and_404_across_tenants():
     own, other = uuid.uuid4(), uuid.uuid4()
     assert await _trigger(own, own) == 409
     assert await _trigger(other, own) == 404
+    assert await _trigger(None, own) == 404
 
 
 @pytest.mark.asyncio

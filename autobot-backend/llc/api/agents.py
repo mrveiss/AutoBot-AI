@@ -110,8 +110,8 @@ async def trigger_heartbeat(
     try:
         run, agent_cfg = await sched.trigger_manual(session, agent_id)
     except AgentNotDispatchable as exc:
-        # Another tenant's agent stays a 404: the reason would confirm it exists.
-        if exc.company_id is not None and exc.company_id != ctx.org_id:
+        # An agent outside this company stays a 404: the reason would confirm it exists.
+        if exc.company_id != ctx.org_id:
             raise HTTPException(
                 status_code=404,
                 detail=f"Agent {agent_id!r} not found or not configured",

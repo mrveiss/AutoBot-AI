@@ -38,7 +38,7 @@ def _mock_session(rows: Optional[list] = None):
     session = AsyncMock()
     result = MagicMock()
     result.fetchone.return_value = rows[0] if rows else None
-    result.first.return_value = rows[0] if rows else None
+    result.all.return_value = rows or []
     result.fetchall.return_value = rows or []
     result.scalars.return_value.all.return_value = rows or []
     session.execute.return_value = result
@@ -401,7 +401,7 @@ async def test_routine_scheduler_pause_requeue_raises_on_redis_none():
 
     # Async context manager for session factory
     mock_session = AsyncMock()
-    mock_session.execute.return_value = MagicMock(first=MagicMock(return_value=None))
+    mock_session.execute.return_value = MagicMock(all=MagicMock(return_value=[]))
     mock_session_cm = AsyncMock()
     mock_session_cm.__aenter__ = AsyncMock(return_value=mock_session)
     mock_session_cm.__aexit__ = AsyncMock(return_value=False)

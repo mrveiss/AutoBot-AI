@@ -17,9 +17,17 @@ from ..services.api_key import ApiKeyService
 logger = logging.getLogger(__name__)
 
 ADAPTER_MAX_WAIT_SECONDS = env_float("LLC_ADAPTER_MAX_WAIT_SECONDS", 7200.0)
+_RUN_KEY_TTL_MARGIN_SECONDS = 600.0
+
+
+def _run_key_ttl(configured: float, max_wait: float) -> float:
+    """The key's lifetime: a shorter configured value would expire the key mid-run, so it never wins."""
+    return max(configured, max_wait + _RUN_KEY_TTL_MARGIN_SECONDS)
+
+
 # Ephemeral run-key TTL backstop — must exceed the max wait so a key never
 # expires mid-run; revocation still happens promptly when the run finishes.
-_RUN_KEY_TTL_SECONDS = env_float("LLC_RUN_KEY_TTL_SECONDS", ADAPTER_MAX_WAIT_SECONDS + 600.0)
+_RUN_KEY_TTL_SECONDS = _run_key_ttl(env_float("LLC_RUN_KEY_TTL_SECONDS", 0.0), ADAPTER_MAX_WAIT_SECONDS)
 
 
 async def issue_run_key(agent_id: str, company_id: str) -> tuple[Any, Optional[str]]:
