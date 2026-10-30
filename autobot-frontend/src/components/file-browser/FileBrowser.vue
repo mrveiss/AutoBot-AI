@@ -690,13 +690,13 @@ onMounted(() => {
 }
 
 .file-info p strong {
-  color: var(--color-electric-500, #3b82f6);
+  color: var(--color-electric-500);
 }
 
 .download-btn {
   margin-top: var(--spacing-5);
   padding: var(--spacing-2-5) var(--spacing-5);
-  background-color: var(--color-electric-600, #2563eb);
+  background-color: var(--color-electric-600);
   color: white;
   border: none;
   border-radius: var(--radius-default);
@@ -706,7 +706,7 @@ onMounted(() => {
 }
 
 .download-btn:hover {
-  background-color: var(--color-electric-700, #1d4ed8);
+  background-color: var(--color-electric-700);
 }
 
 /* Responsive Design */
