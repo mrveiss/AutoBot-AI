@@ -30,7 +30,7 @@ openvino  # version from constraints/shared.txt (#15408)
 # `autobot-infrastructure/autobot-npu-worker/docker/requirements-npu.txt`
 # already states for the same worker; fastapi's is a security floor (it
 # requires starlette >=0.52.1, the O(n^2) Range-header DoS).
-fastapi>=0.147.0
+fastapi  # version from constraints/shared.txt (#18060)
 uvicorn[standard]>=0.54.0
 
 # Model tooling (#15671), moved here from the same inline `name:` list.
