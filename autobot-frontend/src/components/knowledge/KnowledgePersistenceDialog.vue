@@ -568,7 +568,7 @@ watch(() => props.visible, (newVal: boolean) => {
 }
 
 .keyword-tag {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: var(--text-on-primary);
   padding: var(--spacing-1) var(--spacing-3);
   border-radius: var(--radius-full);
