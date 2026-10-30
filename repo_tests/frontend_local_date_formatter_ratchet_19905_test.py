@@ -40,14 +40,15 @@ _ROOTS = ("autobot-frontend/src", "autobot-slm-frontend/src")
 _FOLDERS = ("components", "views", "composables")
 _EXCLUDED = re.compile(r"(\.test\.|\.spec\.|\.stories\.|/__tests__/)")
 _NAMES = r"(?:formatDate|formatTime|formatDateTime|formatTimestamp|formatRelativeTime|formatTimeAgo)"
+_MODIFIERS = r"(?:(?:public|private|protected|static|readonly)[ \t]+)*"
 _ARROW_TAIL = r"=\s*(?:async\s*)?(?:<[^>]*>\s*)?(?:\(|function\b|[A-Za-z_]\w*\s*=>)"
 # Every declaration form, matched over the whole text so a binding split across lines is seen.
 _DECLARATION = re.compile(
     rf"^[ \t]*(?:export[ \t]+)?(?:"
     rf"(?:async[ \t]+)?function[ \t]+{_NAMES}\s*[(<]"  # function declaration
     rf"|const[ \t]+{_NAMES}\s*(?::[^\n]*?)?{_ARROW_TAIL}"  # const arrow / function expression
-    rf"|(?:async[ \t]+)?{_NAMES}\s*(?:<[^>]*>)?\([^)]*\)\s*(?::[^{{;=]+)?\{{"  # object / class method
-    rf"|{_NAMES}[ \t]*:\s*(?:async\s*)?(?:<[^>]*>\s*)?(?:\(|function\b|[A-Za-z_]\w*\s*=>)"  # property
+    rf"|{_MODIFIERS}(?:async[ \t]+)?{_NAMES}\s*(?:<[^>]*>)?\([^)]*\)\s*(?::[^{{;=]+)?\{{"  # object / class method
+    rf"|{_MODIFIERS}{_NAMES}[ \t]*:\s*(?:async\s*)?(?:<[^>]*>\s*)?(?:\(|function\b|[A-Za-z_]\w*\s*=>)"  # property
     rf")",
     re.M,
 )
@@ -114,7 +115,9 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
         self._w(tmp_path, "components/C.vue", "const formatTimestamp =\n  (ts: string): string => {\n")
         self._w(tmp_path, "components/D.vue", "const formatDateTime = <T,>(s: T) => s\n")
         self._w(tmp_path, "components/E.vue", "const formatTimeAgo: (b: number) => string = (b) => `${b}`\n")
-        assert scan(tmp_path)[0] == 5
+        self._w(tmp_path, "components/F.vue", "class K {\n  private formatDate(d: string) {\n    return d\n  }\n}\n")
+        self._w(tmp_path, "components/G.vue", "class L {\n  static formatTime: (b: number) => number = (b) => b\n}\n")
+        assert scan(tmp_path)[0] == 7
 
     def test_a_kit_formatter_an_alias_a_use_and_an_import_are_not_declarations(self, tmp_path: Path) -> None:
         body = (

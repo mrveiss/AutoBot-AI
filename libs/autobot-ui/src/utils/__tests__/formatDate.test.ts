@@ -64,6 +64,13 @@ describe('createDateFormatter (#19905)', () => {
 })
 
 describe('formatDate / formatDateTime / formatISOString / formatTime (#19905)', () => {
+  it('formatDateTime takes a style option without the default fields Intl rejects beside it', () => {
+    const iso = '2026-01-15T10:30:00Z'
+    expect(() => formatDateTime(iso, { dateStyle: 'short' })).not.toThrow()
+    expect(formatDateTime(iso, { dateStyle: 'short' })).toBe(new Date(iso).toLocaleString(undefined, { dateStyle: 'short' }))
+    expect(() => formatDateTime(iso, { timeStyle: 'short' })).not.toThrow()
+  })
+
   it('return an empty string for a missing or invalid value', () => {
     expect(formatDate(undefined)).toBe('')
     expect(formatDate('nope')).toBe('')

@@ -275,13 +275,15 @@ export function formatTime(
   return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: !use24Hour })
 }
 
-/** Format date and time together; `options` override {@link DEFAULT_DATE_TIME_INTL}. */
+/** Format date and time together; `options` override {@link DEFAULT_DATE_TIME_INTL}, whose fields Intl rejects beside a style. */
 export function formatDateTime(
   timestamp: Date | string | undefined | null,
   options?: Intl.DateTimeFormatOptions
 ): string {
   const date = toValidDate(timestamp)
-  return date ? date.toLocaleString(undefined, { ...DEFAULT_DATE_TIME_INTL, ...options }) : ''
+  if (!date) return ''
+  const styled = options?.dateStyle !== undefined || options?.timeStyle !== undefined
+  return date.toLocaleString(undefined, styled ? options : { ...DEFAULT_DATE_TIME_INTL, ...options })
 }
 
 /** Format an ISO string with the browser's default locale string; an invalid one is returned as-is. */
