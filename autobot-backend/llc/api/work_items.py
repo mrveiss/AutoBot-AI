@@ -79,6 +79,7 @@ from ..services.work_item_service import (
 from ..services.work_product_service import WorkProductService
 from .activity import ActivityLogEntry, ActivityLogResponse
 from .github_webhooks import validate_github_pr_url
+from .work_item_comments import serialize_comment
 
 
 class HumanClaimRequest(BaseModel):
@@ -844,15 +845,7 @@ async def add_comment(
     )
     # GH#9624/#19582: add_comment queued the comment and @mention wakes; they dispatch on this commit.
     await session.commit()
-    return {
-        "id": str(comment.id),
-        "work_item_id": str(comment.work_item_id),
-        "company_id": str(comment.company_id),
-        "body": comment.body,
-        "author_agent_id": (str(comment.author_agent_id) if comment.author_agent_id else None),
-        "author_user_id": (str(comment.author_user_id) if comment.author_user_id else None),
-        "created_at": comment.created_at.isoformat() if comment.created_at else None,
-    }
+    return serialize_comment(comment)
 
 
 @router.post("/{work_item_id}/handoff/to-agent", status_code=200)

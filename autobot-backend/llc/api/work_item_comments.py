@@ -37,8 +37,8 @@ router = APIRouter(prefix="/work-items", tags=["llc-work-items"])
 _service = service_dep(WorkItemService)
 
 
-def _serialize_comment(comment: LLCWorkItemComment) -> Dict[str, Any]:
-    """Same field shape the POST sibling returns for one comment."""
+def serialize_comment(comment: LLCWorkItemComment) -> Dict[str, Any]:
+    """One comment on the wire, for the list route and the POST sibling."""
     return {
         "id": str(comment.id),
         "work_item_id": str(comment.work_item_id),
@@ -74,4 +74,4 @@ async def list_comments(
         .offset(offset)
     )
     rows = (await session.execute(stmt)).scalars().all()
-    return {"comments": [_serialize_comment(c) for c in rows], "limit": limit, "offset": offset}
+    return {"comments": [serialize_comment(c) for c in rows], "limit": limit, "offset": offset}
