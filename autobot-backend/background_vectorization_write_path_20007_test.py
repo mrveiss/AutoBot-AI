@@ -48,3 +48,43 @@ async def test_an_embedding_that_failed_is_not_reported_as_success():
     kb._vectorize_fact_in_chromadb = AsyncMock(return_value=False)
     result = await FactsMixin.vectorize_existing_fact(kb, "f1")
     assert result["status"] == "error"
+
+
+@pytest.mark.asyncio
+async def test_a_pass_stops_after_failures_in_a_row_and_leaves_the_rest(monkeypatch):
+    """#20019: a downed backend fails every fact the same way, each after its retries."""
+    import background_vectorization as bv
+
+    monkeypatch.setattr(bv, "MAX_CONSECUTIVE_FAILURES", 2)
+    vectorizer = BackgroundVectorizer()
+    keys = [f"fact:f{i}" for i in range(5)]
+    monkeypatch.setattr(vectorizer, "_get_vectorization_status", AsyncMock(return_value=[]))
+    monkeypatch.setattr(vectorizer, "_filter_pending_facts", lambda batch, _v: (batch, 0, []), raising=False)
+    monkeypatch.setattr(vectorizer, "_sync_pending_set", AsyncMock())
+    monkeypatch.setattr(
+        vectorizer, "_fetch_fact_data", AsyncMock(return_value=[{"content": "c", "metadata": "{}"}] * 5)
+    )
+    kb = _kb("error")
+    stats = await vectorizer._process_batch(kb, keys)
+    assert stats["failed"] == 2 and stats["stopped"] is True
+    assert kb.vectorize_existing_fact.await_count == 2
+    kb.redis.return_value.srem.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_a_success_resets_the_count(monkeypatch):
+    import background_vectorization as bv
+
+    monkeypatch.setattr(bv, "MAX_CONSECUTIVE_FAILURES", 2)
+    vectorizer = BackgroundVectorizer()
+    monkeypatch.setattr(vectorizer, "_get_vectorization_status", AsyncMock(return_value=[]))
+    monkeypatch.setattr(vectorizer, "_filter_pending_facts", lambda batch, _v: (batch, 0, []), raising=False)
+    monkeypatch.setattr(vectorizer, "_sync_pending_set", AsyncMock())
+    monkeypatch.setattr(
+        vectorizer, "_fetch_fact_data", AsyncMock(return_value=[{"content": "c", "metadata": "{}"}] * 4)
+    )
+    kb = _kb("error")
+    outcomes = [{"status": s, "message": "m"} for s in ("error", "success", "error", "success")]
+    kb.vectorize_existing_fact = AsyncMock(side_effect=outcomes)
+    stats = await vectorizer._process_batch(kb, [f"fact:f{i}" for i in range(4)])
+    assert stats["failed"] == 2 and stats["success"] == 2 and "stopped" not in stats

@@ -33,6 +33,8 @@ PENDING_SET_KEY = "kb:vectorize:pending"
 
 # Run the full fact:* safety-net reconcile every Nth cycle (default 12 → hourly
 # at the 5-minute check_interval). Env-tunable; never hard-coded per cadence.
+#: Failures in a row that end a pass: a backend that is down fails every fact the same way (#20019).
+MAX_CONSECUTIVE_FAILURES = env_int_clamped("AUTOBOT_KB_VECTORIZE_MAX_CONSECUTIVE_FAILURES", 5, 1, 1000)
 FULL_SCAN_EVERY_N_CYCLES = env_int_clamped("KB_VECTORIZE_FULL_SCAN_EVERY_N_CYCLES", 12, min_v=1)
 
 # How often the reconciler wakes. Env-backed rather than a literal (#17548): the
@@ -217,7 +219,7 @@ class BackgroundVectorizer:
 
     async def _vectorize_single_fact(self, kb, fact_key: str, fact_data: dict) -> dict:
         """Vectorize a single fact (Issue #336 - extracted helper)."""
-        result = {"success": False, "skipped": False, "tokens": 0}
+        result = {"success": False, "tokens": 0}
 
         if not fact_data:
             return result
@@ -254,19 +256,28 @@ class BackgroundVectorizer:
 
         all_fact_data = await self._fetch_fact_data(kb, facts_to_process)
 
+        consecutive_failures = 0
         for fact_key, fact_data in zip(facts_to_process, all_fact_data):
             try:
                 result = await self._vectorize_single_fact(kb, fact_key, fact_data)
                 if result["success"]:
                     stats["success"] += 1
                     stats["tokens"] += result["tokens"]
-                elif result["skipped"]:
-                    stats["skipped"] += 1
+                    consecutive_failures = 0
                 else:
                     stats["failed"] += 1
+                    consecutive_failures += 1
             except Exception as e:
                 stats["failed"] += 1
+                consecutive_failures += 1
                 logger.error("Error vectorizing fact %s: %s", fact_key, e)
+            # #20019: each failure sleeps through its retries, so a downed backend must not cost the whole batch.
+            if consecutive_failures >= MAX_CONSECUTIVE_FAILURES:
+                logger.warning(
+                    "Stopping this pass after %d failures in a row; the rest stay pending", consecutive_failures
+                )
+                stats["stopped"] = True
+                break
 
         stats["processing_time"] = time.time() - batch_start_time
         return stats
@@ -321,6 +332,8 @@ class BackgroundVectorizer:
                         batch_size=len(batch),
                     )
 
+                if batch_stats.get("stopped"):
+                    break
                 if batch_num < total_batches - 1:
                     await asyncio.sleep(self.batch_delay)
 
