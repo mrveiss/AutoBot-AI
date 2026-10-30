@@ -16,7 +16,8 @@ Every surface where an agent acts resolves its line HERE, and only here:
 and nothing else decides whether an agent may act without a person. The pieces that used to
 decide on their own are INPUTS here, and can only tighten:
 
-* the approval baseline (#18294) -- a category in the baseline can never be line 1;
+* the approval baseline (#18294) -- a category in the baseline can never be line 1, except that a
+  shell command which only reads never gets a baseline category (#19950);
 * the role policy ``CommandApprovalManager.needs_approval`` (#17463) -- a role that needs
   approval for a risk can never be line 1;
 * the work item's declared ``requires_approval_before`` -- the same floor, add-only.
@@ -157,7 +158,8 @@ async def resolve_action_line(
     """Resolve the effective line for one action. Read-only: creates nothing, runs nothing.
 
     LineScope: the verified company; with none, the verified user's personal scope (#18430). A shell command that
-    only reads gets no baseline category and counts as not mutating (#19950). A company that is
+    only reads gets no baseline category, so the baseline floor does not apply to it, and counts as not mutating
+    (#19950); a work item's declared category still does. A company that is
     present but malformed is not a missing one and is never replaced by the user's scope.
     """
     key = action_key(tool_name, params)
