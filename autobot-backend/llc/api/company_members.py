@@ -21,7 +21,7 @@ from llc.deps import assert_company_access
 from llc.models.enums import MembershipRole
 from llc.services.activity_log import LLCActivityLogService
 from llc.services.authz import NotAuthorisedError
-from llc.services.membership_policy import LastOwnerError, authorize_member_change
+from llc.services.membership_policy import LastOwnerError, authorize_member_change, lock_company_members
 from llc.services.membership_service import MemberAlreadyExistsError, MemberNotFoundError, MembershipService
 from user_management.database import get_async_session
 from user_management.services import TenantContext
@@ -75,6 +75,7 @@ async def add_member(
 ) -> Dict[str, Any]:
     assert_company_access(ctx, company_id)
     try:
+        await lock_company_members(session, company_id)
         await authorize_member_change(
             session,
             company_id,
@@ -104,6 +105,7 @@ async def change_member_role(
 ) -> Dict[str, Any]:
     assert_company_access(ctx, company_id)
     try:
+        await lock_company_members(session, company_id)
         current = await _current_role(session, svc, company_id, user_id)
         await authorize_member_change(
             session,
@@ -131,6 +133,7 @@ async def remove_member(
 ) -> None:
     assert_company_access(ctx, company_id)
     try:
+        await lock_company_members(session, company_id)
         current = await _current_role(session, svc, company_id, user_id)
         await authorize_member_change(
             session,

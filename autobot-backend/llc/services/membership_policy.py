@@ -39,13 +39,27 @@ def _role_value(role: Optional[object]) -> Optional[str]:
 
 
 async def _owner_count(session: AsyncSession, company_id: uuid.UUID) -> int:
-    """The owners, row-locked so two concurrent demotions cannot each see the other still there."""
+    """The owners. :func:`lock_company_members` already holds their rows."""
     rows = await session.execute(
-        select(LLCCompanyMembership.id)
-        .where(LLCCompanyMembership.company_id == company_id, LLCCompanyMembership.role == MembershipRole.OWNER)
-        .with_for_update()
+        select(LLCCompanyMembership.id).where(
+            LLCCompanyMembership.company_id == company_id, LLCCompanyMembership.role == MembershipRole.OWNER
+        )
     )
     return len(rows.all())
+
+
+async def lock_company_members(session: AsyncSession, company_id: uuid.UUID) -> None:
+    """Serialize this company's membership changes, before any role is read.
+
+    Without it a role read here can be stale by the time it is acted on, so an admin could demote
+    someone just made owner. The fixed order keeps two owners demoting each other from deadlocking.
+    """
+    await session.execute(
+        select(LLCCompanyMembership.id)
+        .where(LLCCompanyMembership.company_id == company_id)
+        .order_by(LLCCompanyMembership.id)
+        .with_for_update()
+    )
 
 
 async def authorize_member_change(
@@ -61,6 +75,7 @@ async def authorize_member_change(
 
     ``None`` means no membership: *current_role* for an add, *new_role* for a removal.
     *platform_admin* comes from the verified tenant context, never from request data.
+    The caller holds :func:`lock_company_members`, taken before it read *current_role*.
     """
     if platform_admin:
         return
