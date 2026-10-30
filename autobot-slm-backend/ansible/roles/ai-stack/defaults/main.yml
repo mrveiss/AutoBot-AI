@@ -39,8 +39,8 @@ chromadb_auth_token: ""
 # EnvironmentFile= line, and it is written before the unit is deployed (#12513).
 chromadb_authn_env_file: /etc/autobot/chromadb.env
 
-# Ollama (remote on backend node - resolved from inventory)
-ollama_host: "{{ backend_host | default(ansible_host) }}"
+# Ollama: the LLM node when the wizard placed one (#19861), else the backend's node
+ollama_host: "{{ llm_host | default(backend_host | default(ansible_host)) }}"
 ollama_port: 11434
 
 # Agent LLM endpoints — injected into ai-stack.env; default to Ollama (#4661)
