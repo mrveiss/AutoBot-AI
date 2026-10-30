@@ -24,10 +24,15 @@ _PLAYBOOK = shutil.which("ansible-playbook")
 _needs_ansible = pytest.mark.skipif(_PLAYBOOK is None, reason="ansible-playbook is not installed")
 
 
-def _fake_smi(directory) -> None:
+_GPU = '#!/bin/sh\necho "Fake GPU"\n'
+#: WSL2 can ship the binary on a host with no GPU; a stub like this must read as no GPU.
+_NO_GPU_STUB = '#!/bin/sh\necho "NVIDIA-SMI has failed because it could not communicate with the driver" >&2\nexit 9\n'
+
+
+def _fake_smi(directory, body: str = _GPU) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     smi = directory / "nvidia-smi"
-    smi.write_text('#!/bin/sh\necho "Fake GPU"\n', encoding="utf-8")
+    smi.write_text(body, encoding="utf-8")
     smi.chmod(0o755)
 
 
@@ -71,6 +76,12 @@ def _probe(tmp_path, on_path: bool, in_extra: bool) -> dict:
 def test_each_location(tmp_path, on_path: bool, in_extra: bool, expected: bool) -> None:
     result = _probe(tmp_path, on_path, in_extra)
     assert result["gpu"] is expected, result["line"]
+
+
+@_needs_ansible
+def test_a_wsl2_stub_with_no_gpu_reads_as_none(tmp_path) -> None:
+    _fake_smi(tmp_path / "wsl", _NO_GPU_STUB)
+    assert _probe(tmp_path, on_path=False, in_extra=False)["gpu"] is False
 
 
 @pytest.mark.parametrize("role", ["llm", "backend"])
