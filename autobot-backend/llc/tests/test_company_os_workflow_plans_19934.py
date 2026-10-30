@@ -29,8 +29,8 @@ from llc.models.goal import LLCGoal
 from llc.models.membership import LLCCompanyMembership
 from llc.models.role_assignment import LLCRoleAssignment
 from llc.services.company_os import plan_store
-from llc.services.company_os.plan_gate import STATUS_LADDER, derive_handoffs, gate
-from llc.services.company_os.plan_types import PlanStatus
+from llc.services.company_os.plan_gate import STATUS_LADDER, derive_handoffs, evaluate_plan_gate
+from llc.services.company_os.plan_types import WorkflowPlanStatus
 from llc.services.goal import GoalService
 from llc.tests import _e2e_harness as harness
 from user_management.models.base import Base
@@ -289,9 +289,9 @@ async def test_gate_fails_a_planted_missing_handoff_negative_control(ctx):
     _, _, factory = ctx
     async with factory() as s:
         plan = plan_store.read_plan(await plan_store.load_row(s, COMPANY_A, "intake"))
-    assert not [m for m in gate(plan).missing if "handoffs mismatch" in m.message]
+    assert not [m for m in evaluate_plan_gate(plan).missing if "handoffs mismatch" in m.message]
     planted = plan.model_copy(update={"handoffs": []})
-    assert [m for m in gate(planted).missing if "handoffs mismatch" in m.message]
+    assert [m for m in evaluate_plan_gate(planted).missing if "handoffs mismatch" in m.message]
     assert derive_handoffs(plan.steps, plan.edges)[0].key == "s2->s3"
 
 
@@ -552,10 +552,12 @@ async def test_approval_is_cleared_by_any_edit_but_not_by_the_acknowledgement(ct
 
 
 def test_the_ladder_is_ordered_and_leaves_room_for_approved_and_converted():
-    order = list(PlanStatus)
+    order = list(WorkflowPlanStatus)
     earned = [status for status, _ in STATUS_LADDER]
     assert earned == sorted(earned, key=order.index)
-    assert PlanStatus.APPROVED not in earned and order.index(PlanStatus.APPROVED) > order.index(earned[-1])
+    assert WorkflowPlanStatus.APPROVED not in earned and order.index(WorkflowPlanStatus.APPROVED) > order.index(
+        earned[-1]
+    )
 
 
 # ------------------------------------------------------------- tenancy, list, delete

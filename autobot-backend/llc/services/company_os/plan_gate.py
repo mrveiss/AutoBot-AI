@@ -5,11 +5,11 @@
 """Map rules, derived handoffs and the status gate of a plan (#19934, section 7A.1 / 7B).
 
 Pure functions over ``CompanyWorkflowPlan``: no session, no clock. The service calls
-``gate`` on every write and stores the status it returns, so the client never sets one.
+``evaluate_plan_gate`` on every write and stores the status it returns, so the client never sets one.
 
 ``STATUS_LADDER`` is the one place a status is tied to its gates. G5-G7 (``approved``) and
 the conversion (``converted``) join it as further rungs when they are delivered; nothing in
-``gate`` assumes ``labeled`` is the top.
+``evaluate_plan_gate`` assumes ``labeled`` is the top.
 """
 
 from __future__ import annotations
@@ -22,9 +22,9 @@ from .plan_types import (
     Edge,
     Handoff,
     Lane,
-    PlanStatus,
     Step,
     SubStepState,
+    WorkflowPlanStatus,
 )
 
 
@@ -163,22 +163,22 @@ def _g4_labeled(plan: CompanyWorkflowPlan) -> List[Missing]:
 
 
 #: Each rung: the status it earns and the gates that must all pass, cumulatively.
-STATUS_LADDER: Tuple[Tuple[PlanStatus, Tuple[GateCheck, ...]], ...] = (
-    (PlanStatus.MEASURED, (_g1_map, _g2_measured)),
-    (PlanStatus.LABELED, (_g3_broken_down, _g4_labeled)),
+STATUS_LADDER: Tuple[Tuple[WorkflowPlanStatus, Tuple[GateCheck, ...]], ...] = (
+    (WorkflowPlanStatus.MEASURED, (_g1_map, _g2_measured)),
+    (WorkflowPlanStatus.LABELED, (_g3_broken_down, _g4_labeled)),
 )
 
 
 @dataclass(frozen=True)
 class GateReport:
-    status: PlanStatus
-    next_status: Optional[PlanStatus]
+    status: WorkflowPlanStatus
+    next_status: Optional[WorkflowPlanStatus]
     missing: List[Missing]
 
 
-def gate(plan: CompanyWorkflowPlan) -> GateReport:
+def evaluate_plan_gate(plan: CompanyWorkflowPlan) -> GateReport:
     """The highest status whose gates (and every lower rung's) pass, and what the next one lacks."""
-    earned = PlanStatus.DRAFT
+    earned = WorkflowPlanStatus.DRAFT
     for status, checks in STATUS_LADDER:
         missing = [m for check in checks for m in check(plan)]
         if missing:

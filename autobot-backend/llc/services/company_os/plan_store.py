@@ -4,7 +4,7 @@
 # Author: mrveiss
 """Load and save a plan revision, and own its status (#19934).
 
-``save`` is the only place a status is set: it runs ``gate`` over the document, writes the
+``save_plan`` is the only place a status is set: it runs ``evaluate_plan_gate`` over the document, writes the
 result to both the document and the ``status`` column, and appends a ``StatusChange`` when it
 moved. Every write path ends here, so no route can store a status the gate does not support.
 """
@@ -23,8 +23,8 @@ from autobot_shared.logging_manager import get_logger
 from llc.models.company_os_plan import CompanyOsWorkflowPlan
 
 from .errors import CompanyOsConflict, CompanyOsNotFound
-from .plan_gate import GateReport, gate
-from .plan_types import CompanyWorkflowPlan, PlanStatus, StatusChange
+from .plan_gate import GateReport, evaluate_plan_gate
+from .plan_types import CompanyWorkflowPlan, StatusChange, WorkflowPlanStatus
 
 logger = get_logger(__name__)
 
@@ -54,7 +54,7 @@ async def load_row(
 async def load_writable(session: AsyncSession, company_id: uuid.UUID, plan_key: str) -> CompanyOsWorkflowPlan:
     """The latest revision, locked for update; a converted one is read-only (FR-0.4)."""
     row = await load_row(session, company_id, plan_key, lock=True)
-    if row.status == PlanStatus.CONVERTED.value:
+    if row.status == WorkflowPlanStatus.CONVERTED.value:
         raise CompanyOsConflict(FROZEN_MESSAGE)
     return row
 
@@ -74,10 +74,10 @@ def read_plan(row: CompanyOsWorkflowPlan) -> CompanyWorkflowPlan:
     return CompanyWorkflowPlan.model_validate(row.document)
 
 
-def _reason(prev: Optional[PlanStatus], report: GateReport) -> str:
+def _reason(prev: Optional[WorkflowPlanStatus], report: GateReport) -> str:
     if prev is None:
         return "plan created"
-    ladder = list(PlanStatus)
+    ladder = list(WorkflowPlanStatus)
     if ladder.index(report.status) < ladder.index(prev) and report.missing:
         first = report.missing[0]
         return f"{first.gate}: {first.message}"
@@ -101,7 +101,7 @@ def _record_status(plan: CompanyWorkflowPlan, report: GateReport, actor: Optiona
     return True
 
 
-async def save(
+async def save_plan(
     session: AsyncSession,
     row: CompanyOsWorkflowPlan,
     plan: CompanyWorkflowPlan,
@@ -112,7 +112,7 @@ async def save(
     """Recompute the status, store the document and the status column together."""
     if clears_approval:
         plan.approved_at, plan.approved_by = None, None
-    changed = _record_status(plan, gate(plan), actor)
+    changed = _record_status(plan, evaluate_plan_gate(plan), actor)
     row.document = plan.model_dump(mode="json")
     row.status, row.name = plan.status.value, plan.name
     session.add(row)

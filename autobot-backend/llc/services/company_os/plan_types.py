@@ -71,7 +71,7 @@ class HolderKind(str, Enum):
 NO_ROLE_HOLDERS = frozenset({HolderKind.CUSTOMER, HolderKind.EXTERNAL})
 
 
-class PlanStatus(str, Enum):
+class WorkflowPlanStatus(str, Enum):
     """Server-computed (section 7B); the client never sets it."""
 
     DRAFT = "draft"
@@ -218,8 +218,8 @@ class EdgeCase(_Doc):
 
 
 class StatusChange(_Doc):
-    from_status: Optional[PlanStatus] = None
-    to_status: PlanStatus
+    from_status: Optional[WorkflowPlanStatus] = None
+    to_status: WorkflowPlanStatus
     at: datetime
     by: Optional[uuid.UUID] = None
     reason: Optional[str] = Field(None, max_length=1000)
@@ -237,7 +237,7 @@ class CompanyWorkflowPlan(_Doc):
     entry_point: EntryPoint
     starts_at: str = Field(..., min_length=1, max_length=500)
     ends_at: str = Field(..., min_length=1, max_length=500)
-    status: PlanStatus = PlanStatus.DRAFT
+    status: WorkflowPlanStatus = WorkflowPlanStatus.DRAFT
     status_history: List[StatusChange] = Field(default_factory=list)
     lanes: List[Lane] = Field(default_factory=list)
     steps: List[Step] = Field(default_factory=list)

@@ -26,11 +26,11 @@ from llc.services.company_os.plan_types import (
     EntryPoint,
     Label,
     Lane,
-    PlanStatus,
     ReturnKind,
     Step,
     SubStepState,
     Unit,
+    WorkflowPlanStatus,
 )
 
 from .company_os_schemas import GraphValidation
@@ -70,7 +70,7 @@ class PlanSummary(BaseModel):
     plan_key: str
     revision: int
     name: str
-    status: PlanStatus
+    status: WorkflowPlanStatus
     updated_at: datetime
 
     model_config = {"from_attributes": True}
@@ -152,6 +152,6 @@ class GateItem(BaseModel):
 
 
 class GateResponse(BaseModel):
-    status: PlanStatus
-    next_status: Optional[PlanStatus]
+    status: WorkflowPlanStatus
+    next_status: Optional[WorkflowPlanStatus]
     missing: List[GateItem]

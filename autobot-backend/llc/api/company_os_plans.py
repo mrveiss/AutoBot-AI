@@ -27,7 +27,7 @@ from llc.deps import get_session
 from llc.services.authz import NotAuthorisedError
 from llc.services.company_os.errors import CompanyOsError
 from llc.services.company_os.plan_gate import map_warnings
-from llc.services.company_os.plan_types import CompanyWorkflowPlan, EdgeCase, PlanStatus, SubStep
+from llc.services.company_os.plan_types import CompanyWorkflowPlan, EdgeCase, SubStep, WorkflowPlanStatus
 from llc.services.company_os.plans import CompanyOsPlanService
 from user_management.services import TenantContext
 
@@ -86,7 +86,7 @@ async def _read(call: Awaitable[T]) -> T:
 
 @router.get("", response_model=List[PlanSummary])
 async def list_plans(
-    status_filter: Optional[PlanStatus] = None,
+    status_filter: Optional[WorkflowPlanStatus] = None,
     session: AsyncSession = Depends(get_session),
     _user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
