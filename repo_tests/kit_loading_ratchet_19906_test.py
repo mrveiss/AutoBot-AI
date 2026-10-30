@@ -46,7 +46,7 @@ def _code_only(text: str) -> str:
 
 
 # 30 and 321 measured on bb5f0299e0; 15 and 317 after the first batch.
-PINS = {"local_keyframes_spin": 15, "utility_spin_lines": 317}
+PINS = {"local_keyframes_spin": 15, "utility_spin_lines": 315}
 
 
 def _sources(base: Path) -> list[Path]:
