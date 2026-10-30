@@ -35,6 +35,7 @@
  *     (no `.response`), so `err.message` remains the fallback exactly as axios.
  */
 
+import { HttpError } from '@autobot/ui'
 import { slmApiClient } from '@/utils/ApiClient'
 
 /** The axios `{ data }` envelope every migrated method reads via `response.data`. */
@@ -77,7 +78,8 @@ export async function adapterRequest<T>(
     } catch {
       /* non-JSON error body — leave data null, mirroring axios */
     }
-    const error = new Error(`HTTP ${response.status}`) as Error & {
+    const details = typeof data === 'object' && data !== null && !Array.isArray(data) ? (data as Record<string, unknown>) : null
+    const error = new HttpError(response.status, undefined, details) as HttpError & {
       response: { status: number; data: unknown }
     }
     // Reproduce the axios error shape consumers read (err.response.status/.data).
