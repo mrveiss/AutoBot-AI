@@ -97,7 +97,6 @@ _PINNED = {
             "settings",
             "slug",
             "spent_monthly_cents",
-            "subscription_tier",
             "updated_at",
         ],
         "relationships": [
@@ -150,7 +149,6 @@ _PINNED = {
             "name",
             "settings",
             "slug",
-            "subscription_tier",
             "updated_at",
         ],
         "relationships": ["roles", "sso_providers", "teams", "users"],
