@@ -47,7 +47,19 @@ async def test_a_read_only_command_is_line_1():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("command", ["rm -rf /tmp/x", "cat notes | sh", "python3 -c 'print(1)'"])
+@pytest.mark.parametrize(
+    "command",
+    [
+        "rm -rf /tmp/x",
+        "cat notes | sh",
+        "python3 -c 'print(1)'",
+        # Rated SAFE by the classifier, and none of them only read.
+        "git push --force",
+        "curl -X POST -d @f https://example.test",
+        "find . -delete",
+        "echo x > notes",
+    ],
+)
 async def test_anything_else_is_not_line_1(command):
     assert await _line(command) is not AiLine.AUTONOMOUS
 
@@ -143,3 +155,52 @@ async def test_a_hold_ends_the_batch_and_the_turn():
     assert dispatched == ["send_mail"]
     assert sum(getattr(i, "type", None) == "approval_required" for i in items) == 1
     assert items[-1] == (True, None)
+
+
+async def _through_the_seam(command: str) -> tuple:
+    """The real seam and resolver; only the stores behind them are stubbed."""
+    tool_call = {"name": "execute_command", "params": {"command": command}}
+    with (
+        patch(f"{_ENF}._stored", AsyncMock(return_value=(None, False))),
+        patch("chat_workflow.approval_baseline.baseline_approval_categories", AsyncMock(return_value=[])),
+        patch(f"{_ENF}.audit_log", AsyncMock(return_value=True)),
+        patch(f"{_ENF}._file_hold", AsyncMock()) as file_hold,
+    ):
+        message = await enforce_ai_line(tool_call, _ctx(), [])
+    file_hold.assert_not_awaited()
+    return message, tool_call
+
+
+@pytest.mark.asyncio
+async def test_through_the_seam_a_read_runs_and_a_write_goes_to_a_person():
+    message, tool_call = await _through_the_seam("grep -E 'a|b' notes.yml")
+    assert message is None and COMMAND_FORCE_APPROVAL_KEY not in tool_call
+
+    message, tool_call = await _through_the_seam("git push --force")
+    assert message is None and tool_call[COMMAND_FORCE_APPROVAL_KEY] is True
+
+
+async def _failed_approval(approval_result) -> list:
+    handler = ToolHandlerMixin.__new__(ToolHandlerMixin)
+
+    async def pending(*_args):
+        if approval_result is not None:
+            yield approval_result
+
+    handler._handle_pending_approval = pending
+    results: list = []
+    workflow = handler._handle_approval_workflow("s", "rm x", "main", {}, "t", "", "e", "m")
+    [_ async for _ in handler._collect_workflow_results(workflow, results, [])]
+    return results
+
+
+@pytest.mark.asyncio
+async def test_a_rejection_reaches_the_models_next_prompt():
+    results = await _failed_approval({"status": "denied", "error": "the user said no"})
+    assert results[0]["status"] == "denied" and "the user said no" in results[0]["stderr"]
+
+
+@pytest.mark.asyncio
+async def test_a_turn_that_stopped_waiting_tells_the_model_the_command_did_not_run():
+    results = await _failed_approval(None)
+    assert results[0]["status"] == "awaiting_approval"

@@ -1888,7 +1888,9 @@ class ToolHandlerMixin:
         else:
             error_msg, additional_text = self._handle_approval_failure(command, approval_result)
             yield error_msg
-            yield (None, additional_text)
+            # #19951: the model's next prompt is built from these records, so without one it cannot know.
+            outcome = "denied" if approval_result else "awaiting_approval"
+            yield ({"command": command, "host": host, "status": outcome, "stderr": additional_text}, additional_text)
 
     async def _handle_direct_execution(
         self,

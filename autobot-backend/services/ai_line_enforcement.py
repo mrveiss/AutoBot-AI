@@ -125,22 +125,24 @@ async def _stored(scope: Optional[LineScope], key: str) -> tuple[Optional[AiLine
 
 
 def _is_read_only_command(tool_name: str, params: Optional[Mapping[str, Any]]) -> bool:
-    """Whether this call is a shell command the one risk classifier rates SAFE (#19950).
+    """Whether this call is a shell command rated SAFE that also only reads (#19950).
 
-    The tool name says only "runs a command", so the command decides. No command, or a classifier that
-    cannot answer, is not read-only: the call keeps the tool's own line.
+    The tool name says only "runs a command", so the command decides. SAFE alone is not enough: it covers
+    ``git push`` and ``curl -X POST``. No command, or a classifier that cannot answer, is not read-only:
+    the call keeps the tool's own line.
     """
     command = (params or {}).get("command") if tool_name == TERMINAL_TOOL else None
     if not command or not isinstance(command, str):
         return False
     try:
         from secure_command_executor import SecureCommandExecutor
+        from security.read_only_commands import is_read_only_command
 
         risk, _reasons = SecureCommandExecutor(use_docker_sandbox=False).assess_command_risk(command)
+        return risk is CommandRisk.SAFE and is_read_only_command(command)
     except Exception as exc:  # noqa: BLE001 - fail closed on an unreadable verdict
         logger.error("Command risk unreadable (%s); the command keeps its tool's line", exc)
         return False
-    return risk is CommandRisk.SAFE
 
 
 async def resolve_action_line(
