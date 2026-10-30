@@ -200,12 +200,16 @@
 # Phase 4: Model Pulling (conditional on hardware)
 # -----------------------------------------------------------------
 
-# #19862: "All 0 models present" read as success when Apply sent empty lists.
+# #19862: "All 0 models present" read as success when Apply sent empty lists. This fails rather than
+# warns, unlike the skipped-GPU-tier warning below: there a node still gets its CPU models, here it gets
+# none. llm_pull_models: false is how an operator asks for a node with no models.
 - name: "Models | There is something to pull"
   ansible.builtin.assert:
     that:
       - _llm_models_to_pull | length > 0
-    fail_msg: "No models to pull: llm_cpu_models and llm_gpu_models are empty for this node."
+    fail_msg: >-
+      No models to pull for this node (GPU detected: {{ _llm_gpu_detected }}): the model lists that apply
+      to it are empty. Set them, or set llm_pull_models to false to provision this node without models.
     quiet: true
   when: llm_pull_models | default(true)
 
