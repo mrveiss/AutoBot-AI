@@ -146,6 +146,9 @@ python:
   # `python-suite` green, and the guard test that would have caught a dropped
   # declaration never runs -- the exact "required check gated by a filter that
   # omits the inputs it guards" shape flagged in review.
+  # #19817: guards sweep every tracked Dockerfile, under either naming.
+  - '**/Dockerfile*'
+  - '**/*.Dockerfile'
   - 'docker/backend/Dockerfile'
   - 'docker/slm/Dockerfile'
   # #17096: repo_tests/secrets_baseline_reasons.py reads this file by literal
