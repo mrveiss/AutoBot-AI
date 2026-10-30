@@ -88,4 +88,54 @@ describe('ApiClient on the kit transport (#14908)', () => {
     await expect(client.get('/x', { circuitBreaker: 'dep', suppressErrorLog: true })).rejects.toThrow();
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  // #20053: VITE_API_BASE_PATH may be an absolute URL, and callers build `${getApiBase()}/x` endpoints.
+  describe('with an absolute VITE_API_BASE_PATH (#20053)', () => {
+    const BASE = 'https://api.example/api';
+    beforeEach(() => {
+      vi.stubEnv('VITE_API_BASE_PATH', BASE);
+      fetchMock.mockImplementation(async () => json({}));
+    });
+    afterEach(() => vi.unstubAllEnvs());
+
+    it.each([`${BASE}/chat/sessions`, BASE, `${BASE}/`, `${BASE}?x=1`])('sends the bearer on %s, under the configured base', async (endpoint) => {
+      await new ApiClient().get(endpoint);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer live-jwt');
+    });
+
+    it('goes through for getApiBase()-built endpoints on post and rawRequest too', async () => {
+      const client = new ApiClient();
+      await client.post(`${getApiBase()}/chat/sessions`, {});
+      await client.rawRequest(`${getApiBase()}/chat/sessions`);
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it.each([
+      ['a different origin', 'https://other.example/api/x'],
+      ['a different scheme', 'http://api.example/api/x'],
+      ['a different port', 'https://api.example:8443/api/x'],
+      ['a lookalike host', 'https://api.example.evil/api/x'],
+      ['a sibling path of the base', 'https://api.example/apix/x'],
+      ['a path outside the base', 'https://api.example/other'],
+      ['a dot-segment escape', `${BASE}/../admin`],
+      ['a userinfo trick', 'https://api.example@evil.example/api/x'],
+      ['userinfo on the real host', 'https://someone@api.example/api/x'],
+      ['a protocol-relative URL', '//api.example/api/x'],
+      ['a backslash form', 'https:\\\\evil.example/api/x'],
+      ['leading whitespace', ` ${BASE}/x`],
+    ])('refuses %s without sending the bearer', async (_name, endpoint) => {
+      const client = new ApiClient();
+      await expect(client.get(endpoint, { maxRetries: 1 })).rejects.toMatchObject({ name: 'AbsoluteEndpointError' });
+      await expect(client.rawRequest(endpoint)).rejects.toMatchObject({ name: 'AbsoluteEndpointError' });
+      await expect(client.uploadFile(endpoint, new File(['x'], 'x.txt'))).rejects.toMatchObject({ name: 'AbsoluteEndpointError' });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('trusts nothing absolute when the base is a relative proxy prefix', async () => {
+      vi.stubEnv('VITE_API_BASE_PATH', '/api');
+      await expect(new ApiClient().get('https://api.example/api/x')).rejects.toMatchObject({ name: 'AbsoluteEndpointError' });
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+  });
 });

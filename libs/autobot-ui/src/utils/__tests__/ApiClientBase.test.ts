@@ -22,6 +22,10 @@ class ProxyClient extends TestClient {
   protected resolveBaseUrl() { return '' }
 }
 
+class TrustingClient extends ProxyClient {
+  protected isTrustedAbsoluteEndpoint() { return true }
+}
+
 const FOREIGN_ENDPOINTS = [
   'https://evil.example/x', 'HTTP://evil.example/x', 'HtTpS://evil.example/x', 'ftp://evil.example/x',
   'javascript:alert(1)', '//evil.example/x', '/\\evil.example/x', '\\\\evil.example/x', '\\/evil.example/x',
@@ -136,6 +140,44 @@ describe('ApiClientBase', () => {
       await new Client().rawRequest(endpoint)
       expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer tok')
     })
+  })
+
+  describe('isTrustedAbsoluteEndpoint hook (#20053)', () => {
+    it('defaults to refusing every scheme: endpoint (covered by the foreign-endpoint cases above)', async () => {
+      await expect(new TestClient().get('https://api.example/x')).rejects.toBeInstanceOf(AbsoluteEndpointError)
+      expect(fetchMock).not.toHaveBeenCalled()
+    })
+
+    it('lets an override admit a scheme: endpoint through get, rawRequest and uploadFile', async () => {
+      fetchMock.mockResolvedValue(json({}))
+      const client = new TrustingClient()
+      await client.get('https://api.example/x')
+      await client.rawRequest('https://api.example/x')
+      expect(fetchMock).toHaveBeenCalledTimes(2)
+      expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer tok')
+      const opened: string[] = []
+      vi.stubGlobal('XMLHttpRequest', class {
+        upload = {}
+        status = 200
+        responseText = '{}'
+        open(_method: string, url: string) { opened.push(url) }
+        setRequestHeader() {}
+        send() { (this as unknown as { onload: () => void }).onload() }
+      })
+      await client.uploadFile('https://api.example/up', new File(['x'], 'x.txt'))
+      expect(opened).toEqual(['https://api.example/up'])
+      vi.unstubAllGlobals()
+    })
+
+    it.each(['//evil.example/x', '/\\evil.example/x', '\\\\evil.example/x', '\n//evil.example/x'])(
+      'never consults the override for %j: protocol-relative and backslash forms stay refused',
+      async (endpoint) => {
+        const client = new TrustingClient()
+        await expect(client.get(endpoint)).rejects.toBeInstanceOf(AbsoluteEndpointError)
+        await expect(client.rawRequest(endpoint)).rejects.toBeInstanceOf(AbsoluteEndpointError)
+        expect(fetchMock).not.toHaveBeenCalled()
+      }
+    )
   })
 })
 
