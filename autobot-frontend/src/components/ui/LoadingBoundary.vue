@@ -23,13 +23,13 @@
           <h3 class="error-title">{{ t('ui.unifiedLoading.somethingWentWrong') }}</h3>
           <p class="error-message">{{ error }}</p>
           <div class="error-actions">
-            <button v-if="onRetry" @click="onRetry" class="btn-retry">
+            <BaseButton v-if="onRetry" @click="onRetry">
               <Icon name="redo" size="sm" class="mr-2" />
               {{ t('ui.unifiedLoading.retry') }}
-            </button>
-            <button @click="emit('loading-complete')" class="btn-dismiss">
+            </BaseButton>
+            <BaseButton variant="secondary" @click="emit('loading-complete')">
               {{ t('ui.unifiedLoading.continueAnyway') }}
-            </button>
+            </BaseButton>
           </div>
         </div>
       </slot>
@@ -46,9 +46,9 @@
         </slot>
         <div v-if="hasTimedOut" class="timeout-warning">
           <p style="color: var(--color-warning)">{{ t('ui.unifiedLoading.takingLonger') }}</p>
-          <button @click="emit('loading-timeout')" class="btn-cancel">
+          <BaseButton variant="warning" @click="emit('loading-timeout')">
             {{ t('ui.unifiedLoading.cancelAndContinue') }}
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>
@@ -59,6 +59,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 import { ref, onUnmounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import Icon from './Icon.vue'
@@ -147,14 +148,6 @@ onUnmounted(clearTimer)
   @apply flex gap-3 justify-center;
 }
 
-.btn-retry {
-  @apply px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors;
-}
-
-.btn-dismiss {
-  @apply px-4 py-2 bg-autobot-bg-secondary text-autobot-text-secondary rounded-lg hover:bg-autobot-bg-tertiary transition-colors;
-}
-
 .loading-container {
   @apply flex items-center justify-center h-full;
 }
@@ -173,15 +166,5 @@ onUnmounted(clearTimer)
 
 .timeout-warning {
   @apply mt-6 space-y-3;
-}
-
-.btn-cancel {
-  @apply px-4 py-2 rounded-lg transition-colors;
-  background: var(--color-warning-bg);
-  color: var(--color-warning);
-}
-
-.btn-cancel:hover {
-  filter: brightness(1.15);
 }
 </style>
