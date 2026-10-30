@@ -90,11 +90,26 @@ async def read_owner(session_id: str, request: Request, username: str | None = N
     return owner
 
 
+def unowned_read(session_id: str, user_data: Dict, request: Request) -> Dict | None:
+    """#20025: a read never claims. An unowned session is a defect: an admin may look, others see a missing one.
+
+    None for a write, which keeps its own rule: a first message on a new id is how that session gets its owner.
+    """
+    if request.method not in ("GET", "HEAD"):
+        return None
+    logger.error("Session %s... has no owner: read by %s", session_id[:8], user_data.get("username"))
+    if is_admin_role(user_data.get("role")):
+        return {"authorized": True, "user_data": user_data, "reason": "admin_unowned_read"}
+    raise HTTPException(status_code=404, detail="Chat session not found")
+
+
 async def _strict_owner_check(session_id: str, user_data: Dict, request: Request) -> Dict:
     """Admin passes; otherwise the recorded owner must be the caller. Unowned is legacy-allowed."""
     username = user_data.get("username")
     owner = await read_owner(session_id, request, username)
     if owner is None:
+        if (read := unowned_read(session_id, user_data, request)) is not None:
+            return read
         logger.info("Session %s... has no owner - allowing access (legacy session)", session_id[:8])
         return {"authorized": True, "user_data": user_data, "reason": "legacy_unowned"}
     if owner != username:
