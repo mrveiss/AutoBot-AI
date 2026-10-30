@@ -17,10 +17,10 @@ import { useFleetStore } from '@/stores/fleet'
 import { formatDateTime as formatDateTimeTz } from '@/composables/useTimezone'
 import { createLogger } from '@/utils/debugUtils'
 import type { Deployment, BlueGreenDeployment, BlueGreenDeploymentCreate, BlueGreenStatus, NodeRole } from '@/types/slm'
-import { BaseAlert, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseModal, useToast } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
-
 const { t } = useI18n()
+const { showToast } = useToast()
 const logger = createLogger('DeploymentsView')
 const api = useSlmApi()
 const ws = useSlmWebSocket()
@@ -293,7 +293,7 @@ async function handleRetry(deploymentId: string): Promise<void> {
     await fetchDeployments()
   } catch (err) {
     logger.error('Failed to retry deployment:', err)
-    alert(t('deploymentsView.failedToRetryDeployment'))
+    showToast(t('deploymentsView.failedToRetryDeployment'), 'error')
   } finally {
     isRetrying.value = null
   }
@@ -310,7 +310,7 @@ async function handleCancel(deploymentId: string): Promise<void> {
     await fetchDeployments()
   } catch (err) {
     logger.error('Failed to cancel deployment:', err)
-    alert(t('deploymentsView.failedToCancelDeployment'))
+    showToast(t('deploymentsView.failedToCancelDeployment'), 'error')
   } finally {
     isCancelling.value = null
   }
@@ -328,7 +328,7 @@ async function handleRollback(deploymentId: string): Promise<void> {
     await fetchDeployments()
   } catch (err) {
     logger.error('Failed to rollback deployment:', err)
-    alert(t('deploymentsView.failedToRollbackDeployment'))
+    showToast(t('deploymentsView.failedToRollbackDeployment'), 'error')
   } finally {
     isRollingBack.value = null
   }
@@ -377,15 +377,15 @@ async function fetchEligibleNodes(roles: string[]): Promise<void> {
 
 async function handleCreateBgDeployment(): Promise<void> {
   if (!newBgDeployment.value.blue_node_id) {
-    alert(t('deploymentsView.pleaseSelectABlueSourceNode'))
+    showToast(t('deploymentsView.pleaseSelectABlueSourceNode'), 'warning')
     return
   }
   if (!newBgDeployment.value.green_node_id) {
-    alert(t('deploymentsView.pleaseSelectAGreenTargetNode'))
+    showToast(t('deploymentsView.pleaseSelectAGreenTargetNode'), 'warning')
     return
   }
   if (newBgDeployment.value.roles.length === 0) {
-    alert(t('deploymentsView.pleaseSelectRoleToMigrate'))
+    showToast(t('deploymentsView.pleaseSelectRoleToMigrate'), 'warning')
     return
   }
 
@@ -403,9 +403,9 @@ async function handleCreateBgDeployment(): Promise<void> {
     const detail = axiosError?.response?.data?.detail || errorMessage
     const status = axiosError?.response?.status
     if (status === 403) {
-      alert(t('deploymentsView.accessDeniedBlueGreenDeploymentsRequireAdmin'))
+      showToast(t('deploymentsView.accessDeniedBlueGreenDeploymentsRequireAdmin'), 'error')
     } else {
-      alert(t('deploymentsView.failedToCreateBlueGreenDeployment', { detail }))
+      showToast(t('deploymentsView.failedToCreateBlueGreenDeployment', { detail }), 'error')
     }
   } finally {
     isCreatingBg.value = false
@@ -422,7 +422,7 @@ async function handleBgSwitch(deploymentId: string): Promise<void> {
     await fetchBgDeployments()
   } catch (err) {
     logger.error('Failed to switch traffic:', err)
-    alert(t('deploymentsView.failedToSwitchTraffic'))
+    showToast(t('deploymentsView.failedToSwitchTraffic'), 'error')
   }
 }
 
@@ -436,7 +436,7 @@ async function handleBgRollback(deploymentId: string): Promise<void> {
     await fetchBgDeployments()
   } catch (err) {
     logger.error('Failed to rollback:', err)
-    alert(t('deploymentsView.failedToRollback'))
+    showToast(t('deploymentsView.failedToRollback'), 'error')
   }
 }
 
@@ -450,7 +450,7 @@ async function handleBgCancel(deploymentId: string): Promise<void> {
     await fetchBgDeployments()
   } catch (err) {
     logger.error('Failed to cancel deployment:', err)
-    alert(t('deploymentsView.failedToCancel'))
+    showToast(t('deploymentsView.failedToCancel'), 'error')
   }
 }
 
@@ -465,7 +465,7 @@ async function handleBgRetry(deploymentId: string): Promise<void> {
     await fetchBgDeployments()
   } catch (err) {
     logger.error('Failed to retry deployment:', err)
-    alert(t('deploymentsView.failedToRetryDeployment'))
+    showToast(t('deploymentsView.failedToRetryDeployment'), 'error')
   } finally {
     isRetryingBg.value = null
   }
@@ -507,11 +507,11 @@ function toggleRole(role: NodeRole): void {
 // ===== STANDARD DEPLOYMENT CREATE METHODS =====
 async function handleCreateDeployment(): Promise<void> {
   if (!newDeployment.value.node_id) {
-    alert(t('deploymentsView.pleaseSelectATargetNode'))
+    showToast(t('deploymentsView.pleaseSelectATargetNode'), 'warning')
     return
   }
   if (newDeployment.value.roles.length === 0) {
-    alert(t('deploymentsView.pleaseSelectRoleToDeploy'))
+    showToast(t('deploymentsView.pleaseSelectRoleToDeploy'), 'warning')
     return
   }
 
@@ -536,7 +536,7 @@ async function handleCreateDeployment(): Promise<void> {
     const errorMessage = err instanceof Error ? err.message : String(err)
     const axiosError = err as { response?: { data?: { detail?: string } } }
     const detail = axiosError?.response?.data?.detail || errorMessage
-    alert(t('deploymentsView.failedToCreateDeployment', { detail }))
+    showToast(t('deploymentsView.failedToCreateDeployment', { detail }), 'error')
   } finally {
     isCreatingDeployment.value = false
   }
