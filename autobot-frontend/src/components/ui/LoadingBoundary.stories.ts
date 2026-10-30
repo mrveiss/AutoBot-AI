@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 import type { Meta, StoryObj } from '@storybook/vue3'
 import LoadingBoundary from './LoadingBoundary.vue'
+import { useToast } from '@/composables/useToast'
 
 const meta = {
   title: 'Components/UI/LoadingBoundary',
@@ -58,7 +59,8 @@ export const ErrorWithRetry: Story = {
   render: () => ({
     components: { LoadingBoundary },
     setup() {
-      return { onRetry: () => alert('retry triggered') }
+      const { showToast } = useToast()
+      return { onRetry: () => showToast('retry triggered', 'info') }
     },
     template: `
       <div class="h-96">
@@ -106,12 +108,16 @@ export const CustomLoadingSlot: Story = {
 export const CustomErrorSlot: Story = {
   render: () => ({
     components: { LoadingBoundary },
+    setup() {
+      const { showToast } = useToast()
+      return { showToast }
+    },
     template: `
       <div class="h-96">
         <LoadingBoundary :loading="false" error="Custom error">
           <template #error-content>
             <div class="p-4 bg-red-50 rounded border border-red-200 text-sm text-red-700">
-              Something went wrong. <button class="underline" @click="alert('retry')">Try again</button>
+              Something went wrong. <button class="underline" @click="showToast('retry', 'info')">Try again</button>
             </div>
           </template>
         </LoadingBoundary>
