@@ -116,7 +116,6 @@ class OrganizationService(BaseService):
         slug: str | None = None,
         description: str | None = None,
         settings: dict | None = None,
-        subscription_tier: str = "free",
         max_users: int = -1,
     ) -> OrganizationCore:
         """
@@ -127,7 +126,6 @@ class OrganizationService(BaseService):
             slug: URL-safe slug (auto-generated if not provided)
             description: Organization description
             settings: Organization settings JSON
-            subscription_tier: Subscription tier (free, pro, enterprise)
             max_users: Maximum users allowed (-1 for unlimited)
 
         Returns:
@@ -139,7 +137,7 @@ class OrganizationService(BaseService):
         self._require_platform_admin()
 
         slug = await self._validate_and_prepare_slug(name, slug)
-        org = self._build_organization_entity(name, slug, description, settings, subscription_tier, max_users)
+        org = self._build_organization_entity(name, slug, description, settings, max_users)
 
         self.session.add(org)
         await self.session.flush()
@@ -152,7 +150,6 @@ class OrganizationService(BaseService):
             details={
                 "name": name,
                 "slug": slug,
-                "subscription_tier": subscription_tier,
             },
         )
 
@@ -247,7 +244,6 @@ class OrganizationService(BaseService):
         name: str | None = None,
         description: str | None = None,
         settings: dict | None = None,
-        subscription_tier: str | None = None,
         max_users: int | None = None,
     ) -> OrganizationCore:
         """
@@ -258,7 +254,6 @@ class OrganizationService(BaseService):
             name: New name (optional)
             description: New description (optional)
             settings: New settings (optional)
-            subscription_tier: New subscription tier (optional)
             max_users: New max users (optional)
 
         Returns:
@@ -271,7 +266,7 @@ class OrganizationService(BaseService):
         if not org:
             raise OrganizationNotFoundError(f"Organization {org_id} not found")
 
-        changes = self._apply_organization_updates(org, name, description, settings, subscription_tier, max_users)
+        changes = self._apply_organization_updates(org, name, description, settings, max_users)
         await self.session.flush()
 
         if changes:
@@ -436,7 +431,6 @@ class OrganizationService(BaseService):
             "organization_id": str(org_id),
             "name": org.name,
             "slug": org.slug,
-            "subscription_tier": org.subscription_tier,
             "users": {
                 "current": user_count,
                 "max": org.max_users if org.max_users != -1 else "unlimited",
@@ -483,7 +477,6 @@ class OrganizationService(BaseService):
         slug: str,
         description: str | None,
         settings: dict | None,
-        subscription_tier: str,
         max_users: int,
     ) -> OrganizationCore:
         """
@@ -494,7 +487,6 @@ class OrganizationService(BaseService):
             slug: URL-safe slug
             description: Organization description
             settings: Organization settings JSON
-            subscription_tier: Subscription tier
             max_users: Maximum users allowed
 
         Returns:
@@ -508,7 +500,6 @@ class OrganizationService(BaseService):
             slug=slug,
             description=description,
             settings=settings or {},
-            subscription_tier=subscription_tier,
             max_users=max_users,
             is_active=True,
         )
@@ -519,7 +510,6 @@ class OrganizationService(BaseService):
         name: str | None,
         description: str | None,
         settings: dict | None,
-        subscription_tier: str | None,
         max_users: int | None,
     ) -> dict[str, dict[str, str | int | None]]:
         """
@@ -530,7 +520,6 @@ class OrganizationService(BaseService):
             name: New name (optional)
             description: New description (optional)
             settings: New settings (optional)
-            subscription_tier: New subscription tier (optional)
             max_users: New max users (optional)
 
         Returns:
@@ -550,13 +539,6 @@ class OrganizationService(BaseService):
 
         if settings is not None:
             org.settings = settings
-
-        if subscription_tier is not None:
-            changes["subscription_tier"] = {
-                "old": org.subscription_tier,
-                "new": subscription_tier,
-            }
-            org.subscription_tier = subscription_tier
 
         if max_users is not None:
             changes["max_users"] = {"old": org.max_users, "new": max_users}
