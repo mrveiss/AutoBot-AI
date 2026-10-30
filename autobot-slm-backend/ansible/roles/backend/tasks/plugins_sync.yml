@@ -17,6 +17,7 @@
     src: "{{ code_source_dir }}/plugins/"
     dest: "{{ backend_code_dir }}/plugins/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=__pycache__"
       - "--exclude=*.pyc"
   # Templated so an update play that restarts explicitly can opt out of the
