@@ -54,7 +54,7 @@
     role_configs:
       frontend:
         services: ['nginx', 'node']
-        packages: ['nodejs', 'npm', 'nginx']
+        packages: ['nginx']  # Node.js comes from the nodejs role below (#19661)
         ports: [5173, 80, 443]
       npu-worker:
         services: ['npu-service']
@@ -236,18 +236,9 @@
         - name: "Setup Node.js for frontend"
           when: node_role == 'frontend'
           block:
-            - name: "Add NodeSource repository"
-              shell: |
-                curl -fsSL {{ nodesource_base_url }}/setup_{{ node_major }}.x | bash -
-              args:
-                creates: /etc/apt/sources.list.d/nodesource.list
-
-            - name: "Install Node.js"
-              apt:
+            - name: Install Node.js
+              ansible.builtin.include_role:
                 name: nodejs
-                state: present
-                update_cache: true
-                cache_valid_time: 3600
 
         # Redis-specific setup
         - name: "Setup Redis Stack"

@@ -26,6 +26,7 @@ import re
 from pathlib import Path
 
 import pytest
+import yaml
 from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
@@ -143,6 +144,39 @@ def test_the_floor_has_one_value_across_package_lock_and_installer() -> None:
     assert installer and f">={installer.group(1)}" == declared, f"install.sh NODE_MIN_VERSION vs engines {declared}"
 
 
+def _loads_the_group_vars(text: str) -> bool:
+    """A play's ``vars_files`` names the definition; a comment naming the path does not count (#19661)."""
+    plays = yaml.safe_load(text)
+    return isinstance(plays, list) and any(
+        str(entry).endswith("inventory/group_vars/all.yml")
+        for play in plays
+        if isinstance(play, dict)
+        for entry in play.get("vars_files") or []
+    )
+
+
+def test_a_comment_naming_the_definition_does_not_count_as_loading_it() -> None:
+    assert _loads_the_group_vars("- hosts: all\n  vars_files:\n    - ../inventory/group_vars/all.yml\n")
+    assert not _loads_the_group_vars("# ../inventory/group_vars/all.yml\n- hosts: all\n")
+
+
+#: The NodeSource repository named by a task: its setup script or an apt line.
+_NODESOURCE_INSTALL = re.compile(r"nodesource_base_url \}\}/(?:setup_|node_)")
+_NODE_INSTALL_HOME = "autobot-slm-backend/ansible/roles/nodejs/tasks/install.yml"
+_NODE_REPO_DATA = "autobot-slm-backend/ansible/inventory/group_vars/all.yml"  # data, not a task
+
+
+def test_one_ansible_task_file_installs_node() -> None:
+    root = _ROOT / "autobot-slm-backend/ansible"
+    found = {
+        p.relative_to(_ROOT).as_posix()
+        for p in root.rglob("*.yml")
+        if _NODESOURCE_INSTALL.search(p.read_text(encoding="utf-8"))
+    }
+    assert _NODE_INSTALL_HOME in found, "the sweep found no install at all; its pattern has drifted"
+    assert found - {_NODE_INSTALL_HOME, _NODE_REPO_DATA} == set(), "use the nodejs role (#19661)"
+
+
 def test_a_bare_inventory_playbook_that_reads_node_major_loads_its_definition() -> None:
     """A play run with ``-i "<host>,"`` (it targets ``target_host``) loads no group_vars (#15348)."""
     missing = [
@@ -150,7 +184,7 @@ def test_a_bare_inventory_playbook_that_reads_node_major_loads_its_definition() 
         for p in sorted((_ROOT / "autobot-slm-backend/ansible").rglob("*.yml"))
         if "node_major" in (text := p.read_text(encoding="utf-8"))
         and "target_host" in text
-        and "inventory/group_vars/all.yml" not in text
+        and not _loads_the_group_vars(text)
     ]
     assert not missing, f"load ../inventory/group_vars/all.yml via vars_files (#19328): {missing}"
 

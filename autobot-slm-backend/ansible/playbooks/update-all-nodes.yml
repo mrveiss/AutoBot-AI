@@ -16,7 +16,7 @@
 #
 # Tags:
 #   restart              - all service restart tasks (skip for code-only deploys)
-#   deps                 - pip install / npm ci tasks (skip for code-only deploys) (#1603)
+#   deps                 - pip install / npm ci tasks and the Node.js upgrade (skip for code-only deploys) (#1603, #19661)
 #   backend              - autobot-backend deploy + restart tasks
 #   frontend             - autobot-frontend deploy + build + nginx restart tasks
 #   npu, npu-worker      - NPU worker deploy + restart tasks
@@ -627,13 +627,22 @@
       register: slm_pip_install
       tags: [slm, slm-backend, deps]
 
+    # #19661: a host on an older major reaches node_major here, before its npm steps.
+    - name: "[PLAY 1] Upgrade an installed Node.js below node_major"
+      ansible.builtin.include_role:
+        name: nodejs
+        tasks_from: upgrade_installed.yml
+        apply:
+          tags: [slm, slm-frontend, deps]
+      tags: [slm, slm-frontend, deps]
+
     - name: "[PLAY 1] SLM | Install Node.js dependencies"
       command:
         cmd: npm ci --ignore-scripts
         chdir: "{{ autobot.base_dir }}/autobot-slm-frontend"
       become: true
       become_user: autobot
-      when: hostvars['localhost']['node_deps_changed'] | bool
+      when: (hostvars['localhost']['node_deps_changed'] | bool) or (_nodejs_upgraded | default(false) | bool)
       register: slm_npm_install
       tags: [slm, slm-frontend, deps]
 
@@ -1503,6 +1512,16 @@
       when: "'frontend' in group_names"
       tags: [frontend]
 
+    # #19661: a host on an older major reaches node_major here, before its npm steps.
+    - name: "[PLAY 2] Upgrade an installed Node.js below node_major"
+      ansible.builtin.include_role:
+        name: nodejs
+        tasks_from: upgrade_installed.yml
+        apply:
+          tags: [frontend, browser, browser-worker, deps]
+      when: "'frontend' in group_names or 'browser' in group_names"
+      tags: [frontend, browser, browser-worker, deps]
+
     - name: "[PLAY 2] Frontend | Install Node.js dependencies"
       command:
         cmd: npm ci --ignore-scripts
@@ -1511,7 +1530,7 @@
       become_user: autobot
       when:
         - "'frontend' in group_names"
-        - hostvars['localhost']['node_deps_changed'] | bool
+        - (hostvars['localhost']['node_deps_changed'] | bool) or (_nodejs_upgraded | default(false) | bool)
       register: frontend_npm_install
       tags: [frontend, deps]
 
@@ -1528,6 +1547,17 @@
         slm_frontend_publish_build_env: {}
       when: "'frontend' in group_names"
       tags: [frontend]
+
+    # #19661: a running process keeps the old Node.js until restarted. try-restart
+    # leaves the unit alone on a host where it is not running.
+    - name: "[PLAY 2] Frontend | Restart the frontend service onto the new Node.js"
+      ansible.builtin.command:
+        cmd: systemctl try-restart autobot-frontend
+      become: true
+      when:
+        - "'frontend' in group_names"
+        - _nodejs_upgraded | default(false) | bool
+      tags: [frontend, restart]
 
     - name: "[PLAY 2] Frontend | Restart nginx"
       systemd:
@@ -1769,7 +1799,7 @@
       when:
         - >-
           'browser' in group_names
-        - hostvars['localhost']['node_deps_changed'] | bool
+        - (hostvars['localhost']['node_deps_changed'] | bool) or (_nodejs_upgraded | default(false) | bool)
       failed_when: false
       tags: [browser, browser-worker, deps]
 

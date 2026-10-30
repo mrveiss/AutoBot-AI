@@ -4,11 +4,13 @@
 # Author: mrveiss
 #
 # Shared dependency role: Node.js (NodeSource)
-# Installs Node.js and npm.
+# Installs Node.js and npm, and upgrades a host below node_major (#19661). The one
+# NodeSource install in Ansible; repo_tests/node_major_one_home_19328_test.py holds that.
+# nodejs_upgrade_only: true (the updater) leaves a host without Node alone.
 # npm install / npm build stays in service roles.
 ---
 
-- name: "nodejs | Check if Node.js is already installed"
+- name: "nodejs | Read the installed Node.js version"
   ansible.builtin.command:
     cmd: node --version
   register: _node_check
@@ -19,56 +21,23 @@
   tags: ['deps', 'nodejs']
   check_mode: false
 
-- name: "nodejs | Install prerequisites"
-  ansible.builtin.apt:
-    name:
-      - curl
-      - gnupg
-      - ca-certificates
-    state: present
-  become: true
-  when: _node_check.rc != 0
+- name: "nodejs | Compare the installed major with node_major"
+  ansible.builtin.set_fact:
+    _nodejs_upgraded: false
+    _nodejs_installed_major: "{{ (_node_check.stdout | default('') | regex_replace('^v(\\d+).*$', '\\1')) | int }}"
   tags: ['deps', 'nodejs']
 
-- name: "nodejs | Check if NodeSource repo exists"
-  ansible.builtin.stat:
-    path: /etc/apt/sources.list.d/nodesource.list
-  register: _nodesource_repo
+# A newer major is reported, never downgraded: apt would not move it, and the
+# code it runs has already been built against it.
+- name: "nodejs | Report a major newer than node_major"
+  ansible.builtin.debug:
+    msg: "Node.js v{{ _nodejs_installed_major }} is newer than node_major {{ nodejs_major_version }}; left as it is"
+  when: _nodejs_installed_major | int > nodejs_major_version | int
   tags: ['deps', 'nodejs']
 
-- name: "nodejs | Add NodeSource repository"
-  ansible.builtin.shell: |
-    curl -fsSL {{ nodesource_base_url }}/setup_{{ nodejs_major_version }}.x | bash -
-  become: true
-  when:
-    - _node_check.rc != 0
-    - not _nodesource_repo.stat.exists
+- name: "nodejs | Install or upgrade"
+  ansible.builtin.include_tasks: install.yml
+  when: >-
+    (_nodejs_installed_major | int == 0 and not (nodejs_upgrade_only | bool))
+    or (0 < _nodejs_installed_major | int < nodejs_major_version | int)
   tags: ['deps', 'nodejs']
-
-# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml for
-# rationale. Ansible's apt module aborts on any partial-fetch warning, the
-# CLI does not. cache_valid_time alone isn't enough once cache ages past 1h.
-- name: "nodejs | Refresh apt cache (best-effort, bounded; #6719)"
-  ansible.builtin.command:
-    cmd: >-
-      timeout 60 apt-get update -qq
-      -o Acquire::Retries=0
-      -o Acquire::http::Timeout=10
-  become: true
-  changed_when: false
-  failed_when: false
-  tags: ['deps', 'nodejs']
-
-- name: "nodejs | Install Node.js"
-  ansible.builtin.apt:
-    name: nodejs
-    state: present
-  become: true
-  tags: ['deps', 'nodejs']
-
-- name: "nodejs | Verify Node.js is available"
-  ansible.builtin.command:
-    cmd: node --version
-  changed_when: false
-  tags: ['deps', 'nodejs']
-  when: not ansible_check_mode
