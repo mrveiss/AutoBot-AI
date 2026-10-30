@@ -75,10 +75,12 @@ class TestOnlyTheSyncsOwnUntouchedFactsGo:
         self.audit = AsyncMock(return_value=True)
         monkeypatch.setattr(replacement, "_audit_deletion", self.audit)
         monkeypatch.setattr(replacement, "_is_protected", lambda metadata: bool(metadata.get("pinned")))
+        monkeypatch.setattr(replacement, "_provenance_defaults", lambda: {"verification_status": "unverified"})
 
     def _kb(self, metadata, delete=None):
         kb = MagicMock()
         kb.get_fact = MagicMock(return_value={"metadata": metadata})
+        kb.redis_client.hget = MagicMock(return_value=None)
         kb.delete_fact = AsyncMock(return_value=delete or {"status": "success"})
         return kb
 
@@ -95,6 +97,11 @@ class TestOnlyTheSyncsOwnUntouchedFactsGo:
         [
             {"ingest_route": "incremental_sync", "updated_at": "2026-10-30T00:00:00+00:00"},
             {"ingest_route": "incremental_sync", "pinned": True},
+            {"ingest_route": "incremental_sync", "tags": ["mine"]},  # add_tags_to_fact, rename, bulk tag
+            {"ingest_route": "incremental_sync", "tags": []},  # a tag removed leaves the key behind
+            {"ingest_route": "incremental_sync", "shared_by": "u1", "shared_at": "2026-10-30"},  # share_fact
+            {"ingest_route": "incremental_sync", "verification_status": "verified"},  # a default changed
+            {"ingest_route": "incremental_sync", "a_field_no_writer_has_yet": 1},  # any future writer
             {"ingest_route": "connector"},
             {},
         ],
@@ -103,6 +110,13 @@ class TestOnlyTheSyncsOwnUntouchedFactsGo:
         kb = self._kb(metadata)
         assert await replacement.delete_replaced_facts(kb, ["f"]) == 0
         self.audit.assert_not_awaited()
+        kb.delete_fact.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_an_assigned_category_keeps_the_fact(self):
+        kb = self._kb({"ingest_route": "incremental_sync"})
+        kb.redis_client.hget = MagicMock(return_value="cat-1")
+        assert await replacement.delete_replaced_facts(kb, ["f"]) == 0
         kb.delete_fact.assert_not_awaited()
 
     @pytest.mark.asyncio
@@ -133,3 +147,28 @@ async def test_the_removal_paths_delete_reports_a_kb_failure():
     assert await sync_module._delete_fact_safe(kb, "old") is False
     kb.delete_fact = AsyncMock(return_value={"status": "success"})
     assert await sync_module._delete_fact_safe(kb, "old") is True
+
+
+def test_a_real_sync_fact_passes_the_real_predicate():
+    """Unstubbed: what the store really writes for a sync chunk must qualify, or nothing is ever deleted."""
+    from knowledge.facts import _apply_provenance_defaults, _fact_is_protected
+
+    metadata = {key: "x" for key in replacement._SYNC_FACT_KEYS}
+    metadata["ingest_route"] = replacement.SYNC_INGEST_ROUTE
+    _apply_provenance_defaults(metadata)
+    assert not _fact_is_protected(metadata)
+    assert replacement.is_replaceable(metadata)
+    assert not replacement.is_replaceable({**metadata, "tags": ["mine"]})
+    assert not replacement.is_replaceable({**metadata, "pinned": True})
+
+
+@pytest.mark.asyncio
+async def test_a_refused_audit_row_keeps_the_fact(monkeypatch):
+    """Unstubbed down to the store: the row's write failing is what keeps the fact."""
+    from services.audit import audit as canonical
+
+    monkeypatch.setattr(canonical.store, "insert_event", AsyncMock(side_effect=RuntimeError("db down")))
+    monkeypatch.setattr(canonical, "_project", AsyncMock())
+    assert await replacement._audit_deletion("f", {"relative_path": "docs/a.md"}) is False
+    monkeypatch.setattr(canonical.store, "insert_event", AsyncMock())
+    assert await replacement._audit_deletion("f", {"relative_path": "docs/a.md"}) is True
