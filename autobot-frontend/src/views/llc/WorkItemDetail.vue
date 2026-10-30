@@ -296,9 +296,8 @@ const origDesc = ref('')
 const saveError = ref<string | null>(null)
 
 const {
-  comments, artifacts, activity, handoffBrief, hasMoreComments, loading, failed,
-  fetchComments, fetchArtifacts, fetchActivity, fetchHandoffBrief,
-} = useWorkItemPanels(api, () => props.item.id)
+  comments, artifacts, activity, handoffBrief, hasMoreComments, loading, failed, addPostedComment, fetchComments,
+  fetchArtifacts, fetchActivity, fetchHandoffBrief } = useWorkItemPanels(api, () => props.item.id)
 const goalAncestry = ref<GoalAncestor[]>([])
 const newComment = ref('')
 const isPosting = ref(false)
@@ -470,11 +469,12 @@ function onHandoffDone() {
 async function postComment() {
   if (!newComment.value.trim()) return
   isPosting.value = true
+  const postedTo = props.item.id
   try {
-    const comment = await api.post<Comment>(`/api/llc/work-items/${props.item.id}/comments`, {
+    const comment = await api.post<Comment>(`/api/llc/work-items/${postedTo}/comments`, {
       company_id: props.companyId, body: newComment.value,
     })
-    comments.value.push(comment)
+    addPostedComment(postedTo, comment)
     newComment.value = ''
   } catch (err) {
     logger.error('Post comment failed', err)
