@@ -51,7 +51,6 @@ import shutil
 import tempfile
 import time
 import uuid
-from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Dict, Optional
 
 from autobot_shared.cli_tool_flags import sanitize_tool_names
@@ -66,6 +65,7 @@ from services.execution.base_backend import (
     ExecutionTask,
 )
 from services.execution.env_sanitizer import safe_task_env
+from services.execution.transcript_normalizer import StepEvent, parse_cli_line
 
 logger = get_logger(__name__)
 
@@ -106,78 +106,10 @@ _DEFAULT_MCP_PORT = 8200
 # ---------------------------------------------------------------------------
 
 
-@dataclass
-class _StepEvent:
-    """Internal representation of a single Claude Code step before fan-out."""
-
-    kind: str  # "message" | "tool_use" | "tool_result" | "error" | "complete"
-    content: Dict[str, Any] = field(default_factory=dict)
-    tool_name: str = ""
-    tool_id: str = ""
-
-
-# ---------------------------------------------------------------------------
-# JSONL stream parser (CLI path)
-# ---------------------------------------------------------------------------
-
-
-def _parse_cli_line(raw: str) -> Optional[_StepEvent]:
-    """Parse one JSONL line from ``claude --output-format stream-json``.
-
-    Returns None for unrecognised lines so callers can skip silently.
-    The CLI emits events with a ``type`` key; the subset we care about:
-    - ``assistant`` (content blocks: text / tool_use)
-    - ``tool_result``
-    - ``result``
-    - ``error``
-    """
-    raw = raw.strip()
-    if not raw:
-        return None
-    try:
-        obj = json.loads(raw)
-    except json.JSONDecodeError:
-        return None
-
-    ev_type = obj.get("type", "")
-
-    if ev_type == "assistant":
-        blocks = obj.get("message", {}).get("content", [])
-        for block in blocks:
-            btype = block.get("type", "")
-            if btype == "text":
-                return _StepEvent(kind="message", content={"text": block.get("text", "")})
-            if btype == "tool_use":
-                return _StepEvent(
-                    kind="tool_use",
-                    content={"input": block.get("input", {})},
-                    tool_name=block.get("name", ""),
-                    tool_id=block.get("id", ""),
-                )
-        return None
-
-    if ev_type == "tool_result":
-        return _StepEvent(
-            kind="tool_result",
-            content={"output": obj.get("output", ""), "is_error": obj.get("is_error", False)},
-            tool_id=obj.get("tool_use_id", ""),
-        )
-
-    if ev_type == "result":
-        return _StepEvent(
-            kind="complete",
-            content={
-                "subtype": obj.get("subtype", ""),
-                "is_error": obj.get("is_error", False),
-                "result": obj.get("result", ""),
-                "usage": obj.get("usage", {}),
-            },
-        )
-
-    if ev_type == "error":
-        return _StepEvent(kind="error", content={"error": obj.get("error", obj)})
-
-    return None
+# The decoding lives in the shared, pure normalizer (#11137) so saved transcripts and spawned
+# runs cannot drift; these names stay because the rest of this module and its tests use them.
+_StepEvent = StepEvent
+_parse_cli_line = parse_cli_line
 
 
 # ---------------------------------------------------------------------------
