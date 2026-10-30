@@ -283,6 +283,7 @@ python:
   # is exactly the change that skips the suite guarding it -- the guard would be
   # bypassable by touching the one file it exists to watch.
   - 'sync-frontend.sh'
+  - '.github/workflows/wiki.yml'
   - 'autobot-slm-frontend/scripts/sync-to-admin.sh'
   # #15900: seven more of the same shape, found once the coverage detector
   # stopped keying on how a guard binds its repo root. Each is read by a

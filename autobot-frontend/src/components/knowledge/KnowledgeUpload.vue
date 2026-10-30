@@ -1175,7 +1175,7 @@ onMounted(() => {
 
 .drop-zone-content {
   position: relative;
-  z-index: 1;
+  z-index: var(--z-raised);
 }
 
 .drop-zone-content.compact {
