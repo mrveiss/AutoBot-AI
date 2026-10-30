@@ -40,6 +40,7 @@ from autobot_shared.logging_manager import get_llm_logger
 from constants.threshold_constants import TimingConstants
 from knowledge.ingestion_visibility import stamp_if_document
 from knowledge_base import KnowledgeBase, get_knowledge_base
+from knowledge_sync_replacement import SYNC_INGEST_ROUTE, delete_replaced_facts
 from utils.semantic_chunker_gpu import get_gpu_semantic_chunker
 
 logger = get_llm_logger("knowledge_sync_incremental")
@@ -498,7 +499,6 @@ class IncrementalKnowledgeSync:
             "sync_time": self.current_sync_time,
         }
 
-        # Determine category for better organization
         category = self._determine_category(relative_path)
         base_metadata["category"] = category
 
@@ -528,7 +528,7 @@ class IncrementalKnowledgeSync:
                 "character_count": len(chunk.content),
                 "gpu_optimized": True,
             }
-            result = await self.kb.store_fact(chunk_text, {**chunk_metadata, "ingest_route": "incremental_sync"})
+            result = await self.kb.store_fact(chunk_text, {**chunk_metadata, "ingest_route": SYNC_INGEST_ROUTE})
             if result["status"] == "success":
                 fact_ids.append(result["fact_id"])
             else:
@@ -704,7 +704,7 @@ class IncrementalKnowledgeSync:
             # Saved first: a crash before the delete leaves stray facts, never a state naming deleted ones.
             if replaced:
                 await self._save_sync_state()
-                await self._delete_facts(replaced)
+                await delete_replaced_facts(self.kb, replaced)
             metrics.gpu_acceleration_used = True
         else:
             logger.info("No files to process - all up to date!")

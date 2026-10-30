@@ -4,11 +4,13 @@
 # Author: mrveiss
 """Re-indexing a changed file replaces its facts, and only once the new ones are stored (#20026)."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, call
 
 import pytest
 
-from knowledge_sync_incremental import FileMetadata, IncrementalKnowledgeSync, SyncMetrics, _delete_fact_safe
+import knowledge_sync_incremental as sync_module
+import knowledge_sync_replacement as replacement
+from knowledge_sync_incremental import FileMetadata, IncrementalKnowledgeSync, SyncMetrics
 
 
 class TestAChangedFileReplacesItsFacts20026:
@@ -49,7 +51,7 @@ class TestAChangedFileReplacesItsFacts20026:
         assert sync._update_metadata_from_results([doc], [self._metadata(doc, ["new"])], SyncMetrics()) == []
 
     @pytest.mark.asyncio
-    async def test_a_sync_pass_deletes_the_replaced_facts(self, tmp_path):
+    async def test_a_sync_pass_saves_state_before_deleting(self, tmp_path, monkeypatch):
         doc = tmp_path / "doc.md"
         sync = self._sync(tmp_path)
         sync.max_concurrent_files = 1
@@ -58,15 +60,76 @@ class TestAChangedFileReplacesItsFacts20026:
         sync._process_file_with_gpu_chunking = AsyncMock(return_value=self._metadata(doc, ["new"]))
         calls = MagicMock()
         sync._save_sync_state = AsyncMock(side_effect=lambda: calls.saved())
-        sync.kb.delete_fact = AsyncMock(side_effect=lambda fid: calls.deleted(fid))
+        monkeypatch.setattr(
+            sync_module, "delete_replaced_facts", AsyncMock(side_effect=lambda kb, ids: calls.deleted(ids))
+        )
         await sync._process_sync_changes([doc], [], SyncMetrics())
-        assert [c[0] for c in calls.mock_calls] == ["saved", "deleted"], "state is saved before anything is deleted"
-        sync.kb.delete_fact.assert_awaited_once_with("old")
+        assert calls.mock_calls[0][0] == "saved" and calls.mock_calls[1] == call.deleted(["old"])
+
+
+class TestOnlyTheSyncsOwnUntouchedFactsGo:
+    """Maintainer decision on #20028: own facts, unmodified, audited first."""
+
+    @pytest.fixture(autouse=True)
+    def _audit(self, monkeypatch):
+        self.audit = AsyncMock(return_value=True)
+        monkeypatch.setattr(replacement, "_audit_deletion", self.audit)
+        monkeypatch.setattr(replacement, "_is_protected", lambda metadata: bool(metadata.get("pinned")))
+
+    def _kb(self, metadata, delete=None):
+        kb = MagicMock()
+        kb.get_fact = MagicMock(return_value={"metadata": metadata})
+        kb.delete_fact = AsyncMock(return_value=delete or {"status": "success"})
+        return kb
 
     @pytest.mark.asyncio
-    async def test_a_delete_the_kb_reports_as_failed_is_not_counted_as_done(self):
-        kb = MagicMock()
-        kb.delete_fact = AsyncMock(return_value={"status": "error", "message": "boom"})
-        assert await _delete_fact_safe(kb, "old") is False
-        kb.delete_fact = AsyncMock(return_value={"status": "success"})
-        assert await _delete_fact_safe(kb, "old") is True
+    async def test_an_untouched_sync_fact_is_audited_then_deleted(self):
+        kb = self._kb({"ingest_route": "incremental_sync"})
+        assert await replacement.delete_replaced_facts(kb, ["f"]) == 1
+        self.audit.assert_awaited_once()
+        kb.delete_fact.assert_awaited_once_with("f")
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize(
+        "metadata",
+        [
+            {"ingest_route": "incremental_sync", "updated_at": "2026-10-30T00:00:00+00:00"},
+            {"ingest_route": "incremental_sync", "pinned": True},
+            {"ingest_route": "connector"},
+            {},
+        ],
+    )
+    async def test_an_edited_protected_or_foreign_fact_stays(self, metadata):
+        kb = self._kb(metadata)
+        assert await replacement.delete_replaced_facts(kb, ["f"]) == 0
+        self.audit.assert_not_awaited()
+        kb.delete_fact.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_failed_audit_keeps_the_fact(self):
+        self.audit.return_value = False
+        kb = self._kb({"ingest_route": "incremental_sync"})
+        assert await replacement.delete_replaced_facts(kb, ["f"]) == 0
+        kb.delete_fact.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_a_delete_the_kb_reports_as_failed_is_not_counted(self):
+        kb = self._kb({"ingest_route": "incremental_sync"}, delete={"status": "error", "message": "boom"})
+        assert await replacement.delete_replaced_facts(kb, ["f"]) == 0
+
+    @pytest.mark.asyncio
+    async def test_a_missing_fact_is_nothing_to_do_and_one_failure_stops_nothing(self):
+        kb = self._kb({"ingest_route": "incremental_sync"})
+        kb.get_fact = MagicMock(
+            side_effect=[None, RuntimeError("redis"), {"metadata": {"ingest_route": "incremental_sync"}}]
+        )
+        assert await replacement.delete_replaced_facts(kb, ["a", "b", "c"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_the_removal_paths_delete_reports_a_kb_failure():
+    kb = MagicMock()
+    kb.delete_fact = AsyncMock(return_value={"status": "error", "message": "boom"})
+    assert await sync_module._delete_fact_safe(kb, "old") is False
+    kb.delete_fact = AsyncMock(return_value={"status": "success"})
+    assert await sync_module._delete_fact_safe(kb, "old") is True
