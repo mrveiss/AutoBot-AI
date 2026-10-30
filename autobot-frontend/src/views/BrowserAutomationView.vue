@@ -372,7 +372,7 @@ function selectSession(session: typeof sessions.value[0]) {
 .script-block { display: flex; flex-direction: column; gap: var(--spacing-2); }
 .code-textarea { font-family: var(--font-mono); font-size: var(--text-sm); resize: vertical; }
 .action-row { display: flex; gap: var(--spacing-3); margin-top: var(--spacing-4); }
-.btn-action-danger { display: inline-flex; align-items: center; gap: var(--spacing-2); padding: var(--spacing-2) var(--spacing-4); font-size: var(--text-sm); font-weight: var(--font-medium); color: var(--text-on-error); background: var(--color-error); border: none; border-radius: var(--radius-md); cursor: pointer; transition: background var(--duration-150) var(--ease-in-out); }
+.btn-action-danger { display: inline-flex; align-items: center; gap: var(--spacing-2); padding: var(--spacing-2) var(--spacing-4); font-size: var(--text-sm); font-weight: var(--font-medium); color: var(--text-on-error); background: var(--color-error-solid); border: none; border-radius: var(--radius-md); cursor: pointer; transition: background var(--duration-150) var(--ease-in-out); }
 .btn-action-danger:hover { background: var(--color-error-hover); }
 .screenshots-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--spacing-4); }
 .screenshot-item { border: 1px solid var(--border-subtle); border-radius: var(--radius-md); overflow: hidden; }
