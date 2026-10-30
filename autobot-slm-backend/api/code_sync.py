@@ -104,6 +104,7 @@ from services.database import get_db
 from services.deploy_activity import read_deploy_activity
 from services.deploy_artifacts import (
     HOST_STATE_EXCLUDES,
+    RSYNC_ARCHIVE_ARGS,
 )
 from services.deployed_dir_resolver import get_live_dir, get_release_component_dir
 from services.drift_checker import (
@@ -1395,7 +1396,7 @@ async def _rsync_component(
     ssh_opts = f"ssh -i {ssh_key} -o StrictHostKeyChecking=accept-new"
     cmd = [
         "rsync",
-        "-avz",
+        *RSYNC_ARCHIVE_ARGS,
         "--delete",
         "-e",
         ssh_opts,
@@ -1434,12 +1435,11 @@ def _rsync_local_cmd(
 ) -> List[str]:
     """Build the local delete-style rsync argv for *component* (#13851).
 
-    Extracted so the dry-run deletion preview and the real sync are guaranteed
-    to run the *same* command — a preview built from a slightly different
-    exclude list would clear a resolve that then deletes something the operator
-    was never shown.
+    Extracted so the dry-run deletion preview and the real sync are guaranteed to run the
+    *same* command — a preview built from a slightly different exclude list would clear a
+    resolve that then deletes something the operator was never shown.
     """
-    cmd = ["rsync", "-avz", "--delete", "--no-group", "--no-owner"]
+    cmd = ["rsync", *RSYNC_ARCHIVE_ARGS, "--delete", "--no-group", "--no-owner"]
     cmd.extend(_rsync_exclude_args(excludes, component))
     cmd.append(f"{source_dir or f'{source_path}/{component}'}/")
     cmd.append(f"{dest_dir or f'{FLEET_INSTALL_ROOT}/{component}'}/")
@@ -2362,7 +2362,7 @@ async def _snapshot_component(component: str) -> Optional[str]:
     try:
         proc = await asyncio.create_subprocess_exec(
             "rsync",
-            "-a",
+            *RSYNC_ARCHIVE_ARGS,
             "--delete",
             f"{deployed_dir}/",
             f"{backup_dir}/",
