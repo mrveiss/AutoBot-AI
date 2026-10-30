@@ -19,6 +19,7 @@ from .budget import cost_events_router, costs_by_model_router
 from .budget import router as budget_router
 from .companies import router as companies_router
 from .company_ceo import router as company_ceo_router
+from .company_members import router as company_members_router
 from .company_os import router as company_os_router
 from .company_os_skills import router as company_os_skills_router
 from .contacts import router as contacts_router
@@ -59,6 +60,7 @@ router.include_router(budget_router)
 router.include_router(cost_events_router)
 router.include_router(costs_by_model_router)
 router.include_router(companies_router)
+router.include_router(company_members_router)
 router.include_router(company_ceo_router)
 router.include_router(contacts_router)
 router.include_router(agent_hires_router)
