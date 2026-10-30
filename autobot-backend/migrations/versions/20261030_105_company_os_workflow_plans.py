@@ -58,5 +58,12 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    if has_table("company_os_workflow_plans"):
-        op.drop_table("company_os_workflow_plans")
+    if not has_table("company_os_workflow_plans"):
+        return
+    populated = op.get_bind().execute(sa.text("SELECT count(*) FROM company_os_workflow_plans")).scalar()
+    if populated:
+        raise NotImplementedError(
+            f"20261030_105 downgrade is refused: {populated} workflow plan(s) exist. Dropping the table would "
+            "discard them. Export and remove them first."
+        )
+    op.drop_table("company_os_workflow_plans")

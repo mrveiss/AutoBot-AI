@@ -166,13 +166,29 @@ class CompanyOsPlanService(LLCServiceBase):
     async def _metric_target(
         self, session: AsyncSession, company_id: uuid.UUID, plan_key: str, step_key: str, actor: Optional[uuid.UUID]
     ) -> Tuple[PlanRow, CompanyWorkflowPlan]:
-        """The writable plan, after checking the actor may write THIS step's metric (D10)."""
+        """The writable plan, after checking the actor may write THIS step's metric (D10).
+
+        Checked before the row lock, so a caller who may not write cannot hold it, and again under
+        the lock, because the map may have moved the step to another lane in between.
+        """
+        unlocked = plan_store.read_plan(await plan_store.load_row(session, company_id, plan_key))
+        await self._require_step_writer(session, company_id, unlocked, step_key, actor)
         row = await plan_store.load_writable(session, company_id, plan_key)
         plan = plan_store.read_plan(row)
+        await self._require_step_writer(session, company_id, plan, step_key, actor)
+        return row, plan
+
+    @staticmethod
+    async def _require_step_writer(
+        session: AsyncSession,
+        company_id: uuid.UUID,
+        plan: CompanyWorkflowPlan,
+        step_key: str,
+        actor: Optional[uuid.UUID],
+    ) -> None:
         lane_key = plan_measure.find_step(plan, step_key).lane_key
         role_id = next((ln.role_id for ln in plan.lanes if ln.key == lane_key), None)
         await plan_measure.require_metric_writer(session, company_id, actor, role_id)
-        return row, plan
 
     async def put_metric(
         self,

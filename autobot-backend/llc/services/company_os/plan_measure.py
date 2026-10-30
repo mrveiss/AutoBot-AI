@@ -110,7 +110,9 @@ async def _goal_for(
         raise CompanyOsNotFound(f"goal {target} does not exist in this company")
     if goal.level != GoalLevel.KEY_RESULT.value:
         raise CompanyOsConflict("the One Number links a key_result goal")
-    if goal.title != title:
+    # Follow a rename only on a goal still carrying this plan's title: a goal someone linked keeps its own.
+    in_sync = goal_id is None and plan.one_number is not None and goal.title == plan.one_number.title
+    if in_sync and goal.title != title:
         await goals.update(session, goal.id, title=title)
     return goal.id
 

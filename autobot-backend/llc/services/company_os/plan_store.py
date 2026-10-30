@@ -43,7 +43,7 @@ async def load_row(
 ) -> CompanyOsWorkflowPlan:
     """The given revision, or the latest one. Another company's plan is a 404, like a missing one."""
     stmt = _scope(company_id, plan_key)
-    stmt = stmt.where(CompanyOsWorkflowPlan.revision == revision) if revision else stmt
+    stmt = stmt.where(CompanyOsWorkflowPlan.revision == revision) if revision is not None else stmt
     stmt = stmt.order_by(CompanyOsWorkflowPlan.revision.desc()).limit(1)
     row = (await session.execute(stmt.with_for_update() if lock else stmt)).scalar_one_or_none()
     if row is None:
