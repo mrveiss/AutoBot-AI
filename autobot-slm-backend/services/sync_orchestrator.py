@@ -21,7 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.ssot_config import config
 from models.database import Node, NodeCodeSource, NodeRole, Role, RoleStatus
 from services.database import db_service
-from services.deploy_artifacts import rsync_artifact_excludes
+from services.deploy_artifacts import RSYNC_NEVER_WORLD_WRITABLE, rsync_artifact_excludes
 from services.post_sync_timeouts import POST_SYNC_TIMEOUT_S
 from services.ssh_utils import _ssh_key_usable, ssh_destination_args, ssh_remote_path
 
@@ -169,6 +169,7 @@ class SyncOrchestrator:
         rsync_cmd = [
             "rsync",
             "-avz",
+            RSYNC_NEVER_WORLD_WRITABLE,
             *[arg for pattern in rsync_artifact_excludes() for arg in ("--exclude", pattern)],
             "-e",
             ssh_opts,
@@ -275,6 +276,7 @@ class SyncOrchestrator:
         return [
             "rsync",
             "-avz",
+            RSYNC_NEVER_WORLD_WRITABLE,
             "--delete",
             "--exclude",
             ".git",
@@ -449,6 +451,7 @@ class SyncOrchestrator:
         return [
             "rsync",
             "-avz",
+            RSYNC_NEVER_WORLD_WRITABLE,
             "--delete",
             "--exclude",
             ".git",
