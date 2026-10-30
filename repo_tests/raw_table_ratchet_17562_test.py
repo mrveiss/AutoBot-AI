@@ -38,13 +38,12 @@ _COMMENT = re.compile(r"^\s*//")
 # file and hide a live table after it -- an unclosed opener leaves the text counted, failing closed.
 _HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 
-# Measured on the live tree: 41 table-opening lines in 30 autobot-frontend files, 53 in 34
-# autobot-slm-frontend files (#19698). Lower an entry by exactly what a PR converts; delete it at 0.
+# Measured on the live tree: 38 table-opening lines in 27 autobot-frontend files, 51 in 32
+# autobot-slm-frontend files (#19698, #17562 batch 2). Lower an entry by exactly what a PR converts; delete it at 0.
 PINS: dict[str, dict[str, int]] = {
     "autobot-frontend/src": {
         "components/agents/HeartbeatPanel.vue": 2,
         "components/analytics/AdvancedAnalytics.vue": 3,
-        "components/analytics/AgentCostPanel.vue": 1,
         "components/analytics/PatternAnalysis.vue": 1,
         "components/analytics/TechnicalDebtDashboard.vue": 1,
         "components/analytics/code-intelligence/FindingsTable.vue": 1,
@@ -59,7 +58,6 @@ PINS: dict[str, dict[str, int]] = {
         "views/AdminMcpServersView.vue": 1,
         "views/AdminUsersView.vue": 1,
         "views/AdvancedControlView.vue": 3,
-        "views/BenchmarkView.vue": 1,
         "views/BrowserAutomationView.vue": 1,
         "views/BudgetPolicies.vue": 1,
         "views/EvolutionView.vue": 2,
@@ -69,7 +67,6 @@ PINS: dict[str, dict[str, int]] = {
         "views/llc/CompanySecretsView.vue": 1,
         "views/llc/CostDashboard.vue": 2,
         "views/llc/HeartbeatMonitor.vue": 1,
-        "views/llc/MembersView.vue": 1,
         "views/llc/RoutinesView.vue": 1,
         "views/secrets/LlmApiKeysView.vue": 1,
     },
@@ -81,7 +78,6 @@ PINS: dict[str, dict[str, int]] = {
         "components/monitoring/NodeMetricsGrid.vue": 1,
         "components/monitoring/ledger/LedgerDevLoop.vue": 1,
         "components/monitoring/ledger/LedgerLivePanel.vue": 1,
-        "components/skills/ReposTab.vue": 1,
         "views/BackupsView.vue": 1,
         "views/CodeSyncView.vue": 3,
         "views/DeploymentsView.vue": 2,
@@ -91,7 +87,6 @@ PINS: dict[str, dict[str, int]] = {
         "views/ReplicationView.vue": 1,
         "views/RolesView.vue": 1,
         "views/SecurityView.vue": 3,
-        "views/SharedLinksView.vue": 1,
         "views/SystemUpdatesTab.vue": 2,
         "views/monitoring/AgentLedgerMonitor.vue": 1,
         "views/monitoring/LogViewer.vue": 2,
