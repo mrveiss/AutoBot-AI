@@ -27,6 +27,7 @@ from knowledge.fact_redis_codec import (  # noqa: F401 -- names stay patchable h
 )
 from knowledge.fact_sharing import FactSharingMixin
 from knowledge.ingest_sanitize import redact_url_metadata_fields, sanitize_fact_content
+from knowledge.long_fact_embedding import embed_in_windows, window_metadata
 from knowledge.ownership_index import index_ownership, ownership_changed, reindex_ownership
 from knowledge.quarantine import QuarantineAuditFailed, apply_quarantine, require_audit_actor, without_quarantine
 
@@ -177,9 +178,8 @@ async def _generate_embedding_with_npu_fallback(
 ) -> List[float]:
     """Generate a single embedding via the canonical NPU-fallback path.
 
-    Issue #5105: Thin shim — delegates to
-    ``services.npu_client.generate_embedding_with_fallback`` which is the
-    single source of truth for NPU-first / Ollama-fallback embedding
+    Issue #5105: Thin shim — delegates to ``services.npu_client.generate_embedding_with_fallback``,
+    the single source of truth for NPU-first / Ollama-fallback embedding
     generation. Prometheus counter
     ``autobot_embedding_generated_total{backend, status}`` is emitted by
     the canonical helper.
@@ -418,7 +418,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
             return None
         try:
             space = await current_space(self)  # #19379: one model and its store for this check
-            embedding = await _generate_embedding_with_npu_fallback(content, model_name=space.model)
+            embedding = await embed_in_windows(_generate_embedding_with_npu_fallback, content, model_name=space.model)
             chroma_collection = space.vector_store._collection
             results = await asyncio.to_thread(
                 chroma_collection.query,
@@ -652,12 +652,12 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         from knowledge.utils import sanitize_metadata_for_chromadb as _sanitize_metadata_for_chromadb
 
         # Sanitize metadata for ChromaDB
-        sanitized_metadata = _sanitize_metadata_for_chromadb(metadata)
+        sanitized_metadata = _sanitize_metadata_for_chromadb({**metadata, **window_metadata(content)})
 
         # Issue #165: NPU worker with fallback. #19379: the bound space's model, written to its store.
         space = await current_space(self)
-        embedding = await _generate_embedding_with_npu_fallback(
-            content, max_attempts=max_attempts, model_name=space.model
+        embedding = await embed_in_windows(
+            _generate_embedding_with_npu_fallback, content, max_attempts=max_attempts, model_name=space.model
         )
 
         # Issue #12312: an empty embedding means generation failed upstream (backend blip, timeout). Do NOT
