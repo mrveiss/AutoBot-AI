@@ -37,7 +37,7 @@ filelock>=4.2.4
 
 # starlette: the security floor for the O(n^2) Range-header DoS. fastapi itself only requires
 # starlette>=0.46.0, so its floor does not imply this one and it is declared here for every manifest.
-starlette>=1.9.0
+starlette>=1.10.0
 
 # fastapi: the shared floor.
 # Was restated in 11 places at two versions (>=0.147.0 in 8 manifests, ==0.147.0 in
