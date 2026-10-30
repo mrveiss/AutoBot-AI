@@ -73,9 +73,8 @@ def test_each_location(tmp_path, on_path: bool, in_extra: bool, expected: bool) 
     assert result["gpu"] is expected, result["line"]
 
 
-def test_no_role_runs_a_bare_nvidia_smi_of_its_own() -> None:
-    found = []
-    for path in sorted((_ANSIBLE / "roles").rglob("*.yml")):
-        if path != _TASK and "nvidia-smi --query" in path.read_text(encoding="utf-8"):
-            found.append(path.name)
-    assert not found, found
+@pytest.mark.parametrize("role", ["llm", "backend"])
+def test_both_roles_use_the_shared_probe(role: str) -> None:
+    source = (_ANSIBLE / "roles" / role / "tasks" / "main.yml").read_text(encoding="utf-8")
+    assert "_shared/tasks/detect_nvidia_gpu.yml" in source
+    assert "nvidia-smi --query" not in source, f"{role} has a bare probe of its own again"
