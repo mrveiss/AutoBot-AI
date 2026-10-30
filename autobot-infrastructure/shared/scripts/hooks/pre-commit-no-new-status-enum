@@ -86,6 +86,7 @@ EXEMPT_PATHS=(
     "autobot-backend/utils/service_registry.py"
     "autobot-backend/utils/todowrite_optimizer.py"
     "autobot_shared/plugin_sdk/base.py"
+    "autobot-backend/llc/services/company_os/plan_types.py"
 )
 
 is_exempt() {

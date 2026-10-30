@@ -473,7 +473,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot_shared/redis_client.py": 674,
     "autobot_shared/redis_management/connection_manager.py": 1290,
     "autobot_shared/security/ssrf_guard_test.py": 633,
-    "autobot_shared/ssot_config.py": 3220,  # #19319 split to ssot_role_mirrors; #15501 to ssot_hosted_models
+    "autobot_shared/ssot_config.py": 3212,  # splits: #19319 role_mirrors, #15501 hosted_models, #19934 company_os_flags
     "autobot_shared/ssot_config_test.py": 776,
     "autobot_shared/ssot_constants.py": 861,
     "autobot_shared/user_management/team_service.py": 659,
