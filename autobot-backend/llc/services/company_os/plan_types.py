@@ -5,7 +5,7 @@
 """The Workflow Planner plan document (#19934).
 
 One ``CompanyWorkflowPlan`` is the JSONB document of one plan revision. The root is not
-called ``WorkflowPlan`` (``orchestration/types.py``) or ``WorkflowPlanner``
+called ``WorkflowPlan`` (``orchestration/types.py``) or the deprecated planner class beside it
 (``orchestration/workflow_planner.py``): both exist and mean something else.
 
 Wire style mirrors ``graph_types.py``: keys on the wire, UUIDs only for role references.
