@@ -1471,7 +1471,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .category-item.active .count:not(.active-badge) {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: white;
 }
 
@@ -2223,7 +2223,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .btn-danger {
   padding: var(--spacing-2-5) var(--spacing-5);
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-lg);
