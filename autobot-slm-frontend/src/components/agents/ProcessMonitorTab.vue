@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -236,12 +237,12 @@ function formatTime(iso: string | null): string {
           <option value="timed_out">{{ $t('agents.processMonitorTab.timedOut') }}</option>
         </select>
       </div>
-      <button class="btn-primary" @click="fetchProcesses" :disabled="!agentId">
+      <BaseButton @click="fetchProcesses" :disabled="!agentId">
         {{ $t('agents.processMonitorTab.load') }}
-      </button>
-      <button class="btn-secondary" @click="showSpawnForm = !showSpawnForm">
+      </BaseButton>
+      <BaseButton variant="secondary" @click="showSpawnForm = !showSpawnForm">
         {{ $t('agents.processMonitorTab.spawnProcess') }}
-      </button>
+      </BaseButton>
     </div>
 
     <!-- Spawn form -->
@@ -266,8 +267,8 @@ function formatTime(iso: string | null): string {
         </div>
       </div>
       <div class="spawn-actions">
-        <button class="btn-primary" @click="spawnProcess">{{ $t('agents.processMonitorTab.spawn') }}</button>
-        <button class="btn-cancel" @click="showSpawnForm = false">{{ $t('agents.processMonitorTab.cancel') }}</button>
+        <BaseButton @click="spawnProcess">{{ $t('agents.processMonitorTab.spawn') }}</BaseButton>
+        <BaseButton variant="secondary" @click="showSpawnForm = false">{{ $t('agents.processMonitorTab.cancel') }}</BaseButton>
       </div>
     </div>
 
@@ -305,21 +306,20 @@ function formatTime(iso: string | null): string {
             <td>{{ formatDuration(proc.started_at, proc.completed_at, DURATION_OPTIONS) }}</td>
             <td class="time-cell">{{ formatTime(proc.started_at) }}</td>
             <td>
-              <button
+              <BaseButton variant="error" size="xs"
                 v-if="proc.status === 'running'"
-                class="btn-kill"
                 @click.stop="showKillConfirm = proc.id"
               >
                 {{ $t('agents.processMonitorTab.kill') }}
-              </button>
+              </BaseButton>
               <div v-if="showKillConfirm === proc.id" class="kill-confirm" @click.stop>
-                <button class="btn-confirm" @click="signalProcess(proc.id, 'SIGTERM')">
+                <BaseButton variant="warning" size="xs" @click="signalProcess(proc.id, 'SIGTERM')">
                   SIGTERM
-                </button>
-                <button class="btn-confirm btn-error" @click="signalProcess(proc.id, 'SIGKILL')">
+                </BaseButton>
+                <BaseButton variant="error" size="xs" @click="signalProcess(proc.id, 'SIGKILL')">
                   SIGKILL
-                </button>
-                <button class="btn-cancel-sm" @click="showKillConfirm = null">x</button>
+                </BaseButton>
+                <BaseButton variant="secondary" size="xs" @click="showKillConfirm = null">x</BaseButton>
               </div>
             </td>
           </tr>
@@ -335,28 +335,25 @@ function formatTime(iso: string | null): string {
         <h4>{{ $t('agents.processMonitorTab.processValue0Logs', { value0: selectedProcess.id.slice(0, 8) }) }}<span v-if="isStreaming" class="streaming-badge">{{ $t('agents.processMonitorTab.lIVE') }}</span>
         </h4>
         <div class="log-actions">
-          <button
+          <BaseButton variant="secondary"
             v-if="selectedProcess.status === 'running' && !isStreaming"
-            class="btn-secondary"
             @click="streamLogs(selectedProcess.id)"
           >
             {{ $t('agents.processMonitorTab.streamLive') }}
-          </button>
-          <button
+          </BaseButton>
+          <BaseButton variant="secondary"
             v-if="isStreaming"
-            class="btn-cancel"
             @click="stopStream"
           >
             {{ $t('agents.processMonitorTab.stopStream') }}
-          </button>
-          <button
+          </BaseButton>
+          <BaseButton variant="secondary"
             v-if="!isStreaming && !fullLog"
-            class="btn-secondary"
             :disabled="fullLogLoading"
             @click="fetchFullLog(selectedProcess.id)"
           >
             {{ fullLogLoading ? $t('agents.processMonitorTab.loading') : $t('agents.processMonitorTab.viewFullLog') }}
-          </button>
+          </BaseButton>
         </div>
       </div>
       <pre class="log-content">{{ fullLog || selectedProcess.log_excerpt || $t('agents.processMonitorTab.noLogOutput') }}</pre>
@@ -369,16 +366,10 @@ function formatTime(iso: string | null): string {
 .control-group { display: flex; flex-direction: column; gap: var(--spacing-1); }
 .control-group label { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
 .control-group input, .control-group select { padding: var(--spacing-2) var(--spacing-3); border: 1px solid var(--slm-gray-300); border-radius: var(--radius-lg); font-size: var(--text-sm); min-width: 160px; }
-.btn-primary { background: var(--slm-indigo-500); color: white; border: none; padding: var(--spacing-2) var(--spacing-4); border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 500; cursor: pointer; }
-.btn-primary:hover { background: var(--slm-indigo-600); }
-.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-secondary { background: white; color: var(--slm-gray-700); border: 1px solid var(--slm-gray-300); padding: var(--spacing-2) var(--spacing-4); border-radius: var(--radius-md); font-size: var(--text-sm); cursor: pointer; }
-.btn-secondary:hover { background: var(--slm-gray-100); }
 .spawn-form-panel { background: white; border-radius: var(--radius-xl); box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: var(--spacing-5); margin-bottom: var(--spacing-5); }
 .spawn-form-panel h4 { font-size: var(--text-base); font-weight: 600; margin: 0 0 var(--spacing-4) 0; color: var(--text-primary); }
 .spawn-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--spacing-3); margin-bottom: var(--spacing-4); }
 .spawn-actions { display: flex; gap: var(--spacing-2); }
-.btn-cancel { background: var(--slm-gray-200); color: var(--slm-gray-700); border: none; padding: var(--spacing-2) var(--spacing-4); border-radius: var(--radius-md); font-size: var(--text-sm); cursor: pointer; }
 .process-table-wrapper { background: white; border-radius: var(--radius-xl); box-shadow: 0 1px 3px rgba(0,0,0,0.1); overflow: hidden; }
 .process-table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
 .process-table th { text-align: left; padding: var(--spacing-3) var(--spacing-4); background: var(--slm-gray-50); color: var(--text-secondary); font-weight: 600; font-size: var(--text-xs); text-transform: uppercase; border-bottom: 1px solid var(--slm-gray-200); }
@@ -396,12 +387,7 @@ function formatTime(iso: string | null): string {
 .badge-orange { background: var(--slm-orange-100); color: var(--slm-orange-600); }
 .badge-pulse { animation: pulse 2s ease-in-out infinite; }
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
-.btn-kill { background: var(--color-error-solid); color: white; border: none; padding: var(--spacing-1) 10px; border-radius: var(--radius-default); font-size: var(--text-xs); font-weight: 500; cursor: pointer; }
-.btn-kill:hover { background: var(--color-error-600); }
 .kill-confirm { display: flex; gap: var(--spacing-1); align-items: center; }
-.btn-confirm { background: var(--slm-amber-500); color: white; border: none; padding: var(--spacing-1) var(--spacing-2); border-radius: var(--radius-default); font-size: 11px; cursor: pointer; }
-.btn-error { background: var(--color-error-solid); }
-.btn-cancel-sm { background: var(--slm-gray-200); color: var(--slm-gray-700); border: none; padding: 2px 6px; border-radius: var(--radius-default); font-size: 11px; cursor: pointer; }
 .log-panel { background: white; border-radius: var(--radius-xl); box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: var(--spacing-5); margin-top: var(--spacing-5); }
 .log-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-3); }
 .log-header h4 { font-size: var(--text-base); font-weight: 600; margin: 0; color: var(--text-primary); display: flex; align-items: center; gap: var(--spacing-2); }
