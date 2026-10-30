@@ -31,6 +31,7 @@ import type { Role } from '@/types/_generated/workflow'
 import { setupAsyncComponentErrorHandler } from '@/utils/asyncComponentHelpers'
 import { isChunkLoadError } from '@/utils/chunkLoadError'
 import { createLogger } from '@/utils/debugUtils'
+import { setDocumentTitle } from '@/utils/documentTitle'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { getBackendUrl, getSLMAdminUrl } from '@/config/ssot-config'
 import { llcCompanyParamGuard } from './llcGuards'
@@ -1396,9 +1397,7 @@ router.beforeEach(async (to, from) => {
     }
 
     // Update document title
-    if (to.meta.title) {
-      document.title = `${to.meta.title} - AutoBot Pro`
-    }
+    if (to.meta.title) setDocumentTitle(to.meta.title)
 
     // Update active tab in store (with null safety)
     // Issue #729: Updated valid tabs for business-only routes
