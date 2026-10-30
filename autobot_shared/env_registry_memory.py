@@ -216,3 +216,42 @@ env_registry.register_env_var(
         component="filesystem_mcp",
     )
 )
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_MEMORY_SESSION_READ_MAX_CHUNKS",
+        type=int,
+        default=500,
+        description=(
+            "Most chunks one memory.session_read call returns for a single session "
+            "(memory/verbatim_sessions.py, #11137)."
+        ),
+        component="memory",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_MEMORY_SESSION_LIST_MAX_SCAN",
+        type=int,
+        default=5000,
+        description=(
+            "Most of the caller's chunks one memory.session_list call scans when grouping them into sessions "
+            "(memory/verbatim_sessions.py, #11137)."
+        ),
+        component="memory",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_MEMORY_SESSION_LIST_LIMIT",
+        type=int,
+        default=50,
+        description=(
+            "Default number of sessions memory.session_list returns when the caller gives no limit "
+            "(memory/verbatim_sessions.py, #11137)."
+        ),
+        component="memory",
+    )
+)
