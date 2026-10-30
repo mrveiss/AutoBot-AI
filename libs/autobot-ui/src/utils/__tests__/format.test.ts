@@ -49,6 +49,11 @@ describe('range form with a numeric style (#19680)', () => {
     expect(formatDuration(start, '2026-01-01T01:15:03Z', { style: 'msMinutesSeconds' })).toBe('75m 3s')
     expect(formatDuration(start, '2026-01-01T00:00:59.600Z', { style: 'msMinutesSeconds' })).toBe('1m 0s')
   })
+  it('floors the seconds of msMinutesSeconds when asked, and rounds by default', () => {
+    const floor = { style: 'msMinutesSeconds', rounding: 'floor' } as const
+    expect(formatDuration(start, '2026-01-01T00:00:59.600Z', floor)).toBe('59s')
+    expect(formatDuration(start, '2026-01-01T01:15:03.900Z', floor)).toBe('75m 3s')
+  })
   it('shows a missing start as the null text and a negative span as zero', () => {
     expect(formatDuration(null, null, { style: 'msCompound', nullText: '-' })).toBe('-')
     expect(formatDuration(start, '2025-12-31T23:59:55Z', { style: 'msCompound' })).toBe('0s')
