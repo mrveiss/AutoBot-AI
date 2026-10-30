@@ -622,34 +622,32 @@ class IncrementalKnowledgeSync:
 
             metadata = self.file_metadata[file_path]
 
-            # Remove all facts in parallel - eliminates N+1 sequential deletions
-            if metadata.fact_ids:
-                await asyncio.gather(
-                    *[_delete_fact_safe(self.kb, fid) for fid in metadata.fact_ids],
-                    return_exceptions=True,
-                )
+            await self._delete_facts(metadata.fact_ids)
 
-            # Remove from metadata
             del self.file_metadata[file_path]
+            logger.info("Removed knowledge for: %s", Path(file_path).relative_to(self.project_root))
 
-            logger.info(
-                "Removed knowledge for: %s",
-                Path(file_path).relative_to(self.project_root),
-            )
+    async def _delete_facts(self, fact_ids: List[str]) -> None:
+        """Delete facts in parallel - eliminates N+1 sequential deletions."""
+        await asyncio.gather(*[_delete_fact_safe(self.kb, fid) for fid in fact_ids], return_exceptions=True)
 
     def _update_metadata_from_results(
         self,
         changed_files: List[Path],
         results: List[Any],
         metrics: SyncMetrics,
-    ) -> None:
-        """Update metadata from processing results (Issue #315 - extracted helper)."""
+    ) -> List[str]:
+        """Record each stored result; returns the fact ids it replaced, now safe to delete (#20026)."""
+        replaced: List[str] = []
         for file_path, result in zip(changed_files, results):
             if isinstance(result, FileMetadata):
+                previous = self.file_metadata.get(str(file_path))
+                replaced += [fid for fid in (previous.fact_ids if previous else []) if fid not in result.fact_ids]
                 self.file_metadata[str(file_path)] = result
                 metrics.total_chunks_processed += result.chunk_count
             elif isinstance(result, Exception):
                 logger.error("Failed to process %s: %s", file_path, result)
+        return replaced
 
     def _expired_paths(self) -> List[str]:
         """Scanned files past their TTL; expiry re-indexes, and outside the scan nothing would."""
@@ -704,7 +702,7 @@ class IncrementalKnowledgeSync:
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             # Update metadata for successful results
-            self._update_metadata_from_results(changed_files, results, metrics)
+            await self._delete_facts(self._update_metadata_from_results(changed_files, results, metrics))
             metrics.gpu_acceleration_used = True
         else:
             logger.info("No files to process - all up to date!")
