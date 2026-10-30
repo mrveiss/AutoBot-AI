@@ -103,6 +103,18 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "floor BELOW the constant it would replace, which #17914 AC2 refuses, and 1.00 fires on "
         "a single index-versus-filesystem skew.",
     ),
+    "autobot-has-no-pro-name": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Every tracked file minus changelogs and the guard itself (#19982); files are added in every PR, "
+        "so an exact floor would fail any new file, and the changelog share grows at its own rate.",
+    ),
+    "autobot-has-no-pro-tier-in-user-text": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "The .vue components and locale JSON of two frontends (#19982), a subset of tracked files; "
+        "every new component grows it, and the rest of the tree grows at its own rate.",
+    ),
     "audio-extension-allowlist": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

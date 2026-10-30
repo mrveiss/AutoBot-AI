@@ -13,6 +13,7 @@ REACH_ROOTS = {
     ),
     "repo_tests/audit_action_vocabulary_18716_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "repo_tests/audit_writer_single_source_17225_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
+    "repo_tests/autobot_has_no_pro_edition_19982_test.py": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "repo_tests/browser_service_routes_exist_19490_test.py": (
         "autobot-backend",
         "autobot-infrastructure",

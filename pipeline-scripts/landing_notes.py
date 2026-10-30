@@ -200,7 +200,7 @@ def landing_from_pr(pr: Dict[str, Any]) -> Landing:
 def note_text(landing: Landing, via: Sequence[int]) -> str:
     short = landing.merge_sha[:10]
     if landing.is_train:
-        line = f"Landed in train {landing.branch} (#{landing.pr_number}, merge `{short}`)"
+        line = f"Landed via the merge train (#{landing.pr_number}, merge `{short}`)"
         if via:
             line += " via " + ", ".join(f"#{n}" for n in via)
     else:
