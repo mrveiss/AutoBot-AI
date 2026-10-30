@@ -193,6 +193,7 @@ import { KnowledgeRepository } from '@/models/repositories'
 import type { SearchResult, KnowledgeDocument } from '@/stores/useKnowledgeStore'
 import { createLogger } from '@/utils/debugUtils'
 import { preferredScrollBehavior } from '@/composables/useReducedMotion'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('KBSearchResultPanel')
 
@@ -396,13 +397,7 @@ function scoreClass(score: number): string {
   return 'score-low'
 }
 
-function formatDate(date: Date | string): string {
-  try {
-    return new Date(date).toLocaleDateString()
-  } catch {
-    return ''
-  }
-}
+const formatDate = createDateFormatter({ kind: 'date', invalidText: '' })
 
 async function copyContent(): Promise<void> {
   if (!viewerContent.value) return

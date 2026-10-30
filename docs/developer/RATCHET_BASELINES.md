@@ -512,10 +512,8 @@ folder cannot read as a clean 0.
   class method/property, with one of those names. `const formatTime = createDateFormatter({...})`
   and `const formatDate = formatDateTime` are bindings of the kit's functions and are not counted.
 - **What the pin holds:** i18n-aware relative-time formatters (the kit's `formatTimeAgo` is
-  English only), formatters whose name says time but that format a duration (#19680, #19929), and sites in files an
-  open PR held when the ratchet landed, and 29 files whose recorded line ceiling lives in
-  `scripts/frontend_file_size_known_large.py` (held by open PRs; the hook wants the ceiling lowered in the
-  commit that shortens the file). Lower `PINS` in the PR that moves one.
+  English only), formatters whose name says time but that format a duration (#19680, #19929), and declarations in files an
+  open PR held when the ratchet landed. Lower `PINS` in the PR that moves one.
 - **Not independently re-derived.** Rule 3 asks for a second enumeration; this ratchet has only the
   detector's, so its count is as good as the regex. The fixtures in the test file are its positive
   and negative controls.

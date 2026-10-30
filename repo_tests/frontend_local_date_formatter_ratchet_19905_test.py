@@ -19,9 +19,7 @@ take their wording from i18n keys with their own thresholds (``formatRelativeTim
 ``formatTimeAgo``, a few ``formatTime``/``formatDate``) -- the kit's ``formatTimeAgo`` is English
 only and has fixed tiers, so they stay until the kit gains an i18n-aware relative formatter
 (#19606); (2) duration formatters that happen to be called ``formatTime`` (#19680, #19929);
-(3) declarations in files held by an open PR when this landed, and in 29 files whose line-count ceiling
-sits in the file-size table that three open PRs also edit (the hook demands the ceiling be lowered in the
-commit that shortens the file).
+(3) declarations in files an open PR held when this landed.
 The pin goes down as each is moved.
 
 **One number, not a per-file table**, for the reason given in
@@ -56,7 +54,7 @@ _DECLARATION = re.compile(
 _COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
 
 # Measured on 00dce2fb4c; lowered as the remaining groups move to the kit.
-PINS = {"local_date_formatter_declarations": 64}
+PINS = {"local_date_formatter_declarations": 32}
 
 
 def _sources(src: Path) -> list[Path]:
