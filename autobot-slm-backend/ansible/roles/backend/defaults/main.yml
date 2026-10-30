@@ -112,6 +112,9 @@ backend_jwt_secret: "autobot-jwt-secret-change-in-production-minimum-32-chars"
 backend_cors_origins: "*"
 # nginx HTTPS port of the frontend, written as AUTOBOT_FRONTEND_TLS_PORT (#19326)
 frontend_tls_port: 443
+frontend_http_port: 80
+# Set false on a fleet whose frontend serves plain HTTP; config.frontend_url follows it (#19326).
+backend_frontend_tls_enabled: true
 # Internal API key shared with SLM backend for proxy authentication (#1779, #3512).
 # REQUIRED for personality and voice proxies — set via Ansible Vault or inventory.
 autobot_internal_api_key: ""

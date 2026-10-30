@@ -104,9 +104,12 @@ PAIRED: tuple[tuple[str, str], ...] = (
 FORBIDDEN: tuple[re.Pattern[str], ...] = (
     re.compile(r"AUTOBOT_FRONTEND_PORT(?:=|:=|:-|[\"']?\s*[:=]\s*[\"']?)(80|443)\b"),
     re.compile(r"^\s*[\"']?frontend_port[\"']?\s*[:=]\s*[\"']?(80|443)\b", re.MULTILINE),
+    re.compile(r"VITE_FRONTEND_PORT(?:=|:=|:-)(?:80\b|443\b|\{\{ *frontend_tls_port)"),
 )
 #: file -> how many sites of a FORBIDDEN shape stay; shrink-only (empty: none remain).
-KNOWN: dict[str, int] = {}
+#: The one left: the SPA builds its OAuth callback from this port on a nginx host, so it cannot go
+#: until the SPA has a served-URL input (#20058).
+KNOWN: dict[str, int] = {f"{_ANSIBLE}/fix-slm-env-ports.yml": 1}
 
 _SUFFIXES = (".py", ".sh", ".yml", ".yaml", ".j2", ".env", ".service")
 _SCAN_ROOTS = (*scan_mod.SCAN_ROOTS,)
