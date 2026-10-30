@@ -86,7 +86,7 @@ export interface DashboardAnalysis {
   resource_utilization: Record<string, number>
 }
 
-export interface DashboardOverview {
+export interface InstallDashboardOverview {
   system_metrics?: SystemMetrics
   gpu_metrics?: GPUMetrics
   npu_metrics?: NPUMetrics
@@ -112,7 +112,7 @@ export interface GithubMetrics {
 
 export interface InstallMetricsState {
   // Core metrics
-  dashboard: Ref<DashboardOverview | null>
+  dashboard: Ref<InstallDashboardOverview | null>
   services: Ref<ServicesSummary | null>
   alerts: Ref<AlertsSummary | null>
   recommendations: Ref<OptimizationRecommendation[]>
@@ -160,7 +160,7 @@ export function useInstallMetrics(
   const api = useApiClient()
 
   // State
-  const dashboard = ref<DashboardOverview | null>(null)
+  const dashboard = ref<InstallDashboardOverview | null>(null)
   const services = ref<ServicesSummary | null>(null)
   const alerts = ref<AlertsSummary | null>(null)
   const recommendations = ref<OptimizationRecommendation[]>([])
@@ -244,7 +244,7 @@ export function useInstallMetrics(
 
   async function fetchDashboard(): Promise<void> {
     try {
-      dashboard.value = await api.get<DashboardOverview>(`${getApiBase()}/monitoring/dashboard/overview`, { circuitBreaker: 'monitoring' })
+      dashboard.value = await api.get<InstallDashboardOverview>(`${getApiBase()}/monitoring/dashboard/overview`, { circuitBreaker: 'monitoring' })
       lastUpdate.value = new Date()
       error.value = null
     } catch (err) {

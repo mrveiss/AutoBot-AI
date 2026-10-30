@@ -82,6 +82,7 @@
     src: "{{ playbook_dir }}/../"
     dest: "{{ autobot.base_dir }}/app/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=.git"
       - "--exclude=__pycache__"
       - "--exclude=*.pyc"
