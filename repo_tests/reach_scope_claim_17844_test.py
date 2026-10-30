@@ -220,6 +220,12 @@ def test_a_declared_scope_that_the_sweep_does_not_reach_is_refused() -> None:
 _DECLARED_SCOPES = {
     "dead-icon-selector-vue-files": ("autobot-frontend/src",),
     "kit-shadow-ts-files-scanned-14908": ("autobot-frontend/src", "autobot-slm-frontend/src"),
+    "duplicate-type-names-ts-files-scanned-14908": (
+        "autobot-frontend/src",
+        "autobot-slm-frontend/src",
+        "libs/autobot-ui",
+    ),
+    "duplicate-util-filenames-scanned-14908": ("autobot-frontend/src/utils", "autobot-slm-frontend/src/utils"),
     "v-html-sanitiser-sinks": (
         "autobot-frontend/src",
         "autobot-slm-frontend/src",
