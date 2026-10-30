@@ -100,12 +100,12 @@
     </div>
 
     <template #actions>
-      <button class="btn btn-ghost" :disabled="busy" @click="onClose">
+      <BaseButton variant="ghost" :disabled="busy" @click="onClose">
         {{ $t('common.cancel') }}
-      </button>
-      <button class="btn btn-primary" :disabled="!canSubmit || busy" @click="submit">
+      </BaseButton>
+      <BaseButton :disabled="!canSubmit || busy" @click="submit">
         {{ busy ? $t('views.plugins.install.installing') : $t('views.plugins.install.install') }}
-      </button>
+      </BaseButton>
     </template>
   </BaseModal>
 </template>
@@ -113,7 +113,7 @@
 <script setup lang="ts">
 import { computed, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import { usePlugins } from '@/composables/usePlugins'
 import { useTabs } from '@/composables/useTabs'
 
@@ -327,39 +327,5 @@ onUnmounted(() => {
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
-}
-
-.btn {
-  padding: var(--spacing-sm) var(--spacing-md);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  border-radius: var(--radius-md);
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition: background var(--duration-150);
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-ghost {
-  background: transparent;
-  border-color: var(--border-default);
-  color: var(--text-primary);
-}
-
-.btn-ghost:hover:not(:disabled) {
-  background: var(--bg-tertiary);
-}
-
-.btn-primary {
-  background: var(--color-info-solid);
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  filter: brightness(1.1);
 }
 </style>
