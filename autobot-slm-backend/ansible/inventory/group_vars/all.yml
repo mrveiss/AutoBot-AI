@@ -317,11 +317,6 @@ nodesource_base_url: "{{ lookup('env', 'AUTOBOT_NODESOURCE_BASE_URL') | default(
 
 # Package repositories
 repositories:
-  # Add NodeSource for Node.js
-  nodejs:
-    key_url: "{{ nodesource_base_url }}/gpgkey/nodesource.gpg.key"
-    repo: "deb {{ nodesource_base_url }}/node_{{ node_major }}.x {{ ansible_facts['distribution_release'] }} main"
-
   # Add Redis repository
   redis:
     key_url: "https://packages.redis.io/gpg"
