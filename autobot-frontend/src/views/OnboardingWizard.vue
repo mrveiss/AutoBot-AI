@@ -12,6 +12,7 @@ OnboardingWizard.vue — First-run UX wizard (Issue #5061)
 -->
 
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
@@ -243,9 +244,9 @@ onMounted(async () => {
       <p class="text-autobot-text-muted mb-6">
         Your preset has been applied. Head to Chat to start using AutoBot.
       </p>
-      <button class="btn-primary" @click="goToChat">
+      <BaseButton @click="goToChat">
         <Icon name="comments" class="mr-2" />Open Chat
-      </button>
+      </BaseButton>
     </div>
 
     <!-- Wizard steps -->
@@ -409,32 +410,29 @@ onMounted(async () => {
 
         <!-- Footer navigation -->
         <div class="wizard-footer">
-          <button
+          <BaseButton variant="secondary"
             v-if="step > 1"
-            class="btn-secondary"
             :disabled="loading"
             @click="prevStep"
           >
             <Icon name="chevron-left" class="mr-1" />Back
-          </button>
+          </BaseButton>
           <div class="flex-1"></div>
-          <button
+          <BaseButton
             v-if="step < 3"
-            class="btn-primary"
             :disabled="!canGoNext"
             @click="nextStep"
           >
             Next<Icon name="chevron-right" class="ml-1" />
-          </button>
-          <button
+          </BaseButton>
+          <BaseButton
             v-if="step === 3"
-            class="btn-primary"
             :disabled="loading || !selectedPreset"
             @click="handleApply"
           >
             <Icon v-if="loading" name="spinner" class="animate-spin mr-2" />
             <span>{{ loading ? 'Applying…' : 'Apply Preset' }}</span>
-          </button>
+          </BaseButton>
         </div>
       </div>
     </template>
@@ -834,51 +832,5 @@ onMounted(async () => {
   padding-top: 1.25rem;
   border-top: 1px solid var(--border-default);
   gap: 0.75rem;
-}
-
-.btn-primary {
-  background: var(--color-accent, var(--onboarding-accent));
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: var(--radius-md);
-  padding: 0.5rem 1.25rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: opacity 0.15s;
-  display: inline-flex;
-  align-items: center;
-}
-
-.btn-primary:hover:not(:disabled) {
-  opacity: 0.88;
-}
-
-.btn-primary:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  background: transparent;
-  color: var(--text-muted);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  padding: 0.5rem 1.25rem;
-  font-size: 0.875rem;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
-  display: inline-flex;
-  align-items: center;
-}
-
-.btn-secondary:hover:not(:disabled) {
-  border-color: var(--color-accent, var(--onboarding-accent));
-  color: var(--text-primary);
-}
-
-.btn-secondary:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
 }
 </style>
