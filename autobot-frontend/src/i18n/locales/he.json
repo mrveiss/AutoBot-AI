@@ -3313,11 +3313,12 @@
       "preservedSuffix": "; {count} preserved"
     },
     "treeNode": {
-      "vectorizeFolderTitle": "Vectorize folder title",
+      "itemsCount": "Items count",
       "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
-      "itemsCount": "Items count",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeFolderTitle": "Vectorize folder title",
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "memoryOrphan": {
       "title": "Title",
