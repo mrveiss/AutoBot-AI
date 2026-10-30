@@ -14,7 +14,7 @@ websockets==15.0.1
 # is the platform's SSOT config module (`from autobot_shared.ssot_config import
 # config`); without this, importing it — and therefore nearly anything that
 # reads config — fails collection outright.
-pydantic-settings>=2.16.0
+pydantic-settings>=2.16.1
 # #16394: declared in autobot-slm-backend/requirements.txt
 # (jinja2>=3.1.2,<4.0.0). autobot-slm-backend/tests/test_cleanup_wrong_node_15822.py:29
 # does an unconditional `import jinja2` and calls `jinja2.Environment(...)` for
