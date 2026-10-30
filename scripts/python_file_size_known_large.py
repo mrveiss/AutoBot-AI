@@ -121,7 +121,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/orchestration.py": 610,
     "autobot-backend/api/playwright.py": 877,
     "autobot-backend/api/redis_mcp/tools.py": 658,
-    "autobot-backend/api/schemas_agent.py": 2216,
+    "autobot-backend/api/schemas_agent.py": 2212,
     "autobot-backend/api/schemas_analytics.py": 3533,
     "autobot-backend/api/schemas_chat.py": 702,
     "autobot-backend/api/schemas_code.py": 3257,
@@ -234,7 +234,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/knowledge/tags.py": 834,
     "autobot-backend/knowledge_sync_incremental.py": 883,
     "autobot-backend/llc/adapters/tests/test_claude_code_adapter.py": 602,
-    "autobot-backend/llc/api/companies.py": 1718,
+    "autobot-backend/llc/api/companies.py": 1671,
     "autobot-backend/llc/api/roles.py": 713,
     "autobot-backend/llc/api/sprints.py": 1223,
     "autobot-backend/llc/api/work_items.py": 1399,  # #19582: comment wake moved into the service
