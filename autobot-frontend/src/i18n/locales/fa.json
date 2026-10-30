@@ -3980,7 +3980,9 @@
       "loading": "Loading configuration...",
       "emailHint": "Comma-separated email addresses",
       "selectWorkflow": "Workflow",
-      "channelMappingHint": "Select which channels receive notifications for each event type."
+      "channelMappingHint": "Select which channels receive notifications for each event type.",
+      "invalidEmail": "نشانی ایمیل نامعتبر: {emails}",
+      "invalidUrl": "قالب URL نامعتبر است"
     },
     "modal": {
       "saveWorkflowAriaLabel": "Save workflow",
@@ -4280,7 +4282,8 @@
       "emergencyKillFailed": "❌ توقف اضطراری ناموفق بود: {message}",
       "interrupted": "^C (فرایند توسط کاربر قطع شد)",
       "error": "خطا: {error}"
-    }
+    },
+    "urlCopied": "نشانی URL ترمینال در کلیپ‌بورد کپی شد!"
   },
   "manpage": {
     "manager": {
@@ -5512,7 +5515,10 @@
       "thinkingOffLabel": "thinking Off",
       "thinkingOn": "Thinking on",
       "thinkingOnLabel": "thinking On",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "fileTooLarge": "فایل «{name}» بیش از حد بزرگ است (حداکثر {max})",
+      "voiceUnsupported": "ورودی صوتی به Chrome، Edge یا Safari 15+ نیاز دارد. رونویسی در این مرورگر در دسترس نیست.",
+      "micDenied": "دسترسی به میکروفون رد شد. لطفاً در تنظیمات مرورگر اجازه دسترسی به میکروفون را بدهید."
     },
     "visualBrowser": {
       "disconnected": "Disconnected",
@@ -7289,7 +7295,8 @@
       "listView": "List View",
       "refreshAriaLabel": "Refresh files",
       "errorRenamingFile": "Error renaming file",
-      "errorLoadingContents": "Error loading contents"
+      "errorLoadingContents": "Error loading contents",
+      "uploadFailedHint": "لطفاً محدودیت‌های اندازه فایل و الزامات قالب را بررسی کنید"
     },
     "fileTypes": {
       "shell": "Shell Script",
