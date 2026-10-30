@@ -54,10 +54,10 @@
     </form>
 
     <template #actions>
-      <button type="button" class="btn btn-ghost" @click="emit('close')">{{ t('common.cancel') }}</button>
-      <button type="submit" class="btn btn-primary" :disabled="submitting || !agentName" @click="submit">
+      <BaseButton variant="ghost" type="button" @click="emit('close')">{{ t('common.cancel') }}</BaseButton>
+      <BaseButton type="submit" :disabled="submitting || !agentName" @click="submit">
         {{ submitting ? t('hireAgent.hiring') : t('hireAgent.hire') }}
-      </button>
+      </BaseButton>
     </template>
   </BaseModal>
 </template>
@@ -66,7 +66,7 @@
 import { ref } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import { BaseModal, BaseSwitch } from '@autobot/ui'
+import { BaseModal, BaseSwitch, BaseButton } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import AdapterTypeSelect from './AdapterTypeSelect.vue'
 const { t } = useI18n()
@@ -145,29 +145,5 @@ async function submit(): Promise<void> {
   margin: 0;
   font-size: 0.8rem;
   color: var(--color-error);
-}
-
-.btn {
-  padding: 0.45rem 0.9rem;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  border: 1px solid transparent;
-}
-
-.btn-ghost {
-  background: transparent;
-  border-color: var(--border-default);
-  color: var(--text-secondary);
-}
-
-.btn-primary {
-  background: var(--color-accent);
-  color: var(--color-on-accent);
-}
-
-.btn-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 </style>
