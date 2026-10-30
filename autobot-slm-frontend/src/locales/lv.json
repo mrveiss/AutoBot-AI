@@ -3374,6 +3374,7 @@
       "noRepositoriesRegisteredAdd": "No repositories registered. Add a skill repo to install community skills.",
       "skills": "Skills",
       "sync": "Sinhronizēt",
+      "tableLabel": "Skill repositories",
       "type": "Type",
       "uRL": "URL"
     },
