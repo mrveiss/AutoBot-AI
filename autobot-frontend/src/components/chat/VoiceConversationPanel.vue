@@ -571,7 +571,7 @@ onMounted(async () => {
 /* Mic button */
 .voice-panel__mic-btn {
   position: relative;
-  z-index: 1;
+  z-index: var(--z-raised);
   width: var(--spacing-12);
   height: var(--spacing-12);
   border-radius: 50%;
