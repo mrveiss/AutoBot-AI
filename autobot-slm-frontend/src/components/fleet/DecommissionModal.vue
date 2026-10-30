@@ -550,7 +550,7 @@ function handleMigrateClick() {
 }
 
 .btn-error {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: white;
 }
 
