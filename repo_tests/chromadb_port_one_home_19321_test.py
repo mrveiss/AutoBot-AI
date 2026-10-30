@@ -31,6 +31,7 @@ from pathlib import Path
 
 import yaml
 from repo_tests._paths import repo_root
+from repo_tests._pinned_sweep import masked
 from repo_tests._reach import declare
 
 from autobot_shared.ssot_config import PortConfig
@@ -101,24 +102,6 @@ def named_definitions(text: str) -> list[int]:
     for line in text.splitlines():
         out.extend(int(m) for m in _NAMED.findall(_strip_comment(line)))
     return out
-
-
-def masked(text: str, pattern: str) -> str:
-    """*text* with each capture of *pattern* overwritten by ``_``: the pinned sites, and only them.
-
-    The capture, not the whole match, so a definition inside a multi-line pin's context is still
-    swept, and every line keeps its length and number.
-    """
-
-    def _blank(m: re.Match[str]) -> str:
-        out, last = [], m.start()
-        for group in range(1, (m.re.groups or 0) + 1):
-            if m.start(group) >= 0:
-                out += [text[last : m.start(group)], "_" * (m.end(group) - m.start(group))]
-                last = m.end(group)
-        return "".join(out) + text[last : m.end()]
-
-    return re.sub(pattern, _blank, text, flags=re.M)
 
 
 def unrecorded_definitions(texts: dict[str, str]) -> list[str]:
