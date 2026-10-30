@@ -41,4 +41,17 @@ describe('TabbedRouteLayout', () => {
     await build().findAll('[role="tab"]')[0].trigger('click')
     expect(push).toHaveBeenCalledWith('/x/a')
   })
+
+  it('renders the secondary form when nested: no second heading or page shell, tabs and content kept', () => {
+    const w = mount(TabbedRouteLayout, {
+      props: { title: 'T', tabsLabel: 'Sections', tabs, defaultTab: 'a', poller: {} as never, nested: true },
+      slots: { 'header-end': '<span class="end" />' },
+      global: { stubs: { 'router-view': { template: '<div class="view" />' } } },
+    })
+    expect(w.find('h1').exists()).toBe(false)
+    expect(w.find('.h-full').exists()).toBe(false)
+    expect(w.findAll('[role="tab"]')).toHaveLength(2)
+    expect(w.find('.end').exists()).toBe(true)
+    expect(w.find('.view').exists()).toBe(true)
+  })
 })
