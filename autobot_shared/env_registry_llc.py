@@ -41,7 +41,7 @@ env_registry.register_env_var(
         type=int,
         default=120,
         description=(
-            "Seconds after an LLC CLI agent spawns before its output file must have "
+            "Seconds after a Company OS CLI agent spawns before its output file must have "
             "received at least one byte, or the run is killed as stalled (GH#13099). "
             "The Claude Code and Copilot CLIs both emit their first JSONL line within "
             "a few seconds of a cold start; 120s is generous headroom for that before "
@@ -57,7 +57,7 @@ env_registry.register_env_var(
         type=int,
         default=600,
         description=(
-            "Seconds of silence in an LLC CLI agent's output file, after its first "
+            "Seconds of silence in a Company OS CLI agent's output file, after its first "
             "byte, before the run is killed as stalled rather than left to burn out "
             "the full run timeout (GH#13099). Both CLIs stream output line-buffered, "
             "so a healthy run keeps producing it; the one legitimate quiet stretch is "
@@ -74,7 +74,7 @@ env_registry.register_env_var(
         type=str,
         default="* * * * *",
         description=(
-            "Cron a hired LLC agent wakes on when the hire request does not name one "
+            "Cron a hired Company OS agent wakes on when the hire request does not name one "
             "(#15907, owner ruling 2026-09-28). The scheduler's gate is "
             "heartbeat_enabled = true AND heartbeat_cron IS NOT NULL, and this field "
             "previously defaulted to NULL, so an agent hired with the flag set and no "
