@@ -70,7 +70,7 @@ Behavior (enforced on **every** login, not just first JIT):
   made (avoids accidental mass-revocation when the claim is temporarily absent).
 - Role names resolve against org-scoped roles first, falling back to system roles
   (`org_id IS NULL`). Names with no matching role are skipped and logged.
-- LLC `MembershipRole` is **out of scope** — group mapping grants instance roles only.
+- Company OS `MembershipRole` is **out of scope** — group mapping grants instance roles only.
 
 Pre-requisite: request the `groups` scope (OIDC) or configure
 `attribute_mapping.groups` (SAML/LDAP) so groups reach AutoBot.
