@@ -185,3 +185,7 @@ export {
 export type { LedgerSection, LedgerSectionStatus, LedgerAskOutcome } from './src/utils/ledger'
 export { default as LedgerSectionState } from './src/components/LedgerSectionState.vue'
 export type { LedgerStateLabels } from './src/components/LedgerSectionState.vue'
+
+// The one HTTP transport under both apps' ApiClients; each app subclasses it for auth (#14908).
+export { ApiClientBase, withQuery, parseRetryAfterMs, SERVICE_UNAVAILABLE_STATUS } from './src/utils/ApiClientBase'
+export type { TransportRequestOptions, RawRequestOptions, TransportLogger } from './src/utils/ApiClientBase'

@@ -134,7 +134,6 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/services/TerminalService.ts": 1137,
     "autobot-frontend/src/stores/useChatStore.ts": 1176,
     "autobot-frontend/src/stores/useKnowledgeStore.ts": 809,
-    "autobot-frontend/src/utils/ApiClient.ts": 782,
     "autobot-frontend/src/utils/RumAgent.ts": 857,
     "autobot-frontend/src/utils/VisionMultimodalApiClient.ts": 663,
     "autobot-frontend/src/utils/debugUtils.ts": 620,

@@ -1,6 +1,6 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
-import { RETRY_BACKOFF, backoffDelay, httpErrorFrom, isHttpClientError, parseJsonBody } from '@autobot/ui'
+import { ApiClientBase, httpErrorFrom, type RawRequestOptions, type TransportRequestOptions } from '@autobot/ui'
 import appConfig from '@/config/AppConfig.js';
 import { createLogger } from '@/utils/debugUtils';
 import { getApiBase } from '@/config/ssot-config';
@@ -19,19 +19,8 @@ export interface UploadProgressEvent {
   lengthComputable?: boolean;
 }
 
-export interface RequestOptions {
-  headers?: Record<string, string>;
-  timeout?: number;
-  maxRetries?: number;
+export interface RequestOptions extends TransportRequestOptions {
   onUploadProgress?: (progressEvent: UploadProgressEvent) => void;
-  responseType?: string;
-  signal?: AbortSignal;
-  /**
-   * When true, the client does not emit a WARN log on final failure. Use for
-   * endpoints whose absence/timeout is handled gracefully by the caller
-   * (optional widgets, health probes) so they don't generate console noise.
-   */
-  suppressErrorLog?: boolean;
   /** Opt in to fail-fast circuit breaking, keyed by the dependency name (#11682). */
   circuitBreaker?: string;
 }
@@ -81,23 +70,18 @@ export interface ChatMessageResponse {
 // Issue #598: All timeouts sourced from AppConfig (SINGLE SOURCE OF TRUTH)
 // Convenience methods (get/post/put/delete) return parsed JSON data.
 // Use rawRequest() for raw Response access (streaming, blobs).
-export class ApiClient {
+export class ApiClient extends ApiClientBase<RequestOptions> {
   private baseUrl: string;
-  private defaultHeaders: Record<string, string>;
   private baseUrlPromise: Promise<string> | null;
-  private defaultTimeout: number;
   private settings: Record<string, unknown>;
   // BUG5: cache the /api/settings/ response for the session so it isn't
   // re-fetched (and re-timed-out) on every route navigation.
   private _apiSettingsCache: Record<string, unknown> | null = null;
 
   constructor() {
+    super(appConfig.getTimeout('default'), logger);
     this.baseUrl = '';
-    this.defaultHeaders = {
-      'Content-Type': 'application/json',
-    };
     this.baseUrlPromise = null;
-    this.defaultTimeout = appConfig.getTimeout('default');
     this.settings = this._loadSettings();
     // Don't call initializeBaseUrl() in constructor to avoid circular dependency
     // It will be called lazily on first API request
@@ -106,11 +90,6 @@ export class ApiClient {
   // Public setter for base URL (used by plugin configuration)
   setBaseUrl(url: string): void {
     this.baseUrl = url;
-  }
-
-  // Public setter for default timeout (used by plugin configuration)
-  setTimeout(timeout: number): void {
-    this.defaultTimeout = timeout;
   }
 
   updateBaseUrl(newBaseUrl: string): void {
@@ -209,17 +188,26 @@ export class ApiClient {
   }
 
   // ==================================================================================
-  // AUTH TOKEN — retrieves JWT from localStorage (#827)
+  // AUTH, 401 POLICY AND REQUEST HEADERS — the app-specific parts of the kit transport
   // ==================================================================================
 
-  private _getAuthToken(): string | null {
+  protected resolveBaseUrl(): Promise<string> {
+    return this.ensureBaseUrl();
+  }
+
+  // JWT from localStorage (#827)
+  protected getAuthToken(): string | null {
     return readStoredAuthToken();
+  }
+
+  protected isAuthEndpoint(endpoint: string): boolean {
+    return endpoint.includes(`${getApiBase()}/auth/`);
   }
 
   // Handle 401 — clear stored auth and redirect to login (#827).
   // Only destructive when the request carried a bearer token (#10750 A12):
   // a 401 on a token-less background call is not a session rejection.
-  private _handleUnauthorized(endpoint: string, tokenWasAttached: boolean): void {
+  protected handleUnauthorized(endpoint: string, tokenWasAttached: boolean): void {
     if (!tokenWasAttached) {
       logger.debug(
         '401 on token-less request — not clearing session (no session to invalidate):',
@@ -244,274 +232,29 @@ export class ApiClient {
     }
   }
 
-  // ==================================================================================
-  // RAW REQUEST — returns Response object (for streaming, blobs, etc.)
-  // ==================================================================================
+  // Inject the selected company as org/tenant context (#10750 A5). Omitted
+  // when no company is selected, so non-LLC requests are unaffected.
+  protected decorateHeaders(headers: Record<string, string>): void {
+    const orgId = getSelectedCompanyId();
+    if (orgId && !headers['X-Organization-Id']) {
+      headers['X-Organization-Id'] = orgId;
+    }
+  }
 
-  async rawRequest(endpoint: string, options: RequestOptions & {
-    method?: string;
-    body?: unknown;
-  } = {}): Promise<Response> {
+  // Never retry a GET the circuit breaker refused, as well as 4xx.
+  protected isNonRetryable(error: Error): boolean {
+    return super.isNonRetryable(error) || error instanceof CircuitBreakerError;
+  }
+
+  protected uploadTimeout(): number {
+    return appConfig.getTimeout('upload');
+  }
+
+  // Raw Response access (streaming, blobs); `circuitBreaker` opts in to fail-fast (#11682).
+  async rawRequest(endpoint: string, options: RawRequestOptions<RequestOptions> = {}): Promise<Response> {
     const key = options.circuitBreaker;
-    if (!key) return this._send(endpoint, options);
-    return runWithCircuitBreaker(key, () => this._send(endpoint, options));
-  }
-
-  private async _send(endpoint: string, options: RequestOptions & {
-    method?: string;
-    body?: unknown;
-  }): Promise<Response> {
-    const {
-      method = 'GET',
-      headers = {},
-      body,
-      timeout = options.timeout || this.defaultTimeout,
-      signal: externalSignal,
-    } = options;
-
-    const baseUrl = await this.ensureBaseUrl();
-    const url = baseUrl ? `${baseUrl}${endpoint}` : endpoint;
-
-    const controller = new AbortController();
-    let timedOut = false;
-    const timeoutId = window.setTimeout(() => {
-      timedOut = true;
-      controller.abort();
-    }, timeout);
-
-    // Forward external cancellation into the internal controller (#6257)
-    let externalAbortHandler: (() => void) | null = null;
-    if (externalSignal) {
-      if (externalSignal.aborted) {
-        controller.abort();
-      } else {
-        externalAbortHandler = () => controller.abort();
-        externalSignal.addEventListener('abort', externalAbortHandler);
-      }
-    }
-
-    const cleanup = () => {
-      clearTimeout(timeoutId);
-      if (externalSignal && externalAbortHandler) {
-        externalSignal.removeEventListener('abort', externalAbortHandler);
-      }
-    };
-
-    try {
-      const fetchOptions: RequestInit = {
-        method,
-        headers: { ...this.defaultHeaders, ...headers },
-        signal: controller.signal,
-      };
-
-      // Inject auth token if available (#827)
-      const authToken = this._getAuthToken();
-      if (authToken) {
-        const hdrs = fetchOptions.headers as Record<string, string>;
-        hdrs['Authorization'] = `Bearer ${authToken}`;
-      }
-
-      // Inject the selected company as org/tenant context (#10750 A5). Omitted
-      // when no company is selected, so non-LLC requests are unaffected.
-      const orgId = getSelectedCompanyId();
-      if (orgId) {
-        const orgHdrs = fetchOptions.headers as Record<string, string>;
-        if (!orgHdrs['X-Organization-Id']) {
-          orgHdrs['X-Organization-Id'] = orgId;
-        }
-      }
-
-      // Handle body — support FormData (don't stringify, remove Content-Type)
-      if (body instanceof FormData) {
-        fetchOptions.body = body;
-        const hdrs = fetchOptions.headers as Record<string, string>;
-        delete hdrs['Content-Type'];
-      } else if (body !== undefined) {
-        fetchOptions.body = JSON.stringify(body);
-      }
-
-      const response = await fetch(url, fetchOptions);
-      cleanup();
-
-      // Handle 401 — redirect to login (skip for auth endpoints).
-      // Pass whether THIS request actually carried a bearer token so the handler
-      // only clears + redirects on a genuine rejection of an authenticated request
-      // (#10750 A12). Token-less background/optional probes (e.g. the load-time
-      // telemetry-consent check or version poll) that 401 must NOT log the user out.
-      if (
-        response.status === 401 &&
-        !endpoint.includes(`${getApiBase()}/auth/`)
-      ) {
-        this._handleUnauthorized(endpoint, authToken != null);
-      }
-
-      return response;
-    } catch (error) {
-      cleanup();
-      if (error instanceof Error && error.name === 'AbortError') {
-        if (timedOut) throw new Error(`Request timeout after ${timeout}ms`);
-        throw error;
-      }
-      throw error;
-    }
-  }
-
-  // ==================================================================================
-  // CONVENIENCE METHODS — return parsed JSON data (not Response)
-  // ==================================================================================
-
-  // GET with retry logic and exponential backoff
-  async get<T = unknown>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-    let lastError: Error | undefined;
-    const maxRetries = options.maxRetries !== undefined ? options.maxRetries : 3;
-    let attemptsMade = 0;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      attemptsMade = attempt;
-      try {
-        const response = await this.rawRequest(endpoint, {
-          method: 'GET', ...options,
-        });
-
-        if (!response.ok) {
-          throw await httpErrorFrom(response);
-        }
-
-        return await response.json();
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error(String(error));
-        // Per-attempt failures are debug-level only — a single summary line is
-        // logged once below so retries don't flood the console (BUG4/BUG5).
-        logger.debug(
-          `GET attempt ${attempt} failed for ${endpoint}: ${lastError.message}`
-        );
-
-        // Don't retry 4xx client errors — they won't succeed on retry.
-        if (isHttpClientError(lastError) || lastError instanceof CircuitBreakerError) {
-          break;
-        }
-
-        if (attempt < maxRetries) {
-          await new Promise(resolve => window.setTimeout(resolve, backoffDelay(attempt - 1, RETRY_BACKOFF)));
-        }
-      }
-    }
-
-    // Single final log with the ACTUAL attempt count (was always "maxRetries").
-    // Callers that handle the failure gracefully pass suppressErrorLog.
-    if (!options.suppressErrorLog) {
-      logger.warn(
-        `GET failed for ${endpoint} after ${attemptsMade} attempt(s): ${lastError?.message}`
-      );
-    }
-    throw lastError;
-  }
-
-  // POST — returns parsed JSON (handles 204 No Content: #822)
-  async post<T = unknown>(endpoint: string, data?: unknown, options: RequestOptions = {}): Promise<T> {
-    const response = await this.rawRequest(endpoint, {
-      method: 'POST', body: data, ...options,
-    });
-
-    if (!response.ok) {
-      throw await httpErrorFrom(response);
-    }
-
-    return parseJsonBody<T>(response);
-  }
-
-  // PUT — returns parsed JSON (handles 204 No Content: #822)
-  async put<T = unknown>(endpoint: string, data?: unknown, options: RequestOptions = {}): Promise<T> {
-    const response = await this.rawRequest(endpoint, {
-      method: 'PUT', body: data, ...options,
-    });
-
-    if (!response.ok) {
-      throw await httpErrorFrom(response);
-    }
-
-    return parseJsonBody<T>(response);
-  }
-
-  // DELETE — returns parsed JSON (handles empty responses)
-  async delete<T = unknown>(endpoint: string, options: RequestOptions = {}): Promise<T> {
-    const response = await this.rawRequest(endpoint, {
-      method: 'DELETE', ...options,
-    });
-
-    if (!response.ok) {
-      throw await httpErrorFrom(response);
-    }
-
-    return parseJsonBody<T>(response);
-  }
-
-  // PATCH — partial update, returns parsed JSON (handles 204 No Content)
-  async patch<T = unknown>(endpoint: string, data?: unknown, options: RequestOptions = {}): Promise<T> {
-    const response = await this.rawRequest(endpoint, {
-      method: 'PATCH', body: data, ...options,
-    });
-
-    if (!response.ok) {
-      throw await httpErrorFrom(response);
-    }
-
-    return parseJsonBody<T>(response);
-  }
-
-  // ==================================================================================
-  // FILE UPLOAD with progress tracking
-  // ==================================================================================
-
-  async uploadFile(
-    endpoint: string,
-    file: File,
-    progressCallback: ((progress: number) => void) | null = null,
-    options: { fields?: Record<string, string>; timeout?: number } = {}
-  ): Promise<Record<string, unknown>> {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    if (options.fields) {
-      Object.entries(options.fields).forEach(([key, value]) => {
-        formData.append(key, value);
-      });
-    }
-
-    const baseUrl = await this.ensureBaseUrl();
-    const url = baseUrl ? `${baseUrl}${endpoint}` : endpoint;
-    const xhr = new XMLHttpRequest();
-
-    const uploadPromise = new Promise<Record<string, unknown>>((resolve, reject) => {
-      xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          try {
-            resolve(JSON.parse(xhr.responseText));
-          } catch {
-            resolve({ success: true });
-          }
-        } else {
-          reject(new Error(`Upload failed: HTTP ${xhr.status}`));
-        }
-      };
-
-      xhr.onerror = () => reject(new Error('Upload failed: Network error'));
-      xhr.ontimeout = () => reject(new Error('Upload failed: Timeout'));
-
-      if (progressCallback) {
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            progressCallback(Math.round((e.loaded / e.total) * 100));
-          }
-        };
-      }
-
-      xhr.open('POST', url);
-      xhr.timeout = options.timeout || appConfig.getTimeout('upload');
-      xhr.send(formData);
-    });
-
-    return await uploadPromise;
+    if (!key) return super.rawRequest(endpoint, options);
+    return runWithCircuitBreaker(key, () => super.rawRequest(endpoint, options));
   }
 
   // ==================================================================================
