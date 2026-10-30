@@ -74,6 +74,7 @@
     src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-frontend/"
     dest: "{{ frontend_install_dir }}/autobot-frontend/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=node_modules"
       - "--exclude=dist"
       - "--exclude=__pycache__"
@@ -116,6 +117,7 @@
     src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-plugins/"
     dest: "{{ frontend_install_dir }}/autobot-plugins/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=node_modules"
       - "--exclude=dist"
       - "--exclude=.git"
@@ -140,6 +142,7 @@
     src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/libs/"
     dest: "{{ frontend_install_dir }}/libs/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=node_modules"
       - "--exclude=dist"
       - "--exclude=.git"
