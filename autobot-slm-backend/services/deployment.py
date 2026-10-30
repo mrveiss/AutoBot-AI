@@ -443,7 +443,7 @@ class DeploymentService:
             return encrypted_password
 
     async def _handle_enrollment_success(self, db: AsyncSession, node: Node, output: str) -> None:
-        """Update node status and clear password after successful enrollment.
+        """Update node status after successful enrollment; the stored password stays (#19483).
 
         Helper for enroll_node (Issue #665).
 
@@ -458,11 +458,7 @@ class DeploymentService:
         # Update auth method to key-based (SSH keys deployed during enrollment)
         node.auth_method = "key"
 
-        # Clear stored password from extra_data (no longer needed)
-        if node.extra_data and "ssh_password" in node.extra_data:
-            extra_data = dict(node.extra_data)
-            del extra_data["ssh_password"]
-            node.extra_data = extra_data
+        # #19483: no automated path deletes a stored credential (#17038). It stays encrypted at rest.
 
         await db.commit()
 

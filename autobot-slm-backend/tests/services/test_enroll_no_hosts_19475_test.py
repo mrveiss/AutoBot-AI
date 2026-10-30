@@ -132,8 +132,8 @@ def test_failed_enrollment_keeps_the_password_and_original_identity(deployment, 
     assert node.status == deployment.NodeStatus.ERROR.value
 
 
-def test_proven_enrollment_clears_the_password_and_switches_to_key(deployment, monkeypatch, tmp_path) -> None:
+def test_proven_enrollment_keeps_the_password_and_switches_to_key(deployment, monkeypatch, tmp_path) -> None:
     ok, node = _enroll(deployment, monkeypatch, tmp_path, _GOOD_OUTPUT)
     assert ok is True
-    assert "ssh_password" not in node.extra_data
+    assert node.extra_data == {"ssh_password": "stored-secret"}  # pragma: allowlist secret
     assert node.auth_method == "key"
