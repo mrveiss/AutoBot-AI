@@ -1152,6 +1152,11 @@
     "editMaintenanceWindow": "Edit Maintenance Window",
     "editWindow": "Edit window",
     "endTime": "End Time",
+    "failedToActivateWindow": "Failed to activate maintenance window",
+    "failedToCompleteWindow": "Failed to complete maintenance window",
+    "failedToDeleteWindow": "Failed to delete maintenance window",
+    "failedToDrainNode": "Failed to drain node. Please try again.",
+    "failedToResumeNode": "Failed to resume node. Please try again.",
     "fleetWideMaintenance": "Fleet-Wide Maintenance",
     "leaveEmptyForFleet": "Leave empty for fleet-wide maintenance",
     "loadingMaintenanceWindows": "Loading maintenance windows...",
@@ -3336,7 +3341,9 @@
     "yourAutoBotFleetIs": "Your AutoBot fleet is configured and ready to use.",
     "yourSLMServiceLifecycle": "Your SLM (Service Lifecycle Manager) is up and running. This wizard\n          will guide you through adding and configuring your fleet nodes.",
     "provisioningFailed": "Provisioning failed",
-    "retryProvisioning": "Retry provisioning"
+    "retryProvisioning": "Retry provisioning",
+    "failedToSaveKeys": "Failed to save API keys. Check the console for details.",
+    "failedToAddNode": "Failed to add node"
   },
   "skills": {
     "approvalsTab": {
