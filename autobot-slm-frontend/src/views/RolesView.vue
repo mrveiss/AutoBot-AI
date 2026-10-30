@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { BaseAlert, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseModal, HttpError } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -150,7 +150,7 @@ async function apiFetch<T>(
     const response = await slmApiClient.rawRequest(path, options)
     if (!response.ok) {
       const body = await response.json().catch(() => ({}))
-      throw new Error(body.detail || `HTTP ${response.status}`)
+      throw HttpError.withDetail(response.status, response.statusText, body.detail || undefined)
     }
     return await response.json()
   } catch (err) {
