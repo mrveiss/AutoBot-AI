@@ -19,6 +19,8 @@ import pytest
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_lines
+
 REPO_ROOT = repo_root()
 COMPOSE = REPO_ROOT / "docker-compose.yml"
 LEGACY = ("AUTOBOT_DB_USER", "AUTOBOT_DB_NAME", "AUTOBOT_USERS_DB_NAME")
@@ -52,9 +54,8 @@ def _users_url_faults(text: str) -> list[str]:
 
 def _bare_legacy_uses(text: str) -> list[str]:
     """Legacy names used outside their alias chain; the deprecation report line is their other home."""
-    lines = [line for line in text.splitlines() if "AUTOBOT_COMPOSE_LEGACY_DB_VARS" not in line]
-    lines = [line for line in lines if not line.lstrip().startswith("#")]
-    body = "\n".join(lines)
+    lines = code_lines(text, name="compose.yml")
+    body = "\n".join(line.text for line in lines if "AUTOBOT_COMPOSE_LEGACY_DB_VARS" not in line.text)
     found = []
     for name, chain in ALIAS_OF.items():
         if name in re.sub(chain, "", body):
