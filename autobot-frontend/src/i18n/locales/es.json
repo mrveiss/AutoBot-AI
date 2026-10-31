@@ -8984,8 +8984,6 @@
       "unavailableTitle": "El planificador de flujos de trabajo no está disponible",
       "unavailableHint": "Esta función está desactivada en su espacio de trabajo, así que aún no hay nada que mostrar.",
       "statusFlow": "Progreso del plan",
-      "statusNotAvailable": "Este plan está {status}. La aprobación y la conversión aún no están disponibles, así que se muestra solo de lectura.",
-      "convertNotAvailable": "Crear flujos de trabajo desde un plan aún no está disponible.",
       "status": {
         "draft": "Borrador",
         "measured": "Medido",
@@ -9072,7 +9070,58 @@
         "by_hand": "A mano"
       },
       "gate": {
-        "missing": "Aún falta"
+        "missing": "Aún falta",
+        "title": "¿Listo para crear?",
+        "unknown": "Otra comprobación",
+        "state": {
+          "met": "Cumplido",
+          "open": "Abierto",
+          "pending": "Aún sin comprobar"
+        },
+        "name": {
+          "G1": "El mapa es válido",
+          "G2": "Cada paso está medido",
+          "G3": "El paso elegido está desglosado",
+          "G4": "Cada subpaso y caso límite tiene etiqueta",
+          "G5": "Lista «A mano» leída y pasos de IA cubiertos por aprobaciones",
+          "G6": "La vista previa no tiene errores",
+          "G7": "Usted aprobó este plan",
+          "converted": "Los flujos de trabajo están creados"
+        }
+      },
+      "readOnly": "Este plan está {status}, así que los pasos 1 a 4 son de solo lectura.",
+      "firstProcess": {
+        "title": "Su empresa está lista",
+        "body": "Planifique su primer proceso: represéntelo, mídalo y elija el número que quiere mejorar.",
+        "plan": "Planificar mi primer proceso",
+        "later": "Más tarde"
+      },
+      "convert": {
+        "notReady": "Termine primero los pasos 1 a 4. Las comprobaciones de arriba muestran lo que falta.",
+        "previewTitle": "Qué se creará (vista previa, aún no existe nada)",
+        "createdTitle": "Qué se creó",
+        "counts": "Flujos de trabajo: {workflows}. Procesos: {processes}.",
+        "ownerLane": "Responsable: {lane}",
+        "errors": "Errores por corregir antes de aprobar",
+        "warnings": "Advertencias",
+        "documented": "Se conserva como texto del manual, no se construye:",
+        "failedProposals": "No se pudieron presentar {count} propuestas de línea de IA. Reintente para presentarlas.",
+        "turnOnNotAvailable": "Activar los flujos de trabajo aún no está disponible: nada los ejecuta hasta entonces.",
+        "openWorkflows": "Abrir flujos de trabajo",
+        "unavailable": "Esta acción no está disponible: el Planificador de flujos de trabajo está desactivado en su espacio de trabajo o el plan ya no existe.",
+        "blocked": "Aún no está listo. Las comprobaciones de arriba muestran lo que falta.",
+        "approvedBy": "Aprobado por {by} el {at}.",
+        "preview": "Ver qué se creará",
+        "previewAgain": "Actualizar la vista previa",
+        "approve": "Aprobar",
+        "create": "Crear flujos de trabajo",
+        "retry": "Reintentar propuestas de línea de IA",
+        "approveTitle": "¿Aprobar este plan?",
+        "approveMessage": "Usted aprueba la vista previa mostrada. Cualquier edición posterior del plan anula esta aprobación.",
+        "previewFailed": "No se pudo generar la vista previa.",
+        "approveFailed": "No se pudo aprobar el plan.",
+        "convertFailed": "No se pudieron crear los flujos de trabajo.",
+        "retryFailed": "No se pudieron reintentar las propuestas de línea de IA."
       }
     }
   },

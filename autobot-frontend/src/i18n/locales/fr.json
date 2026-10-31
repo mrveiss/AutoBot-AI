@@ -8984,8 +8984,6 @@
       "unavailableTitle": "Le planificateur de workflows n'est pas disponible",
       "unavailableHint": "Cette fonctionnalité est désactivée pour votre espace de travail, il n'y a donc encore rien à afficher.",
       "statusFlow": "Avancement du plan",
-      "statusNotAvailable": "Ce plan est {status}. L'approbation et la conversion ne sont pas encore disponibles ; il est donc en lecture seule.",
-      "convertNotAvailable": "Créer des workflows à partir d'un plan n'est pas encore disponible.",
       "status": {
         "draft": "Brouillon",
         "measured": "Mesuré",
@@ -9072,7 +9070,58 @@
         "by_hand": "À la main"
       },
       "gate": {
-        "missing": "Il manque encore"
+        "missing": "Il manque encore",
+        "title": "Prêt à créer ?",
+        "unknown": "Autre contrôle",
+        "state": {
+          "met": "Satisfait",
+          "open": "Ouvert",
+          "pending": "Pas encore contrôlé"
+        },
+        "name": {
+          "G1": "La carte est valide",
+          "G2": "Chaque étape est mesurée",
+          "G3": "L'étape choisie est détaillée",
+          "G4": "Chaque sous-étape et cas limite est étiqueté",
+          "G5": "Liste « À la main » lue et étapes d'IA couvertes par des approbations",
+          "G6": "L'aperçu ne contient aucune erreur",
+          "G7": "Vous avez approuvé ce plan",
+          "converted": "Les workflows sont créés"
+        }
+      },
+      "readOnly": "Ce plan est {status} : les étapes 1 à 4 sont donc en lecture seule.",
+      "firstProcess": {
+        "title": "Votre entreprise est prête",
+        "body": "Planifiez votre premier processus : cartographiez-le, mesurez-le et choisissez le chiffre à améliorer.",
+        "plan": "Planifier mon premier processus",
+        "later": "Plus tard"
+      },
+      "convert": {
+        "notReady": "Terminez d'abord les étapes 1 à 4. Les contrôles ci-dessus montrent ce qui manque encore.",
+        "previewTitle": "Ce qui sera créé (aperçu, rien n'existe encore)",
+        "createdTitle": "Ce qui a été créé",
+        "counts": "Workflows : {workflows}. Processus : {processes}.",
+        "ownerLane": "Responsable : {lane}",
+        "errors": "Erreurs à corriger avant d'approuver",
+        "warnings": "Avertissements",
+        "documented": "Conservé comme texte de manuel, non construit :",
+        "failedProposals": "{count} propositions de ligne d'IA n'ont pas pu être déposées. Réessayez pour les déposer.",
+        "turnOnNotAvailable": "L'activation des workflows n'est pas encore disponible : rien ne les exécute d'ici là.",
+        "openWorkflows": "Ouvrir les workflows",
+        "unavailable": "Cette action n'est pas disponible : le Planificateur de workflows est désactivé pour votre espace de travail, ou le plan n'existe plus.",
+        "blocked": "Pas encore prêt. Les contrôles ci-dessus montrent ce qui manque.",
+        "approvedBy": "Approuvé par {by} le {at}.",
+        "preview": "Aperçu de ce qui sera créé",
+        "previewAgain": "Actualiser l'aperçu",
+        "approve": "Approuver",
+        "create": "Créer les workflows",
+        "retry": "Réessayer les propositions de ligne d'IA",
+        "approveTitle": "Approuver ce plan ?",
+        "approveMessage": "Vous approuvez l'aperçu affiché. Toute modification ultérieure du plan annule cette approbation.",
+        "previewFailed": "Impossible de générer l'aperçu.",
+        "approveFailed": "Impossible d'approuver le plan.",
+        "convertFailed": "Impossible de créer les workflows.",
+        "retryFailed": "Impossible de réessayer les propositions de ligne d'IA."
       }
     }
   },
