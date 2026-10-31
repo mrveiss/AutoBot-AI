@@ -2441,6 +2441,28 @@
       ansible.builtin.meta: flush_handlers
 
 # =============================================================================
+# PLAY 2d: Grafana (#19661)
+# =============================================================================
+# Last before Play 3: a package outage here fails this host's Grafana step visibly, after its
+# code and services are already updated. Hosts without Grafana are left without it.
+- name: "Play 2d - Move Grafana to its pinned version"
+  hosts: slm_server:monitoring_vm
+  gather_facts: true
+  gather_subset: [min]
+  tags: [monitoring, grafana]
+
+  tasks:
+    - name: "[PLAY 2d] Grafana | Upgrade an installed Grafana below grafana_version"
+      ansible.builtin.include_role:
+        name: monitoring
+        tasks_from: grafana_install.yml
+        apply:
+          become: true
+          tags: [monitoring, grafana]
+      vars:
+        grafana_fresh_install: false
+
+# =============================================================================
 # PLAY 3: Verify + Cleanup
 # =============================================================================
 - name: "Play 3 - Verify & Cleanup"
