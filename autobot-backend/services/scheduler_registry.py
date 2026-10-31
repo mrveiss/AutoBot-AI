@@ -217,6 +217,16 @@ REGISTRY: list[ScheduledJob] = [
         ),
     ),
     ScheduledJob(
+        name="CeleryBeat:trigger_secret_audit",
+        interval_seconds="config:SSOT_CRON",
+        owner_file="celery_app.py",
+        runtime="celery_beat",
+        description=(
+            "Proposes a human review of webhook secrets stored in plaintext (#19759); "
+            "rewrites nothing. Schedule from AUTOBOT_TRIGGER_SECRET_AUDIT_SCHEDULE (crontab)."
+        ),
+    ),
+    ScheduledJob(
         name="LLCHeartbeatScheduler",
         interval_seconds=5,
         owner_file="llc/scheduler/heartbeat_scheduler.py",
