@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Merge main into every open same-repo PR branch and every PR-less branch (#19548).
+"""Merge main into every open same-repo PR branch; a branch with no open PR is left alone (#20261).
 
 Run by ``.github/workflows/sync-branches-with-main.yml`` from a full clone of main.
 ``git push`` authenticates with ``AUTOBOT_PUSH_TOKEN`` and nothing else, as a

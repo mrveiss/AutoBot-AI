@@ -332,7 +332,8 @@ def test_the_plan_skips_forks_includes_drafts_and_leaves_other_bases_alone() -> 
     ]
     branches = ["main", "issue-1", "issue-2", "stacked", "release", "parked-1", "rescued/stash-1", "HEAD", "-x"]
     plan = core.plan_run(pulls, branches, REPO)
-    assert [(t.branch, t.pr) for t in plan.targets] == [("issue-1", 1), ("issue-2", 2), ("parked-1", None)]
+    assert [(t.branch, t.pr) for t in plan.targets] == [("issue-1", 1), ("issue-2", 2)]
+    assert plan.skipped[core.NO_OPEN_PR] == ["`parked-1` (no PR)"]
     assert plan.skipped[core.FORK] == ["#3", "#4"]
     assert plan.skipped[core.OTHER_BASE] == ["#5 `stacked`"], "a PR into another base is neither synced nor parked"
     assert "#6 `release`" in plan.skipped[core.POLICY] and "`rescued/stash-1` (no PR)" in plan.skipped[core.POLICY]
@@ -344,7 +345,7 @@ def test_dependabot_and_automation_branches_are_never_synced_pr_or_not() -> None
     pulls = [_pull(7, "dependabot/pip/x-1.2"), _pull(8, "automation/test-durations"), _pull(9, "issue-9")]
     branches = ["dependabot/npm_and_yarn/y", "automation/other", "parked-2"]
     plan = core.plan_run(pulls, branches, REPO)
-    assert [(t.branch, t.pr) for t in plan.targets] == [("issue-9", 9), ("parked-2", None)]
+    assert [(t.branch, t.pr) for t in plan.targets] == [("issue-9", 9)]
     for skipped in (
         "#7 `dependabot/pip/x-1.2`",
         "#8 `automation/test-durations`",
@@ -363,7 +364,7 @@ def test_merge_train_branches_are_never_synced() -> None:
     assert "`train-parked` (no PR)" in plan.skipped[core.POLICY]
 
 
-def test_prs_are_synced_oldest_first_then_parked_branches() -> None:
+def test_prs_are_synced_oldest_first_and_a_branch_with_no_open_pr_is_skipped() -> None:
     """A run cut short by a timeout or a moved head still caught up the oldest PRs (owner rule 2026-10-26)."""
     pulls = [_pull(30, "issue-30"), _pull(10, "issue-10"), _pull(20, "issue-20")]
     pulls[0]["created_at"], pulls[1]["created_at"], pulls[2]["created_at"] = (
@@ -372,7 +373,8 @@ def test_prs_are_synced_oldest_first_then_parked_branches() -> None:
         "2026-10-21T08:00:00Z",
     )
     plan = core.plan_run(pulls, ["parked-b", "parked-a"], REPO)
-    assert [t.branch for t in plan.targets] == ["issue-20", "issue-30", "issue-10", "parked-a", "parked-b"]
+    assert [t.branch for t in plan.targets] == ["issue-20", "issue-30", "issue-10"]
+    assert plan.skipped[core.NO_OPEN_PR] == ["`parked-a` (no PR)", "`parked-b` (no PR)"]
 
 
 @pytest.mark.parametrize(
