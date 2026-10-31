@@ -33,7 +33,6 @@ slot comes back on the sweep's own authority, the directory waits for a person.
 """
 
 import asyncio
-import logging
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any
@@ -42,6 +41,7 @@ from celery import shared_task
 from sqlalchemy import select
 
 from autobot_shared.env_utils import env_float_clamped
+from autobot_shared.logging_manager import get_logger
 from llc.models.enums import ApprovalStatus, ApprovalType
 from llc.services.approval import ApprovalService
 from llc.services.workspace_disposal import DisposalVerdict, dispose_workspace, work_landed
@@ -55,7 +55,7 @@ from utils.celery_reliability import (
     DeadLetterTask,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 #: Marks a proposal this sweep raised, so it can find its own back without matching on a
 #: title string. ``ApprovalType.DESTRUCTIVE_ACTION`` is the gate; this narrows it.
