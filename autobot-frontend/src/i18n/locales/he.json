@@ -3655,6 +3655,8 @@
       "executionStrategies": "Execution Strategies"
     },
     "history": {
+      "durationSeconds": "שנ׳",
+      "durationMinutes": "דק׳",
       "allStatus": "All Status",
       "reRun": "Re-run",
       "passed": "passed",
