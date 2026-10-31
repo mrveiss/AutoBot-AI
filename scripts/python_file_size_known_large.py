@@ -330,7 +330,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/knowledge/doc_indexer.py": 1247,
     "autobot-backend/services/knowledge/service.py": 849,  # train 48: #18935 merged onto #18945
     "autobot-backend/services/knowledge/test_autonomous_loop.py": 708,
-    "autobot-backend/services/knowledge/test_doc_indexer.py": 1466,
+    "autobot-backend/services/knowledge/test_doc_indexer.py": 1462,
     "autobot-backend/services/knowledge/test_kb_synthesizer.py": 802,
     "autobot-backend/services/llm_cost_tracker.py": 1166,  # #16230: MODEL_PRICING table removed
     "autobot-backend/services/llm_service.py": 1199,  # #16845: _track_usage delegated to llm_usage_recording
