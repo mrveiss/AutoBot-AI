@@ -75,14 +75,24 @@ async def resolve_agent(session: AsyncSession, company_id: Any, agent_ref: Any) 
     return rows[0] if len(rows) == 1 else None
 
 
+def agent_pause_flag_key(slug: Any) -> str:
+    """The Redis flag that pauses one agent."""
+    return f"llc:agent:{slug}:paused"
+
+
+def company_pause_flag_key(company_id: Any) -> str:
+    """The Redis flag that pauses a whole company."""
+    return f"llc:company:{company_id}:paused"
+
+
 async def _pause_flag_reason(slug: Optional[str], company_id: Optional[Any]) -> Optional[str]:
     """The controls keys. A company pause is written only here, so an unread flag is not "not paused"."""
     redis = await get_async_redis_client()
     if redis is None:
         return "pause state is unreadable" if company_id else None
-    if company_id and await redis.exists(f"llc:company:{company_id}:paused"):
+    if company_id and await redis.exists(company_pause_flag_key(company_id)):
         return "company is paused"
-    if slug and await redis.exists(f"llc:agent:{slug}:paused"):
+    if slug and await redis.exists(agent_pause_flag_key(slug)):
         return "agent is paused"
     return None
 
