@@ -38,7 +38,7 @@ from pathlib import Path
 import jinja2
 import pytest
 import yaml
-from repo_tests._ansible_tasks import load_tasks, named
+from repo_tests._ansible_tasks import load_tasks, named, without_comment_lines
 from repo_tests._paths import repo_root
 
 ANSIBLE = repo_root() / "autobot-slm-backend" / "ansible"
@@ -113,6 +113,20 @@ def call_sites() -> list[tuple[str, dict]]:
 
 
 # ── Reach floor ──────────────────────────────────────────────────────────────
+
+
+def test_every_file_naming_the_helper_is_a_resolved_call_site(
+    call_sites: list[tuple[str, dict]],
+) -> None:
+    """The floor above counts findings, so a caller the resolver misses could hide behind a new one (#19661)."""
+    paths = sorted(ROLES.glob("*/tasks/*.yml"))
+    assert len(paths) >= 100, f"the sweep read {len(paths)} task files -- a clean result would be blind"
+    naming = {
+        p.relative_to(ROLES).as_posix()
+        for p in paths
+        if HELPER_STEM in without_comment_lines(p.read_text(encoding="utf-8"))
+    }
+    assert naming == {path for path, _ in call_sites}
 
 
 def test_the_resolver_reaches_every_known_call_site(
