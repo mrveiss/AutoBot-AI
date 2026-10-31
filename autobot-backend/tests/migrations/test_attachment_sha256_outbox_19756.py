@@ -60,4 +60,4 @@ def test_the_migration_is_idempotent_on_a_create_all_database():
 
 def test_the_revision_chains_from_the_current_head():
     module = importlib.import_module(_MODULE)
-    assert (module.revision, module.down_revision) == ("20261031_107", "20261030_105")
+    assert (module.revision, module.down_revision) == ("20261031_107", "20261031_106")
