@@ -104,7 +104,7 @@ KNOWN_LARGE: dict[str, int] = {
     # aborted silently at the password prompt -- stdin is the script pipe, `read`
     # got EOF, `set -e` killed it. The file is delivered BY curl, so it cannot
     # source a helper and cannot be split; the exemption's own reason still holds.
-    "install.sh": 1169,  # #18653: the uninstaller moved to scripts/uninstall.sh; single-file installer cannot be split
+    "install.sh": 1168,  # #18653: the uninstaller moved to scripts/uninstall.sh; single-file installer cannot be split
     "scripts/lib/hardcoded-value-rules.sh": 842,
     "scripts/pr-preflight.sh": 815,
 }
