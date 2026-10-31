@@ -1691,7 +1691,7 @@
     "targetPath": "Target Path *",
     "targetPath2": "Target path:",
     "tabFleet": "Fleet Operations",
-    "tabInfrastructure": "Overview",
+    "tabInfrastructure": "Übersicht",
     "tabMigration": "Migration",
     "tabPerNode": "Per-Node Control",
     "tabReplication": "Replication",
@@ -1826,7 +1826,7 @@
     "sLOCompliance": "SLO Compliance:",
     "tabs": {
       "alertRules": "Alarmregeln",
-      "overview": "Overview",
+      "overview": "Übersicht",
       "slos": "SLOs",
       "traces": "Traces"
     }
