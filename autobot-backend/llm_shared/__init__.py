@@ -34,16 +34,17 @@ from .observability.langsmith_observer import LangSmithObserver
 from .observability.otel_observer import OTELObserver
 from .observability.prometheus_observer import PrometheusObserver
 from .observability.tracing_config import LangFuseTracingConfig, LangSmithTracingConfig
+from .observability.tracing_policy import destination_allowed
 
 register(OTELObserver())
 register(PrometheusObserver())
 
 _langfuse_cfg = LangFuseTracingConfig()
-if _langfuse_cfg.enabled:
+if _langfuse_cfg.enabled and destination_allowed("langfuse", _langfuse_cfg.host):
     register(LangFuseObserver(_langfuse_cfg))
 
 _langsmith_cfg = LangSmithTracingConfig()
-if _langsmith_cfg.enabled:
+if _langsmith_cfg.enabled and destination_allowed("langsmith", _langsmith_cfg.api_url):
     register(LangSmithObserver(_langsmith_cfg))
 
 # Provider registry and base (canonical imports for MVA-62 consolidation)

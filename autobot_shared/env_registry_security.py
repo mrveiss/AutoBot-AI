@@ -433,3 +433,32 @@ register_env_var(
         range=(60, None),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_TRACING_ALLOW_EXTERNAL",
+        type=bool,
+        default=False,
+        description=(
+            "Allow an LLM tracing destination outside this deployment's own origins (#19933). "
+            "Off: a configured tracing key or host is refused at startup unless the destination "
+            "is an SSOT internal origin, so a key alone never moves prompt metadata off the install. "
+            "On: a public destination is allowed; a private, loopback or link-local one is still refused."
+        ),
+        component="security",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_TRACING_INCLUDE_CONTENT",
+        type=bool,
+        default=False,
+        description=(
+            "Send prompt and response text to an enabled LLM tracing destination (#19933). "
+            "Off: only metadata (ids, model, token usage, latency) is sent. "
+            "On: the text is sent after the outbound credential redaction."
+        ),
+        component="security",
+    )
+)
