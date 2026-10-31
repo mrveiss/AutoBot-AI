@@ -128,7 +128,7 @@ def _population(root: Path) -> list[str]:
 REACH = declare(
     "root-resolver-depth-scan",
     discover=_population,
-    floor=7001,  # mid-window: population 7166, window [6866, 7166]
+    floor=7124,  # mid-window: population 7274, window (6974, 7274)
     what="tracked python",
     roots=_ROOTS,
     growth=300,
