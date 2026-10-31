@@ -246,6 +246,7 @@ import { useApiClient } from '@/plugins/api'
 import { useUserStore } from '@/stores/useUserStore'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('UsageView')
@@ -385,9 +386,7 @@ function fmtSeconds(s: number): string {
   return `${m}m ${sec}s`
 }
 
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleString()
-}
+const fmtDate = createDateFormatter()
 
 onMounted(load)
 </script>

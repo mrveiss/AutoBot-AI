@@ -846,8 +846,8 @@ class WorkItemService(LLCServiceBase):
             )
 
         # GH#8252: block BLOCKED→IN_PROGRESS while blockers remain. #15931 ungated
-        # this — it required `relation_svc`, which nothing outside its own tests
-        # passed, so it had never fired. See test_blocked_by_rule_fires_15931.py.
+        # this (nothing outside its own tests passed `relation_svc`; see test_blocked_by_rule_fires_15931.py).
+        # The blocked item is the source of its `blocked_by` rows; the blockers are their targets (#20187).
         if current == WorkItemStatus.BLOCKED and new_status == WorkItemStatus.IN_PROGRESS:
             svc = relation_svc if relation_svc is not None else WorkItemRelationService()
             cid = str(item.company_id)  # the ITEM's, not the caller's (#15952)
