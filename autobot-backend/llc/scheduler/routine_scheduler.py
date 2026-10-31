@@ -22,14 +22,16 @@ get_async_session_factory() to avoid idle_in_transaction_session_timeout.
 """
 
 import asyncio
-import logging
 import time
 from datetime import datetime, timezone
 from typing import Optional
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 
-logger = logging.getLogger(__name__)
+from .schedule_members import routine_due_members
+
+logger = get_logger(__name__)
 
 _SCHEDULE_KEY = "llc:heartbeat:schedule"
 _POLL_INTERVAL = 5.0  # seconds between sorted-set polls
@@ -94,6 +96,7 @@ class RoutineScheduler:
             return
 
         now = datetime.now(tz=timezone.utc)
+        scheduled = 0
         for routine in routines:
             try:
                 next_ts: float = croniter(routine.cron_schedule, now).get_next(float)
@@ -102,8 +105,10 @@ class RoutineScheduler:
                     {f"routine:{routine.id}": next_ts},
                     nx=True,
                 )
+                scheduled += 1
             except Exception as exc:
                 logger.warning("Failed to schedule routine %s: %s", routine.id, exc)
+        logger.info("RoutineScheduler: scheduled %d of %d active routines", scheduled, len(routines))
 
     async def _poll_loop(self) -> None:
         """Continuously poll for due items and dispatch them."""
@@ -121,7 +126,7 @@ class RoutineScheduler:
             return
 
         now_ts = time.time()
-        due_items = await redis.zrangebyscore(_SCHEDULE_KEY, "-inf", now_ts, withscores=False)
+        due_items = routine_due_members(await redis.zrangebyscore(_SCHEDULE_KEY, "-inf", now_ts, withscores=False))
 
         for member in due_items:
             member_str = member.decode() if isinstance(member, bytes) else member
@@ -168,6 +173,9 @@ class RoutineScheduler:
             async with factory() as session:
                 routine = await svc.get(session, routine_id)
                 if routine is None or routine.status != RoutineStatus.ACTIVE:
+                    logger.info(
+                        "RoutineScheduler: routine %s is archived, paused or gone — not re-queued", routine_id_str
+                    )
                     return  # Archived or paused — don't re-queue
 
                 # FR-GOV-05: skip if company or assignee agent is paused/terminated
@@ -190,6 +198,7 @@ class RoutineScheduler:
                 routine.last_fired_at = datetime.now(tz=timezone.utc)
                 await svc.record_run(session, routine_id, status="queued")
                 await session.commit()
+                logger.info("RoutineScheduler: dispatched routine %s (run queued)", routine_id)
 
             # Re-insert next fire time (outside session — session already committed)
             redis = await get_async_redis_client()
