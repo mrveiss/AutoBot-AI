@@ -292,9 +292,10 @@ def test_the_sweep_actually_reached_the_tree() -> None:
     # catches a regressed matcher, and each legitimate retirement comes here and
     # says which script it removed. #14873 retired both sync-all-vms.sh copies; the
     # `utilities/` one carried TWO sites on one line (`source ../lib/... || source lib/...`).
-    # Measured len(_SITES): 77 on main @ 04b31433c9 -> 75 after; the floor sits AT 75.
-    assert len(_SITES) >= 75, (
-        f"only found {len(_SITES)} lib source sites — expected >= 75 "
+    # Measured len(_SITES): 77 on main @ 04b31433c9 -> 75 -> 74: the native-vm scripts share
+    # _native_common.sh (#18557), the floor sits AT 74.
+    assert len(_SITES) >= 74, (
+        f"only found {len(_SITES)} lib source sites — expected >= 74 "
         "(#14041 enumerated 56 scripts; #14891 added 17 sites in 16 extensionless "
         "hooks; #15127 retired batch-configure-vms.sh and "
         "complete-vm-sync-templates.sh, a measured delta of 1; #14873 retired "
@@ -319,8 +320,8 @@ def test_the_sweep_actually_reached_the_tree() -> None:
     # above predicts — CI reported only the site-count floor, and this one
     # surfaced from the pre-push hook after that was fixed. When lowering one
     # floor here, re-run the whole function rather than the failing line.
-    # 68, not 69: #14873 retired utilities/sync-all-vms.sh (one script, two sites; 69 -> 68 measured).
-    assert len(rels) >= 68, f"only {len(rels)} distinct scripts"
+    # 69 -> 68: #14873 retired utilities/sync-all-vms.sh. 68 -> 67: #18557 (measured).
+    assert len(rels) >= 67, f"only {len(rels)} distinct scripts"
     assert (
         "autobot-infrastructure/shared/scripts/vm-management/status-all-vms.sh" in rels
     ), "the walk no longer reaches a known call site"
