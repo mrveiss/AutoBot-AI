@@ -15,21 +15,12 @@ import pytest
 from llc.models.enums import RoutineStatus
 from llc.scheduler import schedule_reconcile as rec
 from llc.scheduler.routine_scheduler import RoutineScheduler
+from testkit.fake_async_session import FakeAsyncSession
+from testkit.fake_redis_pipeline import FakeAsyncPipeline
 
 _AGENT = "ceo-acme"
 _ROUTINE_ID = "6fdfdb26-6743-408c-bb5d-cdfaa13ca002"
 _ROUTINE = f"routine:{_ROUTINE_ID}"
-
-
-class _FakePipe:
-    def __init__(self, redis) -> None:
-        self.redis, self.keys = redis, []
-
-    def exists(self, key):
-        self.keys.append(key)
-
-    async def execute(self):
-        return [1 if k in self.redis.flags else 0 for k in self.keys]
 
 
 class _FakeRedis:
@@ -50,11 +41,14 @@ class _FakeRedis:
             self.scores[member] = score
         return added
 
+    async def exists(self, key):
+        return 1 if key in self.flags else 0
+
     async def zrange(self, key, lo, hi):
         return [m.encode() for m in self.scores]
 
     def pipeline(self, transaction=True):
-        return _FakePipe(self)
+        return FakeAsyncPipeline(self, transaction=transaction)
 
 
 def _w(member, kind, cron, *keys):
@@ -73,7 +67,7 @@ def _wanted(agents=(), routines=()):
 async def _run(redis, agents=(), routines=()):
     p_agents, p_routines = _wanted(agents, routines)
     with p_agents, p_routines:
-        return await rec.reconcile_schedule(redis)
+        return await rec.restore_lost_schedule_members(redis)
 
 
 @pytest.mark.asyncio
@@ -107,7 +101,7 @@ async def test_agent_with_pause_flag_stays_off():
         AsyncMock(return_value=[_w(_AGENT, "agent", "* * * * *", *rec._pause_keys(_AGENT, "acme"))]),
     ):
         with patch.object(rec, "_active_routines", AsyncMock(return_value=[])):
-            assert await rec.reconcile_schedule(redis) == []
+            assert await rec.restore_lost_schedule_members(redis) == []
     assert redis.scores == {}
 
 
@@ -121,7 +115,7 @@ async def test_company_pause_flag_alone_keeps_agent_and_routine_off():
     routines = [_w(_ROUTINE, "routine", "* * * * *", *rec._pause_keys(None, "acme"))]
     with patch.object(rec, "_enabled_agents", AsyncMock(return_value=agents)):
         with patch.object(rec, "_active_routines", AsyncMock(return_value=routines)):
-            assert await rec.reconcile_schedule(redis) == []
+            assert await rec.restore_lost_schedule_members(redis) == []
     assert redis.scores == {}
 
 
@@ -143,23 +137,17 @@ def test_off_statuses_follow_controls_service_plus_paused():
 
 @pytest.mark.asyncio
 async def test_agent_query_excludes_off_statuses_and_blank_cron():
-    seen = {}
+    class _Recording(FakeAsyncSession):
+        async def execute(self, statement, params=None, **kw):
+            self.params = params
+            return await super().execute(statement, params, **kw)
 
-    class _Session:
-        async def execute(self, stmt, params):
-            seen["sql"], seen["params"] = str(stmt), params
-            return SimpleNamespace(mappings=lambda: SimpleNamespace(all=lambda: []))
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *a):
-            return False
-
-    with patch.object(rec, "get_async_session_factory", return_value=lambda: _Session()):
+    session = _Recording(default_result=[])
+    with patch.object(rec, "get_async_session_factory", return_value=lambda: session):
         await rec._enabled_agents()
-    assert "inactive" in seen["params"]["off"] and "paused" in seen["params"]["off"]
-    assert "btrim" in seen["sql"] and "ORDER BY" in seen["sql"]
+    sql = str(session.statements[0])
+    assert "inactive" in session.params["off"] and "paused" in session.params["off"]
+    assert "btrim" in sql and "ORDER BY" in sql
 
 
 @pytest.mark.asyncio
@@ -173,9 +161,9 @@ async def test_bad_cron_is_logged_and_does_not_stop_the_rest(caplog):
     )
     with p_agents, patch.object(rec, "_active_routines", AsyncMock(return_value=[])):
         with caplog.at_level(logging.ERROR, logger=rec.logger.name):
-            restored = await rec.reconcile_schedule(redis)
+            restored = await rec.restore_lost_schedule_members(redis)
             redis.scores.pop(_AGENT)
-            await rec.reconcile_schedule(redis)  # a second pass must not repeat the ERROR
+            await rec.restore_lost_schedule_members(redis)  # a second pass must not repeat the ERROR
     assert restored == [_AGENT]
     assert caplog.text.count("could not restore agent bad") == 1
 

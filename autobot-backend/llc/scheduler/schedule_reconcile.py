@@ -146,7 +146,7 @@ def _next_or_report(item: _Wanted) -> float | None:
         return None
 
 
-async def reconcile_schedule(redis: Any) -> List[str]:
+async def restore_lost_schedule_members(redis: Any) -> List[str]:
     """Re-add every enabled agent and active routine missing from the set; return those restored.
 
     One read of the set finds who is absent; only those are checked for a pause flag and
@@ -172,7 +172,7 @@ async def reconcile_loop(interval: float = SCHEDULE_RECONCILE_INTERVAL_SECONDS) 
             if redis is None:
                 logger.error("Schedule reconcile skipped: Redis unavailable")
             else:
-                await reconcile_schedule(redis)
+                await restore_lost_schedule_members(redis)
         except Exception:
             logger.exception("Schedule reconcile pass failed")
         await asyncio.sleep(interval)
