@@ -208,7 +208,7 @@ def _scanned(root: Path) -> list[str]:
 REACH = declare(
     "browser-port-single-home-scan",
     discover=_scanned,
-    floor=10372,  # re-measured at 10430 with the nested .env* glob, pinned mid-window (#15928)
+    floor=10614,  # re-measured at 10430 with the nested .env* glob, pinned mid-window (#15928)
     growth=600,
     skips=0,
     what="tracked files scanned for a second browser-port home or Grafana's 3000 (#19324)",
