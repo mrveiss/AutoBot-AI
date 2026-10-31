@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from repo_tests._reach import declare
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 WORKFLOWS = REPO_ROOT / ".github" / "workflows"
@@ -29,8 +30,18 @@ _CALLERS = {
 }
 
 
+WORKFLOW_REACH = declare(
+    "ci-requirements-one-install-workflows",
+    discover=lambda root: sorted((root / ".github" / "workflows").glob("*.y*ml")),
+    what="workflow files searched for their own requirements-ci.txt install",
+    roots=(".github/workflows",),
+    floor=65,  # mid-window; repinned by scripts/repin_reach_floors.py
+    growth=10,
+)
+
+
 def _workflows() -> dict[str, str]:
-    return {path.name: path.read_text("utf-8") for path in WORKFLOWS.glob("*.y*ml")}
+    return {path.name: path.read_text("utf-8") for path in WORKFLOW_REACH.examined(REPO_ROOT)}
 
 
 def test_no_workflow_installs_the_file_itself() -> None:
