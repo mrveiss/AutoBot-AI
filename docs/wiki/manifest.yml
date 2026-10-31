@@ -1,0 +1,14 @@
+# The GitHub wiki is generated from these sources on every merge to main (#19278, owner
+# decision 2026-10-23: the repo docs are the single source; the wiki is never edited by hand).
+# Each page maps to ONE source file. `api` is generated from the backend's OpenAPI paths
+# (autobot-frontend/src/types/generated/api.ts), not from a hand-written page.
+pages:
+  Home: README.md
+  Getting-Started: docs/user/getting-started.md
+  Architecture: docs/architecture/README.md
+  Features: docs/features/CATALOG.md
+  API: api
+  Configuration: docs/developer/ENV_VARS.md
+  Deployment: INSTALL.md
+  Development: CONTRIBUTING.md
+  Troubleshooting: docs/user-guide/04-troubleshooting.md

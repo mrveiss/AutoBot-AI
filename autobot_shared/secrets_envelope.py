@@ -42,9 +42,14 @@ from __future__ import annotations
 
 import base64
 import binascii
+import functools
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass
+
+from autobot_shared.logging_manager import get_logger
+
+logger = get_logger(__name__)
 
 ROOT_KEY_ENV = "AUTOBOT_SECRETS_ROOT_KEY"
 
@@ -123,17 +128,33 @@ def _open_bytes(key: bytes, nonce: bytes, ciphertext: bytes, aad: bytes) -> byte
 
 
 def load_root_key() -> bytes:
-    """Load the 32-byte root key from ``AUTOBOT_SECRETS_ROOT_KEY`` (url-safe base64)."""
+    """Load the 32-byte root key from ``AUTOBOT_SECRETS_ROOT_KEY`` (url-safe base64).
+
+    Raises RuntimeError naming which check failed, and logs that reason once per
+    process (#19051): every caller turns the error into a generic "not configured"
+    (a 503, a skipped job), so without this line the cause is invisible on a host.
+    """
     raw = os.environ.get(ROOT_KEY_ENV, "")
     if not raw:
-        raise RuntimeError(f"{ROOT_KEY_ENV} is not set — the unified secrets root key is required")
+        _root_key_unusable(f"{ROOT_KEY_ENV} is not set — the unified secrets root key is required")
     try:
         key = _b64d(raw)
     except (binascii.Error, ValueError) as exc:
-        raise RuntimeError(f"{ROOT_KEY_ENV} is not valid url-safe base64") from exc
+        _root_key_unusable(f"{ROOT_KEY_ENV} is not valid url-safe base64", exc)
     if len(key) != _KEY_LEN:
-        raise RuntimeError(f"{ROOT_KEY_ENV} must decode to 32 bytes (got {len(key)})")
+        _root_key_unusable(f"{ROOT_KEY_ENV} must decode to 32 bytes (got {len(key)})")
     return key
+
+
+def _root_key_unusable(reason: str, cause: Exception | None = None) -> None:
+    """Log *reason* (never the key) once per process, then raise it."""
+    _log_root_key_reason_once(reason)
+    raise RuntimeError(reason) from cause
+
+
+@functools.lru_cache(maxsize=None)
+def _log_root_key_reason_once(reason: str) -> None:
+    logger.error("System vault unavailable in this process: %s", reason)
 
 
 def derive_vault_key(root_key: bytes, vault_id: str) -> bytes:

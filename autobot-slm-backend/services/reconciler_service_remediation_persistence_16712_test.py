@@ -30,27 +30,29 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+from testkit.fake_async_session import FakeAsyncSession
+
 _SLM_ROOT = Path(__file__).resolve().parent.parent
 if str(_SLM_ROOT) not in sys.path:
     sys.path.insert(0, str(_SLM_ROOT))
 
 
 def _load_real_reconciler():
-    """Load reconciler.py with a REAL ServiceStatus bound onto the stubbed
+    """Load reconciler.py with a REAL SystemdState bound onto the stubbed
     models.database (#16712).
 
     The package conftest stubs `sys.modules["models.database"]` to a
-    MagicMock for the whole test session, so `ServiceStatus.FAILED.value`
+    MagicMock for the whole test session, so `SystemdState.FAILED.value`
     inside reconciler.py would otherwise resolve to a MagicMock attribute --
     never equal to the plain string status this test passes, silently
-    making `status != ServiceStatus.FAILED.value` true unconditionally.
+    making `status != SystemdState.FAILED.value` true unconditionally.
     `service_status` itself is a standalone module the conftest never
     touches, so the real enum is one import away.
     """
     import service_status  # noqa: PLC0415
 
     sys.modules.setdefault("models.database", MagicMock())
-    sys.modules["models.database"].ServiceStatus = service_status.ServiceStatus
+    sys.modules["models.database"].SystemdState = service_status.SystemdState
 
     spec = importlib.util.spec_from_file_location(
         "reconciler_under_service_remediation_16712_test", _SLM_ROOT / "services" / "reconciler.py"
@@ -166,27 +168,18 @@ def test_reset_service_remediation_tracker_is_a_noop_when_nothing_to_clear():
     db.commit.assert_not_awaited()
 
 
-class _RaceSimulatingSession:
+def _race_simulating_session(service, *, extra_data_after_refresh) -> FakeAsyncSession:
     """A `db` whose `refresh()` mutates `service.extra_data` mid-call (#17096 review).
 
     Models a heartbeat for the SAME service row landing on a DIFFERENT
     session while `_remediate_failed_service` awaits the (here, fake)
     ansible restart -- exactly what `refresh()` is meant to observe.
     """
-
-    def __init__(self, *, extra_data_after_refresh):
-        self._extra_data_after_refresh = extra_data_after_refresh
-        self.refresh_called = False
-
-    def add(self, _obj):
-        pass
-
-    async def commit(self):
-        pass
-
-    async def refresh(self, obj):
-        self.refresh_called = True
-        obj.extra_data = self._extra_data_after_refresh
+    # `service` is already persisted (loaded by the reconciler), so the session may refresh it.
+    return FakeAsyncSession(
+        rows={(type(service), "service-row"): service},
+        on_refresh=lambda obj: setattr(obj, "extra_data", extra_data_after_refresh),
+    )
 
 
 def _node() -> object:
@@ -201,7 +194,9 @@ def test_write_after_restart_uses_the_row_refreshed_after_the_await_not_the_stal
     service = _FakeService(extra_data={"remediation": {"count": 2, "last_attempt": None, "exhausted": False}})
     # Simulates: the heartbeat path observed recovery and cleared the tracker,
     # AND wrote an unrelated key -- both must survive this write.
-    db = _RaceSimulatingSession(extra_data_after_refresh={"error_message": "transient, cleared by heartbeat"})
+    db = _race_simulating_session(
+        service, extra_data_after_refresh={"error_message": "transient, cleared by heartbeat"}
+    )
     svc = reconciler.ReconcilerService()
     svc._restart_service_via_ansible = AsyncMock(
         return_value=(False, "simulated restart failure")
@@ -210,7 +205,7 @@ def test_write_after_restart_uses_the_row_refreshed_after_the_await_not_the_stal
     result = asyncio.run(svc._remediate_failed_service(db, _node(), service))
 
     assert result is True
-    assert db.refresh_called, "the fix must re-read the row after the restart await, or this test proves nothing"
+    assert db.refreshed, "the fix must re-read the row after the restart await, or this test proves nothing"
     tracker = reconciler.read_service_remediation(service)
     assert (
         tracker["count"] == 1
@@ -225,7 +220,7 @@ def test_write_after_restart_increments_normally_when_nothing_raced():
     count still increments the ordinary way.
     """
     service = _FakeService(extra_data={"remediation": {"count": 2, "last_attempt": None, "exhausted": False}})
-    db = _RaceSimulatingSession(extra_data_after_refresh=dict(service.extra_data))
+    db = _race_simulating_session(service, extra_data_after_refresh=dict(service.extra_data))
     svc = reconciler.ReconcilerService()
     svc._restart_service_via_ansible = AsyncMock(return_value=(False, "simulated restart failure"))
 
@@ -254,22 +249,17 @@ class _LoopSession:
     """
 
     def __init__(self, services, nodes_by_id):
-        self._services = services
-        self._nodes_by_id = nodes_by_id
-        self._call = 0
+        self._db = FakeAsyncSession(
+            results=[
+                [SimpleNamespace(value="true")],
+                list(services),
+                *[[nodes_by_id[service.node_id]] for service in services],
+            ]
+        )
 
     @asynccontextmanager
     async def session(self):
-        yield self
-
-    async def execute(self, _query):
-        self._call += 1
-        if self._call == 1:
-            return SimpleNamespace(scalar_one_or_none=lambda: SimpleNamespace(value="true"))
-        if self._call == 2:
-            return SimpleNamespace(scalars=lambda: SimpleNamespace(all=lambda: self._services))
-        service = self._services[self._call - 3]
-        return SimpleNamespace(scalar_one_or_none=lambda: self._nodes_by_id[service.node_id])
+        yield self._db
 
 
 def test_remediate_failed_services_continues_past_one_services_own_exception():
@@ -315,17 +305,6 @@ def test_remediate_failed_services_continues_past_one_services_own_exception():
     ], f"expected both services attempted despite bad-service raising, got {attempted}"
 
 
-class _CapturingSession:
-    def __init__(self):
-        self.added = []
-
-    def add(self, obj):
-        self.added.append(obj)
-
-    async def commit(self):
-        pass
-
-
 def test_restart_failure_cause_is_captured_end_to_end_through_to_the_exhaustion_event():
     """#16712 AC (#17096 review, finding 4): exhaustion must name "the node,
     the service AND the captured cause" -- not just node and service.
@@ -346,7 +325,7 @@ def test_restart_failure_cause_is_captured_end_to_end_through_to_the_exhaustion_
         }
     )
     node = SimpleNamespace(node_id="node-1", hostname="node-1", ansible_target="node-1")
-    db = _CapturingSession()
+    db = FakeAsyncSession()
     svc = reconciler.ReconcilerService()
 
     # NodeEvent is a MagicMock (models.database is stubbed) -- its constructor

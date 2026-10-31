@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Tuple
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 
+from .feature_boot_policy import enforce_feature_boot_policy
 from .loader import get_load_results, load_router_group
 
 logger = get_logger(__name__)
@@ -671,19 +672,20 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
     # Issue #5071: per-agent diary with background append and runtime discovery
     ("api.agent_diary", "/agent-diary", ["agents"], "agent_diary"),
     # Partially wired or legacy feature routers
-    ("api.chat_sessions", "", ["chat-sessions"], "chat_sessions"),
+    # NOTE (#17325): chat_sessions removed -- api/chat.py includes it into the core chat router, so
+    # /api/chat/sessions* and /api/sessions/* are served from there; this second mount was unreachable.
     # GH#8993: thinking mode preferences for conversations
     ("api.chat_sessions_thinking", "", ["chat-thinking"], "chat_sessions_thinking"),
     # GH#8996: public shared chat links with optional password protection
     ("api.chat_shared_links", "", ["chat-shared-links"], "chat_shared_links"),
-    # GH#9047: embed widget unauthenticated chat endpoint
-    ("api.chat_embed", "", ["chat", "embed"], "chat_embed"),
+    # NOTE (#17325): chat_embed removed -- core_routers.py mounts it before chat (#18720); the copy here
+    # was unreachable.
     # GH#8987: conversation folders and collections
     ("api.chat_folders", "", ["chat-folders"], "chat_folders"),
+    ("api.chat_turn", "", ["chat"], "chat_turn"),  # #17273: cancel the current turn
     # Issue #5061: First-run onboarding presets + doctor
     ("api.onboarding", "/onboarding", ["onboarding"], "onboarding"),
-    # NOTE (#4203): api.diagnostics removed — already registered in monitoring_routers.py
-    # at prefix "" (routes define their own /diagnostics path prefix internally).
+    # NOTE (#4203): api.diagnostics lives in monitoring_routers.py (routes carry their own /diagnostics prefix).
     (
         "api.presence_ws",
         "",
@@ -699,27 +701,9 @@ FEATURE_ROUTER_CONFIGS: List[Tuple[str, str, List[str], str]] = [
         ["voice", "realtime", "webrtc"],
         "realtime_session",
     ),
-    # GH#8995: data-hygiene retention policy CRUD + settings/stats
-    (
-        "api.admin_retention_policies",
-        "",
-        ["admin", "retention", "data-hygiene"],
-        "admin_retention_policies",
-    ),
-    # GH#8605: Per-user voice bundle assignment (admin + user endpoints)
-    (
-        "api.voice_bundle_admin",
-        "",
-        ["voice", "rbac", "admin"],
-        "voice_bundle_admin",
-    ),
-    # GH#8605: Voice bundle management (user-facing endpoints)
-    (
-        "api.voice_bundle_user",
-        "/voice",
-        ["voice", "rbac"],
-        "voice_bundle_user",
-    ),
+    # NOTE (#17325): admin_retention_policies (GH#8995), voice_bundle_admin and voice_bundle_user
+    # (GH#8605) removed -- all three are mounted by core_routers.py, which registers first; the copies
+    # here were unreachable duplicates.
     # NOTE (MVA-3022): mobile_devices removed — already registered in core_routers.py
     # as a system router. Duplicate registration caused routes to appear twice.
     # GH#4459: Web push notification endpoints (subscribe/unsubscribe/vapid-key)
@@ -755,24 +739,19 @@ def load_feature_routers() -> List[Tuple]:
 
     #6797: When fewer routers loaded than configured, escalate the summary log
     to ERROR (was always INFO) so the partial-boot state is loud at deploy
-    time. Optional strict mode via ``AUTOBOT_FEATURE_ROUTERS_STRICT=1`` raises
-    instead of warning, for production deploys that want hard guarantees.
+    time. Strict mode (``config.misc.feature_routers_strict``) raises instead; on
+    by default, off in the production profile (``ssot_role_mirrors``, #19319).
+    A required security router aborts startup in either mode (#19319).
 
     Returns:
         list: List of tuples in format (router, prefix, tags, name)
               Only includes routers that successfully imported.
     """
     # #14207: the reset, the loop and the loaded/expected summary are the
-    # shared loader's, which every registry now uses. Strict mode stays here
-    # because it is this group's policy, not the mechanism's.
+    # shared loader's. The abort policy (strict mode, and the security routers
+    # that abort in any mode, #19319) is this group's, in feature_boot_policy.
     optional_routers = load_router_group("feature", FEATURE_ROUTER_CONFIGS)
-
-    failed = [r for r in _load_results() if not r["loaded"]]
-    if failed and config.misc.feature_routers_strict.lower() in {"1", "true", "yes"}:
-        raise RuntimeError(
-            f"AUTOBOT_FEATURE_ROUTERS_STRICT=1 — {len(failed)} feature router(s) "
-            f"failed to load: {', '.join(r['name'] for r in failed)}"
-        )
+    enforce_feature_boot_policy(_load_results(), config.misc.feature_routers_strict)
     # #6808: publish this worker's results to Redis so the health endpoint can
     # aggregate across all workers instead of returning a per-worker snapshot.
     _publish_load_results_to_redis(_load_results())

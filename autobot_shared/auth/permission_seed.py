@@ -50,7 +50,13 @@ _SECRETS_USER_PERMS: List[str] = [
 
 #: The roles, by value, that carry legacy secrets permissions on top of their
 #: ROLE_PERMISSIONS entry.
-_SECRETS_EXTRA_BY_ROLE: Dict[str, List[str]] = {"admin": _SECRETS_ADMIN_PERMS, "user": _SECRETS_USER_PERMS}
+#: ``superadmin`` inherits admin's extras so its DB seed row is a superset of
+#: admin's, matching its derived ROLE_PERMISSIONS entry (#19125).
+_SECRETS_EXTRA_BY_ROLE: Dict[str, List[str]] = {
+    "admin": _SECRETS_ADMIN_PERMS,
+    "superadmin": _SECRETS_ADMIN_PERMS,
+    "user": _SECRETS_USER_PERMS,
+}
 
 
 def _perm_description(perm: Enum) -> str:

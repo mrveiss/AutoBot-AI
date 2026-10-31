@@ -88,14 +88,16 @@ def test_the_ansible_generator_asks_for_the_right_byte_count() -> None:
     different N here means every provisioned key fails to decode to the 32
     bytes `load_root_key` requires.
     """
-    tasks = (REPO_ROOT / "autobot-slm-backend/ansible/roles/slm_manager/tasks/main.yml").read_text(encoding="utf-8")
-    assert ROOT_KEY in tasks or "autobot_secrets_root_key" in tasks
-
-    generators = re.findall(r"autobot_secrets_root_key.*?openssl rand -base64 (\d+)", tasks, re.DOTALL) + re.findall(
-        r"AUTOBOT_SECRETS_ROOT_KEY=.*?openssl rand -base64 (\d+)", tasks
-    )
-    assert generators, "found no generator for the root key to check"
-    assert set(generators) == {"32"}, f"root key generated at wrong byte count(s): {set(generators)}"
+    # #19051: the back-fill generator moved to secrets_root_key.yml. Each file is checked on its own
+    # (CodeRabbit on #19364): read together, one file's generator could stand in for the other's.
+    role_tasks = REPO_ROOT / "autobot-slm-backend/ansible/roles/slm_manager/tasks"
+    for name in ("main.yml", "secrets_root_key.yml"):
+        tasks = (role_tasks / name).read_text(encoding="utf-8")
+        assert ROOT_KEY in tasks or "autobot_secrets_root_key" in tasks, f"{name} no longer handles the root key"
+        generators = re.findall(r"autobot_secrets_root_key.*?openssl rand -base64 (\d+)", tasks, re.DOTALL)
+        generators += re.findall(r"AUTOBOT_SECRETS_ROOT_KEY=.*?openssl rand -base64 (\d+)", tasks)
+        assert generators, f"found no root-key generator in {name} to check"
+        assert set(generators) == {"32"}, f"{name}: root key generated at wrong byte count(s): {set(generators)}"
 
 
 def test_every_root_key_jinja_expression_compiles() -> None:
@@ -112,10 +114,12 @@ def test_every_root_key_jinja_expression_compiles() -> None:
     env = jinja2.Environment()  # nosec B701  # compiling only, never rendering untrusted input
     # Filters/lookups Ansible injects that core Jinja does not ship.
     env.filters["b64encode"] = lambda v: v
+    env.filters["regex_replace"] = lambda v, *a: v  # #19051: the back-fill strips quotes from a read-back key
     env.globals["lookup"] = lambda *a, **k: "x"
 
     task_files = [
         REPO_ROOT / "autobot-slm-backend/ansible/roles/slm_manager/tasks/main.yml",
+        REPO_ROOT / "autobot-slm-backend/ansible/roles/slm_manager/tasks/secrets_root_key.yml",
         REPO_ROOT / "autobot-slm-backend/ansible/roles/backend/tasks/main.yml",
     ]
     checked = 0

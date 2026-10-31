@@ -55,6 +55,7 @@
   --text-on-success: #000000;
   --text-on-warning: #000000;
   --text-on-error: #ffffff;
+  --text-on-info: #ffffff;
 
   /* Secondary Colors */
   --color-secondary: #64748b;
@@ -86,6 +87,10 @@
   --color-error-bg: rgba(239, 68, 68, 0.1);
   --color-error-bg-hover: rgba(239, 68, 68, 0.2);
   --color-error-border: rgba(239, 68, 68, 0.3);
+  /* #19872: --color-error is only 3.76:1 against white, so a solid error fill
+     carrying white text (--text-on-error) uses this darker shade of the same
+     hue (4.62:1). --color-error stays for text, border and icon uses. */
+  --color-error-solid: #da3535;
 
   --color-info: #3b82f6;
   --color-info-hover: #2563eb;
@@ -93,6 +98,8 @@
   --color-info-dark: #1d4ed8;
   --color-info-bg: rgba(59, 130, 246, 0.1);
   --color-info-bg-hover: rgba(59, 130, 246, 0.2);
+  /* #19872: solid-fill shade of --color-info for white text (3.68:1 -> 4.61:1). */
+  --color-info-solid: #306eeb;
 
   /* Danger Colors (for critical actions) */
   --color-danger: #dc2626;
@@ -128,7 +135,7 @@
   --bg-input: #1e293b;
   --bg-hover: rgba(255, 255, 255, 0.05);
   --bg-active: rgba(255, 255, 255, 0.1);
-  --bg-overlay: rgba(0, 0, 0, 0.5);
+  --bg-overlay: rgba(0, 0, 0, 0.7);
   /* Alias for the dark scrim used by dialog/modal backdrops. Several
      components referenced --bg-overlay-dark, which was never defined
      (backdrops rendered transparent); define it as the standard dark
@@ -160,8 +167,8 @@
   --text-tertiary: #8a98ad;
   --text-muted: #8593a8;
   --text-inverse: #0f172a;
-  --text-link: #3b82f6;
-  --text-link-hover: #60a5fa;
+  --text-link: #60a5fa;
+  --text-link-hover: #93c5fd;
 
   /* ============================================
    * BORDER COLORS
@@ -173,6 +180,7 @@
   --border-strong: #64748b;
   --border-emphasis: #94a3b8;
   --border-focus: var(--color-primary);
+  --focus-ring-width: 3px; /* the @autobot/ui adapter's --aui-focus-ring-width */
   --border-error: var(--color-error);
   --border-success: var(--color-success);
 
@@ -226,7 +234,7 @@
   /* Chart backgrounds */
   --chart-bg: var(--bg-card);
   --chart-grid: rgba(148, 163, 184, 0.1);
-  --chart-axis: var(--text-muted);
+  --chart-axis: var(--text-tertiary);
   --chart-tooltip-bg: var(--bg-elevated);
 
   /* ============================================
@@ -274,6 +282,14 @@
   --spacing-20: 5rem;
   --spacing-24: 6rem;
   --spacing-32: 8rem;
+
+  /* Safe-area insets (#14771): the notch, rounded corners and home indicator.
+   * index.html sets viewport-fit=cover, so these resolve to the device's real
+   * insets (0 on a plain rectangular screen). Use these, never raw env(). */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
 
   /* Sub-half-unit micro spacing — used in dense UI (badges, chips, voice controls).
    * Unused (micro-1, micro-2, micro-6) removed in #5036 audit.
@@ -374,12 +390,12 @@
    * Elevation and depth
    * ============================================ */
 
-  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
-  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
-  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
-  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
-  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.2);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px -1px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 4px 6px -4px rgba(0, 0, 0, 0.3);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.3), 0 8px 10px -6px rgba(0, 0, 0, 0.3);
+  --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
   --shadow-inner: inset 0 2px 4px 0 rgba(0, 0, 0, 0.05);
   --shadow-none: none;
 
@@ -445,6 +461,8 @@
   --z-popover: 1100;
   --z-tooltip: 1200;
   --z-toast: 1300;
+  --z-raised: 1;
+  --z-drawer-backdrop: 299;
   --z-maximum: 10000;
 
   /* ============================================
@@ -465,9 +483,9 @@
    * ============================================ */
 
   --scrollbar-width: 8px;
-  --scrollbar-track: var(--bg-secondary);
-  --scrollbar-thumb: var(--border-default);
-  --scrollbar-thumb-hover: var(--text-tertiary);
+  --scrollbar-track: #1e293b;
+  --scrollbar-thumb: #475569;
+  --scrollbar-thumb-hover: #64748b;
   --scrollbar-radius: var(--radius-full);
 
   /* ============================================
@@ -476,11 +494,50 @@
    * ============================================ */
 
   /* Cards */
-  --card-bg: var(--bg-card);
-  --card-border: var(--border-subtle);
+  --card-bg: #1e293b;
+  --card-border: rgba(71, 85, 105, 0.5);
   --card-shadow: var(--shadow-md);
   --card-radius: var(--radius-lg);
   --card-padding: var(--spacing-4);
+  /* Palette primitives (formerly vue-notus.css, #14785). --red-500 and
+     --orange-500 are the default palette; the ember variant restates them
+     behind [data-theme-variant="ember"] (themes/ember.css, #18161). */
+  --blue-gray-50: #f8fafc;
+  --blue-gray-100: #f1f5f9;
+  --blue-gray-200: #e2e8f0;
+  --blue-gray-300: #cbd5e1;
+  --blue-gray-400: #94a3b8;
+  --blue-gray-500: #64748b;
+  --blue-gray-600: #475569;
+  --blue-gray-700: #334155;
+  --blue-gray-800: #1e293b;
+  --blue-gray-900: #0f172a;
+
+  --indigo-50: #eef2ff;
+  --indigo-100: #e0e7ff;
+  --indigo-500: #6366f1;
+  --indigo-600: #4f46e5;
+  --indigo-700: #4338ca;
+
+  --emerald-50: #ecfdf5;
+  --emerald-500: #10b981;
+  --emerald-700: #047857;
+
+  /* --red-500 / --orange-500: the default palette. The ember variant restates
+     them behind [data-theme-variant="ember"] (themes/ember.css), so they no
+     longer reach every theme (#18161). */
+  --red-500: #ef4444;
+  --red-700: #dc2626;
+
+  --orange-500: #ff7849;
+  --yellow-500: #eab308;
+  --yellow-50: #fefce8;
+
+  /* Density tokens (#17564). Comfortable values; themes/preferences.css
+     redefines them per density scope ([data-layout-density]). */
+  --spacing-unit: 0.25rem;
+  --table-row-height: var(--tbl-row-h);
+  --table-cell-py: var(--tbl-cell-py);
 
   /* Buttons */
   --btn-height-sm: 32px;
@@ -500,15 +557,15 @@
   --input-height-lg: 48px;
   --input-padding-x: var(--spacing-3);
   --input-radius: var(--radius-md);
-  --input-border: var(--border-default);
+  --input-border: #475569;
   --input-border-focus: var(--color-primary);
-  --input-bg: var(--bg-input);
+  --input-bg: #1e293b;
 
   /* Tables */
-  --table-header-bg: var(--bg-secondary);
-  --table-row-bg: var(--bg-card);
-  --table-row-hover: var(--bg-hover);
-  --table-border: var(--border-subtle);
+  --table-header-bg: #1e293b;
+  --table-row-bg: #1e293b;
+  --table-row-hover: rgba(255, 255, 255, 0.05);
+  --table-border: rgba(71, 85, 105, 0.5);
 
   /* Badges */
   --badge-padding-x: var(--spacing-2);
@@ -559,9 +616,9 @@
   --chart-purple-dark: #6d28d9;
 
   /* Canvas — agent draft cell ownership tokens (MVA-360) */
-  --color-agent-draft-border: #3B82F6;
-  --color-agent-draft-bg: #EFF6FF;
-  --color-user-edit-cursor: #059669;
+  --color-agent-draft-border: #60A5FA;
+  --color-agent-draft-bg: #1E3A5F;
+  --color-user-edit-cursor: #34D399;
 
   /* ============================================
    * TERMINAL COMPONENT TOKENS
@@ -859,7 +916,7 @@
 
   /* ============================================
    * SECRETS VIEW TOKENS
-   * Issue #12005 (umbrella #11515). Scoped to llc/SecretsView.vue.
+   * Issue #12005 (umbrella #11515). Scoped to llc/CompanySecretsView.vue.
    * Hex-only (deliberately NO OKLCH override) so the view renders
    * pixel-identical to its previous hardcoded values across all browsers.
    * These are the literal fallbacks the view rendered because their intended
@@ -867,17 +924,17 @@
    * --color-success-subtle, --color-success-text, --color-danger-subtle) are
    * undefined in non-ember themes; preserved behind those intended token
    * names via nested var() so ember still wins where it defines them.
-   * --secretsview-on-accent is the white primary-button label on the accent
+   * --company-secrets-on-accent is the white primary-button label on the accent
    * fill (--text-on-primary carries an OKLCH override that would drift).
    * ============================================ */
-  --secretsview-accent: #c4651a;             /* primary-button accent fill (non-ember) */
-  --secretsview-on-accent: #fff;             /* primary-button label on accent */
-  --secretsview-bg-code: #f3f4f6;            /* secret-name code chip fill */
-  --secretsview-success-bg: #dcfce7;         /* active status-badge fill */
-  --secretsview-success-text: #15803d;       /* active status-badge text */
-  --secretsview-status-revoked-bg: #e5e7eb;  /* revoked status-badge fill */
-  --secretsview-input-disabled-bg: #f3f4f6;  /* disabled modal-input fill */
-  --secretsview-danger-border: #fecaca;      /* danger button border */
+  --company-secrets-accent: #c4651a;             /* primary-button accent fill (non-ember) */
+  --company-secrets-on-accent: #fff;             /* primary-button label on accent */
+  --company-secrets-bg-code: #f3f4f6;            /* secret-name code chip fill */
+  --company-secrets-success-bg: #dcfce7;         /* active status-badge fill */
+  --company-secrets-success-text: #15803d;       /* active status-badge text */
+  --company-secrets-status-revoked-bg: #e5e7eb;  /* revoked status-badge fill */
+  --company-secrets-input-disabled-bg: #f3f4f6;  /* disabled modal-input fill */
+  --company-secrets-danger-border: #fecaca;      /* danger button border */
 
   /* ============================================
    * BACKLOG VIEW TOKENS
@@ -1122,43 +1179,80 @@
   --kanban-wip-exceeded-text: #991b1b;  /* WIP-limit exceeded column-header text */
 
   /* ============================================
-   * SYNTAX HIGHLIGHTING TOKENS (#14770, #14853, umbrella #11515)
-   * Shared by canvas/CodeCell.vue and artifact-cells/CodeCell.vue's
-   * highlight.js themes -- the one token set both components read (#14853's
-   * AC2), not one theme per file.
-   *
-   * The comment on the Kanban block above records the earlier call that this
-   * palette is "DATA, preserved literal in the component" (#12048). That held
-   * only while the file went untouched: `color-no-hex` lints CHANGED files, so
-   * the first edit to it — a one-line composable migration here — surfaced all
-   * fourteen. The decision and the linter disagreed, and the disagreement was
-   * invisible rather than resolved.
-   *
-   * Tokenised rather than suppressed: this repo has no `stylelint-disable`
-   * anywhere, and adding the first one to get a gate green is not a fix.
-   *
-   * Deliberately NOT themeable, despite living here. These are the One Dark /
-   * One Light code palettes and both sets must be available at once — the
-   * component picks between them by class, not by theme — so they carry no
-   * OKLCH override and must not be folded into the semantic --color-* scale.
+   * CODE-CELL SYNTAX PALETTE (#14853, #18497)
+   * Both CodeCells read these and nothing else. Each one is the active
+   * theme's own syntax colour -- the --code-* palette every theme file
+   * defines (light.css, dark.css, contrast.css, mono.css) -- so the cells
+   * follow the selected theme instead of choosing a fixed One Dark / One
+   * Light set by the OS colour scheme. An installed variant that sets
+   * --code-* recolours them; one that does not inherits its base theme's.
+   * No literal colours here: CodeCell.sharedPalette.test.ts fails on one.
    * ============================================ */
-  --codecell-syntax-attr-dark: #88bbff;      /* attr / attribute */
-  --codecell-syntax-number-dark: #d19a66;    /* literal / number */
-  --codecell-syntax-string-dark: #98c379;    /* string */
-  --codecell-syntax-callable-dark: #61afef;  /* built_in / title / function */
-  --codecell-syntax-keyword-dark: #c678dd;   /* keyword */
-  --codecell-syntax-comment-dark: #5c6370;   /* comment */
-  /* #14853: artifact-cells/CodeCell.vue's only category with no match above.
-     Pinned to that file's own prior rendered value -- not a themed color,
-     since nothing here measured what a "correct" tag color should be. */
-  --codecell-syntax-tag-dark: #f97583;       /* tag (HTML/XML element name) */
-  --codecell-syntax-attr-light: #0184bc;
-  --codecell-syntax-number-light: #986801;
-  --codecell-syntax-string-light: #50a14f;
-  --codecell-syntax-callable-light: #4078f2;
-  --codecell-syntax-keyword-light: #a626a4;
-  --codecell-syntax-comment-light: #a0a1a7;
-  --codecell-syntax-tag-light: #800000;      /* #14853, see the dark entry above */
+  --codecell-syntax-attr: var(--code-attribute);
+  --codecell-syntax-number: var(--code-number);
+  --codecell-syntax-string: var(--code-string);
+  --codecell-syntax-callable: var(--code-function);
+  --codecell-syntax-keyword: var(--code-keyword);
+  --codecell-syntax-comment: var(--code-comment);
+  --codecell-syntax-tag: var(--code-tag);
+  /* Weight and style carry the distinction where hue cannot (Monochrome). */
+  --codecell-syntax-keyword-weight: var(--code-keyword-weight, 400);
+  --codecell-syntax-comment-style: var(--code-comment-style, italic);
+
+  /* ============================================
+   * THEME PRESET PICKER SWATCH TOKENS (#14785, umbrella #11515)
+   * settings/ThemePresetPicker.vue previews EVERY preset's background/accent
+   * and every accent colour at once, so these are sample colours of themes that
+   * are NOT active - they cannot read the live --color-* scale and must not
+   * follow the active theme. Tokenised rather than suppressed, as with the
+   * CodeCell syntax palette above.
+   * ============================================ */
+  --preset-preview-auto-dark: #1a1a1a;
+  --preset-preview-auto-light: #f5f5f5;
+  --preset-preview-catppuccin-mocha-bg: #1e1e2e;
+  --preset-preview-catppuccin-mocha-accent: #9333ea;
+  --preset-preview-catppuccin-latte-bg: #eff1f5;
+  --preset-preview-catppuccin-latte-accent: #9333ea;
+  --preset-preview-solarized-dark-bg: #002b36;
+  --preset-preview-solarized-dark-accent: #14b8a6;
+  --preset-preview-solarized-light-bg: #fdf6e3;
+  --preset-preview-solarized-light-accent: #14b8a6;
+  --preset-preview-high-contrast-dark-bg: #000000;
+  --preset-preview-high-contrast-light-bg: #ffffff;
+  --preset-preview-brand-dark-bg: #0a0a0a;
+  --preset-preview-brand-dark-accent: #14b8a6;
+  --preset-preview-brand-light-bg: #ffffff;
+  --preset-preview-brand-light-accent: #14b8a6;
+  --preset-preview-midnight-bg: #0a0a1a;
+  --preset-preview-midnight-accent: #6366f1;
+  --preset-preview-sunset-bg: #fff8f0;
+  --preset-preview-sunset-accent: #f97316;
+  --preset-preview-forest-bg: #0a1a0a;
+  --preset-preview-forest-accent: #10b981;
+  --preset-preview-rose-bg: #fff0f5;
+  --preset-preview-rose-accent: #ec4899;
+  --accent-swatch-blue: #3b82f6;
+  --accent-swatch-green: #10b981;
+  --accent-swatch-purple: #9333ea;
+  --accent-swatch-orange: #f97316;
+  --accent-swatch-pink: #ec4899;
+  --accent-swatch-teal: #14b8a6;
+  --accent-swatch-indigo: #6366f1;
+  --accent-swatch-red: #ef4444;
+
+  /* ============================================
+   * COMPONENT SHOWCASE SWATCH TOKENS (#14785, umbrella #11515)
+   * views/ComponentShowcaseView.vue prints each swatch's hex next to it as
+   * documentation, so the fill is pinned to that printed value instead of
+   * following the active theme (--color-info, for one, is not the cyan shown).
+   * ============================================ */
+  --showcase-swatch-primary: #3b82f6;
+  --showcase-swatch-hover: #2563eb;
+  --showcase-swatch-active: #1d4ed8;
+  --showcase-swatch-success: #10b981;
+  --showcase-swatch-warning: #f59e0b;
+  --showcase-swatch-error: #ef4444;
+  --showcase-swatch-info: #06b6d4;
 
   /* ============================================
    * KB SEARCH HIGHLIGHT TOKENS (#14770, umbrella #11515)
@@ -1188,6 +1282,270 @@
   --opdetail-resume-bg: #dcfce7;           /* resume-button fill */
   --opdetail-resume-text: #166534;         /* resume-button text */
   --opdetail-success-soft: #bbf7d0;        /* resume-button border and hover fill */
+
+  /* Base values moved here from styles/theme.css, themes/dark.css and themes/accents.css (#14785): one base declaration site per token name. */
+  --content-padding-x: 1rem;
+  --content-padding-y: 1.5rem;
+  --scrollbar-thumb-radius: 4px;
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.2s ease;
+  --transition-slow: 0.3s ease;
+  --font-family-sans: Inter, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-family-mono: 'Fira Code', 'JetBrains Mono', Menlo, Monaco, Consolas, 'Courier New', monospace;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.875rem;
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.5;
+  --line-height-relaxed: 1.75;
+  --badge-type-epic-bg: #362b6b;
+  --badge-type-epic-fg: #d6ccff;
+  --badge-type-feature-bg: #1e365f;
+  --badge-type-feature-fg: #bfd7ff;
+  --badge-type-pbi-bg: #123b2c;
+  --badge-type-pbi-fg: #a7ecc9;
+  --badge-type-task-bg: #0e3a52;
+  --badge-type-task-fg: #b3e2f7;
+  --badge-type-bug-bg: #4a1d1d;
+  --badge-type-bug-fg: #ffc4c4;
+  --badge-type-spike-bg: #4a3411;
+  --badge-type-spike-fg: #fbdf9b;
+  --badge-type-subtask-bg: #2f3742;
+  --badge-type-subtask-fg: #cdd6e2;
+  --badge-type-risk-bg: #4a1f38;
+  --badge-type-risk-fg: #f9c0dd;
+  --badge-status-backlog-bg: #2f3742;
+  --badge-status-backlog-fg: #cdd6e2;
+  --badge-status-ready-bg: #0e3a52;
+  --badge-status-ready-fg: #b3e2f7;
+  --badge-status-in_progress-bg: #362b6b;
+  --badge-status-in_progress-fg: #d6ccff;
+  --badge-status-in_review-bg: #4a3d11;
+  --badge-status-in_review-fg: #f5e39b;
+  --badge-status-done-bg: #123b2c;
+  --badge-status-done-fg: #a7ecc9;
+  --badge-status-blocked-bg: #4a1d1d;
+  --badge-status-blocked-fg: #ffc4c4;
+  --badge-status-cancelled-bg: #2f3742;
+  --badge-status-cancelled-fg: #9aa5b3;
+  --badge-priority-critical-bg: #4a1d1d;
+  --badge-priority-critical-fg: #ffc4c4;
+  --badge-priority-high-bg: #4a2c11;
+  --badge-priority-high-fg: #ffcea1;
+  --badge-priority-medium-bg: #4a3d11;
+  --badge-priority-medium-fg: #f5e39b;
+  --badge-priority-low-bg: #163a1f;
+  --badge-priority-low-fg: #aeeabb;
+  --badge-dot-critical: #f87171;
+  --badge-dot-high: #fb923c;
+  --badge-dot-medium: #facc15;
+  --badge-dot-low: #4ade80;
+  --badge-approval-budget_increase-bg: #4a3411;
+  --badge-approval-budget_increase-fg: #fbdf9b;
+  --badge-approval-agent_spawn-bg: #362b6b;
+  --badge-approval-agent_spawn-fg: #d6ccff;
+  --badge-approval-external_api-bg: #1e365f;
+  --badge-approval-external_api-fg: #bfd7ff;
+  --badge-approval-code_deploy-bg: #4a1d1d;
+  --badge-approval-code_deploy-fg: #ffc4c4;
+  --badge-approval-data_access-bg: #123b2c;
+  --badge-approval-data_access-fg: #a7ecc9;
+  --badge-approval-policy_change-bg: #4a1f38;
+  --badge-approval-policy_change-fg: #f9c0dd;
+  --badge-approval-contract_sign-bg: #4a2c11;
+  --badge-approval-contract_sign-fg: #ffcea1;
+  --badge-approval-hiring-bg: #0e3a52;
+  --badge-approval-hiring-fg: #b3e2f7;
+  --badge-approval-approved-bg: #123b2c;
+  --badge-approval-approved-fg: #a7ecc9;
+  --badge-approval-rejected-bg: #4a1d1d;
+  --badge-approval-rejected-fg: #ffc4c4;
+  --badge-approval-changes_requested-bg: #4a3411;
+  --badge-approval-changes_requested-fg: #fbdf9b;
+  --badge-sprint-planning-bg: #4a3d11;
+  --badge-sprint-planning-fg: #f5e39b;
+  --badge-sprint-active-bg: #123b2c;
+  --badge-sprint-active-fg: #a7ecc9;
+  --badge-sprint-review-bg: #362b6b;
+  --badge-sprint-review-fg: #d6ccff;
+  --badge-sprint-closed-bg: #2f3742;
+  --badge-sprint-closed-fg: #cdd6e2;
+
+  /* ============================================
+   * REFINED UI TOKENS (#18223, folded under #14785)
+   * Source: the Refined UI redesign handoff (tokens.css). These are the
+   * LIGHT theme values and the theme-independent sizes; dark, contrast and
+   * mono restate only the colour names in themes/. The legacy --bg-*,
+   * --text-*, --border-* and --card-* names derive from these in
+   * themes/refined-map.css. Name-by-name mapping and the list of new names:
+   * docs/design/REFINED_TOKEN_MAPPING.md
+   * ============================================ */
+
+  /* Surfaces and borders */
+  --bg: #F5F6F8;
+  --surface: #FFFFFF;
+  --surface2: #F8F9FB;
+  --border: #E3E6EC;
+  --line: #EEF0F3;
+  --bw: 1px;
+  /* Text and links */
+  --text: #1E2A44;
+  --text2: #4B5570;
+  --muted: #5F6B85;
+  --link: #1E2A44;
+  --link-h: #B8452A;
+  /* Brand, accent and focus */
+  --primary: #1E2A44;
+  --primary-h: #2C3A5A;
+  --on-primary: #FFFFFF;
+  --accent: #D9603F;
+  --focus: #2563EB;
+  --brand-bg: #1E2A44;
+  --brand-fg: #FFFFFF;
+  --nav-on-bw: 2px;
+  /* Illustration */
+  --tile: #F1F4F8;
+  --tile-b: #E3E6EC;
+  --stroke: #1E2A44;
+  --i1: #A9D4E4;
+  --i2: #F0C674;
+  --i3: #EF9077;
+  --i1t: #D5E9F1;
+  --i2t: #F7E3B8;
+  --i3t: #F7D3C8;
+  /* Bars and alert text */
+  --bar: #1E2A44;
+  --bar-alert: #D9603F;
+  --bar-track: #EEF0F3;
+  --alert-text: #9A3412;
+  /* Status pills */
+  --ok-bg: #E6F4EC;
+  --ok-fg: #1D6A3E;
+  --warn-bg: #FCF1D9;
+  --warn-fg: #7A5300;
+  --bad-bg: #FBE5DF;
+  --bad-fg: #9A3412;
+  --idle-bg: #EEF0F3;
+  --idle-fg: #4B5570;
+  --info-bg: #E2F0F6;
+  --info-fg: #155A70;
+  --pill-b: 0 solid transparent;
+  /* Status dots */
+  --dot-ok: #2E9E60;
+  --dot-idle: #B7BECB;
+  --dot-warn: #E0A93A;
+  --dot-bad: #D9603F;
+  /* Danger tile */
+  --danger-tile: #FBE5DF;
+  --danger-tile-b: #F2C9BC;
+
+  /* Breakpoints, grid and page frame */
+  --bp-sm: 640px;
+  --bp-md: 768px;
+  --bp-lg: 1024px;
+  --bp-xl: 1280px;
+  --bp-2xl: 1536px;
+  --grid-cols: 12;
+  --grid-gutter: 24px;
+  --page-margin: clamp(16px,2.5vw,32px);
+  --topbar-h: var(--header-height);
+  --subnav-w: 220px;
+  --subnav-rail: 56px;
+  --panel-w: 360px;
+  --content-max: 1440px;
+  --reading-max: 72ch;
+  --space-section: 32px;
+  --stack: 16px;
+  --widget-s: 4;
+  --widget-m: 6;
+  --widget-l: 8;
+  --widget-full: 12;
+  --kpi-span: 3;
+
+  /* Table */
+  --tbl-font-size: 13px;
+  --tbl-row-h: 44px;
+  --tbl-cell-px: 16px;
+  --tbl-cell-py: 10px;
+  --tbl-head-h: 36px;
+  --tbl-head-bg: var(--surface2);
+  --tbl-head-fg: var(--muted);
+  --tbl-head-font: 600 11.5px/1.2 'IBM Plex Sans',system-ui,sans-serif;
+  --tbl-head-case: uppercase;
+  --tbl-head-ls: .05em;
+  --tbl-head-border: var(--bw) solid var(--border);
+  --tbl-border: var(--bw) solid var(--line);
+  --tbl-row-hover: var(--surface2);
+  --tbl-row-selected: var(--surface2);
+  --tbl-selected-edge: 3px solid var(--primary);
+  --tbl-zebra: transparent;
+  --tbl-zebra-bg: var(--surface2);
+  --tbl-check-col-w: 44px;
+  --tbl-actions-col-w: 48px;
+  --tbl-min-col: 96px;
+  --tbl-cell-max: 360px;
+  --tbl-num: tabular-nums;
+  --tbl-sticky-top: var(--topbar-h);
+
+  /* Form fields */
+  --field-h-sm: 32px;
+  --field-h-md: 36px;
+  --field-h-lg: 44px;
+  --field-px: 12px;
+  --field-radius: var(--radius-md);
+  --field-font-size: 13.5px;
+  --field-border: var(--bw) solid var(--border);
+  --field-border-hover: var(--muted);
+  --field-bg: var(--surface);
+  --field-bg-disabled: var(--surface2);
+  --field-fg: var(--text);
+  --field-focus-ring: 3px solid var(--focus);
+  --field-focus-offset: 1px;
+  --label-size: 13px;
+  --label-weight: 500;
+  --label-gap: 6px;
+  --help-size: 12.5px;
+  --help-fg: var(--muted);
+  --error-fg: var(--alert-text);
+  --error-border: var(--bar-alert);
+  --error-bw: 2px;
+  --field-gap: 16px;
+  --inline-gap: 8px;
+  --form-section-gap: 28px;
+  --form-label-col: 200px;
+  --form-max: 640px;
+  --action-gap: 8px;
+  --check-gap: 8px;
+  --control-size: 18px;
+  --switch-w: 36px;
+  --switch-h: 20px;
+  --switch-knob: 14px;
+
+  /* Tooltip */
+  --tooltip-delay: 500ms;
+  --tooltip-hide-delay: 100ms;
+  --tooltip-offset: 8px;
+  --tooltip-max: 280px;
+}
+
+/* Refined grid steps down with the viewport (#18223). Behind @media, so an override, not a second base. */
+@media (max-width: 1023.98px) {
+  :root {
+    --grid-cols: 8;
+    --grid-gutter: 16px;
+    --space-section: 24px;
+    --stack: 12px;
+  }
+}
+
+@media (max-width: 767.98px) {
+  :root {
+    --grid-cols: 4;
+  }
 }
 
 /* ============================================
@@ -1247,6 +1605,7 @@
     --text-on-success: oklch(0% 0 0);
     --text-on-warning: oklch(0% 0 0);
     --text-on-error: oklch(100% 0 0);
+    --text-on-info: oklch(100% 0 0);
 
     /* Secondary Colors */
     --color-secondary: oklch(55.4% 0.041 257.4);
@@ -1280,6 +1639,8 @@
     --color-error-bg: oklch(63.7% 0.208 25.3 / 0.1);
     --color-error-bg-hover: oklch(63.7% 0.208 25.3 / 0.2);
     --color-error-border: oklch(63.7% 0.208 25.3 / 0.3);
+    /* #19872: solid-fill shade for white text; matches the sRGB block. */
+    --color-error-solid: oklch(58.6% 0.202 26.1);
 
     /* Info Colors */
     --color-info: oklch(62.3% 0.188 259.8);
@@ -1288,6 +1649,7 @@
     --color-info-dark: oklch(48.8% 0.217 264.4);
     --color-info-bg: oklch(62.3% 0.188 259.8 / 0.1);
     --color-info-bg-hover: oklch(62.3% 0.188 259.8 / 0.2);
+    --color-info-solid: oklch(57.1% 0.200 262.2);
 
     /* Danger Colors */
     --color-danger: oklch(57.7% 0.215 27.3);
@@ -1310,16 +1672,6 @@
     --color-error-alpha-10: oklch(63.7% 0.208 25.3 / 0.1);
 
     /* Background Colors */
-    --bg-primary: oklch(20.8% 0.040 265.8);
-    --bg-secondary: oklch(27.9% 0.037 260.0);
-    --bg-tertiary: oklch(37.2% 0.039 257.3);
-    --bg-elevated: oklch(27.9% 0.037 260.0);
-    --bg-surface: oklch(22.8% 0.038 282.9);
-    --bg-card: oklch(27.9% 0.037 260.0);
-    --bg-input: oklch(27.9% 0.037 260.0);
-    --bg-hover: oklch(100% 0 0 / 0.05);
-    --bg-active: oklch(100% 0 0 / 0.1);
-    --bg-overlay: oklch(0% 0 0 / 0.5);
     --overlay-backdrop: oklch(0% 0 0 / 0.8);
 
     /* Semi-transparent backgrounds */
@@ -1336,18 +1688,8 @@
 
     /* Text Colors — TASK 15: tertiary/muted lightened to meet WCAG AA (4.5:1)
        for small metadata labels on dark backgrounds */
-    --text-primary: oklch(92.9% 0.013 255.5);
-    --text-secondary: oklch(71.1% 0.035 256.8);
-    --text-tertiary: oklch(67.5% 0.035 257.0);
-    --text-muted: oklch(65.0% 0.034 257.0);
-    --text-inverse: oklch(20.8% 0.040 265.8);
-    --text-link: oklch(62.3% 0.188 259.8);
-    --text-link-hover: oklch(71.4% 0.143 254.6);
 
     /* Border tokens */
-    --border-default: oklch(44.6% 0.037 257.3);
-    --border-subtle: oklch(44.6% 0.037 257.3 / 0.5);
-    --border-strong: oklch(55.4% 0.041 257.4);
     --border-emphasis: oklch(71.1% 0.035 256.8);
 
     /* Chart - Primary palette */
@@ -1381,21 +1723,8 @@
     --chart-yellow-bg: oklch(79.5% 0.162 86.0 / 0.2);
 
     /* Chart grid and misc */
-    --chart-grid: oklch(71.1% 0.035 256.8 / 0.1);
 
     /* Code Syntax Highlighting */
-    --code-bg: oklch(17.6% 0.014 258.4);
-    --code-text: oklch(85.7% 0.014 248.0);
-    --code-keyword: oklch(73.4% 0.163 25.8);
-    --code-string: oklch(85.6% 0.077 244.1);
-    --code-number: oklch(78.6% 0.115 246.7);
-    --code-comment: oklch(66.2% 0.018 250.9);
-    --code-function: oklch(80.1% 0.128 305.9);
-    --code-variable: oklch(79.9% 0.141 60.1);
-    --code-operator: oklch(73.4% 0.163 25.8);
-    --code-class: oklch(84.2% 0.164 145.8);
-    --code-tag: oklch(84.2% 0.164 145.8);
-    --code-attribute: oklch(78.6% 0.115 246.7);
 
     /* Colored shadows */
     --shadow-primary: 0 4px 14px 0 oklch(58.5% 0.204 277.1 / 0.3);
@@ -1424,8 +1753,5 @@
     --bg-tertiary-transparent: oklch(37.2% 0.039 257.3 / 0.7);
 
     /* Canvas — agent draft cell ownership tokens */
-    --color-agent-draft-border: oklch(62.3% 0.188 259.8);
-    --color-agent-draft-bg: oklch(97.0% 0.014 254.6);
-    --color-user-edit-cursor: oklch(59.6% 0.127 163.2);
   }
 }

@@ -129,7 +129,7 @@ import { asIconName } from '@/utils/iconMappings'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 
 interface MainCategory {
   id: string
@@ -232,7 +232,7 @@ const showEmptyStateHint = computed(
   cursor: pointer;
   font-size: var(--text-sm);
   transition: all var(--duration-150) var(--ease-in-out);
-  z-index: 1;
+  z-index: var(--z-raised);
 }
 
 .category-edit-btn:hover {
@@ -301,7 +301,7 @@ const showEmptyStateHint = computed(
   font-size: var(--text-xs);
 }
 
-.populate-btn i {
+.populate-btn .icon {
   font-size: var(--text-xs);
 }
 

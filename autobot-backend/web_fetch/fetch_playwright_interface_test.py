@@ -21,7 +21,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 import browser_backends
-from autobot_shared.browser.base import Capability, ContentFormat
+from autobot_shared.browser.base import BrowserCapability, ContentFormat
 from autobot_shared.browser.registry import clear_backends
 from browser_backends import ContainerBrowserBackend, InProcessBrowserBackend, WorkerBrowserBackend
 from web_fetch.fetcher import _fetch_playwright
@@ -136,7 +136,7 @@ async def test_the_requirements_are_the_ones_actually_handed_to_the_resolver():
     """A widened requirement set would re-open the #13306 mis-routing.
 
     This used to grep ``inspect.getsource(_fetch_playwright)`` for
-    ``Capability.EXTRACT_HTML`` and friends (#13311). The literal appearing in
+    ``BrowserCapability.EXTRACT_HTML`` and friends (#13311). The literal appearing in
     the docstring -- which it does, at length -- satisfied that assertion by
     itself, so the check could never have failed. Capture what ``get_browser``
     is called with instead.
@@ -153,7 +153,7 @@ async def test_the_requirements_are_the_ones_actually_handed_to_the_resolver():
     ):
         assert await _fetch_playwright("https://example.com/", timeout=5.0) is None
 
-    assert seen["requires"] == {Capability.EXTRACT_HTML, Capability.OUT_OF_PROCESS}, (
+    assert seen["requires"] == {BrowserCapability.EXTRACT_HTML, BrowserCapability.OUT_OF_PROCESS}, (
         "a parser needs markup, not text (EXTRACT_HTML), and Playwright must "
         f"stay out of the backend process (OUT_OF_PROCESS); got {seen['requires']}"
     )

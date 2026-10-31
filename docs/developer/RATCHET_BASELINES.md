@@ -67,12 +67,11 @@ declares `EXCLUDED_PREFIXES` **and** pins it with
 scope and the hook's `exclude:` diverge. That pairing is what makes the exclusion
 a decision rather than an accident.
 
-`duplication-guard.yml`'s SLM scope is the same shape (#16401): it excludes
-`autobot-slm-backend/ansible/roles/slm_agent/files/slm/agent/`, the Ansible
-mirror that `ansible/tests/detect_agent_code_drift_test.py` already forces
-byte-identical to its source, so jscpd stopped counting the mandatory copy as a
-clone of the original. `duplication_guard_excludes_agent_mirror_test.py` fails
-if that ignore entry disappears or widens past the one path.
+`duplication-guard.yml`'s SLM scope once carried the same shape (#16401), an
+exclusion for the Ansible mirror of `slm/agent/`. The mirror is gone (#18548: the
+`slm_agent` role deploys `autobot-slm-backend/slm/agent/` itself), the exclusion
+with it, and `ansible/tests/slm_agent_deploys_source_tree_18548_test.py` fails if
+a copy is ever tracked under `roles/` again.
 
 ### 3. Derive the population a second way before freezing it
 
@@ -193,9 +192,49 @@ duplicated-line count.
 Before freezing a ratio, ask whether a change the rule should welcome can move
 it: deleting unrelated code, or splitting a file.
 
+**A ratio is acceptable when its numerator and denominator are the same
+population**, because then every welcome change moves both. That is the
+discriminator, and it is the question above rather than an exception to it.
+
+jscpd failed because the two were different populations: duplicated lines over
+*all* scanned lines, so deleting unique code moved the denominator alone.
+Contrast the reach floor in #17142, where `hooks-path-override` requires its
+sweep to cover 0.98 of the tracked files carrying its own suffixes. Adding
+`.md`, `.ts` or `.vue` files moves neither side; adding or splitting a `.py`
+file moves both by one. The ratio is the right form there precisely because an
+absolute floor was *not*: the constant was re-pinned seventeen times, and every
+re-pin was correct when written — a constant does not rot, the tree grows past
+it.
+
+**The first version of that change got this wrong in exactly the way this rule
+describes**, and this rule was already written when it did. It took a fraction
+of the whole tracked tree as a floor on a counted subset, so a month heavy in
+`.md` would have closed the floor on the population and tripped the guard with
+nothing wrong. The fix was to reference the population the guard actually
+bounds. So: ask the question for the ratio you are about to freeze, not for
+ratios in general.
+
+### 8. A migration assertion inherits the baseline it records
+
+When a ratchet changes form — a constant becoming a ratio, a floor becoming a
+fraction — the natural way to prove the new bound is no weaker is to record the
+old one and assert the new one exceeds it. That assertion is only as good as the
+figure it recorded.
+
+#17142 recorded the tracked-file count as the denominator for a guard that
+bounds a subset of it. Had the declaration been fixed and the recorded baseline
+left alone, the test written to stop the claim drifting would have gone on
+passing against the wrong denominator — **certifying the drift it existed to
+prevent.** It fails in the one direction nobody re-checks, because a passing
+migration test reads as "the migration was faithful".
+
+So when you change the form of a bound, change the recorded baseline in the same
+commit, and state which quantity the recorded number is of. A baseline whose
+units are implicit is a baseline that cannot be checked.
+
 ## Worked example — the one that passes
 
-`repo_tests/python_file_size_ratchet_baseline.py`, measured against
+`scripts/python_file_size_known_large.py`, measured against
 `origin/main`:
 
 | | |
@@ -399,6 +438,87 @@ has it too, via a different mechanism: `detect-hardcoded-values.sh
 on a baseline entry that no longer matches anything in a fresh scan. Neither
 needed new work here — this section exists so the next guard author checks
 rather than assumes.
+
+## Direct Redis constructors (#18553)
+
+`repo_tests/redis_direct_constructor_18553_test.py` fails on a NEW direct Redis client
+construction (`redis.Redis(`, `redis.asyncio.Redis(`, `StrictRedis(`, `from_url(`, a Redis
+`ConnectionPool(`, `Sentinel(`, `RedisCluster(`, `from_pool(`) outside `autobot_shared/redis*`; `repo_tests/redis_direct_constructor_baseline_18553.py`
+freezes today's sites with a verdict each (EXCEPTION + reason, or MIGRATE + slice).
+
+- **Boundary:** tracked `.py` and `.sh` under the guard's `SCAN_ROOTS`, tests excluded. Not seen: a
+  client a library builds from a URI (LangGraph checkpointer, Celery) and Python embedded in other
+  file types. Declared in the guard docstring and the baseline header, pinned by the reach floor.
+- **Matcher:** AST with the file's own `redis` imports resolved (so SQLite/Ollama pools do not match);
+  shell scripts through `tools.lint._comment_syntax`. A comment or string mentioning a constructor is not a site.
+- **Population derived a second way** (`git grep` over the same roots, sets compared): 32 files by grep, 28 by
+  the AST; the 4-file difference is files that only MENTION `redis.Redis(` in a string or docstring.
+- **Shrink:** counts are exact, so a removed site is stale until its entry is lowered; `FROZEN_TOTAL` may only
+  go down.
+- **One matcher, one baseline:** the matcher lives in `tools/lint/check_no_direct_redis.py`. This guard, the
+  `no-direct-redis` pre-commit hook and the code-quality CI step all run it against the same baseline (the
+  hook and the step on the changed files only). The earlier regex hook and its `# noqa: redis` opt-out are
+  retired; a site is frozen here with a reason or it fails. The CI wrapper hands hooks `.py` (not `.sh`),
+  so a shell-only change is caught at commit time and by this tree guard.
+
+## Recorded exceptions to a shrink-only ratchet: the symbol-fork record (#18688)
+
+A baseline that only shrinks cannot hold a fork that is correct: a separate service with its own
+auth stack binds `get_current_user` on purpose, and listing it as debt means it never reaches zero.
+`repo_tests/symbol_fork_exceptions.json` records those, so the baseline holds only real debt.
+
+Each entry names `symbol`, `canonical` (the one site that needs no excuse), `sites` (every excepted
+binding, exact `path:qualname`; a module-level binding's qualname is its name), `reason` and `issue`
+(a full issue URL or `#N`). Rules, enforced by `tools/lint/check_symbol_forks.py` and
+`repo_tests/symbol_fork_exceptions_18688_test.py`:
+
+- A cluster whose every binding is the canonical site or a recorded site is not a fork. Any other
+  binding keeps it, so a new third `get_current_user` still fails.
+- An entry missing a field, or with an issue that is not a link, is rejected and exempts nothing.
+- A recorded site that no longer exists is reported STALE. The record shrinks with the tree.
+- `--freeze` writes the baseline from the clusters left after exceptions, so an excepted name
+  leaves the baseline in a removals-only diff.
+
+## Down-only tables are compared with the base, not with a hand total (#19283)
+
+A per-entry table (file-size `KNOWN_LARGE`, the colour and palette baselines) used to carry a
+hand-summed total or a mirrored copy, so that a raise showed up somewhere. Every PR that lowered
+*any* entry then edited the same total line, and two such PRs always conflicted.
+`repo_tests/_ratchet_base.py` now holds each entry to the same table at the base commit instead:
+an entry above the base, or a key the base lacks, is a raise.
+
+- **The base:** `AUTOBOT_RATCHET_BASE_SHA` in CI (a merge group's `base_sha`; on a push to
+  main, the commit main pointed at before), else `HEAD^1`. Locally it is the merge-base with
+  `origin/main`.
+- **The backstop:** a PR run that spans a raise can be cancelled. Main's own push run then
+  compares with `github.event.before`, always an ancestor, so the raise turns main red on the
+  push that lands it. That holds only because every push to main runs: ci.yml keys a push's
+  concurrency group on its commit, so a later merge cannot cancel it while it waits.
+- **Fail closed:** a base that cannot be read raises `BaseUnavailable`. It never passes as
+  "nothing rose".
+- **Moving a table:** pass the old path after the new one,
+  `base_table(root, ("new.py", "old.py"), NAME)`. Without it every entry reads as an addition.
+
+## Local date and time formatters (#19905)
+
+`repo_tests/frontend_local_date_formatter_ratchet_19905_test.py` pins the local declarations named
+`formatDate`, `formatTime`, `formatDateTime`, `formatTimestamp`, `formatRelativeTime` and
+`formatTimeAgo` under `components/`, `views/` and `composables/` of both frontends. It is modelled
+on the byte/duration ratchet (#19680): one number in `PINS`, held down-only against the base by
+`_ratchet_base.base_table`, and a reach floor from `repo_tests._reach.declare(...)` so a moved
+folder cannot read as a clean 0.
+
+- **Boundary:** a `function` or `const` bound to an arrow/function expression, or an object or
+  class method/property, with one of those names. `const formatTime = createDateFormatter({...})`
+  and `const formatDate = formatDateTime` are bindings of the kit's functions and are not counted.
+- **What the pin holds:** i18n-aware relative-time formatters (the kit's `formatTimeAgo` is
+  English only), formatters whose name says time but that format a duration (#19680, #19929), and declarations in files an
+  open PR held when the ratchet landed. Lower `PINS` in the PR that moves one.
+- **Not independently re-derived.** Rule 3 asks for a second enumeration; this ratchet has only the
+  detector's, so its count is as good as the regex. The fixtures in the test file are its positive
+  and negative controls.
+- **Re-pinning the floor:** `python scripts/repin_reach_floors.py` after the tree grows or shrinks
+  past the window.
 
 ## Checklist for a new ratchet
 

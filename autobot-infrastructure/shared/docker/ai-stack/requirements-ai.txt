@@ -2,36 +2,49 @@
 # Includes LangChain, LlamaIndex and related packages with compatible versions
 
 # Core AI Frameworks
-langchain>=1.4.1,<2.0.0          # Issue #2808: upper bound unified; MVA-1330: floor corrected to 1.3.0 — 1.2.24 does not exist on PyPI; PVE-2026-88512 SQL injection fix
-langchain-core>=1.6.3,<2.0.0   # Issue #2808: upper bound unified with backend canonical
+langchain>=1.4.6,<2.0.0          # Issue #2808: upper bound unified; MVA-1330: floor corrected to 1.3.0 — 1.2.24 does not exist on PyPI; PVE-2026-88512 SQL injection fix
+langchain-core>=1.6.11,<2.0.0   # Issue #2808: upper bound unified with backend canonical
 langchain-community>=0.4.2,<0.5.0  # Issue #2808: upper bound unified with backend canonical
-llama-index>=0.14.24,<0.15.0
-llama-index-core>=0.14.24,<0.15.0
+llama-index>=0.14.25,<0.15.0
+llama-index-core>=0.14.25,<0.15.0
 llama-index-vector-stores-chroma>=0.6.0,<1.0.0
 llama-index-embeddings-ollama>=0.10.0,<1.0.0
 llama-index-llms-ollama>=0.11.0,<1.0.0
 
 # Vector Database
-chromadb>=1.5.9,<2.0.0           # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
+chromadb                         # version from constraints/shared.txt (#19478)
 sentence-transformers>=6.1.0
 
 # Model and Tokenization
-transformers>=5.17.0
+transformers>=5.20.2
 tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a floor above that is
                           # unsatisfiable. #10416 (a grouped dependency bump) raised it back to
                           # >=0.23.1 two days after #10332 fixed it, keeping this comment, and the
                           # ai-stack + npu-worker installs have failed to resolve ever since.
                           # scripts/tokenizers_transformers_range_test.py now fails on a floor
                           # that excludes 0.23.0.
-huggingface-hub>=1.32.0
+#
+# The hold is not caution about majors in general: the only production call is
+# `huggingface_hub.login(token=..., add_to_git_credential=False)` in two
+# tts-worker ansible templates, and the test covering it swaps the whole module
+# for a MagicMock, which accepts any signature. So CI passes whatever 2.x does
+# to that function. Whether the signature is still valid in 2.x is UNKNOWN and
+# is what #17847 exists to settle -- not something this file can answer.
+# Held below 2.0 (#17847, re-asserted after #18045). MEASURED on PyPI: the latest
+# `sentence-transformers` (6.1.0) and `tokenizers` (0.23.2) BOTH declare
+# `huggingface-hub<2.0`, so a >=2.x floor is unsatisfiable in any manifest holding
+# either -- pip fails on the whole file and nothing installs. #18045 raised all three
+# declarations to >=2.1.1 together, which satisfied "all three move together" but not
+# the resolver. Raise this only when both of those allow 2.x.
+huggingface-hub>=1.33.0,<2.0
 tiktoken>=0.14.0
 
 # Tensor Operations
 -c ../../../../constraints/shared.txt  # single source of truth for shared versions (#10524)
 numpy  # version from constraints/shared.txt
-torch>=2.14.0
-torchvision>=0.29.0
-torchaudio>=2.11.0
+torch  # version from constraints/shared.txt (#19330)
+torchvision  # version from constraints/shared.txt, paired with torch (#19330)
+# torchaudio removed (#19682): nothing imports it, and its floor was not held to the pinned torch
 
 # Text Processing
 # #15551: not directly imported -- kept because llama-index-core (declared at the
@@ -52,24 +65,24 @@ nltk>=3.10.3
 # 4.0.0.dev3 sdist and tried to build it on the node.
 
 # HTTP and API
-fastapi>=0.141.1
-uvicorn[standard]>=0.53.0
-aiohttp>=3.14.3
+fastapi  # version from constraints/shared.txt (#18060)
+uvicorn[standard]>=0.54.0
+aiohttp>=3.14.5
 httpx>=0.28.1
 httpcore>=1.0.9
 requests>=2.34.2
 
 # Data Processing
-pandas>=3.0.6
-pydantic>=2.13.5
+pandas>=3.1.0
+pydantic>=2.14.1
 
 # Utilities
 async-timeout>=5.0.1
 packaging>=26.3
 protobuf>=7.36.2,<8.0.0           # floor: opentelemetry-exporter-otlp-proto-grpc>=1.40.0 regenerated protos, C extension compatible (#3973); ceiling: mirrors googleapis-common-protos requirement (#4061)
-googleapis-common-protos>=1.75.3,<2.0.0  # required by opentelemetry-exporter-otlp-proto-grpc~=1.57; needs protobuf>=4.25.8 satisfied by floor above (#4061)
-python-dotenv>=1.2.3
-tenacity>=9.1.4
+googleapis-common-protos>=1.75.5,<2.0.0  # required by opentelemetry-exporter-otlp-proto-grpc~=1.57; needs protobuf>=4.25.8 satisfied by floor above (#4061)
+python-dotenv>=1.2.4
+tenacity>=9.2.1
 tqdm>=4.70.1
 typing-extensions>=4.16.0
 
@@ -90,6 +103,13 @@ python-json-logger>=4.2.0
 # into a recorded one. Migrating to 2.1.x is its own work and is NOT a
 # base-unblocking change; the tracking issue is on the cap for whoever lifts it.
 # Do not raise this bound without running the SLM suite against 2.1.x first.
+#
+# Reversed by a grouped dependabot bump THREE times now -- #17706, #17711 and
+# #17709 (restored here). Every one left this comment intact, so the file
+# arrived contradicting itself. The ignore rule cannot catch it: it is keyed on
+# `update-types: semver-major`, and 2.0 -> 2.1 is a MINOR. The durable fix is a
+# `versions: [">=2.1"]` ignore, tracked on #17451 -- until that lands, expect a
+# fourth attempt and restore this line again.
 sqlalchemy>=2.0.54,<2.1
 aiosqlite>=0.22.1
 
@@ -97,7 +117,7 @@ aiosqlite>=0.22.1
 redis>=8.1.0
 
 # Optional: ONNX Runtime for model optimization
-onnxruntime>=1.30.0
+onnxruntime>=1.31.0
 
 # vLLM for high-performance HuggingFace model serving (optional)
 # vllm>=0.7.0
@@ -106,7 +126,7 @@ accelerate>=1.15.0
 
 # Document Processing
 python-docx>=1.2.0
-pypdf>=6.19.0
+pypdf>=6.21.4
 
 # Development and Testing
 pytest>=9.1.1

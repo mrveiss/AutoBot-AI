@@ -26,7 +26,12 @@ on:
       - 'libs/autobot-sdk-ts/**'
       - 'autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking/**'
       - '.github/workflows/npm-package-tests.yml'
+      - '.github/workflows/_changes.yml'
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [release, main, develop]
     # SAFE under #13388: "NPM Package Tests" is not one of the required contexts
     # on main, so this workflow may skip its run entirely. The job-level
@@ -38,6 +43,7 @@ on:
       - 'libs/autobot-sdk-ts/**'
       - 'autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking/**'
       - '.github/workflows/npm-package-tests.yml'
+      - '.github/workflows/_changes.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -46,39 +52,33 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  NODE_VERSION: '22'
-
 jobs:
   # Always runs so the check reports a conclusion even when nothing matched.
   changes:
+    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
+    # every `always()` aggregate below reads `needs.changes.result`.
+    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
+    # context would report FAILED on every draft -- worse than no gate.
+    # Gate the expensive jobs, never the cheap thing others read.
     name: Detect changed packages
-    runs-on: ubuntu-latest
-    outputs:
-      browser_worker: ${{ steps.filter.outputs.browser_worker }}
-      mcp: ${{ steps.filter.outputs.mcp }}
-      sdk_ts: ${{ steps.filter.outputs.sdk_ts }}
-      structured_thinking: ${{ steps.filter.outputs.structured_thinking }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
-        id: filter
-        with:
-          filters: |
-            browser_worker:
-              - 'autobot-browser-worker/**'
-              - '.github/workflows/npm-package-tests.yml'
-            mcp:
-              - '.mcp/**'
-              - '.github/workflows/npm-package-tests.yml'
-            sdk_ts:
-              - 'libs/autobot-sdk-ts/**'
-              - '.github/workflows/npm-package-tests.yml'
-            structured_thinking:
-              - 'autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking/**'
-              - '.github/workflows/npm-package-tests.yml'
+    uses: ./.github/workflows/_changes.yml
+    with:
+      filters: |
+        browser_worker:
+          - 'autobot-browser-worker/**'
+          - '.github/workflows/npm-package-tests.yml'
+        mcp:
+          - '.mcp/**'
+          - '.github/workflows/npm-package-tests.yml'
+        sdk_ts:
+          - 'libs/autobot-sdk-ts/**'
+          - '.github/workflows/npm-package-tests.yml'
+        structured_thinking:
+          - 'autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking/**'
+          - '.github/workflows/npm-package-tests.yml'
 
   npm-package-tests:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: NPM Package Tests
     needs: changes
     runs-on: ubuntu-latest
@@ -96,7 +96,7 @@ jobs:
           || needs.changes.outputs.browser_worker == 'true'
         uses: actions/setup-node@v7
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
           cache: 'npm'
           cache-dependency-path: |
             .mcp/package-lock.json

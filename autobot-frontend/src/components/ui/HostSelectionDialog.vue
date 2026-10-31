@@ -149,18 +149,16 @@
 
       <div class="dialog-footer">
         <div class="button-group">
-          <button
+          <BaseButton variant="secondary"
             type="button"
-            class="btn btn-secondary"
             @click="handleCancel"
             :disabled="isProcessing"
           >
             <Icon name="times" size="sm" />
             {{ t('ui.hostSelection.cancel') }}
-          </button>
-          <button
+          </BaseButton>
+          <BaseButton
             type="button"
-            class="btn btn-primary"
             @click="handleConfirm"
             :disabled="!selectedHostId || isProcessing"
             :aria-busy="isProcessing"
@@ -168,7 +166,7 @@
             <LoadingSpinner v-if="isProcessing" size="sm" />
             <Icon v-else name="check" size="sm" />
             {{ isProcessing ? t('ui.hostSelection.connecting') : t('ui.hostSelection.connectAndExecute') }}
-          </button>
+          </BaseButton>
         </div>
 
         <div class="security-note">
@@ -189,7 +187,7 @@ import { fetchWithAuth } from '@/utils/fetchWithAuth';
 import { createLogger } from '@/utils/debugUtils';
 import Icon, { type IconName } from '@/components/ui/Icon.vue';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
-import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock } from '@autobot/ui';
+import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock, BaseButton } from '@autobot/ui';
 
 const logger = createLogger('HostSelectionDialog');
 const { t } = useI18n();
@@ -631,8 +629,8 @@ onUnmounted(() => {
   gap: var(--spacing-3);
 }
 
-.loading-state i,
-.empty-state i {
+.loading-state .icon,
+.empty-state .icon {
   font-size: var(--font-size-2xl);
 }
 
@@ -744,7 +742,7 @@ onUnmounted(() => {
   border-radius: var(--radius-sm);
 }
 
-.default-badge i {
+.default-badge .icon {
   font-size: var(--text-xs);
 }
 
@@ -880,47 +878,8 @@ onUnmounted(() => {
   margin-bottom: var(--spacing-3);
 }
 
-.btn {
+.button-group :deep(.aui-btn) {
   flex: 1;
-  padding: var(--spacing-3) var(--spacing-4);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-2);
-  transition: all var(--duration-150);
-  border: none;
-}
-
-.btn-secondary {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: var(--bg-hover);
-}
-
-.btn-primary {
-  background: var(--color-primary);
-  color: var(--text-on-primary);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn:focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 2px;
 }
 
 .security-note {

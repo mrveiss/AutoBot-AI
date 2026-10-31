@@ -10,15 +10,19 @@ Test script to check circuit breaker state
 import asyncio
 import logging
 import sys
-
-from autobot_shared.paths import project_root
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Add the src directory to the path
-sys.path.insert(0, str(project_root()))
+# A backend tool (#18289): it deliberately drives backend internals. It puts the backend and the
+# repository root (for `autobot_shared`) on its own path, so it runs from any directory with no
+# PYTHONPATH; the backend's Python dependencies must be installed.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
-from circuit_breaker import circuit_breaker_manager
+from circuit_breaker import get_circuit_breaker_manager  # noqa: E402
 
 
 async def check_circuit_breaker_state():
@@ -27,6 +31,7 @@ async def check_circuit_breaker_state():
 
     # Get the circuit breaker for ollama_service
     try:
+        circuit_breaker_manager = get_circuit_breaker_manager()
         circuit_breaker = circuit_breaker_manager.circuit_breakers.get("ollama_service")
 
         if circuit_breaker is None:
@@ -44,8 +49,8 @@ async def check_circuit_breaker_state():
         logger.info(f"  State: {state_info['state']}")
         logger.error(f"  Failure Count: {state_info['failure_count']}")
         logger.info(f"  Success Count: {state_info['success_count']}")
-        logger.error(f"  Last Failure Time: {state_info['last_failure_time']}")
-        logger.info(f"  State Change Time: {state_info['state_change_time']}")
+        logger.error(f"  Time Since Last Failure: {state_info['time_since_last_failure']}")
+        logger.info(f"  Time In Current State: {state_info['time_in_current_state']:.1f}s")
 
         config = state_info["config"]
         logger.error(f"  Failure Threshold: {config['failure_threshold']}")
@@ -54,8 +59,8 @@ async def check_circuit_breaker_state():
 
         stats = state_info["stats"]
         logger.info(f"  Total Calls: {stats['total_calls']}")
-        logger.error(f"  Total Failures: {stats['total_failures']}")
-        logger.info(f"  Total Successes: {stats['total_successes']}")
+        logger.error(f"  Total Failures: {stats['failed_calls']}")
+        logger.info(f"  Total Successes: {stats['successful_calls']}")
 
         performance = state_info["recent_performance"]
         logger.info(f"  Success Rate: {performance.get('success_rate', 0):.1%}")
@@ -67,9 +72,7 @@ async def check_circuit_breaker_state():
             logger.info("   All requests to Ollama are being blocked")
 
             # Check if enough time has passed for recovery
-            import time
-
-            time_since_failure = time.time() - state_info["last_failure_time"]
+            time_since_failure = state_info["time_since_last_failure"]
             recovery_timeout = config["recovery_timeout"]
 
             if time_since_failure >= recovery_timeout:

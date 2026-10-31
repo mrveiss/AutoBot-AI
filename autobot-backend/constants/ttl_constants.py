@@ -9,6 +9,7 @@ MIGRATION (Issue #GH7440):
     Import directly from autobot_shared.ssot_constants for new code.
 """
 
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.ssot_constants import (  # noqa: F401,F403
     TIMEOUT_HTTP_DEFAULT,
     TIMEOUT_HTTP_LONG,
@@ -23,3 +24,6 @@ from autobot_shared.ssot_constants import (  # noqa: F401,F403
     TTL_365_DAYS,
     TTL_WORKING_MEMORY_DEFAULT,
 )
+
+#: Threat-intel verdict cache lifetime in seconds (#18888); env AUTOBOT_THREAT_INTEL_CACHE_TTL, clamped 1 s-7 days.
+THREAT_INTEL_CACHE_TTL = env_int_clamped("AUTOBOT_THREAT_INTEL_CACHE_TTL", 2 * TTL_1_HOUR, min_v=1, max_v=TTL_7_DAYS)

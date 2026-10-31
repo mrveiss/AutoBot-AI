@@ -60,22 +60,16 @@ permissions:
 jobs:
   changes:
     name: Detect changed paths (required context)
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    outputs:
-      frontend: ${{ steps.filter.outputs.frontend }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
-        id: filter
-        with:
-          # A shared file, NOT an inline copy: frontend-test.yml's `changes` job
-          # loads the very same path set from the very same checkout. Two inline
-          # copies could drift, and a drift in one direction — this workflow
-          # deciding "no frontend change" while frontend-test.yml decides there
-          # was one — would hand the pull request the shim's green while the
-          # real suite never ran. One file, one answer.
-          filters: .github/filters/frontend-paths.yml
+    uses: ./.github/workflows/_changes.yml
+    with:
+      timeout_minutes: 10
+      # A shared file, NOT an inline copy: frontend-test.yml's `changes` job
+      # loads the very same path set from the very same checkout. Two inline
+      # copies could drift, and a drift in one direction — this workflow
+      # deciding "no frontend change" while frontend-test.yml decides there
+      # was one — would hand the pull request the shim's green while the
+      # real suite never ran. One file, one answer.
+      filters: .github/filters/frontend-paths.yml
 
   unit-tests-skip:
     # IDENTICAL to the self-hosted job name in frontend-test.yml on purpose:

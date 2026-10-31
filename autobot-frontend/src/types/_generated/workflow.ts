@@ -95,6 +95,41 @@ export type WorkflowStepStatus =
   | 'failed'
   | 'paused';
 
+/** Generated from `services.notification_types.NotificationEvent` */
+export type NotificationEvent =
+  | 'workflow_completed'
+  | 'workflow_failed'
+  | 'step_failed'
+  | 'approval_needed'
+  | 'service_failed';
+
+/** Generated from `services.notification_types.NotificationChannel` */
+export type NotificationChannel =
+  | 'email'
+  | 'slack'
+  | 'webhook'
+  | 'in_app'
+  | 'telegram';
+
+/** Generated from `services.workflow_automation.phases.WorkflowPhase` */
+export type WorkflowPhase =
+  | 'planning'
+  | 'awaiting_approval'
+  | 'executing'
+  | 'validating'
+  | 'complete'
+  | 'failed';
+
+/** Generated from `agents.overseer.types.OverseerStepStatus` */
+export type OverseerStepStatus =
+  | 'pending'
+  | 'running'
+  | 'streaming'
+  | 'waiting_explanation'
+  | 'explaining'
+  | 'completed'
+  | 'failed';
+
 /** Generated from `autobot_shared.status_enums.Severity` */
 export type Severity =
   | 'unknown'
@@ -254,7 +289,6 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     'mcp.http.write',
     'mcp.desktop.control',
   ],
-  superadmin: [],
   operator: [
     'api.read',
     'chat.use',
@@ -365,6 +399,71 @@ export const ROLE_PERMISSIONS: Readonly<Record<Role, readonly Permission[]>> = {
     'agent.view',
     'workflow.view',
     'files.view',
+  ],
+  superadmin: [
+    'api.read',
+    'api.write',
+    'api.admin',
+    'knowledge.read',
+    'knowledge.write',
+    'knowledge.delete',
+    'knowledge.manage',
+    'analytics.view',
+    'analytics.export',
+    'analytics.manage',
+    'analytics.logs',
+    'agent.view',
+    'agent.execute',
+    'agent.manage',
+    'agent.terminal',
+    'workflow.view',
+    'workflow.create',
+    'workflow.execute',
+    'workflow.manage',
+    'files.view',
+    'files.download',
+    'files.upload',
+    'files.delete',
+    'files.manage',
+    'security.view',
+    'security.audit',
+    'security.manage',
+    'admin.users.read',
+    'admin.users.write',
+    'admin.config.read',
+    'admin.config.write',
+    'admin.system',
+    'admin.reporting_line.write',
+    'mcp.read',
+    'mcp.execute',
+    'mcp.manage',
+    'mcp.external',
+    'batch.view',
+    'batch.create',
+    'batch.execute',
+    'batch.manage',
+    'sandbox.view',
+    'sandbox.execute',
+    'sandbox.manage',
+    'service.management',
+    'allow_shell_execute',
+    'chat.use',
+    'chat.history',
+    'teams.read',
+    'teams.create',
+    'teams.manage',
+    'teams.delete',
+    'webhooks.trigger',
+    'mcp.browser.read',
+    'mcp.database.read',
+    'mcp.git.read',
+    'mcp.http.read',
+    'mcp.metrics.read',
+    'mcp.desktop.read',
+    'mcp.browser.control',
+    'mcp.database.write',
+    'mcp.http.write',
+    'mcp.desktop.control',
   ],
 };
 

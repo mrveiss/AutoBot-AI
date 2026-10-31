@@ -15,6 +15,7 @@ Guides for writing, configuring, and extending AutoBot connectors.
 | Document | Description |
 | --- | --- |
 | [[writing-a-connector]] | Step-by-step guide to writing a custom connector |
+| [[tool-integration-urls]] | Base URLs, redirects and egress for the tool integrations |
 
 ## Related Sections
 

@@ -472,7 +472,7 @@ onMounted(() => {
 
 .error-banner {
   background: var(--slm-red-100);
-  border: 1px solid var(--color-danger-500);
+  border: 1px solid var(--color-error-500);
   color: var(--slm-red-700);
   padding: var(--spacing-3) var(--spacing-4);
   border-radius: var(--radius-lg);

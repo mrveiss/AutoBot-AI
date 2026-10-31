@@ -6,51 +6,17 @@ import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 import App from './App.vue'
 import router from './router/index'
 import { createLogger } from '@/utils/debugUtils'
-import { isChunkLoadError } from '@/utils/chunkLoadError'
 
 const logger = createLogger('main');
 
-import './assets/tailwind.css'
-import './assets/vue-notus.css'
-// Import fonts from local npm packages (avoid CDN tracking prevention warnings)
-import '@fortawesome/fontawesome-free/css/all.min.css'
-// Import only latin subset with weights actually used (400, 500, 600, 700)
-import '@fontsource/inter/latin-400.css'
-import '@fontsource/inter/latin-500.css'
-import '@fontsource/inter/latin-600.css'
-import '@fontsource/inter/latin-700.css'
-
-// Import legacy theme system (Issue #548) - loaded BEFORE design system so tokens win
-import './assets/styles/theme.css'
-import './assets/styles/view.css'
-
-// Import CSS Design System (Issue #704/#901) - SSOT - must come AFTER legacy to override
-import './assets/css/index.css'
-
-// Interaction polish — shell press feedback + stronger easing (#10488 B2)
-import './assets/css/interaction-polish.css'
-
-// Global reset (* { margin:0; padding:0; box-sizing:border-box }, body { margin:0;
-// min-height:100vh }) — must load AFTER vue-notus and component packages so their
-// leaked unscoped body{padding...} rules can't push the layout off-viewport.
-// Without this, the page does not fill the viewport and views without
-// .view-container don't scroll properly.
-import './assets/base.css'
-
-// @autobot/ui shared kit: token contract fallbacks first, then this app's
-// adapter (mapping --aui-* onto the app's own design tokens). Loaded AFTER
-// the app design-system CSS above so the tokens the adapter references are
-// already defined (#10750 C2c, #10860 Task-C).
-import '@autobot/ui/tokens'
-import './assets/aui-theme.css'
+// Every global stylesheet, in load order -- one list shared with Storybook (#18687).
+import './assets/global-styles'
 
 // Initialize theme early to prevent flash of unstyled content
 import { initializeTheme } from '@/composables/useTheme'
 initializeTheme()
 import { initializeThemeVariant } from '@/composables/useThemeVariant'
 initializeThemeVariant()
-// Import xterm CSS globally to avoid dependency resolution issues
-import '@xterm/xterm/css/xterm.css'
 
 // Import i18n
 import i18n, { initI18n } from './i18n'
@@ -121,25 +87,7 @@ registerDirectives(app)
 // Register plugin UI components from the plugin mount registry (#6972 / #7793)
 mountAllPlugins(app)
 
-// Global error handler for uncaught errors
-app.config.errorHandler = (err, _instance, info) => {
-  logger.error('Vue Error Handler:', { error: err, info })
-
-  // Check if this is a chunk loading error
-  const error = err as Error
-  if (isChunkLoadError(error)) {
-    logger.warn('Chunk loading error detected, initiating cache clear...')
-
-    // Import and use cache management
-    import('./utils/cacheManagement').then(({ handleChunkLoadingError }) => {
-      handleChunkLoadingError(error, _instance?.$?.type?.name || 'Unknown')
-    }).catch(cacheError => {
-      logger.error('Failed to handle chunk error:', cacheError)
-      // Fallback to hard reload
-      window.location.reload()
-    })
-  }
-}
+// Vue errors: the single app.config.errorHandler lives in plugins/errorHandler.ts (#19458)
 
 // Global warning handler
 app.config.warnHandler = (msg, _instance, trace) => {

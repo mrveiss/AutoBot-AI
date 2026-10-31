@@ -3,7 +3,7 @@
     <Transition name="voice-overlay">
       <div
         v-if="voiceConversation.isActive.value"
-        class="voice-overlay"
+        id="chat-overlay-voice" class="voice-overlay"
         @keydown.escape="close"
         tabindex="-1"
         ref="overlayRef"
@@ -370,7 +370,7 @@ onBeforeUnmount(() => {
 .voice-overlay {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: var(--z-50);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -465,7 +465,7 @@ onBeforeUnmount(() => {
   letter-spacing: 0.04em;
 }
 
-.voice-overlay__lang-badge i {
+.voice-overlay__lang-badge .icon {
   font-size: 0.625rem;
   opacity: 0.7;
 }
@@ -707,7 +707,7 @@ onBeforeUnmount(() => {
 /* Mic button */
 .voice-overlay__mic-btn {
   position: relative;
-  z-index: 1;
+  z-index: var(--z-raised);
   width: var(--spacing-16);
   height: var(--spacing-16);
   border-radius: 50%;

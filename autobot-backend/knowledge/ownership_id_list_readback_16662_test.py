@@ -20,10 +20,15 @@ from knowledge.ownership import KnowledgeOwnership
 
 
 class _SetStore:
-    """The two Redis set commands the sharing indexes use."""
+    """The Redis commands the sharing indexes and the ACL epoch use."""
 
     def __init__(self):
         self.sets: dict[str, set] = defaultdict(set)
+        self.counters: dict[str, str] = {}
+
+    def set(self, key, value, nx=False):
+        self.counters[key] = value
+        return True
 
     def sadd(self, key, *members):
         self.sets[key].update(members)

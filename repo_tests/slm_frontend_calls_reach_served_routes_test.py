@@ -51,7 +51,7 @@ value `section` takes. 0 false positives with known blind spots beats 5.7% false
 positives with better reach.
 
 **The baseline is exact and shrink-only**, like
-`repo_tests/python_file_size_ratchet_baseline.py`. Every entry is a call that is broken
+`scripts/python_file_size_known_large.py`. Every entry is a call that is broken
 today, with the issue that fixes it. Removing one without doing the work fails, and so
 does doing the work without removing the entry.
 """
@@ -83,31 +83,19 @@ _SERVICES = {
 _RESOLVED_FLOOR = 115
 
 # (repo-relative file, service, normalised path) — exact, shrink-only.
-# #15536 covers every `useAutobotApi.ts` entry; #15236/#15230 covers the terminal one.
 _KNOWN_UNSERVED = frozenset(
+    # #15536 repointed every useAutobotApi call that has a served route. These 7 have none;
+    # each is on #18736 (or #18725 for the NPU restart) for a build-or-retire decision.
+    # #15236/#15230 covers the terminal one.
     {
         ("autobot-slm-frontend/src/composables/useAutobotApi.ts", "main", p)
         for p in (
-            "/api/agents",
-            "/api/batch/status",
-            "/api/files/write",
-            "/api/llm-providers/fallback-status",
-            "/api/mcp/servers",
-            "/api/mcp/servers/{param}",
             "/api/mcp/servers/{param}/restart",
             "/api/mcp/servers/{param}/start",
             "/api/mcp/servers/{param}/stop",
             "/api/monitoring/hardware",
-            "/api/monitoring/system",
-            "/api/npu-workers",
-            "/api/npu-workers/load-balancing/config",
-            "/api/npu-workers/{param}",
-            "/api/npu-workers/{param}/pair",
             "/api/npu-workers/{param}/restart",
-            "/api/npu-workers/{param}/test",
             "/api/permissions/rules/{param}",
-            "/api/users",
-            "/api/users/{param}",
             "/api/voice/config",
         )
     }
@@ -207,6 +195,9 @@ def _receivers(text: str) -> dict[str, str]:
     axios_create = r"(?:const|let)\s+(\w+)[^=\n]*=\s*axios\.create\(\{[^}]*baseURL:\s*(getSlmApiBase|getBackendUrl)\(\)"
     for match in re.finditer(axios_create, text, re.S):
         found[match.group(1)] = "slm" if match.group(2) == "getSlmApiBase" else "main"
+    # #19217: the main-backend client is built by the one shared factory, not inline.
+    for match in re.finditer(r"(?:const|let)\s+(\w+)[^=\n]*=\s*createAutobotBackendClient\(\)", text):
+        found[match.group(1)] = "main"
     return found
 
 
@@ -216,12 +207,17 @@ def _template_pattern(bases: dict[str, str]) -> re.Pattern[str]:
     return re.compile(r"`(?:\$\{[^{}]*\})*\$\{(" + "|".join(heads) + r")\}([^`]*)`")
 
 
+# `<T>` type arguments, nested two deep: `get<Record<string, unknown>>(` and
+# `get<{ files: Array<FileItem> }>(` are calls too (#12363).
+_TYPE_ARGS = r"<(?:[^<>()]|<(?:[^<>()]|<[^<>()]*>)*>)*>"
+
+
 def _call_pattern(receivers: dict[str, str]) -> re.Pattern[str] | None:
     """Match `<client>.<verb>('<literal>'` for the clients resolved in this file."""
     if not receivers:
         return None
     names = "|".join(re.escape(name) for name in receivers)
-    return re.compile(r"\b(" + names + r")\.(?:" + _VERBS + r")(?:<[^>(]*>)?\(\s*(['\"`])([^'\"`]*)\2")
+    return re.compile(r"\b(" + names + r")\.(?:" + _VERBS + r")(?:" + _TYPE_ARGS + r")?\(\s*(['\"`])([^'\"`]*)\2")
 
 
 def _service_of(head: str, bases: dict[str, str]) -> str:
@@ -318,3 +314,24 @@ def test_the_known_unserved_baseline_is_exact() -> None:
         "_KNOWN_UNSERVED in the commit that fixed them:\n"
         + "\n".join(f"  {f} -> [{service}] {path}" for f, service, path in fixed)
     )
+
+
+def test_a_client_from_the_shared_factory_is_resolved_as_the_main_backend() -> None:
+    """#19217: `createAutobotBackendClient()` builds the main-backend client; a sweep that
+    knew only an inline `axios.create` lost every call made through it."""
+    text = "const client = createAutobotBackendClient() // shared\nconst other = makeSomething()"
+    assert _receivers(text) == {"client": "main"}
+
+
+def test_a_call_with_nested_type_arguments_is_matched() -> None:
+    """#12363: typed calls such as `client.get<Record<string, unknown>>('/x')` were
+    invisible to a pattern that stopped at the first `>`."""
+    pattern = _call_pattern({"client": "main"})
+    assert pattern is not None
+    for text in (
+        "client.get<Record<string, unknown>>('/system/metrics')",
+        "client.get<{ files: Array<FileItem> }>(`/files?${params}`)",
+        "client.post('/plain')",
+    ):
+        assert pattern.search(text), text
+    assert not pattern.search("other.get<Record<string, unknown>>('/x')")

@@ -11,41 +11,77 @@
  * Activated via [data-theme="dark"] on document root.
  */
 
-[data-theme="dark"],
-:root {
+[data-theme="dark"] {
+  /* Surfaces and borders */
+  --bg: #0E1420;
+  --surface: #161F31;
+  --surface2: #1A2438;
+  --border: #2A3650;
+  --line: #222D44;
+  /* Text and links */
+  --text: #E6EAF2;
+  --text2: #B9C2D4;
+  --muted: #9AA5BC;
+  --link: #E6EAF2;
+  --link-h: #F5A48C;
+  /* Brand, accent and focus */
+  --primary: #DCE4F2;
+  --primary-h: #C4D0E6;
+  --on-primary: #0E1420;
+  --accent: #F08A6C;
+  --focus: #7FB0FF;
+  --brand-bg: #DCE4F2;
+  --brand-fg: #0E1420;
+  /* Illustration */
+  --tile: #1F2A40;
+  --tile-b: #2A3650;
+  --stroke: #DCE4F2;
+  --i1: #5F9BB5;
+  --i2: #C29A45;
+  --i3: #D3735A;
+  --i1t: #2B4252;
+  --i2t: #4A3E24;
+  --i3t: #4A2F28;
+  /* Bars and alert text */
+  --bar: #B9C2D4;
+  --bar-alert: #F08A6C;
+  --bar-track: #26324A;
+  --alert-text: #F5A48C;
+  /* Status pills */
+  --ok-bg: #163A28;
+  --ok-fg: #8EE0B2;
+  --warn-bg: #3D3016;
+  --warn-fg: #F2CF7A;
+  --bad-bg: #45231B;
+  --bad-fg: #F7A893;
+  --idle-bg: #26324A;
+  --idle-fg: #C3CBDB;
+  --info-bg: #173748;
+  --info-fg: #8FD0EA;
+  /* Status dots */
+  --dot-ok: #4CC486;
+  --dot-idle: #6B7690;
+  --dot-warn: #E8B44E;
+  --dot-bad: #F08A6C;
+  /* Danger tile */
+  --danger-tile: #45231B;
+  --danger-tile-b: #6B3326;
+
   /* ============================================
    * BACKGROUND COLORS - Dark Theme
    * ============================================ */
 
-  --bg-primary: #0f172a;
-  --bg-secondary: #1e293b;
-  --bg-tertiary: #334155;
-  --bg-elevated: #1e293b;
-  --bg-surface: #1a1a2e;
-  --bg-card: #1e293b;
-  --bg-input: #1e293b;
   --bg-hover: rgba(255, 255, 255, 0.05);
   --bg-active: rgba(255, 255, 255, 0.1);
   --bg-overlay: rgba(0, 0, 0, 0.7);
 
-  /* ============================================
-   * TEXT COLORS - Dark Theme
-   * ============================================ */
-
-  --text-primary: #e2e8f0;
-  --text-secondary: #94a3b8;
-  --text-tertiary: #8a98ad;
-  --text-muted: #8593a8;
-  --text-inverse: #0f172a;
-  --text-link: #60a5fa;
-  --text-link-hover: #93c5fd;
+  /* Text colours, surfaces, card/table/input fills and default borders derive
+     from the Refined names declared for this theme (refined-map.css, #18223). */
 
   /* ============================================
    * BORDER COLORS - Dark Theme
    * ============================================ */
 
-  --border-default: #475569;
-  --border-subtle: rgba(71, 85, 105, 0.5);
   --border-strong: #64748b;
 
   /* ============================================
@@ -100,14 +136,7 @@
    * COMPONENT TOKENS - Dark Theme
    * ============================================ */
 
-  --card-bg: #1e293b;
-  --card-border: rgba(71, 85, 105, 0.5);
-  --table-header-bg: #1e293b;
-  --table-row-bg: #1e293b;
   --table-row-hover: rgba(255, 255, 255, 0.05);
-  --table-border: rgba(71, 85, 105, 0.5);
-  --input-bg: #1e293b;
-  --input-border: #475569;
 
   /* Canvas agent-draft tokens — darker tint for dark mode */
   --color-agent-draft-border: #60A5FA;
@@ -179,7 +208,7 @@
  * ============================================ */
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-theme]) {
     --bg-primary: #0f172a;
     --bg-secondary: #1e293b;
     --bg-tertiary: #334155;
@@ -206,5 +235,11 @@
     --scrollbar-track: #1e293b;
     --scrollbar-thumb: #475569;
     --scrollbar-thumb-hover: #64748b;
+
+    /* Border aliases: not derived from --border-default under OS-dark (kept from
+       the retired styles/theme.css so rendering is unchanged, #14785). */
+    --border-color: #334155;
+    --border-color-light: #475569;
+    --border-color-dark: #1e293b;
   }
 }

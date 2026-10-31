@@ -9,6 +9,7 @@ Function call graph analysis endpoints
 import ast
 import asyncio
 import json
+import time
 from pathlib import Path
 from typing import Dict, List
 
@@ -16,9 +17,9 @@ import aiofiles
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
-from autobot_shared.code_graph import compute_node_id, module_path_from_rel_path
+from autobot_shared.code_graph import compute_node_id, extract_dotted_callee, module_path_from_rel_path
 from autobot_shared.code_graph import resolve_callee as _shared_resolve_callee
-from autobot_shared.env_utils import blank_to_none
+from autobot_shared.env_utils import blank_to_none, env_float
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_redis_client
@@ -26,7 +27,11 @@ from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_5_MINUTES
 from utils.io_executor import get_analytics_executor
 
-from .shared import COMMON_THIRD_PARTY, STDLIB_MODULES, ImportContext, resolve_scan_root
+from .call_graph_shaping import build_connected_nodes as _build_connected_nodes
+from .call_graph_shaping import build_orphaned_nodes as _build_orphaned_nodes
+from .call_graph_shaping import calculate_metrics as _calculate_metrics
+from .call_graph_shaping import deduplicate_edges as _deduplicate_edges
+from .shared import COMMON_THIRD_PARTY, EXCLUDED_DIRS, STDLIB_MODULES, ImportContext, resolve_scan_root
 
 logger = get_logger(__name__)
 
@@ -58,6 +63,43 @@ def _resolve_call_graph_max_files() -> int | None:
         return None
     return value
 
+
+#: Seconds the AST scan may run before it stops and reports what it covered
+#: (#17651). A module constant from an env var rather than an SSOT field: the
+#: sibling ``call_graph_max_files`` lives in SSOT, but ``ssot_config.py`` sits at
+#: exactly its shrink-only size ceiling, and the rule is to split rather than
+#: raise -- splitting a 3,300-line hub file is not a change this fix should
+#: carry. ``chat_history/cache.py`` is the precedent the project names for an
+#: env-var-backed module constant, and ``env_float`` is the crash-safe reader
+#: the bare-cast guard exists to enforce.
+#:
+#: WHY 30. Half the *tightest* ``/api/`` gateway the repo ships -- 60s container
+#: and user-template, 300s bare-metal (enumerated in ``call_graph_deadline_test.py``).
+#: This route is ``@bounded(120.0)``, twice the tightest gateway. So a scan
+#: between 60s and 120s returns **504 to the browser while the backend keeps
+#: working**, and the route's own ``truncated`` reporting never reaches the
+#: client. Half the gateway leaves room for response building and serialisation.
+#:
+#: WHY A DEADLINE RATHER THAN A FILE CAP. #13468 removed a hardcoded 300-file cap
+#: because it "silently analysed 8% of a 3,541-file backend and reported the
+#: result as repo-wide statistics" -- its objection was the SILENCE, not the cap:
+#: *"nothing in the response says the result was truncated"*. A deadline keeps
+#: that honesty, since ``files_scanned``/``files_total``/``truncated`` describe
+#: exactly what was read, while bounding the work -- which a file count cannot
+#: do, because the same count costs different time on different trees.
+#:
+#: Non-positive means unbounded, which is the pre-#17651 behaviour and will 504
+#: on a large tree.
+#: Indirection so a test can drive the scan clock. Patching ``time.monotonic``
+#: itself is not an option: it is an attribute of the shared ``time`` module, so
+#: asyncio's event loop reads the same counter and consumes the sequence a test
+#: sets up -- which is how the first version of the deadline test measured 1
+#: file where it expected 3.
+_now = time.monotonic
+
+CALL_GRAPH_SCAN_BUDGET_SECONDS: float | None = env_float("AUTOBOT_CALL_GRAPH_SCAN_BUDGET_SECONDS", 30.0)
+if CALL_GRAPH_SCAN_BUDGET_SECONDS is not None and CALL_GRAPH_SCAN_BUDGET_SECONDS <= 0:
+    CALL_GRAPH_SCAN_BUDGET_SECONDS = None
 
 CALL_GRAPH_MAX_FILES = _resolve_call_graph_max_files()
 
@@ -124,20 +166,6 @@ BUILTIN_FUNCS = {
     "super",
 }
 
-# Directories to exclude from analysis
-EXCLUDED_DIRS = {
-    ".git",
-    "__pycache__",
-    "node_modules",
-    ".venv",
-    "venv",
-    "env",
-    ".env",
-    "archive",
-    "dist",
-    "build",
-}
-
 
 async def _get_python_files(project_root) -> List:
     """Get filtered list of Python files for analysis.
@@ -151,120 +179,9 @@ async def _get_python_files(project_root) -> List:
         get_analytics_executor(),
         lambda: list(project_root.rglob("*.py")),
     )
-    return [f for f in python_files if not any(excluded in f.parts for excluded in EXCLUDED_DIRS)]
-
-
-def _get_connected_func_ids(call_edges: List[Dict]) -> set:
-    """Get set of function IDs that appear in call edges."""
-    connected_funcs = set()
-    for edge in call_edges:
-        connected_funcs.add(edge["from"])
-        if edge["resolved"]:
-            connected_funcs.add(edge["to"])
-    return connected_funcs
-
-
-def _build_function_node(func_id: str, info: Dict) -> Dict:
-    """Build a single function node dict from function info."""
-    return {
-        "id": func_id,
-        "name": info["name"],
-        "full_name": info["full_name"],
-        "module": info["module"],
-        "class": info["class"],
-        "file": info["file"],
-        "line": info["line"],
-        "is_async": info["is_async"],
-    }
-
-
-def _build_connected_nodes(
-    functions: Dict[str, Dict],
-    call_edges: List[Dict],
-) -> List[Dict]:
-    """Build graph nodes from connected functions (Issue #281: extracted)."""
-    connected_funcs = _get_connected_func_ids(call_edges)
-
-    nodes = []
-    for func_id, info in functions.items():
-        if func_id in connected_funcs:
-            nodes.append(_build_function_node(func_id, info))
-    return nodes
-
-
-def _build_orphaned_nodes(
-    functions: Dict[str, Dict],
-    call_edges: List[Dict],
-) -> List[Dict]:
-    """
-    Build list of orphaned functions (defined but never called or calling).
-
-    Orphaned functions are those that:
-    - Are not callers (don't appear in edge 'from')
-    - Are not callees (don't appear in edge 'to' with resolved=True)
-
-    Returns:
-        List of orphaned function nodes sorted by module/file for easier review.
-    """
-    connected_funcs = _get_connected_func_ids(call_edges)
-
-    orphaned = []
-    for func_id, info in functions.items():
-        if func_id not in connected_funcs:
-            orphaned.append(_build_function_node(func_id, info))
-
-    # Sort by module then name for easier review
-    orphaned.sort(key=lambda x: (x["module"] or "", x["name"] or ""))
-    return orphaned
-
-
-def _deduplicate_edges(call_edges: List[Dict]) -> List[Dict]:
-    """Deduplicate edges and add call counts (Issue #281: extracted)."""
-    call_counts = {}
-    for edge in call_edges:
-        key = (edge["from"], edge["to"])
-        call_counts[key] = call_counts.get(key, 0) + 1
-
-    unique_edges = []
-    seen_edges = set()
-    for edge in call_edges:
-        key = (edge["from"], edge["to"])
-        if key not in seen_edges:
-            seen_edges.add(key)
-            unique_edges.append(
-                {
-                    "from": edge["from"],
-                    "to": edge["to"],
-                    "to_name": edge["to_name"],
-                    "resolved": edge["resolved"],
-                    "count": call_counts[key],
-                }
-            )
-    return unique_edges
-
-
-def _calculate_metrics(unique_edges: List[Dict]) -> tuple:
-    """Calculate call metrics and top callers/callees (Issue #281: extracted)."""
-    outgoing_calls = {}
-    incoming_calls = {}
-    for edge in unique_edges:
-        outgoing_calls[edge["from"]] = outgoing_calls.get(edge["from"], 0) + edge["count"]
-        if edge["resolved"]:
-            incoming_calls[edge["to"]] = incoming_calls.get(edge["to"], 0) + edge["count"]
-
-    top_callers = sorted(
-        [{"function": k, "calls": v} for k, v in outgoing_calls.items()],
-        key=lambda x: x["calls"],
-        reverse=True,
-    )[:10]
-
-    top_called = sorted(
-        [{"function": k, "calls": v} for k, v in incoming_calls.items()],
-        key=lambda x: x["calls"],
-        reverse=True,
-    )[:10]
-
-    return top_callers, top_called
+    # Root-relative: a project root that itself lives under a skipped name (a
+    # worktree checkout) must not exclude every file (#13602).
+    return [f for f in python_files if EXCLUDED_DIRS.isdisjoint(f.relative_to(project_root).parts)]
 
 
 def _get_decorator_name(decorator) -> str:
@@ -307,7 +224,7 @@ def _extract_callee_name(node) -> str | None:
     if isinstance(node.func, ast.Name):
         return node.func.id
     elif isinstance(node.func, ast.Attribute):
-        return node.func.attr
+        return node.func.attr  # bare: the dotted form would break resolution -- see extract_dotted_callee (#13492)
     return None
 
 
@@ -346,46 +263,44 @@ def _resolve_callee_id(
     current_class: str,
     functions: Dict,
     import_context: ImportContext | None = None,
+    dotted_name: str | None = None,
 ) -> tuple[str | None, bool]:
+    """Resolve a callee name to its full function ID.
+
+    Module-local, class-local and import-context resolution are delegated to
+    the canonical resolver in ``autobot_shared/code_graph/`` (#13470), the same
+    one ``services/knowledge/code_indexer.py`` uses, so this module keeps no
+    copy. ``functions`` (id -> info) is passed straight through as its
+    ``known_ids``: dict membership checks by key, so that is not a behaviour
+    change. ``dotted_name`` carries the receiver, which the AST path did not
+    previously supply (#13492).
+
+    ``dotted_name`` is the full call text, e.g. ``requests.get``. Returns
+    ``(resolved_id, is_external)``, where ``is_external=True`` is a KNOWN
+    non-resolution and is distinct from an unresolved ``(None, False)``.
     """
-    Resolve a callee name to its full function ID.
+    # Order is the point (#13492). Cases in call_graph_resolution_test.py.
+    dotted = dotted_name or callee_name
+    base = dotted.split(".")[0] if dotted and "." in dotted else None
 
-    Issue #665: Extracted from _create_function_visitor to reduce function length.
-    Issue #713: Enhanced with import context for cross-module resolution.
-    Issue #13470: Delegates the module-local/class-local/import-context
-    resolution to the canonical resolver in autobot_shared/code_graph/ —
-    the same one services/knowledge/code_indexer.py (#13469) uses — so this
-    module no longer keeps its own copy. ``functions`` (id -> info) is passed
-    straight through as the resolver's ``known_ids`` container; dict
-    membership checks by key, so this is not a behaviour change.
+    # 1. explicit import wins (alias included)
+    if base and import_context and import_context.is_external(base):
+        return None, True
 
-    The trailing dotted-name check below is retained for exact behaviour
-    parity even though ``FunctionCallVisitor._extract_callee_name`` never
-    actually returns a name containing "." (attribute calls yield only the
-    final ``.attr`` component) — filed as a follow-up (#13470 remaining work).
-
-    Args:
-        callee_name: Name of the called function
-        module_path: Current module path
-        current_class: Current class context (or None)
-        functions: Dictionary of registered functions
-        import_context: Import context for the current file (Issue #713)
-
-    Returns:
-        Tuple of (resolved_id, is_external):
-        - resolved_id: Function ID if found, None otherwise
-        - is_external: True if call is to external library (not unresolved)
-    """
+    # 2. normal local resolution
     resolved_id, is_external = _shared_resolve_callee(
         callee_name, module_path, current_class, functions, import_context
     )
     if resolved_id or is_external:
         return resolved_id, is_external
 
-    if callee_name and "." in callee_name:
-        base = callee_name.split(".")[0]
-        if base in STDLIB_MODULES or base in COMMON_THIRD_PARTY:
-            return None, True
+    # 3. receiver names a LOCAL class -- resolve_callee never uses the receiver
+    if base and (receiver_local := f"{module_path}.{base}.{callee_name}") in functions:
+        return receiver_local, False
+
+    # 4. raw-name fallback last
+    if base and (base in STDLIB_MODULES or base in COMMON_THIRD_PARTY):
+        return None, True
 
     return None, False
 
@@ -550,25 +465,26 @@ class FunctionCallVisitor(ast.NodeVisitor):
 
         callee_name = _extract_callee_name(node)
         if callee_name and callee_name not in BUILTIN_FUNCS:
-            self._record_call(callee_name, node.lineno)
+            self._record_call(callee_name, node.lineno, extract_dotted_callee(node))
 
         self.generic_visit(node)
 
-    def _record_call(self, callee_name: str, line: int):
-        """Record a function call edge. Issue #713: Extracted for brevity."""
+    def _record_call(self, callee_name: str, line: int, dotted_name: str | None = None):
+        """Record a call edge (#713). ``dotted_name`` decides externality only (#13492)."""
         callee_id, is_external = _resolve_callee_id(
             callee_name,
             self.module_path,
             self.current_class,
             self.functions,
             self.import_context,
+            dotted_name=dotted_name,
         )
 
         if is_external and self.external_calls is not None:
             self.external_calls.append(
                 {
                     "from": self.current_function,
-                    "to_name": callee_name,
+                    "to_name": dotted_name or callee_name,  # dotted: "loads" collides (#13492)
                     "line": line,
                 }
             )
@@ -636,7 +552,8 @@ async def _analyze_python_files(
     functions: Dict[str, Dict],
     call_edges: List[Dict],
     external_calls: List[Dict] | None = None,
-) -> None:
+    deadline: float | None = None,
+) -> int:
     """Analyze Python files and populate functions/call_edges.
 
     Issue #665: Extracted from get_call_graph to reduce function length.
@@ -647,8 +564,28 @@ async def _analyze_python_files(
     Issue #13468: no longer slices to 300 files internally -- the caller
     (``get_call_graph``) decides how much of ``python_files`` to pass in, so
     it can report the true ``files_scanned``/``files_total`` split.
+
+    Issue #17651: stops at ``deadline`` (a ``time.monotonic()`` value) and
+    RETURNS the number of files actually analysed, so the caller's
+    ``files_scanned`` is what was read rather than what was offered. The check
+    is per file and before the read, so the overshoot is bounded by one file's
+    parse rather than by the rest of the tree.
+
+    Returns:
+        Count of files analysed -- less than ``len(python_files)`` when the
+        deadline stopped the scan early.
     """
+    analysed = 0
     for py_file in python_files:
+        if deadline is not None and _now() >= deadline:
+            logger.info(
+                "Call-graph scan stopped at its %.0fs budget after %d of %d files; "
+                "the response reports the covered scope (#17651)",
+                CALL_GRAPH_SCAN_BUDGET_SECONDS or 0.0,
+                analysed,
+                len(python_files),
+            )
+            break
         try:
             rel_path = str(py_file.relative_to(project_root))
             module_path = module_path_from_rel_path(rel_path)
@@ -670,8 +607,10 @@ async def _analyze_python_files(
                 import_context=import_context,
             )
             visitor.visit(tree)
+            analysed += 1
         except Exception as e:
             logger.debug("Could not analyze %s: %s", py_file, e)
+    return analysed
 
 
 def _build_call_graph_response(
@@ -724,9 +663,9 @@ def _build_call_graph_response(
             "resolution_rate": round(resolved_count / max(resolved_count + unresolved_count, 1) * 100, 1),
             "top_callers": top_callers,
             "most_called": top_called,
-            # Issue #13468: scope of the statistics above -- files_scanned may
-            # be less than files_total when AUTOBOT_CALL_GRAPH_MAX_FILES caps
-            # the scan; unset (default) scans every file, so truncated is False.
+            # Issue #13468: scope of the above. Either bound can stop the walk --
+            # AUTOBOT_CALL_GRAPH_MAX_FILES (unset by default) or, since #17651, the
+            # 30s deadline -- so truncated is now reachable on a default config.
             "files_scanned": files_scanned,
             "files_total": files_total,
             "truncated": files_scanned < files_total,
@@ -770,13 +709,19 @@ async def get_call_graph(
     python_files = await _get_python_files(project_root)
     files_total = len(python_files)
     scanned_files = python_files if CALL_GRAPH_MAX_FILES is None else python_files[:CALL_GRAPH_MAX_FILES]
-    files_scanned = len(scanned_files)
 
     functions: Dict[str, Dict] = {}
     call_edges: List[Dict] = []
     external_calls: List[Dict] = []  # Issue #713: Track external library calls
 
-    await _analyze_python_files(scanned_files, project_root, functions, call_edges, external_calls)
+    # #17651: files_scanned is what the scan ACTUALLY read, not what it was
+    # offered. Both bounds report through it -- the optional file cap narrows
+    # `scanned_files`, the time budget stops the loop early -- so `truncated`
+    # stays honest whichever one fired, or neither.
+    deadline = None if CALL_GRAPH_SCAN_BUDGET_SECONDS is None else time.monotonic() + CALL_GRAPH_SCAN_BUDGET_SECONDS
+    files_scanned = await _analyze_python_files(
+        scanned_files, project_root, functions, call_edges, external_calls, deadline=deadline
+    )
 
     nodes = _build_connected_nodes(functions, call_edges)
     orphaned_nodes = _build_orphaned_nodes(functions, call_edges)

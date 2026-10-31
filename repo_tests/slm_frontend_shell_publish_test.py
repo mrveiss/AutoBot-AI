@@ -55,6 +55,8 @@ from typing import Iterator
 from repo_tests._paths import repo_root
 from repo_tests.slm_frontend_publish_contract import CLAUSES
 
+from tools.lint._comment_syntax import code_lines
+
 _REPO_ROOT = repo_root()
 
 _SHARED_HELPER = (
@@ -173,9 +175,7 @@ def _logical_lines(text: str) -> list[str]:
 
 
 def _non_comment_logical_lines(text: str) -> Iterator[str]:
-    for line in _logical_lines(text):
-        if line.strip().startswith("#"):
-            continue
+    for _number, line in code_lines(text, join_continuations=True):
         yield line
 
 

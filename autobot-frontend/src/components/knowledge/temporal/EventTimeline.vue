@@ -205,7 +205,7 @@ function toggleExpand(eventId: string): void {
   margin: var(--spacing-0);
 }
 
-.timeline-header h4 i {
+.timeline-header h4 .icon {
   color: var(--color-primary);
 }
 
@@ -229,8 +229,8 @@ function toggleExpand(eventId: string): void {
   gap: var(--spacing-sm);
 }
 
-.loading-state i,
-.empty-state i {
+.loading-state .icon,
+.empty-state .icon {
   font-size: var(--text-2xl);
 }
 
@@ -288,10 +288,10 @@ function toggleExpand(eventId: string): void {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1;
+  z-index: var(--z-raised);
 }
 
-.timeline-dot i {
+.timeline-dot .icon {
   color: white;
   font-size: var(--text-xs);
 }
@@ -419,7 +419,7 @@ function toggleExpand(eventId: string): void {
     height: 22px;
   }
 
-  .timeline-dot i {
+  .timeline-dot .icon {
     font-size: 8px;
   }
 }

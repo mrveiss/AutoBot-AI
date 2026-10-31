@@ -10,15 +10,21 @@ Final comprehensive analysis of Redis vector store integration options for AutoB
 import asyncio
 import json
 import logging
-import os
 import sys
+from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from autobot_shared.paths import project_root
 
 sys.path.insert(0, str(project_root()))
-from constants import ServiceURLs
-from constants.network_constants import NetworkConstants
+from autobot_shared.network_constants import ServiceURLs
+from autobot_shared.redis_client import require_redis_client
+from autobot_shared.redis_management.database_names import database_number
+from autobot_shared.redis_management.endpoint import resolve_redis_endpoint
+
+# The sibling helper module lives beside this script; put its directory on the path so the import
+# resolves when the file is imported (pytest, tooling) as well as when it is run.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from langchain_redis_arm import (  # noqa: E402
     INSTALL_HINT,
     ModernArmUnavailable,
@@ -30,9 +36,6 @@ from langchain_redis_arm import (  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
-
-# DB number from redis-databases.yaml SSOT (#2806): knowledge = 1
-_DB_KNOWLEDGE = int(os.getenv("AUTOBOT_REDIS_DB_KNOWLEDGE", "1"))
 
 #: Where the final report lands, relative to the project root. One constant so the
 #: writer and the message that tells the operator where to look cannot drift.
@@ -134,10 +137,8 @@ def _build_unmeasured_arm_recommendation() -> Dict[str, Any]:
         "recommendation": "INCONCLUSIVE_MODERN_ARM_NOT_MEASURED",
         "confidence": "NONE",
         "reasoning": [
-            "The modern langchain-redis arm was NOT measured - the package is "
-            "not importable on this machine",
-            "This run therefore compared ONE library, not two; no conclusion "
-            "about LangChain can be drawn from it",
+            "The modern langchain-redis arm was NOT measured - the package is not importable on this machine",
+            "This run therefore compared ONE library, not two; no conclusion about LangChain can be drawn from it",
         ],
         "next_step": "Install the analysis dependencies and re-run: " + INSTALL_HINT,
         "compatibility_issues_resolved": [],
@@ -205,8 +206,10 @@ def _configure_llamaindex_settings(fixes_attempted):
     )
     vector_store = RedisVectorStore(
         schema=schema,
-        redis_url=ServiceURLs.REDIS_LOCAL,
-        redis_kwargs={"db": 2},
+        redis_url=resolve_redis_endpoint().url(),
+        # #19232: the existing llama_index lives in "knowledge" (knowledge/base.py); the old
+        # literal 2 is the prompts database.
+        redis_kwargs={"db": database_number("knowledge")},
     )
     fixes_attempted.append("Connected to existing vector store without overwriting")
 
@@ -286,14 +289,7 @@ class AutoBotVectorStoreAnalysis:
         logger.info("Deep analysis of existing Redis vector data...")
 
         try:
-            import redis
-
-            client = redis.Redis(
-                host=NetworkConstants.LOCALHOST_NAME,
-                port=NetworkConstants.REDIS_PORT,
-                db=_DB_KNOWLEDGE,
-                decode_responses=True,
-            )
+            client = require_redis_client(database="knowledge", decode_responses=True)
 
             index_info_raw = client.execute_command("FT.INFO", "llama_index")
             index_info = {}
@@ -396,8 +392,8 @@ class AutoBotVectorStoreAnalysis:
             return False, 0, fixes_attempted
 
     async def test_langchain_db0_workaround_basic(self) -> Tuple[bool, int, List[str]]:
-        """Test LangChain on Redis DB 0 (basic version)"""
-        logger.info("\nTesting LangChain on Redis DB 0...")
+        """Test LangChain on the main Redis DB (basic version)"""
+        logger.info("\nTesting LangChain on the main Redis DB...")
         fixes_attempted = []
 
         try:
@@ -422,9 +418,9 @@ class AutoBotVectorStoreAnalysis:
             vector_store = RedisVectorStore(
                 embeddings=embeddings,
                 index_name="autobot_langchain_db0",
-                redis_url="%s/0" % ServiceURLs.REDIS_LOCAL,
+                redis_url=resolve_redis_endpoint().url(database_number("main")),
             )
-            fixes_attempted.append("Created LangChain vector store on Redis DB 0")
+            fixes_attempted.append("Created LangChain vector store on the main Redis DB")
 
             test_docs = ["Test deployment configuration document"]
             test_metadata = [{"source": "test", "type": "deployment"}]
@@ -647,7 +643,7 @@ class AutoBotVectorStoreAnalysis:
             return False, 0, fixes_attempted
 
     async def test_langchain_db0_workaround(self) -> Tuple[bool, int, List[str]]:
-        """Test LangChain with DB 0 workaround"""
+        """Test LangChain with main DB workaround"""
         fixes_attempted = []
 
         try:
@@ -673,9 +669,9 @@ class AutoBotVectorStoreAnalysis:
             vector_store = RedisVectorStore(
                 embeddings=embeddings,
                 index_name="autobot_langchain_test",
-                redis_url="%s/0" % ServiceURLs.REDIS_LOCAL,
+                redis_url=resolve_redis_endpoint().url(database_number("main")),
             )
-            fixes_attempted.append("Created vector store on Redis DB 0")
+            fixes_attempted.append("Created vector store on the main Redis DB")
 
             test_docs = ["Kubernetes deployment configuration for AutoBot"]
             test_metadata = [{"source": "test", "category": "deployment"}]

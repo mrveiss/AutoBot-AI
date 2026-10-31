@@ -17,7 +17,6 @@ from api.schemas_common import MAX_THOUGHT_COUNT, SuccessMessageResponse
 from autobot_shared.models.service_message import ServiceMessage
 from autobot_shared.time_utils import now_utc
 from constants.path_constants import PATH
-from models.approval import ApprovalType
 from services.trigger_service import TriggerType
 from type_defs.common import Metadata
 
@@ -751,9 +750,7 @@ class BatchStatusResponse(BaseModel):
 class BatchLoadResponse(BaseModel):
     """Response for POST /load — multi-endpoint batch execution."""
 
-    responses: Any
-    errors: Any
-    timing: Any
+    results: List[Any]
 
 
 class BatchChatInitResponse(BaseModel):
@@ -1174,7 +1171,7 @@ class SessionPresenceResponse(BaseModel):
     """Response for GET /{session_id}/presence."""
 
     session_id: str
-    online_users: List[Any]
+    online_users: List[str]
     count: int
 
 
@@ -1238,7 +1235,7 @@ class WorkflowApprovalResponse(BaseModel):
     timestamp: float
 
 
-class WorkflowStatusUpdate(BaseModel):
+class WorkflowStepStatusUpdate(BaseModel):
     workflow_id: str
     step_id: str
     status: str
@@ -1476,105 +1473,12 @@ class WorkflowState(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# approval_gates.py schemas (#6042)
-# ---------------------------------------------------------------------------
-
-
-class AuthorTypeEnum(str, Enum):
-    """Valid author types for approval comments."""
-
-    HUMAN = "human"
-    AGENT = "agent"
-    SYSTEM = "system"
-
-
-class CreateApprovalRequest(BaseModel):
-    """Request body for creating an approval gate."""
-
-    title: str
-    approval_type: ApprovalType
-    description: str | None = None
-    requested_by_agent: str | None = None
-    workflow_id: str | None = None
-    workflow_step: str | None = None
-    context: Dict[str, Any] | None = None
-    task_ids: List[str] | None = None
-
-
-class ApprovalTransitionRequest(BaseModel):
-    """Request body for approve / reject / request-revision."""
-
-    comment: str | None = None
-
-
-class ApprovalResubmitRequest(BaseModel):
-    """Request body for resubmitting after revision."""
-
-    description: str | None = None
-    context: Dict[str, Any] | None = None
-
-
-class ApprovalAddCommentRequest(BaseModel):
-    """Comment on an approval gate. author_type is ignored (#17056) -- kept only to log an old client sending it."""
-
-    body: str
-    author_type: AuthorTypeEnum | None = None
-
-
-class ApprovalLinkTaskRequest(BaseModel):
-    """Request body for linking a task to an approval gate."""
-
-    task_id: str
-    task_type: str = "github_issue"
-
-
-class TaskApprovalLinkResponse(BaseModel):
-    """Response for a task-approval link."""
-
-    id: str
-    approval_id: str
-    task_id: str
-    task_type: str
-
-
-class ApprovalCommentResponse(BaseModel):
-    """Response for an approval gate comment."""
-
-    id: str
-    approval_id: str
-    author: str
-    author_type: str
-    body: str
-    created_at: str | None = None
-
-
-class ApprovalGateResponse(BaseModel):
-    """Response for an approval gate."""
-
-    id: str
-    title: str
-    description: str | None = None
-    approval_type: str
-    status: str
-    requested_by_agent: str | None = None
-    decided_by_user: str | None = None
-    workflow_id: str | None = None
-    workflow_step: str | None = None
-    context: Dict[str, Any] | None = None
-    decided_at: str | None = None
-    created_at: str | None = None
-    updated_at: str | None = None
-    comments: List[ApprovalCommentResponse] = Field(default_factory=list)
-    task_links: List[TaskApprovalLinkResponse] = Field(default_factory=list)
-
-
-# ---------------------------------------------------------------------------
 # integration_project_management.py schemas
 # ---------------------------------------------------------------------------
 
 
-class ConnectionTestRequest(BaseModel):
-    """Request to test project management connection."""
+class ProjectManagementConnectionTestRequest(BaseModel):
+    """Credentials POST /test-connection probes against a Jira, Trello or Asana provider; nothing is stored."""
 
     provider: str = Field(..., description="Provider: jira, trello, or asana")
     base_url: str | None = Field(None, description="Base URL for the service")
@@ -2265,14 +2169,6 @@ class APIBatchRequest(BaseModel):
     requests: List[Dict]
 
 
-class APIBatchResponse(BaseModel):
-    """Combined response from multiple endpoints."""
-
-    responses: Dict
-    errors: Dict[str, str]
-    timing: Dict[str, float]
-
-
 # ---------------------------------------------------------------------------
 # captcha.py schemas
 # ---------------------------------------------------------------------------
@@ -2527,19 +2423,6 @@ class SystemValidationResultModel(BaseModel):
 # ---------------------------------------------------------------------------
 # web_research_settings.py schemas
 # ---------------------------------------------------------------------------
-
-
-class WebResearchSettings(BaseModel):
-    """Web research settings model."""
-
-    enabled: bool
-    require_user_confirmation: bool = True
-    preferred_method: str = "basic"
-    max_results: int = 5
-    timeout_seconds: int = 30
-    auto_research_threshold: float = 0.3
-    rate_limit_requests: int = 5
-    rate_limit_window: int = 60
 
 
 class ResearchPreferences(BaseModel):
@@ -2881,76 +2764,6 @@ class BrowserSessionCleanupData(BaseModel):
     session_id: str | None = None
     conversation_id: str | None = None
     status: str | None = None
-
-
-# ---------------------------------------------------------------------------
-# web_research_settings.py response data schemas (GH #6509)
-# ---------------------------------------------------------------------------
-
-
-class WebResearchStatusData(BaseModel):
-    """Response data for get_research_status."""
-
-    status: str
-    enabled: bool
-    preferred_method: str | None = None
-    health: Dict[str, Any] | None = None
-    circuit_breakers: Dict[str, Any] | None = None
-    cache_stats: Dict[str, Any] | None = None
-    timestamp: str
-    message: str | None = None
-
-
-class WebResearchToggleData(BaseModel):
-    """Response data for enable_web_research and disable_web_research."""
-
-    status: str
-    message: str
-    enabled: bool
-    timestamp: str
-
-
-class WebResearchSettingsData(BaseModel):
-    """Response data for get_research_settings."""
-
-    status: str
-    settings: Dict[str, Any]
-    timestamp: str
-
-
-class WebResearchSettingsUpdateData(BaseModel):
-    """Response data for update_research_settings."""
-
-    status: str
-    message: str
-    settings: Dict[str, Any]
-    timestamp: str
-
-
-class WebResearchTestData(BaseModel):
-    """Response data for test_web_research."""
-
-    status: str
-    test_query: str
-    result: Any | None = None
-    error: str | None = None
-    timestamp: str
-
-
-class WebResearchCacheClearData(BaseModel):
-    """Response data for clear_research_cache and reset_circuit_breakers."""
-
-    status: str
-    message: str
-    timestamp: str
-
-
-class WebResearchUsageStatsData(BaseModel):
-    """Response data for get_usage_stats."""
-
-    status: str
-    stats: Dict[str, Any]
-    timestamp: str
 
 
 # ---------------------------------------------------------------------------

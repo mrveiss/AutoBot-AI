@@ -23,6 +23,9 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import require_path_string
 from autobot_shared.time_utils import parse_utc_iso
 from constants.threshold_constants import CategoryDefaults
+from knowledge.backup_embeddings import fetch_backup_embeddings, restore_backup_embedding
+from knowledge.export_fields import filter_fact_fields
+from knowledge.quarantine import BACKUP_AUDIT_ACTOR, EXPORT_AUDIT_ACTOR, QuarantineAuditFailed, read_every_fact
 
 if TYPE_CHECKING:
     import aioredis
@@ -143,9 +146,10 @@ class BulkOperationsMixin:
         tags: List[str] | None,
         date_from: str | None,
         date_to: str | None,
+        audit_actor: str,
     ) -> List[Dict[str, Any]]:
         """Get and filter facts for export (Issue #398: extracted)."""
-        facts = await self._get_facts_by_ids(fact_ids) if fact_ids else await self.get_all_facts()
+        facts = await self._get_facts_by_ids(fact_ids) if fact_ids else await read_every_fact(self, audit_actor)
         facts = self._apply_category_filter(facts, category)
         facts = self._apply_categories_filter(facts, categories)
         facts = self._apply_tags_filter(facts, tags)
@@ -164,10 +168,11 @@ class BulkOperationsMixin:
         include_embeddings: bool = False,
         include_metadata: bool = True,
         include_tags: bool = True,
+        audit_actor: str = EXPORT_AUDIT_ACTOR,
     ) -> Dict[str, Any]:
-        """Export facts with optional filtering (Issue #398: refactored)."""
+        """Export facts with optional filtering; ``audit_actor`` is the human who asked (#19163)."""
         try:
-            facts = await self._get_export_facts(fact_ids, category, categories, tags, date_from, date_to)
+            facts = await self._get_export_facts(fact_ids, category, categories, tags, date_from, date_to, audit_actor)
 
             if include_embeddings:
                 facts = await self._add_embeddings_to_facts(facts)
@@ -177,9 +182,9 @@ class BulkOperationsMixin:
             output = self._format_output(facts, format)
             if output is None:
                 return {"status": "error", "message": f"Unknown format: {format}"}
-
             return await self._build_export_result(facts, output, output_file)
-
+        except QuarantineAuditFailed:
+            raise  # a failed read audit is a 503 to the caller, not a 200 with status=error (#19163)
         except Exception as e:
             logger.error("Export failed: %s", e)
             return {"status": "error", "message": "Bulk operation failed"}
@@ -209,50 +214,15 @@ class BulkOperationsMixin:
         include_metadata: bool,
         include_tags: bool,
     ) -> List[Dict[str, Any]]:
-        """
-        Filter fact fields based on include flags.
-
-        Issue #415: Control what fields are included in export.
-        """
-        result = []
-        for fact in facts:
-            filtered_fact = {
-                "fact_id": fact.get("fact_id"),
-                "content": fact.get("content"),
-            }
-
-            # Include timestamp if present
-            if "timestamp" in fact:
-                filtered_fact["timestamp"] = fact["timestamp"]
-
-            # Include embedding if present
-            if "embedding" in fact:
-                filtered_fact["embedding"] = fact["embedding"]
-
-            if include_metadata:
-                metadata = fact.get("metadata", {}).copy()
-                if not include_tags:
-                    metadata.pop("tags", None)
-                filtered_fact["metadata"] = metadata
-            elif include_tags:
-                # Only tags requested, not full metadata
-                tags = fact.get("metadata", {}).get("tags", [])
-                filtered_fact["tags"] = tags
-
-            result.append(filtered_fact)
-
-        return result
+        """Filter fact fields based on include flags (Issue #415); see ``knowledge.export_fields``."""
+        return filter_fact_fields(facts, include_metadata, include_tags)
 
     def _apply_tags_filter(self, facts: List[Dict[str, Any]], tags: List[str] | None) -> List[Dict[str, Any]]:
         """Filter facts by tags (match any)."""
         if not tags:
             return facts
-        filtered = []
-        for fact in facts:
-            fact_tags = set(fact.get("metadata", {}).get("tags", []))
-            if any(tag in fact_tags for tag in tags):
-                filtered.append(fact)
-        return filtered
+        wanted = set(tags)
+        return [f for f in facts if wanted & set(f.get("metadata", {}).get("tags", []))]
 
     def _apply_date_filter(
         self,
@@ -352,12 +322,9 @@ class BulkOperationsMixin:
                 logger.warning("Failed to get fact %s: %s", fact_id, e)
         return facts
 
-    async def _fetch_embeddings_from_vector_store(self, fact_ids: List[str]) -> Dict[str, List[float]]:
-        """Fetch embeddings from vector store (Issue #398: extracted)."""
-        result = await asyncio.to_thread(self.vector_store.get, ids=fact_ids, include=["embeddings"])
-        if result and result.get("ids") and result.get("embeddings"):
-            return dict(zip(result["ids"], result["embeddings"]))
-        return {}
+    async def _fetch_embeddings_from_vector_store(self, fact_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+        """Issue #398, #19647."""
+        return await fetch_backup_embeddings(self, fact_ids)
 
     async def _add_embeddings_to_facts(self, facts: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Add vector embeddings to facts from ChromaDB (Issue #398: refactored)."""
@@ -374,7 +341,7 @@ class BulkOperationsMixin:
                 for fact in facts:
                     fact_id = fact.get("fact_id")
                     if fact_id and fact_id in embeddings_map:
-                        fact["embedding"] = embeddings_map[fact_id]
+                        fact.update(embeddings_map[fact_id])
             except Exception as e:
                 logger.warning("Could not retrieve embeddings: %s", e)
         except Exception as e:
@@ -1439,8 +1406,9 @@ class BulkOperationsMixin:
         include_metadata: bool = True,
         compression: bool = True,
         description: str = "",
+        audit_actor: str = BACKUP_AUDIT_ACTOR,
     ) -> Dict[str, Any]:
-        """Create a full backup of the knowledge base (Issue #398: refactored)."""
+        """Create a full backup; ``audit_actor`` is the human who asked, the scheduler's default is a job (#19163)."""
         try:
             backup_dir = self._get_backup_dir(backup_dir)
             os.makedirs(backup_dir, exist_ok=True)
@@ -1448,7 +1416,7 @@ class BulkOperationsMixin:
             backup_name, backup_file = self._generate_backup_path(backup_dir, compression)
             logger.info("Creating backup: %s", backup_file)
 
-            facts = await self.get_all_facts()
+            facts = await read_every_fact(self, audit_actor)
             if include_embeddings:
                 facts = await self._add_embeddings_to_facts(facts)
 
@@ -1462,7 +1430,6 @@ class BulkOperationsMixin:
                 len(facts),
                 file_size,
             )
-
             return self._build_backup_success_result(
                 backup_name,
                 backup_file,
@@ -1472,7 +1439,8 @@ class BulkOperationsMixin:
                 compression,
                 backup_data["created_at"],
             )
-
+        except QuarantineAuditFailed:
+            raise  # the route answers 503; the scheduler logs it and records the failure (#19163)
         except Exception as e:
             logger.error("Backup failed: %s", e)
             return {"status": "error", "message": "Bulk operation failed"}
@@ -1846,32 +1814,14 @@ class BulkOperationsMixin:
         if result.get("status") != "success":
             return {"action": "error", "reason": "store_failed"}
 
-        embedding = fact_data.get("embedding")
-        if restore_embeddings and embedding and self.vector_store:
-            # #13708: use what store_fact persisted -- an unredacted backup can carry a raw credential.
-            stored_content = result.get("content", content)
-            return await self._restore_fact_embedding(result.get("fact_id", fact_id), stored_content, embedding)
+        if restore_embeddings and fact_data.get("embedding") and self.vector_store:
+            return await self._restore_fact_embedding(result.get("fact_id", fact_id), fact_data)
 
         return {"action": "restored", "embedding": False}
 
-    async def _restore_fact_embedding(self, fact_id: str, content: str, embedding: List[float]) -> Dict[str, Any]:
-        """
-        Restore embedding for a fact.
-
-        Issue #398: Extracted from _store_restored_fact.
-        """
-        try:
-            await asyncio.to_thread(
-                self.vector_store.upsert,
-                ids=[fact_id],
-                embeddings=[embedding],
-                metadatas=[{"content": content[:1000]}],
-                documents=[content[:1000]],
-            )
-            return {"action": "restored", "embedding": True}
-        except Exception as e:
-            logger.warning("Embedding restore failed: %s", e)
-            return {"action": "restored", "embedding": False}
+    async def _restore_fact_embedding(self, fact_id: str, fact_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Issue #398, #19647."""
+        return await restore_backup_embedding(self, fact_id, fact_data)
 
     def _count_restore_results(self, restore_results: List[Any]) -> Dict[str, Any]:
         """

@@ -54,6 +54,18 @@ def _make_tool(name: str, description: str = "A tool", schema: dict | None = Non
     return MCPToolDefinition.model_validate(raw)
 
 
+@pytest.fixture(autouse=True)
+def _line_one():
+    """These tests are about routing; the AI-line decision has its own suite (realtime_mcp_bridge_ai_line_18430_test)."""
+    from types import SimpleNamespace
+
+    from services.ai_line_enforcement import Outcome
+
+    run = SimpleNamespace(outcome=Outcome.RUN, message="")
+    with patch("services.realtime_mcp_bridge.enforce_line", AsyncMock(return_value=run)):
+        yield
+
+
 def _make_bridge(server_uris: list[str] | None = None, is_admin: bool = False) -> RealtimeMCPBridge:
     """Return a bridge with optional server URIs and mocked bundle filtering."""
     bridge = RealtimeMCPBridge(is_admin=is_admin, server_uris=server_uris or [])

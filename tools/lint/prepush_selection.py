@@ -19,6 +19,7 @@ from __future__ import annotations
 import ast
 import fnmatch
 import re
+import subprocess
 import sys
 from pathlib import Path, PurePosixPath
 from typing import Callable, Dict, Mapping, Sequence
@@ -120,9 +121,80 @@ def pytest_settings(ini_text: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
     return patterns, tuple(re.findall(r"(?m)^\s*--ignore=(\S+)", ini_text))
 
 
+def pytest_testpaths(ini_text: str) -> tuple[str, ...]:
+    """The ``testpaths`` roots from the text of ``pytest.ini``: where CI and a bare pytest collect (#18288).
+
+    A ``test_*.py`` outside them (the live probes under ``shared/scripts/analysis``) is never
+    collected, so running it as a push gate runs a live probe against the developer's machine.
+    """
+    block = re.search(r"(?ms)^testpaths\s*=\s*(.*?)(?=^\S)", ini_text)
+    if not block:
+        return ()
+    lines = (line.split("#", 1)[0].strip() for line in block.group(1).splitlines())
+    return tuple(line for line in lines if line)
+
+
 def is_test(path: str, patterns: Sequence[str]) -> bool:
     """Whether pytest collects *path*: its basename matches a ``python_files`` pattern."""
     return any(fnmatch.fnmatchcase(PurePosixPath(path).name, pattern) for pattern in patterns)
+
+
+#: Cheap whole-tree guards run on EVERY push (#18808, #16715). Each fires on the tree's shape, so
+#: the change that trips it is rarely its sibling or a recorded glob -- trains 30-33 surfaced nine
+#: such trips only at train time. Kept to guards measured cheap in .test_durations (about 85s
+#: serial in all, 2026-10-23); a costly whole-tree guard is reached through its declared scan
+#: roots instead (see declared_roots).
+ALWAYS_RUN = {
+    "repo_tests/isolated_git_env_guard_18940_test.py": "whole-tree: test git-repo fixtures (#18940)",
+    "repo_tests/python_file_size_ratchet_test.py": "whole-tree: python file-size ceilings",
+    "repo_tests/shell_file_size_ratchet_test.py": "whole-tree: shell file-size ceilings",
+    "repo_tests/frontend_file_size_ratchet_test.py": "whole-tree: frontend file-size ceilings",
+    "repo_tests/python_filter_covers_its_guards_test.py": "whole-tree: the python filter covers every guard input",
+    "repo_tests/changes_job_equivalence_15360_test.py": "whole-tree: the #15360 changes-job equivalence",
+    "repo_tests/secrets_baseline_reasons_guard_test.py": "whole-tree: every secrets-baseline entry has a reason",
+    "repo_tests/reach_scope_claim_17844_test.py": "whole-tree: reach declarations match their scopes",
+    "repo_tests/guard_reach_meta_test.py": "whole-tree: every tree-scanning guard has a reach floor",
+    "repo_tests/one_git_enumeration_15926_test.py": "whole-tree: one git enumeration (#18808: #18802)",
+    "repo_tests/regex_concept_fork_guard_18093_test.py": "whole-tree: regex concept forks (#18808: #18802)",
+    "repo_tests/frontend_api_contract_ratchet_test.py": "whole-tree: frontend API contract (#18808: #18755)",
+    "repo_tests/raw_palette_class_ratchet_14580_test.py": "whole-tree: raw palette classes (#18808: #18797)",
+    "repo_tests/docstring_restatement_guard_17165_test.py": "whole-tree: docstring restatement (#18808: #18742)",
+    "repo_tests/remote_command_quoting_18359_test.py": "whole-tree: remote command quoting (#18808: #18782)",
+    "repo_tests/env_var_bare_cast_test.py": "whole-tree: bare env-var casts and their baseline",
+    "repo_tests/symbol_fork_ratchet_17312_test.py": "whole-tree: symbol forks and their baseline",
+    "pipeline-scripts/check_baseline_no_growth_test.py": "the baseline no-growth check",
+}
+
+
+REACH_ROOTS_RECORD = "repo_tests/_reach_roots_record.py"
+
+
+def declared_roots(record_text: str) -> Dict[str, tuple]:
+    """``{guard: roots}`` from the text of REACH_ROOTS_RECORD, read as DATA, never imported.
+
+    The hook must not depend on repo_tests being importable (see GLOB_RECORD). The record is
+    computed from the live registry (repo_tests/_reach_roots.py), because a parse of the
+    ``declare(`` calls missed every ``roots=`` written as a constant (#19312 review). An
+    unparseable record selects nothing extra, the same degradation as the glob record.
+    """
+    try:
+        tree = ast.parse(record_text)
+    except SyntaxError:
+        return {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(getattr(t, "id", None) == "REACH_ROOTS" for t in node.targets):
+            try:
+                value = ast.literal_eval(node.value)
+            except ValueError:
+                return {}
+            return {str(k): tuple(v) for k, v in value.items()}
+    return {}
+
+
+def _under_root(path: str, roots: Sequence[str]) -> bool:
+    """Whether *path* falls under a declared root. Roots are raw prefixes, the way
+    ``_reach_scope.scope_complaint`` checks them, so ``autobot-`` covers every ``autobot-*`` tree."""
+    return any(path.startswith(root) for root in roots)
 
 
 def _under(path: str, prefixes: Sequence[str]) -> bool:
@@ -137,6 +209,10 @@ def select(
     ignores: Sequence[str],
     exists: Callable[[str], bool],
     declared_globs: Mapping[str, frozenset] | None = None,
+    testpaths: Sequence[str] = (),
+    roots: Mapping[str, tuple] | None = None,
+    references: Mapping[str, Sequence[str]] | None = None,
+    always: Mapping[str, str] | None = None,
 ) -> Dict[str, str]:
     """The tests to run for *changed*, each mapped to the reason it was chosen.
 
@@ -148,17 +224,33 @@ def select(
     A changed path ALSO runs every guard that declares a glob matching it. Those guards
     are co-located with nothing, so the two rules above never reach them: they scan the
     tree and fire on its shape. That is the whole class #17241 burned four CI cycles on.
+
+    When *testpaths* is given, a test outside every root is never selected: pytest would not
+    collect it (#18288), so the push would run a file no CI shard runs.
     """
     chosen: Dict[str, str] = {}
     declared = declared_globs or {}
+
+    def add(test: str, why: str) -> None:
+        if test not in chosen and exists(test) and not _under(test, ignores):
+            chosen[test] = why
+
+    if changed:
+        for guard, why in (always or {}).items():
+            add(guard, why)
+    for guard, scanned in (roots or {}).items():
+        hit = next((p for p in changed if _under_root(p, scanned)), None)
+        if hit:
+            add(guard, f"scans {', '.join(scanned)}; {hit} changed")
+    for path, tests in (references or {}).items():
+        for test in tests:
+            add(test, f"names {path}")
     if any(p.startswith("repo_tests/") and p.endswith(".py") for p in changed):
         for guard, why in GUARDS_POLICING_GUARDS.items():
-            if guard not in chosen and exists(guard) and not _under(guard, ignores):
-                chosen[guard] = f"a repo_tests file changed; {why}"
+            add(guard, f"a repo_tests file changed; {why}")
     for path in changed:
         for guard in _guards_reading(path, declared):
-            if guard not in chosen and exists(guard) and not _under(guard, ignores):
-                chosen[guard] = f"declares a glob matching {path}"
+            add(guard, f"declares a glob matching {path}")
     for path in changed:
         if is_test(path, patterns):
             test, reason = path, "changed"
@@ -166,9 +258,49 @@ def select(
             test, reason = f"{path[:-3]}_test.py", f"co-located with {path}"
         else:
             continue
-        if test not in chosen and exists(test) and not _under(test, ignores):
+        collected = not testpaths or _under(test, testpaths)
+        if test not in chosen and collected and exists(test) and not _under(test, ignores):
             chosen[test] = reason
     return chosen
+
+
+def tests_naming(root: Path, changed: Sequence[str], patterns: Sequence[str]) -> Dict[str, list]:
+    """``{changed path: [test files that name it]}`` (#16715 AC1).
+
+    A test that slices a template or reads a YAML file names it by its repo path, or by its
+    basename when that basename is unique in the tree (``main.yml`` is not; a template's name
+    usually is). Python paths too: ``frontmatter_test`` lists the modules it polices by path, and
+    #18790 changed one of them (#18808). One ``git grep -F`` per changed path, over test files.
+    """
+    from autobot_shared.paths import scrubbed_git_env  # noqa: PLC0415 - hook-time only
+    from tools.lint._scan_helpers import tracked_paths  # noqa: PLC0415 - hook-time only
+
+    targets = list(changed)
+    if not targets:
+        return {}
+    # An empty enumeration raises (EmptyEnumeration) instead of returning {}: selecting fewer
+    # tests in silence is the failure this function exists to prevent (#19312 review). main()
+    # turns the raise into a failed selection, which blocks the push.
+    tracked = tracked_paths(root)
+    basenames: Dict[str, int] = {}
+    for rel in tracked:
+        name = rel.rsplit("/", 1)[-1]
+        basenames[name] = basenames.get(name, 0) + 1
+    specs = [f":(glob)**/{pattern}" for pattern in patterns]
+    found: Dict[str, list] = {}
+    for path in targets:
+        name = path.rsplit("/", 1)[-1]
+        needles = [path] + ([name] if basenames.get(name) == 1 and name != path else [])
+        args = ["git", "-C", str(root), "grep", "-l", "-F"]
+        for needle in needles:
+            args += ["-e", needle]
+        out = subprocess.run([*args, "--", *specs], capture_output=True, text=True, timeout=60, env=scrubbed_git_env())
+        if out.returncode not in (0, 1):  # 1 is "no match"; anything else is a failed search
+            raise RuntimeError(f"git grep for {path!r} failed (exit {out.returncode}): {out.stderr.strip()}")
+        hits = [line for line in out.stdout.splitlines() if line and line != path]
+        if hits:
+            found[path] = hits
+    return found
 
 
 def format_selection(chosen: Mapping[str, str]) -> str:
@@ -179,7 +311,8 @@ def format_selection(chosen: Mapping[str, str]) -> str:
 def main() -> int:
     """Read the changed paths on stdin and print the tests to run, run from the repo root."""
     root = Path.cwd()
-    patterns, ignores = pytest_settings((root / "pytest.ini").read_text(encoding="utf-8"))
+    ini_text = (root / "pytest.ini").read_text(encoding="utf-8")
+    patterns, ignores = pytest_settings(ini_text)
     changed = [line.strip() for line in sys.stdin if line.strip()]
     record = root / GLOB_RECORD
     try:
@@ -187,12 +320,19 @@ def main() -> int:
     except (OSError, UnicodeDecodeError):
         # An unreadable or undecodable record costs a selection, never a push.
         declared = {}
+    # A missing record is a failed selection, not an empty one (#19312 review): without it no
+    # guard is reached through its scan roots, and that must not pass as "nothing to run".
+    roots_text = (root / REACH_ROOTS_RECORD).read_text(encoding="utf-8")
     chosen = select(
         changed,
         patterns=patterns,
         ignores=ignores,
         exists=lambda rel: (root / rel).is_file(),
         declared_globs=declared,
+        testpaths=pytest_testpaths(ini_text),
+        roots=declared_roots(roots_text),
+        references=tests_naming(root, changed, patterns),
+        always=ALWAYS_RUN,
     )
     sys.stdout.write(format_selection(chosen))
     return 0

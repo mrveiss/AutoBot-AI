@@ -7,110 +7,56 @@
  * #13079 — useSkills / useSkillGovernance migrated off their two private
  * `axios.create` instances onto `useAutobotApi`.
  *
- * `useSkills` owned `axios.create({ baseURL: getBackendUrl() + '/skills/',
- * timeout: 15000 })` and `useSkillGovernance` a second, bare
- * `axios.create({ timeout: 15000 })`. Both attached only
- * `Bearer ${authStore.token}` — no `autobot_access_token` fallback, no 401
- * cleanup — which is exactly the fork that made `AdvancedControlTool` 401 while
- * its ~17 siblings worked (#13077).
- *
- * The harness stubs `axios.create` and records the interceptors `useAutobotApi`
- * registers, then invokes them directly, so these assert the REAL transport
- * behaviour (header actually attached, 401 actually clearing storage, the
- * timeout actually configured) rather than that a function was called.
+ * Both used to attach only `Bearer ${authStore.token}` — no `autobot_access_token`
+ * fallback, no 401 cleanup — which is exactly the fork that made `AdvancedControlTool`
+ * 401 while its ~17 siblings worked (#13077). They now share the SLM's `SlmApiClient`
+ * pointed at the main backend (#12363); its token, 401 and timeout handling are tested
+ * once in `utils/ApiClient.test.ts`. The client is the shared `mockAutobotBackendClient`
+ * double: methods resolve the parsed body and failures are the kit `HttpError`. These
+ * tests pin the base URL, the wire paths, and the error surface.
  *
  * Which tests prove a defect and which are regression guards is stated per
  * `describe` block below.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { HttpError } from '@autobot/ui'
+import { backendClient } from '@/testing/mockAutobotBackendClient'
 
 const BACKEND = 'http://autobot.example/autobot-api'
 
-type Headers = Record<string, unknown>
-type RequestConfig = { headers: Headers }
-
-const h = vi.hoisted(() => {
-  const state = {
-    createConfig: null as Record<string, unknown> | null,
-    requestInterceptor: null as ((c: RequestConfig) => RequestConfig) | null,
-    responseErrorInterceptor: null as ((e: unknown) => Promise<unknown>) | null,
-    token: null as string | null,
-  }
-  const instance = {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    interceptors: {
-      // Plain functions, not vi.fn: the suite runs with `mockReset: true`,
-      // which would strip a vi.fn implementation before the tests execute.
-      request: {
-        use: (fn: (c: RequestConfig) => RequestConfig) => {
-          state.requestInterceptor = fn
-        },
-      },
-      response: {
-        use: (_ok: unknown, err: (e: unknown) => Promise<unknown>) => {
-          state.responseErrorInterceptor = err
-        },
-      },
-    },
-  }
-  return { state, instance }
-})
-
-vi.mock('axios', () => ({
-  default: {
-    create: (config: Record<string, unknown>) => {
-      h.state.createConfig = config
-      return h.instance
-    },
-  },
-}))
-
-vi.mock('@/config/ssot-config', () => ({ getBackendUrl: () => BACKEND }))
-
-vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({
-    get token() {
-      return h.state.token
-    },
-  }),
+vi.mock('@/utils/ApiClient', async (importOriginal) =>
+  (await import('@/testing/mockAutobotBackendClient')).withMockedBackendClient(importOriginal),
+)
+vi.mock('@/config/ssot-config', () => ({
+  getBackendUrl: () => BACKEND,
+  getEnvPositiveInt: (_key: string, fallback: number) => fallback,
 }))
 
 import { useSkills, useSkillGovernance } from './useSkills'
 import { SKILL_APPROVAL_POLL_TIMEOUT_MS } from '@/constants/api-timeouts'
 
-/** The single axios instance every call in this module now shares. */
+/** The single client every call in this module shares. */
 function calls(verb: 'get' | 'post' | 'put') {
-  return h.instance[verb].mock.calls as unknown[][]
+  return backendClient[verb].mock.calls as unknown[][]
 }
 
 function firstUrl(verb: 'get' | 'post' | 'put'): string {
   return calls(verb)[0]?.[0] as string
 }
 
-/** An axios-shaped rejection carrying a FastAPI `{ detail }` body. */
+/** A kit `HttpError` carrying a FastAPI `{ detail }` body. */
 function detailError(status: number, detail: string) {
-  const err = new Error(`Request failed with status code ${status}`) as Error & {
-    response: { status: number; data: { detail: string } }
-  }
-  err.response = { status, data: { detail } }
-  return err
+  return new HttpError(status, 'Error', { detail })
 }
 
 describe('useSkills — migrated onto useAutobotApi (#13079)', () => {
   beforeEach(() => {
-    h.state.token = null
-    h.state.createConfig = null
-    h.state.requestInterceptor = null
-    h.state.responseErrorInterceptor = null
-    localStorage.clear()
-    h.instance.get.mockResolvedValue({ data: {}, status: 200 })
-    h.instance.post.mockResolvedValue({ data: {}, status: 200 })
-    h.instance.put.mockResolvedValue({ data: {}, status: 200 })
+    vi.clearAllMocks()
+    backendClient.baseUrl = null
+    backendClient.get.mockResolvedValue({})
+    backendClient.post.mockResolvedValue({})
+    backendClient.put.mockResolvedValue({})
   })
 
   // ===========================================================================
@@ -118,44 +64,10 @@ describe('useSkills — migrated onto useAutobotApi (#13079)', () => {
   // ===========================================================================
 
   describe('transport the private axios instances lacked', () => {
-    it('attaches the autobot_access_token from localStorage when no SLM token exists', () => {
-      // The private interceptors read `authStore.token` and nothing else, so an
-      // operator holding only an autobot-issued token sent NO Authorization
-      // header at all and every skills call 401'd.
-      localStorage.setItem('autobot_access_token', 'autobot-token')
-      useSkills()
-
-      const headers = h.state.requestInterceptor!({ headers: {} }).headers
-
-      expect(headers.Authorization).toBe('Bearer autobot-token')
-    })
-
-    it('clears the autobot_access_token on a 401', async () => {
-      localStorage.setItem('autobot_access_token', 'stale-token')
-      useSkills()
-
-      await expect(
-        h.state.responseErrorInterceptor!({ response: { status: 401 } })
-      ).rejects.toBeDefined()
-
-      expect(localStorage.getItem('autobot_access_token')).toBeNull()
-    })
-
-    it('drops the unexplained blanket 15s budget for the client default', () => {
-      // 15000 was introduced with the feature (#731) and copied to the second
-      // instance; nothing in history or comment justifies it, and it was too
-      // SHORT for POST /skills/repos/{id}/sync, which awaits a git clone inline
-      // (autobot-backend/api/skills_repos.py:117).
-      useSkills()
-
-      expect(h.state.createConfig?.timeout).toBe(30000)
-      expect(h.state.createConfig?.timeout).not.toBe(15000)
-    })
-
     it('resolves the base URL through the client rather than a private baseURL', () => {
       useSkills()
 
-      expect(h.state.createConfig?.baseURL).toBe(BACKEND)
+      expect(backendClient.baseUrl).toBe(BACKEND)
     })
   })
 
@@ -166,7 +78,7 @@ describe('useSkills — migrated onto useAutobotApi (#13079)', () => {
 
   describe('endpoint paths survive the migration (regression guard)', () => {
     it('fetchSkills GETs /skills/ with the trailing slash preserved', async () => {
-      h.instance.get.mockResolvedValue({ data: { skills: [], categories: [] }, status: 200 })
+      backendClient.get.mockResolvedValue({ skills: [], categories: [] })
 
       await useSkills().fetchSkills()
 
@@ -174,7 +86,7 @@ describe('useSkills — migrated onto useAutobotApi (#13079)', () => {
     })
 
     it('fetchSkills serialises category + search as query params', async () => {
-      h.instance.get.mockResolvedValue({ data: { skills: [], categories: [] }, status: 200 })
+      backendClient.get.mockResolvedValue({ skills: [], categories: [] })
 
       await useSkills().fetchSkills('automation', 'web')
 
@@ -182,7 +94,7 @@ describe('useSkills — migrated onto useAutobotApi (#13079)', () => {
     })
 
     it('fetchCategories GETs /skills/categories', async () => {
-      h.instance.get.mockResolvedValue({ data: { categories: { automation: 2 } }, status: 200 })
+      backendClient.get.mockResolvedValue({ categories: { automation: 2 } })
 
       const s = useSkills()
       await s.fetchCategories()
@@ -192,7 +104,7 @@ describe('useSkills — migrated onto useAutobotApi (#13079)', () => {
     })
 
     it('fetchSkillDetail GETs /skills/{name}', async () => {
-      h.instance.get.mockResolvedValue({ data: { name: 'web_search' }, status: 200 })
+      backendClient.get.mockResolvedValue({ name: 'web_search' })
 
       const s = useSkills()
       await s.fetchSkillDetail('web_search')
@@ -202,7 +114,7 @@ describe('useSkills — migrated onto useAutobotApi (#13079)', () => {
     })
 
     it('enable/disable POST /skills/{name}/{verb}', async () => {
-      h.instance.get.mockResolvedValue({ data: { skills: [], categories: [] }, status: 200 })
+      backendClient.get.mockResolvedValue({ skills: [], categories: [] })
 
       await useSkills().enableSkill('web_search')
       await useSkills().disableSkill('web_search')
@@ -219,7 +131,7 @@ describe('useSkills — migrated onto useAutobotApi (#13079)', () => {
     })
 
     it('initializeSkills POSTs /skills/initialize', async () => {
-      h.instance.get.mockResolvedValue({ data: { skills: [], categories: [] }, status: 200 })
+      backendClient.get.mockResolvedValue({ skills: [], categories: [] })
 
       await useSkills().initializeSkills()
 
@@ -227,7 +139,7 @@ describe('useSkills — migrated onto useAutobotApi (#13079)', () => {
     })
 
     it('percent-encodes a skill name so a slash cannot escape the path', async () => {
-      h.instance.get.mockResolvedValue({ data: { name: 'a/b' }, status: 200 })
+      backendClient.get.mockResolvedValue({ name: 'a/b' })
 
       await useSkills().fetchSkillDetail('a/b')
 
@@ -236,8 +148,8 @@ describe('useSkills — migrated onto useAutobotApi (#13079)', () => {
   })
 
   describe('error surface', () => {
-    it('surfaces the FastAPI detail rather than the axios message', async () => {
-      h.instance.get.mockRejectedValue(detailError(500, 'skill registry unavailable'))
+    it('surfaces the FastAPI detail rather than the generic HttpError message', async () => {
+      backendClient.get.mockRejectedValue(detailError(500, 'skill registry unavailable'))
 
       const s = useSkills()
       await s.fetchSkills()
@@ -245,17 +157,34 @@ describe('useSkills — migrated onto useAutobotApi (#13079)', () => {
       expect(s.error.value).toBe('skill registry unavailable')
       expect(s.loading.value).toBe(false)
     })
+
+    it('renders a plain Error as the translated generic message plus the cause, once', async () => {
+      backendClient.get.mockRejectedValue(new Error('boom'))
+
+      const s = useSkills()
+      await s.fetchSkills()
+
+      expect(s.error.value).toBe('Skills request failed: boom')
+    })
+
+    it('renders a detail-less HttpError as the translated generic message and the status', async () => {
+      backendClient.get.mockRejectedValue(new HttpError(500, 'Internal Server Error'))
+
+      const s = useSkills()
+      await s.fetchSkills()
+
+      expect(s.error.value).toBe('Skills request failed (HTTP 500)')
+    })
   })
 })
 
 describe('useSkillGovernance — migrated onto useAutobotApi (#13079)', () => {
   beforeEach(() => {
-    h.state.token = null
-    h.state.createConfig = null
-    localStorage.clear()
-    h.instance.get.mockResolvedValue({ data: [], status: 200 })
-    h.instance.post.mockResolvedValue({ data: {}, status: 200 })
-    h.instance.put.mockResolvedValue({ data: {}, status: 200 })
+    vi.clearAllMocks()
+    backendClient.baseUrl = null
+    backendClient.get.mockResolvedValue([])
+    backendClient.post.mockResolvedValue({})
+    backendClient.put.mockResolvedValue({})
   })
 
   afterEach(() => {
@@ -266,12 +195,12 @@ describe('useSkillGovernance — migrated onto useAutobotApi (#13079)', () => {
   // Defect proofs.
   // ===========================================================================
 
-  it('surfaces the FastAPI detail instead of the axios status message', async () => {
+  it('surfaces the FastAPI detail instead of the generic status message', async () => {
     // The private instance's callers all read `e instanceof Error ? e.message`,
-    // which under axios is the generic "Request failed with status code 403" —
+    // which is the generic status message —
     // the backend's reason for refusing a governance change never reached the
     // operator.
-    h.instance.get.mockRejectedValue(detailError(403, 'governance is locked'))
+    backendClient.get.mockRejectedValue(detailError(403, 'governance is locked'))
 
     const g = useSkillGovernance()
     await g.fetchRepos()
@@ -280,7 +209,7 @@ describe('useSkillGovernance — migrated onto useAutobotApi (#13079)', () => {
   })
 
   it('surfaces the detail on a refused approval decision', async () => {
-    h.instance.post.mockRejectedValue(detailError(409, 'approval already decided'))
+    backendClient.post.mockRejectedValue(detailError(409, 'approval already decided'))
 
     const g = useSkillGovernance()
     await g.decideApproval('a1', true)
@@ -295,13 +224,26 @@ describe('useSkillGovernance — migrated onto useAutobotApi (#13079)', () => {
 
     const g = useSkillGovernance()
     g.startApprovalPolling()
-    vi.advanceTimersByTime(30_000)
 
-    const [url, config] = calls('get')[0] as [string, { timeout: number }]
+    const [url, config] = calls('get')[0] as [string, { timeout: number; maxRetries: number }]
     expect(url).toBe('/skills/governance/approvals')
     expect(config?.timeout).toBe(SKILL_APPROVAL_POLL_TIMEOUT_MS)
     expect(config.timeout).toBeLessThan(30_000)
+    // GET retries would stretch one failing tick past the interval (#12363)
+    expect(config.maxRetries).toBe(1)
 
+    g.stopApprovalPolling()
+  })
+
+  it('pauses the approval poll after repeated failures instead of polling a down backend', async () => {
+    vi.useFakeTimers()
+    backendClient.get.mockRejectedValue(detailError(503, 'down'))
+
+    const g = useSkillGovernance()
+    g.startApprovalPolling()
+    await vi.advanceTimersByTimeAsync(30_000 * 6)
+
+    expect(g.approvalPoller.pausedOnErrors.value).toBe(true)
     g.stopApprovalPolling()
   })
 
@@ -319,7 +261,7 @@ describe('useSkillGovernance — migrated onto useAutobotApi (#13079)', () => {
 
   describe('endpoint paths survive the migration (regression guard)', () => {
     it('fetchRepos GETs /skills/repos', async () => {
-      h.instance.get.mockResolvedValue({ data: [{ id: 'r1' }], status: 200 })
+      backendClient.get.mockResolvedValue([{ id: 'r1' }])
 
       const g = useSkillGovernance()
       await g.fetchRepos()
@@ -362,7 +304,7 @@ describe('useSkillGovernance — migrated onto useAutobotApi (#13079)', () => {
     })
 
     it('drafts GET /skills/governance/drafts and test/promote POST under it', async () => {
-      h.instance.get.mockResolvedValue({ data: [{ id: 'd1' }], status: 200 })
+      backendClient.get.mockResolvedValue([{ id: 'd1' }])
 
       const g = useSkillGovernance()
       await g.fetchDrafts()
@@ -375,7 +317,7 @@ describe('useSkillGovernance — migrated onto useAutobotApi (#13079)', () => {
     })
 
     it('governance config GETs and PUTs /skills/governance/ with the trailing slash', async () => {
-      h.instance.get.mockResolvedValue({ data: { mode: 'locked' }, status: 200 })
+      backendClient.get.mockResolvedValue({ mode: 'locked' })
 
       const g = useSkillGovernance()
       await g.fetchGovernance()

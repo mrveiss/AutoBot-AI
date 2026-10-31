@@ -139,13 +139,13 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
-import BaseButton from '@/components/base/BaseButton.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { useAIDocument } from '@/composables/useAIDocument'
 import { useTranscriberApi } from '@/composables/transcriber/useTranscriberApi'
 import type { Project } from '@/composables/transcriber/useTranscriberApi'
 import { createLogger } from '@/utils/debugUtils'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const PAGE_SIZE = 50
 
@@ -248,17 +248,7 @@ async function executeDelete() {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  } catch {
-    return iso
-  }
-}
+const formatDate = createDateFormatter({ kind: 'date', intl: { year: 'numeric', month: 'short', day: 'numeric' } })
 </script>
 
 <style scoped>

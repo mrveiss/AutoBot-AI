@@ -18,14 +18,15 @@ reassembled below as helpers that take what they read and return what they
 produce, keeping every step the extraction had preserved.
 """
 
+import argparse
 import asyncio
-import fnmatch
 import glob
 import os
 import sys
 from pathlib import Path
 from typing import List, Tuple
 
+from autobot_shared.kb_doc_set import DOC_PATTERNS, EXCLUDE_PATTERNS, should_exclude_file
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import project_root
 
@@ -43,23 +44,6 @@ _BACKEND_DIR = Path(__file__).resolve().parents[3] / "autobot-backend"
 if str(_BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(_BACKEND_DIR))
 
-# Documentation patterns to include.
-DOC_PATTERNS = [
-    "README.md",
-    "CLAUDE.md",
-    "docs/**/*.md",
-    "autobot-backend/resources/prompts/**/*.md",
-    "*.md",  # Any markdown files in root
-]
-
-# Files to exclude (e.g., test results, node_modules).
-EXCLUDE_PATTERNS = [
-    "**/node_modules/**",
-    "**/venv/**",
-    "**/test-results/**",
-    "**/playwright-report/**",
-    "**/.pytest_cache/**",
-]
 
 # Queries used to smoke-test retrieval once the base has been populated.
 SEARCH_SMOKE_QUERIES = [
@@ -81,14 +65,6 @@ CATEGORY_PREFIXES = [
 ]
 
 
-def should_exclude_file(file_path: str, exclude_patterns: list) -> bool:
-    """Check if file matches any exclude pattern (Issue #315: extracted helper)."""
-    for exclude in exclude_patterns:
-        if fnmatch.fnmatch(file_path, exclude):
-            return True
-    return False
-
-
 def determine_category(rel_path: str) -> str:
     """Determine doc category from relative path (Issue #315: extracted helper)."""
     # Check exact matches first
@@ -103,13 +79,13 @@ def determine_category(rel_path: str) -> str:
     return "documentation"
 
 
-def collect_documentation_files(root: Path) -> List[str]:
-    """Expand DOC_PATTERNS under *root*, de-duplicate, and drop excluded paths."""
+def collect_documentation_files(root: Path, patterns: List[str] | None = None) -> List[str]:
+    """Expand *patterns* (default DOC_PATTERNS) under *root*, de-duplicate, and drop excluded paths."""
     all_files: List[str] = []
-    for pattern in DOC_PATTERNS:
+    for pattern in patterns or DOC_PATTERNS:
         all_files.extend(glob.glob(str(root / pattern), recursive=True))
 
-    unique_files = set(all_files)
+    unique_files = sorted(set(all_files))  # sorted: a caller that takes the first N gets the same N every run
     return [fp for fp in unique_files if os.path.isfile(fp) and not should_exclude_file(fp, EXCLUDE_PATTERNS)]
 
 
@@ -163,18 +139,19 @@ async def run_search_smoke_tests(kb) -> None:
             logger.info(f"  First result: {results[0].get('metadata', {}).get('relative_path', 'Unknown')}")
 
 
-async def add_documentation_to_kb():
-    """Add all project documentation to the knowledge base."""
+async def add_documentation_to_kb(patterns: List[str] | None = None):
+    """Add the project documentation matching *patterns* (default DOC_PATTERNS) to the knowledge base."""
     # Imported here rather than at module scope: ``knowledge/__init__`` loads
     # the composed class lazily (#1514), so a module-scope import would pull
     # redis, chromadb and llama_index in merely to inspect this script.
-    from knowledge import KnowledgeBase
+    from knowledge_factory import get_knowledge_base_async
 
-    kb = KnowledgeBase()
-    await kb.ainit()
+    kb = await get_knowledge_base_async()
+    if kb is None:
+        raise RuntimeError("Knowledge base unavailable: initialization failed or retry cooldown active")
 
     root = project_root()
-    filtered_files = collect_documentation_files(root)
+    filtered_files = collect_documentation_files(root, patterns)
     logger.info(f"Found {len(filtered_files)} documentation files to add to knowledge base")
 
     success_count, error_count = await add_files_to_kb(filtered_files, root, kb)
@@ -186,5 +163,18 @@ async def add_documentation_to_kb():
     await run_search_smoke_tests(kb)
 
 
+def _parse_args(argv: List[str] | None = None) -> argparse.Namespace:
+    """The one KB populate entry point (#19339): the retired copies' variants are its options."""
+    parser = argparse.ArgumentParser(description="Add the project documentation to the knowledge base.")
+    parser.add_argument(
+        "--patterns",
+        nargs="+",
+        metavar="GLOB",
+        help=f"globs under the project root to add instead of the defaults ({', '.join(DOC_PATTERNS)}); "
+        "e.g. --patterns 'docs/**/*.md' for the docs tree only",
+    )
+    return parser.parse_args(argv)
+
+
 if __name__ == "__main__":
-    asyncio.run(add_documentation_to_kb())
+    asyncio.run(add_documentation_to_kb(_parse_args().patterns))

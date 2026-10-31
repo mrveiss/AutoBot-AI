@@ -42,6 +42,7 @@ Covers (#16385 acceptance criteria):
 """
 
 import ast
+import asyncio
 import importlib.util
 import secrets
 import sys
@@ -173,20 +174,6 @@ def _mint_token(secret: str = _SECRET_KEY, **claims: object) -> str:
     return encode_jwt(data, secret=secret, expires_delta=timedelta(minutes=_EXPIRE_MINUTES))
 
 
-class _FakeDenylistRedis:
-    """A working (not unavailable) Redis stand-in for the jti denylist.
-
-    #16387 made ``is_jti_revoked`` fail CLOSED: a Redis client that is
-    unavailable (``None``) now raises rather than reporting "not revoked", so
-    this suite's valid-token test needs a Redis that actually answers, not one
-    that is absent. Nothing in these tests ever revokes a jti, so the real
-    denylist key is always empty here.
-    """
-
-    async def exists(self, _key: str) -> int:
-        return 0
-
-
 class _FakeEpochRedis:
     """A working Redis stand-in for the password-epoch store (#16411).
 
@@ -206,11 +193,24 @@ class _FakeEpochRedis:
         return self._marker
 
 
+def _assert_revocation_unavailable(resp) -> None:
+    """503 + stable detail + Retry-After from the env-backed constant (#18892)."""
+    from autobot_shared.auth.revocation_unavailable import (
+        REVOCATION_RETRY_AFTER_SECONDS,
+        REVOCATION_UNAVAILABLE_DETAIL,
+    )
+
+    assert resp.status_code == 503, resp.text
+    assert resp.json()["detail"] == REVOCATION_UNAVAILABLE_DETAIL
+    assert resp.headers["Retry-After"] == str(max(1, REVOCATION_RETRY_AFTER_SECONDS))
+
+
 def _get_me(
     headers: dict | None = None,
     epoch_marker: str | None = None,
     epoch_error: Exception | None = None,
     epoch_client_present: bool = True,
+    denylist_lookup: AsyncMock | None = None,
 ):
     """Dispatch GET /api/auth/me with both revocation checks given a working
     fake Redis.
@@ -232,7 +232,9 @@ def _get_me(
     epoch_client = _FakeEpochRedis(epoch_marker, epoch_error) if epoch_client_present else None
     epoch_redis = AsyncMock(return_value=epoch_client)
     with (
-        patch.object(_dl_mod, "get_async_redis_client", AsyncMock(return_value=_FakeDenylistRedis())),
+        # #18663: the denylist lives in the SLM's PostgreSQL; stub only its lookup so the
+        # real is_jti_revoked wrapper still runs (deadline, error mapping).
+        patch.object(_dl_mod, "_lookup", denylist_lookup or AsyncMock(return_value=False)),
         patch.object(password_epoch_mod, "get_async_redis_client", epoch_redis),
         TestClient(app) as client,
     ):
@@ -264,17 +266,50 @@ class TestAuthMePasswordEpoch:
         resp = _get_me(headers={"Authorization": f"Bearer {token}"}, epoch_marker="1000")
         assert 200 <= resp.status_code < 300, resp.text
 
-    def test_a_redis_error_on_the_epoch_read_gets_401(self):
-        """#16659: a real store error inside get_password_epoch denies the token."""
+    def test_a_redis_error_on_the_epoch_read_gets_503(self):
+        """#16659, #18892: a store error inside get_password_epoch denies the token with a retryable 503."""
         token = _mint_token()
         resp = _get_me(headers={"Authorization": f"Bearer {token}"}, epoch_error=ConnectionError("redis refused"))
-        assert resp.status_code == 401, resp.text
+        _assert_revocation_unavailable(resp)
 
-    def test_no_epoch_redis_client_gets_401(self):
-        """#16659: with no Redis client the epoch check cannot run, so the token is denied."""
+    def test_a_non_integer_iat_gets_401_not_503(self):
+        """#18892: a malformed iat is a bad credential; retrying cannot fix it."""
+        token = _mint_token(iat="not-a-number")
+        resp = _get_me(headers={"Authorization": f"Bearer {token}"})
+        assert resp.status_code == 401, resp.text
+        assert "Retry-After" not in resp.headers
+
+    def test_no_epoch_redis_client_gets_503(self):
+        """#16659, #18892: with no Redis client the epoch check cannot run, so the token is denied (503)."""
         token = _mint_token()
         resp = _get_me(headers={"Authorization": f"Bearer {token}"}, epoch_client_present=False)
+        _assert_revocation_unavailable(resp)
+
+
+class TestAuthMeJtiDenylist:
+    """The jti denylist branches end to end (#18892): unavailable 503, revoked 401, valid 2xx."""
+
+    def test_a_denylist_timeout_gets_503_with_retry_after(self):
+        token = _mint_token()
+        resp = _get_me(
+            headers={"Authorization": f"Bearer {token}"},
+            denylist_lookup=AsyncMock(side_effect=asyncio.TimeoutError()),
+        )
+        _assert_revocation_unavailable(resp)
+
+    def test_a_revoked_jti_gets_401_not_503(self):
+        token = _mint_token()
+        resp = _get_me(
+            headers={"Authorization": f"Bearer {token}"},
+            denylist_lookup=AsyncMock(return_value=True),
+        )
         assert resp.status_code == 401, resp.text
+        assert "Retry-After" not in resp.headers
+
+    def test_an_unlisted_jti_passes(self):
+        token = _mint_token()
+        resp = _get_me(headers={"Authorization": f"Bearer {token}"})
+        assert 200 <= resp.status_code < 300, resp.text
 
 
 class TestAuthMeMissingOrInvalidToken:

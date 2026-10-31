@@ -15,21 +15,22 @@ scheduler begins dispatching.  For each ``status='running'`` run it:
 """
 
 import json
-import logging
 import os
 import time
 from datetime import datetime, timezone
 
 from sqlalchemy import select
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_utils import delete_if_value
 from user_management.database import get_async_session_factory
 
 from ..models.enums import LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
 from .base import PollLoopScheduler
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _CHECKPOINT_KEY_PREFIX = "llc:session:checkpoint:"
 _CHECKOUT_KEY_PREFIX = "llc:checkout:"
@@ -141,7 +142,7 @@ async def recover_incomplete_runs() -> None:
 
                     if run.work_item_id and redis is not None:
                         try:
-                            await redis.delete(f"{_CHECKOUT_KEY_PREFIX}{run.work_item_id}")
+                            await delete_if_value(redis, f"{_CHECKOUT_KEY_PREFIX}{run.work_item_id}", str(run.agent_id))
                         except Exception:
                             logger.debug("Redis DEL checkout key failed for run %s (swallowed)", run_id)
 

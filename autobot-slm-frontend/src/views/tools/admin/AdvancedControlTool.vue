@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { BaseAlert, isHttpError } from '@autobot/ui'
 /**
  * AdvancedControlTool - Agent desktop streaming + human takeover admin panel.
  *
@@ -32,6 +33,7 @@ import {
   type AdvancedControlSessionAction,
 } from '@/composables/useAutobotApi'
 import { createLogger } from '@/utils/debugUtils'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { t } = useI18n()
 const logger = createLogger('AdvancedControlTool')
@@ -99,12 +101,11 @@ async function loadAll(): Promise<void> {
 }
 
 /**
- * Render an axios/network failure the way the previous raw-fetch transport did
+ * Render an HTTP or network failure the way the previous raw-fetch transport did
  * (`HTTP <status>`), so the banner text and its test assertion are unchanged.
  */
 function describeError(e: unknown): string {
-  const status = (e as { response?: { status?: number } })?.response?.status
-  if (typeof status === 'number') return `HTTP ${status}`
+  if (isHttpError(e)) return `HTTP ${e.status}`
   if (e instanceof Error && e.message) return e.message
   return t('tools.admin.advancedControlTool.genericError')
 }
@@ -176,11 +177,7 @@ async function onSessionAction(sessionId: string, action: AdvancedControlSession
 function yesNo(v: boolean | undefined): string {
   return v ? t('tools.admin.advancedControlTool.yes') : t('tools.admin.advancedControlTool.no')
 }
-function formatTime(iso: string | undefined): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString()
-}
+const formatTime = createDateFormatter({ emptyText: '—' })
 function badgeClass(status: string | undefined): string {
   if (status === 'active' || status === 'approved') return 'bg-green-100 text-green-700'
   if (status === 'paused') return 'bg-yellow-100 text-yellow-700'
@@ -215,9 +212,7 @@ onMounted(loadAll)
     </div>
 
     <!-- Error banner -->
-    <div v-if="error" data-test="error" class="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-      {{ error }}
-    </div>
+    <BaseAlert v-if="error" variant="error" data-test="error" :message="error" />
 
     <!-- Stat cards -->
     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">

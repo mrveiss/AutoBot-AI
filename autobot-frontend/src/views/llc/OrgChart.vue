@@ -8,6 +8,7 @@ import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
 import { useLlcCompanyContext } from '@/composables/llc/useLlcCompanyContext'
+import { shareInFlight } from '@/composables/llc/shareInFlight'
 import OrgTreeNode from './OrgTreeNode.vue'
 import type { OrgNode } from './OrgTreeNode.vue'
 import HireAgentModal from '@/components/llc/HireAgentModal.vue'
@@ -31,6 +32,7 @@ import type { ProcessNodeSource, ToolNodeSource } from '@/composables/llc/orgCan
 import { WORKFLOW_QUERY_KEY } from '@/composables/workflow/workflowDeepLink'
 import { canvasNodeIdFromQuery } from '@/composables/workflow/canvasNodeDeepLink'
 import OrgPeopleList from '@/components/llc/OrgPeopleList.vue'
+import WorkflowPlannerPanel from '@/components/llc/workflowPlanner/WorkflowPlannerPanel.vue'
 import CanvasNodeSidebar from '@/components/llc/CanvasNodeSidebar.vue'
 import {
   buildOrgPeople,
@@ -55,7 +57,7 @@ import {
   toolFilterCounts,
 } from '@/composables/llc/orgCanvasFilters'
 import { describeApiError } from '@/composables/llc/apiErrorMessage'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton, BaseDrawer } from '@autobot/ui'
 
 const logger = createLogger('OrgChart')
 const api = useApiClient()
@@ -71,8 +73,13 @@ const { companyId, resolveCompanyId } = useLlcCompanyContext()
 const tree = ref<OrgNode[]>([])
 const isLoading = ref(false)
 const error = ref<string | null>(null)
+// #14556: the company id did not resolve. Not an empty company: we could not tell whose chart
+// to load, so the view says so and offers a retry instead of an empty chart.
+const companyUnresolved = ref(false)
 const selectedNode = ref<OrgNode | null>(null)
 const drawerOpen = ref(false)
+// The last node shown: the drawer's title holds through its leave transition (#19198).
+const drawerNode = ref<OrgNode | null>(null)
 const showHire = ref(false) // GH#10219
 const terminating = ref(false) // in-flight guard — terminate is irreversible
 
@@ -81,14 +88,11 @@ const ALL_UNITS_TAB = 'all'
 // GH#13938: the People list is a third render of the company — the only one
 // that shows contacts, which are not hierarchy members and so appear in
 // neither the tree nor the canvas.
-type OrgViewMode = 'tree' | 'canvas' | 'people'
-const VIEW_MODES: readonly OrgViewMode[] = ['tree', 'canvas', 'people'] as const
-const VIEW_MODE_LABEL_KEY: Record<OrgViewMode, string> = {
-  tree: 'llc.orgChart.viewTree',
-  canvas: 'llc.orgChart.viewCanvas',
-  people: 'llc.orgChart.viewPeople',
-}
-const viewMode = ref<OrgViewMode>('tree')
+// #19938: the Workflow Planner is a fourth mode — no new nav entry.
+type OrgViewMode = 'tree' | 'canvas' | 'people' | 'planner'
+const VIEW_MODES: readonly OrgViewMode[] = ['tree', 'canvas', 'people', 'planner'] as const
+const VIEW_MODE_LABEL_KEY: Record<OrgViewMode, string> = { tree: 'llc.orgChart.viewTree', canvas: 'llc.orgChart.viewCanvas', people: 'llc.orgChart.viewPeople', planner: 'llc.orgChart.viewPlanner' }
+const viewMode = ref<OrgViewMode>(route?.query?.view === 'planner' ? 'planner' : 'tree')
 const activeTabId = ref<string>(ALL_UNITS_TAB)
 
 // GH#13938: contacts and teams are fetched only when the People list is first
@@ -557,30 +561,9 @@ function onCanvasNodeSelected(nodeId: string | null) {
   if (node) openDrawer(node)
 }
 
-/**
- * De-duplicate the in-flight company resolution (#13942 review).
- *
- * `fetchTree` and `loadExecutorRollup` both start with `await resolveCompanyIdOnce()`
- * and `onMounted` fires them together. The composable has no in-flight
- * de-duplication, so on the path it exists for — reached from a top-level nav
- * entry carrying no company id — both raced into their own
- * `GET /api/llc/companies/` fallback, doubling that request on the view most
- * users land on. Harmless but wasteful, and invisible to CI: every test that
- * mounts this view stubs the composable with a static resolver, so the real
- * resolution path is never exercised.
- *
- * Only the *pending* promise is shared; it is released on settle, so a later
- * call still re-resolves.
- */
-let pendingCompanyId: Promise<string | null> | null = null
-function resolveCompanyIdOnce(): Promise<string | null> {
-  if (!pendingCompanyId) {
-    pendingCompanyId = Promise.resolve(resolveCompanyId()).finally(() => {
-      pendingCompanyId = null
-    })
-  }
-  return pendingCompanyId
-}
+// #13942 review: fetchTree and loadExecutorRollup resolve the company together on mount;
+// one shared in-flight resolution instead of two racing GET /api/llc/companies/ fallbacks.
+const resolveCompanyIdOnce = shareInFlight(() => resolveCompanyId())
 
 /**
  * Load the workflows this company's roles run (#13963).
@@ -813,10 +796,12 @@ async function onToolDetached(roleId: string, toolName: string): Promise<void> {
 async function fetchTree() {
   isLoading.value = true
   error.value = null
+  companyUnresolved.value = false
   try {
     const cid = await resolveCompanyIdOnce()
     if (!cid) {
       tree.value = []
+      companyUnresolved.value = true
       return
     }
     const resp = await api.get<{ nodes: OrgNode[] }>(`/api/llc/companies/${cid}/org-chart`)
@@ -871,9 +856,8 @@ async function toggleAgentPause(node: OrgNode) {
     } else {
       await api.post(`/api/llc/companies/${cid}/controls/agents/${node.id}/resume`, {})
     }
-    // #13996: mutate the tree node itself — the drawer reads through
-    // `selectedNode`, so replacing it with a detached copy left a second
-    // toggle updating the copy while the canvas kept the stale status.
+    // #13996: mutate the tree node itself — the drawer reads through `selectedNode`, so a detached
+    // copy left a second toggle updating the copy while the canvas kept the stale status.
     node.status = willPause ? 'paused' : 'idle'
     if (selectedNode.value?.id === node.id) selectedNode.value = node
   } catch (err: unknown) {
@@ -902,14 +886,11 @@ async function terminateAgent(node: OrgNode) {
 }
 
 function openDrawer(node: OrgNode) {
-  selectedNode.value = node
+  selectedNode.value = drawerNode.value = node
   drawerOpen.value = true
 }
 
-function closeDrawer() {
-  drawerOpen.value = false
-  selectedNode.value = null
-}
+function closeDrawer() { drawerOpen.value = false; selectedNode.value = null }
 
 function onCanvasNodeMoved(nodeId: string, position: { x: number; y: number }) {
   // Containers stay anchored to the subtree they enclose.
@@ -1142,12 +1123,24 @@ onMounted(() => {
       />
     </div>
 
-    <div v-if="error" class="rounded-lg bg-autobot-error-bg border border-autobot-error p-4 text-autobot-error text-sm mb-4">
+    <div v-if="error && viewMode !== 'planner'" class="rounded-lg bg-autobot-error-bg border border-autobot-error p-4 text-autobot-error text-sm mb-4">
       {{ error }}
       <button class="ml-4 underline" @click="fetchTree">{{ t('llc.orgChart.retry') }}</button>
     </div>
 
-    <div v-if="isLoading" class="text-center py-12 text-autobot-text-muted">{{ t('llc.orgChart.loading') }}</div>
+    <WorkflowPlannerPanel v-if="viewMode === 'planner'" />
+
+    <div v-else-if="isLoading" class="text-center py-12 text-autobot-text-muted">{{ t('llc.orgChart.loading') }}</div>
+
+    <div
+      v-else-if="companyUnresolved"
+      class="text-center py-12 text-autobot-text-muted"
+      role="status"
+      data-testid="org-chart-company-unresolved"
+    >
+      {{ t('llc.orgChart.companyUnresolved') }}
+      <button class="ml-4 underline" @click="fetchTree">{{ t('llc.orgChart.retry') }}</button>
+    </div>
 
     <!-- GH#13938: the People list carries its own empty state. An empty
          hierarchy does not mean an empty company — a company can have contacts
@@ -1499,29 +1492,26 @@ onMounted(() => {
       {{ t('llc.orgChart.canvasHint') }}
     </p>
 
-    <!-- Node sidebar (#13940): fixed slot order + icon rail, extracted to
-         CanvasNodeSidebar.vue so it is one component for tree/canvas/People
-         selections rather than a template block duplicated per surface. -->
-    <transition name="slide">
-      <div
-        v-if="drawerOpen && selectedNode"
-        class="fixed inset-y-0 right-0 w-96 bg-autobot-bg-card shadow-2xl border-l border-autobot-border z-50"
-      >
-        <CanvasNodeSidebar
-          :node="selectedNode"
-          :company-id="companyId ?? ''"
-          :terminating="terminating"
-          @close="closeDrawer"
-          @pause="toggleAgentPause"
-          @terminate="terminateAgent"
-        />
-      </div>
-    </transition>
-    <div v-if="drawerOpen" class="fixed inset-0 bg-black/20 z-40" @click="closeDrawer" />
+    <!-- Node sidebar (#13940) in the kit drawer, keyed by node: switching nodes never carries the
+         previous node's items, costs, activity or in-flight reads (#19198). -->
+    <BaseDrawer
+      :model-value="drawerOpen && !!selectedNode"
+      :title="drawerNode?.is_human ? t('llc.orgChart.personDetail') : t('llc.orgChart.agentDetail')"
+      width="24rem"
+      flush
+      :close-label="t('common.close')"
+      @close="closeDrawer"
+    >
+      <CanvasNodeSidebar
+        v-if="selectedNode"
+        :key="selectedNode.id"
+        :node="selectedNode"
+        :company-id="companyId ?? ''"
+        :terminating="terminating"
+        @pause="toggleAgentPause"
+        @terminate="terminateAgent"
+        @heartbeat="(n: OrgNode, on: boolean) => { n.heartbeat_enabled = on }"
+      />
+    </BaseDrawer>
   </div>
 </template>
-
-<style scoped>
-.slide-enter-active, .slide-leave-active { transition: transform 0.25s ease; }
-.slide-enter-from, .slide-leave-to { transform: translateX(100%); }
-</style>

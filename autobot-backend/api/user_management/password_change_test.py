@@ -15,12 +15,9 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from fastapi import HTTPException, status
 
+from autobot_shared.user_management.user_service_errors import InvalidCredentialsError, UserNotFoundError
 from user_management.middleware.rate_limit import RateLimitExceeded
 from user_management.services import TenantContext
-from user_management.services.user_service import (
-    InvalidCredentialsError,
-    UserNotFoundError,
-)
 
 # ---------------------------------------------------------------------------
 # Fixtures

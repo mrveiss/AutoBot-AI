@@ -21,9 +21,10 @@ import logging
 import os
 from pathlib import Path
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Dict, List, Tuple, Type
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple, Type
 
 from .base import BasePlugin, PluginLoadError, PluginManifest, PluginRegistry, PluginStatus
+from .credential_binding import bound_resolver
 from .hooks import validate_hook_names
 from .registry import get_registry
 
@@ -203,14 +204,16 @@ class PluginLoader:
     Discovers plugins from filesystem, loads manifests, and instantiates plugins.
     """
 
-    def __init__(self, plugin_dirs: List[Path] | None = None) -> None:
-        """
-        Initialize plugin loader.
-
-        Args:
-            plugin_dirs: List of directories to search for plugins
-        """
+    def __init__(
+        self,
+        plugin_dirs: List[Path] | None = None,
+        credential_resolvers: Dict[str, Callable[[str], str]] | None = None,
+        trusted_roots: List[Path] | None = None,
+    ) -> None:
+        """Search ``plugin_dirs``; ``credential_resolvers`` reach only plugins under ``trusted_roots`` (#18094)."""
         self.plugin_dirs = plugin_dirs or []
+        self.credential_resolvers = credential_resolvers or {}
+        self.trusted_roots = trusted_roots or []
         self.registry = PluginRegistry()
         # Maps plugin name -> directory containing its plugin.json (set during discover_plugins)
         self._manifest_dirs: Dict[str, Path] = {}
@@ -252,19 +255,10 @@ class PluginLoader:
 
                     manifest = PluginManifest(**data)
 
-                    # #14280: a `plugin.json` describes a Plugin (`kind="plugin"`,
-                    # the field's default) OR documents a component that lives in
-                    # a DIFFERENT subsystem (`kind="extension"`, `kind="skill"`) —
-                    # see ManifestContract. Only "plugin" kind belongs to this
-                    # loader. Before this check, `telemetry-prompt-middleware`
-                    # shipped a manifest for a class that subclassed `Extension`,
-                    # not `BasePlugin`: this loader discovered it, `load_plugin`
-                    # inevitably logged "No plugin class found in module", and the
-                    # #13677 health tally counted a component that was never a
-                    # plugin as a load FAILURE. Skipping here — rather than
-                    # letting `load_plugin` fail later — keeps discovery counts
-                    # honest and stops every non-plugin manifest from being
-                    # imported as though it might satisfy `BasePlugin`.
+                    # #14280: only `kind="plugin"` belongs to this loader; `extension`/`skill`
+                    # manifests document components of other subsystems. Skipping them here
+                    # keeps the #13677 load tally honest (they would otherwise count as
+                    # load FAILURES) and stops non-plugin modules being imported as BasePlugin.
                     if manifest.kind != "plugin":
                         logger.debug(
                             "Skipping non-plugin manifest %s (kind=%r) at %s — " "not this loader's territory",
@@ -368,10 +362,10 @@ class PluginLoader:
             if not plugin_class:
                 return None
 
-            # Instantiate plugin
             plugin = plugin_class(manifest, config)
-
-            # Initialize plugin
+            plugin.credential_resolver = bound_resolver(
+                manifest.name, plugin_dir, self.credential_resolvers, self.trusted_roots
+            )
             await plugin.initialize()
             plugin.status = PluginStatus.LOADED
 

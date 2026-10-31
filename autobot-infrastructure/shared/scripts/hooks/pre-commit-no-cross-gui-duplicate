@@ -10,7 +10,7 @@
 # consolidates code duplicated across autobot-frontend and
 # autobot-slm-frontend into libs/autobot-ui (`@autobot/ui`).
 #
-# Two checks, both FULL-TREE (not diff-based): "a duplicate exists somewhere
+# Three checks, all FULL-TREE (not diff-based): "a duplicate exists somewhere
 # in the repo" is a property of the whole tree, not of what one commit
 # touched, so a pre-existing duplicate must still fail every commit until
 # it is fixed or explicitly grandfathered below.
@@ -39,6 +39,16 @@
 #      "same-concept/different-name" sweep #14907/#14908 call out as
 #      "not covered here" stays a separate, filed piece of work.
 #
+#   3. KIT COMPONENT forks (#14776) — any `.vue` file under either app's
+#      `src/` whose basename equals a component in
+#      `libs/autobot-ui/src/components/*.vue` must be a thin wrapper that
+#      imports that component from `@autobot/ui` (the SkipLink precedent,
+#      #17565). The kit name list is DERIVED from the kit directory at run
+#      time, so a new kit component is guarded the moment it lands. A fork
+#      listed in KIT_FORK_GRANDFATHER is tolerated, but the list is
+#      SHRINK-ONLY and bidirectional: an entry whose file is gone, or has
+#      become a wrapper, FAILS until it is deleted from the list.
+#
 # Suppression: add the filename/type name to the matching ALLOWLIST with a
 # comment explaining why and a tracking issue. Last resort only.
 
@@ -58,13 +68,10 @@ MIN_VOCAB_FILES_SCANNED = 15
 APPS = ("autobot-frontend", "autobot-slm-frontend")
 VOCAB_SUBDIRS = ("utils", "types")
 
-# Composable FILENAMES known to collide and already tracked.
-FILENAME_ALLOWLIST = {
-    # #14907: shared TYPES extracted to the kit (prometheus-metrics.ts); the
-    # composable itself stays per-app — polling/transport logic legitimately
-    # differs (main uses useApiClient + useWebSocket, SLM uses slmApiClient).
-    "usePrometheusMetrics.ts",
-}
+# Composable FILENAMES known to collide and already tracked. Empty since #18225:
+# the two usePrometheusMetrics.ts became useInstallMetrics (main) and
+# useFleetMetrics (SLM), whose shared numbers come from the kit's useMetricsSummary.
+FILENAME_ALLOWLIST: set[str] = set()
 
 # Exported TYPE NAMES (in src/utils/*.ts + src/types/*.ts, top-level) known
 # to collide and already tracked.
@@ -73,17 +80,21 @@ TYPE_NAME_ALLOWLIST = {
     # review required) — not folded into the composables/types sweep.
     "ErrorInfo",
     "RequestOptions",
-    # #14908: DurationStyle (the identical one) already moved to the kit;
-    # these three remain per-app pending a full formatHelpers.ts diff/merge
-    # (577 vs 215 lines) — tracked under #14908's own acceptance criteria,
-    # not silently permitted.
-    "FormatBytesOptions",
-    "FormatDurationOptions",
-    "FormatUptimeOptions",
+    # FormatBytesOptions / FormatDurationOptions / FormatUptimeOptions left this list in #14908:
+    # the formatters moved to the kit and each app's formatHelpers.ts only re-exports them.
     # HealthStatus / ServiceHealth / ServiceStatus left this list in #15401: the
     # main GUI's copies were renamed (the SLM keeps the names, as the owner of
     # deep-settings vocabulary), so none of the three collides any more.
 }
+
+# Kit component forks that predate the guard (#14776). SHRINK-ONLY: each is
+# retired by the slice named in the Refined UI step-3 plan, and the entry is
+# then removed here (a stale entry fails the hook). Never add to this dict.
+KIT_FORK_GRANDFATHER = {
+    "EmptyState": "autobot-frontend/src/components/ui/EmptyState.vue",
+}
+KIT_COMPONENTS_DIR = "libs/autobot-ui/src/components"
+KIT_PACKAGE = "@autobot/ui"
 
 
 def _find_repo_root(start: Path) -> Path:
@@ -182,7 +193,69 @@ def collect_type_violations(repo_root: Path) -> tuple[list[str], int]:
     return violations, len(all_files)
 
 
-def _check_vacuity(comp_scanned: int, vocab_scanned: int) -> int | None:
+def kit_component_names(repo_root: Path) -> set[str]:
+    """Component basenames (no extension) exported by the kit, read from disk."""
+    kit_dir = repo_root / KIT_COMPONENTS_DIR
+    return {p.stem for p in kit_dir.glob("*.vue")} if kit_dir.is_dir() else set()
+
+
+def _is_kit_wrapper(path: Path, name: str) -> bool:
+    """True when the SFC imports its own name from the kit package."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    pattern = (
+        r"import\s*\{[^}]*\b" + re.escape(name) + r"\b[^}]*\}\s*from\s*['\"]"
+        + re.escape(KIT_PACKAGE) + r"['\"]"
+    )
+    return re.search(pattern, text) is not None
+
+
+def _kit_named_vue_files(repo_root: Path, names: set[str]) -> list[Path]:
+    found: list[Path] = []
+    for app in APPS:
+        src = repo_root / app / "src"
+        if not src.is_dir():
+            continue
+        for path in src.rglob("*.vue"):
+            if path.stem in names and "node_modules" not in path.parts and "__tests__" not in path.parts:
+                found.append(path)
+    return found
+
+
+def collect_kit_fork_violations(repo_root: Path) -> list[str]:
+    names = kit_component_names(repo_root)
+    violations = []
+    live_forks: set[str] = set()
+    for path in sorted(_kit_named_vue_files(repo_root, names)):
+        rel = path.relative_to(repo_root).as_posix()
+        if _is_kit_wrapper(path, path.stem):
+            continue
+        if KIT_FORK_GRANDFATHER.get(path.stem) == rel:
+            live_forks.add(path.stem)
+            continue
+        violations.append(
+            f"kit component fork: {rel} reimplements `{path.stem}` from "
+            f"{KIT_COMPONENTS_DIR}/ instead of importing it from {KIT_PACKAGE}"
+        )
+    for name, rel in sorted(KIT_FORK_GRANDFATHER.items()):
+        if name not in live_forks:
+            violations.append(
+                f"stale grandfather entry: KIT_FORK_GRANDFATHER[{name!r}] ({rel}) no longer "
+                "forks the kit (missing or now a wrapper) - delete the entry (shrink-only list)"
+            )
+    return violations
+
+
+def _check_vacuity(comp_scanned: int, vocab_scanned: int, kit_names: int = 1) -> int | None:
+    if kit_names < 1:
+        print(
+            f"FATAL: derived 0 kit components from {KIT_COMPONENTS_DIR}/ — the directory "
+            "likely moved; refusing to report clean",
+            file=sys.stderr,
+        )
+        return 1
     if comp_scanned < MIN_COMPOSABLE_FILES_SCANNED:
         print(
             f"FATAL: only scanned {comp_scanned} composable files (expected >= "
@@ -210,22 +283,27 @@ def main() -> int:
     comp_violations, comp_scanned = collect_composable_violations(repo_root)
     type_violations, vocab_scanned = collect_type_violations(repo_root)
 
-    vacuity_exit = _check_vacuity(comp_scanned, vocab_scanned)
+    kit_violations = collect_kit_fork_violations(repo_root)
+
+    vacuity_exit = _check_vacuity(comp_scanned, vocab_scanned, len(kit_component_names(repo_root)))
     if vacuity_exit is not None:
         return vacuity_exit
 
-    violations = comp_violations + type_violations
+    violations = comp_violations + type_violations + kit_violations
     if not violations:
-        print(f"No cross-GUI duplicates found ({comp_scanned} composables, {vocab_scanned} utils/types files scanned).")
+        print(f"No cross-GUI duplicates found ({comp_scanned} composables, {vocab_scanned} utils/types files scanned, "
+              f"{len(kit_component_names(repo_root))} kit components checked).")
         return 0
 
-    print("COMMIT BLOCKED: cross-GUI duplicate(s) found outside the shared kit (#14907, #14908)")
+    print("COMMIT BLOCKED: cross-GUI duplicate(s) found outside the shared kit (#14907, #14908, #14776)")
     print("=" * 78)
     for v in violations:
         print(f"  VIOLATION: {v}")
     print("=" * 78)
     print("Fix: promote to libs/autobot-ui (@autobot/ui) and re-export from each app,")
     print("or add to FILENAME_ALLOWLIST / TYPE_NAME_ALLOWLIST with a tracking issue.")
+    print("Kit component forks: make the file a thin wrapper importing it from @autobot/ui;")
+    print("KIT_FORK_GRANDFATHER is shrink-only (never add; delete entries as forks retire).")
     return 1
 
 

@@ -203,7 +203,7 @@ onMounted(async () => {
           <BaseButton
             v-if="isArchived(company)"
             class="company-delete-btn"
-            variant="danger"
+            variant="error"
             size="sm"
             @click="requestDelete(company)"
           >
@@ -238,7 +238,7 @@ onMounted(async () => {
         <BaseButton variant="ghost" :disabled="isDeleting" @click="cancelDelete">
           {{ $t('common.cancel') }}
         </BaseButton>
-        <BaseButton variant="danger" :disabled="isDeleting" @click="confirmDelete">
+        <BaseButton variant="error" :disabled="isDeleting" @click="confirmDelete">
           {{ $t('llcCompanyStatus.delete') }}
         </BaseButton>
       </template>

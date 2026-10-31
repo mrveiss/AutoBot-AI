@@ -47,9 +47,9 @@
 #    does not belong in this file.
 #  - the remaining grants name autobot-cleanup-port's exact subcommands, the
 #    only operations the platform's own automation invokes: port cleanup
-#    (run_agent.sh, deployment/deploy_hybrid.sh), a TLS-port diagnostic
-#    (ansible/fix-backend-deadlock.sh) and uvicorn process cleanup
-#    (run_agent.sh).
+#    (run_agent.sh, deployment/deploy_hybrid.sh) and uvicorn process cleanup
+#    (run_agent.sh). The read-only `diagnose-port` grant was retired with its only
+#    caller, ansible/fix-backend-deadlock.sh (#17856).
 
 set -euo pipefail
 
@@ -101,7 +101,6 @@ Defaults!${WRAPPER_DEST} env_reset
 Defaults!${WRAPPER_DEST} secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 ${AUTOBOT_USER} ALL=(root) NOPASSWD: ${WRAPPER_DEST} kill-port backend
 ${AUTOBOT_USER} ALL=(root) NOPASSWD: ${WRAPPER_DEST} kill-port frontend
-${AUTOBOT_USER} ALL=(root) NOPASSWD: ${WRAPPER_DEST} diagnose-port backend-tls
 ${AUTOBOT_USER} ALL=(root) NOPASSWD: ${WRAPPER_DEST} kill-uvicorn
 EOF
 
@@ -112,7 +111,6 @@ if sudo visudo -c -f "${sudoers_tmp}"; then
     echo "✅ Passwordless sudo configured successfully for AutoBot operations"
     echo "The following now work without a password for ${AUTOBOT_USER}:"
     echo "  - sudo ${WRAPPER_DEST} kill-port backend|frontend"
-    echo "  - sudo ${WRAPPER_DEST} diagnose-port backend-tls"
     echo "  - sudo ${WRAPPER_DEST} kill-uvicorn"
 else
     echo "❌ Failed to configure sudoers file (visudo validation failed)"

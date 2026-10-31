@@ -53,7 +53,7 @@ plan = [
 
 | Field          | Type         | Description                                      |
 |----------------|--------------|--------------------------------------------------|
-| `worker_id`    | `str`        | ID matching `NPUWorkerConfig.id` in the registry |
+| `worker_id`    | `str`        | ID matching `NPUWorkerDefinition.id` in the registry |
 | `layer_start`  | `int`        | First layer index owned by this worker (inclusive) |
 | `layer_end`    | `int`        | Last layer index (exclusive, Python-slice style) |
 
@@ -286,6 +286,8 @@ from llm_shared import get_provider_registry
 from services.npu_pipeline_provider import NPUPipelineProvider
 
 registry = get_provider_registry()
+# Not provisioned (#15219): the 70B model below stands for one too large for a single device --
+# the case pipeline parallelism is for. Pull it yourself to run this example.
 pipeline_provider = NPUPipelineProvider(
     model_id="llama3:70b",
     worker_manager=npu_worker_manager,
@@ -293,8 +295,8 @@ pipeline_provider = NPUPipelineProvider(
 )
 registry.register(pipeline_provider)
 registry.set_fallback_chain([
-    f"npu_pipeline:llama3:70b",
-    "npu:llama3:70b",          # single-worker NPU if available
+    f"npu_pipeline:llama3:70b",  # not provisioned
+    "npu:llama3:70b",          # single-worker NPU if available (not provisioned)
     "ollama",                  # GPU fallback
 ])
 ```

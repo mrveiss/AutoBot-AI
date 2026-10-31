@@ -24,7 +24,7 @@ from prompt_manager import get_language_instruction, resolve_language
 from services.llm_service import get_llm_service
 
 from .base_agent import AgentRequest
-from .payloads import AgentStatus, ChatPayload
+from .payloads import AgentOutcome, ChatPayload
 from .standardized_agent import ActionHandler, StandardizedAgent
 
 logger = get_logger(__name__)
@@ -102,7 +102,7 @@ class ChatAgent(StandardizedAgent):
         else:
             token_usage = getattr(response, "usage", {})
         return ChatPayload(
-            status=AgentStatus.SUCCESS,
+            status=AgentOutcome.SUCCESS,
             agent_type="chat",
             model_used=self.model_name,
             response=response_text,

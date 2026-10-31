@@ -185,7 +185,7 @@ export type FactByKeyResponse = components['schemas']['FactByKeyResponse']
 
 /** `DELETE /clear_all` response. */
 // #9724: schema is now namespaced in the generated contract
-export type ClearAllResponse = components['schemas']['knowledge__schemas__ingestion__ClearAllResponse']
+export type ClearAllResponse = components['schemas']['ClearAllResponse']
 
 /** `POST /query_knowledge` response. */
 export type QueryKnowledgeResponse = components['schemas']['QueryKnowledgeResponse']

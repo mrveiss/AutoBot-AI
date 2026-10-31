@@ -68,6 +68,7 @@ export interface VMConfig {
 export interface PortConfig {
   backend: number;
   frontend: number;
+  frontendServed: number;  // nginx's port on a nginx host, else the dev port (#20058)
   redis: number;
   ollama: number;
   vnc: number;
@@ -89,13 +90,12 @@ export interface PortConfig {
  * and there is no schema to generate them from (ports never appear in any
  * OpenAPI response), so `src/config/__tests__/ssot-parity.spec.ts` parses the
  * Python source and asserts this table still matches it (#13074).
- *
- * Exported as a runtime value (not inlined into the `getEnvNumber` calls) so
- * that parity test has something env-independent to compare against.
+ * A runtime value, so that parity test has something env-independent to compare.
  */
 export const PORT_DEFAULTS = {
   backend: 8001,
   frontend: 5173,
+  frontendServed: 5173,
   redis: 6379,
   ollama: 11434,
   vnc: 6080,
@@ -107,16 +107,6 @@ export const PORT_DEFAULTS = {
   slm: 8000,
   slmAdmin: 5174,
 } as const satisfies PortConfig;
-
-/**
- * LLM model configuration.
- */
-export interface LLMConfig {
-  defaultModel: string;
-  embeddingModel: string;
-  provider: string;
-  timeout: number;
-}
 
 /**
  * Timeout configuration (in milliseconds).
@@ -132,6 +122,9 @@ export interface TimeoutConfig {
   retryDelay: number;
   /** WebSocket timeout (ms) */
   websocket: number;
+  /** ApiClient circuit breaker: failures before it opens, then the fail-fast window (ms) */
+  circuitFailureThreshold: number;
+  circuitRecoveryMs: number;
 }
 
 /**
@@ -202,14 +195,9 @@ export const CATEGORY_DEFAULTS = {
 } as const;
 
 /**
- * Permission rule interface.
+ * Permission rule: the kit declares it once for both apps (#19910).
  */
-export interface PermissionRule {
-  tool: string;
-  pattern: string;
-  action: PermissionAction;
-  description: string;
-}
+export type { PermissionRule } from '@autobot/ui';
 
 /**
  * Approval record interface for project memory.
@@ -271,7 +259,6 @@ export interface AutoBotConfig {
   // Sub-configurations
   vm: VMConfig;
   port: PortConfig;
-  llm: LLMConfig;
   timeout: TimeoutConfig;
   vnc: VNCConfig;
   feature: FeatureConfig;
@@ -285,7 +272,7 @@ export interface AutoBotConfig {
   // Computed URLs (readonly getters)
   readonly backendUrl: string;
   readonly frontendUrl: string;
-  readonly redisUrl: string;
+  // No redisUrl: a browser never dials Redis, and the backend owns the one Redis URL builder (#19232).
   readonly ollamaUrl: string;
   /** @deprecated #14822 — legacy broadcast socket base; use `liveEventsUrl`. */
   readonly websocketUrl: string;
@@ -421,10 +408,10 @@ function buildConfig(): AutoBotConfig {
     slm:      getEnv('VITE_SLM_HOST', ''),  // intentionally empty — slmUrl guards this
   };
 
-  // Service ports
   const port: PortConfig = {
     backend: getEnvNumber('VITE_BACKEND_PORT', PORT_DEFAULTS.backend),
     frontend: getEnvNumber('VITE_FRONTEND_PORT', PORT_DEFAULTS.frontend),
+    frontendServed: getEnvNumber('VITE_FRONTEND_SERVED_PORT', getEnvNumber('VITE_FRONTEND_PORT', PORT_DEFAULTS.frontend)),
     redis: getEnvNumber('VITE_REDIS_PORT', PORT_DEFAULTS.redis),
     ollama: getEnvNumber('VITE_OLLAMA_PORT', PORT_DEFAULTS.ollama),
     vnc: getEnvNumber('VITE_DESKTOP_VNC_PORT', PORT_DEFAULTS.vnc),
@@ -437,14 +424,6 @@ function buildConfig(): AutoBotConfig {
     slmAdmin: getEnvNumber('VITE_SLM_ADMIN_PORT', PORT_DEFAULTS.slmAdmin),
   };
 
-  // LLM configuration
-  const llm: LLMConfig = {
-    defaultModel: getEnv('VITE_LLM_DEFAULT_MODEL', 'qwen3.5:9b'),  // Quality tier (#2553)
-    embeddingModel: getEnv('VITE_LLM_EMBEDDING_MODEL', 'nomic-embed-text:latest'),
-    provider: getEnv('VITE_LLM_PROVIDER', 'ollama'),
-    timeout: getEnvNumber('VITE_LLM_TIMEOUT', 30000),
-  };
-
   // Timeout configuration (all in milliseconds)
   const timeout: TimeoutConfig = {
     api: getEnvNumber('VITE_API_TIMEOUT', 60000),
@@ -452,6 +431,8 @@ function buildConfig(): AutoBotConfig {
     retryAttempts: getEnvNumber('VITE_API_RETRY_ATTEMPTS', 3),
     retryDelay: getEnvNumber('VITE_API_RETRY_DELAY', 1000),
     websocket: getEnvNumber('VITE_WEBSOCKET_TIMEOUT', 30000),
+    circuitFailureThreshold: getEnvNumber('VITE_CIRCUIT_FAILURE_THRESHOLD', 3),
+    circuitRecoveryMs: getEnvNumber('VITE_CIRCUIT_RECOVERY_MS', 30000),
   };
 
   // DORMANT: VNC browser path replaced by screenshot panel (#1130). Preserved for #5136 re-integration.
@@ -462,15 +443,15 @@ function buildConfig(): AutoBotConfig {
   const vnc: VNCConfig = {
     desktop: {
       host: getEnv('VITE_DESKTOP_VNC_HOST', vm.main),
-      port: getEnvNumber('VITE_DESKTOP_VNC_PORT', 6080),
+      port: getEnvNumber('VITE_DESKTOP_VNC_PORT', PORT_DEFAULTS.vnc),
     },
     terminal: {
       host: getEnv('VITE_TERMINAL_VNC_HOST', vm.main),
-      port: getEnvNumber('VITE_TERMINAL_VNC_PORT', 6080),
+      port: getEnvNumber('VITE_TERMINAL_VNC_PORT', PORT_DEFAULTS.vnc),
     },
     playwright: {
       host: getEnv('VITE_PLAYWRIGHT_VNC_HOST', vm.browser),
-      port: getEnvNumber('VITE_PLAYWRIGHT_VNC_PORT', 6081),
+      port: getEnvNumber('VITE_PLAYWRIGHT_VNC_PORT', PORT_DEFAULTS.vnc), // #19327: browser noVNC is port.vnc
     },
   };
 
@@ -491,7 +472,6 @@ function buildConfig(): AutoBotConfig {
   const configObj: AutoBotConfig = {
     vm,
     port,
-    llm,
     timeout,
     vnc,
     feature,
@@ -509,11 +489,7 @@ function buildConfig(): AutoBotConfig {
     },
 
     get frontendUrl(): string {
-      return `${runtimeHttpProto()}://${vm.frontend}:${port.frontend}`;
-    },
-
-    get redisUrl(): string {
-      return `redis://${vm.redis}:${port.redis}`;
+      return `${runtimeHttpProto()}://${vm.frontend}:${port.frontendServed}`;
     },
 
     get ollamaUrl(): string {
@@ -639,7 +615,6 @@ export function getServiceUrl(serviceName: string): string | undefined {
   const urlMap: Record<string, string> = {
     backend: cfg.backendUrl,
     frontend: cfg.frontendUrl,
-    redis: cfg.redisUrl,
     ollama: cfg.ollamaUrl,
     websocket: cfg.websocketUrl,
     aistack: cfg.aistackUrl,
@@ -719,7 +694,6 @@ export function getBackendUrl(): string {
   return '';
 }
 
-
 /**
  * Get the API base path for the autobot backend.
  * Returns '/api' by default. Override with VITE_API_BASE_PATH if needed.
@@ -760,9 +734,7 @@ export function getBackendWsUrl(): string {
   return backendUrl.replace(/^http/, 'ws');
 }
 
-/**
- * Get API timeout in milliseconds (backward compatibility).
- */
+/** Get API timeout in milliseconds (backward compatibility). */
 export function getApiTimeout(): number {
   return getConfig().timeout.api;
 }
@@ -851,10 +823,7 @@ export async function discoverService(
   throw new Error(`Service '${serviceName}' not configured in SLM or environment`);
 }
 
-/**
- * Clear the service discovery cache.
- * Useful when services are known to have changed.
- */
+/** Clear the service discovery cache (use when services are known to have changed). */
 export function clearDiscoveryCache(): void {
   discoveryCache.clear();
 }

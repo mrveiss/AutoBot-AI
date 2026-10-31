@@ -30,11 +30,21 @@ _SCRIPTS_DIR = Path(__file__).resolve().parents[0]
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 
-from project_state_tracker import get_state_tracker
-from phase_progression_manager import get_progression_manager
+# A backend tool (#18288): it reports on the backend's project state (`project_state_tracker`,
+# `phase_progression_manager`) and renders with backend HTML helpers (`utils.*`). CI runs it as
+# `python3 autobot-infrastructure/shared/scripts/validation_dashboard_generator.py --ci-mode`.
+# It puts the backend and the repository root (for `autobot_shared`) on its own path, so it runs
+# from any directory with no PYTHONPATH; the backend's Python dependencies must be installed.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
+
+from project_state_tracker import get_state_tracker  # noqa: E402
+from phase_progression_manager import get_progression_manager  # noqa: E402
 from phase_validation_system import PhaseValidator  # noqa: E402 - must follow the sys.path setup above
-from utils.html_dashboard_utils import create_dashboard_header, get_light_theme_css
-from utils.template_loader import load_css, template_exists
+from utils.html_dashboard_utils import create_dashboard_header, get_light_theme_css  # noqa: E402
+from utils.template_loader import load_css, template_exists  # noqa: E402
 
 logger = logging.getLogger(__name__)
 

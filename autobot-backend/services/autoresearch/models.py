@@ -250,7 +250,7 @@ class Experiment:
 
 
 @dataclass
-class ScorerResult:
+class PromptScoreResult:
     """Result from a single prompt evaluation.
 
     Issue #3261: Typed error field replaces magic strings so that
@@ -269,7 +269,7 @@ class ScorerResult:
         return {"score": self.score, "error": self.error}
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "ScorerResult":
+    def from_dict(cls, data: Dict[str, Any]) -> "PromptScoreResult":
         return cls(score=data.get("score"), error=data.get("error"))
 
 

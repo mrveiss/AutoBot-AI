@@ -69,9 +69,9 @@
             <li>{{ $t('setupWizardView.knowledgeOfWhichServices') }}</li>
           </ul>
         </div>
-        <button class="btn-primary" @click="completeStep('welcome')">
+        <BaseButton @click="completeStep('welcome')">
           {{ $t('setupWizardView.getStarted') }}
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Add Nodes -->
@@ -142,18 +142,17 @@
               autocomplete="current-password"
             />
           </label>
-          <button class="btn-secondary" @click="addNode" :disabled="addingNode">
+          <BaseButton variant="secondary" @click="addNode" :disabled="addingNode">
             {{ addingNode ? $t('setupWizardView.adding') : $t('setupWizardView.addNode') }}
-          </button>
+          </BaseButton>
         </div>
 
-        <button
-          class="btn-primary"
+        <BaseButton
           @click="completeStep('add_nodes')"
           :disabled="nodes.length === 0"
         >
           {{ $t('setupWizardView.continue') }}
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Test Connections -->
@@ -174,16 +173,15 @@
           </div>
         </div>
 
-        <button class="btn-secondary" @click="testAllConnections" :disabled="testingConnections">
+        <BaseButton variant="secondary" @click="testAllConnections" :disabled="testingConnections">
           {{ testingConnections ? $t('setupWizardView.testing') : $t('setupWizardView.testAllConnections') }}
-        </button>
-        <button
-          class="btn-primary"
+        </BaseButton>
+        <BaseButton
           @click="completeStep('test_connections')"
           :disabled="!allConnectionsTested"
         >
           {{ $t('setupWizardView.continue') }}
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Enroll Agents -->
@@ -204,16 +202,15 @@
           </div>
         </div>
 
-        <button class="btn-secondary" @click="enrollAllNodes" :disabled="enrolling">
+        <BaseButton variant="secondary" @click="enrollAllNodes" :disabled="enrolling">
           {{ enrolling ? $t('setupWizardView.enrolling') : $t('setupWizardView.enrollAllNodes') }}
-        </button>
-        <button
-          class="btn-primary"
+        </BaseButton>
+        <BaseButton
           @click="completeStep('enroll_agents')"
           :disabled="!allNodesEnrolled"
         >
           {{ $t('setupWizardView.continue') }}
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Assign Roles -->
@@ -334,9 +331,9 @@
           </div>
         </div>
 
-        <button class="btn-primary" @click="saveAndContinueRoles" :disabled="savingRoles">
+        <BaseButton @click="saveAndContinueRoles" :disabled="savingRoles">
           {{ savingRoles ? $t('setupWizardView.saving') : $t('setupWizardView.saveContinue') }}
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Configure Secrets / API Keys (#3079) -->
@@ -366,12 +363,12 @@
           {{ $t('setupWizardView.secretsSavedTheyWill') }}
         </div>
 
-        <button class="btn-secondary" @click="saveSecrets" :disabled="savingSecrets">
+        <BaseButton variant="secondary" @click="saveSecrets" :disabled="savingSecrets">
           {{ savingSecrets ? $t('setupWizardView.saving') : $t('setupWizardView.saveAPIKeys') }}
-        </button>
-        <button class="btn-primary" @click="completeStep('configure_secrets')">
+        </BaseButton>
+        <BaseButton @click="completeStep('configure_secrets')">
           {{ Object.values(secretValues).some(v => v) ? 'Continue' : 'Skip' }}
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Provision Fleet -->
@@ -382,6 +379,7 @@
         </p>
 
         <!-- Phase & status bar -->
+        <PollingPausedAlert :poller="provisionPoller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" @retry="provisionStore.retryPolling()" />
         <div v-if="provisioning || provisionComplete || provisionFailed" class="provision-status-bar">
           <span class="provision-stage">{{ provisionStage }}</span>
           <span class="provision-elapsed">{{ formatElapsed(provisionElapsed) }}</span>
@@ -424,20 +422,18 @@
           </div>
         </div>
 
-        <button
-          class="btn-primary"
+        <BaseButton
           @click="provisionFleet"
           :disabled="provisioning"
         >
           {{ provisioning ? $t('setupWizardView.provisioning') : $t('setupWizardView.startProvisioning') }}
-        </button>
-        <button
+        </BaseButton>
+        <BaseButton
           v-if="provisionComplete"
-          class="btn-primary"
           @click="completeStep('provision_fleet')"
         >
           {{ $t('setupWizardView.continue') }}
-        </button>
+        </BaseButton>
 
         <!--
           #15825: a failed provision used to render NO control at all — the
@@ -452,9 +448,9 @@
             {{ $t('setupWizardView.provisioningFailed') }}
           </p>
           <p v-if="provisionError" class="provision-failure-detail">{{ provisionError }}</p>
-          <button class="btn-primary" :disabled="provisioning" @click="provisionFleet">
+          <BaseButton :disabled="provisioning" @click="provisionFleet">
             {{ $t('setupWizardView.retryProvisioning') }}
-          </button>
+          </BaseButton>
         </div>
       </div>
 
@@ -477,16 +473,15 @@
           </ul>
         </div>
 
-        <button class="btn-secondary" @click="checkFleetHealth" :disabled="checkingHealth">
+        <BaseButton variant="secondary" @click="checkFleetHealth" :disabled="checkingHealth">
           {{ checkingHealth ? $t('setupWizardView.checking') : $t('setupWizardView.checkFleetHealth') }}
-        </button>
-        <button
-          class="btn-primary"
+        </BaseButton>
+        <BaseButton
           @click="completeStep('verify_health')"
           :disabled="!fleetHealth || !fleetHealth.ready"
         >
           {{ $t('setupWizardView.continue') }}
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Complete -->
@@ -494,9 +489,9 @@
         <div class="success-icon">&#10003;</div>
         <h2>{{ $t('setupWizardView.setupComplete') }}</h2>
         <p>{{ $t('setupWizardView.yourAutoBotFleetIs') }}</p>
-        <button class="btn-primary" @click="goToDashboard">
+        <BaseButton @click="goToDashboard">
           {{ $t('setupWizardView.goToDashboard') }}
-        </button>
+        </BaseButton>
       </div>
     </div>
   </div>
@@ -515,6 +510,7 @@ import type { NodeRole } from '@/types/slm'
 import { createLogger } from '@/utils/debugUtils'
 import { useToast } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
+import { PollingPausedAlert, BaseButton } from '@autobot/ui'
 
 const logger = createLogger('SetupWizard')
 
@@ -765,7 +761,7 @@ async function saveSecrets() {
     secretsSaved.value = true
   } catch (err) {
     logger.error('Failed to save secrets:', err)
-    alert('Failed to save API keys. Check the console for details.')
+    showToast(t('setupWizardView.failedToSaveKeys'), 'error')
   } finally {
     savingSecrets.value = false
   }
@@ -773,9 +769,9 @@ async function saveSecrets() {
 
 // ── Provisioning ──────────────────────────────────────────────────────────
 
-// #7096: provision state proxied from store (survives component unmount).
-// Names preserved to minimize template churn; the underlying refs live in
-// useProvisionStore() and persist across navigation.
+// #7096: provision state proxied from store (survives unmount); names kept to minimize template churn.
+// #19482: the alert only needs to know the store's status poller paused.
+const provisionPoller = { pausedOnErrors: computed(() => provisionStore.pollingPaused) }
 const provisioning = computed(() => provisionStore.isRunning)
 const provisionComplete = computed(() => provisionStore.isComplete)
 // #15825: failure was unrepresented in this view. The store has carried both
@@ -912,8 +908,8 @@ async function addNode() {
     newNode.value = { hostname: '', ip_address: '', ssh_user: 'autobot', auth_method: 'key', ssh_password: '' }
     await loadNodes()
   } catch (err: unknown) {
-    const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Failed to add node'
-    alert(msg)
+    const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || t('setupWizardView.failedToAddNode')
+    showToast(msg, 'error')
   } finally {
     addingNode.value = false
   }
@@ -1072,9 +1068,7 @@ async function provisionFleet() {
   try {
     await provisionWizardFleet(nodes.value.map(n => n.node_id))
   } catch (err: unknown) {
-    const detail =
-      (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
-      'Unknown error'
+    const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Unknown error'
     provisionStore.logs.push({ type: 'error', message: `ERROR: ${detail}` })
     provisionStore.disconnectWs()
   }
@@ -1180,8 +1174,8 @@ onMounted(async () => {
 }
 
 .close-btn:hover {
-  border-color: var(--color-danger);
-  color: var(--color-danger);
+  border-color: var(--color-error);
+  color: var(--color-error);
 }
 
 /* Progress bar */
@@ -1254,6 +1248,11 @@ onMounted(async () => {
   padding: 2rem;
 }
 
+.step-panel :deep(.aui-btn) {
+  margin-top: 1rem;
+  margin-right: 0.5rem;
+}
+
 .step-panel h2 {
   margin: 0 0 0.5rem;
   font-size: 1.4rem;
@@ -1285,49 +1284,6 @@ onMounted(async () => {
 .info-box li {
   margin-bottom: 0.3rem;
   color: var(--text-secondary);
-}
-
-/* Buttons */
-.btn-primary,
-.btn-secondary {
-  padding: 0.6rem 1.5rem;
-  border-radius: var(--radius-md);
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-  transition: all 0.15s;
-  margin-top: 1rem;
-  margin-right: 0.5rem;
-}
-
-.btn-primary {
-  background: var(--color-primary);
-  color: var(--color-white);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--slm-blue-600);
-}
-
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: var(--bg-hover);
-}
-
-.btn-secondary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* Nodes list */
@@ -1385,7 +1341,7 @@ onMounted(async () => {
 .status-badge.error,
 .status-badge.offline {
   background: rgba(239, 68, 68, 0.15);
-  color: var(--color-danger-500);
+  color: var(--color-error-500);
 }
 
 .status-badge.enrolling {
@@ -1675,14 +1631,14 @@ input.full-width {
 .provision-failure {
   padding: 0.75rem 1rem;
   margin-top: 0.75rem;
-  background: var(--danger-bg);
-  border: 1px solid var(--danger-color);
+  background: var(--error-bg);
+  border: 1px solid var(--error-color);
   border-radius: var(--radius-md);
 }
 
 .provision-failure-title {
   margin: 0 0 0.25rem;
-  color: var(--danger-color);
+  color: var(--error-color);
   font-weight: 600;
 }
 
@@ -1778,7 +1734,7 @@ input.full-width {
 
 .health-badge.critical {
   background: rgba(239, 68, 68, 0.15);
-  color: var(--color-danger-500);
+  color: var(--color-error-500);
 }
 
 /* Complete panel */

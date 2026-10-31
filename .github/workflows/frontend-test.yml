@@ -24,6 +24,7 @@ on:
       # #14786: mirror of the filter file's own entry -- see its comment.
       - 'libs/autobot-ui/**'
       - '.github/workflows/frontend-test.yml'
+      - '.github/workflows/_changes.yml'
       - '.github/workflows/frontend-required-context.yml'
       - '.github/filters/frontend-paths.yml'
       # Canonical source for the cross-language parity guard (#13073, #13074):
@@ -38,6 +39,10 @@ on:
       # uneditable (#16260) -- restored here now that it does not.
       - 'autobot-plugins/terminal/**'
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     # main is the integration branch every frontend PR merges into, so the
     # suite must run pre-merge, not only post-merge on the push trigger
     # (#10019). release/develop kept for promotion PRs.
@@ -72,37 +77,32 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-env:
-  NODE_VERSION: '22'
-
-
 permissions:
   contents: read
 
 jobs:
   # Job 0: Detect changed paths — always runs so the required contexts report
   changes:
+    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
+    # every `always()` aggregate below reads `needs.changes.result`.
+    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
+    # context would report FAILED on every draft -- worse than no gate.
+    # Gate the expensive jobs, never the cheap thing others read.
     name: Detect changed paths
-    runs-on: ubuntu-latest
-    outputs:
-      frontend: ${{ steps.filter.outputs.frontend }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
-        id: filter
-        with:
-          # #14054: dorny/paths-filter errors on an event it does not
-          # recognise unless `base` is given, and a failed `changes` job
-          # skips every job that needs it -- i.e. the required context
-          # never reports and the queue deadlocks. Empty on push/PR, so
-          # their existing behaviour is unchanged.
-          base: ${{ github.event.merge_group.base_sha || '' }}
-          # Shared file, NOT an inline list: frontend-required-context.yml's
-          # `changes` job loads the very same path set. Its shim job and the
-          # `unit-tests` job below carry the same required context name under
-          # exactly complementary conditions, so the split is only correct while
-          # both compute the same answer — one file, one answer (#13405).
-          filters: .github/filters/frontend-paths.yml
+    uses: ./.github/workflows/_changes.yml
+    with:
+      # #14054: dorny/paths-filter errors on an event it does not
+      # recognise unless `base` is given, and a failed `changes` job
+      # skips every job that needs it -- i.e. the required context
+      # never reports and the queue deadlocks. Empty on push/PR, so
+      # their existing behaviour is unchanged.
+      merge_group_base: true
+      # Shared file, NOT an inline list: frontend-required-context.yml's
+      # `changes` job loads the very same path set. Its shim job and the
+      # `unit-tests` job below carry the same required context name under
+      # exactly complementary conditions, so the split is only correct while
+      # both compute the same answer — one file, one answer (#13405).
+      filters: .github/filters/frontend-paths.yml
 
   # Job 1: Unit and Integration Tests
   unit-tests:
@@ -130,7 +130,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version-file: .nvmrc
           cache: 'npm'
           cache-dependency-path: autobot-frontend/package-lock.json
 
@@ -254,7 +254,7 @@ jobs:
           fail_ci_if_error: false
 
       - name: Upload test results
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: test-results-unit
@@ -298,7 +298,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version-file: .nvmrc
           cache: 'npm'
           cache-dependency-path: autobot-frontend/package-lock.json
 
@@ -362,7 +362,7 @@ jobs:
           npx auditjs ossi || true
 
       - name: Upload security scan results
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: security-scan-results
@@ -376,6 +376,7 @@ jobs:
 
   # Job 3: Build Test
   build-test:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: Build Test
     runs-on: ubuntu-latest
     timeout-minutes: 30  # #11077: fail fast; not GitHub's 24h default
@@ -390,7 +391,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version-file: .nvmrc
           cache: 'npm'
           cache-dependency-path: autobot-frontend/package-lock.json
 

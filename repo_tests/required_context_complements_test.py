@@ -36,6 +36,21 @@ def _jobs(path: Path) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8"))["jobs"]
 
 
+REUSABLE_CHANGES = "./" + ".github/workflows" + "/_changes.yml"
+
+
+def _changes_runner(jobs: dict) -> str:
+    """`runs-on` of the `changes` job, resolved through the reusable call (#15360).
+
+    A caller that `uses:` _changes.yml has no `runs-on` of its own: the runner is
+    the reusable job's, so that is the thing to assert on.
+    """
+    job = jobs["changes"]
+    if job.get("uses") == REUSABLE_CHANGES:
+        return _jobs(REPO_ROOT / ".github" / "workflows" / "_changes.yml")["changes"]["runs-on"]
+    return job["runs-on"]
+
+
 def test_both_workflows_publish_the_same_context_name():
     """The required context is the job NAME; a rename on one side breaks the split."""
     assert _jobs(CI)[REQUIRED_CONTEXT]["name"] == REQUIRED_CONTEXT
@@ -117,7 +132,7 @@ def test_the_shim_declares_no_concurrency_group():
 def test_the_shim_runs_on_a_github_hosted_runner():
     """The shim must not depend on the singleton self-hosted pool."""
     assert _jobs(SHIM)[REQUIRED_CONTEXT]["runs-on"] == "ubuntu-latest"
-    assert _jobs(SHIM)["changes"]["runs-on"] == "ubuntu-latest"
+    assert _changes_runner(_jobs(SHIM)) == "ubuntu-latest"
 
 
 def test_the_shim_fails_closed_on_a_broken_detector():
@@ -332,7 +347,7 @@ def test_the_shim_cannot_be_cancelled_or_starved(pair):
     assert "concurrency" not in parsed
     assert "concurrency" not in parsed["jobs"][context]
     assert parsed["jobs"][context]["runs-on"] == "ubuntu-latest"
-    assert parsed["jobs"]["changes"]["runs-on"] == "ubuntu-latest"
+    assert _changes_runner(parsed["jobs"]) == "ubuntu-latest"
 
 
 @pytest.mark.parametrize("pair", _COMPLEMENT_PAIRS, ids=_PAIR_IDS)

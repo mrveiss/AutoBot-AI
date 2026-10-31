@@ -291,7 +291,7 @@ import { createLogger } from '@/utils/debugUtils'
 import apiClient from '@/utils/ApiClient'
 import { useUserStore } from '@/stores/useUserStore'
 import Icon from '@/components/ui/Icon.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, HttpError } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
@@ -395,7 +395,7 @@ async function loadPolicies(): Promise<void> {
     const res = await apiClient.rawRequest(`/api/budget-policies?${params}`)
     if (!res.ok) {
       const body = await res.json().catch(() => ({})) as { detail?: string }
-      throw new Error(body.detail ?? `HTTP ${res.status}`)
+      throw HttpError.withDetail(res.status, res.statusText, body.detail)
     }
     const data = await res.json() as { policies: BudgetPolicyResponse[]; count: number }
     policies.value = data.policies
@@ -452,7 +452,7 @@ async function submitForm(): Promise<void> {
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({})) as { detail?: string }
-      throw new Error(body.detail ?? `HTTP ${res.status}`)
+      throw HttpError.withDetail(res.status, res.statusText, body.detail)
     }
     closeModal()
     await loadPolicies()
@@ -477,7 +477,7 @@ async function doDelete(): Promise<void> {
     })
     if (!res.ok && res.status !== 204) {
       const body = await res.json().catch(() => ({})) as { detail?: string }
-      throw new Error(body.detail ?? `HTTP ${res.status}`)
+      throw HttpError.withDetail(res.status, res.statusText, body.detail)
     }
     deleteTarget.value = null
     await loadPolicies()
@@ -499,7 +499,7 @@ async function checkAgentStatus(): Promise<void> {
     const res = await apiClient.rawRequest(`/api/budget-policies/${id}/status`)
     if (!res.ok) {
       const body = await res.json().catch(() => ({})) as { detail?: string }
-      throw new Error(body.detail ?? `HTTP ${res.status}`)
+      throw HttpError.withDetail(res.status, res.statusText, body.detail)
     }
     agentStatus.value = await res.json() as PauseStatusResponse
   } catch (err) {
@@ -517,7 +517,7 @@ async function resumeAgent(agentId: string): Promise<void> {
     })
     if (!res.ok) {
       const body = await res.json().catch(() => ({})) as { detail?: string }
-      throw new Error(body.detail ?? `HTTP ${res.status}`)
+      throw HttpError.withDetail(res.status, res.statusText, body.detail)
     }
     agentStatus.value = null
     agentIdQuery.value = ''
@@ -788,7 +788,7 @@ onMounted(loadPolicies)
   align-items: center;
   gap: var(--spacing-2);
   padding: var(--spacing-2) var(--spacing-4);
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: white;
   border: none;
   border-radius: var(--radius-md);

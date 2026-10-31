@@ -14,24 +14,24 @@ Part of Issue #381 - God Class Refactoring
 
 Usage:
     from code_intelligence.anti_pattern_detection import (
-        AntiPatternDetector,
+        AntiPatternSuiteAnalyzer,
         AntiPatternType,
         AntiPatternSeverity,
         AntiPatternResult,
         AnalysisReport,
-        analyze_codebase,
+        analyze_codebase_anti_patterns,
     )
 
     # Quick analysis
-    report = analyze_codebase("/path/to/code")
+    report = analyze_codebase_anti_patterns("/path/to/code")
 
     # Custom analysis
-    detector = AntiPatternDetector()
-    report = detector.analyze_directory("/path/to/code")
+    analyzer = AntiPatternSuiteAnalyzer()
+    report = analyzer.analyze_directory("/path/to/code")
 """
 
 # Main analyzer
-from .analyzer import AntiPatternDetector, analyze_codebase, analyze_codebase_async
+from .analyzer import AntiPatternSuiteAnalyzer, analyze_codebase_anti_patterns, analyze_codebase_async
 
 # Detectors
 from .detectors import (
@@ -44,8 +44,8 @@ from .detectors import (
 # Data models
 from .models import (
     AnalysisReport,
+    AnalyzedClassInfo,
     AntiPatternResult,
-    ClassInfo,
     FunctionInfo,
     ImportInfo,
 )
@@ -96,7 +96,7 @@ __all__ = [
     # Data models
     "AntiPatternResult",
     "AnalysisReport",
-    "ClassInfo",
+    "AnalyzedClassInfo",
     "FunctionInfo",
     "ImportInfo",
     # Severity utilities
@@ -117,8 +117,8 @@ __all__ = [
     "DispensableDetector",
     "NamingDetector",
     # Main analyzer
-    "AntiPatternDetector",
-    "analyze_codebase",
+    "AntiPatternSuiteAnalyzer",
+    "analyze_codebase_anti_patterns",
     "analyze_codebase_async",
     # Issue #554: Infrastructure
     "HAS_ANALYTICS_INFRASTRUCTURE",

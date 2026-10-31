@@ -218,8 +218,8 @@ class SessionListingMixin:
         """
         try:
             stat = await run_in_chat_io_executor(os.stat, chat_path)
-            created_time = datetime.fromtimestamp(stat.st_ctime).isoformat()
-            last_modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
+            created_time = datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc).isoformat()
+            last_modified = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
             file_size = stat.st_size
 
             chat_name, message_count, company_id, session_kind = await self._read_chat_file_metadata(chat_path)
@@ -237,11 +237,13 @@ class SessionListingMixin:
                 "createdTime": created_time,
                 "updatedAt": last_modified,
                 "lastModified": last_modified,
-                # #13948: the ISO fields above are naive LOCAL time, so during a
-                # DST fallback two different instants render as the same hour and
-                # neither sorts nor compares reliably. The raw mtime is the
-                # unambiguous ordering key; consumers that must not skip a session
-                # use this, not the strings.
+                # #13856: the ISO fields above carry an explicit ``+00:00``
+                # offset (the canonical form of autobot_shared.time_utils). They
+                # were naive LOCAL time until #13856, which made them ambiguous
+                # across a DST fallback and wrong by the host offset for every
+                # parse_utc_iso consumer.
+                # #13948: the raw mtime stays the ordering key regardless — a
+                # number needs no parser and cannot drift in format.
                 "updatedAtEpoch": stat.st_mtime,
                 "isActive": False,
                 "fileSize": file_size,
@@ -355,8 +357,8 @@ class SessionListingMixin:
         Returns:
             Session dictionary with all metadata
         """
-        created_time = datetime.fromtimestamp(stat.st_ctime).isoformat()
-        last_modified = datetime.fromtimestamp(stat.st_mtime).isoformat()
+        created_time = datetime.fromtimestamp(stat.st_ctime, tz=timezone.utc).isoformat()
+        last_modified = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
         session_name = f"Terminal Session {session_id[:8]}"
 
         return {
@@ -370,7 +372,7 @@ class SessionListingMixin:
             "createdTime": created_time,
             "updatedAt": last_modified,
             "lastModified": last_modified,
-            "updatedAtEpoch": stat.st_mtime,  # #13948, as above
+            "updatedAtEpoch": stat.st_mtime,  # #13948/#13856, as above
             "isActive": False,
             "fileSize": stat.st_size,
             "fast_mode": True,

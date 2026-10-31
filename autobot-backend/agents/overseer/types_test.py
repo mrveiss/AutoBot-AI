@@ -11,46 +11,46 @@ from agents.overseer.types import (
     CommandBreakdownPart,
     CommandExplanation,
     OutputExplanation,
+    OverseerStepStatus,
+    OverseerTaskStatus,
     OverseerUpdate,
-    StepResult,
-    StepStatus,
-    StreamChunk,
+    StepChunk,
+    StepRunResult,
     TaskPlan,
-    TaskStatus,
 )
 
 
 class TestTaskStatus:
-    """Tests for TaskStatus enum."""
+    """Tests for OverseerTaskStatus enum."""
 
     def test_all_values(self):
-        assert TaskStatus.PENDING.value == "pending"
-        assert TaskStatus.PLANNING.value == "planning"
-        assert TaskStatus.EXECUTING.value == "executing"
-        assert TaskStatus.STREAMING.value == "streaming"
-        assert TaskStatus.EXPLAINING.value == "explaining"
-        assert TaskStatus.COMPLETED.value == "completed"
-        assert TaskStatus.FAILED.value == "failed"
-        assert TaskStatus.CANCELLED.value == "cancelled"
+        assert OverseerTaskStatus.PENDING.value == "pending"
+        assert OverseerTaskStatus.PLANNING.value == "planning"
+        assert OverseerTaskStatus.EXECUTING.value == "executing"
+        assert OverseerTaskStatus.STREAMING.value == "streaming"
+        assert OverseerTaskStatus.EXPLAINING.value == "explaining"
+        assert OverseerTaskStatus.COMPLETED.value == "completed"
+        assert OverseerTaskStatus.FAILED.value == "failed"
+        assert OverseerTaskStatus.CANCELLED.value == "cancelled"
 
     def test_member_count(self):
-        assert len(TaskStatus) == 8
+        assert len(OverseerTaskStatus) == 8
 
 
 class TestStepStatus:
-    """Tests for StepStatus enum."""
+    """Tests for OverseerStepStatus enum."""
 
     def test_all_values(self):
-        assert StepStatus.PENDING.value == "pending"
-        assert StepStatus.RUNNING.value == "running"
-        assert StepStatus.STREAMING.value == "streaming"
-        assert StepStatus.WAITING_EXPLANATION.value == "waiting_explanation"
-        assert StepStatus.EXPLAINING.value == "explaining"
-        assert StepStatus.COMPLETED.value == "completed"
-        assert StepStatus.FAILED.value == "failed"
+        assert OverseerStepStatus.PENDING.value == "pending"
+        assert OverseerStepStatus.RUNNING.value == "running"
+        assert OverseerStepStatus.STREAMING.value == "streaming"
+        assert OverseerStepStatus.WAITING_EXPLANATION.value == "waiting_explanation"
+        assert OverseerStepStatus.EXPLAINING.value == "explaining"
+        assert OverseerStepStatus.COMPLETED.value == "completed"
+        assert OverseerStepStatus.FAILED.value == "failed"
 
     def test_member_count(self):
-        assert len(StepStatus) == 7
+        assert len(OverseerStepStatus) == 7
 
 
 class TestCommandBreakdownPart:
@@ -117,7 +117,7 @@ class TestAgentTask:
         assert task.task_id == "task_1"
         assert task.command is None
         assert task.dependencies == []
-        assert task.status == StepStatus.PENDING
+        assert task.status == OverseerStepStatus.PENDING
         assert isinstance(task.created_at, datetime)
         assert task.started_at is None
 
@@ -128,7 +128,7 @@ class TestAgentTask:
             total_steps=5,
             description="Run scan",
             command="nmap -sn 10.0.0.0/24",
-            status=StepStatus.RUNNING,
+            status=OverseerStepStatus.RUNNING,
         )
         d = task.to_dict()
         assert d["task_id"] == "task_abc"
@@ -183,14 +183,14 @@ class TestTaskPlan:
 
 
 class TestStepResult:
-    """Tests for StepResult dataclass."""
+    """Tests for StepRunResult dataclass."""
 
     def test_creation_minimal(self):
-        result = StepResult(
+        result = StepRunResult(
             task_id="t1",
             step_number=1,
             total_steps=2,
-            status=StepStatus.COMPLETED,
+            status=OverseerStepStatus.COMPLETED,
         )
         assert result.command is None
         assert result.command_explanation is None
@@ -198,11 +198,11 @@ class TestStepResult:
         assert result.execution_time == 0.0
 
     def test_to_dict_with_explanations(self):
-        result = StepResult(
+        result = StepRunResult(
             task_id="t1",
             step_number=1,
             total_steps=1,
-            status=StepStatus.COMPLETED,
+            status=OverseerStepStatus.COMPLETED,
             command="ls -la",
             command_explanation=CommandExplanation(
                 summary="Lists files",
@@ -225,11 +225,11 @@ class TestStepResult:
         assert d["output_explanation"]["key_findings"] == ["42 blocks"]
 
     def test_to_dict_without_explanations(self):
-        result = StepResult(
+        result = StepRunResult(
             task_id="t1",
             step_number=1,
             total_steps=1,
-            status=StepStatus.FAILED,
+            status=OverseerStepStatus.FAILED,
             error="timeout",
         )
         d = result.to_dict()
@@ -239,10 +239,10 @@ class TestStepResult:
 
 
 class TestStreamChunk:
-    """Tests for StreamChunk dataclass."""
+    """Tests for StepChunk dataclass."""
 
     def test_creation(self):
-        chunk = StreamChunk(
+        chunk = StepChunk(
             task_id="t1",
             step_number=1,
             chunk_type="stdout",
@@ -252,7 +252,7 @@ class TestStreamChunk:
         assert isinstance(chunk.timestamp, datetime)
 
     def test_to_dict(self):
-        chunk = StreamChunk(
+        chunk = StepChunk(
             task_id="t1",
             step_number=2,
             chunk_type="return_code",

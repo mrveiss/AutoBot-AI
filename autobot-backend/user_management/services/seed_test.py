@@ -20,8 +20,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from autobot_shared.user_management.user_service_errors import DuplicateUserError
 from user_management.services.seed import seed_default_admin
-from user_management.services.user_service import DuplicateUserError
 
 # ---------------------------------------------------------------------------
 # Helpers

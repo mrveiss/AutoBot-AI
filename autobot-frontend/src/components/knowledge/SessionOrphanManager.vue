@@ -104,23 +104,27 @@
       </div>
 
       <!-- Status Messages -->
-      <div v-if="statusMessage" :class="['status-message', statusMessage.type]">
-        <Icon :name="statusMessage.icon" />
-        <span>{{ statusMessage.text }}</span>
-        <button @click="statusMessage = null" class="dismiss-btn">
-          <Icon name="times" />
-        </button>
-      </div>
+      <BaseAlert
+        v-if="statusMessage"
+        :key="statusMessage.id"
+        class="mt-6"
+        bordered
+        :variant="statusMessage.type"
+        :message="statusMessage.text"
+        :auto-dismiss="statusAutoDismiss"
+        dismissible
+        :dismiss-label="$t('common.dismiss')"
+        @dismiss="clearStatus"
+      />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
-import { ref } from 'vue'
+import { useStatusMessage } from '@/composables/knowledge/useStatusMessage'
 import { useI18n } from 'vue-i18n'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton, BaseAlert } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { useKnowledgeOrphans } from '@/composables/knowledge/useKnowledgeOrphans'
 
@@ -128,42 +132,15 @@ const { t } = useI18n()
 
 const logger = createLogger('SessionOrphanManager')
 
-// Types
-interface StatusMessage {
-  type: 'success' | 'error' | 'warning' | 'info'
-  text: string
-  icon: IconName
-}
-
 // Composable
 const { orphanScanResult, isScanning, isCleaningOrphans, scanSessionOrphans: doScan, cleanupSessionOrphans: doCleanup } = useKnowledgeOrphans()
 
 // State
-const statusMessage = ref<StatusMessage | null>(null)
-
-// Methods
-const showStatus = (type: StatusMessage['type'], text: string) => {
-  const icons: Record<StatusMessage['type'], IconName> = {
-    success: 'check-circle',
-    error: 'exclamation-circle',
-    warning: 'exclamation-triangle',
-    info: 'info-circle'
-  }
-  statusMessage.value = { type, text, icon: icons[type] }
-
-  // Auto-dismiss success messages
-  if (type === 'success') {
-    setTimeout(() => {
-      if (statusMessage.value?.type === 'success') {
-        statusMessage.value = null
-      }
-    }, 5000)
-  }
-}
+const { statusMessage, showStatus, clearStatus, statusAutoDismiss } = useStatusMessage()
 
 const scanSessionOrphans = async () => {
   if (isScanning.value || isCleaningOrphans.value) return
-  statusMessage.value = null
+  clearStatus()
 
   try {
     const data = await doScan()
@@ -333,26 +310,5 @@ const cleanupSessionOrphans = async () => {
   color: var(--text-tertiary);
   margin: var(--spacing-0) var(--spacing-0) var(--spacing-4) var(--spacing-0);
   line-height: 1.5;
-}
-
-.status-message.warning {
-  background: var(--color-warning-bg-light);
-  border: 1px solid var(--color-warning);
-  color: var(--color-warning-darker);
-}
-
-.status-message.info {
-  background: var(--color-info-bg);
-  border: 1px solid var(--color-primary);
-  color: var(--color-info-dark);
-}
-
-.dismiss-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: var(--spacing-1);
-  color: inherit;
-  opacity: 0.7;
 }
 </style>

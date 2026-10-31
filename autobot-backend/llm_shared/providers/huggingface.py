@@ -25,6 +25,7 @@ import aiohttp
 from autobot_shared.http_client import get_http_client
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
+from autobot_shared.ssot_hosted_models import HUGGINGFACE_KNOWN_CHAT_MODELS, hosted_default_model
 from llm_shared.models import LLMRequest, LLMResponse
 from llm_shared.types import ProviderType
 from services.provider_key_vault import resolve_provider_key
@@ -35,15 +36,7 @@ logger = get_logger(__name__)
 
 _HF_BASE_URL = "https://api-inference.huggingface.co"
 
-_KNOWN_CHAT_MODELS: List[str] = [
-    "meta-llama/Meta-Llama-3.1-8B-Instruct",
-    "meta-llama/Llama-3.2-3B-Instruct",
-    "mistralai/Mistral-7B-Instruct-v0.3",
-    "mistralai/Mixtral-8x7B-Instruct-v0.1",
-    "microsoft/Phi-3-mini-4k-instruct",
-    "HuggingFaceH4/zephyr-7b-beta",
-    "google/gemma-2-9b-it",
-]
+_KNOWN_CHAT_MODELS: List[str] = list(HUGGINGFACE_KNOWN_CHAT_MODELS)  # #15501: the catalog lives in the SSOT
 
 
 class HuggingFaceProvider(BaseProvider):
@@ -71,10 +64,10 @@ class HuggingFaceProvider(BaseProvider):
         )
         return self._api_token
 
-    def _build_headers(self) -> Dict[str, str]:
-        """Build request headers, injecting the HF token when available."""
+    def _build_headers(self, signed_in_token: str | None = None) -> Dict[str, str]:
+        """Build request headers: a signed-in token (#19241) wins over the configured HF token."""
         headers = {"Content-Type": "application/json"}
-        token = self._resolve_api_token()
+        token = signed_in_token or self._resolve_api_token()
         if token:
             headers["Authorization"] = f"Bearer {token}"
         return headers
@@ -97,14 +90,14 @@ class HuggingFaceProvider(BaseProvider):
         """Execute a non-streaming chat completion via HuggingFace Inference API."""
         self._total_requests += 1
         start = time.time()
-        model = request.model_name or self._get_setting("default_model", "meta-llama/Llama-3.2-3B-Instruct")
+        model = request.model_name or self._get_setting("default_model", hosted_default_model("huggingface"))
         url = f"{_HF_BASE_URL}/v1/chat/completions"
         try:
             http_client = get_http_client()
             timeout = aiohttp.ClientTimeout(total=request.timeout or 60)
             async with await http_client.post(
                 url,
-                headers=self._build_headers(),
+                headers=self._build_headers(await self._signed_in_token()),
                 json=self._build_chat_payload(request, model),
                 timeout=timeout,
             ) as resp:
@@ -150,7 +143,7 @@ class HuggingFaceProvider(BaseProvider):
     async def stream_completion(self, request: LLMRequest) -> AsyncIterator[str]:
         """Stream a chat completion from HuggingFace, yielding text chunks."""
         self._total_requests += 1
-        model = request.model_name or self._get_setting("default_model", "meta-llama/Llama-3.2-3B-Instruct")
+        model = request.model_name or self._get_setting("default_model", hosted_default_model("huggingface"))
         url = f"{_HF_BASE_URL}/v1/chat/completions"
         payload = self._build_chat_payload(request, model)
         payload["stream"] = True
@@ -159,7 +152,7 @@ class HuggingFaceProvider(BaseProvider):
             timeout = aiohttp.ClientTimeout(total=None, connect=5.0, sock_read=None)
             async with await http_client.post(
                 url,
-                headers=self._build_headers(),
+                headers=self._build_headers(await self._signed_in_token()),
                 json=payload,
                 timeout=timeout,
             ) as resp:

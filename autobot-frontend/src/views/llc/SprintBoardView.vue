@@ -80,9 +80,7 @@
               <div class="card-footer">
                 <WorkItemBadge kind="priority" :value="item.priority" variant="dot" />
                 <span v-if="item.story_points" class="card-points">{{ item.story_points }}</span>
-                <span v-if="item.assignee_name" class="card-assignee" :title="item.assignee_name">
-                  {{ initials(item.assignee_name) }}
-                </span>
+                <BaseAvatar v-if="item.assignee_name" class="card-assignee" :name="item.assignee_name" size="xs" variant="primary" />
               </div>
             </div>
             <div v-if="itemsByColumn(col.id).length === 0" class="column-empty">
@@ -142,6 +140,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseAvatar } from '@autobot/ui'
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
@@ -150,7 +149,7 @@ import { useWorkItemLabels } from '@/composables/useWorkItemLabels'
 import WorkItemDetail from './WorkItemDetail.vue'
 import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
 import { useLiveEvents } from '@/composables/useLiveEvents'
-import { formatDate as fmtDate } from '@/utils/formatHelpers'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('SprintBoardView')
 const api = useApiClient()
@@ -230,13 +229,7 @@ function itemsByColumn(colId: string) {
   return items.value.filter(i => i.column_id === colId)
 }
 
-function initials(name: string) {
-  return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
-}
-
-function formatDate(iso: string) {
-  return fmtDate(iso, { month: 'short', day: 'numeric' })
-}
+const formatDate = createDateFormatter({ kind: 'date', intl: { month: 'short', day: 'numeric' }, invalidText: '' })
 
 function switchToTimeline() {
   // #11701: preserve the current board/sprint context so the Gantt scopes to
@@ -601,16 +594,6 @@ onMounted(async () => {
 
 .card-assignee {
   margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: 50%;
-  background: var(--color-primary);
-  color: white;
-  font-size: 0.6rem;
-  font-weight: 600;
 }
 
 .column-empty {

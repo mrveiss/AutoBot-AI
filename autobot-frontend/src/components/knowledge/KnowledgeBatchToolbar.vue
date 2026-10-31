@@ -45,7 +45,7 @@
  */
 
 import Icon from '@/components/ui/Icon.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 
 interface Props {
   hasSelection: boolean
@@ -71,7 +71,7 @@ defineEmits<Emits>()
 .batch-toolbar {
   position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: var(--z-20);
   background: var(--color-primary);
   color: var(--text-on-primary);
   padding: var(--spacing-3) var(--spacing-6);
@@ -95,7 +95,7 @@ defineEmits<Emits>()
   font-weight: var(--font-medium);
 }
 
-.toolbar-info i {
+.toolbar-info .icon {
   font-size: var(--text-lg);
 }
 

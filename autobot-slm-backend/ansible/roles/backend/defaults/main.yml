@@ -7,7 +7,7 @@
 backend_service_account: autobot-backend  # Phase 7: migrate service to run as this account
 backend_user: autobot
 backend_group: autobot
-backend_install_dir: /opt/autobot/autobot-backend
+backend_install_dir: "{{ autobot.base_dir }}/autobot-backend"
 # Canonical git checkout on the box (#3649), matching the autobot_shared and
 # monitoring role defaults, and derived from `autobot.base_dir` since #15632. Every code_source_dir reference in this role's
 # tasks/main.yml used to repeat the default(...) fallback with this literal inline
@@ -16,7 +16,7 @@ backend_install_dir: /opt/autobot/autobot-backend
 # to catch (#15162). Defined here once, tasks reference the bare variable.
 code_source_dir: "{{ autobot.base_dir }}/code_source"
 backend_code_dir: "{{ backend_install_dir }}"  # Actual code location (can be overridden by playbook)
-backend_shared_standalone_dir: /opt/autobot/autobot_shared  # Standalone PYTHONPATH copy used by workers (#3649)
+backend_shared_standalone_dir: "{{ autobot.base_dir }}/autobot_shared"  # Standalone PYTHONPATH copy used by workers (#3649)
 backend_log_dir: /var/log/autobot
 backend_data_dir: /var/lib/autobot
 
@@ -110,9 +110,18 @@ autobot_admin_password: ""
 backend_secret_key: "change-me-in-production"
 backend_jwt_secret: "autobot-jwt-secret-change-in-production-minimum-32-chars"
 backend_cors_origins: "*"
+# nginx HTTPS port of the frontend, written as AUTOBOT_FRONTEND_TLS_PORT (#19326)
+frontend_tls_port: 443
+frontend_http_port: 80
+# Set false on a fleet whose frontend serves plain HTTP; config.frontend_url follows it (#19326).
+backend_frontend_tls_enabled: true
 # Internal API key shared with SLM backend for proxy authentication (#1779, #3512).
 # REQUIRED for personality and voice proxies — set via Ansible Vault or inventory.
 autobot_internal_api_key: ""
+# #16375: read-only token Prometheus presents to /api/metrics/prometheus. Its home
+# is the SLM secret store (`prometheus_scrape_token`, delivered as an extra var by
+# fetch_deploy_secrets); never set a literal here. Empty refuses every scrape.
+backend_prometheus_scrape_token: "{{ prometheus_scrape_token | default('') }}"
 
 # #14758: root key for the canonical envelope secret store. Read back from
 # slm-secrets.env at deploy time so the backend and the SLM derive the same vault
@@ -130,7 +139,7 @@ backend_slm_auth_tok: ""
 
 # LLM Configuration (Issue #858)
 backend_llm_provider: "ollama"  # Default LLM provider for all agents
-backend_llm_endpoint: "http://127.0.0.1:11434"  # Default Ollama endpoint
+backend_llm_endpoint: "http://{{ backend_ollama_host | default('127.0.0.1') }}:{{ backend_ollama_port | default(11434) }}"  # #19861: backend_ollama_host from the wizard
 backend_llm_model: "qwen3.5:9b"  # Default LLM model
 
 # Browser Worker connection (Playwright VM — leave empty for single-host deploys)
@@ -142,7 +151,7 @@ backend_browser_port: 9001  # Port 9001 is canonical; 3000 was Grafana's port (#
 # the default?" without restating the address (#17244).
 backend_ai_stack_host_shipped_default: "127.0.0.1"
 backend_ai_stack_host: "{{ backend_ai_stack_host_shipped_default }}"
-backend_ai_stack_port: 8080
+backend_ai_stack_port: "{{ ai_stack_port }}"
 
 # ChromaDB connection (co-located: ai-stack node; fleet deployment: ai-stack node IP)
 # Default follows backend_ai_stack_host so WSL2 auto-detection (#3503) propagates here too.
@@ -172,7 +181,7 @@ backend_health_check_retries: 120      # Max retry attempts (120 × 5s = 600s to
 backend_health_check_delay: 5          # Seconds between retries
 
 # Audit log file path (#8936: ensures AUTOBOT_AUDIT_LOG_FILE is always set in prod)
-backend_audit_log_file: /opt/autobot/logs/audit.log
+backend_audit_log_file: "{{ autobot.base_dir }}/logs/audit.log"
 
 # GPU / CUDA-torch / vLLM inference (#10288, #15162)
 # Two independent decisions, deliberately not coupled (#15162):
@@ -194,3 +203,13 @@ backend_has_gpu: "auto"
 # `..._gateway_host` reaches the Windows side when it is not.
 backend_wsl2_loopback_host: "127.0.0.1"
 backend_wsl2_gateway_host: "10.255.255.254"
+
+# #19366: the node's shared TLS directory for this role's tasks. The two templates spell the
+# fallback themselves because deploy-backend-env.yml / deploy-nginx-proxy.yml render them outside the role.
+backend_tls_cert_dir: "{{ autobot_tls_remote_cert_dir | default('/etc/autobot/certs') }}"
+
+# Feature-router boot mode, production profile (#6690, #19319). Mirrors FEATURE_ROUTERS_STRICT_PRODUCTION
+# in autobot_shared/ssot_role_mirrors.py (Ansible cannot import Python); a guard pins the two equal. "0" lets
+# a managed backend start degraded when a feature router fails to import (logged at ERROR, published
+# to the router health endpoint) instead of refusing to start. Set "1" per inventory to hard-fail.
+backend_feature_routers_strict: "0"

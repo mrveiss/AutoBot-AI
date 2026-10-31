@@ -12,11 +12,13 @@
  * herd reconnection during backend restarts.
  */
 
+import { backoffDelay } from '@autobot/ui'
 import { ref, onUnmounted } from 'vue'
 import type { SLMWebSocketMessage, NodeHealth } from '@/types/slm'
 import { getConfig } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { slmApiClient } from '@/utils/ApiClient'
+import { readSlmToken } from '@/utils/authStorage'
 import { HEALTH_PROBE_TIMEOUT_MS } from '@/constants/api-timeouts'
 
 const logger = createLogger('SlmWebSocket')
@@ -108,7 +110,7 @@ function doConnect(): void {
   }
 
   try {
-    const token = sessionStorage.getItem('slm_access_token')
+    const token = readSlmToken()
     socket.value = token
       ? new WebSocket(WS_URL, ['bearer', token])
       : new WebSocket(WS_URL)
@@ -215,10 +217,7 @@ function scheduleReconnect(): void {
   reconnecting.value = true
 
   // Exponential backoff: 1s, 2s, 4s, 8s, 16s, up to 30s max
-  const delay = Math.min(
-    BASE_RECONNECT_DELAY * Math.pow(2, reconnectAttempts),
-    MAX_RECONNECT_DELAY
-  )
+  const delay = backoffDelay(reconnectAttempts, { base: BASE_RECONNECT_DELAY, max: MAX_RECONNECT_DELAY })
   reconnectAttempts++
 
   reconnectTimer = setTimeout(async () => {

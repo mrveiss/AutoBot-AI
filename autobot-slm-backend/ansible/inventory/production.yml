@@ -18,8 +18,8 @@ all:
     ansible_python_interpreter: /usr/bin/python3
 
     # Global network configuration - set per-install in .env or override vars
-    network_subnet: "{{ lookup('env', 'NETWORK_SUBNET') | default('0.0.0.0/0', true) }}"
-    network_gateway: "{{ lookup('env', 'NETWORK_GATEWAY') | default('0.0.0.0', true) }}"
+    network_subnet: "{{ (lookup('env', 'NETWORK_SUBNET') | trim) or undef(hint='network_subnet is unset: set NETWORK_SUBNET in the environment or in /etc/autobot/slm-secrets.env. It is a firewall source, so it never falls back to an open range (#17642)') }}"
+    network_gateway: "{{ (lookup('env', 'NETWORK_GATEWAY') | trim) or undef(hint='network_gateway is unset: set NETWORK_GATEWAY in the environment or in /etc/autobot/slm-secrets.env (#17642)') }}"
     dns_servers:
       - "{{ dns_nameservers[0] }}"
       - "{{ dns_nameservers[1] }}"
@@ -46,9 +46,8 @@ all:
     redis_host: "{{ hostvars['autobot-database']['ansible_host'] }}"
     redis_port: 6379
     ai_stack_host: "{{ hostvars['autobot-aiml']['ansible_host'] }}"
-    ai_stack_port: 8080
     browser_host: "{{ hostvars['autobot-browser']['ansible_host'] }}"
-    browser_port: 3000
+    browser_port: 9001  # #19324: the browser role binds 9001 (roles/browser/vars); 3000 is Grafana
 
   children:
     slm:
@@ -85,7 +84,7 @@ all:
         frontend_port: 5173
         nginx_port: 80
         nginx_ssl_port: 443
-        nodejs_version: "20"
+        nodejs_version: "{{ node_major }}"
         vue_build_mode: "production"
 
     backend:
@@ -201,10 +200,11 @@ all:
             gpu_passthrough: true
       vars:
         # AI/ML-specific configuration
-        ai_stack_port: 8080
         ollama_port: 11434
-        # TTS Worker (#928, migrated from .22 -- #1394)
-        tts_worker_port: 8082
+        # TTS Worker: the port lives in roles/tts-worker/defaults/main.yml as
+        # `tts_port` (8083). #17782 removed a `tts_worker_port: 8082` here -- no
+        # Ansible task read that name, so it configured nothing, and 8082 is
+        # WSL2/Hyper-V reserved on this host class anyway (#3431, incident #3464).
         model_cache_size: "10gb"
         inference_threads: 4
 
@@ -228,7 +228,7 @@ all:
             - browser-automation
       vars:
         # Browser-specific configuration
-        playwright_port: 3000
+        playwright_port: 9001  # #19324: roles/browser/vars/main.yml overrides this anyway
         browser_timeout: 30
         headless_mode: true
 

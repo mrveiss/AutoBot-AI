@@ -26,8 +26,10 @@ import slmApiClient from '@/utils/ApiClient'
 
 const logger = createLogger('usePersonality')
 
-// Issue #1145: Route through SLM backend proxy (validates SLM JWT + forwards to main backend).
-// Using /autobot-api/personality caused JWT mismatch since SLM tokens are unknown to main backend.
+// Issue #1145: Route through the SLM backend proxy, which validates the SLM JWT and forwards
+// to the main backend with the internal key. The main backend does accept SLM-minted JWTs
+// (HS256 on the shared secret, `sub` identity fallback, #12135); the proxy is kept because it
+// enforces SLM admin for mutating methods before the backend sees the call.
 // Endpoints below are relative to getSlmApiBase() (resolved by slmApiClient) under this prefix.
 const API_PREFIX = '/personality'
 

@@ -33,6 +33,7 @@ from api.schemas_system import WhatsAppConfigRequest, WhatsAppConfigResponse
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.webhook_signature import verify_webhook_signature
 from services.gateway.gateway_manager import GatewayManager
 from services.gateway.ingest_governor import ingest_governor
 from services.whatsapp_service import (
@@ -42,7 +43,6 @@ from services.whatsapp_service import (
     get_whatsapp_app_secret,
     get_whatsapp_verify_token,
     save_whatsapp_config,
-    verify_webhook_signature,
 )
 from utils.chat_utils import generate_request_id
 
@@ -101,7 +101,7 @@ async def _route_to_chat_and_reply(
         media_id:        Graph API media id for lazy re-fetch, or None.
     """
     from api.chat import process_chat_message
-    from services.llm_service import LLMService
+    from services.llm_service import get_llm_service
     from utils.chat_utils import get_chat_history_manager
     from utils.lazy_singleton import lazy_init_singleton
 
@@ -145,7 +145,7 @@ async def _route_to_chat_and_reply(
     )
 
     chat_history_manager = get_chat_history_manager(request)
-    llm_service = lazy_init_singleton(request.app.state, "llm_service", LLMService)
+    llm_service = lazy_init_singleton(request.app.state, "llm_service", get_llm_service)
     memory_interface = getattr(request.app.state, "memory_interface", None)
 
     response_data = await process_chat_message(

@@ -82,7 +82,8 @@ _LUA_LEASE_TOKEN = re.compile(r"['\"](EX|PX|NX)['\"]", re.I)
 _LUA_EXPIRY_CALL = re.compile(r"redis\.call\(\s*['\"]P?EXPIRE(?:AT)?['\"]", re.I)
 
 #: THE registry. Not an exemption -- the subject.
-_THE_REGISTRY = "autobot_shared/coordination/work_claims.py"
+#: The Lua acquire/lease moved to work_claims_lua.py (size ceiling); work_claims.py itself holds none.
+_THE_REGISTRY = "autobot_shared/coordination/work_claims_lua.py"
 
 #: Every file allowed to hold a claim-or-lock primitive, with HOW MANY it holds
 #: and why. The count is the half a filename-only registry could not express
@@ -95,9 +96,23 @@ _THE_REGISTRY = "autobot_shared/coordination/work_claims.py"
 #: old stale-entry check only fired when a file lost its LAST primitive, so
 #: going from two to one was invisible in both directions at once.
 _ALLOWED: dict[str, tuple[int, str]] = {
+    "autobot_shared/membership_epoch.py": (
+        1,
+        "#19630 -- a token mint, not a lock: SETNX fills a missing epoch key so concurrent workers "
+        "converge on one random token. No holder, no renewal, nothing to release.",
+    ),
+    "autobot-backend/autobot_memory_graph/entity_upsert.py": (
+        1,
+        "#18417 — a dedup name index, not a work claim: SETNX adopts a pre-index entity so a name maps to one entity.",
+    ),
     "autobot-backend/events/channel_stream.py": (
         1,
         "#14815 — a watermark, not a lock: SETNX keeps the LOWEST broken event id for a channel.",
+    ),
+    "autobot-backend/llm_shared/provider_degradation.py": (
+        1,
+        "#15022 -- a state replay, not a lock: an outage-time needs_reauth mark is written back with `nx` "
+        "so it never overwrites a newer mark another worker wrote. No holder, no renewal, nothing to release.",
     ),
     "autobot-backend/llc/notifications/router.py": (
         1,
@@ -131,9 +146,9 @@ _ALLOWED: dict[str, tuple[int, str]] = {
         1,
         "#11607 — Celery task dedup by task id.",
     ),
-    "autobot_shared/coordination/work_claims.py": (
+    "autobot_shared/coordination/work_claims_lua.py": (
         2,
-        "#15947 — THE claim registry. Every agent scope claim goes through it.",
+        "#15947 — THE claim registry (its Lua acquire/lease scripts, split out of work_claims.py). Every agent scope claim goes through it.",
     ),
     "autobot_shared/idempotency.py": (
         2,
@@ -192,9 +207,17 @@ def _iter_sources(root: Path | None = None) -> list[Path]:
 REACH = declare(
     "one-claim-registry",
     discover=_iter_sources,
-    floor=3_002,
+    # Re-pinned MID-window 2026-10-04 (#17356): `_reach.verify_floor` now refuses a floor in
+    # the bottom tenth of `growth`, because that is zero tolerance dressed as an allowance.
+    # Re-measured by the mechanism itself, not carried across (#15928); the arithmetic is in
+    # the commit message, which cannot drift from the tree it describes.
+    floor=3438,  # re-pinned mid-window (train 80 on main)
     what="Python modules swept for claim-or-lock primitives",
     growth=50,
+    # Scope as data (#17844). Five trees, including `scripts/` and `pipeline-scripts/` that no
+    # sibling guard reaches -- `verify_scope` fails if the sweep stops reaching any one of them,
+    # which the single floor over all five cannot see.
+    roots=_ROOTS,
 )
 
 

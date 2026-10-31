@@ -9,20 +9,21 @@ started_at is older than the per-agent timeout (default 30 minutes).
 For each stuck run:
   1. Marks the run status = timed_out
   2. Calls adapter.cancel() (best-effort)
-  3. Deletes the Redis checkout lock: DEL llc:checkout:{work_item_id}
+  3. Deletes the Redis checkout lock llc:checkout:{work_item_id} while it names the agent
   4. Sets the work item status = blocked
   5. Creates a recovery work item (type=bug) assigned to the agent's manager
   6. Writes an activity log entry
 """
 
-import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_utils import delete_if_value
 from user_management.database import get_async_session_factory
 
 from ..models.enums import ActivityEventType, WorkItemStatus, WorkItemType
@@ -32,7 +33,7 @@ from ..services.activity_log import LLCActivityLogService
 from ..services.work_item_service import WorkItemService
 from .base import PollLoopScheduler
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _DEFAULT_TIMEOUT_MINUTES = 30
 _POLL_INTERVAL_SECONDS = 60
@@ -138,7 +139,7 @@ class LivenessMonitor(PollLoopScheduler):
 
         # Step 3: Release Redis checkout lock
         if run.work_item_id:
-            await self._release_checkout_lock(str(run.work_item_id))
+            await self._release_checkout_lock(str(run.work_item_id), str(agent_id))
 
         # Step 4: Set work item status = blocked
         work_item = None
@@ -161,12 +162,13 @@ class LivenessMonitor(PollLoopScheduler):
         except Exception:
             logger.debug("adapter.cancel() swallowed for agent %s run %s", agent_id, run_id)
 
-    async def _release_checkout_lock(self, work_item_id: str) -> None:
+    async def _release_checkout_lock(self, work_item_id: str, agent_id: str) -> None:
+        """Drop the fence only while it still names the stuck run's agent."""
         redis = await get_async_redis_client()
         if redis is None:
             return
         try:
-            await redis.delete(f"llc:checkout:{work_item_id}")
+            await delete_if_value(redis, f"llc:checkout:{work_item_id}", agent_id)
         except Exception:
             logger.debug("Redis DEL llc:checkout:%s failed (swallowed)", work_item_id)
 

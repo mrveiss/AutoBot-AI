@@ -182,6 +182,7 @@
     src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-slm-backend/"
     dest: "{{ slm_backend_dir }}/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       # Re-includes come first -- rsync applies the first matching rule, and
       # `.env.example` is tracked source that the `.env.*` family below would
       # otherwise swallow (#14231).
@@ -262,6 +263,7 @@
   failed_when: false
   when: slm_requirements_stat.stat.exists
   tags: ['slm', 'backend']
+  check_mode: false
 
 - name: "SLM | Remove stale venv if not Python 3.14"
   ansible.builtin.file:
@@ -317,6 +319,7 @@
     src: "{{ playbook_dir }}/../../../autobot_shared/"
     dest: "{{ slm_base_dir }}/autobot_shared/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=__pycache__"
       - "--exclude=*.pyc"
       - "--exclude=*.egg-info"
@@ -385,6 +388,16 @@
   timeout: 120  # Issue #2835: prevent indefinite hang
   when: slm_requirements_stat.stat.exists
   changed_when: true
+  tags: ['slm', 'backend']
+
+# #17892: requirements.txt declares `-c ../constraints/shared.txt`, which pip
+# resolves against the deployed file -- {{ slm_base_dir }}/constraints/shared.txt.
+# Nothing placed it there, so a clean-machine install aborted here with
+# "Could not open constraint file". The shared staging task is how every other
+# role puts the repo-root manifests on the node; this role had not included it.
+- name: "SLM | Stage the shared manifests this pip step reads (#17892)"
+  ansible.builtin.include_tasks: ../../_shared/tasks/stage_shared_manifests.yml
+  when: not (autobot_shared_manifests_staged | default(false))
   tags: ['slm', 'backend']
 
 # #16641: without this, pip falls back to shelling out to the standalone
@@ -629,37 +642,11 @@
   no_log: true
   tags: ['slm', 'secrets']
 
-# #14758: same back-fill for the envelope root key. Every host provisioned
-# before this change already has the secrets file, so the template task above is
-# skipped and the key would never appear — which is the state the issue reports.
-#
-# Gated on the grep finding nothing, so it only ever ADDS. Rotating this value
-# silently would be worse than leaving it absent: the root key derives every
-# vault KEK, so a new one makes every already-encrypted secret undecryptable.
-- name: "SLM | Check if AUTOBOT_SECRETS_ROOT_KEY present in secrets file (#14758)"
-  ansible.builtin.shell:
-    cmd: >-
-      grep -q '^AUTOBOT_SECRETS_ROOT_KEY=.\+'
-      {{ slm_credentials_dir }}/{{ slm_credentials_file }}
-  register: _slm_root_key_check
-  changed_when: false
-  failed_when: false
-  when: slm_secrets_stat.stat.exists
-  no_log: true
-  tags: ['slm', 'secrets']
-
-- name: "SLM | Add AUTOBOT_SECRETS_ROOT_KEY to existing secrets file (#14758)"
-  ansible.builtin.lineinfile:
-    path: "{{ slm_credentials_dir }}/{{ slm_credentials_file }}"
-    regexp: "^AUTOBOT_SECRETS_ROOT_KEY="
-    # #16405: same fix as the set_fact generator above -- 32 random bytes from
-    # openssl rand, not 32 characters from a password lookup.
-    line: "AUTOBOT_SECRETS_ROOT_KEY={{ lookup('pipe', 'openssl rand -base64 32') | replace('+', '-') | replace('/', '_') }}"
-    create: false
-  when:
-    - slm_secrets_stat.stat.exists
-    - _slm_root_key_check.rc != 0
-  no_log: true
+# #14758 / #19051: back-fill the envelope root key into an existing secrets
+# file. The tasks live in secrets_root_key.yml so the builtin updater
+# (update-all-nodes.yml Play 1, which never runs this role) runs the same ones.
+- name: "SLM | Back-fill AUTOBOT_SECRETS_ROOT_KEY into the secrets file (#14758, #19051)"
+  ansible.builtin.include_tasks: secrets_root_key.yml
   tags: ['slm', 'secrets']
 
 # #16299: deliberately NO back-fill for AUTOBOT_BACKEND_SECRET_KEY or
@@ -863,6 +850,7 @@
     src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-plugins/"
     dest: "{{ slm_base_dir }}/autobot-plugins/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=node_modules"
       - "--exclude=dist"
       - "--exclude=.git"
@@ -892,6 +880,7 @@
     src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/libs/"
     dest: "{{ slm_base_dir }}/libs/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=node_modules"
       - "--exclude=dist"
       - "--exclude=.git"
@@ -1174,6 +1163,7 @@
   changed_when: false
   failed_when: false
   tags: ['slm', 'service']
+  check_mode: false
 
 - name: "SLM | Collect startup logs when service is not starting (#7920)"
   ansible.builtin.shell:

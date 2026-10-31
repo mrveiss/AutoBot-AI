@@ -4,6 +4,7 @@
 
 <script setup lang="ts">
 import { createLogger } from '@/utils/debugUtils'
+import { BaseAlert, PollingPausedAlert } from '@autobot/ui'
 
 const logger = createLogger('MCPTool')
 /**
@@ -14,7 +15,10 @@ const logger = createLogger('MCPTool')
  */
 
 import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useAutobotApi } from '@/composables/useAutobotApi'
+import { formatCompactRelativeTime } from '@/utils/dateUtils'
 
 const api = useAutobotApi()
 
@@ -71,7 +75,7 @@ const lastUpdated = ref<Date | null>(null)
 // Issue #986: track load errors so we can show them instead of empty state
 const loadError = ref<string | null>(null)
 
-let refreshInterval: ReturnType<typeof setInterval> | null = null
+const REFRESH_INTERVAL_MS = 30000
 // Issue #986: Safety timeout — force-clear loading if Promise.all hangs (TCP half-open / nginx
 // holds connection open longer than axios timeout). 20s covers any realistic API round-trip.
 let loadingTimeoutId: ReturnType<typeof setTimeout> | null = null
@@ -79,11 +83,7 @@ let loadingTimeoutId: ReturnType<typeof setTimeout> | null = null
 // Computed
 const lastUpdatedTime = computed(() => {
   if (!lastUpdated.value) return 'Never'
-  const now = new Date()
-  const diff = Math.floor((now.getTime() - lastUpdated.value.getTime()) / 1000)
-  if (diff < 60) return `${diff}s ago`
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  return `${Math.floor(diff / 3600)}h ago`
+  return formatCompactRelativeTime(lastUpdated.value)
 })
 
 const bridgeHealthClass = computed(() => {
@@ -135,21 +135,26 @@ function toggleToolSchema(toolName: string): void {
   expandedTools.value = new Set(expandedTools.value)
 }
 
-async function fetchBridges(): Promise<void> {
+/** Resolves true when the read succeeded; the poller counts a false as a failed tick. */
+async function fetchBridges(): Promise<boolean> {
   try {
     // Issue #835 - use named function from useAutobotApi
     bridges.value = (await api.getMCPBridges()) as unknown as MCPBridge[]
+    return true
   } catch (e) {
     logger.error('Failed to fetch MCP bridges:', e)
+    return false
   }
 }
 
-async function fetchTools(): Promise<void> {
+async function fetchTools(): Promise<boolean> {
   try {
     // Issue #835 - use named function from useAutobotApi
     tools.value = (await api.getMCPTools()) as unknown as MCPTool[]
+    return true
   } catch (e) {
     logger.error('Failed to fetch MCP tools:', e)
+    return false
   }
 }
 
@@ -162,17 +167,20 @@ async function fetchHealth(): Promise<void> {
   }
 }
 
-async function fetchStats(): Promise<void> {
+async function fetchStats(): Promise<boolean> {
   try {
     // Issue #835 - use named function from useAutobotApi
     const data = await api.getMCPStats()
     stats.value = ((data.overview || data) as unknown as MCPStats) || { total_tools: 0, total_bridges: 0, healthy_bridges: 0 }
+    return true
   } catch (e) {
     logger.error('Failed to fetch MCP stats:', e)
+    return false
   }
 }
 
-async function refreshData(): Promise<void> {
+/** Resolves false when every list read failed, so the poller counts the tick as a failure. */
+async function refreshData(): Promise<boolean> {
   isRefreshing.value = true
   loading.value = true
   loadError.value = null
@@ -189,11 +197,13 @@ async function refreshData(): Promise<void> {
     }
   }, 20000)
 
+  let anyLoaded = false
   try {
     // Fetch bridges, tools, stats in parallel — fast endpoints.
     // Health check is slow (checks all 10 bridges, ~60s) — load it
     // in the background so it doesn't block the loading state. (#986)
-    await Promise.all([fetchBridges(), fetchTools(), fetchStats()])
+    const results = await Promise.all([fetchBridges(), fetchTools(), fetchStats()])
+    anyLoaded = results.some(Boolean)
     lastUpdated.value = new Date()
   } finally {
     if (loadingTimeoutId) {
@@ -205,21 +215,26 @@ async function refreshData(): Promise<void> {
   }
   // Load health data after UI is visible
   fetchHealth()
+  return anyLoaded
 }
 
-onMounted(() => {
-  refreshData()
-  refreshInterval = setInterval(() => refreshData(), 30000)
-})
+const { t } = useI18n()
+
+// #19482: the shared dashboard policy (stop on unmount and after repeated failures, paused alert)
+const refreshPoller = useDashboardPoller(async () => {
+  throwUnlessLoaded(await refreshData())
+}, REFRESH_INTERVAL_MS)
+
+onMounted(() => refreshPoller.start(''))
 
 onUnmounted(() => {
-  if (refreshInterval) clearInterval(refreshInterval)
   if (loadingTimeoutId) clearTimeout(loadingTimeoutId)
 })
 </script>
 
 <template>
   <div class="p-6">
+    <PollingPausedAlert :poller="refreshPoller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mb-6" @retry="refreshPoller.start('')" />
     <!-- Overview Cards -->
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
       <!-- Total Tools Card -->
@@ -261,7 +276,7 @@ onUnmounted(() => {
             <h3 class="text-sm font-medium text-gray-500 uppercase">{{ $t('tools.admin.mCPTool.lastUpdated') }}</h3>
             <p class="mt-2 text-lg font-bold text-gray-900">{{ lastUpdatedTime }}</p>
             <button
-              @click="refreshData"
+              @click="refreshPoller.start('')"
               class="mt-2 text-sm text-purple-600 hover:text-purple-700 flex items-center gap-1"
               :disabled="isRefreshing"
             >
@@ -342,7 +357,7 @@ onUnmounted(() => {
       </svg>
       <p class="mt-4 text-red-600 font-medium">{{ loadError }}</p>
       <button
-        @click="refreshData"
+        @click="refreshPoller.start('')"
         class="mt-4 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 text-sm"
       >
         {{ $t('tools.admin.mCPTool.retry') }}
@@ -408,9 +423,7 @@ onUnmounted(() => {
             </code>
           </div>
 
-          <div v-if="bridge.error" class="mt-4 p-3 bg-red-50 border border-red-200 rounded-sm">
-            <p class="text-xs text-red-700">{{ bridge.error }}</p>
-          </div>
+          <BaseAlert v-if="bridge.error" variant="error" class="mt-4" :message="bridge.error" />
         </div>
       </div>
     </div>
@@ -526,9 +539,7 @@ onUnmounted(() => {
             </div>
           </div>
 
-          <div v-if="check.error" class="mt-3 p-2 bg-red-50 border border-red-200 rounded-sm">
-            <p class="text-xs text-red-700">{{ check.error }}</p>
-          </div>
+          <BaseAlert v-if="check.error" variant="error" size="compact" class="mt-3" :message="check.error" />
         </div>
       </div>
     </div>

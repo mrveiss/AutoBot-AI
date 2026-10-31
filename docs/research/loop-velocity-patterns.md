@@ -354,3 +354,17 @@ The scheduled sweep's first run reported `conflicted=32`. Triage of all 32:
 - **A merged PR is not proof its branch is disposable, and a closed PR is not proof it was abandoned.** Both need the closing comment read. Twelve "conflicted" branches turned out to be a broken release step.
 - **CodeQL flags validators.** Three separate times it flagged the code doing the checking. Where the shape allows, restructure so the tainted value never reaches the sink; where it does not, the alert needs dismissing.
 - **A timeout that fires on queue time reads as "too slow"** and invites raising the bound, which cannot help.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #15294 — session-stop orphan check is blind to unlanded worktree branches, and files issues instead of surfacing them (closed)
+- #15296 — branch-switch guard denies correct commands: redirections parsed as branch names, -C target repo ignored, and quoted prose matched (closed)
+- #15306 — Branches and worktrees drift from base unchecked: 0 of 86 worktrees current, 73 no longer merge
+- #15309 — Both self-hosted runners have no watchdog: the only scheduled copy ran on a host with no runner, and its log path was unwritable
+- #15376 — Release changelog archive stalled at v0.4.0: 13 releases unlanded because Actions cannot open the changelog PR (closed)
+- #15407 — Self-hosted queue stalls a required check: verify-precommit-config cancelled after ~50min queueing under PR burst (closed)
+- #15408 — openvino floor is restated in 7 files, so every dependabot bump fails until 6 are hand-edited (closed)
+- #15409 — calibrated_under shipped unwired: no call site passes it, blocked by a file at its 600-line ceiling
+- #15410 — marker-tests suite has no schedule, so slow/perf regressions surface only on release PRs

@@ -34,6 +34,7 @@
  * ```
  */
 
+import { backoffDelay } from '@autobot/ui'
 import { ref, computed, type Ref, type ComputedRef } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -379,8 +380,8 @@ export function useConnectionTester(
 
       while (attempt <= (autoRetry ? maxRetries : 0)) {
         if (attempt > 0) {
-          // Exponential backoff: delay * (2 ^ attempt)
-          const delay = retryDelay * Math.pow(2, attempt - 1)
+          // Exponential backoff: retryDelay * 2^(attempt - 1)
+          const delay = backoffDelay(attempt - 1, { base: retryDelay })
           await updateStatus('testing', `Retrying... (attempt ${attempt}/${maxRetries})`)
           await new Promise(resolve => setTimeout(resolve, delay))
           retryCount.value = attempt

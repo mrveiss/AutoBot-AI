@@ -22,6 +22,7 @@ import api.admin_orphan_repair as route
 from api.user_management.dependencies import get_db_session
 from auth_middleware import get_current_user
 from services.orphan_repair import Assessment
+from testkit.canonical_gate import canonical_resolver
 
 LIVE_USER = str(uuid.uuid4())
 _ADMIN = {"username": "admin", "role": "admin", "user_id": "admin-1"}
@@ -63,7 +64,7 @@ def audit():
     auth = MagicMock()
     auth.get_user_from_request.return_value = _ADMIN
     with (
-        patch("auth_rbac.get_auth_middleware", return_value=auth),
+        canonical_resolver("auth_rbac.resolve_human_user", auth),
         patch("services.orphan_repair.audit_log", new=AsyncMock(return_value=True)) as audit_log,
     ):
         yield audit_log
@@ -117,7 +118,7 @@ def test_a_non_admin_is_refused_before_anything_is_judged(audit):
     auth = MagicMock()
     auth.get_user_from_request.return_value = {"username": "u2", "role": "user", "user_id": "u2"}
     with (
-        patch("auth_rbac.get_auth_middleware", return_value=auth),
+        canonical_resolver("auth_rbac.resolve_human_user", auth),
         patch.dict(route.REPAIRERS, {"fake": _Repairer(True)}),
     ):
         body = {"resource_type": "fake", "resource_id": "r-1", "new_owner_id": LIVE_USER}

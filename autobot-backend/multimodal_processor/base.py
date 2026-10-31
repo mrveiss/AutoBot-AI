@@ -15,7 +15,7 @@ from typing import Any
 from autobot_shared.logging_manager import get_logger
 from memory import get_memory_manager
 
-from .models import MultiModalInput, ProcessingResult
+from .models import MultiModalInput, MultimodalResult
 
 
 class BaseModalProcessor:
@@ -27,7 +27,7 @@ class BaseModalProcessor:
         self.logger = get_logger(f"{__name__}.{processor_type}")
         self.memory_manager = get_memory_manager()
 
-    async def process(self, input_data: MultiModalInput) -> ProcessingResult:
+    async def process(self, input_data: MultiModalInput) -> MultimodalResult:
         """Process input and return result"""
         raise NotImplementedError
 

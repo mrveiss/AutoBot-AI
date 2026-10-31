@@ -13,6 +13,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 import { slmApiClient } from '@/utils/ApiClient'
+import { BaseAlert } from '@autobot/ui'
 import type { PlaybookInfo } from '@/types/slm'
 
 const logger = createLogger('InfrastructureView')
@@ -198,19 +199,12 @@ function getCategoryColor(category: string): string {
     </div>
 
     <!-- Info Panel -->
-    <div class="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-      <div class="flex items-start gap-3">
-        <svg class="w-5 h-5 text-blue-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-        <div class="text-sm text-blue-700">
-          <p class="font-medium">{{ $t('infrastructureView.aboutInfrastructureSetup') }}</p>
-          <p class="mt-1 text-blue-600">
-            {{ $t('infrastructureView.infrastructurePlaybooksAutomateThe') }}
-          </p>
-        </div>
-      </div>
-    </div>
+    <BaseAlert
+      variant="info"
+      class="mt-8"
+      :title="$t('infrastructureView.aboutInfrastructureSetup')"
+      :message="$t('infrastructureView.infrastructurePlaybooksAutomateThe')"
+    />
 
     <!-- Infrastructure Wizard Modal -->
     <InfrastructureWizard

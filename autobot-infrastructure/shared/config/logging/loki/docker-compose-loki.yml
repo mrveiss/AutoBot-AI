@@ -5,7 +5,8 @@ services:
     image: grafana/loki:2.9.2
     container_name: autobot-loki
     ports:
-      - "3100:3100"
+      # #17500: loopback unless AUTOBOT_LOKI_BIND_ADDRESS opens it on purpose.
+      - "${AUTOBOT_LOKI_BIND_ADDRESS:-127.0.0.1}:3100:3100"
     volumes:
       - ./loki-config.yml:/etc/loki/local-config.yaml
       - loki-data:/tmp/loki
@@ -31,12 +32,12 @@ services:
       retries: 3
 
   grafana:
-    image: grafana/grafana:10.2.0
+    image: grafana/grafana:11.1.0
     container_name: autobot-grafana-logs
     ports:
-      - "3001:3000"  # Different port to avoid conflicts
+      - "${AUTOBOT_LOKI_BIND_ADDRESS:-127.0.0.1}:3001:3000"  # Different port to avoid conflicts
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=autobot123
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets}
       - GF_USERS_ALLOW_SIGN_UP=false
     volumes:
       - grafana-data:/var/lib/grafana

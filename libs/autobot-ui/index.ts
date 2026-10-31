@@ -12,7 +12,7 @@
 // See README.md for the token contract and authoring rules.
 
 // Shared semantic vocabulary (#10885) — the single presentational colour
-// type (neutral|primary|success|warning|danger|info) that Badge/Alert/status
+// type (neutral|primary|success|warning|error|info) that Badge/Alert/status
 // pills across both apps map onto. Domain-status enums keep their own types.
 export type { SemanticVariant, SemanticColor } from './src/types/semantic'
 
@@ -23,20 +23,75 @@ export type { GetPath, JsonOf, GetResponse } from './src/types/contract'
 export { default as BaseButton } from './src/components/BaseButton.vue'
 export type { ButtonVariant, ButtonSize } from './src/components/BaseButton.vue'
 
+export { default as BaseInput } from './src/components/BaseInput.vue'
+export type { InputSize, InputType } from './src/components/BaseInput.vue'
+
 export { default as BaseBadge } from './src/components/BaseBadge.vue'
-export type { BadgeVariant, BadgeSize } from './src/components/BaseBadge.vue'
+export type { BadgeVariant, BadgeSize, BadgeTone } from './src/components/BaseBadge.vue'
+// The one risk-tier badge (#13422): RiskTier is the backend's ladder, sent as risk_tier.
+export { default as RiskBadge } from './src/components/RiskBadge.vue'
+export { RISK_TIERS } from './src/types/riskTier'
+export type { RiskTier } from './src/types/riskTier'
+
+// The one inline alert/banner for both apps (#18819).
+export { default as BaseAlert } from './src/components/BaseAlert.vue'
+export type { AlertVariant, AlertSize, BaseAlertProps } from './src/components/BaseAlert.vue'
 
 export { default as BaseCard } from './src/components/BaseCard.vue'
 
+// The one data table (#14778) -- retires the main app's BaseTable and DataTable forks.
+export { default as BaseTable } from './src/components/BaseTable.vue'
+export type { BaseTableColumn, TableRow, TableRowKey, TableSize, TableRowVariant, SortOrder } from './src/components/BaseTable.vue'
+export { filterRows, pageRows, pageCountOf, clampPage, defaultVisibleKeys } from './src/utils/tableView'
+export type { TableFilters } from './src/utils/tableView'
+
 export { default as EmptyState } from './src/components/EmptyState.vue'
+
+// The one toast host for both apps (#19903); the caller supplies the translated labels.
+export { default as ToastContainer } from './src/components/ToastContainer.vue'
+export type { ToastContainerProps } from './src/components/ToastContainer.vue'
+
+export { default as SkipLink } from './src/components/SkipLink.vue'
+// One language picker for both apps (#18354); endonym labels live with it.
+export { default as LanguageSwitcher } from './src/components/LanguageSwitcher.vue'
+export { LOCALE_ENDONYMS, localeOptions } from './src/utils/locales'
+export type { LocaleOption } from './src/utils/locales'
 
 export { default as BaseModal } from './src/components/BaseModal.vue'
 export type { ModalSize } from './src/components/BaseModal.vue'
 
+export { default as BaseDrawer } from './src/components/BaseDrawer.vue'
+
+export { default as BaseSwitch } from './src/components/BaseSwitch.vue'
+export type { SwitchSize } from './src/components/BaseSwitch.vue'
+
+export { default as BaseAvatar } from './src/components/BaseAvatar.vue'
+export type { AvatarSize, AvatarVariant, AvatarStatus } from './src/components/BaseAvatar.vue'
+export { initialsOf } from './src/utils/initials'
+
+export { default as BasePagination } from './src/components/BasePagination.vue'
+export type { PaginationLabels } from './src/components/BasePagination.vue'
+
+export { default as BaseFormField } from './src/components/BaseFormField.vue'
+
+// Page title row and trail (#17563).
+export { default as PageHeader } from './src/components/PageHeader.vue'
+export { default as Breadcrumb } from './src/components/Breadcrumb.vue'
+export type { BreadcrumbItem } from './src/components/Breadcrumb.vue'
+
+export { default as BrandMark } from './src/components/BrandMark.vue'
+
+export { default as BaseTooltip } from './src/components/BaseTooltip.vue'
+export type { TooltipPlacement } from './src/components/BaseTooltip.vue'
+
+// Screen-reader announcer (#18240) — promoted from the SLM useAccessibility.
+export { useAnnounce, LIVE_REGION_ID } from './src/composables/useAnnounce'
+export type { AnnouncePriority } from './src/composables/useAnnounce'
+
 // Dialog-a11y composables — the focus-trap / scroll-lock / focus-restore /
 // initial-focus primitives shared by every dialog and modal consumer.
 export { useFocusTrap, isTabbable, FOCUSABLE_SELECTOR } from './src/composables/useFocusTrap'
-export type { UseFocusTrapReturn } from './src/composables/useFocusTrap'
+export type { UseFocusTrapOptions, UseFocusTrapReturn } from './src/composables/useFocusTrap'
 
 export { useFocusRestore } from './src/composables/useFocusRestore'
 
@@ -48,7 +103,7 @@ export { useBodyScrollLock, __resetLockStateForTests } from './src/composables/u
 // Data composables — pagination + form-validation primitives promoted from
 // the main app (#10885) so both frontends import them from one canonical
 // home instead of re-deriving them per view.
-export { usePagination, useSimplePagination, useShowAllToggle } from './src/composables/usePagination'
+export { usePagination, useSimplePagination, useShowAllToggle, useShowMore } from './src/composables/usePagination'
 export type { PaginationOptions, UsePaginationReturn } from './src/composables/usePagination'
 
 export { useFormValidation, quickValidate, validators } from './src/composables/useFormValidation'
@@ -72,7 +127,7 @@ export {
 export type { ToastType, Toast, UseToastReturn } from './src/composables/useToast'
 
 // Shared Prometheus/monitoring metric shapes (#14907) — the eight type names
-// both apps' usePrometheusMetrics.ts declared identically-named. Domain
+// both apps' metrics composables declared identically-named (#14907). Domain
 // logic and domain-only types stay per-app; see the file's own doc comment.
 export type {
   GPUMetrics,
@@ -84,11 +139,88 @@ export type {
   OptimizationRecommendation,
   UsePrometheusMetricsOptions,
 } from './src/types/prometheus-metrics'
+// The headline monitoring numbers both apps derive from those shapes (#18225).
+export { useMetricsSummary } from './src/composables/useMetricsSummary'
+export type {
+  SystemHealth,
+  MetricsSummary,
+  MetricsSummarySources,
+  MetricsSummaryDashboard,
+} from './src/composables/useMetricsSummary'
 
-// Shared duration-formatting vocabulary (#14908).
+// Shared duration, uptime and byte formatting (#14908).
 export type { DurationStyle } from './src/utils/duration'
+export { formatDuration, formatUptime, formatFileSize, formatBytes } from './src/utils/format'
+export type { FormatDurationOptions, FormatUptimeOptions, FormatBytesOptions } from './src/utils/format'
+export {
+  formatDate,
+  formatTime,
+  formatDateTime,
+  formatISOString,
+  formatTimeAgo,
+  formatRelativeTime,
+  createDateFormatter,
+  DEFAULT_DATE_TIME_INTL
+} from './src/utils/format'
+export type { DateInput, DateFormatterOptions, FormatRelativeTimeOptions } from './src/utils/format'
 
 // Scoped console logger (#14908) — canonical LogLevel/log/createLogger; both
 // apps' utils/debugUtils.ts re-export these rather than re-declaring them.
 export { log, createLogger } from './src/utils/logger'
+// Managed polling with scoped disposal and a consecutive-error stop (#19482).
+export { usePollingJob } from './src/composables/usePollingJob'
+export type { UsePollingJobOptions, UsePollingJobReturn } from './src/composables/usePollingJob'
+// The one "updates have stopped" notice for a poller paused on errors (#19482).
+export { default as PollingPausedAlert } from './src/components/PollingPausedAlert.vue'
+
+// One DOMPurify-backed sanitiser for every v-html binding in both apps (#2847, #19118).
+export { sanitizeChatHtml, sanitizeKnowledgeHtml, sanitizeHtml, escapeHtml } from './src/utils/sanitize'
+export type { SanitizePreset } from './src/utils/sanitize'
 export type { LogLevel } from './src/utils/logger'
+
+// The one exponential-backoff formula for reconnects and retries (#15402).
+export { backoffDelay, RETRY_BACKOFF } from './src/utils/backoff'
+export type { BackoffOptions } from './src/utils/backoff'
+
+// What a canonical API client throws for a non-2xx response: status and details kept (#12363).
+export { HttpError, isHttpError, isHttpClientError, extractErrorInfo, httpErrorFrom, parseJsonBody, type ErrorInfo } from './src/utils/httpError'
+
+export { default as SchedulePicker } from './src/components/SchedulePicker.vue'
+export * from './src/schedule'
+
+// Agent-ledger answers and their section states (#18391) — one reading of the
+// shared response shapes for the Company OS and SLM ledger views.
+export {
+  loadingLedgerSection,
+  ledgerSectionFrom,
+  readLedgerSection,
+  ledgerAskOutcomeFrom,
+  sendLedgerAsk,
+} from './src/utils/ledger'
+export type { LedgerSection, LedgerSectionStatus, LedgerAskOutcome } from './src/utils/ledger'
+export { default as LedgerSectionState } from './src/components/LedgerSectionState.vue'
+export type { LedgerStateLabels } from './src/components/LedgerSectionState.vue'
+
+// The one HTTP transport under both apps' ApiClients; each app subclasses it for auth (#14908).
+export { ApiClientBase, withQuery, parseRetryAfterMs, SERVICE_UNAVAILABLE_STATUS } from './src/utils/ApiClientBase'
+export type { TransportRequestOptions, RawRequestOptions, TransportLogger } from './src/utils/ApiClientBase'
+
+// The one spinner and the one skeleton for every loading state (#19906).
+export { default as BaseSpinner } from './src/components/BaseSpinner.vue'
+export type { SpinnerSize } from './src/components/BaseSpinner.vue'
+export { default as BaseSkeleton } from './src/components/BaseSkeleton.vue'
+export type { SkeletonShape } from './src/components/BaseSkeleton.vue'
+
+// The agent-ledger row shapes both consoles read, declared once (#19910).
+export type {
+  ActivityRow,
+  ClaimRow,
+  ConflictRow,
+  IdleSubscriberRow,
+  PeerMessageRow,
+  PresenceRow,
+  PresenceTaskRow,
+} from './src/types/ledger'
+
+// A tool permission rule as the backend serves it, declared once (#19910).
+export type { PermissionRule } from './src/types/permission'

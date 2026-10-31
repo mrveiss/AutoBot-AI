@@ -25,6 +25,7 @@ from api.voice_bundle_user import (
     router,
 )
 from auth_middleware import get_current_user
+from testkit.canonical_gate import canonical_resolver
 
 # Test users
 _USER_ALICE = {"user_id": "alice", "username": "alice", "role": "user"}
@@ -41,11 +42,11 @@ def _patch_auth_middleware():
     """Make the canonical require_role() gate see the injected test user.
 
     Admin-gated routes use ``require_role("admin", "superadmin")`` (#12704),
-    which reads the user via ``auth_rbac.get_auth_middleware()``.
+    which reads the user via ``auth_rbac.resolve_human_user``.
     """
     mw = MagicMock()
     mw.get_user_from_request.side_effect = lambda request: _CURRENT["user"]
-    with patch("auth_rbac.get_auth_middleware", return_value=mw):
+    with canonical_resolver("auth_rbac.resolve_human_user", mw):
         yield
     _CURRENT["user"] = None
 

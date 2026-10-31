@@ -87,7 +87,7 @@ class TestMeshEdgeSync:
         """get_neighbors() calls zrangebyscore with the correct key and args."""
         db = _make_db_mock([])
         redis, _ = _make_redis_mock()
-        redis.zrangebyscore = AsyncMock(return_value=[("B", 0.9)])
+        redis.zrangebyscore = AsyncMock(return_value=[(b"B", 0.9)])
 
         syncer = MeshEdgeSync(db=db, redis=redis, min_weight=0.5)
         result = await syncer.get_neighbors("A", min_weight=0.5, limit=10)

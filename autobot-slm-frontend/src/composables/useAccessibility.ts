@@ -7,7 +7,7 @@
  * Accessibility composables for WCAG 2.1 AA compliance.
  *
  * Provides:
- * - useFocusTrap: traps focus within modals/dialogs
+ * - useFocusTrap: re-exported from the shared kit (restoreFocus / initialFocus / listenOnDocument options)
  * - useKeyboardNav: arrow key navigation for lists/grids
  * - useHighContrast: high contrast mode toggle with localStorage
  * - useAnnounce: screen reader announcements via aria-live
@@ -15,7 +15,7 @@
  * Issue #754: Accessibility audit and improvements.
  */
 
-import { ref, onMounted, onUnmounted, watch, type Ref } from 'vue'
+import { ref, type Ref } from 'vue'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('Accessibility')
@@ -123,85 +123,6 @@ export function useDarkMode() {
     toggle,
     init,
   }
-}
-
-
-// ─── Focus Trap ───────────────────────────────────────────────
-
-/** Selector for all focusable elements within a container. */
-const FOCUSABLE_SELECTOR = [
-  'a[href]',
-  'button:not([disabled])',
-  'input:not([disabled])',
-  'select:not([disabled])',
-  'textarea:not([disabled])',
-  '[tabindex]:not([tabindex="-1"])',
-].join(', ')
-
-/**
- * Trap focus within a container element (for modals/dialogs).
- *
- * Issue #754: Accessibility audit and improvements.
- */
-export function useFocusTrap(containerRef: Ref<HTMLElement | null>) {
-  let previousFocus: HTMLElement | null = null
-
-  function getFocusableElements(): HTMLElement[] {
-    if (!containerRef.value) return []
-    return Array.from(containerRef.value.querySelectorAll(FOCUSABLE_SELECTOR))
-  }
-
-  function handleKeyDown(event: KeyboardEvent): void {
-    if (event.key !== 'Tab') return
-
-    const focusable = getFocusableElements()
-    if (focusable.length === 0) return
-
-    const first = focusable[0]
-    const last = focusable[focusable.length - 1]
-
-    if (event.shiftKey && document.activeElement === first) {
-      event.preventDefault()
-      last.focus()
-    } else if (!event.shiftKey && document.activeElement === last) {
-      event.preventDefault()
-      first.focus()
-    }
-  }
-
-  function activate(): void {
-    previousFocus = document.activeElement as HTMLElement
-    document.addEventListener('keydown', handleKeyDown)
-
-    // Focus first focusable element in the container
-    const focusable = getFocusableElements()
-    if (focusable.length > 0) {
-      focusable[0].focus()
-    }
-  }
-
-  function deactivate(): void {
-    document.removeEventListener('keydown', handleKeyDown)
-    if (previousFocus) {
-      previousFocus.focus()
-      previousFocus = null
-    }
-  }
-
-  // Auto-activate/deactivate based on container visibility
-  watch(containerRef, (el) => {
-    if (el) {
-      activate()
-    } else {
-      deactivate()
-    }
-  })
-
-  onUnmounted(() => {
-    deactivate()
-  })
-
-  return { activate, deactivate }
 }
 
 
@@ -314,51 +235,8 @@ export function useKeyboardNav(
 
 // ─── Screen Reader Announcements ──────────────────────────────
 
-/**
- * Announce messages to screen readers via an aria-live region.
- *
- * Issue #754: Accessibility audit and improvements.
- */
-export function useAnnounce() {
-  let liveRegion: HTMLElement | null = null
-
-  function ensureLiveRegion(): HTMLElement {
-    if (liveRegion) return liveRegion
-
-    const existing = document.getElementById('a11y-live-region')
-    if (existing) {
-      liveRegion = existing
-      return liveRegion
-    }
-
-    liveRegion = document.createElement('div')
-    liveRegion.id = 'a11y-live-region'
-    liveRegion.setAttribute('aria-live', 'polite')
-    liveRegion.setAttribute('aria-atomic', 'true')
-    liveRegion.setAttribute('role', 'status')
-    liveRegion.className = 'sr-only'
-    document.body.appendChild(liveRegion)
-    return liveRegion
-  }
-
-  /**
-   * Announce a message to screen readers.
-   *
-   * Helper for useAnnounce (Issue #754).
-   */
-  function announce(message: string, priority: 'polite' | 'assertive' = 'polite'): void {
-    const region = ensureLiveRegion()
-    region.setAttribute('aria-live', priority)
-    // Clear then set to ensure re-announcement
-    region.textContent = ''
-    requestAnimationFrame(() => {
-      region.textContent = message
-    })
-  }
-
-  onMounted(() => {
-    ensureLiveRegion()
-  })
-
-  return { announce }
-}
+// useAnnounce (#18240) and useFocusTrap (#19688) live in the shared kit; re-exported so existing
+// importers of this module keep working with ONE implementation.
+// NOTE: the kit useFocusTrap is manual (activate/deactivate); the former local copy auto-activated
+// through watch(containerRef), the kit one does not, so call activate() when the container shows.
+export { useAnnounce, useFocusTrap } from '@autobot/ui'

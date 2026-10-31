@@ -144,7 +144,7 @@ part of that corpus worth having is its *statistics*, not its contents.
 | Capability | Where | State |
 |---|---|---|
 | Visual builder + canvas | `autobot-frontend/src/views/WorkflowBuilderView.vue`, `components/workflow/WorkflowCanvas.vue`, `composables/useWorkflowBuilder.ts` | Built |
-| DAG execution | `autobot-backend/orchestration/workflow_executor.py`, `dag_executor.py` (`NodeType` enum at `dag_executor.py:54`) | Built |
+| DAG execution | `autobot-backend/orchestration/workflow_executor.py`, `dag_executor.py` (`DagNodeType` enum at `dag_executor.py:54`) | Built |
 | Native template library | `autobot-backend/workflow_templates/` — 18 templates across 6 category modules (analysis, community, development, research, security, sysadmin) | Built |
 | Template model | `workflow_templates/types.py:87` — `id, name, description, category, complexity, steps, estimated_duration_minutes, agents_involved, tags, variables, required_secrets` | Built |
 | Template gallery UI | `components/workflow/WorkflowTemplateGallery.vue` — search box + category filter chips | Built |
@@ -163,7 +163,7 @@ Those documents are `{nodes, connections}` graphs typed to a third-party engine'
 (the reference work's own indexer normalises ~365 vendor-specific node type strings through a
 hand-written mapping table). AutoBot's interchange format is `{schema_version: "1.0", steps: [...]}`
 with `agents_involved` and an automation mode (`services/workflow_serializer.py:38,295`), executed
-against our own `NodeType` enum. There is no shared vocabulary. Only generic control flow —
+against our own `DagNodeType` enum. There is no shared vocabulary. Only generic control flow —
 trigger, HTTP request, conditional, loop, code, wait — has any AutoBot counterpart; the other ~350
 node types are connectors to services we have no node for. A translator would therefore convert a
 small fraction of workflows and silently mangle the rest.
@@ -422,3 +422,27 @@ Two security constraints fell out of the design and are filed as `priority: high
 | #17605 | Fidelity report + pre-import preview (← #17604) | v0.13.0 |
 | #17606 | Credentials never carried across (← #17603) | v0.13.0 |
 | #17607 | Quarantine foreign code nodes (← #17603) | v0.13.0 |
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #11064 — perf(rag): BM25 IDF uses query-local candidate set, not corpus stats (#11022 split)
+- #17590 — Umbrella: a workflow marketplace — public discovery for workflows we author ourselves
+- #17591 — feat(marketplace): generalise the catalogue from plugin-only to workflow entries
+- #17592 — feat(workflow): a publish-to-public transition beside the private share path
+- #17593 — feat(workflow-templates): trigger_type and integrations facets on WorkflowTemplate
+- #17594 — feat(marketplace): derive a description for published workflows that lack one
+- #17595 — feat(marketplace): FTS5-backed catalogue search with an input sanitiser
+- #17596 — feat(marketplace): static catalogue export for offline installs
+- #17597 — feat(workflow-templates): rank connector and subject demand from external corpus statistics
+- #17598 — feat(workflow-templates): author native templates for the top-ranked subjects
+- #17599 — tech-debt(rag): two hybrid-search implementations — one reachable only from a validator (closed)
+- #17600 — tech-debt(api-contract): marketplace search documents full-text, implements substring
+- #17601 — security(api): 11 handlers return raw exception text in the HTTPException detail
+- #17602 — Umbrella: import workflows from other platforms — a pluggable converter with an honest fidelity report
+- #17603 — feat(workflow-import): converter framework — source-adapter registry and canonical IR
+- #17604 — feat(workflow-import): node-mapping registry with unmapped nodes as a first-class outcome
+- #17605 — feat(workflow-import): fidelity report and pre-import preview
+- #17606 — feat(workflow-import): credentials are never carried across — re-declared as required_secrets
+- #17607 — feat(workflow-import): quarantine foreign code nodes — no silent conversion into executable steps

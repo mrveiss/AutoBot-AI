@@ -64,12 +64,13 @@ short enough that it no longer pushes the statement past the line limit.
 Exit code:
   0 — every annotation is well-formed
   1 — at least one carries prose where IDs belong, or sits on a closing bracket
+  2 — git could not enumerate the tracked files; nothing was checked (#14896)
 """
 
 from __future__ import annotations
 
+import logging
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -79,7 +80,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # the canonical git-env scrub is importable when this runs as a bare hook.
 sys.path.insert(0, str(REPO_ROOT))
 
-from autobot_shared.paths import scrubbed_git_env  # noqa: E402
+from tools.lint._scan_helpers import (  # noqa: E402
+    EmptyEnumeration,
+    GitEnumerationFailed,
+    configure_logging,
+    tracked_paths,
+)
+
+logger = logging.getLogger(__name__)
 
 # The suppression token followed by test IDs, then a separator and prose. The separator is
 # what distinguishes this from a legitimate multi-ID annotation (``# nose<c> B603
@@ -103,21 +111,8 @@ _MAX_REPORTED = 15
 
 
 def _tracked_python_files() -> list[Path]:
-    # Fixed argv, no shell, no caller input.
-    result = subprocess.run(  # nosec B603 B607
-        ["git", "ls-files", "*.py"],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        # Explicit, not the platform default: a non-UTF-8 locale would decode
-        # a non-ASCII tracked path into a name that matches no file.
-        encoding="utf-8",
-        check=False,
-        # An inherited GIT_DIR outranks `cwd=` and would enumerate another
-        # checkout's index while REPO_ROOT names this one (#14896).
-        env=scrubbed_git_env(),
-    )
-    return [REPO_ROOT / line for line in result.stdout.splitlines() if line]
+    """Tracked ``*.py`` files; raises ``RuntimeError`` rather than returning ``[]``."""
+    return [REPO_ROOT / rel for rel in tracked_paths(REPO_ROOT, "*.py")]
 
 
 def _scan(is_bad, hint: str) -> list[str]:
@@ -153,7 +148,13 @@ def find_orphaned() -> list[str]:
 
 
 def main() -> int:
-    problems = find_malformed() + find_orphaned()
+    try:
+        problems = find_malformed() + find_orphaned()
+    except (EmptyEnumeration, GitEnumerationFailed) as exc:
+        # git failing used to read as "no files" and pass (#14896).
+        configure_logging(logger)
+        logger.error("check_nosec_format: cannot enumerate tracked files, nothing was checked: %s", exc)
+        return 2
     for problem in problems[:_MAX_REPORTED]:
         print(problem)
     if len(problems) > _MAX_REPORTED:

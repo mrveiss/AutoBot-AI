@@ -30,8 +30,9 @@ import aiohttp
 
 from autobot_shared.auth.permissions import ROLE_PERMISSIONS, Role, role_value
 from autobot_shared.http_client import get_http_client
+from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
-from constants.network_constants import NetworkConstants
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 
@@ -103,12 +104,13 @@ class MCPDispatcher:
         Makes a single HTTP request to /api/mcp/tools which aggregates all
         bridges.  Returns the number of tools cached.
         """
-        backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+        backend_url = config.backend_url
         try:
             http_client = get_http_client()
             async with await http_client.get(
                 f"{backend_url}/api/mcp/tools",
                 timeout=aiohttp.ClientTimeout(total=5),
+                guard_egress=EGRESS_POLICY,
             ) as response:
                 if response.status != 200:
                     logger.warning(
@@ -189,6 +191,16 @@ class MCPDispatcher:
         """Return the cached tool entry for tool_name, or None if not found."""
         return self._tool_cache.get(tool_name)
 
+    async def ensure_loaded(self) -> None:
+        """Load the tool cache once if it never has been (#18430: one public way, not ``_cache_loaded``)."""
+        if not self._cache_loaded:
+            await self.refresh_tool_cache()
+
+    async def has_tool(self, tool_name: str) -> bool:
+        """Whether *tool_name* is in the registry, loading the cache first if needed."""
+        await self.ensure_loaded()
+        return self.find_tool(tool_name) is not None
+
     # ------------------------------------------------------------------
     # Dispatch
     # ------------------------------------------------------------------
@@ -226,12 +238,11 @@ class MCPDispatcher:
         # existed because ``superadmin`` was not a ``Role`` member, so resolving
         # it through ``Role()`` raised and reported the most privileged role in
         # the system as denied on every tool. It is a Role member now, so the
-        # canonical mapping answers for it like any other role — and what that
-        # mapping says is that superadmin holds no granular permission, so an
-        # MCP tool requiring one is refused. That is the deliberate reading of
-        # an empty ROLE_PERMISSIONS entry, not an accident of resolution: the
-        # short-circuit was the last place where being in ``ADMIN_ROLES``
-        # granted access that ``ROLE_PERMISSIONS`` never wrote down.
+        # canonical mapping answers for it like any other role — and since #19125
+        # (owner decision 2026-10-21) that mapping gives superadmin admin's
+        # permissions, so an MCP tool requiring one is admitted for it exactly
+        # as for admin, through the written-down grant and not through
+        # ``ADMIN_ROLES`` membership.
         try:
             # role_value(), not str(): a ``Role`` member stringifies to
             # "Role.ADMIN" and would be reported as unknown-role (#14944).
@@ -419,10 +430,11 @@ class MCPDispatcher:
 
         try:
             http_client = get_http_client()
-            async with await http_client.post(
+            async with await http_client.post(  # see #18355: endpoint is a relative path
                 endpoint,
                 json={"arguments": arguments},
                 timeout=aiohttp.ClientTimeout(total=30),
+                guard_egress=EGRESS_POLICY,
             ) as response:
                 if response.status == 200:
                     result = await response.json()

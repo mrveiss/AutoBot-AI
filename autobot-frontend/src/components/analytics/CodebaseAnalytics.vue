@@ -182,6 +182,7 @@
       <!-- Duplicate Code Analysis (#1469, #184) -->
       <DuplicatesSection
         :duplicates="duplicateAnalysis"
+        :scan-state="duplicateScanState"
         :loading="loadingProgress.duplicates"
         @export="(fmt: string) => exportSection('duplicates', fmt as 'md' | 'json')"
       />
@@ -279,7 +280,7 @@
         @load-performance-findings="loadPerformanceFindings"
         @load-redis-optimizations="loadRedisOptimizations"
         @load-health-score="codeIntelGetHealthScore"
-        @load-quality-score="() => codeIntelGetQualityScore(rootPath, 'python')"
+        @load-quality-score="() => codeIntelGetQualityScore()"
         @load-analysis-history="codeIntelGetAnalysisHistory"
       />
 
@@ -289,7 +290,7 @@
         :loading="loadingEnvAnalysis"
         :error="envAnalysisError"
         :use-ai-filtering="useAiFiltering"
-        :ai-filtering-model="aiFilteringModel"
+        :ai-filtering-model-state="aiFilteringModelState"
         :ai-filtering-priority="aiFilteringPriority"
         :llm-filtering-result="llmFilteringResult"
         @refresh="loadEnvironmentAnalysis"
@@ -574,6 +575,7 @@ const {
   codebaseStats,
   problemsReport,
   duplicateAnalysis,
+  duplicateScanState,
   declarationAnalysis,
   hardcodeAnalysis,
   loadingProgress,
@@ -695,7 +697,7 @@ const {
   loadingEnvAnalysis,
   envAnalysisError,
   useAiFiltering,
-  aiFilteringModel,
+  aiFilteringModelState,
   aiFilteringPriority,
   llmFilteringResult,
   loadEnvironmentAnalysis,

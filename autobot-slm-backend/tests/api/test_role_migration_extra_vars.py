@@ -143,3 +143,41 @@ def test_migrate_role_endpoint_maps_execution_error_to_handled_500():
 
     assert raised is not None
     assert raised.status_code == 500
+
+
+def _extra_vars_for(playbook: str, name: str) -> dict:
+    role = MagicMock()
+    role.name = name
+    role.ansible_playbook = playbook
+    fake_exec = MagicMock()
+    fake_exec.execute_playbook = AsyncMock(return_value={"success": True, "output": "ok", "returncode": 0})
+    stub_pe = MagicMock()
+    stub_pe.PlaybookExecutor = MagicMock(return_value=fake_exec)
+    with patch.dict(sys.modules, {"services.playbook_executor": stub_pe}):
+        _run(_roles_mod.run_role_full_procedure(role, "00-SLM-Manager"))
+    return fake_exec.execute_playbook.call_args.kwargs["extra_vars"]
+
+
+def test_slm_agent_registry_path_skips_the_common_role_19040():
+    """Migrate/Redeploy and the co-located update must not run `common` (admin user, SSH keys, UFW)."""
+    extra = _extra_vars_for("playbooks/deploy-slm-agent.yml", "slm-agent")
+    assert extra == {"role_name": "slm-agent", "slm_agent_run_common": False}
+
+
+def test_other_roles_do_not_get_the_skip_var_19040():
+    assert "slm_agent_run_common" not in _extra_vars_for("playbooks/deploy_role.yml", "tts-worker")
+
+
+def test_ui_deploy_path_and_playbook_default_still_run_common_19040():
+    """The UI button passes no variables (variables={}), so the playbook's own default decides."""
+    import re
+
+    import yaml
+
+    root = Path(__file__).resolve().parents[2]
+    play = yaml.safe_load((root / "ansible/playbooks/deploy-slm-agent.yml").read_text(encoding="utf-8"))[0]
+    common = next(r for r in play["roles"] if r["role"] == "common")
+    assert re.search(r"slm_agent_run_common\s*\|\s*default\(true\)", common["when"])
+    infra = (root / "api/infrastructure.py").read_text(encoding="utf-8")
+    block = infra[infra.index('id="deploy-slm-agent"') :]
+    assert "variables={}" in block[: block.index("PlaybookInfo(")]

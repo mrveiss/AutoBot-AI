@@ -19,7 +19,7 @@ from .development import get_all_development_templates
 from .research import get_all_research_templates
 from .security import get_all_security_templates
 from .sysadmin import get_all_sysadmin_templates
-from .types import TemplateCategory, WorkflowTemplate
+from .types import WorkflowTemplate, WorkflowTemplateCategory
 
 
 class WorkflowTemplateManager:
@@ -51,7 +51,7 @@ class WorkflowTemplateManager:
 
     def list_templates(
         self,
-        category: TemplateCategory | None = None,
+        category: WorkflowTemplateCategory | None = None,
         tags: List[str] | None = None,
     ) -> List[WorkflowTemplate]:
         """List workflow templates, optionally filtered by category or tags."""

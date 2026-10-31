@@ -512,7 +512,7 @@ async def test_resume_agent_restores_pre_pause_status(initial_status):
 @pytest.mark.asyncio
 async def test_pause_company_raises_company_not_found():
     """pause_company must raise CompanyNotFoundError for an unknown company_id."""
-    from llc.services.controls_service import CompanyNotFoundError
+    from llc.services.company import CompanyNotFoundError
 
     company_id = str(uuid.uuid4())
     actor_id = str(uuid.uuid4())
@@ -528,7 +528,7 @@ async def test_pause_company_raises_company_not_found():
 @pytest.mark.asyncio
 async def test_resume_company_raises_company_not_found():
     """resume_company must raise CompanyNotFoundError for an unknown company_id."""
-    from llc.services.controls_service import CompanyNotFoundError
+    from llc.services.company import CompanyNotFoundError
 
     company_id = str(uuid.uuid4())
     actor_id = str(uuid.uuid4())

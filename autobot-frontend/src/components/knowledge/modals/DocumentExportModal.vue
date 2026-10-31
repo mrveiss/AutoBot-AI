@@ -15,8 +15,7 @@
 
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, watch } from 'vue'
-import { BaseModal } from '@autobot/ui'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
 
@@ -263,7 +262,7 @@ watch(() => props.modelValue, (isOpen) => {
       <!-- Actions -->
       <div class="modal-actions">
         <BaseButton
-          variant="outline-solid"
+          variant="outline"
           @click="closeModal"
           :disabled="isExporting"
         >
@@ -318,8 +317,9 @@ watch(() => props.modelValue, (isOpen) => {
   font-size: var(--text-sm);
 }
 
-.export-summary i {
-  font-size: var(--text-xl);
+.export-summary .icon {
+  width: var(--text-xl);
+  height: var(--text-xl);
   color: var(--color-info);
 }
 
@@ -377,7 +377,7 @@ watch(() => props.modelValue, (isOpen) => {
 }
 
 .format-option.selected .format-icon {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: var(--text-on-primary);
 }
 

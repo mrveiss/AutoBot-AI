@@ -33,6 +33,7 @@ import os
 import time
 from dataclasses import dataclass
 
+from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import TTL_1_MINUTE
 from constants.network_constants import NetworkConstants
@@ -191,11 +192,13 @@ async def _fetch_registry_nodes() -> list[dict]:
     # copy of that rule here is how that bug came back the first time.
     session = await client._get_session()
     url = client._rest_url(NODES_PATH)
+    await assert_egress_policy(url)
 
     collected: list[dict] = []
     page = 1
     while page <= _MAX_PAGES:
-        async with session.get(url, params={"page": str(page), "per_page": str(_NODES_PER_PAGE)}) as response:
+        params = {"page": str(page), "per_page": str(_NODES_PER_PAGE)}
+        async with session.get(url, params=params, allow_redirects=False) as response:
             response.raise_for_status()
             payload = await response.json()
         batch = payload.get("nodes") or []

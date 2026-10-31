@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -388,7 +389,7 @@ onMounted(async () => {
               <button
                 @click="serviceAction('stop')"
                 :disabled="loading || !selectedNode || !selectedService"
-                class="px-4 py-2 bg-danger-600 text-white rounded-lg hover:bg-danger-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
+                class="px-4 py-2 bg-error-600 text-white rounded-lg hover:bg-error-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-gray-400"
                 :aria-label="$t('toolsView.stopServiceAria', { service: selectedService || 'service' })"
               >
                 {{ $t('toolsView.stop') }}
@@ -529,9 +530,7 @@ onMounted(async () => {
           </div>
 
           <!-- Error Message -->
-          <div v-if="error" class="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700" role="alert">
-            {{ error }}
-          </div>
+          <BaseAlert v-if="error" variant="error" class="mt-4" :message="error" />
 
           <!-- Result Output -->
           <div v-if="result" class="mt-4" role="region" :aria-label="$t('toolsView.commandOutputAria')">

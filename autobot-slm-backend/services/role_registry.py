@@ -2,8 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""
-Role Registry Service (Issue #779, #1129).
+"""Role Registry Service (Issue #779, #1129).
 
 Manages role definitions and provides default roles for code distribution.
 See docs/developer/ROLES.md for the authoritative role specification including
@@ -17,11 +16,14 @@ from typing import Dict, List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.chromadb_endpoints import CHROMADB_HEARTBEAT_PATH
+from autobot_shared.fleet_constants import FLEET_AGENT_DIR, FLEET_INSTALL_ROOT
+from autobot_shared.ssot_config import config
 from models.database import Role, SyncType
 from services.role_manifest_shape import default_roles_for
 
-_BASE_DIR = os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot")
-_SLM_AGENT_DIR = os.environ.get("SLM_AGENT_DIR", "/opt/autobot/autobot-slm-agent")
+_BASE_DIR = os.environ.get("AUTOBOT_BASE_DIR", FLEET_INSTALL_ROOT)
+_SLM_AGENT_DIR = os.environ.get("SLM_AGENT_DIR", FLEET_AGENT_DIR)
 
 
 def _filtered_pip_install(
@@ -59,9 +61,7 @@ _SLM_ROLES = [
         "auto_restart": True,
         "health_check_port": 8000,
         "health_check_path": "/api/health",
-        # #16889: routed through build-filtered-requirements.sh -- same
-        # rationale as the backend role's post_sync_cmd above; a bare
-        # `pip install -r` can't resolve this file's constraints include.
+        # #16889: the filtered install; why is in _filtered_pip_install's docstring.
         # #14275: venv/bin, not bare (see the backend role below).
         "post_sync_cmd": _filtered_pip_install(
             "autobot-slm-backend", "slm-backend", then=" && venv/bin/alembic upgrade head"
@@ -297,8 +297,8 @@ _AI_STACK_ROLES = [
         "target_path": "",
         "systemd_service": "autobot-chromadb",
         "auto_restart": True,
-        "health_check_port": 8100,  # #16025: was 8000/v1 -- ssot_config (#3094) + ai-stack ansible use 8100/v2
-        "health_check_path": "/api/v2/heartbeat",
+        "health_check_port": config.port.chromadb,  # #16025 /v2 heartbeat; #19321: the SSOT port, not a copy
+        "health_check_path": CHROMADB_HEARTBEAT_PATH,  # #19423
         "required": True,
         "degraded_without": [],
         "ansible_playbook": "setup-ai-stack.yml",
@@ -317,7 +317,7 @@ _OPTIONAL_ROLES = [
         "target_path": f"{_BASE_DIR}/autobot-npu-worker",
         "systemd_service": "autobot-npu-worker",
         "auto_restart": True,
-        "health_check_port": 8081,
+        "health_check_port": config.port.npu,
         "health_check_path": "/health",
         # #14275: routed through the canonical
         # scripts/build-filtered-requirements.sh rather than a bare
@@ -341,17 +341,10 @@ _OPTIONAL_ROLES = [
         "target_path": f"{_BASE_DIR}/autobot-tts-worker",
         "systemd_service": "autobot-tts-worker",
         "auto_restart": True,
-        "health_check_port": 8082,
+        # #19325: was 8082, the Windows NPU worker's port; the TTS worker listens on port.tts (8083, #3431).
+        "health_check_port": config.port.tts,
         "health_check_path": "/health",
-        # #14275: routed through the canonical
-        # scripts/build-filtered-requirements.sh rather than a bare
-        # `pip install -r requirements.txt`. This file's requirements carries a
-        # sibling-relative `-c ../constraints/shared.txt` (#10524) that does not
-        # resolve from the deployed directory, and pip aborts the whole sync:
-        #   ERROR: Could not open constraint file: '/constraints/shared.txt'
-        # The backend entry above has delegated to this script since #11134; the
-        # ansible half of the same defect was #14272. Same script, so the two
-        # deploy paths cannot drift apart again.
+        # #14275: the canonical filtered install, for the reason the npu-worker entry above states.
         "post_sync_cmd": _filtered_pip_install("autobot-tts-worker", "tts-worker"),
         "required": False,
         "degraded_without": ["Voice synthesis — TTS features unavailable"],
@@ -365,7 +358,7 @@ _OPTIONAL_ROLES = [
         "target_path": f"{_BASE_DIR}/autobot-browser-worker",
         "systemd_service": "autobot-playwright",
         "auto_restart": True,
-        "health_check_port": 9001,  # #16025: was 3000/status -- browser ansible role defaults declare 9001 (#4662)
+        "health_check_port": config.port.browser,  # #16025/#19324: SSOT port the browser role binds (#4662)
         "health_check_path": "/health",
         "post_sync_cmd": (f"cd {_BASE_DIR}/autobot-browser-worker && npm install"),
         "required": False,
@@ -410,7 +403,7 @@ _OPTIONAL_ROLES = [
         # guard (which checks only target_path) and activate path-existence + systemd
         # checks — mirrors the postgres fix in #9853 (#9965).
         "target_path": "/usr/bin/Xtigervnc",
-        "systemd_service": "tigervncserver",
+        "systemd_service": "vnc-server",  # #19076 review: the unit roles/vnc installs (vnc_service_name)
         "auto_restart": False,
         "required": False,
         "degraded_without": ["Remote desktop access — headed browser mode unavailable"],
@@ -470,7 +463,7 @@ _INFRA_ROLES = [
         ),
         "required": True,
         "degraded_without": [],
-        "ansible_playbook": "deploy-slm-agent.yml",
+        "ansible_playbook": "playbooks/deploy-slm-agent.yml",
     },
 ]
 
@@ -485,7 +478,7 @@ DEFAULT_ROLES: List[Dict] = default_roles_for(  # #16025: manifest-augmented, se
 # in setup_wizard.py to build role-based host groups.
 #
 # #14460: a value here is only useful if the ansible layer CONSULTS that
-# group -- a `groups.get(...)` clause in playbooks/vars/role_active_facts.yml,
+# group -- a `groups.get(...)` clause in inventory/group_vars/all.yml,
 # a play's `hosts:`, or a `groups[...]` lookup. Two values were consulted
 # nowhere: "databases" (plural) and "browser_automation". The inventory
 # builder created those groups and no play, fact or group_vars file ever
@@ -512,8 +505,7 @@ ROLE_ANSIBLE_GROUPS: Dict[str, str] = {
     "postgres": "database",
     "npu-worker": "npu_worker",
     # #14460: was "browser_automation". `role_browser_active` gates on
-    # `browser`/`browser_worker`; group_vars/browser.yml exists, none for the
-    # old spelling.
+    # `browser`/`browser_worker`; group_vars/browser.yml exists, none for the old spelling.
     "browser-service": "browser",
     "autobot-llm-cpu": "llm_nodes",
     "autobot-llm-gpu": "llm_nodes",
@@ -674,8 +666,7 @@ async def check_role_uniqueness(
             NodeRole.status.in_(["active", "installed", "not_installed"]),
         )
     )
-    existing = result.scalar_one_or_none()
-    return existing
+    return result.scalar_one_or_none()
 
 
 async def get_role_owners(db: AsyncSession) -> Dict[str, str]:

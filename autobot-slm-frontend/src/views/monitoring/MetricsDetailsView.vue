@@ -8,8 +8,11 @@
  * Issue #896 - SLM Metrics Dashboard
  */
 
-import { onMounted, onUnmounted, ref } from 'vue'
-import { usePrometheusMetrics } from '@/composables/usePrometheusMetrics'
+import { onMounted, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { PollingPausedAlert } from '@autobot/ui'
+import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
+import { useFleetMetrics } from '@/composables/useFleetMetrics'
 import FleetMetricsCard from '@/components/monitoring/FleetMetricsCard.vue'
 import NodeMetricsGrid from '@/components/monitoring/NodeMetricsGrid.vue'
 import { createLogger } from '@/utils/debugUtils'
@@ -26,17 +29,20 @@ const {
   lastUpdate,
   refreshMetrics,
   fetchPrometheusExport,
-} = usePrometheusMetrics({ autoFetch: false })
+} = useFleetMetrics({ autoFetch: false, pollInterval: 0 })
+
+const { t } = useI18n()
 
 const showNPUMetrics = ref(false)
-let refreshInterval: ReturnType<typeof setInterval> | null = null
+const REFRESH_INTERVAL_MS = 30000
 
 async function loadMetrics() {
-  await refreshMetrics()
+  const loaded = await refreshMetrics()
   // Check if NPU nodes exist
   if (npuFleetMetrics.value && npuFleetMetrics.value.total_npu_nodes > 0) {
     showNPUMetrics.value = true
   }
+  return loaded
 }
 
 async function downloadPrometheusMetrics() {
@@ -58,21 +64,23 @@ function handleNodeSelect(nodeId: string) {
   // TODO: Implement node detail view
 }
 
-onMounted(async () => {
-  await loadMetrics()
-  // Auto-refresh every 30 seconds
-  refreshInterval = setInterval(loadMetrics, 30000)
-})
+// #19482: the shared dashboard policy (stop on unmount and after repeated failures, paused alert)
+const metricsPoller = useDashboardPoller(async () => {
+  throwUnlessLoaded(await loadMetrics())
+}, REFRESH_INTERVAL_MS)
 
-onUnmounted(() => {
-  if (refreshInterval) {
-    clearInterval(refreshInterval)
-  }
-})
+/** Refresh and Retry: clear the shown error, then restart (also a paused) poller. */
+function restartPolling() {
+  error.value = null
+  metricsPoller.start('')
+}
+
+onMounted(() => metricsPoller.start(''))
 </script>
 
 <template>
   <div class="p-6 space-y-6">
+    <PollingPausedAlert :poller="metricsPoller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" @retry="restartPolling" />
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
@@ -84,7 +92,7 @@ onUnmounted(() => {
       </div>
       <div class="flex gap-2">
         <button
-          @click="loadMetrics"
+          @click="restartPolling"
           :disabled="isLoading"
           class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
         >
@@ -111,14 +119,14 @@ onUnmounted(() => {
     </div>
 
     <!-- Error Alert -->
-    <div v-if="error" class="bg-danger-50 border border-danger-200 rounded-lg p-4">
+    <div v-if="error" class="bg-error-50 border border-error-200 rounded-lg p-4">
       <div class="flex items-start gap-3">
-        <svg class="w-5 h-5 text-danger-600 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+        <svg class="w-5 h-5 text-error-600 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
           <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
         </svg>
         <div class="flex-1">
-          <h3 class="text-sm font-medium text-danger-800">{{ $t('monitoring.metricsDetailsView.errorLoadingMetrics') }}</h3>
-          <p class="text-sm text-danger-700 mt-1">{{ error }}</p>
+          <h3 class="text-sm font-medium text-error-800">{{ $t('monitoring.metricsDetailsView.errorLoadingMetrics') }}</h3>
+          <p class="text-sm text-error-700 mt-1">{{ error }}</p>
         </div>
       </div>
     </div>
@@ -160,7 +168,7 @@ onUnmounted(() => {
           <div
             :class="[
               'text-3xl font-bold',
-              performanceOverview.error_rate > 5 ? 'text-danger-600' :
+              performanceOverview.error_rate > 5 ? 'text-error-600' :
               performanceOverview.error_rate > 1 ? 'text-warning-600' : 'text-success-600'
             ]"
           >

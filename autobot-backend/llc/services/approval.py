@@ -28,6 +28,7 @@ from models.approval import Approval
 from ..kb.decision_log import DecisionLogWriter
 from ..models.enums import ApprovalStatus, ApprovalType
 from .base import LLCServiceBase
+from .wake_events import wake_for_decided_approval
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +62,7 @@ class ApprovalService(LLCServiceBase):
         company_id: uuid.UUID,
         gate_type: ApprovalType,
         payload: Dict[str, Any],
-        requested_by: uuid.UUID,
+        requested_by: uuid.UUID | str,
     ) -> Approval:
         """Create a pending approval record and emit a Redis event.
 
@@ -70,7 +71,12 @@ class ApprovalService(LLCServiceBase):
             company_id: Tenant company.
             gate_type: The gate type being requested.
             payload: Arbitrary context for the board reviewer.
-            requested_by: Agent ID making the request.
+            requested_by: Agent ID making the request, or a plain string for a
+                platform-general requester. Widened to ``str`` in #16818 to match
+                ``Approval.requested_by_agent``, which is a ``String(255)`` documented
+                for exactly that case -- a system sweep has no agent UUID, and minting
+                one to satisfy a type hint would put a fabricated identifier in an
+                audit record.
 
         Returns:
             The newly created ``Approval`` row (status=PENDING), scoped to
@@ -146,6 +152,7 @@ class ApprovalService(LLCServiceBase):
         approval.decided_by_user = str(decided_by)
         approval.decided_at = datetime.now(timezone.utc)
         await session.flush()
+        await wake_for_decided_approval(session, approval, decision.value)  # #19582: wake the requester
         logger.info(
             "Approval decided: id=%s decision=%s decided_by=%s",
             approval_id,

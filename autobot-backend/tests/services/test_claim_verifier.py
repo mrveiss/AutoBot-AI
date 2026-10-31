@@ -16,17 +16,18 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from knowledge.ownership import KnowledgeOwnership
 from services.claim_verifier import (
     ClaimVerifier,
     ResearchStatus,
     SourceAgreement,
-    VerificationStatus,
 )
 from services.knowledge_grounding_models import (
     Claim,
     ClaimType,
     KBSource,
     KBStatus,
+    VerificationStatus,
 )
 
 # ---------------------------------------------------------------------------
@@ -39,6 +40,7 @@ def mock_knowledge_base():
     """Create a mock knowledge base."""
     kb = AsyncMock()
     kb.search = AsyncMock()
+    kb.ownership_manager = KnowledgeOwnership(None)  # #16665: the real visibility decision
     return kb
 
 
@@ -110,7 +112,7 @@ class TestInKBVerification:
     @pytest.mark.asyncio
     async def test_in_kb_returns_verified_immediately(self, claim_verifier, sample_in_kb_claim):
         """IN_KB claims should return VERIFIED with high confidence immediately."""
-        result = await claim_verifier.verify(sample_in_kb_claim)
+        result = await claim_verifier.verify(sample_in_kb_claim, "alice")
 
         assert result.verified_as == VerificationStatus.VERIFIED
         assert result.source == "knowledge_base"
@@ -120,7 +122,7 @@ class TestInKBVerification:
     @pytest.mark.asyncio
     async def test_in_kb_uses_kb_source(self, claim_verifier, sample_in_kb_claim):
         """IN_KB verification should use knowledge_base as source."""
-        result = await claim_verifier.verify(sample_in_kb_claim)
+        result = await claim_verifier.verify(sample_in_kb_claim, "alice")
 
         assert result.source == "knowledge_base"
         assert result.source_text == sample_in_kb_claim.kb_fact
@@ -128,7 +130,7 @@ class TestInKBVerification:
     @pytest.mark.asyncio
     async def test_in_kb_skips_research_agent(self, claim_verifier, sample_in_kb_claim, mock_research_agent):
         """IN_KB verification should not call research agent."""
-        await claim_verifier.verify(sample_in_kb_claim)
+        await claim_verifier.verify(sample_in_kb_claim, "alice")
 
         # Research agent should not be called
         mock_research_agent.investigate_claim.assert_not_called()
@@ -136,7 +138,7 @@ class TestInKBVerification:
     @pytest.mark.asyncio
     async def test_in_kb_skips_rag_search(self, claim_verifier, sample_in_kb_claim, mock_knowledge_base):
         """IN_KB verification should not perform RAG search."""
-        await claim_verifier.verify(sample_in_kb_claim)
+        await claim_verifier.verify(sample_in_kb_claim, "alice")
 
         # KB search should not be called
         mock_knowledge_base.search.assert_not_called()
@@ -153,7 +155,7 @@ class TestContradictingVerification:
     @pytest.mark.asyncio
     async def test_contradicts_returns_conflicting(self, claim_verifier, sample_contradicts_claim):
         """CONTRADICTS claims should return CONFLICTING status."""
-        result = await claim_verifier.verify(sample_contradicts_claim)
+        result = await claim_verifier.verify(sample_contradicts_claim, "alice")
 
         assert result.verified_as == VerificationStatus.CONFLICTING
         assert result.requires_human_review
@@ -161,14 +163,14 @@ class TestContradictingVerification:
     @pytest.mark.asyncio
     async def test_contradicts_includes_kb_fact(self, claim_verifier, sample_contradicts_claim):
         """CONFLICTING verification should include the contradicting fact."""
-        result = await claim_verifier.verify(sample_contradicts_claim)
+        result = await claim_verifier.verify(sample_contradicts_claim, "alice")
 
         assert result.source_text == sample_contradicts_claim.kb_fact
 
     @pytest.mark.asyncio
     async def test_contradicts_zero_confidence(self, claim_verifier, sample_contradicts_claim):
         """CONFLICTING verification should have zero confidence."""
-        result = await claim_verifier.verify(sample_contradicts_claim)
+        result = await claim_verifier.verify(sample_contradicts_claim, "alice")
 
         assert result.confidence == 0.0
 
@@ -177,7 +179,7 @@ class TestContradictingVerification:
         self, claim_verifier, sample_contradicts_claim, mock_research_agent
     ):
         """CONTRADICTS verification should not call research agent."""
-        await claim_verifier.verify(sample_contradicts_claim)
+        await claim_verifier.verify(sample_contradicts_claim, "alice")
 
         mock_research_agent.investigate_claim.assert_not_called()
 
@@ -199,11 +201,11 @@ class TestRAGSearch:
                 "doc_id": "doc_1",
                 "content": "The latency is 500ms according to benchmarks",
                 "score": 0.85,
-                "metadata": {"source_type": "document", "age_days": 5.0},
+                "metadata": {"source_type": "document", "age_days": 5.0, "owner_id": "alice", "visibility": "private"},
             }
         ]
 
-        result = await claim_verifier.kb_rag_search("What is the latency?")
+        result = await claim_verifier.kb_rag_search("What is the latency?", "alice")
 
         assert result is not None
         assert len(result.matches) > 0
@@ -217,11 +219,11 @@ class TestRAGSearch:
                 "node_id": "chunk_1",
                 "content": "Low confidence result",
                 "score": 0.3,  # Below MIN_RAG_CONFIDENCE (0.5)
-                "metadata": {},
+                "metadata": {"owner_id": "alice", "visibility": "private"},
             }
         ]
 
-        result = await claim_verifier.kb_rag_search("test query")
+        result = await claim_verifier.kb_rag_search("test query", "alice")
 
         assert result is not None
         assert len(result.matches) == 0
@@ -232,7 +234,7 @@ class TestRAGSearch:
         """RAG search should handle empty results gracefully."""
         mock_knowledge_base.search.return_value = []
 
-        result = await claim_verifier.kb_rag_search("test query")
+        result = await claim_verifier.kb_rag_search("test query", "alice")
 
         assert result is not None
         assert len(result.matches) == 0
@@ -242,7 +244,7 @@ class TestRAGSearch:
     async def test_rag_search_handles_kb_unavailable(self, claim_verifier):
         """RAG search should handle missing KB gracefully."""
         verifier = ClaimVerifier(None, None)
-        result = await verifier.kb_rag_search("test query")
+        result = await verifier.kb_rag_search("test query", "alice")
 
         assert result is None
 
@@ -254,12 +256,12 @@ class TestRAGSearch:
                 "node_id": f"chunk_{i}",
                 "content": f"Result {i}",
                 "score": 0.9 - (i * 0.1),
-                "metadata": {},
+                "metadata": {"owner_id": "alice", "visibility": "private"},
             }
             for i in range(5)
         ]
 
-        result = await claim_verifier.kb_rag_search("test query")
+        result = await claim_verifier.kb_rag_search("test query", "alice")
 
         assert result is not None
         # Should return all results above MIN_RAG_CONFIDENCE (0.5)
@@ -286,11 +288,11 @@ class TestUnknownWithHighRAGConfidence:
                 "node_id": "chunk_1",
                 "content": "The latency is 500ms",
                 "score": 0.85,  # >= 0.7 threshold
-                "metadata": {"source_type": "document"},
+                "metadata": {"source_type": "document", "owner_id": "alice", "visibility": "private"},
             }
         ]
 
-        result = await claim_verifier.verify(sample_claim)
+        result = await claim_verifier.verify(sample_claim, "alice")
 
         assert result.verified_as == VerificationStatus.VERIFIED
         assert result.source == "kb_rag"
@@ -308,11 +310,11 @@ class TestUnknownWithHighRAGConfidence:
                 "node_id": "chunk_1",
                 "content": "The latency is 500ms",
                 "score": 0.85,
-                "metadata": {},
+                "metadata": {"owner_id": "alice", "visibility": "private"},
             }
         ]
 
-        await claim_verifier.verify(sample_claim)
+        await claim_verifier.verify(sample_claim, "alice")
 
         # Research agent should not be called
         mock_research_agent.investigate_claim.assert_not_called()
@@ -327,11 +329,11 @@ class TestUnknownWithHighRAGConfidence:
                 "node_id": "chunk_1",
                 "content": "The latency is 500ms",
                 "score": 0.7,  # Exactly at threshold
-                "metadata": {},
+                "metadata": {"owner_id": "alice", "visibility": "private"},
             }
         ]
 
-        result = await claim_verifier.verify(sample_claim)
+        result = await claim_verifier.verify(sample_claim, "alice")
 
         # At 0.7, confidence is at threshold but not > 0.8 for VERIFIED
         assert result.source == "kb_rag"
@@ -359,7 +361,7 @@ class TestUnknownWithLowRAGAndResearchAgent:
                 "node_id": "chunk_1",
                 "content": "Possibly related",
                 "score": 0.6,  # < 0.7 threshold
-                "metadata": {},
+                "metadata": {"owner_id": "alice", "visibility": "private"},
             }
         ]
 
@@ -371,7 +373,7 @@ class TestUnknownWithLowRAGAndResearchAgent:
             "confidence": 0.9,
         }
 
-        result = await claim_verifier.verify(sample_claim)
+        result = await claim_verifier.verify(sample_claim, "alice")
 
         # Should use research agent result
         assert result.source == "research_agent"
@@ -385,7 +387,12 @@ class TestUnknownWithLowRAGAndResearchAgent:
         sample_claim.kb_status = KBStatus.UNKNOWN
 
         mock_knowledge_base.search.return_value = [
-            {"node_id": "chunk_1", "content": "Low confidence", "score": 0.5, "metadata": {}}
+            {
+                "node_id": "chunk_1",
+                "content": "Low confidence",
+                "score": 0.5,
+                "metadata": {"owner_id": "alice", "visibility": "private"},
+            }
         ]
 
         mock_research_agent.investigate_claim.return_value = {
@@ -395,7 +402,7 @@ class TestUnknownWithLowRAGAndResearchAgent:
             "confidence": 0.9,
         }
 
-        result = await claim_verifier.verify(sample_claim)
+        result = await claim_verifier.verify(sample_claim, "alice")
 
         assert result.verified_as == VerificationStatus.VERIFIED
         assert result.source_url == "https://example.com"
@@ -416,7 +423,7 @@ class TestUnknownWithLowRAGAndResearchAgent:
             "confidence": 0.0,
         }
 
-        result = await claim_verifier.verify(sample_claim)
+        result = await claim_verifier.verify(sample_claim, "alice")
 
         assert result.verified_as == VerificationStatus.NOT_FOUND
 
@@ -436,7 +443,7 @@ class TestUnknownWithLowRAGAndResearchAgent:
             "confidence": 0.85,
         }
 
-        result = await claim_verifier.verify(sample_claim)
+        result = await claim_verifier.verify(sample_claim, "alice")
 
         assert result.verified_as == VerificationStatus.CONFLICTING
 
@@ -452,7 +459,7 @@ class TestUnknownWithLowRAGAndResearchAgent:
                 "node_id": "chunk_1",
                 "content": "Possibly related",
                 "score": 0.65,
-                "metadata": {},
+                "metadata": {"owner_id": "alice", "visibility": "private"},
             }
         ]
 
@@ -464,7 +471,7 @@ class TestUnknownWithLowRAGAndResearchAgent:
             "confidence": 0.5,  # Lower than RAG
         }
 
-        result = await claim_verifier.verify(sample_claim)
+        result = await claim_verifier.verify(sample_claim, "alice")
 
         # Should use RAG result (higher confidence)
         assert result.source == "kb_rag"
@@ -494,7 +501,7 @@ class TestResearchAgentTimeout:
 
         mock_research_agent.investigate_claim = timeout_func
 
-        result = await claim_verifier.verify(sample_claim)
+        result = await claim_verifier.verify(sample_claim, "alice")
 
         # Should return TIMEOUT status (not found fallback)
         assert result.verified_as in (VerificationStatus.TIMEOUT, VerificationStatus.NOT_FOUND)
@@ -511,7 +518,7 @@ class TestResearchAgentTimeout:
                 "node_id": "chunk_1",
                 "content": "Some evidence",
                 "score": 0.6,
-                "metadata": {},
+                "metadata": {"owner_id": "alice", "visibility": "private"},
             }
         ]
 
@@ -521,7 +528,7 @@ class TestResearchAgentTimeout:
 
         mock_research_agent.investigate_claim = timeout_func
 
-        result = await claim_verifier.verify(sample_claim)
+        result = await claim_verifier.verify(sample_claim, "alice")
 
         # Should handle timeout gracefully
         assert result.verified_as in (VerificationStatus.TIMEOUT, VerificationStatus.UNVERIFIED)
@@ -540,10 +547,10 @@ class TestCacheBehavior:
         """Verified claims should be cached in memory."""
         sample_claim.kb_status = KBStatus.IN_KB
 
-        result1 = await claim_verifier.verify(sample_claim)
+        result1 = await claim_verifier.verify(sample_claim, "alice")
         mock_knowledge_base.reset_mock()
 
-        result2 = await claim_verifier.verify(sample_claim)
+        result2 = await claim_verifier.verify(sample_claim, "alice")
 
         # Should not call KB again (cached)
         mock_knowledge_base.search.assert_not_called()
@@ -564,7 +571,7 @@ class TestCacheBehavior:
     async def test_clear_cache(self, claim_verifier, sample_claim):
         """Cache should be clearable."""
         sample_claim.kb_status = KBStatus.IN_KB
-        await claim_verifier.verify(sample_claim)
+        await claim_verifier.verify(sample_claim, "alice")
 
         await claim_verifier.clear_cache()
 
@@ -580,7 +587,7 @@ class TestCacheBehavior:
         mock_redis.setex = AsyncMock()
         mock_get_redis.return_value = mock_redis
 
-        await claim_verifier.verify(sample_claim)
+        await claim_verifier.verify(sample_claim, "alice")
 
         # Should have called Redis setex
         mock_redis.setex.assert_called_once()
@@ -592,7 +599,7 @@ class TestCacheBehavior:
         sample_claim.kb_status = KBStatus.IN_KB
 
         # First verification populates cache
-        await claim_verifier.verify(sample_claim)
+        await claim_verifier.verify(sample_claim, "alice")
 
         # Clear in-memory cache
         await claim_verifier.clear_cache()
@@ -615,112 +622,6 @@ class TestCacheBehavior:
 
         assert result is not None
         assert result.verified_as == VerificationStatus.VERIFIED
-
-
-# ---------------------------------------------------------------------------
-# Test Batch Verification
-# ---------------------------------------------------------------------------
-
-
-class TestBatchVerification:
-    """Tests for batch verification of multiple claims."""
-
-    @pytest.mark.asyncio
-    async def test_batch_verify_empty_list(self, claim_verifier):
-        """Batch verify should handle empty claim list."""
-        result = await claim_verifier.batch_verify([])
-
-        assert result == []
-
-    @pytest.mark.asyncio
-    async def test_batch_verify_mixed_statuses(self, claim_verifier, mock_knowledge_base, mock_research_agent):
-        """Batch verify should handle claims with different KB statuses."""
-        in_kb_claim = Claim("IN KB claim", ClaimType.FACTUAL, KBStatus.IN_KB, 0.9)
-        unknown_claim = Claim("Unknown claim", ClaimType.FACTUAL, KBStatus.UNKNOWN, 0.5)
-        contradicts_claim = Claim(
-            "Contradicts claim", ClaimType.FACTUAL, KBStatus.CONTRADICTS, 0.3, kb_fact="Actual fact"
-        )
-
-        claims = [in_kb_claim, unknown_claim, contradicts_claim]
-
-        mock_knowledge_base.search.return_value = []
-        mock_research_agent.investigate_claim.return_value = {
-            "fact": None,
-            "status": ResearchStatus.NOT_FOUND.value,
-            "confidence": 0.0,
-        }
-
-        results = await claim_verifier.batch_verify(claims)
-
-        assert len(results) == 3
-        assert results[0].verified_as == VerificationStatus.VERIFIED  # IN_KB
-        assert results[2].verified_as == VerificationStatus.CONFLICTING  # CONTRADICTS
-
-    @pytest.mark.asyncio
-    async def test_batch_verify_preserves_order(self, claim_verifier, mock_knowledge_base, mock_research_agent):
-        """Batch verify should return results in same order as input."""
-        claims = [Claim(f"Claim {i}", ClaimType.FACTUAL, KBStatus.IN_KB, 0.9) for i in range(5)]
-
-        mock_knowledge_base.search.return_value = []
-
-        results = await claim_verifier.batch_verify(claims)
-
-        assert len(results) == len(claims)
-        for i, result in enumerate(results):
-            assert result.original.claim_text == f"Claim {i}"
-
-    @pytest.mark.asyncio
-    async def test_batch_verify_parallelizes(self, claim_verifier, mock_knowledge_base, mock_research_agent):
-        """Batch verify should parallelize verification."""
-        claims = [Claim(f"Claim {i}", ClaimType.FACTUAL, KBStatus.IN_KB, 0.9) for i in range(10)]
-
-        mock_knowledge_base.search.return_value = []
-
-        start_time = time.time()
-        await claim_verifier.batch_verify(claims)
-        elapsed = time.time() - start_time
-
-        # Should complete reasonably quickly (parallel, not sequential)
-        assert elapsed < 5.0  # Should not take long for IN_KB (fast) claims
-
-    @pytest.mark.asyncio
-    async def test_batch_verify_prioritizes_unknown(self, claim_verifier, mock_knowledge_base, mock_research_agent):
-        """Batch verify should prioritize UNKNOWN claims for research agent."""
-        in_kb_claim = Claim("IN KB claim", ClaimType.FACTUAL, KBStatus.IN_KB, 0.9)
-        unknown_claim = Claim("Unknown claim", ClaimType.FACTUAL, KBStatus.UNKNOWN, 0.5)
-
-        claims = [in_kb_claim, unknown_claim]
-
-        mock_knowledge_base.search.return_value = []
-        mock_research_agent.investigate_claim.return_value = {
-            "fact": None,
-            "status": ResearchStatus.NOT_FOUND.value,
-            "confidence": 0.0,
-        }
-
-        results = await claim_verifier.batch_verify(claims)
-
-        # Both should be verified, order preserved
-        assert len(results) == 2
-        assert results[0].original.claim_text == "IN KB claim"
-        assert results[1].original.claim_text == "Unknown claim"
-
-    @pytest.mark.asyncio
-    async def test_batch_verify_error_handling(self, claim_verifier, mock_knowledge_base, mock_research_agent):
-        """Batch verify should handle errors gracefully."""
-        claims = [
-            Claim("Claim 1", ClaimType.FACTUAL, KBStatus.IN_KB, 0.9),
-            Claim("Claim 2", ClaimType.FACTUAL, KBStatus.UNKNOWN, 0.5),
-        ]
-
-        # Simulate error in KB
-        mock_knowledge_base.search.side_effect = Exception("KB error")
-
-        results = await claim_verifier.batch_verify(claims)
-
-        assert len(results) == 2
-        # Should have results but marked as ERROR
-        assert any(r.verified_as == VerificationStatus.ERROR for r in results)
 
 
 # ---------------------------------------------------------------------------
@@ -747,7 +648,7 @@ class TestStatistics:
         """Stats should track cache entry count."""
         sample_claim.kb_status = KBStatus.IN_KB
 
-        await claim_verifier.verify(sample_claim)
+        await claim_verifier.verify(sample_claim, "alice")
 
         stats = claim_verifier.get_stats()
         assert stats["cache_entries"] > 0
@@ -766,7 +667,7 @@ class TestErrorHandling:
         """KB search exception should return None."""
         mock_knowledge_base.search.side_effect = Exception("KB error")
 
-        result = await claim_verifier.kb_rag_search("test claim")
+        result = await claim_verifier.kb_rag_search("test claim", "alice")
 
         assert result is None
 
@@ -780,7 +681,7 @@ class TestErrorHandling:
         mock_knowledge_base.search.return_value = []
         mock_research_agent.investigate_claim.side_effect = Exception("Agent error")
 
-        result = await claim_verifier.verify(sample_claim)
+        result = await claim_verifier.verify(sample_claim, "alice")
 
         # Should return UNVERIFIED or ERROR status, not crash
         assert result.verified_as in (
@@ -803,7 +704,7 @@ class TestErrorHandling:
             "confidence": 0.0,
         }
 
-        result = await claim_verifier.verify(sample_claim)
+        result = await claim_verifier.verify(sample_claim, "alice")
 
         # Should default to NOT_FOUND
         assert result.verified_as == VerificationStatus.NOT_FOUND
@@ -816,7 +717,7 @@ class TestErrorHandling:
 
         mock_knowledge_base.search.return_value = []
 
-        result = await verifier.verify(sample_claim)
+        result = await verifier.verify(sample_claim, "alice")
 
         # Should return ERROR (no KB match, no research agent)
         assert result.verified_as in (VerificationStatus.ERROR, VerificationStatus.UNVERIFIED)
@@ -835,7 +736,7 @@ class TestEdgeCases:
         """Should handle claim with empty text."""
         Claim("", ClaimType.FACTUAL, KBStatus.UNKNOWN, 0.0)
 
-        result = await claim_verifier.kb_rag_search("")
+        result = await claim_verifier.kb_rag_search("", "alice")
 
         assert result is not None
         assert result.confidence == 0.0
@@ -881,11 +782,11 @@ class TestEdgeCases:
                 "node_id": "chunk_1",
                 "content": "Perfect match",
                 "score": 1.0,  # Perfect confidence
-                "metadata": {},
+                "metadata": {"owner_id": "alice", "visibility": "private"},
             }
         ]
 
-        result = await claim_verifier.kb_rag_search("test")
+        result = await claim_verifier.kb_rag_search("test", "alice")
 
         assert result is not None
         assert result.confidence == 1.0
@@ -902,7 +803,7 @@ class TestEdgeCases:
                 "node_id": "chunk_1",
                 "content": "Some evidence",
                 "score": 0.6,
-                "metadata": {},
+                "metadata": {"owner_id": "alice", "visibility": "private"},
             }
         ]
 
@@ -912,7 +813,7 @@ class TestEdgeCases:
             "confidence": 0.0,
         }
 
-        result = await claim_verifier.verify(sample_claim)
+        result = await claim_verifier.verify(sample_claim, "alice")
 
         # Should use RAG result (0.6 > 0.0)
         assert result.source == "kb_rag"

@@ -11,9 +11,27 @@
  * Issue #729 - Migrating admin functionality to SLM.
  */
 
-import axios, { type AxiosInstance, type AxiosRequestConfig } from 'axios'
-import { useAuthStore } from '@/stores/auth'
+export { autobotApiErrorMessage } from '@/composables/autobotApiError'
 import { getBackendUrl } from '@/config/ssot-config'
+import { SlmApiClient } from '@/utils/ApiClient'
+import type { SlmUserResponse } from '@/composables/useSlmUserApi'
+import type { components } from '@/types/generated/api'
+import {
+  toNPUWorker,
+  type NPUWorker,
+  type NPUWorkerDefinition,
+  type NPUWorkerDetails,
+  type NPUWorkerTestResult,
+} from '@/composables/npuWorkerModel'
+
+export { toNPUWorker }
+export type { NPUWorker, NPUWorkerDefinition, NPUWorkerTestResult }
+import type * as LF from '@/composables/autobotAdminModels'
+import type { AgentConfigSummary, MCPServer, PermissionRule } from '@/composables/autobotAdminModels'
+export type { AgentConfigSummary, MCPServer, PermissionRule }
+export type { LogForwardingDestination } from '@/composables/autobotAdminModels'
+import type { BudgetPoliciesList, LLMFallbackStatus } from '@/composables/autobotAdminModels'
+export type { BudgetPoliciesList, BudgetPolicy, LLMActiveFallback, LLMFallbackChain, LLMFallbackStatus } from '@/composables/autobotAdminModels'
 
 // Type definitions for AutoBot API responses
 
@@ -22,14 +40,8 @@ export interface SettingsResponse {
   last_modified: string
 }
 
-export interface UserResponse {
-  id: string
-  username: string
-  email?: string
-  roles: string[]
-  created_at: string
-  last_login?: string
-}
+export type UserCreate = components['schemas']['UserCreate']
+export type UserUpdate = components['schemas']['UserUpdate']
 
 export interface CacheConfig {
   enabled: boolean
@@ -43,32 +55,6 @@ export interface CacheStats {
   misses: number
   size_mb: number
   entries: number
-}
-
-export interface LogForwardingDestination {
-  id: string
-  name: string
-  type: 'syslog' | 'http' | 'file' | 'elasticsearch'
-  enabled: boolean
-  config: Record<string, unknown>
-}
-
-export interface NPUWorker {
-  id: string
-  hostname: string
-  ip_address: string
-  status: 'online' | 'offline' | 'busy' | 'error'
-  capabilities: string[]
-  current_load: number
-  last_heartbeat: string
-}
-
-export interface PermissionRule {
-  id: string
-  pattern: string
-  action: 'allow' | 'deny' | 'ask'
-  scope: string
-  enabled: boolean
 }
 
 export interface PromptTemplate {
@@ -87,14 +73,6 @@ export interface FileItem {
   size?: number
   modified?: string
   permissions?: string
-}
-
-export interface MCPServer {
-  id: string
-  name: string
-  type: string
-  status: 'running' | 'stopped' | 'error'
-  config: Record<string, unknown>
 }
 
 export interface Agent {
@@ -136,50 +114,6 @@ export interface VoiceSpeakResponse {
   text?: string
   status?: string
   error?: string
-}
-
-// GH#8998 / #10488: LLM fallback monitoring (moved from main frontend to SLM admin)
-export interface LLMFallbackChain {
-  primary_model: string
-  fallback_chain: string
-  provider: string
-}
-
-export interface LLMActiveFallback {
-  conversation_id: string
-  primary_model: string
-  fallback_model: string
-  primary_provider: string
-  fallback_provider: string
-  timestamp: number
-}
-
-export interface LLMFallbackStatus {
-  configured_chains: LLMFallbackChain[]
-  active_fallbacks: LLMActiveFallback[]
-}
-
-// Budget audit (#10488 Workstream A): read-only operator oversight of
-// agent/project/task/tenant budget policies + hard-stop auto-pause config.
-// Mirrors the backend BudgetPolicyResponse model (api/budget_policies.py).
-export interface BudgetPolicy {
-  id: string
-  scope: string
-  scope_id: string
-  period: string
-  threshold_usd: number
-  warning_pct: number
-  action: string
-  enabled: boolean
-  name: string
-  description: string
-  created_at: string
-  updated_at: string
-}
-
-export interface BudgetPoliciesList {
-  policies: BudgetPolicy[]
-  count: number
 }
 
 // =============================================================================
@@ -495,16 +429,24 @@ export interface ConfigRevision {
  * `status` of GET /system/health/detailed: the backend's probe vocabulary
  * (`HealthStatus` in `api/system_health.py`, #6909).
  */
-export type SystemHealthStatus = 'ok' | 'degraded' | 'down' | 'not_applicable' | 'idle'
+export type ProbeHealthStatus = 'ok' | 'degraded' | 'down' | 'not_applicable' | 'idle'
 
 /** GET /system/health/detailed as AdminMonitoringView reads it (#997 flattens the percentages). */
 export interface SystemHealthReport {
-  status: SystemHealthStatus
+  status: ProbeHealthStatus
   cpu_percent?: number
   memory_percent?: number
   disk_percent?: number
   uptime_seconds?: number
   /** The backend lists each service as `healthy` or `unhealthy`. */
+  services?: { name: string; status: string }[]
+}
+
+/** GET /system/health/detailed: metrics arrive as "12.5%" strings under `components` (#997). */
+interface DetailedHealthBody {
+  status: ProbeHealthStatus
+  components?: Record<string, string>
+  uptime_seconds?: number
   services?: { name: string; status: string }[]
 }
 
@@ -642,52 +584,22 @@ export interface GovernanceConfig {
 }
 
 /**
- * Unwrap the FastAPI `{ "detail": "..." }` error body (#13079).
- *
- * The raw-`fetch` call sites this client replaced read `detail` off the parsed
- * body and showed it to the operator. Axios rejects with a generic
- * "Request failed with status code 500" message instead, so the detail has to
- * be pulled off `error.response.data` explicitly to keep the same error shape.
+ * The SLM's one HTTP client for the MAIN AutoBot backend (#19217). It lives here because
+ * ADR-008 rule 3 names this file as the main-backend transport owner; `useAutobotApi` and
+ * the per-feature admin composables (e.g. `useWebResearchAdminApi`) all build their client
+ * with it. It is an `SlmApiClient` pointed at the main backend (#12363), so the timeout, the
+ * SLM bearer token, GET retries and `HttpError` are the SLM's own.
  */
-export function autobotApiErrorMessage(err: unknown, fallback: string): string {
-  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
-  if (typeof detail === 'string' && detail.length > 0) return detail
-  if (err instanceof Error && err.message.length > 0) return err.message
-  return fallback
+export function createAutobotBackendClient(): SlmApiClient {
+  const client = new SlmApiClient()
+  client.setBaseUrl(getBackendUrl())
+  // A 401 is an error, never a logout, until one identity spans both backends (#10193, #10400)
+  client.setKeepSessionOn401(true)
+  return client
 }
 
 export function useAutobotApi() {
-  const authStore = useAuthStore()
-
-  const client: AxiosInstance = axios.create({
-    baseURL: getBackendUrl(),
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    timeout: 30000,
-  })
-
-  // Add auth token to all requests
-  client.interceptors.request.use((config) => {
-    // Try SLM token first, fallback to AutoBot token
-    const token = authStore.token || localStorage.getItem('autobot_access_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-    return config
-  })
-
-  // Response interceptor for error handling
-  client.interceptors.response.use(
-    (response) => response,
-    (error) => {
-      if (error.response?.status === 401) {
-        // Token expired or invalid
-        localStorage.removeItem('autobot_access_token')
-      }
-      return Promise.reject(error)
-    }
-  )
+  const client = createAutobotBackendClient() // shared with the per-feature admin composables (#19217)
 
   // =============================================================================
   // Settings API
@@ -695,56 +607,48 @@ export function useAutobotApi() {
 
   async function getSettings(): Promise<SettingsResponse> {
     const response = await client.get<SettingsResponse>('/settings')
-    return response.data
+    return response
   }
 
   async function updateSettings(settings: Record<string, unknown>): Promise<SettingsResponse> {
-    const response = await client.put<SettingsResponse>('/settings', settings)
-    return response.data
+    const response = await client.post<SettingsResponse>('/settings/', settings)
+    return response
   }
 
   async function getSettingsSection(section: string): Promise<Record<string, unknown>> {
-    const response = await client.get(`/settings/${section}`)
-    return response.data
+    const response = await client.get<Record<string, unknown>>(`/settings/${section}`)
+    return response
   }
 
   async function updateSettingsSection(
     section: string,
     data: Record<string, unknown>
   ): Promise<Record<string, unknown>> {
-    const response = await client.put(`/settings/${section}`, data)
-    return response.data
+    const response = await client.post<Record<string, unknown>>(`/settings/${section}`, data)
+    return response
   }
 
   // =============================================================================
   // User Management API
   // =============================================================================
 
-  async function getUsers(): Promise<UserResponse[]> {
-    const response = await client.get<{ users: UserResponse[] }>('/users')
-    return response.data.users
+  async function getUsers(): Promise<SlmUserResponse[]> {
+    const response = await client.get<{ users: SlmUserResponse[] }>('/user-management/users')
+    return response.users
   }
 
-  async function createUser(userData: {
-    username: string
-    password: string
-    email?: string
-    roles?: string[]
-  }): Promise<UserResponse> {
-    const response = await client.post<UserResponse>('/users', userData)
-    return response.data
+  async function createUser(userData: UserCreate): Promise<SlmUserResponse> {
+    const response = await client.post<{ user: SlmUserResponse }>('/user-management/users', userData)
+    return response.user
   }
 
-  async function updateUser(
-    userId: string,
-    data: Partial<UserResponse & { password?: string }>
-  ): Promise<UserResponse> {
-    const response = await client.patch<UserResponse>(`/users/${userId}`, data)
-    return response.data
+  async function updateUser(userId: string, data: UserUpdate): Promise<SlmUserResponse> {
+    const response = await client.patch<SlmUserResponse>(`/user-management/users/${userId}`, data)
+    return response
   }
 
   async function deleteUser(userId: string): Promise<void> {
-    await client.delete(`/users/${userId}`)
+    await client.delete(`/user-management/users/${userId}`)
   }
 
   // =============================================================================
@@ -753,153 +657,156 @@ export function useAutobotApi() {
 
   async function getCacheConfig(): Promise<CacheConfig> {
     const response = await client.get<CacheConfig>('/cache/config')
-    return response.data
+    return response
   }
 
   async function updateCacheConfig(config: Partial<CacheConfig>): Promise<CacheConfig> {
-    const response = await client.put<CacheConfig>('/cache/config', config)
-    return response.data
+    const response = await client.post<CacheConfig>('/cache/config', config)
+    return response
   }
 
   async function getCacheStats(): Promise<CacheStats> {
     const response = await client.get<CacheStats>('/cache/stats')
-    return response.data
+    return response
   }
 
   async function clearCache(cacheType?: string): Promise<{ cleared: number }> {
     const params = cacheType ? `?type=${cacheType}` : ''
     const response = await client.post<{ cleared: number }>(`/cache/clear${params}`)
-    return response.data
+    return response
   }
 
   async function warmupCache(): Promise<{ status: string }> {
     const response = await client.post<{ status: string }>('/cache/warmup')
-    return response.data
+    return response
   }
 
   // =============================================================================
   // Log Forwarding API
   // =============================================================================
 
-  async function getLogForwardingDestinations(): Promise<LogForwardingDestination[]> {
-    const response = await client.get<{ destinations: LogForwardingDestination[] }>(
-      '/log-forwarding/destinations'
-    )
-    return response.data.destinations
+  // Destinations are keyed by `name`; the list is a bare array (api/log_forwarding.py).
+  const lfDest = (name: string) => `/log-forwarding/destinations/${encodeURIComponent(name)}`
+  async function getLogForwardingDestinations(): Promise<LF.LogForwardingDestination[]> {
+    const response = await client.get<LF.LogForwardingDestination[]>('/log-forwarding/destinations')
+    return response
+  }
+
+  async function getLogForwardingDestination(name: string): Promise<LF.LogForwardingDestination> {
+    const response = await client.get<LF.LogForwardingDestination>(lfDest(name))
+    return response
   }
 
   async function createLogForwardingDestination(
-    destination: Omit<LogForwardingDestination, 'id'>
-  ): Promise<LogForwardingDestination> {
-    const response = await client.post<LogForwardingDestination>(
+    destination: LF.LogForwardingDestinationCreate
+  ): Promise<LF.LogForwardingMutationResult> {
+    const response = await client.post<LF.LogForwardingMutationResult>(
       '/log-forwarding/destinations',
       destination
     )
-    return response.data
+    return response
   }
 
   async function updateLogForwardingDestination(
-    id: string,
-    data: Partial<LogForwardingDestination>
-  ): Promise<LogForwardingDestination> {
-    const response = await client.patch<LogForwardingDestination>(
-      `/log-forwarding/destinations/${id}`,
-      data
-    )
-    return response.data
+    name: string,
+    data: LF.LogForwardingDestinationUpdate
+  ): Promise<LF.LogForwardingMutationResult> {
+    const response = await client.put<LF.LogForwardingMutationResult>(lfDest(name), data)
+    return response
   }
 
-  async function deleteLogForwardingDestination(id: string): Promise<void> {
-    await client.delete(`/log-forwarding/destinations/${id}`)
+  async function deleteLogForwardingDestination(name: string): Promise<LF.LogForwardingMessage> {
+    const response = await client.delete<LF.LogForwardingMessage>(lfDest(name))
+    return response
   }
 
-  async function testLogForwardingDestination(
-    id: string
-  ): Promise<{ success: boolean; message: string }> {
-    const response = await client.post<{ success: boolean; message: string }>(
-      `/log-forwarding/destinations/${id}/test`
-    )
-    return response.data
+  async function testLogForwardingDestination(name: string): Promise<LF.LogForwardingTestResult> {
+    const response = await client.post<LF.LogForwardingTestResult>(`${lfDest(name)}/test`)
+    return response
   }
 
   // =============================================================================
   // NPU Workers API
   // =============================================================================
 
+  // The main backend serves workers at /api/npu/... (api/npu_workers.py), as
+  // NPUWorkerDetails; toNPUWorker() flattens each one for the settings table (#15536).
   async function getNPUWorkers(): Promise<NPUWorker[]> {
-    const response = await client.get<{ workers: NPUWorker[] }>('/npu-workers')
-    return response.data.workers
+    const response = await client.get<NPUWorkerDetails[]>('/npu/workers')
+    return response.map(toNPUWorker)
   }
 
   async function getNPUWorker(workerId: string): Promise<NPUWorker> {
-    const response = await client.get<NPUWorker>(`/npu-workers/${workerId}`)
-    return response.data
+    const response = await client.get<NPUWorkerDetails>(`/npu/workers/${workerId}`)
+    return toNPUWorker(response)
   }
 
+  /** PUT replaces the whole definition, so the change goes over a fresh read, not the table's copy. */
   async function updateNPUWorker(
     workerId: string,
-    data: Partial<NPUWorker>
-  ): Promise<NPUWorker> {
-    const response = await client.patch<NPUWorker>(`/npu-workers/${workerId}`, data)
-    return response.data
+    changes: Partial<NPUWorkerDefinition>
+  ): Promise<void> {
+    const current = await getNPUWorker(workerId)
+    await client.put(`/npu/workers/${workerId}`, { ...current.definition, ...changes })
   }
 
+  // No route serves this yet: #18725 builds it, and the settings page hides its button until then.
   async function restartNPUWorker(workerId: string): Promise<{ status: string }> {
     const response = await client.post<{ status: string }>(`/npu-workers/${workerId}/restart`)
-    return response.data
+    return response
   }
 
-  // Missing NPU Worker methods (Issue #729)
   async function getNPULoadBalancingConfig(): Promise<Record<string, unknown>> {
-    const response = await client.get('/npu-workers/load-balancing/config')
-    return response.data
+    const response = await client.get<Record<string, unknown>>('/npu/load-balancing')
+    return response
   }
 
   async function updateNPULoadBalancingConfig(config: Record<string, unknown>): Promise<Record<string, unknown>> {
-    const response = await client.put('/npu-workers/load-balancing/config', config)
-    return response.data
+    const response = await client.put<Record<string, unknown>>('/npu/load-balancing', config)
+    return response
   }
 
-  async function pairNPUWorker(workerId: string, data: { hostname: string; ip_address: string }): Promise<NPUWorker> {
-    const response = await client.post<NPUWorker>(`/npu-workers/${workerId}/pair`, data)
-    return response.data
+  /** The main host contacts the worker at `url`, gives it an id and registers it. */
+  async function pairNPUWorker(data: { url: string; name?: string; enabled?: boolean }): Promise<void> {
+    await client.post('/npu/workers/pair', data)
   }
 
-  async function testNPUWorker(workerId: string): Promise<{ success: boolean; latency_ms: number; message: string }> {
-    const response = await client.post<{ success: boolean; latency_ms: number; message: string }>(`/npu-workers/${workerId}/test`)
-    return response.data
+  async function testNPUWorker(workerId: string): Promise<NPUWorkerTestResult> {
+    const response = await client.post<NPUWorkerTestResult>(`/npu/workers/${workerId}/test`)
+    return response
   }
 
   async function removeNPUWorker(workerId: string): Promise<void> {
-    await client.delete(`/npu-workers/${workerId}`)
+    await client.delete(`/npu/workers/${workerId}`)
   }
 
   // =============================================================================
   // Permission API
   // =============================================================================
 
+  // Rules are grouped by action and have no id: tool + pattern identify one (api/permissions.py).
   async function getPermissionRules(): Promise<PermissionRule[]> {
-    const response = await client.get<{ rules: PermissionRule[] }>('/permissions/rules')
-    return response.data.rules
+    const response = await client.get<Record<PermissionRule['action'], PermissionRule[]>>('/permissions/rules')
+    const { allow = [], ask = [], deny = [] } = response
+    return [...allow, ...ask, ...deny]
   }
 
-  async function createPermissionRule(
-    rule: Omit<PermissionRule, 'id'>
-  ): Promise<PermissionRule> {
-    const response = await client.post<PermissionRule>('/permissions/rules', rule)
-    return response.data
+  async function createPermissionRule(rule: PermissionRule): Promise<{ status: string; message: string }> {
+    const response = await client.post<{ status: string; message: string }>('/permissions/rules', rule)
+    return response
   }
 
+  // No route updates a rule (#18736 decides): delete and re-create it instead.
   async function updatePermissionRule(
     id: string,
     data: Partial<PermissionRule>
   ): Promise<PermissionRule> {
     const response = await client.patch<PermissionRule>(`/permissions/rules/${id}`, data)
-    return response.data
+    return response
   }
 
-  async function deletePermissionRule(id: string): Promise<void> {
-    await client.delete(`/permissions/rules/${id}`)
+  async function deletePermissionRule(rule: Pick<PermissionRule, 'tool' | 'pattern'>): Promise<void> {
+    await client.delete('/permissions/rules', { body: rule })
   }
 
   // =============================================================================
@@ -913,8 +820,8 @@ export function useAutobotApi() {
       prompts: Array<{ id: string; name: string; type: string; path: string; content: string }>
       defaults: Record<string, string>
     }>('/prompts')
-    const defaults = response.data.defaults ?? {}
-    return (response.data.prompts ?? []).map((p) => ({
+    const defaults = response.defaults ?? {}
+    return (response.prompts ?? []).map((p) => ({
       id: p.id,
       name: p.name,
       content: p.content,
@@ -926,14 +833,14 @@ export function useAutobotApi() {
 
   async function getPromptTemplate(id: string): Promise<PromptTemplate> {
     const response = await client.get<PromptTemplate>(`/prompts/${id}`)
-    return response.data
+    return response
   }
 
   async function createPromptTemplate(
     template: Omit<PromptTemplate, 'id' | 'modified_at'>
   ): Promise<PromptTemplate> {
     const response = await client.post<PromptTemplate>('/prompts', template)
-    return response.data
+    return response
   }
 
   async function updatePromptTemplate(
@@ -942,7 +849,7 @@ export function useAutobotApi() {
   ): Promise<PromptTemplate> {
     // Backend exposes PUT /api/prompts/:id (also POST) — PATCH is not supported (Issue #11555)
     const response = await client.put<PromptTemplate>(`/prompts/${id}`, data)
-    return response.data
+    return response
   }
 
   async function deletePromptTemplate(id: string): Promise<void> {
@@ -951,7 +858,7 @@ export function useAutobotApi() {
 
   async function revertPromptToDefault(id: string): Promise<PromptTemplate> {
     const response = await client.post<PromptTemplate>(`/prompts/${id}/revert`)
-    return response.data
+    return response
   }
 
   // =============================================================================
@@ -962,50 +869,35 @@ export function useAutobotApi() {
     const params = new URLSearchParams({ path })
     if (host) params.append('host', host)
     const response = await client.get<{ files: FileItem[] }>(`/files?${params}`)
-    return response.data.files
+    return response.files
   }
 
   async function readFile(path: string, host?: string): Promise<string> {
     const params = new URLSearchParams({ path })
     if (host) params.append('host', host)
     const response = await client.get<{ content: string }>(`/files/read?${params}`)
-    return response.data.content
+    return response.content
   }
 
-  async function writeFile(path: string, content: string, host?: string): Promise<void> {
-    await client.post('/files/write', { path, content, host })
+  /** Admin only; the main backend writes on its own host, so there is no host parameter. */
+  async function writeFile(path: string, content: string): Promise<void> {
+    await client.post('/filesystem/mcp/write_file', { path, content })
   }
 
   async function deleteFile(path: string, host?: string): Promise<void> {
     const params = new URLSearchParams({ path })
     if (host) params.append('host', host)
-    await client.delete(`/files?${params}`)
+    await client.delete(`/files/delete?${params}`)
   }
 
-  async function uploadFile(
-    path: string,
-    file: File,
-    host?: string,
-    onProgress?: (progress: number) => void
-  ): Promise<void> {
+  // fetch has no upload-progress event, so the axios-only progress callback went with axios (#12363)
+  async function uploadFile(path: string, file: File, host?: string): Promise<void> {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('path', path)
     if (host) formData.append('host', host)
-
-    const config: AxiosRequestConfig = {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    }
-    if (onProgress) {
-      config.onUploadProgress = (progressEvent) => {
-        const progress = progressEvent.total
-          ? Math.round((progressEvent.loaded * 100) / progressEvent.total)
-          : 0
-        onProgress(progress)
-      }
-    }
-
-    await client.post('/files/upload', formData, config)
+    // SlmApiClient drops Content-Type for FormData, so the browser sets the multipart boundary
+    await client.post('/files/upload', formData)
   }
 
   // =============================================================================
@@ -1013,92 +905,93 @@ export function useAutobotApi() {
   // =============================================================================
 
   async function getMCPServers(): Promise<MCPServer[]> {
-    const response = await client.get<{ servers: MCPServer[] }>('/mcp/servers')
-    return response.data.servers
+    const response = await client.get<{ servers: MCPServer[] }>('/mcp/external_servers')
+    return response.servers
   }
 
   async function getMCPServer(id: string): Promise<MCPServer> {
-    const response = await client.get<MCPServer>(`/mcp/servers/${id}`)
-    return response.data
+    const response = await client.get<MCPServer>(`/mcp/external_servers/${id}`)
+    return response
   }
 
+  // start/stop/restart: no route serves these (#18736 decides).
   async function startMCPServer(id: string): Promise<{ status: string }> {
     const response = await client.post<{ status: string }>(`/mcp/servers/${id}/start`)
-    return response.data
+    return response
   }
 
   async function stopMCPServer(id: string): Promise<{ status: string }> {
     const response = await client.post<{ status: string }>(`/mcp/servers/${id}/stop`)
-    return response.data
+    return response
   }
 
   async function restartMCPServer(id: string): Promise<{ status: string }> {
     const response = await client.post<{ status: string }>(`/mcp/servers/${id}/restart`)
-    return response.data
+    return response
   }
 
   async function getMCPBridges(): Promise<Record<string, unknown>[]> {
     const response = await client.get<{ bridges: Record<string, unknown>[] }>('/mcp/bridges')
-    return response.data.bridges
+    return response.bridges
   }
 
   async function getMCPTools(): Promise<Record<string, unknown>[]> {
     const response = await client.get<{ tools: Record<string, unknown>[] }>('/mcp/tools')
-    return response.data.tools
+    return response.tools
   }
 
   async function getMCPHealth(): Promise<Record<string, unknown>> {
-    const response = await client.get('/mcp/health')
-    return response.data
+    const response = await client.get<Record<string, unknown>>('/mcp/health')
+    return response
   }
 
   async function getMCPStats(): Promise<Record<string, unknown>> {
-    const response = await client.get('/mcp/stats')
-    return response.data
+    const response = await client.get<Record<string, unknown>>('/mcp/stats')
+    return response
   }
 
   // =============================================================================
   // Agents API
   // =============================================================================
 
-  async function getAgents(): Promise<Agent[]> {
-    const response = await client.get<{ agents: Agent[] }>('/agents')
-    return response.data.agents
+  async function getAgents(): Promise<AgentConfigSummary[]> {
+    const response = await client.get<{ agents: AgentConfigSummary[] }>('/agent_config/agents')
+    return response.agents
   }
 
   async function getAgent(id: string): Promise<Agent> {
     const response = await client.get<Agent>(`/agents/${id}`)
-    return response.data
+    return response
   }
 
   async function updateAgent(id: string, data: Partial<Agent>): Promise<Agent> {
     const response = await client.patch<Agent>(`/agents/${id}`, data)
-    return response.data
+    return response
   }
 
   async function getAvailableAgents(): Promise<Record<string, unknown>[]> {
-    const response = await client.get('/agent/agents/available')
-    return response.data
+    const response = await client.get<Record<string, unknown>[]>('/agent/agents/available')
+    return response
   }
 
   async function getAgentsStatus(): Promise<Record<string, unknown>> {
-    const response = await client.get('/agent/agents/status')
-    return response.data
+    const response = await client.get<Record<string, unknown>>('/agent/agents/status')
+    return response
   }
 
   async function pauseAgent(): Promise<Record<string, unknown>> {
-    const response = await client.post('/agent/pause')
-    return response.data
+    const response = await client.post<Record<string, unknown>>('/agent/pause')
+    return response
   }
 
   async function resumeAgent(): Promise<Record<string, unknown>> {
-    const response = await client.post('/agent/resume')
-    return response.data
+    const response = await client.post<Record<string, unknown>>('/agent/resume')
+    return response
   }
 
   async function executeAgentGoal(goal: string): Promise<Record<string, unknown>> {
-    const response = await client.post('/agent/goal', { goal })
-    return response.data
+    const response = await client.post<Record<string, unknown>>('/agent/goal', { goal })
+    return response
   }
 
   // =============================================================================
@@ -1115,16 +1008,17 @@ export function useAutobotApi() {
     if (options?.end) params.append('end', options.end)
     if (options?.interval) params.append('interval', options.interval)
     const response = await client.get<{ metrics: RUMMetrics[] }>(`/rum/metrics?${params}`)
-    return response.data.metrics
+    return response.metrics
   }
 
   // =============================================================================
   // Voice API
   // =============================================================================
 
+  // No route serves voice config (#18736 decides).
   async function getVoiceConfig(): Promise<Record<string, unknown>> {
-    const response = await client.get('/voice/config')
-    return response.data
+    const response = await client.get<Record<string, unknown>>('/voice/config')
+    return response
   }
 
   async function updateVoiceConfig(config: Record<string, unknown>): Promise<void> {
@@ -1134,20 +1028,16 @@ export function useAutobotApi() {
   async function voiceListen(userRole: string = 'admin'): Promise<Record<string, unknown>> {
     const formData = new FormData()
     formData.append('user_role', userRole)
-    const response = await client.post('/voice/listen', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
-    return response.data
+    const response = await client.post<Record<string, unknown>>('/voice/listen', formData)
+    return response
   }
 
   async function voiceSpeak(text: string, userRole: string = 'admin'): Promise<VoiceSpeakResponse> {
     const formData = new FormData()
     formData.append('text', text)
     formData.append('user_role', userRole)
-    const response = await client.post<VoiceSpeakResponse>('/voice/speak', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
-    return response.data
+    const response = await client.post<VoiceSpeakResponse>('/voice/speak', formData)
+    return response
   }
 
   // =============================================================================
@@ -1155,32 +1045,33 @@ export function useAutobotApi() {
   // =============================================================================
 
   async function getLLMConfig(): Promise<Record<string, unknown>> {
-    const response = await client.get('/llm/config')
-    return response.data
+    const response = await client.get<Record<string, unknown>>('/llm/config')
+    return response
   }
 
   async function updateLLMConfig(config: Record<string, unknown>): Promise<void> {
-    await client.put('/llm/config', config)
+    await client.post('/llm/config', config)
   }
 
   async function getLLMModels(): Promise<Array<{ id: string; name: string; provider: string }>> {
     const response = await client.get<{ models: Array<{ id: string; name: string; provider: string }> }>(
       '/llm/models'
     )
-    return response.data.models
+    return response.models
   }
 
   /**
    * Get LLM fallback monitoring status (GH#8998 / #10488).
    * Backend returns a flat payload (no create_success_response envelope):
    * { configured_chains: [...], active_fallbacks: [...] }.
-   * The /autobot-api proxy strips its prefix -> backend /api/llm-providers/fallback-status.
+   * The /autobot-api proxy maps to the main backend's /api, where the llm_providers
+   * router is mounted at /llm (#15536) -> backend /api/llm/fallback-status.
    */
   async function getLLMFallbackStatus(): Promise<LLMFallbackStatus> {
-    const response = await client.get<LLMFallbackStatus>('/llm-providers/fallback-status')
+    const response = await client.get<LLMFallbackStatus>('/llm/fallback-status')
     return {
-      configured_chains: response.data.configured_chains || [],
-      active_fallbacks: response.data.active_fallbacks || [],
+      configured_chains: response.configured_chains || [],
+      active_fallbacks: response.active_fallbacks || [],
     }
   }
 
@@ -1196,8 +1087,8 @@ export function useAutobotApi() {
   async function getBudgetPolicies(): Promise<BudgetPoliciesList> {
     const response = await client.get<BudgetPoliciesList>('/budget-policies')
     return {
-      policies: response.data.policies || [],
-      count: response.data.count ?? 0,
+      policies: response.policies || [],
+      count: response.count ?? 0,
     }
   }
 
@@ -1212,7 +1103,7 @@ export function useAutobotApi() {
    */
   async function getOrphanStorage(): Promise<OrphanStorageListResponse> {
     const response = await client.get<OrphanStorageListResponse>('/admin/orphan-storage')
-    return response.data
+    return response
   }
 
   /**
@@ -1221,7 +1112,7 @@ export function useAutobotApi() {
    */
   async function createApproval(body: CreateApprovalRequestBody): Promise<ApprovalGateResponse> {
     const response = await client.post<ApprovalGateResponse>('/approval-gates', body)
-    return response.data
+    return response
   }
 
   /** Orphans of one resource type (#15779/#16927): currently 'knowledge_fact' or 'secret'. */
@@ -1229,13 +1120,13 @@ export function useAutobotApi() {
     const params = new URLSearchParams({ resource_type: resourceType })
     if (limit) params.append('limit', String(limit))
     const response = await client.get<OrphanListResponse>(`/admin/orphans?${params}`)
-    return response.data
+    return response
   }
 
   /** Reassign an orphaned resource to a live owner -- a repair, not a deletion; no approval gate. */
   async function repairOrphan(body: OrphanRepairRequestBody): Promise<OrphanRepairResponse> {
     const response = await client.post<OrphanRepairResponse>('/admin/orphans/repair', body)
-    return response.data
+    return response
   }
 
   /** Audit trail (#1281/#4461), filtered by one `operation` at a time -- the backend accepts a single value. */
@@ -1249,7 +1140,7 @@ export function useAutobotApi() {
     if (options?.limit) params.append('limit', String(options.limit))
     if (options?.offset) params.append('offset', String(options.offset))
     const response = await client.get<AuditQueryResponse>(`/audit/logs?${params}`)
-    return response.data
+    return response
   }
 
   // =============================================================================
@@ -1272,7 +1163,7 @@ export function useAutobotApi() {
     const response = await client.get<{
       logs: Array<{ timestamp: string; level: string; message: string; source: string }>
     }>(`/logs?${params}`)
-    return response.data.logs
+    return response.logs
   }
 
   // =============================================================================
@@ -1280,18 +1171,19 @@ export function useAutobotApi() {
   // =============================================================================
 
   async function getSystemMetrics(): Promise<Record<string, unknown>> {
-    const response = await client.get('/monitoring/system')
-    return response.data
+    const response = await client.get<Record<string, unknown>>('/system/metrics')
+    return response
   }
 
+  // No combined hardware route: /monitoring/hardware/{gpu,npu,system} are separate (#18736 decides).
   async function getHardwareInfo(): Promise<Record<string, unknown>> {
-    const response = await client.get('/monitoring/hardware')
-    return response.data
+    const response = await client.get<Record<string, unknown>>('/monitoring/hardware')
+    return response
   }
 
   async function getSystemHealth(): Promise<SystemHealthReport> {
-    const response = await client.get('/system/health/detailed')
-    const data = response.data
+    const response = await client.get<DetailedHealthBody>('/system/health/detailed')
+    const data = response
     // Issue #997: Backend returns metrics nested in components as "12.5%" strings.
     // Transform to flat numeric fields expected by AdminMonitoringView.
     const components: Record<string, string> = data.components || {}
@@ -1316,8 +1208,7 @@ export function useAutobotApi() {
     by_level: { level: string; count: number }[]
     resolved_count: number
   }> {
-    const response = await client.get('/errors/statistics')
-    return response.data
+    return client.get('/errors/statistics')
   }
 
   async function getRecentErrors(limit: number = 10): Promise<{
@@ -1329,8 +1220,7 @@ export function useAutobotApi() {
       resolved: boolean
     }>
   }> {
-    const response = await client.get(`/errors/recent?limit=${limit}`)
-    return response.data
+    return client.get(`/errors/recent?limit=${limit}`)
   }
 
   async function getMetricsSummary(): Promise<{
@@ -1343,8 +1233,8 @@ export function useAutobotApi() {
   }> {
     // #10379: no backend /metrics/summary exists; derive CPU/Memory/Disk metric
     // cards from the detailed system-health endpoint (same data, correct path).
-    const response = await client.get('/system/health/detailed')
-    const components: Record<string, string> = response.data?.components || {}
+    const response = await client.get<DetailedHealthBody>('/system/health/detailed')
+    const components: Record<string, string> = response?.components || {}
     const pct = (s?: string): number => {
       const n = parseFloat(s ?? '')
       return isNaN(n) ? 0 : n
@@ -1369,7 +1259,7 @@ export function useAutobotApi() {
 
   async function getSharedLinksAdmin(): Promise<SharedLinksAdminResponse> {
     const response = await client.get<SharedLinksAdminResponse>('/chat/shared-links/admin')
-    return response.data
+    return response
   }
 
   // =============================================================================
@@ -1377,51 +1267,51 @@ export function useAutobotApi() {
   // =============================================================================
 
   async function getBrowserStatus(): Promise<Record<string, unknown>> {
-    const response = await client.get('/browser/mcp/status')
-    return response.data
+    const response = await client.get<Record<string, unknown>>('/browser/mcp/status')
+    return response
   }
 
   async function browserNavigate(url: string): Promise<Record<string, unknown>> {
-    const response = await client.post('/browser/mcp/navigate', { url })
-    return response.data
+    const response = await client.post<Record<string, unknown>>('/browser/mcp/navigate', { url })
+    return response
   }
 
   async function browserScreenshot(): Promise<Record<string, unknown>> {
-    const response = await client.post('/browser/mcp/screenshot', {})
-    return response.data
+    const response = await client.post<Record<string, unknown>>('/browser/mcp/screenshot', {})
+    return response
   }
 
   async function browserClick(selector: string): Promise<Record<string, unknown>> {
-    const response = await client.post('/browser/mcp/click', { selector })
-    return response.data
+    const response = await client.post<Record<string, unknown>>('/browser/mcp/click', { selector })
+    return response
   }
 
   async function browserFill(selector: string, value: string): Promise<Record<string, unknown>> {
-    const response = await client.post('/browser/mcp/fill', { selector, value })
-    return response.data
+    const response = await client.post<Record<string, unknown>>('/browser/mcp/fill', { selector, value })
+    return response
   }
 
   async function browserEvaluate(script: string): Promise<Record<string, unknown>> {
-    const response = await client.post('/browser/mcp/evaluate', { script })
-    return response.data
+    const response = await client.post<Record<string, unknown>>('/browser/mcp/evaluate', { script })
+    return response
   }
 
   async function browserGoBack(sessionId: string): Promise<Record<string, unknown>> {
-    const response = await client.post(`/browser/mcp/navigate`, { url: 'javascript:history.back()' })
+    const response = await client.post<Record<string, unknown>>(`/browser/mcp/navigate`, { url: 'javascript:history.back()' })
     void sessionId
-    return response.data
+    return response
   }
 
   async function browserGoForward(sessionId: string): Promise<Record<string, unknown>> {
-    const response = await client.post(`/browser/mcp/navigate`, { url: 'javascript:history.forward()' })
+    const response = await client.post<Record<string, unknown>>(`/browser/mcp/navigate`, { url: 'javascript:history.forward()' })
     void sessionId
-    return response.data
+    return response
   }
 
   async function browserRefresh(sessionId: string): Promise<Record<string, unknown>> {
-    const response = await client.post(`/browser/mcp/navigate`, { url: 'javascript:location.reload()' })
+    const response = await client.post<Record<string, unknown>>(`/browser/mcp/navigate`, { url: 'javascript:location.reload()' })
     void sessionId
-    return response.data
+    return response
   }
 
   // =============================================================================
@@ -1429,34 +1319,34 @@ export function useAutobotApi() {
   // =============================================================================
 
   async function getVisionStatus(): Promise<Record<string, unknown>> {
-    const response = await client.get('/vision/status')
-    return response.data
+    const response = await client.get<Record<string, unknown>>('/vision/status')
+    return response
   }
 
   async function getVisionHealth(): Promise<Record<string, unknown>> {
-    const response = await client.get('/vision/health')
-    return response.data
+    const response = await client.get<Record<string, unknown>>('/vision/health')
+    return response
   }
 
   async function analyzeScreen(
     data: { image_base64?: string; url?: string }
   ): Promise<Record<string, unknown>> {
-    const response = await client.post('/vision/analyze', data)
-    return response.data
+    const response = await client.post<Record<string, unknown>>('/vision/analyze', data)
+    return response
   }
 
   async function detectElements(
     data: { image_base64?: string; url?: string }
   ): Promise<Record<string, unknown>> {
-    const response = await client.post('/vision/elements', data)
-    return response.data
+    const response = await client.post<Record<string, unknown>>('/vision/elements', data)
+    return response
   }
 
   async function extractTextOCR(
     data: { image_base64?: string; url?: string }
   ): Promise<Record<string, unknown>> {
-    const response = await client.post('/vision/ocr', data)
-    return response.data
+    const response = await client.post<Record<string, unknown>>('/vision/ocr', data)
+    return response
   }
 
   // =============================================================================
@@ -1464,37 +1354,37 @@ export function useAutobotApi() {
   // =============================================================================
 
   async function listBatchJobs(): Promise<Record<string, unknown>> {
-    const response = await client.get('/batch-jobs')
-    return response.data
+    const response = await client.get<Record<string, unknown>>('/batch-jobs')
+    return response
   }
 
   async function createBatchJob(
     data: Record<string, unknown>
   ): Promise<Record<string, unknown>> {
-    const response = await client.post('/batch-jobs', data)
-    return response.data
+    const response = await client.post<Record<string, unknown>>('/batch-jobs', data)
+    return response
   }
 
   async function getBatchJob(jobId: string): Promise<Record<string, unknown>> {
-    const response = await client.get(`/batch-jobs/${jobId}`)
-    return response.data
+    const response = await client.get<Record<string, unknown>>(`/batch-jobs/${jobId}`)
+    return response
   }
 
   async function cancelBatchJob(jobId: string): Promise<Record<string, unknown>> {
-    const response = await client.delete(`/batch-jobs/${jobId}`)
-    return response.data
+    const response = await client.delete<Record<string, unknown>>(`/batch-jobs/${jobId}`)
+    return response
   }
 
   async function getBatchJobHealth(): Promise<Record<string, unknown>> {
     // #10429: backend exposes /batch-jobs/status (returns status: "healthy"),
     // never /batch-jobs/health (404). Repointed to the real route.
-    const response = await client.get('/batch-jobs/status')
-    return response.data
+    const response = await client.get<Record<string, unknown>>('/batch-jobs/status')
+    return response
   }
 
   async function getBatchStatus(): Promise<Record<string, unknown>> {
-    const response = await client.get('/batch/status')
-    return response.data
+    const response = await client.get<Record<string, unknown>>('/batch-jobs/status')
+    return response
   }
 
   // =============================================================================
@@ -1509,44 +1399,43 @@ export function useAutobotApi() {
       '/terminal/execute',
       { command, host }
     )
-    return response.data
+    return response
   }
 
   // =============================================================================
   // Log Forwarding Status/Control (Issue #729)
   // =============================================================================
 
-  async function getLogForwardingStatus(): Promise<{
-    running: boolean
-    total_destinations: number
-    enabled_destinations: number
-    healthy_destinations: number
-    total_sent: number
-    total_failed: number
-    auto_start: boolean
-  }> {
-    const response = await client.get('/log-forwarding/status')
-    return response.data
+  async function getLogForwardingStatus(): Promise<LF.LogForwardingStatus> {
+    const response = await client.get<LF.LogForwardingStatus>('/log-forwarding/status')
+    return response
   }
 
-  async function startLogForwarding(): Promise<{ status: string }> {
-    const response = await client.post<{ status: string }>('/log-forwarding/start')
-    return response.data
+  async function startLogForwarding(): Promise<LF.LogForwardingMessage> {
+    const response = await client.post<LF.LogForwardingMessage>('/log-forwarding/start')
+    return response
   }
 
-  async function stopLogForwarding(): Promise<{ status: string }> {
-    const response = await client.post<{ status: string }>('/log-forwarding/stop')
-    return response.data
+  async function stopLogForwarding(): Promise<LF.LogForwardingMessage> {
+    const response = await client.post<LF.LogForwardingMessage>('/log-forwarding/stop')
+    return response
   }
 
-  async function setLogForwardingAutoStart(enabled: boolean): Promise<{ status: string }> {
-    const response = await client.post<{ status: string }>('/log-forwarding/auto-start', { enabled })
-    return response.data
+  async function getLogForwardingAutoStart(): Promise<LF.LogForwardingAutoStart> {
+    const response = await client.get<LF.LogForwardingAutoStart>('/log-forwarding/auto-start')
+    return response
   }
 
-  async function testAllLogForwardingDestinations(): Promise<{ results: Array<{ id: string; success: boolean; message: string }> }> {
-    const response = await client.post<{ results: Array<{ id: string; success: boolean; message: string }> }>('/log-forwarding/test-all')
-    return response.data
+  async function setLogForwardingAutoStart(enabled: boolean): Promise<LF.LogForwardingAutoStart> {
+    const response = await client.put<LF.LogForwardingAutoStart>('/log-forwarding/auto-start', undefined, {
+      params: { enabled },
+    })
+    return response
+  }
+
+  async function testAllLogForwardingDestinations(): Promise<LF.LogForwardingTestAllResult> {
+    const response = await client.post<LF.LogForwardingTestAllResult>('/log-forwarding/test-all')
+    return response
   }
 
   // =============================================================================
@@ -1557,62 +1446,62 @@ export function useAutobotApi() {
 
   async function getAdvancedControlCapabilities(): Promise<AdvancedControlCapabilities> {
     const response = await client.get<AdvancedControlCapabilities>(`${AC}/streaming/capabilities`)
-    return response.data
+    return response
   }
 
   async function listAdvancedControlSessions(): Promise<AdvancedControlStreamingSession[]> {
     const response = await client.get<{ sessions: AdvancedControlStreamingSession[]; count: number }>(
       `${AC}/streaming/sessions`
     )
-    return response.data.sessions ?? []
+    return response.sessions ?? []
   }
 
   async function createAdvancedControlSession(
     request: AdvancedControlSessionRequest
   ): Promise<Record<string, unknown>> {
-    const response = await client.post(`${AC}/streaming/create`, request)
-    return response.data
+    const response = await client.post<Record<string, unknown>>(`${AC}/streaming/create`, request)
+    return response
   }
 
   async function terminateAdvancedControlSession(sessionId: string): Promise<Record<string, unknown>> {
-    const response = await client.delete(`${AC}/streaming/${encodeURIComponent(sessionId)}`)
-    return response.data
+    const response = await client.delete<Record<string, unknown>>(`${AC}/streaming/${encodeURIComponent(sessionId)}`)
+    return response
   }
 
   async function getAdvancedControlTakeoverStatus(): Promise<AdvancedControlTakeoverStatus> {
     const response = await client.get<AdvancedControlTakeoverStatus>(`${AC}/takeover/status`)
-    return response.data
+    return response
   }
 
   async function getPendingTakeovers(): Promise<AdvancedControlPendingRequest[]> {
     const response = await client.get<{ pending_requests: AdvancedControlPendingRequest[]; count: number }>(
       `${AC}/takeover/pending`
     )
-    return response.data.pending_requests ?? []
+    return response.pending_requests ?? []
   }
 
   async function getActiveTakeovers(): Promise<AdvancedControlActiveSession[]> {
     const response = await client.get<{ active_sessions: AdvancedControlActiveSession[]; count: number }>(
       `${AC}/takeover/active`
     )
-    return response.data.active_sessions ?? []
+    return response.active_sessions ?? []
   }
 
   async function requestTakeover(
     request: AdvancedControlTakeoverRequest
   ): Promise<Record<string, unknown>> {
-    const response = await client.post(`${AC}/takeover/request`, request)
-    return response.data
+    const response = await client.post<Record<string, unknown>>(`${AC}/takeover/request`, request)
+    return response
   }
 
   async function approveTakeover(
     requestId: string,
     humanOperator: string
   ): Promise<Record<string, unknown>> {
-    const response = await client.post(`${AC}/takeover/${encodeURIComponent(requestId)}/approve`, {
+    const response = await client.post<Record<string, unknown>>(`${AC}/takeover/${encodeURIComponent(requestId)}/approve`, {
       human_operator: humanOperator,
     })
-    return response.data
+    return response
   }
 
   async function takeoverSessionAction(
@@ -1620,11 +1509,11 @@ export function useAutobotApi() {
     action: AdvancedControlSessionAction,
     body?: Record<string, unknown>
   ): Promise<Record<string, unknown>> {
-    const response = await client.post(
+    const response = await client.post<Record<string, unknown>>(
       `${AC}/takeover/sessions/${encodeURIComponent(sessionId)}/${action}`,
       body
     )
-    return response.data
+    return response
   }
 
   // =============================================================================
@@ -1633,21 +1522,21 @@ export function useAutobotApi() {
 
   async function getAgentOrgTree(): Promise<AgentOrgNode[]> {
     const response = await client.get<AgentOrgNode[]>('/agents/org')
-    return response.data ?? []
+    return response ?? []
   }
 
   async function getAgentDirectReports(agentId: string): Promise<AgentDirectReport[]> {
     const response = await client.get<AgentDirectReport[]>(
       `/agents/${encodeURIComponent(agentId)}/reports`
     )
-    return response.data ?? []
+    return response ?? []
   }
 
   async function getAgentActivity(agentId: string): Promise<AgentActivitySummary> {
     const response = await client.get<AgentActivitySummary>(
       `/agents/${encodeURIComponent(agentId)}/activity`
     )
-    return response.data
+    return response
   }
 
   async function getAgentDelegations(
@@ -1661,15 +1550,15 @@ export function useAutobotApi() {
     const response = await client.get<AgentDelegation[]>(
       `/agents/${encodeURIComponent(agentId)}/delegations${query ? `?${query}` : ''}`
     )
-    return response.data ?? []
+    return response ?? []
   }
 
   async function delegateAgentTask(
     agentId: string,
     request: AgentDelegationRequest
   ): Promise<Record<string, unknown>> {
-    const response = await client.post(`/agents/${encodeURIComponent(agentId)}/delegate`, request)
-    return response.data
+    const response = await client.post<Record<string, unknown>>(`/agents/${encodeURIComponent(agentId)}/delegate`, request)
+    return response
   }
 
   // =============================================================================
@@ -1686,35 +1575,27 @@ export function useAutobotApi() {
     const response = await client.get<{ processes: ProcessRun[] }>(
       `/agents/${encodeURIComponent(agentId)}/processes?${params}`
     )
-    return response.data?.processes ?? []
+    return response?.processes ?? []
   }
 
-  /**
-   * Process logs are served as plain text, not JSON. `responseType: 'text'`
-   * disables axios' default JSON parsing so the body arrives verbatim — the
-   * raw `fetch` this replaced used `response.text()` for the same reason.
-   */
+  /** Process logs are served as plain text, not JSON, so the body is read verbatim. */
   async function getProcessLogs(processId: string): Promise<string> {
-    const response = await client.get<string>(
-      `/processes/${encodeURIComponent(processId)}/logs`,
-      { responseType: 'text' }
-    )
-    return response.data
+    return client.get<string>(`/processes/${encodeURIComponent(processId)}/logs`, { responseType: 'text' })
   }
 
   async function signalProcess(
     processId: string,
     signal: string
   ): Promise<Record<string, unknown>> {
-    const response = await client.post(`/processes/${encodeURIComponent(processId)}/signal`, {
+    const response = await client.post<Record<string, unknown>>(`/processes/${encodeURIComponent(processId)}/signal`, {
       signal,
     })
-    return response.data
+    return response
   }
 
   async function spawnProcess(request: ProcessSpawnRequest): Promise<Record<string, unknown>> {
-    const response = await client.post('/processes/spawn', request)
-    return response.data
+    const response = await client.post<Record<string, unknown>>('/processes/spawn', request)
+    return response
   }
 
   // =============================================================================
@@ -1729,7 +1610,7 @@ export function useAutobotApi() {
     const response = await client.get<ConfigRevision[]>(
       `/config-revisions/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}?limit=${limit}`
     )
-    return response.data ?? []
+    return response ?? []
   }
 
   async function rollbackConfigRevision(
@@ -1737,10 +1618,10 @@ export function useAutobotApi() {
     entityId: string,
     revisionId: string
   ): Promise<Record<string, unknown>> {
-    const response = await client.post(
+    const response = await client.post<Record<string, unknown>>(
       `/config-revisions/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}/${encodeURIComponent(revisionId)}/rollback`
     )
-    return response.data
+    return response
   }
 
   // =============================================================================
@@ -1749,38 +1630,35 @@ export function useAutobotApi() {
 
   async function getRbacStatus(): Promise<RbacStatus> {
     const response = await client.get<RbacStatus>('/settings/rbac/status')
-    return response.data
+    return response
   }
 
   async function initializeRbac(request: RbacInitializeRequest): Promise<{ message?: string }> {
     const response = await client.post<{ message?: string }>('/settings/rbac/initialize', request)
-    return response.data
+    return response
   }
 
   async function clearRedisDatabase(database: string): Promise<Record<string, unknown>> {
-    const response = await client.post(`/cache/redis/clear/${encodeURIComponent(database)}`)
-    return response.data
+    const response = await client.post<Record<string, unknown>>(`/cache/redis/clear/${encodeURIComponent(database)}`)
+    return response
   }
 
   /**
    * Reachability probe behind the "Test connection" control (#13079).
    *
-   * `validateStatus` accepts every status code so the probe reports
-   * "reachable but rejected" rather than throwing, and — critically — never
-   * trips the response interceptor that clears `autobot_access_token`: a
-   * connectivity diagnostic must not be able to log the operator out.
+   * It reads the raw response so a connectivity diagnostic reports "reachable but rejected"
+   * instead of raising on a 4xx/5xx, and its 401 never ends the session, even after #10193.
    */
   async function probeBackendHealth(): Promise<BackendHealthProbe> {
-    const response = await client.get('/health', { validateStatus: () => true })
-    return { ok: response.status >= 200 && response.status < 300, status: response.status }
+    const response = await client.rawRequest('/health', { keepSessionOn401: true })
+    return { ok: response.ok, status: response.status }
   }
-
 
   // =============================================================================
   // Skills + skill governance (#731 / #951 / #13079)
   //
   // Paths keep their exact trailing slashes: `useSkills.ts` reached `/skills/`
-  // and `/skills/governance/` through an axios `baseURL` that preserved them,
+  // and `/skills/governance/` through a client `baseURL` that preserved them,
   // and FastAPI answers the slash-less form with a 307 redirect that drops the
   // Authorization header on a cross-origin hop.
   // =============================================================================
@@ -1791,50 +1669,50 @@ export function useAutobotApi() {
     if (query.search) params.append('search', query.search)
     const qs = params.toString()
     const response = await client.get<SkillListResponse>(`/skills/${qs ? `?${qs}` : ''}`)
-    return response.data
+    return response
   }
 
   async function getSkillCategories(): Promise<CategoryCounts> {
     const response = await client.get<CategoryCounts>('/skills/categories')
-    return response.data
+    return response
   }
 
   async function getSkillDetail(name: string): Promise<SkillDetail> {
     const response = await client.get<SkillDetail>(`/skills/${encodeURIComponent(name)}`)
-    return response.data
+    return response
   }
 
   async function enableSkill(name: string): Promise<Record<string, unknown>> {
-    const response = await client.post(`/skills/${encodeURIComponent(name)}/enable`)
-    return response.data
+    const response = await client.post<Record<string, unknown>>(`/skills/${encodeURIComponent(name)}/enable`)
+    return response
   }
 
   async function disableSkill(name: string): Promise<Record<string, unknown>> {
-    const response = await client.post(`/skills/${encodeURIComponent(name)}/disable`)
-    return response.data
+    const response = await client.post<Record<string, unknown>>(`/skills/${encodeURIComponent(name)}/disable`)
+    return response
   }
 
   async function updateSkillConfig(
     name: string,
     config: Record<string, unknown>
   ): Promise<Record<string, unknown>> {
-    const response = await client.put(`/skills/${encodeURIComponent(name)}/config`, { config })
-    return response.data
+    const response = await client.put<Record<string, unknown>>(`/skills/${encodeURIComponent(name)}/config`, { config })
+    return response
   }
 
   async function initializeSkills(): Promise<Record<string, unknown>> {
-    const response = await client.post('/skills/initialize')
-    return response.data
+    const response = await client.post<Record<string, unknown>>('/skills/initialize')
+    return response
   }
 
   async function getSkillRepos(): Promise<SkillRepo[]> {
     const response = await client.get<SkillRepo[]>('/skills/repos')
-    return response.data ?? []
+    return response ?? []
   }
 
   async function addSkillRepo(payload: SkillRepoCreate): Promise<Record<string, unknown>> {
-    const response = await client.post('/skills/repos', payload)
-    return response.data
+    const response = await client.post<Record<string, unknown>>('/skills/repos', payload)
+    return response
   }
 
   /**
@@ -1847,8 +1725,8 @@ export function useAutobotApi() {
    * meant to cover; the client's 30s default applies instead.
    */
   async function syncSkillRepo(repoId: string): Promise<Record<string, unknown>> {
-    const response = await client.post(`/skills/repos/${encodeURIComponent(repoId)}/sync`)
-    return response.data
+    const response = await client.post<Record<string, unknown>>(`/skills/repos/${encodeURIComponent(repoId)}/sync`)
+    return response
   }
 
   /**
@@ -1856,56 +1734,57 @@ export function useAutobotApi() {
    *
    * `timeoutMs` exists for the 30s approval poll in `useSkillGovernance`: a tick
    * that outlived its own interval would overlap the next one, so the polled
-   * read is given a sub-interval budget rather than the client's 30s default.
+   * read is given a sub-interval budget rather than the client's 30s default, and
+   * no GET retries, which would stretch one failing tick past the interval (#12363).
    */
   async function getSkillApprovals(timeoutMs?: number): Promise<SkillApproval[]> {
     const response = await client.get<SkillApproval[]>(
       '/skills/governance/approvals',
-      timeoutMs === undefined ? undefined : { timeout: timeoutMs }
+      timeoutMs === undefined ? undefined : { timeout: timeoutMs, maxRetries: 1 }
     )
-    return response.data ?? []
+    return response ?? []
   }
 
   async function decideSkillApproval(
     approvalId: string,
     decision: SkillApprovalDecision
   ): Promise<Record<string, unknown>> {
-    const response = await client.post(
+    const response = await client.post<Record<string, unknown>>(
       `/skills/governance/approvals/${encodeURIComponent(approvalId)}`,
       decision
     )
-    return response.data
+    return response
   }
 
   async function getSkillDrafts(): Promise<Record<string, unknown>[]> {
     const response = await client.get<Record<string, unknown>[]>('/skills/governance/drafts')
-    return response.data ?? []
+    return response ?? []
   }
 
   async function testSkillDraft(skillId: string): Promise<Record<string, unknown>> {
-    const response = await client.post(
+    const response = await client.post<Record<string, unknown>>(
       `/skills/governance/drafts/${encodeURIComponent(skillId)}/test`
     )
-    return response.data
+    return response
   }
 
   async function promoteSkillDraft(skillId: string): Promise<Record<string, unknown>> {
-    const response = await client.post(
+    const response = await client.post<Record<string, unknown>>(
       `/skills/governance/drafts/${encodeURIComponent(skillId)}/promote`
     )
-    return response.data
+    return response
   }
 
   async function getSkillGovernance(): Promise<GovernanceConfig> {
     const response = await client.get<GovernanceConfig>('/skills/governance/')
-    return response.data
+    return response
   }
 
   async function updateSkillGovernanceMode(
     mode: GovernanceConfig['mode']
   ): Promise<Record<string, unknown>> {
-    const response = await client.put('/skills/governance/', { mode })
-    return response.data
+    const response = await client.put<Record<string, unknown>>('/skills/governance/', { mode })
+    return response
   }
 
   return {
@@ -1945,20 +1824,21 @@ export function useAutobotApi() {
     warmupCache,
     // Log Forwarding
     getLogForwardingDestinations,
+    getLogForwardingDestination,
     createLogForwardingDestination,
     updateLogForwardingDestination,
     deleteLogForwardingDestination,
     testLogForwardingDestination,
     // NPU Workers
     getNPUWorkers,
-    getNPUWorker,
     updateNPUWorker,
-    restartNPUWorker,
     getNPULoadBalancingConfig,
     updateNPULoadBalancingConfig,
     pairNPUWorker,
     testNPUWorker,
     removeNPUWorker,
+    getNPUWorker,
+    restartNPUWorker,
     // Permissions
     getPermissionRules,
     createPermissionRule,
@@ -1978,18 +1858,18 @@ export function useAutobotApi() {
     deleteFile,
     uploadFile,
     // MCP Registry (Issue #835)
+    getMCPBridges,
     getMCPServers,
     getMCPServer,
     startMCPServer,
     stopMCPServer,
     restartMCPServer,
-    getMCPBridges,
     getMCPTools,
     getMCPHealth,
     getMCPStats,
     // Agents (Issue #835)
-    getAgents,
     getAgent,
+    getAgents,
     updateAgent,
     getAvailableAgents,
     getAgentsStatus,
@@ -2001,9 +1881,9 @@ export function useAutobotApi() {
     // Shared Chat Links (GH#8996)
     getSharedLinksAdmin,
     // Voice (Issue #835)
+    voiceListen,
     getVoiceConfig,
     updateVoiceConfig,
-    voiceListen,
     voiceSpeak,
     // LLM
     getLLMConfig,
@@ -2021,9 +1901,9 @@ export function useAutobotApi() {
     // Logs
     getLogs,
     // System
+    getSystemHealth,
     getSystemMetrics,
     getHardwareInfo,
-    getSystemHealth,
     getErrorStatistics,
     getRecentErrors,
     getMetricsSummary,
@@ -2084,6 +1964,7 @@ export function useAutobotApi() {
     probeBackendHealth,
     // Log Forwarding Control (Issue #729)
     getLogForwardingStatus,
+    getLogForwardingAutoStart,
     startLogForwarding,
     stopLogForwarding,
     setLogForwardingAutoStart,

@@ -51,47 +51,77 @@ def _collect_missing(en: dict, locale: dict, prefix: str = "") -> list[str]:
     return missing
 
 
-def main() -> int:
-    en_path = LOCALES_DIR / "en.json"
-    with en_path.open(encoding="utf-8") as f:
-        en = json.load(f)
+def _collect_drift(en: dict, locale: dict, prefix: str = "") -> list[str]:
+    """Keys a locale has that en.json lacks (stale orphans), and object/string shape mismatches.
 
-    total_missing = 0
-    for lang in NON_ENGLISH:
-        path = LOCALES_DIR / f"{lang}.json"
-        with path.open(encoding="utf-8") as f:
-            locale = json.load(f)
-        missing = _collect_missing(en, locale)
-        if missing:
-            total_missing += len(missing)
-            # #14781: these carried no marker while nothing else in this file changed;
-            # touching it for --locales pulled the whole file into the hook's scope.
-            print(
-                f"MISSING {len(missing)} key(s) in {lang}.json:", file=sys.stderr
-            )  # noqa: print -- a checker's report IS its stdout
-            if not quiet:
-                for key in missing[:20]:
-                    print(f"  {key}", file=sys.stderr)  # noqa: print -- a checker's report IS its stdout
-                if len(missing) > 20:
-                    print(
-                        f"  ... and {len(missing) - 20} more", file=sys.stderr
-                    )  # noqa: print -- a checker's report IS its stdout
-        elif not quiet:
-            print(f"  {lang}.json: OK")  # noqa: print -- a checker's report IS its stdout
+    These are wrong under any translation policy: an orphan is text no screen can show, and a
+    shape mismatch makes vue-i18n resolve a path to the wrong kind of value.
+    """
+    drift = []
+    for k, v in locale.items():
+        path = f"{prefix}.{k}" if prefix else k
+        if k not in en:
+            drift.append(f"{path} (not in en.json)")
+        elif isinstance(v, dict) != isinstance(en[k], dict):
+            drift.append(f"{path} (object vs string)")
+        elif isinstance(v, dict):
+            drift.extend(_collect_drift(en[k], v, path))
+    return drift
 
-    if total_missing:
-        print(  # noqa: print -- a checker's report IS its stdout
-            f"\nFAIL: {total_missing} key(s) missing across locale files.",
-            file=sys.stderr,
-        )
-        print(  # noqa: print -- a checker's report IS its stdout
-            "Fix: run tools/patch_i18n.py or manually add the missing keys.",
-            file=sys.stderr,
-        )
-        return 1
 
+def _report(lang: str, label: str, keys: list[str]) -> None:
+    print(
+        f"{label} {len(keys)} key(s) in {lang}.json:", file=sys.stderr
+    )  # noqa: print -- a checker's report IS its stdout
     if not quiet:
-        print("All locale files complete.")  # noqa: print -- a checker's report IS its stdout
+        for key in keys[:20]:
+            print(f"  {key}", file=sys.stderr)  # noqa: print -- a checker's report IS its stdout
+        if len(keys) > 20:
+            print(
+                f"  ... and {len(keys) - 20} more", file=sys.stderr
+            )  # noqa: print -- a checker's report IS its stdout
+
+
+def _load(lang: str) -> dict:
+    with (LOCALES_DIR / f"{lang}.json").open(encoding="utf-8") as f:
+        return json.load(f)
+
+
+def main() -> int:
+    """Strict by default (the SLM's generated locales must stay in parity, #14781).
+
+    ``--allow-missing`` (the main app, #18922): English is the only required language
+    (owner ruling 2026-10-18), so a key only in en.json falls back to English and passes;
+    the untranslated ratchet pins how many there are. Orphans and shape drift still fail.
+    """
+    allow_missing = "--allow-missing" in sys.argv
+    en = _load("en")
+    failures = untranslated = 0
+    for lang in NON_ENGLISH:
+        locale = _load(lang)
+        missing, drift = _collect_missing(en, locale), _collect_drift(en, locale)
+        if drift:
+            failures += len(drift)
+            _report(lang, "DRIFT", drift)
+        if missing and allow_missing:
+            untranslated += len(missing)
+        elif missing:
+            failures += len(missing)
+            _report(lang, "MISSING", missing)
+        if not (drift or (missing and not allow_missing)) and not quiet:
+            print(f"  {lang}.json: OK")  # noqa: print -- a checker's report IS its stdout
+    if failures:
+        print(
+            f"\nFAIL: {failures} locale key problem(s).", file=sys.stderr
+        )  # noqa: print -- a checker's report IS its stdout
+        hint = "remove keys en.json does not have" if allow_missing else "add the missing keys, or remove stale ones"
+        print(f"Fix: {hint}.", file=sys.stderr)  # noqa: print -- a checker's report IS its stdout
+        return 1
+    if not quiet:
+        tail = (
+            f" ({untranslated} key(s) fall back to English; see scripts/list_untranslated.py)" if untranslated else ""
+        )
+        print(f"All locale files consistent{tail}.")  # noqa: print -- a checker's report IS its stdout
     return 0
 
 

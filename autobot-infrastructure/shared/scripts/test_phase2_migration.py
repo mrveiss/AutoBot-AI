@@ -16,8 +16,12 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# A backend tool (#18288, #18289): it puts the backend and the repository root (for `autobot_shared`)
+# on its own path, so it runs from any directory with no PYTHONPATH.
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
 from monitoring.prometheus_metrics import get_metrics_manager
 from utils.error_boundaries import ErrorCategory

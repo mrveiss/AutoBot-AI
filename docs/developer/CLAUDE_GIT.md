@@ -1,5 +1,14 @@
 # Git, Branching & Worktree Rules
 
+## Never work from a stale base
+
+The half that bites is the judgement, not the freshness. Answer "is this already done?" against
+current `origin/main` and the issue's acceptance criteria, **never against an old branch**: a
+stale answer points toward doing *more* work, so nothing pushes back on it, and reviving such a
+branch can regress newer code. `git fetch origin` and branch from (or rebase onto) current base
+before the first edit — the auto-update bot only refreshes branches that already have a PR, so
+the window this covers is everything before the first push.
+
 ## Parallel Work: Worktree Isolation (CRITICAL)
 
 **NO `git checkout` or `git switch` on shared branches during parallel work sessions.**
@@ -20,6 +29,8 @@ git show-ref --verify --quiet refs/heads/issue-XXXX && echo "BRANCH TAKEN"
 git -C .worktrees/issue-XXXX status --short         # if it exists: any output = ACTIVE session
 git -C .worktrees/issue-XXXX log --oneline -3       # commits you did not write = not yours
 ```
+
+Claim the worktree in the ledger on create/reuse (`ledger iam`, then `ledger claim worktree <dir>`) and release it on removal; reuse your own clean, fully pushed worktree before adding one ([OWNER_RULES.md](OWNER_RULES.md)). The `status`/`log` checks above are the fallback when no claim exists.
 
 Three rules, each from a real collision:
 
@@ -58,9 +69,10 @@ cd .worktrees/issue-XXXX && git branch --unset-upstream
 git merge-base --is-ancestor <your-sha> origin/issue-XXXX && echo "safe to force"
 ```
 
-The `auto-update-pr-branches` workflow merges base into PR branches, so "my local
-is behind my own branch" is normal. Force-pushing over it discards the bot's
-merge.
+The `sync-branches-with-main` workflow (#19548) merges main into every branch on
+each push to main, so "my local is behind my own branch" is normal. Force-pushing
+over it discards the bot's merge: `git pull` (a fast-forward) first. A PR labelled
+`sync-conflict` or `sync-needs-workflow-token` was not synced; merge main yourself.
 
 ---
 
@@ -142,7 +154,7 @@ deliberate, evidenced act — not cleanup.
 
 **Protected (blocked by pre-commit hook):** `release`, `master`
 
-**Allowed:** `main`, `issue-*`, `hotfix-*`, worktree branches matching those patterns
+**Allowed:** `main`, `issue-*`, `hotfix-*`, and any other feature branch (the hook only blocks the protected names, so trainmaster `train-*` branches are fine), plus worktree branches matching those
 
 **Workflow:**
 1. `git checkout -b issue-XXXX origin/main`

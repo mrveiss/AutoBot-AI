@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from a2a.trust_score import Capability, authority_for_level
+from a2a.trust_score import TrustCapability, authority_for_level
 from agents.agent_orchestration.agent_execution import AgentExecutor, _routed_agent_types
 from agents.agent_orchestration.capability_requirements import (
     NEEDS_NO_CAPABILITY,
@@ -34,7 +34,7 @@ class TestEveryAgentIsClassified:
         assert not set(REQUIRED_CAPABILITY) & set(NEEDS_NO_CAPABILITY)
 
     def test_every_requirement_is_a_real_capability(self):
-        assert all(isinstance(c, Capability) for c in REQUIRED_CAPABILITY.values())
+        assert all(isinstance(c, TrustCapability) for c in REQUIRED_CAPABILITY.values())
 
 
 class TestRefusedAgents:

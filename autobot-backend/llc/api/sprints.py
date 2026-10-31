@@ -322,9 +322,9 @@ async def _project_source_summary(code_source_id: Optional[str]) -> Optional[Cod
     """Resolve a CodeSource to a summary DTO; returns None when id is absent or source missing."""
     if not code_source_id:
         return None
-    from api.codebase_analytics.source_storage import get_source  # noqa: PLC0415 — lazy to avoid heavy __init__
+    from api.codebase_analytics.source_storage import get_source_or_none_if_unreadable  # noqa: PLC0415
 
-    src = await get_source(code_source_id)
+    src = await get_source_or_none_if_unreadable(code_source_id)
     if not src:
         return None
     return CodeSourceSummary(

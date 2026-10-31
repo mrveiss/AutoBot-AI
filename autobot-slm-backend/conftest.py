@@ -25,10 +25,19 @@ Issue: #3499
 
 import ast
 import importlib
+
+# #19878: the class every module stub is built from; loaded by path (`tests/` is not a package root).
+import importlib.util as _ilu  # noqa: E402
 import sys
 import types
 from pathlib import Path
 from unittest.mock import MagicMock
+
+_ms_spec = _ilu.spec_from_file_location("_slm_module_stub", Path(__file__).parent / "tests" / "_module_stub.py")
+_ms_mod = _ilu.module_from_spec(_ms_spec)
+_ms_spec.loader.exec_module(_ms_mod)
+sys.modules["_slm_module_stub"] = _ms_mod
+ModuleStub = _ms_mod.ModuleStub
 
 # ---------------------------------------------------------------------------
 # Hollow api package — prevents api/__init__.py from executing
@@ -139,7 +148,7 @@ def _stub(name: str) -> MagicMock:
         # ones starting with `assert` (e.g. services.fleet_sync_guard.
         # assert_no_running_sync) which safe mocks block as typo-protection
         # and turn into collection-time ImportError (#10023).
-        mod = MagicMock(unsafe=True)
+        mod = ModuleStub(unsafe=True)
         mod.__name__ = name
         mod.__package__ = name.split(".")[0]
         mod.__spec__ = None
@@ -235,7 +244,7 @@ setattr(sys.modules["models"], "schemas_secrets", _ss_mod)
 # reason -- services/node_gpu.py builds pydantic responses from them, and a
 # MagicMock model validates nothing. Both import only pydantic; gpu_schemas also
 # imports npu_schemas, hence the order and the sys.modules entry before exec.
-for _schema in ("npu_schemas", "gpu_schemas"):
+for _schema in ("npu_schemas", "gpu_schemas", "post_sync_schemas"):
     _schema_path = Path(__file__).parent / "models" / f"{_schema}.py"
     _schema_spec = _ss_importlib_util.spec_from_file_location(f"models.{_schema}", _schema_path)
     _schema_mod = _ss_importlib_util.module_from_spec(_schema_spec)
@@ -407,6 +416,7 @@ sys.modules["status_enums"] = _se_mod
 _REAL_SERVICE_MODULES = (
     "ssh_utils",
     "deploy_artifacts",
+    "ansible_extra_vars",  # #19005: inventory_builder imports it, so it loads first
     "inventory_builder",
     "a2a_card_fetcher",
     "hf_token_validator",
@@ -414,6 +424,7 @@ _REAL_SERVICE_MODULES = (
     "ansible_utils",
     "provision_progress",
     "process_divergence",
+    "unit_names",  # #18359: stdlib-only validators; journal_fetch imports it
     "journal_fetch",
     # #15462: has a co-located test that imports it, so it must be real-loaded
     # here or it resolves to a MagicMock depending on shard order
@@ -445,6 +456,11 @@ _REAL_SERVICE_MODULES = (
     # than an error (the #14307 reasoning this list exists for).
     "capability_tiers",
     "node_capability",
+    # #19125: the SLM's JWKS token verifier; its co-located admin-family test
+    # imports it directly and must exercise the real claim normalisation.
+    "jwks_verifier",
+    # #19318: its co-located test imports it, so it must be real-loaded, not a MagicMock.
+    "admin_seed_password",
 )
 
 # The placeholder a failed real-load falls back to (#15563). Loaded by path for
@@ -577,4 +593,4 @@ def pytest_configure(config) -> None:
     module = importlib.util.module_from_spec(spec)
     sys.modules.setdefault("_slm_stub_lifetime", module)
     spec.loader.exec_module(module)
-    module.register(config, _SLM_ROOT, _INSTALLED_STUBS)
+    module.register_stub_lifetime(config, _SLM_ROOT, _INSTALLED_STUBS)

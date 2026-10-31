@@ -1,0 +1,17 @@
+{
+  "ignoreFiles": ["**/src/tokens/contract.css"],
+  "overrides": [
+    {
+      "files": ["**/*.vue"],
+      "customSyntax": "postcss-html"
+    }
+  ],
+  "rules": {
+    "color-no-hex": [
+      true,
+      {
+        "message": "Hardcoded hex color — a shared component styles off the --aui-* contract (src/tokens/contract.css), never a literal (#14579, tokenisation umbrella #11515)."
+      }
+    ]
+  }
+}

@@ -131,7 +131,7 @@ if _llm_mod is not None:
 # KnowledgeBase stub.
 _kb_mod = sys.modules.get("knowledge_base")
 if _kb_mod is not None:
-    _kb_mod.KnowledgeBase = MagicMock  # type: ignore[attr-defined]
+    _kb_mod.get_knowledge_base = AsyncMock()  # type: ignore[attr-defined]  # #18122: canonical accessor
 
 # Now import the module under test.
 import importlib.util  # noqa: E402
@@ -332,3 +332,39 @@ async def test_search_web_returns_dicts_not_search_result_objects():
     assert "url" in results[0]
     assert "title" in results[0]
     assert "snippet" in results[0]
+
+
+_CONTENT = {"url": "https://example.com/a", "domain": "example.com", "title": "T", "content": "body text"}
+_ASSESSMENT = {"score": 0.9, "recommendation": "store", "key_topics": ["x"]}
+
+
+@pytest.mark.asyncio
+async def test_store_in_knowledge_base_awaits_add_document():
+    """#19156: add_document is a coroutine -- it must be awaited and the content reach the KB."""
+    assistant = _make_assistant()
+    assistant.knowledge_base = MagicMock()
+    assistant.knowledge_base.add_document = AsyncMock(return_value={"status": "success"})
+
+    stored = await assistant.store_in_knowledge_base(_CONTENT, _ASSESSMENT)
+
+    assert stored is True
+    assistant.knowledge_base.add_document.assert_awaited_once()
+    text, metadata = assistant.knowledge_base.add_document.await_args.args
+    assert "body text" in text
+    assert metadata["source"] == "https://example.com/a"
+    assert metadata["stored_by"] == "librarian_assistant"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("outcome", [{"status": "error"}, {"status": "partial"}, RuntimeError("boom")])
+async def test_store_in_knowledge_base_false_on_failure(outcome):
+    """#19156 contrast: a failure result or a raise is not a stored document."""
+    assistant = _make_assistant()
+    assistant.knowledge_base = MagicMock()
+    if isinstance(outcome, Exception):
+        assistant.knowledge_base.add_document = AsyncMock(side_effect=outcome)
+    else:
+        assistant.knowledge_base.add_document = AsyncMock(return_value=outcome)
+
+    assert await assistant.store_in_knowledge_base(_CONTENT, _ASSESSMENT) is False
+    assistant.knowledge_base.add_document.assert_awaited_once()

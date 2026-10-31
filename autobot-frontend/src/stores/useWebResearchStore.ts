@@ -7,24 +7,24 @@
 
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
+import { isHttpError } from '@autobot/ui'
 import ApiClient from '@/utils/ApiClient'
+import type { components } from '@/types/generated/api'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('WebResearchStore')
 
 /**
- * Canonical web-research settings API paths (#11665) — single source for every
- * consumer. The backend registers api/web_research_settings.py with an empty
- * registry prefix, so the live paths are /api/web-research/*.
+ * Web-research READ paths (#11665). The backend registers
+ * api/web_research_settings.py with an empty registry prefix, so the live paths
+ * are /api/web-research/*. Every write (enable, disable, settings PUT, clear
+ * cache, reset circuit breakers) is admin-only and global, so the one editor
+ * lives in the SLM admin console (#19217) and this app only reads.
  */
 export const WEB_RESEARCH_API = {
   settings: '/web-research/settings',
-  status: '/web-research/status',
-  enable: '/web-research/enable',
-  disable: '/web-research/disable',
-  clearCache: '/web-research/clear-cache',
-  resetCircuitBreakers: '/web-research/reset-circuit-breakers'
+  status: '/web-research/status'
 } as const
 
 export interface RateLimiter {
@@ -32,7 +32,7 @@ export interface RateLimiter {
   max_requests?: number
 }
 
-export interface CacheStats {
+export interface ResearchCacheStats {
   cache_size?: number
   rate_limiter?: RateLimiter
 }
@@ -40,27 +40,33 @@ export interface CacheStats {
 export interface ResearchStatus {
   enabled: boolean
   preferred_method: string
-  cache_stats: CacheStats | null
+  cache_stats: ResearchCacheStats | null
   circuit_breakers: Record<string, unknown> | null
 }
 
-export interface WebResearchSettings {
-  enabled: boolean
-  require_user_confirmation: boolean
-  preferred_method: 'basic' | 'advanced' | 'api_based'
-  max_results: number
-  timeout_seconds: number
-  auto_research_threshold: number
-  rate_limit_requests: number
-  rate_limit_window: number
-  store_results_in_kb: boolean
-  anonymize_requests: boolean
-  filter_adult_content: boolean
-}
+/**
+ * The settings this app reads, taken from the backend's generated `WebResearchSettings`
+ * (the SLM editor writes the full set, including the daily limit and quality threshold);
+ * `preferred_method` is narrowed to the values the backend accepts.
+ */
+type ServedSettings = components['schemas']['WebResearchSettings']
+export type WebResearchStoreSettings = Pick<
+  ServedSettings,
+  | 'enabled'
+  | 'require_user_confirmation'
+  | 'max_results'
+  | 'timeout_seconds'
+  | 'auto_research_threshold'
+  | 'rate_limit_requests'
+  | 'rate_limit_window'
+  | 'store_results_in_kb'
+  | 'anonymize_requests'
+  | 'filter_adult_content'
+> & { preferred_method: 'basic' | 'advanced' | 'api_based' }
 
 export const useWebResearchStore = defineStore('webResearch', () => {
   // State
-  const settings = ref<WebResearchSettings>({
+  const settings = ref<WebResearchStoreSettings>({
     enabled: false,
     require_user_confirmation: true,
     preferred_method: 'basic',
@@ -104,7 +110,8 @@ export const useWebResearchStore = defineStore('webResearch', () => {
   )
 
   // Actions
-  function updateSettings(newSettings: Partial<WebResearchSettings>) {
+  // Internal: hydrates the state from the backend read in loadFromBackend.
+  function updateSettings(newSettings: Partial<WebResearchStoreSettings>) {
     settings.value = { ...settings.value, ...newSettings }
   }
 
@@ -124,7 +131,7 @@ export const useWebResearchStore = defineStore('webResearch', () => {
       const data = await ApiClient.get<Record<string, unknown>>(
         `${base}${WEB_RESEARCH_API.settings}`
       )
-      const backendSettings = data.settings as Partial<WebResearchSettings> | undefined
+      const backendSettings = data.settings as Partial<WebResearchStoreSettings> | undefined
       if (backendSettings) updateSettings(backendSettings)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
@@ -139,13 +146,13 @@ export const useWebResearchStore = defineStore('webResearch', () => {
       updateStatus({
         enabled: Boolean(data.enabled),
         preferred_method: String(data.preferred_method ?? status.value.preferred_method),
-        cache_stats: (data.cache_stats as CacheStats | null) ?? null,
+        cache_stats: (data.cache_stats as ResearchCacheStats | null) ?? null,
         circuit_breakers: (data.circuit_breakers as Record<string, unknown> | null) ?? null
       })
       researcherAvailable.value = true
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err)
-      if (msg.includes('HTTP 503')) {
+      if (isHttpError(err) && err.status === 503) {
         researcherAvailable.value = false
       } else {
         logger.warn('Failed to load web research status from backend:', msg)
@@ -158,44 +165,6 @@ export const useWebResearchStore = defineStore('webResearch', () => {
 
   function updateStatus(newStatus: Partial<ResearchStatus>) {
     status.value = { ...status.value, ...newStatus }
-  }
-
-  function toggleWebResearch() {
-    settings.value.enabled = !settings.value.enabled
-    // Issue #821: Clear stale error when toggling
-    lastError.value = null
-  }
-
-  function setEnabled(enabled: boolean) {
-    settings.value.enabled = enabled
-  }
-
-  function setLoading(loading: boolean) {
-    isLoading.value = loading
-  }
-
-  function setError(error: string | null) {
-    lastError.value = error
-  }
-
-  function clearError() {
-    lastError.value = null
-  }
-
-  function resetSettings() {
-    settings.value = {
-      enabled: false,
-      require_user_confirmation: true,
-      preferred_method: 'basic',
-      max_results: 5,
-      timeout_seconds: 30,
-      auto_research_threshold: 0.3,
-      rate_limit_requests: 5,
-      rate_limit_window: 60,
-      store_results_in_kb: true,
-      anonymize_requests: true,
-      filter_adult_content: true
-    }
   }
 
   return {
@@ -212,16 +181,9 @@ export const useWebResearchStore = defineStore('webResearch', () => {
     cacheSize,
     rateLimiterStatus,
 
-    // Actions
-    updateSettings,
+    // Actions (reads only: the writes live in the SLM admin console, #19217)
     updateStatus,
-    loadFromBackend,
-    toggleWebResearch,
-    setEnabled,
-    setLoading,
-    setError,
-    clearError,
-    resetSettings
+    loadFromBackend
   }
 }, {
   persist: {

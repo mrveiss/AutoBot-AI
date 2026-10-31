@@ -3,7 +3,7 @@
 #
 # Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.hardened.yml \
-#     --env-file docker/.env.docker up -d
+#     --env-file docker/.env.docker --env-file docker/.env.secrets up -d
 #
 # What this overlay adds on top of the base compose:
 #   • read_only: true on all writable-root services (backend, worker, slm, redis, postgres, chromadb)
@@ -19,8 +19,9 @@
 #   echo -n "your-jwt-secret"          > secrets/slm_jwt_secret.txt
 #   chmod 600 secrets/*.txt
 #
-# The SLM service reads SLM_ADMIN_PASSWORD_FILE and SLM_JWT_SECRET_FILE
-# via autobot_shared.secret_file_utils (see docs/developer/secrets.md).
+# The SLM reads SLM_ADMIN_PASSWORD_FILE through services/admin_seed_password.py:
+# it seeds a FRESH install only; an existing admin keeps its stored password (#19368).
+# SLM_JWT_SECRET_FILE is not read yet (#19368): the SLM uses its generated key.
 # Note: Postgres credentials are inherited from the base compose so
 # SLM_DATABASE_URL remains consistent with the Postgres user password.
 #
@@ -28,6 +29,9 @@
 # Copyright (c) 2025 mrveiss
 # Author: mrveiss
 
+# Secret files keep their host owner and mode inside the container. The SLM runs as
+# uid 999 (docker/slm/Dockerfile), so secrets/slm_*.txt must be readable by it:
+#   chmod 600 secrets/*.txt && sudo chown 999:999 secrets/slm_admin_password.txt secrets/slm_jwt_secret.txt
 secrets:
   slm_admin_password:
     file: ./secrets/slm_admin_password.txt
@@ -153,7 +157,7 @@ services:
       - slm_jwt_secret
     environment:
       # Map-style environment merges with base (list-style would replace)
-      # The SLM service reads *_FILE variants via autobot_shared.secret_file_utils.
+      # SLM_ADMIN_PASSWORD_FILE: read by services/admin_seed_password.py (fresh install only, #19368).
       # SLM_DATA_DIR inherited from base compose (set to /app/data)
       SLM_ADMIN_PASSWORD_FILE: /run/secrets/slm_admin_password
       SLM_JWT_SECRET_FILE: /run/secrets/slm_jwt_secret
@@ -167,6 +171,13 @@ services:
 
   autobot-frontend:
     # read_only + tmpfs already set in base compose
+    deploy:
+      resources:
+        limits:
+          pids: 64
+
+  autobot-slm-gui:
+    # read_only + tmpfs already set in base compose (#18585)
     deploy:
       resources:
         limits:

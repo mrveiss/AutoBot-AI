@@ -1,8 +1,8 @@
 <!-- AutoBot - AI-Powered Automation Platform -->
 <!-- Copyright (c) 2025-2026 mrveiss -->
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import { formatDuration } from '@/utils/formatHelpers'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { formatDuration, createDateFormatter } from '@/utils/formatHelpers'
 import { useRoute, useRouter } from 'vue-router'
 import UploadModal from '@/components/transcriber/UploadModal.vue'
 import ProcessingProgress from '@/components/transcriber/ProcessingProgress.vue'
@@ -15,6 +15,14 @@ import { useTranscriberStore } from '@/stores/transcriber/useTranscriberStore'
 import { createLogger } from '@/utils/debugUtils'
 
 const logger = createLogger('TranscriberProjectDetailView')
+
+// Live progress returns with its route (#18746): the SSE /recordings/{id}/progress route is not served.
+const LIVE_PROGRESS_ENABLED = false
+
+// While live progress is off, a pending/processing recording is refreshed by polling its served GET.
+const POLL_MS_RAW = Number(import.meta.env.VITE_TRANSCRIBER_POLL_MS)
+// Empty or malformed values (0, NaN) would poll near-continuously: fall back, and never go under 1s.
+const RECORDING_POLL_MS = Number.isFinite(POLL_MS_RAW) && POLL_MS_RAW >= 1000 ? POLL_MS_RAW : 4000
 
 const route = useRoute()
 const router = useRouter()
@@ -51,7 +59,7 @@ async function load() {
 }
 
 function onUploaded(recording: Recording) {
-  // Surface the new recording immediately; ProcessingProgress drives it to done.
+  // Surface the new recording immediately; polling (or ProcessingProgress) drives it to done.
   recordings.value = [recording, ...recordings.value]
   store.setRecordings(recordings.value)
 }
@@ -94,10 +102,45 @@ function isInProgress(r: Recording): boolean {
   return r.status === 'pending' || r.status === 'processing'
 }
 
-function formatDate(iso: string): string {
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
+const formatDate = createDateFormatter({ emptyText: '—', invalidText: '—' })
+
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+function stopPolling() {
+  if (pollTimer === null) return
+  clearInterval(pollTimer)
+  pollTimer = null
 }
+
+let pollBusy = false
+
+// One batch at a time: a slow service must not stack requests or let an older reply win.
+async function pollInProgress() {
+  if (pollBusy) return
+  pollBusy = true
+  try {
+    await Promise.all(recordings.value.filter(isInProgress).map((r) => onProcessingSettled(r.id)))
+  } finally {
+    pollBusy = false
+  }
+}
+
+const hasInProgress = computed(() => recordings.value.some(isInProgress))
+
+// Poll only while something is pending/processing and live progress is off.
+watch(
+  hasInProgress,
+  (active) => {
+    if (active && !LIVE_PROGRESS_ENABLED && pollTimer === null) {
+      pollTimer = setInterval(pollInProgress, RECORDING_POLL_MS)
+    } else if (!active) {
+      stopPolling()
+    }
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(stopPolling)
 
 // Re-load when navigating directly between sibling project routes.
 watch(projectId, (next, prev) => {
@@ -146,7 +189,7 @@ onMounted(load)
           </span>
 
           <ProcessingProgress
-            v-if="isInProgress(recording)"
+            v-if="LIVE_PROGRESS_ENABLED && isInProgress(recording)"
             :recording-id="recording.id"
             class="recording-progress"
             @complete="onProcessingSettled(recording.id)"
@@ -222,7 +265,7 @@ onMounted(load)
 
 .project-detail-desc {
   margin: 0;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .recordings-state {
@@ -231,12 +274,12 @@ onMounted(load)
   align-items: center;
   gap: 0.5rem;
   padding: 2rem;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
   text-align: center;
 }
 
 .recordings-error {
-  color: var(--color-danger-600, #dc2626);
+  color: var(--color-error);
 }
 
 .recordings-list {
@@ -254,9 +297,9 @@ onMounted(load)
   justify-content: space-between;
   gap: 1rem;
   padding: 0.75rem 1rem;
-  border: 1px solid var(--border-color, #e5e7eb);
+  border: 1px solid var(--border-default);
   border-radius: 0.5rem;
-  background: var(--bg-primary, #fff);
+  background: var(--bg-card);
 }
 
 .recording-main {
@@ -280,7 +323,7 @@ onMounted(load)
   flex-wrap: wrap;
   gap: 0.75rem;
   font-size: var(--text-xs, 0.75rem);
-  color: var(--text-tertiary, #9ca3af);
+  color: var(--text-tertiary);
 }
 
 .recording-status {
@@ -289,16 +332,16 @@ onMounted(load)
 }
 
 .recording-status-complete {
-  color: var(--color-success-600, #16a34a);
+  color: var(--color-success);
 }
 
 .recording-status-processing,
 .recording-status-pending {
-  color: var(--color-warning-600, #d97706);
+  color: var(--color-warning);
 }
 
 .recording-status-error {
-  color: var(--color-danger-600, #dc2626);
+  color: var(--color-error);
 }
 
 .recording-progress {
@@ -307,7 +350,7 @@ onMounted(load)
 
 .recording-failure {
   font-size: var(--text-sm, 0.875rem);
-  color: var(--color-danger-600, #dc2626);
+  color: var(--color-error);
 }
 
 .recording-actions {

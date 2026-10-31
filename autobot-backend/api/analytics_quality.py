@@ -993,7 +993,7 @@ def _export_quality_as_csv(health: Any, metrics: dict) -> str:
 # ============================================================================
 
 
-class ConnectionManager:
+class QualityWebSocketHub:
     """Manage WebSocket connections for real-time updates."""
 
     def __init__(self):
@@ -1024,7 +1024,7 @@ class ConnectionManager:
             self.disconnect(conn)
 
 
-manager = ConnectionManager()
+manager = QualityWebSocketHub()
 
 
 # ============================================================================

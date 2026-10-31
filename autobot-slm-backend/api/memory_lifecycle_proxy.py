@@ -19,22 +19,18 @@ operator less than one that says which part it could not read.
 
 from __future__ import annotations
 
-import logging
 from typing import Any, Dict
 
 import httpx
 from fastapi import APIRouter, Depends, Query
 
 from autobot_shared import node_proxy
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_constants import QueryDefaults
 from config import settings
 from services.auth import get_current_user
 
-# Stdlib logging, not autobot_shared.get_logger: this package's test harness
-# replaces `config` with a MagicMock, and the shared logger reads handler sizes
-# from config at import time — it dies during collection. Same reason
-# api/voice_proxy.py does this, and the documented exception in CLAUDE.md.
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 router = APIRouter(prefix="/memory", tags=["memory-lifecycle"])
 

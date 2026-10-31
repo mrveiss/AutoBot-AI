@@ -49,7 +49,8 @@ from llm_shared.fallback_chain import get_fallback_chain_manager
 from llm_shared.models import LLMRequest, LLMResponse
 from llm_shared.optimization.prompt_compressor import CompressionConfig, PromptCompressor
 from llm_shared.rate_limit_backoff import extract_rate_limit_info
-from llm_shared.tiered_routing import TierConfig, TieredModelRouter
+from llm_shared.tiered_routing.base_strategy import RoutingStrategy
+from llm_shared.tiered_routing.registry import get_active_router
 from llm_shared.types import LLMType
 from services.llm_fallback_chain import (
     StreamRetry,
@@ -59,16 +60,16 @@ from services.llm_fallback_chain import (
     resolve_attempt_provider,
     track_attempt,
 )
-from services.llm_usage_recording import record_response_usage
+from services.llm_usage_recording import record_response_usage, recorded_stream
 
 try:
-    from services.provider_health import ProviderHealthManager, ProviderStatus
+    from services.provider_health import ProviderHealthManager, ProviderHealthStatus
 
     _HEALTH_CHECK_AVAILABLE = True
 except Exception:  # pragma: no cover
     _HEALTH_CHECK_AVAILABLE = False
     ProviderHealthManager = None  # type: ignore[assignment]
-    ProviderStatus = None  # type: ignore[assignment]
+    ProviderHealthStatus = None  # type: ignore[assignment]
 
 # OTel tracer shared with llm_shared — same span names so traces merge.
 _llm_tracer = get_tracer("autobot.llm")
@@ -162,9 +163,9 @@ class LLMService:
         self._prompt_compressor = PromptCompressor(CompressionConfig(min_length_to_compress=0))
         # Runtime provider override set via switch_provider() (#3185).
         self._active_provider: str | None = None
-        # Tiered model routing — mirrors LLMInterface._init_tiered_routing() (#3185).
+        # Tiered routing (#3185) via the strategy registry: routing_strategy applies (#18297).
         try:
-            self._tier_router: TieredModelRouter | None = TieredModelRouter(TierConfig.from_config())
+            self._tier_router: RoutingStrategy | None = get_active_router()
         except Exception as exc:  # pragma: no cover
             logger.warning("Tiered routing init failed, disabled: %s", exc)
             self._tier_router = None
@@ -262,11 +263,11 @@ class LLMService:
         max_fallback_attempts = 10  # Safety limit
 
         while len(attempted_models) < max_fallback_attempts:
-            provider = await resolve_attempt_provider(self._registry, current_provider_name, conversation_id)
+            provider, failure = await resolve_attempt_provider(self._registry, current_provider_name, conversation_id)
             if provider is None:
                 self._error_count += 1
                 logger.error("No available provider for chat request")
-                return _build_error_response(request, "No available LLM provider", "none")
+                return _build_error_response(request, failure or "No available LLM provider", "none")
 
             request.model_name = current_model
             attempt_key = track_attempt(
@@ -355,10 +356,10 @@ class LLMService:
         max_fallback_attempts = 10  # Safety limit
 
         while len(attempted_models) < max_fallback_attempts:
-            provider = await resolve_attempt_provider(self._registry, current_provider_name, conversation_id)
+            provider, failure = await resolve_attempt_provider(self._registry, current_provider_name, conversation_id)
             if provider is None:
                 self._error_count += 1
-                raise RuntimeError("No available LLM provider for streaming request")
+                raise RuntimeError(failure or "No available LLM provider for streaming request")
 
             request.model_name = current_model
             attempt_key = track_attempt(
@@ -748,11 +749,10 @@ class LLMService:
     # ------------------------------------------------------------------
 
     @property
-    def tier_router(self) -> TieredModelRouter | None:
-        """Return the shared TieredModelRouter instance, or None if disabled.
+    def tier_router(self) -> RoutingStrategy | None:
+        """Return the configured routing strategy singleton, or None if disabled.
 
         Callers in api/llm.py reach this to get/set metrics and config.
-        Mirrors ``LLMInterface._tier_router`` (interface.py line 410).
         """
         return self._tier_router
 
@@ -828,7 +828,7 @@ class LLMService:
                 health_result = await ProviderHealthManager.check_provider_health(
                     provider_name, timeout=2.0, use_cache=True
                 )
-                if health_result.status == ProviderStatus.UNAVAILABLE:
+                if health_result.status == ProviderHealthStatus.UNAVAILABLE:
                     return (
                         False,
                         f"{provider_name} unavailable: {health_result.message}",
@@ -1012,7 +1012,7 @@ class LLMService:
         """
         chunks_yielded = False
         try:
-            async for chunk in provider.stream_completion(request):
+            async for chunk in recorded_stream(provider, request, session_id=conversation_id):
                 chunks_yielded = True
                 yield chunk
             await emit_fallback_success(
@@ -1089,7 +1089,7 @@ class LLMService:
         }.get(resolved_type)
         if cheap:
             return cheap
-        # Otherwise defer to complexity-based tier routing.
+        # Otherwise defer to the configured routing strategy (#18297).
         if self._tier_router is not None:
             try:
                 selected, _ = self._tier_router.route(messages)

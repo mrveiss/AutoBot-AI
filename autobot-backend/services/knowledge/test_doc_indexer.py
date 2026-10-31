@@ -93,6 +93,7 @@ from services.knowledge.doc_indexer import (  # noqa: E402 — after sys.modules
     _should_exclude,
     get_doc_indexer_service,
 )
+from tests.fixtures import read_text_async, write_text_async
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -293,7 +294,7 @@ class TestIndexAll:
         # Put a stale cache that would skip all files in incremental mode
         stale_cache = {"docs/features/feature_a.md": "stale", "docs/features/feature_b.md": "stale"}
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text(json.dumps(stale_cache), encoding="utf-8")
+        await write_text_async(cache_file, json.dumps(stale_cache))
 
         with (
             patch(f"{_MODULE}.HASH_CACHE_FILE", cache_file),
@@ -326,7 +327,7 @@ class TestIndexAll:
             "docs/features/feature_b.md": _compute_file_hash(str(f_b)),
         }
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text(json.dumps(current_hashes), encoding="utf-8")
+        await write_text_async(cache_file, json.dumps(current_hashes))
 
         with (
             patch(f"{_MODULE}.HASH_CACHE_FILE", cache_file),
@@ -352,7 +353,7 @@ class TestIndexAll:
             "docs/features/feature_b.md": _compute_file_hash(str(f_b)),
         }
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text(json.dumps(current_hashes), encoding="utf-8")
+        await write_text_async(cache_file, json.dumps(current_hashes))
 
         with (
             patch(f"{_MODULE}.HASH_CACHE_FILE", cache_file),
@@ -381,7 +382,7 @@ class TestIndexAll:
             "docs/features/feature_b.md": "stale_hash",
         }
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text(json.dumps(cache), encoding="utf-8")
+        await write_text_async(cache_file, json.dumps(cache))
 
         with (
             patch(f"{_MODULE}.HASH_CACHE_FILE", cache_file),
@@ -416,7 +417,7 @@ class TestIndexAll:
 
         # Cache file must exist and contain both file entries
         assert cache_file.exists()
-        saved = json.loads(cache_file.read_text(encoding="utf-8"))
+        saved = json.loads(await read_text_async(cache_file))
         assert "docs/features/feature_a.md" in saved
         assert "docs/features/feature_b.md" in saved
 
@@ -452,7 +453,7 @@ class TestIndexAll:
         f_a = tmp_path / "docs" / "features" / "feature_a.md"
         cache = {"docs/features/feature_a.md": _compute_file_hash(str(f_a))}
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text(json.dumps(cache), encoding="utf-8")
+        await write_text_async(cache_file, json.dumps(cache))
 
         with (
             patch(f"{_MODULE}.HASH_CACHE_FILE", cache_file),
@@ -539,11 +540,11 @@ class TestIndexFile:
     async def test_skips_file_with_matching_hash(self, tmp_path) -> None:
         """index_file skips indexing when hash matches cache and force=False."""
         f = tmp_path / "guide.md"
-        f.write_text("# Guide\n\nContent here.\n", encoding="utf-8")
+        await write_text_async(f, "# Guide\n\nContent here.\n")
         current_hash = _compute_file_hash(str(f))
         cache = {"guide.md": current_hash}
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text(json.dumps(cache), encoding="utf-8")
+        await write_text_async(cache_file, json.dumps(cache))
 
         svc = _make_service(initialized=True, collection_count=10, root_dir=tmp_path)
 
@@ -557,11 +558,11 @@ class TestIndexFile:
     async def test_force_true_bypasses_hash_check(self, tmp_path) -> None:
         """index_file with force=True indexes even if hash matches cache."""
         f = tmp_path / "guide.md"
-        f.write_text("# Guide\n\nSome section content here.\n\nMore text.\n", encoding="utf-8")
+        await write_text_async(f, "# Guide\n\nSome section content here.\n\nMore text.\n")
         current_hash = _compute_file_hash(str(f))
         cache = {"guide.md": current_hash}
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text(json.dumps(cache), encoding="utf-8")
+        await write_text_async(cache_file, json.dumps(cache))
 
         svc = _make_service(initialized=True, collection_count=10, root_dir=tmp_path)
 
@@ -578,7 +579,7 @@ class TestIndexFile:
     async def test_empty_file_is_skipped(self, tmp_path) -> None:
         """index_file skips files that contain only whitespace."""
         f = tmp_path / "empty.md"
-        f.write_text("   \n\n  ", encoding="utf-8")
+        await write_text_async(f, "   \n\n  ")
         svc = _make_service(initialized=True, collection_count=10, root_dir=tmp_path)
 
         with patch(f"{_MODULE}.HASH_CACHE_FILE", tmp_path / ".hashes.json"):
@@ -590,7 +591,7 @@ class TestIndexFile:
     async def test_successful_index_returns_success_one(self, tmp_path) -> None:
         """index_file returns success=1 when chunk is indexed."""
         f = tmp_path / "doc.md"
-        f.write_text("# Doc\n\n## Section A\n\nSome useful content here.\n", encoding="utf-8")
+        await write_text_async(f, "# Doc\n\n## Section A\n\nSome useful content here.\n")
         svc = _make_service(initialized=True, collection_count=10, root_dir=tmp_path)
 
         with (
@@ -612,7 +613,7 @@ class TestIndexAllEmpty4350Fix:
         docs = tmp_path / "docs" / "features"
         docs.mkdir(parents=True)
         f = docs / "api.md"
-        f.write_text("# API\n\n## Section\n\nApi content here.\n", encoding="utf-8")
+        await write_text_async(f, "# API\n\n## Section\n\nApi content here.\n")
 
         svc = _make_service(initialized=True, collection_count=0, root_dir=tmp_path)
         assert svc.needs_indexing() is True  # Empty collection
@@ -621,7 +622,7 @@ class TestIndexAllEmpty4350Fix:
         current_hash = _compute_file_hash(str(f))
         cache = {"docs/features/api.md": current_hash}
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text(json.dumps(cache), encoding="utf-8")
+        await write_text_async(cache_file, json.dumps(cache))
 
         indexed_files = []
 
@@ -643,7 +644,7 @@ class TestIndexAllEmpty4350Fix:
         docs = tmp_path / "docs" / "features"
         docs.mkdir(parents=True)
         f = docs / "api.md"
-        f.write_text("# API\n\nContent.\n", encoding="utf-8")
+        await write_text_async(f, "# API\n\nContent.\n")
 
         svc = _make_service(initialized=True, collection_count=10, root_dir=tmp_path)
         assert svc.needs_indexing() is False  # Non-empty collection
@@ -651,7 +652,7 @@ class TestIndexAllEmpty4350Fix:
         current_hash = _compute_file_hash(str(f))
         cache = {"docs/features/api.md": current_hash}
         cache_file = tmp_path / ".doc_index_hashes.json"
-        cache_file.write_text(json.dumps(cache), encoding="utf-8")
+        await write_text_async(cache_file, json.dumps(cache))
 
         indexed_files = []
 
@@ -700,12 +701,12 @@ class TestEdgeCases:
         docs = tmp_path / "docs" / "features"
         docs.mkdir(parents=True)
         f = docs / "guide.md"
-        f.write_text("# Guide\n\nContent.\n", encoding="utf-8")
+        await write_text_async(f, "# Guide\n\nContent.\n")
 
         svc = _make_service(initialized=True, collection_count=0, root_dir=tmp_path)
 
         corrupt_cache = tmp_path / ".doc_index_hashes.json"
-        corrupt_cache.write_text("{ invalid json !!!", encoding="utf-8")
+        await write_text_async(corrupt_cache, "{ invalid json !!!")
 
         indexed_files = []
 
@@ -1406,7 +1407,7 @@ class TestDocIndexerSearch:
 
     @pytest.mark.asyncio
     async def test_search_returns_search_results(self) -> None:
-        """Happy path: wraps ChromaDB hits into SearchResult objects."""
+        """Happy path: wraps ChromaDB hits into RankedResult objects."""
         svc = _make_service(initialized=True, collection_count=3)
         svc._collection.query = MagicMock(
             return_value={
@@ -1421,8 +1422,7 @@ class TestDocIndexerSearch:
             }
         )
 
-        stub_mod = MagicMock()
-        stub_mod.SearchResult = MagicMock(side_effect=lambda **kw: kw)
+        stub_mod = MagicMock(RankedResult=MagicMock(side_effect=lambda **kw: kw))
 
         with patch.dict("sys.modules", {"advanced_rag_optimizer": stub_mod}):
             results = await svc.search("what is autobot", n_results=2)
@@ -1446,8 +1446,7 @@ class TestDocIndexerSearch:
             }
         )
 
-        stub_mod = MagicMock()
-        stub_mod.SearchResult = MagicMock(side_effect=lambda **kw: kw)
+        stub_mod = MagicMock(RankedResult=MagicMock(side_effect=lambda **kw: kw))
         with patch.dict("sys.modules", {"advanced_rag_optimizer": stub_mod}):
             await svc.search("query", n_results=100)
 
@@ -1460,8 +1459,7 @@ class TestDocIndexerSearch:
         svc = _make_service(initialized=True, collection_count=5)
         svc._collection.query = MagicMock(side_effect=RuntimeError("chromadb unavailable"))
 
-        stub_mod = MagicMock()
-        stub_mod.SearchResult = MagicMock(side_effect=lambda **kw: kw)
+        stub_mod = MagicMock(RankedResult=MagicMock(side_effect=lambda **kw: kw))
         with patch.dict("sys.modules", {"advanced_rag_optimizer": stub_mod}):
             result = await svc.search("query")
 

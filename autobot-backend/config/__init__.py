@@ -20,7 +20,6 @@ Architecture:
 - file_watcher.py: File watching and callbacks
 - validation.py: Config validation
 - manager.py: Core manager class (composition of mixins)
-- compat.py: Backward compatibility wrappers
 
 Note: Uses lazy imports via __getattr__ to avoid circular import with NetworkConstants.
     Cycle: network_constants → ConfigRegistry → src.config.__init__ → manager → network_constants
@@ -45,21 +44,6 @@ logger = logging.getLogger(__name__)
 
 # Type hints for IDE support without runtime import
 if TYPE_CHECKING:
-    from config.compat import (
-        API_BASE_URL,
-        BACKEND_HOST_IP,
-        BACKEND_PORT,
-        HTTP_PROTOCOL,
-        OLLAMA_HOST_IP,
-        OLLAMA_PORT,
-        OLLAMA_URL,
-        PLAYWRIGHT_HOST_IP,
-        PLAYWRIGHT_VNC_PORT,
-        PLAYWRIGHT_VNC_URL,
-        REDIS_HOST_IP,
-        Config,
-        get_vnc_direct_url,
-    )
     from config.manager import ConfigManager, get_config_manager
     from config.settings import ConfigSettings
 
@@ -90,8 +74,10 @@ class _ConfigStub:
         avoid re-entering the circular-import path this stub exists to guard.
         Previously read nonexistent `config.redis_enabled`/`config.redis_db_main`
         attributes (AttributeError if ever invoked) — fixed to use the real
-        `config.redis.*` sub-config fields.
+        `config.redis.*` sub-config fields. #19232: the database number comes
+        from the one name -> number table, not a parallel SSOT field.
         """
+        from autobot_shared.redis_management.database_names import database_number
 
         return {
             "enabled": config.redis.enabled,
@@ -99,7 +85,7 @@ class _ConfigStub:
             "port": int(config.port.redis),
             "password": config.redis.password,
             "username": config.redis.username,
-            "db": int(config.redis.db_main),
+            "db": database_number("main"),
         }
 
     def get_llm_config(self):
@@ -110,9 +96,6 @@ class _ConfigStub:
 
     def validate_config(self):
         return {}
-
-    def is_feature_enabled(self, feature):
-        return False
 
     async def load_config_async(self, config_type="main"):
         return {}
@@ -192,43 +175,6 @@ def _lazy_import_settings():
     return _lazy_cache["settings"]
 
 
-def _lazy_import_compat():
-    """Lazily import the compat module."""
-    if "compat" not in _lazy_cache:
-        from config.compat import (
-            API_BASE_URL,
-            BACKEND_HOST_IP,
-            BACKEND_PORT,
-            HTTP_PROTOCOL,
-            OLLAMA_HOST_IP,
-            OLLAMA_PORT,
-            OLLAMA_URL,
-            PLAYWRIGHT_HOST_IP,
-            PLAYWRIGHT_VNC_PORT,
-            PLAYWRIGHT_VNC_URL,
-            REDIS_HOST_IP,
-            Config,
-            get_vnc_direct_url,
-        )
-
-        _lazy_cache["compat"] = {
-            "API_BASE_URL": API_BASE_URL,
-            "BACKEND_HOST_IP": BACKEND_HOST_IP,
-            "BACKEND_PORT": BACKEND_PORT,
-            "HTTP_PROTOCOL": HTTP_PROTOCOL,
-            "OLLAMA_HOST_IP": OLLAMA_HOST_IP,
-            "OLLAMA_PORT": OLLAMA_PORT,
-            "OLLAMA_URL": OLLAMA_URL,
-            "PLAYWRIGHT_HOST_IP": PLAYWRIGHT_HOST_IP,
-            "PLAYWRIGHT_VNC_PORT": PLAYWRIGHT_VNC_PORT,
-            "PLAYWRIGHT_VNC_URL": PLAYWRIGHT_VNC_URL,
-            "REDIS_HOST_IP": REDIS_HOST_IP,
-            "Config": Config,
-            "get_vnc_direct_url": get_vnc_direct_url,
-        }
-    return _lazy_cache["compat"]
-
-
 def __getattr__(name: str):
     """Lazy attribute lookup for module-level imports."""
     # Manager-related attributes (new names + deprecated aliases)
@@ -247,41 +193,15 @@ def __getattr__(name: str):
     if name in ("global_config_manager", "config", "cfg"):
         return _get_cached_config_manager()
 
-    if name == "legacy_config":
-        _lazy_import_manager()
-        compat = _lazy_import_compat()
-        if "legacy_config" not in _lazy_cache:
-            _lazy_cache["legacy_config"] = compat["Config"](_get_cached_config_manager())
-        return _lazy_cache["legacy_config"]
-
     # Settings (new name + deprecated alias)
     if name in ("ConfigSettings", "UnifiedConfigSettings"):
         return _lazy_import_settings()[name]
-
-    # Compat constants and classes
-    compat_names = {
-        "API_BASE_URL",
-        "BACKEND_HOST_IP",
-        "BACKEND_PORT",
-        "HTTP_PROTOCOL",
-        "OLLAMA_HOST_IP",
-        "OLLAMA_PORT",
-        "OLLAMA_URL",
-        "PLAYWRIGHT_HOST_IP",
-        "PLAYWRIGHT_VNC_PORT",
-        "PLAYWRIGHT_VNC_URL",
-        "REDIS_HOST_IP",
-        "Config",
-        "get_vnc_direct_url",
-    }
-    if name in compat_names:
-        return _lazy_import_compat()[name]
 
     raise AttributeError(f"module 'src.config' has no attribute '{name}'")
 
 
 # Convenience functions - use _get_cached_config_manager for re-entry safety (#1862)
-def get_config(key: str, default=None):
+def get_config_value(key: str, default=None):
     """Get configuration value"""
     return _get_cached_config_manager().get(key, default)
 
@@ -307,19 +227,14 @@ def get_redis_config():
     return _get_cached_config_manager().get_redis_config()
 
 
-def reload_config():
-    """Reload configuration from files"""
+def reload_config_files():
+    """Reload the file-backed ConfigManager (not the SSOT settings: see autobot_shared.ssot_config.reload_config)."""
     _get_cached_config_manager().reload()
 
 
 def validate_config():
     """Validate configuration and return status"""
     return _get_cached_config_manager().validate_config()
-
-
-def is_feature_enabled(feature: str) -> bool:
-    """Check if a feature is enabled (e.g. 'multimodal.vision', 'npu')."""
-    return _get_cached_config_manager().is_feature_enabled(feature)
 
 
 # Async convenience functions
@@ -366,14 +281,12 @@ __all__ = [
     "global_config_manager",
     "config",
     "cfg",
-    "Config",
-    "legacy_config",
     # Convenience functions
-    "get_config",
+    "get_config_value",
     "get_config_section",
     "get_llm_config",
     "get_redis_config",
-    "reload_config",
+    "reload_config_files",
     "validate_config",
     # Async convenience functions
     "get_config_manager_async",
@@ -382,16 +295,4 @@ __all__ = [
     "get_config_value_async",
     "set_config_value_async",
     # Constants
-    "HTTP_PROTOCOL",
-    "OLLAMA_HOST_IP",
-    "OLLAMA_PORT",
-    "OLLAMA_URL",
-    "REDIS_HOST_IP",
-    "BACKEND_HOST_IP",
-    "BACKEND_PORT",
-    "API_BASE_URL",
-    "PLAYWRIGHT_HOST_IP",
-    "PLAYWRIGHT_VNC_PORT",
-    "PLAYWRIGHT_VNC_URL",
-    "get_vnc_direct_url",
 ]

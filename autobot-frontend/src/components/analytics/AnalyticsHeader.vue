@@ -1,106 +1,104 @@
 <template>
-  <div class="analytics-header">
-    <div class="header-content">
-      <h2><Icon name="code" /> {{ $t('analytics.header.title') }}</h2>
-      <div class="header-controls">
-        <!-- Source selector row -->
-        <div class="source-selector-row">
-          <!-- Project selector dropdown -->
-          <div class="source-selector-wrapper">
-            <select
-              class="source-select"
-              :value="selectedSource ? selectedSource.id : '__custom__'"
-              @change="handleSourceChange"
-              :title="selectedSource ? selectedSource.name : 'Custom path'"
+  <PageHeader class="analytics-header" :level="2" size="xl">
+    <template #title><Icon name="code" /> {{ $t('analytics.header.title') }}</template>
+    <div class="header-controls">
+      <!-- Source selector row -->
+      <div class="source-selector-row">
+        <!-- Project selector dropdown -->
+        <div class="source-selector-wrapper">
+          <select
+            class="source-select"
+            :value="selectedSource ? selectedSource.id : '__custom__'"
+            @change="handleSourceChange"
+            :title="selectedSource ? selectedSource.name : $t('analytics.header.customPath')"
+          >
+            <option value="__custom__">{{ $t('analytics.header.customPath') }}</option>
+            <option
+              v-for="source in sources"
+              :key="source.id"
+              :value="source.id"
             >
-              <option value="__custom__">{{ $t('analytics.header.customPath') }}</option>
-              <option
-                v-for="source in sources"
-                :key="source.id"
-                :value="source.id"
-              >
-                {{ source.name }}
-                <template v-if="source.source_type === 'github'"> ({{ source.repo ?? '' }})</template>
-                <template v-else> ({{ $t('analytics.header.local') }})</template>
-              </option>
-            </select>
-            <Icon name="chevron-down" class="select-chevron" />
-          </div>
-
-          <!-- Manage Sources button -->
-          <button class="btn-manage" @click="$emit('open-source-manager')" :title="$t('analytics.header.manageSourcesTitle')">
-            <Icon name="code-branch" />
-            {{ $t('analytics.header.manageSources') }}
-          </button>
+              {{ source.name }}
+              <template v-if="source.source_type === 'github'"> ({{ source.repo ?? '' }})</template>
+              <template v-else> ({{ $t('analytics.header.local') }})</template>
+            </option>
+          </select>
+          <Icon name="chevron-down" class="select-chevron" />
         </div>
 
-        <!-- Path input (shown when custom path selected or no sources) -->
-        <input
-          v-if="!selectedSource"
-          :value="rootPath"
-          @input="$emit('update:rootPath', ($event.target as HTMLInputElement).value)"
-          :placeholder="$t('analytics.header.pathPlaceholder')"
-          class="path-input"
-          @keyup.enter="$emit('run-full-analysis')"
-        />
-
-        <!-- Selected source info bar -->
-        <div v-if="selectedSource" class="selected-source-bar">
-          <i :class="selectedSource.source_type === 'github' ? 'github' : 'folder'"></i>
-          <span class="selected-source-name">{{ selectedSource.name }}</span>
-          <span class="selected-source-path">
-            {{ selectedSource.repo ?? selectedSource.clone_path ?? '' }}
-          </span>
-          <span class="selected-source-status" :class="`status--${selectedSource.status}`">
-            {{ selectedSource.status }}
-          </span>
-          <button class="btn-clear-source" @click="$emit('clear-source')" :title="$t('analytics.header.useCustomPath')">
-            <Icon name="times" />
-          </button>
-        </div>
-
-        <button @click="$emit('index-codebase')" :disabled="analyzing" class="btn-primary">
-          <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'database'"></i>
-          {{ analyzing ? $t('analytics.header.indexing') : $t('analytics.header.indexCodebase') }}
+        <!-- Manage Sources button -->
+        <button class="btn-manage" @click="$emit('open-source-manager')" :title="$t('analytics.header.manageSourcesTitle')">
+          <Icon name="code-branch" />
+          {{ $t('analytics.header.manageSources') }}
         </button>
-        <button v-if="analyzing && currentJobId" @click="$emit('cancel-indexing')" class="btn-cancel">
-          <Icon name="stop-circle" />
-          {{ $t('analytics.header.cancel') }}
-        </button>
-        <button @click="$emit('run-full-analysis')" :disabled="analyzing || (!rootPath && !selectedSource)" class="btn-secondary">
-          <i :class="analyzing ? 'fas fa-spinner fa-spin' : 'chart-bar'"></i>
-          {{ analyzing ? $t('analytics.header.analyzingAll') : $t('analytics.header.analyzeAll') }}
-        </button>
+      </div>
 
-        <!-- Debug Controls -->
-        <div class="debug-controls">
-          <button @click="$emit('test-declarations')" class="btn-debug btn-declarations">{{ $t('analytics.header.debug.testDeclarations') }}</button>
-          <button @click="$emit('test-duplicates')" class="btn-debug btn-duplicates">{{ $t('analytics.header.debug.testDuplicates') }}</button>
-          <button @click="$emit('test-hardcodes')" class="btn-debug btn-hardcodes">{{ $t('analytics.header.debug.testHardcodes') }}</button>
-          <button @click="$emit('test-npu')" class="btn-debug btn-npu">{{ $t('analytics.header.debug.testNpu') }}</button>
-          <button @click="$emit('test-state')" class="btn-debug btn-state">{{ $t('analytics.header.debug.debugState') }}</button>
-          <button @click="$emit('reset-state')" class="btn-debug btn-reset">{{ $t('analytics.header.debug.resetState') }}</button>
-          <button @click="$emit('test-all-endpoints')" class="btn-debug btn-endpoints">{{ $t('analytics.header.debug.testAllApis') }}</button>
-          <!-- Code Intelligence -->
-          <button @click="$emit('run-code-smell-analysis')" :disabled="analyzingCodeSmells" class="btn-debug btn-smells">
-            <i :class="analyzingCodeSmells ? 'fas fa-spinner fa-spin' : 'bug'"></i>
-            {{ analyzingCodeSmells ? $t('analytics.header.debug.scanning') : $t('analytics.header.debug.codeSmells') }}
-          </button>
-          <button @click="$emit('get-code-health-score')" :disabled="analyzingCodeSmells" class="btn-debug btn-health">
-            <Icon name="heartbeat" /> {{ $t('analytics.header.debug.healthScore') }}
-          </button>
-          <button @click="$emit('export-report')" :disabled="exportingReport" class="btn-debug btn-export">
-            <i :class="exportingReport ? 'fas fa-spinner fa-spin' : 'file-export'"></i>
-            {{ exportingReport ? $t('analytics.header.debug.exporting') : $t('analytics.header.debug.exportReport') }}
-          </button>
-          <button @click="$emit('clear-cache')" :disabled="clearingCache" class="btn-debug btn-cache">
-            <i :class="clearingCache ? 'fas fa-spinner fa-spin' : 'trash-alt'"></i>
-            {{ clearingCache ? $t('analytics.header.debug.clearing') : $t('analytics.header.debug.clearCache') }}
-          </button>
-        </div>
+      <!-- Path input (shown when custom path selected or no sources) -->
+      <input
+        v-if="!selectedSource"
+        :value="rootPath"
+        @input="$emit('update:rootPath', ($event.target as HTMLInputElement).value)"
+        :placeholder="$t('analytics.header.pathPlaceholder')"
+        class="path-input"
+        @keyup.enter="$emit('run-full-analysis')"
+      />
+
+      <!-- Selected source info bar -->
+      <div v-if="selectedSource" class="selected-source-bar">
+        <Icon :name="selectedSource.source_type === 'github' ? 'code-branch' : 'folder'" />
+        <span class="selected-source-name">{{ selectedSource.name }}</span>
+        <span class="selected-source-path">
+          {{ selectedSource.repo ?? selectedSource.clone_path ?? '' }}
+        </span>
+        <span class="selected-source-status" :class="`status--${selectedSource.status}`">
+          {{ selectedSource.status }}
+        </span>
+        <button class="btn-clear-source" @click="$emit('clear-source')" :title="$t('analytics.header.useCustomPath')">
+          <Icon name="times" />
+        </button>
+      </div>
+
+      <button @click="$emit('index-codebase')" :disabled="analyzing" class="btn-primary">
+        <Icon :name="analyzing ? 'spinner' : 'database'" :spin="analyzing" />
+        {{ analyzing ? $t('analytics.header.indexing') : $t('analytics.header.indexCodebase') }}
+      </button>
+      <button v-if="analyzing && currentJobId" @click="$emit('cancel-indexing')" class="btn-cancel">
+        <Icon name="stop-circle" />
+        {{ $t('analytics.header.cancel') }}
+      </button>
+      <button @click="$emit('run-full-analysis')" :disabled="analyzing || (!rootPath && !selectedSource)" class="btn-secondary">
+        <Icon :name="analyzing ? 'spinner' : 'chart-bar'" :spin="analyzing" />
+        {{ analyzing ? $t('analytics.header.analyzingAll') : $t('analytics.header.analyzeAll') }}
+      </button>
+
+      <!-- Debug Controls -->
+      <div class="debug-controls">
+        <button @click="$emit('test-declarations')" class="btn-debug btn-declarations">{{ $t('analytics.header.debug.testDeclarations') }}</button>
+        <button @click="$emit('test-duplicates')" class="btn-debug btn-duplicates">{{ $t('analytics.header.debug.testDuplicates') }}</button>
+        <button @click="$emit('test-hardcodes')" class="btn-debug btn-hardcodes">{{ $t('analytics.header.debug.testHardcodes') }}</button>
+        <button @click="$emit('test-npu')" class="btn-debug btn-npu">{{ $t('analytics.header.debug.testNpu') }}</button>
+        <button @click="$emit('test-state')" class="btn-debug btn-state">{{ $t('analytics.header.debug.debugState') }}</button>
+        <button @click="$emit('reset-state')" class="btn-debug btn-reset">{{ $t('analytics.header.debug.resetState') }}</button>
+        <button @click="$emit('test-all-endpoints')" class="btn-debug btn-endpoints">{{ $t('analytics.header.debug.testAllApis') }}</button>
+        <!-- Code Intelligence -->
+        <button @click="$emit('run-code-smell-analysis')" :disabled="analyzingCodeSmells" class="btn-debug btn-smells">
+          <Icon :name="analyzingCodeSmells ? 'spinner' : 'bug'" :spin="analyzingCodeSmells" />
+          {{ analyzingCodeSmells ? $t('analytics.header.debug.scanning') : $t('analytics.header.debug.codeSmells') }}
+        </button>
+        <button @click="$emit('get-code-health-score')" :disabled="analyzingCodeSmells" class="btn-debug btn-health">
+          <Icon name="heartbeat" /> {{ $t('analytics.header.debug.healthScore') }}
+        </button>
+        <button @click="$emit('export-report')" :disabled="exportingReport" class="btn-debug btn-export">
+          <Icon :name="exportingReport ? 'spinner' : 'file-export'" :spin="exportingReport" />
+          {{ exportingReport ? $t('analytics.header.debug.exporting') : $t('analytics.header.debug.exportReport') }}
+        </button>
+        <button @click="$emit('clear-cache')" :disabled="clearingCache" class="btn-debug btn-cache">
+          <Icon :name="clearingCache ? 'spinner' : 'trash-alt'" :spin="clearingCache" />
+          {{ clearingCache ? $t('analytics.header.debug.clearing') : $t('analytics.header.debug.clearCache') }}
+        </button>
       </div>
     </div>
-  </div>
+  </PageHeader>
 </template>
 
 <script setup lang="ts">
@@ -120,6 +118,7 @@
 // ---- Types ----------------------------------------------------------------
 
 import Icon from '@/components/ui/Icon.vue'
+import { PageHeader } from '@autobot/ui'
 import type { CodeSource } from '@/types/analytics'
 
 // ---- Props & Emits --------------------------------------------------------
@@ -183,27 +182,10 @@ function handleSourceChange(event: Event) {
 /** Issue #704: Migrated to design tokens */
 /** Issue #1133: Source selector additions */
 
+/* Layout and spacing come from the kit PageHeader (#17563); the title keeps its info colour. */
 .analytics-header {
-  background: var(--bg-card);
-  border-radius: var(--radius-xl);
-  padding: var(--spacing-6);
+  --aui-page-header-title-color: var(--color-info);
   margin-bottom: var(--spacing-6);
-  box-shadow: var(--shadow-lg);
-}
-
-.header-content {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-4);
-}
-
-.header-content h2 {
-  color: var(--color-info);
-  margin: var(--spacing-0);
-  font-size: var(--text-xl);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2-5);
 }
 
 .header-controls {
@@ -294,7 +276,8 @@ function handleSourceChange(event: Event) {
   min-width: 0;
 }
 
-.selected-source-bar > i {
+/* Icon renders an <svg> with the class `icon`; target that, not the <i> it replaced */
+.selected-source-bar > .icon {
   color: var(--color-info);
   flex-shrink: 0;
 }
@@ -415,7 +398,7 @@ function handleSourceChange(event: Event) {
 }
 
 .btn-cancel {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-primary);
 }
 

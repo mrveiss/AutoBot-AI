@@ -31,7 +31,7 @@ def _make_db(recording: dict | None) -> AsyncMock:
     return db
 
 
-# Owned by the calling user: since 130df54d9 (#9968) can_access enforces strict
+# Owned by the calling user: since 130df54d9 (#9968) can_access_transcriber_row enforces strict
 # ownership — legacy DEFAULT_USER ("default") rows are NOT visible to real users.
 DEFAULT_RECORDING = {"id": 456, "user_id": "test-user", "status": "complete"}
 
@@ -332,7 +332,7 @@ def test_ws_analyze_streams_and_closes():
     """Test WS streams analysis chunks for a valid recording, then closes."""
     from starlette.websockets import WebSocketDisconnect
 
-    async def fake_stream(content, request):
+    async def fake_stream(content, request, **_attribution):
         yield "analysis-chunk"
 
     client = _make_ws_client(_make_db(DEFAULT_RECORDING), user=MOCK_USER)

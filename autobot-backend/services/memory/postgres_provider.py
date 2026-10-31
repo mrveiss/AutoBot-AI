@@ -7,6 +7,7 @@
 from typing import Any, Dict, List
 
 from autobot_memory_graph import AutoBotMemoryGraph
+from autobot_memory_graph.owner_scope import UNSCOPED_ALL_USERS, OwnerScope, owner_from_source
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -42,15 +43,21 @@ class PostgresMemoryProvider:
         try:
             conversation_id = context.get("conversation_id")
             user_id = context.get("user_id")
+            owner = owner_from_source(context)
+            if owner is None:
+                logger.warning("Memory prefetch skipped: no user scope in context")
+                return {}
             result = {}
             if conversation_id:
-                conversation = await self.memory_graph.get_entity(f"conversation_{conversation_id}")
+                conversation = await self.memory_graph.get_entity(
+                    entity_name=f"conversation_{conversation_id}", owner=owner
+                )
                 if conversation:
                     result["conversation"] = conversation
-                related = await self.memory_graph.search_entities(conversation_id)
+                related = await self.memory_graph.search_entities(conversation_id, owner=owner)
                 result["related_entities"] = related[:10]
             if user_id:
-                user_entity = await self.memory_graph.get_entity(f"user_{user_id}")
+                user_entity = await self.memory_graph.get_entity(entity_name=f"user_{user_id}", owner=owner)
                 if user_entity:
                     result["user"] = user_entity
             return result
@@ -71,14 +78,12 @@ class PostgresMemoryProvider:
                         entity_type=update["entity_type"],
                         name=update["name"],
                         observations=update.get("observations", []),
+                        owner=owner_from_source(turn) or OwnerScope.system(),
                     )
                 elif update.get("action") == "update":
-                    await self.memory_graph.update_entity(
-                        entity_id=update["entity_id"],
-                        **update.get("changes", {}),
-                    )
+                    await self._apply_entity_updates(update["entity_id"], update.get("changes", {}))
                 elif update.get("action") == "delete":
-                    await self.memory_graph.delete_entity(update["entity_id"])
+                    await self._delete_entity_by_id(update["entity_id"])
             for rel in relation_updates:
                 if rel.get("action") == "create":
                     await self.memory_graph.create_relation(
@@ -90,6 +95,7 @@ class PostgresMemoryProvider:
                     await self.memory_graph.delete_relation(
                         from_entity=rel["from_entity"],
                         to_entity=rel["to_entity"],
+                        relation_type=rel["relation_type"],
                     )
             logger.info(f"Synced {len(entity_updates)} entity and " f"{len(relation_updates)} relation updates")
         except Exception as e:
@@ -100,28 +106,61 @@ class PostgresMemoryProvider:
         if not self.memory_graph:
             logger.warning("Memory graph not initialized for search")
             return []
+        owner = owner_from_source(filters)
+        if owner is None:
+            logger.warning("Memory search refused: filters carry no user scope")
+            return []
         try:
-            results = await self.memory_graph.search_entities(query, limit=limit)
+            results = await self.memory_graph.search_entities(query, limit=limit, owner=owner)
             return results
         except Exception as e:
             logger.error(f"Error searching memory: {e}")
             return []
 
-    async def get_entity(self, entity_id: str) -> Dict[str, Any] | None:
+    async def get_entity(self, entity_id: str, *, owner: OwnerScope | None = None) -> Dict[str, Any] | None:
         if not self.memory_graph:
             return None
+        if owner is None:
+            logger.warning("Entity read refused: no caller scope supplied (fail closed, #18825)")
+            return None
         try:
-            return await self.memory_graph.get_entity(entity_id)
+            return await self.memory_graph.get_entity(entity_id=entity_id, owner=owner)
         except Exception as e:
             logger.error(f"Error getting entity {entity_id}: {e}")
             return None
+
+    async def _name_for_id(self, entity_id: str) -> str:
+        """Resolve an entity id to the name the graph's write API is keyed by (#18414)."""
+        # Id -> name resolution for a by-name mutation; by-name mutations are not owner-scoped (#18876).
+        entity = await self.memory_graph.get_entity(entity_id=entity_id, owner=UNSCOPED_ALL_USERS)
+        if not entity:
+            raise ValueError(f"Entity not found: {entity_id}")
+        return entity["name"]
+
+    async def _apply_entity_updates(self, entity_id: str, updates: Dict[str, Any]) -> None:
+        """Apply updates through the graph's one mutation, add_observations (#18414).
+
+        The graph has no field-level update; observations are its only mutable
+        content. Any other key is refused rather than silently dropped.
+        """
+        unsupported = set(updates) - {"observations"}
+        if unsupported:
+            raise ValueError(f"Unsupported entity update fields: {sorted(unsupported)}")
+        observations = updates.get("observations")
+        if not observations:
+            raise ValueError("Entity update has no observations to apply")
+        await self.memory_graph.add_observations(await self._name_for_id(entity_id), observations)
+
+    async def _delete_entity_by_id(self, entity_id: str) -> None:
+        """The graph deletes by name; resolve the id first (#18414)."""
+        await self.memory_graph.delete_entity(await self._name_for_id(entity_id))
 
     async def update_entity(self, entity_id: str, updates: Dict[str, Any]) -> None:
         if not self.memory_graph:
             logger.warning("Memory graph not initialized for update")
             return
         try:
-            await self.memory_graph.update_entity(entity_id, **updates)
+            await self._apply_entity_updates(entity_id, updates)
         except Exception as e:
             logger.error(f"Error updating entity {entity_id}: {e}")
             raise
@@ -131,7 +170,7 @@ class PostgresMemoryProvider:
             logger.warning("Memory graph not initialized for delete")
             return
         try:
-            await self.memory_graph.delete_entity(entity_id)
+            await self._delete_entity_by_id(entity_id)
         except Exception as e:
             logger.error(f"Error deleting entity {entity_id}: {e}")
             raise
@@ -140,7 +179,9 @@ class PostgresMemoryProvider:
         if not self.memory_graph:
             return False
         try:
-            await self.memory_graph.get_entity("_health_check")
+            await self.memory_graph.get_entity(
+                "_health_check", owner=UNSCOPED_ALL_USERS
+            )  # liveness probe, reads no user data
             return True
         except Exception as e:
             logger.error(f"PostgreSQL memory provider health check failed: {e}")

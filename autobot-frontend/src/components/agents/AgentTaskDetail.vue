@@ -35,7 +35,7 @@
       </div>
       <div v-if="task.actual_duration" class="metadata-row">
         <span class="metadata-label">Duration:</span>
-        <span class="metadata-value">{{ formatDuration(task.actual_duration) }}</span>
+        <span class="metadata-value">{{ formatDuration(task.actual_duration, DURATION_OPTIONS) }}</span>
       </div>
     </div>
 
@@ -108,6 +108,7 @@ import Icon from '@/components/ui/Icon.vue'
 import AgentAbstentionBadge from './AgentAbstentionBadge.vue'
 import liveEventService from '@/services/LiveEventService'
 import type { AgentTask } from '@/types/models'
+import { formatDuration, createDateFormatter } from '@/utils/formatHelpers'
 
 /**
  * Agent Task Detail Component (GH#6626)
@@ -183,18 +184,9 @@ const statusLabel = computed(() => {
   return props.task.status.charAt(0).toUpperCase() + props.task.status.slice(1)
 })
 
-const formatDate = (dateStr: string): string => {
-  return new Date(dateStr).toLocaleString()
-}
+const formatDate = createDateFormatter()
 
-const formatDuration = (ms: number): string => {
-  const seconds = Math.floor(ms / 1000)
-  if (seconds < 60) return `${seconds}s`
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) return `${minutes}m ${seconds % 60}s`
-  const hours = Math.floor(minutes / 60)
-  return `${hours}h ${minutes % 60}m`
-}
+const DURATION_OPTIONS = { style: 'msCompound' } as const
 </script>
 
 <style scoped>

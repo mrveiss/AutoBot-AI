@@ -20,6 +20,8 @@ from pathlib import Path
 
 import pytest
 
+from testkit.fake_async_session import FakeAsyncSession
+
 _slm_root = Path(__file__).parent.parent.parent
 if str(_slm_root) not in sys.path:
     sys.path.insert(0, str(_slm_root))
@@ -106,9 +108,15 @@ class TestSensitivePortsSanity:
         for p in (5432, 6379, 3306, 27017):
             assert spa.SENSITIVE_PORTS[p][1] == "high"
 
+    def test_chromadb_is_watched_on_the_ssot_port(self):
+        # #19321: the port comes from PortConfig.chromadb, not a second literal.
+        from autobot_shared.ssot_config import config
+
+        assert spa.SENSITIVE_PORTS[config.port.chromadb] == ("chromadb", "high")
+
 
 class _RecordingEvent:
-    """Stand-in for the SecurityEvent model (stubbed by the slm conftest).
+    """Stand-in for the SlmSecurityEvent model (stubbed by the slm conftest).
 
     Records constructor kwargs as attributes so tests can assert on the fields
     the auditor populates without depending on the real SQLAlchemy model.
@@ -120,7 +128,7 @@ class _RecordingEvent:
 
 class TestBuildSecurityEvent:
     def test_metadata_only_fields(self, monkeypatch):
-        monkeypatch.setattr(spa, "SecurityEvent", _RecordingEvent)
+        monkeypatch.setattr(spa, "SlmSecurityEvent", _RecordingEvent)
         finding = {
             "port": 6379,
             "address": "0.0.0.0",
@@ -137,29 +145,6 @@ class TestBuildSecurityEvent:
         assert ev.raw_data["port"] == 6379 and ev.raw_data["service"] == "redis"
         # metadata only — no secret value fields
         assert "secret" not in (ev.description or "").lower()
-
-
-class _FakeResult:
-    def __init__(self, rows):
-        self._rows = rows
-
-    def scalars(self):
-        return self
-
-    def all(self):
-        return self._rows
-
-
-class _FakeSession:
-    def __init__(self, nodes):
-        self._nodes = nodes
-        self.added = []
-
-    async def execute(self, _stmt):
-        return _FakeResult(self._nodes)
-
-    def add(self, obj):
-        self.added.append(obj)
 
 
 class _FakeSessionCtx:
@@ -186,8 +171,8 @@ class TestAuditFleet:
             _Node("node-a", [{"port": 6379, "address": "0.0.0.0"}, {"port": 5432, "address": "0.0.0.0"}]),
             _Node("node-b", [{"port": 6379, "address": "127.0.0.1"}]),  # loopback → nothing
         ]
-        session = _FakeSession(nodes)
-        monkeypatch.setattr(spa, "SecurityEvent", _RecordingEvent)
+        session = FakeAsyncSession(default_result=nodes)
+        monkeypatch.setattr(spa, "SlmSecurityEvent", _RecordingEvent)
         monkeypatch.setattr(spa, "_get_session", lambda: _FakeSessionCtx(session))
 
         # node-a already has an open exposure for redis(6379) → only 5432 is new.

@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from autobot_memory_graph.entities import EntityOperationsMixin
+from autobot_memory_graph.owner_scope import UNSCOPED_ALL_USERS
 
 _INCIDENT_7 = {"id": "id-7", "name": "Incident 7", "type": "incident"}
 _INCIDENT_71 = {"id": "id-71", "name": "Incident 71", "type": "incident"}
@@ -46,7 +47,7 @@ async def test_a_name_that_does_not_exist_is_not_reported_as_an_exact_hit():
     """ "Incident 7" is a typo; only "Incident 71" exists."""
     graph = _graph(_INCIDENT_71)
 
-    entity = await graph.get_entity(entity_name="Incident 7")
+    entity = await graph.get_entity(entity_name="Incident 7", owner=UNSCOPED_ALL_USERS)
 
     assert entity["id"] == "id-71"
     assert entity["_resolution"] == "fuzzy", "a near-miss must be marked, not passed off as the entity"
@@ -57,7 +58,7 @@ async def test_the_exact_name_wins_over_a_higher_ranked_near_miss():
     """Both exist and the near-miss ranks first — the exact name must still win."""
     graph = _graph(_INCIDENT_71, _INCIDENT_7)
 
-    entity = await graph.get_entity(entity_name="Incident 7")
+    entity = await graph.get_entity(entity_name="Incident 7", owner=UNSCOPED_ALL_USERS)
 
     assert entity["id"] == "id-7"
     assert entity["_resolution"] == "exact"
@@ -68,7 +69,7 @@ async def test_case_differences_are_still_the_same_entity():
     """Entity names are display strings; case is not identity."""
     graph = _graph(_INCIDENT_71, _INCIDENT_7)
 
-    entity = await graph.get_entity(entity_name="incident 7")
+    entity = await graph.get_entity(entity_name="incident 7", owner=UNSCOPED_ALL_USERS)
 
     assert entity["id"] == "id-7"
     assert entity["_resolution"] == "exact"
@@ -80,7 +81,7 @@ async def test_an_exact_match_below_the_first_page_is_still_found():
     crowd = [{"id": f"id-{i}", "name": f"Incident 7{i}", "type": "incident"} for i in range(1, 20)]
     graph = _graph(*crowd, _INCIDENT_7)
 
-    entity = await graph.get_entity(entity_name="Incident 7")
+    entity = await graph.get_entity(entity_name="Incident 7", owner=UNSCOPED_ALL_USERS)
 
     assert entity["id"] == "id-7"
     assert entity["_resolution"] == "exact"
@@ -91,7 +92,7 @@ async def test_an_exact_match_below_the_first_page_is_still_found():
 async def test_no_results_is_still_none():
     graph = _graph()
 
-    assert await graph.get_entity(entity_name="Nothing At All") is None
+    assert await graph.get_entity(entity_name="Nothing At All", owner=UNSCOPED_ALL_USERS) is None
 
 
 # ------------------------------------------------- writes refuse a near-miss

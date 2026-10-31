@@ -9,6 +9,7 @@
 
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
+import { isBenignBrowserNotice } from '@/utils/benignBrowserNotice'
 
 // Issue #981: Use scoped logger — console.* was causing [object Object] in log output
 const logger = createLogger('RumAgent')
@@ -210,6 +211,7 @@ class RumAgent {
   private pendingWsEvents: PrometheusWebSocketMetric[]
   private pendingResources: PrometheusResourceMetric[]
   private pendingCriticalIssues: PrometheusCriticalIssueMetric[]
+  private intervals: ReturnType<typeof setInterval>[] = [] // periodic timers, ended by stop() (#18254)
 
   constructor() {
     this.isEnabled = import.meta.env.DEV || localStorage.getItem('rum_enabled') === 'true'
@@ -252,7 +254,6 @@ class RumAgent {
   }
 
   private initialize(): void {
-
     this.monitorPagePerformance()
     this.monitorResourceTimings()
     this.monitorErrors()
@@ -391,25 +392,12 @@ class RumAgent {
 
   // Error Monitoring
 
-  // #10352: messages that browsers surface as window 'error' events but are
-  // NOT real application errors (no stack, self-correcting). Reporting them as
-  // critical javascript_errors creates false 🚨 alarms in RUM.
-  private static readonly BENIGN_ERROR_MESSAGES = [
-    'ResizeObserver loop limit exceeded',
-    'ResizeObserver loop completed with undelivered notifications',
-  ]
-
-  static isBenignError(message: string | undefined | null): boolean {
-    if (!message) return false
-    return RumAgent.BENIGN_ERROR_MESSAGES.some((m) => message.includes(m))
-  }
-
   private monitorErrors(): void {
     // Global error handler
     window.addEventListener('error', (event) => {
       // #10352: "ResizeObserver loop ..." is a benign browser notice (fires
       // with no real error/stack) — never report it as a CRITICAL js error.
-      if (RumAgent.isBenignError(event.message)) return
+      if (isBenignBrowserNotice(event.message, event.error)) return
       this.trackError('javascript_error', {
         message: event.message,
         filename: event.filename,
@@ -620,17 +608,12 @@ class RumAgent {
 
   // Periodic reporting
   private setupPeriodicReporting(): void {
-    setInterval(() => {
-      this.generateReport()
-    }, 30000) // Every 30 seconds
+    this.intervals.push(setInterval(() => this.generateReport(), 30000)) // Every 30 seconds
   }
 
   // Issue #476: Setup Prometheus metrics reporting
   private setupPrometheusReporting(): void {
-    // Send metrics periodically
-    setInterval(() => {
-      this.flushPrometheusMetrics()
-    }, this.prometheusReportInterval)
+    this.intervals.push(setInterval(() => this.flushPrometheusMetrics(), this.prometheusReportInterval))
 
     // Send session end metrics on page unload
     window.addEventListener('beforeunload', () => {
@@ -767,6 +750,11 @@ class RumAgent {
   disablePrometheusReporting(): void {
     this.prometheusEnabled = false
     localStorage.setItem('rum_prometheus_enabled', 'false')
+  }
+
+  /** End the periodic timers (#18254): this singleton otherwise outlives its loader -- in tests, jsdom. */
+  stop(): void {
+    this.intervals.splice(0).forEach((id) => clearInterval(id))
   }
 
   generateReport(): RumReport {

@@ -26,7 +26,7 @@ logger = get_logger(__name__)
 _METADATA_FIELDS = frozenset({"version", "last_updated"})
 
 # Issue #912: Builtin fallback — used when error_messages.yaml is not found on the VM.
-# Mirrors infrastructure/shared/config/error_messages.yaml exactly.
+# Mirrors static/error_messages.yaml, the one tracked copy; error_catalog_parity_18556_test.py enforces it.
 _BUILTIN_FALLBACK_ERRORS: dict = {
     # AUTH errors
     "AUTH_0001": {

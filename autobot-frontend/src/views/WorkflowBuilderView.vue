@@ -367,6 +367,7 @@
             <div class="overview-card">
               <h4><Icon name="bolt" /> {{ $t('workflow.views.quickActions') }}</h4>
               <div class="quick-actions-grid">
+                <PlanBeforeBuildingAction />
                 <button class="quick-action" @click="navigateTo('canvas')">
                   <Icon name="plus-circle" />
                   <span>{{ $t('workflow.views.newWorkflow') }}</span>
@@ -514,11 +515,12 @@
                   v-for="step in pendingApproval.steps"
                   :key="step.step_id"
                   class="approval-step"
-                  :class="{ 'high-risk': step.risk_level === 'high' || step.risk_level === 'critical' }"
+                  :class="{ 'high-risk': step.risk_tier === 'high' || step.risk_tier === 'critical' }"
                 >
                   <div class="step-header">
                     <span class="step-description">{{ step.description }}</span>
-                    <span class="risk-badge" :class="step.risk_level">{{ step.risk_level }}</span>
+                    <RiskBadge v-if="step.risk_tier" :tier="step.risk_tier" :label="t(`common.riskTier.${step.risk_tier}`)" />
+                    <BaseBadge v-else size="sm" :label="step.risk_level" />
                   </div>
                   <code class="step-command">{{ step.command }}</code>
                 </div>
@@ -693,13 +695,13 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { workflowIdFromQuery } from '@/composables/workflow/workflowDeepLink';
 import { useI18n } from 'vue-i18n';
+import { BaseBadge, RiskBadge } from '@autobot/ui';
 import { createLogger } from '@/utils/debugUtils';
 import { useNotificationBus } from '@/composables/useNotificationBus';
 import {
-  useWorkflowBuilder,
-  type WorkflowNode,
-  type WorkflowTemplate,
+  useWorkflowBuilder, type WorkflowNode, type WorkflowTemplate,
 } from '@/composables/useWorkflowBuilder';
+import PlanBeforeBuildingAction from '@/components/llc/workflowPlanner/PlanBeforeBuildingAction.vue';
 import type { WorkflowTemplateSummary } from '@/types/workflowTemplates';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
@@ -1469,7 +1471,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 }
 
 .category-item.active .count:not(.active-badge) {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: white;
 }
 
@@ -2015,41 +2017,6 @@ watch(hasActiveWorkflows, (hasActive) => {
   color: var(--text-primary);
 }
 
-.risk-badge {
-  font-size: var(--text-xs);
-  padding: var(--spacing-0-5) var(--spacing-2);
-  border-radius: var(--radius-xl);
-  text-transform: uppercase;
-}
-
-.risk-badge.low {
-  background: var(--color-success-bg);
-  color: var(--color-success);
-}
-
-/* #14993: a rule for every value the canonical RiskLevel can carry, not only the
-   four the approval flow produces today -- #14956 took the unstyled set from
-   three values to six. */
-.risk-badge.unknown,
-.risk-badge.info,
-.risk-badge.minimal {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-}
-
-.risk-badge.medium,
-.risk-badge.warning,
-.risk-badge.degraded {
-  background: var(--color-warning-bg);
-  color: var(--color-warning);
-}
-
-.risk-badge.high,
-.risk-badge.error,
-.risk-badge.critical {
-  background: var(--color-error-bg);
-  color: var(--color-error);
-}
 
 .step-command {
   display: block;
@@ -2256,7 +2223,7 @@ watch(hasActiveWorkflows, (hasActive) => {
 
 .btn-danger {
   padding: var(--spacing-2-5) var(--spacing-5);
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-primary);
   border: none;
   border-radius: var(--radius-lg);

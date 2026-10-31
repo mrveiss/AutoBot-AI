@@ -17,7 +17,13 @@ from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from config import settings
+from models.auth_revocation import PasswordEpoch, RevokedToken
 from models.database import Base, Setting
+from models.post_sync_action_run import PostSyncActionRun
+
+# Tables whose models live outside models/database.py (its file-size ceiling). Imported
+# here so they are on Base.metadata before create_all runs (#17455).
+_EXTRA_MODELS = (PostSyncActionRun, RevokedToken, PasswordEpoch)  # auth revocation: #18663
 
 # SSOT-derived seed defaults — env vars match PortConfig/VMConfig aliases
 _BACKEND_HOST = os.getenv("AUTOBOT_BACKEND_HOST", "127.0.0.1")
@@ -36,6 +42,12 @@ class DatabaseService:
         self.engine = None
         self.session_factory = None
         self._initialized = False
+
+    def describe_failure(self, exc: BaseException) -> str:
+        """Where the connection was attempted and how it failed, never credentials (#18665)."""
+        from services.db_transaction_errors import describe_connect_failure
+
+        return describe_connect_failure(exc, settings.database_url)
 
     async def initialize(self) -> None:
         """Initialize the database connection and create tables (#786)."""
@@ -64,6 +76,12 @@ class DatabaseService:
             class_=AsyncSession,
             expire_on_commit=False,
         )
+        # #18663: the shared password-epoch rule reads and writes this database from the
+        # moment it has a session -- installed BEFORE anything below can fail, so a
+        # half-initialized SLM never falls back to a Redis it does not own.
+        from services.password_epoch_store import install as install_epoch_store
+
+        install_epoch_store()
 
         async with self.engine.begin() as conn:
             await conn.run_sync(Base.metadata.create_all)

@@ -15,10 +15,15 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Add src directory to path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+# A backend tool (#18289): it deliberately drives backend internals. It puts the backend and the
+# repository root (for `autobot_shared`) on its own path, so it runs from any directory with no
+# PYTHONPATH; the backend's Python dependencies must be installed.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
-from agents.llm_failsafe_agent import get_robust_llm_response
+from agents.llm_failsafe_agent import get_robust_llm_response  # noqa: E402
 
 
 async def test_llm_direct():

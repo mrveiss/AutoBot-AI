@@ -27,6 +27,7 @@ from api.schemas_workflows import (
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from services.trigger_secrets import EncryptionUnavailableError, SecretStorageError
 from services.trigger_service import (
     TriggerConfig,
     TriggerDefinition,
@@ -99,6 +100,18 @@ async def create_trigger(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)  # user-facing validation error
         ) from exc
+    except SecretStorageError as exc:
+        logger.error("create_trigger refused: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="The webhook secret could not be stored; the trigger was not created. Retry shortly",
+        ) from exc
+    except EncryptionUnavailableError as exc:
+        logger.error("create_trigger refused: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Webhook triggers are temporarily unavailable: secret encryption is not configured",
+        ) from exc
 
     webhook_url: str | None = None
     if request.trigger_type == TriggerType.WEBHOOK:
@@ -134,7 +147,7 @@ async def list_triggers(
     """
     service = get_trigger_service()
     triggers: List[TriggerDefinition] = await service.list_triggers(workflow_id=workflow_id)
-    serialised = [t.to_dict() for t in triggers]
+    serialised = service.serialise_triggers(triggers)
     return TriggerListResponse(triggers=serialised, total=len(serialised))
 
 

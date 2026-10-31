@@ -11,7 +11,6 @@ Issue #378: Added threading locks for file operations to prevent race conditions
 
 import asyncio
 import json
-import os
 import threading
 from datetime import datetime
 from enum import Enum
@@ -22,18 +21,20 @@ from uuid import uuid4
 import aiofiles
 from cryptography.fernet import Fernet
 
+from autobot_shared.audit_actions import canonical_action, spellings_of
 from autobot_shared.config_file_loading import load_config_file
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
 from autobot_shared.time_utils import now_utc, parse_utc_iso, utc_timestamp
 from constants.path_constants import PATH
+from utils.secrets_store_migration import ensure_and_read_shared_key
 
 logger = get_logger(__name__)
 
 # Issue #380: Module-level frozensets for compliance checks
 _CONSENT_REQUIRED_ACTIONS = frozenset({"data_export", "analytics", "marketing"})
 _COMPLIANCE_FRAMEWORKS_WITH_RETENTION = frozenset({"soc2", "gdpr", "iso27001"})
-_AUTH_ACTIONS = frozenset({"login", "authentication"})
+_AUTH_ACTIONS = frozenset({"authentication", *spellings_of("auth.login")})  # canonical + legacy rows (#18716)
 _MONITORING_ACTIONS = frozenset({"monitoring", "security_scan"})
 _ACCESS_ACTIONS = frozenset({"data_access", "data_export"})
 _MODIFICATION_ACTIONS = frozenset({"data_modification", "data_update"})
@@ -52,7 +53,7 @@ class ComplianceFramework(Enum):
     PCI_DSS = "pci_dss"
 
 
-class AuditEventType(Enum):
+class ComplianceAuditEventType(Enum):
     """Types of auditable events"""
 
     AUTHENTICATION = "authentication"
@@ -233,43 +234,25 @@ class ComplianceManager:
 
     def _get_encryption_key(self) -> bytes | None:
         """Get or generate encryption key for sensitive audit data (thread-safe, Issue #378)"""
-        key_path = self.audit_base_path / ".audit_key"
-
-        # Note: _file_lock not yet initialized during __init__, use local lock
-        with threading.Lock():
-            if key_path.exists():
-                try:
-                    with open(key_path, "rb") as f:
-                        return f.read()
-                except Exception as e:
-                    logger.error("Failed to load encryption key: %s", e)
-
-            # Generate new key
-            try:
-                key = Fernet.generate_key()
-                # Fernet key persists for audit data encryption across
-                # restarts; secured by 0o600 file permissions.
-                with open(key_path, "wb") as f:
-                    f.write(key)
-
-                # Set restrictive permissions
-                os.chmod(key_path, 0o600)
-                logger.info("Generated new audit encryption key")
-                return key
-            except Exception as e:
-                logger.error("Failed to generate encryption key: %s", e)
-                return None
+        # One locked, atomic mint shared with the secrets stores (#17855). The
+        # old body built a fresh threading.Lock() per call, which excludes
+        # nothing, and wrote the key non-atomically.
+        try:
+            return ensure_and_read_shared_key(self.audit_base_path, key_filename=".audit_key")
+        except Exception as e:
+            logger.error("Failed to load or generate encryption key: %s", e)
+            return None
 
     def _load_compliance_requirements(self) -> Dict:
         """Load compliance framework requirements"""
         return {
             ComplianceFramework.SOC2: {
                 "required_events": [
-                    AuditEventType.AUTHENTICATION,
-                    AuditEventType.AUTHORIZATION,
-                    AuditEventType.DATA_ACCESS,
-                    AuditEventType.SYSTEM_CONFIGURATION,
-                    AuditEventType.ADMIN_ACTION,
+                    ComplianceAuditEventType.AUTHENTICATION,
+                    ComplianceAuditEventType.AUTHORIZATION,
+                    ComplianceAuditEventType.DATA_ACCESS,
+                    ComplianceAuditEventType.SYSTEM_CONFIGURATION,
+                    ComplianceAuditEventType.ADMIN_ACTION,
                 ],
                 "retention_days": 2555,  # 7 years
                 "encryption_required": True,
@@ -277,9 +260,9 @@ class ComplianceManager:
             },
             ComplianceFramework.GDPR: {
                 "required_events": [
-                    AuditEventType.DATA_ACCESS,
-                    AuditEventType.DATA_MODIFICATION,
-                    AuditEventType.PRIVACY_EVENT,
+                    ComplianceAuditEventType.DATA_ACCESS,
+                    ComplianceAuditEventType.DATA_MODIFICATION,
+                    ComplianceAuditEventType.PRIVACY_EVENT,
                 ],
                 "retention_days": 2555,
                 "pii_tracking": True,
@@ -288,10 +271,10 @@ class ComplianceManager:
             },
             ComplianceFramework.ISO27001: {
                 "required_events": [
-                    AuditEventType.SECURITY_INCIDENT,
-                    AuditEventType.SYSTEM_CONFIGURATION,
-                    AuditEventType.ADMIN_ACTION,
-                    AuditEventType.AUTHORIZATION,
+                    ComplianceAuditEventType.SECURITY_INCIDENT,
+                    ComplianceAuditEventType.SYSTEM_CONFIGURATION,
+                    ComplianceAuditEventType.ADMIN_ACTION,
+                    ComplianceAuditEventType.AUTHORIZATION,
                 ],
                 "retention_days": 2190,  # 6 years
                 "risk_assessment": True,
@@ -324,7 +307,7 @@ class ComplianceManager:
 
     def _build_base_audit_event(
         self,
-        event_type: AuditEventType,
+        event_type: ComplianceAuditEventType,
         user_id: str,
         action: str,
         resource: str,
@@ -380,7 +363,7 @@ class ComplianceManager:
 
     async def log_audit_event(
         self,
-        event_type: AuditEventType,
+        event_type: ComplianceAuditEventType,
         user_id: str,
         action: str,
         resource: str,
@@ -443,14 +426,14 @@ class ComplianceManager:
     def _map_to_trust_criteria(self, action: str) -> List[str]:
         """Map action to SOC2 Trust Service Criteria"""
         mapping = {
-            "login": ["CC6.1", "CC6.2"],  # Security - Logical access
+            "auth.login": ["CC6.1", "CC6.2"],  # Security - Logical access
             "data_access": ["CC6.3", "CC7.1"],  # Security - System operations
             "configuration_change": ["CC8.1"],  # Change Management
             "backup": ["A1.2"],  # Availability
             "monitoring": ["CC7.2"],  # System Monitoring
         }
 
-        return mapping.get(action, ["CC1.1"])  # Default to Control Environment
+        return mapping.get(canonical_action(action), ["CC1.1"])  # Default to Control Environment
 
     def _get_control_objective(self, event_type: str) -> str:
         """Get SOC2 control objective for event type"""
@@ -466,7 +449,6 @@ class ComplianceManager:
 
     def _determine_lawful_basis(self, audit_event: Dict) -> str:
         """Determine GDPR lawful basis for processing"""
-        # This would typically involve business logic to determine basis
         action = audit_event["action"]
 
         if action in _AUTH_ACTIONS:
@@ -497,26 +479,26 @@ class ComplianceManager:
     def _get_processing_purpose(self, action: str) -> str:
         """Get GDPR processing purpose"""
         purposes = {
-            "login": "authentication_and_access_control",
+            "auth.login": "authentication_and_access_control",
             "data_access": "service_provision",
             "monitoring": "security_and_fraud_prevention",
             "backup": "data_protection_and_recovery",
             "analytics": "service_improvement",
         }
 
-        return purposes.get(action, "operational_necessity")
+        return purposes.get(canonical_action(action), "operational_necessity")
 
     def _map_to_iso_control(self, action: str) -> str:
         """Map action to ISO27001 control"""
         controls = {
-            "login": "A.9.2.1",  # User registration and de-registration
+            "auth.login": "A.9.2.1",  # User registration and de-registration
             "data_access": "A.9.4.1",  # Information access restriction
             "configuration_change": "A.12.1.2",  # Change management
             "monitoring": "A.12.4.1",  # Event logging
             "incident": "A.16.1.1",  # Incident management
         }
 
-        return controls.get(action, "A.18.1.1")  # General compliance
+        return controls.get(canonical_action(action), "A.18.1.1")  # General compliance
 
     def _assess_risk_level(self, audit_event: Dict) -> str:
         """Assess risk level for ISO27001"""
@@ -608,8 +590,8 @@ class ComplianceManager:
 
         # Encrypt sensitive events
         sensitive_events = [
-            AuditEventType.PRIVACY_EVENT.value,
-            AuditEventType.SECURITY_INCIDENT.value,
+            ComplianceAuditEventType.PRIVACY_EVENT.value,
+            ComplianceAuditEventType.SECURITY_INCIDENT.value,
         ]
 
         if event_type in sensitive_events or audit_event["data_classification"] in {
@@ -664,10 +646,10 @@ class ComplianceManager:
         event_type = audit_event["event_type"]
         self.stats["events_by_type"][event_type] = self.stats["events_by_type"].get(event_type, 0) + 1
 
-        if audit_event["event_type"] == AuditEventType.AUTHENTICATION.value and audit_event["outcome"] == "failure":
+        if event_type == ComplianceAuditEventType.AUTHENTICATION.value and audit_event["outcome"] == "failure":
             self.stats["failed_authentications"] += 1
 
-        if audit_event["event_type"] == AuditEventType.SECURITY_INCIDENT.value:
+        if audit_event["event_type"] == ComplianceAuditEventType.SECURITY_INCIDENT.value:
             self.stats["security_incidents"] += 1
 
     async def _check_compliance_violations(self, audit_event: Dict):
@@ -701,7 +683,7 @@ class ComplianceManager:
 
         # Example: Check for unauthorized administrative actions
         if (
-            audit_event["event_type"] == AuditEventType.ADMIN_ACTION.value
+            audit_event["event_type"] == ComplianceAuditEventType.ADMIN_ACTION.value
             and audit_event["outcome"] == "success"
             and "unauthorized" in audit_event.get("details", {}).get("flags", [])
         ):
@@ -789,16 +771,16 @@ class ComplianceManager:
         thresholds = self.config.get("notification_thresholds", {})
 
         # Check failed authentication rate
-        if audit_event["event_type"] == AuditEventType.AUTHENTICATION.value and audit_event["outcome"] == "failure":
-            recent_failures = await self._count_recent_events(AuditEventType.AUTHENTICATION, outcome="failure", hours=1)
+        auth = ComplianceAuditEventType.AUTHENTICATION
+        if audit_event["event_type"] == auth.value and audit_event["outcome"] == "failure":
+            recent_failures = await self._count_recent_events(auth, outcome="failure", hours=1)
 
             if recent_failures >= thresholds.get("failed_authentication_rate", 10):
                 await self._send_security_alert("High authentication failure rate detected")
 
-    async def _count_recent_events(self, event_type: AuditEventType, outcome: str = None, hours: int = 1) -> int:
+    async def _count_recent_events(self, event_type: ComplianceAuditEventType, outcome: str = None, hours=1) -> int:
         """Count recent events of specific type"""
-        # This would query the audit logs for recent events
-        # For now, return a placeholder
+        # Placeholder: would query the audit logs for recent events
         return 0
 
     async def _send_security_alert(self, message: str):

@@ -907,3 +907,9 @@ for prop in props_ro:
 **Document Version:** 1.0
 **Last Updated:** 2025-10-04
 **Author:** AutoBot AI/ML Engineering Research
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #15194 — docs: a fixed 6-VM topology is documented as the architecture — AutoBot scales from one VM or Docker to whatever is needed, and ADR-001 enshrines the wrong invariant

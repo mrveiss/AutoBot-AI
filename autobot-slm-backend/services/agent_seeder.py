@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.ssot_config import config as _ssot_config
-from models.database import Agent
+from models.database import SlmAgent
 
 logger = logging.getLogger(__name__)
 
@@ -48,11 +48,11 @@ async def seed_default_agents(db: AsyncSession) -> int:
     """
     created = 0
     for cfg in SEED_AGENT_CONFIGS:
-        result = await db.execute(select(Agent).where(Agent.agent_id == cfg["agent_id"]))
+        result = await db.execute(select(SlmAgent).where(SlmAgent.agent_id == cfg["agent_id"]))
         if result.scalar_one_or_none() is not None:
             continue
 
-        agent = Agent(
+        agent = SlmAgent(
             agent_id=cfg["agent_id"],
             name=cfg["name"],
             description=cfg["description"],

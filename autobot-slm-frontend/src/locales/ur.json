@@ -14,7 +14,7 @@
     "availableRolesAria": "Available roles",
     "cancel": "Cancel",
     "closeDialogAria": "ڈائیلاگ بند کریں",
-    "connectionFailed": "Connection Failed",
+    "connectionFailed": "کنکشن ناکام",
     "connectionInformation": "Connection Information",
     "connectionSuccessful": "Connection Successful",
     "deployPKICertificatesAfter": "Deploy PKI certificates after update",
@@ -116,7 +116,9 @@
       "rollingBack": "Rolling back...",
       "select": "Select...",
       "source": "Source:",
-      "yesRollback": "Yes, rollback"
+      "yesRollback": "Yes, rollback",
+      "loadFailed": "Failed to load revisions",
+      "rollbackFailed": "Rollback failed"
     },
     "orgChartTab": {
       "agentHierarchy": "Agent Hierarchy",
@@ -134,8 +136,10 @@
       "selectAnAgentTo": "Select an agent to view details and delegate tasks",
       "selectReport": "Select report...",
       "submit": "جمع کروائیں",
-      "task": "Task",
-      "total": "Total"
+      "task": "کام",
+      "total": "Total",
+      "loadFailed": "Failed to load org tree",
+      "delegationFailed": "Delegation failed"
     },
     "orgTreeNode": {
       "value0Reports": "{value0} reports"
@@ -149,7 +153,7 @@
       "command": "کمانڈ",
       "completed": "مکمل",
       "dismiss": "Dismiss",
-      "duration": "Duration",
+      "duration": "دورانیہ",
       "eGOrchestrator": "e.g. orchestrator",
       "exit": "Exit",
       "failed": "ناکام",
@@ -162,7 +166,7 @@
       "noProcessesFoundForAgentValue0": "No processes found for agent \"{value0}\"",
       "processValue0Logs": "Process {value0}... Logs",
       "queued": "Queued",
-      "running": "Running",
+      "running": "چل رہا ہے",
       "scriptPyFlag": "script.py --flag",
       "spawn": "Spawn",
       "spawnNewProcess": "Spawn New Process",
@@ -174,7 +178,10 @@
       "timedOut": "Timed Out",
       "timeoutS": "Timeout (s)",
       "usrBinPython3": "/usr/bin/python3",
-      "viewFullLog": "View Full Log"
+      "viewFullLog": "View Full Log",
+      "loadFailed": "Failed to load processes",
+      "signalFailed": "Signal failed",
+      "spawnFailed": "Spawn failed"
     }
   },
   "agentsView": {
@@ -270,8 +277,8 @@
     "component": "جزء:",
     "configure": "Configure",
     "configureAutomaticCodeSync": "Configure automatic code sync schedules",
-    "countDriftedFilePluralDetected": "{count} drifted file{plural} detected",
-    "countUntrackedFilePlural": "{count} untracked file{plural} on this host",
+    "countDriftedFilePluralDetected": "{count} drifted file detected | {count} drifted files detected",
+    "countUntrackedFilePlural": "{count} untracked file on this host | {count} untracked files on this host",
     "createAScheduleTo": "Create a schedule to automatically sync code at specific times.",
     "createFirstSchedule": "Create First Schedule",
     "currentVersion": "Current Version",
@@ -344,7 +351,7 @@
     "runRsyncFromTo": "Run rsync from {source} to {dest}",
     "running": "Running...",
     "sLMManagerRestarting": "SLM Manager Restarting",
-    "schedule": "Schedule",
+    "schedule": "شیڈول",
     "scheduledUpdates": "Scheduled Updates",
     "showDetails": "Show details",
     "slmSelfUpdateStage": "SLM server",
@@ -369,9 +376,23 @@
     "updatePipelineDesc": "Fetches from GitHub, pulls code_source, updates this server, then updates fleet nodes with all dependency installs.",
     "updatePipelineTitle": "Full Update Pipeline",
     "updateThisServer": "Update This Server",
-    "updatesAvailable": "Updates Available"
+    "updatesAvailable": "Updates Available",
+    "syncedNodes": "Successfully synced {count} node | Successfully synced {count} nodes",
+    "queuedSyncNodes": "Successfully queued sync for {count} node | Successfully queued sync for {count} nodes",
+    "pulledLatestChanges": "Successfully pulled latest changes ({commit})",
+    "unknownCommit": "unknown",
+    "componentResynced": "Resynced {component} from code_source",
+    "fleetSyncFailed": "Fleet sync failed",
+    "selfUpdateFailed": "Self-update failed",
+    "failedToPullFromSource": "Failed to pull from source",
+    "driftResolveJobFailed": "Drift resolve job failed",
+    "viewCommitOnGithub": "View commit on GitHub",
+    "fullCommitHashUnavailable": "Full commit hash unavailable",
+    "removeCodeSourceAssignment": "Remove code source assignment?",
+    "deleteSchedule": "Delete schedule \"{name}\"?"
   },
   "common": {
+    "zeroSize": "0 B",
     "codeSyncBadge": {},
     "roleReachesNoDeployPath": "Assigned, but nothing will deploy {roles}: the role reaches no ansible group and has no dedicated playbook. Add a group mapping or a playbook for it.",
     "sidebar": {
@@ -386,7 +407,7 @@
       "healthy": "Healthy:",
       "highContrast": "High Contrast",
       "logOutAria": "Log out",
-      "mainNavigationAria": "Main navigation",
+      "mainNavigationAria": "مرکزی نیویگیشن",
       "maintenance": "Maintenance",
       "monitoring": "نگرانی",
       "orchestration": "Orchestration",
@@ -410,13 +431,24 @@
       "user": "صارف",
       "languageLabel": "Language"
     },
-    "skipLink": {},
+    "skipLink": {
+      "mainContent": "مرکزی مواد پر جائیں"
+    },
     "toastContainer": {
       "dismissNotification": "Dismiss notification",
       "notifications": "اطلاعات"
     },
     "app": {
       "mainContentAria": "Main content"
+    },
+    "polling": {
+      "paused": "Updates paused: the backend did not answer several times in a row, so the figures shown may be out of date.",
+      "readFailed": "A dashboard read did not load.",
+      "retry": "دوبارہ کوشش کریں"
+    },
+    "errors": {
+      "withStatus": "{message} (HTTP {status})",
+      "withCause": "{message}: {cause}"
     }
   },
   "deploymentLogViewer": {
@@ -545,7 +577,44 @@
     "total": "Total",
     "upgrade": "Upgrade",
     "viewDetails": "View details",
-    "yes": "Yes"
+    "yes": "Yes",
+    "rollbackCompleted2": "Rollback completed",
+    "rollbackCompletedMessage": "Rollback completed",
+    "failedToRetryDeployment": "Failed to retry deployment",
+    "areYouSureYouWantToCancel": "Are you sure you want to cancel this deployment?",
+    "failedToCancelDeployment": "Failed to cancel deployment",
+    "areYouSureYouWantToRollback": "Are you sure you want to rollback this deployment? This will revert the node to its previous state.",
+    "failedToRollbackDeployment": "Failed to rollback deployment",
+    "pleaseSelectABlueSourceNode": "Please select a blue (source) node",
+    "pleaseSelectAGreenTargetNode": "Please select a green (target) node",
+    "accessDeniedBlueGreenDeploymentsRequireAdmin": "Access denied: Blue-green deployments require admin privileges",
+    "failedToCreateBlueGreenDeployment": "Failed to create blue-green deployment: {detail}",
+    "areYouSureYouWantToSwitch": "Are you sure you want to switch traffic to the green node?",
+    "failedToSwitchTraffic": "Failed to switch traffic",
+    "failedToRollback": "Failed to rollback",
+    "failedToCancel": "Failed to cancel",
+    "areYouSureYouWantToRetry": "Are you sure you want to retry this deployment?",
+    "pleaseSelectATargetNode": "Please select a target node",
+    "failedToCreateDeployment": "Failed to create deployment: {detail}",
+    "confirmRollbackToBlue": "Are you sure you want to rollback to the blue node?",
+    "pleaseSelectRoleToDeploy": "Please select at least one role to deploy",
+    "pleaseSelectRoleToMigrate": "Please select at least one role to migrate",
+    "categoryCoreLabel": "Core Infrastructure",
+    "categoryCoreDescription": "Required base components for all nodes",
+    "categoryDataLabel": "Data Layer",
+    "categoryDataDescription": "Database and caching services",
+    "categoryApplicationLabel": "Application Layer",
+    "categoryApplicationDescription": "Backend API and frontend web servers",
+    "categoryAiLabel": "AI/ML Services",
+    "categoryAiDescription": "LLM inference and AI processing",
+    "categoryAutomationLabel": "آٹومیشن",
+    "categoryAutomationDescription": "Browser automation and scripting",
+    "categoryObservabilityLabel": "Observability",
+    "categoryObservabilityDescription": "Monitoring and logging stack",
+    "categoryRemoteAccessLabel": "Remote Access",
+    "categoryRemoteAccessDescription": "VNC and remote desktop services",
+    "categoryInfrastructureLabel": "Infrastructure",
+    "categoryInfrastructureDescription": "Shared libraries and agents deployed to all nodes"
   },
   "externalAgentsView": {
     "actions": "اقدامات",
@@ -609,7 +678,9 @@
       "selectANode": "-- Select a node --",
       "selectANodeTo": "Select a node to enable NPU acceleration capabilities",
       "selectNode": "Select Node",
-      "status": "Status"
+      "status": "Status",
+      "failedToAssignNpuRole": "Failed to assign NPU role",
+      "pleaseSelectANode": "Please select a node"
     },
     "decommissionModal": {
       "backupDataBeforeRemoval": "Backup data before removal",
@@ -687,11 +758,19 @@
       "utilization": "Utilization",
       "value0Tasks": "{value0} tasks",
       "weight": "Weight:",
-      "workerLoadOverview": "Worker Load Overview"
+      "workerLoadOverview": "Worker Load Overview",
+      "strategyUpdated": "Load balancing strategy updated successfully.",
+      "metricsRefreshed": "Fleet metrics refreshed. Load distribution updated.",
+      "failedToLoadData": "Failed to load data",
+      "failedToSaveStrategy": "Failed to save strategy",
+      "rebalanceFailed": "Rebalance failed",
+      "highUtilizationSpread": "High utilization spread ({spread}%). Consider switching to \"least-loaded\" strategy.",
+      "moderateUtilizationSpread": "Moderate utilization spread ({spread}%). Current strategy may be adequate.",
+      "loadWellDistributed": "Load is well distributed. No action needed."
     },
     "nPUDetailsPanel": {
       "alertOnly": "Alert Only",
-      "available": "Available",
+      "available": "دستیاب",
       "avgLatency": "Avg Latency",
       "close": "بند کریں",
       "currentUtilization": "Current Utilization",
@@ -712,6 +791,7 @@
       "memory": "Memory",
       "modelsCount": "Models ({count})",
       "noModelsDetected": "No models detected",
+      "notAvailable": "N/A",
       "pending": "زیر التوا",
       "priority110": "Priority (1-10)",
       "queueDepthValue0Requests": "Queue Depth: {value0} requests",
@@ -727,7 +807,12 @@
       "unknown": "نامعلوم",
       "value0ErrorsRecorded": "{value0} errors recorded",
       "weight1100": "Weight (1-100)",
-      "workerConfiguration": "Worker Configuration"
+      "workerConfiguration": "Worker Configuration",
+      "configurationSaved": "Configuration saved",
+      "failedToSaveConfiguration": "Failed to save configuration",
+      "failedToRemoveNpuRole": "Failed to remove NPU role",
+      "failedToRefreshNpuStatus": "Failed to refresh NPU status",
+      "removeNpuWorkerRoleFrom": "Remove NPU Worker role from {hostname}?"
     },
     "nPUNodeCard": {
       "detecting": "Detecting...",
@@ -758,10 +843,12 @@
     "nPUWorkerMonitor": {
       "avgUtilization": "Avg utilization:",
       "currentTask": "Current Task",
+      "metricsUnavailable": "NPU fleet metrics are unavailable",
       "noNPUWorkers": "No NPU Workers",
       "noNodesWithThe": "No nodes with the npu-worker role are registered in the fleet.",
       "online": "online",
       "queueDepth": "Queue Depth",
+      "refreshFailed": "Refresh failed",
       "refreshNow": "Refresh now",
       "utilization": "Utilization"
     },
@@ -781,11 +868,11 @@
       "a2aAgentCardBadge": "A2A · {count} skill{plural}",
       "actionsForNodeAria": "Actions for {hostname}",
       "assignedRolesAria": "Assigned roles",
-      "authMethodKey": "SSH Key",
+      "authMethodKey": "SSH کلید",
       "authMethodPassword": "پاس ورڈ",
       "authMethodPki": "PKI",
       "authenticationAria": "Authentication: {method}",
-      "certificate": "Certificate",
+      "certificate": "سرٹیفکیٹ",
       "codeUpdateLabel": "code",
       "cpu": "CPU",
       "decommission": "Decommission",
@@ -829,7 +916,7 @@
       "clear": "صاف کریں",
       "clickCheckForUpdatesToScan": "Click \"Check for Updates\" to scan",
       "codeUpdateAvailable": "Code update available",
-      "duration": "Duration",
+      "duration": "دورانیہ",
       "eventPlural": "event{plural}",
       "eventsWillAppearHereAsThey": "Events will appear here as they occur.",
       "installUpdates": "Install Updates",
@@ -850,7 +937,9 @@
       "type2": "قسم",
       "value0Critical": "{value0} critical",
       "value0Security": "({value0} security)",
-      "value0UpdatePluralAvailable": "{value0} update{plural} available"
+      "value0UpdatePluralAvailable": "{value0} update{plural} available",
+      "eventsUnavailable": "Lifecycle events could not be loaded.",
+      "retry": "دوبارہ کوشش کریں"
     },
     "nodeServicesPanel": {
       "actionFailed": "Failed to {action} {service}",
@@ -905,7 +994,7 @@
     "closeServicesPanelAria": "Close services panel",
     "confirmReboot": "Reboot node \"{hostname}\"? The node will go offline temporarily.",
     "confirmReenroll": "Re-enroll node \"{hostname}\"? This will reset it to pending status for fresh enrollment.",
-    "connectionFailed": "Connection Failed",
+    "connectionFailed": "کنکشن ناکام",
     "connectionSuccessful": "Connection Successful",
     "connectionTestResultAria": "Connection test result",
     "cpu": "CPU",
@@ -930,8 +1019,6 @@
     "nPUWorkersAria": "NPU workers",
     "noNodesRegistered": "No nodes registered",
     "nodeDetails": "Node Details",
-    "nodeDetailsPanelAria": "Node details panel",
-    "nodeServicesPanelAria": "Node services panel",
     "nodes": "Nodes",
     "nodesOverviewAria": "Nodes overview",
     "realTimeHealthStatus": "Real-time health status of all managed nodes",
@@ -986,7 +1073,8 @@
     "stepValue0Of3": "Step {value0} of 3",
     "targetHosts": "Target Hosts",
     "thisPlaybookWillMake": "This playbook will make changes to your infrastructure. Please review the configuration carefully before proceeding.",
-    "whatHappensNext": "What happens next?"
+    "whatHappensNext": "What happens next?",
+    "failedToExecutePlaybook": "Failed to execute playbook"
   },
   "loginView": {
     "authenticationCode": "Authentication code",
@@ -1065,6 +1153,11 @@
     "editMaintenanceWindow": "Edit Maintenance Window",
     "editWindow": "Edit window",
     "endTime": "End Time",
+    "failedToActivateWindow": "مینٹیننس ونڈو فعال کرنے میں ناکامی",
+    "failedToCompleteWindow": "مینٹیننس ونڈو مکمل کرنے میں ناکامی",
+    "failedToDeleteWindow": "مینٹیننس ونڈو حذف کرنے میں ناکامی",
+    "failedToDrainNode": "نوڈ کو خالی کرنے میں ناکامی۔ براہ کرم دوبارہ کوشش کریں۔",
+    "failedToResumeNode": "نوڈ کو دوبارہ شروع کرنے میں ناکامی۔ براہ کرم دوبارہ کوشش کریں۔",
     "fleetWideMaintenance": "Fleet-Wide Maintenance",
     "leaveEmptyForFleet": "Leave empty for fleet-wide maintenance",
     "loadingMaintenanceWindows": "Loading maintenance windows...",
@@ -1142,7 +1235,7 @@
       "recommendationsValue0": "Recommendations ({value0})",
       "refresh": "تازہ کریں",
       "totalAlerts": "Total Alerts",
-      "warning": "Warning",
+      "warning": "انتباہ",
       "recommendationsUnavailable": "Recommendations are not available yet: the SLM has no source for them."
     },
     "errorMonitor": {
@@ -1180,7 +1273,8 @@
       "trend": "Trend",
       "type": "قسم",
       "unresolved": "Unresolved",
-      "resolvedByAt": "By {by} at {at}"
+      "resolvedByAt": "By {by} at {at}",
+      "paginationAria": "Error list pages"
     },
     "fleetMetricsCard": {
       "acrossValue0Nodes": "Across {value0} nodes",
@@ -1248,7 +1342,7 @@
         "severityDebug": "Debug",
         "severityError": "Error",
         "severityInfo": "معلومات",
-        "severityWarning": "Warning",
+        "severityWarning": "انتباہ",
         "showingCountOfTotalEntries": "Showing {count} of {total} entries",
         "time": "Time"
       },
@@ -1266,7 +1360,8 @@
       "showingCountOfCount2Entries": "Showing {count} of {count2} entries",
       "source": "Source:",
       "source1": "Source",
-      "time": "Time"
+      "time": "Time",
+      "loadError": "لاگز لوڈ کرنے میں ناکامی: {error}"
     },
     "metricsDetailsView": {
       "activeWorkers": "Active Workers",
@@ -1324,6 +1419,107 @@
       "services": "Services",
       "systemHealth": "سسٹم کی صحت",
       "systemMonitoring": "سسٹم کی نگرانی"
+    },
+    "agentLedger": {
+      "title": "ایجنٹ لیجر",
+      "subtitle": "Every company's agent coordination: shared resources, claims, conflicts and dev-loop history.",
+      "refresh": "تازہ کریں",
+      "tabsAria": "لیجر کے منظر",
+      "tabs": {
+        "now": "ابھی کام کر رہے ہیں",
+        "contention": "مسابقت",
+        "claims": "دعوے",
+        "conflicts": "تنازعات",
+        "devLoop": "Dev loop",
+        "activity": "سرگرمی"
+      },
+      "col": {
+        "scope": "دائرہ",
+        "agent": "ایجنٹ",
+        "company": "Company",
+        "mode": "طریقہ",
+        "intent": "ارادہ",
+        "expires": "میعاد ختم",
+        "renewals": "تجدیدات",
+        "kind": "قسم",
+        "status": "Status",
+        "task": "موجودہ کام",
+        "detail": "تفصیل"
+      },
+      "installWide": "Install-wide",
+      "heldBy": "Held by {agent} ({company})",
+      "waiting": "{n} waiting",
+      "waitlistAria": "ترتیب سے انتظار کی فہرست",
+      "silenceMeansHold": "درخواست رہائی نہیں ہے: خاموشی کا مطلب روکے رکھنا ہے، اور غیر تجدید شدہ دعویٰ خود ختم ہو جاتا ہے۔",
+      "ask": "مالک سے رہائی کی درخواست کریں",
+      "askAria": "{scope} کے مالک سے اسے چھوڑنے کی درخواست کریں",
+      "askState": {
+        "sending": "بھیجا جا رہا ہے…",
+        "sent": "درخواست بھیج دی گئی — فیصلہ مالک کا ہے؛ خاموشی کا مطلب روکے رکھنا ہے۔",
+        "tooSoon": "آپ نے ابھی اس دعوے کے بارے میں پوچھا تھا؛ ایک منٹ بعد دوبارہ کوشش کریں۔",
+        "notFound": "یہ کام اب اس دعوے کو نہیں رکھتا — یہ دیکھنے کے لیے ریفریش کریں کہ اب اسے کون رکھتا ہے۔",
+        "unavailable": "لیجر تک رسائی نہیں ہو سکی؛ کچھ نہیں بھیجا گیا۔",
+        "error": "کچھ غلط ہو گیا اور ترسیل کی تصدیق نہیں ہو سکی۔ یہ دیکھنے کے لیے ریفریش کریں کہ آیا دعویٰ اب بھی برقرار ہے۔"
+      },
+      "conflict": {
+        "release_refused": "ایک رہائی مسترد ہوئی",
+        "claim_expired": "ایک دعویٰ رکھے جانے کے دوران ختم ہو گیا",
+        "yield_unanswered": "ایک دستبرداری کی درخواست کا جواب نہیں ملا",
+        "claim_lapsed_during_action": "ایک دعویٰ کارروائی کے دوران ختم ہو گیا"
+      },
+      "devLoop": {
+        "issue": "Issue",
+        "choose": "Choose an issue",
+        "col": {
+          "at": "When",
+          "intent": "ارادہ",
+          "outcome": "Outcome",
+          "tokens": "Estimated tokens",
+          "reason": "وجہ"
+        }
+      },
+      "empty": {
+        "contention": "کوئی مسابقت نہیں",
+        "claims": "کوئی دعویٰ نہیں",
+        "conflicts": "کوئی تنازع نہیں",
+        "activity": "کوئی حالیہ سرگرمی نہیں",
+        "devLoop": "No dev-loop history",
+        "devLoopActions": "No actions recorded for this issue",
+        "presence": "کسی ایجنٹ نے اطلاع نہیں دی",
+        "peerMessages": "کوئی زیر التوا پیغام نہیں",
+        "idleSubscribers": "کوئی فراغت کی رکنیت نہیں"
+      },
+      "notes": {
+        "title": "What this view cannot see",
+        "storeDown": "Couldn't read the {source} store just now. Its entries are missing here, not empty.",
+        "sourcesUnknown": "Couldn't check which ledger sources are readable.",
+        "peerIdentity": "Agents have no per-peer identity yet: an agent that is refused an action can ask another agent to do it (#16950).",
+        "busAuth": "Messages between agents are not authenticated yet, so this view cannot prove who sent one (#16962)."
+      },
+      "source": {
+        "presence": "agent presence",
+        "ai_stack_agents": "AI-stack agents",
+        "live_sessions": "live sessions",
+        "peer_messages": "pending peer messages",
+        "idle_subscribers": "idle subscriptions",
+        "claims": "claims",
+        "waitlists": "waitlists",
+        "events": "ledger activity",
+        "dev_loop": "dev-loop history"
+      },
+      "state": {
+        "loading": "لیجر پڑھا جا رہا ہے…",
+        "unavailableTitle": "لیجر نہیں پڑھا جا سکا",
+        "unavailableBody": "اسٹور {source} نے جواب نہیں دیا۔ یہ اندراجات نہ ہونے جیسا نہیں ہے۔",
+        "errorTitle": "یہ حصہ لوڈ کرتے وقت کچھ غلط ہو گیا"
+      },
+      "busy": "مصروف",
+      "idle": "Idle",
+      "peerMessages": "زیر التوا پیئر پیغامات",
+      "idleSubscribers": "فراغت کی رکنیتیں",
+      "pendingFor": "{name} کے لیے {n} زیر التوا",
+      "sentBy": "{names} کی طرف سے",
+      "waitsForIdle": "{who} انتظار میں ہے کہ {target} فارغ ہو"
     }
   },
   "monitoringView": {
@@ -1332,7 +1528,17 @@
     "monitoring": "نگرانی",
     "monitoringSections": "Monitoring sections",
     "systemHealthStatusAria": "System health: {status}",
-    "value0AlertPlural": "{value0} Alert{plural}"
+    "value0AlertPlural": "{value0} Alert{plural}",
+    "tabs": {
+      "system": "سسٹم",
+      "logs": "Logs",
+      "dashboards": "Dashboards",
+      "alerts": "Alerts",
+      "errors": "خرابیاں",
+      "backendHealth": "Backend Health",
+      "performance": "کارکردگی",
+      "agentLedger": "ایجنٹ لیجر"
+    }
   },
   "orchestration": {
     "nodeHealthCard": {
@@ -1398,7 +1604,7 @@
     "fleetNodes": "Fleet Nodes",
     "fleetServices": "Fleet Services",
     "fleetWideActions": "Fleet-Wide Actions",
-    "full": "Full",
+    "full": "مکمل",
     "full2": "full",
     "gPUInferenceOffloadingBackendFallsBack": "GPU inference offloading — backend falls back to local Ollama",
     "healthy": "✓ Healthy",
@@ -1450,7 +1656,7 @@
     "roles2": "کردار",
     "runAnsiblePlaybook": "Run Ansible Playbook",
     "runAnsiblePlaybookForFullRole": "Run Ansible playbook for full role installation",
-    "running": "Running",
+    "running": "چل رہا ہے",
     "searchServices": "Search services...",
     "selectANode": "Select a node...",
     "selectANodeAboveToManage": "Select a node above to manage its roles.",
@@ -1497,12 +1703,13 @@
     "value0AnsibleMigrationOf": "{value0} Ansible migration of",
     "value0Nodes": "({value0} nodes)",
     "value0OnlineValue1Offline": "{value0} online, {value1} offline",
-    "value0Required": "{value0} (required)"
+    "value0Required": "{value0} (required)",
+    "serviceCount": "{count} service | {count} services"
   },
   "performance": {
     "alertRulesView": {
       "actions": "اقدامات",
-      "alertRules": "Alert Rules",
+      "alertRules": "الرٹ کے اصول",
       "areYouSureYou": "کیا آپ واقعی حذف کرنا چاہتے ہیں",
       "cancel": "Cancel",
       "condition": "Condition",
@@ -1533,7 +1740,7 @@
     },
     "performanceOverview": {
       "avgLatency": "Avg Latency",
-      "duration": "Duration",
+      "duration": "دورانیہ",
       "errorRate": "Error Rate",
       "name": "نام",
       "noTraceDataAvailable": "No trace data available",
@@ -1584,7 +1791,7 @@
     },
     "tracingView": {
       "apply": "Apply",
-      "duration": "Duration",
+      "duration": "دورانیہ",
       "failedToLoadSpan": "Failed to load span details",
       "first": "First",
       "last": "Last",
@@ -1603,7 +1810,8 @@
       "status1": "Status",
       "time": "Time:",
       "time1": "Time",
-      "value0TracePlural": "{value0} trace{plural}"
+      "value0TracePlural": "{value0} trace{plural}",
+      "paginationAria": "Trace list pages"
     }
   },
   "performanceView": {
@@ -1613,7 +1821,13 @@
     "performanceSections": "Performance sections",
     "performanceSummary": "Performance summary",
     "refreshPerformanceData": "Refresh performance data",
-    "sLOCompliance": "SLO Compliance:"
+    "sLOCompliance": "SLO Compliance:",
+    "tabs": {
+      "alertRules": "الرٹ کے اصول",
+      "overview": "جائزہ",
+      "slos": "SLOs",
+      "traces": "ٹریسز"
+    }
   },
   "redisServicePanel": {
     "actionFailed": "Failed to {action} Redis service",
@@ -1713,7 +1927,9 @@
     "verifySync": "Verify Sync",
     "verifySyncStatus": "Verify sync status",
     "verifyingSyncStatus": "Verifying sync status...",
-    "viewDetails": "View details"
+    "viewDetails": "View details",
+    "areYouSureYouWantToPromote": "Are you sure you want to promote this replica to primary? This will make the target node a standalone master.",
+    "areYouSureYouWantToStop": "Are you sure you want to stop this replication? The replica will remain connected but replication link will be marked as stopped."
   },
   "roleManagementModal": {
     "actions": "اقدامات",
@@ -1749,7 +1965,6 @@
     "syncRoleAria": "Sync {roleName}",
     "thisRoleMayContain": "This role may contain data. You can back it up before removal.",
     "thisWillStopAnd": "This will stop and remove the service from the node.",
-    "times": "×",
     "version": "Version"
   },
   "rolesView": {
@@ -1769,7 +1984,7 @@
     "displayName": "Display Name",
     "edit": "Edit",
     "editRoleTitle": "Edit Role: {name}",
-    "full": "Full",
+    "full": "مکمل",
     "health": "صحت",
     "healthCheckPath": "Health Check Path",
     "healthCheckPort": "Health Check Port",
@@ -1900,7 +2115,7 @@
     "enableTlsForAria": "Enable TLS for {service}",
     "enablingTLS": "Enabling TLS...",
     "enterNodeID": "Enter node ID",
-    "expires": "Expires",
+    "expires": "میعاد ختم",
     "expiringSoon30d": "Expiring Soon (30d)",
     "expiry": "Expiry",
     "failed": "ناکام",
@@ -1989,13 +2204,48 @@
     "uploadTLSCertificate": "Upload TLS Certificate",
     "user": "صارف",
     "value0Violations": "{value0} violations",
-    "whatHappensWhenYouEnableTLS": "What happens when you enable TLS?"
+    "whatHappensWhenYouEnableTLS": "What happens when you enable TLS?",
+    "paginationAria": "Security list pages",
+    "failedToLoadSecurityOverview": "Failed to load security overview",
+    "failedToLoadAuditLogs": "Failed to load audit logs",
+    "failedToLoadSecurityEvents": "Failed to load security events",
+    "failedToLoadSecurityPolicies": "Failed to load security policies",
+    "failedToLoadTlsCertificates": "Failed to load TLS certificates",
+    "failedToEnableTls": "Failed to enable TLS",
+    "areYouSureYouWantToDelete": "Are you sure you want to delete this certificate?",
+    "failedToDeleteCertificate": "Failed to delete certificate",
+    "renewThisCertificateThisWillGenerateA": "Renew this certificate? This will generate a new certificate with the same CN and extended validity.",
+    "failedToRenewCertificate": "Failed to renew certificate",
+    "rotateThisCertificateThisWillGenerateA": "Rotate this certificate? This will generate a completely new certificate with new keys (more secure than renewal).",
+    "failedToRotateCertificate": "Failed to rotate certificate",
+    "renewAllCertificatesExpiringWithin30Days": "Renew all certificates expiring within 30 days? This will deploy new certificates to the nodes.",
+    "bulkRenewalCompleteRenewedFailed": "Bulk renewal complete: {renewed} renewed, {failed} failed",
+    "failedToBulkRenewCertificates": "Failed to bulk renew certificates",
+    "pleaseSelectANode": "Please select a node",
+    "pleaseProvideAllCertificateFiles": "Please provide all certificate files",
+    "failedToUploadCertificate": "Failed to upload certificate",
+    "pleaseSelectAtLeastOneServiceTo": "Please select at least one service to enable TLS",
+    "certificateRenewed": "Certificate renewed successfully. New expiry: {expiry}",
+    "certificateRotated": "Certificate rotated successfully. New expiry: {expiry}",
+    "unknownExpiry": "نامعلوم",
+    "confirmEnableTls": "Enable TLS on {services}?\n\nThis will:\n1. Deploy TLS certificates to the nodes\n2. Configure services for HTTPS\n3. Restart affected services\n\nContinue?",
+    "enableTlsForService": "Enable TLS for {name}",
+    "renewCertificateFor": "Renew certificate for {hostname}",
+    "rotateCertificateFor": "Rotate certificate for {hostname}",
+    "deleteCertificateFor": "Delete certificate for {hostname}",
+    "acknowledgeEvent": "Acknowledge event: {title}",
+    "resolveEvent": "Resolve event: {title}",
+    "severityLabel": "{severity} severity",
+    "disableCertificateFor": "Disable certificate for {hostname}",
+    "enableCertificateFor": "Enable certificate for {hostname}",
+    "disablePolicy": "Disable policy: {name}",
+    "enablePolicy": "Enable policy: {name}"
   },
   "settings": {
     "aPISettings": {
       "aPIEndpoints": "API Endpoints",
       "autoBotBackendProxied": "AutoBot Backend (Proxied)",
-      "backendAPI": "Backend API",
+      "backendAPI": "بیک اینڈ API",
       "configurationReference": "Configuration Reference",
       "connectionStatus": "Connection Status",
       "copyToClipboard": "Copy to clipboard",
@@ -2049,7 +2299,17 @@
         "turnCachingOnOr": "Turn caching on or off globally",
         "value0Keys": "{value0} keys",
         "warmUpCaches": "Warm Up Caches",
-        "yourBrowserIsStill": "Your browser is still caching API responses and static assets automatically."
+        "yourBrowserIsStill": "Your browser is still caching API responses and static assets automatically.",
+        "configurationSaved": "Cache configuration saved successfully",
+        "cacheCleared": "{type} cache cleared successfully",
+        "redisDatabaseCleared": "Redis {database} database cleared successfully",
+        "warmupCompleted": "Cache warmup completed successfully",
+        "failedToSaveCacheConfiguration": "Failed to save cache configuration",
+        "failedToClearCache": "Failed to clear cache",
+        "failedToWarmUpCaches": "Failed to warm up caches",
+        "confirmClearRedisDatabase": "Are you sure you want to clear the {database} Redis database?",
+        "confirmClearCache": "Are you sure you want to clear the {type} cache?",
+        "failedToClearRedisDatabase": "Failed to clear Redis database"
       },
       "configDefaultsSettings": {
         "actions": "اقدامات",
@@ -2081,7 +2341,12 @@
         "update": "Update",
         "updated": "تازہ کاری شدہ",
         "value": "Value *",
-        "value1": "ویلیو"
+        "value1": "ویلیو",
+        "configSaved": "Config \"{key}\" saved",
+        "deleteGlobalConfig": "Delete global config \"{key}\"?",
+        "requestFailed": "Request failed: {detail}",
+        "unknownError": "نامعلوم خطا",
+        "editKey": "Edit: {key}"
       },
       "lLMFallbacksView": {},
       "lLMSettings": {
@@ -2146,7 +2411,19 @@
         "setActive": "Set Active",
         "temperature": "Temperature:",
         "test": "Test",
-        "unsavedChanges": "Unsaved changes"
+        "unsavedChanges": "Unsaved changes",
+        "configurationSaved": "Configuration saved",
+        "configApplied": "Config applied to {count} nodes",
+        "failedToLoadLlmConfig": "Failed to load LLM config",
+        "failedToSaveLlmConfig": "Failed to save LLM config",
+        "saveConfigurationBeforeApplyingToFleet": "Save configuration before applying to fleet",
+        "applyFailed": "Apply failed",
+        "failedToApplyConfigToFleet": "Failed to apply config to fleet",
+        "connectionTestFailed": "Connection test failed",
+        "removeProvider": "Remove provider \"{name}\"?",
+        "providersTab": "Providers",
+        "serverSettingsTab": "Server Settings",
+        "modelsTab": "ماڈلز"
       },
       "logForwardingSettings": {
         "aPIKeyOptional": "API Key (optional)",
@@ -2199,12 +2476,32 @@
         "update": "Update",
         "username": "صارف نام",
         "varLogAutobotForwardedLog": "/var/log/autobot-forwarded.log",
-        "warning": "Warning"
+        "warning": "انتباہ",
+        "statusUnknown": "نامعلوم",
+        "leaveBlankToKeep": "Leave blank to keep the current value",
+        "loadFailed": "Failed to load destinations",
+        "toggleFailed": "Failed to toggle service",
+        "autoStartEnabled": "Auto-start enabled",
+        "autoStartDisabled": "Auto-start disabled",
+        "autoStartFailed": "Failed to update auto-start",
+        "destinationCreated": "Destination created successfully",
+        "destinationUpdated": "Destination updated successfully",
+        "saveFailed": "Failed to save destination",
+        "testSucceeded": "Connection test successful",
+        "testFailed": "Connection test failed",
+        "testAllSummary": "{healthy}/{total} destinations healthy",
+        "testAllFailed": "Failed to test destinations",
+        "destinationDeleted": "Destination deleted successfully",
+        "deleteFailed": "Failed to delete destination",
+        "removeStoredValue": "Remove the stored value",
+        "urlPlaceholderSyslog": "syslog.example.com:514",
+        "urlPlaceholderWebhook": "https://logs.example.com/ingest",
+        "urlPlaceholderElasticsearch": "http://elasticsearch.example.com:{port}"
       },
       "nPUWorkersSettings": {
         "actions": "اقدامات",
         "areYouSureYou": "Are you sure you want to remove",
-        "busy": "Busy",
+        "busy": "مصروف",
         "cancel": "Cancel",
         "capabilities": "Capabilities",
         "close": "بند کریں",
@@ -2253,7 +2550,18 @@
         "weighted": "Weighted",
         "windows": "Windows",
         "worker": "Worker",
-        "workerName": "Worker Name *"
+        "workerName": "Worker Name *",
+        "connectionTestFailed": "Connection test failed",
+        "loadBalancingLoadFailed": "Failed to load load-balancing configuration",
+        "loadBalancingSaved": "Load balancing configuration saved",
+        "workerUpdated": "Worker updated successfully",
+        "workerPaired": "Worker paired successfully",
+        "connectionSuccessful": "Connection to {hostname} successful",
+        "workerRemoved": "Worker removed successfully",
+        "failedToLoadWorkers": "Failed to load workers",
+        "failedToSaveWorker": "Failed to save worker",
+        "failedToRemoveWorker": "Failed to remove worker",
+        "failedToSaveConfiguration": "Failed to save configuration"
       },
       "personalitySettings": {
         "active": "فعال",
@@ -2294,7 +2602,13 @@
         "thisActionCannotBe": "This action cannot be undone. The profile will be permanently removed.",
         "tone": "Tone",
         "voice": "Voice",
-        "whenThisPersonalityIs": "When this personality is active, voice output will use the selected voice."
+        "whenThisPersonalityIs": "When this personality is active, voice output will use the selected voice.",
+        "profileSaved": "Profile saved.",
+        "profileActivated": "Profile activated.",
+        "profileReset": "Profile reset to default values.",
+        "profileDeleted": "Profile deleted.",
+        "profileCreated": "Profile \"{name}\" created.",
+        "profileDuplicated": "Duplicated as \"{name}\"."
       },
       "promptsSettings": {
         "allCategories": "All Categories",
@@ -2317,9 +2631,28 @@
         "selectAPrompt": "Select a Prompt",
         "selectAPromptFrom": "Select a prompt from the list to edit",
         "status": "Status:",
-        "unsavedChanges": "Unsaved Changes"
+        "unsavedChanges": "Unsaved Changes",
+        "promptSaved": "Prompt saved successfully",
+        "promptReverted": "Prompt reverted to default",
+        "failedToLoadPrompts": "Failed to load prompts",
+        "failedToSavePrompt": "Failed to save prompt",
+        "failedToRevertPrompt": "Failed to revert prompt",
+        "youHaveUnsavedChangesDiscardThem": "You have unsaved changes. Discard them?",
+        "areYouSureYouWantToRevert": "Are you sure you want to revert this prompt to its default content?"
       },
       "sSOSettings": {
+        "confirmDeleteProvider": "Delete SSO provider \"{name}\"? This cannot be undone.",
+        "providerCreated": "Provider created successfully",
+        "providerDeleted": "Provider deleted successfully",
+        "providerDisabled": "Provider disabled",
+        "providerEnabled": "Provider enabled",
+        "providerNameRequired": "Provider name is required",
+        "providerUpdated": "Provider updated successfully",
+        "connectionTestFailed": "Connection test failed",
+        "failedToDeleteProvider": "Failed to delete provider",
+        "failedToLoadProviders": "Failed to load SSO providers",
+        "failedToSaveProvider": "Failed to save provider",
+        "failedToToggleProvider": "Failed to toggle provider",
         "aCSURLAssertionConsumerService": "ACS URL (Assertion Consumer Service)",
         "addProvider": "Add Provider",
         "addYourFirstProvider": "Add your first provider",
@@ -2384,7 +2717,7 @@
         "sPEntityID": "SP Entity ID",
         "sSOOIDCConfiguration": "SSO / OIDC Configuration",
         "saving": "Saving...",
-        "scope": "Scope",
+        "scope": "دائرہ",
         "searchFilter": "Search Filter",
         "searchFilterExample": "(uid={username})",
         "serverURI": "Server URI",
@@ -2424,6 +2757,9 @@
         "description": "تفصیل",
         "dismissError": "Dismiss error",
         "encryptedTokensAndCredentials": "Encrypted tokens and credentials for AutoBot infrastructure. Values are never displayed.",
+        "expectedHashingPepper": "Pepper used to hash API keys. Required to create new API keys; you provide the value. Rotating it later invalidates existing API keys.",
+        "expectedMissing": "Not set. New API keys cannot be created until it is.",
+        "expectedSetValue": "Set value",
         "failedToCreateSecret": "Failed to create secret",
         "failedToDeleteSecret": "Failed to delete secret",
         "failedToLoadSecrets": "Failed to load secrets",
@@ -2483,7 +2819,7 @@
         "createSLMAdministrator": "Create SLM Administrator",
         "createTeam": "Create Team",
         "created": "تخلیق شدہ",
-        "dark": "Dark",
+        "dark": "گہرا",
         "deleteProvider": "Delete provider",
         "deleteTeam": "Delete team",
         "deleteUser": "Delete user",
@@ -2510,7 +2846,7 @@
         "language": "Language",
         "lastLogin": "Last Login",
         "lastSync": "Last Sync",
-        "light": "Light",
+        "light": "ہلکا",
         "logout": "Logout",
         "lowercaseLettersNumbersUnderscores": "Lowercase, letters, numbers, underscores",
         "microsoftEntraID": "Microsoft Entra ID",
@@ -2549,13 +2885,103 @@
         "teamName": "Team Name",
         "teams": "Teams",
         "testConnection": "Test connection",
-        "theme": "Theme",
+        "theme": "تھیم",
         "thisWillCreateSystem": "This will create system permissions and roles in the database. It is safe to run multiple times.",
         "type": "قسم",
         "userPreferences": "User Preferences",
         "username": "صارف نام",
         "usersWhoAccessAutoBot": "Users who access AutoBot chat, workflows, and tools",
-        "usersWhoManageThe": "Users who manage the AutoBot fleet via the SLM admin dashboard"
+        "usersWhoManageThe": "Users who manage the AutoBot fleet via the SLM admin dashboard",
+        "resetPasswordFor": "Reset Password for {username}",
+        "userCreated": "User created successfully",
+        "slmUserDeleted": "SLM user deleted successfully",
+        "autobotUserDeleted": "AutoBot user deleted successfully",
+        "teamCreated": "Team created successfully",
+        "teamDeleted": "Team deleted successfully",
+        "rbacInitializedSuccessfully": "RBAC initialized successfully",
+        "ssoProviderCreated": "SSO provider created successfully",
+        "ssoProviderDeleted": "SSO provider deleted successfully",
+        "ssoConnectionSuccessful": "SSO provider connection successful",
+        "ssoConnectionFailed": "SSO provider connection test failed",
+        "failedToLoadSlmUsers": "Failed to load SLM users",
+        "failedToLoadAutobotUsers": "Failed to load AutoBot users",
+        "failedToLoadTeams": "Failed to load teams",
+        "failedToLoadSsoProviders": "Failed to load SSO providers",
+        "passwordsDoNotMatch": "Passwords do not match",
+        "failedToCreateUser": "Failed to create user",
+        "failedToDeleteUser": "Failed to delete user",
+        "failedToCreateTeam": "Failed to create team",
+        "failedToDeleteTeam": "Failed to delete team",
+        "failedToCheckRbacStatus": "Failed to check RBAC status",
+        "failedToCreateSsoProvider": "Failed to create SSO provider",
+        "failedToDeleteSsoProvider": "Failed to delete SSO provider",
+        "failedToTestSsoProvider": "Failed to test SSO provider",
+        "confirmDeleteUser": "Are you sure you want to delete this user?",
+        "confirmDeleteTeam": "Are you sure you want to delete this team?",
+        "confirmDeleteSsoProvider": "Are you sure you want to delete this SSO provider?",
+        "confirmDeleteSlmAdmin": "Are you sure you want to delete this SLM admin?",
+        "checkingRbacStatus": "Checking RBAC status...",
+        "failedToInitializeRbac": "Failed to initialize RBAC"
+      },
+      "webResearchSettings": {
+        "title": "Web Research",
+        "subtitle": "Platform-wide web research settings. Changes apply to every user.",
+        "dismiss": "Dismiss",
+        "refresh": "تازہ کریں",
+        "enableSwitch": "Enable web research",
+        "statusEnabled": "فعال",
+        "statusMethod": "Preferred method",
+        "statusCache": "Cache size",
+        "statusRateLimiter": "Rate limiter",
+        "statusResearcher": "Researcher",
+        "yes": "Yes",
+        "no": "No",
+        "unknown": "نامعلوم",
+        "rateLimiterValue": "{current} / {max}",
+        "unavailableTitle": "Web researcher unavailable",
+        "unavailableHint": "The web researcher failed to start on the backend, so web research cannot run and these controls are paused. Settings can still be saved.",
+        "degradedHint": "The web researcher is degraded.",
+        "clearCache": "Clear cache",
+        "resetBreakers": "Reset circuit breakers ({count})",
+        "formTitle": "ترتیبات",
+        "save": "تبدیلیاں محفوظ کریں",
+        "saving": "Saving...",
+        "discard": "Discard changes",
+        "range": "Between {min} and {max}",
+        "atLeast": "At least {min}",
+        "notEnforced": "Saved — not enforced yet",
+        "saved": "Settings saved",
+        "savedNotApplied": "Saved; takes effect after a restart.",
+        "enabledMessage": "Web research enabled",
+        "disabledMessage": "Web research disabled",
+        "cacheCleared": "Research cache cleared",
+        "breakersReset": "Circuit breakers reset",
+        "loadFailed": "Failed to load web research settings",
+        "statusFailed": "Failed to load web research status",
+        "saveFailed": "Failed to save web research settings",
+        "toggleFailed": "Failed to change web research",
+        "clearCacheFailed": "Failed to clear the research cache",
+        "resetBreakersFailed": "Failed to reset circuit breakers",
+        "field_preferred_method": "Search method",
+        "field_max_results": "Max results",
+        "field_timeout_seconds": "Timeout (seconds)",
+        "field_auto_research_threshold": "Auto-research threshold",
+        "field_rate_limit_requests": "Rate limit: requests",
+        "field_rate_limit_window": "Rate limit: window (seconds)",
+        "field_daily_limit": "Daily limit",
+        "field_quality_threshold": "Quality threshold",
+        "field_require_user_confirmation": "Require confirmation before searching",
+        "field_store_results_in_kb": "Store results in the knowledge base",
+        "field_filter_adult_content": "Filter adult content",
+        "field_anonymize_requests": "Anonymize requests",
+        "method_basic": "Basic",
+        "method_advanced": "Advanced",
+        "method_api_based": "API-based",
+        "researcher_unknown": "نامعلوم",
+        "researcher_ok": "دستیاب",
+        "researcher_unavailable": "دستیاب نہیں",
+        "researcher_degraded": "کمزور",
+        "researcher_error": "Status unreadable"
       }
     },
     "backendSettings": {
@@ -2573,7 +2999,7 @@
       "bindAddress": "Bind address",
       "checking": "جانچ ہو رہی ہے...",
       "connectedToBackend": "Connected to Backend",
-      "connectionFailed": "Connection Failed",
+      "connectionFailed": "کنکشن ناکام",
       "currentBackendAPIURL": "Current backend API URL",
       "debug": "Debug",
       "error": "Error",
@@ -2585,12 +3011,14 @@
       "sLMConfiguration": "SLM Configuration",
       "save": "محفوظ کریں",
       "serverConfiguration": "Server Configuration",
-      "serverHost": "Server Host",
+      "serverHost": "سرور میزبان",
       "serverPort": "Server Port",
       "test": "Test",
       "theseSettingsAreRead": "These settings are read-only and configured in the backend.",
       "timeBeforeANode": "Time before a node is marked offline (seconds)",
-      "warning": "Warning"
+      "warning": "انتباہ",
+      "failedToSaveSetting": "Failed to save setting",
+      "failedToLoadSettings": "Failed to load settings"
     },
     "disposalPolicySettings": {
       "controlsHowCompanyOSProjectsAre": "Controls how Company OS projects are disposed after archiving. Default: immediate, no approval.",
@@ -2601,7 +3029,9 @@
       "retentionPeriodDays": "Retention period (days)",
       "savePolicy": "Save Policy",
       "saving": "محفوظ ہو رہا ہے…",
-      "whenEnabledDisposalCreatesAnApproval": "When enabled, disposal creates an approval request before the project is deleted."
+      "whenEnabledDisposalCreatesAnApproval": "When enabled, disposal creates an approval request before the project is deleted.",
+      "failedToLoadDisposalPolicy": "Failed to load disposal policy",
+      "failedToSaveDisposalPolicy": "Failed to save disposal policy"
     },
     "findingsPolicySettings": {
       "automaticallyTriggerFindings": "Automatically trigger findings analysis whenever the code index is refreshed.",
@@ -2662,8 +3092,15 @@
       "systemName": "System Name",
       "timezoneForDisplayingDatesAndTimes": "Timezone for displaying dates and times ({count} zones available)",
       "useDarkThemeFor": "Use dark theme for the interface",
-      "value0Value1NodePlural": "{value0} — {value1} node{plural}",
-      "viewWizard": "View Wizard"
+      "value0Value1NodePlural": "{value0} — {value1} node | {value0} — {value1} nodes",
+      "viewWizard": "View Wizard",
+      "settingsSaved": "Settings saved successfully",
+      "setupWizardReset": "Setup wizard has been reset",
+      "failedToLoadSettings": "Failed to load settings",
+      "failedToSaveSettings": "Failed to save settings",
+      "timeSyncFailed": "Time sync failed",
+      "failedToResetWizard": "Failed to reset wizard",
+      "failedToSaveSettingsList": "Failed to save setting(s): {keys}"
     },
     "monitoringSettings": {
       "10Seconds": "10 seconds",
@@ -2695,7 +3132,17 @@
       "testConnection": "Test Connection",
       "uRLToAccessGrafana": "URL to access Grafana",
       "uRLToAccessPrometheus": "URL to access Prometheus",
-      "useAnsibleToDeploy": "Use Ansible to deploy or migrate the monitoring stack to a different node."
+      "useAnsibleToDeploy": "Use Ansible to deploy or migrate the monitoring stack to a different node.",
+      "settingSaved": "Setting saved successfully",
+      "prometheusConnected": "Prometheus connection successful",
+      "prometheusFailed": "Prometheus connection failed",
+      "prometheusUnreachable": "Cannot reach the Prometheus server",
+      "grafanaConnected": "Grafana connection successful",
+      "grafanaFailed": "Grafana connection failed",
+      "grafanaUnreachable": "Cannot reach the Grafana server",
+      "deployViaAnsible": "Monitoring role deployment will be triggered via Ansible",
+      "failedToLoadSettings": "Failed to load settings",
+      "failedToSaveSetting": "Failed to save setting"
     },
     "notificationsSettings": {
       "adminExampleCom": "admin{'@'}example.com",
@@ -2718,7 +3165,11 @@
       "saveChanges": "Save Changes",
       "saving": "Saving...",
       "securityAlerts": "Security Alerts",
-      "sendNotificationsViaEmail": "Send notifications via email"
+      "sendNotificationsViaEmail": "Send notifications via email",
+      "settingsSaved": "Notification settings saved successfully",
+      "failedToLoadSettings": "Failed to load settings",
+      "failedToSaveSettings": "Failed to save settings",
+      "failedToSaveSettingsList": "Failed to save setting(s): {keys}"
     },
     "securitySettings": {
       "1Year": "1 year",
@@ -2726,7 +3177,7 @@
       "60Days": "60 days",
       "90Days": "90 days",
       "aPIKeyCreated": "API Key Created",
-      "aPIKeys": "API Keys",
+      "aPIKeys": "API کلیدیں",
       "actions": "اقدامات",
       "backupCodes": "Backup Codes",
       "backupCodesRemainingValue0": "Backup codes remaining: {value0}",
@@ -2746,7 +3197,7 @@
       "enterYourPassword": "Enter your password",
       "enterYourPasswordTo": "Enter your password to confirm disabling two-factor authentication.",
       "expiration": "Expiration",
-      "expires": "Expires",
+      "expires": "میعاد ختم",
       "keyPrefix": "Key Prefix",
       "lastVerifiedValue0": "Last verified: {value0}",
       "mFAIsEnabled": "MFA is enabled",
@@ -2770,13 +3221,52 @@
       "value0Uses": "{value0} uses",
       "verifyAndEnable": "Verify and Enable",
       "whatThisKeyIsFor": "What this key is for",
-      "yourAccountIsProtectedWithValue0": "Your account is protected with {value0} authentication"
+      "yourAccountIsProtectedWithValue0": "Your account is protected with {value0} authentication",
+      "mFAEnabledSuccessfully": "MFA enabled successfully",
+      "mFADisabledSuccessfully": "MFA disabled successfully",
+      "aPIKeyRevoked": "API key revoked successfully",
+      "copiedToClipboard": "Copied to clipboard",
+      "failedToLoadMfaStatus": "Failed to load MFA status",
+      "failedToStartMfaSetup": "Failed to start MFA setup",
+      "pleaseEnterAValid6DigitCode": "Please enter a valid 6-digit code",
+      "verificationFailed": "Verification failed",
+      "failedToVerifyMfaCode": "Failed to verify MFA code",
+      "passwordIsRequired": "Password is required",
+      "failedToDisableMfa": "Failed to disable MFA",
+      "failedToRegenerateBackupCodes": "Failed to regenerate backup codes",
+      "failedToLoadApiKeys": "Failed to load API keys",
+      "failedToLoadScopes": "Failed to load scopes",
+      "nameAndAtLeastOneScopeAre": "Name and at least one scope are required",
+      "failedToCreateApiKey": "Failed to create API key",
+      "failedToRevokeApiKey": "Failed to revoke API key",
+      "confirmRevokeApiKey": "Are you sure you want to revoke this API key? This action cannot be undone."
     },
     "cache": {
       "databaseLabel": "{name} (DB {db})"
     },
     "llm": {
       "latencyMs": "({ms}ms)"
+    },
+    "nav": {
+      "general": "General",
+      "monitoring": "نگرانی",
+      "notifications": "اطلاعات",
+      "security": "سلامتی",
+      "api": "API",
+      "backend": "Backend",
+      "disposalPolicy": "Disposal Policy",
+      "findingsPolicy": "Findings Policy",
+      "users": "Users",
+      "cache": "Cache",
+      "prompts": "Prompts",
+      "personality": "Personality",
+      "secrets": "Secrets",
+      "logForwarding": "Log Forwarding",
+      "llm": "LLM",
+      "llmFallbacks": "LLM Fallbacks",
+      "budgetAudit": "Budget Audit",
+      "sso": "SSO / OIDC",
+      "webResearch": "Web Research"
     }
   },
   "settingsView": {
@@ -2834,7 +3324,7 @@
     "sLMAgent": "SLM Agent",
     "sLMServices": "SLM Services:",
     "sSHAccessCredentialsKey": "SSH access credentials (key or password)",
-    "sSHKey": "SSH Key",
+    "sSHKey": "SSH کلید",
     "sSHPassword": "SSH Password",
     "sSHUser": "SSH User",
     "saveAPIKeys": "Save API Keys",
@@ -2859,7 +3349,9 @@
     "yourAutoBotFleetIs": "Your AutoBot fleet is configured and ready to use.",
     "yourSLMServiceLifecycle": "Your SLM (Service Lifecycle Manager) is up and running. This wizard\n          will guide you through adding and configuring your fleet nodes.",
     "provisioningFailed": "Provisioning failed",
-    "retryProvisioning": "Retry provisioning"
+    "retryProvisioning": "Retry provisioning",
+    "failedToSaveKeys": "API کیز محفوظ کرنے میں ناکامی۔ تفصیلات کے لیے کنسول دیکھیں۔",
+    "failedToAddNode": "نوڈ شامل کرنے میں ناکامی"
   },
   "skills": {
     "approvalsTab": {
@@ -2897,8 +3389,24 @@
       "noRepositoriesRegisteredAdd": "No repositories registered. Add a skill repo to install community skills.",
       "skills": "Skills",
       "sync": "Sync",
+      "tableLabel": "Skill repositories",
       "type": "قسم",
       "uRL": "URL"
+    },
+    "unknownSkill": "unknown",
+    "newDraftNotification": "AutoBot generated a new skill: \"{skillId}\" — pending approval",
+    "errors": {
+      "generic": "Skills request failed",
+      "fetchReposFailed": "Failed to fetch repos",
+      "addRepoFailed": "Failed to add repo",
+      "syncRepoFailed": "Failed to sync repo",
+      "fetchApprovalsFailed": "Failed to fetch approvals",
+      "processApprovalFailed": "Failed to process approval",
+      "fetchDraftsFailed": "Failed to fetch drafts",
+      "testDraftFailed": "Test draft failed",
+      "promoteDraftFailed": "Failed to promote draft",
+      "fetchGovernanceFailed": "Failed to fetch governance config",
+      "updateGovernanceModeFailed": "Failed to update governance mode"
     }
   },
   "skillsView": {
@@ -2972,7 +3480,13 @@
     "upgradeAll": "Upgrade All",
     "upgradeSelectedValue0": "Upgrade Selected ({value0})",
     "value0Value1Nodes": "{value0} / {value1} nodes",
-    "version": "Version"
+    "version": "Version",
+    "discoveryCompleted": "Discovery completed",
+    "upgradeJobsStarted": "Upgrade jobs started",
+    "confirmCancelJob": "Cancel this update job?",
+    "jobCancelled": "Job cancelled",
+    "confirmUpgradeAllOnNode": "Upgrade ALL packages on {nodeId}?",
+    "upgradeAllStartedOnNode": "Upgrade all started for {nodeId}"
   },
   "tools": {
     "admin": {
@@ -3044,7 +3558,7 @@
         "allStatus": "All Status",
         "capabilities": "Capabilities",
         "error": "Error",
-        "idle": "بیکار",
+        "idle": "Idle",
         "lastActivityValue0": "Last activity: {value0}",
         "loadingAgents": "ایجنٹس لوڈ ہو رہے ہیں...",
         "noAgentsFound": "No agents found",
@@ -3072,7 +3586,7 @@
         "creating": "Creating...",
         "dataExport": "Data Export",
         "delete": "Delete",
-        "duration": "Duration",
+        "duration": "دورانیہ",
         "enterJobName": "Enter job name",
         "failed": "ناکام",
         "failedItems": "Failed Items",
@@ -3086,10 +3600,16 @@
         "refresh": "تازہ کریں",
         "reportGeneration": "Report Generation",
         "retry": "دوبارہ کوشش کریں",
-        "running": "Running",
+        "running": "چل رہا ہے",
         "started": "شروع ہوا",
         "totalJobs": "Total Jobs",
-        "value0Value1ItemsValue2": "{value0} / {value1} items ({value2}%)"
+        "value0Value1ItemsValue2": "{value0} / {value1} items ({value2}%)",
+        "failedToLoadJobs": "Failed to load jobs",
+        "failedToCreateJob": "Failed to create job",
+        "failedToCancelJob": "Failed to cancel job",
+        "failedToRetryJob": "Failed to retry job",
+        "failedToDeleteJob": "Failed to delete job",
+        "confirmDeleteJob": "Are you sure you want to delete this job?"
       },
       "browserTool": {
         "back": "واپس",
@@ -3112,7 +3632,12 @@
           "disconnected": "disconnected",
           "unknown": "unknown"
         },
-        "takeScreenshot": "Take Screenshot"
+        "takeScreenshot": "Take Screenshot",
+        "startFailed": "Failed to start browser",
+        "navigateFailed": "Navigation failed",
+        "backFailed": "Failed to go back",
+        "forwardFailed": "Failed to go forward",
+        "refreshFailed": "Failed to refresh"
       },
       "fileBrowserTool": {
         "actions": "اقدامات",
@@ -3355,7 +3880,7 @@
   },
   "sharedLinksView": {
     "colCreated": "تخلیق شدہ",
-    "colExpires": "Expires",
+    "colExpires": "میعاد ختم",
     "colOwner": "مالک",
     "colPassword": "پاس ورڈ",
     "colSession": "Session",
@@ -3364,7 +3889,7 @@
     "empty": "No active shared links.",
     "loading": "Loading shared links…",
     "never": "کبھی نہیں",
-    "open": "Open",
+    "open": "کھولیں",
     "protected": "Protected",
     "refresh": "تازہ کریں",
     "subtitle": "Read-only audit of who has shared what — every active public chat link, by user. Users manage their own shares in the app.",
@@ -3383,7 +3908,7 @@
     "period": "Period",
     "readOnlyNotice": "Audit view only. Budget policies are created and managed by users in the user app; this console does not modify them.",
     "refresh": "تازہ کریں",
-    "scope": "Scope",
+    "scope": "دائرہ",
     "scopeId": "Scope ID",
     "status": "Status",
     "subtitle": "Read-only oversight of all agent, project, task, and tenant budget policies and their hard-stop auto-pause configuration.",
@@ -3391,7 +3916,8 @@
     "title": "Budget Policy Audit",
     "totalPolicies": "Total Policies",
     "unnamed": "(unnamed)",
-    "warning": "Warning At"
+    "warning": "Warning At",
+    "failedToFetchBudgetPolicies": "Failed to fetch budget policies"
   },
   "dataHygiene": {
     "audit": {
@@ -3451,10 +3977,16 @@
       "subtitle": "Storage no live record references. Deletion is only ever PROPOSED here — approving it in the approval queue is what actually removes anything.",
       "title": "Unreferenced Storage",
       "totalCandidates": "Candidates",
-      "totalSize": "Total Size"
+      "totalSize": "Total Size",
+      "unknownError": "unknown error"
     },
     "subtitle": "Preview unreferenced storage, repair unreachable resources, and review the audit trail — every deletion is proposed through the approval queue, never applied directly.",
     "tabName": "Data Hygiene",
     "title": "Data Hygiene"
+  },
+  "ui": {
+    "modal": {
+      "closeDialog": "ڈائیلاگ بند کریں"
+    }
   }
 }

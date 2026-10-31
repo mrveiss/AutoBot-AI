@@ -12,11 +12,10 @@ import asyncio
 import json
 import logging
 import os
-import sys
 
 # Import configuration from centralized source
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import sqlite3
+import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -24,9 +23,14 @@ from typing import Any, Dict
 
 import psutil
 
-from config import API_BASE_URL
-from constants import ServiceURLs
-from constants.threshold_constants import TimingConstants
+# Runs from any directory with no PYTHONPATH: put the repository root on the path for
+# `autobot_shared` (#18289).
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.network_constants import ServiceURLs  # noqa: E402
+from autobot_shared.ssot_constants import TimingConstants  # noqa: E402
 
 try:
     import aiofiles
@@ -42,7 +46,7 @@ except ImportError:
     import aiohttp
 
 # Import centralized Redis client
-from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_client import get_async_redis_client  # noqa: E402
 
 # Setup logging
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -291,7 +295,7 @@ class SystemMonitor:
         services_to_monitor = [
             {
                 "name": "backend",
-                "url": f"{API_BASE_URL}/api/system/health",
+                "url": f"{ServiceURLs.BACKEND_API}/api/system/health",
                 "port": 8001,
             },
             {

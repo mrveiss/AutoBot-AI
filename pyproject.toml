@@ -31,6 +31,10 @@ known_first_party = ["autobot_shared"]
 [tool.mypy]
 python_version = "3.14"
 ignore_missing_imports = true
+# Resolve autobot_shared from the repo root whatever the cwd is. Run from
+# autobot-backend/ it was unresolved, ignore_missing_imports made it Any, and
+# every `X = Severity` alias then read as a variable: "not valid as a type" (GH#18345).
+mypy_path = "$MYPY_CONFIG_FILE_DIR"
 # Exclude test files — loose typing in tests is expected; this baseline
 # mirrors the pre-existing state tracked in GH#7105.
 exclude = [
@@ -42,13 +46,12 @@ exclude = [
     "autobot-backend/code_analysis/.*",
 ]
 
-# redis_client / workflow_memory / message_bus use a dual async/sync
+# redis_client / message_bus use a dual async/sync
 # dispatch pattern whose overloads aren't modeled in type stubs.
 # Fix tracked in GH#7105.
 [[tool.mypy.overrides]]
 module = [
     "autobot_shared.redis_client",
-    "autobot_shared.workflow_memory",
     "autobot_shared.message_bus",
 ]
 ignore_errors = true

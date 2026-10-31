@@ -36,6 +36,8 @@ import importlib.util
 import sys
 from pathlib import Path
 
+from testkit.fake_async_session import FakeAsyncSession
+
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 # #14299: models.schemas has a real field annotated `NodeStatus | None`
@@ -162,39 +164,23 @@ class TestHealthCheckEndpoint:
         """The endpoint-level invariant: Postgres alone can no longer make
         /health say "healthy" — Redis has to agree too (#14299)."""
 
-        class _FakeScalarResult:
-            def scalar(self):
-                return 1
-
-        class _FakeDB:
-            async def execute(self, *_a, **_kw):
-                return _FakeScalarResult()
-
         async def _unhealthy_redis():
             return "unhealthy"
 
         monkeypatch.setattr(health, "_check_redis_health", _unhealthy_redis)
 
-        result = _run(health.health_check(db=_FakeDB()))
+        result = _run(health.health_check(db=FakeAsyncSession(default_result=[1])))
 
         assert result.database == "healthy"
         assert result.redis == "unhealthy"
         assert result.status != "healthy", "Postgres-only health must not mask a broken Redis"
 
     def test_healthy_when_both_db_and_redis_agree(self, monkeypatch):
-        class _FakeScalarResult:
-            def scalar(self):
-                return 1
-
-        class _FakeDB:
-            async def execute(self, *_a, **_kw):
-                return _FakeScalarResult()
-
         async def _healthy_redis():
             return "healthy"
 
         monkeypatch.setattr(health, "_check_redis_health", _healthy_redis)
 
-        result = _run(health.health_check(db=_FakeDB()))
+        result = _run(health.health_check(db=FakeAsyncSession(default_result=[1])))
 
         assert result.status == "healthy"

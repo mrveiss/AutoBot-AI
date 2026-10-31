@@ -168,12 +168,12 @@ class TestHelpers:
 
 @pytest.fixture()
 def mock_bs4():
-    """Patch WebFetcher.fetch_raw_html to return fixture site pages (coroutine-compatible)."""
+    """Patch WebFetcher.fetch_raw_page to return fixture site pages, served as text/html (coroutine-compatible)."""
 
     async def _side_effect(url, timeout=30.0):
-        return _fixture_bs4(url, timeout)
+        return (*_fixture_bs4(url, timeout), "text/html")
 
-    with patch("knowledge.connectors.web_crawler.WebFetcher.fetch_raw_html", side_effect=_side_effect):
+    with patch("knowledge.connectors.web_crawler.WebFetcher.fetch_raw_page", side_effect=_side_effect):
         yield
 
 
@@ -349,7 +349,6 @@ class TestSyncSchedulerPath:
         cfg = _make_config(["https://example.com"], max_depth=3, max_pages=50)
         connector = WebCrawlerConnector(cfg)
         result = await connector.sync(incremental=True)
-
         mock_crawl.assert_awaited_once_with(
             seed_urls=["https://example.com"],
             max_depth=3,
@@ -358,6 +357,7 @@ class TestSyncSchedulerPath:
             ingest=False,
             same_origin=True,
             on_seed_complete=ANY,
+            profile="document",  # #18826: the connector's profile, a str enum
         )
         assert result.status == "success"
 
@@ -625,9 +625,9 @@ class TestFetchPageHttpErrorLabelling:
         fetcher = WebFetcher(robots_cache=None)
 
         async def _side_effect(url, timeout=30.0):
-            return "<html><head><title>Just a moment...</title></head><body></body></html>", 403
+            return "<html><head><title>Just a moment...</title></head><body></body></html>", 403, "text/html"
 
-        with patch("knowledge.connectors.web_crawler.WebFetcher.fetch_raw_html", side_effect=_side_effect):
+        with patch("knowledge.connectors.web_crawler.WebFetcher.fetch_raw_page", side_effect=_side_effect):
             fetch_result, raw_html = await connector._fetch_page_with_html(fetcher, "https://cf.example")
         assert fetch_result.success is False
         assert fetch_result.status_code == 403
@@ -647,9 +647,9 @@ class TestFetchPageHttpErrorLabelling:
         fetcher = WebFetcher(robots_cache=None)
 
         async def _side_effect(url, timeout=30.0):
-            return None, None
+            return None, None, None
 
-        with patch("knowledge.connectors.web_crawler.WebFetcher.fetch_raw_html", side_effect=_side_effect):
+        with patch("knowledge.connectors.web_crawler.WebFetcher.fetch_raw_page", side_effect=_side_effect):
             fetch_result, _ = await connector._fetch_page_with_html(fetcher, "https://x")
         assert fetch_result.success is False
         assert fetch_result.error_code == ERR_CONNECTION

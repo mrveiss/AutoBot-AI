@@ -33,7 +33,7 @@ from user_management.database import get_async_session_factory
 from ..models.budget import LLCAgentBudget
 from ..models.enums import ApprovalStatus
 
-# HeartbeatScheduler import is lazy (inside _collect_metrics) to avoid circular-import
+# LLCHeartbeatScheduler import is lazy (inside _collect_metrics) to avoid circular-import
 # chains when the probe module is loaded in test environments.
 
 logger = logging.getLogger(__name__)
@@ -147,7 +147,7 @@ def _compute_status(metrics: dict) -> str:
 
 
 def _is_scheduler_running(scheduler: object) -> bool:
-    """Check whether the HeartbeatScheduler background task is alive."""
+    """Check whether the LLCHeartbeatScheduler background task is alive."""
     return bool(getattr(scheduler, "is_running", False))
 
 

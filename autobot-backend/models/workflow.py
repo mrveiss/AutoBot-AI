@@ -48,7 +48,7 @@ units of a single installation, not a foreign-keyed tenant boundary.
 
 import uuid
 
-from sqlalchemy import Column, DateTime, String, UniqueConstraint
+from sqlalchemy import CheckConstraint, Column, DateTime, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.sql import func
 from sqlalchemy.types import Uuid
@@ -82,7 +82,19 @@ class Workflow(Base):
     """
 
     __tablename__ = "workflows"
-    __table_args__ = (UniqueConstraint("company_id", "workflow_id", name="uq_workflows_company_workflow"),)
+    __table_args__ = (
+        UniqueConstraint("company_id", "workflow_id", name="uq_workflows_company_workflow"),
+        # #18390: target of the composite (company_id, id) foreign keys of the Company OS
+        # graph tables, so those rows can only reference a workflow of their own company.
+        UniqueConstraint("company_id", "id", name="uq_workflows_company_id_id"),
+        # #18390: a meta skill has no trigger and no owning role -- stated in the
+        # schema, not only in the service, so no write path can produce one that has.
+        CheckConstraint("kind IN ('workflow', 'meta_skill')", name="ck_workflows_kind"),
+        CheckConstraint(
+            "kind <> 'meta_skill' OR (owner_role_id IS NULL AND trigger_type IS NULL)",
+            name="ck_workflows_meta_skill_unowned",
+        ),
+    )
 
     id = Column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
     workflow_id = Column(String(255), nullable=False, index=True)
@@ -93,6 +105,15 @@ class Workflow(Base):
     source = Column(String(50), nullable=False, default=SOURCE_CREATED)
     definition = Column(JSONB, nullable=False, default=dict)
     created_by = Column(Uuid(as_uuid=True), nullable=True)
+    # --- Company OS (#18390): the workflow layer of roles -> workflows -> processes.
+    # ``workflow`` | ``meta_skill`` (llc.models.company_os_enums.WorkflowKind).
+    kind = Column(String(20), nullable=False, default="workflow", server_default="workflow")
+    # NULL on rows that predate Company OS and on every meta skill. The role is not
+    # the holder: the next holder of the role inherits the workflow.
+    owner_role_id = Column(Uuid(as_uuid=True), nullable=True, index=True)
+    # One trigger per workflow (llc.models.company_os_enums.TriggerType); NULL = none.
+    trigger_type = Column(String(32), nullable=True)
+    trigger_config = Column(JSONB, nullable=False, default=dict, server_default=text("'{}'"))
     created_at = Column(
         DateTime(timezone=True),
         nullable=False,

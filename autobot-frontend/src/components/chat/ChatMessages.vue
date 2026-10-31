@@ -442,7 +442,7 @@
                 <span>{{ $t('chat.approval.approve') }}</span>
               </BaseButton>
               <BaseButton
-                variant="outline-solid"
+                variant="outline"
                 size="sm"
                 @click="promptForComment((message.metadata as any).terminal_session_id as string)"
                 :disabled="processingApproval || showCommentInput"
@@ -560,6 +560,7 @@
 </template>
 
 <script setup lang="ts">
+import { stripProtocolTagsForDisplay } from '@/utils/llmProtocolTags'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, nextTick, watch, onMounted, onUnmounted } from 'vue'
@@ -578,8 +579,7 @@ import LoadingSpinner from '@/components/ui/LoadingSpinner.vue'
 import SkeletonLoader from '@/components/ui/SkeletonLoader.vue'
 import StableLoadingState from '@/components/ui/StableLoadingState.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import OverseerPlanMessage from '@/components/chat/OverseerPlanMessage.vue'
 import OverseerStepMessage from '@/components/chat/OverseerStepMessage.vue'
 import CitationsDisplay from '@/components/chat/CitationsDisplay.vue'
@@ -898,14 +898,10 @@ const formatMessageContentRaw = (content: string): string => {
     .replace(/\u001b\]0;[^\u0007\n]*\u0007?/g, '') // Set title
     .trim()
 
-  // Strip message type tags (Issue #680)
-  formatted = formatted
-    .replace(/\[\/?(THOUGHT|PLANNING|DEBUG|SOURCES)\]?/gi, '')
-    .replace(/\[\/?(?:THO(?:UGH?T?)?|PLA(?:NN?I?N?G?)?|DEB(?:UG?)?|SOU(?:RC?E?S?)?)\]?$/gi, '')
-    .trim()
-
-  // Strip TOOL_CALL tags
-  formatted = formatted.replace(/<tool_call[^>]*>.*?<\/tool_call>/gs, '')
+  // Strip internal protocol tags — ONE spelling, shared (#680, #18065).
+  // This line used to carry /<tool_call…>/gs with no `i`, so it could not strip
+  // the UPPERCASE tag the prompts actually teach.
+  formatted = stripProtocolTagsForDisplay(formatted)
 
   // Process code blocks
   formatted = formatted.replace(/```(\w+)?\n([\s\S]*?)```/g, (_match, lang, code) => {
@@ -1573,8 +1569,8 @@ onUnmounted(() => {
 
 .message-wrapper.type-overseer_step::after {
   content: 'Step';
-  background: var(--color-info);
-  color: var(--text-inverse);
+  background: var(--color-info-solid);
+  color: var(--text-on-info);
 }
 
 .message-wrapper.type-overseer_plan,

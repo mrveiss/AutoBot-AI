@@ -34,7 +34,7 @@
 
 - name: "Pre-migration backup | Ensure backup directory exists (#10045)"
   ansible.builtin.file:
-    path: /opt/autobot/backups/pre-migration
+    path: "{{ autobot.base_dir }}/backups/pre-migration"
     state: directory
     mode: "0750"
 
@@ -45,7 +45,7 @@
   ansible.builtin.shell: |
     set -o pipefail
     su - postgres -c "pg_dumpall --clean --if-exists" \
-      | gzip > /opt/autobot/backups/pre-migration/backend-$(date +%s).sql.gz
+      | gzip > {{ autobot.base_dir }}/backups/pre-migration/backend-$(date +%s).sql.gz
   args:
     executable: /bin/bash
   become: true
@@ -74,7 +74,7 @@
       exit 1
     fi
     pg_dump --dbname="${DUMP_URL}" --format=custom \
-      --file="/opt/autobot/backups/pre-migration/backend-$(date +%s).dump"
+      --file="{{ autobot.base_dir }}/backups/pre-migration/backend-$(date +%s).dump"
   args:
     executable: /bin/bash
   when: not pre_migration_pg_dir.stat.exists

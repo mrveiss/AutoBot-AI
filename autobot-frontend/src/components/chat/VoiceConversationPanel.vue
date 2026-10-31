@@ -1,7 +1,7 @@
 <template>
   <div
     class="voice-panel h-full flex flex-col bg-autobot-bg-card border-l border-autobot-border"
-    tabindex="-1"
+    tabindex="-1" role="complementary" :aria-label="$t('chat.voice.title')"
     ref="panelRef"
     @keydown.escape="close"
   >
@@ -344,7 +344,7 @@ onMounted(async () => {
   letter-spacing: 0.04em;
 }
 
-.voice-panel__lang-badge i {
+.voice-panel__lang-badge .icon {
   font-size: 0.5625rem;
   opacity: 0.7;
 }
@@ -571,7 +571,7 @@ onMounted(async () => {
 /* Mic button */
 .voice-panel__mic-btn {
   position: relative;
-  z-index: 1;
+  z-index: var(--z-raised);
   width: var(--spacing-12);
   height: var(--spacing-12);
   border-radius: 50%;

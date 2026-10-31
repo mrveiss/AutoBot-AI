@@ -26,8 +26,10 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel
 
 from autobot_shared.logging_manager import get_logger
+from security.upload_filename_policy import require_safe_upload
 
 from ._common import agent_context, agent_node_uuid, assert_item_in_company
+from ._peer_search import fetch_peer_rows
 
 logger = get_logger(__name__)
 
@@ -180,11 +182,14 @@ async def ingest_cost_event(body: CostEvent, request: Request) -> Dict[str, Any]
     point of ingesting the event is that exceeding the limit stops the agent.
     ``UnpricedModel`` is 422 -- the event is well-formed but its cost cannot be
     computed, and charging zero is what #15860 was.
+
+    A ``work_item_id`` that is unknown, or belongs to another company, is 404 and
+    charges nothing: a ``200`` means the cost landed on the item named (#16016).
     """
     from autobot_shared.singleton_factory import lazy_singleton
     from user_management.database import get_async_session_factory
 
-    from ..exceptions import BudgetExhausted, UnpricedModel
+    from ..exceptions import BudgetExhausted, UnpricedModel, WorkItemNotInCompany
     from ..services.budget import BudgetService
 
     agent_id, company_id = agent_context(request)
@@ -198,8 +203,11 @@ async def ingest_cost_event(body: CostEvent, request: Request) -> Dict[str, Any]
                 tokens_in=body.tokens_in,
                 tokens_out=body.tokens_out,
                 model=body.model,
+                work_item_id=body.work_item_id,
             )
             await session.commit()
+    except WorkItemNotInCompany as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except BudgetExhausted as exc:
         raise HTTPException(status_code=402, detail=str(exc)) from exc
     except UnpricedModel as exc:
@@ -406,7 +414,6 @@ async def agent_upload_attachment(
 
     from ..services.attachment_service import AttachmentService, AttachmentTooLarge
 
-    content = await file.read()
     factory = get_async_session_factory()
     try:
         async with factory() as session:
@@ -415,9 +422,9 @@ async def agent_upload_attachment(
                 session,
                 company_id=company_id,
                 work_item_id=work_item_id,
-                filename=file.filename or "upload",
+                filename=require_safe_upload(file.filename),  # #19088: gate before the body is read
                 content_type=file.content_type or "application/octet-stream",
-                content=content,
+                content=await file.read(),
                 uploaded_by_agent_id=agent_id,
             )
         return {
@@ -479,43 +486,20 @@ async def search_peer_agents(
     """
     agent_id, company_id = agent_context(request)
     try:
-        from autobot_shared.logging_manager import get_logger
-        from knowledge import get_knowledge_base
-
-        from ..kb import AgentCapabilityIndexer
-
-        logger_inner = get_logger(__name__)
-        indexer = AgentCapabilityIndexer()
-        kb = await get_knowledge_base()
-        collection_name = indexer._collection_name(company_id)
-
-        try:
-            collection = await kb._async_chroma_client.get_collection(collection_name)
-        except Exception:
+        rows = await fetch_peer_rows(company_id, q, limit)
+        if rows is None:
             return {"agents": [], "count": 0, "query": q}
-
-        results = await collection.query(
-            query_texts=[q],
-            n_results=min(limit, 50),
-            include=["documents", "metadatas"],
-        )
-
-        agents = []
-        if results.get("ids") and len(results["ids"]) > 0:
-            docs = results.get("documents", [[]])[0] if results.get("documents") else []
-            metadatas = results.get("metadatas", [[]])[0] if results.get("metadatas") else []
-            for idx, (doc_id, metadata) in enumerate(zip(results["ids"][0], metadatas)):
-                agents.append(
-                    PeerAgent(
-                        agent_id=metadata.get("agent_id", ""),
-                        agent_name=metadata.get("agent_name", ""),
-                        title=metadata.get("title", ""),
-                        role=metadata.get("role", ""),
-                        capabilities=docs[idx] if idx < len(docs) else "",
-                        manager_name=metadata.get("manager_name"),
-                    )
-                )
-
+        agents = [
+            PeerAgent(
+                agent_id=metadata.get("agent_id", ""),
+                agent_name=metadata.get("agent_name", ""),
+                title=metadata.get("title", ""),
+                role=metadata.get("role", ""),
+                capabilities=doc,
+                manager_name=metadata.get("manager_name"),
+            )
+            for metadata, doc in rows
+        ]
         return {"agents": agents, "count": len(agents), "query": q, "querying_agent": agent_id}
     except Exception as e:
         from autobot_shared.logging_manager import get_logger

@@ -18,21 +18,19 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 
 from api.schemas_system import (
+    ProbeHealthResponse,
     SystemAdminCheckResponse,
     SystemBackupStatusResponse,
     SystemCacheActivityResponse,
-    SystemCacheClearResponse,
-    SystemCacheCoordinatorStatsResponse,
-    SystemCacheEvictResponse,
     SystemCacheStatsResponse,
     SystemDynamicImportResponse,
     SystemFrontendConfigResponse,
-    SystemHealthResponse,
     SystemInfoResponse,
     SystemMetricsResponse,
     SystemPromptReloadResponse,
     SystemReloadConfigResponse,
 )
+from api.system_cache_coordinator import router as _cache_coordinator_router
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
@@ -47,6 +45,7 @@ from utils.advanced_cache_manager import cache_manager, cache_response
 config = get_config_manager()
 
 router = APIRouter()
+router.include_router(_cache_coordinator_router)
 
 logger = get_logger(__name__)
 
@@ -317,18 +316,18 @@ async def get_frontend_config(admin_check: bool = Depends(check_admin_permission
 # operation_ids. A single api_route carrying both methods makes FastAPI reuse
 # ONE unique_id for both operations, producing a colliding operationId that
 # openapi-typescript emits twice (duplicate identifier → vue-tsc-baseline red).
-@router.api_route("/health", methods=["GET"], response_model=SystemHealthResponse, operation_id="get_system_health")
-@router.api_route("/health", methods=["HEAD"], response_model=SystemHealthResponse, operation_id="head_system_health")
+@router.api_route("/health", methods=["GET"], response_model=ProbeHealthResponse, operation_id="get_system_health")
+@router.api_route("/health", methods=["HEAD"], response_model=ProbeHealthResponse, operation_id="head_system_health")
 @router.api_route(  # Frontend compatibility alias
     "/system/health",
     methods=["GET"],
-    response_model=SystemHealthResponse,
+    response_model=ProbeHealthResponse,
     operation_id="get_system_health_alias",
 )
 @router.api_route(  # Frontend compatibility alias
     "/system/health",
     methods=["HEAD"],
-    response_model=SystemHealthResponse,
+    response_model=ProbeHealthResponse,
     operation_id="head_system_health_alias",
 )
 @with_error_handling(
@@ -614,7 +613,7 @@ async def dynamic_import(
     }
 
 
-@router.get("/health/detailed", response_model=SystemHealthResponse)
+@router.get("/health/detailed", response_model=ProbeHealthResponse)
 @cache_response(cache_key="system_health_detailed", ttl=30)  # Cache for 30 seconds
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -762,8 +761,6 @@ async def get_cache_stats(admin_check: bool = Depends(check_admin_permission)):
     Issue #744: Requires admin authentication.
     """
     try:
-        from utils.cache_manager import cache_manager
-
         # Get cache statistics
         cache_stats = await cache_manager.get_stats()
 
@@ -871,8 +868,6 @@ async def get_cache_activity(admin_check: bool = Depends(check_admin_permission)
     Issue #744: Requires admin authentication.
     """
     try:
-        from utils.cache_manager import cache_manager
-
         activity_response = {
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
             "activity": {
@@ -983,102 +978,6 @@ async def get_system_metrics(admin_check: bool = Depends(check_admin_permission)
                 "executable": sys.executable,
             },
         }
-
-
-# Issue #743: Cache coordinator endpoints for memory optimization (Phase 3.2)
-@router.get("/api/cache/stats", response_model=SystemCacheCoordinatorStatsResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="get_cache_coordinator_stats",
-    error_code_prefix="SYSTEM",
-)
-async def get_cache_coordinator_stats(
-    admin_check: bool = Depends(check_admin_permission),
-):
-    """
-    Get unified cache statistics from the cache coordinator.
-
-    Returns stats for all registered caches including:
-    - Individual cache metrics (size, hits, misses, hit_rate)
-    - Total items across all caches
-    - System memory percentage
-    - Pressure trigger count
-
-    Issue #744: Requires admin authentication.
-    """
-    try:
-        from cache import get_cache_coordinator
-
-        coordinator = await get_cache_coordinator()
-        return coordinator.get_cache_stats()
-    except Exception as e:
-        logger.error("Error getting cache coordinator stats: %s", str(e))
-        raise HTTPException(status_code=500, detail="Error getting cache coordinator stats")
-
-
-@router.post("/api/cache/evict", response_model=SystemCacheEvictResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="trigger_cache_eviction",
-    error_code_prefix="SYSTEM",
-)
-async def trigger_cache_eviction(admin_check: bool = Depends(check_admin_permission)):
-    """
-    Manually trigger coordinated cache eviction.
-
-    Evicts items from all registered caches according to eviction_ratio.
-
-    Issue #744: Requires admin authentication.
-    """
-    try:
-        from cache import get_cache_coordinator
-
-        coordinator = await get_cache_coordinator()
-        evicted = await coordinator._coordinated_evict()
-
-        return {
-            "status": "eviction_complete",
-            "evicted": evicted,
-            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-        }
-    except Exception as e:
-        logger.error("Error triggering cache eviction: %s", str(e))
-        raise HTTPException(status_code=500, detail="Error triggering cache eviction")
-
-
-@router.post("/api/cache/clear/{cache_name}", response_model=SystemCacheClearResponse)
-@with_error_handling(
-    category=ErrorCategory.SERVER_ERROR,
-    operation="clear_cache",
-    error_code_prefix="SYSTEM",
-)
-async def clear_cache(cache_name: str, admin_check: bool = Depends(check_admin_permission)):
-    """
-    Clear a specific cache by name.
-
-    Args:
-        cache_name: Name of the cache to clear (e.g., 'lru_memory', 'embedding')
-
-    Issue #744: Requires admin authentication.
-    """
-    try:
-        from cache import get_cache_coordinator
-
-        coordinator = await get_cache_coordinator()
-        if cache_name in coordinator._caches:
-            await coordinator._caches[cache_name].clear()
-            return {
-                "status": "cleared",
-                "cache": cache_name,
-                "timestamp": datetime.now(tz=timezone.utc).isoformat(),
-            }
-
-        raise HTTPException(status_code=404, detail=f"Cache '{cache_name}' not found")
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("Error clearing cache %s: %s", cache_name, str(e))
-        raise HTTPException(status_code=500, detail="Error clearing cache")
 
 
 @router.get("/backup/status", response_model=SystemBackupStatusResponse)

@@ -6,6 +6,15 @@
 
 The Security Scan job used to call npm's audit service twice: ``npm audit
 --json`` for the artifact, then ``npm audit --audit-level=high`` as the gate.
+
+Attribution is per ``via`` ENTRY, not per package (#17889, second review). Three defects
+lived in one line of the first version: ids collected across the whole ``via`` list before
+asking whether any were missing, so a second dict with no ``GHSA-`` url was dropped (a
+legacy ``npmjs.com/advisories/N`` url is that shape); one string in ``via`` set a flag that
+suppressed the check entirely; and a string ``via`` was trusted without checking the package
+it names is in the report. A failing entry with no ``severity`` was skipped outright while
+``metadata.counts`` went on reporting it high. Anything that cannot be attributed to a GHSA
+id now fails, because an advisory the gate cannot name is one it cannot excuse.
 The gate repeated a network call for data the first one already had, and when
 that second call failed -- a 400 from npm's retiring ``audits/quick`` fallback
 on 2026-09-11 -- the job went red exactly as it does for a real advisory.
@@ -44,15 +53,29 @@ import sys
 import time
 import traceback
 from dataclasses import dataclass, field
+from datetime import date
 from pathlib import Path
 from typing import Callable
+
+# `ADVISORY_EXCEPTIONS` is deliberately NOT re-exported (#13400). A re-exported mutable record
+# has two names and one object, so a test patching `gate.ADVISORY_EXCEPTIONS` leaves
+# `exception_problems` reading the original -- the patch point and the read point diverge, which
+# is the same vacuity #17377 AC2 warns about and it silently un-skipped four tests here. One
+# owner, one name: anything needing the record imports `npm_audit_exceptions`.
+from npm_audit_exceptions import (  # noqa: F401
+    FAILING_SEVERITIES,
+    NPM_ADVISORY_ORDER,
+    AdvisoryException,
+    entry_offers_a_patch,
+    exception_problems,
+    excused_phrase,
+    failing_advisories,
+)
 
 DEFAULT_MAX_ATTEMPTS = 3
 DEFAULT_RETRY_DELAY_SECONDS = 15
 DEFAULT_TIMEOUT_SECONDS = 180
 
-SEVERITY_ORDER = ("critical", "high", "moderate", "low", "info")
-FAILING_SEVERITIES = ("critical", "high")
 
 BULK_ENDPOINT = "/-/npm/v1/security/advisories/bulk"
 QUICK_ENDPOINT = "/-/npm/v1/security/audits/quick"
@@ -61,6 +84,8 @@ _ENDPOINT_MARKER = "/-/npm/v1/security/"
 PASSED, FOUND, UNAVAILABLE = "passed", "found", "unavailable"
 EXIT_CODES = {PASSED: 0, FOUND: 1, UNAVAILABLE: 2}
 ANNOTATION_TITLES = {FOUND: "npm audit: advisories found", UNAVAILABLE: "npm audit: could not check"}
+EXCUSED_TITLE = "npm audit: passed with a recorded exception"
+STALE_TITLE = "npm audit: the exception record is stale"
 
 
 @dataclass
@@ -134,13 +159,63 @@ def _counts(vulnerabilities: dict) -> dict[str, int] | None:
     A missing, non-numeric or negative count is not zero: reading it as zero
     would turn a malformed report into a pass (#16357 review).
     """
-    counts = {key: vulnerabilities.get(key) for key in SEVERITY_ORDER}
+    counts = {key: vulnerabilities.get(key) for key in NPM_ADVISORY_ORDER}
     if not all(isinstance(value, int) and not isinstance(value, bool) and value >= 0 for value in counts.values()):
         return None
     return counts  # type: ignore[return-value]
 
 
-def classify(stdout: str, log: str = "") -> Verdict:
+def _counts_contradict_detail(report: dict) -> bool:
+    """A zero failing count over a detail entry that IS failing: the report disagrees with
+    itself, which is unreadable rather than clean. Closed rather than recorded (#17890 N2)
+    because nobody will be here when it becomes reachable."""
+    detail = report.get("vulnerabilities")
+    return isinstance(detail, dict) and any(
+        isinstance(entry, dict) and entry.get("severity") in FAILING_SEVERITIES for entry in detail.values()
+    )
+
+
+def _clean_or_stale(counts: dict[str, int], endpoint: str, today: date) -> Verdict:
+    """A clean audit still fails while a recorded exception has outlived its advisory.
+
+    This is the drain case and the one that actually matters: braces being fixed is exactly
+    when the counts go to zero, and the staleness check used to sit AFTER the zero-count
+    return, so the entry could never be flagged in the only situation where it is stale
+    (review on #17889). Shrink-only, the same pressure the ratchet baselines use.
+    """
+    _, problems = exception_problems({}, today)
+    if problems:
+        return Verdict(FOUND, counts=counts, reason="; ".join(problems), endpoint=endpoint)
+    return Verdict(PASSED, counts=counts, endpoint=endpoint)
+
+
+def _excused_or_found(report: dict, counts: dict[str, int], endpoint: str, today: date) -> Verdict:
+    """A failing count becomes PASSED only when every advisory in it is a recorded exception."""
+    detail = failing_advisories(report)
+    if detail is None:
+        reason = "advisories found, and the per-package detail was unreadable so none could be excused"
+        return Verdict(FOUND, counts=counts, reason=reason, endpoint=endpoint)
+    patchable_by_advisory, unattributed = detail
+    if unattributed:
+        reason = "advisories found that could not be attributed to an advisory id: " + "; ".join(unattributed)
+        return Verdict(FOUND, counts=counts, reason=reason, endpoint=endpoint)
+    if not patchable_by_advisory:
+        reason = "advisories found, but the report named no advisory id, so none could be excused"
+        return Verdict(FOUND, counts=counts, reason=reason, endpoint=endpoint)
+    honoured, problems = exception_problems(patchable_by_advisory, today)
+    unexcused = sorted(set(patchable_by_advisory) - honoured)
+    if problems or unexcused:
+        # BOTH, never one: reporting only the stale entry sent the reader to remove it while
+        # the gate still failed for an advisory nobody had named (review on #17889).
+        if unexcused:
+            problems.append(f"not excused: {', '.join(unexcused)}")
+        return Verdict(FOUND, counts=counts, reason="; ".join(problems), endpoint=endpoint)
+    excused = excused_phrase(honoured)
+    reason = f"{counts['high'] + counts['critical']} excused by recorded exception: {excused} -- see #13400"
+    return Verdict(PASSED, counts=counts, reason=reason, endpoint=endpoint)
+
+
+def classify(stdout: str, log: str = "", today: date | None = None) -> Verdict:
     """One attempt's report as passed / found / unavailable. Never raises."""
     endpoint = endpoint_used(log)
     try:
@@ -162,8 +237,13 @@ def classify(stdout: str, log: str = "") -> Verdict:
     if counts is None:
         reason = "the report's severity counts are missing or are not counts"
         return Verdict(UNAVAILABLE, reason=reason, endpoint=endpoint)
-    result = FOUND if any(counts[severity] for severity in FAILING_SEVERITIES) else PASSED
-    return Verdict(result, counts=counts, endpoint=endpoint)
+    if not any(counts[severity] for severity in FAILING_SEVERITIES):
+        if _counts_contradict_detail(report):
+            reason = "the severity counts say nothing failing while the per-package detail lists a failing advisory"
+            return Verdict(UNAVAILABLE, counts=counts, reason=reason, endpoint=endpoint)
+        return _clean_or_stale(counts, endpoint, today or date.today())
+
+    return _excused_or_found(report, counts, endpoint, today or date.today())
 
 
 Runner = Callable[[list[str]], "subprocess.CompletedProcess[str]"]
@@ -221,13 +301,28 @@ def audit_with_retries(
 
 
 def _headline(outcome: Outcome, attempts: int) -> str:
+    """The one line a reader sees. It must never describe a state that did not happen.
+
+    ``verdict.reason`` was computed and dropped here (review on #17889), so an excused pass
+    printed "no high or critical advisories" while six were excused -- the false statement
+    being exactly what #13400 forbids, in the one place the mechanism is accountable. Every
+    reason now reaches the headline, and a pass through an exception says so.
+    """
     verdict = outcome.verdict
     if verdict.result == PASSED:
+        if verdict.reason:
+            return f"**Passed WITH recorded exception(s):** {verdict.reason}"
         return "**Passed:** no high or critical advisories in autobot-frontend."
     if verdict.result == FOUND:
+        failing = verdict.counts["critical"] + verdict.counts["high"]
+        if not failing:
+            # A clean audit that fails is the stale-record case, and "advisories found: 0"
+            # would send the reader hunting an advisory that is not there.
+            return f"**Failed, the exception record is stale:** {verdict.reason}"
         return (
             f"**Failed, advisories found:** {verdict.counts['critical']} critical and "
             f"{verdict.counts['high']} high. Bump the dependency; do not silence the gate (#13400)."
+            + (f" {verdict.reason}." if verdict.reason else "")
         )
     return (
         f"**Failed, could not check:** no usable audit report after {outcome.attempts} of {attempts} "
@@ -248,7 +343,7 @@ def summary_lines(outcome: Outcome, attempts: int) -> list[str]:
     ]
     if verdict.counts:
         lines += ["", "| Severity | Count |", "| --- | --- |"]
-        lines += [f"| {key} | {verdict.counts[key]} |" for key in SEVERITY_ORDER]
+        lines += [f"| {key} | {verdict.counts[key]} |" for key in NPM_ADVISORY_ORDER]
     return lines
 
 
@@ -267,9 +362,21 @@ def _write_summary(lines: list[str]) -> None:
 
 
 def _announce(outcome: Outcome, attempts: int) -> None:
-    title = ANNOTATION_TITLES.get(outcome.verdict.result)
+    """One annotation. An excused pass is a WARNING, not silence: it is a pass nobody
+    asked for on its merits, and it belongs in the checks UI rather than only the log."""
+    verdict = outcome.verdict
+    title = ANNOTATION_TITLES.get(verdict.result)
+    if verdict.result == FOUND and not (verdict.counts.get("critical", 0) + verdict.counts.get("high", 0)):
+        # The title is read on its own in the checks list, so "advisories found" over a
+        # stale-record failure contradicts its own headline (found by this change's own test).
+        title = STALE_TITLE
     headline = _headline(outcome, attempts).replace("**", "")
-    _emit(f"::error title={title}::{headline}" if title else headline)
+    if title:
+        _emit(f"::error title={title}::{headline}")
+    elif verdict.result == PASSED and verdict.reason:
+        _emit(f"::warning title={EXCUSED_TITLE}::{headline}")
+    else:
+        _emit(headline)
 
 
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:

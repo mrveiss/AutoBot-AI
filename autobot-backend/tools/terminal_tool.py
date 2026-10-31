@@ -376,7 +376,7 @@ class TerminalTool:
     async def get_user_command_history(self, conversation_id: str) -> Dict[str, Any]:
         """Get command history from user's interactive terminal session (Issue #281 refactor)."""
         try:
-            sessions, error = await terminal_backend_client.list_terminal_sessions()
+            sessions, error = await terminal_backend_client.fetch_terminal_sessions()
             if error:
                 return error
 

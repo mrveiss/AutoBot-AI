@@ -26,7 +26,6 @@ The rule these tests pin: an nginx **port** decides, before any host heuristic.
 from __future__ import annotations
 
 import importlib.util
-import sys
 from pathlib import Path
 
 import pytest
@@ -107,8 +106,5 @@ def test_path_expression_still_reads_from_the_selector() -> None:
     ), "the ws path must still be chosen by _is_direct_uvicorn_url"
     assert '"/slm/api/ws/events"' in src, "the nginx-prefixed path must remain the fallback"
 
-
-if sys.version_info < (3, 8):  # pragma: no cover - defensive
-    pytest.skip("requires modern importlib", allow_module_level=True)
 
 assert importlib.util  # keep the import meaningful for linters

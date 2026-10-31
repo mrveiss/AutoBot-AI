@@ -11,8 +11,11 @@
   removing a member. Roles are the backend MembershipRole enum
   (owner/admin/member/guest/lead — see autobot-backend/llc/models/enums.py).
 
-  Backend has no PATCH-role endpoint; changing a member's role is therefore a
-  remove + re-add against the existing endpoints.
+  A member's role changes in place via PATCH /members/{user_id} (#19960). The
+  server owns the rules (membership_policy.py): it answers 403 / 409 and the row
+  reverts. The viewer's own company role is not available to this view (the user
+  store's id is a username, the member rows carry UUIDs), so the control stays
+  enabled and the server decides.
 -->
 <template>
   <div class="members-view">
@@ -29,7 +32,7 @@
     <p v-if="!companyId" class="members-state">{{ t('llcMembers.noCompany') }}</p>
 
     <template v-else>
-      <ErrorBanner v-if="errorMessage" :message="errorMessage" class="members-error" />
+      <BaseAlert variant="error" v-if="errorMessage" :message="errorMessage" class="members-error" dismissible :dismiss-label="t('common.dismiss')" />
 
       <p v-if="isLoading" class="members-state">{{ t('llcMembers.loading') }}</p>
 
@@ -37,40 +40,40 @@
         {{ t('llcMembers.empty') }}
       </BaseCard>
 
-      <BaseCard v-else>
-        <table class="members-table">
-          <thead>
-            <tr>
-              <th scope="col">{{ t('llcMembers.colName') }}</th>
-              <th scope="col">{{ t('llcMembers.colRole') }}</th>
-              <th scope="col" class="members-col-actions">{{ t('llcMembers.colActions') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="member in members" :key="member.user_id">
-              <td>
-                <span class="members-name">{{ member.display_name }}</span>
-              </td>
-              <td>
-                <BaseBadge :variant="roleBadgeVariant(member.role)">
-                  {{ roleLabel(member.role) }}
-                </BaseBadge>
-              </td>
-              <td class="members-col-actions">
-                <BaseButton
-                  variant="error"
-                  size="sm"
-                  :loading="pendingUserId === member.user_id"
-                  :disabled="pendingUserId !== null"
-                  @click="confirmRemove(member)"
-                >
-                  {{ t('llcMembers.remove') }}
-                </BaseButton>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </BaseCard>
+      <BaseTable v-else :columns="columns" :rows="rows" row-key="user_id" :aria-label="t('llcMembers.title')" :actions-label="t('llcMembers.colActions')">
+        <template #cell-display_name="{ value }">
+          <span class="members-name">{{ value }}</span>
+        </template>
+        <template #cell-role="{ value }">
+          <BaseBadge size="sm" :variant="roleBadgeVariant(String(value))">
+            {{ roleLabel(String(value)) }}
+          </BaseBadge>
+        </template>
+        <template #cell-role_control="{ row }">
+          <select
+            class="members-select members-role-select"
+            :aria-label="t('llcMembers.changeRole', { name: row.display_name })"
+            :value="row.role"
+            :disabled="pendingUserId !== null"
+            @change="changeRole(row as unknown as Member, $event)"
+          >
+            <option v-for="role in MEMBERSHIP_ROLES" :key="role" :value="role">
+              {{ roleLabel(role) }}
+            </option>
+          </select>
+        </template>
+        <template #actions="{ row }">
+          <BaseButton
+            variant="error"
+            size="sm"
+            :loading="pendingUserId === row.user_id"
+            :disabled="pendingUserId !== null"
+            @click="confirmRemove(row as unknown as Member)"
+          >
+            {{ t('llcMembers.remove') }}
+          </BaseButton>
+        </template>
+      </BaseTable>
     </template>
 
     <!-- Add member modal -->
@@ -80,7 +83,7 @@
       :title="t('llcMembers.addModalTitle')"
       size="md"
     >
-      <ErrorBanner v-if="addError" :message="addError" class="members-error" />
+      <BaseAlert variant="error" v-if="addError" :message="addError" class="members-error" dismissible :dismiss-label="t('common.dismiss')" />
 
       <div class="members-form">
         <div class="members-field">
@@ -141,11 +144,7 @@ import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import { useCollaborationInvite } from '@/composables/collaboration/useCollaborationInvite'
-import BaseButton from '@/components/base/BaseButton.vue'
-import BaseCard from '@/components/base/BaseCard.vue'
-import BaseBadge from '@/components/base/BaseBadge.vue'
-import { BaseModal } from '@autobot/ui'
-import ErrorBanner from '@/components/base/ErrorBanner.vue'
+import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseModal, BaseTable, type BaseTableColumn } from '@autobot/ui'
 
 // Backend MembershipRole enum (autobot-backend/llc/models/enums.py).
 const MEMBERSHIP_ROLES = ['owner', 'admin', 'member', 'guest', 'lead'] as const
@@ -167,6 +166,13 @@ const props = defineProps<{ companyId?: string }>()
 const companyId = computed(() => (route.params.companyId as string) ?? props.companyId ?? '')
 
 const members = ref<Member[]>([])
+// BaseTable rows are plain records; Member carries no index signature.
+const rows = computed(() => members.value.map((m) => ({ ...m })))
+const columns = computed<BaseTableColumn[]>(() => [
+  { key: 'display_name', label: t('llcMembers.colName') },
+  { key: 'role', label: t('llcMembers.colRole') },
+  { key: 'role_control', label: t('llcMembers.colChangeRole') },
+])
 const isLoading = ref(false)
 const errorMessage = ref('')
 const pendingUserId = ref<string | null>(null)
@@ -284,6 +290,34 @@ async function confirmRemove(member: Member): Promise<void> {
   }
 }
 
+function roleChangeMessage(err: unknown): string {
+  const status = (err as { status?: number })?.status
+  if (status === 403) return t('llcMembers.roleChangeForbidden')
+  if (status === 409) return t('llcMembers.roleChangeLastOwner')
+  return t('llcMembers.roleChangeError')
+}
+
+// PATCH the role; the row only changes once the server accepts it, and a
+// refusal puts the select back on the role the row still has.
+async function changeRole(member: Member, event: Event): Promise<void> {
+  const select = event.target as HTMLSelectElement
+  const newRole = select.value
+  if (newRole === member.role || !isMembershipRole(newRole)) return
+  pendingUserId.value = member.user_id
+  errorMessage.value = ''
+  try {
+    await api.patch(`/api/llc/companies/${companyId.value}/members/${member.user_id}`, { role: newRole })
+    const row = members.value.find((m) => m.user_id === member.user_id)
+    if (row) row.role = newRole
+  } catch (err) {
+    logger.error('Failed to change member role', err)
+    errorMessage.value = roleChangeMessage(err)
+    select.value = member.role
+  } finally {
+    pendingUserId.value = null
+  }
+}
+
 // Surface a picker-load failure inline within the modal.
 watch(usersError, (msg) => {
   if (msg) addError.value = msg
@@ -337,33 +371,6 @@ onMounted(() => {
 
 .members-error {
   margin-bottom: 0.5rem;
-}
-
-.members-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.members-table th,
-.members-table td {
-  text-align: left;
-  padding: 0.625rem 0.75rem;
-  border-bottom: 1px solid var(--border-default);
-  font-size: 0.875rem;
-}
-
-.members-table th {
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-size: 0.6875rem;
-}
-
-.members-col-actions {
-  text-align: right;
-  width: 1%;
-  white-space: nowrap;
 }
 
 .members-name {

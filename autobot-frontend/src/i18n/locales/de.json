@@ -1,5 +1,6 @@
 {
   "common": {
+    "appName": "AutoBot",
     "submit": "Einreichen",
     "cancel": "Stornieren",
     "save": "Speichern",
@@ -103,7 +104,14 @@
     "exportCsv": "Export as CSV",
     "download": "Download",
     "filterByCategory": "Filter by category",
-    "copied": "Copied"
+    "copied": "Copied",
+    "riskTier": {
+      "low": "Niedrig",
+      "medium": "Mittel",
+      "high": "Hoch",
+      "critical": "Kritisch"
+    },
+    "logsLoadFailed": "Protokolle konnten nicht geladen werden: {error}"
   },
   "chat": {
     "sendMessage": "Senden Sie eine Nachricht...",
@@ -255,6 +263,13 @@
     },
     "input": {
       "retryUpload": "Versuchen Sie den Upload erneut",
+      "uploadError": {
+        "http": "Upload fehlgeschlagen (Status {status})",
+        "invalidResponse": "Der Server hat eine unlesbare Antwort gesendet",
+        "network": "Netzwerkfehler beim Hochladen",
+        "cancelled": "Upload abgebrochen",
+        "unknown": "Upload fehlgeschlagen"
+      },
       "filesAttached": "{count}-Dateien angehängt",
       "clearAll": "Alles löschen",
       "removeFile": "Datei entfernen",
@@ -299,7 +314,10 @@
       "thinkingOffLabel": "thinking Off",
       "thinkingOn": "Thinking on",
       "thinkingOnLabel": "thinking On",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "fileTooLarge": "Datei „{name}“ ist zu groß (max. {max})",
+      "voiceUnsupported": "Spracheingabe erfordert Chrome, Edge oder Safari 15+. Die Transkription ist in diesem Browser nicht verfügbar.",
+      "micDenied": "Der Mikrofonzugriff wurde verweigert. Bitte erlauben Sie den Mikrofonzugriff in den Browsereinstellungen."
     },
     "translate": {
       "title": "Text übersetzen",
@@ -515,6 +533,7 @@
         "pending": "Ausstehend",
         "running": "Läuft",
         "streaming": "Streaming",
+        "waiting_explanation": "Wartet auf Erklärung",
         "explaining": "Erklären",
         "completed": "Vollendet",
         "failed": "Fehlgeschlagen"
@@ -763,7 +782,8 @@
       "files": "Dateien",
       "terminal": "Terminal",
       "browser": "Browser",
-      "novnc": "Remotedesktop"
+      "novnc": "Remotedesktop",
+      "ariaLabel": "Chat-Bereiche"
     }
   },
   "settings": {
@@ -776,15 +796,7 @@
     "logging": "Protokollierung",
     "prompts": "Aufforderungen",
     "backend": "Backend",
-    "save": "Einstellungen speichern",
     "reset": "Auf Standardeinstellungen zurücksetzen",
-    "panelLoadFailed": "Das Einstellungsfenster konnte nicht geladen werden",
-    "loadingSettings": "Einstellungen werden geladen...",
-    "backendOffline": "Backend offline – zeigt zwischengespeicherte Einstellungen an",
-    "saving": "Sparen...",
-    "discardChanges": "Änderungen verwerfen",
-    "cacheApiUnavailable": "Cache-API nicht verfügbar",
-    "cachedSettings": "Zwischengespeicherte Einstellungen verwenden (Backend offline)",
     "appearanceDesc": "Passen Sie das Erscheinungsbild Ihres Arbeitsbereichs individuell an",
     "voiceDesc": "Konfigurieren Sie Text-to-Speech-Stimme und Sprachprofile",
     "languageDesc": "Wählen Sie Ihre bevorzugte Sprache für die Benutzeroberfläche und die KI-Antworten",
@@ -794,31 +806,11 @@
     "languageChanged": "Sprache erfolgreich aktualisiert",
     "languageChangeFailed": "Die Sprache konnte nicht aktualisiert werden",
     "webResearch": {
-      "maxResultsHint": "Maximum number of search results to retrieve (1–50)",
       "title": "Web Research",
-      "methodLabel": "Search method",
-      "confirmationLabel": "Require confirmation",
-      "rateLimitRequests": "Requests",
-      "timeoutLabel": "Timeout (seconds)",
-      "enabledLabel": "Enable web research",
       "methodBasic": "Basic",
-      "thresholdLabel": "Auto-research threshold",
       "methodAdvanced": "Advanced",
       "desc": "Configure automated web research behaviour and privacy settings",
-      "rateLimitLabel": "Rate limiting",
-      "methodHint": "Choose how web searches are performed",
-      "maxResultsLabel": "Max results",
-      "confirmationHint": "Ask before performing a web search on your behalf",
-      "methodApiBased": "API-based",
-      "storeInKbHint": "Save research results to the knowledge base",
-      "filterAdultHint": "Filter adult content from search results",
-      "enabledHint": "Allow AutoBot to search the web when answering questions",
-      "privacyLabel": "Privacy & storage",
-      "anonymizeHint": "Anonymize requests before sending to search engines",
-      "timeoutHint": "Maximum time to wait for search results (5–120 s)",
-      "rateLimitWindow": "Window (s)",
-      "thresholdHint": "Confidence level below which AutoBot triggers an automatic search",
-      "rateLimitHint": "Limit how many requests are sent in a given time window"
+      "methodApiBased": "API-based"
     },
     "apiKeys": {
       "enterKey": "Enter API key...",
@@ -940,11 +932,35 @@
       "noApiKeyRequired": "Kein API-Schlüssel erforderlich.",
       "redirecting": "Weiterleitung...",
       "disconnectFailed": "Trennen fehlgeschlagen",
-      "redirectNeedsCallback": "Der OAuth-Weiterleitungsablauf im Browser erfordert eine serverseitige Callback-Konfiguration. Verwenden Sie in Umgebungen ohne Oberfläche den Gerätecode.",
-      "deviceNotConfigured": "Die Geräteauthentifizierung ist für diesen Anbieter nicht konfiguriert",
       "deviceInitFailed": "Der Geräteablauf konnte nicht gestartet werden",
       "stillWaiting": "Die Zustimmung steht noch aus — versuchen Sie es gleich noch einmal.",
       "pollFailed": "Abfrage fehlgeschlagen"
+    },
+    "preferredMode": {
+      "title": "Bevorzugter Modus",
+      "subtitle": "Wählen Sie, wie viel von AutoBot Sie sehen. Sie können jederzeit über die Schaltfläche „Minimal“ in der oberen Leiste wechseln.",
+      "group": "Oberflächenmodus",
+      "minimal": "Minimal",
+      "minimalDesc": "Nur das Wesentliche — für Chat, Wissen und Freigaben im Alltag.",
+      "full": "Vollständig",
+      "fullDesc": "Alles, einschließlich Analysen, Automatisierung, Administration und Entwicklerwerkzeugen.",
+      "selected": "Ausgewählt",
+      "startIn": "Starten in",
+      "startInDesc": "In welchem Modus AutoBot nach der Anmeldung öffnet",
+      "startLast": "Zuletzt verwendet",
+      "startMinimal": "Minimal",
+      "startFull": "Vollständig",
+      "noteSynced": "In Ihrem Konto und auf diesem Gerät gespeichert",
+      "noteDirectLinks": "Ausgeblendete Seiten öffnen sich weiterhin über direkte Links",
+      "noteNeverHidden": "Freigaben, Fehler und Sicherheitshinweise werden nie ausgeblendet"
+    },
+    "additionalThemes": {
+      "title": "Weitere Designs",
+      "subtitle": "Von Ihrer Administration über SLM bereitgestellt",
+      "deployed": "Über SLM bereitgestellt · v{version}",
+      "empty": "Es sind keine weiteren Designs bereitgestellt.",
+      "info": "Administratoren installieren und verteilen Designs in der SLM-Konsole.",
+      "slmLink": "SLM › Einstellungen › Designs ↗"
     }
   },
   "voice": {
@@ -972,7 +988,11 @@
     "confirmDeleteVoice": "Stimme „{name}“ löschen?",
     "languageVoicesActive": "{count} sprachspezifische(n) Stimme(n) konfiguriert",
     "confirmDeleteVoiceTitle": "Stimmprofil löschen",
-    "tapToEnableAudio": "Tippen Sie irgendwo, um die Audiowiedergabe zu aktivieren"
+    "tapToEnableAudio": "Tippen Sie irgendwo, um die Audiowiedergabe zu aktivieren",
+    "speech": {
+      "url": "ein Link",
+      "path": "ein Dateipfad"
+    }
   },
   "analytics": {
     "title": "Analytik",
@@ -1282,7 +1302,10 @@
         "envVarRecommendations": "Empfehlungen für Umgebungsvariablen",
         "sampleHardcodedValues": "Beispiel für hartcodierte Werte",
         "noHardcodedValues": "Es wurden keine hartcodierten Umgebungswerte gefunden. Ihre Konfiguration sieht sauber aus!",
-        "noData": "Es liegen keine Umweltanalysedaten vor."
+        "noData": "Es liegen keine Umweltanalysedaten vor.",
+        "modelHint": "Modell: {model}",
+        "modelLoading": "wird geladen …",
+        "modelServerDefault": "Server-Standard"
       },
       "ownership": {
         "title": "Code-Besitzanalyse",
@@ -1504,21 +1527,16 @@
       "duplicateCode": "Duplikat-Code",
       "locations": "{count} Stellen",
       "linesSaveable": "{count} Zeilen einsparbar",
-      "moreLocations": "+{count} weitere Stellen",
-      "showingOfDuplicates": "Zeige {shown} von {total} Duplikat-Mustern",
       "regexOpportunities": "Regex-Möglichkeiten",
       "current": "Aktuell",
       "suggested": "Vorgeschlagen",
-      "showingOfOpportunities": "Zeige {shown} von {total} Möglichkeiten",
       "complexityHotspots": "Komplexitäts-Hotspots",
       "location": "Ort",
       "cc": "CC",
       "cognitive": "Kognitiv",
       "mi": "MI",
       "nesting": "Verschachtelung",
-      "showingOfHotspots": "Zeige {shown} von {total} Hotspots",
       "refactoringSuggestions": "Refactoring-Vorschläge",
-      "showingOfSuggestions": "Zeige {shown} von {total} Vorschlägen",
       "patternsInChromaDB": "Muster in ChromaDB",
       "clearStoredPatterns": "Gespeicherte Muster löschen",
       "lastScan": "Letzter Scan",
@@ -2192,14 +2210,12 @@
       "high": "Hoch",
       "medium": "Mittel",
       "low": "Niedrig",
-      "showingOf": "Zeige {shown} von {total}",
       "emptyMessage": "Keine Code-Smells gefunden"
     },
     "declarations": {
       "title": "Deklarationen",
       "total": "Gesamt",
       "exported": "Exportiert",
-      "showingOf": "Zeige {shown} von {total}",
       "emptyMessage": "Keine Deklarationen gefunden",
       "types": {
         "function": "Funktion",
@@ -2222,13 +2238,14 @@
       "totalLines": "Zeilen gesamt",
       "similar": "Ähnlich",
       "lines": "Zeilen",
-      "showingOf": "Zeige {shown} von {total}",
       "emptyMessage": "Keine Duplikate gefunden",
       "similarityGroups": {
         "high": "Hohe Ähnlichkeit",
         "medium": "Mittlere Ähnlichkeit",
         "low": "Niedrige Ähnlichkeit"
-      }
+      },
+      "scanFailed": "Der Duplikat-Scan wurde nicht ausgeführt, dies ist also kein Ergebnis. Prüfen Sie die gewählte Codequelle und starten Sie den Scan erneut.",
+      "notScanned": "Für diese Codequelle wurde noch kein Duplikat-Scan ausgeführt."
     },
     "hardcodes": {
       "title": "Hartcodierte Werte",
@@ -2241,7 +2258,6 @@
       "variable": "Variable",
       "value": "Wert",
       "suggestedEnvVar": "Vorgeschlagene Umgebungsvariable",
-      "showingOf": "Zeige {shown} von {total}",
       "emptyMessage": "Keine hartcodierten Werte gefunden",
       "severityGroups": {
         "high": "Hohe Priorität",
@@ -2256,7 +2272,6 @@
       "high": "Hoch",
       "medium": "Mittel",
       "low": "Niedrig",
-      "showingOf": "Zeige {shown} von {total}",
       "emptyMessage": "Keine Probleme gefunden",
       "exportMarkdown": "Export Markdown",
       "exportJson": "Export JSON"
@@ -3801,10 +3816,11 @@
     },
     "treeNode": {
       "itemsCount": "Items count",
+      "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
       "vectorizeFolderTitle": "Vectorize folder title",
-      "retryTitle": "Retry title",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "share": {
       "searching": "Searching...",
@@ -4213,6 +4229,9 @@
       "errorEnterBoth": "Bitte geben Sie sowohl eine Quell- als auch eine Zielentität ein.",
       "notInGraph": "Diese Entitäten sind noch nicht im Beziehungsgraphen.",
       "notInGraphHint": "Sie existieren, haben aber keine Graphverknüpfungen — daher lässt sich keine Verbindung verfolgen. Führen Sie die Entitätsextraktion erneut aus."
+    },
+    "chromaExplorer": {
+      "subtitle": "Vektorsammlungen durchsuchen und erkunden"
     }
   },
   "workflow": {
@@ -4338,7 +4357,8 @@
       "agentsAriaLabel": "Agent capabilities",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "Automatisierung für Ihr Unternehmen wird geöffnet…",
-      "companyRequired": "Wählen Sie ein Unternehmen, um die Automatisierung zu öffnen."
+      "companyRequired": "Wählen Sie ein Unternehmen, um die Automatisierung zu öffnen.",
+      "planBeforeBuilding": "Vor dem Bauen planen"
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -4646,7 +4666,9 @@
       "channelSlack": "Slack",
       "emailHint": "Comma-separated email addresses",
       "channelWebhook": "Webhook",
-      "sectionDesc": "Configure per-workflow notification routing"
+      "sectionDesc": "Configure per-workflow notification routing",
+      "invalidEmail": "Ungültige E-Mail-Adresse: {emails}",
+      "invalidUrl": "Ungültiges URL-Format"
     },
     "liveDashboard": {
       "activeExecutions": "Active Executions",
@@ -4782,8 +4804,8 @@
     "settings": "Terminal Settings",
     "fontSize": "Font Size",
     "theme": "Theme",
-    "dark": "Dark",
-    "light": "Light",
+    "dark": "Dunkel",
+    "light": "Hell",
     "cursorStyle": "Cursor Style",
     "block": "Block",
     "underline": "Underline",
@@ -4944,7 +4966,45 @@
       "editCommand": "Edit",
       "editCancel": "Cancel",
       "editSave": "Save"
-    }
+    },
+    "automation": {
+      "started": "🚀 AUTOMATISIERTER WORKFLOW GESTARTET: {name}",
+      "stepsPlanned": "📋 {count} Schritte geplant. Mit der PAUSE-Taste können Sie jederzeit die manuelle Steuerung übernehmen.",
+      "unnamedWorkflow": "Unbenannter Workflow",
+      "executeStep": "Ausführen: {command}",
+      "paused": "⏸️ AUTOMATISIERUNG PAUSIERT - Manuelle Steuerung aktiviert. Befehle frei eingeben.",
+      "resumed": "▶️ AUTOMATISIERUNG FORTGESETZT - Workflow-Ausführung wird fortgesetzt.",
+      "aboutToExecute": "🤖 KI-WORKFLOW: Gleich wird \"{command}\" ausgeführt",
+      "stepProgress": "📋 Schritt {step}/{total}: {description}",
+      "skipped": "⏭️ ÜBERSPRUNGEN: {command}",
+      "manualControlTaken": "👤 MANUELLE STEUERUNG ÜBERNOMMEN - Führen Sie Ihre manuellen Schritte aus und klicken Sie dann auf FORTSETZEN, um den Workflow fortzusetzen.",
+      "automated": "🤖 AUTOMATISIERT: {command}",
+      "pausedBySystem": "⏸️ WORKFLOW VOM SYSTEM PAUSIERT",
+      "resumedBySystem": "▶️ WORKFLOW VOM SYSTEM FORTGESETZT",
+      "executing": "🤖 WIRD AUSGEFÜHRT: {command}",
+      "stepSkippedByUser": "⏭️ SCHRITT {step} VOM BENUTZER ÜBERSPRUNGEN",
+      "workflowSaved": "💾 WORKFLOW GESPEICHERT: {name}",
+      "workflowUpdated": "📋 WORKFLOW AKTUALISIERT: Konfigurierte Schritte: {count}",
+      "manualCommand": "👤 MANUELL: {command}",
+      "example": {
+        "name": "Systemaktualisierung und Paketinstallation",
+        "updateDesc": "Paketquellen aktualisieren",
+        "updateExpl": "Aktualisiert die Liste der verfügbaren Pakete aus den konfigurierten Quellen.",
+        "upgradeDesc": "Installierte Pakete aktualisieren",
+        "upgradeExpl": "Aktualisiert alle installierten Pakete auf die neuesten Versionen.",
+        "installDesc": "Wichtige Werkzeuge installieren",
+        "installExpl": "Installiert häufig benötigte Entwicklungswerkzeuge.",
+        "verifyDesc": "Installationen überprüfen",
+        "verifyExpl": "Prüft, ob die Werkzeuge korrekt installiert wurden."
+      }
+    },
+    "events": {
+      "emergencyKill": "🛑 NOTABSCHALTUNG: Alle Prozesse vom Benutzer beendet",
+      "emergencyKillFailed": "❌ Notabschaltung fehlgeschlagen: {message}",
+      "interrupted": "^C (Prozess vom Benutzer unterbrochen)",
+      "error": "Fehler: {error}"
+    },
+    "urlCopied": "Terminal-URL in die Zwischenablage kopiert!"
   },
   "llm": {
     "unavailable": "Nicht verfügbar",
@@ -5018,7 +5078,6 @@
     "role": "Rolle:",
     "lastLogin": "Letzte Anmeldung:",
     "preferences": "Einstellungen",
-    "theme": "Design",
     "notifications": "Benachrichtigungen",
     "emailNotifications": "E-Mail-Benachrichtigungen",
     "browserNotifications": "Browserbenachrichtigungen",
@@ -5028,7 +5087,6 @@
     "showTooltips": "Tooltips anzeigen",
     "enableAnimations": "Animationen aktivieren",
     "savePreferences": "Einstellungen speichern",
-    "appearance": "Darstellung",
     "voiceChatDisplay": "Sprachchat-Anzeige",
     "fullScreen": "Vollbild",
     "sidePanel": "Seitenleiste",
@@ -5044,9 +5102,6 @@
     "pwTooShort": "Passwort muss mindestens 8 Zeichen lang sein",
     "pwChanged": "Passwort erfolgreich geändert!",
     "never": "Nie",
-    "themeLight": "Hell",
-    "themeDark": "Dunkel",
-    "themeAuto": "Automatisch",
     "tabDevices": "Tab devices"
   },
   "charts": {
@@ -5719,23 +5774,6 @@
       "postExecutionFailed": "Der Befehl wurde ausgeführt, aber ein Folgeschritt ist fehlgeschlagen. Die Ausgabe wird angezeigt; einige Aktualisierungen fehlen möglicherweise.",
       "enterComment": "Please enter a comment before submitting"
     },
-    "darkModeToggle": {
-      "switchToLight": "Switch to light mode",
-      "switchToDark": "Switch to dark mode",
-      "toggleDarkMode": "Toggle dark mode"
-    },
-    "dataTable": {
-      "sortBy": "Sort by {column}",
-      "actions": "Actions",
-      "noDataAvailable": "No data available",
-      "noItemsToDisplay": "No items to display",
-      "pageOf": "Page {current} of {total}",
-      "pagination": "Table pagination",
-      "previousPage": "Previous page",
-      "nextPage": "Next page",
-      "dataTable": "Data table",
-      "loading": "Loading data..."
-    },
     "hostSelection": {
       "title": "Select Host",
       "defaultPurpose": "Select a host for this operation",
@@ -5779,6 +5817,7 @@
       "retrySending": "Retry sending"
     },
     "preferences": {
+      "accentTheme": "Design",
       "title": "Preferences",
       "reset": "Reset",
       "resetAll": "Reset all preferences to defaults",
@@ -5791,10 +5830,10 @@
       "accentColor": "Accent Color",
       "accentColorOptions": "Accent color options",
       "setAccentColor": "Set accent color to {color}",
-      "teal": "Teal",
-      "emerald": "Emerald",
-      "blue": "Blue",
-      "purple": "Purple",
+      "teal": "Blaugrün",
+      "emerald": "Smaragd",
+      "blue": "Blau",
+      "purple": "Lila",
       "orange": "Orange",
       "layoutDensity": "Layout Density",
       "layoutDensityOptions": "Layout density options",
@@ -5806,7 +5845,11 @@
       "accentColorChanged": "Accent color changed to {color}",
       "layoutDensityChanged": "Layout density changed to {density}",
       "preferencesReset": "All preferences reset to defaults",
-      "theme": "Theme"
+      "theme": "Theme",
+      "green": "Grün",
+      "pink": "Pink",
+      "indigo": "Indigo",
+      "red": "Rot"
     },
     "progressBar": {
       "timeRemaining": "{time} remaining"
@@ -5829,12 +5872,20 @@
       "dismiss": "Dismiss"
     },
     "themeToggle": {
+      "accentPurpleDescription": "Violett – Kreativ & Elegant",
+      "system": "System",
+      "highContrast": "Hoher Kontrast",
+      "monochrome": "Monochrom",
+      "accentThemeDescription": "Design-Standard – die Primärfarbe des Designs",
+      "baseThemeChanged": "Basisdesign geändert zu {name}",
+      "accentChanged": "Akzentfarbe geändert zu {name}",
+      "presetChanged": "Designvorlage geändert zu {name}",
       "theme": "Theme",
       "selectTheme": "Select theme",
       "switchToLight": "Switch to light mode",
       "switchToDark": "Switch to dark mode",
-      "light": "Light",
-      "dark": "Dark"
+      "light": "Hell",
+      "dark": "Dunkel"
     },
     "toastContainer": {
       "notifications": "Notifications",
@@ -5854,7 +5905,9 @@
     },
     "loadingSpinner": {
       "loading": "Loading…"
-    }
+    },
+    "minimalNote": "Nur das Wesentliche wird angezeigt · technische Widgets ausgeblendet",
+    "minimalNoteAction": "Alle Funktionen anzeigen"
   },
   "base": {
     "badge": {
@@ -5868,10 +5921,6 @@
       "actions": "Aktionen",
       "noDataAvailable": "Keine Daten verfügbar",
       "selectRow": "Zeile {row} auswählen"
-    },
-    "panel": {
-      "collapse": "Bereich einklappen",
-      "expand": "Bereich ausklappen"
     }
   },
   "views": {
@@ -6087,8 +6136,6 @@
       "createNewDashboard": "Create new dashboard",
       "availableWidgets": "Available Widgets",
       "configure": "Configure",
-      "expand": "Expand",
-      "shrink": "Shrink",
       "remove": "Remove",
       "noWidgets": "No Widgets Added",
       "noWidgetsHint": "Click \"Edit Layout\" to add widgets to your dashboard",
@@ -6508,7 +6555,17 @@
       "clickToSolve": "Klicken, um im VNC zu lösen",
       "openVnc": "VNC-Desktop öffnen",
       "solved": "Ich habe es gelöst",
-      "skipSource": "Quelle überspringen"
+      "skipSource": "Quelle überspringen",
+      "types": {
+        "recaptcha": "reCAPTCHA",
+        "hcaptcha": "hCaptcha",
+        "cloudflare": "Cloudflare-Prüfung",
+        "slider": "Schieberegler-CAPTCHA",
+        "imageSelect": "Bildauswahl-CAPTCHA",
+        "text": "Text-CAPTCHA",
+        "math": "Rechen-CAPTCHA",
+        "unknown": "Unbekanntes CAPTCHA"
+      }
     }
   },
   "operations": {
@@ -6798,7 +6855,44 @@
       "timeHoursAgo": "{count}h ago",
       "timeInHours": "in {count}h",
       "timeDaysAgo": "{count}d ago",
-      "timeInDays": "in {count}d"
+      "timeInDays": "in {count}d",
+      "categories": {
+        "api_key": "API-Schlüssel",
+        "token": "Zugriffstoken",
+        "oauth_refresh_token": "OAuth-Aktualisierungstoken",
+        "connector_oauth_token": "Connector-Zugriffstoken",
+        "password": "Passwörter",
+        "ssh_key": "SSH-Schlüssel",
+        "infrastructure_host": "Infrastruktur-Hosts",
+        "database_url": "Datenbanken",
+        "certificate": "Zertifikate",
+        "other": "Sonstiges"
+      },
+      "kinds": {
+        "api_key": "API-Schlüssel",
+        "token": "Zugriffstoken",
+        "oauth_refresh_token": "OAuth-Aktualisierungstoken",
+        "connector_oauth_token": "Connector-Zugriffstoken",
+        "password": "Passwort",
+        "ssh_key": "SSH-Schlüssel",
+        "infrastructure_host": "Infrastruktur-Host",
+        "database_url": "Datenbank",
+        "certificate": "Zertifikat",
+        "other": "Sonstiges"
+      },
+      "templates": {
+        "openaiDesc": "Zugriff auf die GPT-API",
+        "anthropicDesc": "Zugriff auf die Claude-API",
+        "awsDesc": "Amazon-Cloud-Dienste",
+        "githubDesc": "Persönliches GitHub-Token",
+        "postgresDesc": "Datenbankverbindung",
+        "redisDesc": "Redis-Verbindung",
+        "sshLabel": "SSH-Schlüssel",
+        "sshDesc": "Serverzugriff",
+        "slackDesc": "Slack-Bot-Token",
+        "serverLabel": "Server-Host",
+        "serverDesc": "SSH/VNC-Serverzugriff"
+      }
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -7284,7 +7378,16 @@
       "initComplete": "Initialisierung abgeschlossen"
     }
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "Alarmregeln",
+      "overview": "Übersicht",
+      "slos": "SLOs",
+      "traces": "Traces"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "browser": {
       "contentsOf": "{path} Contents",
       "refresh": "Refresh",
@@ -7299,7 +7402,8 @@
       "errorDeletingFile": "Error deleting file",
       "errorRenamingFile": "Error renaming file",
       "refreshAriaLabel": "Refresh files",
-      "toggleViewAriaLabel": "Toggle view mode"
+      "toggleViewAriaLabel": "Toggle view mode",
+      "uploadFailedHint": "Bitte prüfen Sie die Dateigrößenbeschränkungen und Formatanforderungen"
     },
     "header": {
       "title": "File Browser",
@@ -7810,11 +7914,10 @@
     "customDashboard": "Custom Dashboard",
     "agentRegistry": "Agents",
     "agentActivity": "Agent-Aktivität",
-    "switchLanguage": "Switch language",
     "openMainMenu": "Open main menu",
-    "skipToContent": "Skip to content",
+    "skipToContent": "Zum Hauptinhalt springen",
     "services": "Services",
-    "skipToNavigation": "Skip to navigation",
+    "skipToNavigation": "Zur Navigation springen",
     "profile": "Profile",
     "systemStatus": "System Status",
     "operations": "Operationen",
@@ -7886,7 +7989,31 @@
     "adminPricing": "Modellpreise",
     "adminMcpServers": "MCP-Server",
     "adminPermissionScopes": "Berechtigungsbereiche",
-    "llcRoles": "Rollen"
+    "llcRoles": "Rollen",
+    "keywords": {
+      "knowledge": "Dokumente Dateien Bibliothek Transkription Notizen",
+      "companyOs": "Firma Unternehmen GmbH Organisation",
+      "automation": "Workflow Pipeline Zeitplan Aufträge",
+      "analytics": "Besucher Metriken Statistiken Diagramme Berichte",
+      "preferences": "Einstellungen Optionen Sprache Design",
+      "budgetPolicies": "Kosten Ausgaben Limits Geld",
+      "systemHealth": "Status Verfügbarkeit Diagnose Überwachung",
+      "vault": "Zugangsdaten Schlüssel Passwörter Token Tresor"
+    },
+    "homeAria": "AutoBot Startseite",
+    "vaultTip": "Geheimnisse — gespeicherte Schlüssel und Zugangsdaten",
+    "preferencesTip": "Einstellungen",
+    "platformAdmin": "Plattform-Administration",
+    "platformAdminAria": "Plattform-Administration, öffnet die SLM-Konsole in einem neuen Tab",
+    "platformAdminTip": "Plattform-Administration — öffnet die SLM-Konsole ↗",
+    "profileMenu": "Profilmenü",
+    "uiMode": {
+      "label": "Minimal",
+      "tip": "Minimale Oberfläche — erweiterte Funktionen ausblenden",
+      "announceMinimal": "Minimale Oberfläche aktiv. Erweiterte Funktionen ausgeblendet.",
+      "announceFull": "Vollständige Oberfläche aktiv. Alle Funktionen angezeigt."
+    },
+    "llcLedger": "Agenten-Ledger"
   },
   "llcCompanyStatus": {
     "showArchived": "Archivierte anzeigen",
@@ -7965,12 +8092,34 @@
     "newCode": "New Code Agent",
     "newCodeDesc": "Start a code analysis session",
     "newAnalysis": "New Analysis",
-    "newAnalysisDesc": "Start an analysis session"
+    "newAnalysisDesc": "Start an analysis session",
+    "openPage": "{page} öffnen",
+    "types": {
+      "task": "Aufgabe",
+      "research": "Recherche",
+      "code": "Quellcode",
+      "analysis": "Analyse",
+      "navigate": "Seite"
+    },
+    "hints": {
+      "navigate": "navigieren",
+      "select": "auswählen",
+      "close": "schließen"
+    }
   },
   "slm": {
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "Wartungsfenster konnte nicht aktiviert werden",
+      "completeWindowFailed": "Wartungsfenster konnte nicht abgeschlossen werden",
+      "deleteWindowFailed": "Wartungsfenster konnte nicht gelöscht werden",
+      "drainNodeFailed": "Knoten konnte nicht entleert werden. Bitte versuchen Sie es erneut.",
+      "resumeNodeFailed": "Knoten konnte nicht fortgesetzt werden. Bitte versuchen Sie es erneut.",
+      "saveKeysFailed": "API-Schlüssel konnten nicht gespeichert werden. Details finden Sie in der Konsole.",
+      "addNodeFailed": "Knoten konnte nicht hinzugefügt werden"
     }
   },
   "mobile": {
@@ -8482,7 +8631,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "Werkzeuginformationen sind derzeit nicht verfügbar — diese Liste ist möglicherweise unvollständig.",
       "canvasNoToolsDefined": "Diesem Unternehmen sind keiner Rolle Werkzeuge zugeordnet.",
-      "deepLinkNodeNotFound": "Dieser Link verweist auf einen Knoten, der hier nicht gefunden werden konnte. Er wurde möglicherweise entfernt, oder Sie haben keinen Zugriff darauf."
+      "deepLinkNodeNotFound": "Dieser Link verweist auf einen Knoten, der hier nicht gefunden werden konnte. Er wurde möglicherweise entfernt, oder Sie haben keinen Zugriff darauf.",
+      "viewPlanner": "Workflow-Planer"
     },
     "executorRollup": {
       "title": "Ausführungs-Übersicht",
@@ -8761,6 +8911,179 @@
       "retry": "Erneut versuchen",
       "loadingItem": "Arbeitselement wird geladen…",
       "itemLoadFailed": "Dieses Arbeitselement konnte nicht geladen werden"
+    },
+    "ledger": {
+      "title": "Agenten-Ledger",
+      "subtitle": "Wer in diesem Unternehmen woran arbeitet und wer wartet.",
+      "tabsAria": "Ledger-Ansichten",
+      "tabs": {
+        "now": "Arbeitet gerade",
+        "claims": "Ansprüche",
+        "contention": "Konkurrenz",
+        "activity": "Aktivität"
+      },
+      "col": {
+        "agent": "Agent",
+        "kind": "Art",
+        "status": "Status",
+        "task": "Aktuelle Aufgabe",
+        "detail": "Details",
+        "scope": "Bereich",
+        "mode": "Modus",
+        "intent": "Absicht",
+        "expires": "Läuft ab",
+        "renewals": "Verlängerungen"
+      },
+      "busy": "Beschäftigt",
+      "idle": "Untätig",
+      "peerMessages": "Ausstehende Peer-Nachrichten",
+      "idleSubscribers": "Untätigkeits-Abos",
+      "pendingFor": "{n} ausstehend für {name}",
+      "sentBy": "von {names}",
+      "waitsForIdle": "{who} wartet, bis {target} untätig ist",
+      "heldBy": "Gehalten von {agent}",
+      "waitlistAria": "Warteliste in Reihenfolge",
+      "silenceMeansHold": "Bitten ist keine Freigabe: Schweigen heißt Halten, und ein nicht verlängerter Anspruch läuft von selbst ab.",
+      "ask": "Inhaber um Freigabe bitten",
+      "askAria": "Den Inhaber von {scope} um Freigabe bitten",
+      "conflicts": "Konflikte",
+      "recent": "Letzte Aktivität",
+      "conflict": {
+        "release_refused": "Eine Freigabe wurde verweigert",
+        "claim_expired": "Ein Anspruch lief während des Haltens ab",
+        "yield_unanswered": "Eine Freigabebitte blieb unbeantwortet",
+        "claim_lapsed_during_action": "Ein Anspruch lief während einer Aktion ab"
+      },
+      "empty": {
+        "presence": "Keine Agenten gemeldet",
+        "peerMessages": "Keine ausstehenden Nachrichten",
+        "idleSubscribers": "Keine Untätigkeits-Abos",
+        "claims": "Keine Ansprüche",
+        "contention": "Nichts ist umkämpft",
+        "conflicts": "Keine Konflikte",
+        "activity": "Keine aktuelle Aktivität"
+      },
+      "state": {
+        "loading": "Ledger wird gelesen…",
+        "unavailableTitle": "Ledger konnte nicht gelesen werden",
+        "unavailableBody": "Der Speicher {source} hat nicht geantwortet. Das ist nicht dasselbe wie keine Einträge.",
+        "errorTitle": "Beim Laden dieses Abschnitts ist ein Fehler aufgetreten"
+      },
+      "askState": {
+        "sending": "Wird gesendet…",
+        "sent": "Anfrage gesendet — der Inhaber entscheidet; Schweigen heißt Halten.",
+        "tooSoon": "Sie haben gerade erst nach diesem Anspruch gefragt; versuchen Sie es in einer Minute erneut.",
+        "notFound": "Diese Aufgabe hält den Anspruch nicht mehr — aktualisieren Sie, um den aktuellen Inhaber zu sehen.",
+        "unavailable": "Ledger nicht erreichbar; es wurde nichts gesendet.",
+        "error": "Etwas ist schiefgelaufen, und die Zustellung konnte nicht bestätigt werden. Aktualisieren Sie, um zu sehen, ob der Claim noch gehalten wird."
+      }
+    },
+    "workflowPlanner": {
+      "title": "Workflow-Planer",
+      "plans": "Pläne",
+      "newPlan": "Neuer Plan",
+      "open": "Öffnen",
+      "back": "Zurück zu den Plänen",
+      "retry": "Erneut versuchen",
+      "loading": "Pläne werden geladen ...",
+      "loadFailed": "Der Plan konnte nicht geladen werden.",
+      "saveFailed": "Die Änderung konnte nicht gespeichert werden.",
+      "createFailed": "Der Plan konnte nicht erstellt werden.",
+      "emptyTitle": "Noch keine Pläne",
+      "emptyHint": "Starten Sie einen Plan, um einen Prozess abzubilden, zu messen und die eine Zahl zum Verbessern zu wählen.",
+      "unavailableTitle": "Der Workflow-Planer ist nicht verfügbar",
+      "unavailableHint": "Diese Funktion ist für Ihren Arbeitsbereich ausgeschaltet, daher gibt es hier noch nichts anzuzeigen.",
+      "statusFlow": "Planfortschritt",
+      "statusNotAvailable": "Dieser Plan ist {status}. Freigabe und Umwandlung sind noch nicht verfügbar, daher wird er nur lesend angezeigt.",
+      "convertNotAvailable": "Workflows aus einem Plan zu erstellen ist noch nicht verfügbar.",
+      "status": {
+        "draft": "Entwurf",
+        "measured": "Gemessen",
+        "labeled": "Beschriftet",
+        "approved": "Freigegeben",
+        "converted": "Umgewandelt"
+      },
+      "col": {
+        "name": "Plan",
+        "revision": "Revision",
+        "status": "Status",
+        "actions": "Aktionen"
+      },
+      "form": {
+        "name": "Planname",
+        "startsAt": "Wo der Prozess beginnt",
+        "endsAt": "Wo der Prozess endet",
+        "create": "Plan erstellen"
+      },
+      "steps": {
+        "map": "Abbilden",
+        "measure": "Messen",
+        "oneNumber": "Eine Zahl wählen",
+        "label": "Aufschlüsseln und beschriften",
+        "convert": "Workflow erstellen"
+      },
+      "map": {
+        "empty": "Noch nichts abgebildet",
+        "emptyHint": "Fügen Sie zuerst die Beteiligten (Bahnen) hinzu, dann ihre Schritte.",
+        "handoffs": "{count} Übergaben",
+        "waitNote": "Was wartet bei dieser Übergabe?",
+        "laneName": "Name der Bahn",
+        "addLane": "Bahn hinzufügen",
+        "stepLabel": "Schritt",
+        "stepLane": "Bahn des Schritts",
+        "addStep": "Schritt hinzufügen"
+      },
+      "source": {
+        "self_reported": "Ihre Angabe",
+        "email": "Mit E-Mail geprüft",
+        "calendar": "Mit Kalender geprüft"
+      },
+      "measure": {
+        "hint": "Wie oft passiert jeder Schritt und wie lange dauert er?",
+        "needSteps": "Bilden Sie zuerst mindestens einen Schritt ab.",
+        "perWeek": "Pro Woche",
+        "duration": "Dauer",
+        "unit": "Einheit der Dauer",
+        "save": "Speichern",
+        "clear": "Löschen"
+      },
+      "unit": {
+        "minutes": "Minuten",
+        "hours": "Stunden",
+        "days": "Tage"
+      },
+      "oneNumber": {
+        "hint": "Die gemessenen Schritte, längste Wartezeiten zuerst. Sie entscheiden, welcher zählt.",
+        "needMetrics": "Messen Sie zuerst mindestens einen Schritt.",
+        "rate": "{freq} pro Woche, {dur} {unit}",
+        "title": "Diese Zahl benennen",
+        "returnKind": "Was Sie zurückgewinnen",
+        "target": "Ziel",
+        "save": "Als meine eine Zahl speichern"
+      },
+      "returnKind": {
+        "hours_back": "Stunden zurück",
+        "more_yeses": "Mehr Zusagen",
+        "money_sooner": "Schneller Geld"
+      },
+      "label": {
+        "needNumber": "Wählen Sie zuerst Ihre eine Zahl; ihr Schritt wird hier aufgeschlüsselt.",
+        "subStep": "Teilschritt",
+        "addSubStep": "Teilschritt hinzufügen",
+        "unlabel": "Beschriftung entfernen",
+        "edgeCase": "Sonderfall: {text}",
+        "byHandNote": "Das bleibt bei Menschen. Die KI handelt dabei nie.",
+        "acknowledge": "Ich habe die Liste „Von Hand“ gelesen",
+        "acknowledged": "Liste „Von Hand“ gelesen"
+      },
+      "labels": {
+        "ai": "KI",
+        "automation": "Automatisierung",
+        "by_hand": "Von Hand"
+      },
+      "gate": {
+        "missing": "Noch offen"
+      }
     }
   },
   "code": {
@@ -9515,7 +9838,164 @@
       "collectionIdPlaceholder": "Sammlungs-ID",
       "pushing": "Wird gesendet…",
       "confirm": "Bestätigen",
-      "pushFailed": "Diese Aufnahme konnte nicht zur Wissensdatenbank hinzugefügt werden. Bitte erneut versuchen."
+      "pushFailed": "Diese Aufnahme konnte nicht zur Wissensdatenbank hinzugefügt werden. Bitte erneut versuchen.",
+      "collectionNotJoined": "Gespeichert, aber die angegebene Sammlung wurde nicht gefunden — das Transkript ist in der Wissensdatenbank, aber nicht in dieser Sammlung."
     }
+  },
+  "systemStatus": {
+    "summary": {
+      "issues": "Systemprobleme erkannt",
+      "warnings": "Systemwarnungen",
+      "ok": "Alle Systeme betriebsbereit"
+    },
+    "tooltip": {
+      "issues": "Klicken, um Systemprobleme anzuzeigen",
+      "warnings": "Klicken, um Systemwarnungen anzuzeigen",
+      "ok": "Klicken, um den Systemstatus anzuzeigen – alle Dienste betriebsbereit"
+    },
+    "aria": {
+      "issues": "Systemstatus: Probleme erkannt",
+      "warnings": "Systemstatus: Warnungen vorhanden",
+      "ok": "Systemstatus: alle Dienste betriebsbereit"
+    },
+    "description": {
+      "servicesDown": "{n} Dienst ausgefallen | {n} Dienste ausgefallen",
+      "warnings": "{n} Warnung | {n} Warnungen",
+      "withWarnings": "{n} Dienst mit Warnungen | {n} Dienste mit Warnungen",
+      "downAndWarnings": "{down} und {warnings}",
+      "ok": "Alle Dienste laufen normal"
+    },
+    "service": {
+      "backend": "Backend-API",
+      "frontend": "Frontend",
+      "websocket": "WebSocket",
+      "redis": "Redis",
+      "ollama": "Ollama",
+      "npu_worker": "NPU-Worker",
+      "browser": "Browser-Dienst",
+      "chromadb": "KI-Stack (ChromaDB)",
+      "other": "Weitere Dienste"
+    },
+    "state": {
+      "running": "Läuft",
+      "connected": "Verbunden",
+      "statusUnknown": "Status unbekannt",
+      "connectionFailed": "Verbindung fehlgeschlagen",
+      "timeout": "Zeitüberschreitung",
+      "connectionRefused": "Verbindung abgelehnt",
+      "unreachable": "Nicht erreichbar",
+      "unhealthy": "Fehlerhaft",
+      "warning": "Warnung",
+      "pending": "Ausstehend",
+      "available": "Verfügbar",
+      "unavailable": "Nicht verfügbar",
+      "http": "HTTP {code}"
+    },
+    "probe": {
+      "degraded": "Eingeschränkt – Statusprüfungen überschritten, Backend antwortet",
+      "degradedAsOf": "Eingeschränkt – Statusprüfungen überschritten, Backend antwortet – Stand {time}",
+      "unreachable": "Nicht erreichbar – Dienststatus unbekannt",
+      "unreachableAsOf": "Nicht erreichbar – Dienststatus unbekannt – Stand {time}"
+    },
+    "lastKnown": "{text} (zuletzt bekannt)"
+  },
+  "schedule": {
+    "title": "Zeitplan",
+    "repeats": "Wiederholt sich",
+    "repeat": {
+      "minutes": "Alle paar Minuten",
+      "hourly": "Stündlich",
+      "daily": "Täglich",
+      "weekly": "Wöchentlich",
+      "monthly": "Monatlich",
+      "once": "Einmalig"
+    },
+    "every": "Alle",
+    "minutesUnit": "Minuten",
+    "onlyBetween": "Nur zwischen",
+    "windowFrom": "Von",
+    "windowTo": "Bis",
+    "and": "und",
+    "onDays": "An Tagen (optional)",
+    "daysHintAny": "Ohne Auswahl gilt jeder Tag.",
+    "onDaysRequired": "An Tagen",
+    "atMinute": "In Minute",
+    "at": "Um",
+    "hour": "Stunde",
+    "minute": "Minute",
+    "weekdaysOnly": "Nur werktags",
+    "monthly": {
+      "which": "Welcher Tag des Monats",
+      "day": "Tag des Monats",
+      "lastDay": "Letzter Tag",
+      "nth": "Wochentag im Monat",
+      "onDay": "Am Tag",
+      "onThe": "Am"
+    },
+    "nth": {
+      "1": "ersten",
+      "2": "zweiten",
+      "3": "dritten",
+      "4": "vierten",
+      "last": "letzten"
+    },
+    "weekday": "Wochentag",
+    "shortMonths": "Monate ohne diesen Tag laufen am letzten Tag des Monats.",
+    "date": "Datum",
+    "timezone": "Zeitzone",
+    "zone": {
+      "company": "Firmenzeit",
+      "usesCompany": "Verwendet die Zeitzone des Unternehmens."
+    },
+    "summary": {
+      "minutes": "Alle {every} Minuten",
+      "minutesWeekdays": "Alle {every} Minuten, werktags",
+      "minutesDays": "Alle {every} Minuten, jeweils {days}",
+      "minutesWindow": "Alle {every} Minuten zwischen {from} und {to}",
+      "minutesWindowWeekdays": "Alle {every} Minuten zwischen {from} und {to}, werktags",
+      "minutesWindowDays": "Alle {every} Minuten zwischen {from} und {to}, jeweils {days}",
+      "hourly": "Jede Stunde in Minute {minute}",
+      "daily": "Jeden Tag um {time} Uhr",
+      "dailyWeekdays": "Jeden Werktag um {time} Uhr",
+      "weekly": "Jeden {days} um {time} Uhr",
+      "monthlyDay": "Am {day}. Tag jedes Monats um {time} Uhr",
+      "monthlyLastDay": "Am letzten Tag jedes Monats um {time} Uhr",
+      "monthlyNth1": "Am ersten {weekday} jedes Monats um {time} Uhr",
+      "monthlyNth2": "Am zweiten {weekday} jedes Monats um {time} Uhr",
+      "monthlyNth3": "Am dritten {weekday} jedes Monats um {time} Uhr",
+      "monthlyNth4": "Am vierten {weekday} jedes Monats um {time} Uhr",
+      "monthlyNthLast": "Am letzten {weekday} jedes Monats um {time} Uhr",
+      "once": "Einmal am {date} um {time} Uhr",
+      "withZone": "{summary} ({zone})",
+      "custom": "Benutzerdefinierter Zeitplan"
+    },
+    "customNote": "Dieser Zeitplan lässt sich nicht per Klick darstellen.",
+    "editCron": "Als Cron bearbeiten",
+    "doneEditing": "Bearbeitung beenden",
+    "nextRuns": "Nächste Ausführungen",
+    "noRuns": "Keine anstehenden Ausführungen.",
+    "previewLoading": "Der Server wird gefragt ...",
+    "previewApprox": "Näherungswert: Der Server bestätigt die genauen Zeiten beim Speichern.",
+    "previewUnavailable": "Für diesen Zeitplan ist keine Vorschau möglich.",
+    "advanced": "Erweitert: gespeichert als",
+    "saved": {
+      "cron": "Standard-Cron",
+      "calendar": "Kalenderregel",
+      "once": "Einmalige Ausführung"
+    },
+    "savedAs": "Gespeicherter Zeitplan",
+    "savedNote": {
+      "once": "Läuft einmal. Es wird kein wiederkehrender Cron gespeichert."
+    },
+    "cronLabel": "Cron-Ausdruck",
+    "cronHint": "Nur Standard-Cron mit fünf Feldern: Minute, Stunde, Tag des Monats, Monat, Wochentag. Auswahl und dieses Feld bleiben synchron.",
+    "cron_extension_unsupported": "{token} ist kein Standard-Cron. Nutzen Sie die Auswahl für Zeitpläne wie den letzten Freitag des Monats.",
+    "invalid_timezone": "Diese Zeitzone wird nicht erkannt.",
+    "once_in_past": "Dieser Zeitpunkt liegt bereits in der Vergangenheit.",
+    "invalid_rrule": "Diese Kalenderregel ist ungültig.",
+    "invalid_cron": "Geben Sie Standard-Cron mit fünf Feldern ein, zum Beispiel 0 9 * * 1-5.",
+    "invalid_generic": "Dieser Zeitplan ist ungültig.",
+    "conflicting_fields": "Ein Zeitplan wird entweder als Cron oder als Kalenderregel bzw. einmalige Ausführung gespeichert, nie beides.",
+    "gatedNote": "Letzter Tag, Wochentag im Monat, die Tage 29 bis 31 und einmalige Ausführungen stehen zur Verfügung, sobald der Scheduler aktualisiert ist."
   }
 }

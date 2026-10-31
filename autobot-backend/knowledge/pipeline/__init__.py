@@ -28,10 +28,10 @@ Usage:
     from knowledge.pipeline import (
         PipelineRunner,
         PipelineContext,
-        get_default_config
+        get_default_pipeline_config
     )
 
-    config = get_default_config()
+    config = get_default_pipeline_config()
     runner = PipelineRunner(config)
 
     context = PipelineContext(
@@ -50,7 +50,7 @@ from .base import (
     PipelineContext,
     PipelineResult,
 )
-from .config import get_default_config, load_pipeline_config
+from .config import get_default_pipeline_config, load_pipeline_config
 from .models import (
     Entity,
     EntityType,
@@ -79,7 +79,7 @@ __all__ = [
     "PipelineRunner",
     # Config
     "load_pipeline_config",
-    "get_default_config",
+    "get_default_pipeline_config",
     # Models
     "ProcessedChunk",
     "Entity",

@@ -12,6 +12,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import slmApiClient from '@/utils/ApiClient'
+import { monitoringChildren } from './monitoringRoutes'
 
 // One-time wizard completion check (Issue #1294)
 let wizardCheckDone = false
@@ -254,6 +255,12 @@ const router = createRouter({
           meta: { title: 'Log Forwarding', parent: 'settings', admin: true }
         },
         {
+          path: 'admin/web-research',
+          name: 'settings-admin-web-research',
+          component: () => import('@/views/settings/admin/WebResearchSettings.vue'),
+          meta: { title: 'Web Research', parent: 'settings', admin: true }
+        },
+        {
           // Consolidated to Fleet Overview /fleet/npu Worker Registry sub-tab
           path: 'admin/npu-workers',
           name: 'settings-admin-npu-workers',
@@ -325,81 +332,7 @@ const router = createRouter({
       name: 'monitoring',
       component: () => import('@/views/MonitoringView.vue'),
       meta: { title: 'Monitoring' },
-      children: [
-        {
-          path: '',
-          name: 'monitoring-default',
-          redirect: '/monitoring/system'
-        },
-        {
-          path: 'system',
-          name: 'monitoring-system',
-          component: () => import('@/views/monitoring/SystemMonitor.vue'),
-          meta: { title: 'System Monitor', parent: 'monitoring' }
-        },
-        {
-          path: 'logs',
-          name: 'monitoring-logs',
-          component: () => import('@/views/monitoring/LogViewer.vue'),
-          meta: { title: 'Log Viewer', parent: 'monitoring' }
-        },
-        {
-          path: 'dashboards',
-          name: 'monitoring-dashboards',
-          component: () => import('@/views/monitoring/GrafanaDashboards.vue'),
-          meta: { title: 'Grafana Dashboards', parent: 'monitoring' }
-        },
-        {
-          path: 'alerts',
-          name: 'monitoring-alerts',
-          component: () => import('@/views/monitoring/AlertsMonitor.vue'),
-          meta: { title: 'Alerts', parent: 'monitoring' }
-        },
-        {
-          path: 'errors',
-          name: 'monitoring-errors',
-          component: () => import('@/views/monitoring/ErrorMonitor.vue'),
-          meta: { title: 'Error Monitoring', parent: 'monitoring' }
-        },
-        // Admin monitoring (migrated from main AutoBot frontend - Issue #729)
-        {
-          path: 'admin',
-          name: 'monitoring-admin',
-          component: () => import('@/views/monitoring/admin/AdminMonitoringView.vue'),
-          meta: { title: 'Admin Dashboard', parent: 'monitoring', admin: true }
-        },
-        // Issue #752: Performance — moved from standalone /performance into monitoring
-        {
-          path: 'performance',
-          name: 'monitoring-performance',
-          component: () => import('@/views/PerformanceView.vue'),
-          meta: { title: 'Performance', parent: 'monitoring' }
-        },
-        {
-          path: 'performance/overview',
-          name: 'monitoring-performance-overview',
-          component: () => import('@/views/performance/PerformanceOverview.vue'),
-          meta: { title: 'Performance Overview', parent: 'monitoring' }
-        },
-        {
-          path: 'performance/traces',
-          name: 'monitoring-performance-traces',
-          component: () => import('@/views/performance/TracingView.vue'),
-          meta: { title: 'Distributed Traces', parent: 'monitoring' }
-        },
-        {
-          path: 'performance/slos',
-          name: 'monitoring-performance-slos',
-          component: () => import('@/views/performance/SLODashboard.vue'),
-          meta: { title: 'SLO Dashboard', parent: 'monitoring' }
-        },
-        {
-          path: 'performance/alerts',
-          name: 'monitoring-performance-alerts',
-          component: () => import('@/views/performance/AlertRulesView.vue'),
-          meta: { title: 'Alert Rules', parent: 'monitoring' }
-        },
-      ]
+      children: monitoringChildren,
     },
     {
       // Issue #838: Service Orchestration management

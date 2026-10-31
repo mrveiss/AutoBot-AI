@@ -17,10 +17,10 @@ import time
 from datetime import datetime, timezone
 
 from autobot_shared.async_compat import fire_and_forget
+from autobot_shared.embedding_model import active_embedding_model
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.missing_dep import MissingDep as _MissingDep
-from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL
 from constants.threshold_constants import TimingConstants
 from knowledge.vector_membership import vectorized_ids
 
@@ -34,6 +34,12 @@ PENDING_SET_KEY = "kb:vectorize:pending"
 # Run the full fact:* safety-net reconcile every Nth cycle (default 12 → hourly
 # at the 5-minute check_interval). Env-tunable; never hard-coded per cadence.
 FULL_SCAN_EVERY_N_CYCLES = env_int_clamped("KB_VECTORIZE_FULL_SCAN_EVERY_N_CYCLES", 12, min_v=1)
+
+# How often the reconciler wakes. Env-backed rather than a literal (#17548): the
+# cadence that suits a KB with a handful of facts is not the one that suits a large
+# one, and a constant in __init__ cannot be tuned per deployment. Floored at 30s so a
+# misconfiguration cannot turn the reconciler into a busy loop against Redis.
+CHECK_INTERVAL_SECONDS = env_int_clamped("AUTOBOT_KB_VECTORIZE_CHECK_INTERVAL_SECONDS", 300, min_v=30)
 
 # Embedding analytics integration (Issue #285)
 try:
@@ -59,13 +65,16 @@ class BackgroundVectorizer:
         """Initialize background vectorizer with default settings."""
         self.is_running = False
         self.last_run: datetime | None = None
-        self.check_interval = 300  # 5 minutes
+        self.check_interval = CHECK_INTERVAL_SECONDS
         self.batch_size = 50
         self.batch_delay = 0.5
         # Cycle counter drives the periodic full fact:* safety-net scan (#11296).
         self._cycle_count = 0
+        # #17548: written every cycle, so 'found nothing' and 'never ran' differ.
+        self._checks_run = 0
+        self.last_check_at: datetime | None = None
         # Embedding model used (from config or default)
-        self.embedding_model = DEFAULT_EMBEDDING_MODEL
+        self.embedding_model = active_embedding_model()
 
     async def _track_embedding_usage(
         self,
@@ -208,35 +217,38 @@ class BackgroundVectorizer:
 
     async def _vectorize_single_fact(self, kb, fact_key: str, fact_data: dict) -> dict:
         """Vectorize a single fact (Issue #336 - extracted helper)."""
-        result = {"success": False, "skipped": False, "tokens": 0}
+        result = {"success": False, "tokens": 0}
 
         if not fact_data:
             return result
 
-        content, metadata = self._extract_fact_content(fact_data)
+        content, _metadata = self._extract_fact_content(fact_data)
         fact_id = fact_key.split(":")[-1] if ":" in fact_key else fact_key
 
-        if not kb.vector_index:
-            logger.warning("Vector index not available")
-            return result
-
-        try:
-            from llama_index.core import Document
-
-            document = Document(text=content, metadata=metadata, doc_id=fact_id)
-            await asyncio.to_thread(kb.vector_index.insert, document)
+        # #20007: vector_index is never built (KB init skips it), so this always failed. The KB's own path
+        # embeds with the bound model and writes to the bound store, and it reports a failure it recorded.
+        outcome = await kb.vectorize_existing_fact(fact_id)
+        if outcome.get("status") == "success":
             result["success"] = True
             result["tokens"] = int(len(content.split()) * 1.3)
             logger.debug("Vectorized fact %s", fact_id)
             await self._mark_vectorization_complete(kb, fact_key)
-        except Exception as doc_error:
-            if "already exists" in str(doc_error).lower():
-                result["skipped"] = True
-                await self._mark_vectorization_complete(kb, fact_key)
-            else:
-                logger.error("Failed to vectorize %s: %s", fact_id, doc_error)
+        else:
+            logger.error("Failed to vectorize %s: %s", fact_id, outcome.get("message"))
 
         return result
+
+    async def _embedding_backend_answers(self, kb) -> bool:
+        """One short embedding, no retries: did the backend fail, or only that fact?"""
+        from knowledge.embedding_space_binding import current_space
+        from knowledge.facts import _generate_embedding_with_npu_fallback
+
+        try:
+            space = await current_space(kb)
+            return bool(await _generate_embedding_with_npu_fallback("ping", max_attempts=1, model_name=space.model))
+        except Exception as e:
+            logger.warning("Embedding backend probe failed: %s", type(e).__name__)
+            return False
 
     async def _process_batch(self, kb, batch: list) -> dict:
         """Process a batch of facts (Issue #336 - extracted helper)."""
@@ -260,13 +272,17 @@ class BackgroundVectorizer:
                 if result["success"]:
                     stats["success"] += 1
                     stats["tokens"] += result["tokens"]
-                elif result["skipped"]:
-                    stats["skipped"] += 1
-                else:
-                    stats["failed"] += 1
+                    continue
+                stats["failed"] += 1
             except Exception as e:
                 stats["failed"] += 1
                 logger.error("Error vectorizing fact %s: %s", fact_key, e)
+            # #20019: a downed backend fails every fact, each after its retries. A fact that fails alone must
+            # not end the pass, or a few at the head of the queue would starve everything behind them.
+            if not await self._embedding_backend_answers(kb):
+                logger.warning("Embedding backend is not answering: stopping this pass; the rest stay pending")
+                stats["stopped"] = True
+                break
 
         stats["processing_time"] = time.time() - batch_start_time
         return stats
@@ -321,6 +337,8 @@ class BackgroundVectorizer:
                         batch_size=len(batch),
                     )
 
+                if batch_stats.get("stopped"):
+                    break
                 if batch_num < total_batches - 1:
                     await asyncio.sleep(self.batch_delay)
 
@@ -336,23 +354,53 @@ class BackgroundVectorizer:
             self.is_running = False
 
     async def periodic_check(self, kb):
-        """Periodic check for unvectorized facts"""
+        """Reconcile missing vector projections, for ever, on a fixed cadence (#17548).
+
+        ``store_authority`` declares that ChromaDB vectors are a rebuildable projection
+        of ``knowledge_facts`` and that *this* is what rebuilds them. Until #17548 the
+        loop existed with no caller, so the reconciling half of that contract only ran
+        when a human hit an endpoint and a vector lost between requests stayed lost.
+
+        **Every cycle leaves a record.** ``_checks_run`` and ``last_check_at`` are
+        written whether or not there was anything to do, and the outcome is logged by
+        name. A reconciler that logs only when it finds work is indistinguishable from
+        one that is not running at all -- which is precisely how the missing caller went
+        unnoticed, and the same failure this would reintroduce one level down.
+        """
         while True:
             try:
+                # Sleep first: the KB is still initialising when the task is created,
+                # and a reconcile against a half-open store is noise, not safety.
                 await asyncio.sleep(self.check_interval)
+                self._checks_run += 1
+                self.last_check_at = datetime.now(tz=timezone.utc)
 
-                # Check if we should run
                 if self.is_running:
+                    logger.info(
+                        "KB vector reconcile #%d: skipped, a vectorization pass is already running",
+                        self._checks_run,
+                    )
                     continue
 
-                if self.last_run and (datetime.now(tz=timezone.utc) - self.last_run).seconds < self.check_interval:
+                # total_seconds(), not .seconds: the latter is the sub-day component, so
+                # a last_run a little over 24h old reports a handful of seconds and the
+                # reconcile is skipped exactly when it is most overdue.
+                since = (datetime.now(tz=timezone.utc) - self.last_run).total_seconds() if self.last_run else None
+                if since is not None and since < self.check_interval:
+                    logger.info(
+                        "KB vector reconcile #%d: skipped, last pass was %.0fs ago (interval %ds)",
+                        self._checks_run,
+                        since,
+                        self.check_interval,
+                    )
                     continue
 
-                logger.info("Periodic check: Looking for unvectorized facts...")
+                logger.info("KB vector reconcile #%d: scanning for unvectorized facts", self._checks_run)
                 await self.vectorize_pending_facts(kb)
+                logger.info("KB vector reconcile #%d: pass complete", self._checks_run)
 
             except Exception as e:
-                logger.error("Periodic check error: %s", e)
+                logger.error("KB vector reconcile #%d error: %s", self._checks_run, e)
                 # Error recovery delay before retry
                 await asyncio.sleep(TimingConstants.STANDARD_TIMEOUT)
 

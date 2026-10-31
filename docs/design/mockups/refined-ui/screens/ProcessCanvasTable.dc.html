@@ -1,0 +1,912 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot Process Table</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.th a.seg{display:inline-flex;align-items:center;text-decoration:none;box-sizing:border-box;color:var(--text2)}
+.th a.seg:hover{color:var(--text)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.btn.xs{height:28px;padding:0 10px;font-size:12.5px;gap:6px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.tt th,.tt td{padding:9px 10px}
+.tt tr.on td{background:var(--surface2)}
+.tt tr.on td:first-child{border-left:3px solid var(--primary)}
+.tt tr.gh td{background:var(--surface2);border-bottom:var(--bw) solid var(--border);font-size:12.5px}
+.tt td:first-child,.tt th:first-child{padding-left:12px;width:20px}
+.ck{width:16px;height:16px;accent-color:var(--primary);margin:0;cursor:pointer}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.sub2{font-size:12.5px;color:var(--muted)}
+.th .btn.dng{color:var(--alert-text);border-color:var(--danger-tile-b)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.ib{width:28px;height:28px;border-radius:6px;border:var(--bw) solid transparent;background:transparent;display:inline-grid;place-items:center;cursor:pointer;padding:0;color:var(--text);flex:none}
+.ib:hover{background:var(--surface2);border-color:var(--border)}
+.ib:disabled{opacity:.35;cursor:not-allowed}
+.grip{cursor:grab}
+.inp{height:32px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);font:inherit;font-size:13px;padding:0 8px;color:var(--text);box-sizing:border-box;min-width:0}
+.hint{margin:0;font-size:12px;color:var(--muted)}
+.lb{font-size:12.5px;font-weight:600;color:var(--text)}
+.tg{display:inline-flex;align-items:center;height:22px;padding:0 8px;border-radius:99px;border:var(--bw) solid var(--border);background:var(--surface2);font-size:12px;font-weight:500}
+.cnt{font-size:11px;font-weight:600;padding:1px 6px;border-radius:99px;background:var(--idle-bg);color:var(--idle-fg)}
+.bulk{display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 14px;background:var(--surface2);border-bottom:var(--bw) solid var(--border);border-left:3px solid var(--primary)}
+.menu{position:absolute;z-index:30;min-width:240px;background:var(--surface);border:var(--bw) solid var(--border);border-radius:8px;padding:4px;display:flex;flex-direction:column;box-sizing:border-box}
+.mi{display:flex;align-items:center;gap:8px;min-height:32px;padding:0 10px;border:0;background:transparent;font:inherit;font-size:13px;color:var(--text);border-radius:5px;cursor:pointer;text-align:left;width:100%;box-sizing:border-box}
+.mi:hover{background:var(--surface2)}
+.mi .k{margin-left:auto;font:500 11.5px 'IBM Plex Mono',monospace;color:var(--muted)}
+.lens{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 10px;border-radius:99px;border:var(--bw) solid var(--primary);background:var(--surface);font:inherit;font-size:13px;font-weight:600;color:var(--text);cursor:pointer;box-sizing:border-box}
+.rule{border:var(--bw) solid var(--border);border-radius:8px;padding:8px 8px 8px 6px;display:flex;gap:6px;align-items:flex-start;background:var(--surface)}
+.rn{width:20px;height:20px;border-radius:99px;background:var(--idle-bg);color:var(--idle-fg);font:600 11px 'IBM Plex Mono',monospace;display:grid;place-items:center;flex:none;margin-top:6px;border:var(--pill-b)}
+.rb{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+.rl{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12.5px;color:var(--text2)}
+.aip{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 7px;border-radius:99px;line-height:1.25;white-space:nowrap}
+.rtb{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:600;padding:2px 7px;border-radius:99px;background:var(--info-bg);color:var(--info-fg);border:var(--pill-b);white-space:nowrap}
+.rc2{display:flex;flex-direction:column;gap:2px}
+.th[data-ui="minimal"] .adv{display:none !important}
+.th[data-ui="minimal"] .adv-only-full{display:none !important}
+.th .only-min{display:none !important}
+.th[data-ui="minimal"] .only-min{display:flex !important}
+.th[data-ui="minimal"] .only-min.blk{display:block !important}
+.uimode{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border);margin-right:8px}
+.uimode .seg{height:28px;font-size:12px}
+.uitog{height:40px;padding:0 10px;margin:0 2px;border-radius:8px;border:var(--bw) solid transparent;background:transparent;color:var(--text2);font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;cursor:pointer}.uitog:hover{background:var(--surface2);color:var(--text)}.uitog.on{background:var(--surface2);color:var(--text);font-weight:600;border-color:var(--accent)}
+.minnote{align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.linkbtn{border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer;min-height:24px}
+.linkbtn:hover{color:var(--link-h)}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" data-ui="{{ui}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html" class="on" aria-current="page">Company OS</a>
+    <a href="Analytics.dc.html" class="adv">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <span class="sr" role="status" aria-live="polite">{{uiAnnounce}}</span>
+    <a href="Secrets.dc.html" class="icon adv" aria-label="Secrets" data-tip="Secrets" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" data-tip="Preferences" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg></a>
+    <button type="button" class="uitog {{uiTogCls}}" onClick="{{toggleUi}}" aria-pressed="{{uiMinPressed}}" data-tip="Minimal interface — hide advanced features" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button>
+    <a href="AdminUsers.dc.html" class="icon adv" aria-label="Platform admin, opens the SLM console" data-tip="Platform admin — opens the SLM console ↗" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <a href="Preferences.dc.html" aria-label="Profile settings" data-tip="Profile settings" data-tip-pos="left" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer; display: grid; place-items: center; text-decoration: none">JD</a>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+
+    <aside class="sub" aria-label="Company OS" style="flex: 1 1 220px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+      <button type="button" data-tip="Switch company" data-tip-pos="bottom" style="margin: 0 0 6px; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: 8px; border: var(--bw) solid var(--border); background: var(--surface2); font: inherit; font-size: 14px; font-weight: 600; color: var(--text); cursor: pointer; text-align: left">
+        <span style="width: 26px; height: 26px; border-radius: 6px; background: var(--brand-bg); color: var(--brand-fg); display: grid; place-items: center; font-size: 12px">AL</span><span style="flex-grow: 1; display: flex; flex-direction: column; line-height: 1.2">AutoBot Labs<span style="font-size: 11.5px; font-weight: 400; color: var(--muted)">Company OS</span></span><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>
+      <p class="sect">Overview</p>
+      <a href="CompanyOS.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5" class="i3"/><rect x="13" y="3" width="8" height="5" rx="1.5" class="i1"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5" class="i2"/></svg>Dashboard</a>
+      <a href="MyPlace.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9H4z"/><circle cx="12" cy="14" r="2.5" class="i2"/></svg>My place</a>
+      <a href="ReviewInbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 13h5l1 2h4l1-2h5"/></svg>My Reviews</a>
+      <a href="Approvals.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Approvals<span class="pill warn" data-tip="3 approvals waiting on you" data-tip-pos="right" style="margin-left: auto">3</span></a>
+      <a href="Activity.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18l5-6 4 3 7-9"/></svg>Activity</a>
+      <a href="RunSupervision.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M10 9l4 2-4 2z" class="i2"/><path d="M8 21h8"/></svg>Run supervision</a>
+      <a href="OperationHistory.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v5h5"/><path d="M12 8v4l3 2"/></svg>Operation history</a>
+      <a href="AgentLedger.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2" class="it2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>Agent ledger</a>
+      <a href="CeoChat.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-4 4v-4H4z" class="it3"/></svg>CEO Chat</a>
+      <a href="CompanyMailbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6" class="it2"/></svg>Mailbox</a>
+      <p class="sect">Work</p>
+      <a href="Backlog.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Backlog</a>
+      <a href="Boards.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1" class="it1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1" class="it2"/></svg>Boards</a>
+      <a href="Portfolios.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2" class="it2"/><path d="M9 7V5h6v2M3 12h18"/></svg>Portfolios</a>
+      <a href="Timeline.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h9M8 12h12M4 18h7"/></svg>Timeline</a>
+      <a href="Goals.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4" class="it3"/></svg>Goals</a>
+      <a href="Automation.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L5 14h6l-1 8 8-12h-6z" class="it2"/></svg>Automation</a>
+      <a href="ProcessCanvas.dc.html" class="on adv" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="6" height="5" rx="1" class="it2"/><rect x="15" y="15" width="6" height="5" rx="1"/><path d="M9 6.5h4a2 2 0 0 1 2 2V15"/></svg>Process canvas</a>
+      <a href="Routines.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>Routines</a>
+      <a href="TranscriberProjects.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" class="it3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Transcriber</a>
+      <p class="sect">Organization</p>
+      <a href="OrgChart.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="5" rx="1" class="it2"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-4h12v4"/></svg>Org Chart</a>
+      <a href="Members.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/></svg>Members</a>
+      <a href="Teams.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3" class="i2"/><path d="M2 20a6 6 0 0 1 12 0M10 20a6 6 0 0 1 12 0"/></svg>Teams</a>
+      <a href="Roles.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M14 10h4M14 14h3"/></svg>Roles</a>
+      <a href="Handbook.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z" class="it2"/><path d="M5 17a3 3 0 0 1 3-3h10M9 8h5"/></svg>Handbook</a>
+      <a href="Costs.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it2"/><path d="M12 7v10"/></svg>Costs &amp; Budget</a>
+      <a href="BusinessIntelligence.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><path d="M5 16l4-5 4 3 6-8" /><circle cx="19" cy="6" r="1.6" class="i2"/></svg>Business intelligence</a>
+      <a href="HeartbeatMonitor.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-4 4 8 2-4h6"/></svg>Heartbeat</a>
+      <a href="Portability.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12h8M13 9l3 3-3 3"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg>Portability</a>
+      <a href="CompanySecrets.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4"/><path d="M12 12h9M18 12v3"/></svg>Secrets</a>
+      <a href="CompanySettings.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>Company settings</a>
+      <div class="only-min minnote" style="margin: 16px 10px 0; padding-top: 12px; border-top: var(--bw) solid var(--line)"><span>Showing essentials</span><button type="button" class="linkbtn" onClick="{{showAll}}">Show all features</button></div>
+    </aside>
+
+    <main style="flex: 999 1 520px; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 40px; display: flex; flex-direction: column; gap: 16px">
+      <section class="card only-min" role="note" aria-labelledby="advn-h" style="padding: 14px 16px; gap: 12px; align-items: center; flex-wrap: wrap">
+        <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg></span>
+        <div style="display: flex; flex-direction: column; gap: 2px; flex: 1 1 240px; min-width: 0">
+          <h2 id="advn-h" style="margin: 0; font-size: 14px; font-weight: 600">This is an advanced area</h2>
+          <span class="sub2">It's hidden from navigation while Minimal interface is on.</span>
+        </div>
+        <button type="button" class="btn sm" onClick="{{showAll}}">Show all features</button>
+        <a href="Main.dc.html" class="btn sm">Go to Home</a>
+      </section>
+
+      <header style="display: flex; flex-wrap: wrap; gap: 14px; align-items: center">
+        <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1">
+          <span class="sub2"><a href="CompanyOS.dc.html" style="color: var(--muted); text-decoration: none">Company OS</a> / Organization / <a href="OrgChart.dc.html" style="color: var(--muted); text-decoration: none">Org Chart</a></span>
+          <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em">Process canvas</h1>
+          <p class="sub2" style="margin: 0">The process library: one row per process, however many workflows use it. Think of a film script: people and agents are the actors, they get roles, roles perform workflows, and workflows are made of processes. Every process also has an owner role, and a routine can run it on a schedule as that role. Select several rows to edit them together.</p>
+        </div>
+        <button type="button" class="btn pri" onClick="{{addCard}}"><svg class="ic sonp" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add process</button>
+      </header>
+
+      <div role="toolbar" aria-label="Table view" style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+        <div role="group" aria-label="View mode" style="display: flex; gap: 2px; padding: 3px; border-radius: 7px; background: var(--surface2); border: var(--bw) solid var(--border)">
+          <a href="OrgChart.dc.html" class="seg">Tree</a>
+          <a href="ProcessCanvas.dc.html" class="seg" data-tip="One workflow at a time. Edit, drag and connect its processes" data-tip-pos="bottom">Canvas</a>
+          <button type="button" class="seg on" aria-pressed="true">Table</button>
+          <a href="OrgChart.dc.html" class="seg">People</a>
+        </div>
+        <button type="button" class="btn sm adv" aria-expanded="{{rulesOpen}}" onClick="{{toggleRules}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4" class="i1"/><circle cx="16" cy="9" r="4" class="i2"/><circle cx="12" cy="16" r="4" class="i3"/></svg>Colour by: rules ({{ruleCount}})</button>
+        <span style="flex-grow: 1" aria-hidden="true"></span>
+        <div class="adv" style="display: flex; align-items: center; gap: 6px">
+          <button type="button" class="lens" data-tip="Saved lens: all roles, all sharing, colour by rules. Shared with everyone in AutoBot Labs." data-tip-pos="bottom"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6" class="it1"/><path d="M15.5 15.5L20 20"/></svg>Release view · shared</button>
+          <button type="button" class="btn sm" onClick="{{saveLens}}">Save lens</button>
+        </div>
+        <div style="position: relative">
+          <button type="button" class="btn sm" aria-haspopup="menu" aria-expanded="{{exportOpen}}" onClick="{{toggleExport}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Export<svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>
+          <sc-if value="{{exportOpenB}}" hint-placeholder-val="{{ true }}">
+            <div class="menu" role="menu" aria-label="Export" style="right: 0; top: 38px">
+              <button type="button" class="mi" role="menuitem" onClick="{{exp.png}}">Export as PNG<span class="k">image</span></button>
+              <button type="button" class="mi" role="menuitem" onClick="{{exp.pdf}}">Export as PDF<span class="k">print</span></button>
+              <button type="button" class="mi" role="menuitem" onClick="{{exp.csv}}">Export as CSV<span class="k">{{csvHint}}</span></button>
+              <p class="hint" style="padding: 6px 10px 4px">{{exportScope}}</p>
+            </div>
+          </sc-if>
+        </div>
+
+        <div style="flex: 1 1 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px">
+          <div style="display: flex; align-items: center; gap: 8px"><label class="lb" for="f-role">Used by role</label><select id="f-role" class="inp" value="{{fRole}}" onChange="{{onFRole}}"><sc-for list="{{roleOpts}}" as="o" hint-placeholder-count="4"><option value="{{o.v}}">{{o.l}}</option></sc-for></select></div>
+          <div style="display: flex; align-items: center; gap: 8px"><label class="lb" for="f-own">Owner role</label><select id="f-own" class="inp" value="{{fOwn}}" onChange="{{onFOwn}}"><sc-for list="{{roleOpts}}" as="o" hint-placeholder-count="4"><option value="{{o.v}}">{{o.l}}</option></sc-for></select></div>
+          <div style="display: flex; align-items: center; gap: 8px"><label class="lb" for="f-wf">Used in workflow</label><select id="f-wf" class="inp" value="{{fWf}}" onChange="{{onFWf}}"><sc-for list="{{wfOpts}}" as="o" hint-placeholder-count="4"><option value="{{o.v}}">{{o.l}}</option></sc-for></select></div>
+          <div style="display: flex; align-items: center; gap: 8px"><label class="lb" for="f-line">AI line</label><select id="f-line" class="inp" value="{{fLine}}" onChange="{{onFLine}}"><option value="all">All lines</option><option value="auto">Autonomous</option><option value="draft">Drafts · person sends</option><option value="never">Never touches</option><option value="unset">Not set</option></select></div>
+          <div style="display: flex; align-items: center; gap: 8px"><label class="lb" for="f-shr">Sharing</label><select id="f-shr" class="inp" value="{{fShare}}" onChange="{{onShare}}"><option value="all">All processes</option><option value="shared">Shared by several workflows</option><option value="single">Used in one workflow</option><option value="none">Not in any workflow</option></select></div>
+          <button type="button" class="linkbtn" onClick="{{clearFilters}}">Clear filters</button>
+        </div>
+      </div>
+
+      <p role="status" aria-live="polite" class="sub2" style="margin: -6px 0 0; min-height: 18px">{{toast}}</p>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+
+        <section class="card" aria-labelledby="tbh" style="flex: 999 1 560px; min-width: 0">
+          <div class="ch">
+            <h2 id="tbh">{{viewTitle}}</h2>
+            <span class="cnt">{{viewCount}}</span>
+            <div role="group" aria-label="Table content" style="display: flex; gap: 2px; padding: 3px; border-radius: 7px; background: var(--surface2); border: var(--bw) solid var(--border)">
+              <button type="button" class="seg {{vc.procs}}" aria-pressed="{{vp.procs}}" onClick="{{setProcs}}">Processes</button>
+              <button type="button" class="seg {{vc.trans}}" aria-pressed="{{vp.trans}}" onClick="{{setTrans}}" data-tip="How each workflow moves from one process to the next" data-tip-pos="bottom">Transitions</button>
+            </div>
+          </div>
+
+          <sc-if value="{{showProcs}}" hint-placeholder-val="{{ true }}">
+          <sc-if value="{{hasSel}}" hint-placeholder-val="{{ true }}">
+            <div class="bulk" role="region" aria-label="Bulk edit">
+              <strong style="font-size: 13.5px">{{selLabel}}</strong>
+              <button type="button" class="linkbtn" onClick="{{clearSel}}">Clear selection</button>
+              <span style="flex-grow: 1" aria-hidden="true"></span>
+              <button type="button" class="btn sm" onClick="{{bulk.workflow}}" data-tip="Adds the selected processes to one more workflow. They stay in the library once."  data-tip-pos="bottom"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M14 10h4M14 14h3"/></svg>Use in a workflow</button>
+              <button type="button" class="btn sm" onClick="{{bulk.owner}}" data-tip="Sets the role responsible for the selected processes" data-tip-pos="bottom"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="9" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>Set owner role</button>
+              <button type="button" class="btn sm" onClick="{{bulk.tag}}"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7l9 9-7 7-9-9z" class="it1"/><circle cx="8.5" cy="8.5" r="1.5"/></svg>Add tag</button>
+              <button type="button" class="btn sm dng" onClick="{{bulk.del}}" data-tip="{{delTip}}" data-tip-pos="left"><svg class="ic sacc" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12"/></svg>Delete</button>
+            </div>
+          </sc-if>
+
+          <div style="overflow-x: auto">
+            <table class="tt" style="border-collapse: collapse; width: 100%">
+              <caption class="sr">Process library, with every workflow and role that uses each process</caption>
+              <thead><tr>
+                <th scope="col"><input type="checkbox" class="ck" aria-label="Select all shown processes" checked="{{allSel}}" onClick="{{toggleAll}}"></th>
+                <th scope="col"><span tabindex="0" data-tip="Colour from the first matching rule" data-tip-pos="right">Colour</span></th>
+                <th scope="col">Process</th>
+                <th scope="col"><span tabindex="0" data-tip="A process does one job. A meta skill is know-how made of several processes, held by roles and called by workflows." data-tip-pos="right">Kind</span></th>
+                <th scope="col"><span tabindex="0" data-tip="How far AI may go. The effective line is the strictest of the process and its tools. Changing a line goes through Approvals." data-tip-pos="right">AI line</span></th>
+                <th scope="col"><span tabindex="0" data-tip="Skills the role running the process must hold. A skill is marked missing when a role that runs it lacks it." data-tip-pos="right">Requires skills</span></th>
+                <th scope="col"><span tabindex="0" data-tip="Every workflow that uses this process, and the role that performs it. Editing the process changes it in all of them." data-tip-pos="right">Used in</span></th>
+                <th scope="col"><span tabindex="0" data-tip="The role responsible for the process. A routine runs it as this role." data-tip-pos="right">Owner role</span></th>
+                <th scope="col"><span tabindex="0" data-tip="A schedule that runs the process on its own, as the owner role" data-tip-pos="right">Routine</span></th>
+                <th scope="col">Tools</th>
+                <th scope="col" class="adv" style="text-align: right"><span tabindex="0" data-tip="Cost per run, in EUR">Cost/run</span></th>
+                <th scope="col">Tags</th>
+              </tr></thead>
+              <tbody>
+                <sc-for list="{{rows}}" as="r" hint-placeholder-count="8">
+                  <tr class="{{r.cls}}">
+                    <td><input type="checkbox" class="ck" aria-label="{{r.selAria}}" checked="{{r.checked}}" onClick="{{r.toggle}}"></td>
+                    <td><span class="pill {{r.colour}}" tabindex="0" data-tip="{{r.colourTip}}" data-tip-pos="right">{{r.colourLabel}}</span></td>
+                    <td><a href="ProcessCanvas.dc.html" data-tip="Open on the canvas" style="font-weight: 600; text-decoration: none">{{r.title}}</a></td>
+                    <td><span class="pill {{r.kindCls}}">{{r.kind}}</span></td>
+                    <td><span class="pill {{r.lineCls}} aip" tabindex="0" data-tip="{{r.lineTip}}"><svg class="ic" width="10" height="10" viewBox="0 0 24 24" aria-hidden="true"><path d="{{r.lineIcon}}"/></svg>{{r.lineLabel}}</span></td>
+                    <td><span style="display: flex; gap: 4px; flex-wrap: wrap; max-width: 260px"><sc-for list="{{r.skills}}" as="k" hint-placeholder-count="1"><span class="pill {{k.cls}}" tabindex="0" data-tip="{{k.tip}}" style="white-space: normal">{{k.label}}</span></sc-for></span><sc-if value="{{r.noSkills}}" hint-placeholder-val="{{ false }}"><span class="sub2">None</span></sc-if></td>
+                    <td><span class="rc2"><sc-for list="{{r.uses}}" as="u" hint-placeholder-count="2"><span><a href="ProcessCanvas.dc.html" style="text-decoration: none">{{u.wf}}</a> <span class="sub2" style="font-size: 11.5px">· {{u.role}}</span></span></sc-for></span><sc-if value="{{r.shared}}" hint-placeholder-val="{{ false }}"><span class="pill info" tabindex="0" data-tip="{{r.sharedTip}}" style="display: inline-block; margin-top: 3px">{{r.sharedLabel}}</span></sc-if><sc-if value="{{r.noUses}}" hint-placeholder-val="{{ false }}"><span class="sub2">{{r.noUsesText}}</span></sc-if><sc-if value="{{r.metaIn}}" hint-placeholder-val="{{ false }}"><span class="sub2" style="font-size: 11.5px; display: block">{{r.metaInText}}</span></sc-if></td>
+                    <td><span class="rc2"><span>{{r.ownerName}}</span><span class="sub2" style="font-size: 11.5px">{{r.ownerWho}}</span></span><sc-if value="{{r.away}}" hint-placeholder-val="{{ false }}"><span class="pill warn" tabindex="0" data-tip="{{r.awayTip}}" style="display: inline-block; margin-top: 3px">Away</span></sc-if></td>
+                    <td><sc-if value="{{r.routine}}" hint-placeholder-val="{{ true }}"><span class="rc2"><span class="rtb" tabindex="0" data-tip="{{r.rtTip}}" style="align-self: flex-start"><svg class="ic" width="11" height="11" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>{{r.rtLabel}}</span><span class="sub2" style="font-size: 11.5px">{{r.rtNext}}</span></span></sc-if><sc-if value="{{r.noRoutine}}" hint-placeholder-val="{{ false }}"><span class="sub2">None</span></sc-if></td>
+                    <td><span class="mono" style="font-size: 12px">{{r.tools}}</span><sc-if value="{{r.missing}}" hint-placeholder-val="{{ false }}"> <span class="pill bad" tabindex="0" data-tip="Ops Lead lacks a tool this process needs: ansible-runner. Grant it from the process.">needs ansible-runner</span></sc-if></td>
+                    <td class="mono adv" style="text-align: right">{{r.cost}}</td>
+                    <td><span style="display: flex; gap: 4px"><sc-for list="{{r.tags}}" as="g" hint-placeholder-count="2"><span class="tg">{{g.t}}</span></sc-for></span></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+          <sc-if value="{{noRows}}" hint-placeholder-val="{{ false }}">
+            <div style="padding: 28px 16px; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center">
+              <strong style="font-size: 14px">No processes match these filters</strong>
+              <span class="sub2">The role, workflow and sharing filters combine, so together they can rule every process out. Clear a filter to see rows again.</span>
+              <button type="button" class="btn sm" onClick="{{clearFilters}}">Clear filters</button>
+            </div>
+          </sc-if>
+          <div class="row" style="border-bottom: 0; border-top: var(--bw) solid var(--line)"><span class="sub2">{{footLabel}}</span><span style="flex-grow: 1" aria-hidden="true"></span><span class="sub2 adv mono" data-tip="Sum over the shown processes, all in EUR" data-tip-pos="left">{{footCost}}</span></div>
+          </sc-if>
+
+          <sc-if value="{{showTrans}}" hint-placeholder-val="{{ false }}">
+            <p class="hint" style="padding: 10px 16px 0">{{transNote}}</p>
+            <div style="overflow-x: auto">
+              <table class="tt" style="border-collapse: collapse; width: 100%">
+                <caption class="sr">Transitions of the chosen workflow</caption>
+                <thead><tr>
+                  <th scope="col">From</th>
+                  <th scope="col"><span tabindex="0" data-tip="On success and On failure follow the result. If and Else follow a condition. On timeout fires when the process runs too long." data-tip-pos="right">Type</span></th>
+                  <th scope="col">Condition or policy</th>
+                  <th scope="col">To</th>
+                </tr></thead>
+                <tbody>
+                  <sc-for list="{{trows}}" as="t" hint-placeholder-count="6">
+                    <tr><td>{{t.from}}</td><td><span class="pill {{t.cls}}">{{t.typeLabel}}</span></td><td>{{t.policy}}</td><td>{{t.to}}</td></tr>
+                  </sc-for>
+                </tbody>
+              </table>
+            </div>
+            <div class="row" style="border-bottom: 0; border-top: var(--bw) solid var(--line)"><span class="sub2">{{transFoot}}</span><span style="flex-grow: 1" aria-hidden="true"></span><a href="ProcessCanvas.dc.html" class="btn sm">Edit on the canvas</a></div>
+          </sc-if>
+        </section>
+
+        <sc-if value="{{rulesOpenB}}" hint-placeholder-val="{{ true }}">
+          <aside class="card adv" aria-labelledby="crh" style="flex: 1 1 360px; min-width: 0; box-sizing: border-box; border-color: var(--primary)">
+            <div class="ch">
+              <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="4" class="i1"/><circle cx="16" cy="9" r="4" class="i2"/><circle cx="12" cy="16" r="4" class="i3"/></svg></span>
+              <div style="flex-grow: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0">
+                <h2 id="crh" style="margin: 0; font-size: 15px; font-weight: 600">Colour rules</h2>
+                <span class="sub2">Rules run top to bottom. The first rule that matches colours the process.</span>
+              </div>
+              <button type="button" class="btn sm" aria-label="Close colour rules" data-tip="Close · Esc" data-tip-pos="left" onClick="{{toggleRules}}" style="width: 32px; padding: 0; justify-content: center"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+            </div>
+            <div style="padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 10px">
+              <ol aria-label="Colour rules in order" style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px">
+                <sc-for list="{{rules}}" as="u" hint-placeholder-count="3">
+                  <li class="rule" aria-label="{{u.aria}}">
+                    <button type="button" class="ib grip" aria-label="{{u.dragAria}}" data-tip="Drag to reorder" data-tip-pos="right" style="width: 18px; margin-top: 2px"><svg class="ic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.2" class="ik"/><circle cx="15" cy="6" r="1.2" class="ik"/><circle cx="9" cy="12" r="1.2" class="ik"/><circle cx="15" cy="12" r="1.2" class="ik"/><circle cx="9" cy="18" r="1.2" class="ik"/><circle cx="15" cy="18" r="1.2" class="ik"/></svg></button>
+                    <span class="rn">{{u.n}}</span>
+                    <div class="rb">
+                      <div class="rl">
+                        <span>If</span>
+                        <label class="sr" for="{{u.fid}}">Field</label>
+                        <select id="{{u.fid}}" class="inp" value="{{u.field}}" onChange="{{u.onField}}"><option value="cost">Cost/run</option><option value="owner">Holder type</option><option value="workflow">Used in workflow</option><option value="role">Used by role</option><option value="tag">Tag</option><option value="sharing">Sharing</option><option value="ownerRole">Owner role</option><option value="routine">Routine</option><option value="skillMissing">Skill missing</option><option value="aiLine">AI line</option></select>
+                        <span>{{u.op}}</span>
+                        <sc-if value="{{u.isNum}}" hint-placeholder-val="{{ true }}">
+                          <span style="display: inline-flex; align-items: center; gap: 4px"><label class="sr" for="{{u.vid}}">Amount in EUR</label><input id="{{u.vid}}" class="inp mono" type="number" step="0.5" min="0" value="{{u.val}}" onInput="{{u.onVal}}" style="width: 64px"><span class="mono">EUR</span></span>
+                        </sc-if>
+                        <sc-if value="{{u.isChoice}}" hint-placeholder-val="{{ false }}">
+                          <label class="sr" for="{{u.vid}}">Value</label>
+                          <select id="{{u.vid}}" class="inp" value="{{u.val}}" onChange="{{u.onVal}}"><sc-for list="{{u.choices}}" as="c" hint-placeholder-count="3"><option value="{{c.v}}">{{c.l}}</option></sc-for></select>
+                        </sc-if>
+                      </div>
+                      <div class="rl">
+                        <span>then colour</span>
+                        <label class="sr" for="{{u.rid}}">Colour</label>
+                        <select id="{{u.rid}}" class="inp" value="{{u.res}}" onChange="{{u.onRes}}"><option value="warn">Warn</option><option value="bad">Bad</option><option value="info">Info</option><option value="ok">OK</option><option value="idle">Neutral</option></select>
+                        <span class="pill {{u.res}}" data-tip="Preview of how matching processes look">{{u.resLabel}}</span>
+                        <span class="sub2">{{u.matchLabel}}</span>
+                      </div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 2px">
+                      <button type="button" class="ib" aria-label="{{u.upAria}}" data-tip="Move up" data-tip-pos="left" onClick="{{u.up}}" disabled="{{u.first}}"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg></button>
+                      <button type="button" class="ib" aria-label="{{u.downAria}}" data-tip="Move down" data-tip-pos="left" onClick="{{u.down}}" disabled="{{u.last}}"><svg class="ic" width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button>
+                      <button type="button" class="ib" aria-label="{{u.rmAria}}" data-tip="Remove rule" data-tip-pos="left" onClick="{{u.remove}}"><svg class="ic sacc" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+                    </div>
+                  </li>
+                </sc-for>
+              </ol>
+              <sc-if value="{{noRules}}" hint-placeholder-val="{{ false }}">
+                <p class="hint" style="padding: 10px; border: var(--bw) dashed var(--border); border-radius: 8px">No rules yet. Processes stay uncoloured until you add one.</p>
+              </sc-if>
+              <button type="button" class="btn sm" onClick="{{addRule}}" style="align-self: flex-start; border-style: dashed"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>Add rule</button>
+              <div class="rule" style="background: var(--surface2); padding: 8px 10px; align-items: center"><span class="sub2" style="flex-grow: 1">If no rule matches</span><span class="pill idle">No colour</span></div>
+
+              <div style="border-top: var(--bw) solid var(--line); padding-top: 12px; display: flex; flex-direction: column; gap: 8px">
+                <span style="font-size: 12.5px; font-weight: 600">Preview on the shown processes</span>
+                <div style="display: flex; gap: 6px; flex-wrap: wrap"><sc-for list="{{preview}}" as="p" hint-placeholder-count="3"><span class="pill {{p.cls}}">{{p.label}}</span></sc-for></div>
+                <p class="hint">Rules apply in Canvas and Table views, and are saved with the lens.</p>
+              </div>
+              <div style="display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap">
+                <button type="button" class="btn sm" onClick="{{resetRules}}">Reset</button>
+                <button type="button" class="btn sm pri" onClick="{{applyRules}}">Apply rules</button>
+              </div>
+            </div>
+          </aside>
+        </sc-if>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"ui":{"editor":"enum","options":["full","minimal"],"default":"full"},"$preview":{"width":1440,"height":2850}}'>
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    try { const u = window.localStorage.getItem('autobot-ui-mode'); if (u === 'full' || u === 'minimal') this.setState({ ui: u }); } catch (e) {}
+  }
+  setUi(id) {
+    try { window.localStorage.setItem('autobot-ui-mode', id); } catch (e) {}
+    this.setState({ ui: id, uiAnnounce: id === 'minimal' ? 'Minimal interface on. Advanced features hidden.' : 'Full interface on. All features shown.' });
+  }
+  say(msg, extra) {
+    this.setState(Object.assign({ toast: msg }, extra || {}));
+  }
+  model() {
+    const T = { 'git-forge': 0, 'ansible-runner': 0.12, 'issue-tracker': 0.06, 'test-runner': 0.18, 'llm-completion': 0.24, 'knowledge-search': 0.07, 'bench-runner': 6.8, 'alerting': 0.02, 'status-page': 0, 'docs-site': 0.02, 'mailbox': 0.01, 'social-media': 0.03, 'transcriber': 0.35 };
+    const P = (id, title, tools) => ({ id: id, title: title, tools: tools, cost: Math.round(tools.reduce((s, t) => s + T[t], 0) * 100) / 100 });
+    const W = (id, name, tag, stages, trigProc) => ({ id: id, name: name, tag: tag, trigProc: trigProc || '', stages: stages.map((s) => ({ n: s[0], ps: s[1] })) });
+    const EM = Object.assign(P('email', 'Handle incoming email', ['mailbox', 'llm-completion', 'issue-tracker', 'social-media']), { metaId: 'mail' });
+    const agent = (n) => ({ n: n, t: 'agent' });
+    const person = (n, away) => ({ n: n, t: 'person', away: !!away });
+    const out = [
+      { id: 'ceo', name: 'Founder & CEO', holders: [person('Jane Doe')], wfs: [W('planning', 'Company planning', 'planning', [['Plan', [P('goals', 'Set quarterly goals', [])]], ['Approve', [P('budgets', 'Approve budgets', [])]]])] },
+      { id: 'ops', name: 'Head of Operations', holders: [person('Alex Smith', true)], wfs: [W('approval', 'Release approval', 'release', [['Intake', [EM]], ['Check', [P('notes', 'Check release notes', [])]], ['Decide', [P('approve', 'Approve release', [])]]])] },
+      { id: 'comms', name: 'Communications Lead', holders: [person('Alex Smith', true)], wfs: [W('social', 'Social media replies', 'social', [['Reply', [P('reply', 'Draft a reply', ['social-media', 'llm-completion'])]], ['Publish', [P('sched', 'Schedule a social media post', ['social-media'])]]], 'check')] },
+      { id: 'opslead', name: 'Ops Lead', holders: [agent('devops-engineer')], wfs: [
+        W('deploy', 'Deploy a release', 'release', [['Intake', [P('triage', 'Triage request', ['issue-tracker', 'llm-completion']), P('ask', 'Ask for details', ['llm-completion'])]], ['Staging', [P('staging', 'Deploy to staging', ['git-forge', 'ansible-runner']), P('smoke', 'Run smoke tests', ['test-runner'])]], ['Production', [P('prod', 'Deploy to production', ['git-forge', 'ansible-runner'])]], ['Recovery', [P('rbs', 'Roll back staging', ['git-forge', 'ansible-runner']), P('rbp', 'Roll back production', ['git-forge', 'ansible-runner']), P('notify', 'Notify owner', ['status-page'])]]]),
+        W('incident', 'Incident response', 'incident', [['Intake', [EM]], ['Detect', [P('alert', 'Triage alert', ['alerting', 'llm-completion'])]], ['Fix', [P('restore', 'Restore service', ['ansible-runner', 'status-page']), P('note', 'Write incident note', ['llm-completion', 'status-page'])]], ['Notify', [P('notify', 'Notify owner', ['status-page'])]]])] },
+      { id: 'research', name: 'Head of Research', holders: [agent('research-agent')], wfs: [W('research', 'Research a change', 'research', [['Research', [P('sources', 'Gather sources', ['knowledge-search'])]], ['Spec', [P('spec', 'Write spec', ['knowledge-search', 'llm-completion'])]]])] },
+      { id: 'staff', name: 'Staff Engineer', holders: [agent('code-agent')], wfs: [W('implement', 'Implement a change', 'engineering', [['Build', [P('impl', 'Implement change', ['git-forge', 'test-runner', 'llm-completion'])]], ['Test', [P('tests', 'Write tests', ['git-forge', 'test-runner'])]]])] },
+      { id: 'reviewer', name: 'Reviewer', holders: [agent('code-reviewer'), person('Jane Doe')], wfs: [W('review', 'Code review', 'engineering', [['Review', [P('review', 'Review code', ['git-forge', 'llm-completion'])]], ['Decide', [P('decide', 'Approve or request changes', ['git-forge'])]]])] },
+      { id: 'perf', name: 'Performance Lead', holders: [agent('performance-engineer')], wfs: [W('perf', 'Performance check', 'performance', [['Measure', [P('bench', 'Run benchmark', ['bench-runner'])]], ['Compare', [P('compare', 'Compare with baseline', ['llm-completion'])]]])] },
+      { id: 'writer', name: 'Technical Writer', holders: [agent('documentation-engineer')], wfs: [
+        W('docs', 'Docs update', 'docs', [['Draft', [P('docs', 'Update docs', ['knowledge-search', 'llm-completion'])]], ['Publish', [P('publish', 'Publish docs', ['docs-site'])]]]),
+        W('transcribe', 'Transcribe meeting recordings', 'recordings', [['Transcribe', [P('trans', 'Transcribe recording', ['transcriber']), P('label', 'Label speakers', ['transcriber'])]], ['Summarise', [P('tsum', 'Summarise transcript', ['llm-completion']), P('wi', 'Create work items', ['issue-tracker'])]], ['Save', [P('kb', 'Save to knowledge base', ['knowledge-search'])]], ['Recovery', [P('notify', 'Notify owner', ['status-page'])]]])] }
+    ];
+    const RS = this.roleSkills();
+    out.forEach((r) => { r.skills = RS[r.id] || []; });
+    out.lib = { safe: Object.assign(P('safe', 'Safe deploy', ['git-forge', 'ansible-runner', 'test-runner']), { metaId: 'safe' }), classify: P('classify', 'Classify email', ['mailbox', 'llm-completion']), extract: P('extract', 'Extract the request', ['llm-completion']), route: P('route', 'Route to the owning role', ['issue-tracker']), check: P('check', 'Check social media feed', ['social-media']), summ: P('summ', 'Summarise daily work', ['issue-tracker', 'llm-completion']), fleet: P('fleet', 'Check fleet health', ['alerting']), reindex: P('reindex', 'Re-index knowledge base', ['knowledge-search']), costrep: P('costrep', 'Send weekly cost report', ['llm-completion']) };
+    const byId = {};
+    out.forEach((r) => r.wfs.forEach((w) => w.stages.forEach((g) => g.ps.forEach((q) => { byId[q.id] = q; }))));
+    const pick = (ids) => ids.map((id) => byId[id] || out.lib[id]);
+    out.metas = [
+      { id: 'mail', pid: 'email', name: 'Handle incoming email', ps: pick(['classify', 'extract', 'route', 'reply']), held: ['ops', 'opslead', 'comms'] },
+      { id: 'safe', pid: 'safe', name: 'Safe deploy', ps: pick(['staging', 'smoke', 'prod', 'rbs']), held: ['opslead'] }
+    ];
+    return out;
+  }
+  owners() {
+    return { check: 'comms', summ: 'writer', fleet: 'opslead', reindex: 'research', costrep: 'ops', classify: 'ops', extract: 'ops', route: 'ops' };
+  }
+  lines() {
+    const set = (k, ids) => ids.reduce((o, id) => { o[id] = k; return o; }, {});
+    return Object.assign({},
+      set('auto', ['classify', 'extract', 'route', 'sources', 'spec', 'impl', 'tests', 'review', 'bench', 'compare', 'trans', 'label', 'tsum', 'kb', 'check', 'fleet', 'triage', 'alert', 'smoke', 'staging', 'rbs', 'notify', 'costrep', 'wi', 'email', 'safe']),
+      set('draft', ['reply', 'sched', 'prod', 'rbp', 'ask', 'publish', 'restore']),
+      set('never', ['approve', 'budgets', 'goals']));
+  }
+  toolLines() {
+    return { 'git-forge': 'auto', 'ansible-runner': 'auto', 'issue-tracker': 'auto', 'test-runner': 'auto', 'llm-completion': 'auto', 'knowledge-search': 'auto', 'bench-runner': 'auto', 'alerting': 'auto', 'status-page': 'auto', 'docs-site': 'draft', 'mailbox': 'draft', 'social-media': 'draft', 'transcriber': 'auto' };
+  }
+  lineDefs() {
+    return {
+      auto: { rank: 0, label: 'Autonomous', setTo: 'Autonomous', cls: 'ok', icon: 'M5 12l5 5 9-10' },
+      draft: { rank: 1, label: 'Drafts · person sends', setTo: 'Drafts', cls: 'warn', icon: 'M4 20h4L19 9l-4-4L4 16z' },
+      never: { rank: 2, label: 'Never touches', setTo: 'Never touches', cls: 'bad', icon: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM6 6l12 12' }
+    };
+  }
+  skills() {
+    return { email: 'Email classification', ansible: 'Ansible deploy', smoke: 'Smoke testing', writeup: 'Incident write-up', brand: 'Brand voice writing', review: 'Code review', bench: 'Benchmarking', tech: 'Technical writing', research: 'Web research', transcribe: 'Transcription' };
+  }
+  roleSkills() {
+    return { ceo: [], ops: ['email', 'brand'], comms: ['brand', 'email'], opslead: ['ansible', 'smoke', 'email'], research: ['research'], staff: ['review'], reviewer: ['review'], perf: ['bench'], writer: ['tech', 'transcribe'] };
+  }
+  reqs() {
+    return { staging: ['ansible'], prod: ['ansible'], rbs: ['ansible'], rbp: ['ansible'], smoke: ['smoke'], note: ['writeup'], reply: ['brand'], review: ['review'], bench: ['bench'], docs: ['tech'], sources: ['research'], classify: ['email'], trans: ['transcribe'], tsum: ['tech'] };
+  }
+  routines() {
+    return {
+      check: { text: 'Every 2 hours', badge: 'every 2 h', next: 'Next 10 Oct 2026, 12:00' },
+      sched: { text: 'Weekdays at 09:00', badge: 'weekdays 09:00', next: 'Next Mon 13 Oct 2026, 09:00' },
+      summ: { text: 'Weekdays at 09:00', badge: 'weekdays 09:00', next: 'Next Mon 13 Oct 2026, 09:00' },
+      fleet: { text: 'Every 30 minutes', badge: 'every 30 min', next: 'Running now' },
+      reindex: { text: 'Every day at 02:00', badge: 'daily 02:00', next: 'Next 11 Oct 2026, 02:00' },
+      costrep: { text: 'Every Monday at 08:00', badge: 'Mondays 08:00', next: 'Next Mon 13 Oct 2026, 08:00' },
+      bench: { text: 'Every Saturday at 03:00', badge: 'Saturdays 03:00', next: 'Paused', paused: true }
+    };
+  }
+  cards() {
+    const map = {};
+    const out = [];
+    const model = this.model();
+    const OWN = this.owners();
+    const RT = this.routines();
+    const SK = this.skills();
+    const REQ = this.reqs();
+    const roleOf = {};
+    model.forEach((r) => { roleOf[r.id] = r; });
+    const touch = (p) => {
+      if (!map[p.id]) {
+        map[p.id] = { id: p.id, title: p.title, meta: p.metaId ? model.metas.filter((m) => m.id === p.metaId)[0] : null, uses: [], roles: [], agent: false, person: false, tools: p.tools, cost: p.cost, tags: [], missing: false, first: null, metaIn: [] };
+        out.push(map[p.id]);
+      }
+      return map[p.id];
+    };
+    const flag = (c, r) => r.holders.forEach((h) => { if (h.t === 'agent') c.agent = true; else c.person = true; });
+    Object.keys(model.lib).forEach((id) => touch(model.lib[id]));
+    model.forEach((r) => r.wfs.forEach((w) => {
+      w.stages.forEach((st) => st.ps.forEach((p) => {
+        const c = touch(p);
+        c.uses.push({ wf: w.name, role: r.name, who: r.holders.map((h) => h.n + ' · ' + h.t).join(', ') });
+        c.roles.push(r.name);
+        c.roleIds = (c.roleIds || []).concat([r.id]);
+        if (!c.first) c.first = r.id;
+        flag(c, r);
+        if (c.tags.indexOf(w.tag) < 0) c.tags.push(w.tag);
+        if (r.id === 'opslead' && p.tools.indexOf('ansible-runner') >= 0) c.missing = true;
+      }));
+      if (w.trigProc) {
+        const c = touch(model.lib[w.trigProc]);
+        c.uses.push({ wf: w.name, role: r.name + ' · starts it', who: '' });
+        c.roles.push(r.name);
+        c.roleIds = (c.roleIds || []).concat([r.id]);
+        if (c.tags.indexOf(w.tag) < 0) c.tags.push(w.tag);
+      }
+    }));
+    const metaReq = (m) => m.ps.map((q) => REQ[q.id] || []).reduce((a, x) => a.concat(x), []).filter((k, i, a) => a.indexOf(k) === i);
+    model.metas.forEach((m) => m.ps.forEach((q) => { touch(q).metaIn.push(m); }));
+    const heldSet = (r) => {
+      const set = {};
+      r.skills.forEach((k) => { set[k] = true; });
+      model.metas.filter((m) => m.held.indexOf(r.id) >= 0).forEach((m) => metaReq(m).forEach((k) => { set[k] = true; }));
+      return set;
+    };
+    out.forEach((c) => {
+      const o = c.meta ? null : roleOf[OWN[c.id] || c.first];
+      c.owner = o;
+      if (o) flag(c, o);
+      c.routine = RT[c.id] || null;
+      if (c.routine) c.tags.push('routine');
+      if (c.cost > 5 && c.tags.indexOf('cost-watch') < 0) c.tags.push('cost-watch');
+      c.shared = c.uses.length > 1;
+      c.key = c.uses.length > 1 ? 'shared' : (c.uses.length === 1 ? 'single' : 'none');
+      c.req = c.meta ? metaReq(c.meta) : (REQ[c.id] || []);
+      const ids = [];
+      const add = (id) => { if (id && ids.indexOf(id) < 0 && roleOf[id]) ids.push(id); };
+      if (o) add(o.id);
+      (c.roleIds || []).forEach(add);
+      model.metas.forEach((m) => { if (m.ps.some((q) => q.id === c.id)) m.held.forEach(add); });
+      c.skillRows = c.req.map((k) => ({ name: SK[k], missingRoles: ids.filter((id) => !heldSet(roleOf[id])[k]).map((id) => roleOf[id].name) }));
+      c.skillMissing = c.skillRows.some((x) => x.missingRoles.length > 0);
+      const LD = this.lineDefs();
+      const PL = this.lines();
+      const TL = this.toolLines();
+      const own = PL[c.id] || '';
+      const cand = [{ k: own || 'draft', t: 'its own line is not set' }];
+      const tcand = (t) => ({ k: TL[t] || 'draft', t: 'tool ' + t + (TL[t] ? ' is set to ' + LD[TL[t]].setTo : ' has no line, treated as Drafts') });
+      if (c.meta) {
+        c.meta.ps.forEach((x) => cand.push({ k: PL[x.id] || 'draft', t: x.title + (PL[x.id] ? ' is set to ' + LD[PL[x.id]].setTo : ' has no line, treated as Drafts') }));
+        c.meta.ps.forEach((x) => x.tools.forEach((t) => cand.push(tcand(t))));
+      } else {
+        c.tools.forEach((t) => cand.push(tcand(t)));
+      }
+      let best = cand[0];
+      cand.forEach((x) => { if (LD[x.k].rank > LD[best.k].rank) best = x; });
+      c.line = best.k;
+      c.lineUnset = !own;
+      c.lineTip = 'Effective: ' + LD[best.k].label + (best === cand[0] ? (own ? '' : ' (not set, treated as Drafts until the owner role decides)') : ' (because ' + best.t + ')');
+    });
+    return out;
+  }
+  transitions() {
+    const T = (from, type, to, o) => Object.assign({ from: from, type: type, to: to, cond: '', retries: 0, timeout: 0 }, o || {});
+    const out = {
+      'Deploy a release': [
+        T('Start', 'plain', 'Triage request', { cond: 'When a work item moves to Ready to deploy' }),
+        T('Triage request', 'if', 'Ask for details', { cond: 'request is incomplete' }),
+        T('Triage request', 'else', 'Deploy to staging'),
+        T('Ask for details', 'success', 'End · Failed (Closed, waiting on requester)'),
+        T('Deploy to staging', 'success', 'Run smoke tests'),
+        T('Deploy to staging', 'failure', 'Roll back staging', { retries: 2 }),
+        T('Run smoke tests', 'if', 'Deploy to production', { cond: 'all checks pass' }),
+        T('Run smoke tests', 'else', 'Roll back staging'),
+        T('Run smoke tests', 'timeout', 'Roll back staging', { timeout: 30 }),
+        T('Deploy to production', 'success', 'End · Done'),
+        T('Deploy to production', 'failure', 'Roll back production'),
+        T('Roll back staging', 'success', 'Notify owner'),
+        T('Roll back production', 'success', 'Notify owner'),
+        T('Notify owner', 'success', 'End · Failed')
+      ],
+      'Incident response': [
+        T('Start', 'plain', 'Handle incoming email', { cond: 'When an email arrives in the company mailbox' }),
+        T('Handle incoming email', 'if', 'Triage alert', { cond: 'it reports an outage' }),
+        T('Handle incoming email', 'else', 'End · Done (No action needed)'),
+        T('Triage alert', 'success', 'Restore service'),
+        T('Restore service', 'success', 'Write incident note'),
+        T('Restore service', 'failure', 'Notify owner'),
+        T('Write incident note', 'success', 'Notify owner'),
+        T('Notify owner', 'success', 'End · Done')
+      ],
+      'Social media replies': [
+        T('Start', 'plain', 'Draft a reply', { cond: 'When Check social media feed finds a mention' }),
+        T('Draft a reply', 'success', 'Schedule a social media post'),
+        T('Draft a reply', 'failure', 'End · Failed (No reply drafted)'),
+        T('Schedule a social media post', 'success', 'End · Done')
+      ],
+      'Transcribe meeting recordings': [
+        T('Start', 'plain', 'Transcribe recording', { cond: 'When an audio or video file is added to Company files / Recordings / Meetings (mp3, m4a, wav, mp4, mov, mkv)' }),
+        T('Transcribe recording', 'success', 'Label speakers'),
+        T('Transcribe recording', 'failure', 'Notify owner', { retries: 1 }),
+        T('Label speakers', 'success', 'Summarise transcript'),
+        T('Summarise transcript', 'if', 'Create work items', { cond: 'action items were found' }),
+        T('Summarise transcript', 'else', 'Save to knowledge base'),
+        T('Create work items', 'success', 'Save to knowledge base'),
+        T('Save to knowledge base', 'success', 'End · Done'),
+        T('Notify owner', 'success', 'End · Failed')
+      ],
+      'Release approval': [
+        T('Start', 'plain', 'Handle incoming email', { cond: 'When an email arrives in the company mailbox' }),
+        T('Handle incoming email', 'if', 'Check release notes', { cond: 'it is a release request' }),
+        T('Handle incoming email', 'else', 'End · Done'),
+        T('Check release notes', 'success', 'Approve release'),
+        T('Approve release', 'success', 'End · Done')
+      ]
+    };
+    const starts = { 'Company planning': 'On a schedule', 'Performance check': 'On a schedule, 02:00' };
+    const model = this.model();
+    model.forEach((r) => r.wfs.forEach((w) => {
+      if (out[w.name]) return;
+      const ps = [].concat.apply([], w.stages.map((g) => g.ps));
+      const rows = [T('Start', 'plain', ps[0].title, { cond: starts[w.name] || 'Started manually' })];
+      ps.forEach((c, i) => rows.push(T(c.title, 'success', i < ps.length - 1 ? ps[i + 1].title : 'End · Done')));
+      out[w.name] = rows;
+    }));
+    return out;
+  }
+  defaultRules() {
+    return [
+      { id: 'r1', field: 'cost', val: '5', res: 'warn' },
+      { id: 'r2', field: 'owner', val: 'agent', res: 'info' },
+      { id: 'r3', field: 'workflow', val: 'Deploy a release', res: 'ok' }
+    ];
+  }
+  matches(rule, c) {
+    if (rule.field === 'cost') return c.cost > Number(rule.val);
+    if (rule.field === 'owner') return rule.val === 'agent' ? c.agent : c.person;
+    if (rule.field === 'workflow') return c.uses.some((u) => u.wf === rule.val);
+    if (rule.field === 'role') return c.roles.indexOf(rule.val) >= 0;
+    if (rule.field === 'tag') return c.tags.indexOf(rule.val) >= 0;
+    if (rule.field === 'sharing') return rule.val === c.key;
+    if (rule.field === 'ownerRole') return !!c.owner && c.owner.name === rule.val;
+    if (rule.field === 'aiLine') return c.line === rule.val;
+    if (rule.field === 'skillMissing') return (rule.val === 'yes') === c.skillMissing;
+    if (rule.field === 'routine') return (rule.val === 'yes') === !!c.routine;
+    return false;
+  }
+  describe(rule) {
+    const names = { cost: 'Cost/run is more than ' + rule.val + ' EUR', owner: 'A holder is ' + (rule.val === 'agent' ? 'an agent' : 'a person'), workflow: 'Used in workflow ' + rule.val, role: 'Used by role ' + rule.val, tag: 'Tag includes ' + rule.val, sharing: { shared: 'Shared by several workflows', single: 'Used in one workflow', none: 'Not in any workflow' }[rule.val], ownerRole: 'Owner role is ' + rule.val, routine: rule.val === 'yes' ? 'Runs on a routine' : 'Has no routine', skillMissing: rule.val === 'yes' ? 'A required skill is missing' : 'No required skill is missing', aiLine: 'AI line is ' + ({ auto: 'Autonomous', draft: 'Drafts · person sends', never: 'Never touches' })[rule.val] };
+    return names[rule.field] || '';
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const ui = st.ui || this.props.ui || 'full';
+    const defs = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+    const resLabels = { warn: 'Warn', bad: 'Bad', info: 'Info', ok: 'OK', idle: 'Neutral' };
+    const ops = { cost: 'is more than', owner: 'is', workflow: 'is', role: 'is', tag: 'includes', sharing: 'is', ownerRole: 'is', routine: 'is', skillMissing: 'is', aiLine: 'is' };
+    const model = this.model();
+    const all = this.cards();
+    const uniq = (a) => a.filter((x, i) => a.indexOf(x) === i);
+    const roleNames = model.map((r) => r.name);
+    const wfNames = [].concat.apply([], model.map((r) => r.wfs.map((w) => w.name)));
+    const tagNames = uniq([].concat.apply([], all.map((c) => c.tags)));
+    const asChoices = (a) => a.map((t) => ({ v: t, l: t }));
+    const choices = {
+      owner: [{ v: 'agent', l: 'an agent' }, { v: 'person', l: 'a person' }],
+      workflow: asChoices(wfNames),
+      role: asChoices(roleNames),
+      tag: asChoices(tagNames),
+      sharing: [{ v: 'shared', l: 'shared by several workflows' }, { v: 'single', l: 'used in one workflow' }, { v: 'none', l: 'not in any workflow' }],
+      ownerRole: asChoices(roleNames),
+      routine: [{ v: 'yes', l: 'runs on a routine' }, { v: 'no', l: 'has no routine' }],
+      skillMissing: [{ v: 'yes', l: 'missing' }, { v: 'no', l: 'none missing' }],
+      aiLine: [{ v: 'auto', l: 'Autonomous' }, { v: 'draft', l: 'Drafts · person sends' }, { v: 'never', l: 'Never touches' }]
+    };
+    const defVal = { cost: '5', owner: 'agent', workflow: 'Deploy a release', role: 'Ops Lead', tag: 'cost-watch', sharing: 'shared', ownerRole: 'Ops Lead', routine: 'yes', skillMissing: 'yes', aiLine: 'draft' };
+    const fRole = st.fRole || 'all';
+    const fWf = st.fWf || 'all';
+    const fShare = st.fShare || 'all';
+    const fOwn = st.fOwn || 'all';
+    const fLine = st.fLine || 'all';
+    const LDS = this.lineDefs();
+    const cards = all.filter((c) => (fRole === 'all' || c.roles.indexOf(fRole) >= 0) && (fWf === 'all' || c.uses.some((u) => u.wf === fWf)) && (fShare === 'all' || fShare === c.key) && (fOwn === 'all' || (!!c.owner && c.owner.name === fOwn)) && (fLine === 'all' || (fLine === 'unset' ? c.lineUnset : c.line === fLine)));
+    const rules = st.rules || this.defaultRules();
+    const sel = st.sel || { staging: true, prod: true };
+    const selIds = cards.filter((c) => sel[c.id]).map((c) => c.id);
+    const n = selIds.length;
+    const setRules = (next, msg) => this.say(msg || '', { rules: next });
+    const patch = (i, obj) => { const next = rules.map((r, j) => (j === i ? Object.assign({}, r, obj) : r)); setRules(next); };
+    const move = (i, d) => { const j = i + d; if (j < 0 || j >= rules.length) return; const next = rules.slice(); const t = next[i]; next[i] = next[j]; next[j] = t; setRules(next, 'Rule moved to position ' + (j + 1)); };
+    const firstMatch = (c) => { for (let i = 0; i < rules.length; i++) { if (this.matches(rules[i], c)) return i; } return -1; };
+    const hits = rules.map(() => 0);
+    let none = 0;
+    const build = (c) => {
+      const m = firstMatch(c);
+      if (m >= 0) hits[m] += 1; else none += 1;
+      const r = m >= 0 ? rules[m] : null;
+      return {
+        cls: sel[c.id] ? 'on' : '',
+        selAria: 'Select ' + c.title,
+        checked: !!sel[c.id],
+        toggle: () => { const s = Object.assign({}, sel); s[c.id] = !s[c.id]; this.setState({ sel: s }); },
+        colour: r ? r.res : 'idle',
+        colourLabel: r ? resLabels[r.res] : 'None',
+        colourTip: r ? 'Rule ' + (m + 1) + ': ' + this.describe(r) : 'No rule matches this process',
+        title: c.title,
+        uses: c.uses.map((u) => ({ wf: u.wf, role: u.role })),
+        shared: c.shared,
+        noUses: c.uses.length === 0,
+        lineCls: LDS[c.line].cls, lineIcon: LDS[c.line].icon, lineLabel: LDS[c.line].label, lineTip: c.lineTip,
+        kind: c.meta ? 'Meta skill' : 'Process',
+        kindCls: c.meta ? 'info' : 'idle',
+        noUsesText: c.meta ? 'Not used in any workflow' : 'Not in any workflow',
+        metaIn: c.metaIn.length > 0,
+        metaInText: 'Step of meta skill ' + c.metaIn.map((m) => m.name).join(' and '),
+        skills: c.skillRows.map((x) => ({ cls: x.missingRoles.length ? 'warn' : 'ok', label: x.name + (x.missingRoles.length ? ' · missing' : ''), tip: x.missingRoles.length ? x.missingRoles.map((n) => n + " doesn't hold the skill " + x.name).join('. ') : 'Every role that runs this holds the skill ' + x.name })),
+        noSkills: c.skillRows.length === 0,
+        ownerName: c.owner ? c.owner.name : 'No owning role',
+        ownerWho: c.owner ? c.owner.holders.map((h) => h.n + ' · ' + h.t).join(', ') : 'Held by ' + c.meta.held.map((id) => roleNames.filter((n, i) => model[i].id === id)[0]).join(', '),
+        away: !!c.owner && c.owner.holders.some((h) => h.away),
+        awayTip: c.owner ? c.owner.holders.filter((h) => h.away).map((h) => h.n).join(' and ') + ' is away. Routines of this role still run because they are automated, but approvals they raise wait.' : '',
+        routine: !!c.routine,
+        noRoutine: !c.routine,
+        rtLabel: c.routine ? c.routine.badge : '',
+        rtNext: c.routine ? c.routine.next : '',
+        rtTip: c.routine ? 'Runs on a routine as ' + c.owner.name + (c.routine.paused ? '. The routine is paused.' : '') : '',
+        sharedLabel: 'shared · ' + c.uses.length + ' workflows',
+        sharedTip: 'Used in ' + c.uses.map((u) => u.wf + ' (' + u.role + ')').join(' and ') + '. Changes apply to all of them.',
+        tools: c.tools.length ? c.tools.join(', ') : '—',
+        missing: !!c.missing,
+        cost: c.cost.toFixed(2) + ' EUR',
+        tags: c.tags.map((t) => ({ t: t }))
+      };
+    };
+    const rows = cards.map((c) => build(c));
+    const dataRows = rows;
+    const counts = {};
+    dataRows.forEach((r) => { if (r.colourLabel !== 'None') counts[r.colour] = (counts[r.colour] || 0) + 1; });
+    const plural = (k) => (k === 1 ? ' process' : ' processes');
+    const preview = Object.keys(counts).map((k) => ({ cls: k, label: resLabels[k] + ' · ' + counts[k] + plural(counts[k]) }));
+    if (none) preview.push({ cls: 'idle', label: 'No colour · ' + none + plural(none) });
+    const exportOpen = st.exportOpen === undefined ? true : st.exportOpen;
+    const rulesOpen = st.rulesOpen === undefined ? true : st.rulesOpen;
+    const exp = (fmt) => () => this.say((n ? n + ' selected processes' : 'The shown processes') + ' exported as ' + fmt, { exportOpen: false });
+    const bulkMsg = (verb) => () => this.say(verb.replace('N', String(n)));
+    const total = Math.round(cards.filter((c) => !c.meta).reduce((s, c) => s + c.cost, 0) * 100) / 100;
+    const wfCount = uniq([].concat.apply([], cards.map((c) => c.uses.map((u) => u.wf)))).length;
+    const roleCount = uniq([].concat.apply([], cards.map((c) => c.roles))).length;
+    const sharedCount = cards.filter((c) => c.shared).length;
+    const routineCount = cards.filter((c) => c.routine).length;
+    const view = st.view || 'processes';
+    const twName = fWf === 'all' ? 'Deploy a release' : fWf;
+    const tLabels = { plain: 'Start', success: 'On success', failure: 'On failure', if: 'If condition', else: 'Else', timeout: 'On timeout' };
+    const tCls = { plain: 'idle', success: 'ok', failure: 'bad', if: 'info', else: 'idle', timeout: 'warn' };
+    const policy = (t) => {
+      if (t.type === 'failure') return t.retries > 0 ? 'Retry ' + t.retries + '× then take this path' : 'No retry';
+      if (t.type === 'if') return 'If ' + t.cond;
+      if (t.type === 'else') return 'All other cases';
+      if (t.type === 'plain') return t.cond || '—';
+      if (t.type === 'timeout') return 'After ' + t.timeout + ' min';
+      return '—';
+    };
+    const tlist = this.transitions()[twName] || [];
+    const trows = tlist.map((t) => ({ from: t.from, to: t.to, cls: tCls[t.type], typeLabel: tLabels[t.type], policy: policy(t) }));
+    return {
+      theme: cur,
+      ui: ui,
+      uiAnnounce: st.uiAnnounce || '',
+      showAll: () => this.setUi('full'),
+      toggleUi: () => this.setUi(ui === 'minimal' ? 'full' : 'minimal'),
+      uiMinPressed: ui === 'minimal' ? 'true' : 'false',
+      uiTogCls: ui === 'minimal' ? 'on' : '',
+      toast: st.toast || '',
+      showProcs: view === 'processes',
+      showTrans: view === 'transitions',
+      setProcs: () => this.setState({ view: 'processes' }),
+      setTrans: () => this.setState({ view: 'transitions' }),
+      vc: { procs: view === 'processes' ? 'on' : '', trans: view === 'transitions' ? 'on' : '' },
+      vp: { procs: view === 'processes' ? 'true' : 'false', trans: view === 'transitions' ? 'true' : 'false' },
+      viewTitle: view === 'processes' ? 'Process library' : 'Transitions of ' + twName,
+      viewCount: view === 'processes' ? cards.length : trows.length,
+      trows: trows,
+      transNote: fWf === 'all' ? 'Showing Deploy a release. Pick a workflow in the “Used in workflow” filter above to see another. Transitions belong to one workflow, so a shared process appears in each workflow it is used in.' : 'Showing the workflow chosen in the filter above.',
+      transFoot: trows.length + (trows.length === 1 ? ' transition' : ' transitions') + ' in ' + twName,
+      addCard: () => this.say('Choose how to add it: use an existing process from this library, or create a new process.'),
+      saveLens: () => this.say('Lens “Release view” saved with the current filters and colour rules'),
+      fRole: fRole,
+      fWf: fWf,
+      fShare: fShare,
+      fOwn: fOwn,
+      fLine: fLine,
+      onFLine: (e) => this.say('', { fLine: e.target.value }),
+      onFOwn: (e) => this.say('', { fOwn: e.target.value }),
+      roleOpts: [{ v: 'all', l: 'All roles' }].concat(roleNames.map((t) => ({ v: t, l: t }))),
+      wfOpts: [{ v: 'all', l: 'All workflows' }].concat(wfNames.map((t) => ({ v: t, l: t }))),
+      onFRole: (e) => this.say('', { fRole: e.target.value }),
+      onFWf: (e) => this.say('', { fWf: e.target.value }),
+      onShare: (e) => this.say('', { fShare: e.target.value }),
+      clearFilters: () => this.say('Filters cleared', { fRole: 'all', fWf: 'all', fShare: 'all', fOwn: 'all', fLine: 'all' }),
+      exportOpen: exportOpen ? 'true' : 'false',
+      exportOpenB: exportOpen,
+      toggleExport: () => this.setState({ exportOpen: !exportOpen }),
+      exp: { png: exp('PNG'), pdf: exp('PDF'), csv: exp('CSV') },
+      csvHint: n ? n + ' selected rows' : 'one row per process',
+      exportScope: n ? 'Exports the ' + n + ' selected processes. Clear the selection to export everything shown.' : 'Exports the shown processes with the active lens.',
+      rulesOpen: rulesOpen ? 'true' : 'false',
+      rulesOpenB: rulesOpen,
+      toggleRules: () => this.setState({ rulesOpen: !rulesOpen }),
+      ruleCount: rules.length,
+      shownCount: cards.length,
+      hasSel: n > 0,
+      selLabel: n === 1 ? '1 process selected' : n + ' processes selected',
+      clearSel: () => this.say('Selection cleared', { sel: {} }),
+      allSel: cards.length > 0 && n === cards.length,
+      toggleAll: () => { const every = cards.length > 0 && n === cards.length; const s = {}; if (!every) cards.forEach((c) => { s[c.id] = true; }); this.setState({ sel: s }); },
+      delTip: 'Deletes ' + n + (n === 1 ? ' process' : ' processes') + ' and their connections.',
+      bulk: {
+        workflow: bulkMsg('Pick a workflow to also use N processes in. They stay in the library once.'),
+        owner: bulkMsg('Pick the owner role for N processes. Their routines run as that role.'),
+        tag: bulkMsg('Type a tag to add to N processes'),
+        del: bulkMsg('N processes deleted with their connections')
+      },
+      rows: rows,
+      noRows: cards.length === 0,
+      footLabel: cards.filter((c) => !c.meta).length + (cards.filter((c) => !c.meta).length === 1 ? ' process' : ' processes') + ' · ' + cards.filter((c) => c.meta).length + ' meta skills · ' + sharedCount + ' shared · ' + routineCount + ' on a routine · used in ' + wfCount + (wfCount === 1 ? ' workflow' : ' workflows') + ' · ' + roleCount + (roleCount === 1 ? ' role' : ' roles'),
+      footCost: 'Total ' + total.toFixed(2) + ' EUR if each runs once',
+      rules: rules.map((r, i) => ({
+        n: i + 1,
+        aria: 'Rule ' + (i + 1) + ': ' + this.describe(r) + ', colour ' + resLabels[r.res],
+        dragAria: 'Reorder rule ' + (i + 1),
+        fid: 'rf-' + r.id, vid: 'rv-' + r.id, rid: 'rr-' + r.id,
+        field: r.field,
+        onField: (e) => patch(i, { field: e.target.value, val: defVal[e.target.value] }),
+        op: ops[r.field],
+        isNum: r.field === 'cost',
+        isChoice: r.field !== 'cost',
+        choices: choices[r.field] || [],
+        val: r.val,
+        onVal: (e) => patch(i, { val: e.target.value }),
+        res: r.res,
+        resLabel: resLabels[r.res],
+        onRes: (e) => patch(i, { res: e.target.value }),
+        matchLabel: hits[i] === 1 ? '1 process' : hits[i] + ' processes',
+        first: i === 0,
+        last: i === rules.length - 1,
+        upAria: 'Move rule ' + (i + 1) + ' up',
+        downAria: 'Move rule ' + (i + 1) + ' down',
+        rmAria: 'Remove rule ' + (i + 1),
+        up: () => move(i, -1),
+        down: () => move(i, 1),
+        remove: () => setRules(rules.filter((x, j) => j !== i), 'Rule ' + (i + 1) + ' removed')
+      })),
+      noRules: rules.length === 0,
+      addRule: () => { const id = 'r' + (Date.now() % 100000); setRules(rules.concat([{ id: id, field: 'tag', val: 'cost-watch', res: 'warn' }]), 'Rule added at the end. Set its condition and colour.'); },
+      resetRules: () => setRules(this.defaultRules(), 'Rules reset to the saved version'),
+      applyRules: () => this.say('Colour rules applied to the Process canvas'),
+      preview: preview,
+      themes: defs.map(([id, label]) => ({
+        label: label,
+        cls: id === cur ? 'on' : '',
+        pressed: id === cur ? 'true' : 'false',
+        pick: () => { try { window.localStorage.setItem('autobot-theme', id); } catch (e) {} this.setState({ theme: id }); }
+      }))
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -52,7 +52,6 @@
 # (integration/slow/distributed/performance) run on a schedule instead and can
 # surface owners this list does not have.
 
-autobot-backend/code_intelligence/conftest.py
 autobot-backend/conftest.py
 autobot-backend/llm_shared/npu_pipeline_routing_test.py
 autobot-backend/tests/orchestration/test_causal_error_recovery.py
@@ -68,7 +67,6 @@ autobot-slm-backend/tests/api/test_collect_outdated_node_ids.py
 autobot-slm-backend/tests/api/test_fleet_health.py
 autobot-slm-backend/tests/api/test_node_update_availability_11964.py
 autobot-slm-backend/tests/api/test_nodes_list_timeout_10913.py run-phase
-autobot-slm-backend/tests/api/test_slm_endpoints_12515.py
 autobot-slm-backend/tests/services/conftest.py
 autobot-slm-backend/tests/services/test_deploy_artifacts_lockstep.py
 autobot-slm-backend/tests/services/test_llm_secrets.py

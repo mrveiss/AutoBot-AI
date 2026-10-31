@@ -139,6 +139,10 @@ on:
     paths:
       - '.github/workflows/marker-tests.yml'
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - '.github/workflows/marker-tests.yml'
 
@@ -148,9 +152,11 @@ concurrency:
 
 permissions:
   contents: read
+  packages: read  # pull the ghcr CI image mirror (#18160)
 
 jobs:
   marker-tests:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: Run slow / integration / distributed / performance tests
     runs-on: ubuntu-latest
     timeout-minutes: 180
@@ -161,7 +167,13 @@ jobs:
     # on connection errors and say nothing about the tests themselves.
     services:
       redis:
-        image: redis:7-alpine
+        # Mirror of the upstream image (ci-image-mirror.yml, #18160): anonymous
+        # pulls hit the per-IP quota. The ghcr packages must be public or grant
+        # this repo read access so fork PRs can pull them.
+        image: ghcr.io/mrveiss/ci-redis:7-alpine
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
         ports:
           - 6379:6379
         options: >-
@@ -240,8 +252,7 @@ jobs:
                   ollama:
                     selected_model: "mock-embed"
 
-          deployment:
-            mode: "local"
+          # #19316: no deployment.mode -- AUTOBOT_DEPLOYMENT_MODE is the one home; unset is auto-detect.
 
           data:
             reliability_stats_file: "data/reliability_stats.json"
@@ -296,7 +307,7 @@ jobs:
           # this same root list in ci.yml, coverage.yml and test-durations.yml, which
           # all deselect markers instead of selecting them.
           python -m pytest \
-            autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks .claude/skills/claims-audit autobot-infrastructure/shared/tests libs \
+            autobot-backend autobot_shared autobot-tts-worker repo_tests tools scripts pipeline-scripts autobot-infrastructure/shared/scripts/hooks autobot-infrastructure/shared/scripts/monitoring .claude/skills/claims-audit autobot-infrastructure/shared/tests libs plugins/core-plugins \
             -n auto --dist loadscope \
             -m "$MARKER_EXPRESSION" \
             --junitxml=marker-report-backend.xml \
@@ -406,7 +417,7 @@ jobs:
 
       - name: Upload marker reports
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: marker-suite-reports
           path: marker-report-*.xml

@@ -9,8 +9,9 @@ between autobot-backend/migrations/db_url.py and
 autobot-slm-backend/api/code_sync.py into a single primitive.
 
 Only the string-assembly step is shared; each caller retains its own
-precedence logic (AUTOBOT_DATABASE_URL, deployment-config, etc.) and its
-own default values, which legitimately differ.
+precedence logic (AUTOBOT_DATABASE_URL, deployment-config, etc.). The
+default user/DB come from ``autobot_shared.postgres_identity`` (#19320); a
+caller overriding them passes identity names, never a literal.
 
 Caller contract
 ---------------
@@ -25,14 +26,16 @@ from __future__ import annotations
 
 from typing import Mapping
 
+from autobot_shared import postgres_identity as _pg
+
 
 def assemble_postgres_url(
     source: Mapping[str, str],
     *,
     default_host: str = "",
-    default_port: str = "5432",
-    default_user: str = "autobot",
-    default_db: str = "autobot",
+    default_port: str = str(_pg.DB_PORT),
+    default_user: str = _pg.USERS_DB_ROLE,
+    default_db: str = _pg.USERS_DB_NAME,
     password_default: str = "",
 ) -> str:
     """Build a ``postgresql://`` URL from AUTOBOT_POSTGRES_* component vars.

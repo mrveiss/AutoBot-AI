@@ -44,13 +44,13 @@ from autobot_shared.coordination.dev_loop_actions import (
     OUTCOME_REFUSED_BUDGET,
     OUTCOME_SKIPPED_CLAIMED,
     build_action,
-    record,
+    record_dev_loop_action,
 )
 from autobot_shared.coordination.work_claims import (
     CLAIM_TTL_S,
     ClaimConflict,
     ClaimMode,
-    release,
+    release_scope,
     renew,
     try_acquire,
 )
@@ -182,7 +182,7 @@ async def run_dev_loop_action(
         with contextlib.suppress(BaseException):
             await renewal_task
         try:
-            await release(scope, agent_id=DEV_LOOP_AGENT_ID, task_id=task_id)
+            await release_scope(scope, agent_id=DEV_LOOP_AGENT_ID, task_id=task_id)
         except Exception:  # noqa: BLE001 -- see below; this must not mask the action's own error
             # `release` reaches Redis and can raise (ClaimUnavailable on an
             # outage). Raised from inside this `finally` it would REPLACE the
@@ -205,7 +205,7 @@ async def _record(issue_number: int, intent: str, outcome: str, estimated_tokens
     that never invoke the action -- a refusal that leaves no trace cannot be
     told apart from an action nobody attempted.
     """
-    written = await record(
+    written = await record_dev_loop_action(
         build_action(
             issue_number,
             intent=intent,
@@ -215,7 +215,7 @@ async def _record(issue_number: int, intent: str, outcome: str, estimated_tokens
         )
     )
     if not written:
-        # `record` already logged the cause; this names what was lost, because a
+        # `record_dev_loop_action` already logged the cause; this names what was lost, because a
         # discarded False is the difference between a healthy audit trail and a
         # silently degraded one (review).
         logger.warning("dev loop: issue #%s's %s outcome is NOT in the action history", issue_number, outcome)

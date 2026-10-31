@@ -11,6 +11,7 @@
 
 import { ref, computed, onMounted, watch } from 'vue'
 import { SshTerminal } from '@autobot/terminal'
+import { BaseAlert } from '@autobot/ui'
 import { getSlmApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { useAuthStore } from '@/stores/auth'
@@ -151,27 +152,27 @@ function onError(message: string) {
 
       <!-- #15227: an unreadable node list is never shown as an empty or a
            current fleet. It says which it is, and offers the retry. -->
-      <div
+      <BaseAlert
         v-if="fleet.error"
-        class="m-3 p-3 bg-amber-50 border border-amber-200 rounded text-sm text-amber-800 flex items-center justify-between gap-3"
+        variant="warning"
+        size="compact"
+        class="m-3"
+        :message="isShowingStaleList
+          ? $t('tools.admin.terminalTool.nodeListStale')
+          : $t('tools.admin.terminalTool.nodeListUnavailable')"
       >
-        <span>
-          {{ isShowingStaleList
-            ? $t('tools.admin.terminalTool.nodeListStale')
-            : $t('tools.admin.terminalTool.nodeListUnavailable') }}
-        </span>
-        <button
-          class="px-2 py-1 text-xs border border-amber-300 rounded-sm hover:bg-amber-100 transition-colors"
-          :disabled="fleet.isLoading"
-          @click="loadNodes"
-        >
-          {{ $t('tools.admin.terminalTool.retryNodeList') }}
-        </button>
-      </div>
+        <template #actions>
+          <button
+            class="px-2 py-1 text-xs border border-amber-300 rounded-sm hover:bg-amber-100 transition-colors"
+            :disabled="fleet.isLoading"
+            @click="loadNodes"
+          >
+            {{ $t('tools.admin.terminalTool.retryNodeList') }}
+          </button>
+        </template>
+      </BaseAlert>
 
-      <div v-if="connectionError" class="m-3 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-700">
-        {{ connectionError }}
-      </div>
+      <BaseAlert v-if="connectionError" variant="error" class="m-3" :message="connectionError" />
 
       <div class="flex-1 overflow-hidden">
         <SshTerminal

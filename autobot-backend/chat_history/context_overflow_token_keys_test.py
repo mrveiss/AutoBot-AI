@@ -20,27 +20,10 @@ so any consumer of these counters saw a permanently empty session.
 import pytest
 
 from chat_history.context_overflow import _TOKEN_TRACKER_KEY_PREFIX, SessionTokenTracker
+from testkit.fake_redis_pipeline import FakeAsyncPipeline
 
 SESSION = "session-abc"
 SESSION_KEY = f"{_TOKEN_TRACKER_KEY_PREFIX}{SESSION}"
-
-
-class _FakePipeline:
-    """Captures hincrby/expire the way redis-py's pipeline does."""
-
-    def __init__(self, store):
-        self._store = store
-        self.expire_calls = []
-
-    def hincrby(self, key, field, amount):
-        self._store.setdefault(key, {})
-        self._store[key][field] = int(self._store[key].get(field, 0)) + amount
-
-    def expire(self, key, ttl):
-        self.expire_calls.append((key, ttl))
-
-    async def execute(self):
-        return []
 
 
 class _FakeAsyncRedis:
@@ -51,7 +34,14 @@ class _FakeAsyncRedis:
         self._decoded = decoded
 
     def pipeline(self):
-        return _FakePipeline(self._hashes)
+        return FakeAsyncPipeline(self)
+
+    async def hincrby(self, key, field, amount):
+        self._hashes.setdefault(key, {})
+        self._hashes[key][field] = int(self._hashes[key].get(field, 0)) + amount
+
+    async def expire(self, key, ttl):
+        return True
 
     async def hgetall(self, key):
         raw = self._hashes.get(key, {})

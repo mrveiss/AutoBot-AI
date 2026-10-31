@@ -14,6 +14,7 @@ AgentStatus values. Cross-reference: GH#7504.
 
 from enum import Enum
 
+from autobot_shared.status_enums import Priority
 from models.approval import ApprovalStatus, ApprovalType  # noqa: F401
 
 
@@ -60,13 +61,19 @@ class WorkItemStatus(str, Enum):
     BLOCKED = "blocked"
 
 
-class WorkItemPriority(str, Enum):
-    """Priority of an LLC work item (GH#8213)."""
+#: The four rungs a work item is ranked on, in declaration order. Members are DERIVED from the
+#: canonical `Priority` (#18098), not re-typed: the vocabulary has one home. Deliberately a
+#: subset -- the database enum `workitempriority` has exactly these four labels and the API
+#: accepts exactly these four, so `normal` and `urgent` must not become valid here.
+_WORK_ITEM_PRIORITIES = (Priority.CRITICAL, Priority.HIGH, Priority.MEDIUM, Priority.LOW)
 
-    CRITICAL = "critical"
-    HIGH = "high"
-    MEDIUM = "medium"
-    LOW = "low"
+WorkItemPriority = Enum(
+    "WorkItemPriority",
+    [(p.name, p.value) for p in _WORK_ITEM_PRIORITIES],
+    type=str,
+    module=__name__,
+)
+WorkItemPriority.__doc__ = "Priority of an LLC work item (GH#8213)."
 
 
 class BudgetMode(str, Enum):
@@ -179,12 +186,20 @@ _NONTERMINAL_RUN_STATUSES = frozenset({LLCRunStatus.QUEUED, LLCRunStatus.RUNNING
 
 
 class HeartbeatInvocationSource(str, Enum):
-    """How a heartbeat run was triggered (GH#8225, GH#9624)."""
+    """How a heartbeat run was triggered (GH#8225, GH#9624, #19582).
+
+    The four ``WORK_ITEM_*`` / ``AGENT_MENTIONED`` / ``APPROVAL_DECIDED`` members are
+    the event wakes: they start a run through ``llc.scheduler.event_wake.wake_agent``
+    whether or not the agent's periodic heartbeat is on.
+    """
 
     SCHEDULER = "scheduler"
     MANUAL = "manual"
     CALLBACK = "callback"
     WORK_ITEM_COMMENTED = "work_item_commented"
+    WORK_ITEM_ASSIGNED = "work_item_assigned"
+    AGENT_MENTIONED = "agent_mentioned"
+    APPROVAL_DECIDED = "approval_decided"
 
 
 class ContextMode(str, Enum):
@@ -439,6 +454,8 @@ class ActivityEventType(str, Enum):
     CONTROL_AGENT_PAUSED = "control.agent_paused"
     CONTROL_AGENT_RESUMED = "control.agent_resumed"
     CONTROL_AGENT_TERMINATED = "control.agent_terminated"
+    # #15907: the periodic heartbeat switched on or off for one agent.
+    CONTROL_AGENT_HEARTBEAT_SET = "control.agent_heartbeat_set"
     CONTROL_SPRINT_PAUSED = "control.sprint_paused"
     CONTROL_SPRINT_RESUMED = "control.sprint_resumed"
     CONTROL_COMPANY_PAUSED = "control.company_paused"

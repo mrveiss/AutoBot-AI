@@ -22,6 +22,7 @@ from redis.exceptions import RedisError
 
 from autobot_shared.user_management.password_epoch import (
     PASSWORD_EPOCH_PREFIX,
+    MalformedTokenClaims,
     RevocationCheckUnavailable,
     get_password_epoch,
     is_token_revoked_by_password_change,
@@ -65,6 +66,14 @@ async def test_pre_12924_token_without_iat_is_not_revoked():
     """Deploying this must not sign out everyone holding an older token."""
     with patch(_MOD, AsyncMock(return_value=_redis(get_value="1000"))):
         assert await is_token_revoked_by_password_change({"sub": "alice"}) is False
+
+
+@pytest.mark.asyncio
+async def test_a_login_token_with_only_a_username_claim_is_revoked():
+    """Backend login tokens carry ``username`` and no ``sub``; the epoch must still apply (#19061)."""
+    with patch(_MOD, AsyncMock(return_value=_redis(get_value="1000"))):
+        assert await is_token_revoked_by_password_change({"username": "alice", "iat": 999}) is True
+        assert await is_token_revoked_by_password_change({"username": "alice", "iat": 1001}) is False
 
 
 @pytest.mark.asyncio
@@ -130,9 +139,9 @@ async def test_a_corrupt_epoch_marker_fails_closed():
 @pytest.mark.asyncio
 @pytest.mark.parametrize("epoch", ["1000", None])
 async def test_a_non_integer_iat_fails_closed(epoch):
-    """#16422: denied whether or not the subject has a marker -- it cannot be placed either way."""
+    """#16422: denied whether or not the subject has a marker; #18892: as a bad credential, not an outage."""
     with patch(_MOD, AsyncMock(return_value=_redis(get_value=epoch))):
-        with pytest.raises(RevocationCheckUnavailable):
+        with pytest.raises(MalformedTokenClaims):
             await is_token_revoked_by_password_change({"sub": "alice", "iat": "not-a-number"})
 
 

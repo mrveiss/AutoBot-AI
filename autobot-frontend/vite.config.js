@@ -11,6 +11,7 @@ import { defineConfig, loadEnv } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import pkg from './package.json'
+import { autobotUiResolve } from '../libs/autobot-ui/vite-resolve.ts'
 
 /**
  * Copy VAD static assets (ONNX runtime WASM + Silero model + worklet bundle)
@@ -45,7 +46,10 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const config = {
     backend: { host: env.VITE_BACKEND_HOST || '127.0.0.1', port: env.VITE_BACKEND_PORT || '8001' },
-    browser: { host: env.VITE_BROWSER_HOST || '127.0.0.1', port: env.VITE_BROWSER_PORT || '3000' },
+    // #19324: 9001, pinned to PORT_DEFAULTS.browser in src/config/ssot-config.ts by
+    // repo_tests/browser_port_single_home_19324_test.py. That module runs getConfig()
+    // at import (import.meta.env), which vite's own config cannot evaluate.
+    browser: { host: env.VITE_BROWSER_HOST || '127.0.0.1', port: env.VITE_BROWSER_PORT || '9001' },
     vnc: { host: env.VITE_DESKTOP_VNC_HOST || env.VITE_BACKEND_HOST || '127.0.0.1', port: env.VITE_DESKTOP_VNC_PORT || '6080' },
     protocol: env.VITE_HTTP_PROTOCOL || 'http'
   }
@@ -68,7 +72,13 @@ export default defineConfig(({ mode }) => {
       // (node_modules/@autobot/terminal) not the real path (../../autobot-plugins/…).
       // Required for file: workspace packages — see #8482 / MVA-893.
       preserveSymlinks: true,
-      alias: { '@': fileURLToPath(new URL('./src', import.meta.url)), 'vue': 'vue/dist/vue.esm-bundler.js' }
+      // #17959: pin @autobot/ui to the in-tree kit and dedupe its bare imports.
+      dedupe: autobotUiResolve().dedupe,
+      alias: [
+        ...autobotUiResolve().alias,
+        { find: '@', replacement: fileURLToPath(new URL('./src', import.meta.url)) },
+        { find: 'vue', replacement: 'vue/dist/vue.esm-bundler.js' },
+      ]
     },
     server: {
       port: 5173,

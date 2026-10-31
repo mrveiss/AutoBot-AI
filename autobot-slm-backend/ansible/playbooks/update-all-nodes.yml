@@ -16,7 +16,7 @@
 #
 # Tags:
 #   restart              - all service restart tasks (skip for code-only deploys)
-#   deps                 - pip install / npm ci tasks (skip for code-only deploys) (#1603)
+#   deps                 - pip install / npm ci tasks and the Node.js upgrade (skip for code-only deploys) (#1603, #19661)
 #   backend              - autobot-backend deploy + restart tasks
 #   frontend             - autobot-frontend deploy + build + nginx restart tasks
 #   npu, npu-worker      - NPU worker deploy + restart tasks
@@ -95,12 +95,12 @@
     # component's own bootstrap plan needs full history
     # (services/sync_deletions.py's `git log --diff-filter=AR`), so this
     # runs once here, before any component's plan, through the same
-    # scrubbed-env git helper (services/git_subprocess.py:run_git) the
+    # scrubbed-env git helper (services/git_subprocess.py:run_git_capture) the
     # planner itself uses -- never an ad-hoc `git fetch` in this playbook.
     - name: "[PRE-FLIGHT] Ensure code_source has full history, not a shallow clone (#16310)"
       ansible.builtin.command:
         cmd: >-
-          /opt/autobot/autobot-slm-backend/venv/bin/python3
+          {{ autobot.base_dir }}/autobot-slm-backend/venv/bin/python3
           {{ git_repo_root }}/autobot-slm-backend/scripts/sync_deletion_planner.py
           ensure-full-history --repo-root {{ git_repo_root }}
       # Query/fixup step, like the git-status commands around it -- ansible's
@@ -212,7 +212,7 @@
     # which is the correct base for "what is this deploy about to change".
     - name: "[PRE-FLIGHT] Read the currently deployed commit (#15430)"
       ansible.builtin.slurp:
-        src: /opt/autobot/autobot-slm-backend/.deployed_commit
+        src: "{{ autobot.base_dir }}/autobot-slm-backend/.deployed_commit"
       register: deployed_commit_raw
       failed_when: false
 
@@ -235,7 +235,7 @@
       shell: >-
         git -c safe.directory={{ git_repo_root }} -C {{ git_repo_root }} diff --name-only
         {{ deps_diff_base }} HEAD
-        -- '*/requirements.txt' 'autobot_shared/pyproject.toml'
+        -- '*/requirements.txt' 'requirements.txt' 'constraints/' 'autobot_shared/pyproject.toml'
       when: deps_diff_base | length > 0
       register: python_deps_diff
       changed_when: false
@@ -263,8 +263,27 @@
     - name: "[PRE-FLIGHT] Check the installed node tree satisfies package.json (#15430)"
       ansible.builtin.command:
         cmd: npm ls --depth=0
-        chdir: /opt/autobot/autobot-slm-frontend
+        chdir: "{{ autobot.base_dir }}/autobot-slm-frontend"
       register: node_tree_check
+      changed_when: false
+      failed_when: false
+
+    # #20002: the Python half of the same recovery. The marker advances even when a run's pip step then
+    # fails, so the bump leaves the diff window and no later run installs it. Only "Would install" counts:
+    # a dry run that fails (no network, say) must not make an offline host's update depend on pip. It runs
+    # from the component's directory because a manifest's editable is relative (#15733), and that editable
+    # is always listed, so it is dropped or a healthy host would run pip on every update.
+    # Reaches the venvs on this controller; a fleet node's venv still relies on the diff.
+    - name: "[PRE-FLIGHT] Check the installed venvs satisfy their manifests (#20002)"
+      ansible.builtin.shell: >-
+        for c in autobot-slm-backend autobot-backend; do
+        [ -x "{{ autobot.base_dir }}/$c/venv/bin/pip" ] || continue;
+        cd "{{ git_repo_root }}/$c" || continue;
+        "{{ autobot.base_dir }}/$c/venv/bin/pip" install --dry-run --disable-pip-version-check --retries 0
+        -r requirements.txt 2>/dev/null
+        | grep '^Would install' | sed -E 's/ autobot[_-]shared-[^ ]+//' | grep -v '^Would install$';
+        done
+      register: python_tree_check
       changed_when: false
       failed_when: false
 
@@ -276,7 +295,8 @@
         # time and nothing else.
         python_deps_changed: >-
           {{ true if (deps_diff_base | length == 0)
-             else (python_deps_diff.stdout | default('') | length > 0) }}
+             else ((python_deps_diff.stdout | default('') | length > 0)
+                   or ('Would install' in (python_tree_check.stdout | default('')))) }}
         # Either the manifests changed in this deployment span, OR the tree
         # already on disk does not satisfy them. The second disjunct is what
         # makes a drifted host self-heal instead of failing every deploy.
@@ -346,6 +366,15 @@
           - "======================================================="
           - "  Target: {{ inventory_hostname }} ({{ ansible_host }})"
 
+    # #19661: every host here runs npm, so it needs node_major. This comes before any code lands
+    # on the host, and a failure stops the update here: the build needs this Node.js anyway.
+    - name: "[PLAY 1] Ensure Node.js is on node_major"
+      ansible.builtin.include_role:
+        name: nodejs
+        apply:
+          tags: [slm, slm-frontend, deps]
+      tags: [slm, slm-frontend, deps]
+
     # #16522/#16566 review: see [PLAY 2] Backend's identical note further
     # down -- the shared TLS cert-ensure task must be reachable from the
     # routine fleet updater, not just full provisioning. slm_manager needs
@@ -358,21 +387,21 @@
     - name: "[PLAY 1] SLM | Deploy autobot-slm-backend"
       unarchive:
         src: "{{ deploy_tmp }}/slm-backend.tar.gz"
-        dest: /opt/autobot/
+        dest: "{{ autobot.base_dir }}/"
       become: true
       tags: [slm, slm-backend]
 
     - name: "[PLAY 1] SLM | Deploy autobot-slm-frontend"
       unarchive:
         src: "{{ deploy_tmp }}/slm-frontend.tar.gz"
-        dest: /opt/autobot/
+        dest: "{{ autobot.base_dir }}/"
       become: true
       tags: [slm, slm-frontend]
 
     - name: "[PLAY 1] SLM | Deploy autobot_shared"
       unarchive:
         src: "{{ deploy_tmp }}/shared.tar.gz"
-        dest: /opt/autobot/
+        dest: "{{ autobot.base_dir }}/"
       become: true
       tags: [slm, shared]
 
@@ -381,20 +410,20 @@
     - name: "[PLAY 1] SLM | Deploy libs (workspace packages)"
       unarchive:
         src: "{{ deploy_tmp }}/libs.tar.gz"
-        dest: /opt/autobot/
+        dest: "{{ autobot.base_dir }}/"
       become: true
       tags: [slm, slm-frontend, libs]
 
     - name: "[PLAY 1] SLM | Deploy autobot-plugins (workspace packages)"
       unarchive:
         src: "{{ deploy_tmp }}/plugins.tar.gz"
-        dest: /opt/autobot/
+        dest: "{{ autobot.base_dir }}/"
       become: true
       tags: [slm, slm-frontend, plugins]
 
     - name: "[PLAY 1] SLM | Fix ownership (unarchive runs as root)"
       file:
-        path: "/opt/autobot/{{ item }}"
+        path: "{{ autobot.base_dir }}/{{ item }}"
         owner: autobot
         group: autobot
         recurse: true
@@ -478,7 +507,7 @@
       ansible.builtin.include_tasks: ../roles/_shared/tasks/record_slm_deployed_commit.yml
       vars:
         deployed_commit_label: "[PLAY 1] SLM"
-        deployed_commit_dir: /opt/autobot/autobot-slm-backend
+        deployed_commit_dir: "{{ autobot.base_dir }}/autobot-slm-backend"
         deployed_commit_owner: autobot
       tags: [slm]
 
@@ -499,11 +528,23 @@
         tasks_from: service_units.yml
       tags: [slm, systemd]
 
+    # #19051: the #14758 root-key back-fill, from the SAME task file the role
+    # uses. Only the role ran it, and this play never runs the role, so a host
+    # kept current by the updater alone never got a key: the backend rendered
+    # `AUTOBOT_SECRETS_ROOT_KEY=` and every System vault call returned 503. It
+    # runs here, before PLAY 2 renders the backend env from the SLM secrets
+    # file. Add-only: an existing key is never rotated.
+    - name: "[PLAY 1] SLM | Back-fill AUTOBOT_SECRETS_ROOT_KEY into the SLM secrets file (#19051)"
+      ansible.builtin.include_role:
+        name: slm_manager
+        tasks_from: secrets_root_key.yml
+      tags: [slm, secrets]
+
     # Issue #9225: slm-agent needs autobot_shared in PYTHONPATH
     - name: "[PLAY 1] SLM Agent | Create autobot_shared symlink for agent imports"
       ansible.builtin.file:
         src: ../autobot_shared
-        dest: /opt/autobot/autobot-slm-agent/autobot_shared
+        dest: "{{ autobot.base_dir }}/autobot-slm-agent/autobot_shared"
         state: link
         force: true
         owner: autobot
@@ -515,7 +556,7 @@
     - name: "[PLAY 1] SLM Backend | Create autobot_shared symlink for backend imports"
       ansible.builtin.file:
         src: ../autobot_shared
-        dest: /opt/autobot/autobot-slm-backend/autobot_shared
+        dest: "{{ autobot.base_dir }}/autobot-slm-backend/autobot_shared"
         state: link
         force: true
         owner: autobot
@@ -536,6 +577,17 @@
       vars:
         db_env_prefix: SLM
       tags: [slm, slm-backend, credentials]
+    #
+    # #19848: the role's postgresql.conf, so a change to a rendered setting (#19421's
+    # listen_addresses) reaches an existing host. config_file skips a host without PostgreSQL,
+    # needs no db_user and never touches pg_hba; PostgreSQL restarts only if the file changed.
+    - name: "[PLAY 1] SLM | Apply PostgreSQL's server config (#19848)"
+      ansible.builtin.include_role:
+        name: postgresql
+        tasks_from: config_file
+        apply:
+          become: true
+      tags: [slm, postgresql]
 
     # --- SLM custom migrations (#1630) ---
     - name: "[PLAY 1] SLM | Load db credentials for migration (#2293)"
@@ -556,13 +608,13 @@
     - name: "[PLAY 1] SLM | Run database migrations (#1630)"
       command:
         cmd: >-
-          /opt/autobot/autobot-slm-backend/venv/bin/python
+          {{ autobot.base_dir }}/autobot-slm-backend/venv/bin/python
           -m migrations.runner
-        chdir: /opt/autobot/autobot-slm-backend
+        chdir: "{{ autobot.base_dir }}/autobot-slm-backend"
       become: true
       become_user: autobot
       environment:
-        PYTHONPATH: /opt/autobot/autobot-slm-backend
+        PYTHONPATH: "{{ autobot.base_dir }}/autobot-slm-backend"
         DATABASE_URL: "{{ slm_db_url | default('') }}"
       register: slm_migration_result
       failed_when: false
@@ -577,10 +629,22 @@
       tags: [slm, slm-backend, migrate]
 
     # --- Dependency install (#1603) ---
+    # #19973: pip stops at a husk (uninstall-no-record-file) and cannot reach the update that fixes it.
+    - name: "[PLAY 1] SLM | Clear venv husks before pip (#17339)"
+      ansible.builtin.include_tasks:
+        file: ../roles/_shared/tasks/clear_venv_husks.yml
+        apply:
+          tags: [slm, deps]
+      vars:
+        husk_venv_dir: "{{ autobot.base_dir }}/autobot-slm-backend/venv"
+      when: hostvars['localhost']['python_deps_changed'] | bool
+      tags: [slm, deps]
+
     - name: "[PLAY 1] SLM | Install Python dependencies"
       command:
-        cmd: /opt/autobot/autobot-slm-backend/venv/bin/pip install
-             -r /opt/autobot/autobot-slm-backend/requirements.txt
+        cmd: >-
+             {{ autobot.base_dir }}/autobot-slm-backend/venv/bin/pip install
+             -r {{ autobot.base_dir }}/autobot-slm-backend/requirements.txt
              -c {{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/constraints/shared.txt
              --quiet --timeout 120
       become: true
@@ -595,10 +659,10 @@
     - name: "[PLAY 1] SLM | Install Node.js dependencies"
       command:
         cmd: npm ci --ignore-scripts
-        chdir: /opt/autobot/autobot-slm-frontend
+        chdir: "{{ autobot.base_dir }}/autobot-slm-frontend"
       become: true
       become_user: autobot
-      when: hostvars['localhost']['node_deps_changed'] | bool
+      when: (hostvars['localhost']['node_deps_changed'] | bool) or (_nodejs_upgraded | default(false) | bool)
       register: slm_npm_install
       tags: [slm, slm-frontend, deps]
 
@@ -612,7 +676,7 @@
       ansible.builtin.include_tasks: ../roles/_shared/tasks/build_publish_slm_frontend.yml
       vars:
         slm_frontend_publish_label: "[PLAY 1] SLM"
-        slm_frontend_publish_dir: /opt/autobot/autobot-slm-frontend
+        slm_frontend_publish_dir: "{{ autobot.base_dir }}/autobot-slm-frontend"
         slm_frontend_publish_user: autobot
       tags: [slm, slm-frontend]
 
@@ -688,6 +752,17 @@
       delegate_to: localhost
       tags: [always]
 
+    # #19318: resolved by the one shared reader -- never a default password. Best-effort:
+    # unresolved leaves it empty and the login below is refused, skipping sync tracking.
+    - name: "[PLAY 1] SLM | Resolve the SLM admin password (#19318)"
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/read_slm_admin_password.yml
+        apply:
+          tags: [always]
+      vars:
+        require_slm_admin_password: false
+      tags: [always]
+
     - name: "[PLAY 1] SLM | Login to get auth token"
       uri:
         url: "https://{{ ansible_host }}/slm/api/auth/login"
@@ -695,7 +770,7 @@
         body_format: json
         body:
           username: "admin"
-          password: "{{ slm_admin_password | default('admin') }}"
+          password: "{{ slm_admin_password }}"
         validate_certs: false
         status_code: [200, 401, 403]
       register: slm_login_play1
@@ -733,6 +808,7 @@
       ignore_errors: true
       when: slm_login_play1.status == 200
       tags: [always]
+      no_log: true  # #19764: credentials in the request or response
 
     - name: "[PLAY 1] SLM Update Complete"
       debug:
@@ -767,8 +843,18 @@
 
   vars:
     deploy_tmp: "/tmp/autobot-deploy"
+    node_cert_dir: "{{ autobot_tls_remote_cert_dir | default('/etc/autobot/certs') }}"  # #19366
 
   pre_tasks:
+    - name: "[PLAY 2] Resolve the SLM admin password (#19318)"
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/read_slm_admin_password.yml
+        apply:
+          tags: [always]
+      vars:
+        require_slm_admin_password: false
+      tags: [always]
+
     - name: "[PLAY 2] Login to SLM API"
       uri:
         url: "https://{{ slm_host }}/slm/api/auth/login"
@@ -776,7 +862,7 @@
         body_format: json
         body:
           username: "admin"
-          password: "{{ slm_admin_password | default('admin') }}"
+          password: "{{ slm_admin_password }}"
         validate_certs: false
         status_code: [200, 401, 403]
       register: slm_login
@@ -801,6 +887,16 @@
       tags: [always]
 
   tasks:
+    # #19661: every host here runs npm, so it needs node_major. This comes before any code lands
+    # on the host, and a failure stops the update here: the build needs this Node.js anyway.
+    - name: "[PLAY 2] Ensure Node.js is on node_major"
+      ansible.builtin.include_role:
+        name: nodejs
+        apply:
+          tags: [frontend, browser, browser-worker, deps]
+      when: "'frontend' in group_names or 'browser' in group_names"
+      tags: [frontend, browser, browser-worker, deps]
+
     # #17243: the pip steps below constrain against constraints/shared.txt, but
     # they used to reference it inside `code_source` -- the git checkout, which
     # exists only on the manager. On an infrastructure node that path is absent
@@ -864,8 +960,8 @@
         owner: autobot
         group: autobot
       loop:
-        - /etc/autobot/certs/server-key.pem
-        - /etc/autobot/certs/server-cert.pem
+        - "{{ node_cert_dir }}/server-key.pem"
+        - "{{ node_cert_dir }}/server-cert.pem"
       become: true
       when: "'backend' in group_names"
       tags: [backend]
@@ -873,7 +969,7 @@
     - name: "[PLAY 2] Backend | Deploy autobot-backend"
       unarchive:
         src: "{{ deploy_tmp }}/backend.tar.gz"
-        dest: /opt/autobot/
+        dest: "{{ autobot.base_dir }}/"
       become: true
       when: "'backend' in group_names"
       tags: [backend]
@@ -881,13 +977,13 @@
     - name: "[PLAY 2] Backend | Deploy autobot_shared"
       unarchive:
         src: "{{ deploy_tmp }}/shared.tar.gz"
-        dest: /opt/autobot/
+        dest: "{{ autobot.base_dir }}/"
       become: true
       when: "'backend' in group_names"
       tags: [backend, shared]
 
     - name: "[PLAY 2] Backend | Fix ownership"
-      command: chown --no-dereference -R autobot:autobot /opt/autobot/autobot-backend
+      command: chown --no-dereference -R autobot:autobot {{ autobot.base_dir }}/autobot-backend
       become: true
       when: "'backend' in group_names"
       changed_when: true
@@ -905,7 +1001,7 @@
       vars:
         sync_deletions_label: "Backend (fleet update)"
         sync_deletions_source_dir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-backend"
-        sync_deletions_target_dir: /opt/autobot/autobot-backend
+        sync_deletions_target_dir: "{{ autobot.base_dir }}/autobot-backend"
         sync_deletions_owner: autobot
       when: "'backend' in group_names"
       tags: [backend]
@@ -920,13 +1016,13 @@
         name: backend
         tasks_from: npu_workers_cleanup
       vars:
-        backend_code_dir: /opt/autobot/autobot-backend
+        backend_code_dir: "{{ autobot.base_dir }}/autobot-backend"
       when: "'backend' in group_names"
       tags: [backend]
 
     - name: "[PLAY 2] Backend | Fix shared ownership (#1632)"
       file:
-        path: /opt/autobot/autobot_shared
+        path: "{{ autobot.base_dir }}/autobot_shared"
         owner: autobot
         group: autobot
         recurse: true
@@ -939,7 +1035,7 @@
       vars:
         sync_deletions_label: "Backend autobot_shared (fleet update)"
         sync_deletions_source_dir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot_shared"
-        sync_deletions_target_dir: /opt/autobot/autobot_shared
+        sync_deletions_target_dir: "{{ autobot.base_dir }}/autobot_shared"
         sync_deletions_owner: autobot
       when: "'backend' in group_names"
       tags: [backend, shared]
@@ -947,7 +1043,7 @@
     - name: "[PLAY 2] Backend | Ensure autobot_shared symlink inside backend dir (#2651)"
       ansible.builtin.file:
         src: ../autobot_shared
-        dest: /opt/autobot/autobot-backend/autobot_shared
+        dest: "{{ autobot.base_dir }}/autobot-backend/autobot_shared"
         state: link
         force: true
         owner: autobot
@@ -958,16 +1054,30 @@
 
     - name: "[PLAY 2] Backend | Remove legacy backend symlink"
       file:
-        path: /opt/autobot/autobot-backend/backend
+        path: "{{ autobot.base_dir }}/autobot-backend/backend"
         state: absent
       become: true
       when: "'backend' in group_names"
       tags: [backend]
 
+    # #19973: pip stops at a husk (uninstall-no-record-file) and cannot reach the update that fixes it.
+    - name: "[PLAY 2] Backend | Clear venv husks before pip (#17339)"
+      ansible.builtin.include_tasks:
+        file: ../roles/_shared/tasks/clear_venv_husks.yml
+        apply:
+          tags: [backend, deps]
+      vars:
+        husk_venv_dir: "{{ autobot.base_dir }}/autobot-backend/venv"
+      when:
+        - "'backend' in group_names"
+        - hostvars['localhost']['python_deps_changed'] | bool
+      tags: [backend, deps]
+
     - name: "[PLAY 2] Backend | Install Python dependencies"
       command:
-        cmd: /opt/autobot/autobot-backend/venv/bin/pip install
-             -r /opt/autobot/autobot-backend/requirements.txt
+        cmd: >-
+             {{ autobot.base_dir }}/autobot-backend/venv/bin/pip install
+             -r {{ autobot.base_dir }}/autobot-backend/requirements.txt
              -c {{ autobot.base_dir }}/constraints/shared.txt
              --quiet --timeout 120
         # #15733: pip resolves a relative editable in a requirements file
@@ -1006,6 +1116,17 @@
       when: "'backend' in group_names"
       tags: [backend, env, credentials]
 
+    # #19848: as in PLAY 1 -- the backend role installs PostgreSQL for user management (#2953),
+    # so its postgresql.conf follows the role on every Code Sync too.
+    - name: "[PLAY 2] Backend | Apply PostgreSQL's server config (#19848)"
+      ansible.builtin.include_role:
+        name: postgresql
+        tasks_from: config_file
+        apply:
+          become: true
+      when: "'backend' in group_names"
+      tags: [backend, postgresql]
+
     # Migrations moved AFTER the .env regen so they run with the fresh
     # credentials and BEFORE the service restart — see the
     # "Database migration sequence" block below (#10001/#10026; replaces the
@@ -1013,7 +1134,7 @@
     # and swallowed the guaranteed failure with failed_when: false).
     - name: "[PLAY 2] Backend | Read existing secret key before .env regen (#2649)"
       ansible.builtin.shell:
-        cmd: grep '^SECRET_KEY=' /opt/autobot/autobot-backend/.env | cut -d= -f2-
+        cmd: grep '^SECRET_KEY=' {{ autobot.base_dir }}/autobot-backend/.env | cut -d= -f2-
       register: existing_secret_key
       become: true
       become_user: autobot
@@ -1044,7 +1165,7 @@
       ansible.builtin.shell:
         cmd: >-
           grep -oP '^AUTOBOT_INTERNAL_API_KEY=\K.*'
-          /etc/autobot/autobot-backend.env 2>/dev/null || true
+          {{ autobot_backend_env_file | quote }} 2>/dev/null || true
       register: existing_internal_api_key
       become: true
       when: "'backend' in group_names"
@@ -1091,18 +1212,13 @@
     # autobot_users at startup ONLY when this is set (#10636). Installer writes
     # AUTOBOT_ADMIN_PASSWORD alongside SLM_ADMIN_PASSWORD; fall back to the SLM
     # admin password so the user app and SLM share one admin credential.
-    - name: "[PLAY 2] Backend | Read admin password for full-user-management seed (#10636)"
-      ansible.builtin.shell:
-        cmd: >-
-          grep -oP '^AUTOBOT_ADMIN_PASSWORD=\K.*' /etc/autobot/slm-secrets.env 2>/dev/null
-          || grep -oP '^SLM_ADMIN_PASSWORD=\K.*' /etc/autobot/slm-secrets.env 2>/dev/null
-          || true
-      register: existing_admin_password
-      become: true
+    - name: "[PLAY 2] Backend | Read admin password for full-user-management seed (#10636, #19370)"
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/read_admin_seed_password.yml
+        apply:
+          become: true
+          tags: [backend, env]
       when: "'backend' in group_names"
-      failed_when: false
-      changed_when: false
-      no_log: true
       tags: [backend, env]
 
     - name: "[PLAY 2] Backend | Load shared backend env vars (#2727)"
@@ -1128,7 +1244,7 @@
       ansible.builtin.shell:
         cmd: >-
           grep -oP '^AUTOBOT_POSTGRES_PASSWORD=\K.*'
-          /opt/autobot/autobot-backend/.env 2>/dev/null || true
+          {{ autobot.base_dir }}/autobot-backend/.env 2>/dev/null || true
       register: current_env_db_password
       become: true
       when: "'backend' in group_names"
@@ -1145,7 +1261,7 @@
         msg: >-
           Refusing to rewrite .env: the DB password in
           /etc/autobot/autobot-db-credentials.env differs from the one currently
-          authenticating in /opt/autobot/autobot-backend/.env. Writing it would
+          authenticating in {{ autobot.base_dir }}/autobot-backend/.env. Writing it would
           break PostgreSQL auth on the next backend restart (#12883). Reconcile
           the two credential stores, then re-run. The working value is the one in
           the live .env.
@@ -1171,7 +1287,7 @@
         tasks_from: env_only
       when: "'backend' in group_names"
       vars:
-        backend_env_dest: /opt/autobot/autobot-backend/.env
+        backend_env_dest: "{{ autobot.base_dir }}/autobot-backend/.env"
         backend_env_owner: autobot
         backend_env_group: autobot
         # backend_secret_key uses a register var specific to this playbook
@@ -1183,11 +1299,11 @@
         autobot_internal_api_key: "{{ existing_internal_api_key.stdout | default('') | trim }}"
         backend_postgres_password: "{{ existing_autobot_db_password.stdout | default('') | trim }}"
         # #10636: seed the default platform admin on first boot (full user mgmt).
-        autobot_admin_password: "{{ existing_admin_password.stdout | default('') | trim }}"
+        autobot_admin_password: "{{ _admin_seed_password_read | default('') }}"
       tags: [backend, env]
 
     - name: "[PLAY 2] Backend | Read backend user mode (#10001)"
-      ansible.builtin.shell: "grep -oP '^AUTOBOT_USER_MODE=\\K.*' /opt/autobot/autobot-backend/.env"
+      ansible.builtin.shell: "grep -oP '^AUTOBOT_USER_MODE=\\K.*' {{ autobot.base_dir }}/autobot-backend/.env"
       become: true
       register: backend_user_mode_probe
       changed_when: false
@@ -1208,7 +1324,7 @@
         - name: "[PLAY 2] Backend | Run strict backend migration sequence (#10001, #10026, #10046)"
           ansible.builtin.include_tasks: ../_shared/tasks/migrate_backend_db.yml
           vars:
-            migration_code_dir: /opt/autobot/autobot-backend
+            migration_code_dir: "{{ autobot.base_dir }}/autobot-backend"
             migration_user: autobot
             migration_become: true
             migration_name_prefix: "[PLAY 2] Backend | "
@@ -1222,6 +1338,33 @@
         tasks_from: unit_only
       when: "'backend' in group_names"
       tags: [backend, systemd, unit]
+
+    # #18324: the deployed docs/ (read by the knowledge import) was synced only by
+    # the role's main.yml, which this playbook never runs, so it froze at the last
+    # provision. `tasks_from` the SAME file main.yml includes -- never a second
+    # rsync -- and it ends with a recorded-commit vs code_source check.
+    - name: "[PLAY 2] Backend | Refresh the deployed docs/ from code_source (#18324, #4100)"
+      ansible.builtin.include_role:
+        name: backend
+        tasks_from: docs_sync
+        apply:
+          tags: [backend, docs]
+      when: "'backend' in group_names"
+      tags: [backend, docs]
+
+    # #18324: same class as docs/ -- the core plugins/ sync lived only in main.yml.
+    - name: "[PLAY 2] Backend | Refresh the core plugins/ from code_source (#18324, #10294)"
+      ansible.builtin.include_role:
+        name: backend
+        tasks_from: plugins_sync
+        apply:
+          tags: [backend, plugins]
+      # The role's `notify: restart backend` ignores --skip-tags; this play
+      # restarts explicitly below, so suppress the handler here (#18324).
+      vars:
+        backend_plugins_sync_notify_restart: false
+      when: "'backend' in group_names"
+      tags: [backend, plugins]
 
     # #14866: seed the access control enforcement posture on every update.
     # Provisioning alone is not enough: every host in the fleet was provisioned
@@ -1345,7 +1488,7 @@
     # for the full reasoning.
     - name: "[PLAY 2] Frontend | Set TLS key permissions"
       file:
-        path: /etc/autobot/certs/server-key.pem
+        path: "{{ node_cert_dir }}/server-key.pem"
         mode: "0640"
         owner: root
         group: autobot
@@ -1370,14 +1513,14 @@
     - name: "[PLAY 2] Frontend | Deploy autobot-frontend"
       unarchive:
         src: "{{ deploy_tmp }}/frontend.tar.gz"
-        dest: /opt/autobot/
+        dest: "{{ autobot.base_dir }}/"
       become: true
       when: "'frontend' in group_names"
       tags: [frontend]
 
     - name: "[PLAY 2] Frontend | Fix ownership"
       file:
-        path: /opt/autobot/autobot-frontend
+        path: "{{ autobot.base_dir }}/autobot-frontend"
         owner: autobot
         group: autobot
         recurse: true
@@ -1394,7 +1537,7 @@
       vars:
         sync_deletions_label: "Frontend (fleet update)"
         sync_deletions_source_dir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-frontend"
-        sync_deletions_target_dir: /opt/autobot/autobot-frontend
+        sync_deletions_target_dir: "{{ autobot.base_dir }}/autobot-frontend"
         sync_deletions_owner: autobot
       when: "'frontend' in group_names"
       tags: [frontend]
@@ -1402,12 +1545,12 @@
     - name: "[PLAY 2] Frontend | Install Node.js dependencies"
       command:
         cmd: npm ci --ignore-scripts
-        chdir: /opt/autobot/autobot-frontend
+        chdir: "{{ autobot.base_dir }}/autobot-frontend"
       become: true
       become_user: autobot
       when:
         - "'frontend' in group_names"
-        - hostvars['localhost']['node_deps_changed'] | bool
+        - (hostvars['localhost']['node_deps_changed'] | bool) or (_nodejs_upgraded | default(false) | bool)
       register: frontend_npm_install
       tags: [frontend, deps]
 
@@ -1418,12 +1561,28 @@
       ansible.builtin.include_tasks: ../roles/_shared/tasks/build_publish_slm_frontend.yml
       vars:
         slm_frontend_publish_label: "Fleet update (user frontend)"
-        slm_frontend_publish_dir: /opt/autobot/autobot-frontend
+        slm_frontend_publish_dir: "{{ autobot.base_dir }}/autobot-frontend"
         slm_frontend_publish_user: autobot
         slm_frontend_publish_build_script: "build"
         slm_frontend_publish_build_env: {}
       when: "'frontend' in group_names"
       tags: [frontend]
+
+    # #19661: a running process keeps the old Node.js until restarted. try-restart
+    # leaves the unit alone on a host where it is not running. The browser worker
+    # needs no equivalent: its restart step below runs on every update.
+    - name: "[PLAY 2] Frontend | Restart the frontend service onto the new Node.js"
+      ansible.builtin.command:
+        cmd: systemctl try-restart autobot-frontend
+      become: true
+      register: _frontend_try_restart
+      changed_when: _frontend_try_restart.rc == 0
+      # rc 5: the unit is not installed, which is normal here (roles/frontend/handlers/main.yml).
+      failed_when: _frontend_try_restart.rc not in [0, 5]
+      when:
+        - "'frontend' in group_names"
+        - _nodejs_upgraded | default(false) | bool
+      tags: [frontend, restart]
 
     - name: "[PLAY 2] Frontend | Restart nginx"
       systemd:
@@ -1447,7 +1606,7 @@
     - name: "[PLAY 2] NPU | Deploy autobot-npu-worker"
       unarchive:
         src: "{{ deploy_tmp }}/npu-worker.tar.gz"
-        dest: /opt/autobot/
+        dest: "{{ autobot.base_dir }}/"
       become: true
       when: >-
         'npu' in group_names
@@ -1455,7 +1614,7 @@
 
     - name: "[PLAY 2] NPU | Fix ownership"
       file:
-        path: /opt/autobot/autobot-npu-worker
+        path: "{{ autobot.base_dir }}/autobot-npu-worker"
         owner: autobot
         group: autobot
         recurse: true
@@ -1472,7 +1631,7 @@
       vars:
         sync_deletions_label: "NPU worker (fleet update)"
         sync_deletions_source_dir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-npu-worker"
-        sync_deletions_target_dir: /opt/autobot/autobot-npu-worker
+        sync_deletions_target_dir: "{{ autobot.base_dir }}/autobot-npu-worker"
         sync_deletions_owner: autobot
       when: >-
         'npu' in group_names
@@ -1480,8 +1639,9 @@
 
     - name: "[PLAY 2] NPU | Install Python dependencies"
       command:
-        cmd: /opt/autobot/autobot-npu-worker/venv/bin/pip install
-             -r /opt/autobot/autobot-npu-worker/requirements.txt
+        cmd: >-
+             {{ autobot.base_dir }}/autobot-npu-worker/venv/bin/pip install
+             -r {{ autobot.base_dir }}/autobot-npu-worker/requirements.txt
              -c {{ autobot.base_dir }}/constraints/shared.txt
              --quiet --timeout 120
         # #15733: pip resolves a relative editable in a requirements file
@@ -1522,6 +1682,8 @@
         'npu' in group_names
       failed_when: false
       tags: [npu, npu-worker, restart]
+      check_mode: false
+      changed_when: false
 
     - name: "[PLAY 2] NPU | Warn if service not active (#1633)"
       debug:
@@ -1595,7 +1757,7 @@
     - name: "[PLAY 2] Browser | Deploy autobot-browser-worker"
       unarchive:
         src: "{{ deploy_tmp }}/browser-worker.tar.gz"
-        dest: /opt/autobot/
+        dest: "{{ autobot.base_dir }}/"
       become: true
       when: >-
         'browser' in group_names
@@ -1603,7 +1765,7 @@
 
     - name: "[PLAY 2] Browser | Fix ownership"
       file:
-        path: /opt/autobot/autobot-browser-worker
+        path: "{{ autobot.base_dir }}/autobot-browser-worker"
         owner: autobot
         group: autobot
         recurse: true
@@ -1618,7 +1780,7 @@
       vars:
         sync_deletions_label: "Browser worker (fleet update)"
         sync_deletions_source_dir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-browser-worker"
-        sync_deletions_target_dir: /opt/autobot/autobot-browser-worker
+        sync_deletions_target_dir: "{{ autobot.base_dir }}/autobot-browser-worker"
         sync_deletions_owner: autobot
       when: >-
         'browser' in group_names
@@ -1626,8 +1788,9 @@
 
     - name: "[PLAY 2] Browser | Install Python dependencies"
       command:
-        cmd: /opt/autobot/autobot-browser-worker/venv/bin/pip install
-             -r /opt/autobot/autobot-browser-worker/requirements.txt
+        cmd: >-
+             {{ autobot.base_dir }}/autobot-browser-worker/venv/bin/pip install
+             -r {{ autobot.base_dir }}/autobot-browser-worker/requirements.txt
              -c {{ autobot.base_dir }}/constraints/shared.txt
              --quiet --timeout 120
         # #15733: pip resolves a relative editable in a requirements file
@@ -1654,14 +1817,14 @@
     - name: "[PLAY 2] Browser | Install npm dependencies"
       command:
         cmd: npm install --omit=dev
-        chdir: /opt/autobot/autobot-browser-worker
+        chdir: "{{ autobot.base_dir }}/autobot-browser-worker"
       become: true
       become_user: autobot
       timeout: 600
       when:
         - >-
           'browser' in group_names
-        - hostvars['localhost']['node_deps_changed'] | bool
+        - (hostvars['localhost']['node_deps_changed'] | bool) or (_nodejs_upgraded | default(false) | bool)
       failed_when: false
       tags: [browser, browser-worker, deps]
 
@@ -1673,7 +1836,7 @@
     - name: "[PLAY 2] Browser | Ensure Playwright browsers match the installed package (#11442)"
       command:
         cmd: node_modules/.bin/playwright install chromium
-        chdir: /opt/autobot/autobot-browser-worker
+        chdir: "{{ autobot.base_dir }}/autobot-browser-worker"
       environment:
         PLAYWRIGHT_BROWSERS_PATH: /var/lib/autobot/playwright-browsers
       become: true
@@ -1684,7 +1847,7 @@
       when:
         - >-
           'browser' in group_names
-        - hostvars['localhost']['node_deps_changed'] | bool
+        - (hostvars['localhost']['node_deps_changed'] | bool) or (_nodejs_upgraded | default(false) | bool)
       tags: [browser, browser-worker, deps]
 
     # #5085: a root-run install produces browser files the `autobot` service
@@ -1700,7 +1863,7 @@
       when:
         - >-
           'browser' in group_names
-        - hostvars['localhost']['node_deps_changed'] | bool
+        - (hostvars['localhost']['node_deps_changed'] | bool) or (_nodejs_upgraded | default(false) | bool)
       failed_when: false
       tags: [browser, browser-worker, deps]
 
@@ -1716,7 +1879,7 @@
       when:
         - >-
           'browser' in group_names
-        - hostvars['localhost']['node_deps_changed'] | bool
+        - (hostvars['localhost']['node_deps_changed'] | bool) or (_nodejs_upgraded | default(false) | bool)
         - browser_playwright_install.rc | default(0) != 0
       tags: [browser, browser-worker, deps]
 
@@ -1755,7 +1918,7 @@
     - name: "[PLAY 2] AI Stack | Deploy ai_api_server and requirements"
       unarchive:
         src: "{{ deploy_tmp }}/ai-stack.tar.gz"
-        dest: /opt/autobot/autobot-ai-stack/
+        dest: "{{ autobot.base_dir }}/autobot-ai-stack/"
         extra_opts: ['--strip-components=4']
         owner: autobot
         group: autobot
@@ -1777,7 +1940,7 @@
         sync_deletions_source_dir: >-
           {{ (code_source_dir | default(autobot.base_dir ~ '/code_source')) ~
           '/autobot-infrastructure/shared/docker/ai-stack' }}
-        sync_deletions_target_dir: /opt/autobot/autobot-ai-stack
+        sync_deletions_target_dir: "{{ autobot.base_dir }}/autobot-ai-stack"
         sync_deletions_owner: autobot
       when: >-
         'aiml' in group_names
@@ -1807,14 +1970,14 @@
     - name: "[PLAY 2] Shared | Deploy autobot_shared"
       unarchive:
         src: "{{ deploy_tmp }}/shared.tar.gz"
-        dest: /opt/autobot/
+        dest: "{{ autobot.base_dir }}/"
       become: true
       when: "'backend' not in group_names"
       tags: [shared]
 
     - name: "[PLAY 2] Shared | Fix ownership"
       file:
-        path: /opt/autobot/autobot_shared
+        path: "{{ autobot.base_dir }}/autobot_shared"
         owner: autobot
         group: autobot
         recurse: true
@@ -1831,7 +1994,7 @@
       vars:
         sync_deletions_label: "Shared autobot_shared (fleet update)"
         sync_deletions_source_dir: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot_shared"
-        sync_deletions_target_dir: /opt/autobot/autobot_shared
+        sync_deletions_target_dir: "{{ autobot.base_dir }}/autobot_shared"
         sync_deletions_owner: autobot
       when: "'backend' not in group_names"
       tags: [shared]
@@ -1840,7 +2003,7 @@
     - name: "[PLAY 2] SLM Agent | Create autobot_shared symlink for agent imports"
       ansible.builtin.file:
         src: ../autobot_shared
-        dest: /opt/autobot/autobot-slm-agent/autobot_shared
+        dest: "{{ autobot.base_dir }}/autobot-slm-agent/autobot_shared"
         state: link
         force: true
         owner: autobot
@@ -1881,7 +2044,7 @@
     - name: "[PLAY 2] SLM Backend | Create autobot_shared symlink for backend imports"
       ansible.builtin.file:
         src: ../autobot_shared
-        dest: /opt/autobot/autobot-slm-backend/autobot_shared
+        dest: "{{ autobot.base_dir }}/autobot-slm-backend/autobot_shared"
         state: link
         force: true
         owner: autobot
@@ -1913,6 +2076,7 @@
       ignore_errors: true
       when: slm_token | default('') | length > 0
       tags: [always]
+      no_log: true  # #19764: credentials in the request or response
 
     # =========================================================================
     # #12959: post-update delivery assertions
@@ -2001,7 +2165,7 @@
 
     - name: "[PLAY 2] Verify | TTS worker carries the streaming route (#12886, #12959)"
       ansible.builtin.command:
-        cmd: grep -c '/tts/synthesize/stream' /opt/autobot/autobot-tts-worker/tts-worker.py
+        cmd: grep -c '/tts/synthesize/stream' {{ autobot.base_dir }}/autobot-tts-worker/tts-worker.py
       register: tts_stream_route
       become: true
       changed_when: false
@@ -2146,6 +2310,15 @@
           become: true
       tags: [database, redis, chromadb, deploy]
 
+    # #19848: as in PLAY 1 -- the database node's postgresql.conf, before the handler flush below.
+    - name: "[PLAY 2b] Database | Apply PostgreSQL's server config (#19848)"
+      ansible.builtin.include_role:
+        name: postgresql
+        tasks_from: config_file
+        apply:
+          become: true
+      tags: [database, postgresql]
+
     # Flush here rather than letting the handlers fall to the end of the play.
     # #12886 recorded both halves of why that matters: queued handlers are
     # DISCARDED when a later task aborts the play, and a handler that never ran
@@ -2209,6 +2382,85 @@
     - name: "[PLAY 2b] Database Node Update Complete"
       ansible.builtin.debug:
         msg: "{{ inventory_hostname }} updated"
+
+# =============================================================================
+# PLAY 2c: Re-render the monitoring config (#18994)
+# =============================================================================
+# Plays 1/2/2b deploy component code and role-owned files, but nothing here ever
+# applied the `monitoring` role, which owns /etc/prometheus/prometheus.yml and the
+# #16375 scrape-token file. The backend gates /api/metrics/prometheus on that token
+# (backend.env, refreshed by Play 1/2 through roles/backend), so a host updated only
+# through this playbook kept its install-time prometheus.yml: no `bearer_token_file`
+# on the autobot-backend job (every scrape 401) and none of the jobs the template
+# gained since. The merge was green, code_source carried the template, and the host
+# never received it -- the #12959 failure shape, for monitoring.
+#
+# `hosts: monitoring_vm` is the group a node's `monitoring` / `slm-monitoring` role
+# token maps to (services/inventory_builder.py), so a host without the role is not
+# touched, and `--limit` still bounds the play to the machine being updated.
+#
+# Config tasks only (`tasks_from: prometheus_config.yml`), as deploy-slm-manager.yml
+# does for #14337: Prometheus is already installed, and the role's install half would
+# restart it for no reason. Placed AFTER Plays 1/2 so the topology decision there
+# observes the backend unit and vhost this very update just (re)wrote.
+#
+# Token safety is the task file's own: the SLM delivers `prometheus_scrape_token` as
+# an extra var (services/playbook_executor.py -> fetch_deploy_secrets); when that
+# fetch degrades the shared keep-task adopts the value already in the backend env file,
+# and if neither exists an already-present token file is left alone, so an empty run
+# never takes a working scrape down. The value is never printed (no_log) nor rendered
+# into prometheus.yml, which names the file only.
+- name: "Play 2c - Update Monitoring Config"
+  hosts: monitoring_vm
+  gather_facts: false
+  tags: [monitoring, prometheus]
+
+  tasks:
+    - name: "[PLAY 2c] Monitoring | Keep the deployed Prometheus scrape token (#16375, #18994)"
+      # `apply.tags`: a `--tags monitoring` run selects the include but would not pass the tag
+      # to the included tasks, finishing without rendering anything.
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/keep_prometheus_scrape_token.yml
+        apply:
+          tags: [monitoring, prometheus]
+      vars:
+        scrape_token_env_files: ["{{ autobot_backend_env_file }}"]
+
+    # `apply: {become: true}`, not a bare `become` -- ansible rejects the whole
+    # playbook for the latter on include_role (#12886).
+    - name: "[PLAY 2c] Monitoring | Render prometheus.yml and the scrape-token file (#18994)"
+      ansible.builtin.include_role:
+        name: monitoring
+        tasks_from: prometheus_config
+        apply:
+          become: true
+          tags: [monitoring, prometheus]
+
+    # Same reasoning as Play 2b: a queued handler is discarded if a later play aborts.
+    - name: "[PLAY 2c] Monitoring | Apply a pending Prometheus restart (#18994)"
+      ansible.builtin.meta: flush_handlers
+
+# =============================================================================
+# PLAY 2d: Grafana (#19661)
+# =============================================================================
+# Last before Play 3: a package outage here fails this host's Grafana step visibly, after its
+# code and services are already updated. Hosts without Grafana are left without it.
+- name: "Play 2d - Move Grafana to its pinned version"
+  hosts: slm_server:monitoring_vm
+  gather_facts: true
+  gather_subset: [min]
+  tags: [monitoring, grafana]
+
+  tasks:
+    - name: "[PLAY 2d] Grafana | Upgrade an installed Grafana below grafana_version"
+      ansible.builtin.include_role:
+        name: monitoring
+        tasks_from: grafana_install.yml
+        apply:
+          become: true
+          tags: [monitoring, grafana]
+      vars:
+        grafana_fresh_install: false
 
 # =============================================================================
 # PLAY 3: Verify + Cleanup

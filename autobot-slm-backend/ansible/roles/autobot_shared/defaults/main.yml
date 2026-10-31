@@ -22,4 +22,4 @@ code_source_dir: "{{ autobot.base_dir }}/code_source"
 # Standalone PYTHONPATH copy imported by backend, Celery, and MCP-bridge
 # services. The backend's embedded autobot_shared path is a symlink here
 # (#10020), so syncing this one directory covers every consumer.
-backend_shared_standalone_dir: /opt/autobot/autobot_shared
+backend_shared_standalone_dir: "{{ autobot.base_dir }}/autobot_shared"

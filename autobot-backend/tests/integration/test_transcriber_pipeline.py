@@ -22,7 +22,7 @@ from media.audio.ffmpeg_service import get_ffmpeg_service
 from transcriber.database import Database
 from transcriber.models import RecordingStatus
 from transcriber.orchestrator import TranscriberOrchestrator
-from voice_processing.language_detection import detect_language
+from voice_processing.language_detection import detect_audio_language
 from voice_processing.providers import get_speech_provider_registry
 
 
@@ -55,7 +55,7 @@ async def test_service_availability():
     assert get_speech_provider_registry() is not None
 
     # Language detection degrades to None for a missing audio file.
-    result = await detect_language(audio_path="/nonexistent/sample_lv.wav", filename_hint="sample_lv.wav")
+    result = await detect_audio_language(audio_path="/nonexistent/sample_lv.wav", filename_hint="sample_lv.wav")
     assert result in ["lv", "en", None]
 
 

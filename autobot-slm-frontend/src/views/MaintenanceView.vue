@@ -4,16 +4,18 @@
 // Author: mrveiss
 
 import { ref, computed, onMounted } from 'vue'
+import { BaseAlert, BaseModal, useToast } from '@autobot/ui'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useFleetStore } from '@/stores/fleet'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { createLogger } from '@/utils/debugUtils'
-import { formatDateTime as formatDateTimeTz } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import type { MaintenanceWindow, MaintenanceWindowCreate } from '@/types/slm'
-
 const route = useRoute()
+const { t } = useI18n()
+const { showToast } = useToast()
 const isUpdatesTab = computed(() => route.path.startsWith('/maintenance/updates'))
-
 const logger = createLogger('MaintenanceView')
 const fleetStore = useFleetStore()
 const api = useSlmApi()
@@ -52,7 +54,6 @@ const formError = ref<string | null>(null)
 // Computed
 const activeWindows = computed(() => windows.value.filter(w => w.status === 'active'))
 const scheduledWindows = computed(() => windows.value.filter(w => w.status === 'scheduled'))
-
 const filteredWindows = computed(() => {
   let filtered = windows.value
   if (statusFilter.value) {
@@ -180,7 +181,7 @@ async function activateWindow(windowId: string): Promise<void> {
     await fetchMaintenanceWindows()
   } catch (err) {
     logger.error('Failed to activate maintenance window:', err)
-    alert('Failed to activate maintenance window')
+    showToast(t('maintenanceView.failedToActivateWindow'), 'error')
   }
 }
 
@@ -191,7 +192,7 @@ async function completeWindow(windowId: string): Promise<void> {
     await fetchMaintenanceWindows()
   } catch (err) {
     logger.error('Failed to complete maintenance window:', err)
-    alert('Failed to complete maintenance window')
+    showToast(t('maintenanceView.failedToCompleteWindow'), 'error')
   }
 }
 
@@ -206,7 +207,7 @@ async function deleteWindow(windowId: string): Promise<void> {
     await fetchMaintenanceWindows()
   } catch (err) {
     logger.error('Failed to delete maintenance window:', err)
-    alert('Failed to delete maintenance window')
+    showToast(t('maintenanceView.failedToDeleteWindow'), 'error')
   }
 }
 
@@ -223,7 +224,7 @@ async function handleDrainNode(nodeId: string): Promise<void> {
     logger.info('Node drained successfully:', nodeId)
   } catch (err) {
     logger.error('Failed to drain node:', err)
-    alert('Failed to drain node. Please try again.')
+    showToast(t('maintenanceView.failedToDrainNode'), 'error')
   } finally {
     isDraining.value = false
   }
@@ -238,7 +239,7 @@ async function handleResumeNode(nodeId: string): Promise<void> {
     logger.info('Node resumed successfully:', nodeId)
   } catch (err) {
     logger.error('Failed to resume node:', err)
-    alert('Failed to resume node. Please try again.')
+    showToast(t('maintenanceView.failedToResumeNode'), 'error')
   } finally {
     isResuming.value = false
   }
@@ -250,10 +251,6 @@ function formatDateTimeLocal(isoString: string): string {
   const offset = date.getTimezoneOffset()
   const localDate = new Date(date.getTime() - offset * 60 * 1000)
   return localDate.toISOString().slice(0, 16)
-}
-
-function formatDateTime(isoString: string): string {
-  return formatDateTimeTz(isoString)
 }
 
 function getStatusBadgeClass(status: string): string {
@@ -564,10 +561,10 @@ function getNodeName(nodeId: string | null): string {
                 <span class="text-sm text-gray-900">{{ getNodeName(window.node_id) }}</span>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ formatDateTime(window.start_time) }}
+                {{ formatFleetDateTime(window.start_time) }}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ formatDateTime(window.end_time) }}
+                {{ formatFleetDateTime(window.end_time) }}
               </td>
               <td class="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
                 {{ window.reason || '-' }}
@@ -655,164 +652,139 @@ function getNodeName(nodeId: string | null): string {
       </div>
     </div>
 
-    <!-- Schedule/Edit Modal -->
-    <Teleport to="body">
-      <Transition
-        enter-active-class="transition duration-200 ease-out"
-        enter-from-class="opacity-0"
-        enter-to-class="opacity-100"
-        leave-active-class="transition duration-150 ease-in"
-        leave-from-class="opacity-100"
-        leave-to-class="opacity-0"
-      >
-        <div
-          v-if="showScheduleDialog"
-          class="fixed inset-0 z-50 flex items-center justify-center p-4"
-        >
-          <div class="fixed inset-0 bg-gray-500/75" @click="closeScheduleDialog"></div>
-          <div class="relative bg-white rounded-lg shadow-xl max-w-lg w-full p-6">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="text-lg font-semibold text-gray-900">
-                {{ editingWindow ? $t('maintenanceView.editMaintenanceWindow') : $t('maintenanceView.scheduleMaintenanceWindow') }}
-              </h3>
-              <button
-                @click="closeScheduleDialog"
-                class="text-gray-400 hover:text-gray-600"
-                :aria-label="$t('maintenanceView.close')"
-              >
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
+    <!-- Schedule/Edit Modal: locked while saving, as Cancel is (#14777) -->
+    <BaseModal
+      :model-value="showScheduleDialog"
+      :title="editingWindow ? $t('maintenanceView.editMaintenanceWindow') : $t('maintenanceView.scheduleMaintenanceWindow')"
+      width="32rem"
+      :locked="isSubmitting"
+      :close-label="$t('maintenanceView.close')"
+      @close="closeScheduleDialog"
+    >
+      <!-- Error Alert -->
+      <BaseAlert v-if="formError" variant="error" class="mb-4" :message="formError" />
 
-            <!-- Error Alert -->
-            <div v-if="formError" class="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
-              <p class="text-sm text-red-600">{{ formError }}</p>
-            </div>
+      <form id="maintenance-window-form" @submit.prevent="submitMaintenanceWindow" class="space-y-4">
+        <!-- Node Selection -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">
+            {{ $t('maintenanceView.targetNode') }}
+          </label>
+          <select v-model="formData.node_id" class="input">
+            <option :value="undefined">{{ $t('maintenanceView.allNodesFleetWide') }}</option>
+            <option
+              v-for="node in nodes"
+              :key="node.node_id"
+              :value="node.node_id"
+            >
+              {{ node.hostname }} ({{ node.ip_address }})
+            </option>
+          </select>
+          <p class="text-xs text-gray-500 mt-1">
+            {{ $t('maintenanceView.leaveEmptyForFleet') }}
+          </p>
+        </div>
 
-            <form @submit.prevent="submitMaintenanceWindow" class="space-y-4">
-              <!-- Node Selection -->
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  {{ $t('maintenanceView.targetNode') }}
-                </label>
-                <select v-model="formData.node_id" class="input">
-                  <option :value="undefined">{{ $t('maintenanceView.allNodesFleetWide') }}</option>
-                  <option
-                    v-for="node in nodes"
-                    :key="node.node_id"
-                    :value="node.node_id"
-                  >
-                    {{ node.hostname }} ({{ node.ip_address }})
-                  </option>
-                </select>
-                <p class="text-xs text-gray-500 mt-1">
-                  {{ $t('maintenanceView.leaveEmptyForFleet') }}
-                </p>
-              </div>
-
-              <!-- Time Range -->
-              <div class="grid grid-cols-2 gap-4">
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">
-                    {{ $t('maintenanceView.startTime') }} <span class="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="datetime-local"
-                    v-model="formData.start_time"
-                    required
-                    class="input"
-                  />
-                </div>
-                <div>
-                  <label class="block text-sm font-medium text-gray-700 mb-1">
-                    {{ $t('maintenanceView.endTime') }} <span class="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="datetime-local"
-                    v-model="formData.end_time"
-                    required
-                    class="input"
-                  />
-                </div>
-              </div>
-
-              <!-- Reason -->
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">
-                  {{ $t('maintenanceView.reason') }}
-                </label>
-                <textarea
-                  v-model="formData.reason"
-                  rows="2"
-                  class="input"
-                  :placeholder="$t('maintenanceView.optionalDescribeTheMaintenanceActivity')"
-                ></textarea>
-              </div>
-
-              <!-- Options -->
-              <div class="space-y-3">
-                <label class="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    v-model="formData.suppress_alerts"
-                    class="rounded-sm text-primary-600 focus:ring-primary-500"
-                  />
-                  <div>
-                    <span class="text-sm font-medium text-gray-900">{{ $t('maintenanceView.suppressAlerts') }}</span>
-                    <p class="text-xs text-gray-500">{{ $t('maintenanceView.donTSendAlerts') }}</p>
-                  </div>
-                </label>
-
-                <label class="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    v-model="formData.suppress_remediation"
-                    class="rounded-sm text-primary-600 focus:ring-primary-500"
-                  />
-                  <div>
-                    <span class="text-sm font-medium text-gray-900">{{ $t('maintenanceView.suppressAutoRemediation') }}</span>
-                    <p class="text-xs text-gray-500">{{ $t('maintenanceView.disableAutomaticRemediationActions') }}</p>
-                  </div>
-                </label>
-
-                <label class="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    v-model="formData.auto_drain"
-                    class="rounded-sm text-primary-600 focus:ring-primary-500"
-                  />
-                  <div>
-                    <span class="text-sm font-medium text-gray-900">{{ $t('maintenanceView.autoDrain') }}</span>
-                    <p class="text-xs text-gray-500">{{ $t('maintenanceView.automaticallyDrainServicesBefore') }}</p>
-                  </div>
-                </label>
-              </div>
-
-              <!-- Actions -->
-              <div class="flex justify-end gap-3 pt-4 border-t border-gray-200">
-                <button
-                  type="button"
-                  @click="closeScheduleDialog"
-                  :disabled="isSubmitting"
-                  class="btn btn-secondary"
-                >
-                  {{ $t('maintenanceView.cancel') }}
-                </button>
-                <button
-                  type="submit"
-                  :disabled="isSubmitting"
-                  class="btn btn-primary"
-                >
-                  {{ isSubmitting ? $t('maintenanceView.saving') : (editingWindow ? $t('maintenanceView.updateWindow') : $t('maintenanceView.scheduleWindow')) }}
-                </button>
-              </div>
-            </form>
+        <!-- Time Range -->
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              {{ $t('maintenanceView.startTime') }} <span class="text-red-500">*</span>
+            </label>
+            <input
+              type="datetime-local"
+              v-model="formData.start_time"
+              required
+              class="input"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">
+              {{ $t('maintenanceView.endTime') }} <span class="text-red-500">*</span>
+            </label>
+            <input
+              type="datetime-local"
+              v-model="formData.end_time"
+              required
+              class="input"
+            />
           </div>
         </div>
-      </Transition>
-    </Teleport>
+
+        <!-- Reason -->
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">
+            {{ $t('maintenanceView.reason') }}
+          </label>
+          <textarea
+            v-model="formData.reason"
+            rows="2"
+            class="input"
+            :placeholder="$t('maintenanceView.optionalDescribeTheMaintenanceActivity')"
+          ></textarea>
+        </div>
+
+        <!-- Options -->
+        <div class="space-y-3">
+          <label class="flex items-center gap-3">
+            <input
+              type="checkbox"
+              v-model="formData.suppress_alerts"
+              class="rounded-sm text-primary-600 focus:ring-primary-500"
+            />
+            <div>
+              <span class="text-sm font-medium text-gray-900">{{ $t('maintenanceView.suppressAlerts') }}</span>
+              <p class="text-xs text-gray-500">{{ $t('maintenanceView.donTSendAlerts') }}</p>
+            </div>
+          </label>
+
+          <label class="flex items-center gap-3">
+            <input
+              type="checkbox"
+              v-model="formData.suppress_remediation"
+              class="rounded-sm text-primary-600 focus:ring-primary-500"
+            />
+            <div>
+              <span class="text-sm font-medium text-gray-900">{{ $t('maintenanceView.suppressAutoRemediation') }}</span>
+              <p class="text-xs text-gray-500">{{ $t('maintenanceView.disableAutomaticRemediationActions') }}</p>
+            </div>
+          </label>
+
+          <label class="flex items-center gap-3">
+            <input
+              type="checkbox"
+              v-model="formData.auto_drain"
+              class="rounded-sm text-primary-600 focus:ring-primary-500"
+            />
+            <div>
+              <span class="text-sm font-medium text-gray-900">{{ $t('maintenanceView.autoDrain') }}</span>
+              <p class="text-xs text-gray-500">{{ $t('maintenanceView.automaticallyDrainServicesBefore') }}</p>
+            </div>
+          </label>
+        </div>
+
+      </form>
+      <template #actions>
+        <div class="flex justify-end gap-3">
+          <button
+            type="button"
+            @click="closeScheduleDialog"
+            :disabled="isSubmitting"
+            class="btn btn-secondary"
+          >
+            {{ $t('maintenanceView.cancel') }}
+          </button>
+          <button
+            type="submit"
+            form="maintenance-window-form"
+            :disabled="isSubmitting"
+            class="btn btn-primary"
+          >
+            {{ isSubmitting ? $t('maintenanceView.saving') : (editingWindow ? $t('maintenanceView.updateWindow') : $t('maintenanceView.scheduleWindow')) }}
+          </button>
+        </div>
+      </template>
+    </BaseModal>
     </div><!-- end v-else maintenance windows -->
   </div>
 </template>

@@ -38,20 +38,20 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         ".flake8",
         ".github/actions/setup-python-ci/action.yml",
         ".github/actions/setup-python-suite/action.yml",
-        ".github/dependabot.yml",
         ".github/filters/code-quality-paths.yml",
-        ".github/workflows/auto-merge-base-into-parked-branches.yml",
         ".github/workflows/code-quality-required-context.yml",
         ".github/workflows/code-quality.yml",
         ".github/workflows/frontend-test.yml",
         ".github/workflows/hardened-smoke-test.yml",
         ".github/workflows/marker-tests.yml",
         ".github/workflows/ssot-coverage.yml",
+        # #19548: replaces the parked-branch workflow's entry one-for-one (its
+        # reader moved with it). Covering it means adding a filter line, and
+        # python-paths.yml is held by open PRs #19432/#19456 (one file, one PR).
+        ".github/workflows/sync-branches-with-main.yml",
         ".mcp/autobot-mcp-server.js",
         ".pre-commit-config.yaml",
         "autobot-frontend/scripts/check-ts-delta.sh",
-        "autobot-frontend/src/components/terminal/SSHTerminal.vue",
-        "autobot-frontend/src/types/generated/api.ts",
         # #17329: hardcoded_values_scope_agreement_test.py passes these three as
         # PARAMETERS to hv_path_in_scan_dirs, a pure string predicate -- it never
         # opens them, and its verdict cannot change when their content does.
@@ -59,19 +59,17 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         # component edit, which is the trade the CLAUDE.md entry below refuses.
         "autobot-frontend/vitest.config.ts",
         "autobot-slm-frontend/openapi.json",
-        "autobot-slm-frontend/src/App.vue",
-        "autobot-slm-frontend/src/composables/useAutobotApi.ts",
         "autobot-slm-frontend/vitest.config.ts",
-        "autobot-slm-frontend/src/types/generated/api.ts",
-        "autobot-slm-frontend/src/views/tools/admin/TerminalTool.vue",
         # #17129: doc_index_worktree_contamination_16934_test.py's "CLAUDE.md" is a
         # literal it writes inside a synthetic tmp_path repo fixture, never a read of
         # the real root-level file -- covering the real path in the filter would run
         # twelve shards on every CLAUDE.md edit for a guard that does not depend on
         # its content. Recorded, not covered, per this file's own trade-off rule.
         "CLAUDE.md",
+        # #18653: uninstall_covers_role_components_18653_test.py composes `Path(tmp) / "autobot"`
+        # -- a synthetic /opt/autobot inside a tmp dir, never a read of a repo tree.
+        "autobot",
         "constraints/shared.txt",
-        "docker/generate-secrets.sh",
         "docker/secrets-init.sh",
         "docker/with-secrets.sh",
         "docs/audit/python_314_consistency.md",
@@ -81,11 +79,7 @@ UNCOVERED_READS: frozenset[str] = frozenset(
         "docs/development/MCP_DEBUG_SCENARIOS.md",
         "docs/runbooks/ROTATE_SSH_KEYS.md",
         "pytest.ini",
-        "requirements-ci.txt",
-        "requirements-gpu-torch.txt",
-        "requirements-gpu.txt",
-        "requirements.txt",
-        # #17133: "README.md" is a literal pre_push_open_pr_cap_17006_test.py
+        # #17133: "README.md" is a literal pre_push_no_open_pr_cap_19397_test.py
         # writes inside its own synthetic tmp_path repo fixture (_seed_repo),
         # never a read of the real root-level file -- same shape as the
         # CLAUDE.md entry above (#17129).
@@ -136,7 +130,24 @@ UNCOVERED_READS: frozenset[str] = frozenset(
 #: reads it by concrete literal path to pin its WebSocket URL against the real
 #: backend route, and `autobot-frontend/src/components/` is outside the python
 #: filter's trees. A new bypass, not a denominator correction.
-MAX_UNCOVERED_READS = 45
+#: RE-DERIVED at 45 by #17798, unchanged on purpose and measured, not assumed:
+#: the sweep now also reads the python-gated ci.yml jobs. That population found
+#: 3 uncovered reads -- `pytest.ini` and `requirements-ci.txt` (already recorded
+#: above via guards) and `requirements-ci-test.txt` (new) -- and would also have
+#: found `.test_durations_slm`, which the guard-source detectors could not see
+#: (bare name, no slash; #17632). The same change covers the last two in the
+#: filter, so the count is 45 both before and after. Dropping either filter line
+#: makes it 46 and fails the equality.
+# 45 -> 39: #17885 added 'autobot-frontend/src/**' and
+# 'autobot-slm-frontend/src/**' to the filter for the frontend ratchet's 184
+# literal reads, which covered six entries recorded here as uncovered.
+#: RAISED 39 -> 40 by #18653: `autobot` above is a tmp_path fixture segment of the
+#: uninstall guard (a fake /opt/autobot tree), a new bypass and not a real read.
+#: LOWERED 40 -> 39 by the train-81 CodeRabbit round: the filter now covers
+#: `docker/generate-secrets.sh`, which two guards really read (#17500, #18729).
+#: LOWERED 39 -> 38 by #19523: the filter now covers `.github/dependabot.yml`, which the
+#: dependabot coverage guards read; deleting a block's directory touches no .py file.
+MAX_UNCOVERED_READS = 34
 
 #: A deliberate raise of ``MAX_UNCOVERED_READS`` is recorded here, as
 #: ``(value, "#issue")``. #17650's criterion is that raising is **justified**, not

@@ -116,6 +116,7 @@ import { computed } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import type { AuditEntry } from '@/types/audit'
 import { AUDIT_RESULT_CONFIG } from '@/types/audit'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 interface Props {
   type: 'session' | 'user'
@@ -145,7 +146,7 @@ const formatDateRange = computed(() => {
   const earliest = new Date(Math.min(...dates.map((d) => d.getTime())))
   const latest = new Date(Math.max(...dates.map((d) => d.getTime())))
 
-  const formatDate = (d: Date) => d.toLocaleDateString()
+  const formatDate = createDateFormatter({ kind: 'date' })
 
   if (formatDate(earliest) === formatDate(latest)) {
     return formatDate(earliest)
@@ -153,10 +154,7 @@ const formatDateRange = computed(() => {
   return `${formatDate(earliest)} - ${formatDate(latest)}`
 })
 
-function formatTime(timestamp: string): string {
-  const date = new Date(timestamp)
-  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-}
+const formatTime = createDateFormatter({ kind: 'time', intl: { hour: '2-digit', minute: '2-digit', second: '2-digit' } })
 
 function formatOperationName(operation: string): string {
   return operation
@@ -222,7 +220,7 @@ function toggleDetails(id: string) {
   gap: var(--spacing-2);
 }
 
-.header-content h3 i {
+.header-content h3 .icon {
   color: var(--color-primary);
 }
 
@@ -265,8 +263,8 @@ function toggleDetails(id: string) {
   gap: var(--spacing-2);
 }
 
-.loading-state i,
-.empty-state i {
+.loading-state .icon,
+.empty-state .icon {
   font-size: var(--text-3xl);
 }
 
@@ -394,7 +392,7 @@ function toggleDetails(id: string) {
   color: var(--text-secondary);
 }
 
-.meta-item i {
+.meta-item .icon {
   color: var(--text-tertiary);
 }
 

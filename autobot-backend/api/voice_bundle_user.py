@@ -20,7 +20,7 @@ from api.voice_bundle_constants import (
     VALID_BUNDLES,
     BundleAssignRequest,
 )
-from api.voice_bundle_helpers import _count_tools_for_bundle
+from api.voice_bundle_helpers import _count_tools_for_bundle, voice_bundle_user_id
 from auth_middleware import get_current_user
 from auth_rbac import require_role
 from autobot_shared.auth.permissions import is_admin_role
@@ -75,7 +75,7 @@ def _is_admin(user: dict) -> bool:
 
 def _get_user_id(user: dict) -> str:
     """Extract user_id from auth payload."""
-    return user.get("user_id") or user.get("sub") or user.get("username") or "unknown"
+    return voice_bundle_user_id(user) or "unknown"
 
 
 def _check_self_or_admin(request: Request, current_user: dict, target_user_id: str) -> bool:

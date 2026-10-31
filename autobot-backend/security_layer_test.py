@@ -6,10 +6,6 @@ Tests integrated security features including role-based access and command execu
 """
 
 import asyncio
-import importlib
-import json
-import os
-import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -27,22 +23,14 @@ class TestSecurityLayer:
     """Test SecurityLayer functionality"""
 
     def setup_method(self):
-        """Set up test fixtures"""
-        # Create temporary audit log file
-        self.temp_audit_file = tempfile.NamedTemporaryFile(delete=False)
-        self.temp_audit_file.close()
-
-        # Mock config to use temporary file
-        with (
-            patch("security_layer.get_config_manager") as mock_get_cm,
-            patch("security_layer.config") as mock_ssot_config,
-        ):
-            mock_ssot_config.audit_log_file = self.temp_audit_file.name
+        """Set up test fixtures; audit records are captured at the canonical service (#17225 D6)."""
+        self.emit_patcher = patch("security_layer.emit_security", return_value=True)
+        self.emit_security = self.emit_patcher.start()
+        with patch("security_layer.get_config_manager") as mock_get_cm:
             mock_config = mock_get_cm.return_value
             mock_config.get.return_value = {
                 "enable_auth": False,
                 "enable_command_security": True,
-                "audit_log_file": self.temp_audit_file.name,
                 "command_approval_required": True,
                 "use_docker_sandbox": False,
                 "roles": {
@@ -55,11 +43,8 @@ class TestSecurityLayer:
             self.security = SecurityLayer()
 
     def teardown_method(self):
-        """Clean up test fixtures"""
-        try:
-            os.unlink(self.temp_audit_file.name)
-        except OSError:
-            pass
+        """Stop capturing audit records."""
+        self.emit_patcher.stop()
 
     def test_initialization(self):
         """Test SecurityLayer initializes correctly"""
@@ -67,7 +52,6 @@ class TestSecurityLayer:
         assert self.security.enable_command_security is True
         assert self.security.command_approval_required is True
         assert self.security.use_docker_sandbox is False
-        assert self.security.audit_log_file == self.temp_audit_file.name
         assert self.security.command_executor is not None
         assert isinstance(self.security.pending_approvals, dict)
         assert isinstance(self.security.approval_results, dict)
@@ -75,11 +59,7 @@ class TestSecurityLayer:
     def test_create_security_policy(self):
         """Test security policy creation from configuration"""
         # Test with custom policies in config
-        with (
-            patch("security_layer.get_config_manager") as mock_get_cm,
-            patch("security_layer.config") as mock_ssot_config,
-        ):
-            mock_ssot_config.audit_log_file = ""
+        with patch("security_layer.get_config_manager") as mock_get_cm:
             mock_config = mock_get_cm.return_value
             mock_config.get.return_value = {
                 "enable_command_security": True,
@@ -341,89 +321,58 @@ class TestSecurityLayer:
             assert result["security"]["enabled"] is False
 
     def test_audit_log(self):
-        """Test audit logging functionality"""
+        """An action is recorded as a SECURITY event at the canonical service, tagged as this layer's."""
         self.security.audit_log(
             action="test_action",
             user="test_user",
             outcome="success",
             details={"command": "test command"},
         )
+        self.emit_security.assert_called_once_with(
+            "test_action",
+            "test_user",
+            resource_type=security_layer.SECURITY_LAYER_SOURCE,
+            metadata={"command": "test command"},
+            outcome="success",
+        )
 
-        # Check that log entry was written
-        with open(self.temp_audit_file.name, "r", encoding="utf-8") as f:
-            log_entry = json.loads(f.read().strip())
+    def test_a_record_that_cannot_be_scheduled_is_counted_not_raised(self):
+        """#14843/#14750: never raises, and a lost record is distinguishable from a written one."""
+        self.emit_security.return_value = False
+        with patch("security_layer.record_audit_write_failure_safely") as counted:
+            self.security.audit_log(action="test_action", user="test_user", outcome="success", details={})
+        counted.assert_called_once_with("test_action", "NotScheduled")
 
-        assert log_entry["action"] == "test_action"
-        assert log_entry["user"] == "test_user"
-        assert log_entry["outcome"] == "success"
-        assert log_entry["details"]["command"] == "test command"
-        assert "timestamp" in log_entry
+    @pytest.mark.asyncio
+    async def test_get_command_history_asks_for_command_actions(self):
+        query = AsyncMock(return_value=[])
+        with patch("security_layer.query_filtered", new=query):
+            assert await self.security.get_command_history(user="u", limit=5) == []
+        flt = query.call_args.args[0]
+        assert flt.actions == security_layer.COMMAND_EXECUTION_ACTIONS
+        assert (flt.actor_id, flt.resource_type) == ("u", security_layer.SECURITY_LAYER_SOURCE)
+        assert query.call_args.kwargs == {"limit": 5}
 
-    def test_audit_log_file_error(self):
-        """Test audit logging with file error"""
-        # Point to invalid directory
-        self.security.audit_log_file = "/invalid/path/audit.log"
-
-        # Should not raise exception
-        self.security.audit_log(action="test_action", user="test_user", outcome="success", details={})
-
-    def test_get_command_history_empty(self):
-        """Test getting command history when empty"""
-        history = self.security.get_command_history()
-        assert history == []
-
-    def test_get_command_history_with_data(self):
-        """Test getting command history with data"""
-        # Write some test log entries
-        test_entries = [
+    @pytest.mark.asyncio
+    async def test_entries_come_back_in_the_layers_shape(self):
+        stored = {
+            "action": "command_execution_attempt",
+            "actor_id": "test_user",
+            "outcome": "success",
+            "metadata": {"command": "ls"},
+            "occurred_at": 0.0,
+        }
+        with patch("security_layer.query_filtered", new=AsyncMock(return_value=[stored])):
+            entries = await self.security.get_audit_entries(limit=1)
+        assert entries == [
             {
+                "timestamp": "1970-01-01T00:00:00+00:00",
+                "user": "test_user",
                 "action": "command_execution_attempt",
-                "user": "test_user",
-                "timestamp": "2023-01-01T10:00:00",
+                "outcome": "success",
                 "details": {"command": "ls"},
-            },
-            {
-                "action": "command_execution_complete",
-                "user": "test_user",
-                "timestamp": "2023-01-01T10:00:01",
-                "details": {"command": "ls"},
-            },
-            {
-                "action": "other_action",
-                "user": "test_user",
-                "timestamp": "2023-01-01T10:00:02",
-                "details": {},
-            },
+            }
         ]
-
-        with open(self.temp_audit_file.name, "w", encoding="utf-8") as f:
-            for entry in test_entries:
-                f.write(json.dumps(entry) + "\n")
-
-        history = self.security.get_command_history()
-        assert len(history) == 2  # Only command execution entries
-
-        # Test with user filter
-        history = self.security.get_command_history(user="test_user")
-        assert len(history) == 2
-
-        history = self.security.get_command_history(user="other_user")
-        assert len(history) == 0
-
-        # Test with limit
-        history = self.security.get_command_history(limit=1)
-        assert len(history) == 1
-
-    def test_get_command_history_malformed_json(self):
-        """Test getting command history with malformed JSON"""
-        # Write malformed JSON
-        with open(self.temp_audit_file.name, "w", encoding="utf-8") as f:
-            f.write('{"valid": "json"}\n')
-            f.write("invalid json line\n")
-            f.write('{"action": "command_execution_attempt", "user": "test"}\n')
-
-        history = self.security.get_command_history()
-        assert len(history) == 1  # Only valid entries
 
     def test_authenticate_user_auth_disabled(self):
         """Test user authentication when auth is disabled"""
@@ -471,11 +420,9 @@ class TestSecurityLayerIntegration:
 
     def setup_method(self):
         """Set up test fixtures"""
-        with (
-            patch("security_layer.get_config_manager") as mock_get_cm,
-            patch("security_layer.config") as mock_ssot_config,
-        ):
-            mock_ssot_config.audit_log_file = ""
+        self.emit_patcher = patch("security_layer.emit_security", return_value=True)
+        self.emit_patcher.start()
+        with patch("security_layer.get_config_manager") as mock_get_cm:
             mock_config = mock_get_cm.return_value
             mock_config.get.return_value = {
                 "enable_auth": False,
@@ -484,6 +431,10 @@ class TestSecurityLayerIntegration:
                 "use_docker_sandbox": False,
             }
             self.security = SecurityLayer()
+
+    def teardown_method(self):
+        """Stop capturing audit records."""
+        self.emit_patcher.stop()
 
     @pytest.mark.asyncio
     async def test_end_to_end_safe_command(self):
@@ -543,41 +494,6 @@ class TestAuditLogFileDefault:
         monkeypatch.setenv("AUTOBOT_PROJECT_ROOT", "/opt/autobot")
 
         assert default_audit_log_file() == str(Path("/opt/autobot/logs/audit.log"))
-
-
-class TestAuditLogFileFollowsSSOTDefault:
-    """#14050: the audit-log default cannot silently disagree with the SSOT."""
-
-    def test_resolved_path_matches_the_ssot_default_when_unset(self, monkeypatch) -> None:
-        from autobot_shared import ssot_config
-
-        monkeypatch.delenv("AUTOBOT_AUDIT_LOG_FILE", raising=False)
-        monkeypatch.delenv("AUTOBOT_PROJECT_ROOT", raising=False)
-        monkeypatch.delenv("AUTOBOT_BASE_DIR", raising=False)
-        ssot_config.reload_config()
-
-        reloaded = importlib.reload(security_layer)
-        try:
-            assert reloaded._AUDIT_LOG_FILE == ssot_config.config.audit_log_file
-            assert reloaded._AUDIT_LOG_FILE == ssot_config.default_audit_log_file()
-            assert not reloaded._AUDIT_LOG_FILE.startswith("/opt/autobot")
-        finally:
-            ssot_config.reload_config()
-            importlib.reload(security_layer)
-
-    def test_resolved_path_honors_a_real_deployment_env_var(self, monkeypatch) -> None:
-        from autobot_shared import ssot_config
-
-        monkeypatch.setenv("AUTOBOT_AUDIT_LOG_FILE", "/opt/autobot/logs/audit.log")
-        ssot_config.reload_config()
-
-        reloaded = importlib.reload(security_layer)
-        try:
-            assert reloaded._AUDIT_LOG_FILE == "/opt/autobot/logs/audit.log"
-        finally:
-            monkeypatch.delenv("AUTOBOT_AUDIT_LOG_FILE", raising=False)
-            ssot_config.reload_config()
-            importlib.reload(security_layer)
 
 
 # Run tests

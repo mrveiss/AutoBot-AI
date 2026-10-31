@@ -14,7 +14,7 @@ Issue #3278 - Plugin and extension system for third-party integrations.
 import asyncio
 import logging
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 from .base import PluginRegistry, PluginStatus
 from .hooks import HookRegistry
@@ -31,7 +31,12 @@ class PluginManager:
     management.  Intended as a singleton owned by the FastAPI application.
     """
 
-    def __init__(self, plugin_dirs: List[Path] | None = None) -> None:
+    def __init__(
+        self,
+        plugin_dirs: List[Path] | None = None,
+        credential_resolvers: Dict[str, Callable[[str], str]] | None = None,
+        trusted_roots: List[Path] | None = None,
+    ) -> None:
         """
         Initialize plugin manager.
 
@@ -39,8 +44,11 @@ class PluginManager:
             plugin_dirs: Directories to search for plugins.  If omitted the
                          manager boots without any search paths (plugins can
                          still be loaded explicitly via ``load_plugin``).
+            credential_resolvers: plugin name -> scoped resolver (#18094).
+            trusted_roots: built-in plugin roots; a resolver is injected only
+                           into a plugin whose real path lies under one.
         """
-        self._loader = PluginLoader(plugin_dirs or [])
+        self._loader = PluginLoader(plugin_dirs or [], credential_resolvers, trusted_roots)
         self._registry = PluginRegistry()
         self._hook_registry = HookRegistry()
         self._started = False

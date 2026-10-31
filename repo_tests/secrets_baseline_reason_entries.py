@@ -24,29 +24,6 @@ BaselineKey = Tuple[str, str, str]
 #: time (see the module docstring).
 SPECIFIC_REASONS: dict[BaselineKey, str] = {
     (
-        ".env.docker",
-        "Secret Keyword",
-        "1ba53c9c3dd2dff0ba71a8b942318082315e6f04",  # pragma: allowlist secret
-    ): (
-        "GRAFANA_ADMIN_PASSWORD default literal 'autobot' -- one of #16299's "
-        "named guessable defaults, tracked there for a generate-on-first-run "
-        "fix (owner ruling 2026-09-17). Not silently allowed: baselined here "
-        "only because the pre-commit hook blocks every .env* edit and the "
-        "fix needs the owner to apply Decision 2's protect-files.sh patch "
-        "first (see #16299)."
-    ),
-    (
-        "docker/.env.docker",
-        "Secret Keyword",
-        "1ba53c9c3dd2dff0ba71a8b942318082315e6f04",  # pragma: allowlist secret
-    ): (
-        "AUTOBOT_DB_PASSWORD default literal 'autobot' -- the same #16299 "
-        "named default as .env.docker's GRAFANA_ADMIN_PASSWORD (identical "
-        "literal, hence identical hashed_secret). Tracked for "
-        "generate-on-first-run; existing installs deliberately keep their "
-        "current password per the owner's 2026-09-17 ruling."
-    ),
-    (
         "autobot-slm-backend/ansible/roles/backend/defaults/main.yml",
         "Secret Keyword",
         "a5c01e694764bcf09315443c6476e283e6f77906",  # pragma: allowlist secret
@@ -561,4 +538,53 @@ SPECIFIC_REASONS: dict[BaselineKey, str] = {
         "the audited verdict carries over unchanged because the value is the same "
         "display heading either way."
     ),
+    (
+        "autobot-slm-frontend/src/locales/en.json",
+        "Secret Keyword",
+        "1e3732aec487906e739333e586f2b6ff9e9f1a96",  # pragma: allowlist secret
+    ): (
+        "the i18n display label `Secrets` (settings.nav.secrets, the SLM settings nav entry "
+        "#19217 moved out of hard-coded English), not a credential; the key `secrets` trips the "
+        "Secret Keyword denylist. Plain SHA1 of the literal label reproduces this hash."
+    ),
 }
+
+
+# #15008: the Secrets page's translated category headings for API keys and
+# passwords. The keys `api_key`/`password` trip the Secret Keyword denylist; each
+# value is a display label, confirmed by re-hashing the literal (plain SHA1 of the
+# label reproduces the stored hashed_secret).
+_SECRETS_CATEGORY_LABELS = (
+    ("ar", "d27284876a7b732ef49257da961c9359499c51cf", "api_key", "مفاتيح API"),  # pragma: allowlist secret
+    ("es", "7c679565756b2a3e6eb3cc6753e7c3055242f92f", "api_key", "Claves API"),  # pragma: allowlist secret
+    ("fa", "1ab08a21b8d719b395908b421d08bfff87c8bb54", "api_key", "کلیدهای API"),  # pragma: allowlist secret
+    ("he", "6fd45fcadd7fb7acb7022e777547f47c53b18d7f", "api_key", "מפתחות API"),  # pragma: allowlist secret
+    ("pt", "21cccea267c9ccd2bce0a45a783d54fe59233b3a", "api_key", "Chaves API"),  # pragma: allowlist secret
+    ("pt", "e33dc67583b5ca424d6ec11b74ceee559d2aba6c", "password", "Senhas"),  # pragma: allowlist secret
+    ("ur", "93ed2b9190fc912659d2145123a9c319963da152", "api_key", "API کلیدیں"),  # pragma: allowlist secret
+)
+SPECIFIC_REASONS.update(
+    {
+        (f"autobot-frontend/src/i18n/locales/{loc}.json", "Secret Keyword", digest): (
+            f"the i18n display label `{label}` (security.secretsManager.categories.{kind}), "
+            f"a Secrets-page category heading, not a credential; the key `{kind}` trips the "
+            "Secret Keyword denylist. Plain SHA1 of the literal label reproduces this hash."
+        )
+        for loc, digest, kind, label in _SECRETS_CATEGORY_LABELS
+    }
+)
+SPECIFIC_REASONS[
+    (
+        "autobot-slm-frontend/src/locales/en.json",
+        "Secret Keyword",
+        "2f4e787013273291c4660e4215db88b21423f8df",  # pragma: allowlist secret
+    )
+] = (
+    "the i18n display label `Reset Password for {username}` (the SLM user dialog title #14777 moved "
+    "into i18n), not a credential; `Password` in the key trips the Secret Keyword denylist. Plain SHA1 "
+    "of the literal label reproduces this hash."
+)
+
+from repo_tests.secrets_baseline_reason_entries_slm_labels import SLM_LABEL_REASONS  # noqa: E402  (#18863)
+
+SPECIFIC_REASONS.update(SLM_LABEL_REASONS)

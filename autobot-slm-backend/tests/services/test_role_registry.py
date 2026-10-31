@@ -268,7 +268,7 @@ def test_vnc_role_has_non_empty_target_path():
     it due to the old guard that only checked target_path (#9965)."""
     role = _role("vnc")
     assert role["target_path"], "vnc target_path must be non-empty so role_detector detects it"
-    assert role["systemd_service"] == ["tigervncserver"]  # #16025: no manifest -- wrapped as a sequence
+    assert role["systemd_service"] == ["vnc-server"]  # #16025: no manifest -- wrapped as a sequence
     assert role["required"] is False
 
 
@@ -502,14 +502,13 @@ def _groups_a_role_joins(role: str) -> set:
 def _activation_sources() -> dict:
     """ansible role -> what switches it on: inventory groups AND node roles.
 
-    Read out of `role_active_facts.yml`, which is what the provisioning
-    playbook actually gates each `include_role` on. Both clauses matter: a
-    role activates either because the node landed in a group or because the
-    node declares the role by name, and covering only the group half leaves
-    the node-roles half unguarded -- which is how the `redis` gap survived
-    the first version of this rule.
+    Read out of `group_vars/all.yml`, which the provisioning playbook gates each
+    `include_role` on. Both clauses matter: a role activates either because the
+    node landed in a group or because the node declares the role by name, and
+    covering only the group half leaves the node-roles half unguarded -- which
+    is how the `redis` gap survived the first version of this rule.
     """
-    facts_file = _ANSIBLE_DIR / "playbooks" / "vars" / "role_active_facts.yml"
+    facts_file = _ANSIBLE_DIR / "inventory" / "group_vars" / "all.yml"
     text = facts_file.read_text(encoding="utf-8")
 
     activating: dict = {}
@@ -520,6 +519,7 @@ def _activation_sources() -> dict:
             current = match.group(1).replace("_", "-")
             activating.setdefault(current, {"groups": set(), "roles": set()})
             continue
+        current = None if line[:1].isalpha() else current  # #18514: all.yml also holds non-fact keys
         if current:
             for group in _re.findall(r"groups\.get\('([a-z0-9_]+)'", line):
                 activating[current]["groups"].add(group)

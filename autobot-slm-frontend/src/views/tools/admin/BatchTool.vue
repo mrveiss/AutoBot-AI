@@ -13,9 +13,16 @@ const logger = createLogger('BatchTool')
  * Migrated from main AutoBot frontend - Issue #729.
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useAutobotApi } from '@/composables/useAutobotApi'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
+import { BaseAlert, BaseModal, PollingPausedAlert } from '@autobot/ui'
+import { formatDuration } from '@/utils/formatHelpers'
+import { useDashboardPoller } from '@/composables/useDashboardPoller'
+import { POLL_CONSECUTIVE_ERROR_LIMIT } from '@/constants/api-timeouts'
+
+const DURATION_OPTIONS = { style: 'msCompound' } as const
 
 const api = useAutobotApi()
 
@@ -59,11 +66,16 @@ const newJob = ref({
   options: {}
 })
 
-let refreshInterval: ReturnType<typeof setInterval> | null = null
-// Issue #1092: Stop polling on repeated auth failures
-let consecutiveErrors = 0
-const MAX_CONSECUTIVE_ERRORS = 3
-const backendAvailable = ref(true)
+const { t } = useI18n()
+
+// Issue #1092: polling stops after repeated failures. Since #19482 that is the shared SLM
+// dashboard policy (useDashboardPoller, POLL_CONSECUTIVE_ERROR_LIMIT); Retry restarts it.
+const POLL_INTERVAL_MS = 10_000
+
+/** Message of a thrown value, or the translated fallback. */
+function errorText(e: unknown, fallbackKey: string): string {
+  return e instanceof Error && e.message ? e.message : t(fallbackKey)
+}
 
 // Computed
 const filteredJobs = computed(() => {
@@ -92,33 +104,19 @@ function getProgressColor(status: string): string {
   }
 }
 
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '-'
-  return formatDateTime(dateStr)
+async function fetchJobs(): Promise<void> {
+  const data = await api.listBatchJobs()
+  jobs.value = (data.jobs as BatchJob[]) || []
 }
 
-function formatDuration(start: string | null, end: string | null): string {
-  if (!start) return '-'
-  const startDate = new Date(start)
-  const endDate = end ? new Date(end) : new Date()
-  const diff = Math.floor((endDate.getTime() - startDate.getTime()) / 1000)
-
-  if (diff < 60) return `${diff}s`
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ${diff % 60}s`
-  return `${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m`
-}
-
+/** Reload after an action; the error is shown, not thrown. */
 async function loadJobs(): Promise<void> {
   loading.value = true
   error.value = null
-
   try {
-    const data = await api.listBatchJobs()
-    jobs.value = (data.jobs as BatchJob[]) || []
-    consecutiveErrors = 0
-    backendAvailable.value = true
+    await fetchJobs()
   } catch (e) {
-    handlePollError(e)
+    error.value = errorText(e, 'tools.admin.batchTool.failedToLoadJobs')
   } finally {
     loading.value = false
   }
@@ -138,45 +136,38 @@ async function loadStats(): Promise<void> {
   }
 }
 
-// Issue #1092: Stop polling after repeated failures
-function handlePollError(e: unknown): void {
-  consecutiveErrors++
-  if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-    stopPolling()
-    backendAvailable.value = false
-    error.value = 'AutoBot backend unreachable. Polling paused.'
-    logger.warn(
-      'Batch polling stopped after %d consecutive errors',
-      consecutiveErrors,
-    )
-  } else {
-    error.value = e instanceof Error ? e.message : 'Failed to load jobs'
+/** One poll tick; a failure throws, so usePollingJob counts it. */
+async function pollTick(): Promise<void> {
+  loading.value = true
+  try {
+    await Promise.all([fetchJobs(), loadStats()])
+    error.value = null
+  } finally {
+    loading.value = false
   }
 }
 
-function stopPolling(): void {
-  if (refreshInterval) {
-    clearInterval(refreshInterval)
-    refreshInterval = null
-  }
-}
+const poller = useDashboardPoller(pollTick, POLL_INTERVAL_MS)
 
-function resumePolling(): void {
-  consecutiveErrors = 0
-  backendAvailable.value = true
+watch(poller.error, (e) => {
+  if (e) error.value = errorText(e, 'tools.admin.batchTool.failedToLoadJobs')
+})
+// The shared PollingPausedAlert says it on screen; the per-tick error then steps aside.
+watch(poller.pausedOnErrors, (paused) => {
+  if (!paused) return
   error.value = null
-  refreshData()
-  refreshInterval = setInterval(() => refreshData(), 10000)
-}
+  logger.warn('Batch polling stopped after %d consecutive errors', POLL_CONSECUTIVE_ERROR_LIMIT)
+})
 
-async function refreshData(): Promise<void> {
-  if (!backendAvailable.value) return
-  await Promise.all([loadJobs(), loadStats()])
+/** Refresh now, and restart polling if it had paused (Refresh and Retry both). */
+function refreshData(): void {
+  error.value = null
+  poller.start('')
 }
 
 async function createJob(): Promise<void> {
   if (!newJob.value.name) {
-    error.value = 'Please enter a job name'
+    error.value = t('tools.admin.batchTool.enterJobName')
     return
   }
 
@@ -188,7 +179,7 @@ async function createJob(): Promise<void> {
     newJob.value = { name: '', type: 'file_processing', items: [], options: {} }
     await loadJobs()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to create job'
+    error.value = errorText(e, 'tools.admin.batchTool.failedToCreateJob')
   } finally {
     loading.value = false
   }
@@ -200,7 +191,7 @@ async function cancelJob(jobId: string): Promise<void> {
     await api.cancelBatchJob(jobId)
     await loadJobs()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to cancel job'
+    error.value = errorText(e, 'tools.admin.batchTool.failedToCancelJob')
   }
 }
 
@@ -213,12 +204,12 @@ async function retryJob(jobId: string): Promise<void> {
     }
     await loadJobs()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to retry job'
+    error.value = errorText(e, 'tools.admin.batchTool.failedToRetryJob')
   }
 }
 
 async function deleteJob(jobId: string): Promise<void> {
-  if (!confirm('Are you sure you want to delete this job?')) return
+  if (!confirm(t('tools.admin.batchTool.confirmDeleteJob'))) return
 
   try {
     // Issue #835 - use cancelBatchJob (DELETE endpoint)
@@ -228,18 +219,12 @@ async function deleteJob(jobId: string): Promise<void> {
     }
     await loadJobs()
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to delete job'
+    error.value = errorText(e, 'tools.admin.batchTool.failedToDeleteJob')
   }
 }
 
-onMounted(() => {
-  refreshData()
-  refreshInterval = setInterval(() => refreshData(), 10000)
-})
-
-onUnmounted(() => {
-  stopPolling()
-})
+// usePollingJob stops itself when the component's scope is disposed.
+onMounted(() => poller.start(''))
 </script>
 
 <template>
@@ -343,21 +328,17 @@ onUnmounted(() => {
       </div>
     </div>
 
-    <!-- Issue #1092: Backend unavailable banner with retry -->
-    <div v-if="!backendAvailable" class="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-lg flex items-center justify-between">
-      <span class="text-amber-800">{{ $t('tools.admin.batchTool.autoBotBackendUnreachablePolling') }}</span>
-      <button
-        @click="resumePolling"
-        class="px-3 py-1.5 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700"
-      >
-        {{ $t('tools.admin.batchTool.retry') }}
-      </button>
-    </div>
+    <!-- Issue #1092 / #19482: polling paused after repeated failures, with Retry -->
+    <PollingPausedAlert
+      class="mb-6"
+      :poller="poller"
+      :message="$t('tools.admin.batchTool.autoBotBackendUnreachablePolling')"
+      :retry-label="$t('tools.admin.batchTool.retry')"
+      @retry="refreshData"
+    />
 
     <!-- Error Message -->
-    <div v-if="error && backendAvailable" class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-      {{ error }}
-    </div>
+    <BaseAlert v-if="error" variant="error" class="mb-6" :message="error" />
 
     <!-- Jobs List -->
     <div v-if="loading && !jobs.length" class="text-center py-12">
@@ -437,15 +418,15 @@ onUnmounted(() => {
         <div class="grid grid-cols-4 gap-4 text-sm">
           <div>
             <p class="text-gray-500">{{ $t('tools.admin.batchTool.created') }}</p>
-            <p class="text-gray-900">{{ formatDate(job.created_at) }}</p>
+            <p class="text-gray-900">{{ formatFleetDateTime(job.created_at, '-') }}</p>
           </div>
           <div>
             <p class="text-gray-500">{{ $t('tools.admin.batchTool.started') }}</p>
-            <p class="text-gray-900">{{ formatDate(job.started_at) }}</p>
+            <p class="text-gray-900">{{ formatFleetDateTime(job.started_at, '-') }}</p>
           </div>
           <div>
             <p class="text-gray-500">{{ $t('tools.admin.batchTool.duration') }}</p>
-            <p class="text-gray-900">{{ formatDuration(job.started_at, job.completed_at) }}</p>
+            <p class="text-gray-900">{{ formatDuration(job.started_at, job.completed_at, DURATION_OPTIONS) }}</p>
           </div>
           <div>
             <p class="text-gray-500">{{ $t('tools.admin.batchTool.failedItems') }}</p>
@@ -454,65 +435,58 @@ onUnmounted(() => {
         </div>
 
         <!-- Error Message -->
-        <div v-if="job.error" class="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-          <p class="text-sm text-red-700">{{ job.error }}</p>
-        </div>
+        <BaseAlert v-if="job.error" variant="error" class="mt-4" :message="job.error" />
       </div>
     </div>
 
     <!-- Create Job Modal -->
-    <div v-if="showCreateModal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 p-6">
-        <div class="flex items-center justify-between mb-6">
-          <h3 class="text-lg font-semibold text-gray-900">{{ $t('tools.admin.batchTool.createBatchJob') }}</h3>
-          <button @click="showCreateModal = false" class="text-gray-400 hover:text-gray-600" :aria-label="$t('tools.admin.batchTool.close')">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
+    <BaseModal
+      :close-on-esc="!loading"
+      v-model="showCreateModal"
+      :title="$t('tools.admin.batchTool.createBatchJob')"
+      width="32rem"
+      :close-on-overlay="false"
+      :close-label="$t('tools.admin.batchTool.close')"
+    >
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('tools.admin.batchTool.jobName') }}</label>
+          <input
+            v-model="newJob.name"
+            type="text"
+            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            :placeholder="$t('tools.admin.batchTool.enterJobName')"
+          />
         </div>
 
-        <div class="space-y-4">
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('tools.admin.batchTool.jobName') }}</label>
-            <input
-              v-model="newJob.name"
-              type="text"
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              :placeholder="$t('tools.admin.batchTool.enterJobName')"
-            />
-          </div>
-
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('tools.admin.batchTool.jobType') }}</label>
-            <select
-              v-model="newJob.type"
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-            >
-              <option value="file_processing">{{ $t('tools.admin.batchTool.fileProcessing') }}</option>
-              <option value="data_export">{{ $t('tools.admin.batchTool.dataExport') }}</option>
-              <option value="report_generation">{{ $t('tools.admin.batchTool.reportGeneration') }}</option>
-              <option value="cleanup">{{ $t('tools.admin.batchTool.cleanup') }}</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="flex justify-end gap-3 mt-6">
-          <button
-            @click="showCreateModal = false"
-            class="px-4 py-2 text-gray-700 hover:text-gray-900"
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('tools.admin.batchTool.jobType') }}</label>
+          <select
+            v-model="newJob.type"
+            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
           >
-            {{ $t('tools.admin.batchTool.cancel') }}
-          </button>
-          <button
-            @click="createJob"
-            :disabled="loading || !newJob.name"
-            class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
-          >
-            {{ loading ? $t('tools.admin.batchTool.creating') : $t('tools.admin.batchTool.createJob') }}
-          </button>
+            <option value="file_processing">{{ $t('tools.admin.batchTool.fileProcessing') }}</option>
+            <option value="data_export">{{ $t('tools.admin.batchTool.dataExport') }}</option>
+            <option value="report_generation">{{ $t('tools.admin.batchTool.reportGeneration') }}</option>
+            <option value="cleanup">{{ $t('tools.admin.batchTool.cleanup') }}</option>
+          </select>
         </div>
       </div>
-    </div>
+      <template #actions>
+        <button
+          @click="showCreateModal = false"
+          class="px-4 py-2 text-gray-700 hover:text-gray-900"
+        >
+          {{ $t('tools.admin.batchTool.cancel') }}
+        </button>
+        <button
+          @click="createJob"
+          :disabled="loading || !newJob.name"
+          class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50"
+        >
+          {{ loading ? $t('tools.admin.batchTool.creating') : $t('tools.admin.batchTool.createJob') }}
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>

@@ -42,7 +42,7 @@
 Implement LLM-powered code generation that learns from the codebase to automatically refactor detected patterns.
 
 ## Technical Requirements
-- Integrate CodeLlama-13B or GPT-4 for code generation
+- Integrate CodeLlama-13B (not provisioned) or GPT-4 for code generation
 - Fine-tune on AutoBot's coding patterns
 - Generate refactored code following project conventions
 - Validate generated code with AST parsing
@@ -1415,19 +1415,19 @@ graph TD
         B --> C[#31 LLM Opt]
         A --> D[#34 Git Hooks]
     end
-    
+
     subgraph "AI Enhancement"
         E[#13 Auto-Refactor] --> F[#25 Code Review]
         F --> G[#22 Self-Learning]
         G --> H[#32 Continuous]
     end
-    
+
     subgraph "Analysis"
         I[#19 Anti-patterns] --> J[#20 Performance]
         J --> K[#24 Bug Predict]
         K --> L[#37 Tech Debt]
     end
-    
+
     subgraph "Developer Tools"
         M[#14 Search] --> N[#33 IDE Plugin]
         O[#36 Dashboard] --> P[#42 Docs]

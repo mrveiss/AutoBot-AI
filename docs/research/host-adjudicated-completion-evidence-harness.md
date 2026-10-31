@@ -317,7 +317,7 @@ implements exactly the source's depth-bounded ancestor walk, and does it *better
 (`:115-118`), with a two-node cycle exercised in `test_lineage_service.py:247-248`. But
 `parent_run_id` exists only for KB-synthesis evolution (`synthesis_provenance.py:40,69`). Greps for
 `parent_run_id` / `parentRunId` outside `services/knowledge/` return nothing — no agent or subagent
-run record (`LLCHeartbeatRun`, a2a `Task`, orchestration `SubagentTask`) carries one. So the
+run record (`LLCHeartbeatRun`, a2a `Task`, orchestration `SubagentDispatchTask`) carries one. So the
 "delegated worker inherits its lead's project" problem the source solves cannot even be asked here.
 
 **Verdict: adopt-with-conditions.** Visible benefit: a work product can no longer claim an author
@@ -562,7 +562,7 @@ recorded here as witnesses, not refiled.
 **Audit — AutoBot has thirteen ratchets and none is edit-scoped.** Every one is either a frozen
 absolute count checked on a full-repo scan, or a shrink-only allow-list keyed on file path or exact
 string. `scripts/check_python_file_size.py` + `repo_tests/python_file_size_ratchet_baseline.py`
-(per-file ceiling, `MAX_KNOWN_LARGE_ENTRIES = 486`); `repo_tests/frontend_api_contract_ratchet_test.py:200-254`
+(per-file ceiling; the `MAX_KNOWN_LARGE_ENTRIES = 486` total it had then was retired by #19283 for a per-entry base comparison); `repo_tests/frontend_api_contract_ratchet_test.py:200-254`
 (raw regex-match scalars, asserted equal in **both** directions); `i18n_untranslated_ratchet_test.py`;
 `background_task_retention_ratchet_test.py`; `credential_vault_resolution_ratchet_test.py`;
 `.github/workflows/ratchet-base-guard.yml` (re-runs the file-size audit on push to catch "a violation
@@ -748,3 +748,12 @@ model" would need that field added, under the doctrine's additive-and-optional r
 absent evidence), **#17496** (work products carry no attribution; unregistered concept; unwired
 lease), **#17497** (`in` as an allow-list admits prototype keys from a WebSocket payload).
 Recorded as prior witnesses, not refiled: #17307 (closed), #16842/#16771, #17092, #13935/#13228.
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #17494 — security(approvals): a negated refusal reads as APPROVE — parse_decision inverts "do not approve"
+- #17495 — bug(completion): four sites assert success when the evidence is absent or explicitly negative
+- #17496 — bug(llc): work products carry no attribution, are unregistered in store_authority, and the workspace lease has no caller
+- #17497 — bug(slm-frontend): 'in' as an allow-list check admits Object.prototype keys from a WebSocket payload

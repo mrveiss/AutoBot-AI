@@ -10,6 +10,7 @@ from .agent_api import router as agent_router
 from .agent_hires import router as agent_hires_router
 from .agent_wiki import router as agent_wiki_router
 from .agents import router as agents_router
+from .ai_lines import router as ai_lines_router
 from .api_keys import router as api_keys_router
 from .approvals import router as approvals_router
 from .backlog import router as backlog_router
@@ -18,6 +19,10 @@ from .budget import cost_events_router, costs_by_model_router
 from .budget import router as budget_router
 from .companies import router as companies_router
 from .company_ceo import router as company_ceo_router
+from .company_members import router as company_members_router
+from .company_os import router as company_os_router
+from .company_os_plans import router as company_os_plans_router
+from .company_os_skills import router as company_os_skills_router
 from .contacts import router as contacts_router
 from .context import router as context_router
 from .controls import router as controls_router
@@ -40,6 +45,8 @@ from .secrets import router as secrets_router
 from .sprints import router as sprints_router
 from .templates import router as templates_router
 from .tools import router as tools_router
+from .work_item_comments import router as work_item_comments_router
+from .work_item_relations_routes import router as work_item_relations_router
 from .work_items import router as work_items_router
 from .workflows import router as workflows_router
 
@@ -49,12 +56,14 @@ router = APIRouter(prefix="/llc", tags=["llc"])
 router.include_router(activity_router)
 router.include_router(boards_router)
 router.include_router(adapters_router)
+router.include_router(ai_lines_router)
 router.include_router(approvals_router)
 router.include_router(backlog_router)
 router.include_router(budget_router)
 router.include_router(cost_events_router)
 router.include_router(costs_by_model_router)
 router.include_router(companies_router)
+router.include_router(company_members_router)
 router.include_router(company_ceo_router)
 router.include_router(contacts_router)
 router.include_router(agent_hires_router)
@@ -66,6 +75,8 @@ router.include_router(roles_router)
 router.include_router(tools_router)
 router.include_router(sprints_router)
 router.include_router(work_items_router)
+router.include_router(work_item_comments_router)
+router.include_router(work_item_relations_router)
 router.include_router(github_webhooks_router)
 router.include_router(api_keys_router)
 router.include_router(agent_router)
@@ -83,9 +94,11 @@ router.include_router(context_router)
 router.include_router(controls_router)
 router.include_router(labels_router)
 router.include_router(templates_router)
-router.include_router(agent_hires_router)
 router.include_router(costs_router)
 router.include_router(workflows_router)
+router.include_router(company_os_router)
+router.include_router(company_os_plans_router)
+router.include_router(company_os_skills_router)
 
 
 @router.get("/health")

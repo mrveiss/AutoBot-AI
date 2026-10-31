@@ -18,7 +18,7 @@
         <div class="mini-progress-bar" :style="{ width: taskStatus.progress + '%' }"></div>
       </div>
       <span v-if="taskStatus?.partial_results?.files_processed" class="files-progress">
-        {{ taskStatus.partial_results.files_processed }} / {{ taskStatus.partial_results.total_files }} files
+        {{ $t('analytics.codebase.shared.filesProgress', { done: taskStatus.partial_results.files_processed, total: taskStatus.partial_results.total_files }) }}
       </span>
     </div>
 
@@ -79,11 +79,11 @@
           <span class="header-count">({{ duplicatePatterns.length }})</span>
         </div>
         <div v-show="isSectionExpanded('duplicates')" class="accordion-content">
-          <div v-for="(dup, index) in duplicatePatterns.slice(0, 20)" :key="'dup-' + index"
+          <div v-for="(dup, index) in visible('duplicates', duplicatePatterns)" :key="'dup-' + index"
                class="pattern-item" :class="'severity-' + dup.severity">
             <div class="pattern-header">
               <span class="pattern-title">{{ dup.description }}</span>
-              <span class="pattern-badge">{{ (dup.similarity_score * 100).toFixed(0) }}% similar</span>
+              <span class="pattern-badge">{{ $t('analytics.codebase.shared.similarPercent', { percent: (dup.similarity_score * 100).toFixed(0) }) }}</span>
             </div>
             <div class="pattern-details">
               <div class="detail-row">
@@ -96,21 +96,17 @@
               </div>
             </div>
             <div class="pattern-locations">
-              <div v-for="(loc, locIdx) in dup.locations?.slice(0, 3)" :key="locIdx" class="location-item">
+              <div v-for="(loc, locIdx) in visible('loc-' + index, dup.locations, NESTED_STEP)" :key="locIdx" class="location-item">
                 <code>{{ loc.file_path }}:{{ loc.start_line }}</code>
                 <span v-if="loc.function_name" class="function-name">{{ loc.function_name }}</span>
               </div>
-              <div v-if="(dup.locations?.length || 0) > 3" class="more-locations">
-                {{ $t('analytics.patterns.moreLocations', { count: (dup.locations?.length || 0) - 3 }) }}
-              </div>
+              <TruncationNotice :shown="shown('loc-' + index, dup.locations?.length ?? 0, NESTED_STEP)" :total="dup.locations?.length ?? 0" :step="NESTED_STEP" @show-more="showMore('loc-' + index, NESTED_STEP)" />
             </div>
             <div class="pattern-suggestion">
               <Icon name="lightbulb" /> {{ dup.suggestion }}
             </div>
           </div>
-          <div v-if="duplicatePatterns.length > 20" class="show-more">
-            <span class="muted">{{ $t('analytics.patterns.showingOfDuplicates', { shown: 20, total: duplicatePatterns.length }) }}</span>
-          </div>
+          <TruncationNotice :shown="shown('duplicates', duplicatePatterns.length)" :total="duplicatePatterns.length" :step="PAGE_SIZE" @show-more="showMore('duplicates')" />
         </div>
       </div>
 
@@ -122,7 +118,7 @@
           <span class="header-count">({{ regexOpportunities.length }})</span>
         </div>
         <div v-show="isSectionExpanded('regex')" class="accordion-content">
-          <div v-for="(opp, index) in regexOpportunities.slice(0, 15)" :key="'regex-' + index"
+          <div v-for="(opp, index) in visible('regex', regexOpportunities)" :key="'regex-' + index"
                class="pattern-item" :class="'severity-' + opp.severity">
             <div class="pattern-header">
               <span class="pattern-title">{{ opp.description }}</span>
@@ -142,9 +138,7 @@
               </div>
             </div>
           </div>
-          <div v-if="regexOpportunities.length > 15" class="show-more">
-            <span class="muted">{{ $t('analytics.patterns.showingOfOpportunities', { shown: 15, total: regexOpportunities.length }) }}</span>
-          </div>
+          <TruncationNotice :shown="shown('regex', regexOpportunities.length)" :total="regexOpportunities.length" :step="PAGE_SIZE" @show-more="showMore('regex')" />
         </div>
       </div>
 
@@ -167,7 +161,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(hotspot, index) in complexityHotspots.slice(0, 20)" :key="'cx-' + index"
+              <tr v-for="(hotspot, index) in visible('complexity', complexityHotspots)" :key="'cx-' + index"
                   :class="'severity-row-' + hotspot.severity">
                 <td class="location-cell">
                   <code>{{ formatLocation(hotspot.locations?.[0]) }}</code>
@@ -185,9 +179,7 @@
               </tr>
             </tbody>
           </table>
-          <div v-if="complexityHotspots.length > 20" class="show-more">
-            <span class="muted">{{ $t('analytics.patterns.showingOfHotspots', { shown: 20, total: complexityHotspots.length }) }}</span>
-          </div>
+          <TruncationNotice :shown="shown('complexity', complexityHotspots.length)" :total="complexityHotspots.length" :step="PAGE_SIZE" @show-more="showMore('complexity')" />
         </div>
       </div>
 
@@ -199,7 +191,7 @@
           <span class="header-count">({{ refactoringSuggestions.length }})</span>
         </div>
         <div v-show="isSectionExpanded('refactoring')" class="accordion-content">
-          <div v-for="(suggestion, index) in refactoringSuggestions.slice(0, 15)" :key="'ref-' + index"
+          <div v-for="(suggestion, index) in visible('refactoring', refactoringSuggestions)" :key="'ref-' + index"
                class="refactoring-item" :class="'severity-' + suggestion.severity">
             <div class="refactoring-header">
               <span class="refactoring-title">{{ suggestion.title }}</span>
@@ -209,22 +201,21 @@
             </div>
             <div class="refactoring-description">{{ suggestion.description }}</div>
             <div class="refactoring-benefits">
-              <span v-for="(benefit, bIdx) in suggestion.benefits?.slice(0, 3)" :key="bIdx" class="benefit-tag">
+              <span v-for="(benefit, bIdx) in visible('benefits-' + index, suggestion.benefits, NESTED_STEP)" :key="bIdx" class="benefit-tag">
                 {{ benefit }}
               </span>
+              <TruncationNotice :shown="shown('benefits-' + index, suggestion.benefits?.length ?? 0, NESTED_STEP)" :total="suggestion.benefits?.length ?? 0" :step="NESTED_STEP" @show-more="showMore('benefits-' + index, NESTED_STEP)" />
             </div>
             <div class="refactoring-impact">
               <span v-if="suggestion.estimated_loc_reduction > 0">
-                <Icon name="minus-circle" /> {{ suggestion.estimated_loc_reduction }} LOC
+                <Icon name="minus-circle" /> {{ $t('analytics.codebase.shared.locReduction', { count: suggestion.estimated_loc_reduction }) }}
               </span>
               <span v-if="suggestion.estimated_complexity_reduction > 0">
-                <Icon name="chart-line" /> -{{ suggestion.estimated_complexity_reduction }} complexity
+                <Icon name="chart-line" /> {{ $t('analytics.codebase.shared.complexityReduction', { count: suggestion.estimated_complexity_reduction }) }}
               </span>
             </div>
           </div>
-          <div v-if="refactoringSuggestions.length > 15" class="show-more">
-            <span class="muted">{{ $t('analytics.patterns.showingOfSuggestions', { shown: 15, total: refactoringSuggestions.length }) }}</span>
-          </div>
+          <TruncationNotice :shown="shown('refactoring', refactoringSuggestions.length)" :total="refactoringSuggestions.length" :step="PAGE_SIZE" @show-more="showMore('refactoring')" />
         </div>
       </div>
 
@@ -258,10 +249,13 @@
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
+import { useShowMore } from '@autobot/ui'
+import TruncationNotice from './TruncationNotice.vue'
 import { watch, onMounted, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { usePatternAnalysis, type PatternAnalysisReport, type CodeLocation } from '@/composables/usePatternAnalysis'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { t } = useI18n()
 const { confirm } = useConfirmDialog()
@@ -308,6 +302,11 @@ const {
   loadCachedData
 } = usePatternAnalysis()
 
+// #12741: a capped list is expandable; the notice below it is the control.
+const PAGE_SIZE = 20
+const NESTED_STEP = 3
+const { visible, shown, showMore } = useShowMore(PAGE_SIZE, () => [duplicatePatterns.value, regexOpportunities.value, complexityHotspots.value, refactoringSuggestions.value])
+
 // Track which sections have been loaded (lazy loading)
 const sectionsLoaded = reactive({
   duplicates: false,
@@ -353,13 +352,7 @@ const formatLocation = (loc: CodeLocation | null | undefined): string => {
   return result
 }
 
-const formatTimestamp = (ts: string): string => {
-  try {
-    return new Date(ts).toLocaleString()
-  } catch {
-    return ts
-  }
-}
+const formatTimestamp = createDateFormatter()
 
 const getMetricClass = (value: number, type: string): string => {
   if (type === 'cc') {
@@ -763,12 +756,6 @@ defineExpose({
   margin-left: var(--spacing-2);
 }
 
-.more-locations {
-  font-size: var(--text-xs);
-  color: var(--text-secondary);
-  font-style: italic;
-}
-
 .pattern-suggestion {
   font-size: var(--text-sm);
   color: var(--color-success);
@@ -957,16 +944,6 @@ defineExpose({
   font-size: var(--text-sm);
   max-width: 400px;
   margin: var(--spacing-2) auto 0;
-}
-
-.show-more {
-  text-align: center;
-  padding: var(--spacing-2);
-  font-size: var(--text-xs);
-}
-
-.muted {
-  color: var(--text-secondary);
 }
 
 /* Responsive */

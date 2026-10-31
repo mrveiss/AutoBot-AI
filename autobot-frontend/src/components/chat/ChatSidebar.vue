@@ -288,7 +288,7 @@
             {{ $t('common.delete') }}
           </BaseButton>
           <BaseButton
-            variant="outline-solid"
+            variant="outline"
             size="xs"
             class="py-1.5 px-2"
             @click="controller.loadChatSessions()"
@@ -421,8 +421,7 @@ import ApiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { formatDate } from '@/utils/formatHelpers'
 import EmptyState from '@/components/ui/EmptyState.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { useNotificationBus } from '@/composables/useNotificationBus'
 

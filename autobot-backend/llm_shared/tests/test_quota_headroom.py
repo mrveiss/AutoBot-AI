@@ -25,10 +25,11 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 try:
+    import fakeredis
     import fakeredis.aioredis as fakeredis_async
 except ImportError:
     fakeredis_async = None  # type: ignore[assignment]
-
+    fakeredis = None  # type: ignore[assignment]
 from redis.exceptions import ConnectionError as RedisConnectionError
 
 from llm_shared.quota_headroom import QuotaHeadroomEntry, QuotaHeadroomStore
@@ -68,7 +69,7 @@ def _make_store_with_fake_server():
 
 @pytest.mark.asyncio
 async def test_record_then_get_redis(_require_fakeredis, _make_store_with_fake_server):
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store = _make_store_with_fake_server(server)
 
     await store.record(
@@ -88,7 +89,7 @@ async def test_record_then_get_redis(_require_fakeredis, _make_store_with_fake_s
 @pytest.mark.asyncio
 async def test_absent_entry_returns_none_redis(_require_fakeredis, _make_store_with_fake_server):
     """No record() call ever made for this key -> None, not a fabricated zero."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store = _make_store_with_fake_server(server)
 
     assert await store.get("anthropic", "5h_output_tokens") is None
@@ -97,7 +98,7 @@ async def test_absent_entry_returns_none_redis(_require_fakeredis, _make_store_w
 @pytest.mark.asyncio
 async def test_cross_worker_visibility(_require_fakeredis, _make_store_with_fake_server):
     """Two stores sharing a FakeServer (simulating two uvicorn workers) share state."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     worker_a = _make_store_with_fake_server(server)
     worker_b = _make_store_with_fake_server(server)
 
@@ -111,7 +112,7 @@ async def test_cross_worker_visibility(_require_fakeredis, _make_store_with_fake
 @pytest.mark.asyncio
 async def test_expiry_restores_absent_state(_require_fakeredis, _make_store_with_fake_server):
     """After TTL expiry (simulated by deleting the key), get() returns None again."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store = _make_store_with_fake_server(server)
 
     await store.record("openai", "rpm", limit=500, remaining=10)
@@ -125,7 +126,7 @@ async def test_expiry_restores_absent_state(_require_fakeredis, _make_store_with
 
 @pytest.mark.asyncio
 async def test_all_entries_filters_by_provider(_require_fakeredis, _make_store_with_fake_server):
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store = _make_store_with_fake_server(server)
 
     await store.record("openai", "rpm", limit=500, remaining=10)
@@ -141,7 +142,7 @@ async def test_all_entries_filters_by_provider(_require_fakeredis, _make_store_w
 
 @pytest.mark.asyncio
 async def test_account_id_scopes_entries_independently(_require_fakeredis, _make_store_with_fake_server):
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store = _make_store_with_fake_server(server)
 
     await store.record("openai", "rpm", account_id="acct-a", remaining=10)
@@ -257,7 +258,7 @@ async def test_all_entries_falls_back_when_redis_client_is_none():
 @pytest.mark.asyncio
 async def test_get_returns_none_for_a_corrupt_entry(_require_fakeredis, _make_store_with_fake_server, caplog):
     """A payload that doesn't parse must not raise into the caller -- treated as absent, not fabricated."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store = _make_store_with_fake_server(server)
     redis = await store._get_redis()
     await redis.set("autobot:llm:headroom:openai:default:rpm", "not valid json")
@@ -273,7 +274,7 @@ async def test_all_entries_skips_a_corrupt_entry_but_keeps_the_rest(
     _require_fakeredis, _make_store_with_fake_server, caplog
 ):
     """One bad row must not make every other Redis-held entry vanish."""
-    server = fakeredis_async.FakeServer()
+    server = fakeredis.FakeServer()
     store = _make_store_with_fake_server(server)
 
     await store.record("openai", "rpm", limit=500, remaining=10)

@@ -1,5 +1,6 @@
 {
   "common": {
+    "appName": "AutoBot",
     "submit": "Iesniegt",
     "cancel": "Atcelt",
     "save": "Saglabāt",
@@ -103,7 +104,14 @@
     "exportCsv": "Export as CSV",
     "download": "Download",
     "filterByCategory": "Filter by category",
-    "copied": "Copied"
+    "copied": "Copied",
+    "riskTier": {
+      "low": "Zems",
+      "medium": "Vidējs",
+      "high": "Augsts",
+      "critical": "Kritisks"
+    },
+    "logsLoadFailed": "Neizdevās ielādēt žurnālus: {error}"
   },
   "chat": {
     "sendMessage": "Nosūtīt ziņu...",
@@ -255,6 +263,13 @@
     },
     "input": {
       "retryUpload": "Mēģiniet augšupielādēt vēlreiz",
+      "uploadError": {
+        "http": "Augšupielāde neizdevās (statuss {status})",
+        "invalidResponse": "Serveris nosūtīja nelasāmu atbildi",
+        "network": "Tīkla kļūda augšupielādes laikā",
+        "cancelled": "Augšupielāde atcelta",
+        "unknown": "Augšupielāde neizdevās"
+      },
       "filesAttached": "{count} faili pievienoti",
       "clearAll": "Notīrīt visu",
       "removeFile": "Noņemt failu",
@@ -299,7 +314,10 @@
       "thinkingOffLabel": "thinking Off",
       "thinkingOn": "Thinking on",
       "thinkingOnLabel": "thinking On",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "fileTooLarge": "Fails “{name}” ir pārāk liels (maks. {max})",
+      "voiceUnsupported": "Balss ievadei nepieciešama Chrome, Edge vai Safari 15+. Transkripcija šajā pārlūkprogrammā nav pieejama.",
+      "micDenied": "Piekļuve mikrofonam tika liegta. Lūdzu, atļaujiet piekļuvi mikrofonam pārlūkprogrammas iestatījumos."
     },
     "translate": {
       "title": "Tulkot tekstu",
@@ -515,6 +533,7 @@
         "pending": "Gaida",
         "running": "Skriešana",
         "streaming": "Straumēšana",
+        "waiting_explanation": "Gaida paskaidrojumu",
         "explaining": "Izskaidrojot",
         "completed": "Pabeigts",
         "failed": "Neizdevās"
@@ -763,7 +782,8 @@
       "files": "Faili",
       "terminal": "Terminālis",
       "browser": "Pārlūks",
-      "novnc": "Attālā darbvirsma"
+      "novnc": "Attālā darbvirsma",
+      "ariaLabel": "Tērzēšanas sadaļas"
     }
   },
   "settings": {
@@ -776,15 +796,7 @@
     "logging": "Mežizstrāde",
     "prompts": "Uzvednes",
     "backend": "Aizmugursistēma",
-    "save": "Saglabāt iestatījumus",
     "reset": "Atiestatīt uz noklusējuma iestatījumiem",
-    "panelLoadFailed": "Neizdevās ielādēt iestatījumu paneli",
-    "loadingSettings": "Notiek iestatījumu ielāde...",
-    "backendOffline": "Aizmugursistēma bezsaistē — tiek rādīti kešatmiņā saglabātie iestatījumi",
-    "saving": "Notiek saglabāšana...",
-    "discardChanges": "Atmest izmaiņas",
-    "cacheApiUnavailable": "Kešatmiņas API nav pieejama",
-    "cachedSettings": "Kešatmiņā saglabāto iestatījumu izmantošana (aizmugursistēma bezsaistē)",
     "appearanceDesc": "Pielāgojiet savas darbvietas izskatu un sajūtu",
     "voiceDesc": "Konfigurējiet teksta pārvēršanas runā balsi un balss profilus",
     "languageDesc": "Izvēlieties vēlamo valodu saskarnei un AI atbildēm",
@@ -794,31 +806,11 @@
     "languageChanged": "Valoda ir veiksmīgi atjaunināta",
     "languageChangeFailed": "Neizdevās atjaunināt valodu",
     "webResearch": {
-      "maxResultsHint": "Maximum number of search results to retrieve (1–50)",
       "title": "Web Research",
-      "methodLabel": "Search method",
-      "confirmationLabel": "Require confirmation",
-      "rateLimitRequests": "Requests",
-      "timeoutLabel": "Timeout (seconds)",
-      "enabledLabel": "Enable web research",
       "methodBasic": "Basic",
-      "thresholdLabel": "Auto-research threshold",
       "methodAdvanced": "Advanced",
       "desc": "Configure automated web research behaviour and privacy settings",
-      "rateLimitLabel": "Rate limiting",
-      "methodHint": "Choose how web searches are performed",
-      "maxResultsLabel": "Max results",
-      "confirmationHint": "Ask before performing a web search on your behalf",
-      "methodApiBased": "API-based",
-      "storeInKbHint": "Save research results to the knowledge base",
-      "filterAdultHint": "Filter adult content from search results",
-      "enabledHint": "Allow AutoBot to search the web when answering questions",
-      "privacyLabel": "Privacy & storage",
-      "anonymizeHint": "Anonymize requests before sending to search engines",
-      "timeoutHint": "Maximum time to wait for search results (5–120 s)",
-      "rateLimitWindow": "Window (s)",
-      "thresholdHint": "Confidence level below which AutoBot triggers an automatic search",
-      "rateLimitHint": "Limit how many requests are sent in a given time window"
+      "methodApiBased": "API-based"
     },
     "apiKeys": {
       "enterKey": "Enter API key...",
@@ -940,11 +932,35 @@
       "noApiKeyRequired": "API atslēga nav nepieciešama.",
       "redirecting": "Pāradresē...",
       "disconnectFailed": "Neizdevās atvienot",
-      "redirectNeedsCallback": "OAuth pārlūka pāradresācijas plūsmai nepieciešama servera puses atzvanīšanas konfigurācija. Vidēs bez saskarnes izmantojiet ierīces kodu.",
-      "deviceNotConfigured": "Ierīces autentifikācija šim pakalpojuma sniedzējam nav konfigurēta",
       "deviceInitFailed": "Neizdevās sākt ierīces plūsmu",
       "stillWaiting": "Joprojām gaida apstiprinājumu — pēc brīža mēģiniet vēlreiz.",
       "pollFailed": "Pārbaude neizdevās"
+    },
+    "preferredMode": {
+      "title": "Vēlamais režīms",
+      "subtitle": "Izvēlieties, cik daudz no AutoBot redzēt. Varat pārslēgties jebkurā laikā ar pogu Minimāls augšējā joslā.",
+      "group": "Interfeisa režīms",
+      "minimal": "Minimāls",
+      "minimalDesc": "Tikai būtiskais — ikdienas tērzēšanai, zināšanām un apstiprinājumiem.",
+      "full": "Pilns",
+      "fullDesc": "Viss, ieskaitot analītiku, automatizāciju, administrēšanu un izstrādātāju rīkus.",
+      "selected": "Atlasīts",
+      "startIn": "Sākt režīmā",
+      "startInDesc": "Kādā režīmā AutoBot tiek atvērts pēc pieteikšanās",
+      "startLast": "Pēdējais izmantotais",
+      "startMinimal": "Minimāls",
+      "startFull": "Pilns",
+      "noteSynced": "Saglabāts jūsu kontā un šajā ierīcē",
+      "noteDirectLinks": "Paslēptās lapas joprojām atveras no tiešajām saitēm",
+      "noteNeverHidden": "Apstiprinājumi, kļūdas un drošības paziņojumi netiek paslēpti nekad"
+    },
+    "additionalThemes": {
+      "title": "Papildu motīvi",
+      "subtitle": "Tos izvieto jūsu administrators, izmantojot SLM",
+      "deployed": "Izvietots, izmantojot SLM · v{version}",
+      "empty": "Nav izvietotu papildu motīvu.",
+      "info": "Administratori motīvus instalē un izvieto SLM konsolē.",
+      "slmLink": "SLM › Iestatījumi › Motīvi ↗"
     }
   },
   "voice": {
@@ -972,7 +988,11 @@
     "confirmDeleteVoice": "Vai dzēst balsi \"{name}\"?",
     "languageVoicesActive": "{count} valodai konfigurēta balss(-es).",
     "confirmDeleteVoiceTitle": "Dzēst balss profilu",
-    "tapToEnableAudio": "Pieskarieties jebkur, lai iespējotu audio atskaņošanu"
+    "tapToEnableAudio": "Pieskarieties jebkur, lai iespējotu audio atskaņošanu",
+    "speech": {
+      "url": "saite",
+      "path": "faila ceļš"
+    }
   },
   "analytics": {
     "title": "Analytics",
@@ -1282,7 +1302,10 @@
         "envVarRecommendations": "Vides mainīgo ieteikumi",
         "sampleHardcodedValues": "Kodēto vērtību paraugi",
         "noHardcodedValues": "Nav atrastas cietkodētas vides vērtības. Jūsu konfigurācija izskatās tīra!",
-        "noData": "Nav pieejami vides analīzes dati."
+        "noData": "Nav pieejami vides analīzes dati.",
+        "modelHint": "Modelis: {model}",
+        "modelLoading": "notiek ielāde…",
+        "modelServerDefault": "servera noklusējums"
       },
       "ownership": {
         "title": "Koda īpašumtiesību analīze",
@@ -1504,21 +1527,16 @@
       "duplicateCode": "Duplicate Code",
       "locations": "{count} locations",
       "linesSaveable": "{count} lines saveable",
-      "moreLocations": "+{count} more locations",
-      "showingOfDuplicates": "Showing {shown} of {total} duplicate patterns",
       "regexOpportunities": "Regex Opportunities",
       "current": "Current",
       "suggested": "Suggested",
-      "showingOfOpportunities": "Showing {shown} of {total} opportunities",
       "complexityHotspots": "Complexity Hotspots",
       "location": "Location",
       "cc": "CC",
       "cognitive": "Cognitive",
       "mi": "MI",
       "nesting": "Nesting",
-      "showingOfHotspots": "Showing {shown} of {total} hotspots",
       "refactoringSuggestions": "Refactoring Suggestions",
-      "showingOfSuggestions": "Showing {shown} of {total} suggestions",
       "patternsInChromaDB": "{count} patterns in ChromaDB",
       "clearStoredPatterns": "Clear stored patterns",
       "lastScan": "Last scan",
@@ -2192,14 +2210,12 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total} {type}",
       "emptyMessage": "No code smells detected"
     },
     "declarations": {
       "title": "Declarations",
       "total": "Total",
       "exported": "Exported",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No declarations found",
       "types": {
         "function": "Function",
@@ -2222,13 +2238,14 @@
       "totalLines": "Total Lines",
       "similar": "similar",
       "lines": "lines",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No duplicate code detected",
       "similarityGroups": {
         "high": "High Similarity",
         "medium": "Medium Similarity",
         "low": "Low Similarity"
-      }
+      },
+      "scanFailed": "Dublikātu skenēšana netika palaista, tāpēc šis nav rezultāts. Pārbaudiet izvēlēto koda avotu un palaidiet skenēšanu vēlreiz.",
+      "notScanned": "Šim koda avotam dublikātu skenēšana vēl nav palaista."
     },
     "hardcodes": {
       "title": "Kodētas vērtības",
@@ -2241,7 +2258,6 @@
       "variable": "Mainīgais",
       "value": "Vērtība",
       "suggestedEnvVar": "Ieteiktais vides mainīgais",
-      "showingOf": "Rādīts {shown} no {total}",
       "emptyMessage": "Kodētas vērtības nav atrastas",
       "severityGroups": {
         "high": "Augsta nopietnība",
@@ -2256,7 +2272,6 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No problems detected",
       "exportMarkdown": "Export Markdown",
       "exportJson": "Export JSON"
@@ -3801,10 +3816,11 @@
     },
     "treeNode": {
       "itemsCount": "Items count",
+      "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
       "vectorizeFolderTitle": "Vectorize folder title",
-      "retryTitle": "Retry title",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "share": {
       "searching": "Searching...",
@@ -4213,6 +4229,9 @@
       "errorEnterBoth": "Lūdzu, ievadiet gan sākuma, gan mērķa entītiju.",
       "notInGraph": "Šīs entītijas vēl nav attiecību grafā.",
       "notInGraphHint": "Tās pastāv, bet tām nav grafa saišu, tāpēc savienojumu nevar izsekot. Palaidiet entītiju izguvi vēlreiz."
+    },
+    "chromaExplorer": {
+      "subtitle": "Pārlūkot un meklēt vektoru kolekcijas"
     }
   },
   "workflow": {
@@ -4338,7 +4357,8 @@
       "agentsAriaLabel": "Agent capabilities",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "Atver jūsu uzņēmuma automatizāciju…",
-      "companyRequired": "Izvēlieties uzņēmumu, lai atvērtu automatizāciju."
+      "companyRequired": "Izvēlieties uzņēmumu, lai atvērtu automatizāciju.",
+      "planBeforeBuilding": "Plānot pirms veidošanas"
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -4646,7 +4666,9 @@
       "channelSlack": "Slack",
       "emailHint": "Comma-separated email addresses",
       "channelWebhook": "Webhook",
-      "sectionDesc": "Configure per-workflow notification routing"
+      "sectionDesc": "Configure per-workflow notification routing",
+      "invalidEmail": "Nederīga e-pasta adrese: {emails}",
+      "invalidUrl": "Nederīgs URL formāts"
     },
     "liveDashboard": {
       "activeExecutions": "Active Executions",
@@ -4782,8 +4804,8 @@
     "settings": "Terminal Settings",
     "fontSize": "Font Size",
     "theme": "Theme",
-    "dark": "Dark",
-    "light": "Light",
+    "dark": "Tumšs",
+    "light": "Gaišs",
     "cursorStyle": "Cursor Style",
     "block": "Block",
     "underline": "Underline",
@@ -4944,7 +4966,45 @@
       "editCommand": "Edit",
       "editCancel": "Cancel",
       "editSave": "Save"
-    }
+    },
+    "automation": {
+      "started": "🚀 AUTOMATIZĒTAIS DARBPLŪSMS SĀKTS: {name}",
+      "stepsPlanned": "📋 Ieplānoti soļi: {count}. Izmantojiet pogu PAUZE, lai jebkurā brīdī pārņemtu manuālo vadību.",
+      "unnamedWorkflow": "Darbplūsma bez nosaukuma",
+      "executeStep": "Izpildīt: {command}",
+      "paused": "⏸️ AUTOMATIZĀCIJA APTURĒTA - Aktivizēta manuālā vadība. Ievadiet komandas brīvi.",
+      "resumed": "▶️ AUTOMATIZĀCIJA ATSĀKTA - Turpina darbplūsmas izpildi.",
+      "aboutToExecute": "🤖 MI DARBPLŪSMA: Tūlīt tiks izpildīts \"{command}\"",
+      "stepProgress": "📋 Solis {step}/{total}: {description}",
+      "skipped": "⏭️ IZLAISTS: {command}",
+      "manualControlTaken": "👤 MANUĀLĀ VADĪBA PĀRŅEMTA - Pabeidziet manuālos soļus un pēc tam noklikšķiniet uz ATSĀKT, lai turpinātu darbplūsmu.",
+      "automated": "🤖 AUTOMATIZĒTI: {command}",
+      "pausedBySystem": "⏸️ SISTĒMA APTURĒJA DARBPLŪSMU",
+      "resumedBySystem": "▶️ SISTĒMA ATSĀKA DARBPLŪSMU",
+      "executing": "🤖 IZPILDA: {command}",
+      "stepSkippedByUser": "⏭️ LIETOTĀJS IZLAIDA SOLI {step}",
+      "workflowSaved": "💾 DARBPLŪSMA SAGLABĀTA: {name}",
+      "workflowUpdated": "📋 DARBPLŪSMA ATJAUNINĀTA: konfigurēti soļi: {count}",
+      "manualCommand": "👤 MANUĀLI: {command}",
+      "example": {
+        "name": "Sistēmas atjaunināšana un pakotņu instalēšana",
+        "updateDesc": "Atjaunināt pakotņu repozitorijus",
+        "updateExpl": "Atjaunina pieejamo pakotņu sarakstu no konfigurētajiem repozitorijiem.",
+        "upgradeDesc": "Jaunināt instalētās pakotnes",
+        "upgradeExpl": "Jaunina visas instalētās pakotnes uz jaunākajām versijām.",
+        "installDesc": "Instalēt pamatrīkus",
+        "installExpl": "Instalē bieži nepieciešamos izstrādes rīkus.",
+        "verifyDesc": "Pārbaudīt instalācijas",
+        "verifyExpl": "Pārbauda, vai rīki ir instalēti pareizi."
+      }
+    },
+    "events": {
+      "emergencyKill": "🛑 ĀRKĀRTAS APTURĒŠANA: Lietotājs pārtrauca visus procesus",
+      "emergencyKillFailed": "❌ Ārkārtas apturēšana neizdevās: {message}",
+      "interrupted": "^C (Lietotājs pārtrauca procesu)",
+      "error": "Kļūda: {error}"
+    },
+    "urlCopied": "Termināļa URL nokopēts starpliktuvē!"
   },
   "llm": {
     "unavailable": "Nav pieejams",
@@ -5018,7 +5078,6 @@
     "role": "Loma:",
     "lastLogin": "Pēdējā pieteikšanās:",
     "preferences": "Iestatījumi",
-    "theme": "Tēma",
     "notifications": "Paziņojumi",
     "emailNotifications": "E-pasta paziņojumi",
     "browserNotifications": "Pārlūka paziņojumi",
@@ -5028,7 +5087,6 @@
     "showTooltips": "Rādīt padomus",
     "enableAnimations": "Iespējot animācijas",
     "savePreferences": "Saglabāt iestatījumus",
-    "appearance": "Izskats",
     "voiceChatDisplay": "Balss tērzēšanas displejs",
     "fullScreen": "Pilnekrāns",
     "sidePanel": "Sānu panelis",
@@ -5044,9 +5102,6 @@
     "pwTooShort": "Parolei jābūt vismaz 8 rakstzīmēm",
     "pwChanged": "Parole veiksmīgi nomainīta!",
     "never": "Nekad",
-    "themeLight": "Gaišs",
-    "themeDark": "Tumšs",
-    "themeAuto": "Automātisks",
     "tabDevices": "Tab devices"
   },
   "charts": {
@@ -5393,7 +5448,7 @@
   "knowledge.promptEditor.versionNumber": "v{version}",
   "knowledge.promptEditor.previewVersion": "Priekšskatījums - Versija {version}",
   "knowledge.promptEditor.errorLoadPrompts": "Neizdevās ielādēt uzveicinājumus",
-  "knowledge.promptEditor.confirmDiscardChanges": "Jums ir nesaglābātas izmaiņas. Atgriezties?",
+  "knowledge.promptEditor.confirmDiscardChanges": "Jums ir nesaglabātas izmaiņas. Vai tās atmest?",
   "knowledge.promptEditor.successSaved": "Uzveicinājums veiksmīgi saglabāts",
   "knowledge.promptEditor.errorSavePrompt": "Neizdevās saglabāt uzveicinājumu",
   "knowledge.promptEditor.successReverted": "Uzveicinājums veiksmīgi atjaunots",
@@ -5719,23 +5774,6 @@
       "postExecutionFailed": "Komanda tika izpildīta, taču nākamais solis neizdevās. Tās izvade tiek rādīta; daži atjauninājumi var trūkt.",
       "enterComment": "Please enter a comment before submitting"
     },
-    "darkModeToggle": {
-      "switchToLight": "Switch to light mode",
-      "switchToDark": "Switch to dark mode",
-      "toggleDarkMode": "Toggle dark mode"
-    },
-    "dataTable": {
-      "sortBy": "Sort by {column}",
-      "actions": "Actions",
-      "noDataAvailable": "No data available",
-      "noItemsToDisplay": "No items to display",
-      "pageOf": "Page {current} of {total}",
-      "pagination": "Table pagination",
-      "previousPage": "Previous page",
-      "nextPage": "Next page",
-      "dataTable": "Data table",
-      "loading": "Loading data..."
-    },
     "hostSelection": {
       "title": "Select Host",
       "defaultPurpose": "Select a host for this operation",
@@ -5779,6 +5817,7 @@
       "retrySending": "Retry sending"
     },
     "preferences": {
+      "accentTheme": "Tēma",
       "title": "Preferences",
       "reset": "Reset",
       "resetAll": "Reset all preferences to defaults",
@@ -5791,11 +5830,11 @@
       "accentColor": "Accent Color",
       "accentColorOptions": "Accent color options",
       "setAccentColor": "Set accent color to {color}",
-      "teal": "Teal",
-      "emerald": "Emerald",
-      "blue": "Blue",
-      "purple": "Purple",
-      "orange": "Orange",
+      "teal": "Tirkīzzils",
+      "emerald": "Smaragds",
+      "blue": "Zils",
+      "purple": "Violets",
+      "orange": "Oranžs",
       "layoutDensity": "Layout Density",
       "layoutDensityOptions": "Layout density options",
       "setLayoutDensity": "Set layout density to {density}",
@@ -5806,7 +5845,11 @@
       "accentColorChanged": "Accent color changed to {color}",
       "layoutDensityChanged": "Layout density changed to {density}",
       "preferencesReset": "All preferences reset to defaults",
-      "theme": "Theme"
+      "theme": "Theme",
+      "green": "Zaļš",
+      "pink": "Rozā",
+      "indigo": "Indigo",
+      "red": "Sarkans"
     },
     "progressBar": {
       "timeRemaining": "{time} remaining"
@@ -5829,12 +5872,20 @@
       "dismiss": "Dismiss"
     },
     "themeToggle": {
+      "accentPurpleDescription": "Violets — radošs un elegants",
+      "system": "Sistēma",
+      "highContrast": "Augsts kontrasts",
+      "monochrome": "Melnbalts",
+      "accentThemeDescription": "Tēmas noklusējums — pašas tēmas primārā krāsa",
+      "baseThemeChanged": "Pamata tēma nomainīta uz {name}",
+      "accentChanged": "Akcenta krāsa nomainīta uz {name}",
+      "presetChanged": "Tēmas sagatave nomainīta uz {name}",
       "theme": "Theme",
       "selectTheme": "Select theme",
       "switchToLight": "Switch to light mode",
       "switchToDark": "Switch to dark mode",
-      "light": "Light",
-      "dark": "Dark"
+      "light": "Gaišs",
+      "dark": "Tumšs"
     },
     "toastContainer": {
       "notifications": "Notifications",
@@ -5854,7 +5905,9 @@
     },
     "loadingSpinner": {
       "loading": "Loading…"
-    }
+    },
+    "minimalNote": "Tiek rādīts būtiskais · tehniskie logrīki paslēpti",
+    "minimalNoteAction": "Rādīt visas funkcijas"
   },
   "base": {
     "badge": {
@@ -5868,10 +5921,6 @@
       "actions": "Darbības",
       "noDataAvailable": "Nav pieejamu datu",
       "selectRow": "Atlasīt rindu {row}"
-    },
-    "panel": {
-      "collapse": "Sakļaut paneli",
-      "expand": "Izvērst paneli"
     }
   },
   "views": {
@@ -6087,8 +6136,6 @@
       "createNewDashboard": "Create new dashboard",
       "availableWidgets": "Available Widgets",
       "configure": "Configure",
-      "expand": "Expand",
-      "shrink": "Shrink",
       "remove": "Remove",
       "noWidgets": "No Widgets Added",
       "noWidgetsHint": "Click \"Edit Layout\" to add widgets to your dashboard",
@@ -6508,7 +6555,17 @@
       "clickToSolve": "Noklikšķiniet, lai atrisinātu VNC",
       "openVnc": "Atvērt VNC darbvirsmu",
       "solved": "Esmu to atrisinājis",
-      "skipSource": "Izlaist avotu"
+      "skipSource": "Izlaist avotu",
+      "types": {
+        "recaptcha": "reCAPTCHA",
+        "hcaptcha": "hCaptcha",
+        "cloudflare": "Cloudflare pārbaude",
+        "slider": "CAPTCHA ar slīdni",
+        "imageSelect": "CAPTCHA ar attēlu izvēli",
+        "text": "Teksta CAPTCHA",
+        "math": "Matemātiskā CAPTCHA",
+        "unknown": "Nezināma CAPTCHA"
+      }
     }
   },
   "operations": {
@@ -6798,7 +6855,44 @@
       "timeHoursAgo": "{count}h ago",
       "timeInHours": "in {count}h",
       "timeDaysAgo": "{count}d ago",
-      "timeInDays": "in {count}d"
+      "timeInDays": "in {count}d",
+      "categories": {
+        "api_key": "API atslēgas",
+        "token": "Piekļuves žetoni",
+        "oauth_refresh_token": "OAuth atjaunošanas žetoni",
+        "connector_oauth_token": "Savienotāju žetoni",
+        "password": "Paroles",
+        "ssh_key": "SSH atslēgas",
+        "infrastructure_host": "Infrastruktūras resursdatori",
+        "database_url": "Datubāzes",
+        "certificate": "Sertifikāti",
+        "other": "Citi"
+      },
+      "kinds": {
+        "api_key": "API atslēga",
+        "token": "Piekļuves žetons",
+        "oauth_refresh_token": "OAuth atjaunošanas žetons",
+        "connector_oauth_token": "Savienotāja žetons",
+        "password": "Parole",
+        "ssh_key": "SSH atslēga",
+        "infrastructure_host": "Infrastruktūras resursdators",
+        "database_url": "Datubāze",
+        "certificate": "Sertifikāts",
+        "other": "Cits"
+      },
+      "templates": {
+        "openaiDesc": "Piekļuve GPT API",
+        "anthropicDesc": "Piekļuve Claude API",
+        "awsDesc": "Amazon mākoņpakalpojumi",
+        "githubDesc": "Personīgais GitHub žetons",
+        "postgresDesc": "Datubāzes savienojums",
+        "redisDesc": "Redis savienojums",
+        "sshLabel": "SSH atslēga",
+        "sshDesc": "Piekļuve serverim",
+        "slackDesc": "Slack robota žetons",
+        "serverLabel": "Servera resursdators",
+        "serverDesc": "SSH/VNC servera piekļuve"
+      }
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -7284,7 +7378,16 @@
       "initComplete": "Inicializācija pabeigta"
     }
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "Brīdinājumu noteikumi",
+      "overview": "Pārskats",
+      "slos": "SLO",
+      "traces": "Izsekojumi"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "browser": {
       "contentsOf": "{path} Contents",
       "refresh": "Refresh",
@@ -7299,7 +7402,8 @@
       "errorDeletingFile": "Error deleting file",
       "errorRenamingFile": "Error renaming file",
       "refreshAriaLabel": "Refresh files",
-      "toggleViewAriaLabel": "Toggle view mode"
+      "toggleViewAriaLabel": "Toggle view mode",
+      "uploadFailedHint": "Lūdzu, pārbaudiet failu izmēra ierobežojumus un formāta prasības"
     },
     "header": {
       "title": "File Browser",
@@ -7810,11 +7914,10 @@
     "customDashboard": "Custom Dashboard",
     "agentRegistry": "Agents",
     "agentActivity": "Aģenta aktivitāte",
-    "switchLanguage": "Switch language",
     "openMainMenu": "Open main menu",
-    "skipToContent": "Skip to content",
+    "skipToContent": "Pāriet uz galveno saturu",
     "services": "Services",
-    "skipToNavigation": "Skip to navigation",
+    "skipToNavigation": "Pāriet uz navigāciju",
     "profile": "Profile",
     "systemStatus": "System Status",
     "operations": "Darbības",
@@ -7886,7 +7989,31 @@
     "adminPricing": "Modeļu cenas",
     "adminMcpServers": "MCP serveri",
     "adminPermissionScopes": "Atļauju tvērumi",
-    "llcRoles": "Lomas"
+    "llcRoles": "Lomas",
+    "keywords": {
+      "knowledge": "dokumenti faili bibliotēka transkripcija piezīmes",
+      "companyOs": "uzņēmums sabiedrība bizness organizācija",
+      "automation": "darbplūsma konveijers grafiks darbi",
+      "analytics": "apmeklētāji metrikas statistika diagrammas atskaites",
+      "preferences": "iestatījumi opcijas valoda tēma",
+      "budgetPolicies": "izmaksas tēriņi limiti nauda",
+      "systemHealth": "statuss pieejamība diagnostika uzraudzība",
+      "vault": "akreditācijas dati atslēgas paroles žetoni seifs"
+    },
+    "homeAria": "AutoBot sākums",
+    "vaultTip": "Noslēpumi — saglabātās atslēgas un akreditācijas dati",
+    "preferencesTip": "Preferences",
+    "platformAdmin": "Platformas administrēšana",
+    "platformAdminAria": "Platformas administrēšana, atver SLM konsoli jaunā cilnē",
+    "platformAdminTip": "Platformas administrēšana — atver SLM konsoli ↗",
+    "profileMenu": "Profila izvēlne",
+    "uiMode": {
+      "label": "Minimāls",
+      "tip": "Minimāls interfeiss — paslēpt papildu funkcijas",
+      "announceMinimal": "Minimālais interfeiss ieslēgts. Papildu funkcijas paslēptas.",
+      "announceFull": "Pilnais interfeiss ieslēgts. Parādītas visas funkcijas."
+    },
+    "llcLedger": "Aģentu žurnāls"
   },
   "llcCompanyStatus": {
     "showArchived": "Rādīt arhivētos",
@@ -7965,12 +8092,34 @@
     "newCode": "New Code Agent",
     "newCodeDesc": "Start a code analysis session",
     "newAnalysis": "New Analysis",
-    "newAnalysisDesc": "Start an analysis session"
+    "newAnalysisDesc": "Start an analysis session",
+    "openPage": "Atvērt: {page}",
+    "types": {
+      "task": "Uzdevums",
+      "research": "Izpēte",
+      "code": "Kods",
+      "analysis": "Analīze",
+      "navigate": "Lapa"
+    },
+    "hints": {
+      "navigate": "pārvietoties",
+      "select": "izvēlēties",
+      "close": "aizvērt"
+    }
   },
   "slm": {
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "Neizdevās aktivizēt apkopes logu",
+      "completeWindowFailed": "Neizdevās pabeigt apkopes logu",
+      "deleteWindowFailed": "Neizdevās izdzēst apkopes logu",
+      "drainNodeFailed": "Neizdevās iztukšot mezglu. Lūdzu, mēģiniet vēlreiz.",
+      "resumeNodeFailed": "Neizdevās atsākt mezglu. Lūdzu, mēģiniet vēlreiz.",
+      "saveKeysFailed": "Neizdevās saglabāt API atslēgas. Skatiet detaļas konsolē.",
+      "addNodeFailed": "Neizdevās pievienot mezglu"
     }
   },
   "mobile": {
@@ -8482,7 +8631,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "Rīku informācija pašlaik nav pieejama — šis saraksts var būt nepilnīgs.",
       "canvasNoToolsDefined": "Šim uzņēmumam nevienai lomai nav pievienots neviens rīks.",
-      "deepLinkNodeNotFound": "Šī saite norāda uz mezglu, kas šeit nav atrasts. Iespējams, tas ir noņemts, vai jums nav piekļuves tam."
+      "deepLinkNodeNotFound": "Šī saite norāda uz mezglu, kas šeit nav atrasts. Iespējams, tas ir noņemts, vai jums nav piekļuves tam.",
+      "viewPlanner": "Plānotājs"
     },
     "executorRollup": {
       "title": "Izpildītāju kopsavilkums",
@@ -8761,6 +8911,179 @@
       "retry": "Mēģināt vēlreiz",
       "loadingItem": "Ielādē darba vienumu…",
       "itemLoadFailed": "Neizdevās ielādēt šo darba vienumu"
+    },
+    "ledger": {
+      "title": "Aģentu žurnāls",
+      "subtitle": "Kurš šajā uzņēmumā pie kā strādā un kurš gaida.",
+      "tabsAria": "Žurnāla skati",
+      "tabs": {
+        "now": "Pašlaik strādā",
+        "claims": "Pieprasījumi",
+        "contention": "Konkurence",
+        "activity": "Darbības"
+      },
+      "col": {
+        "agent": "Aģents",
+        "kind": "Veids",
+        "status": "Statuss",
+        "task": "Pašreizējais uzdevums",
+        "detail": "Sīkāk",
+        "scope": "Tvērums",
+        "mode": "Režīms",
+        "intent": "Nolūks",
+        "expires": "Beidzas",
+        "renewals": "Atjaunojumi"
+      },
+      "busy": "Aizņemts",
+      "idle": "Brīvs",
+      "peerMessages": "Neizlasītās ziņas",
+      "idleSubscribers": "Dīkstāves abonementi",
+      "pendingFor": "{n} gaida lietotāju {name}",
+      "sentBy": "no {names}",
+      "waitsForIdle": "{who} gaida, kamēr {target} būs dīkstāvē",
+      "heldBy": "Tur {agent}",
+      "waitlistAria": "Gaidīšanas rinda secībā",
+      "silenceMeansHold": "Lūgums nav atbrīvošana: klusēšana nozīmē turēšanu, un neatjaunots pieprasījums beidzas pats.",
+      "ask": "Lūgt turētāju atbrīvot",
+      "askAria": "Lūgt {scope} turētāju to atbrīvot",
+      "conflicts": "Konflikti",
+      "recent": "Nesenās darbības",
+      "conflict": {
+        "release_refused": "Atbrīvošana tika atteikta",
+        "claim_expired": "Pieprasījums beidzās, kamēr tika turēts",
+        "yield_unanswered": "Lūgums atbrīvot palika bez atbildes",
+        "claim_lapsed_during_action": "Pieprasījums beidzās darbības laikā"
+      },
+      "empty": {
+        "presence": "Neviens aģents nav pieteicies",
+        "peerMessages": "Nav neizlasītu ziņu",
+        "idleSubscribers": "Nav dīkstāves abonementu",
+        "claims": "Nav pieprasījumu",
+        "contention": "Nekas netiek konkurēts",
+        "conflicts": "Nav konfliktu",
+        "activity": "Nav nesenu darbību"
+      },
+      "state": {
+        "loading": "Lasa žurnālu…",
+        "unavailableTitle": "Neizdevās nolasīt žurnālu",
+        "unavailableBody": "Krātuve {source} neatbildēja. Tas nav tas pats, kas tukšs saraksts.",
+        "errorTitle": "Ielādējot šo sadaļu, radās kļūda"
+      },
+      "askState": {
+        "sending": "Sūta…",
+        "sent": "Lūgums nosūtīts — lemj turētājs; klusēšana nozīmē turēšanu.",
+        "tooSoon": "Jūs tikko jau lūdzāt par šo pieprasījumu; mēģiniet vēlreiz pēc minūtes.",
+        "notFound": "Šis uzdevums vairs netur šo pieprasījumu — atsvaidziniet, lai redzētu, kurš to tur tagad.",
+        "unavailable": "Neizdevās sasniegt žurnālu; nekas netika nosūtīts.",
+        "error": "Radās kļūda, un piegādi nevarēja apstiprināt. Atsvaidziniet, lai redzētu, vai rezervācija joprojām ir spēkā."
+      }
+    },
+    "workflowPlanner": {
+      "title": "Darbplūsmu plānotājs",
+      "plans": "Plāni",
+      "newPlan": "Jauns plāns",
+      "open": "Atvērt",
+      "back": "Atpakaļ uz plāniem",
+      "retry": "Mēģināt vēlreiz",
+      "loading": "Notiek plānu ielāde...",
+      "loadFailed": "Neizdevās ielādēt plānu.",
+      "saveFailed": "Neizdevās saglabāt izmaiņu.",
+      "createFailed": "Neizdevās izveidot plānu.",
+      "emptyTitle": "Plānu vēl nav",
+      "emptyHint": "Sāciet plānu, lai attēlotu vienu procesu, izmērītu to un izvēlētos vienu uzlabojamo skaitli.",
+      "unavailableTitle": "Darbplūsmu plānotājs nav pieejams",
+      "unavailableHint": "Šī funkcija jūsu darba telpā ir izslēgta, tāpēc šeit vēl nav ko rādīt.",
+      "statusFlow": "Plāna gaita",
+      "statusNotAvailable": "Šī plāna statuss ir: {status}. Apstiprināšana un pārveidošana vēl nav pieejama, tāpēc plāns tiek rādīts tikai lasīšanai.",
+      "convertNotAvailable": "Darbplūsmu izveide no plāna vēl nav pieejama.",
+      "status": {
+        "draft": "Melnraksts",
+        "measured": "Izmērīts",
+        "labeled": "Marķēts",
+        "approved": "Apstiprināts",
+        "converted": "Pārveidots"
+      },
+      "col": {
+        "name": "Plāns",
+        "revision": "Redakcija",
+        "status": "Statuss",
+        "actions": "Darbības"
+      },
+      "form": {
+        "name": "Plāna nosaukums",
+        "startsAt": "Kur process sākas",
+        "endsAt": "Kur process beidzas",
+        "create": "Izveidot plānu"
+      },
+      "steps": {
+        "map": "Attēlot",
+        "measure": "Izmērīt",
+        "oneNumber": "Izvēlēties vienu skaitli",
+        "label": "Sadalīt un marķēt",
+        "convert": "Izveidot darbplūsmu"
+      },
+      "map": {
+        "empty": "Vēl nekas nav attēlots",
+        "emptyHint": "Vispirms pievienojiet iesaistītos (joslas), tad katra soļus.",
+        "handoffs": "Nodošanas: {count}",
+        "waitNote": "Kas gaida šajā nodošanā?",
+        "laneName": "Joslas nosaukums",
+        "addLane": "Pievienot joslu",
+        "stepLabel": "Solis",
+        "stepLane": "Soļa josla",
+        "addStep": "Pievienot soli"
+      },
+      "source": {
+        "self_reported": "Jūs teicāt",
+        "email": "Pārbaudīts ar e-pastu",
+        "calendar": "Pārbaudīts ar kalendāru"
+      },
+      "measure": {
+        "hint": "Cik bieži notiek katrs solis un cik ilgi tas aizņem?",
+        "needSteps": "Vispirms attēlojiet vismaz vienu soli.",
+        "perWeek": "Nedēļā",
+        "duration": "Ilgums",
+        "unit": "Ilguma vienība",
+        "save": "Saglabāt",
+        "clear": "Notīrīt"
+      },
+      "unit": {
+        "minutes": "minūtes",
+        "hours": "stundas",
+        "days": "dienas"
+      },
+      "oneNumber": {
+        "hint": "Izmērītie soļi, vispirms garākās gaidīšanas. Jūs izlemjat, kurš ir svarīgs.",
+        "needMetrics": "Vispirms izmēriet vismaz vienu soli.",
+        "rate": "{freq} nedēļā, {dur} {unit}",
+        "title": "Nosauciet šo skaitli",
+        "returnKind": "Ko jūs atgūstat",
+        "target": "Mērķis",
+        "save": "Saglabāt kā manu vienu skaitli"
+      },
+      "returnKind": {
+        "hours_back": "Atgūtas stundas",
+        "more_yeses": "Vairāk piekrišanu",
+        "money_sooner": "Nauda ātrāk"
+      },
+      "label": {
+        "needNumber": "Vispirms izvēlieties savu skaitli; tā solis tiek sadalīts šeit.",
+        "subStep": "Apakšsolis",
+        "addSubStep": "Pievienot apakšsoli",
+        "unlabel": "Noņemt marķējumu",
+        "edgeCase": "Robežgadījums: {text}",
+        "byHandNote": "Tas paliek cilvēkiem. MI tam nekad nepieskaras.",
+        "acknowledge": "Esmu izlasījis sarakstu Ar roku",
+        "acknowledged": "Saraksts Ar roku izlasīts"
+      },
+      "labels": {
+        "ai": "MI",
+        "automation": "Automatizācija",
+        "by_hand": "Ar roku"
+      },
+      "gate": {
+        "missing": "Vēl trūkst"
+      }
     }
   },
   "code": {
@@ -9515,7 +9838,164 @@
       "collectionIdPlaceholder": "Kolekcijas ID",
       "pushing": "Nosūta…",
       "confirm": "Apstiprināt",
-      "pushFailed": "Neizdevās pievienot šo ierakstu zināšanu bāzei. Lūdzu, mēģiniet vēlreiz."
+      "pushFailed": "Neizdevās pievienot šo ierakstu zināšanu bāzei. Lūdzu, mēģiniet vēlreiz.",
+      "collectionNotJoined": "Saglabāts, bet norādītā kolekcija netika atrasta — transkripts ir zināšanu bāzē, taču nav šajā kolekcijā."
     }
+  },
+  "systemStatus": {
+    "summary": {
+      "issues": "Konstatētas sistēmas problēmas",
+      "warnings": "Sistēmas brīdinājumi",
+      "ok": "Visas sistēmas darbojas"
+    },
+    "tooltip": {
+      "issues": "Noklikšķiniet, lai skatītu sistēmas problēmas",
+      "warnings": "Noklikšķiniet, lai skatītu sistēmas brīdinājumus",
+      "ok": "Noklikšķiniet, lai skatītu sistēmas statusu — visi pakalpojumi darbojas"
+    },
+    "aria": {
+      "issues": "Sistēmas statuss: konstatētas problēmas",
+      "warnings": "Sistēmas statuss: ir brīdinājumi",
+      "ok": "Sistēmas statuss: visi pakalpojumi darbojas"
+    },
+    "description": {
+      "servicesDown": "{n} pakalpojums nedarbojas | {n} pakalpojumi nedarbojas",
+      "warnings": "{n} brīdinājums | {n} brīdinājumi",
+      "withWarnings": "{n} pakalpojums ar brīdinājumiem | {n} pakalpojumi ar brīdinājumiem",
+      "downAndWarnings": "{down} un {warnings}",
+      "ok": "Visi pakalpojumi darbojas normāli"
+    },
+    "service": {
+      "backend": "Aizmugursistēmas API",
+      "frontend": "Priekšgals",
+      "websocket": "WebSocket",
+      "redis": "Redis",
+      "ollama": "Ollama",
+      "npu_worker": "NPU apstrādātājs",
+      "browser": "Pārlūka pakalpojums",
+      "chromadb": "MI steks (ChromaDB)",
+      "other": "Citi pakalpojumi"
+    },
+    "state": {
+      "running": "Darbojas",
+      "connected": "Savienots",
+      "statusUnknown": "Statuss nezināms",
+      "connectionFailed": "Savienojums neizdevās",
+      "timeout": "Noildze",
+      "connectionRefused": "Savienojums atteikts",
+      "unreachable": "Nav sasniedzams",
+      "unhealthy": "Nav veselīgs",
+      "warning": "Brīdinājums",
+      "pending": "Gaida",
+      "available": "Pieejams",
+      "unavailable": "Nav pieejams",
+      "http": "HTTP {code}"
+    },
+    "probe": {
+      "degraded": "Pasliktināts — statusa pārbaudēm iestājās noildze, aizmugursistēma atbild",
+      "degradedAsOf": "Pasliktināts — statusa pārbaudēm iestājās noildze, aizmugursistēma atbild — statuss {time}",
+      "unreachable": "Nav sasniedzams — pakalpojumu statuss nezināms",
+      "unreachableAsOf": "Nav sasniedzams — pakalpojumu statuss nezināms — statuss {time}"
+    },
+    "lastKnown": "{text} (pēdējais zināmais)"
+  },
+  "schedule": {
+    "title": "Grafiks",
+    "repeats": "Atkārtojas",
+    "repeat": {
+      "minutes": "Ik pēc dažām minūtēm",
+      "hourly": "Katru stundu",
+      "daily": "Katru dienu",
+      "weekly": "Katru nedēļu",
+      "monthly": "Katru mēnesi",
+      "once": "Vienreiz"
+    },
+    "every": "Ik pēc",
+    "minutesUnit": "minūtēm",
+    "onlyBetween": "Tikai starp",
+    "windowFrom": "No",
+    "windowTo": "Līdz",
+    "and": "un",
+    "onDays": "Dienās (nav obligāti)",
+    "daysHintAny": "Ja nekas nav izvēlēts, ir katra diena.",
+    "onDaysRequired": "Dienās",
+    "atMinute": "Minūtē",
+    "at": "Plkst.",
+    "hour": "Stunda",
+    "minute": "Minūte",
+    "weekdaysOnly": "Tikai darbdienās",
+    "monthly": {
+      "which": "Kura mēneša diena",
+      "day": "Mēneša diena",
+      "lastDay": "Pēdējā diena",
+      "nth": "Nedēļas diena mēnesī",
+      "onDay": "Dienā",
+      "onThe": "Šajā"
+    },
+    "nth": {
+      "1": "pirmajā",
+      "2": "otrajā",
+      "3": "trešajā",
+      "4": "ceturtajā",
+      "last": "pēdējā"
+    },
+    "weekday": "Nedēļas diena",
+    "shortMonths": "Mēnešos bez šīs dienas darbība notiek mēneša pēdējā dienā.",
+    "date": "Datums",
+    "timezone": "Laika josla",
+    "zone": {
+      "company": "uzņēmuma laiks",
+      "usesCompany": "Izmanto uzņēmuma laika joslu."
+    },
+    "summary": {
+      "minutes": "Ik pēc {every} minūtēm",
+      "minutesWeekdays": "Ik pēc {every} minūtēm darbdienās",
+      "minutesDays": "Ik pēc {every} minūtēm: {days}",
+      "minutesWindow": "Ik pēc {every} minūtēm no {from} līdz {to}",
+      "minutesWindowWeekdays": "Ik pēc {every} minūtēm no {from} līdz {to} darbdienās",
+      "minutesWindowDays": "Ik pēc {every} minūtēm no {from} līdz {to}: {days}",
+      "hourly": "Katru stundu {minute}. minūtē",
+      "daily": "Katru dienu plkst. {time}",
+      "dailyWeekdays": "Katru darbdienu plkst. {time}",
+      "weekly": "Katru nedēļu: {days}, plkst. {time}",
+      "monthlyDay": "Katra mēneša {day}. datumā plkst. {time}",
+      "monthlyLastDay": "Katra mēneša pēdējā dienā plkst. {time}",
+      "monthlyNth1": "Katra mēneša pirmā {weekday}, plkst. {time}",
+      "monthlyNth2": "Katra mēneša otrā {weekday}, plkst. {time}",
+      "monthlyNth3": "Katra mēneša trešā {weekday}, plkst. {time}",
+      "monthlyNth4": "Katra mēneša ceturtā {weekday}, plkst. {time}",
+      "monthlyNthLast": "Katra mēneša pēdējā {weekday}, plkst. {time}",
+      "once": "Vienreiz {date} plkst. {time}",
+      "withZone": "{summary} ({zone})",
+      "custom": "Pielāgots grafiks"
+    },
+    "customNote": "Šo grafiku nevar parādīt ar klikšķiem.",
+    "editCron": "Rediģēt kā cron",
+    "doneEditing": "Pabeigt rediģēšanu",
+    "nextRuns": "Nākamās izpildes",
+    "noRuns": "Nav gaidāmu izpilžu.",
+    "previewLoading": "Notiek pārbaude serverī...",
+    "previewApprox": "Aptuveni: serveris precīzos laikus apstiprinās saglabājot.",
+    "previewUnavailable": "Šim grafikam priekšskatījums nav pieejams.",
+    "advanced": "Papildu: saglabāts kā",
+    "saved": {
+      "cron": "Standarta cron",
+      "calendar": "Kalendāra noteikums",
+      "once": "Vienreizēja izpilde"
+    },
+    "savedAs": "Saglabātais grafiks",
+    "savedNote": {
+      "once": "Darbojas vienreiz. Atkārtots cron netiek saglabāts."
+    },
+    "cronLabel": "Cron izteiksme",
+    "cronHint": "Tikai standarta cron ar pieciem laukiem: minūte, stunda, mēneša diena, mēnesis, nedēļas diena. Atlasītājs un šis lauks paliek sinhronizēti.",
+    "cron_extension_unsupported": "{token} nav standarta cron. Izmantojiet atlasītāju tādiem grafikiem kā mēneša pēdējā piektdiena.",
+    "invalid_timezone": "Šī laika josla netiek atpazīta.",
+    "once_in_past": "Šis datums un laiks jau ir pagājis.",
+    "invalid_rrule": "Šis kalendāra noteikums nav derīgs.",
+    "invalid_cron": "Ievadiet standarta cron ar pieciem laukiem, piemēram, 0 9 * * 1-5.",
+    "invalid_generic": "Šis grafiks nav derīgs.",
+    "conflicting_fields": "Grafiks tiek saglabāts vai nu kā cron, vai kā kalendāra noteikums vai vienreizēja izpilde, nekad abi.",
+    "gatedNote": "Pēdējā diena, nedēļas diena mēnesī, 29.–31. datums un vienreizējas izpildes būs pieejamas pēc plānotāja atjaunināšanas."
   }
 }

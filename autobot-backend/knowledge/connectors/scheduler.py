@@ -23,6 +23,7 @@ from typing import Dict
 from autobot_shared.leader_lease import LeaderLease
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_scan import scan_keys
 
 logger = get_logger(__name__)
 
@@ -208,7 +209,8 @@ class ConnectorScheduler:
             return
         try:
             persisted: Dict[str, int] = {}
-            async for key in redis.scan_iter(match=_SCHEDULE_PREFIX + "*"):
+            # One bounded walk per tick (COUNT from AUTOBOT_REDIS_SCAN_COUNT), not 10-key pages (#18999).
+            for key in await scan_keys(redis, _SCHEDULE_PREFIX + "*"):
                 raw = await redis.get(key)
                 if raw is None:
                     continue

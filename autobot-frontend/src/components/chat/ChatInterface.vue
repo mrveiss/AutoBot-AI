@@ -71,9 +71,12 @@
               </button>
               <!-- Voice Conversation (#1029) -->
               <button
-                @click="openVoiceConversation"
+                ref="voiceBtnRef"
+                @click="toggleVoiceConversation"
                 class="header-btn"
-                :class="{ 'bg-electric-100 text-electric-600': showVoiceOverlay || showVoicePanel }"
+                :class="{ 'bg-electric-100 text-electric-600': voiceExpanded }"
+                :aria-expanded="voiceExpanded"
+                :aria-controls="voiceControlsId"
                 :title="$t('chat.interface.voiceChat')"
               >
                 <Icon name="headset" />
@@ -83,8 +86,11 @@
             <div class="header-btn-divider" aria-hidden="true"></div>
             <button
               v-if="store.currentSessionId"
-              @click="toggleFilePanel"
+              ref="fileBtnRef"
+              @click="togglePanel('files')"
               class="header-btn"
+              :aria-expanded="showFilePanel"
+              aria-controls="chat-panel-files"
               :class="{ 'bg-electric-100 text-electric-600': showFilePanel }"
               :title="$t('chat.interface.toggleFilePanel')"
             >
@@ -102,12 +108,12 @@
             </button>
             <!-- #16443: collaboration panel toggle, collaborative sessions only -->
             <button
-              v-if="isCollaborativeSession"
-              @click="toggleCollaborationPanel"
+              v-if="isCollaborativeSession" ref="collabBtnRef"
+              @click="togglePanel('collaboration')"
               class="header-btn"
               :class="{ 'bg-electric-100 text-electric-600': showCollaborationPanel }"
               :title="$t('collaboration.panel.title')"
-              :aria-pressed="showCollaborationPanel"
+              :aria-expanded="showCollaborationPanel" aria-controls="chat-panel-collaboration"
             >
               <Icon name="users" />
             </button>
@@ -153,15 +159,17 @@
       <Transition name="slide-left">
         <ChatFilePanel
           v-if="showFilePanel && store.currentSessionId"
+          id="chat-panel-files"
           :session-id="store.currentSessionId"
           @close="showFilePanel = false"
         />
         <VoiceConversationPanel
           v-else-if="showVoicePanel"
-          @close="closeVoicePanel"
+          id="chat-panel-voice"
+          @close="showVoicePanel = false"
         />
         <ChatCollaborationPanel
-          v-else-if="showCollaborationPanel && isCollaborativeSession"
+          id="chat-panel-collaboration" v-else-if="showCollaborationPanel && isCollaborativeSession"
           @close="showCollaborationPanel = false"
         />
       </Transition>
@@ -318,6 +326,7 @@ const logger = createLogger('ChatInterface')
 import ErrorBoundary from '@/components/common/ErrorBoundary.vue'
 import ChatSidebar from './ChatSidebar.vue'
 import ChatHeader from './ChatHeader.vue'
+import { useChatSidePanels } from '@/composables/useChatSidePanels'
 import ChatTabs from './ChatTabs.vue'
 import ChatTabContent from './ChatTabContent.vue'
 import ChatFilePanel from './ChatFilePanel.vue'
@@ -330,7 +339,7 @@ import VoiceConversationOverlay from './VoiceConversationOverlay.vue'
 import VoiceConversationPanel from './VoiceConversationPanel.vue'
 import ChatSettingsModal from './ChatSettingsModal.vue'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
-import { extractCompleteSentences } from '@/utils/ttsSentences'
+import { createSpeechShaper, createTtsStream } from '@/utils/ttsSentences'
 // Issue #3232: chain-of-thought reasoning trace
 import ReasoningTrace from './ReasoningTrace.vue'
 import { useReasoningTrace } from '@/composables/useReasoningTrace'
@@ -505,13 +514,13 @@ const {
 // Voice conversation (#1029)
 const voiceConversation = useVoiceConversation()
 const showVoiceOverlay = ref(false)
-const showVoicePanel = ref(false)
+// One right-hand panel at a time; focus handled in the composable (#18243)
+const { showFilePanel, showVoicePanel, showCollaborationPanel, fileBtnRef, voiceBtnRef,
+  collabBtnRef, voiceExpanded, voiceControlsId, toggle: togglePanel, closeAll: closeAllPanels } = useChatSidePanels(showVoiceOverlay)
 const { voiceDisplayMode, contextOverflowMode } = usePreferences()
 
 function openVoiceConversation(): void {
   if (voiceDisplayMode.value === 'sidepanel') {
-    showFilePanel.value = false
-    showCollaborationPanel.value = false
     showVoicePanel.value = true
   } else {
     showVoiceOverlay.value = true
@@ -519,7 +528,11 @@ function openVoiceConversation(): void {
   voiceConversation.activate()
 }
 
-function closeVoicePanel(): void {
+// Side-panel mode: the header button toggles (aria-expanded); overlay mode
+// stays open-only, it has its own close control.
+function toggleVoiceConversation(): void {
+  if (!showVoicePanel.value) return openVoiceConversation()
+  voiceConversation.deactivate()
   showVoicePanel.value = false
 }
 
@@ -575,9 +588,8 @@ const showComparePanel = ref(false)
 const showKnowledgeDialog = ref(false)
 const showCommandDialog = ref(false)
 const showWorkflowProgress = ref(false)
-const showFilePanel = ref(false)
+
 // #16443: collaboration panel (participants/activity/notifications)
-const showCollaborationPanel = ref(false)
 // Mobile sidebar overlay (#1804)
 const showMobileSidebar = ref(false)
 // Chat settings modal (MVA-2006)
@@ -741,20 +753,9 @@ const sessionInfo = computed(() => {
 
 
 // Methods
-const toggleFilePanel = () => {
-  showVoicePanel.value = false
-  showCollaborationPanel.value = false
-  showFilePanel.value = !showFilePanel.value
-}
 
 // #16443
 const isCollaborativeSession = computed(() => store.currentSession?.mode === 'collaborative')
-
-const toggleCollaborationPanel = () => {
-  showVoicePanel.value = false
-  showFilePanel.value = false
-  showCollaborationPanel.value = !showCollaborationPanel.value
-}
 
 const exportSession = async () => {
   if (!store.currentSessionId) return
@@ -1065,7 +1066,7 @@ const handleKeyboardShortcuts = (event: KeyboardEvent) => {
       case 'f':
         if (store.currentSessionId) {
           event.preventDefault()
-          toggleFilePanel()
+          togglePanel('files')
         }
         break
     }
@@ -1281,9 +1282,7 @@ watch(() => store.currentSessionId, (newSessionId, oldSessionId) => {
     loadNovncUrl()
 
     // Close file panel when switching sessions
-    showFilePanel.value = false
-    showVoicePanel.value = false
-    showCollaborationPanel.value = false
+    closeAllPanels()
 
     // Prime TTS cursor to end of new session's last speakable message (#1488).
     // Without this the TTS watcher fires, sees current.id !== _lastStreamingMsgId,
@@ -1313,6 +1312,10 @@ watch(
 const _SPEAKABLE_TYPES = new Set(['response', 'message'])
 let _lastSpokenIdx = 0
 let _lastStreamingMsgId: string | null = null
+// Shapes each reply's spoken slices; fence state spans slices (#13102)
+const _newSpeechShaper = () => createSpeechShaper({ url: t('voice.speech.url'), path: t('voice.speech.path') })
+let _speechShaper = _newSpeechShaper()
+let _ttsStream = createTtsStream()
 
 /** Prime TTS cursor to end of current last message. Used on voice-enable and session switch. */
 function _primeTtsCursor(): void {
@@ -1324,6 +1327,10 @@ function _primeTtsCursor(): void {
     if (m.type && !_SPEAKABLE_TYPES.has(m.type)) continue
     _lastStreamingMsgId = m.id
     _lastSpokenIdx = m.content.length
+    // Read the skipped text unspoken so an open code fence is known (#13102)
+    _speechShaper = _newSpeechShaper()
+    _speechShaper.push(m.content)
+    _ttsStream = createTtsStream(true)
     break
   }
 }
@@ -1364,6 +1371,8 @@ watch(
       if (store.isTyping) stopSpeaking()
       _lastStreamingMsgId = current.id
       _lastSpokenIdx = store.isTyping ? 0 : current.content.length
+      _speechShaper = _newSpeechShaper()
+      _ttsStream = createTtsStream(!store.isTyping)
     }
 
     if (store.isTyping && current.content) {
@@ -1372,18 +1381,16 @@ watch(
       // by the summed sentence lengths, which drift over multi-paragraph replies
       // and drop/duplicate slices (#12502).
       const newText = current.content.slice(_lastSpokenIdx)
-      const { sentences, consumed } = extractCompleteSentences(
-        newText,
-        _MIN_TTS_SENTENCE_CHARS,
-      )
-      for (const s of sentences) speakStreaming(s)
+      const { spans, consumed } = _ttsStream.next(newText)
+      for (const span of spans) speakStreaming(_speechShaper.push(span))
       _lastSpokenIdx += consumed
     } else if (!store.isTyping && current.content) {
       // Stream ended: ALWAYS flush the remaining tail (all text after the cursor).
       // Lists, code blocks and unpunctuated endings have no terminal ". "/"! "/"? "
       // so they only ever reach TTS via this remainder flush (#12502).
-      const remainder = current.content.slice(_lastSpokenIdx).trim()
-      if (remainder) speakStreaming(remainder)
+      const remainder = current.content.slice(_lastSpokenIdx)
+      if (remainder.trim()) speakStreaming(_speechShaper.push(remainder))
+      speakStreaming(_speechShaper.flush())
       flushStreaming()
       // Mark all content as spoken — do NOT reset to 0/null here.
       // Resetting _lastStreamingMsgId to null would cause any subsequent reactive
@@ -1394,11 +1401,6 @@ watch(
     }
   }
 )
-
-// Minimum chars a candidate sentence must have before it is dispatched to TTS (#1485).
-// Short fragments like "Hello there! " (13 chars) sound choppy when spoken alone —
-// buffer them until they combine with the next sentence or flush as a remainder.
-const _MIN_TTS_SENTENCE_CHARS = 20
 
 </script>
 
@@ -1491,7 +1493,7 @@ const _MIN_TTS_SENTENCE_CHARS = 20
   background: var(--color-warning-bg);
   border-bottom: 1px solid var(--color-warning-border);
 }
-.tool-approval-header i { color: var(--color-warning); font-size: 1.25rem; }
+.tool-approval-header .icon { color: var(--color-warning); width: 1.25rem; height: 1.25rem; }
 .tool-approval-header h3 { @apply text-sm font-semibold; color: var(--text-primary); margin: var(--spacing-0); }
 .tool-approval-body { @apply flex flex-col gap-3 px-5 py-4; }
 .tool-approval-row { @apply flex flex-col gap-1; }
@@ -1507,7 +1509,7 @@ const _MIN_TTS_SENTENCE_CHARS = 20
 .tool-approval-btn { @apply flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors; }
 .tool-approval-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .tool-approval-btn--deny { background: var(--color-error-bg); color: var(--color-error); border: 1px solid var(--color-error-border); }
-.tool-approval-btn--deny:hover:not(:disabled) { background: var(--color-error); color: var(--text-on-error); }
+.tool-approval-btn--deny:hover:not(:disabled) { background: var(--color-error-solid); color: var(--text-on-error); }
 .tool-approval-btn--approve { background: var(--color-success-bg); color: var(--color-success); border: 1px solid var(--color-success-border); }
 .tool-approval-btn--approve:hover:not(:disabled) { background: var(--color-success); color: var(--text-on-success); }
 /* Issue #4960: countdown timer */

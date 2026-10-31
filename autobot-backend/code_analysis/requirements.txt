@@ -7,21 +7,21 @@ redis>=8.1.0
 -c ../../constraints/shared.txt  # single source of truth for shared versions (#10524)
 numpy  # version from constraints/shared.txt
 scikit-learn>=1.9.1
-pandas>=3.0.6
+pandas>=3.1.0
 
 # Vector Database for Embeddings
-chromadb>=1.5.9
+chromadb  # version from constraints/shared.txt (#19478)
 
 # Optional: NPU/AI Acceleration
 # openvino>=2023.0.0  # Intel OpenVINO for NPU
 # onnxruntime>=1.12.0  # ONNX runtime
 
 # HTTP Client for API Analysis
-aiohttp>=3.14.3  # GH#8323: zip bomb, request smuggling CVEs
+aiohttp>=3.14.5  # GH#8323: zip bomb, request smuggling CVEs
 requests>=2.34.2  # GH#8326: CVE-2026-25645
 
 # Configuration
-python-dotenv>=1.2.3
+python-dotenv>=1.2.4
 
 # Development Dependencies (optional)
 # pytest>=7.0.0

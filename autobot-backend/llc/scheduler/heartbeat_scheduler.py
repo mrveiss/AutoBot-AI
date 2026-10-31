@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""HeartbeatScheduler — Redis sorted-set dispatch engine (GH#8225).
+"""LLCHeartbeatScheduler — Redis sorted-set dispatch engine (GH#8225).
 
 Architecture:
   - On startup: loads all heartbeat-enabled agents from DB, computes next fire
@@ -28,7 +28,6 @@ Rate-limit recovery (GH#8204):
 """
 
 import asyncio
-import logging
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -41,8 +40,9 @@ except ImportError:
 from sqlalchemy import select, text, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from autobot_shared.env_utils import env_float
+from autobot_shared.env_utils import env_float, env_float_clamped
 from autobot_shared.feature_flags import is_feature_enabled
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
@@ -63,9 +63,18 @@ from ..org_role_authority import apply_org_role_bound
 from ..services.api_key import ApiKeyService
 from ..services.budget import BudgetService
 from ..services.controls_service import ControlsService
-from ..services.replay_service import RunReplayService, parse_jsonl_events
+from ..services.work_item_queue import has_pending_work
 
-logger = logging.getLogger(__name__)
+# Aliased to the name `_run_adapter` already calls (#17726). Renaming the call
+# site would put that unrelated 82-line function in scope for the function-length
+# guard, and refactoring it is not this change.
+from .replay_recording import record_run_for_replay as _record_run_for_replay
+from .run_context import enrich_run_context
+from .run_status import RunSuperseded, latest_run_in, mark_running
+from .run_workspace import acquire_run_workspace, release_run_workspace, release_workspace_best_effort
+from .schedule_members import agent_due_members, drop_unschedulable_member
+
+logger = get_logger(__name__)
 
 _SCHEDULE_KEY = "llc:heartbeat:schedule"
 _POLL_INTERVAL = 5.0  # seconds between sorted-set polls
@@ -83,8 +92,17 @@ _ADAPTER_MAX_WAIT_SECONDS = env_float("LLC_ADAPTER_MAX_WAIT_SECONDS", 7200.0)
 # expires mid-run; revocation still happens promptly when the run finishes.
 _RUN_KEY_TTL_SECONDS = env_float("LLC_RUN_KEY_TTL_SECONDS", _ADAPTER_MAX_WAIT_SECONDS + 600.0)
 
+#: #17726: a short-circuited wake writes no run row, so these two keys are the
+#: only evidence it happened. Without them "the queue was empty" and "the
+#: scheduler is dead" are the same observation. Retained long enough that a
+#: human investigating a quiet agent can still see its last wake; a hash field
+#: cannot expire on its own, so the TTL is set on the whole key each write.
+#: One key PER AGENT: EXPIRE covers a whole key, so a shared hash outlives its TTL (review).
+_IDLE_WAKE_KEY_PREFIX = "llc:heartbeat:idle:"
+_IDLE_WAKE_TTL_SECONDS = env_float_clamped("AUTOBOT_LLC_HEARTBEAT_IDLE_WAKE_TTL_SECONDS", 604800.0, min_v=60.0)
 
-class HeartbeatScheduler:
+
+class LLCHeartbeatScheduler:
     """Cron-driven heartbeat dispatcher backed by a Redis sorted set.
 
     Instantiate once and call ``start()`` inside the application lifespan.
@@ -114,7 +132,7 @@ class HeartbeatScheduler:
         # GH#8494: assign to self._poll_task so the reference is held and GC cannot
         # collect the task while the scheduler is running.
         self._poll_task = asyncio.create_task(self._poll_loop(), name="heartbeat-scheduler")
-        logger.info("HeartbeatScheduler started")
+        logger.info("LLCHeartbeatScheduler started")
 
     async def stop(self) -> None:
         """Cancel polling loop, drain in-flight adapter tasks, and exit cleanly."""
@@ -127,7 +145,7 @@ class HeartbeatScheduler:
                 pass
         if self._tasks:
             await asyncio.gather(*list(self._tasks), return_exceptions=True)
-        logger.info("HeartbeatScheduler stopped")
+        logger.info("LLCHeartbeatScheduler stopped")
 
     # ------------------------------------------------------------------
     # Schedule population (restart-safe)
@@ -162,8 +180,8 @@ class HeartbeatScheduler:
                 continue
             try:
                 next_ts = _next_fire(cron_expr, now)
-            except (ValueError, KeyError) as exc:
-                logger.warning("Invalid cron for agent %s: %s", agent_id, exc)
+            except Exception as exc:  # per-agent; see test_one_bad_cron_does_not_unschedule_everyone
+                logger.warning("Cron unusable for agent %s: %s", agent_id, exc)
                 continue
             mapping[agent_id] = next_ts
 
@@ -173,7 +191,7 @@ class HeartbeatScheduler:
             # NX was previously used but prevented cron expression updates from
             # taking effect — an updated schedule would be silently ignored.
             await redis.zadd(_SCHEDULE_KEY, mapping, gt=True)
-            logger.info("Scheduled %d agents in sorted set", len(mapping))
+            logger.info("Scheduled %d of %d heartbeat-enabled agents in sorted set", len(mapping), len(agents))
 
         # Re-queue any rate-limited agents whose retry_after is still in the
         # future — they may have been evicted from Redis if the server restarted.
@@ -241,7 +259,7 @@ class HeartbeatScheduler:
             return
 
         now = datetime.now(tz=timezone.utc).timestamp()
-        due: list[bytes] = await redis.zrangebyscore(_SCHEDULE_KEY, 0, now)
+        due = agent_due_members(await redis.zrangebyscore(_SCHEDULE_KEY, 0, now))
         if not due:
             return
 
@@ -259,8 +277,17 @@ class HeartbeatScheduler:
                     agent_id,
                     int(_POLL_INTERVAL),
                 )
-                retry_ts = datetime.now(tz=timezone.utc).timestamp() + _POLL_INTERVAL
-                await redis.zadd(_SCHEDULE_KEY, {agent_id: retry_ts})
+                await self._requeue(redis, agent_id, cycles=1, why="dispatch error")
+
+    async def _requeue(self, redis: Any, agent_id: str, cycles: int = 6, why: str = "deferred") -> None:
+        """Put *agent_id* back on the schedule a few poll cycles from now.
+
+        One place decides how long a deferred wake waits; three copies of a backoff
+        is how two of them end up disagreeing.
+        """
+        retry_ts = datetime.now(tz=timezone.utc).timestamp() + _POLL_INTERVAL * cycles
+        await redis.zadd(_SCHEDULE_KEY, {agent_id: retry_ts})
+        logger.info("Heartbeat agent=%s re-queued in %.0fs (%s)", agent_id, retry_ts - time.time(), why)
 
     async def _handle_due_agent(self, agent_id: str, redis: Any) -> None:
         """Create (or resume) a run record, dispatch adapter, advance sorted-set score.
@@ -274,17 +301,23 @@ class HeartbeatScheduler:
         factory = get_async_session_factory()
         async with factory() as session:
             agent = await self._get_agent_config(session, agent_id)
-            if agent is None:
-                await redis.zrem(_SCHEDULE_KEY, agent_id)
+            if agent is None or not agent.get("heartbeat_cron"):
+                await drop_unschedulable_member(redis, _SCHEDULE_KEY, agent_id, agent)
                 return
 
-            cron_expr = agent.get("heartbeat_cron")
-            if not cron_expr:
-                await redis.zrem(_SCHEDULE_KEY, agent_id)
-                return
+            cron_expr = agent["heartbeat_cron"]
 
             # Check for an active rate-limited run to resume.
             rate_limited_run = await self._find_rate_limited_run(session, agent_id)
+
+            # #17726: a wake with nothing to do must not cost a run row, an
+            # adapter call or a model invocation. A rate-limited run is resumed
+            # regardless: it already holds a checked-out item, so its work
+            # exists by definition and the queue has nothing to say about it.
+            if rate_limited_run is None and not await self._has_pending_work(session, agent):
+                await self._record_idle_wake(agent_id, redis)
+                await self._reschedule(agent_id, cron_expr, redis)
+                return
 
             if rate_limited_run is not None:
                 run = rate_limited_run
@@ -313,26 +346,16 @@ class HeartbeatScheduler:
                     )
                 except ValueError as exc:
                     logger.warning("Skipping heartbeat for agent %s (no organization): %s", agent_id, exc)
-                    retry_ts = datetime.now(tz=timezone.utc).timestamp() + _POLL_INTERVAL * 6
-                    await redis.zadd(_SCHEDULE_KEY, {agent_id: retry_ts})
+                    await self._requeue(redis, agent_id, why="no organization")
                     return
 
-                # Enrich context with recent decisions when context_mode=fat (GH#8243)
-                context_mode = agent.get("context_mode") or "slim"
-                if context_mode == "fat":
-                    company_id_val = agent.get("company_id")
-                    if company_id_val:
-                        context["recent_decisions"] = await _fetch_recent_decisions(str(company_id_val))
+                await enrich_run_context(agent, context, run)
+                logger.info("Heartbeat run %s created for agent %s", run.id, agent_id)
 
-                # GH#8499: write context_snapshot so the field is never NULL.
-                # For fat context include a generated_at timestamp; for slim/other
-                # modes write the mode so diagnostics can confirm what was used.
-                utc_now_iso = datetime.now(tz=timezone.utc).isoformat()
-                if context_mode == "fat":
-                    run.context_snapshot = {"mode": "fat", "generated_at": utc_now_iso}
-                else:
-                    run.context_snapshot = {"mode": context_mode}
-
+            # #16818: the run leases its workspace, or defers rather than sharing it.
+            if not await acquire_run_workspace(session, agent, agent_id, run.id, context):
+                await self._requeue(redis, agent_id, why="workspace lease unavailable")
+                return
             await session.commit()
 
         t = asyncio.create_task(
@@ -342,6 +365,16 @@ class HeartbeatScheduler:
         self._tasks.add(t)
         t.add_done_callback(self._tasks.discard)
 
+        await self._reschedule(agent_id, cron_expr, redis, run_id=run.id)
+
+    async def _reschedule(self, agent_id: str, cron_expr: str, redis: Any, *, run_id: Any = None) -> None:
+        """Advance this agent's sorted-set score to its next fire time.
+
+        Shared by the dispatch path and #17726's short-circuit. A second copy in
+        the short-circuit would be a second place for the invalid-cron handling
+        to drift, and the consequence of that drift is an agent that stops
+        waking with nothing anywhere saying why.
+        """
         now = datetime.now(tz=timezone.utc).timestamp()
         try:
             next_ts = _next_fire(cron_expr, now)
@@ -350,25 +383,59 @@ class HeartbeatScheduler:
             await redis.zrem(_SCHEDULE_KEY, agent_id)
             return
         await redis.zadd(_SCHEDULE_KEY, {agent_id: next_ts})
-        logger.debug(
-            "Dispatched heartbeat for agent=%s run=%s next=%.0f",
-            agent_id,
-            run.id,
-            next_ts,
-        )
+        logger.info("Heartbeat scheduled agent=%s run=%s next=%.0f", agent_id, run_id, next_ts)
+
+    async def _has_pending_work(self, session: AsyncSession, agent: Dict[str, Any]) -> bool:
+        """Whether a checkout would find anything for this agent (#17726).
+
+        **Returns True when it cannot tell.** An agent with no ``company_id``
+        reaches ``_create_run``, which raises ``ValueError`` and is handled on
+        the dispatch path; answering "no work" here would swallow that and
+        silently stop waking an agent whose configuration is broken. The
+        short-circuit exists to avoid spend on a *known*-empty queue, so
+        anything short of a definite empty answer keeps the old behaviour --
+        a wrong True costs one wake that finds nothing, a wrong False drops work.
+        """
+        company_id = agent.get("company_id")
+        node_id = agent.get("agent_node_id")
+        if not company_id or not node_id:
+            return True
+        try:
+            return await has_pending_work(session, str(node_id), str(company_id))
+        except Exception:
+            logger.exception(
+                "Pending-work check failed for agent %s — dispatching as before",
+                agent.get("agent_id"),
+            )
+            return True
+
+    async def _record_idle_wake(self, agent_id: str, redis: Any) -> None:
+        """Leave evidence that a wake happened and found nothing (#17726).
+
+        The AC this satisfies is *distinguishable from a wake that never
+        happened*: with no run row, silence means both. A counter and a
+        timestamp per agent are the cheapest pair that separates them --
+        ``last_idle_wake_at`` answers "is it alive" and the count answers "how
+        much of its cadence is finding nothing", which is what tells an operator
+        the cadence is wrong. Deliberately not a log line per wake: at a
+        one-minute cron that is 1,440 lines a day per agent saying nothing
+        happened, and the ruling asked for no log noise.
+
+        Never raises into the caller. A bookkeeping failure must not turn a free
+        wake into a skipped schedule advance.
+        """
+        try:
+            key = f"{_IDLE_WAKE_KEY_PREFIX}{agent_id}"
+            await redis.hincrby(key, "count", 1)
+            await redis.hset(key, "at", datetime.now(tz=timezone.utc).isoformat())
+            await redis.expire(key, int(_IDLE_WAKE_TTL_SECONDS))
+            logger.info("Heartbeat wake skipped for agent %s: no eligible work (idle wake recorded)", agent_id)
+        except Exception:
+            logger.warning("Could not record idle wake for agent %s", agent_id, exc_info=True)
 
     async def _find_rate_limited_run(self, session: AsyncSession, agent_id: str) -> Optional[LLCHeartbeatRun]:
         """Return the most recent ``rate_limited`` run for *agent_id*, or None."""
-        result = await session.execute(
-            select(LLCHeartbeatRun)
-            .where(
-                LLCHeartbeatRun.agent_id == agent_id,
-                LLCHeartbeatRun.status == LLCRunStatus.RATE_LIMITED.value,
-            )
-            .order_by(LLCHeartbeatRun.created_at.desc())
-            .limit(1)
-        )
-        return result.scalar_one_or_none()
+        return await latest_run_in(session, agent_id, (LLCRunStatus.RATE_LIMITED.value,))
 
     # ------------------------------------------------------------------
     # Manual trigger (called from API)
@@ -378,8 +445,12 @@ class HeartbeatScheduler:
         self,
         session: AsyncSession,
         agent_id: str,
+        source: HeartbeatInvocationSource = HeartbeatInvocationSource.MANUAL,
     ) -> tuple[LLCHeartbeatRun, Dict[str, Any]]:
         """Flush a QUEUED run record; caller must commit then call dispatch_run.
+
+        *source* is ``MANUAL`` for the API trigger and an event source for
+        ``event_wake.wake_agent`` (#19582): one run-creation path for both.
 
         Returns (run, agent_cfg) so the caller can fire the adapter task after
         the DB commit is visible to other connections (avoids the race where
@@ -396,11 +467,7 @@ class HeartbeatScheduler:
         if agent is None:
             raise ValueError(f"Agent {agent_id!r} not found or not configured")
 
-        run = await self._create_run(
-            session,
-            agent=agent,
-            source=HeartbeatInvocationSource.MANUAL,
-        )
+        run = await self._create_run(session, agent=agent, source=source)
         await session.flush()
         return run, agent
 
@@ -435,7 +502,7 @@ class HeartbeatScheduler:
         query = """
             SELECT aon.agent_id, aon.name, aon.heartbeat_cron, aon.heartbeat_enabled,
                    aon.adapter_type, aon.adapter_config, aon.context_mode,
-                   aon.company_id
+                   aon.company_id, aon.id AS agent_node_id, aon.org_role, aon.status
             FROM agent_org_nodes aon
             WHERE aon.agent_id = :agent_id
         """
@@ -475,36 +542,15 @@ class HeartbeatScheduler:
         """
         factory = get_async_session_factory()
 
-        # Fetch current retry_count before marking RUNNING so backoff is correct.
         try:
-            async with factory() as session:
-                result = await session.execute(select(LLCHeartbeatRun.retry_count).where(LLCHeartbeatRun.id == run_id))
-                retry_count: int = result.scalar_one_or_none() or 0
-                await session.execute(
-                    update(LLCHeartbeatRun)
-                    .where(LLCHeartbeatRun.id == run_id)
-                    .values(
-                        status=LLCRunStatus.RUNNING.value,
-                        started_at=datetime.now(tz=timezone.utc),
-                    )
-                )
-                await session.commit()
-        except Exception as exc:
-            logger.exception("Failed to mark run %s as RUNNING — marking FAILED", run_id)
-            try:
-                async with factory() as session:
-                    await session.execute(
-                        update(LLCHeartbeatRun)
-                        .where(LLCHeartbeatRun.id == run_id)
-                        .values(
-                            status=LLCRunStatus.FAILED.value,
-                            finished_at=datetime.now(tz=timezone.utc),
-                            error=str(exc),
-                        )
-                    )
-                    await session.commit()
-            except Exception:
-                logger.exception("Could not write FAILED status for run %s", run_id)
+            retry_count = await mark_running(factory, run_id)
+        except RunSuperseded:  # #19582: another run of this agent holds RUNNING
+            await release_workspace_best_effort(factory, run_id, LLCRunStatus.SKIPPED.value)
+            return
+        if retry_count is None:
+            # The release stays HERE rather than inside the helper, so every exit from
+            # this function keeps its release in view (#17725 review).
+            await release_workspace_best_effort(factory, run_id, LLCRunStatus.FAILED.value)
             return
 
         error_msg: Optional[str] = None
@@ -529,14 +575,38 @@ class HeartbeatScheduler:
             error_msg = str(exc)
             final_status = LLCRunStatus.FAILED.value
 
+        # #17725: both return without reaching `_finish_run` -- see the release helper.
         if rate_limited_exc is not None:
             await self._handle_rate_limited(agent, run_id, retry_count, rate_limited_exc)
+            await release_workspace_best_effort(factory, run_id, LLCRunStatus.RATE_LIMITED.value)
             return
 
         if quota_exc is not None:
             await self._handle_quota_exhausted(agent, run_id, quota_exc)
+            await release_workspace_best_effort(factory, run_id, LLCRunStatus.QUOTA_EXHAUSTED.value)
             return
 
+        await self._finish_run(factory, agent, run_id, final_status, error_msg)
+
+        # GH#9034: fire-and-forget replay recording — must never affect run status.
+        # Pass external_run_id so the recording locates the exact output file (H1).
+        # GH#9951: a SKIPPED run never dispatched, so there is nothing to record.
+        if final_status != LLCRunStatus.SKIPPED.value:
+            _record_task = asyncio.create_task(
+                _record_run_for_replay(agent, run_id, context, final_status, external_run_id=external_run_id),
+                name=f"replay-record-{run_id}",
+            )
+            self._tasks.add(_record_task)
+            _record_task.add_done_callback(self._tasks.discard)
+
+    async def _finish_run(
+        self, factory: Any, agent: Dict[str, Any], run_id: uuid.UUID, final_status: str, error_msg: Optional[str]
+    ) -> None:
+        """Close the run out and hand its workspace back, in one transaction.
+
+        Completed, skipped and adapter-failed runs pass here. The three endings that
+        do NOT are documented on `release_workspace_best_effort`.
+        """
         try:
             async with factory() as session:
                 await session.execute(
@@ -553,20 +623,11 @@ class HeartbeatScheduler:
                         text("UPDATE agent_org_nodes SET last_heartbeat_at = now()" " WHERE agent_id = :aid"),
                         {"aid": agent["agent_id"]},
                     )
+                # #16818 AC2: a workspace must not outlive the run that took it.
+                await release_run_workspace(session, run_id, final_status)
                 await session.commit()
         except Exception:
             logger.exception("Could not write final status for run %s", run_id)
-
-        # GH#9034: fire-and-forget replay recording — must never affect run status.
-        # Pass external_run_id so the recording locates the exact output file (H1).
-        # GH#9951: a SKIPPED run never dispatched, so there is nothing to record.
-        if final_status != LLCRunStatus.SKIPPED.value:
-            _record_task = asyncio.create_task(
-                _record_run_for_replay(agent, run_id, context, final_status, external_run_id=external_run_id),
-                name=f"replay-record-{run_id}",
-            )
-            self._tasks.add(_record_task)
-            _record_task.add_done_callback(self._tasks.discard)
 
     async def _handle_rate_limited(
         self,
@@ -710,119 +771,19 @@ class HeartbeatScheduler:
 # ------------------------------------------------------------------
 
 # One lazy_singleton call at module level so every import site gets the same instance.
-# Do NOT call lazy_singleton(HeartbeatScheduler) at individual call sites — each call
+# Do NOT call lazy_singleton(LLCHeartbeatScheduler) at individual call sites — each call
 # produces an independent closure with its own instance variable.
-_get_scheduler = lazy_singleton(HeartbeatScheduler)
+_get_scheduler = lazy_singleton(LLCHeartbeatScheduler)
 
 
-def get_heartbeat_scheduler() -> HeartbeatScheduler:
-    """Return the process-wide HeartbeatScheduler singleton."""
+def get_heartbeat_scheduler() -> LLCHeartbeatScheduler:
+    """Return the process-wide LLCHeartbeatScheduler singleton."""
     return _get_scheduler()
 
 
 # ------------------------------------------------------------------
 # Module-level helpers
 # ------------------------------------------------------------------
-
-
-def _resolve_adapter_output_file(
-    adapter_type: str, output_dir: str, agent_id: str, external_run_id: str
-) -> Optional[str]:
-    """Locate the transcript an adapter run actually wrote (#13614, #14760).
-
-    Delegates to the adapters package, which resolves the path helpers from the
-    adapter registered under *adapter_type* rather than importing one family's
-    helpers directly. The previous version imported `claude_code_adapter`'s pair
-    unconditionally, so the copilot adapters — which name their files
-    `llc_copilot_*` rather than `llc_agent_*` — missed on both the state-file
-    lookup and the recomputed fallback, every time. The function was generic in
-    name only (#14760).
-    """
-    try:
-        from ..adapters.subprocess_base import resolve_transcript_path
-    except ImportError:
-        # Losing the helpers is a wiring fault, not an absent transcript. The
-        # caller cannot tell those apart from a None, so say which it was.
-        logger.exception(
-            "Could not import adapter path helpers — replay transcript resolution is disabled for run %s",
-            external_run_id,
-        )
-        return None
-
-    return resolve_transcript_path(adapter_type, output_dir, agent_id, external_run_id)
-
-
-async def _record_run_for_replay(
-    agent: Dict[str, Any],
-    run_id: uuid.UUID,
-    context: Dict[str, Any],
-    final_status: str,
-    *,
-    external_run_id: Optional[str] = None,
-) -> None:
-    """Best-effort replay recording fired after a run reaches terminal status (GH#9034).
-
-    For subprocess adapters the JSONL output file is resolved via the adapter's
-    ``_output_path`` helper using the exact ``external_run_id`` returned by
-    ``adapter.invoke`` — no mtime glob, no concurrent-run collision (H1 fix).
-    For in-process agents there is no file; recorded_events is stored as None.
-    Any exception is swallowed so the scheduler is never blocked.
-    """
-    import asyncio as _asyncio
-    import os as _os
-
-    try:
-        output_text: Optional[str] = None
-        recorded_events = None
-
-        adapter_type = agent.get("adapter_type") or "autobot_agent"
-        if adapter_type != "autobot_agent" and external_run_id is not None:
-            # Resolve the exact output file via the adapter's own path helper.
-            cfg = agent.get("adapter_config") or {}
-            output_dir: str = cfg.get("output_dir", "/tmp")  # nosec B108
-            agent_id_str = str(agent.get("agent_id", ""))
-            output_file: Optional[str] = _resolve_adapter_output_file(
-                adapter_type, output_dir, agent_id_str, external_run_id
-            )
-
-            if output_file and _os.path.exists(output_file):
-                try:
-                    raw: str = await _asyncio.to_thread(_read_file_text, output_file)
-                    from ..services.replay_service import _REPLAY_OUTPUT_CAP
-
-                    output_text = raw[-_REPLAY_OUTPUT_CAP:] if len(raw) > _REPLAY_OUTPUT_CAP else raw
-                    recorded_events = parse_jsonl_events(raw)
-                except OSError:
-                    logger.warning(
-                        "Could not read transcript for replay (run_id: %s) — recording the run without output",
-                        run_id,
-                    )
-            elif output_file:
-                # A configured transcript path that does not exist is currently
-                # indistinguishable from an empty transcript: the replay record is
-                # written either way, with no output and no trace of why.
-                logger.warning(
-                    "Transcript file for replay does not exist (run_id: %s) — recording the run without output",
-                    run_id,
-                )
-
-        svc = RunReplayService()
-        await svc.record_run(
-            run_id=run_id,
-            agent=agent,
-            context=context,
-            final_status=final_status,
-            output_text=output_text,
-            recorded_events=recorded_events,
-        )
-    except Exception:
-        logger.exception("_record_run_for_replay: unexpected error for run %s", run_id)
-
-
-def _read_file_text(path: str) -> str:
-    """Read a file as text — runs in a thread via asyncio.to_thread (M4)."""
-    with open(path, encoding="utf-8", errors="replace") as fh:
-        return fh.read()
 
 
 def _next_fire(cron_expr: str, base_ts: float) -> float:
@@ -1060,19 +1021,3 @@ async def _await_adapter_completion(adapter: Any, agent_config: Dict[str, Any], 
     logger.warning("Adapter run %s exceeded max wait — cancelling", run_id)
     await adapter.cancel(agent_config, run_id)
     return AdapterRunStatus(status=LLCRunStatus.TIMEOUT)
-
-
-async def _fetch_recent_decisions(company_id: str, n: int = 5) -> list[Dict[str, Any]]:
-    """Query the decisions KB for the most recent decisions (GH#8243).
-
-    Used by heartbeat context building when context_mode=fat.  Best-effort —
-    returns an empty list on any failure rather than blocking the heartbeat.
-    """
-    try:
-        from ..kb.decision_log import DecisionLogReader
-
-        reader = DecisionLogReader()
-        return await reader.list_decisions(company_id=company_id, limit=n)
-    except Exception as exc:
-        logger.warning("Failed to fetch recent decisions for company %s: %s", company_id, exc)
-        return []

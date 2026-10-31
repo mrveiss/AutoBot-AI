@@ -51,7 +51,7 @@ runs ``bootstrap`` mode instead, the same one-time mode used when no marker
 exists at all, rather than repeating a fatal error on every run forever.
 
     ensure-full-history   Unshallow --repo-root if it is a shallow clone,
-               through the same scrubbed-env `run_git` helper every other
+               through the same scrubbed-env `run_git_capture` helper every other
                mode uses. Called once per pre-flight code_source fetch,
                before any component's diff/bootstrap plan -- #16310's other
                fix: a bootstrap plan computed against a shallow clone is not

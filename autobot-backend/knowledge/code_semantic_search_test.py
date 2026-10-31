@@ -181,9 +181,9 @@ class TestHybridSearch(unittest.TestCase):
 
     def test_result_merging_logic(self):
         """Test that results from same location are merged."""
-        from agents.npu_code_search_agent import CodeSearchResult
+        from agents.npu_code_search_agent import NpuCodeSearchResult
 
-        semantic_result = CodeSearchResult(
+        semantic_result = NpuCodeSearchResult(
             file_path="test.py",
             content="def test(): pass",
             line_number=1,
@@ -192,7 +192,7 @@ class TestHybridSearch(unittest.TestCase):
             metadata={"search_type": "semantic"},
         )
 
-        keyword_result = CodeSearchResult(
+        keyword_result = NpuCodeSearchResult(
             file_path="test.py",
             content="def test(): pass",
             line_number=1,

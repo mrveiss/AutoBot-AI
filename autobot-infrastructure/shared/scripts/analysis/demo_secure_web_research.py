@@ -15,11 +15,16 @@ import logging
 import sys
 from pathlib import Path
 
-# Add project root to path
-sys.path.insert(0, str(Path(__file__).parent))
+# A backend tool (#18289): it deliberately drives backend internals. It puts the backend and the
+# repository root (for `autobot_shared`) on its own path, so it runs from any directory with no
+# PYTHONPATH; the backend's Python dependencies must be installed.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
-from agents.web_researcher import ResearchType
-from security.secure_web_research import SecureWebResearch
+from agents.web_researcher import ResearchType  # noqa: E402
+from security.secure_web_research import SecureWebResearch  # noqa: E402
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")

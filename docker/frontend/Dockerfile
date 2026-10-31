@@ -16,7 +16,9 @@ ARG NPM_FETCH_RETRY_MINTIMEOUT=20000
 ARG NPM_FETCH_RETRY_MAXTIMEOUT=120000
 
 # ---- Build main frontend ----
-FROM node:20-bookworm-slim AS builder
+# Node.js major: pinned to the repo-root .nvmrc by repo_tests/node_major_one_home_19328_test.py (#19328).
+ARG NODE_MAJOR=22
+FROM node:${NODE_MAJOR}-bookworm-slim AS builder
 
 ARG NPM_FETCH_RETRIES
 ARG NPM_FETCH_RETRY_MINTIMEOUT
@@ -51,7 +53,7 @@ RUN npm run build
 
 
 # ---- Build SLM frontend ----
-FROM node:20-bookworm-slim AS slm-builder
+FROM node:${NODE_MAJOR}-bookworm-slim AS slm-builder
 
 # Same retry posture as the main builder (#13783) — a stage does not inherit
 # another stage's ENV, so the ARGs are re-declared rather than assumed.
@@ -85,8 +87,8 @@ ENV VITE_API_URL=/slm
 RUN npx vite build --base /slm/
 
 
-# ---- Production stage ----
-FROM ubuntu:22.04 AS production
+# ---- nginx base, shared by the SLM-only GUI and the full frontend (#18585) ----
+FROM ubuntu:22.04 AS nginx-base
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -98,20 +100,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nginx wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy built main frontend
-COPY --from=builder /app/dist/ /usr/share/nginx/html/
-
-# Copy built SLM frontend under /slm/
-COPY --from=slm-builder /app/dist/ /usr/share/nginx/html/slm/
-
-# Copy nginx config (main + shared includes)
-COPY docker/nginx/nginx.conf /etc/nginx/nginx.conf
+# Shared nginx includes: http-block settings + SLM upstream, and the SLM routes
 COPY docker/nginx/nginx-common.conf /etc/nginx/nginx-common.conf
-COPY docker/nginx/nginx-locations.conf /etc/nginx/nginx-locations.conf
-
-# Create cache directories
-RUN mkdir -p /var/cache/nginx /var/run \
-    && chown -R www-data:www-data /var/cache/nginx /var/run /usr/share/nginx/html
+COPY docker/nginx/nginx-slm-locations.conf /etc/nginx/nginx-slm-locations.conf
+# TLS settings and the port-80 redirect server, shared by both TLS configs (#18593)
+COPY docker/nginx/nginx-tls.conf /etc/nginx/nginx-tls.conf
+COPY docker/nginx/nginx-tls-redirect.conf /etc/nginx/nginx-tls-redirect.conf
 
 EXPOSE 80 443
 
@@ -119,3 +113,32 @@ HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
     CMD wget -q --spider http://localhost/health || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]
+
+# ---- SLM-only GUI (#18585) ----
+# `--target slm-gui` builds only the SLM frontend — the main-frontend builder
+# stage is skipped — and serves it with no dependency on the main backend.
+FROM nginx-base AS slm-gui
+
+COPY --from=slm-builder /app/dist/ /usr/share/nginx/html/slm/
+COPY docker/nginx/nginx-slm.conf /etc/nginx/nginx.conf
+
+RUN mkdir -p /var/cache/nginx /var/run \
+    && chown -R www-data:www-data /var/cache/nginx /var/run /usr/share/nginx/html
+
+# ---- Production stage (full frontend; last, so it stays the default target) ----
+FROM nginx-base AS production
+
+# Copy built main frontend
+COPY --from=builder /app/dist/ /usr/share/nginx/html/
+
+# Copy built SLM frontend under /slm/
+COPY --from=slm-builder /app/dist/ /usr/share/nginx/html/slm/
+
+# Copy nginx config (main + full-stack includes)
+COPY docker/nginx/nginx.conf /etc/nginx/nginx.conf
+COPY docker/nginx/nginx-backend-upstream.conf /etc/nginx/nginx-backend-upstream.conf
+COPY docker/nginx/nginx-locations.conf /etc/nginx/nginx-locations.conf
+
+# Create cache directories
+RUN mkdir -p /var/cache/nginx /var/run \
+    && chown -R www-data:www-data /var/cache/nginx /var/run /usr/share/nginx/html

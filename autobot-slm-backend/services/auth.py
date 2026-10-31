@@ -27,8 +27,6 @@ rejected before PyJWT is invoked.
 """
 
 import asyncio
-import logging
-import os
 import secrets
 from datetime import timedelta
 from typing import Callable, NoReturn
@@ -38,18 +36,26 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.auth.interactive_principal import is_purpose_bound
+from autobot_shared.auth.internal_api_key import verify_internal_api_key  # noqa: F401 (re-export)
 from autobot_shared.auth.jwt_core import _peek_alg, decode_jwt_or_none, encode_jwt, hash_password
+from autobot_shared.auth.permission_evaluator import evaluate_permission
+from autobot_shared.auth.permission_gate import PermissionGate
 from autobot_shared.auth.permissions import Permission
+from autobot_shared.auth.revocation_unavailable import revocation_unavailable_error
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import now_utc
 from autobot_shared.user_management.password_epoch import (
+    MalformedTokenClaims,
     is_token_revoked_by_password_change,
 )
 from config import settings
-from models.schemas import TokenResponse, UserCreate, UserResponse
+from models.schemas import SlmAdminUserCreate, SlmAdminUserResponse, TokenResponse
 from services.api_key_audit import AUDIT_UNAVAILABLE_DETAIL, AuditUnavailable, audit_key_request
-from services.api_key_authority import legacy_grace_deadline, permission_allowed, role_for_user
+from services.api_key_authority import legacy_grace_deadline, role_for_user
 from services.api_key_routes import mark_key_permission
 from services.token_denylist import is_jti_revoked
+from user_management.database import get_slm_db  # noqa: F401 -- re-exported for api.auth
 from user_management.models.user import User
 
 try:  # redis-py exceptions do NOT inherit builtin ConnectionError/OSError
@@ -57,15 +63,16 @@ try:  # redis-py exceptions do NOT inherit builtin ConnectionError/OSError
 except ImportError:  # pragma: no cover - redis is a hard dep in deployments
     _RedisError = ConnectionError  # type: ignore[assignment,misc]
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 security = HTTPBearer()
 
-# #16387: the narrow set of failure modes a revocation-check Redis call can
+# #16387: the narrow set of failure modes a revocation check can
 # raise -- the client's own error type plus the connection/timeout errors it
 # can surface. Deliberately NOT `except Exception`: a check that cannot run
 # must be told apart from a genuine "not revoked" answer, and a blanket catch
-# would also swallow real bugs and relabel them as Redis outages.
+# would also swallow real bugs and relabel them as store outages. The SLM's own
+# stores (#18663) raise ConnectionError/TimeoutError; RedisError stays for the RS256 path.
 _REVOCATION_CHECK_FAILURES = (asyncio.TimeoutError, ConnectionError, OSError, _RedisError)
 
 
@@ -80,10 +87,10 @@ class AuthService:
         """Create a JWT access token.
 
         Every SLM-minted HS256 token receives a unique ``jti`` claim so that
-        individual tokens can be revoked via the Redis denylist without
+        individual tokens can be revoked via the jti denylist (the SLM's PostgreSQL, #18663) without
         invalidating other tokens issued to the same user.  Revocation is
         enforced on the async decode path (``decode_token_async``).
-        The sync ``decode_token`` path does not check Redis — see its docstring.
+        The sync ``decode_token`` path does not check the denylist — see its docstring.
         """
         payload = dict(data)
         payload.setdefault("jti", secrets.token_urlsafe(16))
@@ -107,7 +114,7 @@ class AuthService:
         Use ``decode_token_async`` in async contexts — it handles both alg
         values and performs JWKS key lookup for RS256 tokens.
 
-        **Revocation note:** ``jti`` denylist checks require Redis (async).
+        **Revocation note:** ``jti`` denylist checks are async (a database query).
         This sync path does NOT check the denylist.  Token revocation is
         enforced on the async HTTP auth path via ``decode_token_async``.
         """
@@ -133,10 +140,10 @@ class AuthService:
         Returns the normalized claims dict, or ``None`` when the token is
         absent, malformed, expired, or actually revoked.
 
-        Raises ``HTTPException`` (401, matching ``get_current_user``'s normal
-        invalid-token response) when a revocation check itself cannot run --
-        the HS256 jti denylist or the password-epoch check -- because Redis
-        errored. Fail CLOSED (#16387): the caller must not treat "could not
+        Raises ``HTTPException`` (503 ``revocation_check_unavailable`` + ``Retry-After``,
+        #18892; a 401 would make clients log a valid session out) when a revocation check itself cannot run --
+        the HS256 jti denylist or the password-epoch check -- because its store
+        (the SLM's PostgreSQL since #18663) could not answer. Fail CLOSED (#16387): the caller must not treat "could not
         check" as "not revoked".
         """
         alg = _peek_alg(token)
@@ -156,7 +163,7 @@ class AuthService:
                     revoked = await is_jti_revoked(jti)
                 except _REVOCATION_CHECK_FAILURES as exc:
                     # #16387: fail CLOSED. The jti denylist is the only record
-                    # of a logged-out or leaked-credential token; if Redis
+                    # of a logged-out or leaked-credential token; if its store
                     # cannot answer we cannot tell "not revoked" from
                     # "unknown", so the token is denied rather than honoured.
                     # This also gates the backend admin path reached through
@@ -166,11 +173,7 @@ class AuthService:
                         "decode_token_async: jti denylist check failed (%s); denying token",
                         exc.__class__.__name__,
                     )
-                    raise HTTPException(
-                        status_code=status.HTTP_401_UNAUTHORIZED,
-                        detail="Invalid or expired token",
-                        headers={"WWW-Authenticate": "Bearer"},
-                    ) from exc
+                    raise revocation_unavailable_error() from exc
                 if revoked:
                     logger.warning("decode_token_async: HS256 token with jti=%r is revoked", jti)
                     return None
@@ -180,6 +183,10 @@ class AuthService:
             # with the old password". The epoch check does that in one lookup.
             try:
                 password_revoked = await is_token_revoked_by_password_change(claims)
+            except MalformedTokenClaims:
+                # #18892: an unreadable iat is a bad credential, not a store outage -- 401, never 503.
+                logger.warning("decode_token_async: token iat is malformed; rejecting token")
+                return None
             except _REVOCATION_CHECK_FAILURES as exc:
                 # #16387: same fail-closed reasoning as the jti check above --
                 # a token this check cannot clear is denied, not honoured.
@@ -187,11 +194,7 @@ class AuthService:
                     "decode_token_async: password-epoch check failed (%s); denying token",
                     exc.__class__.__name__,
                 )
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid or expired token",
-                    headers={"WWW-Authenticate": "Bearer"},
-                ) from exc
+                raise revocation_unavailable_error() from exc
             if password_revoked:
                 return None
 
@@ -201,7 +204,7 @@ class AuthService:
         logger.warning("decode_token_async: rejecting token with unsupported alg=%r", alg)
         return None
 
-    async def create_user(self, db: AsyncSession, user_data: UserCreate) -> UserResponse:
+    async def create_user(self, db: AsyncSession, user_data: SlmAdminUserCreate) -> SlmAdminUserResponse:
         """Create a new user."""
         result = await db.execute(select(User).where(User.username == user_data.username))
         if result.scalar_one_or_none():
@@ -224,7 +227,7 @@ class AuthService:
         await db.commit()
         await db.refresh(user)
 
-        return UserResponse.model_validate(user)
+        return SlmAdminUserResponse.model_validate(user)
 
     async def get_user_by_username(self, db: AsyncSession, username: str) -> User | None:
         """Get a user by username."""
@@ -259,6 +262,13 @@ async def get_current_user(
     token = credentials.credentials
     payload = await auth_service.decode_token_async(token)
 
+    # #18321: a token minted for another purpose -- the MFA-pending temp token issued
+    # BEFORE the second factor, a service token -- is never a session. One choke point,
+    # the shared #17049 predicate; only api/mfa.py accepts the MFA-pending token.
+    if payload and is_purpose_bound(payload):
+        logger.warning("get_current_user: refusing a purpose-bound token for sub=%r", payload.get("sub"))
+        payload = None
+
     if not payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -269,42 +279,19 @@ async def get_current_user(
     return payload
 
 
-def require_permission(permission: Permission) -> Callable:
-    """FastAPI dependency factory requiring a specific permission.
-
-    Derives the user's role from the JWT 'role' field (preferred) or falls
-    back to the legacy 'admin' boolean flag for tokens issued before role was
-    included.  Raises 403 when the role lacks the required permission.
-
-    Usage::
-
-        @router.post("/endpoint")
-        async def endpoint(
-            _: dict = Depends(require_permission(Permission.ADMIN_CONFIG_WRITE)),
-        ): ...
-    """
-
-    async def _check(current_user: dict = Depends(get_current_user)) -> dict:
-        return _require_permission_or_403(current_user, permission)
-
-    return _check
+# The one shared gate (#18263): the decision is
+# ``autobot_shared.auth.permission_evaluator`` (role grant UNION DB custom-role grants,
+# AND API-key scope narrowing); a denial is audited and answered 403, a missing caller 401.
+# ``require_permission`` / ``require_any_permission`` are re-exported under the names every
+# route already imports, so this service defines neither.
+def _wire_rbac() -> None:
+    """Import this service's RBAC shim, which calls ``configure_rbac`` (DB grants, deny audit)."""
+    import user_management.middleware.rbac_middleware  # noqa: F401, PLC0415
 
 
-def _require_permission_or_403(current_user: dict, permission: Permission) -> dict:
-    """Raise 403 unless the caller may exercise *permission*; else return it.
-
-    The decision is ``services.api_key_authority.permission_allowed``. The
-    caller's role must grant *permission*, and an API-key caller's scopes must
-    also carry it (#16040 AC2). So a key never exceeds its owner's role, nor
-    its own scopes. It lives there, free of FastAPI, so it can be tested
-    directly.
-    """
-    if not permission_allowed(current_user, permission):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"Permission denied: {permission.value} required",
-        )
-    return current_user
+_permission_gate = PermissionGate(get_current_user, wire_rbac=_wire_rbac)
+require_permission = _permission_gate.require_permission
+require_any_permission = _permission_gate.require_any_permission
 
 
 # Optional bearer: unlike ``security`` (auto_error=True), this returns None
@@ -313,22 +300,8 @@ def _require_permission_or_403(current_user: dict, permission: Permission) -> di
 _optional_security = HTTPBearer(auto_error=False)
 
 
-def verify_internal_api_key(provided: str | None) -> bool:
-    """Constant-time check of the trusted internal-service API key (#11450).
-
-    Mirrors autobot-backend ``auth_middleware.verify_internal_api_key`` (#1145):
-    the slm-agent and sibling services authenticate machine-to-machine with the
-    shared ``AUTOBOT_INTERNAL_API_KEY`` (#10263/#10492), never a user JWT.
-    Returns True only when the key is configured AND *provided* matches exactly;
-    ``secrets.compare_digest`` prevents timing inference and a None can't match.
-    """
-    expected = os.getenv("AUTOBOT_INTERNAL_API_KEY", "")
-    if not expected or not provided:
-        return False
-    return secrets.compare_digest(provided, expected)
-
-
 async def require_service_management_or_internal(
+    request: Request,
     x_internal_api_key: str | None = Header(None, alias="X-Internal-API-Key"),
     credentials: HTTPAuthorizationCredentials | None = Depends(_optional_security),
 ) -> dict:
@@ -353,7 +326,7 @@ async def require_service_management_or_internal(
             headers={"WWW-Authenticate": "Bearer"},
         )
     current_user = await get_current_user(credentials)
-    return _require_permission_or_403(current_user, Permission.SERVICE_MANAGEMENT)
+    return await _permission_gate.enforce(request, current_user, (Permission.SERVICE_MANAGEMENT,))
 
 
 async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
@@ -375,14 +348,6 @@ async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
 # authenticated user WITHOUT service.management gets 403.  Reuses the shared
 # ROLE_PERMISSIONS table — no second permission system.
 require_service_management = require_permission(Permission.SERVICE_MANAGEMENT)
-
-
-async def get_slm_db():
-    """Local dependency for SLM database session."""
-    from user_management.database import get_slm_session
-
-    async with get_slm_session() as session:
-        yield session
 
 
 async def get_api_key_user(
@@ -514,7 +479,7 @@ def require_key_permission(permission: Permission) -> Callable:
     """
 
     async def _check(request: Request, current_user: dict = Depends(get_api_key_user)) -> dict:
-        allowed = permission_allowed(current_user, permission)
+        allowed = await evaluate_permission(current_user, permission)
         await _audit_or_503(
             request,
             action="api_key_request" if allowed else "api_key_refused_scope",
@@ -525,7 +490,9 @@ def require_key_permission(permission: Permission) -> Callable:
             username=current_user.get("sub"),
             permission=permission.value,
         )
-        return _require_permission_or_403(current_user, permission)
+        if not allowed:  # the key-request row above is this denial's audit record
+            raise _permission_gate.forbidden((permission,))
+        return current_user
 
     return mark_key_permission(_check, permission)
 

@@ -198,3 +198,38 @@ def test_no_private_tls_or_timeout_switch_is_reintroduced():
     private = {v for v in read_vars if "TLS" in v or "TIMEOUT" in v}
     assert not private, f"a private TLS/timeout switch was reintroduced: {sorted(private)}"
     assert "node_proxy" in source, "the shared node client is no longer used here"
+
+
+def test_the_proxy_limit_ceiling_is_the_shared_one_the_node_enforces():
+    """#14887: `limit` is forwarded unchanged, so the proxy must not accept more than the node.
+
+    Both tiers bind to ``QueryDefaults.MAX_SEARCH_LIMIT``; the node side asserts the same
+    in ``autobot-backend/api/memory_lifecycle_test.py``. Read from the enforced route
+    parameter, not the source text.
+    """
+    from autobot_shared.api_routing.router_routes import effective_routes
+    from autobot_shared.ssot_constants import QueryDefaults
+
+    route = next(
+        m.route for m in effective_routes(proxy.router) if getattr(m.route, "path", None) == "/memory/lifecycle"
+    )
+    limit = next(p for p in route.dependant.query_params if p.name == "limit")
+    ceiling = next(m.le for m in limit.field_info.metadata if getattr(m, "le", None) is not None)
+    assert ceiling == QueryDefaults.MAX_SEARCH_LIMIT
+
+
+def test_the_proxy_limit_ceiling_is_bound_to_the_constant_not_a_matching_literal():
+    """A literal equal to the constant today would pass the value check above; this does not (#14887)."""
+    import ast
+    import inspect
+
+    tree = ast.parse(inspect.getsource(proxy))
+    handler = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.AsyncFunctionDef) and any("/lifecycle" in ast.unparse(d) for d in node.decorator_list)
+    )
+    args = handler.args.args
+    default = handler.args.defaults[[a.arg for a in args].index("limit") - (len(args) - len(handler.args.defaults))]
+    le = next(kw.value for kw in default.keywords if kw.arg == "le")
+    assert ast.unparse(le) == "QueryDefaults.MAX_SEARCH_LIMIT", f"limit ceiling is {ast.unparse(le)}, not the constant"

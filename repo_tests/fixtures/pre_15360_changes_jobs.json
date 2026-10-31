@@ -1,0 +1,1615 @@
+{
+ "ai-security-review": {
+  "base_is_merge_group": false,
+  "checkout": true,
+  "checkout_uses": "actions/checkout@v7",
+  "consumed_outputs": [
+   "reviewable"
+  ],
+  "declared_outputs_read_from_step": true,
+  "display_name": "Detect changed paths",
+  "dorny_uses": "dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d",
+  "filters": {
+   "content": {
+    "backend": [
+     [
+      "autobot-backend/**/*.py",
+      "autobot-slm-backend/**/*.py",
+      "autobot_shared/**/*.py",
+      ".github/filters/backend-python-paths.yml"
+     ],
+     "**/requirements*.txt",
+     "requirements-ci/**",
+     ".github/workflows/startup-import-smoke.yml",
+     ".github/workflows/backend-required-context.yml"
+    ],
+    "backend-python": [
+     "autobot-backend/**/*.py",
+     "autobot-slm-backend/**/*.py",
+     "autobot_shared/**/*.py",
+     ".github/filters/backend-python-paths.yml"
+    ],
+    "deps": [
+     "**/requirements*.txt",
+     "requirements-ci/**",
+     "pyproject.toml",
+     "autobot_shared/pyproject.toml",
+     "autobot-frontend/package*.json",
+     ".github/workflows/security.yml"
+    ],
+    "python": [
+     [
+      "autobot-backend/**/*.py",
+      "autobot-slm-backend/**/*.py",
+      "autobot_shared/**/*.py",
+      ".github/filters/backend-python-paths.yml"
+     ],
+     ".github/workflows/security.yml"
+    ],
+    "reviewable": [
+     [
+      "autobot-backend/**/*.py",
+      "autobot-slm-backend/**/*.py",
+      "autobot_shared/**/*.py",
+      ".github/filters/backend-python-paths.yml"
+     ],
+     "ansible/**",
+     ".github/workflows/ai-security-review.yml"
+    ],
+    "wiring": [
+     [
+      "autobot-backend/**/*.py",
+      "autobot-slm-backend/**/*.py",
+      "autobot_shared/**/*.py",
+      ".github/filters/backend-python-paths.yml"
+     ],
+     "autobot-frontend/src/**",
+     "scripts/audit_api_wiring.py",
+     "scripts/api_wiring_baseline.txt",
+     "requirements*.txt",
+     ".github/workflows/api-wiring.yml"
+    ]
+   },
+   "file": ".github/filters/backend-python-paths.yml",
+   "sha256": "18bfcaf8-e98f2c5c-797e4af0-fbb9e626-918c0ffa-8d56bcf0-58848749-72ffe9df"
+  },
+  "header_sha256": "6b14b130-240ae654-3579fc89-8b24097f-83d5a130-a63919da-2fa62ef4-9719e66c",
+  "job_level_extras": [],
+  "on": {
+   "pull_request": {
+    "branches": [
+     "release",
+     "main"
+    ],
+    "paths": [
+     "autobot-backend/**/*.py",
+     "autobot-slm-backend/**/*.py",
+     "autobot_shared/**/*.py",
+     ".github/filters/backend-python-paths.yml",
+     "ansible/**",
+     ".github/workflows/ai-security-review.yml"
+    ]
+   }
+  },
+  "other_jobs_if_needs": {
+   "review": [
+    "needs.changes.outputs.reviewable == 'true'",
+    "changes"
+   ]
+  },
+  "other_jobs_sha256": {
+   "review": "4100a9c4-3c8010bc-9b9e28ed-1ce2f949-fccbfec4-33d3f1e8-b893a9c3-ee294421"
+  },
+  "outputs": [
+   "reviewable"
+  ],
+  "pr_only": false,
+  "runs_on": "ubuntu-latest",
+  "step_id": "filter",
+  "timeout": 360
+ },
+ "api-wiring": {
+  "base_is_merge_group": true,
+  "checkout": true,
+  "checkout_uses": "actions/checkout@v7",
+  "consumed_outputs": [
+   "wiring"
+  ],
+  "declared_outputs_read_from_step": true,
+  "display_name": "Detect changed paths",
+  "dorny_uses": "dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d",
+  "filters": {
+   "content": {
+    "backend": [
+     [
+      "autobot-backend/**/*.py",
+      "autobot-slm-backend/**/*.py",
+      "autobot_shared/**/*.py",
+      ".github/filters/backend-python-paths.yml"
+     ],
+     "**/requirements*.txt",
+     "requirements-ci/**",
+     ".github/workflows/startup-import-smoke.yml",
+     ".github/workflows/backend-required-context.yml"
+    ],
+    "backend-python": [
+     "autobot-backend/**/*.py",
+     "autobot-slm-backend/**/*.py",
+     "autobot_shared/**/*.py",
+     ".github/filters/backend-python-paths.yml"
+    ],
+    "deps": [
+     "**/requirements*.txt",
+     "requirements-ci/**",
+     "pyproject.toml",
+     "autobot_shared/pyproject.toml",
+     "autobot-frontend/package*.json",
+     ".github/workflows/security.yml"
+    ],
+    "python": [
+     [
+      "autobot-backend/**/*.py",
+      "autobot-slm-backend/**/*.py",
+      "autobot_shared/**/*.py",
+      ".github/filters/backend-python-paths.yml"
+     ],
+     ".github/workflows/security.yml"
+    ],
+    "reviewable": [
+     [
+      "autobot-backend/**/*.py",
+      "autobot-slm-backend/**/*.py",
+      "autobot_shared/**/*.py",
+      ".github/filters/backend-python-paths.yml"
+     ],
+     "ansible/**",
+     ".github/workflows/ai-security-review.yml"
+    ],
+    "wiring": [
+     [
+      "autobot-backend/**/*.py",
+      "autobot-slm-backend/**/*.py",
+      "autobot_shared/**/*.py",
+      ".github/filters/backend-python-paths.yml"
+     ],
+     "autobot-frontend/src/**",
+     "scripts/audit_api_wiring.py",
+     "scripts/api_wiring_baseline.txt",
+     "requirements*.txt",
+     ".github/workflows/api-wiring.yml"
+    ]
+   },
+   "file": ".github/filters/backend-python-paths.yml",
+   "sha256": "18bfcaf8-e98f2c5c-797e4af0-fbb9e626-918c0ffa-8d56bcf0-58848749-72ffe9df"
+  },
+  "header_sha256": "a87bc1db-91fe7005-6f25388c-4a9b806f-e9f98d50-8fbac86c-4e4f5d3f-28af4f51",
+  "job_level_extras": [],
+  "on": {
+   "merge_group": null,
+   "pull_request": {
+    "branches": [
+     "release",
+     "main"
+    ],
+    "types": [
+     "opened",
+     "synchronize",
+     "reopened",
+     "ready_for_review"
+    ]
+   },
+   "push": {
+    "branches": [
+     "release",
+     "main"
+    ],
+    "paths": [
+     "autobot-backend/**/*.py",
+     "autobot-slm-backend/**/*.py",
+     "autobot_shared/**/*.py",
+     ".github/filters/backend-python-paths.yml",
+     "autobot-frontend/src/**",
+     "scripts/audit_api_wiring.py",
+     "scripts/api_wiring_baseline.txt",
+     "requirements*.txt",
+     ".github/workflows/api-wiring.yml"
+    ]
+   }
+  },
+  "other_jobs_if_needs": {
+   "api-wiring": [
+    "${{ (github.event_name == 'merge_group' || needs.changes.outputs.wiring == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}",
+    "changes"
+   ],
+   "api-wiring-skip": [
+    "github.event_name != 'merge_group' && needs.changes.outputs.wiring != 'true'",
+    "changes"
+   ]
+  },
+  "other_jobs_sha256": {
+   "api-wiring": "14fe6a45-acdf5fae-d3c272dd-97c22d20-96224875-38e2376e-bd6c1af5-3089fb3a",
+   "api-wiring-skip": "cac0dd1c-62ba26a3-33f2182d-4533ec0b-bfb0c475-6a353ba2-436156ae-0a9bb6f7"
+  },
+  "outputs": [
+   "wiring"
+  ],
+  "pr_only": false,
+  "runs_on": "ubuntu-latest",
+  "step_id": "filter",
+  "timeout": 360
+ },
+ "backend-required-context": {
+  "base_is_merge_group": true,
+  "checkout": true,
+  "checkout_uses": "actions/checkout@v7",
+  "consumed_outputs": [
+   "backend"
+  ],
+  "declared_outputs_read_from_step": true,
+  "display_name": "Detect changed paths (backend required context)",
+  "dorny_uses": "dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d",
+  "filters": {
+   "content": {
+    "backend": [
+     [
+      "autobot-backend/**/*.py",
+      "autobot-slm-backend/**/*.py",
+      "autobot_shared/**/*.py",
+      ".github/filters/backend-python-paths.yml"
+     ],
+     "**/requirements*.txt",
+     "requirements-ci/**",
+     ".github/workflows/startup-import-smoke.yml",
+     ".github/workflows/backend-required-context.yml"
+    ],
+    "backend-python": [
+     "autobot-backend/**/*.py",
+     "autobot-slm-backend/**/*.py",
+     "autobot_shared/**/*.py",
+     ".github/filters/backend-python-paths.yml"
+    ],
+    "deps": [
+     "**/requirements*.txt",
+     "requirements-ci/**",
+     "pyproject.toml",
+     "autobot_shared/pyproject.toml",
+     "autobot-frontend/package*.json",
+     ".github/workflows/security.yml"
+    ],
+    "python": [
+     [
+      "autobot-backend/**/*.py",
+      "autobot-slm-backend/**/*.py",
+      "autobot_shared/**/*.py",
+      ".github/filters/backend-python-paths.yml"
+     ],
+     ".github/workflows/security.yml"
+    ],
+    "reviewable": [
+     [
+      "autobot-backend/**/*.py",
+      "autobot-slm-backend/**/*.py",
+      "autobot_shared/**/*.py",
+      ".github/filters/backend-python-paths.yml"
+     ],
+     "ansible/**",
+     ".github/workflows/ai-security-review.yml"
+    ],
+    "wiring": [
+     [
+      "autobot-backend/**/*.py",
+      "autobot-slm-backend/**/*.py",
+      "autobot_shared/**/*.py",
+      ".github/filters/backend-python-paths.yml"
+     ],
+     "autobot-frontend/src/**",
+     "scripts/audit_api_wiring.py",
+     "scripts/api_wiring_baseline.txt",
+     "requirements*.txt",
+     ".github/workflows/api-wiring.yml"
+    ]
+   },
+   "file": ".github/filters/backend-python-paths.yml",
+   "sha256": "18bfcaf8-e98f2c5c-797e4af0-fbb9e626-918c0ffa-8d56bcf0-58848749-72ffe9df"
+  },
+  "header_sha256": "6629c9ed-7906202f-b2e85727-a7f74b8c-5d24a02b-5111c92a-a8a034fa-c2491067",
+  "job_level_extras": [],
+  "on": {
+   "pull_request": {
+    "branches": [
+     "release",
+     "main",
+     "develop"
+    ]
+   }
+  },
+  "other_jobs_if_needs": {
+   "startup-import-smoke": [
+    "needs.changes.outputs.backend != 'true'",
+    "changes"
+   ]
+  },
+  "other_jobs_sha256": {
+   "startup-import-smoke": "4558146d-032aa2db-5397a099-b4650f72-25889bb5-5511bf37-5c4732c1-18b4cb6e"
+  },
+  "outputs": [
+   "backend"
+  ],
+  "pr_only": false,
+  "runs_on": "ubuntu-latest",
+  "step_id": "filter",
+  "timeout": 10
+ },
+ "code-quality": {
+  "base_is_merge_group": true,
+  "checkout": true,
+  "checkout_uses": "actions/checkout@v7",
+  "consumed_outputs": [
+   "backend"
+  ],
+  "declared_outputs_read_from_step": true,
+  "display_name": "Detect changed paths",
+  "dorny_uses": "dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d",
+  "filters": {
+   "content": {
+    "backend": [
+     "**/*.py",
+     "**/*.md",
+     "**/*.json",
+     "**/*.sh",
+     "**/*.ts",
+     "**/*.vue",
+     "**/requirements*.txt",
+     "requirements-ci/**",
+     "repo_tests/**",
+     "pyproject.toml",
+     ".flake8",
+     ".bandit",
+     ".pre-commit-config.yaml",
+     "pipeline-scripts/**",
+     "tools/lint/**",
+     "autobot-infrastructure/shared/scripts/**",
+     "autobot-slm-backend/ansible/roles/backend/files/**",
+     "autobot-backend/config/permission_rules.yaml",
+     "autobot-backend/static/error_messages.yaml",
+     "autobot-slm-backend/ansible/roles/backend/tasks/**",
+     ".github/actions/**",
+     "scripts/runner-watchdog-inventory.yaml",
+     "scripts/systemd/runner-watchdog@.service",
+     "scripts/systemd/runner-watchdog@.timer",
+     "docs/**",
+     "scripts/lib/**",
+     "scripts/lint-conventions.sh",
+     ".github/workflows/code-quality.yml",
+     ".github/filters/code-quality-paths.yml",
+     ".github/workflows/code-quality-required-context.yml"
+    ]
+   },
+   "file": ".github/filters/code-quality-paths.yml",
+   "sha256": "83ac730c-745162c5-e32f6573-c5f40561-fe25f4f4-d55e69d5-de2748cc-1362af3e"
+  },
+  "header_sha256": "5038f297-5490d82c-e53d78c7-b13d9f9a-44d5ece5-70782fbe-346d8ec4-5f6496fd",
+  "job_level_extras": [],
+  "on": {
+   "merge_group": null,
+   "pull_request": {
+    "branches": [
+     "release",
+     "main",
+     "develop"
+    ],
+    "types": [
+     "opened",
+     "synchronize",
+     "reopened",
+     "ready_for_review"
+    ]
+   },
+   "push": {
+    "branches": [
+     "release",
+     "main",
+     "develop"
+    ],
+    "paths": [
+     "**/*.py",
+     "**/*.sh",
+     "**/*.md",
+     "**/*.json",
+     "**/*.ts",
+     "**/*.vue",
+     "**/requirements*.txt",
+     "requirements-ci/**",
+     "repo_tests/**",
+     "pyproject.toml",
+     ".flake8",
+     ".bandit",
+     ".pre-commit-config.yaml",
+     "pipeline-scripts/**",
+     "tools/lint/**",
+     "autobot-infrastructure/shared/scripts/**",
+     "autobot-slm-backend/ansible/roles/backend/files/**",
+     "autobot-backend/config/permission_rules.yaml",
+     "autobot-backend/static/error_messages.yaml",
+     "autobot-slm-backend/ansible/roles/backend/tasks/**",
+     ".github/actions/**",
+     "scripts/runner-watchdog-inventory.yaml",
+     "scripts/systemd/runner-watchdog@.service",
+     "scripts/systemd/runner-watchdog@.timer",
+     "docs/**",
+     "scripts/lib/**",
+     "scripts/lint-conventions.sh",
+     ".github/workflows/code-quality.yml",
+     ".github/filters/code-quality-paths.yml",
+     ".github/workflows/code-quality-required-context.yml"
+    ]
+   }
+  },
+  "other_jobs_if_needs": {
+   "code-quality": [
+    "${{ (github.event_name == 'merge_group' || needs.changes.outputs.backend == 'true') && (github.event_name != 'pull_request' || github.event.pull_request.draft == false) }}",
+    "changes"
+   ]
+  },
+  "other_jobs_sha256": {
+   "code-quality": "676bc8e7-7a72ddec-40677fbb-da83548a-1fee83b3-ba14171b-209e6d86-6b6658c4"
+  },
+  "outputs": [
+   "backend"
+  ],
+  "pr_only": false,
+  "runs_on": "ubuntu-latest",
+  "step_id": "filter",
+  "timeout": 360
+ },
+ "code-quality-required-context": {
+  "base_is_merge_group": true,
+  "checkout": true,
+  "checkout_uses": "actions/checkout@v7",
+  "consumed_outputs": [
+   "backend"
+  ],
+  "declared_outputs_read_from_step": true,
+  "display_name": "Detect changed paths (code-quality required context)",
+  "dorny_uses": "dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d",
+  "filters": {
+   "content": {
+    "backend": [
+     "**/*.py",
+     "**/*.md",
+     "**/*.json",
+     "**/*.sh",
+     "**/*.ts",
+     "**/*.vue",
+     "**/requirements*.txt",
+     "requirements-ci/**",
+     "repo_tests/**",
+     "pyproject.toml",
+     ".flake8",
+     ".bandit",
+     ".pre-commit-config.yaml",
+     "pipeline-scripts/**",
+     "tools/lint/**",
+     "autobot-infrastructure/shared/scripts/**",
+     "autobot-slm-backend/ansible/roles/backend/files/**",
+     "autobot-backend/config/permission_rules.yaml",
+     "autobot-backend/static/error_messages.yaml",
+     "autobot-slm-backend/ansible/roles/backend/tasks/**",
+     ".github/actions/**",
+     "scripts/runner-watchdog-inventory.yaml",
+     "scripts/systemd/runner-watchdog@.service",
+     "scripts/systemd/runner-watchdog@.timer",
+     "docs/**",
+     "scripts/lib/**",
+     "scripts/lint-conventions.sh",
+     ".github/workflows/code-quality.yml",
+     ".github/filters/code-quality-paths.yml",
+     ".github/workflows/code-quality-required-context.yml"
+    ]
+   },
+   "file": ".github/filters/code-quality-paths.yml",
+   "sha256": "83ac730c-745162c5-e32f6573-c5f40561-fe25f4f4-d55e69d5-de2748cc-1362af3e"
+  },
+  "header_sha256": "cad81a4c-5ce99eec-c4f17ee4-2194a963-a7672eb9-d6251c56-2b4a1602-c65966fd",
+  "job_level_extras": [],
+  "on": {
+   "pull_request": {
+    "branches": [
+     "release",
+     "main",
+     "develop"
+    ]
+   }
+  },
+  "other_jobs_if_needs": {
+   "code-quality": [
+    "needs.changes.outputs.backend != 'true'",
+    "changes"
+   ]
+  },
+  "other_jobs_sha256": {
+   "code-quality": "d9d54ec6-fd90941e-d248db4c-f372be55-22a6acda-d15aa483-62237553-aa94ce66"
+  },
+  "outputs": [
+   "backend"
+  ],
+  "pr_only": false,
+  "runs_on": "ubuntu-latest",
+  "step_id": "filter",
+  "timeout": 10
+ },
+ "docker-smoke-required-context": {
+  "base_is_merge_group": false,
+  "checkout": true,
+  "checkout_uses": "actions/checkout@v7",
+  "consumed_outputs": [
+   "docker"
+  ],
+  "declared_outputs_read_from_step": true,
+  "display_name": "Detect changed paths (docker required context)",
+  "dorny_uses": "dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d",
+  "filters": {
+   "content": {
+    "docker": [
+     "docker/**",
+     "**/Dockerfile*",
+     "docker-compose*.yml",
+     "docker-compose*.yaml",
+     ".dockerignore",
+     ".env.example",
+     "**/requirements*.txt",
+     "constraints/**",
+     "requirements-ci/**",
+     "autobot-ai-stack/**",
+     "autobot-backend/**",
+     "autobot-browser-worker/**",
+     "autobot-database/**",
+     "autobot-frontend/**",
+     "autobot-infrastructure/**",
+     "autobot-monitoring/**",
+     "autobot-npu-worker/**",
+     "autobot-plugins/**",
+     "autobot-slm-backend/**",
+     "autobot-slm-database/**",
+     "autobot-slm-frontend/**",
+     "autobot-tts-worker/**",
+     "autobot_shared/**",
+     "libs/**",
+     "plugins/**",
+     ".github/workflows/docker-smoke-test.yml",
+     ".github/workflows/docker-smoke-required-context.yml",
+     ".github/filters/docker-paths.yml"
+    ]
+   },
+   "file": ".github/filters/docker-paths.yml",
+   "sha256": "70254e15-7e9d902c-06dd61e9-f0758247-95a13af1-7f733230-5664132a-00f63686"
+  },
+  "header_sha256": "8bf50320-7c1bfc3c-81cb2dc6-99a159b7-656a444d-96d99d49-f9ebd199-42112117",
+  "job_level_extras": [],
+  "on": {
+   "pull_request": {
+    "branches": [
+     "main"
+    ]
+   }
+  },
+  "other_jobs_if_needs": {
+   "smoke-test": [
+    "always() && (\n  needs.changes.result != 'success'\n  || needs.changes.outputs.docker != 'true'\n)",
+    "changes"
+   ]
+  },
+  "other_jobs_sha256": {
+   "smoke-test": "af09ad28-50d3023c-6f71d8c9-475cf303-eac9c0bb-5e598de1-e1c238a8-19dbeb6b"
+  },
+  "outputs": [
+   "docker"
+  ],
+  "pr_only": false,
+  "runs_on": "ubuntu-latest",
+  "step_id": "filter",
+  "timeout": 10
+ },
+ "docker-smoke-test": {
+  "base_is_merge_group": false,
+  "checkout": true,
+  "checkout_uses": "actions/checkout@v7",
+  "consumed_outputs": [
+   "docker"
+  ],
+  "declared_outputs_read_from_step": true,
+  "display_name": "Detect changed paths (docker smoke)",
+  "dorny_uses": "dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d",
+  "filters": {
+   "content": {
+    "docker": [
+     "docker/**",
+     "**/Dockerfile*",
+     "docker-compose*.yml",
+     "docker-compose*.yaml",
+     ".dockerignore",
+     ".env.example",
+     "**/requirements*.txt",
+     "constraints/**",
+     "requirements-ci/**",
+     "autobot-ai-stack/**",
+     "autobot-backend/**",
+     "autobot-browser-worker/**",
+     "autobot-database/**",
+     "autobot-frontend/**",
+     "autobot-infrastructure/**",
+     "autobot-monitoring/**",
+     "autobot-npu-worker/**",
+     "autobot-plugins/**",
+     "autobot-slm-backend/**",
+     "autobot-slm-database/**",
+     "autobot-slm-frontend/**",
+     "autobot-tts-worker/**",
+     "autobot_shared/**",
+     "libs/**",
+     "plugins/**",
+     ".github/workflows/docker-smoke-test.yml",
+     ".github/workflows/docker-smoke-required-context.yml",
+     ".github/filters/docker-paths.yml"
+    ]
+   },
+   "file": ".github/filters/docker-paths.yml",
+   "sha256": "70254e15-7e9d902c-06dd61e9-f0758247-95a13af1-7f733230-5664132a-00f63686"
+  },
+  "header_sha256": "6ca40dcb-18d57aa0-b2bd4fad-4869d200-9d76fe01-11e9a0b3-ff76469b-689545cf",
+  "job_level_extras": [],
+  "on": {
+   "merge_group": null,
+   "pull_request": {
+    "branches": [
+     "main"
+    ],
+    "types": [
+     "opened",
+     "synchronize",
+     "reopened",
+     "ready_for_review"
+    ]
+   },
+   "push": {
+    "branches": [
+     "main"
+    ]
+   },
+   "schedule": [
+    {
+     "cron": "0 10 * * 0"
+    }
+   ]
+  },
+  "other_jobs_if_needs": {
+   "smoke-test": [
+    "always() && (\n  github.event_name != 'pull_request'\n  || needs.changes.result != 'success'\n  || needs.changes.outputs.docker == 'true'\n)",
+    "changes"
+   ]
+  },
+  "other_jobs_sha256": {
+   "smoke-test": "af6db7ac-51fdf5ba-d041178b-660b9450-ad7ace2c-72a29fa5-07c96d98-1d0ed6fc"
+  },
+  "outputs": [
+   "docker"
+  ],
+  "pr_only": true,
+  "runs_on": "ubuntu-latest",
+  "step_id": "filter",
+  "timeout": 10
+ },
+ "frontend-required-context": {
+  "base_is_merge_group": false,
+  "checkout": true,
+  "checkout_uses": "actions/checkout@v7",
+  "consumed_outputs": [
+   "frontend"
+  ],
+  "declared_outputs_read_from_step": true,
+  "display_name": "Detect changed paths (required context)",
+  "dorny_uses": "dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d",
+  "filters": {
+   "content": {
+    "frontend": [
+     "autobot-frontend/**",
+     "libs/autobot-ui/**",
+     ".github/workflows/frontend-test.yml",
+     ".github/workflows/frontend-required-context.yml",
+     ".github/filters/frontend-paths.yml",
+     "autobot_shared/ssot_config.py",
+     "pipeline-scripts/npm_audit_gate.py",
+     "autobot-plugins/terminal/**"
+    ]
+   },
+   "file": ".github/filters/frontend-paths.yml",
+   "sha256": "ec60310f-a63662a5-5c13a669-1ae53689-716feb07-28a20947-5261a30a-2b95bbf3"
+  },
+  "header_sha256": "541b38f2-f2fbe2fa-75830233-a5f53ce5-4ea84e36-b605b44b-1833b9c6-9903a3bf",
+  "job_level_extras": [],
+  "on": {
+   "pull_request": {
+    "branches": [
+     "release",
+     "main",
+     "develop"
+    ]
+   }
+  },
+  "other_jobs_if_needs": {
+   "unit-tests-skip": [
+    "needs.changes.outputs.frontend != 'true'",
+    "changes"
+   ]
+  },
+  "other_jobs_sha256": {
+   "unit-tests-skip": "b8a02c68-416cfda9-83f2bd56-0506ad5d-b3034695-4b4c8440-1f8785e0-3a37f720"
+  },
+  "outputs": [
+   "frontend"
+  ],
+  "pr_only": false,
+  "runs_on": "ubuntu-latest",
+  "step_id": "filter",
+  "timeout": 10
+ },
+ "frontend-test": {
+  "base_is_merge_group": true,
+  "checkout": true,
+  "checkout_uses": "actions/checkout@v7",
+  "consumed_outputs": [
+   "frontend"
+  ],
+  "declared_outputs_read_from_step": true,
+  "display_name": "Detect changed paths",
+  "dorny_uses": "dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d",
+  "filters": {
+   "content": {
+    "frontend": [
+     "autobot-frontend/**",
+     "libs/autobot-ui/**",
+     ".github/workflows/frontend-test.yml",
+     ".github/workflows/frontend-required-context.yml",
+     ".github/filters/frontend-paths.yml",
+     "autobot_shared/ssot_config.py",
+     "pipeline-scripts/npm_audit_gate.py",
+     "autobot-plugins/terminal/**"
+    ]
+   },
+   "file": ".github/filters/frontend-paths.yml",
+   "sha256": "ec60310f-a63662a5-5c13a669-1ae53689-716feb07-28a20947-5261a30a-2b95bbf3"
+  },
+  "header_sha256": "34e9f824-febd2255-192c6bb2-7dc6e3e1-dcd0f356-a55c171a-b3eca103-9b5a6440",
+  "job_level_extras": [],
+  "on": {
+   "merge_group": null,
+   "pull_request": {
+    "branches": [
+     "release",
+     "main",
+     "develop"
+    ],
+    "types": [
+     "opened",
+     "synchronize",
+     "reopened",
+     "ready_for_review"
+    ]
+   },
+   "push": {
+    "branches": [
+     "release",
+     "main",
+     "develop"
+    ],
+    "paths": [
+     "autobot-frontend/**",
+     "libs/autobot-ui/**",
+     ".github/workflows/frontend-test.yml",
+     ".github/workflows/frontend-required-context.yml",
+     ".github/filters/frontend-paths.yml",
+     "autobot_shared/ssot_config.py",
+     "pipeline-scripts/npm_audit_gate.py",
+     "autobot-plugins/terminal/**"
+    ]
+   }
+  },
+  "other_jobs_if_needs": {
+   "build-test": [
+    "${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}",
+    [
+     "changes",
+     "unit-tests"
+    ]
+   ],
+   "security-scan": [
+    "needs.changes.outputs.frontend == 'true'",
+    "changes"
+   ],
+   "test-summary": [
+    "always() && needs.changes.outputs.frontend == 'true'",
+    [
+     "changes",
+     "unit-tests",
+     "security-scan",
+     "build-test"
+    ]
+   ],
+   "unit-tests": [
+    "github.event_name == 'merge_group' || needs.changes.outputs.frontend == 'true'",
+    "changes"
+   ]
+  },
+  "other_jobs_sha256": {
+   "build-test": "121c88ff-f58194dd-d2f8e6f8-f8efaeff-80088c76-a212f1da-709a6929-fe1ef166",
+   "security-scan": "0788fcd0-646691ed-044f7c9f-344c3c1b-91165b4e-3fd290fc-7dd6fb78-e87e0b0b",
+   "test-summary": "21a0a14e-3456bf36-0f235718-4be0366f-847644c5-f152cd13-cade046a-6f015388",
+   "unit-tests": "0dc4b915-b5a1c086-e9c815c6-40133b73-e80f40a3-383f3845-5fb2f89d-d2cd1256"
+  },
+  "outputs": [
+   "frontend"
+  ],
+  "pr_only": false,
+  "runs_on": "ubuntu-latest",
+  "step_id": "filter",
+  "timeout": 360
+ },
+ "migration-gate": {
+  "base_is_merge_group": true,
+  "checkout": true,
+  "checkout_uses": "actions/checkout@v7",
+  "consumed_outputs": [
+   "migrations"
+  ],
+  "declared_outputs_read_from_step": true,
+  "display_name": "Detect changed paths",
+  "dorny_uses": "dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d",
+  "filters": {
+   "inline": {
+    "migrations": [
+     "autobot-backend/migrations/**",
+     "autobot-backend/tests/migrations/**",
+     "autobot-backend/user_management/models/**",
+     "autobot-backend/llc/models/**",
+     "autobot-backend/canvas/models.py",
+     "autobot-backend/models/**",
+     "autobot-backend/initialization/lifespan.py",
+     "autobot-slm-backend/ansible/setup-user-backend.yml",
+     "autobot-slm-backend/ansible/playbooks/update-all-nodes.yml",
+     ".github/workflows/migration-gate.yml"
+    ]
+   }
+  },
+  "header_sha256": "eb71a914-35916764-1b61fada-bf95924a-1f89ee1d-602904c3-73d257e3-5adabdb9",
+  "job_level_extras": [],
+  "on": {
+   "merge_group": null,
+   "pull_request": {
+    "branches": [
+     "release",
+     "main"
+    ],
+    "types": [
+     "opened",
+     "synchronize",
+     "reopened",
+     "ready_for_review"
+    ]
+   },
+   "push": {
+    "branches": [
+     "release",
+     "main"
+    ],
+    "paths": [
+     "autobot-backend/migrations/**",
+     "autobot-backend/tests/migrations/**",
+     "autobot-backend/user_management/models/**",
+     "autobot-backend/llc/models/**",
+     "autobot-backend/canvas/models.py",
+     "autobot-backend/models/**",
+     "autobot-backend/initialization/lifespan.py",
+     "autobot-slm-backend/ansible/setup-user-backend.yml",
+     "autobot-slm-backend/ansible/playbooks/update-all-nodes.yml",
+     ".github/workflows/migration-gate.yml"
+    ]
+   },
+   "schedule": [
+    {
+     "cron": "40 4 * * *"
+    }
+   ],
+   "workflow_dispatch": null
+  },
+  "other_jobs_if_needs": {
+   "migration-matrix": [
+    "always()",
+    [
+     "changes",
+     "migration-tests"
+    ]
+   ],
+   "migration-tests": [
+    "needs.changes.outputs.migrations != 'false' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'",
+    "changes"
+   ]
+  },
+  "other_jobs_sha256": {
+   "migration-matrix": "849f032b-a125b6e6-b4ec5080-7c7d1d4a-6c773ca9-9716f4df-3945d19b-f9b3c210",
+   "migration-tests": "327b9072-5342d2bc-69ac03c5-5e769482-48262bbf-0a2ea403-184985ef-f1324ea0"
+  },
+  "outputs": [
+   "migrations"
+  ],
+  "pr_only": false,
+  "runs_on": "ubuntu-latest",
+  "step_id": "filter",
+  "timeout": 10
+ },
+ "npm-package-tests": {
+  "base_is_merge_group": false,
+  "checkout": true,
+  "checkout_uses": "actions/checkout@v7",
+  "consumed_outputs": [
+   "browser_worker",
+   "mcp",
+   "sdk_ts",
+   "structured_thinking"
+  ],
+  "declared_outputs_read_from_step": true,
+  "display_name": "Detect changed packages",
+  "dorny_uses": "dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d",
+  "filters": {
+   "inline": {
+    "browser_worker": [
+     "autobot-browser-worker/**",
+     ".github/workflows/npm-package-tests.yml"
+    ],
+    "mcp": [
+     ".mcp/**",
+     ".github/workflows/npm-package-tests.yml"
+    ],
+    "sdk_ts": [
+     "libs/autobot-sdk-ts/**",
+     ".github/workflows/npm-package-tests.yml"
+    ],
+    "structured_thinking": [
+     "autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking/**",
+     ".github/workflows/npm-package-tests.yml"
+    ]
+   }
+  },
+  "header_sha256": "d86c9c24-ccd0a6cd-c7d7e2cf-bacb5c89-caa3344c-35d2c33c-47a416f7-06a3d739",
+  "job_level_extras": [],
+  "on": {
+   "pull_request": {
+    "branches": [
+     "release",
+     "main",
+     "develop"
+    ],
+    "paths": [
+     ".mcp/**",
+     "autobot-browser-worker/**",
+     "libs/autobot-sdk-ts/**",
+     "autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking/**",
+     ".github/workflows/npm-package-tests.yml"
+    ],
+    "types": [
+     "opened",
+     "synchronize",
+     "reopened",
+     "ready_for_review"
+    ]
+   },
+   "push": {
+    "branches": [
+     "release",
+     "main",
+     "develop"
+    ],
+    "paths": [
+     ".mcp/**",
+     "autobot-browser-worker/**",
+     "libs/autobot-sdk-ts/**",
+     "autobot-infrastructure/shared/mcp/tools/mcp-structured-thinking/**",
+     ".github/workflows/npm-package-tests.yml"
+    ]
+   }
+  },
+  "other_jobs_if_needs": {
+   "npm-package-tests": [
+    "${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}",
+    "changes"
+   ]
+  },
+  "other_jobs_sha256": {
+   "npm-package-tests": "5db1093a-2a13e720-40ae5288-57cbb57d-eec2e145-959e5685-00627674-8775dc44"
+  },
+  "outputs": [
+   "browser_worker",
+   "mcp",
+   "sdk_ts",
+   "structured_thinking"
+  ],
+  "pr_only": false,
+  "runs_on": "ubuntu-latest",
+  "step_id": "filter",
+  "timeout": 360
+ },
+ "python-required-context": {
+  "base_is_merge_group": false,
+  "checkout": true,
+  "checkout_uses": "actions/checkout@v7",
+  "consumed_outputs": [
+   "python"
+  ],
+  "declared_outputs_read_from_step": true,
+  "display_name": "Detect changed paths (python required context)",
+  "dorny_uses": "dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d",
+  "filters": {
+   "content": {
+    "python": [
+     "**/*.py",
+     "**/requirements*.txt",
+     "requirements-ci/**",
+     "pyproject.toml",
+     "autobot_shared/pyproject.toml",
+     ".github/workflows/ci.yml",
+     ".github/workflows/duplication-guard.yml",
+     ".github/filters/frontend-paths.yml",
+     "autobot-frontend/src/**",
+     "autobot-slm-frontend/src/**",
+     ".github/workflows/security.yml",
+     ".github/codeql/**",
+     ".github/workflows/codeql.yml",
+     ".github/workflows/python-required-context.yml",
+     ".github/filters/python-paths.yml",
+     "docker/backend/Dockerfile",
+     "docker/slm/Dockerfile",
+     "docker/.env.docker",
+     "autobot-slm-backend/ansible/roles/slm_manager/templates/autobot-slm-backend.service.j2",
+     "autobot-slm-backend/ansible/roles/slm_agent/templates/slm-agent.service.j2",
+     "autobot-slm-backend/ansible/roles/ai-stack/templates/ai-stack.env.j2",
+     "autobot-infrastructure/**",
+     "autobot-slm-backend/ansible/**",
+     "tools/git-hooks/**",
+     "scripts/install-git-hooks.sh",
+     "pipeline-scripts/check-issue-close-refs.sh",
+     "pipeline-scripts/check-pre-commit-hook-pr.sh",
+     "pipeline-scripts/check_baseline_no_growth.sh",
+     "pipeline-scripts/check_codeql_alert_ceiling.sh",
+     "pipeline-scripts/detect-hardcoded-values.sh",
+     "pipeline-scripts/pr-queue-open-list.sh",
+     "scripts/lib/git-root.sh",
+     "scripts/lib/git-scope.sh",
+     "scripts/lib/hardcoded-value-rules.sh",
+     "scripts/lint-conventions.sh",
+     "scripts/lib/commit-subject.ere",
+     ".github/workflows/test-durations.yml",
+     "sync-frontend.sh",
+     ".claude/hooks/scan-secrets.sh",
+     ".github/scripts/issue-triage-labels.js",
+     ".github/workflows/no-commit-trailers.yml",
+     ".github/workflows/pr-issue-validation.yml",
+     ".github/workflows/release.yml",
+     ".github/workflows/slm-migration-gate.yml",
+     ".github/workflows/sync-main-to-release.yml",
+     "autobot-frontend/package.json",
+     "autobot-frontend/src/composables/useVoiceOutput.ts",
+     "autobot-frontend/src/embed/embed-styles.ts",
+     "autobot-frontend/src/main.ts",
+     "install.sh",
+     "constraints/ansible-core.txt",
+     ".secrets.baseline",
+     ".github/workflows/ci-dispatch-watchdog.yml",
+     ".github/workflows/import-hermeticity-sweep.yml",
+     ".github/workflows/ratchet-base-guard.yml",
+     ".github/workflows/stylelint-tokens.yml",
+     ".github/workflows/phase_validation.yml",
+     "requirements-gpu-faiss.txt",
+     "docs/guides/CONFIGURATION_GUIDE.md",
+     "autobot-frontend/src/components/security/SecretsManager.vue",
+     ".github/workflows/auto-fix-generated-types.yml",
+     "autobot-slm-frontend/src/locales/**",
+     "autobot-frontend/src/constants/knowledgeUpload.ts",
+     "autobot-frontend/src/components/knowledge/KnowledgeUpload.vue",
+     "autobot-frontend/src/utils/cacheManagement.ts",
+     "autobot-frontend/src/composables/useCssVars.ts",
+     "autobot-frontend/src/assets/css/design-tokens.css",
+     "autobot-frontend/src/assets/css/themes/light.css",
+     "autobot-frontend/src/assets/css/themes/dark.css",
+     ".test_durations",
+     ".test_durations_slm",
+     "requirements-ci-test.txt",
+     "docs/research/**",
+     ".github/workflows/docs-liquid-tags.yml"
+    ]
+   },
+   "file": ".github/filters/python-paths.yml",
+   "sha256": "377f8f96-7b0cd8d6-c340e4c7-7ad2875e-9fd9dee9-d3f2344b-bace14b9-955377f3"
+  },
+  "header_sha256": "8b42d970-d0f9a9b7-9319ae9c-3558382f-2a638cb2-1c44f9d3-d3c8cb5f-b52fd591",
+  "job_level_extras": [],
+  "on": {
+   "pull_request": null
+  },
+  "other_jobs_if_needs": {
+   "python-suite": [
+    "needs.changes.outputs.python != 'true'",
+    "changes"
+   ]
+  },
+  "other_jobs_sha256": {
+   "python-suite": "b5c13534-d0eed61a-185fa376-9728a1d4-f4112946-291f81ad-57add81d-c2f7c00b"
+  },
+  "outputs": [
+   "python"
+  ],
+  "pr_only": false,
+  "runs_on": "ubuntu-latest",
+  "step_id": "filter",
+  "timeout": 10
+ },
+ "security": {
+  "base_is_merge_group": false,
+  "checkout": true,
+  "checkout_uses": "actions/checkout@v7",
+  "consumed_outputs": [
+   "deps",
+   "python"
+  ],
+  "declared_outputs_read_from_step": true,
+  "display_name": "Detect changed paths",
+  "dorny_uses": "dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d",
+  "filters": {
+   "content": {
+    "backend": [
+     [
+      "autobot-backend/**/*.py",
+      "autobot-slm-backend/**/*.py",
+      "autobot_shared/**/*.py",
+      ".github/filters/backend-python-paths.yml"
+     ],
+     "**/requirements*.txt",
+     "requirements-ci/**",
+     ".github/workflows/startup-import-smoke.yml",
+     ".github/workflows/backend-required-context.yml"
+    ],
+    "backend-python": [
+     "autobot-backend/**/*.py",
+     "autobot-slm-backend/**/*.py",
+     "autobot_shared/**/*.py",
+     ".github/filters/backend-python-paths.yml"
+    ],
+    "deps": [
+     "**/requirements*.txt",
+     "requirements-ci/**",
+     "pyproject.toml",
+     "autobot_shared/pyproject.toml",
+     "autobot-frontend/package*.json",
+     ".github/workflows/security.yml"
+    ],
+    "python": [
+     [
+      "autobot-backend/**/*.py",
+      "autobot-slm-backend/**/*.py",
+      "autobot_shared/**/*.py",
+      ".github/filters/backend-python-paths.yml"
+     ],
+     ".github/workflows/security.yml"
+    ],
+    "reviewable": [
+     [
+      "autobot-backend/**/*.py",
+      "autobot-slm-backend/**/*.py",
+      "autobot_shared/**/*.py",
+      ".github/filters/backend-python-paths.yml"
+     ],
+     "ansible/**",
+     ".github/workflows/ai-security-review.yml"
+    ],
+    "wiring": [
+     [
+      "autobot-backend/**/*.py",
+      "autobot-slm-backend/**/*.py",
+      "autobot_shared/**/*.py",
+      ".github/filters/backend-python-paths.yml"
+     ],
+     "autobot-frontend/src/**",
+     "scripts/audit_api_wiring.py",
+     "scripts/api_wiring_baseline.txt",
+     "requirements*.txt",
+     ".github/workflows/api-wiring.yml"
+    ]
+   },
+   "file": ".github/filters/backend-python-paths.yml",
+   "sha256": "18bfcaf8-e98f2c5c-797e4af0-fbb9e626-918c0ffa-8d56bcf0-58848749-72ffe9df"
+  },
+  "header_sha256": "bfaff9a0-ae317ee9-456cb33b-8b49b884-67a45cde-4037ca9e-3a435a98-e0c89fb8",
+  "job_level_extras": [],
+  "on": {
+   "pull_request": {
+    "branches": [
+     "release",
+     "main"
+    ],
+    "paths": [
+     "autobot-backend/**/*.py",
+     "autobot-slm-backend/**/*.py",
+     "autobot_shared/**/*.py",
+     ".github/filters/backend-python-paths.yml",
+     "**/requirements*.txt",
+     "requirements-ci/**",
+     "pyproject.toml",
+     "autobot_shared/pyproject.toml",
+     "**/package*.json",
+     ".secrets.baseline",
+     ".github/workflows/security.yml"
+    ],
+    "types": [
+     "opened",
+     "synchronize",
+     "reopened",
+     "ready_for_review"
+    ]
+   },
+   "push": {
+    "branches": [
+     "release",
+     "dev",
+     "main"
+    ]
+   },
+   "schedule": [
+    {
+     "cron": "0 2 * * *"
+    }
+   ]
+  },
+  "other_jobs_if_needs": {
+   "compliance-check": [
+    "${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}",
+    null
+   ],
+   "dependency-security": [
+    "github.event_name == 'schedule' || needs.changes.outputs.deps == 'true'",
+    "changes"
+   ],
+   "secret-detection": [
+    null,
+    null
+   ],
+   "security-summary": [
+    "always()",
+    [
+     "changes",
+     "dependency-security",
+     "static-analysis",
+     "secret-detection",
+     "compliance-check"
+    ]
+   ],
+   "static-analysis": [
+    "github.event_name == 'schedule' || needs.changes.outputs.python == 'true'",
+    "changes"
+   ]
+  },
+  "other_jobs_sha256": {
+   "compliance-check": "123899e0-fd587e01-b14084dd-0e8759c8-fe7288b4-9ffd527b-46a3f255-e6168d12",
+   "dependency-security": "8af2b520-3f46075d-7de4f32d-de53d746-992caa01-0c51956f-0d5cd737-450b24ee",
+   "secret-detection": "1a70dd4d-b07dda90-8885db96-e999d7fa-2ebac94b-4549aee2-a00815ba-ad431d1d",
+   "security-summary": "d7ada57f-e7d14e7d-4559749f-a7e4e3e6-44b5e914-96e7e4aa-fb0a26fc-7de2aaa9",
+   "static-analysis": "0936ffd6-a5f4c690-7da1f5a3-84c36374-e570c565-180cf399-a30ce466-eb532321"
+  },
+  "outputs": [
+   "deps",
+   "python"
+  ],
+  "pr_only": false,
+  "runs_on": "ubuntu-latest",
+  "step_id": "filter",
+  "timeout": 360
+ },
+ "slm-frontend-check": {
+  "base_is_merge_group": false,
+  "checkout": true,
+  "checkout_uses": "actions/checkout@v7",
+  "consumed_outputs": [
+   "slm_frontend"
+  ],
+  "declared_outputs_read_from_step": true,
+  "display_name": "Detect changed paths",
+  "dorny_uses": "dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d",
+  "filters": {
+   "inline": {
+    "slm_frontend": [
+     "autobot-slm-frontend/**",
+     ".github/workflows/slm-frontend-check.yml",
+     "autobot-frontend/scripts/check-i18n-keys.mjs",
+     "autobot-frontend/src/i18n/locales/**",
+     "scripts/lift_locale_translations.py"
+    ]
+   }
+  },
+  "header_sha256": "a43a848b-97a71ebc-b7ce9d62-13150778-cf7d7773-71ca8766-bfb00045-4e4673fd",
+  "job_level_extras": [],
+  "on": {
+   "pull_request": {
+    "branches": [
+     "release",
+     "main",
+     "develop"
+    ],
+    "paths": [
+     "autobot-slm-frontend/**",
+     ".github/workflows/slm-frontend-check.yml",
+     "autobot-frontend/scripts/check-i18n-keys.mjs",
+     "autobot-frontend/src/i18n/locales/**",
+     "scripts/lift_locale_translations.py"
+    ],
+    "types": [
+     "opened",
+     "synchronize",
+     "reopened",
+     "ready_for_review"
+    ]
+   },
+   "push": {
+    "branches": [
+     "release",
+     "main",
+     "develop"
+    ],
+    "paths": [
+     "autobot-slm-frontend/**",
+     ".github/workflows/slm-frontend-check.yml",
+     "autobot-frontend/scripts/check-i18n-keys.mjs",
+     "autobot-frontend/src/i18n/locales/**",
+     "scripts/lift_locale_translations.py"
+    ]
+   }
+  },
+  "other_jobs_if_needs": {
+   "slm-frontend-check": [
+    "${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}",
+    "changes"
+   ]
+  },
+  "other_jobs_sha256": {
+   "slm-frontend-check": "8457562c-0ab7ac20-ec44215b-1ba15560-7eea2aa8-0ec2a0c6-585c63d9-ab67c152"
+  },
+  "outputs": [
+   "slm_frontend"
+  ],
+  "pr_only": false,
+  "runs_on": "ubuntu-latest",
+  "step_id": "filter",
+  "timeout": 360
+ },
+ "startup-import-smoke": {
+  "base_is_merge_group": true,
+  "checkout": true,
+  "checkout_uses": "actions/checkout@v7",
+  "consumed_outputs": [
+   "backend"
+  ],
+  "declared_outputs_read_from_step": true,
+  "display_name": "Detect changed paths",
+  "dorny_uses": "dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d",
+  "filters": {
+   "content": {
+    "backend": [
+     [
+      "autobot-backend/**/*.py",
+      "autobot-slm-backend/**/*.py",
+      "autobot_shared/**/*.py",
+      ".github/filters/backend-python-paths.yml"
+     ],
+     "**/requirements*.txt",
+     "requirements-ci/**",
+     ".github/workflows/startup-import-smoke.yml",
+     ".github/workflows/backend-required-context.yml"
+    ],
+    "backend-python": [
+     "autobot-backend/**/*.py",
+     "autobot-slm-backend/**/*.py",
+     "autobot_shared/**/*.py",
+     ".github/filters/backend-python-paths.yml"
+    ],
+    "deps": [
+     "**/requirements*.txt",
+     "requirements-ci/**",
+     "pyproject.toml",
+     "autobot_shared/pyproject.toml",
+     "autobot-frontend/package*.json",
+     ".github/workflows/security.yml"
+    ],
+    "python": [
+     [
+      "autobot-backend/**/*.py",
+      "autobot-slm-backend/**/*.py",
+      "autobot_shared/**/*.py",
+      ".github/filters/backend-python-paths.yml"
+     ],
+     ".github/workflows/security.yml"
+    ],
+    "reviewable": [
+     [
+      "autobot-backend/**/*.py",
+      "autobot-slm-backend/**/*.py",
+      "autobot_shared/**/*.py",
+      ".github/filters/backend-python-paths.yml"
+     ],
+     "ansible/**",
+     ".github/workflows/ai-security-review.yml"
+    ],
+    "wiring": [
+     [
+      "autobot-backend/**/*.py",
+      "autobot-slm-backend/**/*.py",
+      "autobot_shared/**/*.py",
+      ".github/filters/backend-python-paths.yml"
+     ],
+     "autobot-frontend/src/**",
+     "scripts/audit_api_wiring.py",
+     "scripts/api_wiring_baseline.txt",
+     "requirements*.txt",
+     ".github/workflows/api-wiring.yml"
+    ]
+   },
+   "file": ".github/filters/backend-python-paths.yml",
+   "sha256": "18bfcaf8-e98f2c5c-797e4af0-fbb9e626-918c0ffa-8d56bcf0-58848749-72ffe9df"
+  },
+  "header_sha256": "f512d3b6-efd5481d-818ab8cb-3d9f85f4-0925f555-180926e3-c80918c7-df36334f",
+  "job_level_extras": [],
+  "on": {
+   "merge_group": null,
+   "pull_request": {
+    "branches": [
+     "release",
+     "main",
+     "develop"
+    ],
+    "types": [
+     "opened",
+     "synchronize",
+     "reopened",
+     "ready_for_review"
+    ]
+   },
+   "push": {
+    "branches": [
+     "release",
+     "main",
+     "develop"
+    ],
+    "paths": [
+     "autobot-backend/**/*.py",
+     "autobot-slm-backend/**/*.py",
+     "autobot_shared/**/*.py",
+     ".github/filters/backend-python-paths.yml",
+     "**/requirements*.txt",
+     "requirements-ci/**",
+     ".github/workflows/startup-import-smoke.yml",
+     ".github/workflows/backend-required-context.yml"
+    ]
+   }
+  },
+  "other_jobs_if_needs": {
+   "startup-import-smoke": [
+    "github.event_name == 'merge_group' || needs.changes.outputs.backend == 'true'",
+    "changes"
+   ]
+  },
+  "other_jobs_sha256": {
+   "startup-import-smoke": "b1550ecd-ccc9f6d1-59aa4ec6-dce655c6-3b72d773-bf9486ae-f9d11127-537289f9"
+  },
+  "outputs": [
+   "backend"
+  ],
+  "pr_only": false,
+  "runs_on": "ubuntu-latest",
+  "step_id": "filter",
+  "timeout": 360
+ },
+ "verify-generated-types": {
+  "base_is_merge_group": true,
+  "checkout": true,
+  "checkout_uses": "actions/checkout@v7",
+  "consumed_outputs": [
+   "slm_types",
+   "types"
+  ],
+  "declared_outputs_read_from_step": true,
+  "display_name": "Detect changed paths",
+  "dorny_uses": "dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d",
+  "filters": {
+   "inline": {
+    "slm_types": [
+     "autobot-slm-backend/**/*.py",
+     "autobot_shared/**/*.py",
+     "autobot-slm-frontend/src/types/generated/api.ts",
+     "autobot-slm-frontend/package.json",
+     "autobot-slm-frontend/package-lock.json",
+     "scripts/audit_api_wiring.py",
+     "**/requirements*.txt",
+     ".github/workflows/verify-generated-types.yml"
+    ],
+    "types": [
+     "autobot-backend/**/*.py",
+     "autobot_shared/**/*.py",
+     "autobot-frontend/src/types/generated/api.ts",
+     "autobot-frontend/package.json",
+     "autobot-frontend/package-lock.json",
+     "scripts/audit_api_wiring.py",
+     "**/requirements*.txt",
+     ".github/workflows/verify-generated-types.yml"
+    ]
+   }
+  },
+  "header_sha256": "c5361763-f8918f58-e12fab4e-e027fd31-a331618f-51df485a-cec7412b-33052e58",
+  "job_level_extras": [],
+  "on": {
+   "merge_group": null,
+   "pull_request": {
+    "branches": [
+     "release",
+     "main"
+    ],
+    "types": [
+     "opened",
+     "synchronize",
+     "reopened",
+     "ready_for_review"
+    ]
+   },
+   "push": {
+    "branches": [
+     "release",
+     "main"
+    ],
+    "paths": [
+     "autobot-backend/**/*.py",
+     "autobot_shared/**/*.py",
+     "autobot-frontend/src/types/generated/api.ts",
+     "autobot-frontend/package.json",
+     "autobot-frontend/package-lock.json",
+     "scripts/audit_api_wiring.py",
+     "requirements*.txt",
+     ".github/workflows/verify-generated-types.yml"
+    ]
+   }
+  },
+  "other_jobs_if_needs": {
+   "verify-generated-types": [
+    "always()",
+    [
+     "changes",
+     "verify-types-run"
+    ]
+   ],
+   "verify-generated-types-slm": [
+    "needs.changes.outputs.slm_types != 'false'",
+    "changes"
+   ],
+   "verify-types-run": [
+    "needs.changes.outputs.types != 'false'",
+    "changes"
+   ]
+  },
+  "other_jobs_sha256": {
+   "verify-generated-types": "b5f2873a-11dd1ee2-ab731e26-57cede35-a1126cf3-cc2a5302-58b03d8f-ae17f01f",
+   "verify-generated-types-slm": "eb4a15aa-0f4241c9-ea167c54-1edb7ef6-8f9f134e-f01901be-215c867f-56ec646e",
+   "verify-types-run": "3f216762-32a09b96-cc950c84-5efaaf44-4b7afd31-26d3b54c-855deb60-9b17f173"
+  },
+  "outputs": [
+   "slm_types",
+   "types"
+  ],
+  "pr_only": false,
+  "runs_on": "ubuntu-latest",
+  "step_id": "filter",
+  "timeout": 10
+ }
+}

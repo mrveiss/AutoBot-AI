@@ -16,7 +16,7 @@
 
     <!-- Loading state -->
     <div v-if="loading" class="chart-loading-overlay">
-      <div class="loading-spinner"></div>
+      <BaseSpinner size="md" />
       <span>{{ $t('charts.importTree.loading') }}</span>
     </div>
 
@@ -68,7 +68,7 @@
       <div v-show="viewMode === 'network'" class="network-view">
         <!-- Loading Cytoscape library -->
         <div v-if="cytoscapeLoading && !cy" class="cytoscape-loading">
-          <div class="loading-spinner"></div>
+          <BaseSpinner size="md" />
           <span>{{ $t('charts.importTree.loadingVisualization') }}</span>
         </div>
 
@@ -228,8 +228,9 @@
 </template>
 
 <script setup lang="ts">
+import { BaseSpinner } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
-import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
+import { ref, shallowRef, computed, watch, onUnmounted, nextTick } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 import { useI18n } from 'vue-i18n'
 import { getCssVar } from '@/composables/useCssVars'
@@ -317,7 +318,7 @@ const isFullscreen = ref(false)
 
 // Cytoscape instance
 const cytoscapeContainer = ref<HTMLElement | null>(null)
-let cy: Core | null = null
+const cy = shallowRef<Core | null>(null)
 
 // Cytoscape lazy-load state is owned by the shared composable (#5206).
 // `onReady` below is the chart-specific init for the network view; retry
@@ -330,7 +331,7 @@ const {
   retry: retryCytoscape,
 } = useCytoscapeLibrary(async () => {
   await nextTick()
-  if (viewMode.value === 'network' && !cy && cytoscapeContainer.value) {
+  if (viewMode.value === 'network' && !cy.value && cytoscapeContainer.value) {
     initCytoscape()
     updateCytoscapeElements()
   }
@@ -458,7 +459,7 @@ function handleSearch() {
 function initCytoscape() {
   if (!cytoscapeModule.value || !cytoscapeContainer.value) return
 
-  cy = cytoscapeModule.value({
+  cy.value = cytoscapeModule.value({
     container: cytoscapeContainer.value,
     style: getCytoscapeStyles(),
     elements: [],
@@ -469,7 +470,7 @@ function initCytoscape() {
   })
 
   // Event handlers
-  cy.on('tap', 'node', (evt) => {
+  cy.value.on('tap', 'node', (evt) => {
     const node = evt.target as NodeSingular
     const filePath = node.id()
     const nodeData = node.data()
@@ -487,24 +488,24 @@ function initCytoscape() {
     highlightConnected(node)
   })
 
-  cy.on('tap', (evt) => {
-    if (evt.target === cy) {
+  cy.value.on('tap', (evt) => {
+    if (evt.target === cy.value) {
       selectedNode.value = null
       clearHighlight()
     }
   })
 
-  cy.on('mouseover', 'node', (evt) => {
+  cy.value.on('mouseover', 'node', (evt) => {
     const node = evt.target as NodeSingular
     highlightConnected(node)
   })
 
-  cy.on('mouseout', 'node', () => {
+  cy.value.on('mouseout', 'node', () => {
     clearHighlight()
   })
 
-  cy.on('zoom', () => {
-    zoomLevel.value = cy?.zoom() || 1
+  cy.value.on('zoom', () => {
+    zoomLevel.value = cy.value?.zoom() || 1
   })
 }
 
@@ -585,7 +586,7 @@ function getCytoscapeStyles(): Array<{ selector: string; style: Record<string, s
 }
 
 function updateCytoscapeElements() {
-  if (!cy) return
+  if (!cy.value) return
 
   const elements: Array<{ data: Record<string, unknown>; position?: { x: number; y: number } }> = []
   const nodeIds = new Set<string>()
@@ -674,12 +675,12 @@ function updateCytoscapeElements() {
     }
   }
 
-  cy.elements().remove()
-  cy.add(elements)
+  cy.value.elements().remove()
+  cy.value.add(elements)
 
   // Apply layout
   if (layoutMode.value === 'force') {
-    cy.layout({
+    cy.value.layout({
       name: 'fcose',
       quality: 'default',
       randomize: true,
@@ -699,7 +700,7 @@ function updateCytoscapeElements() {
   } else {
     const cols = Math.ceil(Math.sqrt(nodeIds.size))
     let i = 0
-    for (const node of cy.nodes()) {
+    for (const node of cy.value.nodes()) {
       const row = Math.floor(i / cols)
       const col = i % cols
       node.position({
@@ -714,20 +715,20 @@ function updateCytoscapeElements() {
 }
 
 function zoomIn() {
-  if (!cy) return
-  const currentZoom = cy.zoom()
-  cy.zoom(currentZoom * 1.2)
+  if (!cy.value) return
+  const currentZoom = cy.value.zoom()
+  cy.value.zoom(currentZoom * 1.2)
 }
 
 function zoomOut() {
-  if (!cy) return
-  const currentZoom = cy.zoom()
-  cy.zoom(currentZoom / 1.2)
+  if (!cy.value) return
+  const currentZoom = cy.value.zoom()
+  cy.value.zoom(currentZoom / 1.2)
 }
 
 function fitGraph() {
-  if (!cy) return
-  cy.fit(undefined, 50)
+  if (!cy.value) return
+  cy.value.fit(undefined, 50)
 }
 
 function toggleLayout() {
@@ -738,20 +739,20 @@ function toggleLayout() {
 function toggleFullscreen() {
   isFullscreen.value = !isFullscreen.value
   nextTick(() => {
-    if (cy) {
-      cy.resize()
+    if (cy.value) {
+      cy.value.resize()
       fitGraph()
     }
   })
 }
 
 function highlightConnected(node: NodeSingular) {
-  if (!cy) return
+  if (!cy.value) return
 
   const connectedEdges = node.connectedEdges()
   const connectedNodes = node.neighborhood().nodes()
 
-  cy.elements().addClass('dimmed')
+  cy.value.elements().addClass('dimmed')
   node.removeClass('dimmed')
   connectedEdges.removeClass('dimmed')
   connectedNodes.removeClass('dimmed')
@@ -762,36 +763,36 @@ function highlightConnected(node: NodeSingular) {
 }
 
 function clearHighlight() {
-  if (!cy) return
-  cy.elements().removeClass('dimmed').removeClass('highlighted')
+  if (!cy.value) return
+  cy.value.elements().removeClass('dimmed').removeClass('highlighted')
 }
 
 // Watch for view mode changes to lazy-load Cytoscape
 watch(() => viewMode.value, async (newMode) => {
-  if (newMode === 'network' && !cy && !cytoscapeLoading.value) {
+  if (newMode === 'network' && !cy.value && !cytoscapeLoading.value) {
     await ensureCytoscapeReady()
   }
 })
 
 // Watch for data changes to update graph
 watch(() => props.data, () => {
-  if (cy) {
+  if (cy.value) {
     updateCytoscapeElements()
   }
 })
 
 // Watch for filtered data changes
 watch(() => filteredData.value, () => {
-  if (cy) {
+  if (cy.value) {
     updateCytoscapeElements()
   }
 })
 
 // Cleanup on unmount
 onUnmounted(() => {
-  if (cy) {
-    cy.destroy()
-    cy = null
+  if (cy.value) {
+    cy.value.destroy()
+    cy.value = null
   }
 })
 </script>
@@ -854,19 +855,6 @@ onUnmounted(() => {
   background: rgba(0, 0, 0, 0.3);
   z-index: 10;
   gap: var(--spacing-2);
-}
-
-.loading-spinner {
-  width: var(--spacing-8);
-  height: var(--spacing-8);
-  border: 3px solid var(--border-color);
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .chart-error {

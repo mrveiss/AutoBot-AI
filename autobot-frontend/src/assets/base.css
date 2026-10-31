@@ -45,6 +45,13 @@ body {
   color: var(--text-primary);
 }
 
+/* #14771: viewport-fit=cover lets the page reach under the notch and home
+ * indicator; the app shell keeps everything in flow inside the safe area.
+ * position: fixed chrome escapes this padding and applies its own insets. */
+#app {
+  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
+}
+
 /* ============================================
  * GLOBAL SCROLLBAR STYLING
  * Consistent scrollbars across all browsers
@@ -128,6 +135,23 @@ a:hover {
   text-decoration: underline;
 }
 
+/* Links in body text carry a cue that is not colour (WCAG 1.4.1, #18223): in the
+ * Refined themes the link colour is the text colour (--link = --text), so an
+ * underline at rest is what tells a link from a word. Anchors that carry a class
+ * (nav, buttons, cards) style themselves. Hover takes the handoff's --link-h. */
+a:not([class]),
+.prose a,
+.message-text a {
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+a:not([class]):hover,
+.prose a:hover,
+.message-text a:hover {
+  color: var(--text-link-hover);
+}
+
 a:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
@@ -170,16 +194,16 @@ button:disabled {
 
 /* GH#12711: buttons had a disabled treatment but form controls did not, so a
  * `<input type="checkbox" disabled>` rendered identically to an active one —
- * users could not tell what was interactive. BaseInput already handles its own
- * disabled state (.container-disabled); this covers the raw controls used
+ * users could not tell what was interactive. The kit BaseInput already handles its own
+ * disabled state (.aui-input__control--disabled); this covers the raw controls used
  * directly across the app. Mirrors the button treatment so disabled reads the
  * same everywhere. */
-/* :not(.base-input) matters — BaseInput's container already applies
+/* :not(.aui-input__field) matters — the kit BaseInput control already applies
  * opacity 0.6 when disabled, and stacking 0.5 on the inner input would
  * compound to 0.3 and render it nearly invisible. */
-input:not(.base-input):disabled,
-textarea:not(.base-input):disabled,
-select:not(.base-input):disabled,
+input:not(.aui-input__field):disabled,
+textarea:not(.aui-input__field):disabled,
+select:not(.aui-input__field):disabled,
 input[type='checkbox']:disabled,
 input[type='radio']:disabled {
   opacity: 0.5;
@@ -187,10 +211,10 @@ input[type='radio']:disabled {
 }
 
 /* A disabled control's label must dim with it, or the row still reads as active. */
-input:not(.base-input):disabled + label,
+input:not(.aui-input__field):disabled + label,
 input[type='checkbox']:disabled + span,
 input[type='radio']:disabled + span,
-label:has(> input:not(.base-input):disabled) {
+label:has(> input:not(.aui-input__field):disabled) {
   opacity: 0.5;
   cursor: not-allowed;
 }

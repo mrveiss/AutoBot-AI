@@ -27,7 +27,7 @@ one action that implements the rule.
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.codebase_analytics.orphan_clone_detector import register as register_code_source_clone_detector
+from api.codebase_analytics.orphan_clone_detector import register_clone_detector
 from api.schemas_orphan_storage import (
     OrphanStorageCandidateResponse,
     OrphanStorageDeletionRequest,
@@ -42,7 +42,7 @@ from models.approval import ApprovalType
 from services.approval_gate_service import ApprovalGateService
 from services.orphan_storage import list_all_candidates, registered_providers
 from services.orphan_storage_cleanup_action import ACTION as ORPHAN_STORAGE_DELETE
-from services.orphan_storage_cleanup_action import register as register_orphan_storage_cleanup_action
+from services.orphan_storage_cleanup_action import register_cleanup_action
 
 router = APIRouter(prefix="/admin", dependencies=[Depends(require_role("admin", "superadmin"))])
 
@@ -50,12 +50,12 @@ router = APIRouter(prefix="/admin", dependencies=[Depends(require_role("admin", 
 # rather than as a side effect of importing orphan_clone_detector itself --
 # so a test that imports that module for its functions doesn't also mutate
 # the global registry. register_detector() is idempotent regardless.
-register_code_source_clone_detector()
+register_clone_detector()
 
 # Same reasoning: the approved-cleanup executor is registered at import time,
 # not lazily -- it must be wired before any approve() call can reach it, and
 # both registries are idempotent to re-registration.
-register_orphan_storage_cleanup_action()
+register_cleanup_action()
 
 
 @router.get("/orphan-storage", response_model=OrphanStorageListResponse)

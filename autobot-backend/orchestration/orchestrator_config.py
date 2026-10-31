@@ -5,6 +5,7 @@
 """OrchestratorConfig — extracted from orchestrator.py (#5060)."""
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.ssot_config import config
 
 logger = get_logger(__name__)
 
@@ -18,10 +19,9 @@ class OrchestratorConfig:
 
     def _load_config(self):
         llm_config = self.config_manager.get_llm_config()
-        self.orchestrator_llm_model = llm_config.get(
-            "orchestrator_llm",
-            llm_config.get("ollama", {}).get("selected_model"),
-        )
+        # #15502: the source-of-truth tier map is the only model authority; the planner's tier is
+        # config.llm.planning_model (AUTOBOT_PLANNING_MODEL), not a GUI-selected or settings.json value.
+        self.orchestrator_llm_model = config.llm.planning_model
         default_model = llm_config.get("ollama", {}).get("selected_model")
         self.task_llm_model = llm_config.get("task_llm", f"ollama_{default_model}")
         self.ollama_models = llm_config.get("ollama", {}).get("models", {})

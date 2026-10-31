@@ -37,12 +37,13 @@ from typing import Dict, List, Tuple
 import yaml
 
 from autobot_shared.env_utils import env_int
+from autobot_shared.ssot_config import config as ssot_config
 from models.manifest import RoleManifest, UpdatePolicy
 
 logger = logging.getLogger(__name__)
 
 # Base dir where autobot-infrastructure/ lives on the SLM server
-_AUTOBOT_BASE = Path(os.environ.get("AUTOBOT_BASE_DIR", "/opt/autobot"))
+_AUTOBOT_BASE = Path(ssot_config.path.base_dir)
 # #16025: independent override -- see the module docstring for why this is
 # not just AUTOBOT_BASE_DIR / "autobot-infrastructure".
 _INFRA_BASE_OVERRIDE = os.environ.get("SLM_INFRA_BASE_DIR")

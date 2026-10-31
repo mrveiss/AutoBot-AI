@@ -15,13 +15,15 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# Add AutoBot to Python path
-sys.path.append(str(Path(__file__).parent))
+# A backend tool (#18288, #18289): it puts the backend and the repository root (for `autobot_shared`)
+# on its own path, so it runs from any directory with no PYTHONPATH.
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+for _root in (_REPO_ROOT / "autobot-backend", _REPO_ROOT):
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
 
-# Add project root for terminal input handler
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-from utils.terminal_input_handler import safe_input
-from workflow_classifier import WorkflowClassifier
+from utils.terminal_input_handler import safe_input  # noqa: E402
+from workflow_classifier import WorkflowClassifier  # noqa: E402
 
 
 def _show_initial_stats(classifier: WorkflowClassifier) -> None:

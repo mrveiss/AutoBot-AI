@@ -23,19 +23,15 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
 import os
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from autobot_shared.env_file import parse_env_text
 from autobot_shared.env_utils import env_float
+from autobot_shared.logging_manager import get_logger
 
-# Plain stdlib logging, deliberately -- see autobot_shared/user_management/
-# password_epoch.py:50-58: this module is imported by code_sync.py, whose
-# test harness (tests/api/test_collect_outdated_node_ids.py) stubs config as
-# a MagicMock, and autobot_shared.logging_manager.get_logger compares that
-# MagicMock against an int at call time, raising under that harness.
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 #: Seconds the post-sync pricing refresh may run before it is abandoned. The
 #: install/update itself is never blocked past this: on timeout the step is
@@ -75,17 +71,11 @@ def _load_env_file(env_path: Path) -> Dict[str, str]:
     if not real.startswith(root + os.sep):
         raise ValueError(f"env file path resolves outside the deployed root {root!r}")
     real_path = Path(real)
-
-    env: Dict[str, str] = {}
     if not real_path.exists():
-        return env
-    for raw in real_path.read_text(encoding="utf-8").splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, _, value = line.partition("=")
-        env[key.strip()] = value.strip().strip('"').strip("'")
-    return env
+        return {}
+    # The read stays here, in the guard's scope (#16229 ruling); an unreadable file RAISES
+    # (OSError) so the subprocess never runs without its env. Parsing is the one parser (#19232).
+    return parse_env_text(real_path.read_text(encoding="utf-8"))
 
 
 def _pricing_subprocess_env(deployed_dir: str) -> Dict[str, str]:

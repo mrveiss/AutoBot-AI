@@ -1,7 +1,7 @@
 <template>
   <div class="notification-config">
     <!-- Workflow Selector -->
-    <div class="config-section">
+    <div v-if="!workflowId" class="config-section">
       <label class="field-label" for="nc-workflow-select">
         {{ $t('workflow.notifications.selectWorkflow') }}
       </label>
@@ -14,7 +14,7 @@
       >
         <option value="">{{ $t('workflow.notifications.chooseWorkflow') }}</option>
         <option
-          v-for="wf in workflows"
+          v-for="wf in workflows ?? []"
           :key="wf.workflow_id"
           :value="wf.workflow_id"
         >
@@ -43,14 +43,14 @@
         <label class="toggle-label">
           <input
             type="checkbox"
-            v-model="enabled"
+            v-model="config.enabled"
             class="toggle-input"
           />
           <span class="toggle-text">{{ $t('workflow.notifications.enableNotifications') }}</span>
         </label>
       </div>
 
-      <fieldset :disabled="!enabled" class="config-fieldset">
+      <fieldset :disabled="!config.enabled" class="config-fieldset">
         <!-- Email Recipients -->
         <div class="config-section">
           <label class="field-label" for="nc-email-recipients">
@@ -64,6 +64,9 @@
             :placeholder="$t('workflow.notifications.emailPlaceholder')"
           />
           <span class="field-hint">{{ $t('workflow.notifications.emailHint') }}</span>
+          <p v-if="invalidEmails.length" class="field-error">
+            {{ $t('workflow.notifications.invalidEmail', { emails: invalidEmails.join(', ') }) }}
+          </p>
         </div>
 
         <!-- Slack Webhook -->
@@ -75,9 +78,10 @@
             id="nc-slack-webhook"
             type="url"
             class="field-input"
-            v-model="slackWebhookUrl"
+            v-model="config.slack_webhook_url"
             placeholder="https://hooks.slack.com/services/..."
           />
+          <p v-if="slackUrlInvalid" class="field-error">{{ $t('workflow.notifications.invalidUrl') }}</p>
         </div>
 
         <!-- Generic Webhook -->
@@ -89,9 +93,10 @@
             id="nc-webhook-url"
             type="url"
             class="field-input"
-            v-model="webhookUrl"
+            v-model="config.webhook_url"
             placeholder="https://example.com/webhook"
           />
+          <p v-if="webhookUrlInvalid" class="field-error">{{ $t('workflow.notifications.invalidUrl') }}</p>
         </div>
 
         <!-- Channel-to-Event Routing Matrix -->
@@ -142,7 +147,7 @@
       <div class="config-actions">
         <button
           class="btn-save"
-          :disabled="saving"
+          :disabled="saving || hasValidationErrors"
           @click="handleSave"
         >
           <svg v-if="saving" class="spinner btn-spinner" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -159,23 +164,28 @@
 </template>
 
 <script setup lang="ts">
+/**
+ * WorkflowNotificationConfig -- the one per-workflow notification form (#3139).
+ *
+ * Two uses, one component (#19903): the Notifications section of the workflow
+ * builder passes `workflows` and gets a workflow picker; the workflow runner's
+ * dialog passes `workflowId` and gets the form for that workflow alone.
+ */
 import { ref, computed, watch } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { createLogger } from '@/utils/debugUtils';
 import {
-  useWorkflowNotificationConfig,
-  ALL_EVENTS,
+  useNotificationConfig,
+  isValidEmail,
+  isValidUrl,
+  parseRecipients,
+  NOTIFICATION_EVENTS,
   type NotificationEvent,
   type NotificationChannel,
-  type NotificationConfigPayload,
-} from '@/composables/useWorkflowNotificationConfig';
+} from '@/composables/useNotificationConfig';
 
 const logger = createLogger('WorkflowNotificationConfig');
 const { t } = useI18n();
-
-// ---------------------------------------------------------------------------
-// Props
-// ---------------------------------------------------------------------------
 
 interface WorkflowSummary {
   workflow_id: string;
@@ -183,53 +193,50 @@ interface WorkflowSummary {
   [key: string]: unknown;
 }
 
-defineProps<{
-  workflows: WorkflowSummary[];
+const props = defineProps<{
+  /** Offered in a picker. Omit when `workflowId` fixes the workflow. */
+  workflows?: WorkflowSummary[];
+  /** Fixes the workflow and hides the picker. */
+  workflowId?: string;
 }>();
 
 const emit = defineEmits<{
   (e: 'saved', workflowId: string): void;
 }>();
 
-// ---------------------------------------------------------------------------
-// Composable
-// ---------------------------------------------------------------------------
-
 const {
+  config,
+  loading: loadingConfig,
   saving,
-  loadingConfig,
-  configError,
-  fetchNotificationConfig,
-  saveNotificationConfig,
-} = useWorkflowNotificationConfig();
+  error: configError,
+  reset,
+  fetchConfig,
+  saveConfig,
+  isChannelEnabled,
+  toggleChannel,
+} = useNotificationConfig();
 
-// ---------------------------------------------------------------------------
-// Local state
-// ---------------------------------------------------------------------------
-
-const selectedWorkflowId = ref('');
-const enabled = ref(false);
+const selectedWorkflowId = ref(props.workflowId ?? '');
 const emailRecipientsRaw = ref('');
-const slackWebhookUrl = ref('');
-const webhookUrl = ref('');
-const channels = ref<Record<string, string[]>>({});
 const saveSuccess = ref(false);
-
-const allEvents = ALL_EVENTS;
+const allEvents = NOTIFICATION_EVENTS;
 
 /** Only show channels for which the user has provided a target. */
 const availableChannels = computed<NotificationChannel[]>(() => {
   const result: NotificationChannel[] = [];
   if (emailRecipientsRaw.value.trim()) result.push('email');
-  if (slackWebhookUrl.value.trim()) result.push('slack');
-  if (webhookUrl.value.trim()) result.push('webhook');
+  if (config.value.slack_webhook_url?.trim()) result.push('slack');
+  if (config.value.webhook_url?.trim()) result.push('webhook');
   result.push('in_app');
   return result;
 });
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
+const invalidEmails = computed(() => parseRecipients(emailRecipientsRaw.value).filter((e) => !isValidEmail(e)));
+const slackUrlInvalid = computed(() => !!config.value.slack_webhook_url && !isValidUrl(config.value.slack_webhook_url));
+const webhookUrlInvalid = computed(() => !!config.value.webhook_url && !isValidUrl(config.value.webhook_url));
+const hasValidationErrors = computed(
+  () => invalidEmails.value.length > 0 || slackUrlInvalid.value || webhookUrlInvalid.value,
+);
 
 function channelLabel(ch: NotificationChannel): string {
   const map: Record<NotificationChannel, string> = {
@@ -237,6 +244,7 @@ function channelLabel(ch: NotificationChannel): string {
     slack: t('workflow.notifications.channelSlack'),
     webhook: t('workflow.notifications.channelWebhook'),
     in_app: t('workflow.notifications.channelInApp'),
+    telegram: t('workflow.notifications.channelTelegram'),
   };
   return map[ch] ?? ch;
 }
@@ -247,78 +255,37 @@ function eventLabel(ev: NotificationEvent): string {
     workflow_failed: t('workflow.notifications.eventFailed'),
     step_failed: t('workflow.notifications.eventStepFailed'),
     approval_needed: t('workflow.notifications.eventApprovalNeeded'),
+    service_failed: t('workflow.notifications.eventServiceFailed'),
   };
   return map[ev] ?? ev;
 }
 
-function isChannelEnabled(event: string, channel: string): boolean {
-  return channels.value[event]?.includes(channel) ?? false;
-}
-
-function toggleChannel(event: string, channel: string): void {
-  if (!channels.value[event]) {
-    channels.value[event] = [];
-  }
-  const idx = channels.value[event].indexOf(channel);
-  if (idx >= 0) {
-    channels.value[event].splice(idx, 1);
-  } else {
-    channels.value[event].push(channel);
-  }
-}
-
-function resetForm(): void {
-  enabled.value = false;
-  emailRecipientsRaw.value = '';
-  slackWebhookUrl.value = '';
-  webhookUrl.value = '';
-  channels.value = {};
-  saveSuccess.value = false;
-}
-
-// ---------------------------------------------------------------------------
-// Load config when workflow selection changes
-// ---------------------------------------------------------------------------
-
 async function handleWorkflowChange(workflowId: string): Promise<void> {
   selectedWorkflowId.value = workflowId;
-  resetForm();
+  saveSuccess.value = false;
+  emailRecipientsRaw.value = '';
+  reset();
   if (!workflowId) return;
-
-  const config = await fetchNotificationConfig(workflowId);
-  if (config) {
-    enabled.value = true;
-    emailRecipientsRaw.value = (config.email_recipients ?? []).join(', ');
-    slackWebhookUrl.value = config.slack_webhook_url ?? '';
-    webhookUrl.value = config.webhook_url ?? '';
-    channels.value = { ...config.channels };
-  }
+  await fetchConfig(workflowId);
+  emailRecipientsRaw.value = config.value.email_recipients.join(', ');
 }
 
-// ---------------------------------------------------------------------------
-// Save
-// ---------------------------------------------------------------------------
+watch(
+  () => props.workflowId,
+  (id) => {
+    if (id) void handleWorkflowChange(id);
+  },
+  { immediate: true },
+);
 
 async function handleSave(): Promise<void> {
-  if (!selectedWorkflowId.value) return;
+  if (!selectedWorkflowId.value || hasValidationErrors.value) return;
   saveSuccess.value = false;
+  config.value.email_recipients = parseRecipients(emailRecipientsRaw.value);
+  config.value.slack_webhook_url = config.value.slack_webhook_url || null;
+  config.value.webhook_url = config.value.webhook_url || null;
 
-  const recipients = emailRecipientsRaw.value
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
-
-  const payload: NotificationConfigPayload = {
-    enabled: enabled.value,
-    email_recipients: recipients,
-    slack_webhook_url: slackWebhookUrl.value || null,
-    webhook_url: webhookUrl.value || null,
-    channels: channels.value,
-    templates: {},
-  };
-
-  const ok = await saveNotificationConfig(selectedWorkflowId.value, payload);
-  if (ok) {
+  if (await saveConfig(selectedWorkflowId.value)) {
     saveSuccess.value = true;
     logger.info('Notification config saved for %s', selectedWorkflowId.value);
     emit('saved', selectedWorkflowId.value);
@@ -375,6 +342,11 @@ watch(saveSuccess, (val) => {
 .field-hint {
   font-size: var(--text-xs);
   color: var(--text-secondary);
+}
+
+.field-error {
+  font-size: var(--text-xs);
+  color: var(--wfnotif-error-text);
 }
 
 .toggle-section {

@@ -15,7 +15,7 @@ Composes all functionality through mixins:
 import asyncio
 import json
 import os
-import uuid
+from contextlib import aclosing
 from contextvars import ContextVar
 from typing import Any, Dict, FrozenSet, List
 
@@ -27,16 +27,16 @@ from autobot_shared.redis_client import get_redis_client as get_redis_manager
 from chat_workflow import limits
 from chat_workflow.tool_call_grammar import (
     TOOL_CALL_BARE_CLOSE_RE,
-    TOOL_CALL_CLOSE_RE,
     TOOL_CALL_COMPLETE_RE,
-    TOOL_CALL_OPEN_RE,
     TOOL_CALL_OPENING_RE,
+    normalize_tool_call_text,
     strip_unparsed_tool_tags,
 )
 from constants.api_constants import PATH_OLLAMA_GENERATE
 from constants.model_constants import ModelConfig
 from constants.ttl_constants import TIMEOUT_HTTP_DEFAULT, TTL_24_HOURS
 from llm_shared.providers.reasoning_effort import map_effort_to_provider_params
+from llm_shared.run_credentials import llm_principal_scope_for
 from services.tool_output_filter import cap_unmatched_output, get_tool_output_filter
 from slash_command_handler import get_slash_command_handler
 
@@ -50,9 +50,10 @@ from .models import (
     filter_internal_prompts,
 )
 from .session_handler import SessionHandlerMixin
-from .session_role import resolve_auth_role
+from .session_role import resolve_auth_role, stamp_verified_identity
 from .thought_markers import detect_content_type, find_last_tag_positions, find_new_segment_start
 from .tool_handler import ToolHandlerMixin
+from .turn_control import CHAT_LLM_CALL_TIMEOUT_SECONDS, stream_graph_turn, stream_legacy_turn
 
 logger = get_logger(__name__)
 
@@ -74,8 +75,6 @@ _BLOCK_CONTENT_TYPES: FrozenSet[str] = frozenset({"thought", "planning"})
 # source of truth in tool_call_grammar.py, shared with
 # chat_workflow/tool_handler.py. Module-level aliases kept for
 # backwards-compatible imports (tests import these names directly).
-_TOOL_CALL_OPEN_RE = TOOL_CALL_OPEN_RE
-_TOOL_CALL_CLOSE_RE = TOOL_CALL_CLOSE_RE
 _TOOL_CALL_COMPLETE_RE = TOOL_CALL_COMPLETE_RE
 _TOOL_CALL_BARE_CLOSE_RE = TOOL_CALL_BARE_CLOSE_RE
 _TOOL_CALL_OPENING_RE = TOOL_CALL_OPENING_RE
@@ -317,7 +316,6 @@ class ChatWorkflowManager(
         self.redis_manager = None  # Async Redis manager
         self.redis_client = None  # Main database connection
         self.conversation_history_ttl = TTL_24_HOURS
-        self.transcript_dir = "data/conversation_transcripts"  # Long-term file storage
         self._active_streams = 0  # #16947 busy signal: incremented for process_message_stream's span
 
         self.error_manager = get_error_boundary_manager()
@@ -412,11 +410,8 @@ class ChatWorkflowManager(
     MAX_CONTINUATION_ITERATIONS = limits.MAX_CONTINUATION_ITERATIONS  # #352, #17468: one shared value
 
     def _normalize_tool_call_text(self, text: str) -> str:
-        """Normalize TOOL_CALL spacing in LLM response text (Issue #332)."""
-        # Issue #380: Use pre-compiled patterns
-        text = _TOOL_CALL_OPEN_RE.sub("<TOOL_CALL", text)
-        text = _TOOL_CALL_CLOSE_RE.sub("</TOOL_CALL>", text)
-        return text
+        """Delegate to the grammar module's single normaliser (#332, #380, #18065)."""
+        return normalize_tool_call_text(text)
 
     def _filter_internal_prompts(self, text: str) -> str:
         """Filter out internal continuation prompts that LLM echoes back (Issue #716).
@@ -2115,11 +2110,11 @@ before summarizing.
         api_kwargs: dict | None = None,
         image_b64: str | None = None,
     ):
-        """Process a single LLM iteration. Yields chunks, then (llm_response, tool_calls). Issue #620.
+        """One LLM iteration: yields chunks, then (llm_response, tool_calls) (#620). ``image_b64`` (#11538) is
+        gated on vision support and attached in the shape ``ollama_endpoint`` consumes — see _attach_vision_payload.
 
-        Issue #11538: ``image_b64`` (the latest browser/VNC screenshot, if any) is
-        threaded into the payload, gated on vision support and attached in the shape
-        ``ollama_endpoint`` (the actual POST target) consumes — see _attach_vision_payload.
+        Spend exemption (#16924): records no LLM spend. True only while ``ollama_endpoint`` is self-hosted inference
+        with no per-token bill; pointed at a metered endpoint, this must record via ``services.llm_usage_recording``.
         """
         import aiohttp
 
@@ -2137,7 +2132,7 @@ before summarizing.
             async with await http_client.post(
                 ollama_endpoint,
                 json=payload,
-                timeout=aiohttp.ClientTimeout(total=None, connect=TIMEOUT_HTTP_DEFAULT),
+                timeout=aiohttp.ClientTimeout(total=CHAT_LLM_CALL_TIMEOUT_SECONDS, connect=TIMEOUT_HTTP_DEFAULT),
             ) as response:
                 logger.info("[ChatWorkflowManager] Ollama response status: %s", response.status)
                 if response.status != 200:
@@ -3407,10 +3402,9 @@ before summarizing.
         if language:
             session.metadata["language"] = language
 
-        # #11261: stash caller identity so the prompt-build path can scope
-        # trajectory retrieval to this user/tenant (strict isolation, #11089).
+        # #11261/#18825: tenant scopes trajectory reads (#11089); user/org are the VERIFIED principal, every turn.
+        stamp_verified_identity(session.metadata, context)
         if context:
-            session.metadata["user_id"] = context.get("user_id") or ""
             session.metadata["tenant_id"] = context.get("tenant_id") or context.get("org_id") or ""
             # #11501 T2: CEO-chat path carries company_id — used to append the
             # board-tool teaching to the system prompt for this turn only.
@@ -3467,7 +3461,7 @@ before summarizing.
             self._fire_pre_compact_hook(
                 session_id=session.session_id,
                 conversation_history=session.conversation_history or [],
-                user_id=context.get("user_id") if context else None,
+                user_id=session.metadata.get("user_id"),  # the verified identity stamped above (#18825)
                 model_name=llm_params.get("model", ""),
             )
         )
@@ -3715,7 +3709,7 @@ before summarizing.
         return error_msg
 
     async def _apply_session_role(
-        self, session_id: str, context: Dict[str, Any] | None, auth_role: str | None = None
+        self, session_id: str, context: Dict[str, Any] | None, auth_role: str | None = None, scope: dict | None = None
     ) -> Dict[str, Any] | None:
         """Overlay the trusted per-session governance onto the chat context (GH#11186/#11202).
 
@@ -3723,10 +3717,10 @@ before summarizing.
         pinned agent's ``forbidden_work`` is enforced at the tool seam and cannot be
         lifted by the caller. GH#11202: when the approval gate flag is on and the
         session declares approval categories, they are overlaid as
-        ``requires_approval_before`` so the existing ``_enforce_work_item_approval``
-        seam gate holds matching tools BEFORE they execute — the correct
-        pre-execution stage. Backend decides; the frontend only calls the endpoints.
+        ``requires_approval_before`` so the AI-line point (``_enforce_ai_line``, #18430) holds
+        matching tools BEFORE they execute — the correct pre-execution stage. The backend decides.
         """
+        from chat_workflow.approval_baseline import with_baseline_categories
         from chat_workflow.session_role import (
             CHAT_APPROVAL_GATE_ENABLED,
             SessionRoleService,
@@ -3739,7 +3733,7 @@ before summarizing.
         # #13821: the authenticated caller's RBAC role, from the endpoint's
         # server-side identity. Applied unconditionally (it strips on a missing
         # role) so a client-supplied auth_role can never reach the tool seam.
-        context = apply_auth_role(context, auth_role)
+        context = apply_auth_role(context, auth_role, scope)  # scope: #18430, the AI lines' verified principal
         context = apply_role(context, await svc.get_role(session_id))
         # #13704: same trust model for the work-item binding. A server-set value
         # overrides any client-supplied work_item_id, and an unbound session has
@@ -3747,9 +3741,8 @@ before summarizing.
         # goal chain L4 reads on their behalf (#13687).
         context = apply_work_item(context, await SessionWorkItemService().get_work_item(session_id))
         if CHAT_APPROVAL_GATE_ENABLED:
-            categories = await svc.get_approval_categories(session_id)
-            if categories:
-                context = {**(context or {}), "requires_approval_before": categories}
+            # #18294: all categories gated by default; only the SLM setting relaxes one.
+            context = await with_baseline_categories(context, await svc.get_approval_categories(session_id))
         return context
 
     async def process_message_stream(
@@ -3758,6 +3751,7 @@ before summarizing.
         message: str,
         context: Dict[str, Any] | None = None,
         auth_role: str | None = None,
+        auth_scope: dict | None = None,
     ):
         """Process a message via LangGraph StateGraph.
 
@@ -3769,19 +3763,19 @@ before summarizing.
         """
         # GH#11186: apply the trusted per-session role once here, so both the graph
         # and legacy paths carry the governed identity into the tool seam.
-        context = await self._apply_session_role(session_id, context, auth_role)
+        context = await self._apply_session_role(session_id, context, auth_role, auth_scope)
         self._active_streams += 1
         try:
-            try:
-                async for msg in self._process_via_graph(session_id, message, context):
-                    yield msg
-            except Exception as graph_err:
-                logger.warning(
-                    "LangGraph flow failed, falling back to legacy: %s",
-                    graph_err,
-                )
-                async for msg in self._process_message_stream_legacy(session_id, message, context):
-                    yield msg
+            with llm_principal_scope_for(auth_scope):  # #19241: this turn's signed-in provider tokens, reset after
+                try:
+                    async with aclosing(self._process_via_graph(session_id, message, context)) as graph_stream:
+                        async for msg in graph_stream:
+                            yield msg
+                except Exception as graph_err:
+                    logger.warning("LangGraph flow failed, falling back to legacy: %s", graph_err)
+                    async with aclosing(stream_legacy_turn(self, session_id, message, context)) as legacy:
+                        async for msg in legacy:
+                            yield msg
         finally:
             self._active_streams -= 1
 
@@ -3804,77 +3798,15 @@ before summarizing.
         from .graph import get_compiled_graph
 
         graph = await get_compiled_graph(self)
-        queue = asyncio.Queue()
-
-        def stream_callback(data):
-            """Callback invoked by graph nodes for real-time streaming."""
-            queue.put_nowait(data)
-
-        config = {
-            "configurable": {
-                "thread_id": session_id,
-                "manager": self,
-                "stream_callback": stream_callback,
-            }
-        }
-
         initial_state = {
             "session_id": session_id,
             "user_message": message,
             "context": context or {},
         }
-
-        graph_task = asyncio.create_task(self._run_graph_task(graph, initial_state, config, queue))
-
-        while True:
-            data = await queue.get()
-            if data is None:
-                break
-            if hasattr(data, "to_dict"):
-                yield data
-            else:
-                # Preserve original ID to prevent poll-cycle churn (#1064)
-                msg_id = data.get("id") or str(uuid.uuid4())
-                yield WorkflowMessage(
-                    type=data.get("type", "response"),
-                    content=data.get("content", ""),
-                    metadata=data.get("metadata", {}),
-                    id=msg_id,
-                )
-
-        await graph_task
-
-    async def _run_graph_task(self, graph, initial_state, config, queue):
-        """Execute the graph and signal completion via queue sentinel."""
-        try:
-            result = await graph.ainvoke(initial_state, config=config)
-
-            # Check for interrupt (command approval needed)
-            interrupt_data = result.get("__interrupt__")
-            if interrupt_data:
-                for intr in interrupt_data:
-                    queue.put_nowait(intr.value)
-        except Exception as exc:
-            logger.error("Graph execution error: %s", exc, exc_info=True)
-            # Issue #1475: Delete corrupted checkpoint so the session can recover.
-            session_id = initial_state.get("session_id")
-            if session_id:
-                from .graph import delete_thread_checkpoints
-
-                await delete_thread_checkpoints(session_id)
-            if isinstance(exc, (TimeoutError, asyncio.TimeoutError)):
-                error_content = "The model is taking too long to respond. Please try again."
-            else:
-                # Issue #9410: Never leak exception details in SSE streams
-                error_content = "An unexpected error occurred. Please try again."
-            queue.put_nowait(
-                {
-                    "type": "error",
-                    "content": error_content,
-                }
-            )
-        finally:
-            queue.put_nowait(None)
+        # #17273: the turn owns the task and cancels it on any exit; aclosing() makes that deterministic.
+        async with aclosing(stream_graph_turn(self, graph, session_id, initial_state)) as turn:
+            async for msg in turn:
+                yield msg
 
     async def _process_message_stream_legacy(
         self, session_id: str, message: str, context: Dict[str, Any] | None = None
@@ -3928,38 +3860,9 @@ before summarizing.
         from .graph import get_compiled_graph
 
         graph = await get_compiled_graph(self)
-        queue = asyncio.Queue()
-
-        def stream_callback(data):
-            queue.put_nowait(data)
-
-        config = {
-            "configurable": {
-                "thread_id": session_id,
-                "manager": self,
-                "stream_callback": stream_callback,
-            }
-        }
-
-        graph_task = asyncio.create_task(self._run_graph_task(graph, Command(resume=decision), config, queue))
-
-        while True:
-            data = await queue.get()
-            if data is None:
-                break
-            if hasattr(data, "to_dict"):
-                yield data
-            else:
-                # Preserve original ID to prevent poll-cycle churn (#1064)
-                msg_id = data.get("id") or str(uuid.uuid4())
-                yield WorkflowMessage(
-                    type=data.get("type", "response"),
-                    content=data.get("content", ""),
-                    metadata=data.get("metadata", {}),
-                    id=msg_id,
-                )
-
-        await graph_task
+        async with aclosing(stream_graph_turn(self, graph, session_id, Command(resume=decision))) as turn:
+            async for msg in turn:
+                yield msg
 
     async def shutdown(self):
         """Shutdown the workflow manager and clean up resources."""

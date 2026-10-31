@@ -74,7 +74,7 @@ class EfficiencyLevel(Enum):
 
 
 @dataclass
-class ToolCall:
+class ToolCallRecord:
     """Individual tool call record"""
 
     tool_name: str
@@ -170,13 +170,13 @@ class ToolPatternAnalyzer:
         success: bool,
         error_message: str | None,
         session_id: str,
-    ) -> ToolCall:
-        """Create a ToolCall record with classification and cost estimation.
+    ) -> ToolCallRecord:
+        """Create a ToolCallRecord record with classification and cost estimation.
 
         Creates the record, classifies the call type, and estimates API cost.
         Issue #620.
         """
-        tool_call = ToolCall(
+        tool_call = ToolCallRecord(
             tool_name=tool_name,
             call_time=datetime.now(tz=timezone.utc),
             parameters=parameters.copy(),
@@ -190,7 +190,7 @@ class ToolPatternAnalyzer:
         tool_call.api_cost = self._estimate_api_cost(tool_name, parameters)
         return tool_call
 
-    def _process_tool_call(self, tool_call: ToolCall) -> None:
+    def _process_tool_call(self, tool_call: ToolCallRecord) -> None:
         """Process a tool call by updating statistics and triggering analysis.
 
         Updates call history, statistics, pattern tracking, and triggers analysis.
@@ -298,7 +298,7 @@ class ToolPatternAnalyzer:
 
         return min(10, base_cost)
 
-    def _update_tool_statistics(self, tool_call: ToolCall) -> None:
+    def _update_tool_statistics(self, tool_call: ToolCallRecord) -> None:
         """Update statistics for the tool"""
         stats = self.tool_statistics[tool_call.tool_name]
 
@@ -349,7 +349,7 @@ class ToolPatternAnalyzer:
         else:
             return EfficiencyLevel.CRITICAL
 
-    def _update_pattern_tracking(self, tool_call: ToolCall) -> None:
+    def _update_pattern_tracking(self, tool_call: ToolCallRecord) -> None:
         """Update pattern tracking data"""
         # Sequence pattern tracking
         if len(self.tool_calls) >= 2:
@@ -503,7 +503,7 @@ class ToolPatternAnalyzer:
 
                     self.detected_patterns[f"inefficient_rwr_{i}"] = pattern
 
-    def _calculate_pattern_optimization_potential(self, calls: List[ToolCall]) -> float:
+    def _calculate_pattern_optimization_potential(self, calls: List[ToolCallRecord]) -> float:
         """Calculate optimization potential for a pattern"""
         if not calls:
             return 0.0
@@ -603,7 +603,7 @@ class ToolPatternAnalyzer:
                 )
             )
 
-    def _find_similar_operations(self) -> Dict[str, List[ToolCall]]:
+    def _find_similar_operations(self) -> Dict[str, List[ToolCallRecord]]:
         """Find operations that could be batched together"""
         similar_ops = defaultdict(list)
 

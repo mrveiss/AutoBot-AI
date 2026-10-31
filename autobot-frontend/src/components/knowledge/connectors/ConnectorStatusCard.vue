@@ -9,8 +9,7 @@
 import { ref, computed } from 'vue'
 import type { ConnectorConfig, ConnectorStatus } from '@/types/knowledgeBase'
 import { formatTimeAgo } from '@/utils/formatHelpers'
-import BaseBadge from '@/components/base/BaseBadge.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseBadge, BaseButton } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
@@ -55,10 +54,10 @@ const typeBadgeVariant = computed(() => {
  */
 const tierValue = computed(() => (typeof props.config.tier === 'number' ? props.config.tier : 0))
 
-const tierBadgeVariant = computed<'success' | 'warning' | 'danger'>(() => {
+const tierBadgeVariant = computed<'success' | 'warning' | 'error'>(() => {
   switch (tierValue.value) {
     case 2:
-      return 'danger'
+      return 'error'
     case 1:
       return 'warning'
     default:
@@ -94,9 +93,9 @@ const lastSyncDisplay = computed(() => {
 })
 
 const syncStatusVariant = computed(() => {
-  const map: Record<string, 'success' | 'danger' | 'warning' | 'neutral'> = {
+  const map: Record<string, 'success' | 'error' | 'warning' | 'neutral'> = {
     success: 'success',
-    failed: 'danger',
+    failed: 'error',
     running: 'warning',
     never: 'neutral'
   }

@@ -9,8 +9,8 @@
  */
 
 import { ref, computed } from 'vue'
-import type { NodeMetricsDetailed } from '@/composables/usePrometheusMetrics'
-import { formatDateTime } from '@/composables/useTimezone'
+import type { NodeMetricsDetailed } from '@/composables/useFleetMetrics'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 
 interface Props {
   nodes: NodeMetricsDetailed[]
@@ -73,7 +73,7 @@ function getStatusColor(status: string): string {
 }
 
 function getMetricColor(value: number): string {
-  if (value >= 90) return 'text-danger-600 font-semibold'
+  if (value >= 90) return 'text-error-600 font-semibold'
   if (value >= 70) return 'text-warning-600'
   return 'text-gray-900'
 }
@@ -167,11 +167,11 @@ function getSortIcon(key: SortKey): string {
               <div class="text-sm text-gray-900">
                 {{ node.services_running }} / {{ node.services_running + node.services_failed }}
               </div>
-              <div v-if="node.services_failed > 0" class="text-xs text-danger-600">{{ $t('monitoring.nodeMetricsGrid.value0Failed', { value0: node.services_failed }) }}</div>
+              <div v-if="node.services_failed > 0" class="text-xs text-error-600">{{ $t('monitoring.nodeMetricsGrid.value0Failed', { value0: node.services_failed }) }}</div>
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
               <span v-if="node.last_heartbeat">
-                {{ formatDateTime(node.last_heartbeat) }}
+                {{ formatFleetDateTime(node.last_heartbeat) }}
               </span>
               <span v-else class="text-gray-400">{{ $t('monitoring.nodeMetricsGrid.noData') }}</span>
             </td>

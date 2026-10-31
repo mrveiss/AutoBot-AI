@@ -12,6 +12,7 @@ proves nothing about the copy that actually blocks a merge.
 
 from __future__ import annotations
 
+import ast
 import importlib.util
 import sys
 
@@ -316,43 +317,100 @@ def test_setup_python_suite_installs_ffmpeg_directly():
     assert "ffmpeg" in action, "setup-python-suite/action.yml no longer installs ffmpeg (#14550)"
 
 
-#: Repo-local, stdlib-only, and the sanctioned home for git enumeration (#15955).
-_SCAN_HELPERS = "_scan_helpers"
+#: Repo-local, stdlib-only sibling helpers the checker may import: the
+#: sanctioned home for git enumeration (#15955) and for comment syntax
+#: (#17941). Imported as siblings because CI runs the checker as
+#: `python3 tools/lint/<name>.py`, where `tools.lint.` is not importable.
+_SIBLING_HELPERS = ("_scan_helpers", "_comment_syntax")
+
+#: The ONE dotted import a helper may make: `_comment_syntax` defers to
+#: `_scan_helpers` for continuation folding rather than re-deriving it
+#: (#16414). Named exactly, not as the `tools` root -- allowing `tools` would
+#: admit anything that ever lands under it.
+_ALLOWED_DOTTED = frozenset({"tools.lint._scan_helpers"})
+
+#: Spelled as a name so the fixtures below read as source, not as escapes.
+NL = chr(10)
+
+
+def _imported_roots(source: str) -> list[str]:
+    """Every module a file imports, by AST (CodeRabbit, #17941).
+
+    Line matching read only column-zero imports, so a function-local
+    `import requests` was invisible -- and `_comment_syntax` has exactly one
+    deferred import, which is how this guard passed while being unable to see
+    it. A relative import has no module root to check and is reported as
+    ``.`` so it can never be silently treated as stdlib.
+    """
+    found: list[str] = []
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            found.extend(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            if node.level:
+                found.append("." * node.level + (node.module or ""))
+            elif node.module and node.module != "__future__":
+                found.append(node.module)
+    return found
+
+
+def _non_stdlib(source: str, extra: set[str]) -> list[str]:
+    """Imported modules that are neither stdlib nor explicitly permitted."""
+    allowed = set(sys.stdlib_module_names) | extra
+    return [
+        name for name in _imported_roots(source) if name not in _ALLOWED_DOTTED and name.split(".")[0] not in allowed
+    ]
 
 
 def test_the_checker_needs_no_third_party_import():
     """It must run in a job that installs linters, not the application's dependencies."""
-    source = _CHECKER.read_text(encoding="utf-8")
     # Stdlib asked of the interpreter, not listed by hand: the previous literal
     # set of five names failed on `os` and `subprocess` -- both stdlib, neither
     # in the list -- so it was enforcing "these five modules", not "stdlib".
-    allowed = set(sys.stdlib_module_names) | {_SCAN_HELPERS}
-    third_party = [
-        line
-        for line in source.splitlines()
-        if line.startswith(("import ", "from "))
-        and not line.startswith("from __future__")
-        and line.split()[1].split(".")[0] not in allowed
-    ]
+    third_party = _non_stdlib(_CHECKER.read_text(encoding="utf-8"), set(_SIBLING_HELPERS))
     assert third_party == [], f"the checker imports non-stdlib modules: {third_party}"
 
 
-def test_the_scan_helper_the_checker_leans_on_is_itself_dependency_free():
-    """The one non-stdlib import above must not become a door to the application's deps.
+@pytest.mark.parametrize("helper_name", _SIBLING_HELPERS)
+def test_the_sibling_helpers_the_checker_leans_on_are_dependency_free(helper_name):
+    """The non-stdlib imports above must not become a door to the app's deps.
 
-    Exempting `_scan_helpers` is only safe while `_scan_helpers` is safe. Without
-    this, the exemption launders whatever that module grows to import.
+    Exempting a helper is only safe while that helper is safe. Without this,
+    the exemption launders whatever the module grows to import -- and the
+    exemption list is where a second helper gets added without anyone asking
+    the question again, so this is parametrized over the list rather than
+    written once per name.
     """
-    helper = REPO_ROOT / "tools" / "lint" / "_scan_helpers.py"
-    allowed = set(sys.stdlib_module_names) | {"autobot_shared"}
-    offenders = [
-        line
-        for line in helper.read_text(encoding="utf-8").splitlines()
-        if line.startswith(("import ", "from "))
-        and not line.startswith("from __future__")
-        and line.split()[1].split(".")[0] not in allowed
-    ]
-    assert offenders == [], f"_scan_helpers reaches beyond stdlib and autobot_shared: {offenders}"
+    helper = REPO_ROOT / "tools" / "lint" / f"{helper_name}.py"
+    offenders = _non_stdlib(helper.read_text(encoding="utf-8"), {"autobot_shared"} | set(_SIBLING_HELPERS))
+    assert offenders == [], f"{helper_name} reaches beyond stdlib and autobot_shared: {offenders}"
+
+
+@pytest.mark.parametrize(
+    "label,source,expect_flagged",
+    [
+        ("module-level third party", "import requests" + NL, True),
+        ("FUNCTION-LOCAL third party", "def f():" + NL + "    import requests" + NL, True),
+        ("comma form", "import os, requests" + NL, True),
+        ("from-import third party", "from requests import get" + NL, True),
+        ("relative import", "from . import sibling" + NL, True),
+        ("stdlib", "import os" + NL + "import sys" + NL, False),
+        ("dotted stdlib", "import os.path" + NL, False),
+        ("the permitted dotted helper", "from tools.lint._scan_helpers import logical_lines" + NL, False),
+        ("a DIFFERENT tools module", "from tools.lint.other import thing" + NL, True),
+        ("__future__", "from __future__ import annotations" + NL, False),
+    ],
+)
+def test_the_import_detector_sees_each_shape(label, source, expect_flagged):
+    """Controls, because the sweep over the real files is clean and proves nothing alone.
+
+    The function-local case is the one that mattered: it passed before this
+    was AST-based. The `tools.lint.other` case is the contrast for the dotted
+    allowance -- permitting the `tools` ROOT would have let anything under it
+    through, so the allowance names one module.
+    """
+    flagged = _non_stdlib(source, set(_SIBLING_HELPERS))
+    assert bool(flagged) is expect_flagged, f"{label}: {flagged}"
 
 
 def test_a_real_checkout_is_enumerated_by_git_not_by_the_walk():

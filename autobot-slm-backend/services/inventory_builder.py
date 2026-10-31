@@ -44,7 +44,6 @@ Groups parameterised at runtime (``target``, ``autobot-backend``,
 they are resolved via --limit or passed as extra-vars.
 """
 
-import json
 import logging
 import os
 import re
@@ -55,7 +54,9 @@ from typing import Any
 
 import yaml
 
+from autobot_shared.role_group_ownership import declared_and_detected, withhold_unowned_groups
 from autobot_shared.ssot_config import config
+from services.ansible_extra_vars import dump_extra_vars
 
 logger = logging.getLogger(__name__)
 
@@ -158,6 +159,14 @@ REQUIRED_GROUPS: frozenset = frozenset(
     }
 )
 
+
+def _secrets_lookup(key: str, why: str = "") -> str:
+    """Env, then the install-time secrets file, else a refusal -- never a default (#17642)."""
+    grep = f"lookup('pipe', 'grep -oP \"{key}=\\\\K.*\" /etc/autobot/slm-secrets.env 2>/dev/null || true')"
+    hint = f"{key.lower()} is unset: set {key} in the environment or in /etc/autobot/slm-secrets.env. {why}(#17642)"
+    return f"{{{{ (lookup('env', '{key}') | trim) or ({grep} | trim) or undef(hint='{hint}') }}}}"
+
+
 # Global all.vars — reproduced verbatim from slm-nodes.yml
 _ALL_VARS: dict[str, str] = {
     "ansible_user": "autobot",
@@ -168,16 +177,8 @@ _ALL_VARS: dict[str, str] = {
         ' \'grep -oP "SLM_HOST=\\\\K.*" /etc/autobot/slm-secrets.env'
         " 2>/dev/null || echo 127.0.0.1'), true) }}"
     ),
-    "network_subnet": (
-        "{{ lookup('env', 'NETWORK_SUBNET') or"
-        " lookup('pipe', 'grep -oP \"NETWORK_SUBNET=\\\\K.*\""
-        " /etc/autobot/slm-secrets.env 2>/dev/null') or '0.0.0.0/0' }}"
-    ),
-    "network_gateway": (
-        "{{ lookup('env', 'NETWORK_GATEWAY') or"
-        " lookup('pipe', 'grep -oP \"NETWORK_GATEWAY=\\\\K.*\""
-        " /etc/autobot/slm-secrets.env 2>/dev/null') or '0.0.0.0' }}"
-    ),
+    "network_subnet": _secrets_lookup("NETWORK_SUBNET", "A firewall source never falls back to an open range. "),
+    "network_gateway": _secrets_lookup("NETWORK_GATEWAY"),
 }
 
 
@@ -297,12 +298,8 @@ def unmatched_role_tokens(role_tokens: list[str]) -> set[str]:
 def _union_roles(node: Any) -> list[str]:
     """Return union of node.roles and node.detected_roles as a deduped list.
 
-    Detection legitimately adds groups: a node running redis that nobody
-    declared still needs the redis plays to reach it, which
-    ``test_detected_roles_merged_with_roles`` pins.
-
-    What detection must NOT do is grant a privileged group -- see
-    ``_strip_undeclared_privileged_groups`` for why (#14513).
+    Feeds the ``node_roles`` hostvar only; group mapping goes through
+    ``groups_for_role_tokens`` with declared and detected kept apart (#19197).
     """
     seen: set[str] = set()
     result: list[str] = []
@@ -458,22 +455,25 @@ def _build_hostvars(node: Any, local_ip_check: Any) -> dict:
     return hostvars
 
 
-def groups_for_role_tokens(role_tokens: list[str]) -> set[str]:
+def groups_for_role_tokens(role_tokens: list[str], detected_tokens: Any = ()) -> set[str]:
     """Complete ansible group set for one node, universal groups included.
 
-    Extracted from ``build_registry_inventory`` so the setup-wizard inventory
-    path can reach the same answer instead of carrying its own mapping
-    (#14286). Two builders emitting different group vocabularies for one fleet
-    is what made plays gated on ``aiml`` / ``database`` match zero hosts and
-    report success having done nothing.
+    Shared with the setup-wizard inventory path so two builders never emit
+    different group vocabularies for one fleet (#14286): plays gated on
+    ``aiml`` / ``database`` then matched zero hosts and reported success.
 
     Args:
-        role_tokens: role / detected_role strings for one node.
+        role_tokens: DECLARED role strings -- full mapping.
+        detected_tokens: running roles; owner-gated (``role_group_ownership``, #19197).
 
     Returns:
         Every ansible group the node belongs to.
     """
-    node_groups = _role_tokens_to_groups(role_tokens)
+    detected_tokens = list(detected_tokens)
+    node_groups = _role_tokens_to_groups(role_tokens) | withhold_unowned_groups(
+        _role_tokens_to_groups(detected_tokens), detected_tokens
+    )
+    role_tokens = list(role_tokens) + detected_tokens
 
     # Every node joins autobot + autobot_cluster (centralized logging, etc.)
     node_groups |= _UNIVERSAL_ALL
@@ -552,10 +552,10 @@ def build_registry_inventory(nodes: list[Any], local_ip_check: Any) -> dict:
 
     for node in nodes:
         host_name: str = node.node_id  # host name IS the node_id (#10109)
-        hostvars = _build_hostvars(node, local_ip_check)
-        host_section[host_name] = hostvars
-
-        node_groups = _strip_undeclared_privileged_groups(node, groups_for_role_tokens(_union_roles(node)))
+        host_section[host_name] = _build_hostvars(node, local_ip_check)
+        node_groups = _strip_undeclared_privileged_groups(
+            node, groups_for_role_tokens(*declared_and_detected(node, _role_tokens_to_groups))
+        )
 
         for g in node_groups:
             if g not in groups:
@@ -640,8 +640,8 @@ def write_temp_inventory(inv: dict, uid_tmp_dir: str | None = None) -> Path:
     return tmp_path
 
 
-def write_temp_extra_vars(extra_vars: dict, uid_tmp_dir: str | None = None) -> Path:
-    """Write *extra_vars* to a unique 0600 JSON temp file and return its Path.
+def write_temp_extra_vars(extra_vars: dict, uid_tmp_dir: str | None = None, unsafe_keys: Any = ()) -> Path:
+    """Write *extra_vars* to a unique 0600 YAML temp file and return its Path.
 
     Passed to ansible-playbook as ``-e @<file>`` so secret extra_vars (the
     stored SLM secrets auto-merged by PlaybookExecutor, #3519) never appear
@@ -649,26 +649,26 @@ def write_temp_extra_vars(extra_vars: dict, uid_tmp_dir: str | None = None) -> P
     ``/proc/<pid>/cmdline`` for the whole playbook run (#11735).  The caller
     deletes the file after the run, same contract as write_temp_inventory.
 
+    Values under *unsafe_keys* (caller-supplied) get the ``!unsafe`` tag, which JSON cannot
+    carry, so Ansible never templates them (#19005); other keys (merged secrets) stay plain.
+
     Args:
         extra_vars: Mapping passed to the playbook as extra vars.
         uid_tmp_dir: Directory for the temp file.  If None, uses
             ``/tmp/ansible_local_tmp_<uid>`` (nosec B108 — uid-scoped).
+        unsafe_keys: Keys of *extra_vars* whose string values are tagged ``!unsafe``.
 
     Returns:
-        Path to the written 0600 JSON file.
+        Path to the written 0600 YAML file.
     """
     if uid_tmp_dir is None:
         uid_tmp_dir = f"/tmp/ansible_local_tmp_{os.getuid()}"  # nosec B108
     tmp_dir = Path(uid_tmp_dir)
     tmp_dir.mkdir(mode=0o700, exist_ok=True)
 
-    fd, tmp_path_str = tempfile.mkstemp(
-        prefix="autobot_evars_",
-        suffix=".json",
-        dir=str(tmp_dir),
-    )
+    fd, tmp_path_str = tempfile.mkstemp(prefix="autobot_evars_", suffix=".yml", dir=str(tmp_dir))
     with os.fdopen(fd, "w", encoding="utf-8") as fh:
-        json.dump(extra_vars, fh)
+        dump_extra_vars(extra_vars, fh, unsafe_keys)
     return Path(tmp_path_str)
 
 

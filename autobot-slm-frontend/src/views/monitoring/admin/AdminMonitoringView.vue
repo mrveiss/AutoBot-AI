@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { BaseAlert, PollingPausedAlert } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { formatUptime } from '@/utils/formatHelpers'
 
@@ -14,11 +15,14 @@ const logger = createLogger('AdminMonitoringView')
  * Migrated from main AutoBot frontend - Issue #729.
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useAutobotApi, type SystemHealthReport } from '@/composables/useAutobotApi'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 
 const api = useAutobotApi()
+const { t } = useI18n()
 
 // State
 const loading = ref(false)
@@ -58,7 +62,6 @@ interface MonitoringError {
 const recentErrors = ref<MonitoringError[]>([])
 const metrics = ref<MetricSummary[]>([])
 
-let refreshTimer: ReturnType<typeof setInterval> | null = null
 
 // Computed
 const healthStatus = computed(() => {
@@ -96,10 +99,6 @@ function serviceBadgeClass(status: string): string {
 
 // Methods
 
-function formatDate(dateStr: string): string {
-  return formatDateTime(dateStr)
-}
-
 function getErrorLevelClass(level: string): string {
   switch (level.toLowerCase()) {
     case 'error': return 'bg-red-100 text-red-800'
@@ -109,96 +108,98 @@ function getErrorLevelClass(level: string): string {
   }
 }
 
-async function loadSystemHealth(): Promise<void> {
+async function loadSystemHealth(): Promise<boolean> {
   try {
     const data = await api.getSystemHealth()
     systemHealth.value = data
+    return true
   } catch (e) {
     logger.error('Failed to load system health:', e)
     // A failed read says nothing about the backend now, so drop the last report
     systemHealth.value = null
+    return false
   }
 }
 
-async function loadErrorStats(): Promise<void> {
+async function loadErrorStats(): Promise<boolean> {
   try {
     const data = await api.getErrorStatistics()
     errorStats.value = data
+    return true
   } catch (e) {
     logger.error('Failed to load error stats:', e)
+    return false
   }
 }
 
-async function loadRecentErrors(): Promise<void> {
+async function loadRecentErrors(): Promise<boolean> {
   try {
     const data = await api.getRecentErrors(10)
     recentErrors.value = data.errors || []
+    return true
   } catch (e) {
     logger.error('Failed to load recent errors:', e)
+    return false
   }
 }
 
-async function loadMetrics(): Promise<void> {
+async function loadMetrics(): Promise<boolean> {
   try {
     const data = await api.getMetricsSummary()
     metrics.value = data.metrics || []
+    return true
   } catch (e) {
     logger.error('Failed to load metrics:', e)
+    return false
   }
 }
 
-async function refreshAllData(): Promise<void> {
+/** Resolves false when every read failed, so the poller counts the tick as a failure (#19482). */
+async function refreshAllData(): Promise<boolean> {
   loading.value = true
   error.value = null
 
   try {
-    await Promise.all([
+    const results = await Promise.all([
       loadSystemHealth(),
       loadErrorStats(),
       loadRecentErrors(),
       loadMetrics()
     ])
+    return results.some(Boolean)
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load data'
+    return false
   } finally {
     loading.value = false
   }
 }
 
+// #19482: the shared dashboard policy (stop on unmount and after repeated failures, paused alert)
+const refreshPoller = useDashboardPoller(async () => {
+  throwUnlessLoaded(await refreshAllData())
+}, refreshInterval * 1000)
+
 function toggleAutoRefresh(): void {
   if (autoRefresh.value) {
-    startAutoRefresh()
+    refreshPoller.start('')
   } else {
-    stopAutoRefresh()
+    refreshPoller.stop()
   }
 }
 
-function startAutoRefresh(): void {
-  if (refreshTimer) clearInterval(refreshTimer)
-  refreshTimer = setInterval(() => refreshAllData(), refreshInterval * 1000)
+/** Refresh and Retry: restart the poller (also a paused one); with auto-refresh off it is a one-off read. */
+function restartRefresh(): void {
+  if (autoRefresh.value) refreshPoller.start('')
+  else void refreshAllData()
 }
 
-function stopAutoRefresh(): void {
-  if (refreshTimer) {
-    clearInterval(refreshTimer)
-    refreshTimer = null
-  }
-}
-
-onMounted(() => {
-  refreshAllData()
-  if (autoRefresh.value) {
-    startAutoRefresh()
-  }
-})
-
-onUnmounted(() => {
-  stopAutoRefresh()
-})
+onMounted(() => restartRefresh())
 </script>
 
 <template>
   <div class="p-6">
+    <PollingPausedAlert :poller="refreshPoller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mb-6" @retry="refreshPoller.start('')" />
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <div class="flex items-center gap-3">
@@ -222,7 +223,7 @@ onUnmounted(() => {
 
         <!-- Refresh button -->
         <button
-          @click="refreshAllData"
+          @click="restartRefresh"
           :disabled="loading"
           class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 flex items-center gap-2"
         >
@@ -253,9 +254,7 @@ onUnmounted(() => {
     </div>
 
     <!-- Error Message -->
-    <div v-if="error" class="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-      {{ error }}
-    </div>
+    <BaseAlert v-if="error" variant="error" class="mb-6" :message="error" />
 
     <!-- Stats Grid -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
@@ -377,7 +376,7 @@ onUnmounted(() => {
                     </span>
                   </div>
                   <p class="text-sm text-gray-900 font-medium">{{ err.message }}</p>
-                  <p class="text-xs text-gray-500 mt-1">{{ formatDate(err.timestamp) }}</p>
+                  <p class="text-xs text-gray-500 mt-1">{{ formatFleetDateTime(err.timestamp) }}</p>
                 </div>
               </div>
             </div>

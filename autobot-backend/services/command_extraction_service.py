@@ -23,6 +23,7 @@ import re
 from dataclasses import dataclass
 from typing import Any, Dict, List, Set, Tuple
 
+from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 
@@ -270,7 +271,9 @@ async def _slm_exec(
     try:
         from autobot_shared.http_client import get_http_client
 
-        async with get_http_client().tracked_request("POST", url, json=payload, headers=headers, ssl=False) as resp:
+        async with get_http_client().tracked_request(
+            "POST", url, json=payload, headers=headers, ssl=False, guard_egress=EGRESS_POLICY
+        ) as resp:
             data: Dict[str, Any] = await resp.json()
             return (
                 data.get("success", False),

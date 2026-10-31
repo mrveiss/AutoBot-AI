@@ -49,7 +49,7 @@ class DevelopmentPhase(Enum):
     PHASE_10_OPENVINO = "phase_10_openvino"
 
 
-class ValidationStatus(Enum):
+class ProjectCheckStatus(Enum):
     """Status of validation checks"""
 
     PASSED = "passed"
@@ -59,11 +59,11 @@ class ValidationStatus(Enum):
 
 
 @dataclass
-class ValidationResult:
+class ProjectCheckResult:
     """Result of a single validation check"""
 
     check_name: str
-    status: ValidationStatus
+    status: ProjectCheckStatus
     score: float  # 0.0 to 1.0
     details: str
     timestamp: datetime = field(default_factory=datetime.now)
@@ -94,7 +94,7 @@ class DevelopmentPhaseInfo:
     capabilities: List[PhaseCapability] = field(default_factory=list)
     completion_percentage: float = 0.0
     last_validated: datetime | None = None
-    validation_results: List[ValidationResult] = field(default_factory=list)
+    validation_results: List[ProjectCheckResult] = field(default_factory=list)
     prerequisites: List[DevelopmentPhase] = field(default_factory=list)
     is_active: bool = False
     is_completed: bool = False
@@ -517,14 +517,14 @@ class ProjectStateManager:
 
     async def validate_all_phases_async(
         self,
-    ) -> Dict[DevelopmentPhase, List[ValidationResult]]:
+    ) -> Dict[DevelopmentPhase, List[ProjectCheckResult]]:
         """Validate all defined phases asynchronously.
 
         Issue #357: Async wrapper for non-blocking validation operations.
         """
         return await asyncio.to_thread(self.validate_all_phases)
 
-    async def validate_phase_async(self, phase: DevelopmentPhase) -> List[ValidationResult]:
+    async def validate_phase_async(self, phase: DevelopmentPhase) -> List[ProjectCheckResult]:
         """Validate all capabilities in a phase asynchronously.
 
         Issue #357: Async wrapper for non-blocking validation operations.
@@ -545,27 +545,27 @@ class ProjectStateManager:
         """
         return await asyncio.to_thread(self.auto_progress_phases)
 
-    def _validate_file_exists(self, capability: PhaseCapability) -> ValidationResult:
+    def _validate_file_exists(self, capability: PhaseCapability) -> ProjectCheckResult:
         """Validate file existence (Issue #315)."""
         file_path = self.project_root / capability.validation_target
         exists = file_path.exists()
-        return ValidationResult(
+        return ProjectCheckResult(
             capability.name,
-            ValidationStatus.PASSED if exists else ValidationStatus.FAILED,
+            ProjectCheckStatus.PASSED if exists else ProjectCheckStatus.FAILED,
             1.0 if exists else 0.0,
             f"File {'exists' if exists else 'missing'}: {file_path}",
         )
 
-    def _validate_api_endpoint(self, capability: PhaseCapability) -> ValidationResult:
+    def _validate_api_endpoint(self, capability: PhaseCapability) -> ProjectCheckResult:
         """Validate API endpoint (Issue #315)."""
         # URGENT FIX: Prevent circular dependency deadlock for self-referential endpoints
         backend_url = f"{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
         backend_localhost = f"{NetworkConstants.LOCALHOST_NAME}:{NetworkConstants.BACKEND_PORT}"
 
         if backend_url in capability.validation_target or backend_localhost in capability.validation_target:
-            return ValidationResult(
+            return ProjectCheckResult(
                 capability.name,
-                ValidationStatus.PASSED,
+                ProjectCheckStatus.PASSED,
                 1.0,
                 "Self-referential endpoint validation skipped to prevent deadlock",
             )
@@ -575,30 +575,30 @@ class ProjectStateManager:
         try:
             response = httpx.get(capability.validation_target, timeout=5)
             success = response.status_code < 400
-            return ValidationResult(
+            return ProjectCheckResult(
                 capability.name,
-                ValidationStatus.PASSED if success else ValidationStatus.FAILED,
+                ProjectCheckStatus.PASSED if success else ProjectCheckStatus.FAILED,
                 1.0 if success else 0.0,
                 f"API endpoint {capability.validation_target}: HTTP {response.status_code}",
             )
         except Exception as e:
-            return ValidationResult(
+            return ProjectCheckResult(
                 capability.name,
-                ValidationStatus.FAILED,
+                ProjectCheckStatus.FAILED,
                 0.0,
                 f"API endpoint failed: {str(e)}",
             )
 
-    def _validate_websocket_endpoint(self, capability: PhaseCapability) -> ValidationResult:
+    def _validate_websocket_endpoint(self, capability: PhaseCapability) -> ProjectCheckResult:
         """Validate WebSocket endpoint (Issue #315)."""
-        return ValidationResult(
+        return ProjectCheckResult(
             capability.name,
-            ValidationStatus.PASSED,
+            ProjectCheckStatus.PASSED,
             1.0,
             "WebSocket endpoint validation not implemented yet",
         )
 
-    def _validate_function_test(self, capability: PhaseCapability) -> ValidationResult:
+    def _validate_function_test(self, capability: PhaseCapability) -> ProjectCheckResult:
         """Validate function test (Issue #315)."""
         function_handlers = {
             "validate_all_phases": self._validate_all_phases_test,
@@ -609,23 +609,23 @@ class ProjectStateManager:
         if handler:
             return handler(capability)
 
-        return ValidationResult(
+        return ProjectCheckResult(
             capability.name,
-            ValidationStatus.PENDING,
+            ProjectCheckStatus.PENDING,
             0.5,
             f"Function test '{capability.validation_target}' not implemented",
         )
 
-    def _validate_all_phases_test(self, capability: PhaseCapability) -> ValidationResult:
+    def _validate_all_phases_test(self, capability: PhaseCapability) -> ProjectCheckResult:
         """Self-referential validation test (Issue #315)."""
-        return ValidationResult(
+        return ProjectCheckResult(
             capability.name,
-            ValidationStatus.PASSED,
+            ProjectCheckStatus.PASSED,
             1.0,
             "Phase validation system is operational",
         )
 
-    def _validate_phase_completion_test(self, capability: PhaseCapability) -> ValidationResult:
+    def _validate_phase_completion_test(self, capability: PhaseCapability) -> ProjectCheckResult:
         """Validate phase completion logic (Issue #315)."""
         try:
             test_results = []
@@ -633,21 +633,21 @@ class ProjectStateManager:
                 result = self.check_phase_completion(test_phase)
                 test_results.append(f"{test_phase.value}: {'Complete' if result else 'Incomplete'}")
 
-            return ValidationResult(
+            return ProjectCheckResult(
                 capability.name,
-                ValidationStatus.PASSED,
+                ProjectCheckStatus.PASSED,
                 1.0,
                 "Automated phase progression logic operational" f" - {len(test_results)} phases tested",
             )
         except Exception as e:
-            return ValidationResult(
+            return ProjectCheckResult(
                 capability.name,
-                ValidationStatus.FAILED,
+                ProjectCheckStatus.FAILED,
                 0.0,
                 f"Phase progression logic test failed: {str(e)}",
             )
 
-    def validate_capability(self, capability: PhaseCapability) -> ValidationResult:
+    def validate_capability(self, capability: PhaseCapability) -> ProjectCheckResult:
         """Validate a single capability (Issue #315 - dispatch table)."""
         validation_dispatch = {
             "file_exists": self._validate_file_exists,
@@ -661,22 +661,22 @@ class ProjectStateManager:
             if handler:
                 return handler(capability)
 
-            return ValidationResult(
+            return ProjectCheckResult(
                 capability.name,
-                ValidationStatus.SKIPPED,
+                ProjectCheckStatus.SKIPPED,
                 0.0,
                 f"Unknown validation method: {capability.validation_method}",
             )
 
         except Exception as e:
-            return ValidationResult(
+            return ProjectCheckResult(
                 capability.name,
-                ValidationStatus.FAILED,
+                ProjectCheckStatus.FAILED,
                 0.0,
                 f"Validation error: {str(e)}",
             )
 
-    def validate_phase(self, phase: DevelopmentPhase) -> List[ValidationResult]:
+    def validate_phase(self, phase: DevelopmentPhase) -> List[ProjectCheckResult]:
         """Validate all capabilities in a phase"""
         if phase not in self.phases:
             return []
@@ -691,7 +691,7 @@ class ProjectStateManager:
             results.append(result)
 
             # Update capability status
-            capability.implemented = result.status == ValidationStatus.PASSED
+            capability.implemented = result.status == ProjectCheckStatus.PASSED
             capability.last_validated = result.timestamp
             capability.validation_details = result.details
 
@@ -708,7 +708,7 @@ class ProjectStateManager:
 
         return results
 
-    def validate_all_phases(self) -> Dict[DevelopmentPhase, List[ValidationResult]]:
+    def validate_all_phases(self) -> Dict[DevelopmentPhase, List[ProjectCheckResult]]:
         """Validate all defined phases"""
         logger.info("Starting validation of all phases...")
 

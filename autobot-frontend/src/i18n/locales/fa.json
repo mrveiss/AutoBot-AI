@@ -1,5 +1,6 @@
 {
   "common": {
+    "appName": "AutoBot",
     "submit": "ارسال",
     "cancel": "لغو",
     "save": "ذخیره",
@@ -103,7 +104,14 @@
     "exportCsv": "Export as CSV",
     "download": "Download",
     "filterByCategory": "Filter by category",
-    "copied": "Copied"
+    "copied": "Copied",
+    "riskTier": {
+      "low": "پایین",
+      "medium": "متوسط",
+      "high": "بالا",
+      "critical": "Critical"
+    },
+    "logsLoadFailed": "بارگذاری گزارش‌ها ناموفق بود: {error}"
   },
   "nav": {
     "chat": "گفتگو",
@@ -122,15 +130,14 @@
     "customDashboard": "Custom Dashboard",
     "agentRegistry": "Agents",
     "agentActivity": "فعالیت عامل",
-    "mainNavigation": "Main navigation",
+    "mainNavigation": "ناوبری اصلی",
     "plugins": "Plugins",
-    "switchLanguage": "Switch language",
     "automation": "Automation",
     "secrets": "Secrets",
-    "skipToContent": "Skip to content",
+    "skipToContent": "رفتن به محتوای اصلی",
     "systemStatus": "System Status",
     "services": "Services",
-    "skipToNavigation": "Skip to navigation",
+    "skipToNavigation": "رفتن به ناوبری",
     "openMainMenu": "Open main menu",
     "operations": "عملیات",
     "remoteDesktop": "Remote Desktop",
@@ -201,7 +208,31 @@
     "adminPricing": "قیمت‌گذاری مدل‌ها",
     "adminMcpServers": "سرورهای MCP",
     "adminPermissionScopes": "دامنه‌های مجوز",
-    "llcRoles": "نقش‌ها"
+    "llcRoles": "نقش‌ها",
+    "keywords": {
+      "knowledge": "اسناد فایل‌ها کتابخانه رونویسی یادداشت",
+      "companyOs": "شرکت سازمان کسب‌وکار",
+      "automation": "گردش کار خط لوله زمان‌بندی کارها",
+      "analytics": "بازدیدکنندگان معیارها آمار نمودار گزارش",
+      "preferences": "تنظیمات گزینه‌ها زبان پوسته",
+      "budgetPolicies": "هزینه مخارج محدودیت پول",
+      "systemHealth": "وضعیت دسترس‌پذیری عیب‌یابی پایش",
+      "vault": "اعتبارنامه کلید رمز عبور توکن گاوصندوق"
+    },
+    "homeAria": "صفحه اصلی AutoBot",
+    "vaultTip": "رمزها — کلیدها و اعتبارنامه‌های ذخیره‌شده",
+    "preferencesTip": "ترجیحات",
+    "platformAdmin": "مدیریت پلتفرم",
+    "platformAdminAria": "مدیریت پلتفرم، کنسول SLM را در برگه جدید باز می‌کند",
+    "platformAdminTip": "مدیریت پلتفرم — کنسول SLM را باز می‌کند ↗",
+    "profileMenu": "منوی نمایه",
+    "uiMode": {
+      "label": "حداقلی",
+      "tip": "رابط حداقلی — پنهان کردن قابلیت‌های پیشرفته",
+      "announceMinimal": "رابط حداقلی روشن شد. قابلیت‌های پیشرفته پنهان هستند.",
+      "announceFull": "رابط کامل روشن شد. همه قابلیت‌ها نمایش داده می‌شوند."
+    },
+    "llcLedger": "دفتر عامل‌ها"
   },
   "llcCompanyStatus": {
     "showArchived": "نمایش بایگانی‌شده‌ها",
@@ -658,7 +689,10 @@
         "envVarRecommendations": "Environment Variable Recommendations",
         "sampleHardcodedValues": "Sample Hardcoded Values",
         "noHardcodedValues": "No hardcoded environment values found. Your configuration looks clean!",
-        "noData": "No environment analysis data available."
+        "noData": "No environment analysis data available.",
+        "modelHint": "مدل: {model}",
+        "modelLoading": "در حال بارگذاری…",
+        "modelServerDefault": "پیش‌فرض سرور"
       },
       "ownership": {
         "title": "Code Ownership Analysis",
@@ -870,21 +904,16 @@
       "duplicateCode": "Duplicate Code",
       "locations": "{count} locations",
       "linesSaveable": "{count} lines saveable",
-      "moreLocations": "+{count} more locations",
-      "showingOfDuplicates": "Showing {shown} of {total} duplicate patterns",
       "regexOpportunities": "Regex Opportunities",
       "current": "Current",
       "suggested": "Suggested",
-      "showingOfOpportunities": "Showing {shown} of {total} opportunities",
       "complexityHotspots": "Complexity Hotspots",
       "location": "Location",
       "cc": "CC",
       "cognitive": "Cognitive",
       "mi": "MI",
       "nesting": "Nesting",
-      "showingOfHotspots": "Showing {shown} of {total} hotspots",
       "refactoringSuggestions": "Refactoring Suggestions",
-      "showingOfSuggestions": "Showing {shown} of {total} suggestions",
       "patternsInChromaDB": "{count} patterns in ChromaDB",
       "clearStoredPatterns": "Clear stored patterns",
       "lastScan": "Last scan",
@@ -1558,14 +1587,12 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total} {type}",
       "emptyMessage": "No code smells detected"
     },
     "declarations": {
       "title": "Declarations",
       "total": "Total",
       "exported": "Exported",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No declarations found",
       "types": {
         "function": "Function",
@@ -1588,13 +1615,14 @@
       "totalLines": "Total Lines",
       "similar": "similar",
       "lines": "lines",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No duplicate code detected",
       "similarityGroups": {
         "high": "High Similarity",
         "medium": "Medium Similarity",
         "low": "Low Similarity"
-      }
+      },
+      "scanFailed": "اسکن موارد تکراری اجرا نشد، پس این یک نتیجه نیست. منبع کد انتخاب‌شده را بررسی کنید و اسکن را دوباره اجرا کنید.",
+      "notScanned": "هنوز هیچ اسکن موارد تکراری برای این منبع کد اجرا نشده است."
     },
     "hardcodes": {
       "title": "مقادیر کدنویسی‌شده",
@@ -1607,7 +1635,6 @@
       "variable": "متغیر",
       "value": "مقدار",
       "suggestedEnvVar": "متغیر محیطی پیشنهادی",
-      "showingOf": "نمایش {shown} از {total}",
       "emptyMessage": "هیچ مقدار کدنویسی‌شده‌ای یافت نشد",
       "severityGroups": {
         "high": "شدت بالا",
@@ -1622,7 +1649,6 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No problems detected",
       "exportMarkdown": "Export Markdown",
       "exportJson": "Export JSON"
@@ -3288,11 +3314,12 @@
       "preservedSuffix": "; {count} preserved"
     },
     "treeNode": {
-      "vectorizeFolderTitle": "Vectorize folder title",
+      "itemsCount": "Items count",
       "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
-      "itemsCount": "Items count",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeFolderTitle": "Vectorize folder title",
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "memoryOrphan": {
       "title": "Title",
@@ -3579,6 +3606,9 @@
       "errorEnterBoth": "لطفاً هم موجودیت مبدأ و هم مقصد را وارد کنید.",
       "notInGraph": "این موجودیت‌ها هنوز در گراف روابط نیستند.",
       "notInGraphHint": "آن‌ها وجود دارند اما پیوندی در گراف ندارند، بنابراین ارتباطی قابل ردیابی نیست. استخراج موجودیت‌ها را دوباره اجرا کنید."
+    },
+    "chromaExplorer": {
+      "subtitle": "مرور و جستجو در مجموعه‌های بردار"
     }
   },
   "reasoningTrace": {
@@ -3740,7 +3770,8 @@
       "agentsAriaLabel": "Agent capabilities",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "در حال باز کردن خودکارسازی شرکت شما…",
-      "companyRequired": "برای باز کردن خودکارسازی یک شرکت انتخاب کنید."
+      "companyRequired": "برای باز کردن خودکارسازی یک شرکت انتخاب کنید.",
+      "planBeforeBuilding": "پیش از ساخت برنامه‌ریزی کنید"
     },
     "runner": {
       "completed": "Completed",
@@ -3953,7 +3984,9 @@
       "loading": "Loading configuration...",
       "emailHint": "Comma-separated email addresses",
       "selectWorkflow": "Workflow",
-      "channelMappingHint": "Select which channels receive notifications for each event type."
+      "channelMappingHint": "Select which channels receive notifications for each event type.",
+      "invalidEmail": "نشانی ایمیل نامعتبر: {emails}",
+      "invalidUrl": "قالب URL نامعتبر است"
     },
     "modal": {
       "saveWorkflowAriaLabel": "Save workflow",
@@ -4199,7 +4232,7 @@
     "cursorBlink": "Cursor Blink",
     "keyboardHint": "Press Enter to send, Shift+Enter for new line, ↑/↓ for history",
     "reconnect": "Reconnect",
-    "dark": "Dark",
+    "dark": "تیره",
     "underline": "Underline",
     "settings": "Terminal Settings",
     "lines": "Lines:",
@@ -4207,7 +4240,7 @@
     "fontSize": "Font Size",
     "session": "Session:",
     "autobotVMs": "AutoBot VMs",
-    "light": "Light",
+    "light": "روشن",
     "closeWindow": "Close Window",
     "cursorStyle": "Cursor Style",
     "saveLog": "Save Log",
@@ -4216,7 +4249,45 @@
     "emergencyKillTitle": "Emergency Kill All Processes",
     "infrastructureHosts": "Infrastructure Hosts",
     "resumeAutomation": "Resume Automation",
-    "host": "Host:"
+    "host": "Host:",
+    "automation": {
+      "started": "🚀 گردش کار خودکار آغاز شد: {name}",
+      "stepsPlanned": "📋 {count} مرحله برنامه‌ریزی شد. برای در دست گرفتن کنترل دستی در هر زمان از دکمه توقف استفاده کنید.",
+      "unnamedWorkflow": "گردش کار بدون نام",
+      "executeStep": "اجرا: {command}",
+      "paused": "⏸️ خودکارسازی متوقف شد - کنترل دستی فعال شد. دستورات را آزادانه وارد کنید.",
+      "resumed": "▶️ خودکارسازی از سر گرفته شد - ادامه اجرای گردش کار.",
+      "aboutToExecute": "🤖 گردش کار هوش مصنوعی: در آستانه اجرای \"{command}\"",
+      "stepProgress": "📋 مرحله {step}/{total}: {description}",
+      "skipped": "⏭️ رد شد: {command}",
+      "manualControlTaken": "👤 کنترل دستی در دست گرفته شد - مراحل دستی خود را کامل کنید، سپس برای ادامه گردش کار روی ادامه کلیک کنید.",
+      "automated": "🤖 خودکار: {command}",
+      "pausedBySystem": "⏸️ گردش کار توسط سیستم متوقف شد",
+      "resumedBySystem": "▶️ گردش کار توسط سیستم از سر گرفته شد",
+      "executing": "🤖 در حال اجرا: {command}",
+      "stepSkippedByUser": "⏭️ مرحله {step} توسط کاربر رد شد",
+      "workflowSaved": "💾 گردش کار ذخیره شد: {name}",
+      "workflowUpdated": "📋 گردش کار به‌روزرسانی شد: مراحل پیکربندی‌شده: {count}",
+      "manualCommand": "👤 دستی: {command}",
+      "example": {
+        "name": "به‌روزرسانی سیستم و نصب بسته‌ها",
+        "updateDesc": "به‌روزرسانی مخازن بسته",
+        "updateExpl": "فهرست بسته‌های موجود را از مخازن پیکربندی‌شده به‌روزرسانی می‌کند.",
+        "upgradeDesc": "ارتقای بسته‌های نصب‌شده",
+        "upgradeExpl": "همه بسته‌های نصب‌شده را به آخرین نسخه ارتقا می‌دهد.",
+        "installDesc": "نصب ابزارهای ضروری",
+        "installExpl": "ابزارهای توسعه پرکاربرد را نصب می‌کند.",
+        "verifyDesc": "بررسی نصب‌ها",
+        "verifyExpl": "بررسی می‌کند که ابزارها به درستی نصب شده باشند."
+      }
+    },
+    "events": {
+      "emergencyKill": "🛑 توقف اضطراری: همه فرایندها توسط کاربر خاتمه یافت",
+      "emergencyKillFailed": "❌ توقف اضطراری ناموفق بود: {message}",
+      "interrupted": "^C (فرایند توسط کاربر قطع شد)",
+      "error": "خطا: {error}"
+    },
+    "urlCopied": "نشانی URL ترمینال در کلیپ‌بورد کپی شد!"
   },
   "manpage": {
     "manager": {
@@ -4739,7 +4810,6 @@
   "profile": {
     "confirmNewPassword": "Confirm new password",
     "newPassword": "New password",
-    "themeDark": "Dark",
     "changing": "Changing...",
     "tabGeneral": "General",
     "enableAnimations": "Enable animations",
@@ -4747,7 +4817,6 @@
     "soundNotifications": "Sound notifications",
     "tabSecurity": "Security",
     "voiceProfiles": "Voice Profiles",
-    "theme": "Theme",
     "pwFillAll": "Please fill in all password fields",
     "lastLogin": "Last Login:",
     "tabAppearance": "Appearance & Voice",
@@ -4755,7 +4824,6 @@
     "notifications": "Notifications",
     "emailNotifications": "Email notifications",
     "accountInfo": "Account Information",
-    "appearance": "Appearance",
     "savePreferences": "Save Preferences",
     "role": "Role:",
     "changePassword": "Change Password",
@@ -4765,7 +4833,6 @@
     "preferencesSaved": "Preferences saved!",
     "pwMismatch": "Passwords do not match",
     "fullScreen": "Full-screen",
-    "themeLight": "Light",
     "email": "Email:",
     "interface": "Interface",
     "pwTooShort": "Password must be at least 8 characters",
@@ -4775,30 +4842,38 @@
     "compactMode": "Compact mode",
     "voiceChatDisplay": "Voice Chat Display",
     "closeAria": "Close profile",
-    "themeAuto": "Auto",
     "pwChanged": "Password changed successfully!",
     "username": "Username:",
     "tabDevices": "Tab devices"
   },
   "ui": {
     "themeToggle": {
-      "dark": "Dark",
-      "light": "Light",
+      "accentPurpleDescription": "بنفش — خلاق و شیک",
+      "system": "سیستمی",
+      "highContrast": "کنتراست بالا",
+      "monochrome": "تک‌رنگ",
+      "accentThemeDescription": "پیش‌فرض پوسته — رنگ اصلی خود پوسته",
+      "baseThemeChanged": "پوسته پایه به {name} تغییر کرد",
+      "accentChanged": "رنگ تأکیدی به {name} تغییر کرد",
+      "presetChanged": "پیش‌تنظیم پوسته به {name} تغییر کرد",
+      "dark": "تیره",
+      "light": "روشن",
       "switchToDark": "Switch to dark mode",
       "theme": "Theme",
       "switchToLight": "Switch to light mode",
       "selectTheme": "Select theme"
     },
     "preferences": {
+      "accentTheme": "پوسته",
       "fontSizeChanged": "Font size changed to {size}",
       "fontSizeOptions": "Font size options",
-      "orange": "Orange",
-      "emerald": "Emerald",
+      "orange": "نارنجی",
+      "emerald": "زمردی",
       "setAccentColor": "Set accent color to {color}",
       "resetAll": "Reset all preferences to defaults",
       "reset": "Reset",
       "medium": "Medium",
-      "blue": "Blue",
+      "blue": "آبی",
       "spacious": "Spacious",
       "fontSize": "Font Size",
       "setFontSize": "Set font size to {size}",
@@ -4812,12 +4887,16 @@
       "compact": "Compact",
       "title": "Preferences",
       "accentColor": "Accent Color",
-      "teal": "Teal",
+      "teal": "فیروزه‌ای",
       "small": "Small",
-      "purple": "Purple",
+      "purple": "بنفش",
       "accentColorChanged": "Accent color changed to {color}",
       "layoutDensityOptions": "Layout density options",
-      "theme": "Theme"
+      "theme": "Theme",
+      "green": "سبز",
+      "pink": "صورتی",
+      "indigo": "نیلی",
+      "red": "قرمز"
     },
     "commandPermission": {
       "executionFailed": "اجرای دستور ناموفق بود",
@@ -4844,11 +4923,6 @@
       "feedbackDescription": "Help improve AutoBot by explaining your decision",
       "title": "Command Permission Required",
       "comment": "Comment"
-    },
-    "darkModeToggle": {
-      "toggleDarkMode": "Toggle dark mode",
-      "switchToLight": "Switch to light mode",
-      "switchToDark": "Switch to dark mode"
     },
     "messageStatus": {
       "sending": "Sending",
@@ -4881,18 +4955,6 @@
       "failedToConnect": "Failed to connect to host",
       "cancel": "Cancel",
       "commandToExecute": "Command to Execute"
-    },
-    "dataTable": {
-      "noDataAvailable": "No data available",
-      "noItemsToDisplay": "No items to display",
-      "actions": "Actions",
-      "pageOf": "Page {current} of {total}",
-      "sortBy": "Sort by {column}",
-      "pagination": "Table pagination",
-      "previousPage": "Previous page",
-      "nextPage": "Next page",
-      "dataTable": "Data table",
-      "loading": "Loading data..."
     },
     "systemStatus": {
       "lastCheck": "Last Check:",
@@ -4948,7 +5010,9 @@
     },
     "loadingSpinner": {
       "loading": "Loading…"
-    }
+    },
+    "minimalNote": "نمایش موارد ضروری · ابزارک‌های فنی پنهان شده‌اند",
+    "minimalNoteAction": "نمایش همه قابلیت‌ها"
   },
   "collaboration": {
     "participantList": {
@@ -5173,6 +5237,7 @@
       "status": {
         "failed": "Failed",
         "streaming": "Streaming",
+        "waiting_explanation": "در انتظار توضیح",
         "explaining": "Explaining",
         "pending": "Pending",
         "completed": "Completed",
@@ -5440,6 +5505,13 @@
       "chatMessage": "Chat message",
       "attachFile": "Attach file",
       "retryUpload": "Retry upload",
+      "uploadError": {
+        "http": "بارگذاری ناموفق بود (وضعیت {status})",
+        "invalidResponse": "سرور پاسخ ناخوانایی ارسال کرد",
+        "network": "خطای شبکه هنگام بارگذاری",
+        "cancelled": "بارگذاری لغو شد",
+        "unknown": "بارگذاری ناموفق بود"
+      },
       "removeFile": "Remove file",
       "overseerLabel": "Overseer",
       "managePresets": "Manage slash command presets",
@@ -5456,7 +5528,10 @@
       "thinkingOffLabel": "thinking Off",
       "thinkingOn": "Thinking on",
       "thinkingOnLabel": "thinking On",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "fileTooLarge": "فایل «{name}» بیش از حد بزرگ است (حداکثر {max})",
+      "voiceUnsupported": "ورودی صوتی به Chrome، Edge یا Safari 15+ نیاز دارد. رونویسی در این مرورگر در دسترس نیست.",
+      "micDenied": "دسترسی به میکروفون رد شد. لطفاً در تنظیمات مرورگر اجازه دسترسی به میکروفون را بدهید."
     },
     "visualBrowser": {
       "disconnected": "Disconnected",
@@ -5761,7 +5836,8 @@
       "files": "پرونده‌ها",
       "terminal": "پایانه",
       "browser": "مرورگر",
-      "novnc": "میزکار راه دور"
+      "novnc": "میزکار راه دور",
+      "ariaLabel": "بخش‌های گفتگو"
     }
   },
   "serviceMessages": {
@@ -5945,7 +6021,44 @@
       "deleteCredential": "Delete Credential",
       "username": "Username",
       "transferBtn": "Transfer",
-      "sshKeyHint": "Paste your entire private key including BEGIN/END markers"
+      "sshKeyHint": "Paste your entire private key including BEGIN/END markers",
+      "categories": {
+        "api_key": "کلیدهای API",
+        "token": "توکن‌های دسترسی",
+        "oauth_refresh_token": "توکن‌های تازه‌سازی OAuth",
+        "connector_oauth_token": "توکن‌های رابط",
+        "password": "گذرواژه‌ها",
+        "ssh_key": "کلیدهای SSH",
+        "infrastructure_host": "میزبان‌های زیرساخت",
+        "database_url": "پایگاه‌های داده",
+        "certificate": "گواهی‌ها",
+        "other": "سایر"
+      },
+      "kinds": {
+        "api_key": "کلید API",
+        "token": "توکن دسترسی",
+        "oauth_refresh_token": "توکن تازه‌سازی OAuth",
+        "connector_oauth_token": "توکن رابط",
+        "password": "گذرواژه",
+        "ssh_key": "کلید SSH",
+        "infrastructure_host": "میزبان زیرساخت",
+        "database_url": "پایگاه داده",
+        "certificate": "گواهی",
+        "other": "سایر"
+      },
+      "templates": {
+        "openaiDesc": "دسترسی به API ‏GPT",
+        "anthropicDesc": "دسترسی به API ‏Claude",
+        "awsDesc": "خدمات ابری آمازون",
+        "githubDesc": "توکن شخصی GitHub",
+        "postgresDesc": "اتصال پایگاه داده",
+        "redisDesc": "اتصال Redis",
+        "sshLabel": "کلید SSH",
+        "sshDesc": "دسترسی به سرور",
+        "slackDesc": "توکن ربات Slack",
+        "serverLabel": "میزبان سرور",
+        "serverDesc": "دسترسی به سرور SSH/VNC"
+      }
     },
     "threatDashboard": {
       "checking": "Checking...",
@@ -6349,7 +6462,6 @@
       "template": "Template",
       "defaultTitle": "Custom Dashboard",
       "widgetArchitectureDesc": "Interactive system architecture diagram",
-      "shrink": "Shrink",
       "save": "Save",
       "subtitle": "Customizable dashboard with drag-and-drop widgets",
       "widgetWorkflowDesc": "Interactive workflow execution flowcharts",
@@ -6371,7 +6483,6 @@
       "addWidgetTitle": "Add Widget",
       "widgetHeatmap": "Resource Heatmap",
       "saveChanges": "Save Changes",
-      "expand": "Expand",
       "refreshInterval": "Refresh Interval (seconds)",
       "configureWidget": "Configure Widget",
       "metric": "Metric",
@@ -6750,31 +6861,11 @@
   },
   "settings": {
     "webResearch": {
-      "enabledLabel": "Enable web research",
-      "timeoutHint": "Maximum time to wait for search results (5–120 s)",
-      "filterAdultHint": "Filter adult content from search results",
-      "enabledHint": "Allow AutoBot to search the web when answering questions",
-      "maxResultsHint": "Maximum number of search results to retrieve (1–50)",
-      "methodHint": "Choose how web searches are performed",
-      "methodLabel": "Search method",
-      "rateLimitHint": "Limit how many requests are sent in a given time window",
-      "rateLimitLabel": "Rate limiting",
       "methodApiBased": "API-based",
-      "rateLimitRequests": "Requests",
       "title": "Web Research",
-      "confirmationLabel": "Require confirmation",
-      "timeoutLabel": "Timeout (seconds)",
-      "storeInKbHint": "Save research results to the knowledge base",
       "desc": "Configure automated web research behaviour and privacy settings",
-      "confirmationHint": "Ask before performing a web search on your behalf",
-      "anonymizeHint": "Anonymize requests before sending to search engines",
-      "maxResultsLabel": "Max results",
-      "privacyLabel": "Privacy & storage",
-      "rateLimitWindow": "Window (s)",
       "methodBasic": "Basic",
-      "methodAdvanced": "Advanced",
-      "thresholdHint": "Confidence level below which AutoBot triggers an automatic search",
-      "thresholdLabel": "Auto-research threshold"
+      "methodAdvanced": "Advanced"
     },
     "backend": "Backend",
     "apiKeys": {
@@ -6800,29 +6891,21 @@
     },
     "languageHint": "Select your preferred language. The interface will switch immediately if translations are available. AI responses will also use this language.",
     "languageTitle": "Language Preferences",
-    "cachedSettings": "Using cached settings (backend offline)",
     "languageChangeFailed": "Failed to update language",
     "developer": "Developer",
-    "discardChanges": "Discard Changes",
     "voiceDesc": "Configure text-to-speech voice and voice profiles",
-    "save": "Save Settings",
     "languageSelect": "Interface Language",
     "general": "General",
     "language": "Language",
     "appearance": "Appearance",
     "voice": "Voice",
     "logging": "Logging",
-    "cacheApiUnavailable": "Cache API not available",
     "languageChanged": "Language updated successfully",
     "languageDesc": "Choose your preferred language for the interface and AI responses",
-    "loadingSettings": "Loading settings...",
     "prompts": "Prompts",
-    "saving": "Saving...",
-    "panelLoadFailed": "Failed to load settings panel",
     "reset": "Reset to Defaults",
     "appearanceDesc": "Customize the look and feel of your workspace",
     "title": "Settings",
-    "backendOffline": "Backend offline — showing cached settings",
     "connection": {
       "title": "Connection",
       "desc": "Configure backend connection settings",
@@ -6922,11 +7005,35 @@
       "noApiKeyRequired": "کلید API لازم نیست.",
       "redirecting": "در حال انتقال...",
       "disconnectFailed": "قطع اتصال ناموفق بود",
-      "redirectNeedsCallback": "جریان OAuth با تغییر مسیر در مرورگر به پیکربندی callback سمت سرور نیاز دارد. در محیط‌های بدون رابط کاربری از کد دستگاه استفاده کنید.",
-      "deviceNotConfigured": "احراز هویت دستگاه برای این ارائه‌دهنده پیکربندی نشده است",
       "deviceInitFailed": "شروع جریان دستگاه ناموفق بود",
       "stillWaiting": "هنوز در انتظار تأیید — لحظاتی دیگر دوباره تلاش کنید.",
       "pollFailed": "بررسی ناموفق بود"
+    },
+    "preferredMode": {
+      "title": "حالت ترجیحی",
+      "subtitle": "انتخاب کنید چه مقدار از AutoBot را ببینید. هر زمان با دکمه «حداقلی» در نوار بالا می‌توانید جابه‌جا شوید.",
+      "group": "حالت رابط",
+      "minimal": "حداقلی",
+      "minimalDesc": "فقط موارد ضروری — برای گفتگو، دانش و تأییدهای روزمره.",
+      "full": "کامل",
+      "fullDesc": "همه‌چیز، از جمله تحلیل‌ها، خودکارسازی، مدیریت و ابزارهای توسعه‌دهنده.",
+      "selected": "انتخاب‌شده",
+      "startIn": "شروع در",
+      "startInDesc": "حالتی که AutoBot هنگام ورود در آن باز می‌شود",
+      "startLast": "آخرین استفاده‌شده",
+      "startMinimal": "حداقلی",
+      "startFull": "کامل",
+      "noteSynced": "در حساب شما و روی این دستگاه ذخیره می‌شود",
+      "noteDirectLinks": "صفحه‌های پنهان همچنان از پیوندهای مستقیم باز می‌شوند",
+      "noteNeverHidden": "تأییدها، خطاها و هشدارهای امنیتی هرگز پنهان نمی‌شوند"
+    },
+    "additionalThemes": {
+      "title": "پوسته‌های بیشتر",
+      "subtitle": "توسط مدیر شما از طریق SLM مستقر شده‌اند",
+      "deployed": "مستقر از طریق SLM · v{version}",
+      "empty": "هیچ پوسته بیشتری مستقر نشده است.",
+      "info": "مدیران پوسته‌ها را در کنسول SLM نصب و مستقر می‌کنند.",
+      "slmLink": "SLM › تنظیمات › پوسته‌ها ↗"
     }
   },
   "visualizations": {
@@ -7180,7 +7287,16 @@
     },
     "progress": {}
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "قوانین هشدار",
+      "overview": "نمای کلی",
+      "slos": "SLOها",
+      "traces": "ردیابی‌ها"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "treeView": {
       "noStructure": "No directory structure available",
       "title": "Directory Structure",
@@ -7201,7 +7317,8 @@
       "listView": "List View",
       "refreshAriaLabel": "Refresh files",
       "errorRenamingFile": "Error renaming file",
-      "errorLoadingContents": "Error loading contents"
+      "errorLoadingContents": "Error loading contents",
+      "uploadFailedHint": "لطفاً محدودیت‌های اندازه فایل و الزامات قالب را بررسی کنید"
     },
     "fileTypes": {
       "shell": "Shell Script",
@@ -7411,6 +7528,16 @@
       "detected": "CAPTCHA Detected",
       "openVnc": "Open VNC Desktop",
       "skipSource": "Skip Source",
+      "types": {
+        "recaptcha": "reCAPTCHA",
+        "hcaptcha": "hCaptcha",
+        "cloudflare": "چالش Cloudflare",
+        "slider": "کپچای لغزنده",
+        "imageSelect": "کپچای انتخاب تصویر",
+        "text": "کپچای متنی",
+        "math": "کپچای ریاضی",
+        "unknown": "کپچای ناشناخته"
+      },
       "solved": "I've Solved It"
     }
   },
@@ -7426,10 +7553,6 @@
     },
     "input": {
       "clearInput": "Clear input"
-    },
-    "panel": {
-      "collapse": "Collapse panel",
-      "expand": "Expand panel"
     }
   },
   "voice": {
@@ -7457,7 +7580,11 @@
     "stopListening": "Stop listening",
     "stop": "Stop",
     "confirmDeleteVoiceTitle": "حذف نمایه صدا",
-    "tapToEnableAudio": "برای فعال‌سازی پخش صدا هر جایی را لمس کنید"
+    "tapToEnableAudio": "برای فعال‌سازی پخش صدا هر جایی را لمس کنید",
+    "speech": {
+      "url": "یک پیوند",
+      "path": "یک مسیر فایل"
+    }
   },
   "auth": {
     "login": {
@@ -7965,12 +8092,34 @@
     "newCode": "New Code Agent",
     "newCodeDesc": "Start a code analysis session",
     "newAnalysis": "New Analysis",
-    "newAnalysisDesc": "Start an analysis session"
+    "newAnalysisDesc": "Start an analysis session",
+    "openPage": "باز کردن {page}",
+    "types": {
+      "task": "وظیفه",
+      "research": "پژوهش",
+      "code": "کد",
+      "analysis": "تحلیل",
+      "navigate": "صفحه"
+    },
+    "hints": {
+      "navigate": "پیمایش",
+      "select": "انتخاب",
+      "close": "بستن"
+    }
   },
   "slm": {
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "فعال‌سازی پنجره نگهداری ناموفق بود",
+      "completeWindowFailed": "تکمیل پنجره نگهداری ناموفق بود",
+      "deleteWindowFailed": "حذف پنجره نگهداری ناموفق بود",
+      "drainNodeFailed": "تخلیه گره ناموفق بود. لطفاً دوباره تلاش کنید.",
+      "resumeNodeFailed": "از سرگیری گره ناموفق بود. لطفاً دوباره تلاش کنید.",
+      "saveKeysFailed": "ذخیره کلیدهای API ناموفق بود. برای جزئیات کنسول را بررسی کنید.",
+      "addNodeFailed": "افزودن گره ناموفق بود"
     }
   },
   "mobile": {
@@ -8482,7 +8631,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "اطلاعات ابزارها در حال حاضر در دسترس نیست — این فهرست ممکن است ناقص باشد.",
       "canvasNoToolsDefined": "هیچ ابزاری به هیچ نقشی در این شرکت پیوست نشده است.",
-      "deepLinkNodeNotFound": "این پیوند به گره‌ای اشاره دارد که در اینجا یافت نشد. ممکن است حذف شده باشد یا شما به آن دسترسی نداشته باشید."
+      "deepLinkNodeNotFound": "این پیوند به گره‌ای اشاره دارد که در اینجا یافت نشد. ممکن است حذف شده باشد یا شما به آن دسترسی نداشته باشید.",
+      "viewPlanner": "برنامه‌ریز"
     },
     "executorRollup": {
       "title": "خلاصه مجریان",
@@ -8761,6 +8911,179 @@
       "retry": "تلاش دوباره",
       "loadingItem": "در حال بارگذاری آیتم کاری…",
       "itemLoadFailed": "بارگذاری این آیتم کاری ممکن نشد"
+    },
+    "ledger": {
+      "title": "دفتر عامل‌ها",
+      "subtitle": "چه کسی در این شرکت روی چه کاری کار می‌کند و چه کسی منتظر است.",
+      "tabsAria": "نماهای دفتر",
+      "tabs": {
+        "now": "در حال کار",
+        "claims": "ادعاها",
+        "contention": "رقابت",
+        "activity": "فعالیت"
+      },
+      "col": {
+        "agent": "عامل",
+        "kind": "نوع",
+        "status": "وضعیت",
+        "task": "وظیفه فعلی",
+        "detail": "جزئیات",
+        "scope": "دامنه",
+        "mode": "حالت",
+        "intent": "هدف",
+        "expires": "انقضا",
+        "renewals": "تمدیدها"
+      },
+      "busy": "مشغول",
+      "idle": "بیکار",
+      "peerMessages": "پیام‌های همتای در انتظار",
+      "idleSubscribers": "اشتراک‌های بیکاری",
+      "pendingFor": "{n} در انتظار برای {name}",
+      "sentBy": "از {names}",
+      "waitsForIdle": "{who} منتظر است تا {target} بیکار شود",
+      "heldBy": "در اختیار {agent}",
+      "waitlistAria": "فهرست انتظار به ترتیب",
+      "silenceMeansHold": "درخواست، آزادسازی نیست: سکوت یعنی نگه‌داشتن، و ادعای تمدیدنشده خودبه‌خود منقضی می‌شود.",
+      "ask": "از دارنده بخواهید آزاد کند",
+      "askAria": "از دارنده {scope} بخواهید آن را آزاد کند",
+      "conflicts": "تعارض‌ها",
+      "recent": "فعالیت اخیر",
+      "conflict": {
+        "release_refused": "یک آزادسازی رد شد",
+        "claim_expired": "یک ادعا هنگام نگه‌داری منقضی شد",
+        "yield_unanswered": "یک درخواست واگذاری بی‌پاسخ ماند",
+        "claim_lapsed_during_action": "یک ادعا در حین یک اقدام منقضی شد"
+      },
+      "empty": {
+        "presence": "هیچ عاملی گزارش نداده است",
+        "peerMessages": "پیام در انتظاری نیست",
+        "idleSubscribers": "اشتراک بیکاری وجود ندارد",
+        "claims": "ادعایی وجود ندارد",
+        "contention": "رقابتی وجود ندارد",
+        "conflicts": "تعارضی وجود ندارد",
+        "activity": "فعالیت اخیری نیست"
+      },
+      "state": {
+        "loading": "در حال خواندن دفتر…",
+        "unavailableTitle": "خواندن دفتر ممکن نشد",
+        "unavailableBody": "مخزن {source} پاسخ نداد. این با نبودن هیچ ورودی یکی نیست.",
+        "errorTitle": "هنگام بارگذاری این بخش خطایی رخ داد"
+      },
+      "askState": {
+        "sending": "در حال ارسال…",
+        "sent": "درخواست ارسال شد — تصمیم با دارنده است؛ سکوت یعنی نگه‌داشتن.",
+        "tooSoon": "همین الان دربارهٔ این ادعا پرسیدید؛ یک دقیقه دیگر دوباره تلاش کنید.",
+        "notFound": "این وظیفه دیگر این ادعا را در اختیار ندارد — برای دیدن دارندهٔ فعلی بازخوانی کنید.",
+        "unavailable": "دسترسی به دفتر ممکن نشد؛ چیزی ارسال نشد.",
+        "error": "خطایی رخ داد و تحویل تأیید نشد. صفحه را تازه کنید تا ببینید آیا ادعا هنوز نگه داشته شده است."
+      }
+    },
+    "workflowPlanner": {
+      "title": "برنامه‌ریز گردش کار",
+      "plans": "برنامه‌ها",
+      "newPlan": "برنامه جدید",
+      "open": "باز کردن",
+      "back": "بازگشت به برنامه‌ها",
+      "retry": "تلاش دوباره",
+      "loading": "در حال بارگذاری برنامه‌ها...",
+      "loadFailed": "بارگذاری برنامه ممکن نشد.",
+      "saveFailed": "ذخیره تغییر ممکن نشد.",
+      "createFailed": "ایجاد برنامه ممکن نشد.",
+      "emptyTitle": "هنوز برنامه‌ای نیست",
+      "emptyHint": "یک برنامه شروع کنید تا یک فرایند را ترسیم و اندازه‌گیری کنید و یک عدد برای بهبود انتخاب کنید.",
+      "unavailableTitle": "برنامه‌ریز گردش کار در دسترس نیست",
+      "unavailableHint": "این قابلیت برای فضای کار شما خاموش است، پس هنوز چیزی برای نمایش نیست.",
+      "statusFlow": "پیشرفت برنامه",
+      "statusNotAvailable": "وضعیت این برنامه: {status}. تأیید و تبدیل هنوز در دسترس نیست، بنابراین فقط‌خواندنی نمایش داده می‌شود.",
+      "convertNotAvailable": "ساخت گردش کار از روی برنامه هنوز در دسترس نیست.",
+      "status": {
+        "draft": "پیش‌نویس",
+        "measured": "اندازه‌گیری‌شده",
+        "labeled": "برچسب‌خورده",
+        "approved": "تأییدشده",
+        "converted": "تبدیل‌شده"
+      },
+      "col": {
+        "name": "برنامه",
+        "revision": "بازنگری",
+        "status": "وضعیت",
+        "actions": "عملیات"
+      },
+      "form": {
+        "name": "نام برنامه",
+        "startsAt": "فرایند از کجا شروع می‌شود",
+        "endsAt": "فرایند کجا تمام می‌شود",
+        "create": "ایجاد برنامه"
+      },
+      "steps": {
+        "map": "ترسیم",
+        "measure": "اندازه‌گیری",
+        "oneNumber": "انتخاب یک عدد",
+        "label": "تفکیک و برچسب‌زنی",
+        "convert": "ایجاد گردش کار"
+      },
+      "map": {
+        "empty": "هنوز چیزی ترسیم نشده",
+        "emptyHint": "ابتدا افراد درگیر (مسیرها) و سپس گام‌های هرکدام را اضافه کنید.",
+        "handoffs": "{count} تحویل",
+        "waitNote": "در این تحویل چه چیزی منتظر می‌ماند؟",
+        "laneName": "نام مسیر",
+        "addLane": "افزودن مسیر",
+        "stepLabel": "گام",
+        "stepLane": "مسیر گام",
+        "addStep": "افزودن گام"
+      },
+      "source": {
+        "self_reported": "شما گفتید",
+        "email": "با ایمیل بررسی شد",
+        "calendar": "با تقویم بررسی شد"
+      },
+      "measure": {
+        "hint": "هر گام چند بار رخ می‌دهد و چقدر طول می‌کشد؟",
+        "needSteps": "ابتدا دست‌کم یک گام ترسیم کنید.",
+        "perWeek": "در هفته",
+        "duration": "مدت",
+        "unit": "واحد مدت",
+        "save": "ذخیره",
+        "clear": "پاک کردن"
+      },
+      "unit": {
+        "minutes": "دقیقه",
+        "hours": "ساعت",
+        "days": "روز"
+      },
+      "oneNumber": {
+        "hint": "گام‌های اندازه‌گیری‌شده، با طولانی‌ترین انتظار در ابتدا. شما تصمیم می‌گیرید کدام مهم است.",
+        "needMetrics": "ابتدا دست‌کم یک گام را اندازه‌گیری کنید.",
+        "rate": "{freq} در هفته، {dur} {unit}",
+        "title": "نامی برای این عدد بگذارید",
+        "returnKind": "آنچه پس می‌گیرید",
+        "target": "هدف",
+        "save": "ذخیره به‌عنوان عدد من"
+      },
+      "returnKind": {
+        "hours_back": "ساعت‌های بازگشتی",
+        "more_yeses": "پاسخ مثبت بیشتر",
+        "money_sooner": "پول سریع‌تر"
+      },
+      "label": {
+        "needNumber": "ابتدا عدد خود را انتخاب کنید؛ گام آن اینجا تفکیک می‌شود.",
+        "subStep": "زیرگام",
+        "addSubStep": "افزودن زیرگام",
+        "unlabel": "حذف برچسب",
+        "edgeCase": "مورد مرزی: {text}",
+        "byHandNote": "این‌ها نزد انسان‌ها می‌ماند. هوش مصنوعی هرگز روی آن‌ها اقدام نمی‌کند.",
+        "acknowledge": "فهرست دستی را خواندم",
+        "acknowledged": "فهرست دستی خوانده شد"
+      },
+      "labels": {
+        "ai": "هوش مصنوعی",
+        "automation": "خودکارسازی",
+        "by_hand": "دستی"
+      },
+      "gate": {
+        "missing": "هنوز کم است"
+      }
     }
   },
   "code": {
@@ -9515,7 +9838,164 @@
       "collectionIdPlaceholder": "شناسه مجموعه",
       "pushing": "در حال ارسال…",
       "confirm": "تأیید",
-      "pushFailed": "افزودن این ضبط به پایگاه دانش ممکن نشد. لطفاً دوباره تلاش کنید."
+      "pushFailed": "افزودن این ضبط به پایگاه دانش ممکن نشد. لطفاً دوباره تلاش کنید.",
+      "collectionNotJoined": "ذخیره شد، اما مجموعه‌ای که نام بردید پیدا نشد — رونوشت در پایگاه دانش هست ولی در آن مجموعه نیست."
     }
+  },
+  "systemStatus": {
+    "summary": {
+      "issues": "مشکلات سیستم شناسایی شد",
+      "warnings": "هشدارهای سیستم",
+      "ok": "همه سیستم‌ها فعال هستند"
+    },
+    "tooltip": {
+      "issues": "برای مشاهده مشکلات سیستم کلیک کنید",
+      "warnings": "برای مشاهده هشدارهای سیستم کلیک کنید",
+      "ok": "برای مشاهده وضعیت سیستم کلیک کنید - همه سرویس‌ها فعال هستند"
+    },
+    "aria": {
+      "issues": "وضعیت سیستم: مشکلاتی شناسایی شد",
+      "warnings": "وضعیت سیستم: هشدارهایی وجود دارد",
+      "ok": "وضعیت سیستم: همه سرویس‌ها فعال هستند"
+    },
+    "description": {
+      "servicesDown": "{n} سرویس از کار افتاده | {n} سرویس از کار افتاده",
+      "warnings": "{n} هشدار | {n} هشدار",
+      "withWarnings": "{n} سرویس با هشدار | {n} سرویس با هشدار",
+      "downAndWarnings": "{down} و {warnings}",
+      "ok": "همه سرویس‌ها به‌طور عادی کار می‌کنند"
+    },
+    "service": {
+      "backend": "API بک‌اند",
+      "frontend": "فرانت‌اند",
+      "websocket": "WebSocket",
+      "redis": "Redis",
+      "ollama": "Ollama",
+      "npu_worker": "کارگر NPU",
+      "browser": "سرویس مرورگر",
+      "chromadb": "پشته هوش مصنوعی (ChromaDB)",
+      "other": "سایر سرویس‌ها"
+    },
+    "state": {
+      "running": "در حال اجرا",
+      "connected": "متصل",
+      "statusUnknown": "وضعیت نامشخص",
+      "connectionFailed": "اتصال ناموفق",
+      "timeout": "پایان مهلت",
+      "connectionRefused": "اتصال رد شد",
+      "unreachable": "غیرقابل دسترس",
+      "unhealthy": "ناسالم",
+      "warning": "هشدار",
+      "pending": "در انتظار",
+      "available": "در دسترس",
+      "unavailable": "در دسترس نیست",
+      "http": "HTTP {code}"
+    },
+    "probe": {
+      "degraded": "افت کارایی — مهلت بررسی وضعیت تمام شد، بک‌اند پاسخ می‌دهد",
+      "degradedAsOf": "افت کارایی — مهلت بررسی وضعیت تمام شد، بک‌اند پاسخ می‌دهد — وضعیت در {time}",
+      "unreachable": "غیرقابل دسترس — وضعیت سرویس‌ها نامشخص",
+      "unreachableAsOf": "غیرقابل دسترس — وضعیت سرویس‌ها نامشخص — وضعیت در {time}"
+    },
+    "lastKnown": "{text} (آخرین وضعیت شناخته‌شده)"
+  },
+  "schedule": {
+    "title": "زمان‌بندی",
+    "repeats": "تکرار",
+    "repeat": {
+      "minutes": "هر چند دقیقه",
+      "hourly": "ساعتی",
+      "daily": "روزانه",
+      "weekly": "هفتگی",
+      "monthly": "ماهانه",
+      "once": "یک‌بار"
+    },
+    "every": "هر",
+    "minutesUnit": "دقیقه",
+    "onlyBetween": "فقط بین",
+    "windowFrom": "از",
+    "windowTo": "تا",
+    "and": "و",
+    "onDays": "در روزهای (اختیاری)",
+    "daysHintAny": "اگر چیزی انتخاب نشود، هر روز اجرا می‌شود.",
+    "onDaysRequired": "در روزهای",
+    "atMinute": "در دقیقه",
+    "at": "در ساعت",
+    "hour": "ساعت",
+    "minute": "دقیقه",
+    "weekdaysOnly": "فقط روزهای کاری",
+    "monthly": {
+      "which": "کدام روز ماه",
+      "day": "روز ماه",
+      "lastDay": "آخرین روز",
+      "nth": "روز هفته در ماه",
+      "onDay": "در روز",
+      "onThe": "در"
+    },
+    "nth": {
+      "1": "اولین",
+      "2": "دومین",
+      "3": "سومین",
+      "4": "چهارمین",
+      "last": "آخرین"
+    },
+    "weekday": "روز هفته",
+    "shortMonths": "ماه‌هایی که این روز را ندارند در آخرین روز ماه اجرا می‌شوند.",
+    "date": "تاریخ",
+    "timezone": "منطقه زمانی",
+    "zone": {
+      "company": "زمان شرکت",
+      "usesCompany": "از منطقه زمانی شرکت استفاده می‌کند."
+    },
+    "summary": {
+      "minutes": "هر {every} دقیقه",
+      "minutesWeekdays": "هر {every} دقیقه در روزهای کاری",
+      "minutesDays": "هر {every} دقیقه، در روزهای {days}",
+      "minutesWindow": "هر {every} دقیقه بین {from} و {to}",
+      "minutesWindowWeekdays": "هر {every} دقیقه بین {from} و {to} در روزهای کاری",
+      "minutesWindowDays": "هر {every} دقیقه بین {from} و {to}، در روزهای {days}",
+      "hourly": "هر ساعت در دقیقه {minute}",
+      "daily": "هر روز ساعت {time}",
+      "dailyWeekdays": "هر روز کاری ساعت {time}",
+      "weekly": "هر هفته {days} ساعت {time}",
+      "monthlyDay": "روز {day} هر ماه ساعت {time}",
+      "monthlyLastDay": "آخرین روز هر ماه ساعت {time}",
+      "monthlyNth1": "اولین {weekday} هر ماه ساعت {time}",
+      "monthlyNth2": "دومین {weekday} هر ماه ساعت {time}",
+      "monthlyNth3": "سومین {weekday} هر ماه ساعت {time}",
+      "monthlyNth4": "چهارمین {weekday} هر ماه ساعت {time}",
+      "monthlyNthLast": "آخرین {weekday} هر ماه ساعت {time}",
+      "once": "یک‌بار در {date} ساعت {time}",
+      "withZone": "{summary}، {zone}",
+      "custom": "زمان‌بندی سفارشی"
+    },
+    "customNote": "این زمان‌بندی را نمی‌توان با کلیک نمایش داد.",
+    "editCron": "ویرایش به‌صورت cron",
+    "doneEditing": "پایان ویرایش",
+    "nextRuns": "اجراهای بعدی",
+    "noRuns": "اجرای آینده‌ای وجود ندارد.",
+    "previewLoading": "در حال بررسی با سرور...",
+    "previewApprox": "تقریبی: سرور هنگام ذخیره، زمان‌های دقیق را تأیید می‌کند.",
+    "previewUnavailable": "برای این زمان‌بندی پیش‌نمایش ممکن نیست.",
+    "advanced": "پیشرفته: ذخیره‌شده به‌صورت",
+    "saved": {
+      "cron": "cron استاندارد",
+      "calendar": "قانون تقویم",
+      "once": "اجرای یک‌باره"
+    },
+    "savedAs": "زمان‌بندی ذخیره‌شده",
+    "savedNote": {
+      "once": "یک‌بار اجرا می‌شود. هیچ cron تکرارشونده‌ای ذخیره نمی‌شود."
+    },
+    "cronLabel": "عبارت cron",
+    "cronHint": "فقط cron استاندارد پنج‌فیلدی: دقیقه، ساعت، روز ماه، ماه، روز هفته. انتخابگر و این فیلد همگام می‌مانند.",
+    "cron_extension_unsupported": "{token} در cron استاندارد وجود ندارد. برای زمان‌بندی‌هایی مانند آخرین جمعه ماه از انتخابگر استفاده کنید.",
+    "invalid_timezone": "این منطقه زمانی شناخته نشد.",
+    "once_in_past": "آن تاریخ و ساعت گذشته است.",
+    "invalid_rrule": "این قانون تقویم معتبر نیست.",
+    "invalid_cron": "یک cron استاندارد پنج‌فیلدی وارد کنید، مثلاً 0 9 * * 1-5.",
+    "invalid_generic": "این زمان‌بندی معتبر نیست.",
+    "conflicting_fields": "زمان‌بندی یا به‌صورت cron ذخیره می‌شود یا به‌صورت قانون تقویم یا اجرای یک‌باره، نه هر دو.",
+    "gatedNote": "آخرین روز، روز هفته در ماه، روزهای ۲۹ تا ۳۱ و اجرای یک‌باره پس از به‌روزرسانی زمان‌بند در دسترس خواهند بود."
   }
 }

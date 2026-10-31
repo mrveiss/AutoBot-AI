@@ -18,6 +18,9 @@ from autobot_shared.logging_manager import get_logger
     # Simple exec-style (for specific commands like 'man')
     result = await execute_command(["man", "-w", "ls"], timeout=5.0)
 
+    # Same contract from synchronous code (never call it on the event loop)
+    result = execute_command_sync(["man", "-w", "ls"], timeout=5.0)
+
     # Shell command (for complex shell expressions)
     result = await execute_shell_command("ls -la | grep .py")
 
@@ -27,6 +30,7 @@ from autobot_shared.logging_manager import get_logger
 """
 
 import asyncio
+import subprocess
 from asyncio import Queue as AsyncQueue
 from dataclasses import dataclass
 from typing import Any, AsyncGenerator, Callable, Dict, List
@@ -45,9 +49,10 @@ __all__ = [
     "get_timestamp",
     "execute_shell_command",
     "execute_command",
+    "execute_command_sync",
     "execute_shell_command_streaming",
     "CommandResult",
-    "StreamChunk",
+    "CmdOutputChunk",
 ]
 
 
@@ -71,7 +76,7 @@ class CommandResult:
 
 
 @dataclass
-class StreamChunk:
+class CmdOutputChunk:
     """A chunk of streaming command output."""
 
     content: str
@@ -236,6 +241,16 @@ def _create_execution_error_result(args: List[str], error: Exception) -> Command
     )
 
 
+def _create_error_result(args: List[str], error: Exception) -> CommandResult:
+    """Map a launch failure to its CommandResult: 127 when not found, else a generic error.
+
+    The one place the async and sync entry points agree on what a failed launch looks like (#18180).
+    """
+    if isinstance(error, FileNotFoundError):
+        return _create_not_found_result(args)
+    return _create_execution_error_result(args, error)
+
+
 async def _communicate_with_process(
     process: asyncio.subprocess.Process,
     args: List[str],
@@ -294,21 +309,57 @@ async def execute_command(
         )
         return await _communicate_with_process(process, args, timeout)
 
-    except FileNotFoundError:
-        return _create_not_found_result(args)
     except Exception as e:
-        return _create_execution_error_result(args, e)
+        return _create_error_result(args, e)
+
+
+def execute_command_sync(
+    args: List[str],
+    timeout: float | None = None,
+    cwd: str | None = None,
+    env: Dict[str, str] | None = None,
+) -> CommandResult:
+    """
+    Synchronous twin of :func:`execute_command` (#18180).
+
+    Same arguments, same ``CommandResult``, and the same parse, timeout, not-found and
+    execution-error helpers as the async path -- only the process launch differs. Blocking:
+    call it from sync code or via ``asyncio.to_thread``, never directly on the event loop.
+
+    Args:
+        args: Command and arguments as a list (exec-style, never a shell)
+        timeout: Optional timeout in seconds (falsy means none, as in the async path)
+        cwd: Optional working directory
+        env: Optional environment variables (merged with current env)
+
+    Returns:
+        CommandResult with stdout, stderr, return_code, and status
+    """
+    try:
+        completed = subprocess.run(  # nosec B603  # exec-style argv, shell=False; callers own argv safety
+            args,
+            capture_output=True,
+            timeout=timeout or None,
+            cwd=cwd,
+            env=_prepare_process_env(env),
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return _create_timeout_result(args, timeout)
+    except Exception as e:
+        return _create_error_result(args, e)
+    return _parse_command_output(completed.stdout, completed.stderr, completed.returncode)
 
 
 def _create_stream_reader(
     output_queue: AsyncQueue,
-    on_output: Callable[[StreamChunk], None] | None,
+    on_output: Callable[[CmdOutputChunk], None] | None,
 ) -> Callable:
     """
     Create a coroutine factory for reading process streams.
 
     Returns a coroutine that reads lines from a stream and queues them
-    as StreamChunk objects. Issue #620.
+    as CmdOutputChunk objects. Issue #620.
 
     Args:
         output_queue: Queue to put chunks into
@@ -326,7 +377,7 @@ def _create_stream_reader(
                 if not line:
                     break
                 content = line.decode("utf-8", errors="replace")
-                chunk = StreamChunk(
+                chunk = CmdOutputChunk(
                     content=content,
                     chunk_type=chunk_type,
                     is_final=False,
@@ -343,7 +394,7 @@ def _create_stream_reader(
 async def _yield_chunks_from_queue(
     output_queue: AsyncQueue,
     done_event: asyncio.Event,
-) -> AsyncGenerator[StreamChunk, None]:
+) -> AsyncGenerator[CmdOutputChunk, None]:
     """
     Yield chunks from the output queue until processing is complete.
 
@@ -351,11 +402,11 @@ async def _yield_chunks_from_queue(
     is complete. Issue #620.
 
     Args:
-        output_queue: Queue containing StreamChunk objects
+        output_queue: Queue containing CmdOutputChunk objects
         done_event: Event signaling when stream processing is complete
 
     Yields:
-        StreamChunk objects as they arrive in the queue
+        CmdOutputChunk objects as they arrive in the queue
     """
     while not done_event.is_set() or not output_queue.empty():
         try:
@@ -367,8 +418,8 @@ async def _yield_chunks_from_queue(
 
 def _create_final_chunk(
     return_code: int,
-    on_output: Callable[[StreamChunk], None] | None,
-) -> StreamChunk:
+    on_output: Callable[[CmdOutputChunk], None] | None,
+) -> CmdOutputChunk:
     """
     Create the final status chunk after process completion.
 
@@ -379,9 +430,9 @@ def _create_final_chunk(
         on_output: Optional callback for the chunk
 
     Returns:
-        StreamChunk with process exit status
+        CmdOutputChunk with process exit status
     """
-    final_chunk = StreamChunk(
+    final_chunk = CmdOutputChunk(
         content=f"[Process exited with code {return_code}]",
         chunk_type="status",
         is_final=True,
@@ -393,8 +444,8 @@ def _create_final_chunk(
 
 def _create_error_chunk(
     error: Exception,
-    on_output: Callable[[StreamChunk], None] | None,
-) -> StreamChunk:
+    on_output: Callable[[CmdOutputChunk], None] | None,
+) -> CmdOutputChunk:
     """
     Create an error chunk for streaming command failures.
 
@@ -405,9 +456,9 @@ def _create_error_chunk(
         on_output: Optional callback for the chunk
 
     Returns:
-        StreamChunk with error information
+        CmdOutputChunk with error information
     """
-    error_chunk = StreamChunk(
+    error_chunk = CmdOutputChunk(
         content=f"Error: {error}",
         chunk_type="error",
         is_final=True,
@@ -421,7 +472,7 @@ async def _setup_stream_tasks(
     process: asyncio.subprocess.Process,
     output_queue: AsyncQueue,
     done_event: asyncio.Event,
-    on_output: Callable[[StreamChunk], None] | None,
+    on_output: Callable[[CmdOutputChunk], None] | None,
 ) -> asyncio.Task:
     """
     Set up stream reading tasks and return the completion task.
@@ -453,8 +504,8 @@ async def _setup_stream_tasks(
 
 async def execute_shell_command_streaming(
     command: str,
-    on_output: Callable[[StreamChunk], None] | None = None,
-) -> AsyncGenerator[StreamChunk, None]:
+    on_output: Callable[[CmdOutputChunk], None] | None = None,
+) -> AsyncGenerator[CmdOutputChunk, None]:
     """
     Execute a shell command with streaming output.
 
@@ -466,7 +517,7 @@ async def execute_shell_command_streaming(
         on_output: Optional callback for each output chunk
 
     Yields:
-        StreamChunk objects with content and type (stdout/stderr)
+        CmdOutputChunk objects with content and type (stdout/stderr)
 
     Example:
         async for chunk in execute_shell_command_streaming("apt update"):
@@ -479,7 +530,7 @@ async def execute_shell_command_streaming(
             stderr=asyncio.subprocess.PIPE,
         )
 
-        output_queue: AsyncQueue[StreamChunk] = AsyncQueue()
+        output_queue: AsyncQueue[CmdOutputChunk] = AsyncQueue()
         done_event = asyncio.Event()
         completion_task = await _setup_stream_tasks(process, output_queue, done_event, on_output)
 

@@ -20,8 +20,8 @@ import logging
 
 from autobot_shared.browser.base import (
     ActionRequest,
+    BrowserCapability,
     BrowserResult,
-    Capability,
     ExtractRequest,
     NavigateRequest,
     ScreenshotRequest,
@@ -39,13 +39,13 @@ class ContainerBrowserBackend:
     name = BACKEND_NAME
     capabilities = frozenset(
         {
-            Capability.SCREENSHOT,
+            BrowserCapability.SCREENSHOT,
             # #13236: the container also exposes a `render` endpoint, which
             # `web_fetch/fetcher.py::_fetch_playwright` already uses for its
             # JS-render fallback. Phase 2 wrapped only `capture_screenshot`
             # and under-declared this stack.
-            Capability.EXTRACT_HTML,
-            Capability.OUT_OF_PROCESS,
+            BrowserCapability.EXTRACT_HTML,
+            BrowserCapability.OUT_OF_PROCESS,
         }
     )
 

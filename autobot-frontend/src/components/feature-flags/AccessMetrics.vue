@@ -209,6 +209,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue';
 import type { ViolationStatistics } from '@/utils/FeatureFlagsApiClient';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const props = defineProps<{
   metrics: ViolationStatistics | null;
@@ -304,15 +305,7 @@ const formatDayLabel = (dateString: string) => {
   return date.toLocaleDateString('en-US', { weekday: 'short' });
 };
 
-const formatTime = (timestamp: number) => {
-  const date = new Date(timestamp * 1000);
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-};
+const formatTime = createDateFormatter({ locale: 'en-US', unit: 'seconds', intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } });
 </script>
 
 <style scoped>
@@ -344,7 +337,7 @@ const formatTime = (timestamp: number) => {
   gap: var(--spacing-2-5);
 }
 
-.header-info h3 i {
+.header-info h3 .icon {
   color: var(--color-primary);
 }
 

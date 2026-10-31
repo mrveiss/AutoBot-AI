@@ -11,12 +11,19 @@
 # ==========================================================
 slm_user: autobot
 slm_group: autobot
-slm_base_dir: /opt/autobot
+slm_base_dir: "{{ autobot.base_dir }}"
+# #18281: used only when the backend role's backend_data_dir / backend_user are not in scope for this play.
+# They equal roles/backend/defaults/main.yml; tests/test_secrets_backup_18281.py pins the code default to it.
+slm_backend_data_dir_fallback: /var/lib/autobot
+slm_backend_user_fallback: autobot
 slm_backend_dir: "{{ slm_base_dir }}/autobot-slm-backend"
+# #19051: the backend env on the SLM host -- the root-key back-fill reuses a key
+# found here rather than generating one over it.
+slm_backend_env_file: "{{ slm_base_dir }}/autobot-backend/.env"
 slm_frontend_dir: "{{ slm_base_dir }}/autobot-slm-frontend"
 slm_shared_dir: "{{ slm_base_dir }}/autobot_shared"
 slm_log_dir: "{{ slm_base_dir }}/logs"
-slm_certs_dir: /etc/autobot/certs
+slm_certs_dir: "{{ autobot_tls_remote_cert_dir | default('/etc/autobot/certs') }}"  # #19366
 slm_credentials_dir: /etc/autobot
 slm_credentials_file: slm-secrets.env
 
@@ -150,9 +157,6 @@ grafana_configure: "{{ grafana_mode == 'local' }}"
 
 # Deploy dashboards (both local and external modes)
 grafana_deploy_dashboards: true
-
-# Grafana version (only used when grafana_install is true)
-grafana_version: latest
 
 # Prometheus URL for Grafana data source
 # When Grafana is external, this must be accessible from the external host

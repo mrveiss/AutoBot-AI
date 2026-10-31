@@ -15,10 +15,10 @@ differences are ``async def`` and ``await``.
 from __future__ import annotations
 
 import asyncio
-import re
 from typing import Any, List, Sequence
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.slug import sanitize_token
 from autobot_shared.time_utils import utc_timestamp
 from knowledge.backends.async_base import AsyncBaseClient, AsyncBaseCollection
 from knowledge.backends.base import Embedding, Metadata, Where, WhereDocument
@@ -29,12 +29,11 @@ logger = get_logger(__name__)
 # [a-zA-Z0-9._-] (e.g. the ':' the LLC layer uses in "company:<uuid>"). Map any
 # invalid character to '_' at the backend boundary so callers can keep their
 # logical naming. No-op for already-valid names (KB's own collections).
-_CHROMA_NAME_INVALID = re.compile(r"[^a-zA-Z0-9._-]")
 
 
 def _chroma_safe_name(name: str) -> str:
     """Return a ChromaDB-valid collection name (#10743)."""
-    return _CHROMA_NAME_INVALID.sub("_", name)
+    return sanitize_token(name, allowed="a-zA-Z0-9._-", replacement="_", collapse=False)
 
 
 class AsyncChromaDBCollection(AsyncBaseCollection):
@@ -227,6 +226,12 @@ class AsyncChromaDBClient(AsyncBaseClient):
         except Exception as exc:  # ChromaDB raises its own exception type
             raise ValueError(f"no such collection: {name}") from exc
         return AsyncChromaDBCollection(raw_col)
+
+    async def get_collection_or_none(self, name: str) -> AsyncBaseCollection | None:
+        # Absence is ``None``; any other failure (an unreachable server) raises,
+        # as ``AsyncChromaClient.get_collection_or_none`` does (#13920, #19519).
+        raw_col = await self._raw.get_collection_or_none(_chroma_safe_name(name))
+        return None if raw_col is None else AsyncChromaDBCollection(raw_col)
 
     async def create_collection(
         self,

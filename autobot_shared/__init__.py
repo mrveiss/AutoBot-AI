@@ -5,7 +5,7 @@
 """AutoBot shared utilities - deployed with each backend component.
 
 Issue #1196: Lazy imports via __getattr__ to break circular import:
-  autobot_shared.__init__ → redis_client → utils.redis_management
+  autobot_shared.__init__ → redis_client → autobot_shared.redis_management
   → monitoring.prometheus_metrics → autobot_shared (CIRCULAR)
 """
 

@@ -21,8 +21,12 @@
  * Electric Blue - Technical Precision
  * ============================================ */
 
-[data-accent="blue"],
-:root {
+/* #18066: `:root` removed from this selector. design-tokens.css already
+   declares every token in this block with byte-identical values, and is
+   a superset (it also has -alpha-, -muted, -subtle). Two `:root` blocks
+   for one default is a second declaration that can drift; this file owns
+   the per-accent overrides, design-tokens.css owns the default. */
+[data-accent="blue"] {
   --color-primary: #3b82f6;
   --color-primary-hover: #2563eb;
   --color-primary-active: #1d4ed8;
@@ -49,7 +53,7 @@
 
 /* ============================================
  * PURPLE ACCENT
- * Violet - Creative & Premium
+ * Violet - Creative & Elegant
  * ============================================ */
 
 [data-accent="purple"] {
@@ -144,8 +148,7 @@
 
 @supports (color: oklch(0 0 0)) {
   /* Blue (default) */
-  [data-accent="blue"],
-  :root {
+  [data-accent="blue"] {
     --color-primary: oklch(62.3% 0.188 259.8);
     --color-primary-hover: oklch(54.6% 0.215 262.9);
     --color-primary-active: oklch(48.8% 0.217 264.4);

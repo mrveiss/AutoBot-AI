@@ -12,7 +12,6 @@ Issue #725: Added mTLS support for Redis connections.
 """
 
 from datetime import timedelta
-from pathlib import Path
 
 from celery import Celery
 from celery.schedules import crontab
@@ -23,10 +22,14 @@ from autobot_shared.logging_manager import get_logger as _get_logger
 from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import config as ssot_config
 from config.manager import get_config_manager
+from utils.error_boundaries import register_backend_hooks
 
 # Use singleton config instance for extended config values
 config = get_config_manager()
 logger = _get_logger(__name__)
+
+# #18554: Celery workers never run the app lifespan, so register the boundary hooks here.
+register_backend_hooks()
 
 # Build Redis URLs from SSOT configuration (loads directly from .env)
 # DB numbers come from redis-databases.yaml via DATABASE_MAPPING (#2670)
@@ -42,19 +45,9 @@ _backend_ssl_options = None
 
 if _redis_tls_enabled:
     # #6702: resolve cert paths (explicit env vars first, legacy cert_dir fallback)
-    from autobot_shared.tls import get_internal_tls_context
+    from autobot_shared.tls import get_internal_tls_context, resolve_redis_mtls_paths
 
-    _ca_cert = ssot_config.misc.tls_ca_path
-    _client_cert = ssot_config.misc.tls_cert_path
-    _client_key = ssot_config.misc.tls_key_path
-
-    # Fallback to legacy cert_dir pattern for backwards compatibility
-    if not _ca_cert or not _client_cert or not _client_key:
-        _project_root = Path(__file__).parent.parent
-        _cert_dir = ssot_config.tls.cert_dir
-        _ca_cert = str(_project_root / _cert_dir / "ca" / "ca-cert.pem")
-        _client_cert = str(_project_root / _cert_dir / "main-host" / "server-cert.pem")
-        _client_key = str(_project_root / _cert_dir / "main-host" / "server-key.pem")
+    _ca_cert, _client_cert, _client_key = resolve_redis_mtls_paths()
 
     _ssl_context = get_internal_tls_context(ca_path=_ca_cert, client_cert=_client_cert, client_key=_client_key)
     _broker_ssl_options = {"ssl": _ssl_context}
@@ -183,6 +176,7 @@ celery_app.autodiscover_tasks(["tasks", "workers", "llc.scheduler"], related_nam
 # the latter on worker startup (#16231, #16250).
 import services.pricing_refresh  # noqa: F401
 from llm_shared.pricing.redis_store import REFRESH_INTERVAL_HOURS as _PRICING_REFRESH_INTERVAL_HOURS  # noqa: E402
+from services.trigger_secrets import TRIGGER_SECRET_AUDIT_SCHEDULE  # noqa: E402
 from utils.celery_schedules import crontab_from_string  # noqa: E402
 
 # =========================================================================
@@ -224,6 +218,23 @@ celery_app.conf.beat_schedule = {
     "llc-stalled-run-sweep": {
         "task": "llc.scheduler.stalled_run_sweep.run_stalled_run_sweep",
         "schedule": crontab(minute=20),
+    },
+    # #16818: reclaim workspace leases past their deadline and *propose* disposal
+    # of the workspaces whose work reached the remote. It does not dispose: under
+    # #17038 no agent deletes data on its own, so the sweep raises an approval and
+    # a human decides. Saying "dispose" here would describe a system we are not
+    # allowed to build. Hourly and off-phase from the stalled-run sweep above:
+    # that one releases a stalled run's lease, this one catches a holder that
+    # vanished without any run at all.
+    "llc-workspace-lease-sweep": {
+        "task": "llc.scheduler.workspace_lease_sweep.run_workspace_lease_sweep",
+        "schedule": crontab(minute=50),
+    },
+    # #19759: propose (never perform) a human-approved re-encryption of webhook
+    # secrets still stored in plaintext. Schedule from AUTOBOT_TRIGGER_SECRET_AUDIT_SCHEDULE (crontab).
+    "llc-trigger-secret-audit": {
+        "task": "llc.scheduler.trigger_secret_audit.run_trigger_secret_audit",
+        "schedule": crontab_from_string(TRIGGER_SECRET_AUDIT_SCHEDULE),
     },
     # GH#7356: background audit daemon — testgaps, dead-code, claims
     # Beat pidfile must NOT reside on tmpfs (/run/autobot/ is wiped on reboot).
@@ -413,3 +424,16 @@ def _reset_async_redis_pools_on_worker_init(sender=None, **kwargs):
             "worker_process_init: async Redis pool reset failed (worker will still start)",
             exc_info=True,
         )
+
+
+# #18094: a worker resolves provider keys (knowledge tasks build a KnowledgeBase, whose LLM and
+# embedding providers resolve OPENAI/ANTHROPIC keys). The lifespan never runs here, so read the
+# vault once per forked worker before its first task. Never raises: a failure is classified as a
+# vault outage, which refuses keys rather than serving env.
+@worker_process_init.connect
+def _hydrate_provider_keys_on_worker_init(sender=None, **kwargs):
+    """Hydrate the provider-key vault cache in each worker process."""
+    from services.provider_key_process_init import hydrate_this_process
+
+    hydrated = hydrate_this_process()
+    logger.info("worker_process_init: provider keys hydrated from vault: %d (#18094)", len(hydrated))

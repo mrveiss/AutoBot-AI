@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { BaseAlert, BaseButton } from '@autobot/ui'
 /**
  * SecretsSettings - System Secrets Management (#1417)
  *
@@ -11,13 +12,14 @@
  * Values are stored encrypted at rest and never displayed.
  */
 
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import {
   useSecretsApi,
   type SecretResponse,
   type SecretCreate,
 } from '@/composables/useSecretsApi'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const api = useSecretsApi()
 const { t } = useI18n()
@@ -26,6 +28,7 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 const success = ref<string | null>(null)
 const secrets = ref<SecretResponse[]>([])
+const secretsLoaded = ref(false)
 
 // Apply-secrets propagation (#11719): which keys have a dependent-role
 // mapping, and the outcome of the last "Apply to services" run.
@@ -42,6 +45,33 @@ const newSecret = ref<SecretCreate>({
   description: '',
 })
 
+// Known secrets the SLM expects an operator to set (#19120). A missing one is
+// listed so the operator can add it; a human supplies the value -- this page
+// never generates one.
+const EXPECTED_SECRETS = [
+  {
+    key: 'slm_hmac_api_key_secret',
+    category: 'system',
+    descriptionKey: 'settings.admin.secretsSettings.expectedHashingPepper',
+  },
+]
+
+const missingExpected = computed(() =>
+  secretsLoaded.value
+    ? EXPECTED_SECRETS.filter((e) => !secrets.value.some((s) => s.key === e.key))
+    : []
+)
+
+function setExpected(entry: (typeof EXPECTED_SECRETS)[number]): void {
+  newSecret.value = {
+    key: entry.key,
+    value: '',
+    category: entry.category,
+    description: t(entry.descriptionKey),
+  }
+  showAddForm.value = true
+}
+
 const editingKey = ref<string | null>(null)
 const editValue = ref('')
 
@@ -56,7 +86,9 @@ async function fetchSecrets(): Promise<void> {
   error.value = null
   try {
     secrets.value = await api.listSecrets()
+    secretsLoaded.value = true
   } catch (e: unknown) {
+    secretsLoaded.value = false
     const err = e as { response?: { data?: { detail?: string } } }
     error.value =
       err.response?.data?.detail || t('settings.admin.secretsSettings.failedToLoadSecrets')
@@ -164,9 +196,7 @@ function cancelEdit(): void {
   editValue.value = ''
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString()
-}
+const formatDate = createDateFormatter()
 
 function categoryLabel(value: string): string {
   return categories.find((c) => c.value === value)?.label || value
@@ -181,40 +211,9 @@ onMounted(() => {
 <template>
   <div class="p-6 space-y-6">
     <!-- Messages -->
-    <div
-      v-if="error"
-      class="p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 flex items-center gap-3"
-    >
-      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-        />
-      </svg>
-      {{ error }}
-      <button class="ml-auto text-red-500 hover:text-red-700" @click="error = null" :aria-label="$t('settings.admin.secretsSettings.dismissError')">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
-    </div>
+    <BaseAlert v-if="error" variant="error" :message="error" dismissible :dismiss-label="$t('settings.admin.secretsSettings.dismissError')" @dismiss="error = null" />
 
-    <div
-      v-if="success"
-      class="p-4 bg-green-50 border border-green-200 rounded-lg text-green-700 flex items-center gap-3"
-    >
-      <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-        />
-      </svg>
-      {{ success }}
-    </div>
+    <BaseAlert v-if="success" variant="success" :message="success" />
 
     <!-- Header -->
     <div class="flex items-center justify-between">
@@ -285,6 +284,22 @@ onMounted(() => {
         </button>
       </div>
     </div>
+
+    <!-- Known secrets that are not set yet (#19120) -->
+    <BaseAlert
+      v-for="entry in (loading ? [] : missingExpected)"
+      :key="entry.key"
+      variant="warning"
+      :title="entry.key"
+    >
+      <p>{{ $t(entry.descriptionKey) }}</p>
+      <p class="text-xs mt-1">{{ $t('settings.admin.secretsSettings.expectedMissing') }}</p>
+      <template #actions>
+        <BaseButton variant="primary" size="sm" @click="setExpected(entry)">
+          {{ $t('settings.admin.secretsSettings.expectedSetValue') }}
+        </BaseButton>
+      </template>
+    </BaseAlert>
 
     <!-- Loading -->
     <div v-if="loading" class="flex items-center justify-center py-12">
@@ -424,29 +439,10 @@ onMounted(() => {
       </table>
     </div>
 
-    <!-- Info Box -->
-    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-      <div class="flex gap-3">
-        <svg
-          class="w-5 h-5 text-blue-500 shrink-0 mt-0.5"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            stroke-width="2"
-            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-          />
-        </svg>
-        <div class="text-sm text-blue-800">
-          <p class="font-medium">{{ $t('settings.admin.secretsSettings.aboutSystemSecrets') }}</p>
-          <p class="mt-1">
-            {{ $t('settings.admin.secretsSettings.aboutSystemSecretsBody') }}
-          </p>
-        </div>
-      </div>
-    </div>
+    <BaseAlert
+      variant="info"
+      :title="$t('settings.admin.secretsSettings.aboutSystemSecrets')"
+      :message="$t('settings.admin.secretsSettings.aboutSystemSecretsBody')"
+    />
   </div>
 </template>

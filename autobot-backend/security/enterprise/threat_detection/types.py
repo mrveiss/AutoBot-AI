@@ -12,21 +12,23 @@ Part of Issue #381 - God Class Refactoring
 
 from enum import Enum
 
+from autobot_shared.status_enums import Severity
+
 # Issue #380: Module-level frozensets to avoid repeated list creation in detection methods
 SENSITIVE_RESOURCE_KEYWORDS = frozenset({"admin", "config", "secret", "key", "password"})
 FILE_OPERATION_ACTIONS = frozenset({"file_read", "file_write", "file_delete", "file_upload"})
 
 # Issue #315 - Severity priority ordering for comparison
-SEVERITY_PRIORITY = {"critical": 4, "high": 3, "medium": 2, "low": 1}
+SEVERITY_PRIORITY = {
+    level.value: priority
+    for priority, level in enumerate((Severity.LOW, Severity.MEDIUM, Severity.HIGH, Severity.CRITICAL), start=1)
+}
 
 
-class ThreatLevel(Enum):
-    """Threat severity levels"""
-
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
+# #18098: this was a four-rung fork of the canonical ladder with identical values.
+# Callers only read ``.value`` and construct from the four strings (SEVERITY_PRIORITY,
+# get_max_severity, threats_by_level), so the alias is wire-neutral.
+ThreatLevel = Severity
 
 
 class ThreatCategory(Enum):

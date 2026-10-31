@@ -39,11 +39,12 @@ from autobot_shared.code_graph import ResolvedCall, compute_node_id, module_path
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import scrubbed_git_env
-from constants.path_constants import PATH
+from services.knowledge.index_cache_paths import code_index_hashes
 from utils.file_categorization import (
     ALL_CODE_EXTENSIONS,
     JS_EXTENSIONS,
     PYTHON_EXTENSIONS,
+    SKIP_DIRS,
     TS_EXTENSIONS,
     VUE_EXTENSIONS,
 )
@@ -431,9 +432,6 @@ UNSUPPORTED_CODE_EXTENSIONS: "frozenset[str]" = frozenset(ext.lower() for ext in
 )
 
 
-_DEFAULT_CACHE = PATH.DATA_DIR / ".code_index_hashes.json"
-
-
 class CodeIndexer:
     """Index source files into ChromaDB using AST extraction.
 
@@ -447,11 +445,11 @@ class CodeIndexer:
         self,
         collection: Any,
         embed_model: Any,
-        cache_file: Path = _DEFAULT_CACHE,
+        cache_file: Path | None = None,  # None: the shared user cache (index_cache_paths, #19553)
     ) -> None:
         self._collection = collection
         self._embed_model = embed_model
-        self._cache_file = cache_file
+        self._cache_file = cache_file or code_index_hashes()
         self._hash_cache: dict[str, str] = self._load_cache()
         # Node ids known to the collection plus everything indexed so far this
         # run; lazily seeded (#13469) so cross-file/cross-run call resolution
@@ -806,7 +804,6 @@ class CodeIndexer:
         indexer report full coverage of a corpus it had never fully seen.
         """
         root = Path(root_dir)
-        skip_dirs = {".git", "node_modules", "venv", ".venv", "__pycache__", ".mypy_cache"}
 
         def _walk() -> "tuple[list[Path], list[Path]]":
             found: list[Path] = []
@@ -817,7 +814,7 @@ class CodeIndexer:
                 # under `.worktrees/`, a home directory, a `.cache` — matched the
                 # hidden-directory rule and the walk silently collected nothing.
                 relative_parts = path.relative_to(root).parts
-                if path.is_dir() or any(part.startswith(".") or part in skip_dirs for part in relative_parts):
+                if path.is_dir() or any(part.startswith(".") or part in SKIP_DIRS for part in relative_parts):
                     continue
                 suffix = path.suffix.lower()
                 if suffix in _EXTRACTORS:

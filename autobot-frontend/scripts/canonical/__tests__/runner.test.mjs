@@ -43,6 +43,8 @@ describe("frontend canonical-check runner", () => {
   });
 });
 
+const WHOLE_TREE_MS = 60_000;
+
 describe("--all walks the TARGETS trees (#17571)", () => {
   it("reports violations the whole tree contains, not zero", () => {
     // Before this change --all satisfied the "pass something" check and then
@@ -53,7 +55,9 @@ describe("--all walks the TARGETS trees (#17571)", () => {
     const found = JSON.parse(r.stdout);
     expect(Array.isArray(found)).toBe(true);
     expect(found.length).toBeGreaterThan(0);
-  });
+    // A whole-tree run reads every source file of both apps (the unloaded-stylesheet
+    // rule builds the import graph), so the default 5s is not the budget (#17613).
+  }, WHOLE_TREE_MS);
 
   it("refuses to report a clean run when nothing matched", async () => {
     const { collectTargetFiles } = await import("../registry.mjs");
@@ -129,7 +133,7 @@ describe("the unloaded-authority rule (#14785)", () => {
     expect(found).toHaveLength(1);
     expect(found[0].severity).toBe("block");
     expect(found[0].message).toContain("no file imports it");
-  });
+  }, WHOLE_TREE_MS);
 
   it("says nothing about a stylesheet that makes no such claim", async () => {
     const { mkdtemp, writeFile } = await import("node:fs/promises");
@@ -141,7 +145,7 @@ describe("the unloaded-authority rule (#14785)", () => {
     await writeFile(file, "/* component styles */\n.x { color: red; }\n", "utf-8");
 
     expect(await rule.check(file)).toEqual([]);
-  });
+  }, WHOLE_TREE_MS);
 
   it("honours its waiver", async () => {
     const { mkdtemp, writeFile } = await import("node:fs/promises");
@@ -157,7 +161,7 @@ describe("the unloaded-authority rule (#14785)", () => {
     );
 
     expect(await rule.check(file)).toEqual([]);
-  });
+  }, WHOLE_TREE_MS);
 
   it("the tree is clean of blocking violations", () => {
     // The live assertion, stated as the outcome rather than as the detector's
@@ -165,7 +169,7 @@ describe("the unloaded-authority rule (#14785)", () => {
     // to canonical-audit.yml lands green rather than reddening main on arrival.
     const r = run("--all");
     expect(r.status).toBe(0);
-  });
+  }, WHOLE_TREE_MS);
 });
 
 describe("a run that inspects nothing is refused, not reported clean (#17608 review)", () => {

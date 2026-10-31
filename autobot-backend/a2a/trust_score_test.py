@@ -19,8 +19,8 @@ import pytest
 
 from a2a.trust_score import (
     PROMOTION_WINDOW,
-    Capability,
     TrustAccessDenied,
+    TrustCapability,
     TrustLevel,
     TrustRecord,
     TrustScoreManager,
@@ -160,7 +160,7 @@ class TestTrustLevelMapping:
 
 
 # ---------------------------------------------------------------------------
-# Capability matrix
+# TrustCapability matrix
 # ---------------------------------------------------------------------------
 
 
@@ -171,26 +171,26 @@ class TestCapabilityMatrix:
 
     def test_limited_has_tasks(self):
         caps = get_capabilities(TrustLevel.LIMITED)
-        assert Capability.SUBMIT_TASKS in caps
-        assert Capability.QUERY_MEMORY not in caps
+        assert TrustCapability.SUBMIT_TASKS in caps
+        assert TrustCapability.QUERY_MEMORY not in caps
 
     def test_standard_has_memory(self):
         caps = get_capabilities(TrustLevel.STANDARD)
-        assert Capability.QUERY_MEMORY in caps
+        assert TrustCapability.QUERY_MEMORY in caps
 
     def test_trusted_has_all_capabilities(self):
         caps = get_capabilities(TrustLevel.TRUSTED)
-        assert caps == set(Capability)
+        assert caps == set(TrustCapability)
 
     def test_define_agents_is_gone_with_no_operation_behind_it(self):
         """#16957: a capability no route or code path gates claims a control that does not exist."""
-        assert "define_agents" not in {c.value for c in Capability}
+        assert "define_agents" not in {c.value for c in TrustCapability}
 
     def test_has_capability_positive(self):
-        assert has_capability(TrustLevel.STANDARD, Capability.SUBMIT_TASKS)
+        assert has_capability(TrustLevel.STANDARD, TrustCapability.SUBMIT_TASKS)
 
     def test_has_capability_negative(self):
-        assert not has_capability(TrustLevel.UNTRUSTED, Capability.SUBMIT_TASKS)
+        assert not has_capability(TrustLevel.UNTRUSTED, TrustCapability.SUBMIT_TASKS)
 
 
 # ---------------------------------------------------------------------------
@@ -278,9 +278,9 @@ class TestRequireCapability:
     def test_raises_for_denied_capability(self, tmp_path):
         mgr = _manager_no_redis(tmp_path)
         with pytest.raises(TrustAccessDenied) as exc_info:
-            mgr.require_capability("new-peer", Capability.SUBMIT_TASKS)
+            mgr.require_capability("new-peer", TrustCapability.SUBMIT_TASKS)
         assert exc_info.value.peer_id == "new-peer"
-        assert exc_info.value.capability == Capability.SUBMIT_TASKS
+        assert exc_info.value.capability == TrustCapability.SUBMIT_TASKS
         assert exc_info.value.level == TrustLevel.UNTRUSTED
 
     def test_no_raise_for_allowed_capability(self, tmp_path):
@@ -289,14 +289,14 @@ class TestRequireCapability:
         for _ in range(PROMOTION_WINDOW):
             mgr.record_success(peer)
         assert mgr.get_trust_level(peer) != TrustLevel.UNTRUSTED
-        mgr.require_capability(peer, Capability.SUBMIT_TASKS)  # must not raise
+        mgr.require_capability(peer, TrustCapability.SUBMIT_TASKS)  # must not raise
 
     def test_standard_peer_can_query_memory(self, tmp_path):
         mgr = _manager_no_redis(tmp_path)
         peer = "std-peer"
         for _ in range(PROMOTION_WINDOW):
             mgr.record_success(peer)
-        mgr.require_capability(peer, Capability.QUERY_MEMORY)  # must not raise
+        mgr.require_capability(peer, TrustCapability.QUERY_MEMORY)  # must not raise
 
 
 # ---------------------------------------------------------------------------

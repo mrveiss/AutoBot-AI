@@ -17,8 +17,7 @@ import type {
 import ConnectorStatusCard from './ConnectorStatusCard.vue'
 import ConnectorConfigModal from './ConnectorConfigModal.vue'
 import ConnectorHistoryPanel from './ConnectorHistoryPanel.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
@@ -330,8 +329,9 @@ onMounted(() => {
   padding: var(--spacing-8);
 }
 
-.loading-state i {
-  font-size: var(--text-2xl);
+.loading-state .icon {
+  width: var(--text-2xl);
+  height: var(--text-2xl);
   margin-bottom: var(--spacing-3);
 }
 

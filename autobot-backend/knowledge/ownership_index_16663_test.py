@@ -34,12 +34,17 @@ class _SetStore:
 
     def __init__(self):
         self.sets: dict[str, set] = defaultdict(set)
+        self.counters: dict[str, str] = {}
 
     def sadd(self, key, *members):
         self.sets[key].update(members)
 
     def srem(self, key, *members):
         self.sets[key].difference_update(members)
+
+    def set(self, key, value, nx=False):
+        self.counters[key] = value
+        return True
 
 
 def _owned(**extra):

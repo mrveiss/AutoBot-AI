@@ -36,6 +36,10 @@ from repo_tests._hardcoded_colour_baseline import (
 from repo_tests._reach import declare
 
 _FRONTEND = Path("autobot-frontend/src")
+#: #17567: the `!important` sweep covers the control plane too. Its keys carry this
+#: prefix so a path in one app cannot collide with the same path in the other.
+_SLM_FRONTEND = Path("autobot-slm-frontend/src")
+SLM_KEY_PREFIX = "slm:"
 _SUFFIXES = {".ts", ".vue", ".js"}
 _SKIP_FRAGMENTS = (
     "assets/css/",
@@ -102,19 +106,23 @@ def _colour_scanned_files(root: Path) -> list[str]:
 
 
 def _important_scanned_files(root: Path) -> list[str]:
-    """Every .vue the !important sweep opens. Its reach population."""
-    frontend = root / _FRONTEND
-    if not frontend.is_dir():
-        return []
-    return [
-        p.relative_to(frontend).as_posix() for p in sorted(frontend.rglob("*.vue")) if "node_modules" not in p.parts
-    ]
+    """Every .vue the !important sweep opens, in both apps. Its reach population."""
+    out: list[str] = []
+    for tree, prefix in ((_FRONTEND, ""), (_SLM_FRONTEND, SLM_KEY_PREFIX)):
+        frontend = root / tree
+        if frontend.is_dir():
+            out += [
+                prefix + p.relative_to(frontend).as_posix()
+                for p in sorted(frontend.rglob("*.vue"))
+                if "node_modules" not in p.parts
+            ]
+    return out
 
 
 REACH_COLOUR_FILES = declare(
     "hardcoded-colour-scan",
     discover=_colour_scanned_files,
-    floor=820,
+    floor=882,  # mid-window: population 912, window (852, 912)
     growth=60,
     skips=0,
     what="frontend source files scanned for colour literals",
@@ -122,10 +130,10 @@ REACH_COLOUR_FILES = declare(
 REACH_IMPORTANT_FILES = declare(
     "important-declaration-sweep",
     discover=_important_scanned_files,
-    floor=430,
+    floor=567,  # train 22b: re-pinned mid-window [547, 587] on a population of 587 (#18633 SLM views)
     growth=40,
     skips=0,
-    what="component files scanned for !important",
+    what="component files scanned for !important, in both frontends (570 read; the SLM joined in #17567)",
 )
 
 
@@ -206,6 +214,16 @@ def _scan_important(root: Path) -> dict[str, int]:
         found = len(_IMPORTANT.findall(css))
         if found:
             counts[path.relative_to(root).as_posix()] = found
+    return counts
+
+
+def _scan_important_all(repo: Path) -> dict[str, int]:
+    """The sweep over both apps: the user frontend's keys as they always were,
+    the control plane's behind ``SLM_KEY_PREFIX`` (#17567)."""
+    counts = _scan_important(repo / _FRONTEND)
+    slm = repo / _SLM_FRONTEND
+    if slm.is_dir():
+        counts.update({SLM_KEY_PREFIX + k: v for k, v in _scan_important(slm).items()})
     return counts
 
 

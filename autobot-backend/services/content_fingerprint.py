@@ -12,8 +12,7 @@ detect source document changes and trigger cache invalidation.
 Issue: #1375
 """
 
-import hashlib
-
+from autobot_shared.content_digest import content_digest, fact_dedup_key
 from autobot_shared.logging_manager import get_logger
 
 logger = get_logger(__name__)
@@ -32,7 +31,7 @@ def compute_fingerprint(content: str) -> str:
         Full 64-character hex SHA-256 digest.
     """
     normalized = " ".join(content.split())
-    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+    return content_digest(normalized)
 
 
 def verify_fingerprint(content: str, stored_fingerprint: str) -> bool:
@@ -60,7 +59,7 @@ def compute_content_hash_key(content: str) -> str:
     Returns:
         First 16 hex characters of SHA-256 digest (no normalization).
     """
-    return hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+    return fact_dedup_key(content)
 
 
 def extract_fingerprint(metadata: dict) -> str | None:

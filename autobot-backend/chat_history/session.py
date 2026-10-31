@@ -25,6 +25,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_relative_path
 from chat_history.cache import _CHAT_RECENT_MAX_ENTRIES
 from chat_history.file_io import run_in_chat_io_executor
+from chat_history.graph_owner import create_entity_on_missing, session_owner_scope
 from constants.redis_constants import REDIS_KEY
 from security.session_owner_errors import SessionOwnerUnreadable
 
@@ -194,7 +195,9 @@ class SessionMixin:
             if metadata:
                 entity_metadata.update(metadata)
 
-            await self.memory_graph.create_conversation_entity(session_id=session_id, metadata=entity_metadata)
+            await self.memory_graph.create_conversation_entity(
+                session_id=session_id, metadata=entity_metadata, owner=session_owner_scope(metadata)
+            )
 
             logger.info("Created Memory Graph entity for session: %s", session_id)
 
@@ -541,7 +544,9 @@ class SessionMixin:
             logger.info("Chat session '%s' saved successfully", session_id)
 
             if self.memory_graph_enabled and self.memory_graph:
-                await self._update_memory_graph_entity(session_id, session_messages, name, current_time)
+                await self._update_memory_graph_entity(
+                    session_id, session_messages, name, current_time, chat_data.get("metadata")
+                )
 
             await self._handle_periodic_cleanup()
 
@@ -583,34 +588,10 @@ class SessionMixin:
         name: str,
         metadata: Dict[str, Any],
         observations: List[str],
+        session_metadata: Dict[str, Any] | None = None,
     ) -> None:
-        """
-        Create a new Memory Graph entity when one does not exist.
-
-        Args:
-            session_id: The session identifier.
-            name: Session name or title.
-            metadata: Extracted conversation metadata.
-            observations: Pre-built observation strings.
-
-        Issue #620.
-        """
-        entity_metadata = {
-            "session_id": session_id,
-            "title": name or session_id,
-            "status": "active",
-            "priority": "medium",
-            "topics": metadata["topics"],
-            "entity_mentions": metadata["entity_mentions"],
-        }
-
-        await self.memory_graph.create_conversation_entity(
-            session_id=session_id,
-            metadata=entity_metadata,
-            observations=observations,
-        )
-
-        logger.info("Created Memory Graph entity for session: %s", session_id)
+        """Create a new Memory Graph entity when one does not exist. Issue #620, #18825 (owner kept)."""
+        await create_entity_on_missing(self.memory_graph, session_id, name, metadata, observations, session_metadata)
 
     async def _update_memory_graph_entity(
         self,
@@ -618,6 +599,7 @@ class SessionMixin:
         session_messages: List[Dict[str, Any]],
         name: str,
         current_time: str,
+        session_metadata: Dict[str, Any] | None = None,
     ):
         """Update Memory Graph entity with conversation observations. Issue #620."""
         try:
@@ -635,7 +617,9 @@ class SessionMixin:
                         "Entity not found, creating new entity for session: %s",
                         session_id,
                     )
-                    await self._create_memory_graph_entity_on_missing(session_id, name, metadata, observations)
+                    await self._create_memory_graph_entity_on_missing(
+                        session_id, name, metadata, observations, session_metadata
+                    )
                 else:
                     raise
 
@@ -711,8 +695,8 @@ class SessionMixin:
 
         try:
             cache_key = f"chat:session:{session_id}"
-            # Issue #361 - avoid blocking
-            await run_in_chat_io_executor(self.redis_client.delete, cache_key)
+            context_key = f"{REDIS_KEY.CHAT_CONVERSATION_PREFIX}{session_id}"  # #18293: its LLM-context cache too
+            await run_in_chat_io_executor(self.redis_client.delete, cache_key, context_key)  # #361: off-loop
             await run_in_chat_io_executor(self.redis_client.zrem, REDIS_KEY.CHAT_RECENT, session_id)
             logger.debug("Cleared Redis cache for session %s", session_id)
         except Exception as e:

@@ -169,7 +169,8 @@ def test_real_pdf_offsets_resolve_to_the_right_pages():
 
 def test_upload_metadata_offsets_index_the_stored_content():
     """The end-to-end invariant: metadata offsets must match what was stored."""
-    from api.knowledge import _extract_file_content, _page_provenance_metadata
+    from api.knowledge import _extract_file_content
+    from knowledge.upload_pages import page_provenance_metadata as _page_provenance_metadata
 
     raw = _pdf(["alpha page", "beta page"])
     stored_content, extracted = _extract_file_content("doc.pdf", raw)
@@ -193,7 +194,7 @@ def test_stored_upload_content_has_no_page_markers():
 
 def test_unpaginated_formats_get_no_fabricated_page_metadata():
     """A DOCX has no pages; `page: 1` would be an invented citation."""
-    from api.knowledge import _page_provenance_metadata
+    from knowledge.upload_pages import page_provenance_metadata as _page_provenance_metadata
     from media.document.extraction import ExtractedDocument
 
     assert _page_provenance_metadata(ExtractedDocument(format="docx", text="content")) == {}

@@ -55,7 +55,7 @@
             :disabled="!taskId.trim() || loading"
             @click="submitAnalysis"
           >
-            <span v-if="loading" class="spinner" aria-hidden="true" />
+            <BaseSpinner v-if="loading" size="sm" />
             {{ loading ? $t('analytics.failureAnalysis.form.analyzing') : $t('analytics.failureAnalysis.form.analyze') }}
           </button>
           <button
@@ -175,11 +175,15 @@
               <span class="meta-pill">
                 {{ $t('analytics.failureAnalysis.result.successRate') }}: {{ (intv.predicted_success_rate * 100).toFixed(0) }}%
               </span>
-              <span class="meta-pill cost-pill" :class="levelClass(intv.cost_level)">
-                {{ $t('analytics.failureAnalysis.result.cost') }}: {{ intv.cost_level }}
-              </span>
-              <span class="meta-pill risk-pill" :class="levelClass(intv.risk_level)">
-                {{ $t('analytics.failureAnalysis.result.risk') }}: {{ intv.risk_level }}
+              <BaseBadge
+                size="sm"
+                :variant="COST_VARIANT[intv.cost_level] ?? 'neutral'"
+                :label="`${$t('analytics.failureAnalysis.result.cost')}: ${intv.cost_level}`"
+              />
+              <span class="meta-pill">
+                {{ $t('analytics.failureAnalysis.result.risk') }}:
+                <RiskBadge v-if="intv.risk_tier" :tier="intv.risk_tier" :label="$t(`common.riskTier.${intv.risk_tier}`)" />
+                <template v-else>{{ intv.risk_level }}</template>
               </span>
             </div>
             <ul v-if="intv.evidence.length" class="evidence-list">
@@ -232,6 +236,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { BaseBadge, RiskBadge, type BadgeVariant, BaseSpinner } from '@autobot/ui'
 import { useFailureAnalysis } from '@/composables/useFailureAnalysis'
 
 const { loading, error, result, analyzeFailure, clearResult } = useFailureAnalysis()
@@ -260,13 +265,9 @@ function recTypeClass(type: string): string {
   }
 }
 
-function levelClass(level: string): string {
-  switch (level) {
-    case 'high': return 'level-high'
-    case 'medium': return 'level-medium'
-    default: return 'level-low'
-  }
-}
+// Cost is not a risk tier, so it keeps its own small map onto the kit's semantic badge
+// variants; the risk pill renders the backend's risk_tier through RiskBadge (#13422).
+const COST_VARIANT: Record<string, BadgeVariant> = { low: 'success', medium: 'warning', high: 'error' }
 </script>
 
 <style scoped>
@@ -405,20 +406,6 @@ function levelClass(level: string): string {
 .btn-secondary:hover:not(:disabled) {
   border-color: var(--text-secondary);
   color: var(--text-primary);
-}
-
-.spinner {
-  display: inline-block;
-  width: var(--spacing-3-5);
-  height: var(--spacing-3-5);
-  border: 2px solid rgba(255, 255, 255, 0.4);
-  border-top-color: var(--faildash-on-accent);
-  border-radius: 50%;
-  animation: spin 0.7s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 /* Error banner */
@@ -724,24 +711,6 @@ function levelClass(level: string): string {
   border-radius: var(--radius-full);
   font-size: var(--text-xs);
   color: var(--text-secondary);
-}
-
-.level-high {
-  background: var(--color-red-50);
-  border-color: var(--color-red-200);
-  color: var(--color-red-700);
-}
-
-.level-medium {
-  background: var(--color-amber-50);
-  border-color: var(--color-amber-200);
-  color: var(--color-amber-700);
-}
-
-.level-low {
-  background: var(--color-green-50);
-  border-color: var(--color-green-200);
-  color: var(--color-green-700);
 }
 
 .evidence-list {

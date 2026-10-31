@@ -1,5 +1,6 @@
 {
   "common": {
+    "appName": "AutoBot",
     "submit": "Submit",
     "cancel": "Cancel",
     "save": "Save",
@@ -93,6 +94,7 @@
     "toggleLayout": "Toggle layout",
     "fullscreen": "Fullscreen",
     "exitFullscreen": "Exit fullscreen",
+    "breadcrumb": "Breadcrumb",
     "expand": "Expand",
     "collapse": "Collapse",
     "copyToClipboard": "Copy to clipboard",
@@ -103,7 +105,14 @@
     "exportCsv": "Export as CSV",
     "download": "Download",
     "filterByCategory": "Filter by category",
-    "copied": "Copied"
+    "copied": "Copied",
+    "riskTier": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "critical": "Critical"
+    },
+    "logsLoadFailed": "Failed to load logs: {error}"
   },
   "chat": {
     "contextWindow": {
@@ -306,6 +315,13 @@
     },
     "input": {
       "retryUpload": "Retry upload",
+      "uploadError": {
+        "http": "Upload failed (status {status})",
+        "invalidResponse": "The server sent an unreadable response",
+        "network": "Network error during upload",
+        "cancelled": "Upload cancelled",
+        "unknown": "Upload failed"
+      },
       "filesAttached": "{count} files attached",
       "clearAll": "Clear all",
       "removeFile": "Remove file",
@@ -350,7 +366,11 @@
       "thinkingOffLabel": "thinking Off",
       "thinkingOn": "Thinking on",
       "thinkingOnLabel": "thinking On",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "stopFailed": "Couldn't stop the reply",
+      "fileTooLarge": "File \"{name}\" is too large (max {max})",
+      "voiceUnsupported": "Voice input requires Chrome, Edge, or Safari 15+. Transcription is not available in this browser.",
+      "micDenied": "Microphone access was denied. Please allow microphone access in your browser settings."
     },
     "translate": {
       "title": "Translate Text",
@@ -566,6 +586,7 @@
         "pending": "Pending",
         "running": "Running",
         "streaming": "Streaming",
+        "waiting_explanation": "Waiting for explanation",
         "explaining": "Explaining",
         "completed": "Completed",
         "failed": "Failed"
@@ -763,7 +784,8 @@
       "files": "Files",
       "terminal": "Terminal",
       "browser": "Browser",
-      "novnc": "Remote Desktop"
+      "novnc": "Remote Desktop",
+      "ariaLabel": "Chat sections"
     }
   },
   "settings": {
@@ -776,15 +798,7 @@
     "logging": "Logging",
     "prompts": "Prompts",
     "backend": "Backend",
-    "save": "Save Settings",
     "reset": "Reset to Defaults",
-    "panelLoadFailed": "Failed to load settings panel",
-    "loadingSettings": "Loading settings...",
-    "backendOffline": "Backend offline — showing cached settings",
-    "saving": "Saving...",
-    "discardChanges": "Discard Changes",
-    "cacheApiUnavailable": "Cache API not available",
-    "cachedSettings": "Using cached settings (backend offline)",
     "apiKeys": {
       "wizardTitle": "API Key Setup",
       "selectRolesDescription": "Select the roles deployed on your nodes to see which API keys are needed.",
@@ -821,29 +835,9 @@
     "webResearch": {
       "title": "Web Research",
       "desc": "Configure automated web research behaviour and privacy settings",
-      "enabledLabel": "Enable web research",
-      "enabledHint": "Allow AutoBot to search the web when answering questions",
-      "confirmationLabel": "Require confirmation",
-      "confirmationHint": "Ask before performing a web search on your behalf",
-      "methodLabel": "Search method",
-      "methodHint": "Choose how web searches are performed",
       "methodBasic": "Basic",
       "methodAdvanced": "Advanced",
-      "methodApiBased": "API-based",
-      "maxResultsLabel": "Max results",
-      "maxResultsHint": "Maximum number of search results to retrieve (1–50)",
-      "timeoutLabel": "Timeout (seconds)",
-      "timeoutHint": "Maximum time to wait for search results (5–120 s)",
-      "thresholdLabel": "Auto-research threshold",
-      "thresholdHint": "Confidence level below which AutoBot triggers an automatic search",
-      "rateLimitLabel": "Rate limiting",
-      "rateLimitHint": "Limit how many requests are sent in a given time window",
-      "rateLimitRequests": "Requests",
-      "rateLimitWindow": "Window (s)",
-      "privacyLabel": "Privacy & storage",
-      "storeInKbHint": "Save research results to the knowledge base",
-      "anonymizeHint": "Anonymize requests before sending to search engines",
-      "filterAdultHint": "Filter adult content from search results"
+      "methodApiBased": "API-based"
     },
     "connection": {
       "title": "Connection",
@@ -940,11 +934,88 @@
       "noApiKeyRequired": "No API key required.",
       "redirecting": "Redirecting...",
       "disconnectFailed": "Disconnect failed",
-      "redirectNeedsCallback": "OAuth browser-redirect flow requires server-side callback configuration. Use device-code for headless environments.",
-      "deviceNotConfigured": "Device auth is not configured for this provider",
+      "needsReauth": "{provider} rejected the saved sign-in. Sign in again to reconnect.",
+      "providerRevokeFailed": "Disconnected here, but the provider did not confirm revoking access: {reason}",
+      "shared": {
+        "heading": "Shared sign-in (all organisations)",
+        "description": "Organisations without their own system sign-in fall back to this shared token. Revoking it removes it for every one of them and revokes it at the provider.",
+        "revokeButton": "Revoke shared {provider} token",
+        "confirmTitle": "Revoke the shared {provider} token?",
+        "confirmMessage": "Every organisation that relies on the shared {provider} sign-in loses it immediately and falls back to its API key. This cannot be undone; a new sign-in is needed to restore it.",
+        "done": "The shared {provider} token was revoked.",
+        "superadminOnly": "This account has no organisation, so this is the {provider} sign-in every organisation shares. Only a superadmin can revoke it."
+      },
       "deviceInitFailed": "Device flow initiation failed",
+      "initiateFailed": "Could not start sign-in",
+      "notConfigured": "{provider} sign-in is not configured on this server. Ask an administrator to set:",
+      "systemHeading": "System (shared)",
+      "systemDesc": "Connections shared by everyone in your organization. Administrators only.",
+      "userHeading": "My account",
+      "userDesc": "Connect your own provider account. Only you can use these credentials.",
+      "loadFailed": "Could not load the list of sign-in providers",
+      "tos": {
+        "openai": "Connecting uses your OpenAI account subscription. Charges apply per the OpenAI ToS.",
+        "anthropic": "Connecting uses your Anthropic Console account. Charges apply per the Anthropic ToS.",
+        "huggingface": "Uses your HuggingFace account token (PRO or Inference API access required)."
+      },
+      "callback": {
+        "finishing": "Finishing provider sign-in...",
+        "missingParams": "The provider did not return a sign-in code.",
+        "notStored": "The provider sign-in did not complete.",
+        "failed": "Provider sign-in failed",
+        "failedWith": "Provider sign-in failed: {reason}",
+        "success": "Provider connected"
+      },
       "stillWaiting": "Still waiting for approval — try again in a moment.",
       "pollFailed": "Poll failed"
+    },
+    "preferredMode": {
+      "title": "Preferred mode",
+      "subtitle": "Choose how much of AutoBot you see. You can switch any time with the Minimal button in the top bar.",
+      "group": "Interface mode",
+      "minimal": "Minimal",
+      "minimalDesc": "Essentials only — for everyday chat, knowledge and approvals.",
+      "full": "Full",
+      "fullDesc": "Everything, including analytics, automation, admin and developer tools.",
+      "selected": "Selected",
+      "startIn": "Start in",
+      "startInDesc": "Which mode AutoBot opens in when you sign in",
+      "startLast": "Last used",
+      "startMinimal": "Minimal",
+      "startFull": "Full",
+      "noteSynced": "Saved to your account and this device",
+      "noteDirectLinks": "Hidden pages still open from direct links",
+      "noteNeverHidden": "Approvals, errors and security notices are never hidden"
+    },
+    "additionalThemes": {
+      "title": "Additional themes",
+      "subtitle": "Deployed by your administrator via the SLM",
+      "deployed": "Deployed via SLM · v{version}",
+      "empty": "No additional themes are deployed.",
+      "info": "Administrators install and deploy themes in the SLM console.",
+      "slmLink": "SLM › Settings › Themes ↗"
+    },
+    "telegramPanel": {
+      "title": "Telegram Bot",
+      "statusConfigured": "Bot configured and active",
+      "statusNotConfigured": "Bot not configured",
+      "tokenLabel": "Bot Token",
+      "tokenHint": "Create a bot via @BotFather on Telegram and paste the token here.",
+      "tokenAria": "Telegram bot token",
+      "showToken": "Show token",
+      "hideToken": "Hide token",
+      "modeLabel": "How messages arrive",
+      "modeWebhook": "Webhook — Telegram calls a public HTTPS URL",
+      "modePolling": "Polling — AutoBot fetches messages; no public URL needed",
+      "modePollingHint": "Use polling on local or LAN-only installs. Any registered webhook is removed.",
+      "webhookLabel": "Webhook URL",
+      "webhookHint": "Public HTTPS URL where Telegram will deliver updates. AutoBot registers /api/telegram/webhook at this base URL.",
+      "webhookAria": "Webhook base URL",
+      "activeWebhook": "Active webhook: {url}",
+      "activePolling": "Polling for messages",
+      "saveFailed": "Failed to save configuration",
+      "saving": "Saving…",
+      "save": "Save & Verify"
     }
   },
   "voice": {
@@ -972,7 +1043,11 @@
     "confirmDeleteVoice": "Delete voice \"{name}\"?",
     "languageVoicesActive": "{count} language-specific voice(s) configured",
     "confirmDeleteVoiceTitle": "Delete voice profile",
-    "tapToEnableAudio": "Tap anywhere to enable audio playback"
+    "tapToEnableAudio": "Tap anywhere to enable audio playback",
+    "speech": {
+      "url": "a link",
+      "path": "a file path"
+    }
   },
   "analytics": {
     "title": "Analytics",
@@ -1212,7 +1287,8 @@
         "uniquePatterns": "Unique Patterns",
         "recommendation": "Consider consolidating duplicate values into shared configuration files or environment variables.",
         "noDuplicatesFound": "No configuration duplicates found.",
-        "noConfigData": "No configuration duplicate data available."
+        "noConfigData": "No configuration duplicate data available.",
+        "locationsCount": "{count} location | {count} locations"
       },
       "declarations": {
         "title": "Code Declarations",
@@ -1292,7 +1368,12 @@
         "envVarRecommendations": "Environment Variable Recommendations",
         "sampleHardcodedValues": "Sample Hardcoded Values",
         "noHardcodedValues": "No hardcoded environment values found. Your configuration looks clean!",
-        "noData": "No environment analysis data available."
+        "noData": "No environment analysis data available.",
+        "modelHint": "Model: {model}",
+        "modelLoading": "loading…",
+        "modelServerDefault": "server default",
+        "use": "Use:",
+        "defaultLabel": "Default:"
       },
       "ownership": {
         "title": "Code Ownership Analysis",
@@ -1484,6 +1565,45 @@
         "noCallersTitle": "No callers found",
         "noCallersBody": "Nothing in the indexed graph calls this node.",
         "skippedHeading": "Show {count} unresolved edge(s)"
+      },
+      "shared": {
+        "lines": "{count} line | {count} lines",
+        "files": "{count} file | {count} files",
+        "commits": "{count} commit | {count} commits",
+        "filesOwned": "{count} file owned | {count} files owned",
+        "points": "{count} pt | {count} pts",
+        "imports": "{count} import | {count} imports",
+        "calls": "{count} call | {count} calls",
+        "filesAffected": "{count} file affected | {count} files affected",
+        "filesNeedAttention": "{count} file needs attention | {count} files need attention",
+        "contributors": "{count} contributor | {count} contributors",
+        "duplicates": "{count} duplicate | {count} duplicates",
+        "patterns": "{count} pattern | {count} patterns",
+        "hardcodedValues": "{count} hardcoded value | {count} hardcoded values",
+        "items": "{count} item | {count} items",
+        "coveragePercent": "{percent}% coverage",
+        "similarPercent": "{percent}% similar",
+        "matchPercent": "{percent}% match",
+        "reducedPercent": "{percent}% reduced",
+        "analysisCompleted": "Analysis completed in {seconds}s",
+        "unknown": "Unknown",
+        "field": "Field:",
+        "impact": "Impact",
+        "recency": "Recency",
+        "complexityReduction": "-{count} complexity",
+        "locReduction": "{count} LOC",
+        "tokens": "~{count} tokens",
+        "filesProgress": "{done} / {total} files",
+        "filterAll": "All ({count})",
+        "filterHigh": "High ({count})",
+        "filterMedium": "Medium ({count})",
+        "filterLow": "Low ({count})",
+        "analyzedFiles": "Analyzed Files",
+        "riskFiles": "{risk} Risk Files",
+        "riskCount": "{name}: {count} file | {name}: {count} files",
+        "high": "High",
+        "medium": "Medium",
+        "low": "Low"
       }
     },
     "patterns": {
@@ -1504,21 +1624,16 @@
       "duplicateCode": "Duplicate Code",
       "locations": "{count} locations",
       "linesSaveable": "{count} lines saveable",
-      "moreLocations": "+{count} more locations",
-      "showingOfDuplicates": "Showing {shown} of {total} duplicate patterns",
       "regexOpportunities": "Regex Opportunities",
       "current": "Current",
       "suggested": "Suggested",
-      "showingOfOpportunities": "Showing {shown} of {total} opportunities",
       "complexityHotspots": "Complexity Hotspots",
       "location": "Location",
       "cc": "CC",
       "cognitive": "Cognitive",
       "mi": "MI",
       "nesting": "Nesting",
-      "showingOfHotspots": "Showing {shown} of {total} hotspots",
       "refactoringSuggestions": "Refactoring Suggestions",
-      "showingOfSuggestions": "Showing {shown} of {total} suggestions",
       "patternsInChromaDB": "{count} patterns in ChromaDB",
       "clearStoredPatterns": "Clear stored patterns",
       "lastScan": "Last scan",
@@ -1959,7 +2074,8 @@
           "label": "Runtime Risk",
           "description": "Health based on where code actually fails at runtime."
         }
-      }
+      },
+      "codebaseRatedPrefix": "Your codebase is rated"
     },
     "bugPrediction": {
       "title": "Bug Prediction Dashboard",
@@ -2192,14 +2308,12 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total} {type}",
       "emptyMessage": "No code smells detected"
     },
     "declarations": {
       "title": "Declarations",
       "total": "Total",
       "exported": "Exported",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No declarations found",
       "types": {
         "function": "Function",
@@ -2222,13 +2336,14 @@
       "totalLines": "Total Lines",
       "similar": "similar",
       "lines": "lines",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No duplicate code detected",
       "similarityGroups": {
         "high": "High Similarity",
         "medium": "Medium Similarity",
         "low": "Low Similarity"
-      }
+      },
+      "scanFailed": "The duplicate scan did not run, so this is not a result. Check the selected code source and run the scan again.",
+      "notScanned": "No duplicate scan has run for this code source yet."
     },
     "hardcodes": {
       "title": "Hardcoded Values",
@@ -2241,7 +2356,6 @@
       "variable": "Variable",
       "value": "Value",
       "suggestedEnvVar": "Suggested Env Var",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No hardcoded values detected",
       "severityGroups": {
         "high": "High Severity",
@@ -2256,7 +2370,6 @@
       "high": "High",
       "medium": "Medium",
       "low": "Low",
-      "showingOf": "Showing {shown} of {total}",
       "emptyMessage": "No problems detected",
       "exportJson": "Export JSON",
       "exportMarkdown": "Export Markdown"
@@ -2568,7 +2681,9 @@
       }
     },
     "truncation": {
-      "showingOf": "Showing {shown} of {total}"
+      "showingOf": "Showing {shown} of {total}",
+      "showMore": "Show {count} more",
+      "serverLimited": "Showing the top {shown} of {total}. The server limits this list, so the rest cannot be loaded here."
     }
   },
   "knowledge": {
@@ -4044,7 +4159,8 @@
       "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
       "vectorizeFolderTitle": "Vectorize folder title",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "verification": {
       "approve": "Approve",
@@ -4143,6 +4259,19 @@
         "submitLabel": "Get Data",
         "emptyState": "Enter a URL and a JSON Schema, then click Get Data to extract structured information.",
         "resultTitle": "Extracted Data"
+      },
+      "status": {
+        "title": "Web research status",
+        "desc": "Web research is configured once for the whole platform, in the SLM admin console. This is a read-only view.",
+        "enabled": "Enabled",
+        "method": "Search method",
+        "cacheSize": "Cache size",
+        "availability": "Researcher",
+        "yes": "Yes",
+        "no": "No",
+        "available": "Available",
+        "notAvailable": "Not available",
+        "configureLink": "Configure web research in the SLM console"
       }
     },
     "watchFolders": {
@@ -4213,6 +4342,12 @@
       "errorEnterBoth": "Please enter both a source and a target entity.",
       "notInGraph": "These entities are not in the relationship graph yet.",
       "notInGraphHint": "They exist, but have no graph links — so no connection can be traced. Re-run entity extraction to index their relations."
+    },
+    "chroma": {
+      "quarantined": "Research quarantine"
+    },
+    "chromaExplorer": {
+      "subtitle": "Browse and search vector collections"
     }
   },
   "workflow": {
@@ -4338,7 +4473,8 @@
       "sectionDescLiveDashboard": "Real-time workflow execution monitoring with agent observability",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "Opening automation for your company…",
-      "companyRequired": "Select a company to open automation."
+      "companyRequired": "Select a company to open automation.",
+      "planBeforeBuilding": "Plan before building"
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -4627,13 +4763,17 @@
       "channelSlack": "Slack",
       "channelWebhook": "Webhook",
       "channelInApp": "In-App",
+      "channelTelegram": "Telegram",
       "eventCompleted": "Workflow Completed",
       "eventFailed": "Workflow Failed",
       "eventStepFailed": "Step Failed",
       "eventApprovalNeeded": "Approval Needed",
+      "eventServiceFailed": "Service Failed",
       "save": "Save",
       "saving": "Saving...",
-      "saved": "Saved successfully"
+      "saved": "Saved successfully",
+      "invalidEmail": "Invalid email address: {emails}",
+      "invalidUrl": "Invalid URL format"
     },
     "liveDashboard": {
       "reconnect": "Reconnect",
@@ -4905,6 +5045,10 @@
       "reconnect": "Reconnect",
       "clear": "Clear",
       "closeWindow": "Close Window",
+      "kill": "Kill",
+      "pause": "Pause",
+      "resume": "Resume",
+      "interrupt": "Interrupt",
       "session": "Session:",
       "lines": "Lines:",
       "shortcutHint": "Press Ctrl+C to interrupt, Ctrl+D to exit",
@@ -4944,7 +5088,45 @@
       "editCancel": "Cancel",
       "editReset": "Reset to original",
       "editedBadge": "Edited"
-    }
+    },
+    "automation": {
+      "started": "🚀 AUTOMATED WORKFLOW STARTED: {name}",
+      "stepsPlanned": "📋 {count} steps planned. Use PAUSE button to take manual control at any time.",
+      "unnamedWorkflow": "Unnamed Workflow",
+      "executeStep": "Execute: {command}",
+      "paused": "⏸️ AUTOMATION PAUSED - Manual control activated. Type commands freely.",
+      "resumed": "▶️ AUTOMATION RESUMED - Continuing workflow execution.",
+      "aboutToExecute": "🤖 AI WORKFLOW: About to execute \"{command}\"",
+      "stepProgress": "📋 Step {step}/{total}: {description}",
+      "skipped": "⏭️ SKIPPED: {command}",
+      "manualControlTaken": "👤 MANUAL CONTROL TAKEN - Complete your manual steps, then click RESUME to continue workflow.",
+      "automated": "🤖 AUTOMATED: {command}",
+      "pausedBySystem": "⏸️ WORKFLOW PAUSED BY SYSTEM",
+      "resumedBySystem": "▶️ WORKFLOW RESUMED BY SYSTEM",
+      "executing": "🤖 EXECUTING: {command}",
+      "stepSkippedByUser": "⏭️ STEP {step} SKIPPED BY USER",
+      "workflowSaved": "💾 WORKFLOW SAVED: {name}",
+      "workflowUpdated": "📋 WORKFLOW UPDATED: {count} steps configured",
+      "manualCommand": "👤 MANUAL: {command}",
+      "example": {
+        "name": "System Update and Package Installation",
+        "updateDesc": "Update package repositories",
+        "updateExpl": "This updates the list of available packages from configured repositories.",
+        "upgradeDesc": "Upgrade installed packages",
+        "upgradeExpl": "This upgrades all installed packages to their latest versions.",
+        "installDesc": "Install essential tools",
+        "installExpl": "Install commonly needed development tools.",
+        "verifyDesc": "Verify installations",
+        "verifyExpl": "Check that the tools were installed correctly."
+      }
+    },
+    "events": {
+      "emergencyKill": "🛑 EMERGENCY KILL: All processes terminated by user",
+      "emergencyKillFailed": "❌ Emergency kill failed: {message}",
+      "interrupted": "^C (Process interrupted by user)",
+      "error": "Error: {error}"
+    },
+    "urlCopied": "Terminal URL copied to clipboard!"
   },
   "llm": {
     "unavailable": "Unavailable",
@@ -5018,7 +5200,6 @@
     "role": "Role:",
     "lastLogin": "Last Login:",
     "preferences": "Preferences",
-    "theme": "Theme",
     "notifications": "Notifications",
     "emailNotifications": "Email notifications",
     "browserNotifications": "Browser notifications",
@@ -5028,7 +5209,6 @@
     "showTooltips": "Show tooltips",
     "enableAnimations": "Enable animations",
     "savePreferences": "Save Preferences",
-    "appearance": "Appearance",
     "voiceChatDisplay": "Voice Chat Display",
     "fullScreen": "Full-screen",
     "sidePanel": "Side panel",
@@ -5044,9 +5224,6 @@
     "pwTooShort": "Password must be at least 8 characters",
     "pwChanged": "Password changed successfully!",
     "never": "Never",
-    "themeLight": "Light",
-    "themeDark": "Dark",
-    "themeAuto": "Auto",
     "tabDevices": "Tab devices"
   },
   "charts": {
@@ -5726,23 +5903,6 @@
       "postExecutionFailed": "The command ran, but a follow-up step failed. Its output is shown; some updates may be missing.",
       "enterComment": "Please enter a comment before submitting"
     },
-    "darkModeToggle": {
-      "switchToLight": "Switch to light mode",
-      "switchToDark": "Switch to dark mode",
-      "toggleDarkMode": "Toggle dark mode"
-    },
-    "dataTable": {
-      "sortBy": "Sort by {column}",
-      "actions": "Actions",
-      "noDataAvailable": "No data available",
-      "noItemsToDisplay": "No items to display",
-      "pageOf": "Page {current} of {total}",
-      "pagination": "Table pagination",
-      "previousPage": "Previous page",
-      "nextPage": "Next page",
-      "dataTable": "Data table",
-      "loading": "Loading data..."
-    },
     "hostSelection": {
       "title": "Select Host",
       "defaultPurpose": "Select a host for this operation",
@@ -5786,6 +5946,7 @@
       "retrySending": "Retry sending"
     },
     "preferences": {
+      "accentTheme": "Theme",
       "title": "Preferences",
       "reset": "Reset",
       "resetAll": "Reset all preferences to defaults",
@@ -5813,7 +5974,11 @@
       "accentColorChanged": "Accent color changed to {color}",
       "layoutDensityChanged": "Layout density changed to {density}",
       "preferencesReset": "All preferences reset to defaults",
-      "theme": "Theme"
+      "theme": "Theme",
+      "green": "Green",
+      "pink": "Pink",
+      "indigo": "Indigo",
+      "red": "Red"
     },
     "progressBar": {
       "timeRemaining": "{time} remaining"
@@ -5833,15 +5998,36 @@
       "lastCheck": "Last Check:",
       "consecutiveFailures": "Consecutive Failures:",
       "errorDetails": "Error Details:",
-      "dismiss": "Dismiss"
+      "dismiss": "Dismiss",
+      "states": {
+        "healthy": "Healthy",
+        "degraded": "Degraded",
+        "critical": "Unreachable",
+        "unknown": "Unknown"
+      }
     },
     "themeToggle": {
+      "system": "System",
+      "highContrast": "High contrast",
+      "monochrome": "Monochrome",
+      "accentThemeDescription": "Theme default — the theme's own primary colour",
+      "baseThemeChanged": "Base theme changed to {name}",
+      "accentChanged": "Accent color changed to {name}",
+      "presetChanged": "Theme preset changed to {name}",
       "theme": "Theme",
       "selectTheme": "Select theme",
       "switchToLight": "Switch to light mode",
       "switchToDark": "Switch to dark mode",
       "light": "Light",
-      "dark": "Dark"
+      "dark": "Dark",
+      "accentBlueDescription": "Electric Blue — Technical Precision",
+      "accentGreenDescription": "Emerald — Growth & Success",
+      "accentPurpleDescription": "Violet — Creative & Elegant",
+      "accentOrangeDescription": "Amber — Energy & Innovation",
+      "accentPinkDescription": "Rose — Friendly & Approachable",
+      "accentTealDescription": "Cyan — Modern & Professional",
+      "accentIndigoDescription": "Deep Blue — Trust & Stability",
+      "accentRedDescription": "Crimson — Bold & Urgent"
     },
     "toastContainer": {
       "notifications": "Notifications",
@@ -5861,6 +6047,44 @@
     },
     "loadingSpinner": {
       "loading": "Loading…"
+    },
+    "minimalNote": "Showing essentials · technical widgets hidden",
+    "minimalNoteAction": "Show all features",
+    "themePresets": {
+      "title": "Theme Presets",
+      "description": "Choose a pre-configured theme or customize your own color scheme",
+      "names": {
+        "auto": "Auto",
+        "catppuccin-mocha": "Catppuccin Mocha",
+        "catppuccin-latte": "Catppuccin Latte",
+        "solarized-dark": "Solarized Dark",
+        "solarized-light": "Solarized Light",
+        "high-contrast-dark": "High Contrast Dark",
+        "high-contrast-light": "High Contrast Light",
+        "brand-dark": "AutoBot Dark",
+        "brand-light": "AutoBot Light",
+        "midnight": "Midnight",
+        "sunset": "Sunset",
+        "forest": "Forest",
+        "rose": "Rose"
+      },
+      "descriptions": {
+        "auto": "Follows system preference",
+        "catppuccin-mocha": "Warm dark theme with purple accents",
+        "catppuccin-latte": "Soft light theme with purple accents",
+        "solarized-dark": "Classic dark theme with cyan accents",
+        "solarized-light": "Classic light theme with cyan accents",
+        "high-contrast-dark": "Maximum readability dark theme",
+        "high-contrast-light": "Maximum readability light theme",
+        "brand-dark": "Official AutoBot dark theme",
+        "brand-light": "Official AutoBot light theme",
+        "midnight": "Deep blue night theme",
+        "sunset": "Warm orange light theme",
+        "forest": "Natural green dark theme",
+        "rose": "Elegant pink light theme"
+      },
+      "advanced": "Advanced Customization",
+      "baseTheme": "Base Theme"
     }
   },
   "base": {
@@ -5875,10 +6099,6 @@
       "actions": "Actions",
       "noDataAvailable": "No data available",
       "selectRow": "Select row {row}"
-    },
-    "panel": {
-      "collapse": "Collapse panel",
-      "expand": "Expand panel"
     }
   },
   "views": {
@@ -6096,8 +6316,6 @@
       "createNewDashboard": "Create new dashboard",
       "availableWidgets": "Available Widgets",
       "configure": "Configure",
-      "expand": "Expand",
-      "shrink": "Shrink",
       "remove": "Remove",
       "noWidgets": "No Widgets Added",
       "noWidgetsHint": "Click \"Edit Layout\" to add widgets to your dashboard",
@@ -6134,7 +6352,19 @@
       "widgetAgents": "Agent Activity",
       "widgetAgentsDesc": "Real-time agent activity monitoring",
       "widgetArchitecture": "System Architecture",
-      "widgetArchitectureDesc": "Interactive system architecture diagram"
+      "widgetArchitectureDesc": "Interactive system architecture diagram",
+      "saveFailed": "Could not save the dashboard layout. Your changes are kept on this page.",
+      "dashboardLimit": "A page holds at most {max} dashboards.",
+      "widgetLimit": "A dashboard holds at most {max} widgets. Remove one before adding another.",
+      "resetLayout": "Reset layout",
+      "resetLayoutConfirm": "Reset this page to the default layout? Your saved layout is removed.",
+      "widgetSystemMonitor": "System Monitor",
+      "widgetCpuHeatmap": "CPU Heatmap",
+      "mainDashboard": "Main Dashboard",
+      "loadFailed": "Could not load your saved dashboard layout. Editing is off so it cannot be overwritten.",
+      "retryLoad": "Retry loading",
+      "newDashboard": "New Dashboard",
+      "resetFailed": "Could not reset the layout. Your saved layout is unchanged."
     },
     "devSpeedup": {
       "title": "Developer Speedup",
@@ -6515,7 +6745,17 @@
       "clickToSolve": "Click to solve in VNC",
       "openVnc": "Open VNC Desktop",
       "solved": "I've Solved It",
-      "skipSource": "Skip Source"
+      "skipSource": "Skip Source",
+      "types": {
+        "recaptcha": "reCAPTCHA",
+        "hcaptcha": "hCaptcha",
+        "cloudflare": "Cloudflare Challenge",
+        "slider": "Slider CAPTCHA",
+        "imageSelect": "Image Selection CAPTCHA",
+        "text": "Text CAPTCHA",
+        "math": "Math CAPTCHA",
+        "unknown": "Unknown CAPTCHA"
+      }
     }
   },
   "operations": {
@@ -6805,7 +7045,44 @@
       "timeHoursAgo": "{count}h ago",
       "timeInHours": "in {count}h",
       "timeDaysAgo": "{count}d ago",
-      "timeInDays": "in {count}d"
+      "timeInDays": "in {count}d",
+      "categories": {
+        "api_key": "API Keys",
+        "token": "Tokens",
+        "oauth_refresh_token": "OAuth Refresh Tokens",
+        "connector_oauth_token": "Connector Tokens",
+        "password": "Passwords",
+        "ssh_key": "SSH Keys",
+        "infrastructure_host": "Infrastructure Hosts",
+        "database_url": "Databases",
+        "certificate": "Certificates",
+        "other": "Other"
+      },
+      "kinds": {
+        "api_key": "API Key",
+        "token": "Token",
+        "oauth_refresh_token": "OAuth Refresh Token",
+        "connector_oauth_token": "Connector Token",
+        "password": "Password",
+        "ssh_key": "SSH Key",
+        "infrastructure_host": "Infrastructure Host",
+        "database_url": "Database",
+        "certificate": "Certificate",
+        "other": "Other"
+      },
+      "templates": {
+        "openaiDesc": "GPT API access",
+        "anthropicDesc": "Claude API access",
+        "awsDesc": "Amazon Web Services",
+        "githubDesc": "GitHub personal token",
+        "postgresDesc": "Database connection",
+        "redisDesc": "Redis connection",
+        "sshLabel": "SSH Key",
+        "sshDesc": "Server access",
+        "slackDesc": "Slack bot token",
+        "serverLabel": "Server Host",
+        "serverDesc": "SSH/VNC server access"
+      }
     },
     "threatDashboard": {
       "title": "Threat Intelligence",
@@ -7096,7 +7373,23 @@
       "abstained": "Abstained",
       "viewLogs": "View Logs",
       "loadError": "Unable to load agent activity right now.",
-      "noAgents": "No active agents."
+      "noAgents": "No active agents.",
+      "statusNotReported": "Status not reported",
+      "notReported": "Not reported",
+      "notApplicable": "N/A",
+      "seconds": "{n}s",
+      "minutes": "{n}m",
+      "hours": "{n}h",
+      "secondsAgo": "{n}s ago",
+      "minutesAgo": "{n}m ago",
+      "hoursAgo": "{n}h ago",
+      "types": {
+        "orchestrator": "Orchestrator Agent",
+        "worker": "Worker Agent",
+        "monitor": "Monitor Agent",
+        "analyzer": "Analyzer Agent",
+        "executor": "Executor Agent"
+      }
     },
     "resourceHeatmap": {
       "defaultTitle": "Resource Utilization Heatmap",
@@ -7121,7 +7414,8 @@
       "rangeMedium": "Medium",
       "rangeHigh": "High",
       "rangeCritical": "Critical",
-      "usage": "Usage"
+      "usage": "Usage",
+      "loadFailed": "Heatmap data could not be loaded:"
     },
     "systemArchitecture": {
       "defaultTitle": "System Architecture",
@@ -7291,7 +7585,16 @@
       "initComplete": "Initialization complete"
     }
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "Alert Rules",
+      "overview": "Overview",
+      "slos": "SLOs",
+      "traces": "Traces"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "browser": {
       "contentsOf": "{path} Contents",
       "refresh": "Refresh",
@@ -7306,7 +7609,8 @@
       "errorDeletingFile": "Error deleting file",
       "errorRenamingFile": "Error renaming file",
       "refreshAriaLabel": "Refresh files",
-      "toggleViewAriaLabel": "Toggle view mode"
+      "toggleViewAriaLabel": "Toggle view mode",
+      "uploadFailedHint": "Please check file size limits and format requirements"
     },
     "header": {
       "title": "File Browser",
@@ -7618,6 +7922,7 @@
       "noLogs": "No audit logs found",
       "previous": "Previous",
       "pageOf": "Page {page}",
+      "paginationAria": "Audit log pages",
       "next": "Next",
       "entryDetails": "Audit Entry Details",
       "id": "ID",
@@ -7657,6 +7962,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "Failed to activate maintenance window",
+      "completeWindowFailed": "Failed to complete maintenance window",
+      "deleteWindowFailed": "Failed to delete maintenance window",
+      "drainNodeFailed": "Failed to drain node. Please try again.",
+      "resumeNodeFailed": "Failed to resume node. Please try again.",
+      "saveKeysFailed": "Failed to save API keys. Check the console for details.",
+      "addNodeFailed": "Failed to add node"
     }
   },
   "desktop": {
@@ -7867,11 +8181,10 @@
     "slmAdmin": "SLM Admin",
     "slmAdminTitle": "SLM Admin — opens in new tab",
     "profileSettings": "Profile Settings",
-    "switchLanguage": "Switch language",
     "openMainMenu": "Open main menu",
     "profile": "Profile",
     "services": "Services",
-    "skipToContent": "Skip to content",
+    "skipToContent": "Skip to main content",
     "skipToNavigation": "Skip to navigation",
     "systemStatus": "System Status",
     "marketplace": "Marketplace",
@@ -7935,7 +8248,37 @@
     "documents": "AI Documents",
     "companyOsUnavailableTitle": "Company OS is not available",
     "companyOsUnavailableDesc": "Company OS requires company mode (PostgreSQL). This deployment does not have company mode enabled, so company workspaces are disabled. Switch to single_company or multi_company mode to enable it.",
-    "llcRoles": "Roles"
+    "llcRoles": "Roles",
+    "keywords": {
+      "knowledge": "documents files library transcriber notes",
+      "companyOs": "company llc business organization",
+      "automation": "workflow pipeline schedule jobs",
+      "analytics": "visitors metrics statistics charts reports",
+      "preferences": "settings options language theme",
+      "budgetPolicies": "cost spending limits money",
+      "systemHealth": "status uptime diagnostics monitoring",
+      "vault": "credentials keys passwords tokens vault"
+    },
+    "homeAria": "AutoBot home",
+    "vaultTip": "Secrets — stored keys and credentials",
+    "preferencesTip": "Preferences",
+    "platformAdmin": "Platform admin",
+    "platformAdminAria": "Platform admin, opens the SLM console in a new tab",
+    "platformAdminTip": "Platform admin — opens the SLM console ↗",
+    "profileMenu": "Profile menu",
+    "uiMode": {
+      "label": "Minimal",
+      "tip": "Minimal interface — hide advanced features",
+      "announceMinimal": "Minimal interface on. Advanced features hidden.",
+      "announceFull": "Full interface on. All features shown."
+    },
+    "llcLedger": "Agent ledger",
+    "backendHealth": {
+      "degradedTitle": "Backend degraded",
+      "degradedMessage": "Some backend services are slow or failing. Features may not work as expected.",
+      "criticalTitle": "Backend unreachable",
+      "criticalMessage": "AutoBot cannot reach its backend. Changes may not be saved until it is back."
+    }
   },
   "llcCompanyStatus": {
     "showArchived": "Show archived",
@@ -7982,6 +8325,11 @@
     "loadError": "Failed to load members.",
     "addError": "Failed to add member.",
     "removeError": "Failed to remove member.",
+    "colChangeRole": "Change role",
+    "changeRole": "Change role for {name}",
+    "roleChangeForbidden": "You are not allowed to make that role change.",
+    "roleChangeLastOwner": "A company must keep an owner.",
+    "roleChangeError": "Failed to change the role.",
     "usersLoadError": "Failed to load users.",
     "role": {
       "owner": "Owner",
@@ -8007,7 +8355,20 @@
     "newCode": "New Code Agent",
     "newCodeDesc": "Start a code analysis session",
     "newAnalysis": "New Analysis",
-    "newAnalysisDesc": "Start an analysis session"
+    "newAnalysisDesc": "Start an analysis session",
+    "openPage": "Open {page}",
+    "types": {
+      "task": "Task",
+      "research": "Research",
+      "code": "Code",
+      "analysis": "Analysis",
+      "navigate": "Page"
+    },
+    "hints": {
+      "navigate": "navigate",
+      "select": "select",
+      "close": "close"
+    }
   },
   "llc": {
     "templates": {
@@ -8090,7 +8451,13 @@
       "noRuns": "No runs yet",
       "liveActivity": "Live Activity",
       "system": "system",
-      "waitingActivity": "Waiting for activity…"
+      "waitingActivity": "Waiting for activity…",
+      "noApprovals": "No pending approvals",
+      "runStatus": {
+        "done": "Done",
+        "running": "Running",
+        "failed": "Failed"
+      }
     },
     "cost": {
       "title": "Cost Dashboard",
@@ -8141,6 +8508,7 @@
       "coverage": "Coverage",
       "coverageComplete": "All steps costed",
       "coveragePartial": "{costed} of {total} steps costed",
+      "currencyAmount": "{amount} {currency}",
       "stepRollupEmpty": "No process steps are mapped yet, so there is nothing to total.",
       "stepRollupUnavailable": "The totals could not be loaded.",
       "stepRollupToolNote": "A step counts towards every tool its role carries, so the tool totals do not add up to the role totals.",
@@ -8351,8 +8719,13 @@
       "noActivity": "No activity recorded.",
       "noHandoffBrief": "No handoff brief available.",
       "loadingBrief": "Loading brief...",
+      "loadMoreComments": "Load more comments",
       "errors": {
-        "saveFailed": "Couldn't save your change. Please try again."
+        "saveFailed": "Couldn't save your change. Please try again.",
+        "commentsFailed": "Couldn't load the comments. Please try again.",
+        "artifactsFailed": "Couldn't load the artifacts. Please try again.",
+        "activityFailed": "Couldn't load the activity. Please try again.",
+        "handoffFailed": "Couldn't load the handoff brief. Please try again."
       }
     },
     "orgChart": {
@@ -8360,6 +8733,7 @@
       "hireAgent": "Hire Agent",
       "loading": "Loading…",
       "empty": "No people or agents found.",
+      "companyUnresolved": "Could not determine which company this org chart belongs to.",
       "retry": "Retry",
       "agentDetail": "Agent Detail",
       "personDetail": "Person Detail",
@@ -8378,6 +8752,12 @@
       "terminateAgent": "Terminate Agent",
       "confirmTerminate": "Terminate agent \"{name}\"? This permanently stops it with no recovery path.",
       "terminatedNote": "This agent has been terminated.",
+      "heartbeat": {
+        "label": "Run on heartbeat",
+        "on": "On: wakes on its schedule.",
+        "off": "Off: no scheduled wakes.",
+        "saveFailed": "Could not change the heartbeat: {detail}"
+      },
       "viewMode": "View mode",
       "viewTree": "Tree",
       "viewCanvas": "Canvas",
@@ -8470,7 +8850,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "Tool information is unavailable right now — this list may be incomplete.",
       "canvasNoToolsDefined": "No tools are attached to any role in this company.",
-      "deepLinkNodeNotFound": "This link points to a node that could not be found here. It may have been removed, or you may not have access to it."
+      "deepLinkNodeNotFound": "This link points to a node that could not be found here. It may have been removed, or you may not have access to it.",
+      "viewPlanner": "Workflow Planner"
     },
     "executorRollup": {
       "title": "Executor Rollup",
@@ -8749,6 +9130,179 @@
       "retry": "Retry",
       "loadingItem": "Loading work item…",
       "itemLoadFailed": "Could not load this work item"
+    },
+    "ledger": {
+      "title": "Agent ledger",
+      "subtitle": "Who is working on what in this company, and who is waiting.",
+      "tabsAria": "Ledger views",
+      "tabs": {
+        "now": "Now working",
+        "claims": "Claims",
+        "contention": "Contention",
+        "activity": "Activity"
+      },
+      "col": {
+        "agent": "Agent",
+        "kind": "Kind",
+        "status": "Status",
+        "task": "Current task",
+        "detail": "Detail",
+        "scope": "Scope",
+        "mode": "Mode",
+        "intent": "Intent",
+        "expires": "Expires",
+        "renewals": "Renewals"
+      },
+      "busy": "Busy",
+      "idle": "Idle",
+      "peerMessages": "Pending peer messages",
+      "idleSubscribers": "Idle subscriptions",
+      "pendingFor": "{n} pending for {name}",
+      "sentBy": "from {names}",
+      "waitsForIdle": "{who} waits for {target} to go idle",
+      "heldBy": "Held by {agent}",
+      "waitlistAria": "Waitlist in order",
+      "silenceMeansHold": "Asking is a request, not a release: silence means hold, and an unrenewed claim expires on its own.",
+      "ask": "Ask holder to release",
+      "askAria": "Ask the holder of {scope} to release it",
+      "conflicts": "Conflicts",
+      "recent": "Recent activity",
+      "conflict": {
+        "release_refused": "A release was refused",
+        "claim_expired": "A claim expired while held",
+        "yield_unanswered": "A yield request went unanswered",
+        "claim_lapsed_during_action": "A claim lapsed during an action"
+      },
+      "empty": {
+        "presence": "No agents have reported in",
+        "peerMessages": "No pending messages",
+        "idleSubscribers": "No idle subscriptions",
+        "claims": "No claims",
+        "contention": "Nothing is contended",
+        "conflicts": "No conflicts",
+        "activity": "No recent activity"
+      },
+      "state": {
+        "loading": "Reading the ledger…",
+        "unavailableTitle": "Couldn't read the ledger",
+        "unavailableBody": "The {source} store did not answer. This is not the same as having no entries.",
+        "errorTitle": "Something went wrong loading this section"
+      },
+      "askState": {
+        "sending": "Sending…",
+        "sent": "Request sent — the holder decides; silence means hold.",
+        "tooSoon": "You asked about this claim a moment ago; try again in a minute.",
+        "notFound": "That claim is no longer held by this task — refresh to see who holds it now.",
+        "unavailable": "Couldn't reach the ledger; nothing was sent.",
+        "error": "Something went wrong and delivery could not be confirmed. Refresh to see whether the claim is still held."
+      }
+    },
+    "workflowPlanner": {
+      "title": "Workflow Planner",
+      "plans": "Plans",
+      "newPlan": "New plan",
+      "open": "Open",
+      "back": "Back to plans",
+      "retry": "Retry",
+      "loading": "Loading plans...",
+      "loadFailed": "Could not load the plan.",
+      "saveFailed": "Could not save the change.",
+      "createFailed": "Could not create the plan.",
+      "emptyTitle": "No plans yet",
+      "emptyHint": "Start a plan to map one process, measure it and pick the one number to improve.",
+      "unavailableTitle": "Workflow Planner is not available",
+      "unavailableHint": "This feature is switched off for your workspace, so there is nothing to show here yet.",
+      "statusFlow": "Plan progress",
+      "statusNotAvailable": "This plan is {status}. Approval and conversion are not available yet, so it is shown read-only.",
+      "convertNotAvailable": "Creating workflows from a plan is not available yet.",
+      "status": {
+        "draft": "Draft",
+        "measured": "Measured",
+        "labeled": "Labeled",
+        "approved": "Approved",
+        "converted": "Converted"
+      },
+      "col": {
+        "name": "Plan",
+        "revision": "Revision",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "form": {
+        "name": "Plan name",
+        "startsAt": "Where the process starts",
+        "endsAt": "Where the process ends",
+        "create": "Create plan"
+      },
+      "steps": {
+        "map": "Map it",
+        "measure": "Measure",
+        "oneNumber": "Pick one number",
+        "label": "Break down and label",
+        "convert": "Create workflow"
+      },
+      "map": {
+        "empty": "Nothing mapped yet",
+        "emptyHint": "Add who is involved (lanes), then the steps each of them does.",
+        "handoffs": "{count} handoffs",
+        "waitNote": "What waits at this handoff?",
+        "laneName": "Lane name",
+        "addLane": "Add lane",
+        "stepLabel": "Step",
+        "stepLane": "Lane of the step",
+        "addStep": "Add step"
+      },
+      "source": {
+        "self_reported": "You said",
+        "email": "Checked against email",
+        "calendar": "Checked against calendar"
+      },
+      "measure": {
+        "hint": "How often does each step happen, and how long does it take?",
+        "needSteps": "Map at least one step first.",
+        "perWeek": "Per week",
+        "duration": "Duration",
+        "unit": "Duration unit",
+        "save": "Save",
+        "clear": "Clear"
+      },
+      "unit": {
+        "minutes": "minutes",
+        "hours": "hours",
+        "days": "days"
+      },
+      "oneNumber": {
+        "hint": "The steps you measured, longest waits first. You decide which one matters.",
+        "needMetrics": "Measure at least one step first.",
+        "rate": "{freq} per week, {dur} {unit}",
+        "title": "Name this number",
+        "returnKind": "What you get back",
+        "target": "Target",
+        "save": "Save as my one number"
+      },
+      "returnKind": {
+        "hours_back": "Hours back",
+        "more_yeses": "More yeses",
+        "money_sooner": "Money sooner"
+      },
+      "label": {
+        "needNumber": "Pick your one number first; its step is what you break down here.",
+        "subStep": "Sub-step",
+        "addSubStep": "Add sub-step",
+        "unlabel": "Remove label",
+        "edgeCase": "Edge case: {text}",
+        "byHandNote": "These stay with people. AI never acts on them.",
+        "acknowledge": "I have read the By Hand list",
+        "acknowledged": "By Hand list read"
+      },
+      "labels": {
+        "ai": "AI",
+        "automation": "Automation",
+        "by_hand": "By Hand"
+      },
+      "gate": {
+        "missing": "Still missing"
+      }
     }
   },
   "mobile": {
@@ -9271,6 +9825,9 @@
     "roleCoordinator": "Coordinator",
     "roleManager": "Manager",
     "adapter": "Adapter",
+    "runOnHeartbeat": "Run on heartbeat",
+    "runOnHeartbeatHint": "Wake this agent on a fixed schedule. Leave off for an agent you wake yourself.",
+    "failed": "Failed to hire agent.",
     "hiring": "Hiring…",
     "hire": "Hire"
   },
@@ -9515,7 +10072,180 @@
       "collectionIdPlaceholder": "Collection ID",
       "pushing": "Pushing…",
       "confirm": "Confirm",
-      "pushFailed": "Could not add this recording to the knowledge base. Please try again."
+      "pushFailed": "Could not add this recording to the knowledge base. Please try again.",
+      "collectionNotJoined": "Stored, but the collection you named was not found — the transcript is in the Knowledge Base and is not in that collection."
+    }
+  },
+  "systemStatus": {
+    "summary": {
+      "issues": "System Issues Detected",
+      "warnings": "System Warnings",
+      "ok": "All Systems Operational"
+    },
+    "tooltip": {
+      "issues": "Click to view system issues",
+      "warnings": "Click to view system warnings",
+      "ok": "Click to view system status - all services operational"
+    },
+    "aria": {
+      "issues": "System status: issues detected",
+      "warnings": "System status: warnings present",
+      "ok": "System status: all services operational"
+    },
+    "description": {
+      "servicesDown": "{n} service down | {n} services down",
+      "warnings": "{n} warning | {n} warnings",
+      "withWarnings": "{n} service with warnings | {n} services with warnings",
+      "downAndWarnings": "{down} and {warnings}",
+      "ok": "All services running normally"
+    },
+    "service": {
+      "backend": "Backend API",
+      "frontend": "Frontend",
+      "websocket": "WebSocket",
+      "redis": "Redis",
+      "ollama": "Ollama",
+      "npu_worker": "NPU Worker",
+      "browser": "Browser Service",
+      "chromadb": "AI Stack (ChromaDB)",
+      "other": "Other Services"
+    },
+    "state": {
+      "running": "Running",
+      "connected": "Connected",
+      "statusUnknown": "Status Unknown",
+      "connectionFailed": "Connection Failed",
+      "timeout": "Timeout",
+      "connectionRefused": "Connection refused",
+      "unreachable": "Unreachable",
+      "unhealthy": "Unhealthy",
+      "warning": "Warning",
+      "pending": "Pending",
+      "available": "Available",
+      "unavailable": "Unavailable",
+      "http": "HTTP {code}"
+    },
+    "probe": {
+      "degraded": "Degraded — status checks timed out, backend responding",
+      "degradedAsOf": "Degraded — status checks timed out, backend responding — status as of {time}",
+      "unreachable": "Unreachable — service status unknown",
+      "unreachableAsOf": "Unreachable — service status unknown — status as of {time}"
+    },
+    "lastKnown": "{text} (last known)"
+  },
+  "schedule": {
+    "title": "Schedule",
+    "repeats": "Repeats",
+    "repeat": {
+      "minutes": "Every few minutes",
+      "hourly": "Hourly",
+      "daily": "Daily",
+      "weekly": "Weekly",
+      "monthly": "Monthly",
+      "once": "Once"
+    },
+    "every": "Every",
+    "minutesUnit": "minutes",
+    "onlyBetween": "Only between",
+    "windowFrom": "From",
+    "windowTo": "To",
+    "and": "and",
+    "onDays": "On days (optional)",
+    "daysHintAny": "None selected means every day.",
+    "onDaysRequired": "On days",
+    "atMinute": "At minute",
+    "at": "At",
+    "hour": "Hour",
+    "minute": "Minute",
+    "weekdaysOnly": "Weekdays only",
+    "monthly": {
+      "which": "Which day of the month",
+      "day": "Day of month",
+      "lastDay": "Last day",
+      "nth": "Weekday of the month",
+      "onDay": "On day",
+      "onThe": "On the"
+    },
+    "nth": {
+      "1": "first",
+      "2": "second",
+      "3": "third",
+      "4": "fourth",
+      "last": "last"
+    },
+    "weekday": "Weekday",
+    "shortMonths": "Months without this day run on the last day.",
+    "date": "Date",
+    "timezone": "Time zone",
+    "zone": {
+      "company": "company time",
+      "usesCompany": "Uses the company time zone."
+    },
+    "summary": {
+      "minutes": "Every {every} minutes",
+      "minutesWeekdays": "Every {every} minutes on weekdays",
+      "minutesDays": "Every {every} minutes on {days}",
+      "minutesWindow": "Every {every} minutes between {from} and {to}",
+      "minutesWindowWeekdays": "Every {every} minutes between {from} and {to} on weekdays",
+      "minutesWindowDays": "Every {every} minutes between {from} and {to} on {days}",
+      "hourly": "Every hour at minute {minute}",
+      "daily": "Every day at {time}",
+      "dailyWeekdays": "Every weekday at {time}",
+      "weekly": "Every {days} at {time}",
+      "monthlyDay": "On day {day} of every month at {time}",
+      "monthlyLastDay": "On the last day of every month at {time}",
+      "monthlyNth1": "On the first {weekday} of every month at {time}",
+      "monthlyNth2": "On the second {weekday} of every month at {time}",
+      "monthlyNth3": "On the third {weekday} of every month at {time}",
+      "monthlyNth4": "On the fourth {weekday} of every month at {time}",
+      "monthlyNthLast": "On the last {weekday} of every month at {time}",
+      "once": "Once on {date} at {time}",
+      "withZone": "{summary}, {zone}",
+      "custom": "Custom schedule"
+    },
+    "customNote": "This schedule cannot be shown as clicks.",
+    "editCron": "Edit as cron",
+    "doneEditing": "Done editing",
+    "nextRuns": "Next runs",
+    "noRuns": "No upcoming runs.",
+    "previewLoading": "Checking with the server...",
+    "previewApprox": "Approximate: the server confirms the exact times when you save.",
+    "previewUnavailable": "Next runs cannot be previewed for this schedule.",
+    "advanced": "Advanced: saved as",
+    "saved": {
+      "cron": "Standard cron",
+      "calendar": "Calendar rule",
+      "once": "One-off run"
+    },
+    "savedAs": "Saved schedule",
+    "savedNote": {
+      "once": "Runs once. No repeating cron is saved."
+    },
+    "cronLabel": "Cron expression",
+    "cronHint": "Standard five-field cron only: minute, hour, day of month, month, weekday. The picker and this field stay in sync.",
+    "cron_extension_unsupported": "{token} is not standard cron. Use the picker for schedules such as the last Friday of the month.",
+    "invalid_timezone": "This time zone is not recognised.",
+    "once_in_past": "That date and time has already passed.",
+    "invalid_rrule": "This calendar rule is not valid.",
+    "invalid_cron": "Enter standard five-field cron, for example 0 9 * * 1-5.",
+    "invalid_generic": "This schedule is not valid.",
+    "conflicting_fields": "A schedule is saved either as cron or as a calendar rule or one-off run, never both.",
+    "gatedNote": "Last day, weekday of the month, days 29 to 31 and one-off runs become available once the scheduler is updated."
+  },
+  "dashboardGrid": {
+    "movableWidget": "movable widget",
+    "widgetLabel": "{name} widget",
+    "keyboardHelp": "Press Space or Enter to pick up a widget. Arrow keys move it, Shift with Left or Right changes its width, Shift with Up or Down changes its height. Space or Enter drops it, Escape cancels.",
+    "narrower": "Make narrower",
+    "wider": "Make wider",
+    "shorter": "Make shorter",
+    "taller": "Make taller",
+    "announce": {
+      "grabbed": "Picked up {name}. Position {position} of {total}.",
+      "dropped": "Dropped {name} at position {position} of {total}.",
+      "cancelled": "Move cancelled. {name} is back at position {position} of {total}.",
+      "moved": "{name} moved to position {position} of {total}.",
+      "resized": "{name} is now {span} of 12 columns wide and {height} pixels tall."
     }
   }
 }

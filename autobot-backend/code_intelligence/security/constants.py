@@ -19,6 +19,7 @@ from autobot_shared.ssot_constants import (  # noqa: F401
     INSECURE_RANDOM_FUNCS,
     PLACEHOLDER_PATTERNS,
 )
+from autobot_shared.status_enums import Severity
 
 # Issue #380: Module-level frozensets for security pattern checking
 PICKLE_MODULES: FrozenSet[str] = frozenset({"pickle", "cPickle"})
@@ -29,14 +30,10 @@ VALIDATION_FUNCS: FrozenSet[str] = frozenset({"validate", "Validator", "Schema"}
 VALIDATION_ATTRS: FrozenSet[str] = frozenset({"validate", "parse_obj", "model_validate"})
 
 
-class SecuritySeverity(Enum):
-    """Severity levels for security findings (aligned with CVSS)."""
-
-    INFO = "info"
-    LOW = "low"
-    MEDIUM = "medium"
-    HIGH = "high"
-    CRITICAL = "critical"
+#: An exact subset of the canonical ladder, so an alias rather than a class (#18098).
+#: Breakdowns that used to iterate this enum iterate `Severity.finding_ladder()` so the
+#: wire keeps its five keys.
+SecuritySeverity = Severity
 
 
 class VulnerabilityType(Enum):

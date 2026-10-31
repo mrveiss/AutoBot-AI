@@ -26,6 +26,8 @@ import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 
+from testkit.fake_async_session import FakeAsyncSession
+
 _NODES_PY = Path(__file__).parent / "nodes.py"
 _WANTED = {"_declare_role_on_node"}
 
@@ -58,18 +60,8 @@ def _load() -> dict:
 _declare_role_on_node = _load()["_declare_role_on_node"]
 
 
-class _FakeDb:
-    """Minimal stand-in: the function only executes a select and reads one row."""
-
-    def __init__(self, node):
-        self._node = node
-
-    async def execute(self, _query):
-        return SimpleNamespace(scalar_one_or_none=lambda: self._node)
-
-
 def _run(node, role_name):
-    asyncio.run(_declare_role_on_node(_FakeDb(node), "node-under-test", role_name))
+    asyncio.run(_declare_role_on_node(FakeAsyncSession(default_result=[node]), "node-under-test", role_name))
     return node
 
 
@@ -99,4 +91,4 @@ def test_a_node_with_no_roles_yet_is_handled():
 
 def test_a_missing_node_is_a_no_op_not_a_crash():
     """The caller already 404s on an unknown node; this must not raise first."""
-    asyncio.run(_declare_role_on_node(_FakeDb(None), "gone", "frontend"))
+    asyncio.run(_declare_role_on_node(FakeAsyncSession(), "gone", "frontend"))

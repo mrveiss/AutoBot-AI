@@ -11,6 +11,22 @@
  * 1. Design tokens (base variables)
  * 2. Theme files (variable overrides)
  * 3. Utility classes
+ *
+ * Token precedence (#14785), lowest to highest; verified by resolving every
+ * custom property under every theme/accent/variant/media combination:
+ *   1. tailwind.css @theme          aliases only: a var() of each token below
+ *   2. css/design-tokens.css :root  the ONE base declaration of every token,
+ *      palette primitives (--red-500, ...) included since vue-notus.css gave
+ *      its :root block up (#14785)
+ *      (plus its @supports oklch restatement of the same token)
+ *   3. css/themes/*.css, preferences.css   overrides behind [data-*] selectors
+ *      or prefers-color-scheme; same specificity as :root, later file wins.
+ *      Refined names (--bg, --surface, --text, ...) are declared per theme
+ *      (design-tokens.css = light, dark/contrast/mono.css); refined-map.css
+ *      points the existing --bg-*, --text-*, --border-* names at them (#18223)
+ *   4. the @autobot/ui adapter      --aui-* tokens, a var() of the tokens above
+ * A token declared as a base value in two files is a violation, enforced by
+ * scripts/canonical/rules/ds_duplicate_base_declaration.mjs.
  */
 
 /* Design tokens - SSOT for all design values */
@@ -20,11 +36,21 @@
 @import './themes/dark.css';
 @import './themes/light.css';
 
+/* Refined contrast + monochrome themes (#18223). Light-based, so after light.css */
+@import './themes/contrast.css';
+@import './themes/mono.css';
+
+/* Existing semantic names resolve to the Refined names of the active theme (#18223) */
+@import './themes/refined-map.css';
+
 /* Accent colors - Custom accent color presets (Issue #8988) */
 @import './themes/accents.css';
 
 /* Ember theme variant - Warm palette (Issue #9274 / MVA-3096) */
 @import './themes/ember.css';
+
+/* User-preference overrides: font size, layout density (#14785) */
+@import './themes/preferences.css';
 
 /* Global component patterns — shared UI classes for all views (Issue #901) */
 @import './components.css';

@@ -25,8 +25,10 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from advanced_rag_optimizer import RAGMetrics, SearchResult
-from services.graph_rag_service import EntityMatch, GraphRAGMetrics, GraphRAGService
+from advanced_rag_optimizer import RAGMetrics, RankedResult
+from knowledge.search_filters import SYSTEM_SCOPE
+from services.graph_rag_service import EntityMatch, GraphRAGMetrics
+from tests.memory_graph._unscoped_service import UNSCOPED_ALL_USERS, GraphRAGService
 
 # ============================================================================
 # Fixtures
@@ -40,7 +42,7 @@ def mock_rag_service():
     rag.advanced_search = AsyncMock(
         return_value=(
             [
-                SearchResult(
+                RankedResult(
                     content="Redis timeout configuration guide",
                     metadata={"session_id": "abc123", "entities": ["Redis Config"]},
                     semantic_score=0.95,
@@ -50,7 +52,7 @@ def mock_rag_service():
                     source_path="docs/redis.md",
                     chunk_index=0,
                 ),
-                SearchResult(
+                RankedResult(
                     content="Redis connection pooling best practices",
                     metadata={"session_id": "def456"},
                     semantic_score=0.88,
@@ -162,8 +164,7 @@ def test_graph_rag_service_initialization(mock_rag_service, mock_memory_graph) -
 async def test_graph_aware_search_basic(graph_rag_service, mock_rag_service) -> None:
     """Test basic graph-aware search delegates to RAGService."""
     results, metrics = await graph_rag_service.graph_aware_search(
-        query="Redis configuration",
-        max_results=5,
+        query="Redis configuration", max_results=5, principal=SYSTEM_SCOPE
     )
 
     # Verify RAGService was called (composition, not duplication)
@@ -171,12 +172,13 @@ async def test_graph_aware_search_basic(graph_rag_service, mock_rag_service) -> 
         query="Redis configuration",
         max_results=10,  # 2x for filtering
         enable_reranking=True,
-        timeout=None,
+        timeout=10.0,  # RAGConfig.graph_timeout_seconds default
+        principal=SYSTEM_SCOPE,  # the KB leg is searched as the caller (#16664)
     )
 
     # Verify results returned
     assert len(results) > 0
-    assert isinstance(results[0], SearchResult)
+    assert isinstance(results[0], RankedResult)
 
     # Verify metrics structure
     assert isinstance(metrics, GraphRAGMetrics)
@@ -188,10 +190,7 @@ async def test_graph_aware_search_basic(graph_rag_service, mock_rag_service) -> 
 async def test_graph_aware_search_with_entity_expansion(graph_rag_service, mock_rag_service, mock_memory_graph) -> None:
     """Test graph expansion adds related entity content."""
     results, metrics = await graph_rag_service.graph_aware_search(
-        query="Redis issues",
-        start_entity="Redis Config",
-        max_depth=2,
-        max_results=5,
+        query="Redis issues", start_entity="Redis Config", max_depth=2, max_results=5, principal=SYSTEM_SCOPE
     )
 
     # Issue #12389: start_entity="Redis Config" and every extracted entity
@@ -295,6 +294,7 @@ async def test_graph_aware_search_no_expansion_without_entities(
         start_entity=None,  # No start entity
         max_depth=2,
         max_results=5,
+        principal=SYSTEM_SCOPE,
     )
 
     # Verify graph traversal NOT called
@@ -314,8 +314,7 @@ async def test_graph_aware_search_timeout_handling(graph_rag_service, mock_rag_s
     mock_rag_service.advanced_search.side_effect = asyncio.TimeoutError()
 
     results, metrics = await graph_rag_service.graph_aware_search(
-        query="Redis issues",
-        timeout=1.0,
+        query="Redis issues", timeout=1.0, principal=SYSTEM_SCOPE
     )
 
     # Verify graceful handling
@@ -332,7 +331,7 @@ async def test_graph_aware_search_timeout_handling(graph_rag_service, mock_rag_s
 async def test_extract_entities_from_results(graph_rag_service, mock_memory_graph) -> None:
     """Test entity extraction from search results."""
     rag_results = [
-        SearchResult(
+        RankedResult(
             content="Redis config",
             metadata={"entities": ["Redis Config"], "session_id": "abc123"},
             semantic_score=0.9,
@@ -362,7 +361,7 @@ async def test_extract_entities_handles_missing_entities(graph_rag_service, mock
     mock_memory_graph.get_entity = AsyncMock(return_value=None)
 
     rag_results = [
-        SearchResult(
+        RankedResult(
             content="Test",
             metadata={"entities": ["Nonexistent Entity"]},
             semantic_score=0.9,
@@ -387,7 +386,7 @@ async def test_extract_entities_handles_missing_entities(graph_rag_service, mock
 
 @pytest.mark.asyncio
 async def test_expand_via_graph(graph_rag_service, mock_memory_graph) -> None:
-    """Test graph expansion creates SearchResult objects from entities."""
+    """Test graph expansion creates RankedResult objects from entities."""
     entity_matches = [
         EntityMatch(
             entity={
@@ -411,9 +410,9 @@ async def test_expand_via_graph(graph_rag_service, mock_memory_graph) -> None:
     # Verify graph traversal called
     mock_memory_graph.get_related_entities.assert_called_once()
 
-    # Verify SearchResult creation
+    # Verify RankedResult creation
     assert len(expanded) > 0
-    assert isinstance(expanded[0], SearchResult)
+    assert isinstance(expanded[0], RankedResult)
     assert expanded[0].metadata["source"] == "graph_expansion"
     assert expanded[0].hybrid_score > 0  # Graph proximity score applied
 
@@ -455,7 +454,7 @@ async def test_expand_via_graph_multiple_starting_points(graph_rag_service, mock
 async def test_deduplicate_and_rank(graph_rag_service) -> None:
     """Test deduplication removes duplicate content and ranks by score."""
     results = [
-        SearchResult(
+        RankedResult(
             content="Duplicate content here",
             metadata={},
             semantic_score=0.9,
@@ -465,7 +464,7 @@ async def test_deduplicate_and_rank(graph_rag_service) -> None:
             source_path="source1",
             chunk_index=0,
         ),
-        SearchResult(
+        RankedResult(
             content="Duplicate content here",  # Same content
             metadata={},
             semantic_score=0.7,
@@ -475,7 +474,7 @@ async def test_deduplicate_and_rank(graph_rag_service) -> None:
             source_path="source2",
             chunk_index=0,
         ),
-        SearchResult(
+        RankedResult(
             content="Unique content here",
             metadata={},
             semantic_score=0.95,
@@ -506,7 +505,7 @@ async def test_deduplicate_and_rank(graph_rag_service) -> None:
 async def test_deduplicate_and_rank_respects_max_results(graph_rag_service) -> None:
     """Test deduplication respects max_results limit."""
     results = [
-        SearchResult(
+        RankedResult(
             content=f"Content {i}",
             metadata={},
             semantic_score=0.9 - i * 0.1,
@@ -541,10 +540,7 @@ async def test_end_to_end_composition(graph_rag_service, mock_rag_service, mock_
     """Test end-to-end flow verifies proper composition."""
     # Execute full search
     results, metrics = await graph_rag_service.graph_aware_search(
-        query="Redis configuration",
-        start_entity="Redis Config",
-        max_depth=2,
-        max_results=5,
+        query="Redis configuration", start_entity="Redis Config", max_depth=2, max_results=5, principal=SYSTEM_SCOPE
     )
 
     # Verify RAGService called (composition)
@@ -654,7 +650,7 @@ def test_create_search_result_unknown_origin_defaults_to_inferred() -> None:
 async def test_deduplicate_and_rank_applies_provenance_boost(graph_rag_service) -> None:
     """extracted > inferred after deduplication when base hybrid_score is equal."""
     base_score = 0.5
-    extracted = SearchResult(
+    extracted = RankedResult(
         content="Graph entity A",
         metadata={"source_provenance": "extracted"},
         semantic_score=0.0,
@@ -664,7 +660,7 @@ async def test_deduplicate_and_rank_applies_provenance_boost(graph_rag_service) 
         source_path="graph:A",
         chunk_index=0,
     )
-    inferred = SearchResult(
+    inferred = RankedResult(
         content="Graph entity B",
         metadata={"source_provenance": "inferred"},
         semantic_score=0.0,
@@ -686,7 +682,7 @@ async def test_deduplicate_and_rank_applies_provenance_boost(graph_rag_service) 
 async def test_deduplicate_and_rank_applies_provenance_penalty(graph_rag_service) -> None:
     """inferred > ambiguous after deduplication when base hybrid_score is equal."""
     base_score = 0.5
-    inferred = SearchResult(
+    inferred = RankedResult(
         content="Graph entity C",
         metadata={"source_provenance": "inferred"},
         semantic_score=0.0,
@@ -696,7 +692,7 @@ async def test_deduplicate_and_rank_applies_provenance_penalty(graph_rag_service
         source_path="graph:C",
         chunk_index=0,
     )
-    ambiguous = SearchResult(
+    ambiguous = RankedResult(
         content="Graph entity D",
         metadata={"source_provenance": "ambiguous"},
         semantic_score=0.0,
@@ -717,7 +713,7 @@ async def test_deduplicate_and_rank_applies_provenance_penalty(graph_rag_service
 @pytest.mark.asyncio
 async def test_deduplicate_and_rank_no_provenance_unchanged(graph_rag_service) -> None:
     """Results without source_provenance are not adjusted (0.0 delta, no mutation)."""
-    result = SearchResult(
+    result = RankedResult(
         content="Graph entity E",
         metadata={},
         semantic_score=0.0,
@@ -738,7 +734,7 @@ async def test_deduplicate_and_rank_no_provenance_unchanged(graph_rag_service) -
 @pytest.mark.asyncio
 async def test_metadata_none_does_not_raise(graph_rag_service) -> None:
     """Result with metadata=None passes through _deduplicate_and_rank without AttributeError (#4939)."""
-    result = SearchResult(
+    result = RankedResult(
         content="Graph entity F",
         metadata=None,
         semantic_score=0.0,
@@ -760,7 +756,7 @@ async def test_metadata_none_does_not_raise(graph_rag_service) -> None:
 @pytest.mark.asyncio
 async def test_hybrid_score_clamped_at_1_0(graph_rag_service) -> None:
     """hybrid_score + provenance boost is clamped at 1.0 (#4943)."""
-    result = SearchResult(
+    result = RankedResult(
         content="Graph entity G",
         metadata={"source_provenance": "extracted"},
         semantic_score=0.0,
@@ -780,7 +776,7 @@ async def test_hybrid_score_clamped_at_1_0(graph_rag_service) -> None:
 @pytest.mark.asyncio
 async def test_hybrid_score_clamped_at_0_0(graph_rag_service) -> None:
     """hybrid_score + provenance penalty is clamped at 0.0 (#4943)."""
-    result = SearchResult(
+    result = RankedResult(
         content="Graph entity H",
         metadata={"source_provenance": "ambiguous"},
         semantic_score=0.0,
@@ -832,9 +828,9 @@ async def test_find_connection_path_delegates_to_memory_graph(graph_rag_service,
         relation="CAUSED",
         max_depth=4,
         direction="outgoing",
+        owner=UNSCOPED_ALL_USERS,
     )
-    assert result["found"] is True
-    assert result["hops"] == 1
+    assert (result["found"], result["hops"]) == (True, 1)
 
 
 @pytest.mark.asyncio
@@ -845,8 +841,7 @@ async def test_find_connection_path_records_traversal_time(graph_rag_service, mo
 
     result = await graph_rag_service.find_connection_path("A", "B")
 
-    assert result["traversal_time"] >= 0.0
-    assert result["found"] is False
+    assert result["traversal_time"] >= 0.0 and result["found"] is False
 
 
 @pytest.mark.asyncio

@@ -26,6 +26,9 @@ export interface KnowledgeStats {
   index_name?: string | null
   initialized?: boolean
   rag_available?: boolean
+  // #15502: served by GET /knowledge_base/stats; the frontend holds no model name.
+  embedding_model?: string
+  embedding_dimensions?: number
 }
 
 // ============================================================================

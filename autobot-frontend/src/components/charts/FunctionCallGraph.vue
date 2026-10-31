@@ -15,7 +15,7 @@
 
     <!-- Loading state -->
     <div v-if="loading" class="chart-loading-overlay">
-      <div class="loading-spinner"></div>
+      <BaseSpinner size="md" />
       <span>{{ $t('charts.callGraph.loading') }}</span>
     </div>
 
@@ -106,7 +106,7 @@
       <!-- Network view (Cytoscape) - DEFAULT, lazy-loaded on demand (#5158) -->
       <div v-show="viewMode === 'network'" class="network-view">
         <div v-if="cytoscapeLoading && !cy" class="cytoscape-loading">
-          <div class="loading-spinner"></div>
+          <BaseSpinner size="md" />
           <span>{{ $t('charts.callGraph.loadingVisualization', 'Loading visualization library...') }}</span>
         </div>
         <div v-else-if="cytoscapeError" class="chart-error">
@@ -347,8 +347,9 @@
 </template>
 
 <script setup lang="ts">
+import { BaseSpinner } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
-import { ref, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, shallowRef, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
 // Type imports only — runtime load handled by the shared composable (#5206).
 // The default namespace import below gives type-only access to helpers
@@ -457,7 +458,7 @@ const orphanedModuleFilter = ref('')
 // Cytoscape instances
 const cytoscapeContainer = ref<HTMLElement | null>(null)
 const clusterContainer = ref<HTMLElement | null>(null)
-let cy: Core | null = null
+const cy = shallowRef<Core | null>(null)
 let clusterCy: Core | null = null
 
 // Cytoscape lazy-loading state is owned by the shared composable (#5206).
@@ -471,7 +472,7 @@ const {
   ensureReady: ensureCytoscapeReady,
   retry: retryCytoscape,
 } = useCytoscapeLibrary(() => {
-  if (viewMode.value === 'network' && cytoscapeContainer.value && !cy) {
+  if (viewMode.value === 'network' && cytoscapeContainer.value && !cy.value) {
     initCytoscape()
     updateCytoscapeElements()
   } else if (viewMode.value === 'stats' && clusterContainer.value && !clusterCy) {
@@ -615,7 +616,7 @@ const filteredNodes = computed(() => {
 function initCytoscape() {
   if (!cytoscapeModule.value || !cytoscapeContainer.value) return
 
-  cy = cytoscapeModule.value({
+  cy.value = cytoscapeModule.value({
     container: cytoscapeContainer.value,
     style: getCytoscapeStyles(),
     elements: [],
@@ -626,7 +627,7 @@ function initCytoscape() {
   })
 
   // Event handlers
-  cy.on('tap', 'node', (evt) => {
+  cy.value.on('tap', 'node', (evt) => {
     const node = evt.target as NodeSingular
     const funcId = node.id()
     selectedFunc.value = funcId
@@ -652,27 +653,27 @@ function initCytoscape() {
     highlightConnected(node)
   })
 
-  cy.on('tap', (evt) => {
-    if (evt.target === cy) {
+  cy.value.on('tap', (evt) => {
+    if (evt.target === cy.value) {
       selectedFunc.value = null
       selectedNodeInfo.value = null
       clearHighlight()
     }
   })
 
-  cy.on('mouseover', 'node', (evt) => {
+  cy.value.on('mouseover', 'node', (evt) => {
     const node = evt.target as NodeSingular
     highlightConnected(node)
   })
 
-  cy.on('mouseout', 'node', () => {
+  cy.value.on('mouseout', 'node', () => {
     if (!selectedFunc.value) {
       clearHighlight()
     }
   })
 
-  cy.on('zoom', () => {
-    zoomLevel.value = cy?.zoom() || 1
+  cy.value.on('zoom', () => {
+    zoomLevel.value = cy.value?.zoom() || 1
   })
 }
 
@@ -759,7 +760,7 @@ function getCytoscapeStyles(): cytoscape.StylesheetStyle[] {
 }
 
 function updateCytoscapeElements() {
-  if (!cy) return
+  if (!cy.value) return
 
   const elements: cytoscape.ElementDefinition[] = []
   const nodeIds = new Set(filteredNodes.value.map(n => n.id))
@@ -826,15 +827,15 @@ function updateCytoscapeElements() {
   }
 
   // Update graph
-  cy.elements().remove()
-  cy.add(elements)
+  cy.value.elements().remove()
+  cy.value.add(elements)
 
   // Run layout
   runLayout()
 }
 
 function runLayout() {
-  if (!cy || cy.nodes().length === 0) return
+  if (!cy.value || cy.value.nodes().length === 0) return
 
   const layoutOptions = layoutMode.value === 'force'
     ? {
@@ -861,37 +862,37 @@ function runLayout() {
         avoidOverlap: true
       }
 
-  cy.layout(layoutOptions as cytoscape.LayoutOptions).run()
+  cy.value.layout(layoutOptions as cytoscape.LayoutOptions).run()
 }
 
 function highlightConnected(node: NodeSingular) {
-  if (!cy) return
+  if (!cy.value) return
   const neighborhood = node.neighborhood().add(node)
-  cy.elements().addClass('dimmed')
+  cy.value.elements().addClass('dimmed')
   neighborhood.removeClass('dimmed').addClass('highlighted')
 }
 
 function clearHighlight() {
-  if (!cy) return
-  cy.elements().removeClass('dimmed').removeClass('highlighted')
+  if (!cy.value) return
+  cy.value.elements().removeClass('dimmed').removeClass('highlighted')
 }
 
 function zoomIn() {
-  if (!cy) return
-  cy.zoom(cy.zoom() * 1.25)
-  cy.center()
+  if (!cy.value) return
+  cy.value.zoom(cy.value.zoom() * 1.25)
+  cy.value.center()
 }
 
 function zoomOut() {
-  if (!cy) return
-  cy.zoom(cy.zoom() * 0.8)
-  cy.center()
+  if (!cy.value) return
+  cy.value.zoom(cy.value.zoom() * 0.8)
+  cy.value.center()
 }
 
 function fitGraph() {
-  if (!cy) return
-  cy.fit(undefined, 30)
-  zoomLevel.value = cy.zoom()
+  if (!cy.value) return
+  cy.value.fit(undefined, 30)
+  zoomLevel.value = cy.value.zoom()
 }
 
 function toggleLayout() {
@@ -904,8 +905,8 @@ function toggleFullscreen() {
   // Re-fit the graph after transition
   nextTick(() => {
     setTimeout(() => {
-      if (cy) {
-        cy.resize()
+      if (cy.value) {
+        cy.value.resize()
         fitGraph()
       }
       if (clusterCy) {
@@ -1286,9 +1287,9 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  if (cy) {
-    cy.destroy()
-    cy = null
+  if (cy.value) {
+    cy.value.destroy()
+    cy.value = null
   }
   if (clusterCy) {
     clusterCy.destroy()
@@ -1300,7 +1301,7 @@ onUnmounted(() => {
 watch(() => props.data, async (newData) => {
   if (newData?.nodes?.length) {
     await nextTick()
-    if (!cy && cytoscapeContainer.value) {
+    if (!cy.value && cytoscapeContainer.value) {
       await ensureCytoscapeReady()
     } else {
       updateCytoscapeElements()
@@ -1325,7 +1326,7 @@ watch(() => props.data, async (newData) => {
 watch(viewMode, async (newMode) => {
   if (newMode === 'network') {
     await nextTick()
-    if (!cy && cytoscapeContainer.value) {
+    if (!cy.value && cytoscapeContainer.value) {
       await ensureCytoscapeReady()
     }
   } else if (newMode === 'stats') {
@@ -1401,19 +1402,6 @@ watch(viewMode, async (newMode) => {
   text-decoration: underline;
   font-size: var(--text-sm);
   padding: var(--spacing-0);
-}
-
-.loading-spinner {
-  width: var(--spacing-8);
-  height: var(--spacing-8);
-  border: 3px solid var(--border-default);
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .error-icon {
@@ -2086,7 +2074,7 @@ watch(viewMode, async (newMode) => {
   color: var(--text-muted);
 }
 
-.orphaned-item-details i {
+.orphaned-item-details .icon {
   margin-right: var(--spacing-1);
   opacity: 0.7;
 }
@@ -2122,7 +2110,7 @@ watch(viewMode, async (newMode) => {
   color: var(--text-muted);
 }
 
-.orphaned-empty i {
+.orphaned-empty .icon {
   font-size: 2rem;
   margin-bottom: var(--spacing-3);
   color: var(--color-success);

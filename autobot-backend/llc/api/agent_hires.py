@@ -22,9 +22,11 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.user_management.dependencies import get_current_user, require_org_context
+from autobot_shared.env_utils import env_str
 from autobot_shared.logging_manager import get_logger
 from llc.adapters import adapter_unavailable_reason, registered_adapter_types
 from llc.deps import assert_company_access
+from llc.scheduler.schedule_entry import schedule_heartbeat
 from llc.services.budget import BudgetService
 from llc.services.model_tiers import get_model_tier_service
 from user_management.database import get_async_session
@@ -133,6 +135,84 @@ class AgentHireRead(BaseModel):
 # ---------------------------------------------------------------------------
 
 
+#: #15907, owner ruling 2026-09-28. A hire that opts into the heartbeat gets a
+#: one-minute wake unless it says otherwise.
+#:
+#: Why a default at all. The scheduler's gate is ``heartbeat_enabled = true AND
+#: heartbeat_cron IS NOT NULL`` (``heartbeat_scheduler.py:220-221``), and this
+#: field defaulted to ``None``. So an agent hired with ``heartbeat_enabled=true``
+#: and no cron was never scheduled: the flag said yes and the column the
+#: scheduler actually reads said nothing. Two columns, one of them invisible in
+#: every view, is the shape #15907 reported -- and the hire flow reproduced it
+#: for any caller who set the flag and not the cron.
+#:
+#: Why one minute is affordable. #17726's short-circuit returns before creating
+#: a run when the agent's queue is empty, so the common wake costs one bounded
+#: query and no model invocation. Without that, this default would be 1,440 full
+#: agent invocations per agent per day; the ruling made the cadence conditional
+#: on the short-circuit landing first, and it is in this same change.
+#:
+#: ``heartbeat_enabled`` deliberately stays ``False``: opting every hired agent
+#: into a cadence is option A from the ruling, which was rejected.
+#: ``AUTOBOT_`` prefixed deliberately, against 12 ``LLC_*`` config reads already
+#: on main (``llc/config/__init__.py``, three schedulers, the stalled-run sweep,
+#: and three in ``heartbeat_scheduler.py`` itself). That family is invisible to
+#: the registry's prefix-keyed sweep, which is a real gap -- filed separately
+#: rather than fixed here, because renaming twelve live variables is not this
+#: change. A new one joins the visible set.
+_FALLBACK_HEARTBEAT_CRON = "* * * * *"
+
+
+def _validated_default_cron() -> str:
+    """The configured default cron, or the fallback if it will never fire (#17726 review).
+
+    An unvalidated value here is worse than it looks. It persists into every hire
+    that opts into the heartbeat, and the scheduler's repopulate loop answers a
+    bad cron with ``logger.warning(...); continue`` -- so the agent is stored
+    with ``heartbeat_enabled=true``, is never added to the schedule, and never
+    wakes. One warning line per repopulate is the only evidence.
+
+    That is the failure this change exists to remove, inverted: the whole point
+    of the idle short-circuit is that a wake which finds nothing still leaves a
+    trace. An agent that never wakes at all must not leave less of one.
+
+    So a malformed value is rejected loudly and the operator gets a working
+    default rather than silently dead agents. `croniter` absent is a different
+    case: it means validation is unavailable, not that the value is bad, so the
+    value is accepted and the inability to check is what gets logged.
+    """
+    raw = env_str("AUTOBOT_LLC_DEFAULT_HEARTBEAT_CRON", _FALLBACK_HEARTBEAT_CRON)
+    if raw == _FALLBACK_HEARTBEAT_CRON:
+        return raw
+    try:
+        from croniter import croniter
+    except ImportError:
+        logger.warning(
+            "AUTOBOT_LLC_DEFAULT_HEARTBEAT_CRON=%r accepted unvalidated: croniter is not installed",
+            raw,
+        )
+        return raw
+    try:
+        # .get_next(), not just the constructor: `0 0 31 2 *` CONSTRUCTS fine and
+        # can never fire (February has no 31st). Validation that accepts an
+        # unfireable cron leaves exactly the silently-dead agent it was added to
+        # prevent -- `get_next()` is what raises CroniterBadDateError.
+        croniter(raw).get_next()
+    except Exception as exc:
+        logger.error(
+            "AUTOBOT_LLC_DEFAULT_HEARTBEAT_CRON=%r is not a valid cron (%s); "
+            "falling back to %r so hired agents are schedulable",
+            raw,
+            exc,
+            _FALLBACK_HEARTBEAT_CRON,
+        )
+        return _FALLBACK_HEARTBEAT_CRON
+    return raw
+
+
+DEFAULT_HEARTBEAT_CRON = _validated_default_cron()
+
+
 class AgentHireRequest(BaseModel):
     """Request body for POST /companies/{company_id}/agent-hires (GH#8486)."""
 
@@ -151,7 +231,10 @@ class AgentHireRequest(BaseModel):
     assistant_agent_id: Optional[str] = Field(None)
     assistant_name: Optional[str] = Field(None)
     role_description: Optional[str] = Field(None)
-    heartbeat_cron: Optional[str] = Field(None)
+    heartbeat_cron: Optional[str] = Field(
+        DEFAULT_HEARTBEAT_CRON,
+        description="Cron for periodic wake. Defaults to every minute; only used when heartbeat_enabled.",
+    )
     heartbeat_enabled: bool = Field(False)
     adapter_type: Optional[str] = Field("claude_code")
     adapter_config: Optional[Dict[str, Any]] = Field(None)
@@ -340,21 +423,11 @@ async def list_agent_hires(
 # ---------------------------------------------------------------------------
 
 
-@router.post(
-    "/companies/{company_id}/agent-hires",
-    response_model=AgentHireResponse,
-    status_code=status.HTTP_201_CREATED,
-    summary="Hire a new agent (Sonnet or Haiku tier) for a company (GH#8486)",
-)
-async def hire_agent(
-    company_id: uuid.UUID,
-    body: AgentHireRequest,
-    session: AsyncSession = Depends(get_async_session),
-    _current_user: dict = Depends(get_current_user),
-    ctx: TenantContext = Depends(require_org_context),
-) -> AgentHireResponse:
-    """Hire a new LLC agent with explicit model selection and AGENTS.md generation."""
-    assert_company_access(ctx, str(company_id))
+def _validate_hire(body: AgentHireRequest) -> str:
+    """The hire's resolved model, or a 422 for a model or adapter that cannot run.
+
+    Extracted from ``hire_agent`` (#15907, function length); the checks are unchanged.
+    """
     resolved_model = body.model or SONNET_MODEL
     if resolved_model not in _VALID_MODELS:
         raise HTTPException(
@@ -383,13 +456,11 @@ async def hire_agent(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=(f"Adapter {resolved_adapter!r} is registered but cannot run on this " f"deployment: {unavailable}"),
         )
+    return resolved_model
 
-    is_haiku = resolved_model == HAIKU_MODEL
-    agent_id = str(uuid.uuid4())
 
-    adapter_cfg: Dict[str, Any] = dict(body.adapter_config or {})
-    adapter_cfg["model"] = resolved_model
-
+def _render_agents_md(body: AgentHireRequest, company_id: uuid.UUID, is_haiku: bool) -> str:
+    """The hired agent's AGENTS.md, by tier. Extracted from ``hire_agent`` (#15907)."""
     role_desc = body.role_description or f"{body.agent_name} — LLC agent for company {company_id}."
     if is_haiku:
         reports_to_name = body.reports_to or "the supervising Sonnet agent"
@@ -410,6 +481,32 @@ async def hire_agent(
             agent_name=body.agent_name,
             role_description=role_desc,
         )
+    return agents_md
+
+
+@router.post(
+    "/companies/{company_id}/agent-hires",
+    response_model=AgentHireResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Hire a new agent (Sonnet or Haiku tier) for a company (GH#8486)",
+)
+async def hire_agent(
+    company_id: uuid.UUID,
+    body: AgentHireRequest,
+    session: AsyncSession = Depends(get_async_session),
+    _current_user: dict = Depends(get_current_user),
+    ctx: TenantContext = Depends(require_org_context),
+) -> AgentHireResponse:
+    """Hire a new LLC agent with explicit model selection and AGENTS.md generation."""
+    assert_company_access(ctx, str(company_id))
+    resolved_model = _validate_hire(body)
+    is_haiku = resolved_model == HAIKU_MODEL
+    agent_id = str(uuid.uuid4())
+
+    adapter_cfg: Dict[str, Any] = dict(body.adapter_config or {})
+    adapter_cfg["model"] = resolved_model
+
+    agents_md = _render_agents_md(body, company_id, is_haiku)
 
     instructions_file_path = f"/etc/llc/agents/{company_id}/{agent_id}/AGENTS.md"
 
@@ -448,6 +545,9 @@ async def hire_agent(
     await budget_svc.provision_budget(session, agent_id, str(company_id))
 
     await session.commit()
+    # #15907: a hire that opts into the heartbeat wakes without waiting for a restart.
+    if body.heartbeat_enabled and body.heartbeat_cron:
+        await schedule_heartbeat(agent_id, body.heartbeat_cron)
 
     logger.info(
         "Hired agent %s (name=%r model=%r company=%s reports_to=%s)",

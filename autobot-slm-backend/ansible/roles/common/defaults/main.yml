@@ -43,7 +43,7 @@ firewall_service_ports:
   postgresql: 5432
 
   # AI/ML services
-  ai_stack: 8080
+  ai_stack: "{{ ai_stack_port }}"
   npu_worker: 8081
 
   # Browser automation (port 9001 is canonical; 3000 was legacy/Grafana conflict, #5608)

@@ -72,7 +72,6 @@
   hosts: monitoring_vm
   become: true
   vars:
-    grafana_version: "latest"
     grafana_host: "{{ ansible_host }}"
     grafana_port: 3000
     slm_server_ip: "{{ infrastructure.hosts.slm }}"
@@ -83,24 +82,13 @@
     # ==========================================================
     # Install Grafana
     # ==========================================================
-    - name: "Install | Add Grafana GPG key"
-      ansible.builtin.apt_key:
-        url: https://apt.grafana.com/gpg.key
-        state: present
-      tags: ['install']
-
-    - name: "Install | Add Grafana APT repository"
-      ansible.builtin.apt_repository:
-        repo: deb https://apt.grafana.com stable main
-        state: present
-        filename: grafana
-      tags: ['install']
-
-    - name: "Install | Install Grafana"
-      ansible.builtin.apt:
-        name: grafana
-        state: "{{ 'latest' if grafana_version == 'latest' else 'present' }}"
-        update_cache: true
+    # #19661: the monitoring role holds the one install and the one grafana_version.
+    - name: "Install | Install or upgrade Grafana"
+      ansible.builtin.include_role:
+        name: monitoring
+        tasks_from: grafana_install.yml
+        apply:
+          tags: ['install']
       tags: ['install']
 
     # ==========================================================

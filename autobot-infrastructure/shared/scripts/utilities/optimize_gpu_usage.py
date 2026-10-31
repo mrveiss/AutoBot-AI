@@ -12,11 +12,18 @@ import json
 import logging
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 import yaml
 
-from constants import ServiceURLs
+# Runs from any directory with no PYTHONPATH: put the repository root on the path for
+# `autobot_shared` (#18289).
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+
+from autobot_shared.network_constants import ServiceURLs  # noqa: E402
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")

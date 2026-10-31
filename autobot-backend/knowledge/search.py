@@ -12,7 +12,7 @@ See: src/knowledge/search_components/
 - helpers.py: Redis hash operations and result building
 - query_processor.py: Query preprocessing and expansion
 - keyword_search.py: Keyword-based search using Redis
-- hybrid_search.py: Hybrid search with RRF
+- hybrid_search.py: Hybrid search with RRF (the one KB hybrid search, #17599)
 - reranking.py: Cross-encoder result reranking
 - tag_filter.py: Tag-based result filtering
 - analytics.py: Search analytics tracking
@@ -31,8 +31,9 @@ from typing import TYPE_CHECKING, Any, Dict, List, Set
 from autobot_shared.error_boundaries import error_boundary
 from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import CategoryDefaults
+from knowledge.embedding_space_binding import current_space, snapshot
+from knowledge.quarantine import gate_response, require_audit_actor, store_side_where
 
-# Issue #5064: prompt-injection sanitizer applied pre-embedding.
 # Issue #5064: prompt-injection sanitizer applied pre-embedding.
 from knowledge.query_sanitizer import sanitize_query as _sanitize_query
 
@@ -45,17 +46,18 @@ from knowledge.search_components import (
     get_analytics,
     get_reranker,
 )
+from knowledge.search_components.basic_vector_search import BasicVectorSearchMixin
+from knowledge.search_components.helpers import map_kb_result_to_dict  # noqa: F401 -- re-exported for callers (#10740)
 from knowledge.search_components.helpers import (
     build_search_result,
     decode_redis_hash,
+    extract_search_params,
     matches_category,
     score_fact_by_terms,
 )
 from knowledge.search_components.hybrid_search import HybridSearcher
 
 # Issue #3828: canonical vector search engine — SearchMixin.search() delegates here.
-from knowledge.vector_search_engine import SearchResult as _EngineSearchResult
-from knowledge.vector_search_engine import get_vector_search_engine
 from models.task_context import SearchContext
 
 if TYPE_CHECKING:
@@ -72,21 +74,7 @@ _score_fact_by_terms = score_fact_by_terms
 _build_search_result = build_search_result
 
 
-def map_kb_result_to_dict(raw: Dict[str, Any]) -> Dict[str, Any]:
-    """Map one raw KB search row to the canonical result shape. Issue #10740.
-
-    Keys: content, source (node_id with doc_id fallback), score, metadata.
-    Single-item mapper; callers apply it with a list comprehension.
-    """
-    return {
-        "content": raw.get("content", ""),
-        "source": raw.get("node_id", raw.get("doc_id", "")),
-        "score": raw.get("score", 0.0),
-        "metadata": raw.get("metadata", {}),
-    }
-
-
-class SearchMixin:
+class SearchMixin(BasicVectorSearchMixin):
     """
     Search functionality mixin for knowledge base.
 
@@ -182,14 +170,13 @@ class SearchMixin:
         filters: Dict[str, Any] | None = None,
     ) -> List[Dict[str, Any]]:
         """Execute vector search and deduplicate results (Issue #398: extracted)."""
-        query_embedding = await self._get_query_embedding(query)
-        results_data = await self._query_chromadb(query_embedding, similarity_top_k, where=filters)
-        results = self._deduplicate_results(results_data, similarity_top_k)
-        logger.info(
-            "ChromaDB search returned %d unique documents for query: %s...",
-            len(results),
-            query[:50],
+        space = await current_space(self)  # #19379: the query's model and the store it meets, one snapshot
+        query_embedding = await self._get_query_embedding(query, space.model)
+        results_data = await self._query_chromadb(
+            query_embedding, similarity_top_k, where=filters, store=space.vector_store
         )
+        results = self._deduplicate_results(results_data, similarity_top_k)
+        logger.info("ChromaDB search returned %d unique documents for query: %s...", len(results), query[:50])
         return results
 
     async def basic_vector_search(
@@ -214,13 +201,33 @@ class SearchMixin:
             return []
         return await self._execute_vector_search(sanitized, top_k, filters=filters)
 
-    async def search(  # noqa: PLR0913
+    async def search(
+        self,
+        *args: Any,
+        include_unservable: bool = False,
+        include_quarantined: bool = False,
+        audit_actor: str | None = None,
+        **kwargs: Any,
+    ) -> Any:
+        """The one KB read every caller goes through: dispatch, then the serving (#18820) and quarantine (#19163) check.
+
+        Applied once to what any mode returned (basic list, enhanced/advanced dict); basic also gets the
+        store-side ``where``. ``include_unservable=True`` opts out of the serving predicate;
+        ``include_quarantined=True`` is the ONLY way to receive quarantined facts and needs ``audit_actor``
+        (one audit entry: who, count, ids). Neither is a default; a page may be shorter than ``limit``.
+        """
+        require_audit_actor(include_quarantined, audit_actor)
+        kwargs.update(include_unservable=include_unservable, include_quarantined=include_quarantined)
+        response = await self._dispatch_search(*args, **kwargs)
+        return await gate_response(response, include_unservable, include_quarantined, audit_actor)
+
+    async def _dispatch_search(  # noqa: PLR0913
         self,
         query: str,
         top_k: int = 10,
         similarity_top_k: int = None,
         filters: Dict[str, Any] | None = None,
-        mode: str = "auto",
+        mode: str = CategoryDefaults.SEARCH_MODE_AUTO,
         # ---- Enhanced params (formerly enhanced_search) ----
         limit: int | None = None,
         offset: int = 0,
@@ -242,6 +249,8 @@ class SearchMixin:
         exclude_sources: List[str] | None = None,
         verified_only: bool = False,
         session_id: str | None = None,
+        include_unservable: bool = False,
+        include_quarantined: bool = False,
     ):
         """Canonical KB search — consolidates basic, enhanced, and advanced paths (#10666).
 
@@ -277,7 +286,7 @@ class SearchMixin:
 
         if advanced or enhanced:
             eff_limit = limit if limit is not None else top_k
-            eff_mode = mode if mode != "auto" else CategoryDefaults.SEARCH_MODE_HYBRID
+            eff_mode = mode if mode != CategoryDefaults.SEARCH_MODE_AUTO else CategoryDefaults.SEARCH_MODE_HYBRID
             ctx = SearchContext.from_params(
                 query=query,
                 limit=eff_limit,
@@ -316,78 +325,27 @@ class SearchMixin:
                 board_id=board_id,
             )
 
-        # ---- Basic vector search path ----
-        self.ensure_initialized()
-        similarity_top_k = similarity_top_k or top_k
+        where = store_side_where(filters, include_unservable, include_quarantined)
+        return await self._search_basic(query, top_k, similarity_top_k, where)
 
-        invalid_result = self._validate_search_inputs(query)
-        if invalid_result is not None:
-            return invalid_result
-
-        # Issue #5064: sanitize query before embedding to block prompt injection.
-        sanitized = self._sanitize_search_query(query)
-        if sanitized is None:
-            return []
-        query = sanitized
-
-        try:
-            engine = await get_vector_search_engine()
-            engine_results: List[_EngineSearchResult] = await engine.search(
-                query=query,
-                top_k=similarity_top_k,
-                filters=filters,
-                hardware_backend="auto",
-            )
-            # Convert canonical SearchResult -> legacy dict format expected by callers
-            results = [
-                {
-                    "content": r.text,
-                    "score": r.score,
-                    "metadata": r.metadata,
-                    "node_id": r.source,
-                    "doc_id": r.source,  # V1 compatibility
-                }
-                for r in engine_results
-            ]
-            # A1 (#12552): reinforce facts surfaced by a real query. Fire-and-forget;
-            # never blocks or alters the returned results.
-            try:
-                await self.record_fact_access([r.source for r in engine_results if r.source])
-            except Exception:
-                logger.debug("search: record_fact_access skipped", exc_info=True)
-            return results
-        except Exception as exc:
-            logger.warning(
-                "VectorSearchEngine delegation failed (%s), falling back to direct ChromaDB",
-                exc,
-            )
-
-        # Fallback: original direct ChromaDB path
-        try:
-            return await self._execute_vector_search(query, similarity_top_k, filters=filters)
-        except Exception as e:
-            logger.error("Knowledge base search failed: %s", e)
-            return []
-
-    async def _get_query_embedding(self, query: str) -> List[float]:
+    async def _get_query_embedding(self, query: str, model: str | None = None) -> List[float]:
         """Get embedding for query, using cache when available.
 
         Issue #281: Extracted helper.
         Issue #165: Uses NPU worker for hardware-accelerated embedding generation.
         """
-        from autobot_shared.ssot_config import config
         from knowledge.embedding_cache import get_embedding_cache
         from knowledge.facts import _generate_embedding_with_npu_fallback
 
-        # Issue #12251: cache key is (model, text). The NPU-fallback helper
-        # embeds with the configured default model, so key on that name.
-        model = config.llm.embedding_model
+        # Issue #12251/#18143: cache key is (model, text) and the generator is given the same model,
+        # so key and vector agree. #19379: the model is the bound space's, not the record's.
+        model = model or snapshot(self).model
         _embedding_cache = get_embedding_cache()
         query_embedding = await _embedding_cache.get(query, model=model)
 
         if query_embedding is None:
             # Cache miss - compute embedding using NPU worker with fallback
-            query_embedding = await _generate_embedding_with_npu_fallback(query)
+            query_embedding = await _generate_embedding_with_npu_fallback(query, model_name=model)
             await _embedding_cache.put(query, query_embedding, model=model)
 
         return query_embedding
@@ -397,14 +355,15 @@ class SearchMixin:
         query_embedding: List[float],
         similarity_top_k: int,
         where: Dict[str, Any] | None = None,
+        store: Any = None,
     ) -> Dict[str, Any]:
         """Query ChromaDB directly with embedding. Issue #281: Extracted helper.
 
-        Issue #934: Accepts optional where filter for permission-based pre-filtering.
-        Issue #8392: Records access for CollectionTierManager hot/warm/cold promotion.
+        Issue #934: optional where filter for permission pre-filtering; #8392: tier access recording.
         """
-        chroma_collection = self.vector_store._collection
-
+        chroma_collection = self.vector_store._collection  # the KB-read guard counts this read (kept a plain assign)
+        if store is not None:
+            chroma_collection = store._collection  # #19379: the caller's snapshot
         # Issue #8392: Record collection access for tiering promotions (non-critical).
         try:
             from knowledge.tiering import get_tier_manager
@@ -532,10 +491,10 @@ class SearchMixin:
         if filter_parts:
             base_filters = filter_parts
 
-        if mode == "keyword":
+        if mode == CategoryDefaults.SEARCH_MODE_KEYWORD:
             return await self._keyword_search(processed_query, fetch_limit, category)
-        elif mode == "semantic":
-            return await self.search(
+        elif mode == CategoryDefaults.SEARCH_MODE_SEMANTIC:
+            return await self._dispatch_search(
                 processed_query,
                 top_k=fetch_limit,
                 filters=base_filters,
@@ -619,7 +578,7 @@ class SearchMixin:
         category: str | None = None,
         tags: List[str] | None = None,
         tags_match_any: bool = False,
-        mode: str = "hybrid",
+        mode: str = CategoryDefaults.SEARCH_MODE_HYBRID,
         enable_reranking: bool = False,
         min_score: float = 0.0,
         board_id: str | None = None,
@@ -767,28 +726,7 @@ class SearchMixin:
 
     def _extract_search_params(self, ctx: SearchContext) -> Dict[str, Any]:
         """Extract search parameters from context (Issue #398: extracted)."""
-        return {
-            "query": ctx.query_params.query,
-            "limit": ctx.query_params.limit,
-            "offset": ctx.query_params.offset,
-            "tags": ctx.query_params.tags,
-            "tags_match_any": ctx.query_params.tags_match_any,
-            "exclude_terms": ctx.query_params.exclude_terms,
-            "require_terms": ctx.query_params.require_terms,
-            "category": ctx.filters.category,
-            "created_after": ctx.filters.created_after,
-            "created_before": ctx.filters.created_before,
-            "exclude_sources": ctx.filters.exclude_sources,
-            "verified_only": ctx.filters.verified_only,
-            "mode": ctx.options.mode,
-            "enable_reranking": ctx.options.enable_reranking,
-            "min_score": ctx.options.min_score,
-            "enable_query_expansion": ctx.options.enable_query_expansion,
-            "enable_relevance_scoring": ctx.options.enable_relevance_scoring,
-            "enable_clustering": ctx.options.enable_clustering,
-            "track_analytics": ctx.options.track_analytics,
-            "session_id": ctx.session_id,
-        }
+        return extract_search_params(ctx)
 
     async def _execute_multi_query_search(
         self,

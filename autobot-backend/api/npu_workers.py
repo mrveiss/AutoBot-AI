@@ -40,15 +40,16 @@ from fastapi.responses import JSONResponse
 
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
+from autobot_shared.http_egress_guard import assert_egress_policy
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_management.types import DATABASE_MAPPING
 from autobot_shared.ssot_config import DEFAULT_EMBEDDING_MODEL, DEFAULT_LLM_MODEL
 from autobot_shared.time_utils import utc_timestamp
 from models.npu_models import (
     LoadBalancingConfig,
-    NPUWorkerConfig,
+    NPUWorkerDefinition,
     NPUWorkerDetails,
-    NPUWorkerMetrics,
+    NPUWorkerLoadMetrics,
     WorkerHeartbeat,
     WorkerTestResult,
 )
@@ -109,7 +110,7 @@ async def list_workers(admin_check: bool = Depends(check_admin_permission)):
 )
 async def add_worker(
     admin_check: bool = Depends(check_admin_permission),
-    worker_config: NPUWorkerConfig = None,
+    worker_config: NPUWorkerDefinition = None,
 ):
     """
     Register a new NPU worker.
@@ -193,7 +194,7 @@ async def get_worker(
 async def update_worker(
     admin_check: bool = Depends(check_admin_permission),
     worker_id: str = None,
-    worker_config: NPUWorkerConfig = None,
+    worker_config: NPUWorkerDefinition = None,
 ):
     """
     Update existing worker configuration.
@@ -317,7 +318,7 @@ async def test_worker(
         raise_internal_error("Failed to test worker")
 
 
-@router.get("/npu/workers/{worker_id}/metrics", response_model=NPUWorkerMetrics | None)
+@router.get("/npu/workers/{worker_id}/metrics", response_model=NPUWorkerLoadMetrics | None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_worker_metrics",
@@ -401,6 +402,7 @@ async def get_worker_log_level(
         worker_url = f"http://{worker.config.ip_address}:{worker.config.port}"
 
         async with httpx.AsyncClient(timeout=5.0) as client:
+            # pending #18257: node-registry provider / admin-only pairing to a registered node
             response = await client.get(f"{worker_url}/config/logging")
             if response.status_code != 200:
                 raise_internal_error(f"Worker returned error: {response.status_code}")
@@ -418,6 +420,7 @@ async def _send_log_level_to_worker(worker_url: str, level: str, worker_id: str)
     import httpx
 
     async with httpx.AsyncClient(timeout=5.0) as client:
+        # pending #18257: node-registry provider / admin-only pairing to a registered node
         response = await client.put(f"{worker_url}/config/logging", params={"level": level})
         if response.status_code != 200:
             raise_internal_error(f"Worker returned error: {response.status_code}")
@@ -613,17 +616,12 @@ async def proxy_npu_health():
     """
     from autobot_shared.ssot_config import config as ssot_config
 
-    npu_host = ssot_config.vm.npu
-    npu_port = ssot_config.port.npu
-    url = f"http://{npu_host}:{npu_port}/health"
-
+    url = f"{ssot_config.npu_worker_url}/health"
     try:
+        await assert_egress_policy(url)  # server-chosen SSOT npu_worker origin; redirects stay off (httpx default)
         async with httpx.AsyncClient(timeout=5.0) as client:
             resp = await client.get(url)
-            return JSONResponse(
-                status_code=resp.status_code,
-                content=resp.json(),
-            )
+            return JSONResponse(status_code=resp.status_code, content=resp.json())
     except httpx.ConnectError:
         return JSONResponse(
             status_code=503,
@@ -868,6 +866,7 @@ async def _check_worker_health(client: httpx.AsyncClient, worker_url: str) -> Wo
         HTTPException: If worker is unreachable or health check fails
     """
     try:
+        # pending #18257: node-registry provider / admin-only pairing to a registered node
         health_response = await client.get(f"{worker_url}/health")
         if health_response.status_code != 200:
             raise_invalid_input("worker_url", f"health check failed: {health_response.status_code}")
@@ -958,6 +957,7 @@ async def _send_pairing_request(
     }
 
     try:
+        # pending #18257: node-registry provider / admin-only pairing to a registered node
         pair_response = await client.post(f"{worker_url}/pair", json=pair_request)
         if pair_response.status_code != 200:
             raise_invalid_input("worker_url", f"Worker rejected pairing: {pair_response.text}")
@@ -1001,7 +1001,7 @@ async def _register_worker_in_backend(
         )
         await manager.update_worker_status_from_heartbeat(heartbeat)
     else:
-        new_config = NPUWorkerConfig(
+        new_config = NPUWorkerDefinition(
             id=worker_id,
             name=worker_name or f"NPU Worker ({platform})",
             url=worker_url,

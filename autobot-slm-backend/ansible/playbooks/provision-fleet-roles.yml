@@ -129,7 +129,7 @@
     - name: "[PRE-FLIGHT] Ensure code_source has full history, not a shallow clone (#16310)"
       ansible.builtin.command:
         cmd: >-
-          /opt/autobot/autobot-slm-backend/venv/bin/python3
+          {{ autobot.base_dir }}/autobot-slm-backend/venv/bin/python3
           {{ git_repo_root }}/autobot-slm-backend/scripts/sync_deletion_planner.py
           ensure-full-history --repo-root {{ git_repo_root }}
       changed_when: false
@@ -616,7 +616,7 @@
     # deps already installed.
     - name: "SLM | Ensure SLM frontend node_modules exist (#7472)"
       community.general.npm:
-        path: "{{ slm_frontend_dir | default('/opt/autobot/autobot-slm-frontend') }}"
+        path: "{{ slm_frontend_dir | default(autobot.base_dir ~ '/autobot-slm-frontend') }}"
         state: present
       become_user: "{{ slm_user | default('autobot') }}"
       when: _is_slm_frontend_colocated | bool
@@ -632,7 +632,7 @@
       ansible.builtin.include_tasks: ../roles/_shared/tasks/build_publish_slm_frontend.yml
       vars:
         slm_frontend_publish_label: "SLM"
-        slm_frontend_publish_dir: "{{ slm_frontend_dir | default('/opt/autobot/autobot-slm-frontend') }}"
+        slm_frontend_publish_dir: "{{ slm_frontend_dir | default(autobot.base_dir ~ '/autobot-slm-frontend') }}"
         slm_frontend_publish_user: "{{ slm_user | default('autobot') }}"
       when: _is_slm_frontend_colocated | bool
       tags: ['frontend', 'slm-nginx', 'provision']
@@ -859,6 +859,15 @@
       become: false
       tags: ['mark-synced']
 
+    - name: "Mark-synced | Resolve the SLM admin password (#19318)"
+      ansible.builtin.include_tasks:
+        file: ../_shared/tasks/read_slm_admin_password.yml
+        apply:
+          tags: ['mark-synced']
+      vars:
+        require_slm_admin_password: false
+      tags: ['mark-synced']
+
     - name: "Mark-synced | Login to SLM API"
       ansible.builtin.uri:
         url: "https://{{ _slm_api_host }}/slm/api/auth/login"
@@ -866,7 +875,7 @@
         body_format: json
         body:
           username: "admin"
-          password: "{{ slm_admin_password | default(lookup('env', 'SLM_ADMIN_PASSWORD')) | default('admin', true) }}"
+          password: "{{ slm_admin_password }}"
         validate_certs: false
         status_code: [200, 401, 403]
         timeout: 10
@@ -903,6 +912,7 @@
       ignore_errors: true
       when: _slm_login.status == 200
       tags: ['mark-synced']
+      no_log: true  # #19764: credentials in the request or response
 
 # -------------------------------------------------------------------
 # Phase 7: Summary

@@ -32,9 +32,9 @@ if str(_here) not in sys.path:
 
 from pipeline_dispatcher import (  # noqa: E402
     PipelineDispatcher,
+    PipelineWorker,
+    PipelineWorkerState,
     WorkerDroppedError,
-    WorkerNode,
-    WorkerState,
 )
 
 # ---------------------------------------------------------------------------
@@ -52,8 +52,8 @@ _PROMPT = "Hello, pipeline"
 # ---------------------------------------------------------------------------
 
 
-def _make_worker(worker_id: str, vram_bytes: int = _8_GB) -> WorkerNode:
-    return WorkerNode(worker_id=worker_id, vram_bytes=vram_bytes, state=WorkerState.ONLINE)
+def _make_worker(worker_id: str, vram_bytes: int = _8_GB) -> PipelineWorker:
+    return PipelineWorker(worker_id=worker_id, vram_bytes=vram_bytes, state=PipelineWorkerState.ONLINE)
 
 
 @pytest.fixture
@@ -170,7 +170,7 @@ async def test_fallback_fires_when_worker_drops_mid_run():
 
     async def _flaky_call(worker, layer_count, prompt, max_tokens):
         if worker.worker_id == "npu-1":
-            worker.state = WorkerState.OFFLINE
+            worker.state = PipelineWorkerState.OFFLINE
             raise WorkerDroppedError(worker.worker_id)
         return await original_call_worker(worker, layer_count, prompt, max_tokens)
 
@@ -195,7 +195,7 @@ async def test_fallback_rate_accumulates_across_runs():
 
     async def _sometimes_flaky(worker, layer_count, prompt, max_tokens):
         if run_counter["n"] == 0 and worker.worker_id == "npu-1":
-            worker.state = WorkerState.OFFLINE
+            worker.state = PipelineWorkerState.OFFLINE
             raise WorkerDroppedError(worker.worker_id)
         return await original_call_worker(worker, layer_count, prompt, max_tokens)
 

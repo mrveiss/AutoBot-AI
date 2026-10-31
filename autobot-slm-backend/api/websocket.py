@@ -13,14 +13,19 @@ import logging
 import time
 from typing import Dict, Set
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect, status
 
+from autobot_shared.auth.interactive_principal import is_purpose_bound, is_service_token
+from autobot_shared.auth.revocation_unavailable import REVOCATION_UNAVAILABLE_DETAIL
 from autobot_shared.time_utils import utc_timestamp
 from autobot_shared.websocket_subprotocol import accept_websocket, negotiated_subprotocol, resolve_ws_token
 from services.auth import auth_service
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ws", tags=["websocket"])
+
+# RFC 6455 close code 1013: the server cannot serve right now, retry later (#18892).
+_WS_TRY_AGAIN_LATER = 1013
 
 
 def _extract_ws_token(websocket: WebSocket) -> str | None:
@@ -69,13 +74,32 @@ def _log_ws_reject_context(websocket: WebSocket, reason: str) -> None:
     )
 
 
+async def _close_for_decode_error(websocket: WebSocket, exc: HTTPException) -> None:
+    """Deny a token whose decode raised, via a WebSocket close frame (no HTTP response is possible).
+
+    #16387: decode_token_async raises (rather than returning None) when a revocation check could
+    not run. #18892: "could not decide" (503) closes 1013 (try again later), not the 4001 auth
+    failure, so a client does not treat a valid session as dead. Any other HTTPException is a
+    rejected token and closes 4001.
+    """
+    unavailable = exc.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    _log_ws_reject_context(websocket, "revocation check unavailable" if unavailable else "token rejected")
+    await accept_websocket(websocket)
+    if unavailable:
+        await websocket.close(code=_WS_TRY_AGAIN_LATER, reason=REVOCATION_UNAVAILABLE_DETAIL)
+    else:
+        await websocket.close(code=4001, reason="Invalid or expired token")
+
+
 async def _authenticate_websocket_token(websocket: WebSocket) -> dict | None:
     """Authenticate a WebSocket connection.
 
     Extracts the JWT via subprotocol header (preferred) or query param
     (fallback), validates it, accepts the socket on success, and returns
-    the decoded payload.  On failure, accepts then closes with code 4001
-    so the browser receives a proper WS frame rather than an HTTP 403.
+    the decoded payload.  On failure, accepts then closes so the browser
+    receives a proper WS frame rather than an HTTP 403: code 4001 for a
+    missing, invalid or expired token, code 1013 (try again later) when the
+    revocation check could not run (#18892).
 
     NOTE: the close MUST be preceded by accept() so uvicorn sends a proper
     WebSocket close frame (code 4001) rather than converting an unaccepted
@@ -98,15 +122,14 @@ async def _authenticate_websocket_token(websocket: WebSocket) -> dict | None:
 
     try:
         payload = await auth_service.decode_token_async(token)
-    except HTTPException:
-        # #16387: decode_token_async raises (rather than returning None) when
-        # a revocation check could not run at all, so the token is denied the
-        # same as any other invalid token -- just via a WebSocket close frame
-        # instead of an HTTP 401, since no HTTP response can be sent here.
-        _log_ws_reject_context(websocket, "revocation check failed")
-        await accept_websocket(websocket)
-        await websocket.close(code=4001, reason="Invalid or expired token")
+    except HTTPException as exc:
+        await _close_for_decode_error(websocket, exc)
         return None
+
+    # #18338: a session or the backend's service token -- never a token minted for another
+    # purpose, such as the MFA-pending temp token issued before the second factor.
+    if payload and is_purpose_bound(payload) and not is_service_token(payload):
+        payload = None
 
     if not payload:
         _log_ws_reject_context(websocket, "invalid token")

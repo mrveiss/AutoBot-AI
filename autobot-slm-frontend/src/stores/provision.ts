@@ -25,6 +25,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
+import { useDashboardPoller } from '@/composables/useDashboardPoller'
 import { getConfig } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -72,7 +73,6 @@ export const useProvisionStore = defineStore('provision', () => {
 
   // ── Internal: WebSocket lifecycle ───────────────────────────────────────
   let ws: WebSocket | null = null
-  let pollTimer: number | null = null
   let linesSeen = 0
   let lastWsMessageAt = 0
   let staleTaskTimer: number | null = null
@@ -184,44 +184,52 @@ export const useProvisionStore = defineStore('provision', () => {
   }
 
   // ── Internal: polling fallback ──────────────────────────────────────────
-  function startPolling(): void {
-    if (pollTimer !== null) return
-    logger.info('Starting provision polling fallback')
-    pollTimer = window.setInterval(async () => {
-      try {
-        const result = await api.getProvisionStatus(linesSeen)
-        if (result.lines.length > 0) {
-          for (const line of result.lines) {
-            logs.value.push({ type: 'info', message: line })
-          }
-          linesSeen = result.total_lines
-        }
-        if (result.elapsed_seconds !== undefined) {
-          elapsedSeconds.value = Math.round(result.elapsed_seconds)
-        }
-        if (result.status === 'completed') {
-          status.value = 'completed'
-          finishedAt.value = Date.now()
-          stopPolling()
-          // Try reconnecting WS for any final messages
-          connectWs()
-        } else if (result.status === 'failed') {
-          status.value = 'failed'
-          error.value = result.error || 'Provisioning failed'
-          finishedAt.value = Date.now()
-          stopPolling()
-        }
-      } catch (err) {
-        logger.error('Provision polling error', err)
+  // #19482: the shared dashboard policy. The poller lives in the store's scope, so it
+  // outlives the wizard view (#7096); it stops after repeated failures and `pollingPaused`
+  // lets the wizard show the paused alert, whose Retry calls `retryPolling`.
+  const statusPoller = useDashboardPoller(pollProvisionStatus, POLL_INTERVAL_MS)
+  const pollingPaused = computed(() => statusPoller.pausedOnErrors.value)
+
+  /** One poll tick; a failed read throws so the poller counts it. */
+  async function pollProvisionStatus(): Promise<void> {
+    const result = await api.getProvisionStatus(linesSeen)
+    if (result.lines.length > 0) {
+      for (const line of result.lines) {
+        logs.value.push({ type: 'info', message: line })
       }
-    }, POLL_INTERVAL_MS) as unknown as number
+      linesSeen = result.total_lines
+    }
+    if (result.elapsed_seconds !== undefined) {
+      elapsedSeconds.value = Math.round(result.elapsed_seconds)
+    }
+    if (result.status === 'completed') {
+      status.value = 'completed'
+      finishedAt.value = Date.now()
+      stopPolling()
+      // Try reconnecting WS for any final messages
+      connectWs()
+    } else if (result.status === 'failed') {
+      status.value = 'failed'
+      error.value = result.error || 'Provisioning failed'
+      finishedAt.value = Date.now()
+      stopPolling()
+    }
+  }
+
+  function startPolling(): void {
+    if (statusPoller.isPolling.value) return
+    logger.info('Starting provision polling fallback')
+    statusPoller.start('')
   }
 
   function stopPolling(): void {
-    if (pollTimer !== null) {
-      clearInterval(pollTimer)
-      pollTimer = null
-    }
+    statusPoller.stop()
+  }
+
+  /** Retry after the poller paused on repeated failures. */
+  function retryPolling(): void {
+    logger.info('Restarting provision polling after a pause')
+    statusPoller.start('')
   }
 
   // ── Internal: stale-heartbeat watcher ───────────────────────────────────
@@ -346,5 +354,7 @@ export const useProvisionStore = defineStore('provision', () => {
     reset,
     connectWs,
     disconnectWs,
+    pollingPaused,
+    retryPolling,
   }
 })

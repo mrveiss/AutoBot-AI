@@ -169,18 +169,14 @@ class ServiceConfigMixin:
     def get_backend_config(self) -> Dict[str, Any]:
         """Get backend configuration with fallback defaults.
 
-        #15051: `service_discovery.py`'s `_register_backend_service` reads
-        `backend_config.get("host")` and `.get("port")` -- the "host"/"port"
-        convention every sibling accessor here uses (`get_redis_config()`,
-        `get_distributed_services_config()`) -- and logs an error on every
-        process start when they come back None, silently falling back to
-        `system_defaults`. This dict never set them: "server_host"/"server_port"
-        are the BIND address (0.0.0.0 by default), not the DIAL address a
-        caller would connect to, and nothing populated the latter. `get_host()`
-        / `get_port()` are the canonical resolvers for exactly that (env var,
-        `infrastructure.hosts.backend`, then the fallback map), so this wires
-        them in rather than leaving every caller to reimplement the fallback
-        `service_discovery.py` already carries.
+        #15051: callers read `host` and `port` -- the convention every sibling
+        accessor here uses (`get_redis_config()`,
+        `get_distributed_services_config()`). "server_host"/"server_port" are the
+        BIND address (0.0.0.0 by default), not the DIAL address a caller would
+        connect to. `get_host()` / `get_port()` are the canonical resolvers for
+        the DIAL address (env var, `infrastructure.hosts.backend`, then the
+        fallback map), so this wires them in rather than leaving every caller to
+        reimplement the fallback.
         """
         backend_config = self.get_nested("backend", {})
 
@@ -211,9 +207,8 @@ class ServiceConfigMixin:
 
         Issue #12748: CANONICAL core Redis connection config. Reached via
         ConfigManager (unified_config_manager / global_config_manager /
-        config_manager), config.get_redis_config() (config/__init__.py, pure
-        delegate), and config.compat.get_redis_config(manager) (pure
-        delegate). config.__init__._ConfigStub.get_redis_config() mirrors
+        config_manager) and config.get_redis_config() (config/__init__.py,
+        pure delegate). config.__init__._ConfigStub.get_redis_config() mirrors
         this shape for the circular-import re-entry path only.
 
         NOT the same concern as services.config_service.ConfigService.
@@ -221,6 +216,7 @@ class ServiceConfigMixin:
         db index db_tasks vs db_main here) — that is a different scope/owner
         sharing only the function name, intentionally left unconverged.
         """
+        from autobot_shared.redis_management.database_names import database_number
         from autobot_shared.ssot_config import config as ssot
 
         return {
@@ -229,7 +225,7 @@ class ServiceConfigMixin:
             "port": ssot.port.redis,
             "password": ssot.redis.password,
             "username": ssot.redis.username,
-            "db": ssot.redis.db_main,
+            "db": database_number("main"),  # #19232: the one name -> number table
         }
 
     def get_ollama_url(self) -> str:
@@ -266,14 +262,12 @@ class ServiceConfigMixin:
         return self.get_ollama_endpoint_for_model(model_name)
 
     def get_redis_url(self) -> str:
-        """Get the Redis service URL from configuration (backward compatibility)"""
-        env_url = ssot_config.redis_url
-        if env_url:
-            return env_url
+        """The Redis URL without credentials (backward compatibility).
 
-        host = self.get_nested("memory.redis.host", NetworkConstants.LOCALHOST_IP)
-        port = self.get_nested("memory.redis.port", NetworkConstants.REDIS_PORT)
-        return f"redis://{host}:{port}"
+        #19232: the one endpoint resolver builds it; the ``memory.redis`` fallback
+        here was a second builder, and unreachable once ``redis_url`` always answers.
+        """
+        return ssot_config.redis_url
 
     def get_distributed_services_config(self) -> Dict[str, Any]:
         """Get distributed services configuration from NetworkConstants"""

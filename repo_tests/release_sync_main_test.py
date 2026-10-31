@@ -35,6 +35,8 @@ import yaml
 from repo_tests._paths import repo_root
 from repo_tests._release_sync_fakes import BASE, HEAD, REPO, SCRIPT, SOURCE, _api, _pull, _run, load_script
 
+from tools.lint._comment_syntax import code_text
+
 _REPO_ROOT = repo_root()
 _SCRIPT = SCRIPT
 _WORKFLOW = _REPO_ROOT / ".github/workflows/sync-main-to-release.yml"
@@ -413,7 +415,9 @@ def _shell_bodies() -> List[str]:
     for job in _spec()["jobs"].values():
         for step in job.get("steps", []):
             if "run" in step:
-                bodies.append("\n".join(line for line in step["run"].splitlines() if not line.lstrip().startswith("#")))
+                # #17941: shared stripper, same operation as
+                # `parked_branch_merge_workflow_test` performs on `run:` bodies.
+                bodies.append(code_text(step["run"], name="x.sh"))
     return bodies
 
 

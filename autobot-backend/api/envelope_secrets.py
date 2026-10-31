@@ -28,7 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth_middleware import get_auth_middleware, verify_internal_api_key
+from auth_middleware import resolve_human_user, verify_internal_api_key
 from autobot_shared.secrets_vault import VaultKind, VaultRef
 from llc.deps import get_session
 from models.secret import Secret
@@ -58,8 +58,8 @@ def get_coordinator() -> SecretsCoordinator:
 
 
 async def principal(request: Request) -> tuple[uuid.UUID, set[str]]:
-    """Resolve the caller to ``(user_id, permission_names)``; 401 when unauthenticated."""
-    user = get_auth_middleware().get_user_from_request(request)
+    """Resolve the caller to ``(user_id, permission_names)``; 401 when unauthenticated or revoked (#18688)."""
+    user = await resolve_human_user(request)
     if not user or not user.get("user_id"):
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "authentication required")
     user_id = uuid.UUID(str(user["user_id"]))

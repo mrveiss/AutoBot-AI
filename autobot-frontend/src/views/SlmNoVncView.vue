@@ -41,8 +41,8 @@ import Icon from '@/components/ui/Icon.vue'
 // #17370: the desktop socket refuses a caller without `mcp.desktop.control`
 // (#17054/#17369). Gated through `holdsPermission` -- the role table, no
 // administrative override -- so this agrees with the socket on every role,
-// including superadmin, whose table entry is empty and whom the socket
-// refuses while `hasPermission` would return true.
+// including superadmin, whose table entry is derived from admin's (#19125)
+// and so holds the permission the socket requires.
 //
 // Not the boundary. The socket is. This is so a refused caller reads an
 // explanation instead of a viewer that never connects.

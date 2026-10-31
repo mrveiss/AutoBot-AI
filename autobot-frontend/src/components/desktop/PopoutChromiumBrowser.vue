@@ -406,7 +406,7 @@
               <Icon name="hand-paper" class="mr-1" />
               {{ $t('desktop.popoutBrowser.takeControl') }}
             </BaseButton>
-            <BaseButton variant="outline-solid" @click="hideInteractionOverlay">
+            <BaseButton variant="outline" @click="hideInteractionOverlay">
               {{ $t('desktop.popoutBrowser.dismiss') }}
             </BaseButton>
           </div>
@@ -429,7 +429,7 @@ import ScrapeTemplatePanel from '@/components/browser/ScrapeTemplatePanel.vue'
 import LoadingBoundary from '@/components/ui/LoadingBoundary.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import StatusBadge from '@/components/ui/StatusBadge.vue'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseButton } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { useAsyncHandler } from '@/composables/useErrorHandler'
 import { createLogger } from '@/utils/debugUtils'
@@ -1223,7 +1223,7 @@ export default {
   top: var(--spacing-5);
   right: var(--spacing-5);
   width: 300px;
-  z-index: 20;
+  z-index: var(--z-20);
 }
 
 </style>

@@ -19,7 +19,7 @@ This document shows how to migrate from duplicate timeout/debounce implementatio
 
 ## Debounce Patterns
 
-### Example 1: Custom Debounce Implementation (WebResearchSettings.vue)
+### Example 1: Custom Debounce Implementation
 
 **BEFORE (lines 429-454):**
 ```vue
@@ -616,6 +616,7 @@ const fetchWithRetry = async (url: string, maxRetries = 3) => {
 **AFTER:**
 ```vue
 <script setup lang="ts">
+import { backoffDelay } from '@autobot/ui'
 import { useSleep } from '@/composables/useTimeout'
 
 const fetchWithRetry = async (url: string, maxRetries = 3) => {
@@ -624,8 +625,8 @@ const fetchWithRetry = async (url: string, maxRetries = 3) => {
       return await fetch(url)
     } catch (error) {
       if (i < maxRetries - 1) {
-        // Exponential backoff: 1s, 2s, 4s
-        await useSleep(1000 * Math.pow(2, i))
+        // Exponential backoff: 1s, 2s, 4s (the one formula, #15402)
+        await useSleep(backoffDelay(i, { base: 1000 }))
       }
     }
   }

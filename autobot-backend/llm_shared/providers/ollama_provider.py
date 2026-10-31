@@ -6,7 +6,7 @@
 Ollama provider for the multi-provider LLM layer (#1806).
 
 Registry-facing BaseProvider implementation that delegates chat_completion
-to ``llm_shared.providers.ollama.OllamaProvider`` (which carries
+to ``llm_shared.providers.ollama.OllamaRequestExecutor`` (which carries
 OpenTelemetry tracing and circuit breaker protection) while implementing
 stream_completion directly for true incremental chunk delivery.
 
@@ -43,7 +43,7 @@ class OllamaProvider(BaseProvider):
     """
     Ollama provider implementation conforming to BaseProvider.
 
-    Delegates to the existing llm_shared OllamaProvider (the inner one
+    Delegates to the existing llm_shared OllamaRequestExecutor (the inner one
     at providers/ollama.py) for actual inference and streaming while exposing
     the uniform BaseProvider interface required by the ProviderRegistry.
     """
@@ -94,16 +94,16 @@ class OllamaProvider(BaseProvider):
         return self._base_url
 
     def _ensure_delegate(self):
-        """Lazily construct the llm_shared OllamaProvider delegate."""
+        """Lazily construct the llm_shared OllamaRequestExecutor delegate."""
         if self._delegate is not None:
             return self._delegate
         from llm_shared.models import LLMSettings
-        from llm_shared.providers.ollama import OllamaProvider as _OllamaProvider
+        from llm_shared.providers.ollama import OllamaRequestExecutor
         from llm_shared.streaming import StreamingManager
 
         settings = LLMSettings()
         streaming_manager = StreamingManager()
-        self._delegate = _OllamaProvider(
+        self._delegate = OllamaRequestExecutor(
             settings=settings,
             streaming_manager=streaming_manager,
         )

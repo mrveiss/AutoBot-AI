@@ -8,9 +8,9 @@
  */
 
 import { ref, computed, onMounted, watch } from 'vue'
-import BaseBadge from '@/components/base/BaseBadge.vue'
+import { BaseBadge } from '@autobot/ui'
 import { useConnectorJob, fetchConnectorHistory } from '@/composables/knowledge/useConnectorJob'
-import { formatTimeAgo } from '@/utils/formatHelpers'
+import { formatTimeAgo, formatDuration } from '@/utils/formatHelpers'
 import { createLogger } from '@/utils/debugUtils'
 import type { ConnectorHistoryEntry } from '@/types/knowledgeBase'
 
@@ -69,10 +69,10 @@ function toggleRow(index: number) {
   }
 }
 
-function statusVariant(status: string | null): 'success' | 'danger' | 'warning' | 'neutral' {
+function statusVariant(status: string | null): 'success' | 'error' | 'warning' | 'neutral' {
   switch (status) {
     case 'success': return 'success'
-    case 'failed': return 'danger'
+    case 'failed': return 'error'
     case 'partial': return 'warning'
     default: return 'neutral'
   }
@@ -90,13 +90,7 @@ function errorList(entry: ConnectorHistoryEntry): string[] {
   return []
 }
 
-function formatDuration(seconds: number | null): string {
-  if (seconds === null) return '—'
-  if (seconds < 60) return `${seconds.toFixed(1)}s`
-  const m = Math.floor(seconds / 60)
-  const s = Math.round(seconds % 60)
-  return `${m}m ${s}s`
-}
+const DURATION_OPTIONS = { style: 'secondsCompact' } as const
 </script>
 
 <template>
@@ -138,7 +132,7 @@ function formatDuration(seconds: number | null): string {
             {{ entry.status ?? '?' }}
           </BaseBadge>
           <span class="row-time">{{ entry.started_at ? formatTimeAgo(entry.started_at) : '?' }}</span>
-          <span class="row-duration">{{ formatDuration(entry.duration_seconds) }}</span>
+          <span class="row-duration">{{ formatDuration(entry.duration_seconds, DURATION_OPTIONS) }}</span>
           <span class="row-counts">
             +{{ entry.added ?? 0 }} ~{{ entry.updated ?? 0 }} -{{ entry.deleted ?? 0 }}
           </span>

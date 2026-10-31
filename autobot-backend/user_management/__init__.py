@@ -14,6 +14,6 @@ This module provides enterprise-grade user management with:
 - PostgreSQL storage with SQLAlchemy async
 """
 
-from user_management.config import DeploymentMode, get_deployment_config
+from user_management.config import UserManagementMode, get_deployment_config
 
-__all__ = ["DeploymentMode", "get_deployment_config"]
+__all__ = ["UserManagementMode", "get_deployment_config"]

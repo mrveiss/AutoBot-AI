@@ -15,8 +15,7 @@ import type {
   ConnectorType
 } from '@/types/knowledgeBase'
 import { knowledgeRepository } from '@/models/repositories/KnowledgeRepository'
-import { BaseModal } from '@autobot/ui'
-import BaseButton from '@/components/base/BaseButton.vue'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import ConnectorOAuthButton from '@/components/knowledge/connectors/ConnectorOAuthButton.vue'
 import { createLogger } from '@/utils/debugUtils'
 import { useI18n } from 'vue-i18n'
@@ -1249,7 +1248,7 @@ function closeModal() {
       <!-- Test Connection (edit mode only) -->
       <div v-if="isEditing" class="test-section">
         <BaseButton
-          variant="outline-solid"
+          variant="outline"
           size="sm"
           :loading="testing"
           @click="testConnection"

@@ -51,7 +51,16 @@ import pathlib
 import re
 import sys
 
-# Plain stdlib logging, deliberately (#1082, matching check_flake8_exclude_anchoring.py
+# #13842: sibling-directory insert, so this resolves whether the checker
+# runs as a script (`python3 tools/lint/<name>.py`, which CI does) or is
+# imported as a module. A `tools.lint.` path works only in the second
+# case and fails the first with ModuleNotFoundError.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+from _scan_helpers import configure_logging  # noqa: E402
+from _scan_helpers import report_audit  # noqa: E402
+from _scan_helpers import project_root as repo_root  # noqa: E402
+
 # and check_python_file_size.py): this runs inside `code-quality`, which installs
 # linters only — never the application's own dependencies — so
 # `autobot_shared.logging_manager` is not importable here.
@@ -79,11 +88,6 @@ _ALLOWLIST_FILE = "repo_tests/requirements_ci_drift_baseline.txt"
 GUARD_INPUT_PATHS = (*_PRODUCTION_REQUIREMENTS, _CI_REQUIREMENTS, "requirements-ci/*.txt", _ALLOWLIST_FILE)
 
 _NAME_RE = re.compile(r"^([A-Za-z0-9][A-Za-z0-9._-]*)")
-
-
-def repo_root() -> pathlib.Path:
-    """Repo root derived from this file, never from the caller's cwd."""
-    return pathlib.Path(__file__).resolve().parents[2]
 
 
 def _normalize(name: str) -> str:
@@ -382,38 +386,8 @@ def audit_drift(root: pathlib.Path | None = None) -> tuple[int, list[str]]:
     return len(production), problems
 
 
-def configure_logging() -> None:
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stderr)
-        handler.setFormatter(logging.Formatter("%(message)s"))
-        logger.addHandler(handler)
-    logger.setLevel(logging.INFO)
-
-
-def run_audit() -> int:
-    reached, problems = audit_drift()
-    pairs, constraint_problems = audit_constraint_drift()
-    problems = [*problems, *constraint_problems]
-    if problems:
-        logger.error("%s", "\n\n".join(problems))
-        logger.error(
-            "\nrequirements-ci drift audit FAILED over %d production package(s) (#14551) "
-            "and %d shared pair(s) (#17448).",
-            reached,
-            pairs,
-        )
-        return 1
-    logger.info(
-        "requirements-ci drift audit clean: %d production package(s) mirrored (#14551), "
-        "%d shared pair(s) constraint-checked (#17448).",
-        reached,
-        pairs,
-    )
-    return 0
-
-
 def main(argv: list[str]) -> int:
-    configure_logging()
+    configure_logging(logger)
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--audit",
@@ -423,7 +397,19 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     if not args.audit:
         parser.error("nothing to do — pass --audit")
-    return run_audit()
+    reached, problems = audit_drift()
+    pairs, constraint_problems = audit_constraint_drift()
+    problems = [*problems, *constraint_problems]
+    return report_audit(
+        logger,
+        problems,
+        "\nrequirements-ci drift audit FAILED over %d production package(s) (#14551) "
+        "and %d shared pair(s) (#17448).",
+        "requirements-ci drift audit clean: %d production package(s) mirrored (#14551), "
+        "%d shared pair(s) constraint-checked (#17448).",
+        reached,
+        pairs,
+    )
 
 
 if __name__ == "__main__":

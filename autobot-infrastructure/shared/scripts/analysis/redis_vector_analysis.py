@@ -12,11 +12,17 @@ import asyncio
 import json
 import logging
 import sys
+from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
 from autobot_shared.paths import project_root
-from constants import ServiceURLs
-from langchain_redis_arm import (
+from autobot_shared.network_constants import ServiceURLs
+from autobot_shared.redis_client import RedisDatabase, require_redis_client
+
+# The sibling helper module lives beside this script; put its directory on the path so the import
+# resolves when the file is imported (pytest, tooling) as well as when it is run.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from langchain_redis_arm import (  # noqa: E402
     INSTALL_HINT,
     NOT_MEASURED,
     ModernArmUnavailable,
@@ -82,7 +88,7 @@ def _build_sample_doc(key, doc_data):
     }
 
 
-def _configure_llamaindex(ollama_base_url, embedding_model, llm_model, redis_host, redis_port, redis_db):
+def _configure_llamaindex(ollama_base_url, embedding_model, llm_model, redis_client):
     """Configure LlamaIndex LLM, embeddings, and vector store connection.
 
     Helper for test_llamaindex_with_existing_data (#825).
@@ -116,8 +122,7 @@ def _configure_llamaindex(ollama_base_url, embedding_model, llm_model, redis_hos
     )
     vector_store = RedisVectorStore(
         schema=schema,
-        redis_url="redis://%s:%s" % (redis_host, redis_port),
-        redis_kwargs={"db": redis_db},
+        redis_client=redis_client,
     )
     index = VectorStoreIndex.from_vector_store(
         vector_store=vector_store,
@@ -163,8 +168,9 @@ def _init_langchain_embeddings(embedding_model, ollama_base_url):
 
 class RedisVectorStoreAnalyzer:
     def __init__(self):
-        self.redis_host = "localhost"
-        self.redis_port = 6379
+        # Vector data lives in DB 2. Every Redis connection below -- direct and the LlamaIndex and
+        # langchain vector stores alike -- is a canonical client (#18553), so host, port, auth and
+        # TLS come from SSOT config through one path and no URL is assembled here.
         self.redis_db = 2
         self.ollama_base_url = ServiceURLs.OLLAMA_LOCAL
         self.embedding_model = "nomic-embed-text:latest"
@@ -185,19 +191,16 @@ class RedisVectorStoreAnalyzer:
             logger.error("Failed to get models: %s", e)
         return []
 
+    def _vector_store_client(self):
+        """The canonical bytes client for the vector DB; vector stores read raw embedding bytes."""
+        return require_redis_client(database=RedisDatabase(self.redis_db), decode_responses=False)
+
     async def analyze_existing_data(self) -> Dict[str, Any]:
         """Analyze the existing Redis vector data structure"""
         logger.info("Analyzing existing Redis data structure...")
 
         try:
-            import redis
-
-            client = redis.Redis(
-                host=self.redis_host,
-                port=self.redis_port,
-                db=self.redis_db,
-                decode_responses=True,
-            )
+            client = require_redis_client(database=RedisDatabase(self.redis_db), decode_responses=True)
 
             index_info = client.execute_command("FT.INFO", "llama_index")
             info_dict = _parse_index_info(index_info)
@@ -245,9 +248,7 @@ class RedisVectorStoreAnalyzer:
                 self.ollama_base_url,
                 self.embedding_model,
                 llm_model,
-                self.redis_host,
-                self.redis_port,
-                self.redis_db,
+                self._vector_store_client(),
             )
 
             query_engine = index.as_query_engine()
@@ -278,15 +279,10 @@ class RedisVectorStoreAnalyzer:
                 self.ollama_base_url,
             )
 
-            redis_url = "redis://%s:%s/%s" % (
-                self.redis_host,
-                self.redis_port,
-                self.redis_db,
-            )
             vector_store = RedisVectorStore(
                 embeddings=embeddings,
                 index_name="autobot_langchain_test",
-                redis_url=redis_url,
+                redis_client=self._vector_store_client(),
             )
 
             test_docs = [
@@ -345,14 +341,7 @@ class RedisVectorStoreAnalyzer:
         logger.info("\nTesting direct Redis FT.SEARCH capabilities...")
 
         try:
-            import redis
-
-            client = redis.Redis(
-                host=self.redis_host,
-                port=self.redis_port,
-                db=self.redis_db,
-                decode_responses=True,
-            )
+            client = require_redis_client(database=RedisDatabase(self.redis_db), decode_responses=True)
 
             queries = [
                 "deployment configuration",
@@ -660,9 +649,7 @@ class RedisVectorStoreAnalyzer:
                 self.ollama_base_url,
                 self.embedding_model,
                 llm_model,
-                self.redis_host,
-                self.redis_port,
-                self.redis_db,
+                self._vector_store_client(),
             )
 
             retriever = index.as_retriever(similarity_top_k=5)

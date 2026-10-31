@@ -113,8 +113,13 @@ class TestTerminatePidRealProcesses:
     """terminate_pid's contract against real processes: already-dead, grace, own-group guard."""
 
     async def test_already_dead_pid_returns_true(self) -> None:
-        proc = await asyncio.create_subprocess_exec("true", start_new_session=True)
+        # The child blocks on stdin until its create_time is read: a child that exits at once can be
+        # reaped before _create_time() looks it up, which raised NoSuchProcess in CI (flake).
+        proc = await asyncio.create_subprocess_exec(
+            "sh", "-c", "read _", stdin=asyncio.subprocess.PIPE, start_new_session=True
+        )
         create_time = _create_time(proc.pid)
+        proc.stdin.close()
         await proc.wait()
         result = await terminate_pid(
             proc.pid, grace_seconds=1, log_name=_TEST_LOG_NAME, expected_create_time=create_time

@@ -21,14 +21,16 @@ concrete tool for the pattern.
 import argparse
 import json
 import os
+import re
 import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List, Tuple
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.status_enums import Severity
+from utils.file_categorization import HTML_EXTENSIONS, SKIP_DIRS
 
 logger = get_logger(__name__)
 
@@ -76,8 +78,8 @@ class SecurityFixToolBase:
     """Shared backup/report/CLI skeleton for the XSS security-fix tools.
 
     Verified byte-identical between ``security_sanitizer.SecurityFixAgent``
-    and ``security_deep_sanitizer.SecurityFixAgent`` (module-level class name
-    collision across two separate scripts — not the same class).
+    and ``security_deep_sanitizer.DeepSecurityFixAgent`` (two separate scripts that
+    formerly shared a class name — not the same class).
 
     Subclasses MUST set:
         - ``REPORT_FILE_PREFIX``: filename prefix for the saved report
@@ -153,6 +155,99 @@ class SecurityFixToolBase:
         agent = cls()
         agent.run(target_path)
 
+    # --- Shared scan/inject core (#18557 slice 2) ---------------------------
+    # Formerly cloned between security_sanitizer and security_deep_sanitizer.
+    # Subclasses supply ``xss_patterns`` and the three ``_..._block`` hooks
+    # (the exact text inserted, so each tool's output is byte-for-byte kept).
+
+    _HTML_EXTENSIONS = tuple(sorted(HTML_EXTENSIONS))
+
+    def _csp_header(self) -> str:
+        """Hook: the CSP ``<meta>`` tag (without surrounding newlines)."""
+        raise NotImplementedError
+
+    def _meta_tags_block(self) -> str:
+        """Hook: exact text inserted before ``</head>`` for the meta tags."""
+        raise NotImplementedError
+
+    def _dom_helper_block(self) -> str:
+        """Hook: exact text inserted for the DOM sanitization helper."""
+        raise NotImplementedError
+
+    def validate_html_structure(self, content: str) -> bool:
+        """HTML structure validation: doctype/html/head present, scripts balanced."""
+        try:
+            has_doctype = "<!DOCTYPE" in content.upper()
+            has_html_tag = "<html" in content.lower()
+            has_head_tag = "<head" in content.lower()
+            script_opens = content.count("<script")
+            script_closes = content.count("</script>")
+            return has_doctype and has_html_tag and has_head_tag and script_opens == script_closes
+        except Exception:
+            return False
+
+    def analyze_context_safety(self, match: str, pattern_name: str) -> bool:
+        """Analyze if a potential vulnerability is actually safe in context."""
+        pattern_info = self.xss_patterns.get(pattern_name, {})
+        safe_contexts = pattern_info.get("context_safe", []) if isinstance(pattern_info, dict) else []
+        if any(safe_context in match for safe_context in safe_contexts):
+            return True
+        if self.is_minified_library_code(match):
+            return True
+        return any(framework in match for framework in ["React", "Vue", "Angular", "__webpack"])
+
+    def is_minified_library_code(self, code: str) -> bool:
+        """Detect if code appears to be from a minified library."""
+        indicators = [
+            len(code) > 200,
+            re.search(r"[a-zA-Z]\.[a-zA-Z]\.[a-zA-Z]", code),
+            code.count(",") > 10 and "\n" not in code,
+            any(lib in code.lower() for lib in ["react", "vue", "angular", "jquery", "lodash"]),
+        ]
+        return sum(bool(i) for i in indicators) >= 2
+
+    def scan_directory(self, directory: str) -> List[str]:
+        """Scan directory for HTML files to fix."""
+        html_files = []
+        try:
+            for root, _dirs, files in os.walk(directory):
+                for file in files:
+                    if file.lower().endswith(self._HTML_EXTENSIONS):
+                        html_files.append(os.path.join(root, file))
+        except Exception as e:
+            logger.error("Error scanning directory %s: %s", directory, e)
+        return html_files
+
+    def inject_security_headers(self, content: str) -> Tuple[str, List[str]]:
+        """Inject CSP headers and security meta tags into HTML head."""
+        enhancements: List[str] = []
+        head_match = re.search(r"<head[^>]*>(.*?)</head>", content, re.DOTALL | re.IGNORECASE)
+        if not head_match:
+            return content, enhancements
+        head_content = head_match.group(1)
+        head_start, head_end = head_match.start(1), head_match.end(1)
+        if not re.search(r"Content-Security-Policy", head_content, re.IGNORECASE):
+            new_head = "\n" + self._csp_header() + "\n" + head_content
+            content = content[:head_start] + new_head + content[head_end:]
+            enhancements.append("Content Security Policy (CSP) injected")
+        if not re.search(r"X-Content-Type-Options", head_content, re.IGNORECASE):
+            pos = content.find("</head>")
+            if pos != -1:
+                content = content[:pos] + self._meta_tags_block() + content[pos:]
+                enhancements.append("Security meta tags injected")
+        return content, enhancements
+
+    def inject_dom_sanitization(self, content: str) -> Tuple[str, List[str]]:
+        """Inject DOM sanitization helper script."""
+        enhancements: List[str] = []
+        injection_point = content.find("</head>")
+        if injection_point == -1:
+            injection_point = content.find("<script")
+        if injection_point != -1:
+            content = content[:injection_point] + self._dom_helper_block() + content[injection_point:]
+            enhancements.append("DOM sanitization helpers injected")
+        return content, enhancements
+
 
 class ConsoleLogToolBase:
     """Shared backup/process/CLI skeleton for the console.log auto-tools.
@@ -186,6 +281,42 @@ class ConsoleLogToolBase:
     REPORT_HELP: str = ""
     REPORT_COUNT_KEY: str = ""
     ERROR_MESSAGE: str = "File processing failed"
+    BACKUP_DIR_NAME: str = ".console-backups"
+
+    # Class-level defaults shared by both tools (#18557 slice 2); instances get
+    # their own copies in ``__init__`` so per-instance mutation stays local.
+    # Canonical skip dirs plus extras: test trees and other output dirs are not
+    # console.log targets.
+    _SKIP_DIRS = SKIP_DIRS | {"out", "tests", "test", "__tests__", "e2e", "tmp"}
+    _TARGET_EXTENSIONS = (".js", ".jsx", ".ts", ".tsx", ".vue", ".mjs")
+
+    def __init__(self, project_root: str, backup_dir: str = None):
+        self.project_root = Path(project_root)
+        self.backup_dir = Path(backup_dir) if backup_dir else self.project_root / self.BACKUP_DIR_NAME
+        self.report = {
+            "timestamp": datetime.now(tz=timezone.utc).isoformat(),
+            "files_processed": 0,
+            "files_modified": 0,
+            self.REPORT_COUNT_KEY: 0,
+            "errors": [],
+            "details": [],
+        }
+        self.skip_dirs = set(self._SKIP_DIRS)
+        self.target_extensions = set(self._TARGET_EXTENSIONS)
+
+    def should_process_file(self, file_path: Path) -> bool:
+        """Check if file should be processed."""
+        try:
+            parts = file_path.relative_to(self.project_root).parts
+        except ValueError:
+            parts = file_path.parts
+        if any(part in self.skip_dirs for part in parts):
+            return False
+        if file_path.suffix not in self.target_extensions:
+            return False
+        if any(pattern in file_path.name.lower() for pattern in ["test", "spec", "mock"]):
+            return False
+        return ".min." not in file_path.name
 
     def create_backup(self, file_path: Path) -> Path:
         """Create backup of file before modification."""

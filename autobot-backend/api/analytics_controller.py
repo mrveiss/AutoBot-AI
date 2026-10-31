@@ -16,7 +16,7 @@ Related Issues: #185 (Split), #212 (Analytics split)
 
 import asyncio
 import json
-import re
+import sys
 import time
 from collections import defaultdict
 from datetime import datetime, timezone
@@ -26,9 +26,9 @@ import psutil
 import redis
 
 from api.schemas_analytics import CodeAnalysisRequest, CommunicationPattern
+from autobot_shared.endpoint_normalization import collapse_dynamic_segments
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_async_redis_client
-from autobot_shared.ssot_config import config as _ssot
 from constants import PATH
 from constants.threshold_constants import TimingConstants
 from type_defs.common import Metadata
@@ -50,41 +50,6 @@ CODE_INDEXING_ANALYSIS_TYPES = {"full", "incremental"}
 # After normalization these should stay well under the cap, but it acts as a
 # last-resort safety net against truly novel path shapes.
 MAX_API_FREQUENCY_ENTRIES = 2000
-
-# Patterns matched left-to-right; first match wins per path segment.
-_DYNAMIC_SEGMENT_PATTERNS = [
-    # UUID v4: 8-4-4-4-12 hex groups
-    re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", re.I),
-    # Long hex strings (SHA-like, ≥16 chars)
-    re.compile(r"[0-9a-f]{16,}", re.I),
-    # Pure numeric IDs (one or more digits)
-    re.compile(r"^\d+$"),
-    # Alphanumeric slugs that look generated: starts with alpha/digit, contains
-    # both letters and digits, length ≥ 8.  Avoids collapsing short word slugs.
-    re.compile(r"^(?=[a-z0-9_-]{0,200}[a-z])(?=[a-z0-9_-]{0,200}\d)[a-z0-9_-]{8,}$", re.I),
-]
-
-
-# Simple service address function using configuration
-_SERVICE_HOST_MAP = {
-    "backend": lambda: _ssot.vm.main,
-    "frontend": lambda: _ssot.vm.frontend,
-    "redis": lambda: _ssot.vm.redis,
-    "ollama": lambda: _ssot.vm.ollama,
-    "npu_worker": lambda: _ssot.vm.npu,
-    "ai_stack": lambda: _ssot.vm.aistack,
-    "browser": lambda: _ssot.vm.browser,
-    "browser_service": lambda: _ssot.vm.browser,
-}
-
-
-def get_service_address(service_name: str, port: int, protocol: str = "http") -> str:
-    """Get standardized service address from config helper"""
-    try:
-        host = _SERVICE_HOST_MAP[service_name]()
-    except (KeyError, Exception):
-        host = "localhost"
-    return f"{protocol}://{host}:{port}"
 
 
 # Global analytics state management (shared with analytics.py)
@@ -134,23 +99,10 @@ class AnalyticsController:
         if len(parts) != 2:
             return endpoint
         method, path = parts
-        segments = path.split("/")
-        normalized = []
-        for segment in segments:
-            if not segment:
-                normalized.append(segment)
-                continue
-            # Strip query string from the last segment before pattern-matching.
-            clean = segment.split("?")[0]
-            replaced = False
-            for pattern in _DYNAMIC_SEGMENT_PATTERNS:
-                if pattern.search(clean):
-                    normalized.append("{id}")
-                    replaced = True
-                    break
-            if not replaced:
-                normalized.append(segment)
-        return f"{method} {'/'.join(normalized)}"
+        # #18093: the segment rules live in autobot_shared so the monitoring collector
+        # cannot drift from them again -- its own copy had the substitutions ordered
+        # such that a uuid was never collapsed at all.
+        return f"{method} {collapse_dynamic_segments(path)}"
 
     def _prune_api_dicts(self) -> None:
         """Drop the least-frequent entries when ``api_frequencies`` exceeds the cap.
@@ -320,8 +272,12 @@ class AnalyticsController:
     async def _run_code_analysis_suite(self, request: CodeAnalysisRequest, results: Dict):
         """Run the code analysis suite"""
         try:
+            # #13842: `sys.executable`, never bare "python3" -- this spawns
+            # repo code, whose floor is 3.14, and a bare name takes whatever
+            # PATH offers. A SyntaxError in a subprocess reads as "analysis
+            # broken", not "wrong interpreter".
             cmd = [
-                "python3",
+                sys.executable,
                 str(self.code_analysis_path / "scripts" / "analyze_project.py"),
                 "--target",
                 request.target_path,
@@ -356,8 +312,9 @@ class AnalyticsController:
     async def _run_code_indexing(self, request: CodeAnalysisRequest, results: Dict):
         """Run code indexing using code-index-mcp"""
         try:
+            # #13842: same reasoning as `_run_code_analysis_suite` above.
             cmd = [
-                "python3",
+                sys.executable,
                 str(self.code_index_path / "run.py"),
                 "--index-path",
                 request.target_path,
@@ -507,7 +464,7 @@ class AnalyticsController:
                 if redis_conn:
                     kb_info = await redis_conn.info()
                     stats["knowledge_base_usage"] = {
-                        "keys_count": kb_info.get("db1", {}).get("keys", 0),
+                        "keys_count": await redis_conn.dbsize(),  # its own DB, whichever number (#19232)
                         "memory_usage_mb": (kb_info.get("used_memory", 0) / (1024 * 1024)),
                     }
             except Exception:

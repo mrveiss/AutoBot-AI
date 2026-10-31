@@ -52,7 +52,11 @@ KNOWN_UNGATED: frozenset[str] = frozenset()
 REACH = declare(
     "router-auth-coverage",
     discover=registered_routers,
-    floor=90,
+    # Re-pinned MID-window 2026-10-04 (#17356): `_reach.verify_floor` now refuses a floor in
+    # the bottom tenth of `growth`, because that is zero tolerance dressed as an allowance.
+    # Re-measured by the mechanism itself, not carried across (#15928); the arithmetic is in
+    # the commit message, which cannot drift from the tree it describes.
+    floor=97,
     what="routers registered in core_routers.py",
     growth=20,
 )

@@ -30,6 +30,11 @@ import pytest
 # ---------------------------------------------------------------------------
 
 _SLM_ROOT = Path(__file__).parent.parent
+
+# #18088: the implementation is shared by both services now. These tests load it by
+# path with stubbed deps, so they follow the file rather than this service's copy --
+# which is a 29-line re-export shim and would make every assertion below vacuous.
+_SHARED_MIDDLEWARE = _SLM_ROOT.parent / "autobot_shared" / "user_management" / "middleware" / "rbac_middleware.py"
 _SHARED_ROOT = _SLM_ROOT.parent / "autobot_shared"
 
 for _p in (str(_SLM_ROOT), str(_SHARED_ROOT)):
@@ -56,7 +61,9 @@ _MOCK_NAMES = [
     "user_management.database",
     "user_management.config",
     # audit model — we supply a hand-rolled stub below
-    "user_management.models.audit",
+    "autobot_shared.user_management.models.audit",
+    # #17225 D1: the one audit_logs row constructor; stubbed to build the _AuditLog below.
+    "autobot_shared.user_management.audit_rows",
     "user_management.models",
     "user_management.models.base",
     # The shared audit counter rbac_middleware imports at module level (#14750).
@@ -78,7 +85,7 @@ _fastapi_mock.Request = type("Request", (), {})
 _fastapi_mock.status = http.HTTPStatus
 
 # Provide just enough of the AuditLog model/constants for the module to import.
-_audit_mod = sys.modules["user_management.models.audit"]
+_audit_mod = sys.modules["autobot_shared.user_management.models.audit"]
 
 
 class _AuditLog:
@@ -98,8 +105,9 @@ class _AuditResourceType:
 
 
 _audit_mod.AuditLog = _AuditLog
-_audit_mod.AuditAction = _AuditAction
+_audit_mod.IdentityAuditAction = _AuditAction
 _audit_mod.AuditResourceType = _AuditResourceType
+sys.modules["autobot_shared.user_management.audit_rows"].audit_row = lambda **kwargs: _AuditLog(**kwargs)
 
 # autobot_shared.logging_manager / .ssot_constants are imported by rbac_middleware
 # but were missing from _MOCK_NAMES (#13312): a bare MagicMock has no submodule
@@ -119,13 +127,22 @@ _ssot_constants_mod = MagicMock()
 _ssot_constants_mod.TTL_5_MINUTES = 300
 sys.modules["autobot_shared.ssot_constants"] = _ssot_constants_mod
 
+# #18338: the middleware scopes DB grants with the import-free grant_scope module. Load it
+# for real under its full name (a path-less MagicMock parent cannot be walked); the
+# restore block below removes it again with every other bootstrap key.
+_GRANT_SCOPE_SPEC = importlib.util.spec_from_file_location(
+    "autobot_shared.user_management.grant_scope", _SHARED_ROOT / "user_management" / "grant_scope.py"
+)
+sys.modules[_GRANT_SCOPE_SPEC.name] = importlib.util.module_from_spec(_GRANT_SCOPE_SPEC)
+_GRANT_SCOPE_SPEC.loader.exec_module(sys.modules[_GRANT_SCOPE_SPEC.name])
+
 # Load the module under test. The restore block MUST run even if exec_module()
 # raises, or a bad stub here (or a future import added to rbac_middleware.py)
 # leaks these MagicMocks into every test collected afterward (#13312).
 try:
     _SPEC = importlib.util.spec_from_file_location(
         "user_management.middleware.rbac_middleware",
-        _SLM_ROOT / "user_management" / "middleware" / "rbac_middleware.py",
+        _SHARED_MIDDLEWARE,
     )
     _rbac_mod: types.ModuleType = types.ModuleType(_SPEC.name)
     _SPEC.loader.exec_module(_rbac_mod)
@@ -137,6 +154,20 @@ finally:
         elif sys.modules[_k] is not _PRE_BOOTSTRAP_MODULES[_k]:
             sys.modules[_k] = _PRE_BOOTSTRAP_MODULES[_k]
     del _PRE_BOOTSTRAP_MODULES
+
+
+def _wired(db_session_context=None, user_service_cls=None):
+    """Inject fakes through the middleware's seam (#18088) -- it imports no service module."""
+    return patch.object(
+        _rbac_mod,
+        "_dependencies",
+        _rbac_mod.RBACDependencies(
+            db_session_context=db_session_context or MagicMock(),
+            user_service_cls=user_service_cls or MagicMock(),
+            tenant_context_cls=MagicMock(),
+            get_deployment_config=MagicMock(),
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -172,7 +203,7 @@ class TestEmitPermissionDeniedAudit:
         session = MagicMock()
         session.add = MagicMock(side_effect=added_entries.append)
 
-        with patch.object(_rbac_mod, "db_session_context", return_value=_make_session_ctx(session)):
+        with _wired(db_session_context=MagicMock(return_value=_make_session_ctx(session))):
             await _rbac_mod._emit_permission_denied_audit(user_id, permission, path, ip_address=ip, user_agent=ua)
 
         assert len(added_entries) == 1
@@ -196,7 +227,7 @@ class TestEmitPermissionDeniedAudit:
         broken_ctx.__aexit__ = AsyncMock(return_value=False)
 
         # Must NOT raise — the deny flow must be unaffected
-        with patch.object(_rbac_mod, "db_session_context", return_value=broken_ctx):
+        with _wired(db_session_context=MagicMock(return_value=broken_ctx)):
             await _rbac_mod._emit_permission_denied_audit(user_id, "agents.read", "/api/x")
 
     @pytest.mark.asyncio
@@ -210,7 +241,7 @@ class TestEmitPermissionDeniedAudit:
         broken_ctx.__aenter__ = AsyncMock(side_effect=OSError("timeout"))
         broken_ctx.__aexit__ = AsyncMock(return_value=False)
 
-        with patch.object(_rbac_mod, "db_session_context", return_value=broken_ctx):
+        with _wired(db_session_context=MagicMock(return_value=broken_ctx)):
             with caplog.at_level(logging.ERROR):
                 await _rbac_mod._emit_permission_denied_audit(user_id, "admin.system", "/admin")
 
@@ -223,7 +254,7 @@ class TestEmitPermissionDeniedAudit:
         session = MagicMock()
         session.add = MagicMock(side_effect=added_entries.append)
 
-        with patch.object(_rbac_mod, "db_session_context", return_value=_make_session_ctx(session)):
+        with _wired(db_session_context=MagicMock(return_value=_make_session_ctx(session))):
             await _rbac_mod._emit_permission_denied_audit(None, "users.read", "/api/users")
 
         assert len(added_entries) == 1
@@ -236,7 +267,7 @@ class TestEmitPermissionDeniedAudit:
         session = MagicMock()
         session.add = MagicMock(side_effect=added_entries.append)
 
-        with patch.object(_rbac_mod, "db_session_context", return_value=_make_session_ctx(session)):
+        with _wired(db_session_context=MagicMock(return_value=_make_session_ctx(session))):
             await _rbac_mod._emit_permission_denied_audit(uuid.uuid4(), "reports.view", "/reports")
 
         entry = added_entries[0]
@@ -253,7 +284,7 @@ class TestEmitPermissionDeniedAudit:
         session = MagicMock()
         session.add = MagicMock(side_effect=added_entries.append)
 
-        with patch.object(_rbac_mod, "db_session_context", return_value=_make_session_ctx(session)):
+        with _wired(db_session_context=MagicMock(return_value=_make_session_ctx(session))):
             await _rbac_mod._emit_permission_denied_audit(user_id, "admin.read", "/admin", org_id=org_id)
 
         assert len(added_entries) == 1
@@ -266,7 +297,7 @@ class TestEmitPermissionDeniedAudit:
         session = MagicMock()
         session.add = MagicMock(side_effect=added_entries.append)
 
-        with patch.object(_rbac_mod, "db_session_context", return_value=_make_session_ctx(session)):
+        with _wired(db_session_context=MagicMock(return_value=_make_session_ctx(session))):
             await _rbac_mod._emit_permission_denied_audit(uuid.uuid4(), "users.write", "/api/users", org_id=None)
 
         assert len(added_entries) == 1

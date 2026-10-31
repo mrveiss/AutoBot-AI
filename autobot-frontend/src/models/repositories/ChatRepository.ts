@@ -1,8 +1,10 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 import { getBackendUrl, getApiBase } from '@/config/ssot-config'
+import { HttpError } from '@autobot/ui'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import { clearStoredAuth } from '@/utils/authToken'
 import type { ApiResponse } from '@/types/models'
 import type { ChatMessage } from '@/types/api'
 
@@ -209,7 +211,7 @@ export class ChatRepository {
 
       if (!response.ok) {
         const errorText = await response.text()
-        throw new Error(`HTTP ${response.status}: ${errorText}`)
+        throw new HttpError(response.status, errorText)
       }
 
       // Check if response is SSE streaming
@@ -251,7 +253,7 @@ export class ChatRepository {
       )
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        throw new HttpError(response.status, response.statusText)
       }
       if (!response.body) {
         throw new Error('Streaming response has no readable body')
@@ -611,9 +613,7 @@ export class ChatRepository {
         } catch {
           errorBody = await response.text().catch(() => undefined)
         }
-        const error = new Error(
-          `HTTP ${response.status}: ${response.statusText}`,
-        ) as Error & { response?: { status: number; data: unknown } }
+        const error: HttpError & { response?: { status: number; data: unknown } } = new HttpError(response.status, response.statusText)
         error.response = { status: response.status, data: errorBody }
         throw error
       }
@@ -647,8 +647,7 @@ export class ChatRepository {
       !window.location.pathname.includes('/login')
     ) {
       logger.warn('401 Unauthorized — clearing auth and redirecting to login')
-      localStorage.removeItem('autobot_auth')
-      localStorage.removeItem('autobot_user')
+      clearStoredAuth()
       const redirect = encodeURIComponent(window.location.pathname)
       window.location.href = `/login?redirect=${redirect}`
     }

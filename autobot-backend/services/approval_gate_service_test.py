@@ -36,6 +36,11 @@ def _make_approval(*, status: str = ApprovalStatus.PENDING.value) -> MagicMock:
     # post-approval dispatch, so a real approval's actual default (no
     # context at all) is what they mean to simulate.
     a.context = None
+    # #13421: likewise for resume dispatch -- an unconfigured mock's source and
+    # resume_ref are truthy, which would read as an approval waiting on a resumer.
+    a.source = None
+    a.resume_ref = None
+    a.expires_at = None
     return a
 
 
@@ -43,6 +48,7 @@ def _make_session(scalar_result: object = None) -> AsyncMock:
     session = AsyncMock()
     execute_result = MagicMock()
     execute_result.scalar_one_or_none.return_value = scalar_result
+    execute_result.first.return_value = (1,)  # #18413: the conditional UPDATE claimed the row
     session.execute = AsyncMock(return_value=execute_result)
     session.commit = AsyncMock()
     session.refresh = AsyncMock()

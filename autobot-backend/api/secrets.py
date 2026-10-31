@@ -45,6 +45,9 @@ from api.schemas_system import (
     SecretTypesData,
     SecretUpdateRequest,
 )
+from api.secrets_audit import audit_secret_op
+from api.secrets_failure_log import describe_failure
+from api.secrets_ownership import stamp_owner
 from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_memory_graph import AutoBotMemoryGraph
 from autobot_shared.auth import resolve_auth_type, validate_config_against_schema
@@ -214,7 +217,7 @@ class SecretsManager:
             try:
                 current_mtime = os.path.getmtime(self.secrets_file)
             except OSError as e:
-                logger.error("Failed to get secrets file mtime: %s", e)
+                logger.error("Failed to get secrets file mtime: %s", type(e).__name__)
                 # File may have been deleted - return empty dict
                 self._secrets_cache = {}
                 self._cache_mtime = None
@@ -262,7 +265,7 @@ class SecretsManager:
             try:
                 self._cache_mtime = os.path.getmtime(self.secrets_file)
             except OSError as e:
-                logger.error("Failed to update cache mtime: %s", e)
+                logger.error("Failed to update cache mtime: %s", type(e).__name__)
                 self._cache_mtime = None
 
     def _invalidate_cache(self):
@@ -290,7 +293,9 @@ class SecretsManager:
 
         # Encrypt and store the secret value
         encrypted_value = self._encrypt_value(request.value)
-        secret_data = secret.dict()
+        # #19476: JSON-native (ISO datetimes, plain enum values) so the cache
+        # holds exactly what the file holds and a fresh process would load.
+        secret_data = secret.model_dump(mode="json")
         secret_data["encrypted_value"] = encrypted_value
 
         secrets[secret.id] = secret_data
@@ -534,26 +539,6 @@ async def check_rate_limit(request: Request) -> None:
         )
 
 
-def audit_log(
-    operation: str,
-    secret_id: str,
-    request: Request,
-    success: bool = True,
-    details: str = "",
-) -> None:
-    """Log security-relevant operations for audit trail"""
-    client_id = get_client_id(request)
-    status = "SUCCESS" if success else "FAILED"
-    safe_id = secret_log_ref(secret_id) if secret_id else "none"  # #16444: main:#1049, no raw fallback
-    logger.info(
-        "[Secrets Audit] %s | Operation: %s | " "SecretID: %s | Client: %s",
-        status,
-        operation,
-        safe_id,
-        client_id,
-    )
-
-
 async def _mirror_llm_provider_key(name: str, value: str, user: Dict | None) -> None:
     """Best-effort System-vault mirror for an LLM-provider-key capture (#10088 Task 7).
 
@@ -740,21 +725,15 @@ async def create_secret(
             secret_id = secret_data["id"]
         else:
             # Issue #666: Wrap blocking file I/O in asyncio.to_thread
-            secret = await asyncio.to_thread(secrets_manager.create_secret, request)
-            # Convert datetime objects to strings for JSON serialization
-            secret_data = secret.dict()
-            if secret_data.get("created_at"):
-                secret_data["created_at"] = secret_data["created_at"].isoformat()
-            if secret_data.get("updated_at"):
-                secret_data["updated_at"] = secret_data["updated_at"].isoformat()
-            if secret_data.get("expires_at"):
-                secret_data["expires_at"] = secret_data["expires_at"].isoformat()
+            # #19476: owner/org come from the authenticated principal.
+            secret = await asyncio.to_thread(secrets_manager.create_secret, stamp_owner(request, _user))
+            secret_data = secret.model_dump(mode="json")
             secret_id = secret.id
             # #10088 Task 7: mirror LLM-provider-key captures into the System vault
             # (best-effort -- never turns a successful legacy write into a failure).
             await _mirror_llm_provider_key(request.name, request.value, _user)
 
-        audit_log("CREATE", secret_id, http_request, details=f"name={request.name}")
+        await audit_secret_op("CREATE", secret_id, http_request, name=request.name)
         audit_record(
             user_id=str((_user or {}).get("user_id", "unknown")),
             action=AuditAction.API_KEY_CREATE,
@@ -773,15 +752,15 @@ async def create_secret(
             },
         )
     except ValueError as e:
-        audit_log("CREATE", "N/A", http_request, success=False, details=str(e))
+        await audit_secret_op("CREATE", None, http_request, "failed", reason=type(e).__name__)
         raise HTTPException(status_code=400, detail="Internal server error")
     except HTTPException:
         # #16428: without this, get_coordinator()'s 503 (vault not configured)
         # falls into the generic handler below and becomes a misleading 500.
         raise
     except Exception as e:
-        audit_log("CREATE", "N/A", http_request, success=False, details=str(e))
-        logger.error("Failed to create secret: %s", e)
+        await audit_secret_op("CREATE", None, http_request, "failed", reason=type(e).__name__)
+        logger.error("Failed to create secret: %s", type(e).__name__)
         raise HTTPException(status_code=500, detail="Failed to create secret")
 
 
@@ -802,7 +781,7 @@ async def list_secrets(
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         secrets = await asyncio.to_thread(secrets_manager.list_secrets, chat_id=chat_id, scope=scope)
-        audit_log("LIST", "N/A", http_request, details=f"count={len(secrets)}")
+        await audit_secret_op("LIST", None, http_request, count=len(secrets))
         return JSONResponse(
             status_code=200,
             content={
@@ -812,7 +791,8 @@ async def list_secrets(
             },
         )
     except Exception as e:
-        logger.error("Failed to list secrets: %s", e)
+        # #19476: names the cause without a value (secrets_failure_log).
+        logger.error("Failed to list secrets: %s", describe_failure(e))
         raise HTTPException(status_code=500, detail="Failed to list secrets")
 
 
@@ -860,7 +840,7 @@ async def get_secrets_status(
             "timestamp": datetime.now(tz=timezone.utc).isoformat(),
         }
     except Exception as e:
-        logger.error("Failed to get secrets status: %s", e)
+        logger.error("Failed to get secrets status: %s", type(e).__name__)
         return {
             "status": "error",
             "service": "secrets_manager",
@@ -914,7 +894,7 @@ async def get_secrets_stats(
 
         return JSONResponse(status_code=200, content=stats)
     except Exception as e:
-        logger.error("Failed to get secrets stats: %s", e)
+        logger.error("Failed to get secrets stats: %s", type(e).__name__)
         raise HTTPException(status_code=500, detail="Failed to get stats")
 
 
@@ -937,7 +917,7 @@ async def get_secret(
         owner_id = str((_user or {}).get("user_id", "unknown"))
         secret = await _get_secret_dual_read(secret_id, chat_id, owner_id)
         if not secret:
-            audit_log("ACCESS", secret_id, http_request, success=False, details="not_found")
+            await audit_secret_op("ACCESS", secret_id, http_request, "failed", reason="not_found")
             raise HTTPException(status_code=404, detail="Secret not found")
 
         # Issue #608: Track secret usage in memory graph when accessed within a chat
@@ -951,36 +931,27 @@ async def get_secret(
                         owner_id=secret.get("chat_id") or "system",
                         scope="session" if secret.get("scope") == "chat" else "user",
                         session_id=chat_id,
+                        org_id=(_user or {}).get("org_id") or None,
                         metadata={
                             "secret_id": secret_id[:8] + "...",
                             "accessed_via": "api",
                             "original_scope": secret.get("scope"),
                         },
                     )
-                    logger.debug(
-                        "[Issue #608] Created secret entity for %s... in session %s",
-                        secret_id[:8],
-                        chat_id,
-                    )
+                    logger.debug("[Issue #608] Created secret entity for %s... in session %s", secret_id[:8], chat_id)
                 except Exception as graph_err:
                     logger.warning("[Issue #608] Failed to create secret entity: %s", graph_err)
 
-        audit_log("ACCESS", secret_id, http_request, details="value_retrieved")
+        await audit_secret_op("ACCESS", secret_id, http_request, reason="value_retrieved")
         return JSONResponse(status_code=200, content=secret)
     except PermissionError:
-        audit_log(
-            "ACCESS",
-            secret_id,
-            http_request,
-            success=False,
-            details="permission_denied",
-        )
+        await audit_secret_op("ACCESS", secret_id, http_request, "denied", reason="permission_denied")
         raise HTTPException(status_code=403, detail="Internal server error")
     except HTTPException:
         raise
     except Exception as e:
-        audit_log("ACCESS", secret_id, http_request, success=False, details=str(e))
-        logger.error("Failed to get secret: %s", e)
+        await audit_secret_op("ACCESS", secret_id, http_request, "failed", reason=type(e).__name__)
+        logger.error("Failed to get secret: %s", type(e).__name__)
         raise HTTPException(status_code=500, detail="Failed to get secret")
 
 
@@ -1003,14 +974,8 @@ async def update_secret(
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         secret = await asyncio.to_thread(secrets_manager.update_secret, secret_id, request, chat_id=chat_id)
         if secret:
-            # Convert datetime objects to strings for JSON serialization
-            secret_data = secret.dict()
-            if secret_data.get("created_at"):
-                secret_data["created_at"] = secret_data["created_at"].isoformat()
-            if secret_data.get("updated_at"):
-                secret_data["updated_at"] = secret_data["updated_at"].isoformat()
-            if secret_data.get("expires_at"):
-                secret_data["expires_at"] = secret_data["expires_at"].isoformat()
+            # One serialization for the cache, the file and every response (#19476)
+            secret_data = secret.model_dump(mode="json")
         elif request.credentials:
             # #16428: not a legacy secret; rotate it in ConnectorCredentialStore
             # instead -- #13632's one-store decision, "PUT rotates the credential."
@@ -1019,14 +984,14 @@ async def update_secret(
             try:
                 await get_credential_store().rotate(secret_id, request.credentials, owner_id)
             except LookupError:
-                audit_log("UPDATE", secret_id, http_request, success=False, details="not_found")
+                await audit_secret_op("UPDATE", secret_id, http_request, "failed", reason="not_found")
                 raise HTTPException(status_code=404, detail="Secret not found")
             secret_data = await _get_connector_bridged_secret(secret_id, owner_id)
         else:
-            audit_log("UPDATE", secret_id, http_request, success=False, details="not_found")
+            await audit_secret_op("UPDATE", secret_id, http_request, "failed", reason="not_found")
             raise HTTPException(status_code=404, detail="Secret not found")
 
-        audit_log("UPDATE", secret_id, http_request)
+        await audit_secret_op("UPDATE", secret_id, http_request)
         return JSONResponse(
             status_code=200,
             content={
@@ -1036,24 +1001,18 @@ async def update_secret(
             },
         )
     except PermissionError:
-        audit_log(
-            "UPDATE",
-            secret_id,
-            http_request,
-            success=False,
-            details="permission_denied",
-        )
+        await audit_secret_op("UPDATE", secret_id, http_request, "denied", reason="permission_denied")
         raise HTTPException(status_code=403, detail="Internal server error")
     except ValueError as e:
         # #16428: rotate()'s merged-bundle validation failure -- a bad
         # request, not a server fault.
-        audit_log("UPDATE", secret_id, http_request, success=False, details=str(e))
+        await audit_secret_op("UPDATE", secret_id, http_request, "failed", reason=type(e).__name__)
         raise HTTPException(status_code=400, detail="Internal server error")
     except HTTPException:
         raise
     except Exception as e:
-        audit_log("UPDATE", secret_id, http_request, success=False, details=str(e))
-        logger.error("Failed to update secret: %s", e)
+        await audit_secret_op("UPDATE", secret_id, http_request, "failed", reason=type(e).__name__)
+        logger.error("Failed to update secret: %s", type(e).__name__)
         raise HTTPException(status_code=500, detail="Failed to update secret")
 
 
@@ -1083,11 +1042,11 @@ async def delete_secret(
             # decision, "DELETE revokes it there."
             bridged = await _get_connector_bridged_secret(secret_id, owner_id)
             if bridged is None:
-                audit_log("DELETE", secret_id, http_request, success=False, details="not_found")
+                await audit_secret_op("DELETE", secret_id, http_request, "failed", reason="not_found")
                 raise HTTPException(status_code=404, detail="Secret not found")
             await get_credential_store().revoke(secret_id, owner_id)
 
-        audit_log("DELETE", secret_id, http_request)
+        await audit_secret_op("DELETE", secret_id, http_request)
         audit_record(
             user_id=str((_user or {}).get("user_id", "unknown")),
             action=AuditAction.API_KEY_REVOKE,
@@ -1102,19 +1061,13 @@ async def delete_secret(
             content={"status": "success", "message": "Secret deleted successfully"},
         )
     except PermissionError:
-        audit_log(
-            "DELETE",
-            secret_id,
-            http_request,
-            success=False,
-            details="permission_denied",
-        )
+        await audit_secret_op("DELETE", secret_id, http_request, "denied", reason="permission_denied")
         raise HTTPException(status_code=403, detail="Internal server error")
     except HTTPException:
         raise
     except Exception as e:
-        audit_log("DELETE", secret_id, http_request, success=False, details=str(e))
-        logger.error("Failed to delete secret: %s", e)
+        await audit_secret_op("DELETE", secret_id, http_request, "failed", reason=type(e).__name__)
+        logger.error("Failed to delete secret: %s", type(e).__name__)
         raise HTTPException(status_code=500, detail="Failed to delete secret")
 
 
@@ -1135,11 +1088,12 @@ async def transfer_secrets(
     try:
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         result = await asyncio.to_thread(secrets_manager.transfer_secrets, request, chat_id=chat_id)
-        audit_log(
+        await audit_secret_op(
             "TRANSFER",
-            ",".join(result.get("transferred", [])),
+            None,
             http_request,
-            details=f"to={request.target_scope}",
+            refs=",".join(secret_log_ref(i) for i in result.get("transferred", [])),
+            to=str(request.target_scope),
         )
         return JSONResponse(
             status_code=200,
@@ -1153,8 +1107,8 @@ async def transfer_secrets(
             },
         )
     except Exception as e:
-        audit_log("TRANSFER", "N/A", http_request, success=False, details=str(e))
-        logger.error("Failed to transfer secrets: %s", e)
+        await audit_secret_op("TRANSFER", None, http_request, "failed", reason=type(e).__name__)
+        logger.error("Failed to transfer secrets: %s", type(e).__name__)
         raise HTTPException(status_code=500, detail="Failed to transfer secrets")
 
 
@@ -1174,7 +1128,7 @@ async def get_chat_cleanup_info(
         info = await asyncio.to_thread(secrets_manager.cleanup_chat_secrets, chat_id)
         return JSONResponse(status_code=200, content=info)
     except Exception as e:
-        logger.error("Failed to get chat cleanup info: %s", e)
+        logger.error("Failed to get chat cleanup info: %s", type(e).__name__)
         raise HTTPException(status_code=500, detail="Failed to get cleanup info")
 
 
@@ -1196,11 +1150,13 @@ async def delete_chat_secrets(
         # Issue #666: Wrap blocking file I/O in asyncio.to_thread
         result = await asyncio.to_thread(secrets_manager.delete_chat_secrets, chat_id, secret_ids)
         deleted_ids = [s.get("id", "unknown") for s in result.get("deleted_secrets", [])]
-        audit_log(
+        await audit_secret_op(
             "BULK_DELETE",
-            ",".join(deleted_ids),
+            None,
             http_request,
-            details=f"chat={chat_id}, count={result['total_deleted']}",
+            refs=",".join(secret_log_ref(i) for i in deleted_ids),
+            chat=chat_id,
+            count=result["total_deleted"],
         )
         return JSONResponse(
             status_code=200,
@@ -1211,6 +1167,6 @@ async def delete_chat_secrets(
             },
         )
     except Exception as e:
-        audit_log("BULK_DELETE", "N/A", http_request, success=False, details=str(e))
-        logger.error("Failed to delete chat secrets: %s", e)
+        await audit_secret_op("BULK_DELETE", None, http_request, "failed", reason=type(e).__name__)
+        logger.error("Failed to delete chat secrets: %s", type(e).__name__)
         raise HTTPException(status_code=500, detail="Failed to delete chat secrets")

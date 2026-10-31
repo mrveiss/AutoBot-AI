@@ -17,13 +17,14 @@ is already in use throughout the backend.
 
 from typing import List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from api.schemas_system import (
     PhaseEntry,
     PhasesStatusResponse,
     ValidationRunResponse,
 )
+from auth_middleware import check_admin_permission, get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
@@ -31,7 +32,7 @@ from project_state_manager import get_project_state_manager
 
 logger = get_logger(__name__)
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(get_current_user)])
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +86,7 @@ async def get_phases_status() -> PhasesStatusResponse:
     operation="run_phases_validation",
     error_code_prefix="PHASES",
 )
-async def run_phases_validation() -> ValidationRunResponse:
+async def run_phases_validation(_: bool = Depends(check_admin_permission)) -> ValidationRunResponse:
     """Queue a phase validation run.
 
     Triggers a full project phase validation pass via the project state

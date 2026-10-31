@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseAlert, BaseModal, HttpError } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -149,7 +150,7 @@ async function apiFetch<T>(
     const response = await slmApiClient.rawRequest(path, options)
     if (!response.ok) {
       const body = await response.json().catch(() => ({}))
-      throw new Error(body.detail || `HTTP ${response.status}`)
+      throw HttpError.withDetail(response.status, response.statusText, body.detail || undefined)
     }
     return await response.json()
   } catch (err) {
@@ -178,8 +179,10 @@ async function fetchFleetHealth(): Promise<void> {
 }
 
 async function fetchNodes(): Promise<void> {
-  const result = await apiFetch<NodeSummary[]>('/nodes')
-  if (result) nodes.value = result
+  // GET /nodes answers NodeListResponse { nodes, total }, not a bare list (#19002 review):
+  // read as a list, the migrate dialog's target picker iterated the object's fields.
+  const result = await apiFetch<{ nodes: NodeSummary[] }>('/nodes')
+  if (result) nodes.value = result.nodes
 }
 
 function openCreateForm(): void {
@@ -364,10 +367,12 @@ onMounted(() => {
     </div>
 
     <!-- Fleet health detail (degraded/critical) -->
-    <div v-if="fleetHealth && fleetHealth.health !== 'healthy'" class="mb-4 p-3 rounded-lg border text-sm"
-      :class="fleetHealth.health === 'critical' ? 'bg-red-50 border-red-200 text-red-700' : 'bg-yellow-50 border-yellow-200 text-yellow-700'">
-      {{ fleetHealth.detail }}
-    </div>
+    <BaseAlert
+      v-if="fleetHealth && fleetHealth.health !== 'healthy'"
+      :variant="fleetHealth.health === 'critical' ? 'error' : 'warning'"
+      class="mb-4"
+      :message="fleetHealth.detail"
+    />
 
     <!-- Node Status Summary -->
     <div class="grid grid-cols-4 gap-4 mb-6">
@@ -390,13 +395,8 @@ onMounted(() => {
     </div>
 
     <!-- Alerts -->
-    <div v-if="errorMessage" class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-      {{ errorMessage }}
-      <button @click="errorMessage = null" class="ml-2 underline">{{ $t('rolesView.dismiss') }}</button>
-    </div>
-    <div v-if="successMessage" class="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
-      {{ successMessage }}
-    </div>
+    <BaseAlert v-if="errorMessage" variant="error" class="mb-4" :message="errorMessage" dismissible :dismiss-label="$t('rolesView.dismiss')" @dismiss="errorMessage = null" />
+    <BaseAlert v-if="successMessage" variant="success" class="mb-4" :message="successMessage" />
 
     <!-- Role Form (Create/Edit) -->
     <div v-if="showForm" class="bg-white rounded-lg border mb-6">
@@ -539,46 +539,47 @@ onMounted(() => {
       <div v-if="isLoading" class="p-8 text-center text-gray-500">{{ $t('rolesView.loadingRoles') }}</div>
     </div>
 
-    <!-- Migrate Role Dialog -->
-    <div v-if="showMigrateDialog"
-      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-lg shadow-xl w-full max-w-lg mx-4">
-        <div class="px-6 py-4 border-b flex items-center justify-between">
-          <h2 class="text-lg font-semibold text-gray-900">
-            {{ isRedeploy ? $t('rolesView.redeployRoleTitle') : $t('rolesView.migrateRoleTitle') }}:
-            {{ migratingRole?.display_name || migratingRole?.name }}
-          </h2>
-          <button @click="showMigrateDialog = false; migrateOutput = null"
-            class="text-gray-400 hover:text-gray-600 text-xl">{{ $t('rolesView.times') }}</button>
+    <!-- Migrate Role Dialog: locked while the playbook runs, as Cancel is (#14777) -->
+    <BaseModal
+      v-model="showMigrateDialog"
+      :title="`${isRedeploy ? $t('rolesView.redeployRoleTitle') : $t('rolesView.migrateRoleTitle')}: ${migratingRole?.display_name || migratingRole?.name || ''}`"
+      width="32rem"
+      :locked="migrateLoading"
+      :close-label="$t('ui.modal.closeDialog')"
+      @close="migrateOutput = null"
+    >
+      <div class="space-y-4">
+        <div v-if="isRedeploy" class="text-xs text-indigo-700 bg-indigo-50 p-2 rounded-sm">
+          {{ $t('rolesView.redeployHint') }}
         </div>
-        <div class="p-6 space-y-4">
-          <div v-if="isRedeploy" class="text-xs text-indigo-700 bg-indigo-50 p-2 rounded-sm">
-            {{ $t('rolesView.redeployHint') }}
-          </div>
-          <div v-if="migratingRole?.ansible_playbook" class="text-sm text-gray-600">
-            {{ $t('rolesView.playbook') }} <code class="bg-gray-100 px-1 rounded-sm">{{ migratingRole.ansible_playbook }}</code>
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.targetNode') }}</label>
-            <select v-model="targetNodeId" class="w-full px-3 py-2 border rounded-lg text-sm">
-              <option value="">{{ $t('rolesView.selectTargetNode') }}</option>
-              <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
-                {{ node.node_id }} — {{ node.ip_address }} ({{ node.status }})
-              </option>
-            </select>
-          </div>
-          <div v-if="migratingRole?.degraded_without?.length" class="text-xs text-yellow-700 bg-yellow-50 p-2 rounded-sm">
-            {{ $t('rolesView.optionalRoleWithout', { detail: migratingRole.degraded_without.join('; ') }) }}
-          </div>
-          <!-- Output -->
-          <div v-if="migrateOutput" class="mt-2">
-            <p class="text-xs font-medium text-gray-600 mb-1">{{ $t('rolesView.playbookOutput') }}</p>
-            <pre class="bg-gray-900 text-green-300 text-xs p-3 rounded-sm overflow-auto max-h-48">{{ migrateOutput }}</pre>
-          </div>
+        <div v-if="migratingRole?.ansible_playbook" class="text-sm text-gray-600">
+          {{ $t('rolesView.playbook') }} <code class="bg-gray-100 px-1 rounded-sm">{{ migratingRole.ansible_playbook }}</code>
         </div>
-        <div class="px-6 py-4 border-t flex justify-end gap-2">
-          <button @click="showMigrateDialog = false; migrateOutput = null"
-            class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm">{{ $t('rolesView.cancel') }}</button>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('rolesView.targetNode') }}</label>
+          <select v-model="targetNodeId" class="w-full px-3 py-2 border rounded-lg text-sm">
+            <option value="">{{ $t('rolesView.selectTargetNode') }}</option>
+            <option v-for="node in nodes" :key="node.node_id" :value="node.node_id">
+              {{ node.node_id }} — {{ node.ip_address }} ({{ node.status }})
+            </option>
+          </select>
+        </div>
+        <BaseAlert
+          v-if="migratingRole?.degraded_without?.length"
+          variant="warning"
+          size="compact"
+          :message="$t('rolesView.optionalRoleWithout', { detail: migratingRole.degraded_without.join('; ') })"
+        />
+        <!-- Output -->
+        <div v-if="migrateOutput" class="mt-2">
+          <p class="text-xs font-medium text-gray-600 mb-1">{{ $t('rolesView.playbookOutput') }}</p>
+          <pre class="bg-gray-900 text-green-300 text-xs p-3 rounded-sm overflow-auto max-h-48">{{ migrateOutput }}</pre>
+        </div>
+      </div>
+      <template #actions>
+        <div class="flex justify-end gap-2">
+          <button @click="showMigrateDialog = false; migrateOutput = null" :disabled="migrateLoading"
+            class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-sm disabled:opacity-50">{{ $t('rolesView.cancel') }}</button>
           <button @click="executeMigrate" :disabled="!targetNodeId || migrateLoading"
             :class="isRedeploy ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-purple-600 hover:bg-purple-700'"
             class="px-4 py-2 text-white rounded-lg disabled:opacity-50 text-sm">
@@ -587,7 +588,7 @@ onMounted(() => {
               : (isRedeploy ? $t('rolesView.runRedeploy') : $t('rolesView.runMigration')) }}
           </button>
         </div>
-      </div>
-    </div>
+      </template>
+    </BaseModal>
   </div>
 </template>

@@ -34,16 +34,17 @@ import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+import fakeredis
 import fakeredis.aioredis as fakeredis_async
 
 from api.terminal_handlers import TerminalWebSocket
-from api.workflow_automation import (
+from secure_command_executor import CommandRisk, SecureCommandExecutor
+from services.workflow_automation import (
     AutomationMode,
     WorkflowAutomationManager,
     WorkflowControlRequest,
     WorkflowStep,
 )
-from secure_command_executor import CommandRisk, SecureCommandExecutor
 
 
 class TestSessionTakeover:
@@ -62,7 +63,7 @@ class TestSessionTakeover:
         # `llm_shared/tests/test_provider_degradation.py` do -- runs the real
         # persistence path instead of skipping it.
         self.workflow_manager.executor.state_machine._redis = fakeredis_async.FakeRedis(
-            server=fakeredis_async.FakeServer(), decode_responses=True
+            server=fakeredis.FakeServer(), decode_responses=True
         )
 
     async def test_workflow_creation(self):
@@ -234,24 +235,20 @@ class TestSessionTakeover:
             SimpleNamespace(
                 task_id="plan_a",
                 action="Update package repositories",
-                requires_approval=True,
                 dependencies=[],
+                inputs={"command": "sudo apt update"},
             ),
+            SimpleNamespace(task_id="plan_x", action="Reason about the result", dependencies=[], inputs={}),
             SimpleNamespace(
                 task_id="plan_b",
                 action="Run the verification probe",
-                requires_approval=False,
                 dependencies=["plan_a"],
                 inputs={"command": "systemctl status autobot"},
             ),
         ]
+        # #13809: the chat path plans with create_workflow_plan, not the fixed skeleton.
         self.workflow_manager.orchestrator = AsyncMock()
-        self.workflow_manager.orchestrator.classify_request_complexity_verdict.return_value = SimpleNamespace(
-            complexity="COMPLEX",
-            classified=True,
-            state=SimpleNamespace(value="classified"),
-        )
-        self.workflow_manager.orchestrator.plan_workflow_steps.return_value = planned
+        self.workflow_manager.orchestrator.create_workflow_plan.return_value = SimpleNamespace(tasks=planned)
 
         workflow_id = await self.workflow_manager.create_workflow_from_chat_request(
             "Update my system and install security patches", self.test_session_id
@@ -259,15 +256,10 @@ class TestSessionTakeover:
 
         assert workflow_id is not None, "A planned request must produce a workflow"
         workflow = self.workflow_manager.active_workflows[workflow_id]
-        assert len(workflow.steps) == 2, "Every planned task must become a step"
-
+        # The task with no command is an agent action this executor cannot run.
+        assert [s.command for s in workflow.steps] == ["sudo apt update", "systemctl status autobot"]
         first, second = workflow.steps
-        # No `inputs` on the first task, so the manager derives the command from
-        # the action text; the second carries an explicit command and keeps it.
-        assert first.command == "sudo apt update", "Package-update action should map to the update command"
-        assert second.command == "systemctl status autobot", "An explicit planned command must survive"
-        assert first.requires_confirmation is True, "Approval requirement must carry across"
-        assert second.requires_confirmation is False, "Approval requirement must carry across"
+        assert first.requires_confirmation and second.requires_confirmation, "LLM-authored commands are gated"
         assert first.dependencies == [], "The first step depends on nothing"
         assert second.dependencies == ["step_1"], "Planner task ids must be remapped to step ids"
 

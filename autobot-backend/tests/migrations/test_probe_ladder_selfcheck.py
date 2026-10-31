@@ -155,6 +155,24 @@ def test_observability_coverage():
         # nothing and the DELETE matches nothing. Both statements are also
         # scoped to rows still in the shape the backfill created, so a row edited
         # since is untouched on the first run and every later one.
+        "20260928_097",  # workspace-lease path unique among LIVE leases only
+        # (#16818) — drops a table-wide UNIQUE constraint and creates a partial
+        # unique index in its place. It creates no table and no column, and
+        # extract_artifacts observes revisions solely through create_table and
+        # add_column, so it cannot be observable by construction. Same structural
+        # category as 20260821_081 (index-only) and 20260906_089 (constraint swap)
+        # above, not a new one. NOTE for anyone reading the assertion message
+        # below: the `_TABLE`-variable hint does not apply here — this revision
+        # has no add_column calls at all, so inlining the literal table name
+        # would change nothing about its observability.
+        #
+        # Extended consciously, and idempotent by inspection rather than by
+        # construction: upgrade() reads get_unique_constraints before dropping
+        # the old constraint and get_indexes before creating the new one, acting
+        # in each case only when the first state is still present. It also
+        # returns early on a non-postgresql dialect or a missing table. So the
+        # adoption re-run this allowlist permits is a genuine no-op rather than a
+        # "constraint does not exist" or "relation already exists" failure.
     }
     assert unobservable <= allowed, (
         f"new unobservable revisions: {sorted(unobservable - allowed)} — "

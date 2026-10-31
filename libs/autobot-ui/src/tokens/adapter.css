@@ -1,0 +1,137 @@
+/* Copyright 2025-2026 mrveiss
+   SPDX-License-Identifier: Apache-2.0 */
+/**
+ * @autobot/ui token adapter: the ONE mapping of the kit's contract (`--aui-*`,
+ * ./contract.css) onto the app-side semantic token names.
+ *
+ * Both frontends used to keep their own copy of this file (aui-theme.css, 142
+ * differing lines) and each mapped the contract onto names only it defined.
+ * They now share the semantic names (--bg-surface, --text-primary,
+ * --border-default, --color-primary, --color-error, --radius-md, ...), each
+ * with its OWN values: autobot-frontend in src/assets/css/design-tokens.css and
+ * themes/, autobot-slm-frontend in src/assets/styles/slm-scheme.css. So this
+ * file has no value in it and no app-specific name.
+ *
+ * Every name an app must define for this adapter is a `var()` below. An app
+ * that leaves one undefined gets an invalid --aui-* token, not the contract's
+ * neutral fallback, so add the name to the app rather than to a fallback here.
+ *
+ * Load order (main.ts of each app): '@autobot/ui/tokens' (neutral fallbacks)
+ * first, then '@autobot/ui/adapter', after the app's own theme CSS.
+ */
+
+:root {
+  /* ---- Color: brand / interactive ------------------------------------ */
+  --aui-color-primary: var(--color-primary);
+  --aui-color-primary-hover: var(--color-primary-hover);
+  --aui-color-primary-active: var(--color-primary-active);
+  --aui-color-primary-contrast: var(--text-on-primary);
+
+  /* ---- Color: brand mark --------------------------------------------- */
+  --aui-brand-bg: var(--brand-bg);
+  --aui-brand-fg: var(--brand-fg);
+
+  /* ---- Color: neutrals / chrome -------------------------------------- */
+  --aui-color-surface: var(--bg-surface);
+  --aui-color-surface-raised: var(--bg-elevated);
+  --aui-color-surface-sunken: var(--bg-tertiary);
+  --aui-color-border: var(--border-default);
+  --aui-color-border-strong: var(--border-strong);
+  --aui-color-text: var(--text-primary);
+  --aui-color-text-muted: var(--text-muted);
+  --aui-color-text-inverse: var(--text-inverse);
+
+  /* ---- Color: status ------------------------------------------------- */
+  --aui-color-success: var(--color-success);
+  --aui-color-success-contrast: var(--text-on-success);
+  --aui-color-warning: var(--color-warning);
+  --aui-color-warning-contrast: var(--text-on-warning);
+  --aui-color-error: var(--color-error);
+  --aui-color-error-contrast: var(--text-on-error);
+  --aui-color-error-solid: var(--color-error-solid);
+  --aui-color-info: var(--color-info);
+  --aui-color-info-contrast: var(--text-on-info);
+  --aui-color-info-solid: var(--color-info-solid);
+
+  /* ---- Overlay (modal backdrop) -------------------------------------- */
+  --aui-color-overlay: var(--bg-overlay);
+
+  /* ---- Focus --------------------------------------------------------- */
+  --aui-color-focus-ring: var(--border-focus);
+  --aui-focus-ring-width: var(--focus-ring-width);
+
+  /* ---- Radius -------------------------------------------------------- */
+  --aui-radius-sm: var(--radius-sm);
+  --aui-radius-md: var(--radius-md);
+  --aui-radius-lg: var(--radius-lg);
+  --aui-radius-full: var(--radius-full);
+
+  /* ---- Elevation ----------------------------------------------------- */
+  --aui-shadow-sm: var(--shadow-sm);
+  --aui-shadow-md: var(--shadow-md);
+  --aui-shadow-lg: var(--shadow-lg);
+  --aui-shadow-xl: var(--shadow-2xl);
+
+  /* ---- Typography ---------------------------------------------------- */
+  --aui-font-sans: var(--font-sans);
+  --aui-font-mono: var(--font-mono);
+  --aui-text-xs: var(--text-xs);
+  --aui-text-sm: var(--text-sm);
+  --aui-text-base: var(--text-base);
+  --aui-text-lg: var(--text-lg);
+  --aui-text-xl: var(--text-xl);
+  --aui-font-weight-medium: var(--font-medium);
+  --aui-font-weight-semibold: var(--font-semibold);
+
+  /* ---- Spacing (control padding scale) ------------------------------- */
+  --aui-space-1: var(--spacing-1);
+  --aui-space-2: var(--spacing-2);
+  --aui-space-3: var(--spacing-3);
+  --aui-space-4: var(--spacing-4);
+  --aui-space-5: var(--spacing-5);
+  --aui-space-6: var(--spacing-6);
+
+  /* ---- Form controls (BaseInput) ------------------------------------- */
+  --aui-input-bg: var(--input-bg);
+  --aui-input-border: var(--input-border);
+  --aui-input-height-sm: var(--input-height-sm);
+  --aui-input-height-md: var(--input-height-md);
+  --aui-input-height-lg: var(--input-height-lg);
+  --aui-input-padding-x: var(--input-padding-x);
+
+  /* ---- Z-index ------------------------------------------------------- */
+  --aui-z-dropdown: var(--z-dropdown);
+  --aui-z-modal: var(--z-modal);
+  --aui-z-tooltip: var(--z-tooltip);
+
+  /* ---- Tooltip ------------------------------------------------------- */
+  --aui-tooltip-delay: var(--tooltip-delay);
+  --aui-tooltip-hide-delay: var(--tooltip-hide-delay);
+  --aui-tooltip-offset: var(--tooltip-offset);
+  --aui-tooltip-max: var(--tooltip-max);
+
+  /* ---- Table (both apps define --tbl-*; the SLM in slm-scheme.css) ---- */
+  --aui-table-font-size: var(--tbl-font-size);
+  --aui-table-row-h: var(--tbl-row-h);
+  --aui-table-cell-px: var(--tbl-cell-px);
+  --aui-table-cell-py: var(--tbl-cell-py);
+  --aui-table-head-h: var(--tbl-head-h);
+  --aui-table-head-bg: var(--tbl-head-bg);
+  --aui-table-head-fg: var(--tbl-head-fg);
+  --aui-table-head-font: var(--tbl-head-font);
+  --aui-table-head-case: var(--tbl-head-case);
+  --aui-table-head-ls: var(--tbl-head-ls);
+  --aui-table-head-border: var(--tbl-head-border);
+  --aui-table-border: var(--tbl-border);
+  --aui-table-row-hover: var(--tbl-row-hover);
+  --aui-table-row-selected: var(--tbl-row-selected);
+  --aui-table-row-selected-edge: var(--tbl-selected-edge);
+  --aui-table-zebra-bg: var(--tbl-zebra-bg);
+  --aui-table-check-w: var(--tbl-check-col-w);
+  --aui-table-min-col: var(--tbl-min-col);
+  --aui-table-num: var(--tbl-num);
+
+  /* ---- Motion -------------------------------------------------------- */
+  --aui-transition-fast: var(--duration-200) var(--ease-in-out);
+  --aui-transition: var(--duration-300) var(--ease-in-out);
+}

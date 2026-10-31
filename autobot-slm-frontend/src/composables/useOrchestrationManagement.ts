@@ -158,7 +158,7 @@ export function useOrchestrationManagement() {
   // Service Definitions API (from useOrchestration)
   // ===========================================================================
 
-  async function fetchServiceDefinitions(): Promise<ServiceDefinition[]> {
+  async function fetchServiceDefinitions(): Promise<ServiceDefinition[] | null> {
     loading.value = true
     error.value = null
 
@@ -170,7 +170,7 @@ export function useOrchestrationManagement() {
     } catch (e) {
       error.value = extractErrorMessage(e, 'Failed to fetch service definitions')
       logger.error('Failed to fetch service definitions:', e)
-      return []
+      return null
     } finally {
       loading.value = false
     }
@@ -230,7 +230,7 @@ export function useOrchestrationManagement() {
         serviceCount: response.data.services?.length,
         totalServices: response.data.total_services,
       })
-      fleetServices.value = response.data.services
+      fleetServices.value = response.data.services ?? [] // may be omitted; keep the array invariant (#18802)
       totalFleetServices.value = response.data.total_services
       lastRefresh.value = new Date()
       return response.data

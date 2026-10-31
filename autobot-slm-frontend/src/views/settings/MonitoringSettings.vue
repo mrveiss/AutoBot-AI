@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseAlert, BaseSwitch } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -10,8 +11,15 @@
  */
 
 import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useToast } from '@/composables/useToast'
 import { getGrafanaUrl, getPrometheusUrl } from '@/config/ssot-config'
 import { listSettings, upsertSetting } from '@/utils/slmSettingsApi'
+import { createLogger } from '@/utils/debugUtils'
+
+const logger = createLogger('MonitoringSettings')
+const { t } = useI18n()
+const { showToast } = useToast()
 
 const loading = ref(false)
 const saving = ref(false)
@@ -42,7 +50,7 @@ async function fetchSettings(): Promise<void> {
       }
     })
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load settings'
+    error.value = e instanceof Error ? e.message : t('settings.monitoringSettings.failedToLoadSettings')
   } finally {
     loading.value = false
   }
@@ -57,20 +65,20 @@ async function saveSetting(key: string, value: string): Promise<void> {
     const ok = await upsertSetting(key, { value })
 
     if (!ok) {
-      throw new Error('Failed to save setting')
+      throw new Error(t('settings.monitoringSettings.failedToSaveSetting'))
     }
 
-    success.value = 'Setting saved successfully'
+    success.value = t('settings.monitoringSettings.settingSaved')
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to save setting'
+    error.value = e instanceof Error ? e.message : t('settings.monitoringSettings.failedToSaveSetting')
   } finally {
     saving.value = false
   }
 }
 
 async function deployMonitoringRole(): Promise<void> {
-  alert('Monitoring role deployment will be triggered via Ansible')
+  showToast(t('settings.monitoringSettings.deployViaAnsible'), 'info')
 }
 
 async function testPrometheusConnection(): Promise<void> {
@@ -81,13 +89,14 @@ async function testPrometheusConnection(): Promise<void> {
     // eslint-disable-next-line no-restricted-syntax
     const response = await fetch(`${getPrometheusUrl()}/-/healthy`)
     if (response.ok) {
-      success.value = 'Prometheus connection successful'
+      success.value = t('settings.monitoringSettings.prometheusConnected')
       setTimeout(() => { success.value = null }, 3000)
     } else {
-      error.value = 'Prometheus connection failed'
+      error.value = t('settings.monitoringSettings.prometheusFailed')
     }
   } catch (e) {
-    error.value = 'Cannot reach Prometheus server'
+    logger.warn('Prometheus connection test failed:', e)
+    error.value = t('settings.monitoringSettings.prometheusUnreachable')
   }
 }
 
@@ -98,13 +107,14 @@ async function testGrafanaConnection(): Promise<void> {
     // eslint-disable-next-line no-restricted-syntax
     const response = await fetch(`${getGrafanaUrl()}/api/health`)
     if (response.ok) {
-      success.value = 'Grafana connection successful'
+      success.value = t('settings.monitoringSettings.grafanaConnected')
       setTimeout(() => { success.value = null }, 3000)
     } else {
-      error.value = 'Grafana connection failed'
+      error.value = t('settings.monitoringSettings.grafanaFailed')
     }
   } catch (e) {
-    error.value = 'Cannot reach Grafana server'
+    logger.warn('Grafana connection test failed:', e)
+    error.value = t('settings.monitoringSettings.grafanaUnreachable')
   }
 }
 
@@ -123,12 +133,8 @@ onMounted(fetchSettings)
 
     <template v-else>
       <!-- Messages -->
-      <div v-if="error" class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-        {{ error }}
-      </div>
-      <div v-if="success" class="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">
-        {{ success }}
-      </div>
+      <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
+      <BaseAlert v-if="success" variant="success" class="mb-4" :message="success" />
 
       <!-- Settings Card -->
       <div class="bg-white rounded-lg shadow-xs border border-gray-200 p-6 mb-6">
@@ -257,14 +263,7 @@ onMounted(fetchSettings)
               <label class="block text-sm font-medium text-gray-900">{{ $t('settings.monitoringSettings.alerting') }}</label>
               <p class="text-xs text-gray-500 mt-1">{{ $t('settings.monitoringSettings.enableAlertNotifications') }}</p>
             </div>
-            <label class="relative inline-flex items-center cursor-pointer">
-              <input
-                type="checkbox"
-                v-model="settings.alerting_enabled"
-                class="sr-only peer"
-              />
-              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-hidden peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
-            </label>
+            <BaseSwitch v-model="settings.alerting_enabled" :label="$t('settings.monitoringSettings.alerting')" />
           </div>
         </div>
       </div>

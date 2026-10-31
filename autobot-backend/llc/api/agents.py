@@ -33,7 +33,7 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/agents", tags=["llc-agents"])
 
 
-class TriggerResponse(BaseModel):
+class AgentHeartbeatTriggerResponse(BaseModel):
     run_id: uuid.UUID
     status: str
 
@@ -88,13 +88,13 @@ async def list_agents(
     ]
 
 
-@router.post("/{agent_id}/heartbeat/trigger", response_model=TriggerResponse, status_code=202)
+@router.post("/{agent_id}/heartbeat/trigger", response_model=AgentHeartbeatTriggerResponse, status_code=202)
 async def trigger_heartbeat(
     agent_id: str,
     session: AsyncSession = Depends(get_async_session),
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
-) -> TriggerResponse:
+) -> AgentHeartbeatTriggerResponse:
     """Manually trigger a heartbeat run for *agent_id* immediately.
 
     Requires an authenticated user with org context. The agent must belong to
@@ -115,4 +115,4 @@ async def trigger_heartbeat(
 
     await session.commit()
     sched.dispatch_run(agent_cfg, run.id)
-    return TriggerResponse(run_id=run.id, status=run.status)
+    return AgentHeartbeatTriggerResponse(run_id=run.id, status=run.status)

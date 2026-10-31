@@ -280,3 +280,13 @@ All owner decisions closed — the design is ready to decompose into an umbrella
 3. ~~Confidence display~~ → **both** — inline caveats in the answer **and** a structured `contradictions[]`/confidence block.
 4. ~~First-PR scope~~ → **bundle Phase 0 + grounded synthesis.**
 5. ~~Fact promotion~~ → **quarantine in a dedicated `research` collection until corroborated**, then promote to general KB (gate lands in Phase 1).
+
+## Linked issues
+
+Issues this research produced or is the analysis for (#18967). Each one links back to this document.
+
+- #12621 — Umbrella: Precision & Efficiency Research Agent (KB-native) (closed)
+- #12622 — Research agent P0: findings→KB facts + grounded /research synthesis (closed)
+- #12623 — Research agent P1: N-source corroboration + contradiction surfacing + KB promotion gate (closed)
+- #12624 — Research agent P2: LLM planner loop (decompose, skip-known, prune, saturation stop) (closed)
+- #12625 — Research agent P3: topic-based source routing + data-driven source definitions (closed)

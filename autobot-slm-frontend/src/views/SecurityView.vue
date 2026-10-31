@@ -17,11 +17,12 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
-import { usePagination } from '@autobot/ui'
+import { BaseAlert, BaseModal, usePagination, BasePagination, useToast } from '@autobot/ui'
 import type { TLSEndpointResponse, FleetCert } from '@/types/api-responses'
 import { createLogger } from '@/utils/debugUtils'
-import { formatRelativeTime } from '@/utils/dateUtils'
+import { formatCompactRelativeTime } from '@/utils/dateUtils'
 import config from '@/config/ssot-config'
+import { useI18n } from 'vue-i18n'
 import type {
   SecurityEventResponse,
   SecurityOverviewResponse,
@@ -30,6 +31,8 @@ import type {
   SecurityPolicyResponse,
 } from '@/types/slm'
 
+const { t } = useI18n()
+const { showToast } = useToast()
 const logger = createLogger('SecurityView')
 const slmApi = useSlmApi()
 const route = useRoute()
@@ -41,7 +44,6 @@ type AuditLog = AuditLogResponse
 type SecurityPolicy = SecurityPolicyResponse
 type SecurityOverview = SecurityOverviewResponse
 type ThreatSummary = ThreatSummaryType
-
 
 // Active tab — route-based
 type SecurityTab = 'overview' | 'tls-settings' | 'certificates' | 'audit' | 'threats' | 'policies'
@@ -92,8 +94,7 @@ const {
   currentPage: auditPage,
   totalPages: auditTotalPages,
   itemsPerPage: auditPerPage,
-  next: auditNext,
-  prev: auditPrev,
+  goToPage: auditGoTo,
 } = usePagination<AuditLog>(auditLogs, {
   itemsPerPage: PER_PAGE,
   serverTotalItems: auditLogsTotal,
@@ -104,8 +105,7 @@ const {
   currentPage: eventsPage,
   totalPages: eventsTotalPages,
   itemsPerPage: eventsPerPage,
-  next: eventsNext,
-  prev: eventsPrev,
+  goToPage: eventsGoTo,
 } = usePagination<SecurityEvent>(securityEvents, {
   itemsPerPage: PER_PAGE,
   serverTotalItems: eventsTotal,
@@ -116,8 +116,7 @@ const {
   currentPage: policiesPage,
   totalPages: policiesTotalPages,
   itemsPerPage: policiesPerPage,
-  next: policiesNext,
-  prev: policiesPrev,
+  goToPage: policiesGoTo,
 } = usePagination<SecurityPolicy>(policies, {
   itemsPerPage: PER_PAGE,
   serverTotalItems: policiesTotal,
@@ -167,8 +166,8 @@ const severityColors: Record<string, string> = {
   critical: 'bg-red-500',
 }
 
-// Format relative time
-
+// A known severity reads in the UI language in labels; an unknown one shows as sent.
+const severityName = (severity: string) => (severity in severityColors ? t(`securityView.${severity}`) : severity)
 
 // API calls
 async function fetchOverview() {
@@ -179,7 +178,7 @@ async function fetchOverview() {
     logger.info('Security overview loaded')
   } catch (err) {
     logger.error('Failed to fetch security overview:', err)
-    error.value = 'Failed to load security overview'
+    error.value = t('securityView.failedToLoadSecurityOverview')
   } finally {
     loading.value = false
   }
@@ -198,7 +197,7 @@ async function fetchAuditLogs() {
     logger.info('Audit logs loaded:', response.total)
   } catch (err) {
     logger.error('Failed to fetch audit logs:', err)
-    error.value = 'Failed to load audit logs'
+    error.value = t('securityView.failedToLoadAuditLogs')
   } finally {
     loading.value = false
   }
@@ -217,7 +216,7 @@ async function fetchSecurityEvents() {
     logger.info('Security events loaded:', response.total)
   } catch (err) {
     logger.error('Failed to fetch security events:', err)
-    error.value = 'Failed to load security events'
+    error.value = t('securityView.failedToLoadSecurityEvents')
   } finally {
     loading.value = false
   }
@@ -255,7 +254,7 @@ async function fetchPolicies() {
     logger.info('Security policies loaded:', response.total)
   } catch (err) {
     logger.error('Failed to fetch security policies:', err)
-    error.value = 'Failed to load security policies'
+    error.value = t('securityView.failedToLoadSecurityPolicies')
   } finally {
     loading.value = false
   }
@@ -293,14 +292,14 @@ async function fetchTlsEndpoints() {
     logger.info('TLS endpoints loaded:', response.total)
   } catch (err) {
     logger.error('Failed to fetch TLS endpoints:', err)
-    error.value = 'Failed to load TLS certificates'
+    error.value = t('securityView.failedToLoadTlsCertificates')
   } finally {
     loading.value = false
   }
 }
 
 async function deleteTlsCertificate(credentialId: string) {
-  if (!confirm('Are you sure you want to delete this certificate?')) {
+  if (!confirm(t('securityView.areYouSureYouWantToDelete'))) {
     return
   }
 
@@ -310,7 +309,7 @@ async function deleteTlsCertificate(credentialId: string) {
     logger.info('TLS certificate deleted:', credentialId)
   } catch (err) {
     logger.error('Failed to delete TLS certificate:', err)
-    alert('Failed to delete certificate')
+    showToast(t('securityView.failedToDeleteCertificate'), 'error')
   }
 }
 
@@ -329,7 +328,7 @@ const rotatingCredentialId = ref<string | null>(null)
 const bulkRenewing = ref(false)
 
 async function renewTlsCertificate(credentialId: string) {
-  if (!confirm('Renew this certificate? This will generate a new certificate with the same CN and extended validity.')) {
+  if (!confirm(t('securityView.renewThisCertificateThisWillGenerateA'))) {
     return
   }
 
@@ -338,17 +337,17 @@ async function renewTlsCertificate(credentialId: string) {
     const result = await slmApi.renewTlsCertificate(credentialId, true)
     await fetchTlsEndpoints()
     logger.info('TLS certificate renewed:', result)
-    alert(`Certificate renewed successfully. New expiry: ${result.expires_at || 'Unknown'}`)
+    showToast(t('securityView.certificateRenewed', { expiry: result.expires_at || t('securityView.unknownExpiry') }), 'success')
   } catch (err) {
     logger.error('Failed to renew TLS certificate:', err)
-    alert('Failed to renew certificate')
+    showToast(t('securityView.failedToRenewCertificate'), 'error')
   } finally {
     renewingCredentialId.value = null
   }
 }
 
 async function rotateTlsCertificate(credentialId: string) {
-  if (!confirm('Rotate this certificate? This will generate a completely new certificate with new keys (more secure than renewal).')) {
+  if (!confirm(t('securityView.rotateThisCertificateThisWillGenerateA'))) {
     return
   }
 
@@ -357,17 +356,17 @@ async function rotateTlsCertificate(credentialId: string) {
     const result = await slmApi.rotateTlsCertificate(credentialId, true, true)
     await fetchTlsEndpoints()
     logger.info('TLS certificate rotated:', result)
-    alert(`Certificate rotated successfully. New expiry: ${result.expires_at || 'Unknown'}`)
+    showToast(t('securityView.certificateRotated', { expiry: result.expires_at || t('securityView.unknownExpiry') }), 'success')
   } catch (err) {
     logger.error('Failed to rotate TLS certificate:', err)
-    alert('Failed to rotate certificate')
+    showToast(t('securityView.failedToRotateCertificate'), 'error')
   } finally {
     rotatingCredentialId.value = null
   }
 }
 
 async function bulkRenewExpiring() {
-  if (!confirm('Renew all certificates expiring within 30 days? This will deploy new certificates to the nodes.')) {
+  if (!confirm(t('securityView.renewAllCertificatesExpiringWithin30Days'))) {
     return
   }
 
@@ -376,10 +375,10 @@ async function bulkRenewExpiring() {
     const result = await slmApi.bulkRenewExpiringCertificates(30, true)
     await fetchTlsEndpoints()
     logger.info('Bulk renewal completed:', result)
-    alert(`Bulk renewal complete: ${result.renewed} renewed, ${result.failed} failed`)
+    showToast(t('securityView.bulkRenewalCompleteRenewedFailed', { renewed: result.renewed, failed: result.failed }), 'warning')
   } catch (err) {
     logger.error('Failed to bulk renew certificates:', err)
-    alert('Failed to bulk renew certificates')
+    showToast(t('securityView.failedToBulkRenewCertificates'), 'error')
   } finally {
     bulkRenewing.value = false
   }
@@ -393,11 +392,11 @@ function openUploadModal() {
 
 async function uploadTlsCertificate() {
   if (!selectedNodeId.value) {
-    alert('Please select a node')
+    showToast(t('securityView.pleaseSelectANode'), 'warning')
     return
   }
   if (!uploadForm.value.ca_cert || !uploadForm.value.server_cert || !uploadForm.value.server_key) {
-    alert('Please provide all certificate files')
+    showToast(t('securityView.pleaseProvideAllCertificateFiles'), 'warning')
     return
   }
 
@@ -408,7 +407,7 @@ async function uploadTlsCertificate() {
     logger.info('TLS certificate uploaded for node:', selectedNodeId.value)
   } catch (err) {
     logger.error('Failed to upload TLS certificate:', err)
-    alert('Failed to upload certificate')
+    showToast(t('securityView.failedToUploadCertificate'), 'error')
   }
 }
 
@@ -474,11 +473,11 @@ function toggleTlsService(serviceName: string) {
 
 async function enableTlsOnSelectedServices() {
   if (selectedTlsServices.value.length === 0) {
-    alert('Please select at least one service to enable TLS')
+    showToast(t('securityView.pleaseSelectAtLeastOneServiceTo'), 'warning')
     return
   }
 
-  if (!confirm(`Enable TLS on ${selectedTlsServices.value.join(', ')}?\n\nThis will:\n1. Deploy TLS certificates to the nodes\n2. Configure services for HTTPS\n3. Restart affected services\n\nContinue?`)) {
+  if (!confirm(t('securityView.confirmEnableTls', { services: selectedTlsServices.value.join(', ') }))) {
     return
   }
 
@@ -512,7 +511,7 @@ async function enableTlsOnSelectedServices() {
     logger.error('Failed to enable TLS:', err)
     tlsEnableResult.value = {
       success: false,
-      message: err instanceof Error ? err.message : 'Failed to enable TLS'
+      message: err instanceof Error ? err.message : t('securityView.failedToEnableTls')
     }
   } finally {
     tlsEnabling.value = false
@@ -655,7 +654,7 @@ const scoreColor = computed(() => {
                 <div
                   :class="['w-2 h-2 rounded-full', severityColors[event.severity] || 'bg-gray-500']"
                   role="img"
-                  :aria-label="`${event.severity} severity`"
+                  :aria-label="$t('securityView.severityLabel', { severity: severityName(event.severity) })"
                 ></div>
                 <div>
                   <div class="text-sm font-medium text-gray-900">{{ event.title }}</div>
@@ -665,7 +664,7 @@ const scoreColor = computed(() => {
                   </div>
                 </div>
               </div>
-              <div class="text-xs text-gray-500">{{ formatRelativeTime(event.timestamp) }}</div>
+              <div class="text-xs text-gray-500">{{ formatCompactRelativeTime(event.timestamp) }}</div>
             </div>
           </div>
         </div>
@@ -729,7 +728,7 @@ const scoreColor = computed(() => {
                   type="checkbox"
                   :checked="selectedTlsServices.includes(service.name)"
                   class="h-5 w-5 text-primary-600 rounded-sm border-gray-300 focus:ring-primary-500"
-                  :aria-label="`Enable TLS for ${service.displayName}`"
+                  :aria-label="$t('securityView.enableTlsForService', { name: service.displayName })"
                   @click.stop
                   @change="toggleTlsService(service.name)"
                 />
@@ -800,24 +799,16 @@ const scoreColor = computed(() => {
       </div>
 
       <!-- Help Section -->
-      <div class="mt-8 p-4 bg-blue-50 rounded-lg border border-blue-200">
-        <div class="flex items-start gap-3">
-          <svg class="w-5 h-5 text-blue-600 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <div class="text-sm text-blue-800">
-            <p class="font-medium mb-1">{{ $t('securityView.whatHappensWhenYouEnableTLS') }}</p>
-            <ul class="list-disc list-inside space-y-1 text-blue-700">
-              <li>{{ $t('securityView.tLSCertificatesAreDeployedToThe') }}</li>
-              <li>{{ $t('securityView.serviceConfigurationsAreUpdatedToUse') }}</li>
-              <li>{{ $t('securityView.servicesAreRestartedToApplyThe') }}</li>
-              <li>{{ $t('securityView.frontendAccessibleAt', { port: config.port.tlsFrontend }) }}</li>
-              <li>{{ $t('securityView.backendAccessibleAt', { port: config.port.tlsBackend }) }}</li>
-              <li>{{ $t('securityView.redisWillAcceptTLSConnectionsOn', { value0: config.port.tlsRedis }) }}</li>
-            </ul>
-          </div>
-        </div>
-      </div>
+      <BaseAlert variant="info" class="mt-8" :title="$t('securityView.whatHappensWhenYouEnableTLS')">
+        <ul class="list-disc list-inside space-y-1">
+          <li>{{ $t('securityView.tLSCertificatesAreDeployedToThe') }}</li>
+          <li>{{ $t('securityView.serviceConfigurationsAreUpdatedToUse') }}</li>
+          <li>{{ $t('securityView.servicesAreRestartedToApplyThe') }}</li>
+          <li>{{ $t('securityView.frontendAccessibleAt', { port: config.port.tlsFrontend }) }}</li>
+          <li>{{ $t('securityView.backendAccessibleAt', { port: config.port.tlsBackend }) }}</li>
+          <li>{{ $t('securityView.redisWillAcceptTLSConnectionsOn', { value0: config.port.tlsRedis }) }}</li>
+        </ul>
+      </BaseAlert>
     </div>
 
     <!-- TLS Certificates (Issue #725) -->
@@ -966,7 +957,7 @@ const scoreColor = computed(() => {
                     @click="renewTlsCertificate(endpoint.credential_id)"
                     :disabled="renewingCredentialId === endpoint.credential_id"
                     class="px-2 py-1 rounded-sm text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 disabled:opacity-50"
-                    :aria-label="`Renew certificate for ${endpoint.hostname}`"
+                    :aria-label="$t('securityView.renewCertificateFor', { hostname: endpoint.hostname })"
                   >
                     {{ renewingCredentialId === endpoint.credential_id ? '...' : $t('securityView.renew') }}
                   </button>
@@ -974,7 +965,7 @@ const scoreColor = computed(() => {
                     @click="rotateTlsCertificate(endpoint.credential_id)"
                     :disabled="rotatingCredentialId === endpoint.credential_id"
                     class="px-2 py-1 rounded-sm text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 disabled:opacity-50"
-                    :aria-label="`Rotate certificate for ${endpoint.hostname}`"
+                    :aria-label="$t('securityView.rotateCertificateFor', { hostname: endpoint.hostname })"
                   >
                     {{ rotatingCredentialId === endpoint.credential_id ? '...' : $t('securityView.rotate') }}
                   </button>
@@ -986,14 +977,14 @@ const scoreColor = computed(() => {
                         ? 'bg-gray-100 hover:bg-gray-200 text-gray-700'
                         : 'bg-success-100 hover:bg-success-200 text-success-700'
                     ]"
-                    :aria-label="`${endpoint.is_active ? 'Disable' : 'Enable'} certificate for ${endpoint.hostname}`"
+                    :aria-label="endpoint.is_active ? $t('securityView.disableCertificateFor', { hostname: endpoint.hostname }) : $t('securityView.enableCertificateFor', { hostname: endpoint.hostname })"
                   >
                     {{ endpoint.is_active ? $t('securityView.disable') : $t('securityView.enable') }}
                   </button>
                   <button
                     @click="deleteTlsCertificate(endpoint.credential_id)"
                     class="px-2 py-1 rounded-sm text-xs bg-error-100 hover:bg-error-200 text-error-700"
-                    :aria-label="`Delete certificate for ${endpoint.hostname}`"
+                    :aria-label="$t('securityView.deleteCertificateFor', { hostname: endpoint.hostname })"
                   >{{ $t('securityView.delete') }}</button>
                 </div>
               </td>
@@ -1042,7 +1033,7 @@ const scoreColor = computed(() => {
           <tbody class="bg-white divide-y divide-gray-200">
             <tr v-for="log in auditLogs" :key="log.log_id">
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ formatRelativeTime(log.timestamp) }}
+                {{ formatCompactRelativeTime(log.timestamp) }}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                 {{ log.username || '-' }}
@@ -1077,19 +1068,16 @@ const scoreColor = computed(() => {
         >
           <span class="text-sm text-gray-500" role="status">{{ $t('securityView.showingCountOfValue1Logs', { count: auditLogs.length, value1: auditLogsTotal }) }}</span>
           <div class="flex items-center gap-3">
-            <span class="text-sm text-gray-500">{{ $t('securityView.pageValue0OfValue1', { value0: auditPage, value1: auditTotalPages }) }}</span>
-            <div class="flex gap-2">
-              <button
-                @click="auditPrev"
-                :disabled="auditPage === 1"
-                class="px-3 py-1 text-sm border rounded-sm hover:bg-gray-50 disabled:opacity-50"
-              >{{ $t('securityView.previous') }}</button>
-              <button
-                @click="auditNext"
-                :disabled="auditPage * auditPerPage >= auditLogsTotal"
-                class="px-3 py-1 text-sm border rounded-sm hover:bg-gray-50 disabled:opacity-50"
-              >{{ $t('securityView.next') }}</button>
-            </div>
+            <BasePagination
+              class="flex-1"
+              :page="auditPage"
+              :total-pages="auditTotalPages"
+              :labels="{ previous: $t('securityView.previous'), next: $t('securityView.next') }"
+              :label="$t('securityView.paginationAria')"
+              @update:page="auditGoTo"
+            >
+              <template #summary>{{ $t('securityView.pageValue0OfValue1', { value0: auditPage, value1: auditTotalPages }) }}</template>
+            </BasePagination>
           </div>
         </div>
       </div>
@@ -1152,7 +1140,7 @@ const scoreColor = computed(() => {
                 <div
                   :class="['w-3 h-3 mt-1 rounded-full', severityColors[event.severity]]"
                   role="img"
-                  :aria-label="`${event.severity} severity`"
+                  :aria-label="$t('securityView.severityLabel', { severity: severityName(event.severity) })"
                 ></div>
                 <div>
                   <div class="font-medium text-gray-900">{{ event.title }}</div>
@@ -1160,7 +1148,7 @@ const scoreColor = computed(() => {
                   <div class="text-xs text-gray-400 mt-2">
                     {{ event.source_ip ? `IP: ${event.source_ip}` : '' }}
                     {{ event.source_user ? ` | User: ${event.source_user}` : '' }}
-                    | {{ formatRelativeTime(event.timestamp) }}
+                    | {{ formatCompactRelativeTime(event.timestamp) }}
                   </div>
                 </div>
               </div>
@@ -1182,12 +1170,12 @@ const scoreColor = computed(() => {
                     v-if="!event.is_acknowledged"
                     @click="acknowledgeEvent(event.event_id)"
                     class="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded-sm"
-                    :aria-label="`Acknowledge event: ${event.title}`"
+                    :aria-label="$t('securityView.acknowledgeEvent', { title: event.title })"
                   >{{ $t('securityView.ack') }}</button>
                   <button
                     @click="resolveEvent(event.event_id)"
                     class="px-2 py-1 text-xs bg-success-100 hover:bg-success-200 text-success-700 rounded-sm"
-                    :aria-label="`Resolve event: ${event.title}`"
+                    :aria-label="$t('securityView.resolveEvent', { title: event.title })"
                   >{{ $t('securityView.resolve') }}</button>
                 </div>
               </div>
@@ -1200,19 +1188,16 @@ const scoreColor = computed(() => {
         >
           <span class="text-sm text-gray-500" role="status">{{ $t('securityView.showingCountOfValue1Events', { count: securityEvents.length, value1: eventsTotal }) }}</span>
           <div class="flex items-center gap-3">
-            <span class="text-sm text-gray-500">{{ $t('securityView.pageValue0OfValue1', { value0: eventsPage, value1: eventsTotalPages }) }}</span>
-            <div class="flex gap-2">
-              <button
-                @click="eventsPrev"
-                :disabled="eventsPage === 1"
-                class="px-3 py-1 text-sm border rounded-sm hover:bg-gray-50 disabled:opacity-50"
-              >{{ $t('securityView.previous') }}</button>
-              <button
-                @click="eventsNext"
-                :disabled="eventsPage * eventsPerPage >= eventsTotal"
-                class="px-3 py-1 text-sm border rounded-sm hover:bg-gray-50 disabled:opacity-50"
-              >{{ $t('securityView.next') }}</button>
-            </div>
+            <BasePagination
+              class="flex-1"
+              :page="eventsPage"
+              :total-pages="eventsTotalPages"
+              :labels="{ previous: $t('securityView.previous'), next: $t('securityView.next') }"
+              :label="$t('securityView.paginationAria')"
+              @update:page="eventsGoTo"
+            >
+              <template #summary>{{ $t('securityView.pageValue0OfValue1', { value0: eventsPage, value1: eventsTotalPages }) }}</template>
+            </BasePagination>
           </div>
         </div>
       </div>
@@ -1260,7 +1245,7 @@ const scoreColor = computed(() => {
                       ? 'bg-error-100 hover:bg-error-200 text-error-700'
                       : 'bg-success-100 hover:bg-success-200 text-success-700'
                   ]"
-                  :aria-label="`${policy.is_enforced ? 'Disable' : 'Enable'} policy: ${policy.name}`"
+                  :aria-label="policy.is_enforced ? $t('securityView.disablePolicy', { name: policy.name }) : $t('securityView.enablePolicy', { name: policy.name })"
                 >
                   {{ policy.is_enforced ? $t('securityView.disable') : $t('securityView.enable') }}
                 </button>
@@ -1274,122 +1259,96 @@ const scoreColor = computed(() => {
         >
           <span class="text-sm text-gray-500" role="status">{{ $t('securityView.showingCountOfValue1Policies', { count: policies.length, value1: policiesTotal }) }}</span>
           <div class="flex items-center gap-3">
-            <span class="text-sm text-gray-500">{{ $t('securityView.pageValue0OfValue1', { value0: policiesPage, value1: policiesTotalPages }) }}</span>
-            <div class="flex gap-2">
-              <button
-                @click="policiesPrev"
-                :disabled="policiesPage === 1"
-                class="px-3 py-1 text-sm border rounded-sm hover:bg-gray-50 disabled:opacity-50"
-              >{{ $t('securityView.previous') }}</button>
-              <button
-                @click="policiesNext"
-                :disabled="policiesPage * policiesPerPage >= policiesTotal"
-                class="px-3 py-1 text-sm border rounded-sm hover:bg-gray-50 disabled:opacity-50"
-              >{{ $t('securityView.next') }}</button>
-            </div>
+            <BasePagination
+              class="flex-1"
+              :page="policiesPage"
+              :total-pages="policiesTotalPages"
+              :labels="{ previous: $t('securityView.previous'), next: $t('securityView.next') }"
+              :label="$t('securityView.paginationAria')"
+              @update:page="policiesGoTo"
+            >
+              <template #summary>{{ $t('securityView.pageValue0OfValue1', { value0: policiesPage, value1: policiesTotalPages }) }}</template>
+            </BasePagination>
           </div>
         </div>
       </div>
     </div>
 
     <!-- Upload Certificate Modal -->
-    <Teleport to="body">
-      <Transition name="modal">
-        <div
-          v-if="showUploadModal"
-          class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-          @click.self="showUploadModal = false"
-          @keydown.escape="showUploadModal = false"
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="upload-cert-title"
-        >
-          <div class="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-              <h3 id="upload-cert-title" class="text-lg font-semibold text-gray-900">{{ $t('securityView.uploadTLSCertificate') }}</h3>
-              <button
-                @click="showUploadModal = false"
-                class="text-gray-400 hover:text-gray-600"
-                :aria-label="$t('securityView.closeUploadDialog')"
-              >
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            <div class="p-6 space-y-4">
-              <div>
-                <label for="cert-node-id" class="block text-sm font-medium text-gray-700 mb-1">{{ $t('securityView.nodeID') }}</label>
-                <input
-                  id="cert-node-id"
-                  v-model="selectedNodeId"
-                  type="text"
-                  :placeholder="$t('securityView.enterNodeID')"
-                  class="w-full rounded-md border-gray-300 shadow-xs focus:border-primary-500 focus:ring-primary-500"
-                />
-              </div>
-
-              <div>
-                <label for="cert-name" class="block text-sm font-medium text-gray-700 mb-1">{{ $t('securityView.certificateNameOptional') }}</label>
-                <input
-                  id="cert-name"
-                  v-model="uploadForm.name"
-                  type="text"
-                  :placeholder="$t('securityView.eGRedisServerApiClient')"
-                  class="w-full rounded-md border-gray-300 shadow-xs focus:border-primary-500 focus:ring-primary-500"
-                />
-              </div>
-
-              <div>
-                <label for="cert-ca" class="block text-sm font-medium text-gray-700 mb-1">{{ $t('securityView.cACertificatePEM') }}</label>
-                <textarea
-                  id="cert-ca"
-                  v-model="uploadForm.ca_cert"
-                  rows="4"
-                  :placeholder="$t('securityView.pemCertificateHint')"
-                  class="w-full rounded-md border-gray-300 shadow-xs focus:border-primary-500 focus:ring-primary-500 font-mono text-xs"
-                ></textarea>
-              </div>
-
-              <div>
-                <label for="cert-server" class="block text-sm font-medium text-gray-700 mb-1">{{ $t('securityView.serverCertificatePEM') }}</label>
-                <textarea
-                  id="cert-server"
-                  v-model="uploadForm.server_cert"
-                  rows="4"
-                  :placeholder="$t('securityView.pemCertificateHint')"
-                  class="w-full rounded-md border-gray-300 shadow-xs focus:border-primary-500 focus:ring-primary-500 font-mono text-xs"
-                ></textarea>
-              </div>
-
-              <div>
-                <label for="cert-key" class="block text-sm font-medium text-gray-700 mb-1">{{ $t('securityView.privateKeyPEM') }}</label>
-                <textarea
-                  id="cert-key"
-                  v-model="uploadForm.server_key"
-                  rows="4"
-                  :placeholder="$t('securityView.pemKeyHint')"
-                  class="w-full rounded-md border-gray-300 shadow-xs focus:border-primary-500 focus:ring-primary-500 font-mono text-xs"
-                ></textarea>
-                <p class="text-xs text-gray-500 mt-1">{{ $t('securityView.thePrivateKeyWillBeEncrypted') }}</p>
-              </div>
-            </div>
-
-            <div class="flex justify-end gap-3 px-6 py-4 border-t border-gray-200">
-              <button
-                @click="showUploadModal = false"
-                class="btn btn-secondary"
-              >{{ $t('securityView.cancel') }}</button>
-              <button
-                @click="uploadTlsCertificate"
-                class="btn btn-primary"
-              >{{ $t('securityView.upload') }}</button>
-            </div>
-          </div>
+    <BaseModal
+      v-model="showUploadModal"
+      :title="$t('securityView.uploadTLSCertificate')"
+      width="42rem"
+      :close-label="$t('securityView.closeUploadDialog')"
+    >
+      <div class="space-y-4">
+        <div>
+          <label for="cert-node-id" class="block text-sm font-medium text-gray-700 mb-1">{{ $t('securityView.nodeID') }}</label>
+          <input
+            id="cert-node-id"
+            v-model="selectedNodeId"
+            type="text"
+            :placeholder="$t('securityView.enterNodeID')"
+            class="w-full rounded-md border-gray-300 shadow-xs focus:border-primary-500 focus:ring-primary-500"
+          />
         </div>
-      </Transition>
-    </Teleport>
+
+        <div>
+          <label for="cert-name" class="block text-sm font-medium text-gray-700 mb-1">{{ $t('securityView.certificateNameOptional') }}</label>
+          <input
+            id="cert-name"
+            v-model="uploadForm.name"
+            type="text"
+            :placeholder="$t('securityView.eGRedisServerApiClient')"
+            class="w-full rounded-md border-gray-300 shadow-xs focus:border-primary-500 focus:ring-primary-500"
+          />
+        </div>
+
+        <div>
+          <label for="cert-ca" class="block text-sm font-medium text-gray-700 mb-1">{{ $t('securityView.cACertificatePEM') }}</label>
+          <textarea
+            id="cert-ca"
+            v-model="uploadForm.ca_cert"
+            rows="4"
+            :placeholder="$t('securityView.pemCertificateHint')"
+            class="w-full rounded-md border-gray-300 shadow-xs focus:border-primary-500 focus:ring-primary-500 font-mono text-xs"
+          ></textarea>
+        </div>
+
+        <div>
+          <label for="cert-server" class="block text-sm font-medium text-gray-700 mb-1">{{ $t('securityView.serverCertificatePEM') }}</label>
+          <textarea
+            id="cert-server"
+            v-model="uploadForm.server_cert"
+            rows="4"
+            :placeholder="$t('securityView.pemCertificateHint')"
+            class="w-full rounded-md border-gray-300 shadow-xs focus:border-primary-500 focus:ring-primary-500 font-mono text-xs"
+          ></textarea>
+        </div>
+
+        <div>
+          <label for="cert-key" class="block text-sm font-medium text-gray-700 mb-1">{{ $t('securityView.privateKeyPEM') }}</label>
+          <textarea
+            id="cert-key"
+            v-model="uploadForm.server_key"
+            rows="4"
+            :placeholder="$t('securityView.pemKeyHint')"
+            class="w-full rounded-md border-gray-300 shadow-xs focus:border-primary-500 focus:ring-primary-500 font-mono text-xs"
+          ></textarea>
+          <p class="text-xs text-gray-500 mt-1">{{ $t('securityView.thePrivateKeyWillBeEncrypted') }}</p>
+        </div>
+      </div>
+      <template #actions>
+        <button
+          @click="showUploadModal = false"
+          class="btn btn-secondary"
+        >{{ $t('securityView.cancel') }}</button>
+        <button
+          @click="uploadTlsCertificate"
+          class="btn btn-primary"
+        >{{ $t('securityView.upload') }}</button>
+      </template>
+    </BaseModal>
   </div>
 </template>
 

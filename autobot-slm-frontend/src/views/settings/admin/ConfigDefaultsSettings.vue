@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseAlert } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -12,11 +13,13 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
 import slmApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 
 const logger = createLogger('ConfigDefaultsSettings')
+const { t } = useI18n()
 
 // Types
 interface ConfigEntry {
@@ -65,7 +68,7 @@ async function apiRequest<T>(
     if (method === 'PUT') return await slmApiClient.put<T>(path, body)
     return await slmApiClient.delete<T>(path)
   } catch (err) {
-    errorMessage.value = `Request failed: ${err instanceof Error ? err.message : 'Unknown error'}`
+    errorMessage.value = t('settings.admin.configDefaultsSettings.requestFailed', { detail: err instanceof Error ? err.message : t('settings.admin.configDefaultsSettings.unknownError') })
     logger.error('API error:', err)
     return null
   }
@@ -107,7 +110,7 @@ async function saveConfig(): Promise<void> {
     { value: newValue.value, value_type: newValueType.value }
   )
   if (result) {
-    successMessage.value = `Config "${key}" saved`
+    successMessage.value = t('settings.admin.configDefaultsSettings.configSaved', { key })
     showAddForm.value = false
     await fetchDefaults()
     setTimeout(() => { successMessage.value = null }, 3000)
@@ -115,7 +118,7 @@ async function saveConfig(): Promise<void> {
 }
 
 async function deleteConfig(key: string): Promise<void> {
-  if (!confirm(`Delete global config "${key}"?`)) return
+  if (!confirm(t('settings.admin.configDefaultsSettings.deleteGlobalConfig', { key }))) return
   const result = await apiRequest<{ message: string }>(
     'DELETE',
     `/config/defaults/${encodeURIComponent(key)}`
@@ -125,10 +128,6 @@ async function deleteConfig(key: string): Promise<void> {
     await fetchDefaults()
     setTimeout(() => { successMessage.value = null }, 3000)
   }
-}
-
-function formatDate(d: string): string {
-  return formatDateTime(d)
 }
 
 // Lifecycle
@@ -156,18 +155,13 @@ onMounted(() => { fetchDefaults() })
     </div>
 
     <!-- Alerts -->
-    <div v-if="errorMessage" class="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-      {{ errorMessage }}
-      <button @click="errorMessage = null" class="ml-2 underline">{{ $t('settings.admin.configDefaultsSettings.dismiss') }}</button>
-    </div>
-    <div v-if="successMessage" class="p-3 bg-green-50 border border-green-200 rounded-lg text-green-700 text-sm">
-      {{ successMessage }}
-    </div>
+    <BaseAlert v-if="errorMessage" variant="error" :message="errorMessage" dismissible :dismiss-label="$t('settings.admin.configDefaultsSettings.dismiss')" @dismiss="errorMessage = null" />
+    <BaseAlert v-if="successMessage" variant="success" size="compact" :message="successMessage" />
 
     <!-- Add/Edit Form -->
     <div v-if="showAddForm" class="bg-white rounded-lg border">
       <div class="px-4 py-3 bg-gray-50 border-b flex items-center justify-between">
-        <h3 class="font-medium text-gray-900">{{ editingKey ? `Edit: ${editingKey}` : $t('settings.admin.configDefaultsSettings.addConfigDefault') }}</h3>
+        <h3 class="font-medium text-gray-900">{{ editingKey ? $t('settings.admin.configDefaultsSettings.editKey', { key: editingKey }) : $t('settings.admin.configDefaultsSettings.addConfigDefault') }}</h3>
         <button @click="showAddForm = false" class="text-gray-400 hover:text-gray-600">{{ $t('settings.admin.configDefaultsSettings.times') }}</button>
       </div>
       <form @submit.prevent="saveConfig" class="p-4 space-y-4">
@@ -231,7 +225,7 @@ onMounted(() => { fetchDefaults() })
             <td class="px-4 py-3">
               <span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-700">{{ cfg.value_type }}</span>
             </td>
-            <td class="px-4 py-3 text-sm text-gray-500">{{ formatDate(cfg.updated_at) }}</td>
+            <td class="px-4 py-3 text-sm text-gray-500">{{ formatFleetDateTime(cfg.updated_at) }}</td>
             <td class="px-4 py-3 text-right">
               <button @click="openEditForm(cfg)"
                 class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-sm hover:bg-gray-200 mr-1">{{ $t('settings.admin.configDefaultsSettings.edit') }}</button>

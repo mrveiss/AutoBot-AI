@@ -187,9 +187,9 @@ async def test_load_plugin_endpoint_does_not_pass_grant_capabilities_kwarg():
     TypeError at runtime; the endpoint must call it with positional
     manifest + config only.
     """
-    from autobot_shared.plugin_sdk.capabilities import Capability, TrustTier
+    from autobot_shared.plugin_sdk.capabilities import PluginCapability, TrustTier
 
-    loader, _, _ = _make_load_endpoint_mocks(TrustTier.COMMUNITY, [Capability.KB_READ])
+    loader, _, _ = _make_load_endpoint_mocks(TrustTier.COMMUNITY, [PluginCapability.KB_READ])
 
     with (
         patch("plugin_manager.get_plugin_loader", return_value=loader),
@@ -208,9 +208,9 @@ async def test_load_plugin_endpoint_does_not_pass_grant_capabilities_kwarg():
 @pytest.mark.asyncio
 async def test_load_plugin_endpoint_auto_grants_official_plugin_capabilities():
     """#9049 contract: official plugins auto-grant on load."""
-    from autobot_shared.plugin_sdk.capabilities import Capability, TrustTier
+    from autobot_shared.plugin_sdk.capabilities import PluginCapability, TrustTier
 
-    granted = [Capability.KB_READ, Capability.LLM_CALL]
+    granted = [PluginCapability.KB_READ, PluginCapability.LLM_CALL]
     loader, manifest, _ = _make_load_endpoint_mocks(TrustTier.OFFICIAL, granted)
 
     with (
@@ -232,9 +232,9 @@ async def test_load_plugin_endpoint_does_not_auto_grant_community_plugin():
     Positive control for the OFFICIAL test above — proves the endpoint is
     actually gating on trust_tier, not blindly granting every load.
     """
-    from autobot_shared.plugin_sdk.capabilities import Capability, TrustTier
+    from autobot_shared.plugin_sdk.capabilities import PluginCapability, TrustTier
 
-    loader, _, _ = _make_load_endpoint_mocks(TrustTier.COMMUNITY, [Capability.KB_READ])
+    loader, _, _ = _make_load_endpoint_mocks(TrustTier.COMMUNITY, [PluginCapability.KB_READ])
 
     with (
         patch("plugin_manager.get_plugin_loader", return_value=loader),

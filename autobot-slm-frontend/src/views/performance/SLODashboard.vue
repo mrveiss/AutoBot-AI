@@ -13,6 +13,7 @@
 import { ref, onMounted } from 'vue'
 import { usePerformanceMonitoring } from '@/composables/usePerformanceMonitoring'
 import type { SLODefinition } from '@/composables/usePerformanceMonitoring'
+import { BaseAlert, BaseModal } from '@autobot/ui'
 
 const {
   slos,
@@ -156,12 +157,7 @@ async function handleDelete(): Promise<void> {
 <template>
   <div class="p-6">
     <!-- Error Banner -->
-    <div
-      v-if="error"
-      class="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm"
-    >
-      {{ error }}
-    </div>
+    <BaseAlert v-if="error" variant="error" class="mb-4" :message="error" />
 
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
@@ -262,169 +258,156 @@ async function handleDelete(): Promise<void> {
     </div>
 
     <!-- Create SLO Modal -->
-    <transition
-      enter-active-class="transition ease-out duration-200"
-      enter-from-class="opacity-0"
-      enter-to-class="opacity-100"
-      leave-active-class="transition ease-in duration-150"
-      leave-from-class="opacity-100"
-      leave-to-class="opacity-0"
+    <BaseModal
+      v-model="showCreateModal"
+      :title="$t('performance.sLODashboard.createSLO')"
+      width="32rem"
+      :close-label="$t('ui.modal.closeDialog')"
     >
-      <div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center">
-        <div class="fixed inset-0 bg-black/50" @click="showCreateModal = false"></div>
-        <div class="relative bg-white rounded-lg shadow-xl w-full max-w-lg mx-4 p-6">
-          <h3 class="text-lg font-semibold text-gray-900 mb-4">{{ $t('performance.sLODashboard.createSLO') }}</h3>
-          <form @submit.prevent="handleCreate" class="space-y-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.sLODashboard.name') }}</label>
-              <input
-                v-model="form.name"
-                type="text"
-                required
-                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                :placeholder="$t('performance.sLODashboard.aPIResponseTimeSLO')"
-              />
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.sLODashboard.description') }}</label>
-              <input
-                v-model="form.description"
-                type="text"
-                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                :placeholder="$t('performance.sLODashboard.optionalDescription')"
-              />
-            </div>
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.sLODashboard.target') }}</label>
-                <input
-                  v-model.number="form.target_percent"
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="100"
-                  required
-                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.sLODashboard.metricType') }}</label>
-                <select
-                  v-model="form.metric_type"
-                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                >
-                  <option v-for="opt in metricTypeOptions" :key="opt.value" :value="opt.value">
-                    {{ opt.label }}
-                  </option>
-                </select>
-              </div>
-            </div>
-            <div class="grid grid-cols-3 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.sLODashboard.threshold1') }}</label>
-                <input
-                  v-model.number="form.threshold_value"
-                  type="number"
-                  step="1"
-                  required
-                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                />
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.sLODashboard.unit') }}</label>
-                <select
-                  v-model="form.threshold_unit"
-                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                >
-                  <option v-for="opt in thresholdUnitOptions" :key="opt.value" :value="opt.value">
-                    {{ opt.label }}
-                  </option>
-                </select>
-              </div>
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.sLODashboard.windowDays') }}</label>
-                <input
-                  v-model.number="form.window_days"
-                  type="number"
-                  min="1"
-                  required
-                  class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                />
-              </div>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.sLODashboard.nodeIDOptional') }}</label>
-              <input
-                v-model="form.node_id"
-                type="text"
-                class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                :placeholder="$t('performance.sLODashboard.leaveEmptyForGlobal')"
-              />
-            </div>
-            <div class="flex items-center gap-2">
-              <input
-                v-model="form.enabled"
-                type="checkbox"
-                id="slo-enabled"
-                class="rounded-sm border-gray-300"
-              />
-              <label for="slo-enabled" class="text-sm text-gray-700">{{ $t('performance.sLODashboard.enabled') }}</label>
-            </div>
-            <div class="flex justify-end gap-3 pt-2">
-              <button
-                type="button"
-                @click="showCreateModal = false"
-                class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                {{ $t('performance.sLODashboard.cancel') }}
-              </button>
-              <button
-                type="submit"
-                :disabled="!form.name || loading"
-                class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
-              >
-                {{ $t('performance.sLODashboard.create') }}
-              </button>
-            </div>
-          </form>
+      <form id="slo-create-form" @submit.prevent="handleCreate" class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.sLODashboard.name') }}</label>
+          <input
+            v-model="form.name"
+            type="text"
+            required
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            :placeholder="$t('performance.sLODashboard.aPIResponseTimeSLO')"
+          />
         </div>
-      </div>
-    </transition>
-
-    <!-- Delete Confirmation Modal -->
-    <transition
-      enter-active-class="transition ease-out duration-200"
-      enter-from-class="opacity-0"
-      enter-to-class="opacity-100"
-      leave-active-class="transition ease-in duration-150"
-      leave-from-class="opacity-100"
-      leave-to-class="opacity-0"
-    >
-      <div v-if="showDeleteConfirm" class="fixed inset-0 z-50 flex items-center justify-center">
-        <div class="fixed inset-0 bg-black/50" @click="showDeleteConfirm = false"></div>
-        <div class="relative bg-white rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
-          <h3 class="text-lg font-semibold text-gray-900 mb-2">{{ $t('performance.sLODashboard.deleteSLO') }}</h3>
-          <p class="text-sm text-gray-600 mb-4">
-            {{ $t('performance.sLODashboard.areYouSureYou') }}
-            <span class="font-medium">"{{ deleteTarget?.name }}"</span>{{ $t('performance.sLODashboard.thisActionCannotBe') }}
-          </p>
-          <div class="flex justify-end gap-3">
-            <button
-              @click="showDeleteConfirm = false"
-              class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.sLODashboard.description') }}</label>
+          <input
+            v-model="form.description"
+            type="text"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            :placeholder="$t('performance.sLODashboard.optionalDescription')"
+          />
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.sLODashboard.target') }}</label>
+            <input
+              v-model.number="form.target_percent"
+              type="number"
+              step="0.1"
+              min="0"
+              max="100"
+              required
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.sLODashboard.metricType') }}</label>
+            <select
+              v-model="form.metric_type"
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
             >
-              {{ $t('performance.sLODashboard.cancel') }}
-            </button>
-            <button
-              @click="handleDelete"
-              :disabled="loading"
-              class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
-            >
-              {{ $t('performance.sLODashboard.delete') }}
-            </button>
+              <option v-for="opt in metricTypeOptions" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </option>
+            </select>
           </div>
         </div>
-      </div>
-    </transition>
+        <div class="grid grid-cols-3 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.sLODashboard.threshold1') }}</label>
+            <input
+              v-model.number="form.threshold_value"
+              type="number"
+              step="1"
+              required
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.sLODashboard.unit') }}</label>
+            <select
+              v-model="form.threshold_unit"
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            >
+              <option v-for="opt in thresholdUnitOptions" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.sLODashboard.windowDays') }}</label>
+            <input
+              v-model.number="form.window_days"
+              type="number"
+              min="1"
+              required
+              class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            />
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1">{{ $t('performance.sLODashboard.nodeIDOptional') }}</label>
+          <input
+            v-model="form.node_id"
+            type="text"
+            class="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            :placeholder="$t('performance.sLODashboard.leaveEmptyForGlobal')"
+          />
+        </div>
+        <div class="flex items-center gap-2">
+          <input
+            v-model="form.enabled"
+            type="checkbox"
+            id="slo-enabled"
+            class="rounded-sm border-gray-300"
+          />
+          <label for="slo-enabled" class="text-sm text-gray-700">{{ $t('performance.sLODashboard.enabled') }}</label>
+        </div>
+      </form>
+      <template #actions>
+        <div class="flex justify-end gap-3">
+          <button
+            type="button"
+            @click="showCreateModal = false"
+            class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            {{ $t('performance.sLODashboard.cancel') }}
+          </button>
+          <button
+            type="submit"
+            form="slo-create-form"
+            :disabled="!form.name || loading"
+            class="px-4 py-2 text-sm font-medium text-white bg-primary-600 rounded-lg hover:bg-primary-700 disabled:opacity-50"
+          >
+            {{ $t('performance.sLODashboard.create') }}
+          </button>
+        </div>
+      </template>
+    </BaseModal>
+
+    <!-- Delete Confirmation Modal -->
+    <BaseModal
+      v-model="showDeleteConfirm"
+      :title="$t('performance.sLODashboard.deleteSLO')"
+      size="sm"
+      :close-label="$t('ui.modal.closeDialog')"
+    >
+      <p class="text-sm text-gray-600">
+        {{ $t('performance.sLODashboard.areYouSureYou') }}
+        <span class="font-medium">"{{ deleteTarget?.name }}"</span>{{ $t('performance.sLODashboard.thisActionCannotBe') }}
+      </p>
+      <template #actions>
+        <button
+          @click="showDeleteConfirm = false"
+          class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+        >
+          {{ $t('performance.sLODashboard.cancel') }}
+        </button>
+        <button
+          @click="handleDelete"
+          :disabled="loading"
+          class="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 disabled:opacity-50"
+        >
+          {{ $t('performance.sLODashboard.delete') }}
+        </button>
+      </template>
+    </BaseModal>
   </div>
 </template>

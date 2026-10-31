@@ -11,13 +11,13 @@ Provides advanced screen understanding and visual automation capabilities.
 Package Structure:
 - types.py: Core data classes (ElementType, InteractionType, UIElement, ScreenState)
 - collections.py: UIElementCollection, ProcessingResultExtractor
-- classifiers.py: ElementClassifier, TemplateMatchingEngine, ContextAnalyzer
+- classifiers.py: ElementClassifier, TemplateMatchingEngine, ScreenContextAnalyzer
 - screen_analyzer.py: ScreenAnalyzer for multimodal screen analysis
 - system.py: ComputerVisionSystem main coordinator
 """
 
 # Re-export classifiers
-from .classifiers import ContextAnalyzer, ElementClassifier, TemplateMatchingEngine
+from .classifiers import ElementClassifier, ScreenContextAnalyzer, TemplateMatchingEngine
 
 # Re-export collections
 from .collections import ProcessingResultExtractor, UIElementCollection
@@ -53,7 +53,7 @@ __all__ = [
     # Classifiers
     "ElementClassifier",
     "TemplateMatchingEngine",
-    "ContextAnalyzer",
+    "ScreenContextAnalyzer",
     # Screen Analyzer
     "ScreenAnalyzer",
     # System

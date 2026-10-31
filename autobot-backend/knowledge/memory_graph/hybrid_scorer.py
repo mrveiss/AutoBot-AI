@@ -15,6 +15,6 @@ in. Import from `autobot_memory_graph.semantic_search` directly for new code.
 """
 
 from autobot_memory_graph.semantic_search import (  # noqa: F401
+    EntitySearchResult,
     HybridScorer,
-    SearchResult,
 )

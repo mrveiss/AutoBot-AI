@@ -1,0 +1,1342 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AutoBot Handbook</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+.lkic{display:none;margin-right:4px;vertical-align:-1px}
+.lockd .lkic{display:inline}
+.linkbtn.lockd{color:var(--muted);text-decoration:none;cursor:default;font-weight:500}
+.linkbtn.lockd:hover{color:var(--muted)}
+[data-tip=""]::before,[data-tip=""]::after{display:none}
+.th{
+ --bg:#F5F6F8;--surface:#FFFFFF;--surface2:#F8F9FB;--border:#E3E6EC;--line:#EEF0F3;--bw:1px;
+ --text:#1E2A44;--text2:#4B5570;--muted:#5F6B85;--link:#1E2A44;--link-h:#B8452A;
+ --primary:#1E2A44;--primary-h:#2C3A5A;--on-primary:#FFFFFF;--accent:#D9603F;--focus:#2563EB;
+ --tile:#F1F4F8;--tile-b:#E3E6EC;--stroke:#1E2A44;--i1:#A9D4E4;--i2:#F0C674;--i3:#EF9077;--i1t:#D5E9F1;--i2t:#F7E3B8;--i3t:#F7D3C8;
+ --bar:#1E2A44;--bar-alert:#D9603F;--bar-track:#EEF0F3;--alert-text:#9A3412;
+ --ok-bg:#E6F4EC;--ok-fg:#1D6A3E;--warn-bg:#FCF1D9;--warn-fg:#7A5300;--bad-bg:#FBE5DF;--bad-fg:#9A3412;--idle-bg:#EEF0F3;--idle-fg:#4B5570;--info-bg:#E2F0F6;--info-fg:#155A70;--pill-b:0 solid transparent;
+ --dot-ok:#2E9E60;--dot-idle:#B7BECB;--dot-warn:#E0A93A;--dot-bad:#D9603F;
+ --danger-tile:#FBE5DF;--danger-tile-b:#F2C9BC;--brand-bg:#1E2A44;--brand-fg:#FFFFFF;--nav-on-bw:2px;
+}
+.th[data-theme="dark"]{
+ --bg:#0E1420;--surface:#161F31;--surface2:#1A2438;--border:#2A3650;--line:#222D44;
+ --text:#E6EAF2;--text2:#B9C2D4;--muted:#9AA5BC;--link:#E6EAF2;--link-h:#F5A48C;
+ --primary:#DCE4F2;--primary-h:#C4D0E6;--on-primary:#0E1420;--accent:#F08A6C;--focus:#7FB0FF;
+ --tile:#1F2A40;--tile-b:#2A3650;--stroke:#DCE4F2;--i1:#5F9BB5;--i2:#C29A45;--i3:#D3735A;--i1t:#2B4252;--i2t:#4A3E24;--i3t:#4A2F28;
+ --bar:#B9C2D4;--bar-alert:#F08A6C;--bar-track:#26324A;--alert-text:#F5A48C;
+ --ok-bg:#163A28;--ok-fg:#8EE0B2;--warn-bg:#3D3016;--warn-fg:#F2CF7A;--bad-bg:#45231B;--bad-fg:#F7A893;--idle-bg:#26324A;--idle-fg:#C3CBDB;--info-bg:#173748;--info-fg:#8FD0EA;
+ --dot-ok:#4CC486;--dot-idle:#6B7690;--dot-warn:#E8B44E;--dot-bad:#F08A6C;
+ --danger-tile:#45231B;--danger-tile-b:#6B3326;--brand-bg:#DCE4F2;--brand-fg:#0E1420;
+}
+.th[data-theme="contrast"]{
+ --bg:#FFFFFF;--surface:#FFFFFF;--surface2:#FFFFFF;--border:#000000;--line:#000000;--bw:2px;
+ --text:#000000;--text2:#000000;--muted:#1A1A1A;--link:#0033CC;--link-h:#001A66;
+ --primary:#000000;--primary-h:#000000;--on-primary:#FFFFFF;--accent:#B00020;--focus:#0033CC;
+ --tile:#FFFFFF;--tile-b:#000000;--stroke:#000000;--i1:#FFFFFF;--i2:#FFFFFF;--i3:#FFFFFF;--i1t:#FFFFFF;--i2t:#FFFFFF;--i3t:#FFFFFF;
+ --bar:#000000;--bar-alert:#B00020;--bar-track:#FFFFFF;--alert-text:#B00020;
+ --ok-bg:#FFFFFF;--ok-fg:#000000;--warn-bg:#FFFFFF;--warn-fg:#000000;--bad-bg:#B00020;--bad-fg:#FFFFFF;--idle-bg:#FFFFFF;--idle-fg:#000000;--info-bg:#FFFFFF;--info-fg:#000000;--pill-b:1.5px solid #000000;
+ --dot-ok:#000000;--dot-idle:#FFFFFF;--dot-warn:#000000;--dot-bad:#B00020;
+ --danger-tile:#FFFFFF;--danger-tile-b:#B00020;--brand-bg:#000000;--brand-fg:#FFFFFF;--nav-on-bw:4px;
+}
+.th[data-theme="mono"]{
+ --bg:#F4F4F5;--surface:#FFFFFF;--surface2:#FAFAFA;--border:#E4E4E7;--line:#F0F0F2;
+ --text:#18181B;--text2:#3F3F46;--muted:#52525B;--link:#18181B;--link-h:#000000;
+ --primary:#18181B;--primary-h:#27272A;--on-primary:#FFFFFF;--accent:#18181B;--focus:#18181B;
+ --tile:#F4F4F5;--tile-b:#E4E4E7;--stroke:#18181B;--i1:#D4D4D8;--i2:#E4E4E7;--i3:#A1A1AA;--i1t:#EDEDEF;--i2t:#F4F4F5;--i3t:#E4E4E7;
+ --bar:#A1A1AA;--bar-alert:#18181B;--bar-track:#EDEDEF;--alert-text:#18181B;
+ --ok-bg:#F4F4F5;--ok-fg:#18181B;--warn-bg:#E4E4E7;--warn-fg:#18181B;--bad-bg:#18181B;--bad-fg:#FFFFFF;--idle-bg:#F4F4F5;--idle-fg:#52525B;--info-bg:#F4F4F5;--info-fg:#3F3F46;--pill-b:1px solid #D4D4D8;
+ --dot-ok:#18181B;--dot-idle:#D4D4D8;--dot-warn:#71717A;--dot-bad:#18181B;
+ --danger-tile:#F4F4F5;--danger-tile-b:#18181B;--brand-bg:#18181B;--brand-fg:#FFFFFF;
+}
+.th{background:var(--bg);color:var(--text)}
+.th a{color:var(--link)}.th a:hover{color:var(--link-h)}
+.th :focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.ic{fill:none;stroke:var(--stroke);stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round;flex:none}
+.i1{fill:var(--i1)}.i2{fill:var(--i2)}.i3{fill:var(--i3)}.iw{fill:var(--surface)}.it1{fill:var(--i1t)}.it2{fill:var(--i2t)}.it3{fill:var(--i3t)}.ik{fill:var(--stroke)}
+.sacc{stroke:var(--accent)}.sonp{stroke:var(--on-primary)}
+.tile{width:34px;height:34px;border-radius:8px;background:var(--tile);border:var(--bw) solid var(--tile-b);display:grid;place-items:center;flex:none;box-sizing:border-box}
+.tile.lg{width:44px;height:44px;border-radius:10px}
+.tile.danger{background:var(--danger-tile);border-color:var(--danger-tile-b)}
+.nav a{display:flex;align-items:center;gap:8px;height:56px;padding:0 12px;color:var(--text2);font-weight:500;font-size:14px;text-decoration:none;box-sizing:border-box}
+.nav a:hover{color:var(--text);background:var(--surface2)}
+.nav a.on{color:var(--text);font-weight:600;border-bottom:var(--nav-on-bw) solid var(--accent);padding-top:var(--nav-on-bw)}
+.nav a.icon{width:40px;height:40px;padding:0;justify-content:center;border-radius:8px}
+.seg{height:30px;padding:0 10px;border-radius:5px;border:0;background:transparent;color:var(--text2);font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+.seg:hover{color:var(--text)}
+.seg.on{background:var(--surface);color:var(--text);font-weight:600;outline:var(--bw) solid var(--border)}
+.sub a{display:flex;align-items:center;gap:10px;padding:7px 10px;border-radius:6px;color:var(--text2);font-size:13.5px;text-decoration:none;min-height:24px;border-left:3px solid transparent}
+.sub a:hover{background:var(--surface2);color:var(--text)}
+.sub a.on{background:var(--surface2);color:var(--text);font-weight:600;border-left-color:var(--primary)}
+.sect{margin:16px 10px 6px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.card{background:var(--surface);border:var(--bw) solid var(--border);border-radius:10px}
+.ch{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:var(--bw) solid var(--line)}
+.ch h2{margin:0;font-size:15px;font-weight:600;flex-grow:1}
+.pill{font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:5px;white-space:nowrap;border:var(--pill-b)}
+.ok{background:var(--ok-bg);color:var(--ok-fg)}.warn{background:var(--warn-bg);color:var(--warn-fg)}.bad{background:var(--bad-bg);color:var(--bad-fg)}.idle{background:var(--idle-bg);color:var(--idle-fg)}.info{background:var(--info-bg);color:var(--info-fg)}
+.btn{height:36px;padding:0 14px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);color:var(--text);font:inherit;font-weight:500;font-size:13.5px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;text-decoration:none;box-sizing:border-box}
+.btn:hover{background:var(--surface2)}
+.th .btn.pri{background:var(--primary);border-color:var(--primary);color:var(--on-primary)}
+.th .btn.pri:hover{background:var(--primary-h);color:var(--on-primary)}
+.btn.sm{height:32px;padding:0 12px;font-size:13px}
+.mono{font-family:'IBM Plex Mono',ui-monospace,monospace}
+.kpi{padding:16px;display:flex;gap:14px;align-items:center}
+.kpi b{display:block;font-size:24px;font-weight:600;letter-spacing:-.01em}
+.kpi span{font-size:12.5px;color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:99px;flex:none;border:1px solid var(--stroke);box-sizing:border-box}
+.d-ok{background:var(--dot-ok)}.d-idle{background:var(--dot-idle)}.d-warn{background:var(--dot-warn)}.d-bad{background:var(--dot-bad)}
+th{font-size:11.5px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);text-align:left;padding:9px 16px;background:var(--surface2);border-bottom:var(--bw) solid var(--border)}
+td{font-size:13px;padding:10px 16px;border-bottom:var(--bw) solid var(--line);white-space:nowrap}
+.bar{height:6px;border-radius:99px;background:var(--bar-track);overflow:hidden;outline:var(--pill-b)}
+.bf{height:100%;background:var(--bar)}.bf.alert{background:var(--bar-alert)}
+.row{display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:var(--bw) solid var(--line)}
+.row:last-child{border-bottom:0}
+.sub2{font-size:12.5px;color:var(--muted)}
+.av{width:32px;height:32px;border-radius:99px;border:var(--bw) solid var(--tile-b);background:var(--tile);display:grid;place-items:center;font-weight:600;font-size:12px;flex:none;box-sizing:border-box;color:var(--text)}
+.r-owner,.r-admin,.r-lead,.r-member,.r-guest{color:var(--text);border:var(--bw) solid var(--border)}
+.r-owner{background:var(--i3t)}.r-admin{background:var(--i2t)}.r-lead{background:var(--i1t)}.r-member{background:var(--surface)}.r-guest{background:var(--surface2);border-style:dashed;color:var(--text2)}
+.th .btn.dng{color:var(--alert-text);border-color:var(--danger-tile-b)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.fld{display:flex;flex-direction:column;gap:6px}
+.fld label{font-size:13px;font-weight:600}
+.fld select{height:36px;border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);font:inherit;font-size:13.5px;padding:0 10px;color:var(--text)}
+.hint{margin:0;font-size:12px;color:var(--muted)}
+.th[data-ui="minimal"] .adv{display:none !important}
+.th[data-ui="minimal"] .adv-only-full{display:none !important}
+.th .only-min{display:none !important}
+.th[data-ui="minimal"] .only-min{display:flex !important}
+.th[data-ui="minimal"] .only-min.blk{display:block !important}
+.uimode{display:flex;gap:2px;padding:2px;border-radius:7px;background:var(--surface2);border:var(--bw) solid var(--border);margin-right:8px}
+.uimode .seg{height:28px;font-size:12px}
+.uitog{height:40px;padding:0 10px;margin:0 2px;border-radius:8px;border:var(--bw) solid transparent;background:transparent;color:var(--text2);font:inherit;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:6px;cursor:pointer}.uitog:hover{background:var(--surface2);color:var(--text)}.uitog.on{background:var(--surface2);color:var(--text);font-weight:600;border-color:var(--accent)}
+.minnote{align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;color:var(--muted)}
+.linkbtn{border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;font-weight:600;color:var(--link);text-decoration:underline;text-underline-offset:2px;cursor:pointer;min-height:24px;text-align:left}
+.linkbtn:hover{color:var(--link-h)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.th{--tooltip-delay:500ms;--tooltip-hide-delay:100ms;--tooltip-offset:8px;--tooltip-max:280px}
+[data-tip]{position:relative}
+[data-tip]::before,[data-tip]::after{position:absolute;left:50%;pointer-events:none;opacity:0;visibility:hidden;transition:opacity 120ms ease-out var(--tooltip-hide-delay),visibility 0s linear calc(var(--tooltip-hide-delay) + 120ms);z-index:50}
+[data-tip]::after{content:attr(data-tip);bottom:calc(100% + var(--tooltip-offset));transform:translateX(-50%);box-sizing:border-box;width:max-content;max-width:var(--tooltip-max);padding:6px 10px;border-radius:6px;background:var(--primary);color:var(--on-primary);border:var(--bw) solid var(--primary);font:500 12.5px/1.35 'IBM Plex Sans',system-ui,sans-serif;letter-spacing:0;text-transform:none;white-space:normal;text-align:left}
+[data-tip]::before{content:"";bottom:calc(100% + var(--tooltip-offset) - 4px);width:8px;height:8px;margin-left:-4px;background:var(--primary);transform:rotate(45deg)}
+[data-tip]:hover::before,[data-tip]:hover::after{opacity:1;visibility:visible;transition-delay:var(--tooltip-delay),var(--tooltip-delay)}
+[data-tip]:focus-visible::before,[data-tip]:focus-visible::after{opacity:1;visibility:visible;transition-delay:0s,0s}
+[data-tip-pos="bottom"]::after{bottom:auto;top:calc(100% + var(--tooltip-offset))}
+[data-tip-pos="bottom"]::before{bottom:auto;top:calc(100% + var(--tooltip-offset) - 4px)}
+[data-tip-pos="right"]::after{left:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="right"]::before{left:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+[data-tip-pos="left"]::after{left:auto;right:calc(100% + var(--tooltip-offset));bottom:auto;top:50%;transform:translateY(-50%)}
+[data-tip-pos="left"]::before{left:auto;right:calc(100% + var(--tooltip-offset) - 4px);margin-left:0;bottom:auto;top:50%;margin-top:-4px}
+@media (prefers-reduced-motion: reduce){[data-tip]::before,[data-tip]::after{transition:none}}
+@media (hover: none){[data-tip]::before,[data-tip]::after{display:none}}
+.chp{display:flex;gap:10px;align-items:flex-start;width:100%;text-align:left;padding:8px 12px;border:0;border-left:3px solid transparent;border-bottom:var(--bw) solid var(--line);background:transparent;font:inherit;color:var(--text2);cursor:pointer;box-sizing:border-box}
+.chp:hover{background:var(--surface2);color:var(--text)}
+.chp.on{background:var(--surface2);color:var(--text);border-left-color:var(--primary)}
+.grp{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:9px 12px;border:0;border-bottom:var(--bw) solid var(--line);background:var(--surface2);font:inherit;font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);cursor:pointer;box-sizing:border-box}
+.grp:hover{color:var(--text)}
+.tab{height:40px;padding:0 14px;border:0;border-bottom:3px solid transparent;background:transparent;font:inherit;font-size:13.5px;font-weight:500;color:var(--text2);cursor:pointer;margin-bottom:-1px}
+.tab:hover{color:var(--text)}
+.tab.on{color:var(--text);font-weight:600;border-bottom-color:var(--accent)}
+.fld input,.fld textarea{border-radius:6px;border:var(--bw) solid var(--border);background:var(--surface);font:inherit;font-size:13.5px;padding:0 10px;color:var(--text);box-sizing:border-box}
+.fld input{height:36px}
+.fld textarea{padding:10px;line-height:1.5;resize:vertical;font-family:'IBM Plex Mono',ui-monospace,monospace;font-size:13px}
+.hb h3{margin:24px 0 8px;font-size:18px;font-weight:600;letter-spacing:-.005em}
+.hb h3:first-child{margin-top:0}
+.hb p{margin:0 0 14px}
+.hb ol{margin:0 0 14px;padding-left:24px}
+.hb li{margin:0 0 10px;padding-left:4px}
+.hb li::marker{font-weight:600;color:var(--muted)}
+.mb{padding:14px 16px;border:var(--bw) solid var(--border);border-radius:10px;background:var(--surface);min-width:0}
+.mb h3{margin:0 0 10px;font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.lst{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.lst li{display:flex;align-items:center;flex-wrap:wrap;gap:8px;font-size:13.5px}
+</style>
+</helmet>
+
+<div class="th" data-theme="{{theme}}" data-ui="{{ui}}" style="font-family: 'IBM Plex Sans', system-ui, sans-serif; min-height: 100vh; display: flex; flex-wrap: wrap; align-items: stretch; align-content: flex-start">
+
+  <nav class="nav" aria-label="Main" style="flex: 1 1 100%; box-sizing: border-box; min-height: 56px; padding: 0 clamp(16px, 2.5vw, 28px); display: flex; flex-wrap: wrap; align-items: center; gap: 2px; background: var(--surface); border-bottom: var(--bw) solid var(--border)">
+    <a href="Main.dc.html" aria-label="AutoBot home" style="padding: 0 20px 0 0; gap: 10px">
+      <span class="tile" style="background: var(--brand-bg); border-color: var(--brand-bg)"><svg class="ic" width="24" height="24" viewBox="0 0 48 48" aria-hidden="true" style="stroke: var(--brand-fg); stroke-width: 2.6"><rect x="10" y="16" width="28" height="22" rx="5" class="i1"/><circle cx="19" cy="27" r="3" style="fill: var(--brand-bg)"/><circle cx="29" cy="27" r="3" style="fill: var(--brand-bg)"/><path d="M24 16v-6"/><circle cx="24" cy="8" r="3" class="i3"/></svg></span>
+      <span style="font-weight: 600; font-size: 17px; color: var(--text); letter-spacing: -.01em">AutoBot</span>
+    </a>
+    <a href="Main.dc.html">Home</a>
+    <a href="Chat.dc.html">Chat</a>
+    <a href="Knowledge.dc.html">Knowledge</a>
+    <a href="CompanyOS.dc.html" class="on" aria-current="page">Company OS</a>
+    <a href="Analytics.dc.html" class="adv">Analytics</a>
+    <span style="flex-grow: 1" aria-hidden="true"></span>
+    <span class="sr" role="status" aria-live="polite">{{uiAnnounce}}</span>
+    <a href="Secrets.dc.html" class="icon adv" aria-label="Secrets" data-tip="Secrets" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4" class="i3"/><path d="M12 12h9M18 12v3M21 12v2"/></svg></a>
+    <a href="Preferences.dc.html" class="icon" aria-label="Preferences" data-tip="Preferences" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" class="i1"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg></a>
+    <button type="button" class="uitog {{uiTogCls}}" onClick="{{toggleUi}}" aria-pressed="{{uiMinPressed}}" data-tip="Minimal interface — hide advanced features" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2" class="iw"/><path d="M4 9h16M9 9v11"/><rect x="11.5" y="11.5" width="6" height="6" rx="1" class="i2"/></svg><span>Minimal</span></button>
+    <a href="AdminUsers.dc.html" class="icon adv" aria-label="Platform admin, opens the SLM console" data-tip="Platform admin — opens the SLM console ↗" data-tip-pos="bottom"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 3v6c0 5-4 8-8 9-4-1-8-4-8-9V6z" class="it3"/><path d="M9 12l2 2 4-4"/></svg></a>
+    <a href="Preferences.dc.html" aria-label="Profile settings" data-tip="Profile settings" data-tip-pos="left" style="margin-left: 8px; width: 34px; height: 34px; border-radius: 99px; border: 0; background: var(--brand-bg); font: inherit; font-weight: 600; font-size: 12.5px; color: var(--brand-fg); cursor: pointer; display: grid; place-items: center; text-decoration: none">JD</a>
+  </nav>
+
+  <div style="flex: 999 1 560px; min-width: 0; min-height: calc(100vh - 57px); display: flex; flex-wrap: wrap; align-items: stretch">
+
+    <aside class="sub" aria-label="Company OS" style="flex: 1 1 220px; max-width: 100%; box-sizing: border-box; padding: 18px 12px; display: flex; flex-direction: column; gap: 1px; background: var(--surface); border-right: var(--bw) solid var(--border)">
+      <button type="button" data-tip="Switch company" data-tip-pos="bottom" style="margin: 0 0 6px; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: 8px; border: var(--bw) solid var(--border); background: var(--surface2); font: inherit; font-size: 14px; font-weight: 600; color: var(--text); cursor: pointer; text-align: left">
+        <span style="width: 26px; height: 26px; border-radius: 6px; background: var(--brand-bg); color: var(--brand-fg); display: grid; place-items: center; font-size: 12px">AL</span><span style="flex-grow: 1; display: flex; flex-direction: column; line-height: 1.2">AutoBot Labs<span style="font-size: 11.5px; font-weight: 400; color: var(--muted)">Company OS</span></span><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10l5 5 5-5"/></svg></button>
+      <p class="sect">Overview</p>
+      <a href="CompanyOS.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="1.5" class="i3"/><rect x="13" y="3" width="8" height="5" rx="1.5" class="i1"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5" class="i2"/></svg>Dashboard</a>
+      <a href="MyPlace.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7v9H4z"/><circle cx="12" cy="14" r="2.5" class="i2"/></svg>My place</a>
+      <a href="ReviewInbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 13h5l1 2h4l1-2h5"/></svg>My Reviews</a>
+      <a href="Approvals.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Approvals<span class="pill warn" data-tip="3 approvals waiting on you" data-tip-pos="right" style="margin-left: auto">3</span></a>
+      <a href="Activity.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18l5-6 4 3 7-9"/></svg>Activity</a>
+      <a href="RunSupervision.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M10 9l4 2-4 2z" class="i2"/><path d="M8 21h8"/></svg>Run supervision</a>
+      <a href="OperationHistory.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.3-5.6M4 4v5h5"/><path d="M12 8v4l3 2"/></svg>Operation history</a>
+      <a href="AgentLedger.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2" class="it2"/><path d="M9 8h6M9 12h6M9 16h3"/></svg>Agent ledger</a>
+      <a href="CeoChat.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-4 4v-4H4z" class="it3"/></svg>CEO Chat</a>
+      <a href="CompanyMailbox.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6" class="it2"/></svg>Mailbox</a>
+      <p class="sect">Work</p>
+      <a href="Backlog.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Backlog</a>
+      <a href="Boards.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="5" height="16" rx="1" class="it1"/><rect x="10" y="4" width="5" height="11" rx="1"/><rect x="17" y="4" width="4" height="7" rx="1" class="it2"/></svg>Boards</a>
+      <a href="Portfolios.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="13" rx="2" class="it2"/><path d="M9 7V5h6v2M3 12h18"/></svg>Portfolios</a>
+      <a href="Timeline.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h9M8 12h12M4 18h7"/></svg>Timeline</a>
+      <a href="Goals.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4" class="it3"/></svg>Goals</a>
+      <a href="Automation.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2L5 14h6l-1 8 8-12h-6z" class="it2"/></svg>Automation</a>
+      <a href="ProcessCanvas.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="6" height="5" rx="1" class="it2"/><rect x="15" y="15" width="6" height="5" rx="1"/><path d="M9 6.5h4a2 2 0 0 1 2 2V15"/></svg>Process canvas</a>
+      <a href="Routines.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>Routines</a>
+      <a href="TranscriberProjects.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" class="it3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>Transcriber</a>
+      <p class="sect">Organization</p>
+      <a href="OrgChart.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="5" rx="1" class="it2"/><rect x="3" y="16" width="6" height="5" rx="1"/><rect x="15" y="16" width="6" height="5" rx="1"/><path d="M12 8v4M6 16v-4h12v4"/></svg>Org Chart</a>
+      <a href="Members.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="9" r="3.5"/><path d="M3 20a6 6 0 0 1 12 0"/></svg>Members</a>
+      <a href="Teams.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="3"/><circle cx="16" cy="9" r="3" class="i2"/><path d="M2 20a6 6 0 0 1 12 0M10 20a6 6 0 0 1 12 0"/></svg>Teams</a>
+      <a href="Roles.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="2"/><circle cx="9" cy="11" r="2"/><path d="M14 10h4M14 14h3"/></svg>Roles</a>
+      <a href="Handbook.dc.html" class="on" aria-current="page"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z" class="it2"/><path d="M5 17a3 3 0 0 1 3-3h10M9 8h5"/></svg>Handbook</a>
+      <a href="Costs.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8" class="it2"/><path d="M12 7v10"/></svg>Costs &amp; Budget</a>
+      <a href="BusinessIntelligence.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h16"/><path d="M5 16l4-5 4 3 6-8" /><circle cx="19" cy="6" r="1.6" class="i2"/></svg>Business intelligence</a>
+      <a href="HeartbeatMonitor.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l2-4 4 8 2-4h6"/></svg>Heartbeat</a>
+      <a href="Portability.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 12h8M13 9l3 3-3 3"/><rect x="4" y="4" width="16" height="16" rx="2"/></svg>Portability</a>
+      <a href="CompanySecrets.dc.html" class="adv"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="12" r="4"/><path d="M12 12h9M18 12v3"/></svg>Secrets</a>
+      <a href="CompanySettings.dc.html"><svg class="ic" width="17" height="17" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/></svg>Company settings</a>
+      <div class="only-min minnote" style="margin: 16px 10px 0; padding-top: 12px; border-top: var(--bw) solid var(--line)"><span>Showing essentials</span><button type="button" class="linkbtn" onClick="{{showAll}}">Show all features</button></div>
+    </aside>
+
+    <main style="flex: 999 1 520px; min-width: 0; box-sizing: border-box; padding: 24px clamp(16px, 2.5vw, 32px) 40px; display: flex; flex-direction: column; gap: 20px">
+      <header style="display: flex; flex-wrap: wrap; gap: 14px; align-items: center">
+        <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1">
+          <span class="sub2"><a href="CompanyOS.dc.html" style="color: var(--muted); text-decoration: none">Company OS</a> / Organization</span>
+          <h1 style="margin: 0; font-size: 24px; font-weight: 600; letter-spacing: -.01em">Handbook</h1>
+          <p class="sub2" style="margin: 0">How AutoBot Labs works, for everyone who joins. Company chapters first, then a page for every role, workflow and process.</p>
+          <p class="sub2" style="margin: 0; color: var(--text2); font-weight: 500">Your handbook shows what your roles need. It changes when your roles change.</p>
+        </div>
+        <div class="fld" style="min-width: 260px; max-width: 420px">
+          <label for="hbas" style="display: flex; align-items: center; gap: 6px">Viewing as <span class="pill idle" tabindex="0" data-tip="Founder & CEO and anyone with the “View whole handbook” permission, set in Roles, see the whole handbook. Everyone else sees only what their roles need." data-tip-pos="bottom" style="font-weight: 500">Who sees what</span></label>
+          <select id="hbas" value="{{asVal}}" onChange="{{onAs}}">
+            <sc-for list="{{viewers}}" as="o" hint-placeholder-count="4"><option value="{{o.id}}">{{o.label}}</option></sc-for>
+          </select>
+          <span class="mono sub2" style="font-size: 12px">{{scopeLine}}</span>
+        </div>
+        <span class="sub2" style="display: inline-flex; align-items: center; gap: 6px"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="6" rx="7" ry="3" class="it1"/><path d="M5 6v6c0 1.7 3.1 3 7 3s7-1.3 7-3V6M5 12v6c0 1.7 3.1 3 7 3s7-1.3 7-3v-6"/></svg>Stored in <a href="Knowledge.dc.html">Knowledge</a>, searchable there and in chat</span>
+      </header>
+
+      <sc-if value="{{isEverything}}" hint-placeholder-val="{{ false }}">
+      <section class="card" aria-labelledby="cov" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+          <h2 id="cov" style="margin: 0; font-size: 15px; font-weight: 600; flex-grow: 1">Every role, workflow and process has a page</h2>
+          <span class="pill {{cov.cls}}">{{cov.text}}</span>
+          <button type="button" class="btn sm" aria-pressed="{{needsPressed}}" onClick="{{toggleNeeds}}" data-tip="Show only the pages that still need an explanation" data-tip-pos="left">{{needsLabel}}</button>
+        </div>
+        <div class="bar" role="img" aria-label="{{cov.text}}"><div class="bf {{cov.barCls}}" style="width: {{cov.pct}}%"></div></div>
+        <p class="sub2" style="margin: 0">Pages come from the company model. A new role, workflow or process gets a page automatically and shows “Needs an explanation” until its owner role writes one.</p>
+        <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px">
+          <span class="sub2" style="font-weight: 600">Needs an explanation:</span>
+          <sc-for list="{{cov.needs}}" as="n" hint-placeholder-count="3"><button type="button" class="linkbtn {{n.lcls}}" onClick="{{n.go}}" aria-disabled="{{n.dis}}" data-tip="{{n.ltip}}">{{n.label}}</button></sc-for>
+        </div>
+      </section>
+      </sc-if>
+
+      <sc-if value="{{notEverything}}" hint-placeholder-val="{{ false }}">
+      <section class="card" aria-labelledby="mine" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+        <h2 id="mine" style="margin: 0; font-size: 15px; font-weight: 600">{{mineTitle}}</h2>
+        <sc-if value="{{mineIsPerson}}" hint-placeholder-val="{{ false }}">
+          <ul class="lst">
+            <sc-for list="{{mineRows}}" as="m" hint-placeholder-count="2">
+              <li style="gap: 12px"><button type="button" class="linkbtn" onClick="{{m.go}}" style="font-size: 13.5px">{{m.name}}</button><div class="bar" style="width: 140px" role="img" aria-label="{{m.progress}}"><div class="bf" style="width: {{m.pct}}%"></div></div><span class="sub2">{{m.progress}}</span><sc-if value="{{m.onboarding}}" hint-placeholder-val="{{ false }}"><span class="pill info" tabindex="0" data-tip="You are working through the onboarding path for this role.">Onboarding</span></sc-if><sc-if value="{{m.done}}" hint-placeholder-val="{{ false }}"><span class="pill ok">Done</span></sc-if></li>
+            </sc-for>
+          </ul>
+        </sc-if>
+        <sc-if value="{{mineIsAgent}}" hint-placeholder-val="{{ false }}">
+          <p style="margin: 0; font-size: 13.5px"><span class="pill ok">{{loadedLine}}</span></p>
+          <p class="sub2" style="margin: 0">Agents load exactly their own handbook, not the whole company handbook.</p>
+        </sc-if>
+      </section>
+      </sc-if>
+
+      <div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+
+        <section class="card" aria-labelledby="chl" style="flex: 1 1 280px; max-width: 340px; min-width: 240px; overflow: hidden">
+          <div class="ch"><h2 id="chl">Pages</h2><span class="sub2">{{navCount}}</span></div>
+          <div style="padding: 12px 12px 10px; border-bottom: var(--bw) solid var(--line)" class="fld">
+            <label for="hbq" class="sr">Search the handbook</label>
+            <input id="hbq" type="search" value="{{query}}" onInput="{{onQuery}}" placeholder="Search chapters, roles, workflows, processes" autocomplete="off">
+          </div>
+          <nav aria-label="Handbook pages" style="max-height: 820px; overflow-y: auto">
+            <sc-for list="{{nav}}" as="c" hint-placeholder-count="12">
+              <sc-if value="{{c.isHead}}" hint-placeholder-val="{{ false }}">
+                <button type="button" class="grp" aria-expanded="{{c.expanded}}" onClick="{{c.toggle}}"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="{{c.chev}}"/></svg>{{c.label}}</button>
+              </sc-if>
+              <sc-if value="{{c.isItem}}" hint-placeholder-val="{{ true }}">
+                <button type="button" class="chp {{c.cls}}" aria-current="{{c.cur}}" onClick="{{c.pick}}">
+                  <span style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 0">
+                    <strong style="font-weight: 600; font-size: 13.5px; color: var(--text)">{{c.title}}</strong>
+                    <span class="sub2">{{c.sub}}</span>
+                  </span>
+                  <sc-if value="{{c.needs}}" hint-placeholder-val="{{ false }}"><span class="pill warn" tabindex="0" data-tip="Needs an explanation from its owner role" data-tip-pos="right">Needs words</span></sc-if>
+                  <sc-if value="{{c.pending}}" hint-placeholder-val="{{ false }}"><span class="dot d-warn" role="img" aria-label="Has a change waiting for approval" data-tip="1 change waiting for approval" data-tip-pos="right" tabindex="0" style="margin-top: 6px"></span></sc-if>
+                </button>
+              </sc-if>
+            </sc-for>
+          </nav>
+          <sc-if value="{{noMatch}}" hint-placeholder-val="{{ false }}">
+            <p class="sub2" role="status" style="margin: 0; padding: 16px">No page matches. Try a shorter word, or clear the search and the filter to see every page.</p>
+          </sc-if>
+        </section>
+
+        <div style="flex: 999 1 520px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+
+          <sc-if value="{{pendingShow}}" hint-placeholder-val="{{ false }}">
+            <div class="card" role="status" style="padding: 12px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; border-color: var(--dot-warn)">
+              <span class="pill warn">Waiting for approval</span>
+              <span style="font-size: 13.5px; flex-grow: 1">1 change waiting for approval · by <span class="mono">research-agent</span></span>
+              <a href="Approvals.dc.html" class="btn sm">Review in Approvals</a>
+            </div>
+          </sc-if>
+          <sc-if value="{{sentShow}}" hint-placeholder-val="{{ false }}">
+            <div class="card" role="status" style="padding: 12px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; border-color: var(--dot-ok)">
+              <span class="pill ok">Sent</span>
+              <span style="font-size: 13.5px; flex-grow: 1">Your change was sent. It is published after {{pg.owner}} approves it in Approvals.</span>
+              <a href="Approvals.dc.html" class="btn sm">Open Approvals</a>
+            </div>
+          </sc-if>
+
+          <article class="card" aria-labelledby="ct" style="overflow: hidden">
+            <div class="ch" style="flex-wrap: wrap">
+              <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z" class="it2"/><path d="M5 17a3 3 0 0 1 3-3h10M9 8h5"/></svg></span>
+              <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1; min-width: 0">
+                <span class="sub2">{{pg.crumb}}</span>
+                <h2 id="ct" style="font-size: 18px; flex-grow: 0">{{pg.title}}</h2>
+              </div>
+              <span class="pill info">{{pg.kindLabel}}</span>
+              <sc-if value="{{pg.isChapter}}" hint-placeholder-val="{{ false }}">
+                <button type="button" class="btn sm" onClick="{{toggleEdit}}" aria-expanded="{{editExpanded}}" aria-controls="hbedit"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z" class="it2"/></svg>{{editLabel}}</button>
+              </sc-if>
+            </div>
+
+            <sc-if value="{{pg.isChapter}}" hint-placeholder-val="{{ false }}">
+            <div style="padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 8px 22px; align-items: center; background: var(--surface2); border-bottom: var(--bw) solid var(--line)">
+              <span style="font-size: 13px">Owned by <strong style="font-weight: 600">{{sel.ownerRole}}</strong></span>
+              <span style="font-size: 13px" class="sub2">Last changed {{sel.changed}} · <span class="mono" data-tip="Version {{sel.version}} of this chapter" tabindex="0">{{sel.version}}</span></span>
+              <span style="display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px"><span class="sub2">Applies to</span>
+                <sc-for list="{{sel.applies}}" as="a" hint-placeholder-count="1"><span class="pill info">{{a.name}}</span></sc-for>
+              </span>
+              <span class="pill ok" tabindex="0" data-tip="Holders of every role that this applies to — people and agents — get this chapter as standing rules. Agents load it into their instructions." style="margin-left: auto; display: inline-flex; align-items: center; gap: 8px">
+                <span aria-hidden="true" style="width: 26px; height: 14px; border-radius: 99px; background: var(--dot-ok); border: 1px solid var(--stroke); position: relative; box-sizing: border-box; display: inline-block"><span style="position: absolute; right: 1px; top: 1px; width: 10px; height: 10px; border-radius: 99px; background: var(--surface)"></span></span>
+                Agents follow this chapter
+              </span>
+            </div>
+
+            <div role="tablist" aria-label="Chapter views" style="display: flex; gap: 4px; padding: 0 16px; border-bottom: var(--bw) solid var(--border)">
+              <button type="button" role="tab" class="tab {{readCls}}" aria-selected="{{readSel}}" onClick="{{showRead}}">Chapter</button>
+              <button type="button" role="tab" class="tab {{histCls}}" aria-selected="{{histSel}}" onClick="{{showHist}}">History</button>
+            </div>
+
+            <sc-if value="{{isRead}}" hint-placeholder-val="{{ false }}">
+              <div role="tabpanel" aria-label="Chapter text" style="padding: 24px clamp(16px, 3vw, 32px) 8px">
+                <div class="hb" style="max-width: 720px; font-size: 15.5px; line-height: 1.65; color: var(--text)">
+                  <sc-for list="{{sel.pre}}" as="b" hint-placeholder-count="4">
+                    <sc-if value="{{b.isH}}" hint-placeholder-val="{{ false }}"><h3>{{b.text}}</h3></sc-if>
+                    <sc-if value="{{b.isP}}" hint-placeholder-val="{{ true }}"><p>{{b.text}}</p></sc-if>
+                  </sc-for>
+                  <sc-if value="{{sel.hasLines}}" hint-placeholder-val="{{ false }}">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin: 4px 0 10px; line-height: 1.5">
+                      <sc-for list="{{sel.lineCards}}" as="l" hint-placeholder-count="3">
+                        <div style="border: var(--bw) solid var(--border); border-radius: 10px; background: var(--surface); padding: 14px; display: flex; flex-direction: column; gap: 8px">
+                          <span class="pill {{l.tone}}" style="align-self: flex-start">{{l.name}}</span>
+                          <strong style="font-weight: 600; font-size: 14.5px">{{l.meaning}}</strong>
+                          <span style="font-size: 14px">{{l.l1}}</span>
+                          <span style="font-size: 14px">{{l.l2}}</span>
+                          <span style="font-size: 14px">{{l.l3}}</span>
+                          <span class="sub2" style="margin-top: auto; padding-top: 8px; border-top: var(--bw) solid var(--line)">Examples: {{l.examples}}</span>
+                        </div>
+                      </sc-for>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 10px; margin: 0 0 22px; font-size: 12.5px; color: var(--muted)">
+                      <span>Reversible, inside the company</span>
+                      <svg aria-hidden="true" height="12" viewBox="0 0 100 12" preserveAspectRatio="none" style="flex: 1 1 auto; min-width: 40px; height: 12px"><path class="ic" d="M0 6h96M91 1l5 5-5 5" vector-effect="non-scaling-stroke"/></svg>
+                      <span>Irreversible, or seen outside</span>
+                    </div>
+                    <div style="overflow-x: auto; border: var(--bw) solid var(--border); border-radius: 10px; margin: 0 0 14px">
+                      <table style="border-collapse: collapse; width: 100%; font-size: 14px; line-height: 1.45">
+                        <caption class="sr">Starting settings for the three lines</caption>
+                        <thead><tr><th scope="col">Tool or procedure</th><th scope="col">Line</th><th scope="col">Why</th></tr></thead>
+                        <tbody>
+                          <sc-for list="{{sel.lineRows}}" as="w" hint-placeholder-count="13">
+                            <tr><td style="white-space: normal">{{w.name}}</td><td><span class="pill {{w.tone}}">{{w.line}}</span></td><td style="white-space: normal" class="sub2">{{w.why}}</td></tr>
+                          </sc-for>
+                        </tbody>
+                      </table>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{sel.hasRules}}" hint-placeholder-val="{{ false }}">
+                    <ol>
+                      <sc-for list="{{sel.rules}}" as="r" hint-placeholder-count="6">
+                        <li><strong style="font-weight: 600">{{r.lead}}</strong> {{r.rest}}</li>
+                      </sc-for>
+                    </ol>
+                  </sc-if>
+                  <sc-for list="{{sel.post}}" as="b" hint-placeholder-count="1">
+                    <sc-if value="{{b.isH}}" hint-placeholder-val="{{ false }}"><h3>{{b.text}}</h3></sc-if>
+                    <sc-if value="{{b.isP}}" hint-placeholder-val="{{ true }}"><p>{{b.text}}</p></sc-if>
+                  </sc-for>
+                </div>
+              </div>
+
+              <div style="margin: 16px clamp(16px, 3vw, 32px) 24px; border: var(--bw) solid var(--border); border-radius: 10px; background: var(--surface2)">
+                <div style="padding: 14px 16px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; border-bottom: var(--bw) solid var(--line)">
+                  <div style="display: flex; flex-direction: column; gap: 2px; flex-grow: 1">
+                    <strong style="font-weight: 600; font-size: 14px">{{readCount}}</strong>
+                    <span class="sub2">Agents don't need to confirm. They load the chapter instead.</span>
+                  </div>
+                  <sc-if value="{{canAgree}}" hint-placeholder-val="{{ false }}"><button type="button" class="btn pri" onClick="{{agree}}"><svg class="ic sonp" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12l5 5 9-10"/></svg>Read and agreed</button></sc-if>
+                  <sc-if value="{{agreedShow}}" hint-placeholder-val="{{ false }}"><span class="pill ok" role="status">You agreed to {{sel.version}}</span></sc-if>
+                </div>
+                <ul aria-label="People and whether they have read {{sel.version}}" style="list-style: none; margin: 0; padding: 8px 8px 8px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0 12px">
+                  <sc-for list="{{people}}" as="p" hint-placeholder-count="6">
+                    <li style="display: flex; align-items: center; gap: 10px; padding: 6px 8px">
+                      <span class="av" style="width: 28px; height: 28px; font-size: 11px">{{p.ini}}</span>
+                      <span style="font-size: 13px; flex-grow: 1">{{p.name}}</span>
+                      <span class="pill {{p.cls}}">{{p.label}}</span>
+                    </li>
+                  </sc-for>
+                </ul>
+                <div class="adv" style="padding: 10px 16px; border-top: var(--bw) solid var(--line); display: flex; align-items: center; gap: 8px">
+                  <span class="pill info" tabindex="0" data-tip="Agents that hold a role this chapter applies to load it into their instructions.">{{agentsLoaded}}</span>
+                  <a href="AgentLedger.dc.html" class="sub2">See who works on what in the agent ledger</a>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{isHist}}" hint-placeholder-val="{{ false }}">
+              <div role="tabpanel" aria-label="Version history" style="overflow-x: auto">
+                <table style="border-collapse: collapse; width: 100%">
+                  <caption class="sr">Versions of {{sel.title}}, newest first</caption>
+                  <thead><tr><th scope="col">Version</th><th scope="col">Date</th><th scope="col">Author</th><th scope="col" style="width: 100%">Note</th></tr></thead>
+                  <tbody>
+                    <sc-for list="{{sel.history}}" as="h" hint-placeholder-count="4">
+                      <tr><td><span class="mono">{{h.version}}</span> <sc-if value="{{h.current}}" hint-placeholder-val="{{ false }}"><span class="pill ok" style="margin-left: 6px">Current</span></sc-if></td><td>{{h.date}}</td><td>{{h.author}}</td><td style="white-space: normal">{{h.note}}</td></tr>
+                    </sc-for>
+                  </tbody>
+                </table>
+              </div>
+            </sc-if>
+            </sc-if>
+
+            <sc-if value="{{pg.isGen}}" hint-placeholder-val="{{ true }}">
+              <div style="padding: 16px; display: flex; flex-direction: column; gap: 16px">
+
+                <section class="mb" aria-labelledby="exh">
+                  <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px">
+                    <h3 id="exh" style="margin: 0; flex-grow: 1">Explanation — written by the owner role</h3>
+                    <span class="pill info">Owned by {{pg.owner}}</span>
+                    <sc-if value="{{pg.canSuggest}}" hint-placeholder-val="{{ true }}"><button type="button" class="btn sm" onClick="{{toggleEdit}}" aria-expanded="{{editExpanded}}" aria-controls="hbedit"><svg class="ic" width="15" height="15" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z" class="it2"/></svg>{{editLabel}}</button></sc-if>
+                  </div>
+                  <sc-if value="{{pg.hasExpl}}" hint-placeholder-val="{{ true }}"><p style="margin: 0; max-width: 720px; font-size: 15.5px; line-height: 1.65">{{pg.explText}}</p></sc-if>
+                  <sc-if value="{{pg.needsExpl}}" hint-placeholder-val="{{ false }}">
+                    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px; border-radius: 8px; border: var(--bw) dashed var(--dot-warn); background: var(--surface2)">
+                      <span class="pill warn">Needs an explanation</span>
+                      <span style="font-size: 13.5px; flex: 1 1 260px">{{pg.owner}} has not written this page yet. Use Suggest a change to write it. It is published after the owner approves it in Approvals.</span>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{pg.explPending}}" hint-placeholder-val="{{ false }}"><p class="sub2" style="margin: 8px 0 0"><span class="pill warn">Waiting for approval</span> A suggested explanation is waiting in Approvals.</p></sc-if>
+                </section>
+
+                <sc-if value="{{pg.showModel}}" hint-placeholder-val="{{ true }}">
+                <section aria-labelledby="mdh" style="display: flex; flex-direction: column; gap: 12px">
+                  <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px">
+                    <h3 id="mdh" style="margin: 0; font-size: 11.5px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); flex-grow: 1">From the company model — updates itself</h3>
+                    <span class="sub2" style="display: inline-flex; align-items: center; gap: 6px"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v5h-5"/></svg>Updated automatically when the model changes · last change 12 Oct 2026</span>
+                  </div>
+
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px">
+
+                    <sc-if value="{{pg.hasOwnerRow}}" hint-placeholder-val="{{ false }}">
+                      <div class="mb"><h3>{{pg.ownerLabel}}</h3>
+                        <ul class="lst"><li><button type="button" class="linkbtn {{pg.ownerLcls}}" onClick="{{pg.ownerGo}}" aria-disabled="{{pg.ownerDis}}" data-tip="{{pg.ownerLtip}}" style="font-size: 13.5px"><svg class="ic lkic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>{{pg.owner}}</button><span class="sub2">{{pg.ownerNote}}</span></li></ul>
+                      </div>
+                    </sc-if>
+
+                    <sc-if value="{{pg.isWf}}" hint-placeholder-val="{{ false }}">
+                      <div class="mb"><h3>Trigger</h3>
+                        <p style="margin: 0; font-size: 13.5px">{{pg.trigger}}</p>
+                        <a href="{{pg.canvasHref}}" class="btn sm" style="margin-top: 10px">Open in process canvas</a>
+                      </div>
+                    </sc-if>
+
+                    <sc-if value="{{pg.isRole}}" hint-placeholder-val="{{ true }}">
+                      <div class="mb" style="grid-column: 1 / -1"><h3>Who holds it</h3>
+                        <ul class="lst">
+                          <sc-for list="{{pg.holders}}" as="h" hint-placeholder-count="1">
+                            <li style="gap: 10px">
+                              <span class="av" style="width: 30px; height: 30px; font-size: 11px">{{h.ini}}</span>
+                              <strong style="font-weight: 600">{{h.name}}</strong>
+                              <span class="pill idle">{{h.type}}</span>
+                              <span class="pill {{h.statusCls}}" tabindex="0" data-tip="{{h.statusTip}}">{{h.status}}</span>
+                              <sc-if value="{{h.onboarding}}" hint-placeholder-val="{{ false }}"><span class="pill info" tabindex="0" data-tip="Working through the onboarding path for this role.">Onboarding</span></sc-if>
+                              <span class="sub2" style="margin-left: auto">{{h.progress}}</span>
+                            </li>
+                          </sc-for>
+                        </ul>
+                        <p class="sub2" style="margin: 10px 0 0">Reports to <button type="button" class="linkbtn {{pg.reportsLcls}}" onClick="{{pg.reportsGo}}" aria-disabled="{{pg.reportsDis}}" data-tip="{{pg.reportsLtip}}"><svg class="ic lkic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>{{pg.reportsTo}}</button></p>
+                      </div>
+
+                      <div class="mb" style="grid-column: 1 / -1"><h3>Onboarding path — read in this order</h3>
+                        <p class="sub2" style="margin: 0 0 10px">{{pg.pathNote}}</p>
+                        <ol class="lst" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 6px 16px; counter-reset: p">
+                          <sc-for list="{{pg.path}}" as="s" hint-placeholder-count="12">
+                            <li style="gap: 8px; flex-wrap: nowrap"><span class="mono sub2" style="width: 22px; text-align: right; flex: none">{{s.n}}</span><button type="button" class="linkbtn {{s.lcls}}" onClick="{{s.go}}" aria-disabled="{{s.dis}}" data-tip="{{s.ltip}}" style="font-size: 13.5px; font-weight: 500"><svg class="ic lkic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>{{s.title}}</button><span class="sub2" style="flex: none">{{s.kind}}</span><span class="pill {{s.cls}}" style="margin-left: auto; flex: none">{{s.status}}</span></li>
+                          </sc-for>
+                        </ol>
+                      </div>
+
+                      <div class="mb"><h3>Workflows it performs</h3>
+                        <ul class="lst">
+                          <sc-for list="{{pg.wfLinks}}" as="w" hint-placeholder-count="2">
+                            <li><button type="button" class="linkbtn {{w.lcls}}" onClick="{{w.go}}" aria-disabled="{{w.dis}}" data-tip="{{w.ltip}}" style="font-size: 13.5px"><svg class="ic lkic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>{{w.name}}</button><span class="sub2" style="margin-left: auto">{{w.note}}</span></li>
+                          </sc-for>
+                        </ul>
+                        <sc-if value="{{pg.noWfs}}" hint-placeholder-val="{{ false }}"><p class="sub2" style="margin: 0">This role performs no workflows yet.</p></sc-if>
+                      </div>
+
+                      <div class="mb"><h3>Processes it owns</h3>
+                        <ul class="lst">
+                          <sc-for list="{{pg.procLinks}}" as="w" hint-placeholder-count="4">
+                            <li><button type="button" class="linkbtn {{w.lcls}}" onClick="{{w.go}}" aria-disabled="{{w.dis}}" data-tip="{{w.ltip}}" style="font-size: 13.5px"><svg class="ic lkic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>{{w.name}}</button><span class="pill {{w.cls}}" style="margin-left: auto">{{w.line}}</span></li>
+                          </sc-for>
+                        </ul>
+                        <sc-if value="{{pg.noProcs}}" hint-placeholder-val="{{ false }}"><p class="sub2" style="margin: 0">This role owns no processes yet.</p></sc-if>
+                      </div>
+
+                      <div class="mb"><h3>Meta skills</h3>
+                        <ul class="lst">
+                          <sc-for list="{{pg.metaLinks}}" as="w" hint-placeholder-count="1">
+                            <li><button type="button" class="linkbtn {{w.lcls}}" onClick="{{w.go}}" aria-disabled="{{w.dis}}" data-tip="{{w.ltip}}" style="font-size: 13.5px"><svg class="ic lkic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>{{w.name}}</button><span class="sub2" style="margin-left: auto">{{w.note}}</span></li>
+                          </sc-for>
+                        </ul>
+                        <sc-if value="{{pg.noMetas}}" hint-placeholder-val="{{ false }}"><p class="sub2" style="margin: 0">This role holds no meta skills.</p></sc-if>
+                      </div>
+
+                      <div class="mb"><h3>Budget</h3>
+                        <p style="margin: 0; font-size: 13.5px">{{pg.budget}}</p>
+                        <p class="sub2" style="margin: 6px 0 0">{{pg.budgetNote}}</p>
+                      </div>
+                    </sc-if>
+
+                    <sc-if value="{{pg.hasSteps}}" hint-placeholder-val="{{ false }}">
+                      <div class="mb" style="grid-column: 1 / -1"><h3>Steps, in plain words</h3>
+                        <ol class="lst" style="gap: 12px">
+                          <sc-for list="{{pg.steps}}" as="s" hint-placeholder-count="6">
+                            <li style="align-items: flex-start; flex-wrap: nowrap; gap: 10px">
+                              <span class="mono sub2" style="width: 22px; text-align: right; flex: none; padding-top: 2px">{{s.n}}</span>
+                              <span style="display: flex; flex-direction: column; gap: 4px; min-width: 0; flex-grow: 1">
+                                <span style="display: flex; flex-wrap: wrap; align-items: center; gap: 8px"><button type="button" class="linkbtn {{s.lcls}}" onClick="{{s.go}}" aria-disabled="{{s.dis}}" data-tip="{{s.ltip}}" style="font-size: 14px"><svg class="ic lkic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>{{s.title}}</button><span class="sub2">{{s.stage}}</span><span class="pill {{s.cls}}" tabindex="0" data-tip="{{s.tip}}">{{s.line}}</span></span>
+                                <span style="font-size: 13.5px; color: var(--text2)">{{s.text}}</span>
+                              </span>
+                            </li>
+                          </sc-for>
+                        </ol>
+                      </div>
+                      <div class="mb" style="grid-column: 1 / -1"><h3>What a person must do</h3>
+                        <ul class="lst">
+                          <sc-for list="{{pg.personSteps}}" as="s" hint-placeholder-count="2">
+                            <li><span class="pill {{s.cls}}">{{s.line}}</span><button type="button" class="linkbtn {{s.lcls}}" onClick="{{s.go}}" aria-disabled="{{s.dis}}" data-tip="{{s.ltip}}" style="font-size: 13.5px"><svg class="ic lkic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>{{s.title}}</button><span class="sub2">{{s.text}}</span></li>
+                          </sc-for>
+                        </ul>
+                        <sc-if value="{{pg.noPerson}}" hint-placeholder-val="{{ false }}"><p class="sub2" style="margin: 0">No step needs a person. Agents do every step alone, then report.</p></sc-if>
+                      </div>
+                    </sc-if>
+
+                    <sc-if value="{{pg.isProcLike}}" hint-placeholder-val="{{ false }}">
+                      <div class="mb"><h3>AI line</h3>
+                        <p style="margin: 0 0 6px"><span class="pill {{pg.effCls}}">{{pg.effLine}}</span></p>
+                        <p class="sub2" style="margin: 0">{{pg.effWhy}}</p>
+                      </div>
+                      <div class="mb"><h3>Used in workflows</h3>
+                        <ul class="lst">
+                          <sc-for list="{{pg.usedIn}}" as="w" hint-placeholder-count="2">
+                            <li><button type="button" class="linkbtn {{w.lcls}}" onClick="{{w.go}}" aria-disabled="{{w.dis}}" data-tip="{{w.ltip}}" style="font-size: 13.5px"><svg class="ic lkic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>{{w.name}}</button><span class="sub2" style="margin-left: auto">{{w.note}}</span></li>
+                          </sc-for>
+                        </ul>
+                        <sc-if value="{{pg.noUsed}}" hint-placeholder-val="{{ false }}"><p class="sub2" style="margin: 0">No workflow uses it yet.</p></sc-if>
+                      </div>
+                    </sc-if>
+
+                    <sc-if value="{{pg.isMeta}}" hint-placeholder-val="{{ false }}">
+                      <div class="mb"><h3>Held by roles</h3>
+                        <ul class="lst">
+                          <sc-for list="{{pg.heldBy}}" as="w" hint-placeholder-count="2">
+                            <li><button type="button" class="linkbtn {{w.lcls}}" onClick="{{w.go}}" aria-disabled="{{w.dis}}" data-tip="{{w.ltip}}" style="font-size: 13.5px"><svg class="ic lkic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>{{w.name}}</button></li>
+                          </sc-for>
+                        </ul>
+                      </div>
+                    </sc-if>
+
+                    <sc-if value="{{pg.hasSkills}}" hint-placeholder-val="{{ true }}">
+                      <div class="mb"><h3>{{pg.skillsLabel}}</h3>
+                        <ul class="lst" style="flex-direction: row; flex-wrap: wrap">
+                          <sc-for list="{{pg.skills}}" as="k" hint-placeholder-count="3"><li><span class="pill idle">{{k.name}}</span></li></sc-for>
+                        </ul>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{pg.noSkills}}" hint-placeholder-val="{{ false }}">
+                      <div class="mb"><h3>{{pg.skillsLabel}}</h3><p class="sub2" style="margin: 0">None needed.</p></div>
+                    </sc-if>
+
+                    <sc-if value="{{pg.hasRoutines}}" hint-placeholder-val="{{ true }}">
+                      <div class="mb"><h3>Routines</h3>
+                        <ul class="lst">
+                          <sc-for list="{{pg.routines}}" as="w" hint-placeholder-count="1">
+                            <li><button type="button" class="linkbtn {{w.lcls}}" onClick="{{w.go}}" aria-disabled="{{w.dis}}" data-tip="{{w.ltip}}" style="font-size: 13.5px"><svg class="ic lkic" width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>{{w.name}}</button><span class="sub2">{{w.when}}</span><span class="pill {{w.cls}}" style="margin-left: auto">{{w.state}}</span></li>
+                          </sc-for>
+                        </ul>
+                      </div>
+                    </sc-if>
+
+                    <sc-if value="{{pg.hasTools}}" hint-placeholder-val="{{ true }}">
+                      <div class="mb"><h3>Tools and their AI line</h3>
+                        <ul class="lst">
+                          <sc-for list="{{pg.tools}}" as="t" hint-placeholder-count="4">
+                            <li><span class="mono" style="font-size: 12.5px">{{t.name}}</span><span class="pill {{t.cls}}" style="margin-left: auto">{{t.line}}</span></li>
+                          </sc-for>
+                        </ul>
+                      </div>
+                    </sc-if>
+
+                    <sc-if value="{{pg.hasInputs}}" hint-placeholder-val="{{ false }}">
+                      <div class="mb"><h3>Inputs</h3>
+                        <ul class="lst">
+                          <sc-for list="{{pg.inputs}}" as="t" hint-placeholder-count="2">
+                            <li><span style="font-weight: 600">{{t.f}}</span><span class="sub2">{{t.t}}</span><span class="pill {{t.cls}}" style="margin-left: auto">{{t.req}}</span></li>
+                          </sc-for>
+                        </ul>
+                      </div>
+                    </sc-if>
+
+                    <sc-if value="{{pg.isProcLike}}" hint-placeholder-val="{{ false }}">
+                      <div class="mb"><h3>Model</h3>
+                        <a href="{{pg.canvasHref}}" class="btn sm">Open in process canvas</a>
+                      </div>
+                    </sc-if>
+                  </div>
+                </section>
+                </sc-if>
+                <sc-if value="{{pg.isLimited}}" hint-placeholder-val="{{ false }}">
+                  <p class="sub2" style="margin: 0; display: flex; align-items: center; gap: 8px"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Only the name and purpose are shown. Its holders, workflows and processes are not in your handbook. Ask its owner role.</p>
+                </sc-if>
+              </div>
+            </sc-if>
+          </article>
+
+          <sc-if value="{{editOpen}}" hint-placeholder-val="{{ false }}">
+            <section id="hbedit" class="card" aria-labelledby="edt" style="border-color: var(--primary)">
+              <div class="ch">
+                <span class="tile"><svg class="ic" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z" class="it2"/></svg></span>
+                <h2 id="edt">Suggest a change to {{pg.title}}</h2>
+                <button type="button" class="btn sm" aria-label="Close editor" data-tip="Close the editor" data-tip-pos="left" onClick="{{toggleEdit}}" style="width: 32px; padding: 0; justify-content: center"><svg class="ic" width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+              </div>
+              <div style="padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 14px">
+                <div class="fld">
+                  <label for="hbmd">{{pg.editLabel}}</label>
+                  <textarea id="hbmd" rows="{{pg.editRows}}" value="{{draft}}" onInput="{{onDraft}}" aria-describedby="hbmdh"></textarea>
+                  <p class="hint" id="hbmdh">{{pg.editHint}}</p>
+                </div>
+                <div class="fld">
+                  <label for="hbnote">Change note</label>
+                  <input id="hbnote" type="text" value="{{note}}" onInput="{{onNote}}" aria-invalid="{{noteInvalid}}" aria-describedby="hbnoteh" placeholder="What changed and why">
+                  <p class="hint" id="hbnoteh" style="{{noteHintStyle}}">{{noteHint}}</p>
+                </div>
+                <p style="margin: 0; font-size: 13px; padding: 10px 12px; border-radius: 8px; background: var(--info-bg); color: var(--info-fg)">Changes are published after the chapter owner approves them in Approvals.</p>
+                <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end">
+                  <button type="button" class="btn" onClick="{{toggleEdit}}">Cancel</button>
+                  <button type="button" class="btn pri" onClick="{{send}}">Send for approval</button>
+                </div>
+              </div>
+            </section>
+          </sc-if>
+
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["light","dark","contrast","mono"],"default":"light"},"ui":{"editor":"enum","options":["full","minimal"],"default":"full"},"$preview":{"width":1440,"height":2000}}'>
+class Component extends DCLogic {
+  componentDidMount() {
+    try { const t = window.localStorage.getItem('autobot-theme'); if (t) this.setState({ theme: t }); } catch (e) {}
+    try { const u = window.localStorage.getItem('autobot-ui-mode'); if (u === 'full' || u === 'minimal') this.setState({ ui: u }); } catch (e) {}
+  }
+  setUi(id) {
+    try { window.localStorage.setItem('autobot-ui-mode', id); } catch (e) {}
+    this.setState({ ui: id, uiAnnounce: id === 'minimal' ? 'Minimal interface on. Advanced features hidden.' : 'Full interface on. All features shown.' });
+  }
+  chapterData() {
+    const H = (x) => ({ isH: true, isP: false, text: x });
+    const P = (x) => ({ isH: false, isP: true, text: x });
+    return [
+      { id: 'welcome', title: 'Welcome', owner: 'Founder & CEO', version: 'v4', changed: '19 Aug 2026', applies: ['Everyone'], agents: 6,
+        read: [1, 1, 1, 1, 1, 0],
+        pre: [H('Welcome to AutoBot Labs'), P('AutoBot Labs is run by people and agents working side by side. Both are called actors in this handbook. It is the shared agreement about how we work, and it applies to everyone who holds a role, whether that holder is a person or an agent.'), H('How to use this handbook'), P('Read the chapters that apply to your role first, then skim the rest. Every role, workflow and process also has its own page, so you can look up how a thing works. If something is unclear, ask in CEO Chat or the Mailbox instead of guessing. When you know a better way to do something, suggest a change to the page.')],
+        rules: [], post: [],
+        history: [['v4', '19 Aug 2026', 'Alex Smith', 'Added how to ask when something is unclear.'], ['v3', '2 Jun 2026', 'Jane Doe', 'Explained that agents are actors too.'], ['v2', '11 Mar 2026', 'Jane Doe', 'Shorter introduction.'], ['v1', '5 Jan 2026', 'Jane Doe', 'First version.']] },
+      { id: 'organised', title: 'How we are organised', owner: 'Head of Operations', version: 'v6', changed: '14 Sep 2026', applies: ['Everyone'], agents: 6,
+        read: [1, 1, 1, 1, 0, 0],
+        pre: [H('Actors hold roles'), P('People and agents are actors. An actor does its work by holding one or more roles. A role stays when its holder moves on, so permissions, skills and workflows never depend on one person. Roles are listed in Roles, and Org Chart shows who reports to whom.'), H('Roles hold skills'), P('A role holds skills and meta skills. Whoever holds the role gets them, so a new holder can start work straight away. A role also lists the workflows it performs.'), H('Teams'), P('A team groups the actors who work on the same area. A team has a lead who plans the work and approves the team’s output.')],
+        rules: [], post: [],
+        history: [['v6', '14 Sep 2026', 'Alex Smith', 'Explained that skills belong to roles, not to actors.'], ['v5', '28 Jul 2026', 'Alex Smith', 'Added the paragraph about teams.'], ['v4', '9 Jun 2026', 'Jane Doe', 'Agents are now described as actors.'], ['v3', '17 Apr 2026', 'Alex Smith', 'Replaced the org diagram with a link to Org Chart.']] },
+      { id: 'lines', title: 'The three lines for AI', owner: 'Founder & CEO', version: 'v1', changed: '12 Oct 2026', applies: ['Everyone'], agents: 6,
+        read: [1, 0, 0, 0, 0, 0],
+        pre: [P('Every tool and procedure sits on one of three lines that say how far AI may go; one with no line set is treated as “AI drafts, a person sends”, and agents never move a line themselves.')],
+        cards: [
+          { tone: 'ok', name: 'Autonomous', meaning: 'AI does it alone, then reports.', l1: 'Safe to repeat or undo.', l2: 'Stays inside the company.', l3: 'A report says what was done.', examples: 'read the knowledge base, run tests.' },
+          { tone: 'warn', name: 'AI drafts, a person sends', meaning: 'A person reviews, edits and sends.', l1: 'Nothing goes out until a person sends it.', l2: 'The person can change the draft.', l3: 'This is the default when no line is set.', examples: 'reply to outside email, publish a post.' },
+          { tone: 'bad', name: 'AI never touches', meaning: 'Only people act.', l1: 'Agents do not do this step.', l2: 'People decide and act.', l3: 'No agent can move this line.', examples: 'pay money, sign a contract.' }
+        ],
+        table: [
+          ['Search and read the knowledge base', 'Autonomous', 'Read-only, inside the company'],
+          ['Transcribe a recording', 'Autonomous', 'Creates a new transcript; nothing is lost'],
+          ['Run tests and benchmarks', 'Autonomous', 'Reversible, reports only'],
+          ['Claim and release work in the ledger', 'Autonomous', 'Coordination; claims expire on their own'],
+          ['Reply to an email from outside', 'AI drafts, a person sends', 'Leaves the company'],
+          ['Publish a social media post', 'AI drafts, a person sends', 'Public, cannot be unseen'],
+          ['Release to production', 'AI drafts, a person sends', 'Hard to undo; Head of Operations approves'],
+          ['Delete or rewrite stored data', 'AI drafts, a person sends', 'Proposed, then approved in Approvals'],
+          ['Change a handbook chapter', 'AI drafts, a person sends', 'The chapter’s owner publishes'],
+          ['Pay, refund or transfer money', 'AI never touches', 'Money out'],
+          ['Sign or accept a contract', 'AI never touches', 'Legal commitment'],
+          ['Read or rotate a secret’s value', 'AI never touches', 'Secrets are write-only for people'],
+          ['Grant a role or access', 'AI never touches', 'Access decisions stay with people']
+        ],
+        rules: [], post: [P('These are starting settings. Each owner role confirms the line for its tools and procedures; a change to a line goes through Approvals.')],
+        history: [['v1', '12 Oct 2026', 'Jane Doe', 'First version.']] },
+      { id: 'flows', title: 'How work flows', owner: 'Ops Lead', version: 'v5', changed: '30 Sep 2026', applies: ['Everyone'], agents: 6, pending: true,
+        read: [0, 1, 1, 1, 0, 0],
+        pre: [H('Workflows are made of processes'), P('A role performs workflows, and a workflow is a chain of processes. Every process has an owner role, so there is always someone accountable for each step. Some processes run on a routine, which means they start on a schedule instead of waiting for a person.'), H('Claim, work, hand over'), P('Before you start a piece of work, claim it. The agent ledger shows who works on what, so check it first. When you finish, say what you did and what is left, so the next actor can continue without asking you.'), H('When a step needs a person'), P('Some steps need a decision from a person, such as changing stored data. The process pauses and the request appears in Approvals. Work continues when the person approves.')],
+        rules: [], post: [],
+        history: [['v5', '30 Sep 2026', 'Sam Lee', 'Added the handover paragraph.'], ['v4', '12 Aug 2026', 'Alex Smith', 'Routines are now named in the first section.'], ['v3', '3 Jun 2026', 'documentation-engineer', 'Fixed links to Process canvas and Routines.'], ['v2', '20 Mar 2026', 'Alex Smith', 'Added the claim step.']] },
+      { id: 'rules', title: 'Rules everyone follows', owner: 'Head of Operations', version: 'v7', changed: '2 Oct 2026', applies: ['Everyone'], agents: 6,
+        read: [0, 1, 1, 1, 1, 0],
+        pre: [P('These six rules apply to every actor, every day. They are short on purpose.')],
+        rules: [
+          { lead: 'Show evidence.', rest: 'A claim without a command and its output is not done.' },
+          { lead: 'Say “I don’t know” and ask.', rest: 'Never guess a cause, a count or a verdict.' },
+          { lead: 'Get approval before changing stored data.', rest: 'Nothing changes or deletes stored data or credentials until a person approves it in Approvals.' },
+          { lead: 'Keep internal details inside.', rest: 'No addresses, hostnames, secrets or internal paths in anything shared outside the company.' },
+          { lead: 'Claim work before you start it.', rest: 'Check the agent ledger so two actors don’t do the same thing.' },
+          { lead: 'Finish what you started.', rest: 'Complete it before you start something new.' }
+        ],
+        post: [P('If a rule gets in the way of real work, do not work around it. Tell the chapter owner, and they can change it through Approvals.')],
+        history: [['v7', '2 Oct 2026', 'Alex Smith', 'Added rule 6, finish what you started.'], ['v6', '15 Sep 2026', 'Alex Smith', 'Rule 3 now names credentials as well as stored data.'], ['v5', '1 Aug 2026', 'Jane Doe', 'Added rule 5, claim work before you start it.'], ['v4', '22 Jun 2026', 'Alex Smith', 'Rule 2 reworded in plain words.']] },
+      { id: 'security', title: 'Security and data', owner: 'Staff Engineer', version: 'v3', changed: '22 Sep 2026', applies: ['Staff Engineer', 'Ops Lead', 'Reviewer', 'Performance Lead'], agents: 4,
+        read: [1, 1, 0, 1, 0, 0],
+        pre: [H('Secrets stay in Secrets'), P('Passwords, tokens and keys live in Secrets and nowhere else. Never paste one into chat, a document, a work item or a log. If you see one in a place it should not be, tell the chapter owner right away.'), H('Stored data and credentials'), P('Agents propose changes to stored data and credentials. They never make or delete them on their own. A person approves each one in Approvals, and the decision is kept in the audit log.'), H('Permissions follow roles'), P('Permissions are granted to roles, not to individual actors. If you need something you do not have, ask for the role that has it instead of borrowing someone else’s access.')],
+        rules: [], post: [],
+        history: [['v3', '22 Sep 2026', 'code-reviewer', 'Added the permissions paragraph.'], ['v2', '4 Aug 2026', 'Alex Smith', 'Credentials now covered with stored data.'], ['v1', '10 Jun 2026', 'Jane Doe', 'First version.']] },
+      { id: 'comms', title: 'Communication', owner: 'Technical Writer', version: 'v2', changed: '30 Aug 2026', applies: ['Everyone'], agents: 6,
+        read: [1, 1, 1, 0, 1, 1],
+        pre: [H('Write in plain words'), P('Use short sentences and everyday words. Say what happened and what happens next. If something went wrong, say how to fix it.'), H('Use the right place'), P('Decisions go to CEO Chat. Mail from outside the company goes through the Mailbox. Talk about a piece of work belongs on its work item, so the next person finds it there.')],
+        rules: [], post: [],
+        history: [['v2', '30 Aug 2026', 'documentation-engineer', 'Added where each kind of message belongs.'], ['v1', '18 Jul 2026', 'Alex Smith', 'First version.']] },
+      { id: 'money', title: 'Money', owner: 'Head of Operations', version: 'v3', changed: '5 Sep 2026', applies: ['Head of Operations', 'Ops Lead', 'Staff Engineer'], agents: 3,
+        read: [1, 1, 0, 0, 0, 0],
+        pre: [H('Show the currency'), P('Every amount is written with its currency code, for example EUR 120. Never add amounts in different currencies together. Report each currency on its own line.'), H('Budgets'), P('Budgets are set in Costs & Budget. If a budget looks too small for the work, ask the budget owner. Do not work around it.')],
+        rules: [], post: [],
+        history: [['v3', '5 Sep 2026', 'Alex Smith', 'Currency code is now required on every amount.'], ['v2', '2 Jul 2026', 'Alex Smith', 'Added the budgets section.'], ['v1', '9 May 2026', 'Jane Doe', 'First version.']] },
+      { id: 'changing', title: 'Changing this handbook', owner: 'Founder & CEO', version: 'v2', changed: '9 Sep 2026', applies: ['Everyone'], agents: 6,
+        read: [1, 1, 1, 1, 1, 1],
+        pre: [H('Anyone can suggest a change'), P('Any person or agent can suggest a change to any chapter. The suggestion goes to Approvals, where the chapter owner reads it and decides.'), H('What happens after approval'), P('An approved change is published as a new version of the chapter. History keeps every version with its date, author and note. People confirm the new version with Read and agreed. Agents that follow the chapter load the new version.'), P('Handbook edits are AI-drafts, a-person-sends: an agent may draft a change, and the chapter owner publishes it.'), H('Role, workflow and process pages'), P('These pages are built from the company model, so the facts on them update themselves. The explanation on each page is written by its owner role and changes the same way: suggest a change, then the owner approves it in Approvals.')],
+        rules: [], post: [],
+        history: [['v2', '9 Sep 2026', 'Jane Doe', 'Suggestions now go through Approvals.'], ['v1', '15 Jan 2026', 'Jane Doe', 'First version.']] }
+    ];
+  }
+  toMarkdown(c) {
+    const out = [];
+    const emit = (b) => out.push(b.isH ? '## ' + b.text : b.text, '');
+    c.pre.forEach(emit);
+    if (c.table) {
+      out.push('| Tool or procedure | Line | Why |', '| --- | --- | --- |');
+      c.table.forEach((t) => out.push('| ' + t.join(' | ') + ' |'));
+      out.push('');
+    }
+    c.rules.forEach((r, i) => out.push((i + 1) + '. **' + r.lead + '** ' + r.rest));
+    if (c.rules.length) out.push('');
+    c.post.forEach(emit);
+    return '# ' + c.title + '\n\n' + out.join('\n').trim();
+  }
+  explanations() {
+    return {
+      'role:ceo': 'Sets the direction for AutoBot Labs. This role plans each quarter, decides the goals and approves what the company spends. Goals and budgets are decided by a person in this role, never by an agent.',
+      'role:ops': 'Keeps day-to-day operations running. This role checks release requests, approves releases and sends the weekly cost report. It owns the chapter Rules everyone follows.',
+      'role:comms': 'Speaks for the company in public. This role watches the social media feed, drafts replies in the company voice and schedules posts. A person always sends what goes out.',
+      'role:opslead': 'Keeps the servers healthy and gets releases out safely. This role triages release requests, deploys to staging and production, rolls back when checks fail and handles incidents. If you are new, read Deploy a release first.',
+      'role:research': 'Finds out what is true before we build. This role gathers sources, writes the spec for a change and keeps the knowledge base current.',
+      'role:staff': 'Builds the change. This role implements the spec and writes the tests that prove it works, then hands the result to a Reviewer.',
+      'role:reviewer': 'The second pair of eyes. This role reviews code and decides to approve it or ask for changes. Nothing is merged without this decision.',
+      'role:perf': 'Keeps the product fast. This role runs the nightly benchmark and compares it with the baseline so a slowdown is seen early.',
+      'role:writer': 'Keeps the documentation true and turns recordings into text. This role updates and publishes docs, transcribes meeting recordings and summarises the daily work.',
+      'wf:planning': 'Once a quarter the company sets its goals and approves budgets. Both steps are decided by a person.',
+      'wf:approval': 'Decides whether a release goes ahead. A release request arrives by email, the release notes are checked and a person approves.',
+      'wf:social': 'Replies to mentions of the company. An agent drafts the reply and schedules it, and a person approves it before it is published.',
+      'wf:deploy': 'Takes a release from request to production. Staging comes first, and the smoke tests must pass before production. If anything fails, the release is rolled back and the owner is told.',
+      'wf:incident': 'Handles an outage report. The alert is triaged, service is restored, an incident note is written and the owner is notified.',
+      'wf:research': 'Turns a question into a plan. Sources are gathered first, then a spec is written from them.',
+      'wf:implement': 'Builds a change from the spec. The change is implemented first, then the tests are written.',
+      'wf:review': 'Every change gets reviewed. The reviewer reads the code, then approves it or asks for changes.',
+      'wf:perf': 'Runs every night to catch slowdowns. It measures the benchmark and compares it with the baseline.',
+      'wf:docs': 'Keeps the documentation current. A draft is written from the knowledge base and then published.',
+      'wf:transcribe': 'Turns a meeting recording into a transcript, a summary and saved knowledge. Action items become work items. If transcription fails, the owner is notified.',
+      'meta:mail': 'A small reusable flow for incoming email. It classifies the message, extracts the request, routes urgent ones to the owning role and drafts a reply for the rest. Roles hold it and workflows call it.',
+      'meta:safe': 'A reusable safe-deploy flow. It deploys to staging, runs smoke tests, goes to production only when all checks pass and otherwise rolls staging back.',
+      'proc:goals': 'Sets the company’s goals for the quarter.',
+      'proc:budgets': 'Approves the budget for each team.',
+      'proc:approve': 'A person approves the release. Agents never do this step.',
+      'proc:classify': 'Reads an email and decides what kind of message it is.',
+      'proc:extract': 'Pulls the request out of the email in plain words.',
+      'proc:route': 'Sends the request to the role that owns it.',
+      'proc:triage': 'Checks that a request is complete and ready to work on.',
+      'proc:ask': 'Asks the requester for the missing details.',
+      'proc:staging': 'Deploys the release to staging, a copy of production used for checks.',
+      'proc:smoke': 'Runs quick tests to confirm the main paths still work.',
+      'proc:prod': 'Deploys the release to production. A person sends it.',
+      'proc:rbs': 'Puts staging back to the last good version.',
+      'proc:rbp': 'Puts production back to the last good version.',
+      'proc:notify': 'Tells the owner what happened, so nobody finds out by accident.',
+      'proc:alert': 'Reads an alert and decides how serious it is.',
+      'proc:restore': 'Brings the service back. A person approves the change.',
+      'proc:sources': 'Gathers the sources needed to answer a question.',
+      'proc:spec': 'Writes down what to build and how to know it works.',
+      'proc:impl': 'Makes the code change described in the spec.',
+      'proc:tests': 'Writes tests that prove the change works.',
+      'proc:review': 'Reads the change and lists any problems.',
+      'proc:decide': 'Approves the change or asks for changes.',
+      'proc:bench': 'Runs the benchmark suite.',
+      'proc:compare': 'Compares benchmark results with the baseline.',
+      'proc:docs': 'Updates the docs to match the change.',
+      'proc:publish': 'Publishes the docs to the docs site. A person sends it.',
+      'proc:trans': 'Turns the recording into text.',
+      'proc:label': 'Marks who is speaking.',
+      'proc:tsum': 'Writes a short summary of the transcript.',
+      'proc:wi': 'Creates a work item for each action item found.',
+      'proc:kb': 'Saves the result to the knowledge base.',
+      'proc:check': 'Looks at the social media feed for mentions of the company.',
+      'proc:reply': 'Drafts a reply to a mention. A person sends it.',
+      'proc:sched': 'Schedules the reply to be published. A person approves it.',
+      'proc:summ': 'Summarises the daily work for the team.',
+      'proc:fleet': 'Checks that every server in the fleet is healthy.',
+      'proc:costrep': 'Sends the weekly cost report.'
+    };
+  }
+  model() {
+    const TC = { 'git-forge': 0, 'ansible-runner': 0.12, 'issue-tracker': 0.06, 'test-runner': 0.18, 'llm-completion': 0.24, 'knowledge-search': 0.07, 'bench-runner': 6.8, 'alerting': 0.02, 'status-page': 0, 'docs-site': 0.02, 'mailbox': 0.01, 'transcriber': 0.35, 'social-media': 0.03 };
+    const TL = { 'git-forge': 'auto', 'ansible-runner': 'auto', 'issue-tracker': 'auto', 'test-runner': 'auto', 'llm-completion': 'auto', 'knowledge-search': 'auto', 'bench-runner': 'auto', 'alerting': 'auto', 'status-page': 'auto', 'docs-site': 'draft', 'mailbox': 'draft', 'social-media': 'draft', 'transcriber': 'auto' };
+    const P = (id, title, tools, metaId) => ({ id: id, title: title, tools: tools, metaId: metaId || '', cost: Math.round(tools.reduce((s, t) => s + TC[t], 0) * 100) / 100 });
+    const L = {};
+    [
+      P('goals', 'Set quarterly goals', []), P('budgets', 'Approve budgets', []),
+      P('notes', 'Check release notes', []), P('approve', 'Approve release', []),
+      P('email', 'Handle incoming email', ['mailbox', 'llm-completion', 'issue-tracker', 'social-media'], 'mail'),
+      P('safe', 'Safe deploy', ['git-forge', 'ansible-runner', 'test-runner'], 'safe'),
+      P('classify', 'Classify email', ['mailbox', 'llm-completion']), P('extract', 'Extract the request', ['llm-completion']), P('route', 'Route to the owning role', ['issue-tracker']),
+      P('triage', 'Triage request', ['issue-tracker', 'llm-completion']), P('ask', 'Ask for details', ['llm-completion']),
+      P('staging', 'Deploy to staging', ['git-forge', 'ansible-runner']), P('smoke', 'Run smoke tests', ['test-runner']),
+      P('prod', 'Deploy to production', ['git-forge', 'ansible-runner']),
+      P('rbs', 'Roll back staging', ['git-forge', 'ansible-runner']), P('rbp', 'Roll back production', ['git-forge', 'ansible-runner']),
+      P('notify', 'Notify owner', ['status-page']),
+      P('alert', 'Triage alert', ['alerting', 'llm-completion']), P('restore', 'Restore service', ['ansible-runner', 'status-page']),
+      P('note', 'Write incident note', ['llm-completion', 'status-page']),
+      P('sources', 'Gather sources', ['knowledge-search']), P('spec', 'Write spec', ['knowledge-search', 'llm-completion']),
+      P('impl', 'Implement change', ['git-forge', 'test-runner', 'llm-completion']), P('tests', 'Write tests', ['git-forge', 'test-runner']),
+      P('review', 'Review code', ['git-forge', 'llm-completion']), P('decide', 'Approve or request changes', ['git-forge']),
+      P('bench', 'Run benchmark', ['bench-runner']), P('compare', 'Compare with baseline', ['llm-completion']),
+      P('docs', 'Update docs', ['knowledge-search', 'llm-completion']), P('publish', 'Publish docs', ['docs-site']),
+      P('trans', 'Transcribe recording', ['transcriber']), P('label', 'Label speakers', ['transcriber']), P('tsum', 'Summarise transcript', ['llm-completion']), P('wi', 'Create work items', ['issue-tracker']), P('kb', 'Save to knowledge base', ['knowledge-search']),
+      P('check', 'Check social media feed', ['social-media']), P('reply', 'Draft a reply', ['social-media', 'llm-completion']), P('sched', 'Schedule a social media post', ['social-media']),
+      P('summ', 'Summarise daily work', ['issue-tracker', 'llm-completion']), P('fleet', 'Check fleet health', ['alerting']),
+      P('reindex', 'Re-index knowledge base', ['knowledge-search']), P('costrep', 'Send weekly cost report', ['llm-completion'])
+    ].forEach((p) => { L[p.id] = p; });
+    const W = (id, name, trigger, stages) => ({ id: id, name: name, trigger: trigger, ids: [].concat.apply([], stages.map((s) => s[1])), stages: stages });
+    const agent = (n) => ({ n: n, t: 'agent' });
+    const person = (n) => ({ n: n, t: 'person' });
+    const email = 'When an email arrives in the company mailbox';
+    const roles = [
+      { id: 'ceo', name: 'Founder & CEO', holders: [person('Jane Doe')], parent: '', budget: '', wfs: [W('planning', 'Company planning', 'Every quarter on the first working day', [['Plan', ['goals']], ['Approve', ['budgets']]])] },
+      { id: 'ops', name: 'Head of Operations', holders: [person('Alex Smith')], parent: 'ceo', budget: '', wfs: [W('approval', 'Release approval', email, [['Intake', ['email']], ['Check', ['notes']], ['Decide', ['approve']]])] },
+      { id: 'comms', name: 'Communications Lead', holders: [person('Alex Smith')], parent: 'ceo', budget: '2.10 / 8.00', wfs: [W('social', 'Social media replies', 'When Check social media feed finds a mention', [['Reply', ['reply']], ['Publish', ['sched']]])] },
+      { id: 'opslead', name: 'Ops Lead', holders: [agent('devops-engineer')], parent: 'ops', budget: '11.40 / 25.00', wfs: [
+        W('deploy', 'Deploy a release', 'When a work item moves to Ready to deploy', [['Intake', ['triage', 'ask']], ['Staging', ['staging', 'smoke']], ['Production', ['prod']], ['Recovery', ['rbs', 'rbp', 'notify']]]),
+        W('incident', 'Incident response', email, [['Intake', ['email']], ['Triage', ['alert']], ['Fix', ['restore', 'note']], ['Notify', ['notify']]])] },
+      { id: 'research', name: 'Head of Research', holders: [agent('research-agent')], parent: 'ceo', budget: '18.20 / 40.00', wfs: [W('research', 'Research a change', 'Started by hand', [['Research', ['sources']], ['Spec', ['spec']]])] },
+      { id: 'staff', name: 'Staff Engineer', holders: [agent('code-agent')], parent: 'ceo', budget: '22.75 / 60.00', wfs: [W('implement', 'Implement a change', 'Started by hand', [['Build', ['impl']], ['Test', ['tests']]])] },
+      { id: 'reviewer', name: 'Reviewer', holders: [agent('code-reviewer'), person('Jane Doe')], parent: 'staff', budget: '6.40 / 15.00', wfs: [W('review', 'Code review', 'Started by hand', [['Review', ['review']], ['Decide', ['decide']]])] },
+      { id: 'perf', name: 'Performance Lead', holders: [agent('performance-engineer')], parent: 'staff', budget: '4.80 / 12.00', wfs: [W('perf', 'Performance check', 'Every night at 02:00', [['Measure', ['bench']], ['Compare', ['compare']]])] },
+      { id: 'writer', name: 'Technical Writer', holders: [agent('documentation-engineer')], parent: 'research', budget: '3.10 / 10.00', wfs: [
+        W('docs', 'Docs update', 'Started by hand', [['Draft', ['docs']], ['Publish', ['publish']]]),
+        W('transcribe', 'Transcribe meeting recordings', 'When an audio or video file is added to Company files / Recordings / Meetings (mp3, m4a, wav, mp4, mov, mkv)', [['Transcribe', ['trans', 'label']], ['Summarise', ['tsum', 'wi']], ['Save', ['kb']], ['Recovery', ['notify']]])] }
+    ];
+    const metas = [
+      { id: 'mail', pid: 'email', name: 'Handle incoming email', ids: ['classify', 'extract', 'route', 'reply'], held: ['ops', 'opslead', 'comms'], trigger: 'When a workflow calls it' },
+      { id: 'safe', pid: 'safe', name: 'Safe deploy', ids: ['staging', 'smoke', 'prod', 'rbs'], held: ['opslead'], trigger: 'When a workflow calls it' }
+    ];
+    const E = (from, to, type, o) => Object.assign({ from: from, to: to, type: type, cond: '', retries: 0, timeout: 0 }, o || {});
+    const edges = {
+      incident: [E('email', 'alert', 'if', { cond: 'it reports an outage' }), E('email', 'end:No action needed', 'else'), E('alert', 'restore', 'success'), E('restore', 'note', 'success'), E('note', 'notify', 'success'), E('notify', 'done', 'success'), E('restore', 'notify', 'failure')],
+      approval: [E('email', 'notes', 'if', { cond: 'it is a release request' }), E('email', 'end:Not a release request', 'else'), E('notes', 'approve', 'success'), E('approve', 'done', 'success')],
+      mail: [E('classify', 'extract', 'success'), E('extract', 'route', 'if', { cond: 'it is urgent' }), E('extract', 'reply', 'else'), E('route', 'done', 'success'), E('reply', 'done', 'success')],
+      safe: [E('staging', 'smoke', 'success'), E('smoke', 'prod', 'if', { cond: 'all checks pass' }), E('smoke', 'rbs', 'else'), E('prod', 'done', 'success'), E('rbs', 'failed', 'success')],
+      transcribe: [E('trans', 'label', 'success'), E('label', 'tsum', 'success'), E('tsum', 'wi', 'if', { cond: 'action items were found' }), E('tsum', 'kb', 'else'), E('wi', 'kb', 'success'), E('kb', 'done', 'success'), E('trans', 'notify', 'failure', { retries: 1 }), E('notify', 'failed', 'success')],
+      social: [E('reply', 'sched', 'success'), E('sched', 'done', 'success'), E('reply', 'end:No reply drafted', 'failure')],
+      deploy: [E('triage', 'ask', 'if', { cond: 'the request is incomplete' }), E('triage', 'staging', 'else'), E('ask', 'end:Closed, waiting on the requester', 'success'), E('staging', 'smoke', 'success'), E('staging', 'rbs', 'failure', { retries: 2 }), E('smoke', 'prod', 'if', { cond: 'all checks pass' }), E('smoke', 'rbs', 'else'), E('smoke', 'rbs', 'timeout', { timeout: 30 }), E('prod', 'done', 'success'), E('prod', 'rbp', 'failure'), E('rbs', 'notify', 'success'), E('rbp', 'notify', 'success'), E('notify', 'failed', 'success')]
+    };
+    const owners = { check: 'comms', summ: 'writer', fleet: 'opslead', reindex: 'research', costrep: 'ops', classify: 'ops', extract: 'ops', route: 'ops' };
+    roles.forEach((r) => r.wfs.forEach((w) => w.ids.forEach((id) => { if (!owners[id]) owners[id] = r.id; })));
+    const usage = {};
+    roles.forEach((r) => r.wfs.forEach((w) => w.ids.forEach((id) => { (usage[id] = usage[id] || []).push({ w: w, r: r, trig: false }); })));
+    roles.forEach((r) => r.wfs.forEach((w) => { if (w.id === 'social') (usage.check = usage.check || []).push({ w: w, r: r, trig: true }); }));
+    const lines = {};
+    ['classify', 'extract', 'route', 'sources', 'spec', 'impl', 'tests', 'review', 'bench', 'compare', 'trans', 'label', 'tsum', 'kb', 'check', 'fleet', 'triage', 'alert', 'smoke', 'staging', 'rbs', 'notify', 'costrep', 'wi', 'email', 'safe'].forEach((id) => { lines[id] = 'auto'; });
+    ['reply', 'sched', 'prod', 'rbp', 'ask', 'publish', 'restore'].forEach((id) => { lines[id] = 'draft'; });
+    ['approve', 'budgets', 'goals'].forEach((id) => { lines[id] = 'never'; });
+    const reqs = { staging: ['ansible'], prod: ['ansible'], rbs: ['ansible'], rbp: ['ansible'], smoke: ['smoke'], note: ['writeup'], reply: ['brand'], review: ['review'], bench: ['bench'], docs: ['tech'], sources: ['research'], classify: ['email'], trans: ['transcribe'], tsum: ['tech'] };
+    const skills = { email: 'Email classification', ansible: 'Ansible deploy', smoke: 'Smoke testing', writeup: 'Incident write-up', brand: 'Brand voice writing', review: 'Code review', bench: 'Benchmarking', tech: 'Technical writing', research: 'Web research', transcribe: 'Transcription' };
+    const roleSkills = { ceo: [], ops: ['email', 'brand'], comms: ['brand', 'email'], opslead: ['ansible', 'smoke', 'email'], research: ['research'], staff: ['review'], reviewer: ['review'], perf: ['bench'], writer: ['tech', 'transcribe'] };
+    const routines = {
+      check: { text: 'Every 2 hours' }, sched: { text: 'Weekdays at 09:00' }, summ: { text: 'Weekdays at 09:00' }, fleet: { text: 'Every 30 minutes' },
+      reindex: { text: 'Every day at 02:00' }, costrep: { text: 'Every Monday at 08:00' }, bench: { text: 'Every Saturday at 03:00', paused: true }
+    };
+    return { TC: TC, TL: TL, L: L, roles: roles, metas: metas, edges: edges, owners: owners, usage: usage, lines: lines, reqs: reqs, skills: skills, roleSkills: roleSkills, routines: routines };
+  }
+  renderVals() {
+    const st = this.state || {};
+    const cur = st.theme || this.props.theme || 'light';
+    const ui = st.ui || this.props.ui || 'full';
+    const defs = [['light', 'Light'], ['dark', 'Dark'], ['contrast', 'High contrast'], ['mono', 'Monochrome']];
+    const setSt = (o) => this.setState(o);
+    const M = this.model();
+    const all = this.chapterData();
+    const EX = this.explanations();
+    const exOverride = st.expl || {};
+    const roleBy = {}; M.roles.forEach((r) => { roleBy[r.id] = r; });
+    const metaBy = {}; M.metas.forEach((m) => { metaBy[m.id] = m; });
+    const wfBy = {}; M.roles.forEach((r) => r.wfs.forEach((w) => { wfBy[w.id] = { w: w, r: r }; }));
+    const metaPids = {}; M.metas.forEach((m) => { metaPids[m.pid] = m.id; });
+    const procIds = Object.keys(M.L).filter((id) => !metaPids[id]);
+    const pageKeyOfProc = (id) => (metaPids[id] ? 'meta:' + metaPids[id] : 'proc:' + id);
+    const LD = {
+      auto: { rank: 0, label: 'Autonomous', cls: 'ok', set: 'Autonomous' },
+      draft: { rank: 1, label: 'AI drafts, a person sends', cls: 'warn', set: 'AI drafts, a person sends' },
+      never: { rank: 2, label: 'AI never touches', cls: 'bad', set: 'AI never touches' }
+    };
+    const ownLine = (q) => M.lines[q.id] || '';
+    const ownEff = (q) => ownLine(q) || 'draft';
+    const toolCand = (t) => ({ k: M.TL[t] || 'draft', t: 'the tool ' + t + (M.TL[t] ? ' is set to ' + LD[M.TL[t]].set : ' has no line, so it is treated as AI drafts, a person sends') });
+    const effOf = (q) => {
+      const cands = [{ k: ownEff(q), t: '' }];
+      const m = q.metaId ? metaBy[q.metaId] : null;
+      if (m) {
+        m.ids.forEach((id) => { const x = M.L[id]; cands.push({ k: ownEff(x), t: x.title + (ownLine(x) ? ' is set to ' + LD[ownEff(x)].set : ' has no line, so it is treated as AI drafts, a person sends') }); });
+        m.ids.forEach((id) => M.L[id].tools.forEach((t) => cands.push(toolCand(t))));
+      } else {
+        q.tools.forEach((t) => cands.push(toolCand(t)));
+      }
+      let best = cands[0];
+      cands.forEach((x) => { if (LD[x.k].rank > LD[best.k].rank) best = x; });
+      const own = ownLine(q);
+      const why = best === cands[0] ? (own ? 'Its own line is set to ' + LD[own].set + '.' : 'Its own line is not set, so it is treated as AI drafts, a person sends until its owner role decides.') : 'Stricter than its own line because ' + best.t + '.';
+      return { key: best.k, ld: LD[best.k], why: why };
+    };
+    const nameOfRole = (id) => (roleBy[id] ? roleBy[id].name : 'No owning role');
+
+    const views = {};
+    const pageList = [];
+    const addPage = (key, group, title, sub, holder) => { pageList.push({ key: key, group: group, title: title, sub: sub }); views[key] = holder || {}; };
+    all.forEach((x, i) => addPage('ch:' + x.id, 'company', x.title, 'Owned by ' + x.owner));
+    M.roles.forEach((r) => addPage('role:' + r.id, 'roles', r.name, r.holders.map((h) => h.n).join(', ')));
+    M.roles.forEach((r) => r.wfs.forEach((w) => addPage('wf:' + w.id, 'wfs', w.name, 'Owned by ' + r.name)));
+    procIds.forEach((id) => addPage('proc:' + id, 'procs', M.L[id].title, 'Owned by ' + nameOfRole(M.owners[id])));
+    M.metas.forEach((m) => addPage('meta:' + m.id, 'metas', m.name, 'Held by ' + m.held.length + (m.held.length === 1 ? ' role' : ' roles')));
+    const explOf = (key) => (exOverride[key] !== undefined ? exOverride[key] : (EX[key] || ''));
+    const needsOf = (key) => key.indexOf('ch:') !== 0 && !explOf(key);
+    const generated = pageList.filter((p) => p.key.indexOf('ch:') !== 0);
+    const needKeys = generated.filter((p) => needsOf(p.key));
+    const VIEWERS = [
+      { id: 'mv', label: 'Jane Doe · Founder & CEO (sees everything)', who: 'Jane Doe', t: 'person', roles: ['ceo', 'reviewer'], everything: true },
+      { id: 'anna', label: 'Alex Smith · Head of Operations + Communications Lead', who: 'Alex Smith', t: 'person', roles: ['ops', 'comms'], everything: false },
+      { id: 'devops', label: 'devops-engineer · Ops Lead', who: 'devops-engineer', t: 'agent', roles: ['opslead'], everything: false },
+      { id: 'docs', label: 'documentation-engineer · Technical Writer', who: 'documentation-engineer', t: 'agent', roles: ['writer'], everything: false }
+    ];
+    const V = VIEWERS.find((x) => x.id === st.as) || VIEWERS[2];
+    const HANDOFF = { ops: ['opslead'], research: ['staff'], staff: ['reviewer'] };
+    const ownedIds = (rid) => procIds.filter((id) => M.owners[id] === rid);
+    const scopeFor = (rids) => {
+      const S = { ch: {}, role: {}, limited: {}, wf: {}, proc: {}, meta: {} };
+      const rn = rids.map(nameOfRole);
+      all.forEach((x) => { if (x.applies.indexOf('Everyone') >= 0 || x.applies.some((a) => rn.indexOf(a) >= 0)) S.ch['ch:' + x.id] = true; });
+      rids.forEach((id) => {
+        S.role['role:' + id] = true;
+        roleBy[id].wfs.forEach((w) => { S.wf['wf:' + w.id] = true; w.ids.forEach((pid) => { if (!metaPids[pid]) S.proc['proc:' + pid] = true; }); });
+        ownedIds(id).forEach((pid) => { S.proc['proc:' + pid] = true; });
+        M.metas.filter((m) => m.held.indexOf(id) >= 0).forEach((m) => { S.meta['meta:' + m.id] = true; m.ids.forEach((pid) => { S.proc['proc:' + pid] = true; }); });
+      });
+      rids.forEach((id) => { [roleBy[id].parent].concat(HANDOFF[id] || []).forEach((o) => { if (o && !S.role['role:' + o]) S.limited['role:' + o] = true; }); });
+      S.count = ['ch', 'role', 'wf', 'proc', 'meta'].reduce((n, k) => n + Object.keys(S[k]).length, 0);
+      return S;
+    };
+    const S = scopeFor(V.roles);
+    const inScope = (key) => V.everything || !!(S.ch[key] || S.role[key] || S.limited[key] || S.wf[key] || S.proc[key] || S.meta[key]);
+    const rolesOfHolder = (n) => M.roles.filter((r) => r.holders.some((h) => h.n === n));
+    const defaultView = V.everything ? 'role:ceo' : 'role:' + V.roles[0];
+    const view = inScope(st.view || defaultView) ? (st.view || defaultView) : defaultView;
+    const curPage = pageList.find((p) => p.key === view) || pageList.find((p) => p.key === defaultView);
+    const vkey = curPage.key;
+    const kind = vkey.split(':')[0];
+    const vid = vkey.split(':').slice(1).join(':');
+    const isLimited = !V.everything && kind === 'role' && !S.role[vkey];
+    const goTo = (key) => { const f = () => setSt({ view: key, tab: 'read', edit: false, err: false }); f.key = key; return f; };
+    const LOCK_TIP = 'Not in your handbook — ask its owner role';
+    const lockIt = (item) => {
+      if (!item) return item;
+      const k = item.go && item.go.key;
+      const ok = !k || inScope(k);
+      item.lcls = ok ? '' : 'lockd'; item.dis = ok ? 'false' : 'true'; item.ltip = ok ? '' : LOCK_TIP;
+      if (!ok) item.go = () => {};
+      return item;
+    };
+
+    // chapter state
+    const chId = kind === 'ch' ? vid : (st.sel || 'rules');
+    const c = all.find((x) => x.id === chId) || all[0];
+    const tab = st.tab || 'read';
+    const edit = !!st.edit;
+    const drafts = st.drafts || {};
+    const notes = st.notes || {};
+    const sent = st.sent || {};
+    const agreed = st.agreed || {};
+    const names = ['Jane Doe', 'Alex Smith', 'Sam Lee', 'Chris Park', 'Morgan Hale', 'Reviewer (audit)'];
+    const inis = ['JD', 'AS', 'SL', 'CP', 'MH', 'RA'];
+    const reads = c.read.map((v, i) => (i === 0 && agreed[c.id]) ? 1 : v);
+    const nRead = reads.reduce((a, b) => a + b, 0);
+    const youRead = !!reads[0];
+    const md = this.toMarkdown(c);
+
+    // navigation
+    const q = (st.q || '').trim().toLowerCase();
+    const needsOnly = !!st.needsOnly;
+    const coll = st.coll || {};
+    const groupDefs = [['company', 'Company'], ['roles', 'Roles'], ['wfs', 'Workflows'], ['procs', 'Processes'], ['metas', 'Meta skills']];
+    const textOf = (p) => (p.title + ' ' + p.sub + ' ' + (p.key.indexOf('ch:') === 0 ? this.toMarkdown(all.find((x) => 'ch:' + x.id === p.key)) : explOf(p.key))).toLowerCase();
+    const nav = [];
+    let shown = 0;
+    groupDefs.forEach(([g, label]) => {
+      const total = pageList.filter((p) => p.group === g && inScope(p.key)).length;
+      const items = pageList.filter((p) => p.group === g && inScope(p.key) && (!q || textOf(p).indexOf(q) >= 0) && (!needsOnly || needsOf(p.key)));
+      if (items.length === 0 && (q || needsOnly || total === 0)) return;
+      const open = !coll[g] || !!q || needsOnly;
+      const countText = (q || needsOnly) ? items.length + ' of ' + total : String(total);
+      nav.push({ isHead: true, isItem: false, label: label + ' (' + countText + ')', expanded: open ? 'true' : 'false', chev: open ? 'M7 10l5 5 5-5' : 'M10 7l5 5-5 5', toggle: () => setSt({ coll: Object.assign({}, coll, { [g]: !coll[g] }) }), title: '', sub: '', cls: '', cur: 'false', needs: false, pending: false, pick: () => {} });
+      if (open) {
+        items.forEach((p) => {
+          shown++;
+          nav.push({ isHead: false, isItem: true, label: '', expanded: 'true', chev: '', toggle: () => {}, title: p.title, sub: S.limited[p.key] && !V.everything ? 'Name and purpose only' : p.sub, cls: p.key === vkey ? 'on' : '', cur: p.key === vkey ? 'page' : 'false', needs: V.everything && needsOf(p.key), pending: p.key === 'ch:flows', pick: () => setSt(Object.assign({ view: p.key, tab: 'read', edit: false, err: false }, p.key.indexOf('ch:') === 0 ? { sel: p.key.slice(3) } : {})) });
+        });
+      }
+    });
+
+    // coverage
+    const total = generated.length;
+    const nNeed = needKeys.length;
+    const cov = {
+      text: (total - nNeed) + ' of ' + total + ' explained' + (nNeed ? ' · ' + nNeed + ' need an explanation' : ''),
+      cls: nNeed ? 'warn' : 'ok',
+      barCls: nNeed ? '' : '',
+      pct: Math.round(((total - nNeed) / total) * 100),
+      needs: needKeys.map((p) => ({ label: p.title, go: goTo(p.key) }))
+    };
+
+    // generated page
+    const pg = {
+      isChapter: kind === 'ch', isGen: kind !== 'ch', isRole: kind === 'role', isWf: kind === 'wf', isMeta: kind === 'meta', isProcLike: kind === 'proc' || kind === 'meta',
+      kindLabel: { ch: 'Chapter', role: 'Role', wf: 'Workflow', proc: 'Process', meta: 'Meta skill' }[kind],
+      title: curPage.title, crumb: { ch: 'Company chapter', role: 'Roles', wf: 'Workflows', proc: 'Processes', meta: 'Meta skills' }[kind],
+      owner: '', ownerLabel: 'Owner role', ownerNote: '', ownerGo: () => {}, hasOwnerRow: false,
+      hasExpl: false, needsExpl: false, explText: '', explPending: false,
+      holders: [], reportsTo: '', reportsGo: () => {}, path: [], pathNote: '', wfLinks: [], noWfs: false, procLinks: [], noProcs: false, metaLinks: [], noMetas: false, budget: '', budgetNote: '',
+      trigger: '', canvasHref: 'ProcessCanvas.dc.html', hasSteps: false, steps: [], personSteps: [], noPerson: false,
+      effLine: '', effCls: 'idle', effWhy: '', usedIn: [], noUsed: false, heldBy: [],
+      skillsLabel: 'Skills', skills: [], hasSkills: false, noSkills: false, routines: [], hasRoutines: false, tools: [], hasTools: false, inputs: [], hasInputs: false,
+      editLabel: 'Chapter text (Markdown)', editRows: 14, editHint: 'Use ## for headings and 1. 2. 3. for numbered rules.'
+    };
+    const lineTip = (e) => e.ld.label + '. ' + e.why;
+    const ownedBy = (rid) => procIds.filter((id) => M.owners[id] === rid);
+    const wfLine = (w) => w.ids.map((id) => M.L[id]);
+    const stepsOf = (ids, edgeList) => {
+      const procs = ids.map((id) => M.L[id]);
+      const tt = (t) => {
+        if (t === 'done') return 'the workflow ends';
+        if (t === 'failed') return 'the workflow ends as failed';
+        if (t.indexOf('end:') === 0) return 'the workflow ends (' + t.slice(4) + ')';
+        return 'go to “' + M.L[t].title + '”';
+      };
+      const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+      return procs.map((p, i) => {
+        const outs = edgeList ? edgeList.filter((e) => e.from === p.id) : [{ from: p.id, to: i < procs.length - 1 ? procs[i + 1].id : 'done', type: 'success', cond: '', retries: 0, timeout: 0 }];
+        const parts = [];
+        outs.filter((e) => e.type === 'if').forEach((e) => {
+          const el = outs.find((x) => x.type === 'else');
+          parts.push('If ' + e.cond + ', then ' + tt(e.to) + (el ? ', otherwise ' + tt(el.to) : '') + '.');
+        });
+        outs.filter((e) => e.type === 'success').forEach((e) => parts.push('Then ' + tt(e.to) + '.'));
+        outs.filter((e) => e.type === 'failure').forEach((e) => parts.push('If it fails: ' + (e.retries ? 'retry ' + e.retries + '× then ' : '') + tt(e.to) + '.'));
+        outs.filter((e) => e.type === 'timeout').forEach((e) => parts.push('If it takes longer than ' + e.timeout + ' min: ' + tt(e.to) + '.'));
+        if (!outs.some((e) => e.type === 'if') && outs.some((e) => e.type === 'else')) outs.filter((e) => e.type === 'else').forEach((e) => parts.push('Otherwise, ' + tt(e.to) + '.'));
+        const eff = effOf(p);
+        const pageKey = pageKeyOfProc(p.id);
+        return { n: String(i + 1), title: p.title, stage: '', go: goTo(pageKey), text: parts.map(cap).join(' '), line: eff.ld.label, cls: eff.ld.cls, tip: lineTip(eff), key: eff.key };
+      });
+    };
+    const personText = { draft: 'A person reviews, edits and sends this step.', never: 'Only a person does this step.' };
+    const fillSteps = (steps) => {
+      pg.hasSteps = true;
+      pg.steps = steps;
+      pg.personSteps = steps.filter((s) => s.key !== 'auto').map((s) => ({ title: s.title, go: s.go, line: s.key === 'never' ? 'Person does it' : 'Person sends', cls: s.cls, text: personText[s.key] }));
+      pg.noPerson = pg.personSteps.length === 0;
+    };
+    const toolRows = (ids) => {
+      const set = []; ids.forEach((id) => M.L[id].tools.forEach((t) => { if (set.indexOf(t) < 0) set.push(t); }));
+      return set.map((t) => ({ name: t, line: LD[M.TL[t] || 'draft'].label + (M.TL[t] ? '' : ' (not set)'), cls: LD[M.TL[t] || 'draft'].cls }));
+    };
+    const routineRow = (id) => {
+      const r = M.routines[id]; if (!r) return null;
+      return { name: M.L[id].title, go: goTo('proc:' + id), when: r.text, state: r.paused ? 'Paused' : 'Active', cls: r.paused ? 'warn' : 'ok' };
+    };
+    const PROG = { 'ops|Alex Smith': 6, 'comms|Alex Smith': 4, 'ceo|Jane Doe': 999, 'reviewer|Jane Doe': 3 };
+    const STAT = { 'Jane Doe': ['Online', 'ok'], 'Alex Smith': ['Away', 'idle'], 'research-agent': ['Active', 'ok'], 'code-agent': ['Active', 'ok'], 'documentation-engineer': ['Idle', 'idle'], 'code-reviewer': ['Active', 'ok'], 'performance-engineer': ['Paused', 'warn'], 'devops-engineer': ['Error', 'bad'] };
+
+    const pathOf = (r) => ['welcome', 'organised', 'lines', 'flows'].map((id) => ({ key: 'ch:' + id, title: all.find((x) => x.id === id).title, kind: 'Chapter' }))
+      .concat(r.wfs.map((w) => ({ key: 'wf:' + w.id, title: w.name, kind: 'Workflow' })))
+      .concat(ownedBy(r.id).map((id) => ({ key: 'proc:' + id, title: M.L[id].title, kind: 'Process' })));
+    const progOf = (r, name) => { const n = pathOf(r).length; const v = PROG[r.id + '|' + name]; return Math.min(v === undefined ? n : v, n); };
+    if (kind === 'role' && isLimited) {
+      pg.owner = roleBy[vid].name;
+    } else if (kind === 'role') {
+      const r = roleBy[vid];
+      pg.owner = r.name;
+      const pathItems = pathOf(r);
+      const people = r.holders.filter((h) => h.t === 'person');
+      const lead = people[0];
+      const leadK = lead ? Math.min(PROG[r.id + '|' + lead.n] === undefined ? pathItems.length : PROG[r.id + '|' + lead.n], pathItems.length) : pathItems.length;
+      pg.holders = r.holders.map((h) => {
+        const k = h.t === 'person' ? Math.min(PROG[r.id + '|' + h.n] === undefined ? pathItems.length : PROG[r.id + '|' + h.n], pathItems.length) : 0;
+        const s = STAT[h.n] || ['Active', 'ok'];
+        return {
+          ini: h.t === 'person' ? h.n.split(' ').map((x) => x.charAt(0)).join('') : h.n.slice(0, 2).toUpperCase(),
+          name: h.n, type: h.t === 'person' ? 'Person' : 'Agent', status: s[0], statusCls: s[1],
+          statusTip: h.n === 'devops-engineer' ? 'Missing the ansible-runner tool. Grant it to the role so this agent can run deploys.' : 'Status as shown in Org Chart.',
+          onboarding: h.t === 'person' && k < pathItems.length,
+          progress: h.t === 'person' ? k + ' of ' + pathItems.length + ' read' : 'Loaded: ' + scopeFor(rolesOfHolder(h.n).map((x) => x.id)).count + ' pages for ' + rolesOfHolder(h.n).map((x) => x.name).join(' + ')
+        };
+      });
+      pg.path = pathItems.map((it, i) => ({
+        n: String(i + 1), title: it.title, kind: it.kind, go: goTo(it.key),
+        status: lead ? (i < leadK ? 'Read' : 'Not read') : 'Loaded', cls: lead ? (i < leadK ? 'ok' : 'idle') : 'ok'
+      }));
+      pg.pathNote = 'Assigned automatically when someone gets this role. ' + (lead ? 'Checks show ' + lead.n + '’s progress. Agents load the path instead of reading it.' : 'Agents load the path instead of reading it, so every page shows as loaded.');
+      pg.reportsTo = r.parent ? nameOfRole(r.parent) : 'Nobody, top of the company';
+      pg.reportsGo = r.parent ? goTo('role:' + r.parent) : () => {};
+      pg.wfLinks = r.wfs.map((w) => ({ name: w.name, go: goTo('wf:' + w.id), note: 'EUR ' + w.ids.reduce((s, id) => s + M.L[id].cost, 0).toFixed(2) + ' per run, all steps' }));
+      pg.noWfs = r.wfs.length === 0;
+      pg.procLinks = ownedBy(r.id).map((id) => { const e = effOf(M.L[id]); return { name: M.L[id].title, go: goTo('proc:' + id), line: e.ld.label, cls: e.ld.cls }; });
+      pg.noProcs = pg.procLinks.length === 0;
+      const held = M.metas.filter((m) => m.held.indexOf(r.id) >= 0);
+      pg.metaLinks = held.map((m) => ({ name: m.name, go: goTo('meta:' + m.id), note: m.ids.length + ' processes' }));
+      pg.noMetas = held.length === 0;
+      pg.budget = r.budget ? r.budget.replace(' / ', ' of ') + ' EUR used this month' : 'No budget set';
+      pg.budgetNote = 'The same figure as in Org Chart. All amounts are in EUR.';
+      pg.skills = (M.roleSkills[r.id] || []).map((k) => ({ name: M.skills[k] }));
+      pg.skillsLabel = 'Skills';
+      pg.hasSkills = pg.skills.length > 0; pg.noSkills = !pg.hasSkills;
+      const allIds = [].concat.apply([], r.wfs.map((w) => w.ids)).concat(ownedBy(r.id));
+      pg.tools = toolRows(allIds); pg.hasTools = pg.tools.length > 0;
+      pg.routines = ownedBy(r.id).map(routineRow).filter((x) => x); pg.hasRoutines = pg.routines.length > 0;
+    } else if (kind === 'wf') {
+      const hit = wfBy[vid];
+      pg.owner = hit.r.name;
+      pg.hasOwnerRow = true; pg.ownerLabel = 'Owner role'; pg.ownerGo = goTo('role:' + hit.r.id);
+      pg.ownerNote = 'Held by ' + hit.r.holders.map((h) => h.n).join(', ');
+      pg.trigger = hit.w.trigger;
+      fillSteps(stepsOf(hit.w.ids, M.edges[hit.w.id]));
+      pg.tools = toolRows(hit.w.ids); pg.hasTools = true;
+      pg.routines = hit.w.ids.map(routineRow).filter((x) => x); pg.hasRoutines = pg.routines.length > 0;
+      pg.skills = []; hit.w.ids.forEach((id) => (M.reqs[id] || []).forEach((k) => { if (!pg.skills.some((s) => s.name === M.skills[k])) pg.skills.push({ name: M.skills[k] }); }));
+      pg.skillsLabel = 'Skills the steps need'; pg.hasSkills = pg.skills.length > 0; pg.noSkills = !pg.hasSkills;
+    } else if (kind === 'proc' || kind === 'meta') {
+      const m = kind === 'meta' ? metaBy[vid] : null;
+      const p = m ? M.L[m.pid] : M.L[vid];
+      const ids = m ? m.ids : [p.id];
+      const own = M.owners[p.id];
+      pg.owner = m ? 'Roles that hold it' : nameOfRole(own);
+      if (!m) { pg.hasOwnerRow = true; pg.ownerLabel = 'Owner role'; pg.ownerGo = goTo('role:' + own); pg.ownerNote = 'Held by ' + roleBy[own].holders.map((h) => h.n).join(', '); }
+      const e = effOf(p);
+      pg.effLine = e.ld.label; pg.effCls = e.ld.cls; pg.effWhy = e.why;
+      pg.usedIn = (M.usage[p.id] || []).map((u) => ({ name: u.w.name, go: goTo('wf:' + u.w.id), note: u.trig ? 'starts it · ' + u.r.name : u.r.name }));
+      pg.noUsed = pg.usedIn.length === 0;
+      if (m) {
+        pg.owner = 'the roles that hold it';
+        pg.heldBy = m.held.map((id) => ({ name: nameOfRole(id), go: goTo('role:' + id) }));
+        pg.trigger = m.trigger;
+        fillSteps(stepsOf(m.ids, M.edges[m.id]));
+        pg.usedIn = [];
+        roleBy.ops.wfs.concat(roleBy.opslead.wfs).forEach((w) => { if (w.ids.indexOf(m.pid) >= 0) pg.usedIn.push({ name: w.name, go: goTo('wf:' + w.id), note: 'calls it' }); });
+        pg.noUsed = pg.usedIn.length === 0;
+        pg.hasOwnerRow = false;
+      }
+      const reqIds = []; ids.forEach((id) => (M.reqs[id] || []).forEach((k) => { if (reqIds.indexOf(k) < 0) reqIds.push(k); }));
+      pg.skills = reqIds.map((k) => ({ name: M.skills[k] }));
+      pg.skillsLabel = 'Skills it needs'; pg.hasSkills = pg.skills.length > 0; pg.noSkills = !pg.hasSkills;
+      pg.tools = toolRows(ids).map((t) => t); pg.hasTools = pg.tools.length > 0;
+      if (!m) { const rr = routineRow(p.id); pg.routines = rr ? [rr] : []; pg.hasRoutines = !!rr; }
+      if (!m) {
+        pg.inputs = vid === 'staging'
+          ? [{ f: 'Release tag', t: 'Text', req: 'Required', cls: 'info' }, { f: 'Target environment', t: 'Text · staging', req: 'Optional', cls: 'idle' }, { f: 'Max deploy time', t: 'Number · 15 min', req: 'Optional', cls: 'idle' }]
+          : [{ f: 'Source link', t: 'URL', req: 'Required', cls: 'info' }, { f: 'Notes', t: 'Text', req: 'Optional', cls: 'idle' }];
+        pg.hasInputs = true;
+      }
+    }
+    if (kind !== 'ch') {
+      pg.hasExpl = !!explOf(vkey);
+      pg.needsExpl = !pg.hasExpl;
+      pg.explText = explOf(vkey);
+      pg.explPending = !!sent[vkey] && pg.needsExpl;
+      pg.editLabel = 'Explanation, written by ' + pg.owner;
+      pg.editRows = 6;
+      pg.editHint = 'Plain words, short paragraphs. Say what it is for and why it works this way.';
+    } else {
+      pg.owner = c.owner;
+    }
+
+    pg.isLimited = isLimited; pg.showModel = !isLimited; pg.canSuggest = !isLimited;
+    ['path', 'steps', 'personSteps', 'wfLinks', 'procLinks', 'metaLinks', 'routines', 'usedIn', 'heldBy'].forEach((k) => pg[k].forEach(lockIt));
+    cov.needs.forEach(lockIt);
+    const oL = lockIt({ go: pg.ownerGo }); pg.ownerGo = oL.go; pg.ownerLcls = oL.lcls; pg.ownerDis = oL.dis; pg.ownerLtip = oL.ltip;
+    const rL = lockIt({ go: pg.reportsGo }); pg.reportsGo = rL.go; pg.reportsLcls = rL.lcls; pg.reportsDis = rL.dis; pg.reportsLtip = rL.ltip;
+    const cnt = (k) => Object.keys(S[k]).length;
+    const scopeLine = V.everything
+      ? 'Everything: Roles ' + M.roles.length + ' · Workflows ' + Object.keys(wfBy).length + ' · Processes ' + procIds.length + ' · Meta skills ' + M.metas.length
+      : 'Roles ' + (cnt('role') + cnt('limited')) + ' · Workflows ' + cnt('wf') + ' · Processes ' + cnt('proc') + ' · Meta skills ' + cnt('meta');
+    const heldNames = V.roles.map(nameOfRole).join(' + ');
+    const mineRows = V.t === 'person' ? V.roles.map((id) => {
+      const r = roleBy[id]; const n = pathOf(r).length; const k = progOf(r, V.who);
+      return { name: r.name, go: goTo('role:' + id), progress: k + ' of ' + n + ' read', pct: Math.round((k / n) * 100), onboarding: k < n, done: k >= n };
+    }) : [];
+    const draft = drafts[vkey] !== undefined ? drafts[vkey] : (kind === 'ch' ? md : explOf(vkey));
+    const note = notes[vkey] || '';
+    const noteInvalid = !!st.err && !note.trim();
+    const q2 = {};
+    return {
+      theme: cur,
+      ui: ui,
+      uiAnnounce: st.uiAnnounce || '',
+      showAll: () => this.setUi('full'),
+      toggleUi: () => this.setUi(ui === 'minimal' ? 'full' : 'minimal'),
+      uiMinPressed: ui === 'minimal' ? 'true' : 'false',
+      uiTogCls: ui === 'minimal' ? 'on' : '',
+      themes: defs.map(([id, label]) => ({
+        label: label,
+        cls: id === cur ? 'on' : '',
+        pressed: id === cur ? 'true' : 'false',
+        pick: () => { try { window.localStorage.setItem('autobot-theme', id); } catch (e) {} this.setState({ theme: id }); }
+      })),
+      cov: cov,
+      viewers: VIEWERS.map((v) => ({ id: v.id, label: v.label })),
+      asVal: V.id,
+      onAs: (e) => {
+        const nv = VIEWERS.find((x) => x.id === e.target.value) || VIEWERS[2];
+        setSt({ as: nv.id, view: nv.everything ? 'role:ceo' : 'role:' + nv.roles[0], tab: 'read', edit: false, err: false, needsOnly: false, q: '' });
+      },
+      isEverything: V.everything,
+      notEverything: !V.everything,
+      scopeLine: scopeLine,
+      mineTitle: V.t === 'person' ? 'Your onboarding' : 'Loaded handbook',
+      mineRows: mineRows,
+      mineIsPerson: V.t === 'person',
+      mineIsAgent: V.t === 'agent',
+      loadedLine: 'Loaded: ' + S.count + ' pages for ' + heldNames,
+      needsPressed: needsOnly ? 'true' : 'false',
+      needsLabel: needsOnly ? 'Showing: needs explanation' : 'Needs explanation',
+      toggleNeeds: () => setSt({ needsOnly: !needsOnly }),
+      query: st.q || '',
+      onQuery: (e) => setSt({ q: e.target.value }),
+      navCount: pageList.filter((p) => inScope(p.key)).length + ' pages',
+      nav: nav,
+      noMatch: shown === 0 && (!!q || needsOnly),
+      pg: pg,
+      sel: {
+        title: c.title,
+        ownerRole: c.owner,
+        version: c.version,
+        changed: c.changed,
+        applies: c.applies.map((n) => ({ name: n })),
+        pre: c.pre,
+        post: c.post,
+        rules: c.rules,
+        hasRules: c.rules.length > 0,
+        hasLines: !!c.table,
+        lineCards: c.cards || [],
+        lineRows: (c.table || []).map((t) => ({ name: t[0], line: t[1], why: t[2], tone: t[1] === 'Autonomous' ? 'ok' : (t[1] === 'AI never touches' ? 'bad' : 'warn') })),
+        history: c.history.map((h, i) => ({ version: h[0], date: h[1], author: h[2], note: h[3], current: i === 0 }))
+      },
+      pendingShow: kind === 'ch' && !!c.pending,
+      sentShow: !!sent[vkey],
+      isRead: kind === 'ch' && tab === 'read',
+      isHist: kind === 'ch' && tab === 'hist',
+      readCls: tab === 'read' ? 'on' : '',
+      histCls: tab === 'hist' ? 'on' : '',
+      readSel: tab === 'read' ? 'true' : 'false',
+      histSel: tab === 'hist' ? 'true' : 'false',
+      showRead: () => setSt({ tab: 'read' }),
+      showHist: () => setSt({ tab: 'hist' }),
+      readCount: nRead + ' of 6 people have read ' + c.version,
+      canAgree: !youRead,
+      agreedShow: youRead,
+      agree: () => setSt({ agreed: Object.assign({}, agreed, { [c.id]: true }) }),
+      people: names.map((n, i) => ({ name: n, ini: inis[i], cls: reads[i] ? 'ok' : 'idle', label: reads[i] ? 'Read ' + c.version : 'Not yet' })),
+      agentsLoaded: 'Loaded by ' + c.agents + ' agents',
+      editOpen: edit,
+      editExpanded: edit ? 'true' : 'false',
+      editLabel: edit ? 'Close editor' : 'Suggest a change',
+      toggleEdit: () => setSt({ edit: !edit, err: false }),
+      draft: draft,
+      onDraft: (e) => setSt({ drafts: Object.assign({}, drafts, { [vkey]: e.target.value }) }),
+      note: note,
+      onNote: (e) => setSt({ notes: Object.assign({}, notes, { [vkey]: e.target.value }), err: false }),
+      noteInvalid: noteInvalid ? 'true' : 'false',
+      noteHint: noteInvalid ? 'Add a short note so the owner can see what changed and why.' : 'Shown to the owner in Approvals and kept in History.',
+      noteHintStyle: noteInvalid ? 'color: var(--alert-text); font-weight: 600' : '',
+      send: () => {
+        if (!note.trim()) { setSt({ err: true }); return; }
+        setSt({ edit: false, err: false, sent: Object.assign({}, sent, { [vkey]: true }) });
+      }
+    };
+  }
+}
+</script>
+</body>
+</html>

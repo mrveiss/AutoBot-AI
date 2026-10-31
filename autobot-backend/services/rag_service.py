@@ -16,36 +16,29 @@ import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Set, Tuple
 
-from advanced_rag_optimizer import AdvancedRAGOptimizer, RAGMetrics, SearchResult
+from advanced_rag_optimizer import AdvancedRAGOptimizer, RAGMetrics, RankedResult
 from autobot_shared.logging_manager import get_llm_logger
 from autobot_shared.redis_client import get_async_redis_client
 from constants.ttl_constants import TTL_30_DAYS
 from events.bus import publish_event
 from events.event_types import RAG_RETRIEVAL
+from knowledge.chunk_identity import resolve_chunk_id
 from knowledge.search_components.query_classifier import get_query_classifier
 from knowledge.search_components.retrieval_learner import GLOBAL_USER, get_retrieval_learner
-from services.context_sufficiency import (
-    SufficiencyVerdict,
-    get_context_sufficiency_evaluator,
-)
+from knowledge.search_filters import KbPrincipal, require_kb_principal
+from knowledge.stale_filter import drop_stale
 from services.knowledge_base_adapter import KnowledgeBaseAdapter
 from services.neural_mesh_retriever import NeuralMeshRetriever
+from services.rag_cache_tiers import RAGCacheTiersMixin
 from services.rag_config import RAGConfig, get_rag_config
-from services.semantic_query_cache import get_semantic_query_cache
-from services.session_adaptive_reranker import get_session_adaptive_reranker
-from services.topic_retrieval_cache import CachedChunk, get_topic_retrieval_cache
+from services.rag_derived_context import RAGDerivedContextMixin
+from services.rag_visibility import VISIBILITY_OVERFETCH, cache_scope, filter_ranked
+from services.session_adaptive_reranker import get_session_adaptive_reranker, session_adapted_weights
 from type_defs.common import Metadata
 
 logger = get_llm_logger("rag_service")
 
 _STREAM_TTL_SECONDS = TTL_30_DAYS
-
-# In-process cache for the DocIndexer hash cache file (Issue #4723).
-# The file is only rewritten when indexing completes (infrequent), so reading
-# it on every advanced_search() call is unnecessary I/O.
-_hash_cache_memo: dict = {}
-_hash_cache_loaded_at: float = 0.0
-_HASH_CACHE_TTL: float = 60.0  # seconds
 
 # Module-level singleton cache for synthesis schema — avoids repeated disk reads on the
 # hot path (_get_kb_synthesis_context is called on every advanced_search). (#4654)
@@ -75,7 +68,7 @@ def reset_synthesis_schema_cache() -> None:
     _SYNTHESIS_SCHEMA_CACHE = None
 
 
-class RAGService:
+class RAGService(RAGDerivedContextMixin, RAGCacheTiersMixin):
     """
     Reusable RAG service providing advanced knowledge retrieval capabilities.
 
@@ -103,7 +96,7 @@ class RAGService:
         self.config = config or get_rag_config()
         self.optimizer: AdvancedRAGOptimizer | None = None
         self._initialized = False
-        self._cache: Dict[str, Tuple[List[SearchResult], float]] = {}
+        self._cache: Dict[str, Tuple[List[RankedResult], float]] = {}
         self._cache_lock = asyncio.Lock()  # CRITICAL: Protect concurrent cache access
         # Neural Mesh RAG retriever (Issue #2059); injected at startup when Phase 3 is active.
         self._mesh_retriever: Any | None = None
@@ -172,6 +165,7 @@ class RAGService:
                     self._mesh_retriever = NeuralMeshRetriever(
                         chroma_search=_chroma,
                         hybrid_search=_hybrid,
+                        config=self.config,
                         **_shared_mesh_components,
                     )
                     self.config.mesh_retriever_enabled = True
@@ -196,10 +190,17 @@ class RAGService:
         max_results: int,
         enable_reranking: bool,
         categories: List[str] | None,
+        scope: str | None,
     ) -> str:
-        """Build cache key for search (Issue #665: extracted helper)."""
+        """Build cache key for search (Issue #665: extracted helper).
+
+        Prefixed with the visibility *scope* (#16664), so one scope never reads another's entry.
+        An empty key (no scope: the ACL epoch was unreadable) means "do not cache".
+        """
+        if scope is None:
+            return ""
         categories_key = ",".join(sorted(categories)) if categories else "all"
-        return f"{query}:{max_results}:{enable_reranking}:{categories_key}"
+        return f"{scope}:{query}:{max_results}:{enable_reranking}:{categories_key}"
 
     async def _execute_search_with_timeout(
         self,
@@ -207,9 +208,12 @@ class RAGService:
         fetch_limit: int,
         enable_reranking: bool,
         timeout_seconds: float,
-    ) -> Tuple[List[SearchResult], RAGMetrics]:
-        """Execute search with timeout protection (Issue #665: extracted helper).
+        principal: KbPrincipal,
+    ) -> Tuple[List[RankedResult], RAGMetrics]:
+        """Execute search with timeout protection and keep what *principal* may read.
 
+        Issue #665: extracted helper. Issue #16664: the optimizer's results are filtered here,
+        before anything caches, cuts or merges them.
         Issue #4696: when enable_rlm_refinement is True, delegates to
         advanced_search_with_refinement() for RLM-driven query refinement.
         The extra refinement_history is logged at debug level and discarded.
@@ -225,20 +229,36 @@ class RAGService:
                 timeout=timeout_seconds,
             )
             if history:
-                logger.debug(
-                    "RLM refinement completed: %d iteration(s) for query %r",
-                    len(history),
-                    query,
+                logger.debug("RLM refinement completed: %d iteration(s) for query %r", len(history), query)
+        else:
+            results, metrics = await asyncio.wait_for(
+                self.optimizer.advanced_search(query=query, max_results=fetch_limit, enable_reranking=reranking),
+                timeout=timeout_seconds,
+            )
+        return await filter_ranked(results, principal, self._ownership_manager()), metrics
+
+    def _apply_category_filter(
+        self,
+        results: List[RankedResult],
+        metrics: RAGMetrics,
+        categories: List[str] | None,
+        max_results: int,
+    ) -> List[RankedResult]:
+        """Category-filter already-visible *results* and cut them to *max_results*. Ref: #1088."""
+        if categories:
+            filtered = self._filter_by_categories(results, categories)
+            if filtered or not results:
+                logger.info("Category filter applied: %s, results: %d/%d", categories, len(filtered), len(results))
+                results = filtered
+            else:
+                logger.warning(
+                    "Category filter %s eliminated all %d results — returning unfiltered results instead",
+                    categories,
+                    len(results),
                 )
-            return results, metrics
-        return await asyncio.wait_for(
-            self.optimizer.advanced_search(
-                query=query,
-                max_results=fetch_limit,
-                enable_reranking=reranking,
-            ),
-            timeout=timeout_seconds,
-        )
+        results = results[:max_results]
+        metrics.final_results_count = len(results)
+        return results
 
     async def _execute_and_cache_search(
         self,
@@ -248,162 +268,33 @@ class RAGService:
         timeout_seconds: float,
         categories: List[str] | None,
         cache_key: str,
-    ) -> Tuple[List[SearchResult], RAGMetrics]:
+        principal: KbPrincipal,
+    ) -> Tuple[List[RankedResult], RAGMetrics]:
         """Helper for advanced_search. Ref: #1088.
 
-        Executes timed search, applies category filter, caches result, and
-        handles timeout/exception fallback according to config.
+        Executes timed search, keeps what *principal* may read, applies the category filter,
+        caches the filtered result and handles timeout/exception fallback according to config.
         """
-        fetch_limit = max_results * (2 if categories else 1)
+        fetch_limit = max_results * VISIBILITY_OVERFETCH * (2 if categories else 1)
         try:
             results, metrics = await self._execute_search_with_timeout(
-                query, fetch_limit, enable_reranking, timeout_seconds
+                query, fetch_limit, enable_reranking, timeout_seconds, principal
             )
-            if categories:
-                unfiltered_count = len(results)
-                filtered = self._filter_by_categories(results, categories)[:max_results]
-                if not filtered and unfiltered_count > 0:
-                    logger.warning(
-                        "Category filter %s eliminated all %d results — " "returning unfiltered results instead",
-                        categories,
-                        unfiltered_count,
-                    )
-                else:
-                    results = filtered
-                    logger.info(
-                        "Category filter applied: %s, results: %d/%d",
-                        categories,
-                        len(results),
-                        unfiltered_count,
-                    )
-                metrics.final_results_count = len(results)
-            await self._add_to_cache(cache_key, (results, metrics))
+            results = self._apply_category_filter(results, metrics, categories, max_results)
+            if cache_key:
+                await self._add_to_cache(cache_key, (results, metrics))
             logger.info(f"Advanced search completed: {len(results)} results in {metrics.total_time:.3f}s")
             return results, metrics
         except asyncio.TimeoutError:
             logger.error(f"Advanced search timed out after {timeout_seconds}s, using fallback")
             if self.config.fallback_to_basic_search:
-                return await self._fallback_basic_search(query, max_results)
+                return await self._fallback_basic_search(query, max_results, principal=principal)
             raise
         except Exception as e:
             logger.error("Advanced search failed: %s", e)
             if self.config.fallback_to_basic_search:
-                return await self._fallback_basic_search(query, max_results)
+                return await self._fallback_basic_search(query, max_results, principal=principal)
             raise
-
-    async def _check_topic_cache(self, query: str) -> Tuple[List[SearchResult], RAGMetrics] | None:
-        """Check topic retrieval cache for related chunks. Issue #1376."""
-        try:
-            from knowledge.facts import _generate_embedding_with_npu_fallback
-
-            embedding = await _generate_embedding_with_npu_fallback(query)
-            if embedding is None:
-                return None
-            topic_cache = await get_topic_retrieval_cache()
-            chunks = await topic_cache.lookup(embedding)
-            if chunks is None:
-                return None
-            results = [
-                SearchResult(
-                    content=c.content,
-                    metadata={**c.metadata, "source": "topic_cache"},
-                    semantic_score=c.score,
-                    keyword_score=0.0,
-                    hybrid_score=c.score,
-                    relevance_rank=i + 1,
-                    source_path=c.metadata.get("source_path", "topic_cache"),
-                )
-                for i, c in enumerate(chunks)
-            ]
-            metrics = RAGMetrics()
-            metrics.total_time = 0.0
-            metrics.final_results_count = len(results)
-            return results, metrics
-        except Exception as exc:
-            logger.debug("Topic cache check failed: %s", exc)
-            return None
-
-    async def _store_in_topic_cache(self, results: List[SearchResult]) -> None:
-        """Store search results in topic retrieval cache. Issue #1376."""
-        if not results:
-            return
-        try:
-            from knowledge.facts import _generate_embedding_with_npu_fallback
-
-            embeddings = []
-            chunks = []
-            for r in results[:10]:
-                emb = await _generate_embedding_with_npu_fallback(r.content)
-                if emb is not None:
-                    embeddings.append(emb)
-                    chunks.append(
-                        CachedChunk(
-                            content=r.content,
-                            metadata=r.metadata or {},
-                            score=r.hybrid_score,
-                        )
-                    )
-            if embeddings:
-                topic_cache = await get_topic_retrieval_cache()
-                await topic_cache.store(embeddings, chunks)
-        except Exception as exc:
-            logger.debug("Topic cache store failed: %s", exc)
-
-    async def _check_semantic_cache(self, query: str) -> Tuple[List[SearchResult], RAGMetrics] | None:
-        """Check semantic query cache for similar past queries. Issue #1372."""
-        try:
-            sem_cache = await get_semantic_query_cache()
-            hit = await sem_cache.lookup(query)
-            if hit is None:
-                return None
-            # Reconstruct a single SearchResult from cached response
-            sr = SearchResult(
-                content=hit.response_text,
-                metadata={
-                    "source": "semantic_cache",
-                    "model": hit.model,
-                    "original_query": hit.original_query,
-                    "similarity_score": hit.similarity_score,
-                },
-                semantic_score=hit.similarity_score,
-                keyword_score=0.0,
-                hybrid_score=hit.similarity_score,
-                relevance_rank=1,
-                source_path="semantic_cache",
-            )
-            metrics = RAGMetrics()
-            metrics.total_time = 0.0
-            metrics.final_results_count = 1
-            return [sr], metrics
-        except Exception as exc:
-            logger.debug("Semantic cache check failed: %s", exc)
-            return None
-
-    async def _store_in_semantic_cache(
-        self,
-        query: str,
-        results: List[SearchResult],
-        model: str = "rag",
-    ) -> None:
-        """Store search results in semantic cache. Issue #1372."""
-        if not results:
-            return
-        try:
-            sem_cache = await get_semantic_query_cache()
-            # Cache the top result's content as the response
-            top_content = results[0].content if results else ""
-            metadata = {
-                "result_count": len(results),
-                "top_score": results[0].hybrid_score if results else 0,
-            }
-            await sem_cache.store(
-                query=query,
-                response_text=top_content,
-                model=model,
-                metadata=metadata,
-            )
-        except Exception as exc:
-            logger.debug("Semantic cache store failed: %s", exc)
 
     async def _lookup_retrieval_pattern(
         self,
@@ -452,7 +343,7 @@ class RAGService:
     async def _record_retrieval_outcome(
         self,
         pattern_hash: str | None,
-        results: List[SearchResult],
+        results: List[RankedResult],
         user_id: str | None = None,
     ) -> None:
         """Record search outcome against the matched retrieval pattern. Issue #2095.
@@ -480,7 +371,7 @@ class RAGService:
     def _record_session_signal(
         self,
         session_id: str,
-        results: List[SearchResult],
+        results: List[RankedResult],
     ) -> None:
         """Feed retrieval success/miss signal into the session-adaptive reranker. Issue #4690.
 
@@ -592,81 +483,34 @@ class RAGService:
         except Exception as exc:
             logger.debug("Feedback stream write failed (non-fatal): %s", exc)
 
-    async def _check_cache_tiers(
-        self,
-        query: str,
-        max_results: int,
-        enable_reranking: bool,
-        categories: List[str] | None,
-    ) -> Tuple[List[SearchResult], RAGMetrics, str] | None:
-        """Check all cache tiers before falling through to ChromaDB. Ref: #1376.
-
-        Returns (results, metrics, cache_key) on hit, None on miss.
-        The cache_key is always returned for downstream use.
-        """
-        evaluator = get_context_sufficiency_evaluator()
-
-        # Tier 0: Semantic similarity cache (Issue #1372)
-        sem_result = await self._check_semantic_cache(query)
-        if sem_result is not None:
-            context_text = sem_result[0][0].content if sem_result[0] else ""
-            cached_at = sem_result[0][0].metadata.get("cached_at", 0) if sem_result[0] else 0
-            check = await evaluator.evaluate(query, context_text, cached_at)
-            if check.verdict != SufficiencyVerdict.INSUFFICIENT:
-                return sem_result + ("",)
-            logger.info("Semantic cache hit rejected: %s", check.reason)
-
-        # Tier 1: Exact-match cache
-        cache_key = self._build_cache_key(query, max_results, enable_reranking, categories)
-        cached_result = await self._get_from_cache(cache_key)
-        if cached_result:
-            context_text = " ".join(r.content for r in cached_result[0][:3])
-            check = await evaluator.evaluate(query, context_text)
-            if check.verdict != SufficiencyVerdict.INSUFFICIENT:
-                return cached_result + (cache_key,)
-            logger.info("Cache hit rejected: %s", check.reason)
-
-        # Tier 2: Topic-level retrieval cache (Issue #1376)
-        topic_result = await self._check_topic_cache(query)
-        if topic_result is not None:
-            return topic_result + (cache_key,)
-
-        return None
-
     async def _run_mesh_retriever(
         self,
         query: str,
         max_results: int,
-    ) -> Tuple[List[SearchResult], RAGMetrics]:
+        principal: KbPrincipal,
+    ) -> Tuple[List[RankedResult], RAGMetrics]:
         """Delegate retrieval to NeuralMeshRetriever and emit feedback. Issue #2059.
 
         Called only when mesh_retriever_enabled=True and _mesh_retriever is set.
-        The mesh retriever returns SearchResult-compatible chunks directly; this
-        helper handles feedback emission so the caller stays clean.
+        Drops stale chunks like every other branch (#18141) and keeps only what
+        *principal* may read (#16664), then emits feedback.
         """
         logger.info("Using NeuralMeshRetriever for query (mesh_retriever_enabled=True)")
-        mesh_result = await self._mesh_retriever.retrieve(query, max_results)
-        results: List[SearchResult] = mesh_result.chunks
+        mesh_result = await self._mesh_retriever.retrieve(query, max_results * VISIBILITY_OVERFETCH)
+        results = await self._filter_stale_chunks(mesh_result.ranked_chunks())
+        results = (await filter_ranked(results, principal, self._ownership_manager()))[:max_results]
         metrics = RAGMetrics()
         metrics.final_results_count = len(results)
 
-        retrieved_ids = [r.metadata.get("chunk_id", r.source_path) for r in results]
-        await self._emit_retrieval_feedback(
-            query=query,
-            retrieved_ids=retrieved_ids,
-            ranked_ids=retrieved_ids,
-        )
-        await self._store_feedback_in_stream(
-            query=query,
-            retrieved_ids=retrieved_ids,
-            ranked_ids=retrieved_ids,
-        )
+        retrieved_ids = [resolve_chunk_id(r) for r in results]
+        await self._emit_retrieval_feedback(query=query, retrieved_ids=retrieved_ids, ranked_ids=retrieved_ids)
+        await self._store_feedback_in_stream(query=query, retrieved_ids=retrieved_ids, ranked_ids=retrieved_ids)
         return results, metrics
 
     async def _emit_ranked_feedback(
         self,
         query: str,
-        results: List[SearchResult],
+        results: List[RankedResult],
         user_id: str | None = None,
     ) -> None:
         """Classify query complexity and emit retrieval feedback to event + Redis stream.
@@ -680,9 +524,9 @@ class RAGService:
         """
         classifier = get_query_classifier()
         complexity = classifier.classify(query)
-        ranked_ids = [r.metadata.get("chunk_id", r.source_path) for r in results]
+        ranked_ids = [resolve_chunk_id(r) for r in results]
         pre_rerank_order = sorted(results, key=lambda r: r.hybrid_score, reverse=True)
-        retrieved_ids = [r.metadata.get("chunk_id", r.source_path) for r in pre_rerank_order]
+        retrieved_ids = [resolve_chunk_id(r) for r in pre_rerank_order]
         await self._emit_retrieval_feedback(
             query=query,
             retrieved_ids=retrieved_ids,
@@ -706,8 +550,13 @@ class RAGService:
         categories: List[str] | None = None,
         user_id: str | None = None,
         session_id: str | None = None,
-    ) -> Tuple[List[SearchResult], RAGMetrics]:
+        *,
+        principal: KbPrincipal,
+    ) -> Tuple[List[RankedResult], RAGMetrics]:
         """Perform advanced RAG search with reranking.
+
+        Issue #16664: ``principal`` is required. Every leg returns only what it may read and the
+        caches are partitioned by its scope; ``SYSTEM_SCOPE`` reads non-private facts only.
 
         Issue #556: categories. Issue #1372: semantic cache.
         Issue #1376: topic cache. Issue #1374: sufficiency guard.
@@ -724,64 +573,59 @@ class RAGService:
             categories:       Optional category filter list.
             user_id:          Authenticated user identifier; None uses global scope.
             session_id:       Conversation session identifier for adaptive reranking.
+            principal:        Who is asking (``kb_principal(user)``) or ``SYSTEM_SCOPE``; None raises.
         """
+        principal = require_kb_principal(principal)  # before any read (#16664)
         if not self.config.enable_advanced_rag:
-            return await self._fallback_basic_search(query, max_results, categories)
+            return await self._fallback_basic_search(query, max_results, categories, principal=principal)
 
-        hit = await self._check_cache_tiers(query, max_results, enable_reranking, categories)
+        scope = await cache_scope(principal)
+        hit = await self._check_cache_tiers(query, max_results, enable_reranking, categories, principal, scope)
         if hit is not None:
             return hit[0], hit[1]
 
         # Neural Mesh RAG path (Issue #2059)
         if self.config.mesh_retriever_enabled and self._mesh_retriever is not None:
-            return await self._run_mesh_retriever(query, max_results)
+            return await self._run_mesh_retriever(query, max_results, principal)
 
         if not await self.initialize():
             logger.warning("RAG init failed, using fallback")
-            return await self._fallback_basic_search(query, max_results, categories)
+            return await self._fallback_basic_search(query, max_results, categories, principal=principal)
 
-        # Issue #4690: Apply session-adapted weights before executing the search so
-        # the optimizer uses weights refined by earlier hits/misses in this session.
-        _prev_semantic: float | None = None
-        _prev_keyword: float | None = None
-        if self.config.enable_session_adaptive_reranking and session_id and self.optimizer:
-            _prev_semantic = self.optimizer.hybrid_weight_semantic
-            _prev_keyword = self.optimizer.hybrid_weight_keyword
-            adapted_sem, adapted_kw = self._session_reranker.get_weights(session_id)
-            self.optimizer.hybrid_weight_semantic = adapted_sem
-            self.optimizer.hybrid_weight_keyword = adapted_kw
-            logger.debug(
-                "Session adaptive reranking [%s]: sem=%.3f kw=%.3f",
-                session_id,
-                adapted_sem,
-                adapted_kw,
+        # Issue #4690: session-adapted weights apply to this search only; the
+        # context manager restores them even if the search raises.
+        adapting = bool(self.config.enable_session_adaptive_reranking and session_id)
+        # The guard this replaced was `enabled and session_id and self.optimizer`,
+        # so the reranker is reached only once the optimizer is known to exist --
+        # tests build this service with `__new__` and set only what they need.
+        adapting_optimizer = self.optimizer if adapting else None
+        with session_adapted_weights(
+            adapting_optimizer,
+            self._session_reranker if adapting_optimizer else None,
+            session_id,
+            enabled=adapting,
+        ):
+            # Issue #2095/#3240: consult retrieval learner with user_id for personalised hints.
+            classifier = get_query_classifier()
+            complexity = classifier.classify(query)
+            pattern_hash = await self._lookup_retrieval_pattern(
+                query=query,
+                complexity=complexity.value,
+                categories=categories,
+                user_id=user_id,
             )
 
-        # Issue #2095/#3240: consult retrieval learner with user_id for personalised hints.
-        classifier = get_query_classifier()
-        complexity = classifier.classify(query)
-        pattern_hash = await self._lookup_retrieval_pattern(
-            query=query,
-            complexity=complexity.value,
-            categories=categories,
-            user_id=user_id,
-        )
-
-        cache_key = self._build_cache_key(query, max_results, enable_reranking, categories)
-        timeout_seconds = timeout or self.config.timeout_seconds
-        results, metrics = await self._execute_and_cache_search(
-            query,
-            max_results,
-            enable_reranking,
-            timeout_seconds,
-            categories,
-            cache_key,
-        )
-
-        # Issue #4690: Restore original weights so other non-session callers are unaffected.
-        if _prev_semantic is not None and self.optimizer:
-            self.optimizer.hybrid_weight_semantic = _prev_semantic
-            self.optimizer.hybrid_weight_keyword = _prev_keyword  # type: ignore[assignment]
+            cache_key = self._build_cache_key(query, max_results, enable_reranking, categories, scope)
+            timeout_seconds = timeout or self.config.timeout_seconds
+            results, metrics = await self._execute_and_cache_search(
+                query,
+                max_results,
+                enable_reranking,
+                timeout_seconds,
+                categories,
+                cache_key,
+                principal,
+            )
 
         # Issue #4953: merge autobot_docs results when category is requested or
         # no category filter is active (search-all).
@@ -791,7 +635,9 @@ class RAGService:
 
                 doc_svc = get_doc_indexer_service()
                 if doc_svc._initialized:
-                    doc_results = await doc_svc.search(query, n_results=max_results)
+                    doc_results = await doc_svc.search(query, n_results=max_results * VISIBILITY_OVERFETCH)
+                    # #16664: the docs carry the platform grant, so this keeps them for any signed-in user
+                    doc_results = await filter_ranked(doc_results, principal, self._ownership_manager())
                     if doc_results:
                         combined = results + doc_results
                         combined.sort(key=lambda r: r.hybrid_score, reverse=True)
@@ -800,13 +646,13 @@ class RAGService:
             except Exception as _doc_exc:
                 logger.debug("autobot_docs search skipped: %s", _doc_exc)
 
-        # Issue #4689: filter chunks whose source_path is absent from the hash cache
-        # (file was removed/moved since last index run).
+        # Issue #4689: drop doc chunks whose file has left the doc index (knowledge.stale_filter).
         results = await self._filter_stale_chunks(results)
 
-        # Store in semantic + topic caches for future lookups
-        await self._store_in_semantic_cache(query, results)
-        await self._store_in_topic_cache(results)
+        # Store the filtered results in the semantic + topic caches, inside this scope
+        if scope is not None:
+            await self._store_in_semantic_cache(query, results, scope)
+            await self._store_in_topic_cache(results, scope)
 
         # Issue #3240: emit user-scoped feedback to personalised Redis stream.
         await self._emit_ranked_feedback(query, results, user_id=user_id)
@@ -824,17 +670,24 @@ class RAGService:
         self,
         query: str,
         max_context_length: int | None = None,
+        *,
+        principal: KbPrincipal,
     ) -> Tuple[str, RAGMetrics]:
         """
         Get optimized context for RAG-based response generation.
 
+        Issue #18944: ``principal`` is required (``kb_principal(user)`` or ``SYSTEM_SCOPE``); the optimizer
+        results and the synthesis and lessons legs keep only what it may read. None raises.
+
         Args:
             query: Search query string
             max_context_length: Maximum context length (uses config default if not provided)
+            principal: Who is asking
 
         Returns:
             Tuple of (optimized_context, metrics)
         """
+        principal = require_kb_principal(principal)  # before any read (#18944)
         if not await self.initialize():
             return "RAG optimizer not available", RAGMetrics()
 
@@ -851,17 +704,17 @@ class RAGService:
 
         try:
             context, metrics = await self.optimizer.get_optimized_context(
-                query=query, max_context_length=context_length
+                query=query, max_context_length=context_length, principal=principal
             )
 
             # Issue #4564: enrich context with KB synthesis summaries (optional)
-            synthesis_prefix = await self._get_kb_synthesis_context(query)
+            synthesis_prefix = await self._get_kb_synthesis_context(query, principal)
             if synthesis_prefix:
                 context = synthesis_prefix + "\n\n" + context
 
             # Issue #4678: optionally inject AnalyzerService lessons (low-weight)
             if self.config.enable_analyzer_lessons:
-                lessons_ctx = await self._get_analyzer_lessons_context(query)
+                lessons_ctx = await self._get_analyzer_lessons_context(query, principal)
                 if lessons_ctx:
                     context = context + "\n\n" + lessons_ctx
 
@@ -871,14 +724,16 @@ class RAGService:
             logger.error("Failed to get optimized context: %s", e)
             return "Error: RAG context retrieval failed", RAGMetrics()
 
-    async def _get_kb_synthesis_context(self, query: str) -> str:
+    async def _get_kb_synthesis_context(self, query: str, principal: KbPrincipal) -> str:
         """Query all KB synthesis ChromaDB collections for enrichment (Issue #4564, #4635).
 
         Queries the default ``kb_synthesis`` collection plus any
         ``synthesis_target`` collections defined in synthesis_schema.yaml.
         Results from all collections are merged.  Per-collection errors are
         logged and swallowed so the main context path is never interrupted.
+        Issue #18944: each hit is kept only if *principal* may read it (:meth:`_visible_synthesis_docs`).
         """
+        principal = require_kb_principal(principal)
         from knowledge.backends import get_async_default_client
 
         # Collect all synthesis collection names: default + schema-defined targets.
@@ -902,43 +757,13 @@ class RAGService:
         for col_name in collection_names:
             try:
                 collection = await client.get_or_create_collection(name=col_name)
-                results = await collection.query(query_texts=[query], n_results=2)
-                if results and results.get("ids") and results["ids"][0]:
-                    docs = results.get("documents", [[]])[0]
-                    all_docs.extend(d for d in docs if d)
+                all_docs.extend(await self._visible_synthesis_docs(collection, query, principal))
             except Exception as exc:
                 logger.debug("KB synthesis fetch from '%s' failed (non-fatal): %s", col_name, exc)
 
         if not all_docs:
             return ""
         return "KB synthesis summaries:\n" + "\n".join(f"- {d}" for d in all_docs)
-
-    async def _get_analyzer_lessons_context(self, query: str) -> str:
-        """Query the ``autobot_lessons`` ChromaDB collection for supplemental context.
-
-        Issue #4678: Injects AnalyzerService-distilled lessons as low-weight
-        supplemental context after primary synthesis summaries.  Requires
-        ``RAGConfig.enable_analyzer_lessons`` to be True (checked by caller).
-
-        Returns an empty string on any error so the main context path is never
-        interrupted.
-        """
-        try:
-            from knowledge.backends import get_async_default_client
-
-            client = await get_async_default_client()
-            collection = await client.get_or_create_collection(name="autobot_lessons")
-            results = await collection.query(query_texts=[query], n_results=2)
-            if not (results and results.get("ids") and results["ids"][0]):
-                return ""
-            docs = results.get("documents", [[]])[0]
-            relevant = [d for d in docs if d]
-            if not relevant:
-                return ""
-            return "Analyzer lessons:\n" + "\n".join(f"- {d}" for d in relevant)
-        except Exception as exc:
-            logger.debug("Analyzer lessons fetch failed (non-fatal): %s", exc)
-            return ""
 
     async def rerank_results(
         self,
@@ -962,10 +787,10 @@ class RAGService:
             return results
 
         try:
-            # Convert results to SearchResult objects
+            # Convert results to RankedResult objects
             search_results = []
             for i, result in enumerate(results):
-                sr = SearchResult(
+                sr = RankedResult(
                     content=result.get("content", result.get("text", "")),
                     metadata=result.get("metadata", {}),
                     semantic_score=result.get("score", 0.0),
@@ -994,81 +819,15 @@ class RAGService:
             logger.error("Reranking failed: %s", e)
             return results
 
-    async def _filter_stale_chunks(
-        self,
-        results: List[SearchResult],
-    ) -> List[SearchResult]:
-        """Filter out chunks whose source_path is absent from the DocIndexer hash cache.
-
-        Issue #4689: chunks for files removed/moved since the last index run must
-        not reach the LLM context.  If the hash cache is unavailable (file missing,
-        parse error) the method returns the original list unchanged so RAG is never
-        disrupted by a cache I/O failure.
-
-        The check is path-presence only (not hash equality); we trust that the
-        DocIndexer re-indexes changed files on the next cycle.
-
-        Returns:
-            Filtered list (stale chunks dropped) or original list on cache failure.
-        """
-        import json as _json
-        from pathlib import Path as _Path
-
-        try:
-            from services.knowledge.doc_indexer import HASH_CACHE_FILE
-
-            cache_path: _Path = HASH_CACHE_FILE
-        except Exception as exc:
-            logger.debug("Could not import HASH_CACHE_FILE (skipping provenance check): %s", exc)
-            return results
-
-        def _load() -> dict:
-            if not cache_path.exists():
-                return {}
-            try:
-                with open(cache_path, "r", encoding="utf-8") as fh:
-                    return _json.load(fh)
-            except Exception:
-                return {}
-
-        try:
-            global _hash_cache_memo, _hash_cache_loaded_at
-            now = time.monotonic()
-            if now - _hash_cache_loaded_at > _HASH_CACHE_TTL:
-                _hash_cache_memo = await asyncio.to_thread(_load)
-                _hash_cache_loaded_at = now
-            hash_cache: dict = _hash_cache_memo
-        except Exception as exc:
-            logger.debug("Hash cache load failed (skipping provenance check): %s", exc)
-            return results
-
-        if not hash_cache:
-            # Empty cache means indexer hasn't run yet; skip filtering to avoid
-            # dropping all results on a fresh deployment.
-            return results
-
-        valid: List[SearchResult] = []
-        stale_paths: List[str] = []
-        for chunk in results:
-            if chunk.source_path in hash_cache:
-                valid.append(chunk)
-            else:
-                stale_paths.append(chunk.source_path)
-
-        if stale_paths:
-            logger.warning(
-                "Provenance check: dropped %d stale chunk(s) — source paths absent from " "hash cache: %s",
-                len(stale_paths),
-                stale_paths[:10],  # cap log line length
-            )
-
-        return valid
+    async def _filter_stale_chunks(self, results: List[RankedResult]) -> List[RankedResult]:
+        """*results* through the shared stale filter, ``knowledge.stale_filter.drop_stale`` (#4689, #19280)."""
+        return await drop_stale(results)
 
     def _filter_by_categories(
         self,
-        results: List[SearchResult],
+        results: List[RankedResult],
         categories: List[str],
-    ) -> List[SearchResult]:
+    ) -> List[RankedResult]:
         """
         Filter search results by category.
 
@@ -1132,16 +891,20 @@ class RAGService:
         query: str,
         max_results: int,
         categories: List[str] | None = None,
-    ) -> Tuple[List[SearchResult], RAGMetrics]:
+        *,
+        principal: KbPrincipal,
+    ) -> Tuple[List[RankedResult], RAGMetrics]:
         """
         Fallback to basic search when advanced RAG fails.
 
         Issue #556: Added categories parameter for filtering.
+        Issue #16664: keeps only what *principal* may read.
 
         Args:
             query: Search query
             max_results: Maximum results to return
             categories: Optional list of categories to filter
+            principal: Who is asking, or SYSTEM_SCOPE
 
         Returns:
             Tuple of (basic_results, empty_metrics)
@@ -1152,16 +915,16 @@ class RAGService:
         try:
             start_time = time.time()
 
-            # Fetch more if filtering by category
-            fetch_limit = max_results * 2 if categories else max_results
+            # Fetch more: the visibility filter (and a category filter) can only remove results
+            fetch_limit = max_results * VISIBILITY_OVERFETCH * (2 if categories else 1)
 
             # Use knowledge base adapter for consistent interface
             basic_results = await self.kb_adapter.search(query=query, top_k=fetch_limit)
 
-            # Convert to SearchResult objects
+            # Convert to RankedResult objects
             search_results = []
             for i, result in enumerate(basic_results):
-                sr = SearchResult(
+                sr = RankedResult(
                     content=result.get("content", result.get("text", "")),
                     metadata=result.get("metadata", {}),
                     semantic_score=result.get("score", 0.0),
@@ -1172,10 +935,11 @@ class RAGService:
                 )
                 search_results.append(sr)
 
-            # Apply category filter if specified
+            # #16664: visibility first, so the category cut and top-k are taken over readable results
+            search_results = await filter_ranked(search_results, principal, self._ownership_manager())
             if categories:
                 search_results = self._filter_by_categories(search_results, categories)
-                search_results = search_results[:max_results]
+            search_results = search_results[:max_results]
 
             # Issue #4721: filter stale chunks on the fallback path too.
             search_results = await self._filter_stale_chunks(search_results)
@@ -1189,7 +953,7 @@ class RAGService:
             logger.error("Basic search fallback failed: %s", e)
             return [], metrics
 
-    async def _get_from_cache(self, cache_key: str) -> Tuple[List[SearchResult], RAGMetrics] | None:
+    async def _get_from_cache(self, cache_key: str) -> Tuple[List[RankedResult], RAGMetrics] | None:
         """Get results from cache if not expired."""
         # CRITICAL: Protect cache access with lock to prevent race conditions
         async with self._cache_lock:
@@ -1202,7 +966,7 @@ class RAGService:
                     del self._cache[cache_key]
         return None
 
-    async def _add_to_cache(self, cache_key: str, results: Tuple[List[SearchResult], RAGMetrics]) -> None:
+    async def _add_to_cache(self, cache_key: str, results: Tuple[List[RankedResult], RAGMetrics]) -> None:
         """Add results to cache with timestamp.
 
         Args:

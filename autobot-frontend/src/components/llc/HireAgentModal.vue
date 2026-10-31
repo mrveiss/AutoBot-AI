@@ -42,14 +42,22 @@
         <AdapterTypeSelect v-model="adapterType" />
       </label>
 
+      <div class="flex items-center justify-between gap-3">
+        <div>
+          <span class="field-label">{{ t('hireAgent.runOnHeartbeat') }}</span>
+          <p class="text-xs text-autobot-text-muted">{{ t('hireAgent.runOnHeartbeatHint') }}</p>
+        </div>
+        <BaseSwitch v-model="heartbeatEnabled" :label="t('hireAgent.runOnHeartbeat')" data-testid="hire-heartbeat" />
+      </div>
+
       <p v-if="error" class="form-error">{{ error }}</p>
     </form>
 
     <template #actions>
-      <button type="button" class="btn btn-ghost" @click="emit('close')">{{ t('common.cancel') }}</button>
-      <button type="submit" class="btn btn-primary" :disabled="submitting || !agentName" @click="submit">
+      <BaseButton variant="ghost" type="button" @click="emit('close')">{{ t('common.cancel') }}</BaseButton>
+      <BaseButton type="submit" :disabled="submitting || !agentName" @click="submit">
         {{ submitting ? t('hireAgent.hiring') : t('hireAgent.hire') }}
-      </button>
+      </BaseButton>
     </template>
   </BaseModal>
 </template>
@@ -58,7 +66,7 @@
 import { ref } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseSwitch, BaseButton } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import AdapterTypeSelect from './AdapterTypeSelect.vue'
 const { t } = useI18n()
@@ -73,6 +81,9 @@ const agentName = ref('')
 const model = ref('claude-sonnet-4-6')
 const orgRole = ref('worker')
 const adapterType = ref('')
+// #15907: off by default -- the 2026-09-28 ruling keeps a hire off the heartbeat
+// unless the owner opts in (`AgentHireRequest.heartbeat_enabled` defaults False).
+const heartbeatEnabled = ref(false)
 const submitting = ref(false)
 const error = ref('')
 
@@ -86,13 +97,14 @@ async function submit(): Promise<void> {
       org_role: orgRole.value,
       model: model.value,
       adapter_type: adapterType.value,
+      heartbeat_enabled: heartbeatEnabled.value,
     })
     emit('hired')
     emit('close')
   } catch (err: unknown) {
     // ApiClient throws an Error whose message already carries the API detail
     // (e.g. the 422 "Unknown adapter_type …").
-    error.value = (err instanceof Error && err.message) || 'Failed to hire agent.'
+    error.value = (err instanceof Error && err.message) || t('hireAgent.failed')
     logger.error('Hire agent failed', err)
   } finally {
     submitting.value = false
@@ -118,44 +130,20 @@ async function submit(): Promise<void> {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: var(--text-secondary, #6b7280);
+  color: var(--text-secondary);
 }
 
 .field-input {
   padding: 0.4rem 0.5rem;
   border-radius: 6px;
-  border: 1px solid var(--border-default, #d1d5db);
-  background: var(--bg-surface, #fff);
-  color: var(--text-primary, #111827);
+  border: 1px solid var(--border-default);
+  background: var(--bg-surface);
+  color: var(--text-primary);
 }
 
 .form-error {
   margin: 0;
   font-size: 0.8rem;
-  color: var(--color-error, #dc2626);
-}
-
-.btn {
-  padding: 0.45rem 0.9rem;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  cursor: pointer;
-  border: 1px solid transparent;
-}
-
-.btn-ghost {
-  background: transparent;
-  border-color: var(--border-default, #d1d5db);
-  color: var(--text-secondary, #6b7280);
-}
-
-.btn-primary {
-  background: var(--color-accent, #c4651a);
-  color: #fff;
-}
-
-.btn-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+  color: var(--color-error);
 }
 </style>

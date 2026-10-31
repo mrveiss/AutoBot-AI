@@ -24,6 +24,7 @@ from typing import Dict, List
 import aiohttp
 
 from autobot_shared.http_client import get_http_client
+from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config
 from constants.ttl_constants import TTL_5_MINUTES
@@ -63,7 +64,9 @@ class SkillRanker:
         """
         try:
             url = f"{self.slm_host}/api/skills/active"
-            async with get_http_client().tracked_request("GET", url, timeout=aiohttp.ClientTimeout(total=5)) as resp:
+            async with get_http_client().tracked_request(
+                "GET", url, timeout=aiohttp.ClientTimeout(total=5), guard_egress=EGRESS_POLICY
+            ) as resp:
                 if resp.status == 200:
                     data = await resp.json()
                     skills = data.get("skills", []) if isinstance(data, dict) else data
@@ -122,7 +125,7 @@ class SkillRanker:
             url = f"{self.slm_host}/api/embeddings"
             payload = {"input": text}
             async with get_http_client().tracked_request(
-                "POST", url, json=payload, timeout=aiohttp.ClientTimeout(total=10)
+                "POST", url, json=payload, timeout=aiohttp.ClientTimeout(total=10), guard_egress=EGRESS_POLICY
             ) as resp:
                 if resp.status == 200:
                     data = await resp.json()

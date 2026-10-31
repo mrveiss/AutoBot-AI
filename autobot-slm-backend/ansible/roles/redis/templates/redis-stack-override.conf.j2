@@ -11,7 +11,16 @@ LimitNOFILE=65535
 LimitNPROC=4096
 
 # Memory
-MemoryLimit={{ redis_memory_limit | upper }}
+# #19124: systemd takes K/M/G/T, never redis's own "6gb" -- the old
+# deprecated cgroup-v1 key, upper-cased to "6GB", was rejected and ignored by
+# systemd, so no cap ever applied. Derived from maxmemory by redis's
+# unit rules, with headroom so redis evicts before the kernel throttles or kills.
+{% set _mem = redis_memory_limit | string | lower | trim %}
+{% set _num = _mem.rstrip('kmgb') %}
+{% set _unit = _mem[_num | length:] if (_num.isdigit() and _num | int > 0) else 'unparseable redis_memory_limit: ' ~ _mem %}
+{% set _bytes = (_num | int) * redis_memory_unit_bytes[_unit] %}
+MemoryHigh={{ (_bytes * redis_systemd_memory_high_factor / 1048576) | round(0, 'ceil') | int }}M
+MemoryMax={{ (_bytes * redis_systemd_memory_max_factor / 1048576) | round(0, 'ceil') | int }}M
 
 # Restart policy
 Restart=always

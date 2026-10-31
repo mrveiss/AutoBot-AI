@@ -227,7 +227,6 @@ knowledge:
 
     # Reranking configuration
     enable_reranking: true       # Enable cross-encoder reranking
-    reranking_model: "cross-encoder/ms-marco-MiniLM-L-6-v2"  # Model for reranking
 
     # Performance and caching
     cache_ttl_seconds: 300       # Cache time-to-live (5 minutes)
@@ -496,7 +495,8 @@ knowledge_base:
   # Semantic chunking settings
   semantic_chunking:
     enabled: true
-    model: "nomic-embed-text:latest"
+    # No model key (#19430): the chunker's sentence model is code-pinned in
+    # autobot-backend/utils/semantic_chunker_base.py; nothing read the old key.
     percentile_threshold: 95.0
 
   # Query settings
@@ -510,61 +510,6 @@ knowledge_base:
     ttl: 300  # 5 minutes cache TTL
     max_size: 1000  # Maximum number of cached queries
     prefix: "kb_cache:"  # Redis key prefix for cache entries
-
-# Search Configuration
-search:
-  # Hybrid search settings
-  hybrid:
-    enabled: true
-    semantic_weight: 0.7  # Weight for semantic similarity scores
-    keyword_weight: 0.3   # Weight for keyword matching scores
-    min_keyword_score: 0.1  # Minimum keyword score threshold
-    keyword_boost_factor: 1.5  # Boost factor for multiple keyword matches
-    semantic_top_k: 15    # Number of semantic results to retrieve for hybrid processing
-    final_top_k: 10       # Maximum number of final results to return
-
-    # Keyword extraction settings
-    min_keyword_length: 3
-    stop_words:
-      - "the"
-      - "a"
-      - "an"
-      - "and"
-      - "or"
-      - "but"
-      - "in"
-      - "on"
-      - "at"
-      - "to"
-      - "for"
-      - "of"
-      - "with"
-      - "by"
-      - "from"
-      - "up"
-      - "about"
-      - "into"
-      - "through"
-      - "during"
-      - "is"
-      - "are"
-      - "was"
-      - "were"
-      - "be"
-      - "been"
-      - "being"
-      - "have"
-      - "has"
-      - "had"
-      - "do"
-      - "does"
-      - "did"
-      - "will"
-      - "would"
-      - "could"
-      - "should"
-      - "may"
-      - "might"
 
 # Monitoring Configuration
 monitoring:
@@ -590,14 +535,8 @@ monitoring:
     real_time_updates: true # Enable WebSocket real-time updates
 
 # LLM Optimization Configuration
+# No model name lives here: the tier map in autobot_shared/ssot_config.py is the only model authority (#15502).
 llm:
-  # Specific model assignments for different tasks
-  models:
-    rag: "gemma3:270m"              # Lightweight model for RAG operations (291MB)
-    chat: "llama3.2:1b-instruct-q4_K_M"  # Balanced model for chat (807MB)
-    classification: "gemma3:270m"    # Fast model for message classification
-    fallback: "qwen3.5:9b"  # Quality model for complex tasks (#2585)
-
   # Model optimization settings
   optimization:
     performance_threshold: 0.8  # Minimum performance threshold for model selection
@@ -610,9 +549,6 @@ llm:
   tiered_routing:
     enabled: true                    # Enable/disable tiered model routing
     complexity_threshold: 3.0        # Score threshold (0-10): < threshold uses simple tier
-    models:
-      simple: "gemma2:2b"            # Model for simple requests (score < 3)
-      complex: "qwen3.5:9b" # Model for complex requests (score >= 3)
     fallback_to_complex: true        # Fallback to complex tier if simple fails
     logging:
       log_scores: true               # Log complexity scores for debugging
@@ -622,10 +558,6 @@ llm:
   fallback:
     strategy: "performance"    # "performance", "size", "speed"
     max_retries: 3            # Maximum retries before falling back
-    fallback_models:          # Ordered list of fallback models
-      - "qwen3.5:9b"
-      - "gemma2:2b"
-      - "llama3.2:1b"
 
   # Performance targets
   targets:
@@ -633,16 +565,8 @@ llm:
     min_tokens_per_second: 5  # Minimum tokens/second for acceptable performance
     min_success_rate: 0.85    # Minimum success rate threshold
 
-  # Existing LLM Configuration (continued)
-  fallback_models:
-    - "qwen3.5:9b"
-    - "gemma2:2b"
-    - "llama3.2:1b"
-  emergency_fallback_model: "llama3.2:1b"
-
-  # Embedding settings
+  # Embedding settings (the model name comes from the tier map)
   embedding:
-    model: "nomic-embed-text:latest"
     dimensions: 768
     test_timeout: 10
 
@@ -736,7 +660,6 @@ agents:
   # Knowledge Base Librarian Agent
   kb_librarian:
     enabled: true
-    model: "llama3.2:1b-instruct-q4_K_M"
     provider: "ollama"
     timeout_seconds: 15.0
     max_results: 5
@@ -747,7 +670,6 @@ agents:
   # Research Agent (Web Research)
   research:
     enabled: true
-    model: "llama3.2:1b-instruct-q4_K_M"
     provider: "ollama"
     timeout_seconds: 30.0
     max_results: 5
@@ -763,7 +685,6 @@ agents:
   # Classification Agent
   classification:
     enabled: true
-    model: "gemma2:2b"
     provider: "ollama"
     timeout_seconds: 10.0
     priority: 1
@@ -771,7 +692,6 @@ agents:
   # Chat Agent
   chat:
     enabled: true
-    model: "llama3.2:1b-instruct-q4_K_M"
     provider: "ollama"
     timeout_seconds: 20.0
     priority: 1
@@ -779,7 +699,6 @@ agents:
   # System Commands Agent
   system_commands:
     enabled: true
-    model: "llama3.2:1b-instruct-q4_K_M"
     provider: "ollama"
     timeout_seconds: 15.0
     priority: 3
@@ -787,7 +706,6 @@ agents:
   # Security Scanner Agent
   security_scanner:
     enabled: true
-    model: "llama3.2:1b-instruct-q4_K_M"
     provider: "ollama"
     timeout_seconds: 30.0
     priority: 3
@@ -795,7 +713,6 @@ agents:
   # Code Analysis Agent
   code_analysis:
     enabled: true
-    model: "llama3.2:1b-instruct-q4_K_M"
     provider: "ollama"
     timeout_seconds: 25.0
     priority: 2
@@ -804,7 +721,6 @@ agents:
 agent_global:
   default_timeout: 20.0
   default_provider: "ollama"
-  default_model: "llama3.2:1b-instruct-q4_K_M"
   max_concurrent_agents: 3
   agent_pool_size: 5
   health_check_interval: 300

@@ -16,26 +16,21 @@
  * site.
  */
 
-/** Parse an env var as a positive integer, falling back when unset/invalid. */
-function timeoutFromEnv(name: string, fallbackMs: number): number {
-  const raw = import.meta.env[name]
-  const parsed = raw != null && raw !== '' ? parseInt(String(raw), 10) : NaN
-  return Number.isNaN(parsed) || parsed <= 0 ? fallbackMs : parsed
-}
+import { getEnvPositiveInt } from '@/config/ssot-config'
 
 /**
  * `POST /nodes/{id}/exec` and the node connection/health probes run SSH or an
  * ansible ad-hoc command against a fleet node and block until it finishes.
  * Five minutes matches the ansible-runner ceiling these endpoints sit behind.
  */
-export const REMOTE_EXEC_TIMEOUT_MS = timeoutFromEnv('VITE_SLM_REMOTE_EXEC_TIMEOUT_MS', 300_000)
+export const REMOTE_EXEC_TIMEOUT_MS = getEnvPositiveInt('VITE_SLM_REMOTE_EXEC_TIMEOUT_MS', 300_000)
 
 /**
  * `POST /infrastructure/execute` kicks off a playbook run. The call returns as
  * soon as the execution is registered (status is then polled), but registration
  * itself involves inventory resolution on a cold cache.
  */
-export const PLAYBOOK_EXECUTE_TIMEOUT_MS = timeoutFromEnv(
+export const PLAYBOOK_EXECUTE_TIMEOUT_MS = getEnvPositiveInt(
   'VITE_SLM_PLAYBOOK_EXEC_TIMEOUT_MS',
   120_000
 )
@@ -45,7 +40,7 @@ export const PLAYBOOK_EXECUTE_TIMEOUT_MS = timeoutFromEnv(
  * gates an exponential backoff, so it must fail FAST rather than hold the
  * reconnect timer open for the full default budget.
  */
-export const HEALTH_PROBE_TIMEOUT_MS = timeoutFromEnv('VITE_SLM_HEALTH_PROBE_TIMEOUT_MS', 3_000)
+export const HEALTH_PROBE_TIMEOUT_MS = getEnvPositiveInt('VITE_SLM_HEALTH_PROBE_TIMEOUT_MS', 3_000)
 
 /**
  * Reads issued from a polling loop must not retry: `slmApiClient.get()` retries
@@ -55,6 +50,13 @@ export const HEALTH_PROBE_TIMEOUT_MS = timeoutFromEnv('VITE_SLM_HEALTH_PROBE_TIM
  * the next tick is the retry.
  */
 export const POLLED_READ_MAX_RETRIES = 1
+
+/**
+ * Consecutive failed ticks after which an SLM dashboard poller stops and shows the
+ * paused alert with Retry, instead of polling a down backend forever (#19482,
+ * owner decision 2026-10-25). Pass to `usePollingJob`'s `consecutiveErrorLimit`.
+ */
+export const POLL_CONSECUTIVE_ERROR_LIMIT = getEnvPositiveInt('VITE_SLM_POLL_ERROR_LIMIT', 5)
 
 /**
  * `GET /skills/governance/approvals` when issued from `useSkillGovernance`'s
@@ -72,7 +74,7 @@ export const POLLED_READ_MAX_RETRIES = 1
  * `POST /skills/repos/{id}/sync` awaits a git clone inline. Only the poll has a
  * reason for a shorter budget, so only the poll gets one.
  */
-export const SKILL_APPROVAL_POLL_TIMEOUT_MS = timeoutFromEnv(
+export const SKILL_APPROVAL_POLL_TIMEOUT_MS = getEnvPositiveInt(
   'VITE_SKILL_APPROVAL_POLL_TIMEOUT_MS',
   10_000
 )

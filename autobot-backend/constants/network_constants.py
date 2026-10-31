@@ -14,7 +14,7 @@ with zero import changes.
 
 The file is loaded directly via importlib to avoid a circular import:
   constants.network_constants → autobot_shared.__init__
-  → redis_client → utils.redis_management.config
+  → redis_client → autobot_shared.redis_management.config
   → constants.network_constants  (incomplete)
 """
 

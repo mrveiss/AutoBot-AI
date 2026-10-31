@@ -18,52 +18,25 @@
  *      swallowed into a generic error and never dropped when a sibling row
  *      succeeds.
  *
- * Follows CacheSettings.test.ts's transport-mocking convention: `axios` is
- * mocked at the module level with one shared instance, since `useAutobotApi`
- * calls `axios.create()` fresh on every `useAutobotApi()` invocation but this
- * mock always hands back the same recorded instance.
+ * Follows CacheSettings.test.ts's transport-mocking convention: the shared
+ * `mockAutobotBackendClient` double replaces `SlmApiClient`, so every
+ * `useAutobotApi()` invocation hands back the same recorded methods, which resolve
+ * the parsed body and reject with the kit `HttpError`.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
-import axios from 'axios'
 import DataHygieneView from './DataHygieneView.vue'
+import { HttpError } from '@autobot/ui'
+import { backendClient } from '@/testing/mockAutobotBackendClient'
 import en from '@/locales/en.json'
 
-// Not a real credential -- a fixture value for the mocked auth store's
-// bearer field, built from parts so it does not read like a literal secret.
-const FIXTURE_BEARER = ['test', 'bearer', 'fixture'].join('-')
-
-vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({ token: FIXTURE_BEARER }),
-}))
-
-vi.mock('axios', () => {
-  const instance = {
-    get: vi.fn(),
-    post: vi.fn(),
-    put: vi.fn(),
-    patch: vi.fn(),
-    delete: vi.fn(),
-    interceptors: {
-      request: { use: () => undefined },
-      response: { use: () => undefined },
-    },
-  }
-  return { default: { create: () => instance } }
-})
+vi.mock('@/utils/ApiClient', async (importOriginal) =>
+  (await import('@/testing/mockAutobotBackendClient')).withMockedBackendClient(importOriginal),
+)
 
 const i18n = createI18n({ legacy: true, locale: 'en', fallbackLocale: 'en', messages: { en } })
-
-type MockedClient = {
-  get: ReturnType<typeof vi.fn>
-  post: ReturnType<typeof vi.fn>
-}
-
-function client(): MockedClient {
-  return (axios.create as unknown as () => MockedClient)()
-}
 
 const STORAGE_CANDIDATES = [
   {
@@ -106,15 +79,16 @@ const EMPTY_AUDIT_RESPONSE = { success: true, total_returned: 0, has_more: false
 
 /** Routes every GET this view issues to its mocked response, by URL prefix. */
 function defaultGetImplementation(url: string) {
-  if (url.startsWith('/admin/orphan-storage')) return Promise.resolve({ data: STORAGE_RESPONSE })
-  if (url.startsWith('/admin/orphans')) return Promise.resolve({ data: ORPHANS_RESPONSE })
-  if (url === '/users') return Promise.resolve({ data: USERS_RESPONSE })
-  if (url.startsWith('/audit/logs')) return Promise.resolve({ data: EMPTY_AUDIT_RESPONSE })
+  if (url.startsWith('/admin/orphan-storage')) return Promise.resolve(STORAGE_RESPONSE)
+  if (url.startsWith('/admin/orphans')) return Promise.resolve(ORPHANS_RESPONSE)
+  if (url === '/user-management/users') return Promise.resolve(USERS_RESPONSE)
+  if (url.startsWith('/audit/logs')) return Promise.resolve(EMPTY_AUDIT_RESPONSE)
   return Promise.reject(new Error(`unexpected GET ${url}`))
 }
 
 function mountView(): VueWrapper {
-  return mount(DataHygieneView, { global: { plugins: [i18n] } })
+  // BaseModal teleports to body; stub the teleport so the dialog renders inline (#14777)
+  return mount(DataHygieneView, { global: { plugins: [i18n], stubs: { teleport: true } } })
 }
 
 /** Settle the four concurrent on-mount fetches (storage, users, orphans, audit x3). */
@@ -128,11 +102,10 @@ async function mountAndSettle(): Promise<VueWrapper> {
 
 describe('DataHygieneView (#17040)', () => {
   beforeEach(() => {
-    const c = client()
-    c.get.mockReset()
-    c.post.mockReset()
-    c.get.mockImplementation(defaultGetImplementation)
-    c.post.mockResolvedValue({ data: { id: 'unused' } })
+    backendClient.get.mockReset()
+    backendClient.post.mockReset()
+    backendClient.get.mockImplementation(defaultGetImplementation)
+    backendClient.post.mockResolvedValue({ id: 'unused' })
   })
 
   it('renders the storage and resources tables with their totals from the mocked APIs', async () => {
@@ -158,11 +131,11 @@ describe('DataHygieneView (#17040)', () => {
     await wrapper.find('[data-testid="storage-preview-button"]').trigger('click')
     expect(wrapper.find('[data-testid="storage-preview-modal"]').exists()).toBe(true)
 
-    client().post.mockClear()
+    backendClient.post.mockClear()
     await wrapper.find('[data-testid="storage-preview-cancel"]').trigger('click')
 
     expect(wrapper.find('[data-testid="storage-preview-modal"]').exists()).toBe(false)
-    expect(client().post).not.toHaveBeenCalled()
+    expect(backendClient.post).not.toHaveBeenCalled()
     // Nothing was proposed -- no per-row result rendered either.
     expect(wrapper.find('[data-testid="proposal-result-success"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="proposal-result-failure"]').exists()).toBe(false)
@@ -176,18 +149,18 @@ describe('DataHygieneView (#17040)', () => {
     await checkboxes[1]!.setValue(true)
     await wrapper.find('[data-testid="storage-preview-button"]').trigger('click')
 
-    client().post.mockImplementation((_url: string, body: { context: { candidate_id: string } }) => {
+    backendClient.post.mockImplementation((_url: string, body: { context: { candidate_id: string } }) => {
       if (body.context.candidate_id === 'obj-1') {
-        return Promise.resolve({ data: { id: 'appr-1' } })
+        return Promise.resolve({ id: 'appr-1' })
       }
-      return Promise.reject({ response: { data: { detail: 'candidate is no longer orphaned' } } })
+      return Promise.reject(new HttpError(409, 'Conflict', { detail: 'candidate is no longer orphaned' }))
     })
 
     await wrapper.find('[data-testid="storage-preview-confirm"]').trigger('click')
     await flushPromises()
     await flushPromises()
 
-    expect(client().post).toHaveBeenCalledTimes(2)
+    expect(backendClient.post).toHaveBeenCalledTimes(2)
     const successRows = wrapper.findAll('[data-testid="proposal-result-success"]')
     const failureRows = wrapper.findAll('[data-testid="proposal-result-failure"]')
     expect(successRows).toHaveLength(1)
@@ -207,7 +180,7 @@ describe('DataHygieneView (#17040)', () => {
 
     await rows[0]!.find('[data-testid="resource-owner-select"]').setValue('user-1')
 
-    client().post.mockRejectedValue({ response: { data: { detail: 'resource is not actually orphaned' } } })
+    backendClient.post.mockRejectedValue(new HttpError(409, 'Conflict', { detail: 'resource is not actually orphaned' }))
 
     await rows[0]!.find('[data-testid="resource-repair-button"]').trigger('click')
     await flushPromises()
@@ -235,7 +208,7 @@ describe('DataHygieneView (#17040)', () => {
     const rows = wrapper.findAll('[data-testid="resource-row"]')
     await rows[0]!.find('[data-testid="resource-owner-select"]').setValue('user-1')
 
-    client().post.mockResolvedValue({ data: { resource_type: 'knowledge_fact', resource_id: 'fact-1', new_owner_id: 'user-1' } })
+    backendClient.post.mockResolvedValue({ resource_type: 'knowledge_fact', resource_id: 'fact-1', new_owner_id: 'user-1' })
 
     await rows[0]!.find('[data-testid="resource-repair-button"]').trigger('click')
     // repairResource() awaits the POST, then awaits its own internal fetchOrphans() refetch

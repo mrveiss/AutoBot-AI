@@ -22,9 +22,9 @@ import pytest
 
 from code_intelligence.precommit_analyzer import (
     CheckCategory,
-    CheckDefinition,
     CheckSeverity,
     PrecommitAnalyzer,
+    PrecommitCheckDefinition,
     get_check_categories,
     get_precommit_checks,
 )
@@ -392,7 +392,7 @@ class TestCheckManagement:
 
     def test_add_custom_check(self):
         """Test adding a custom check."""
-        custom_check = CheckDefinition(
+        custom_check = PrecommitCheckDefinition(
             id="CUSTOM001",
             name="Custom Pattern",
             category=CheckCategory.QUALITY,
@@ -455,7 +455,7 @@ class TestAnalyzeFiles:
 
 
 class TestCommitCheckResult:
-    """Test CommitCheckResult functionality."""
+    """Test PrecommitCommitCheckResult functionality."""
 
     def test_blocking_result(self):
         """Test that BLOCK severity issues block commit."""

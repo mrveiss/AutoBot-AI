@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Literal
 
 from pydantic import AliasChoices, BaseModel, Field, field_validator
 
+from api.schemas_knowledge_share import ShareKnowledgeRequest  # noqa: F401 -- re-export (#18795)
 from autobot_memory_graph.core import (
     ENTITY_TYPES,
     RELATION_TYPE_ALIASES,
@@ -20,6 +21,7 @@ from autobot_memory_graph.core import (
     canonical_relation_type,
 )
 from autobot_shared.env_utils import env_float
+from constants.rag_graph_constants import RAG_GRAPH_PATH_DEPTH, RAG_GRAPH_TRAVERSAL_DEPTH, RAG_RELATION_DEPTH
 from constants.threshold_constants import CategoryDefaults, QueryDefaults
 from knowledge.ownership import AccessLevel, VisibilityLevel
 from type_defs.common import Metadata
@@ -642,7 +644,7 @@ class KnowledgeAutoApplySuggestionsResponse(BaseModel):
 
 
 class KnowledgeShareFactResponse(BaseModel):
-    """Response for POST /api/knowledge/facts/{fact_id}/share."""
+    """Response for the deprecated POST /api/knowledge_base/facts/{fact_id}/share (308 shim, #18795; removal #18793)."""
 
     success: bool
     fact_id: str
@@ -651,7 +653,7 @@ class KnowledgeShareFactResponse(BaseModel):
 
 
 class KnowledgeUnshareFactResponse(BaseModel):
-    """Response for DELETE /api/knowledge/facts/{fact_id}/share/{user_id_to_remove}."""
+    """Response for the deprecated DELETE .../facts/{fact_id}/share/{user_id_to_remove} (308 shim, #18795; #18793)."""
 
     success: bool
     fact_id: str
@@ -660,7 +662,7 @@ class KnowledgeUnshareFactResponse(BaseModel):
 
 
 class KnowledgeUpdateVisibilityResponse(BaseModel):
-    """Response for PUT /api/knowledge/facts/{fact_id}/visibility."""
+    """Response for PUT /api/knowledge_base/facts/{fact_id}/visibility."""
 
     success: bool
     fact_id: str
@@ -668,7 +670,7 @@ class KnowledgeUpdateVisibilityResponse(BaseModel):
 
 
 class KnowledgeMyFactsResponse(BaseModel):
-    """Response for GET /api/knowledge/facts/mine."""
+    """Response for GET /api/knowledge_base/facts/mine."""
 
     success: bool
     user_id: str
@@ -679,7 +681,7 @@ class KnowledgeMyFactsResponse(BaseModel):
 
 
 class KnowledgeSharedWithMeResponse(BaseModel):
-    """Response for GET /api/knowledge/facts/shared-with-me."""
+    """Response for GET /api/knowledge_base/facts/shared-with-me."""
 
     success: bool
     user_id: str
@@ -693,14 +695,14 @@ class KnowledgeSharedWithMeResponse(BaseModel):
 
 
 class KnowledgeGroundResponseResponse(BaseModel):
-    """Response for POST /api/ground-response."""
+    """Response for POST /api/knowledge_base/ground-response."""
 
     status: str
     data: Dict[str, Any]
 
 
 class KnowledgeVerifyClaimResponse(BaseModel):
-    """Response for POST /api/verify-claim."""
+    """Response for POST /api/knowledge_base/verify-claim."""
 
     status: str
     claim_text: str
@@ -712,7 +714,7 @@ class KnowledgeVerifyClaimResponse(BaseModel):
 
 
 class KnowledgeConflictsListResponse(BaseModel):
-    """Response for GET /api/kb-conflicts."""
+    """Response for GET /api/knowledge_base/kb-conflicts."""
 
     status: str
     conflicts: List[Any]
@@ -723,14 +725,14 @@ class KnowledgeConflictsListResponse(BaseModel):
 
 
 class KnowledgeResolveConflictResponse(BaseModel):
-    """Response for POST /api/kb-conflicts/{conflict_id}/resolve."""
+    """Response for POST /api/knowledge_base/kb-conflicts/{conflict_id}/resolve."""
 
     status: str
     data: Dict[str, Any]
 
 
 class KnowledgeGroundingStatsResponse(BaseModel):
-    """Response for GET /api/kb-stats.
+    """Response for GET /api/knowledge_base/kb-stats.
 
     Stats shape is dynamic — extra fields allowed.
     """
@@ -990,7 +992,6 @@ _ALNUM_ID_RE = re.compile(r"^[a-zA-Z0-9_-]+$")  # Mixed case: IDs, categories, c
 _LOWERCASE_TAG_RE = re.compile(r"^[a-z0-9_-]+$")  # Lowercase: tags
 
 # Issue #380: Module-level tuples for search mode and sort validation
-_VALID_SEARCH_MODES = ("semantic", "keyword", "hybrid", "auto")
 _VALID_SORT_OPTIONS = ("newest", "oldest", "longest")
 
 
@@ -1204,8 +1205,8 @@ class SearchRequest(BaseModel):
     @classmethod
     def validate_mode(cls, v):
         """Validate search mode."""
-        if v not in _VALID_SEARCH_MODES:  # Issue #380: use module constant
-            raise ValueError(f"Invalid mode: {v}. Must be one of {_VALID_SEARCH_MODES}")
+        if v not in CategoryDefaults.SEARCH_MODES:  # the one allow-list (#19335)
+            raise ValueError(f"Invalid mode: {v}. Must be one of {CategoryDefaults.SEARCH_MODES}")
         return v
 
     @field_validator("created_after", "created_before")
@@ -1439,28 +1440,6 @@ class ScanHostChangesRequest(BaseModel):
     force: bool = Field(default=False)
     scan_type: str = Field(default="manpages", max_length=50)
     auto_vectorize: bool = Field(default=False, description="Automatically vectorize detected changes")
-
-
-class AdvancedSearchRequest(BaseModel):
-    """Request model for advanced RAG search with reranking"""
-
-    query: str = Field(..., min_length=1, max_length=1000, description="Search query")
-    max_results: int = Field(
-        default=QueryDefaults.RAG_DEFAULT_RESULTS,
-        ge=1,
-        le=50,
-        description="Maximum results to return",
-    )
-    enable_reranking: bool = Field(default=True, description="Enable cross-encoder reranking")
-    return_context: bool = Field(default=False, description="Return optimized context for RAG")
-    timeout: float | None = Field(default=None, description="Optional timeout in seconds")
-
-
-class RerankRequest(BaseModel):
-    """Request model for reranking existing search results"""
-
-    query: str = Field(..., min_length=1, max_length=1000, description="Original search query")
-    results: List[Metadata] = Field(..., description="Search results to rerank")
 
 
 # ===== TAG MANAGEMENT MODELS (Issue #77) =====
@@ -2092,12 +2071,6 @@ class EmbeddingSettingsData(BaseModel):
 
 class EmbeddingUpdateData(BaseModel):
     """data payload for PUT /settings."""
-
-    model_config = {"extra": "allow"}
-
-
-class EmbeddingModelsData(BaseModel):
-    """data payload for GET /models."""
 
     model_config = {"extra": "allow"}
 
@@ -3041,7 +3014,7 @@ class UpdateFactRequest(BaseModel):
 
 
 class ShareFactRequest(BaseModel):
-    """Request model for sharing a fact with users (Issue #688)."""
+    """Deprecated (#688): the limits moved to ``ShareKnowledgeRequest`` (#18795); removal tracked in #18793."""
 
     user_ids: List[str] = Field(
         ...,
@@ -3063,7 +3036,7 @@ class ShareFactRequest(BaseModel):
 
 
 class UnshareFactRequest(BaseModel):
-    """Request model for removing users from fact sharing (Issue #688)."""
+    """Deprecated (#688): unshare is a path param on the collaboration route (#18795); removal in #18793."""
 
     user_ids: List[str] = Field(
         ...,
@@ -3946,7 +3919,7 @@ class KnowledgeExtractionRequest(BaseModel):
     extraction_mode: str = Field("comprehensive")
 
 
-class ResearchRequest(BaseModel):
+class ComprehensiveResearchRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=5000)
     research_depth: str = Field("comprehensive")
     sources: List[str] | None = None
@@ -4386,7 +4359,7 @@ class TraverseRequest(BaseModel):
     """Request model for graph traversal."""
 
     start_fact_id: str = Field(..., description="Starting fact ID for traversal")
-    max_depth: int = Field(2, ge=1, le=5, description="Maximum traversal depth")
+    max_depth: int = Field(RAG_GRAPH_TRAVERSAL_DEPTH, ge=1, le=5, description="Maximum traversal depth")
     relation_types: List[str] | None = Field(None, description="Optional list of relation types to follow")
     include_fact_details: bool = Field(False, description="Include full fact content in results")
 
@@ -4397,7 +4370,7 @@ class HybridSearchRequest(BaseModel):
     query: str = Field(..., description="Search query text")
     top_k: int = Field(10, ge=1, le=100, description="Number of vector matches")
     expand_relations: bool = Field(True, description="Expand results with graph relations")
-    relation_depth: int = Field(1, ge=1, le=3, description="Relation traversal depth")
+    relation_depth: int = Field(RAG_RELATION_DEPTH, ge=1, le=3, description="Relation traversal depth")
     relation_types: List[str] | None = Field(None, description="Filter by relation types")
 
 
@@ -4464,13 +4437,6 @@ class KnowledgeScopeFilter(BaseModel):
     scope: VisibilityLevel | None = Field(default=None, description="Visibility level to filter by")
     organization_id: str | None = Field(default=None, description="Organization ID filter")
     group_ids: List[str] | None = Field(default=None, description="Group IDs to filter by")
-
-
-class ShareKnowledgeRequest(BaseModel):
-    """Request to share knowledge with users or groups."""
-
-    user_ids: List[str] | None = Field(default=None, description="User IDs to share with")
-    group_ids: List[str] | None = Field(default=None, description="Group IDs to share with")
 
 
 class UpdatePermissionsRequest(BaseModel):
@@ -4548,7 +4514,7 @@ class GraphRequest(BaseModel):
     """Request model for multi-source knowledge graph."""
 
     max_facts: int = Field(50, ge=1, le=200, description="Maximum facts to include")
-    max_depth: int = Field(2, ge=1, le=3, description="Maximum relation depth")
+    max_depth: int = Field(RAG_GRAPH_TRAVERSAL_DEPTH, ge=1, le=3, description="Maximum relation depth")
     include_categories: bool = Field(True, description="Include category nodes")
     include_relations: bool = Field(True, description="Include fact relations")
     category_filter: str | None = Field(None, description="Filter by category path")
@@ -4602,10 +4568,8 @@ class GraphRAGSearchRequest(BaseModel):
     """Request model for graph-aware RAG search."""
 
     query: str = Field(..., min_length=1, max_length=1000, description="Search query string")
-    start_entity: str | None = Field(
-        None, max_length=200, description="Optional starting entity name for graph traversal"
-    )
-    max_depth: int = Field(2, ge=1, le=3, description="Maximum graph traversal depth (1-3 hops)")
+    start_entity: str | None = Field(None, max_length=200, description="Optional start entity name for graph traversal")
+    max_depth: int | None = Field(None, ge=1, le=3, description="Hops (1-3); None = RAGConfig.graph_traversal_depth")
     max_results: int = Field(5, ge=1, le=20, description="Maximum number of results to return")
     enable_reranking: bool = Field(True, description="Whether to apply cross-encoder reranking")
     timeout: float | None = Field(None, ge=1.0, le=30.0, description="Optional timeout in seconds (1-30s)")
@@ -4641,7 +4605,7 @@ class GraphRAGPathRequest(BaseModel):
     relation: str | None = Field(
         None, max_length=100, description="Restrict traversal to this relation type; omit for all types"
     )
-    max_depth: int = Field(6, ge=1, le=10, description="Maximum path length to search (1-10 hops)")
+    max_depth: int = Field(RAG_GRAPH_PATH_DEPTH, ge=1, le=10, description="Maximum path length to search (1-10 hops)")
     direction: Literal["outgoing", "incoming", "both"] = Field(
         "both", description="Edge direction to follow; 'both' treats relations as undirected"
     )
@@ -4715,7 +4679,7 @@ class MemoryRelatedRequest(BaseModel):
     """Arguments for the ``memory.related`` tool. #13762."""
 
     entity: str = Field(..., min_length=1, max_length=200, description="Entity name")
-    depth: int = Field(2, ge=1, le=5, description="Maximum traversal depth (1-5 hops)")
+    depth: int = Field(RAG_GRAPH_TRAVERSAL_DEPTH, ge=1, le=5, description="Maximum traversal depth (1-5 hops)")
 
     @field_validator("entity")
     @classmethod
@@ -5007,8 +4971,8 @@ class ScopedSearchRequest(BaseModel):
     query: str = Field(..., min_length=1, description="Search query")
     top_k: int = Field(default=10, ge=1, le=100, description="Maximum results")
     mode: str = Field(
-        default="hybrid",
-        pattern=r"^(semantic|keyword|hybrid|auto)\z",
+        default=CategoryDefaults.SEARCH_MODE_HYBRID,
+        pattern=r"^(" + "|".join(CategoryDefaults.SEARCH_MODES) + r")\z",
         description="Search mode",
     )
     category: str | None = Field(default=None, description="Filter by category")
@@ -5052,7 +5016,7 @@ from datetime import datetime as _datetime
 from services.audit.audit import AuditEventType as _AuditEventType  # GH#8290 Phase 2
 
 
-class AuditEvent(BaseModel):
+class KnowledgeAuditEventRecord(BaseModel):
     """Audit event model."""
 
     id: str
@@ -5100,7 +5064,7 @@ class GraphRagMetricsData(BaseModel):
     """Response data for GET /graphrag/metrics."""
 
     service: str = ""
-    graph_weight: float = 0.0
+    graph_weight: float  # no second default: always RAGConfig.graph_weight (#18141)
     entity_extraction_enabled: bool = False
     rag_service: Dict[str, Any] = Field(default_factory=dict)
     graph_initialized: bool = False

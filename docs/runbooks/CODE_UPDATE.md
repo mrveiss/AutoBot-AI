@@ -14,7 +14,7 @@ This runbook describes how to deploy a code update to the AutoBot fleet after co
 
 ## Prerequisites
 
-- SLM server (`.19`) is running and healthy
+- The SLM server (`<slm-manager-ip>`) is running and healthy
 - SSH access from dev machine to all target nodes
 - `autobot-slm-backend/ansible/` is the working directory
 - Post-commit hook is configured (see Quick Reference below)
@@ -63,7 +63,7 @@ git push origin main
 The hook at `scripts/hooks/slm-post-commit` runs automatically:
 
 - Detects changed role directories via `git diff`
-- `rsync`s changed roles to `/opt/autobot/cache/` on SLM (`.19`)
+- `rsync`s changed roles to `/opt/autobot/cache/` on the SLM server
 - Calls `POST /api/code-source/notify` with changed roles and commit hash
 
 Expected: SLM marks nodes with the changed role(s) as `OUTDATED`.
@@ -121,6 +121,11 @@ ssh autobot@<slm-manager-ip> 'curl --insecure https://<backend-ip>:8443/api/heal
 # Check frontend
 curl -sk https://<frontend-ip>/api/health
 ```
+
+The update also refreshes the install's `docs/` and core `plugins/` directories from the
+code-source checkout and fails if the recorded docs commit differs from the code-source
+commit. The install has no maintained `autobot-infrastructure/` copy: run infrastructure
+scripts from the code-source checkout, never from an install-level copy.
 
 ---
 

@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Tests for provider rate-limit recovery in HeartbeatScheduler (GH#8502).
+"""Tests for provider rate-limit recovery in LLCHeartbeatScheduler (GH#8502).
 
 Covers:
   1. ProviderRateLimited exception carries provider name and retry hint.
@@ -30,7 +30,7 @@ from llc.scheduler.heartbeat_scheduler import (
     _MAX_RATE_LIMIT_RETRIES,
     _RL_BASE_SECONDS,
     _RL_MAX_SECONDS,
-    HeartbeatScheduler,
+    LLCHeartbeatScheduler,
 )
 
 # ---------------------------------------------------------------------------
@@ -105,7 +105,7 @@ def test_provider_rate_limited_with_hint():
 @pytest.mark.asyncio
 async def test_handle_rate_limited_writes_status_and_requeues():
     """Verify rate_limited status is written and agent re-queued in Redis."""
-    scheduler = HeartbeatScheduler()
+    scheduler = LLCHeartbeatScheduler()
     agent = _make_agent()
     exc = ProviderRateLimited(provider="anthropic")
     redis = _make_redis()
@@ -139,7 +139,7 @@ async def test_handle_rate_limited_writes_status_and_requeues():
 @pytest.mark.asyncio
 async def test_handle_rate_limited_uses_provider_hint():
     """Provider retry_after_seconds hint is used verbatim when > 0."""
-    scheduler = HeartbeatScheduler()
+    scheduler = LLCHeartbeatScheduler()
     agent = _make_agent()
     exc = ProviderRateLimited(provider="anthropic", retry_after_seconds=7200)
     redis = _make_redis()
@@ -165,7 +165,7 @@ async def test_handle_rate_limited_uses_provider_hint():
 @pytest.mark.asyncio
 async def test_handle_rate_limited_exponential_backoff():
     """Backoff doubles with retry_count and is capped at _RL_MAX_SECONDS."""
-    scheduler = HeartbeatScheduler()
+    scheduler = LLCHeartbeatScheduler()
     agent = _make_agent()
     exc = ProviderRateLimited(provider="anthropic")
     redis = _make_redis()
@@ -193,7 +193,7 @@ async def test_handle_rate_limited_exponential_backoff():
 @pytest.mark.asyncio
 async def test_handle_rate_limited_cap_at_max():
     """Backoff is capped at _RL_MAX_SECONDS regardless of retry_count."""
-    scheduler = HeartbeatScheduler()
+    scheduler = LLCHeartbeatScheduler()
     agent = _make_agent()
     exc = ProviderRateLimited(provider="anthropic")
     redis = _make_redis()
@@ -222,7 +222,7 @@ async def test_handle_rate_limited_cap_at_max():
 @pytest.mark.asyncio
 async def test_handle_rate_limited_demotes_after_max_retries():
     """After _MAX_RATE_LIMIT_RETRIES the run is demoted to FAILED, not re-queued."""
-    scheduler = HeartbeatScheduler()
+    scheduler = LLCHeartbeatScheduler()
     agent = _make_agent()
     exc = ProviderRateLimited(provider="anthropic")
     redis = _make_redis()
@@ -252,7 +252,7 @@ async def test_handle_rate_limited_demotes_after_max_retries():
 @pytest.mark.asyncio
 async def test_handle_rate_limited_does_not_overwrite_earlier_redis_score():
     """If an earlier score already exists in Redis, zadd is skipped."""
-    scheduler = HeartbeatScheduler()
+    scheduler = LLCHeartbeatScheduler()
     agent = _make_agent()
     exc = ProviderRateLimited(provider="anthropic")
 
@@ -284,7 +284,7 @@ async def test_handle_rate_limited_does_not_overwrite_earlier_redis_score():
 @pytest.mark.asyncio
 async def test_handle_due_agent_resumes_rate_limited_run():
     """When a rate_limited run exists, _handle_due_agent resumes it."""
-    scheduler = HeartbeatScheduler()
+    scheduler = LLCHeartbeatScheduler()
     agent = _make_agent()
     redis = _make_redis()
     rate_limited_run = _make_run()
@@ -322,7 +322,7 @@ async def test_handle_due_agent_resumes_rate_limited_run():
 @pytest.mark.asyncio
 async def test_handle_due_agent_creates_fresh_run_when_no_rate_limited():
     """When no rate_limited run exists, _handle_due_agent creates a new run."""
-    scheduler = HeartbeatScheduler()
+    scheduler = LLCHeartbeatScheduler()
     agent = _make_agent()
     redis = _make_redis()
     fresh_run = _make_run(status=LLCRunStatus.QUEUED.value, retry_count=0)
@@ -365,7 +365,7 @@ async def test_handle_due_agent_creates_fresh_run_when_no_rate_limited():
 @pytest.mark.asyncio
 async def test_restore_rate_limited_agents_requeues_on_restart():
     """On restart, agents with active rate_limited runs are re-queued in Redis."""
-    scheduler = HeartbeatScheduler()
+    scheduler = LLCHeartbeatScheduler()
     redis = _make_redis()
 
     future_dt = datetime(2099, 1, 1, 12, 0, 0, tzinfo=timezone.utc)

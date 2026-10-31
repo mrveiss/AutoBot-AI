@@ -245,3 +245,52 @@ def test_real_load_executes_the_file_and_registers_it(clean_modules, tmp_path):
     assert sys.modules["scratchpkg.leaf"] is module
     assert getattr(sys.modules["scratchpkg"], "leaf", None) is module
     stubs.restore()
+
+
+# ------------------------------------------- evict + import_real (#13596)
+
+
+def test_evict_then_import_real_is_fully_undone_by_restore(clean_modules, tmp_path, monkeypatch):
+    pkg_dir = tmp_path / "scratchpkg"
+    pkg_dir.mkdir()
+    (pkg_dir / "__init__.py").write_text("VALUE = 1\n", encoding="utf-8")
+    (pkg_dir / "leaf.py").write_text("from . import child\n", encoding="utf-8")
+    (pkg_dir / "child.py").write_text("X = 2\n", encoding="utf-8")
+    monkeypatch.syspath_prepend(str(tmp_path))
+    importlib.invalidate_caches()
+
+    stale = types.ModuleType("scratchpkg")
+    stale.__path__ = []  # type: ignore[attr-defined]
+    sys.modules["scratchpkg"] = stale
+    before = dict(sys.modules)
+
+    stubs = StubSet()
+    stubs.evict("scratchpkg")
+    assert "scratchpkg" not in sys.modules
+    real = stubs.import_real("scratchpkg.leaf")
+    assert real.child.X == 2
+    assert sys.modules["scratchpkg"] is not stale
+
+    stubs.restore()
+    assert sys.modules["scratchpkg"] is stale
+    assert "scratchpkg.leaf" not in sys.modules
+    assert "scratchpkg.child" not in sys.modules
+    assert set(sys.modules) == set(before)
+
+
+def test_evict_only_stubs_leaves_a_genuine_module_in_place(clean_modules):
+    stub = types.ModuleType("scratchpkg")
+    stub.__path__ = []  # type: ignore[attr-defined]
+    genuine = types.ModuleType("scratchpkg.child")
+    genuine.__file__ = str(_REAL_DIR / "child.py")
+    sys.modules["scratchpkg"] = stub
+    sys.modules["scratchpkg.child"] = genuine
+
+    stubs = StubSet()
+    stubs.evict("scratchpkg", only_stubs=True)
+    assert "scratchpkg" not in sys.modules
+    assert sys.modules["scratchpkg.child"] is genuine
+
+    stubs.restore()
+    assert sys.modules["scratchpkg"] is stub
+    assert sys.modules["scratchpkg.child"] is genuine

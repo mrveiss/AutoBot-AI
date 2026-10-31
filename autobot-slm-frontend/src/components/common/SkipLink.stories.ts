@@ -12,7 +12,6 @@ const meta = {
   tags: ['autodocs'],
   argTypes: {
     target: { control: 'text' },
-    label: { control: 'text' },
   },
 } satisfies Meta<typeof SkipLink>
 
@@ -21,13 +20,11 @@ export default meta
 export const Default = {
   args: {
     target: '#main-content',
-    label: 'Skip to main content',
   },
 }
 
-export const CustomLabel = {
+export const CustomTarget = {
   args: {
     target: '#nav',
-    label: 'Skip to navigation',
   },
 }

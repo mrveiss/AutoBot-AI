@@ -21,6 +21,7 @@ from jinja2 import Environment, FileSystemLoader, Template
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
+from autobot_shared.supported_languages import SUPPORTED_LANGUAGES
 from constants.ttl_constants import TTL_24_HOURS
 
 logger = get_logger(__name__)
@@ -1423,26 +1424,6 @@ def reload_prompts() -> None:
     Convenience function to reload all prompts.
     """
     get_prompt_manager().reload()
-
-
-# Issue #1327: Supported languages for prompt language injection.
-# Canonical copy lives in personality_service.SUPPORTED_LANGUAGES;
-# duplicated here to avoid circular-import issues at call time.
-SUPPORTED_LANGUAGES = {
-    "en": "English",
-    "es": "Spanish",
-    "fr": "French",
-    "de": "German",
-    "pt": "Portuguese",
-    "zh": "Chinese",
-    "ja": "Japanese",
-    "ko": "Korean",
-    "ar": "Arabic",
-    "ru": "Russian",
-    "it": "Italian",
-    "nl": "Dutch",
-    "hi": "Hindi",
-}
 
 
 def resolve_language(request_language=None):

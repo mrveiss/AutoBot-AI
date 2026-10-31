@@ -17,6 +17,10 @@ on:
   push:
     branches: [ release, main, develop ]
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [ release, main, develop ]
     # #13388: SAFE — "SSOT Configuration Compliance" is not a required context.
     # pipeline-scripts/detect-hardcoded-values.sh scans with
@@ -54,6 +58,7 @@ permissions:
 
 jobs:
   ssot-coverage:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: SSOT Configuration Compliance
     runs-on: ubuntu-latest
 
@@ -140,7 +145,7 @@ jobs:
         # nowhere.
         ./pipeline-scripts/check_baseline_no_growth.sh
 
-    - name: Comment on PR with SSOT status
+    - name: Build the SSOT status comment
       # #14153: this is a nicety on top of the analysis above, not the
       # analysis itself. On a fork PR, GITHUB_TOKEN is read-only — the
       # comment call fails with 403, and without continue-on-error that
@@ -195,32 +200,18 @@ jobs:
             body += `📖 See [SSOT_CONFIG_GUIDE.md](docs/developer/SSOT_CONFIG_GUIDE.md) for documentation.\n`;
           }
 
-          // Find existing comment
-          const { data: comments } = await github.rest.issues.listComments({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            issue_number: context.issue.number,
-          });
+          require('fs').writeFileSync(process.env.RUNNER_TEMP + '/ssot-comment.md', body, 'utf8');
 
-          const botComment = comments.find(comment =>
-            comment.user.type === 'Bot' && comment.body.includes('SSOT Configuration Compliance')
-          );
-
-          if (botComment) {
-            await github.rest.issues.updateComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              comment_id: botComment.id,
-              body: body
-            });
-          } else {
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: body
-            });
-          }
+    - name: Post or update the SSOT status comment
+      # #12984: the one shared upsert. It reads every page of comments, so a PR
+      # with more than 30 comments no longer collects a new report per run.
+      # Same fork-hostile caveat as the step above: continue-on-error.
+      if: github.event_name == 'pull_request'
+      continue-on-error: true
+      uses: ./.github/actions/upsert-pr-comment
+      with:
+        marker: '<!-- ssot-coverage -->'
+        body-file: ${{ runner.temp }}/ssot-comment.md
 
     - name: Set job status
       shell: bash

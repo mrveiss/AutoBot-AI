@@ -106,9 +106,7 @@
             </td>
             <td class="col-points">{{ item.story_points ?? '—' }}</td>
             <td class="col-assignee">
-              <span v-if="item.assignee_name" class="assignee-avatar" :title="item.assignee_name">
-                {{ initials(item.assignee_name) }}
-              </span>
+              <BaseAvatar v-if="item.assignee_name" :name="item.assignee_name" size="sm" variant="primary" />
               <span v-else class="assignee-empty">—</span>
             </td>
             <td class="col-sprint">
@@ -255,7 +253,7 @@ import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import WorkItemDetail from './WorkItemDetail.vue'
 import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseAvatar, BaseModal } from '@autobot/ui'
 
 const logger = createLogger('BacklogView')
 const api = useApiClient()
@@ -338,10 +336,6 @@ const allSelected = computed(() =>
 const someSelected = computed(() =>
   filteredItems.value.some(i => selectedIds.value.has(i.id)) && !allSelected.value
 )
-
-function initials(name: string) {
-  return name.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
-}
 
 function toggleSelect(id: string) {
   const next = new Set(selectedIds.value)
@@ -656,19 +650,6 @@ onMounted(() => {
   color: var(--text-secondary);
 }
 
-.assignee-avatar {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  border-radius: 50%;
-  background: var(--color-primary);
-  color: white;
-  font-size: 0.65rem;
-  font-weight: 600;
-  cursor: default;
-}
 
 .sprint-tag {
   font-size: 0.75rem;

@@ -41,6 +41,7 @@ from typing import Any, Dict, List, Optional
 
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
+from sqlalchemy import update as sa_update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -53,6 +54,19 @@ from .base import LLCServiceBase
 #: Name of the constraint create() is entitled to translate into a 409.
 #: Must match models/workflow.py's UniqueConstraint name exactly.
 _UNIQUE_CONSTRAINT_NAME = "uq_workflows_company_workflow"
+
+
+def _legacy_row(company_id: uuid.UUID, workflow_id: str) -> tuple:
+    """Predicate for a row the legacy routes may mutate: a plain workflow with no owner role.
+
+    Meta skills and role-owned workflows belong to ``CompanyOsWorkflowService`` (#18390).
+    """
+    return (
+        Workflow.workflow_id == workflow_id,
+        Workflow.company_id == company_id,
+        Workflow.kind == "workflow",
+        Workflow.owner_role_id.is_(None),
+    )
 
 
 class WorkflowConflictError(Exception):
@@ -91,6 +105,10 @@ class WorkflowService(LLCServiceBase):
         status: str = WorkflowStatus.PLANNED.value,
         definition: Optional[Dict[str, Any]] = None,
         actor: Optional[uuid.UUID] = None,
+        kind: str = "workflow",
+        owner_role_id: Optional[uuid.UUID] = None,
+        trigger_type: Optional[str] = None,
+        trigger_config: Optional[Dict[str, Any]] = None,
     ) -> Workflow:
         if company_id is None:
             raise ValueError("company_id is required to create a workflow")
@@ -107,6 +125,10 @@ class WorkflowService(LLCServiceBase):
             source=SOURCE_CREATED,
             definition=definition or {},
             created_by=actor,
+            kind=kind,
+            owner_role_id=owner_role_id,
+            trigger_type=trigger_type,
+            trigger_config=trigger_config or {},
         )
         session.add(workflow)
         try:
@@ -153,7 +175,9 @@ class WorkflowService(LLCServiceBase):
         company_id: uuid.UUID,
     ) -> List[Workflow]:
         result = await session.execute(
-            select(Workflow).where(Workflow.company_id == company_id).order_by(Workflow.created_at.desc())
+            select(Workflow)
+            .where(Workflow.company_id == company_id, Workflow.kind == "workflow")
+            .order_by(Workflow.created_at.desc())
         )
         return list(result.scalars().all())
 
@@ -167,11 +191,16 @@ class WorkflowService(LLCServiceBase):
         actor: Optional[uuid.UUID] = None,
     ) -> Optional[Workflow]:
         status = WorkflowStatus(status).value
-        workflow = await self.get(session, company_id, workflow_id)
-        if workflow is None:
+        # The write itself carries the legacy-row predicate (#18446): a row that became a
+        # meta skill or got an owner role between any earlier read and now matches nothing,
+        # so this route cannot change a Company OS row whatever the read said.
+        result = await session.execute(
+            sa_update(Workflow).where(*_legacy_row(company_id, workflow_id)).values(status=status)
+        )
+        if result.rowcount == 0:
             return None
-        workflow.status = status
-        await session.flush()
+        workflow = await self.get(session, company_id, workflow_id)
+        await session.refresh(workflow)
 
         if self.activity_log:
             await self.activity_log.record(
@@ -200,12 +229,7 @@ class WorkflowService(LLCServiceBase):
         without a second lookup; the audit record is written only after
         ``rowcount`` confirms a row actually matched this company.
         """
-        result = await session.execute(
-            sa_delete(Workflow).where(
-                Workflow.workflow_id == workflow_id,
-                Workflow.company_id == company_id,
-            )
-        )
+        result = await session.execute(sa_delete(Workflow).where(*_legacy_row(company_id, workflow_id)))
         deleted = result.rowcount > 0
 
         if deleted and self.activity_log:

@@ -76,14 +76,40 @@ fi
 # `target-version` in pyproject.toml controls the syntax it *emits* and stays
 # at py312 until #13747 has host evidence that the NPU worker is actually
 # running 3.14, not merely configured for it (see pyproject.toml).
+#
+# The CI-parity venv is searched FIRST and by absolute path (#13842 F4). It is
+# built by scripts/setup-ci-parity-env.sh at $HOME/.venv-python-suite with the
+# same 3.14 CI uses, and it is deliberately NOT on PATH -- so without this the
+# search skipped a perfectly good 3.14 sitting on the box and fell through to
+# whatever older interpreter happened to have black, which is the drift F4
+# describes. Honour CI_PARITY_VENV so the location stays overridable, exactly
+# as the setup script does.
+#
+# The parity venv must BE 3.14 to be worth preferring. CI_PARITY_VENV is
+# overridable, so it can point at an older environment that happens to have
+# black; selecting that over an available python3.14 would reintroduce the very
+# drift this block exists to remove, and the version `case` further down only
+# prints a note -- it never revises the choice (CodeRabbit, #13916).
 PYTHON_BIN=""
-for candidate in python3.14 python3.13 python3.12 python3.11 python3.10 python3; do
-    command -v "$candidate" >/dev/null 2>&1 || continue
-    if "$candidate" -m black --version >/dev/null 2>&1; then
-        PYTHON_BIN="$candidate"
-        break
+PARITY_PY="${CI_PARITY_VENV:-$HOME/.venv-python-suite}/bin/python"
+if [ -x "$PARITY_PY" ] && "$PARITY_PY" -m black --version >/dev/null 2>&1; then
+    parity_ver=$("$PARITY_PY" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || true)
+    if [ "$parity_ver" = "3.14" ]; then
+        PYTHON_BIN="$PARITY_PY"
+    else
+        echo "format.sh: NOTE — the parity venv is Python ${parity_ver:-unknown}, not 3.14; searching PATH instead." >&2
     fi
-done
+fi
+
+if [ -z "$PYTHON_BIN" ]; then
+    for candidate in python3.14 python3.13 python3.12 python3.11 python3.10 python3; do
+        command -v "$candidate" >/dev/null 2>&1 || continue
+        if "$candidate" -m black --version >/dev/null 2>&1; then
+            PYTHON_BIN="$candidate"
+            break
+        fi
+    done
+fi
 
 if [ -z "$PYTHON_BIN" ]; then
     echo "format.sh: no python3 on PATH has 'black' installed (try: pip install black)" >&2
@@ -101,9 +127,15 @@ case "$actual_ver" in
         ;;
     *)
         echo "format.sh: WARNING — using Python $actual_ver but the project runs 3.14." >&2
-        echo "  Black will emit a 'cannot parse code formatted for Python 3.12'" >&2
-        echo "  warning and its output can differ from CI's. To silence:" >&2
-        echo "    python3.14 -m pip install black==26.3.1 isort==8.0.1" >&2
+        echo "  Black's output can differ from CI's at this version, so a clean" >&2
+        echo "  local run may still fail the CI format check." >&2
+        echo "  Fixing this needs a Python 3.14 interpreter on the box first:" >&2
+        echo "  setup-ci-parity-env.sh builds the VENV, not the interpreter, and" >&2
+        echo "  exits if it cannot find 3.14 (install it via your OS package" >&2
+        echo "  manager, or point CI_PARITY_PYTHON at one). With 3.14 present:" >&2
+        echo "    bash scripts/setup-ci-parity-env.sh" >&2
+        echo "  builds CI's env at \$HOME/.venv-python-suite without sudo and" >&2
+        echo "  installs nothing outside it; format.sh then finds it itself." >&2
         echo "" >&2
         ;;
 esac

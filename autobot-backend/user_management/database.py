@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 
+from autobot_shared.db_session import async_session_scope
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import database_pool_settings
 from config import config_manager
@@ -201,19 +202,8 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
         async def get_users(session: AsyncSession = Depends(get_async_session)):
             ...
     """
-    session_factory = get_async_session_factory()
-    async with session_factory() as session:
-        session.info["_post_commit_cbs"] = []
-        try:
-            yield session
-            await session.commit()
-            for cb in session.info.pop("_post_commit_cbs", []):
-                await cb()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+    async with async_session_scope(get_async_session_factory()) as session:
+        yield session
 
 
 @asynccontextmanager
@@ -225,19 +215,8 @@ async def db_session_context() -> AsyncGenerator[AsyncSession, None]:
         async with db_session_context() as session:
             result = await session.execute(query)
     """
-    session_factory = get_async_session_factory()
-    async with session_factory() as session:
-        session.info["_post_commit_cbs"] = []
-        try:
-            yield session
-            await session.commit()
-            for cb in session.info.pop("_post_commit_cbs", []):
-                await cb()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+    async with async_session_scope(get_async_session_factory()) as session:
+        yield session
 
 
 async def _verify_postgres_connection() -> None:
@@ -331,6 +310,24 @@ async def init_database() -> None:
                 e,
             )
             await asyncio.sleep(_DB_INIT_RETRY_DELAY_SECONDS)
+
+
+@asynccontextmanager
+async def isolated_session_factory() -> AsyncGenerator[async_sessionmaker[AsyncSession], None]:
+    """A session factory on a private, unpooled engine, disposed on exit (#18094).
+
+    For one-shot work on a short-lived event loop outside the app's own loop -- e.g.
+    provider-key hydration from a Celery worker init or a CLI. The shared engine's
+    pooled connections are bound to the loop that opened them, so borrowing it from a
+    loop that is about to close would leave dead connections behind for the next user.
+    """
+    from sqlalchemy.pool import NullPool
+
+    engine = create_async_engine(get_deployment_config().postgres_url, poolclass=NullPool)
+    try:
+        yield async_sessionmaker(bind=engine, class_=AsyncSession, expire_on_commit=False)
+    finally:
+        await engine.dispose()
 
 
 async def close_database() -> None:

@@ -19,9 +19,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import get_config
+from autobot_shared.user_management.user_service_errors import DuplicateUserError
 from user_management.models import Role, User
 from user_management.services.base_service import TenantContext
-from user_management.services.user_service import DuplicateUserError, UserService
+from user_management.services.user_service import UserService
 
 logger = get_logger(__name__)
 

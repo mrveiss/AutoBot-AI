@@ -64,6 +64,24 @@ same one; `autobot-backend/agents/dev_loop_issue_gate.py` is the first caller.
 Not a `task` (Principle 1's `task` refusal is about task *identity*, which an
 issue outlives), so `services/task_claim.py` is the wrong place for it.
 
+**One registry for "who is working on issue N"** (#17098). Developer sessions keep a
+machine-local ledger (claims for pr, branch, worktree, issue, task). For `issue` that ledger
+is **not** a second registry: `work_claims` (`issue:<n>`) is the single source of truth and the
+ledger writes through to it and reads holders back from it. The documented interface is
+`autobot_shared/coordination/issue_claims.py`, run as
+`python -m autobot_shared.coordination.issue_claims {claim|release|who|list}`; it prints one
+JSON object and its exit code is the verdict (0 granted/free, 1 held by someone else with the
+holder named, 3 registry unreadable). A session holds `agent_id=<ledger name>`,
+`task_id=dev-ledger`; the dev loop holds `autobot-dev-loop`, so each refusal names the other.
+Cross-refusal is therefore the registry's own conflict rule, not a second check that can drift.
+Rules for the ledger side: call the CLI **before** writing any ledger-local state, treat every
+exit other than 0 as a refusal (fail closed -- an unreadable registry never grants), and keep
+pr, branch and worktree claims local. A session `--steal` of an `issue` claim is not supported:
+the holder releases or the TTL (`AUTOBOT_ISSUE_CLAIM_SESSION_TTL_S`) lapses. The ledger script
+is owner tooling outside this repo, so the owner applies the ledger-side change separately.
+Until it is applied the ledger still holds issue claims locally and AutoBot cannot see them; the cross-refusal is tested at the registry
+(`autobot-backend/tests/coordination/test_issue_claims.py`).
+
 **The dev loop's action history** lives beside the claims, in the same keyspace
 (`work_claims:actions:issue:<n>`, `autobot_shared/coordination/dev_loop_actions.py`).
 A claim says who holds an issue *now* and disappears on release; this is what was
@@ -142,7 +160,7 @@ merges, and between those two moments the scope is unclaimed but not safe
 - **The chain is bounded.** Unbounded handoff recreates, inside one branch, the
   pile of unlanded work the worktree ceiling exists to prevent — and hides it,
   because a growing branch looks like progress.
-- **No TTL decides this.** An interest ends when its branch does. `prune` takes
+- **No TTL decides this.** An interest ends when its branch does. `prune_closed_branches` takes
   the live-branch set from a caller with a GitHub client, because this package
   has none and must not grow one.
 
@@ -160,6 +178,48 @@ worktree. It means **ping-pong stewardship** — the lock alternates — or stac
 branches when the dependency is one-directional. Before entering mode 3, check
 whether the dependency is one-directional (sequence it with a `blocked_by` edge)
 or whether the two issues should have been one.
+
+## Restart and resume
+
+A machine restart wipes `/tmp` (every session's scratchpad) and ends every live
+session. The branch is the record; everything else must reach durable storage
+first. Owner rule 17 in [`OWNER_RULES.md`](OWNER_RULES.md). Procedure: #19452.
+
+**Before a restart, each session:**
+
+1. Commits and pushes every branch. Nothing stays local-only, and `--no-verify` is
+   never used. A branch whose push is blocked stays committed in a worktree under
+   `$HOME`, and the resume note says so.
+2. Checks every branch for local == origin and every worktree for an empty
+   `git status --porcelain`, and records the result.
+3. Copies whatever it still needs from its scratchpad (finished agent reports
+   included) to one durable per-session folder under `$HOME`, and checks the copy.
+4. Writes one **resume note** in its memory, indexed at the top of the memory
+   index: open PRs with head and state, ledger claims, train slots, pending host
+   evidence and the next step. The note is removed from the index once the
+   session has resumed.
+5. Leaves its ledger claims in place. Claims are keyed by session id, and a
+   resumed session keeps its id.
+
+**After the restart:**
+
+1. Each session resumes from its resume note under the same ledger name. Its
+   display name may differ; the ledger name is the identity.
+2. **Liveness is activity, not age.** A session's tool use refreshes the
+   heartbeat of every claim it owns. A claim counts as orphaned only when its
+   owner shows no activity beat (`ledger who` reports `alive`, `idle Nm` or
+   `no beat`). A display name that matches no live session is not evidence: on
+   2026-10-25 a live session was read as orphaned for exactly that reason.
+3. Orphaned worktrees are handled by the reaper, never swept by a person: clean
+   and fully pushed trees are reaped. For dirty or unpushed trees, the reaper
+   saves a verified snapshot to `$HOME` and raises an orphan event (live in the
+   coordination tooling since 2026-10-25, #19452). A claim whose owner has made no
+   activity beat for 6 hours no longer protects its tree. A takeover is an
+   explicit `claim --steal` that names the snapshot. Nothing is discarded or
+   committed on another session's behalf.
+4. Monitors and background waits do not survive a restart, so they are re-armed.
+   Subagents are gone too; their pushed branch is the record, and the parent
+   re-dispatches what is left.
 
 ## Anti-goals
 

@@ -23,7 +23,7 @@ logger = get_logger(__name__)
 STREAMING_TYPES = frozenset(["llm_response", "llm_response_chunk", "response"])
 
 
-def _parse_timestamp(msg_ts: str) -> datetime | None:
+def parse_message_timestamp(msg_ts: str) -> datetime | None:
     """Parse message timestamp string (Issue #315 - extracted)."""
     if not isinstance(msg_ts, str) or not msg_ts:
         return None
@@ -64,7 +64,7 @@ def _group_streaming_by_time_window(
             non_streaming.append(msg)
             continue
 
-        current_ts = _parse_timestamp(msg.get("timestamp", ""))
+        current_ts = parse_message_timestamp(msg.get("timestamp", ""))
         if current_ts and last_streaming_ts:
             time_diff = abs((current_ts - last_streaming_ts).total_seconds())
             if time_diff > 120:  # 2 minutes = new group

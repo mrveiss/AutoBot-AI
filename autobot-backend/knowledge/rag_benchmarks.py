@@ -27,6 +27,7 @@ from typing import Callable, Dict, List, Set
 import pytest
 
 from autobot_shared.logging_manager import get_logger
+from constants.user_scope_constants import GLOBAL_USER
 
 # Add project root and shared infrastructure to path so benchmark_base is importable
 _repo_root = Path(__file__).parent.parent.parent
@@ -1240,15 +1241,14 @@ class TestRealKBBenchmarks:
 # ---------------------------------------------------------------------------
 
 #: Sentinel user namespace for benchmark-generated feedback events.
-#: Mirrors RetrievalLearner.GLOBAL_USER so all users benefit from benchmark
-#: runs without the benchmarks knowing anything about individual user IDs.
-_BENCHMARK_USER = "__global__"
+#: Is RetrievalLearner's GLOBAL_USER so all users benefit from benchmark runs.
+_BENCHMARK_USER = GLOBAL_USER
 
 #: Redis stream TTL for benchmark-injected feedback events (30 days).
 _BENCHMARK_STREAM_TTL = 60 * 60 * 24 * 30
 
 
-class BenchmarkResult:
+class RetrievalBenchmarkResult:
     """Lightweight result container returned by run_benchmark_suite().
 
     Attributes:
@@ -1310,7 +1310,7 @@ class BenchmarkRunReport:
                         Any other combination is False (Issue #5160: empty
                         runs must not be labelled held-out).
         mean_precision_at_k: Mean precision@k across results in the run.
-        results:       The underlying BenchmarkResult list.
+        results:       The underlying RetrievalBenchmarkResult list.
     """
 
     split_used: str
@@ -1319,7 +1319,7 @@ class BenchmarkRunReport:
     tuned_on_dev: bool
     held_out_score: bool
     mean_precision_at_k: float
-    results: List["BenchmarkResult"]
+    results: List["RetrievalBenchmarkResult"]
 
     def as_dict(self) -> dict:
         return {
@@ -1366,7 +1366,7 @@ class BenchmarkHarness:
     def _build_report(
         self,
         split: BenchmarkSplit,
-        results: List["BenchmarkResult"],
+        results: List["RetrievalBenchmarkResult"],
         touched_test: bool,
     ) -> BenchmarkRunReport:
         mean_p = sum(r.precision_at_k for r in results) / len(results) if results else 0.0
@@ -1387,7 +1387,7 @@ class BenchmarkHarness:
 
     def tune(
         self,
-        harness_fn: Callable[[BenchmarkDataset], List["BenchmarkResult"]],
+        harness_fn: Callable[[BenchmarkDataset], List["RetrievalBenchmarkResult"]],
     ) -> BenchmarkRunReport:
         """Run *harness_fn* under dev-only enforcement.
 
@@ -1403,7 +1403,7 @@ class BenchmarkHarness:
 
     def score(
         self,
-        scorer_fn: Callable[[BenchmarkDataset], List["BenchmarkResult"]],
+        scorer_fn: Callable[[BenchmarkDataset], List["RetrievalBenchmarkResult"]],
     ) -> BenchmarkRunReport:
         """Run *scorer_fn* under test-only enforcement.
 
@@ -1420,7 +1420,7 @@ class BenchmarkHarness:
 
     def run(
         self,
-        runner_fn: Callable[[BenchmarkDataset], List["BenchmarkResult"]],
+        runner_fn: Callable[[BenchmarkDataset], List["RetrievalBenchmarkResult"]],
         split: BenchmarkSplit = BenchmarkSplit.TEST,
     ) -> BenchmarkRunReport:
         """Generic entry point; dispatches to tune / score / combined run."""
@@ -1463,10 +1463,10 @@ def run_benchmark_suite(
     k: int = 5,
     dataset: BenchmarkDataset | None = None,
     split: BenchmarkSplit = BenchmarkSplit.ALL,
-) -> List["BenchmarkResult"]:
+) -> List["RetrievalBenchmarkResult"]:
     """Run the precision@k benchmark suite against *chroma_collection*.
 
-    Issue #4676: Produces BenchmarkResult objects that can be passed to
+    Issue #4676: Produces RetrievalBenchmarkResult objects that can be passed to
     ``publish_feedback_events()`` so the scores feed into RetrievalLearner.
     Issue #5074: Accepts an explicit *dataset* and *split* so the same suite
     can serve both tuning (DEV) and held-out scoring (TEST).
@@ -1483,12 +1483,12 @@ def run_benchmark_suite(
         split:             Which portion of the dataset to run against.
 
     Returns:
-        List of BenchmarkResult — one entry per query in the requested split.
+        List of RetrievalBenchmarkResult — one entry per query in the requested split.
     """
     if dataset is None:
         dataset = get_default_dataset()
 
-    results: List[BenchmarkResult] = []
+    results: List[RetrievalBenchmarkResult] = []
     dim = 128  # must match _deterministic_embed default
 
     for query in dataset.iter_split(split):
@@ -1511,7 +1511,7 @@ def run_benchmark_suite(
 
         precision = sum(1 for d in ranked_ids[:k] if d in expected_ids) / k
         results.append(
-            BenchmarkResult(
+            RetrievalBenchmarkResult(
                 query=query,
                 retrieved_ids=retrieved_ids,
                 ranked_ids=ranked_ids,
@@ -1531,12 +1531,12 @@ def run_benchmark_suite(
     return results
 
 
-async def publish_feedback_events(redis, results: List["BenchmarkResult"]) -> int:
+async def publish_feedback_events(redis, results: List["RetrievalBenchmarkResult"]) -> int:
     """Publish benchmark results as synthetic rag:feedback stream entries.
 
     Issue #4676 — Evaluator adapter.
 
-    Translates each BenchmarkResult into the same schema that
+    Translates each RetrievalBenchmarkResult into the same schema that
     ``knowledge_rag_feedback.py`` writes so ``RetrievalLearner.consume_feedback_stream()``
     can process them without any schema changes.  Events are written to the
     ``__global__`` namespace so all users benefit from the benchmark signal.
@@ -1546,7 +1546,7 @@ async def publish_feedback_events(redis, results: List["BenchmarkResult"]) -> in
 
     Args:
         redis:   An async Redis client (``get_async_redis_client(database='analytics')``).
-        results: BenchmarkResult list from ``run_benchmark_suite()``.
+        results: RetrievalBenchmarkResult list from ``run_benchmark_suite()``.
 
     Returns:
         Number of feedback events written to Redis.

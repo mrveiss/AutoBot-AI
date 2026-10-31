@@ -23,7 +23,6 @@
   --orange-200: #f1bb83;
   --orange-300: #e99e55;
   --orange-400: #e2842e;
-  --orange-500: #d6731f;
   --orange-600: #c4651a;
   --orange-700: #a35214;
   --orange-800: #824010;
@@ -70,13 +69,25 @@
 
   /* Functional */
   --green-500:#2f8a5f; --green-300:#5fb78f; --green-bg:#e3f1e9; --green-bg-dk:#12281e;
-  --red-500:#cb3326;   --red-300:#ff6f5e;   --red-bg:#fae5e1;   --red-bg-dk:#311410;
+  --red-300:#ff6f5e;   --red-bg:#fae5e1;   --red-bg-dk:#311410;
+}
+
+/* The two palette primitives ember re-tints. Behind the variant selector, not a
+   bare :root: declared on :root they overrode the default palette for every
+   theme (#18161). The base values are in design-tokens.css. */
+[data-theme-variant="ember"]:where(:not([data-theme="contrast"], [data-theme="mono"])) {
+  --red-500: #cb3326;
+  --orange-500: #d6731f;
 }
 
 /* ----------------------------------------------------------------------------
    2. SEMANTIC TOKENS — LIGHT (apricot linen)
 ---------------------------------------------------------------------------- */
-[data-theme-variant="ember"]:root,
+/* The bare :root branch is "no theme chosen yet", which is light. It must not reach
+   contrast or mono: those are accessibility and corporate themes the user picked,
+   and a variant that repainted their surfaces, text and borders would defeat them.
+   :where() keeps the specificity (0,2,0) the dark block below relies on. */
+[data-theme-variant="ember"]:root:where(:not([data-theme="contrast"], [data-theme="mono"])),
 [data-theme-variant="ember"][data-theme="light"] {
   color-scheme: light;
 
@@ -141,6 +152,16 @@
   --color-warning: var(--gold-500);
   --color-info: var(--wine-500);
   --color-info-bg: #f3e2ea;
+  /* #19872: ember repaints the status fills, so the base --text-on-* no longer
+     applies. Dark ink on the mid green and gold; the deep red and wine already
+     clear 4.5:1 under white, so their solid-fill shade is the fill itself. The
+     green takes pure black (4.92:1); plum-975 on it is 4.48:1. */
+  --text-on-success: #000000;
+  --text-on-warning: var(--plum-975);
+  --text-on-error: var(--wax-0);
+  --text-on-info: var(--wax-0);
+  --color-error-solid: var(--color-error);
+  --color-info-solid: var(--color-info);
 
   --color-ring: color-mix(in srgb, var(--orange-600) 42%, transparent);
 
@@ -272,6 +293,16 @@
   --color-warning: var(--gold-400);
   --color-info: var(--wine-300);
   --color-info-bg: #2e1822;
+  /* #19872: dark ember's red and wine are light tints, so white on them fails.
+     Success and warning are light tints too and keep dark ink (plum-975). The
+     error and info solid fills reuse the light variant's deep red and wine,
+     which carry white at 5.20:1 and 8.00:1. */
+  --text-on-success: var(--plum-975);
+  --text-on-warning: var(--plum-975);
+  --text-on-error: var(--wax-0);
+  --text-on-info: var(--wax-0);
+  --color-error-solid: var(--red-500);
+  --color-info-solid: var(--wine-500);
 
   --color-ring: color-mix(in srgb, var(--orange-400) 55%, transparent);
 
@@ -398,7 +429,8 @@
   }
 }
 
-[data-theme-variant="ember"] :focus-visible {
+/* contrast and mono keep their own --focus ring. */
+[data-theme-variant="ember"]:where(:not([data-theme="contrast"], [data-theme="mono"])) :focus-visible {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }

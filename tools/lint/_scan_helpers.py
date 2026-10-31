@@ -46,10 +46,11 @@ import re
 import subprocess  # nosec B404  # git plumbing, fixed argv, no shell
 import sys
 from pathlib import Path
-from typing import Iterable, List, Sequence, Tuple
+from typing import Collection, Iterable, List, Sequence, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from autobot_shared.paths import project_root  # noqa: E402,F401  # re-export for lint hooks (#18954)
 from autobot_shared.paths import scrubbed_git_env  # noqa: E402
 
 # Plain stdlib logging, deliberately (#1082): these helpers run inside bare
@@ -57,6 +58,13 @@ from autobot_shared.paths import scrubbed_git_env  # noqa: E402
 # config loading onto every commit. Same trade as
 # `scripts/check_python_file_size.py`.
 logger = logging.getLogger(__name__)
+
+# One module identity whether imported bare or as `tools.lint._scan_helpers`:
+# two copies mean two `EmptyEnumeration` classes, and an `except` written
+# against one never matches the other (#14896).
+_TWIN = {"_scan_helpers": "tools.lint._scan_helpers", "tools.lint._scan_helpers": "_scan_helpers"}
+if __name__ in _TWIN:
+    sys.modules.setdefault(_TWIN[__name__], sys.modules[__name__])
 
 # Directories skipped during full-repo scans. Kept as a frozenset so hooks
 # can reference the same constant without risk of per-hook mutation. Adding
@@ -85,6 +93,15 @@ PY_FLOOR = 4000
 def _looks_like_a_pattern(entry: str) -> bool:
     """Whether *entry* is already a pathspec rather than a bare directory name."""
     return any(ch in entry for ch in "*?[") or "/" in entry
+
+
+class GitEnumerationFailed(RuntimeError):
+    """`git ls-files` exited non-zero (or could not run).
+
+    A `RuntimeError` subclass so existing `except RuntimeError` callers keep
+    working, while a harness can catch THIS and let a checker's own bugs
+    propagate with their traceback (#14896).
+    """
 
 
 class EmptyEnumeration(RuntimeError):
@@ -177,15 +194,37 @@ def tracked_paths(repo_root: Path, *patterns: str, exclude: Sequence[str] = ()) 
     # one that fails because the result comes back plausible and full-length.
     # `EmptyEnumeration` cannot catch it: the list is non-empty, just wrong.
     positive_prefixes = sorted({posixpath.dirname(p) for p in patterns}) or [""]
-    excludes = []
+    excludes: list[str] = []
     for entry in exclude:
         if "/" in entry:
             rooted = [entry]  # already rooted; re-prefixing would move it
         else:
             rooted = [posixpath.join(pre, entry) if pre else entry for pre in positive_prefixes]
         excludes.extend(f":(exclude){spec}" for spec in rooted)
+    return _ls_files(repo_root, [*patterns, *excludes], " ".join(patterns) or "<all>")
+
+
+def tracked_modes(repo_root: Path, *patterns: str) -> List[Tuple[str, str]]:
+    """``(mode, path)`` for each tracked path matching *patterns* (``git ls-files -s``).
+
+    Same contract as :func:`tracked_paths`: anchored at *repo_root*, scrubbed
+    environment, raises :class:`GitEnumerationFailed` / :class:`EmptyEnumeration`
+    and never returns ``[]``.
+    """
+    rows = _ls_files(repo_root, ["-s", *patterns], "-s " + " ".join(patterns))
+    return [(meta.split()[0], path) for meta, _, path in (row.partition("\t") for row in rows)]
+
+
+def _ls_files(repo_root: Path, git_args: Sequence[str], described: str) -> List[str]:
+    """The one ``git ls-files`` call: cwd-anchored, scrubbed env, never empty.
+
+    Raises :class:`GitEnumerationFailed` on a non-zero exit and
+    :class:`EmptyEnumeration` on an empty listing. Lines come back with
+    backslashes normalised to ``/``; ``-s`` lines keep their ``mode sha stage\t``
+    prefix for the caller to split.
+    """
     result = subprocess.run(  # nosec B603 B607  # fixed argv, no shell
-        ["git", "ls-files", *patterns, *excludes],
+        ["git", "ls-files", *git_args],
         cwd=str(repo_root),
         capture_output=True,
         text=True,
@@ -193,30 +232,30 @@ def tracked_paths(repo_root: Path, *patterns: str, exclude: Sequence[str] = ()) 
         check=False,
         env=scrubbed_git_env(),
     )
-    described = " ".join(patterns) or "<all>"
     if result.returncode != 0:
-        raise RuntimeError(f"git ls-files {described} failed in {repo_root}: {result.stderr.strip()}")
-    paths = [line.replace("\\", "/") for line in result.stdout.splitlines() if line.strip()]
-    if not paths:
+        raise GitEnumerationFailed(f"git ls-files {described} failed in {repo_root}: {result.stderr.strip()}")
+    lines = [line.replace("\\", "/") for line in result.stdout.splitlines() if line.strip()]
+    if not lines:
         raise EmptyEnumeration(
             f"git ls-files {described} listed nothing in {repo_root} — refusing to "
             "report an empty enumeration as a clean tree."
         )
-    return paths
+    return lines
 
 
-def enforce_reach(reached: int, floor: int, *, hook: str, full_repo: bool) -> int:
+def enforce_reach(reached: int, floor: int, *, hook: str, full_repo: bool, unit: str = "file(s)") -> int:
     """``1`` when a full-repo sweep landed under *floor*, else ``0``.
 
     **Full-repo mode only.** pre-commit passes the changed files as argv, and
     a PR touching nothing in a hook's scope legitimately gives it zero files;
     a floor applied there would fail every such PR in the repository. That is
     why *full_repo* is a keyword the caller must state rather than something
-    inferred here.
+    inferred here. *unit* names what *reached* counts, so a sweep that counts
+    reads or plays does not report them as files.
     """
     if not full_repo or reached >= floor:
         return 0
-    logger.error("[%s] full-repo sweep reached only %d file(s); floor is %d.", hook, reached, floor)
+    logger.error("[%s] full-repo sweep reached only %d %s; floor is %d.", hook, reached, unit, floor)
     logger.error("FIX THE SWEEP, not the tree — a clean result below this floor asserts nothing.")
     return 1
 
@@ -375,6 +414,62 @@ def resolve_base(explicit: str | None = None) -> str | None:
     if os.environ.get("PRE_COMMIT") == "1":
         return os.environ.get("PRE_COMMIT_FROM_REF") or None
     return None
+
+
+#: Directory names the Ansible-file walks never descend into: VCS, caches, vendored
+#: or per-checkout trees. Named once so the two ansible lint walks cannot disagree.
+ANSIBLE_SKIP_DIRS = frozenset({".git", "__pycache__", "node_modules", ".worktrees", "venv", ".venv"})
+
+
+def iter_ansible_files(root: Path, suffixes: Collection[str]) -> Iterable[Path]:
+    """Yield files under *root* whose suffix is in *suffixes*, skipping vendored/cached dirs.
+
+    Only the parts BELOW *root* are matched: a checkout that itself lives under
+    ``.worktrees`` would otherwise skip every file and report a clean scan (#18972).
+    """
+    for path in root.rglob("*"):
+        if not path.is_file() or path.suffix not in suffixes:
+            continue
+        if any(part in ANSIBLE_SKIP_DIRS for part in path.relative_to(root).parts):
+            continue
+        yield path
+
+
+def configure_logging(target: logging.Logger) -> None:
+    """Attach a stderr handler to *target* so findings reach the developer.
+
+    Run as a bare script, a module logger has no handler, and logging's
+    last-resort path drops anything below WARNING -- so a checker that found
+    something printed nothing and exited 1, which reads as a crash.
+
+    Thirteen `tools/lint` checkers each carried a byte-identical private copy
+    of this. Measured by comparing ASTs with docstrings excluded: 13
+    definitions, 1 distinct body. The logger is a parameter rather than a
+    module global because each caller logs under its own `__name__`, which is
+    what makes the message say which checker spoke.
+    """
+    if not target.handlers:
+        handler = logging.StreamHandler(sys.stderr)
+        handler.setFormatter(logging.Formatter("%(message)s"))
+        target.addHandler(handler)
+    target.setLevel(logging.INFO)
+
+
+def report_audit(log: logging.Logger, problems: List[str], failed: str, clean: str, *counts: int) -> int:
+    """Report a full-repo ``--audit`` sweep: ``1`` with every problem logged, else ``0``.
+
+    Seven checkers each ended their ``run_audit`` with this same block: the
+    problems joined by a blank line at ERROR, then a one-line FAILED summary,
+    or a one-line clean summary at INFO. *failed* and *clean* are the
+    %-format summaries (each begins with the newline the FAILED form has
+    always carried), filled from *counts*; the checker owns its wording.
+    """
+    if problems:
+        log.error("%s", "\n\n".join(problems))
+        log.error(failed, *counts)
+        return 1
+    log.info(clean, *counts)
+    return 0
 
 
 def logical_lines(text: str) -> List[Tuple[int, str]]:

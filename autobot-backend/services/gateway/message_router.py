@@ -13,7 +13,7 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 
-from .types import ChannelMessage, MessageType, RoutingDecision
+from .types import ChannelMessage, GatewayMessageType, RoutingDecision
 
 logger = get_logger(__name__)
 
@@ -53,13 +53,13 @@ class MessageRouter:
                 confidence=1.0,
                 reasoning="System message",
             )
-        if message.message_type == MessageType.USER_VOICE:
+        if message.message_type == GatewayMessageType.USER_VOICE:
             return RoutingDecision(
                 agent_type="voice_transcription",
                 confidence=1.0,
                 reasoning="Voice message requires transcription",
             )
-        if message.message_type == MessageType.USER_IMAGE:
+        if message.message_type == GatewayMessageType.USER_IMAGE:
             return RoutingDecision(
                 agent_type="image_analysis",
                 confidence=1.0,
@@ -110,7 +110,7 @@ class MessageRouter:
             return non_text_decision
 
         # For text messages, delegate to agent router
-        if self._agent_router and message.message_type == MessageType.USER_TEXT:
+        if self._agent_router and message.message_type == GatewayMessageType.USER_TEXT:
             return await self._delegate_to_agent_router(message, context)
 
         # Default fallback
@@ -123,12 +123,12 @@ class MessageRouter:
     def _is_system_message(self, message: ChannelMessage) -> bool:
         """Check if message is a system control message."""
         return message.message_type in {
-            MessageType.SYSTEM_STATUS,
-            MessageType.SYSTEM_ERROR,
-            MessageType.SYSTEM_PROGRESS,
-            MessageType.SESSION_START,
-            MessageType.SESSION_END,
-            MessageType.SESSION_HEARTBEAT,
+            GatewayMessageType.SYSTEM_STATUS,
+            GatewayMessageType.SYSTEM_ERROR,
+            GatewayMessageType.SYSTEM_PROGRESS,
+            GatewayMessageType.SESSION_START,
+            GatewayMessageType.SESSION_END,
+            GatewayMessageType.SESSION_HEARTBEAT,
         }
 
     async def get_routing_stats(self) -> Dict[str, Any]:

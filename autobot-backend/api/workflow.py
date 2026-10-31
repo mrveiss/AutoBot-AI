@@ -26,6 +26,7 @@ from api.schemas_workflows import (
     WorkflowPendingApprovalsResponse,
     WorkflowStatusResponse,
 )
+from api.workflow_librarian_step import _handle_librarian_step
 from api.workflow_state import get_workflow_state_machine
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
@@ -49,29 +50,15 @@ prometheus_metrics = get_metrics_manager()
 
 # Issue #336: Agent step handlers extracted from elif chain
 # Issue #322: Refactored to use WorkflowStepContext to eliminate data clump pattern
-async def _handle_librarian_step(ctx: WorkflowStepContext) -> None:
-    """Handle librarian agent step (Issue #336 - extracted handler)."""
-    from agents.kb_librarian_agent import KBLibrarianAgent
-
-    kb_agent = KBLibrarianAgent()
-    search_query = ctx.action.replace("Search Knowledge Base", "").strip()
-    if not search_query:
-        search_query = "network security scanning tools"
-
-    result = await kb_agent.process_query(search_query)
-    response = result.get("response", "Search completed")
-    ctx.step["result"] = f"Knowledge base search completed: {response}"
-
-
 async def _handle_research_step(ctx: WorkflowStepContext) -> None:
     """Handle research agent step (Issue #336 - extracted handler, Issue #322 - context)."""
-    from agents.web_researcher import ResearchRequest, WebResearcher
+    from agents.web_researcher import WebResearcher, WebResearchRequest
 
     research_agent = WebResearcher()
     action_lower = ctx.action.lower()
 
     if "research tools" in action_lower:
-        request = ResearchRequest(query="network security scanning tools", focus="tools")
+        request = WebResearchRequest(query="network security scanning tools", focus="tools")
         result = await research_agent.research_specific_tools(request)
         ctx.step["result"] = f"Research completed: {result.get('summary', 'Tools researched')}"
     elif "installation guide" in action_lower:
@@ -79,7 +66,7 @@ async def _handle_research_step(ctx: WorkflowStepContext) -> None:
         guide = result.get("installation_guide", "Guide obtained")
         ctx.step["result"] = f"Installation guide retrieved: {guide}"
     else:
-        request = ResearchRequest(query=ctx.action, focus="general")
+        request = WebResearchRequest(query=ctx.action, focus="general")
         result = await research_agent.perform_research(request)
         ctx.step["result"] = f"Research completed: {result.summary}"
 
@@ -110,9 +97,9 @@ async def _handle_orchestrator_step(ctx: WorkflowStepContext) -> None:
 
 async def _handle_knowledge_manager_step(ctx: WorkflowStepContext) -> None:
     """Handle knowledge manager agent step (Issue #336 - extracted handler, Issue #322 - context)."""
-    from knowledge_base import KnowledgeBase
+    from knowledge import get_knowledge_base
 
-    kb = KnowledgeBase()
+    kb = await get_knowledge_base()  # raises RuntimeError when the canonical KB is unavailable (D2)
     content = f"Workflow step result: {ctx.step.get('result', ctx.action)}"
     metadata = {
         "workflow_id": ctx.workflow_id,
@@ -310,9 +297,12 @@ async def _execute_complex_workflow(
     }
 
 
-def _prepare_workflow_data(workflow_id: str, user_message: str, workflow_response: Dict, auto_approve: bool) -> Dict:
-    """Prepare workflow data structure (Issue #281: extracted)."""
+def _prepare_workflow_data(
+    workflow_id: str, user_message: str, workflow_response: Dict, auto_approve: bool, user_id: str | None = None
+) -> Dict:
+    """Prepare workflow data structure (Issue #281: extracted; #16665: records the triggering user)."""
     return {
+        "user_id": user_id,
         "workflow_id": workflow_id,
         "user_message": user_message,
         "classification": workflow_response.get("message_classification"),
@@ -920,6 +910,7 @@ async def execute_single_step(workflow_id: str, step: Metadata, orchestrator):
             step=step,
             orchestrator=orchestrator,
             action=action,
+            user_id=active_workflows.get(workflow_id, {}).get("user_id"),  # #16665: the triggering user
         )
         handler = AGENT_STEP_HANDLERS.get(agent_type)
         if handler:

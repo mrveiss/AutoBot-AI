@@ -20,6 +20,8 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from code_intelligence.python_files import collect_python_files
+from code_intelligence.similarity_thresholds import SIMILARITY_MEDIUM
 
 from .detectors import (
     BloaterDetector,
@@ -32,10 +34,7 @@ from .types import DEFAULT_IGNORE_PATTERNS, Thresholds
 
 # Issue #554: Import analytics infrastructure for semantic analysis
 try:
-    from code_intelligence.analytics_infrastructure import (
-        SIMILARITY_MEDIUM,
-        SemanticAnalysisMixin,
-    )
+    from code_intelligence.analytics_infrastructure import SemanticAnalysisMixin
 
     HAS_ANALYTICS_INFRASTRUCTURE = True
 except ImportError:
@@ -54,12 +53,12 @@ except ImportError:
 logger = get_logger(__name__)
 
 
-class AntiPatternDetector(SemanticAnalysisMixin):
+class AntiPatternSuiteAnalyzer(SemanticAnalysisMixin):
     """
-    Detects code anti-patterns and smells in Python code.
+    Runs the suite of category detectors over a file or a directory tree.
 
-    Uses AST parsing to analyze code structure and identify common
-    anti-patterns that indicate potential code quality issues.
+    Not the canonical ``AntiPatternDetector`` (``code_analysis.src``, GH#6757),
+    which owns the per-file/cross-file rules; this one held that name until #12771.
 
     Issue #554: Now includes optional semantic analysis via ChromaDB/Redis/LLM
     infrastructure for detecting semantically similar anti-patterns.
@@ -113,7 +112,7 @@ class AntiPatternDetector(SemanticAnalysisMixin):
         self._bloater = BloaterDetector()
         self._coupler = CouplerDetector()
         self._dispensable = DispensableDetector()
-        self._naming = NamingDetector()
+        self._naming = NamingDetector(magic_number_threshold=self.MAGIC_NUMBER_THRESHOLD)
 
         # State tracking
         self._total_classes = 0
@@ -380,8 +379,8 @@ class AntiPatternDetector(SemanticAnalysisMixin):
         """Run file-level detections."""
         patterns: List[AntiPatternResult] = []
 
-        # Dead code detection
-        patterns.extend(self._dispensable.detect_dead_code(tree, file_path))
+        # Dead code + duplicate-class detection
+        patterns.extend(self._dispensable.detect_file_level(tree, file_path))
 
         # Missing docstrings
         if self.detect_naming:
@@ -394,26 +393,8 @@ class AntiPatternDetector(SemanticAnalysisMixin):
         return patterns
 
     def _get_python_files(self, directory: str) -> List[str]:
-        """
-        Get all Python files in directory, excluding specified patterns.
-
-        Issue #607: Uses shared FileListCache when available for performance.
-        Falls back to direct rglob if cache is not available or for custom directories.
-        """
-        python_files = []
-        dir_path = Path(directory)
-
-        for py_file in dir_path.rglob("*.py"):
-            should_exclude = False
-            for exclude_dir in self.exclude_dirs:
-                if exclude_dir in py_file.parts:
-                    should_exclude = True
-                    break
-
-            if not should_exclude:
-                python_files.append(str(py_file))
-
-        return sorted(python_files)
+        """All Python files in *directory* minus ``exclude_dirs`` (shared collector, #18731)."""
+        return collect_python_files(directory, self.exclude_dirs)
 
     async def _get_python_files_async(self, directory: str) -> List[str]:
         """
@@ -432,7 +413,7 @@ class AntiPatternDetector(SemanticAnalysisMixin):
             for py_file in all_files:
                 should_exclude = False
                 for exclude_dir in self.exclude_dirs:
-                    if exclude_dir in py_file.parts:
+                    if exclude_dir in py_file.relative_to(dir_path).parts:
                         should_exclude = True
                         break
                 if not should_exclude:
@@ -641,7 +622,7 @@ class AntiPatternDetector(SemanticAnalysisMixin):
                     "line_start": "line_start",
                     "description": "description",
                 },
-                min_similarity=(SIMILARITY_MEDIUM if HAS_ANALYTICS_INFRASTRUCTURE else 0.7),
+                min_similarity=SIMILARITY_MEDIUM,
             )
         except Exception as e:
             logger.warning("Semantic duplicate detection failed: %s", e)
@@ -710,7 +691,7 @@ class AntiPatternDetector(SemanticAnalysisMixin):
         )
 
 
-def analyze_codebase(
+def analyze_codebase_anti_patterns(
     directory: str,
     exclude_dirs: List[str] | None = None,
     detect_circular: bool = True,
@@ -728,7 +709,7 @@ def analyze_codebase(
     Returns:
         AnalysisReport with all detected anti-patterns
     """
-    detector = AntiPatternDetector(
+    detector = AntiPatternSuiteAnalyzer(
         exclude_dirs=exclude_dirs,
         detect_circular=detect_circular,
         detect_naming=detect_naming,
@@ -760,7 +741,7 @@ async def analyze_codebase_async(
     Returns:
         Dictionary with analysis results including semantic matches
     """
-    detector = AntiPatternDetector(
+    detector = AntiPatternSuiteAnalyzer(
         exclude_dirs=exclude_dirs,
         detect_circular=detect_circular,
         detect_naming=detect_naming,

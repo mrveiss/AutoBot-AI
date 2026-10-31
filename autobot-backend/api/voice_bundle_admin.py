@@ -16,11 +16,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from api.voice_bundle_constants import VALID_BUNDLES, BundleAssignRequest
+from api.voice_bundle_helpers import voice_bundle_user_id
 from auth_middleware import get_current_user
 from auth_rbac import require_role
 from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
-from services.event_log import EventType, emit
+from services.audit.audit import ComplianceEventType, emit_compliance
 
 logger = get_logger(__name__)
 
@@ -30,7 +31,8 @@ bundle_me_router = APIRouter(tags=["voice", "rbac"])
 # Router for admin operations
 bundle_admin_router = APIRouter(prefix="/admin", tags=["admin", "voice", "rbac"])
 
-# Combined router for feature_routers.py discovery (GH#8605)
+# Combined router (GH#8605). NOT mounted: core_routers.py mounts bundle_me_router and
+# bundle_admin_router directly (#17325); mounting this too would register every route twice.
 router = APIRouter()
 router.include_router(bundle_me_router, prefix="/voice")
 router.include_router(bundle_admin_router)
@@ -66,7 +68,7 @@ async def get_my_bundle(
     from api.redis_mcp.rbac import resolve_bundle_for_user  # noqa: PLC0415
     from api.voice_bundle_user import _count_tools_for_bundle  # noqa: PLC0415
 
-    user_id = current_user.get("user_id") or current_user.get("sub") or current_user.get("username")
+    user_id = voice_bundle_user_id(current_user)
     role = current_user.get("role", "user")
     is_admin = is_admin_role(role)  # #12717: superadmin must not see a reduced tool count
 
@@ -131,7 +133,7 @@ async def set_user_bundle(
             detail=f"Invalid bundle_name '{body.bundle_name}'. Valid: {sorted(VALID_BUNDLES)}",
         )
 
-    admin_id = admin_user.get("user_id") or admin_user.get("sub") or admin_user.get("username") or "unknown"
+    admin_id = voice_bundle_user_id(admin_user) or "unknown"
 
     try:
         from sqlalchemy import text  # noqa: PLC0415
@@ -164,9 +166,9 @@ async def set_user_bundle(
         raise HTTPException(status_code=500, detail="Database error") from exc
 
     # Audit log
-    emit(
-        EventType.CONFIG_CHANGED,
-        user_id=str(admin_id),
+    emit_compliance(
+        ComplianceEventType.CONFIG_CHANGED,
+        str(admin_id),
         resource_type="user_voice_bundle",
         resource_id=user_id,
         metadata={

@@ -76,6 +76,27 @@ async def _proxy_to_main_backend(request: Request, path: str) -> Response:
     )
 
 
+# The root "/" handler is declared FIRST: Starlette tries routes in registration order and
+# "{path:path}" matches the empty string, so declared the other way round the root handler never ran (#17325).
+@router.api_route(
+    "/",
+    methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+    include_in_schema=False,
+)
+async def personality_proxy_root(
+    request: Request,
+    current_user: Annotated[dict, Depends(get_current_user)],
+) -> Response:
+    """Handle root /personality/ path (e.g. /personality/toggle)."""
+    if request.method in _MUTATION_METHODS and not current_user.get("admin", False):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin privilege required",
+        )
+
+    return await _proxy_to_main_backend(request, "")
+
+
 @router.api_route(
     "/{path:path}",
     methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
@@ -101,22 +122,3 @@ async def personality_proxy(
         )
 
     return await _proxy_to_main_backend(request, path)
-
-
-@router.api_route(
-    "/",
-    methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
-    include_in_schema=False,
-)
-async def personality_proxy_root(
-    request: Request,
-    current_user: Annotated[dict, Depends(get_current_user)],
-) -> Response:
-    """Handle root /personality/ path (e.g. /personality/toggle)."""
-    if request.method in _MUTATION_METHODS and not current_user.get("admin", False):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Admin privilege required",
-        )
-
-    return await _proxy_to_main_backend(request, "")

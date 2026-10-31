@@ -54,6 +54,10 @@ on:
   push:
     branches: [ release, dev, main ]
   pull_request:
+    # ready_for_review is REQUIRED here: the jobs below are gated on
+    # draft == false, and marking a PR ready fires ONLY this event. Without
+    # it a required context stays `skipped` and the PR can never merge.
+    types: [opened, synchronize, reopened, ready_for_review]
     branches: [ release, main ]  # Issue #6597: Semgrep blocks merge on all feature PRs
     # #13388: SAFE — this workflow publishes no required status context (none of
     # the ten on main comes from here), so skipping the run cannot deadlock
@@ -85,6 +89,7 @@ on:
       - '**/package*.json'
       - '.secrets.baseline'  # #17067: a baseline-only PR must trigger the whole-tree secret scan too
       - '.github/workflows/security.yml'
+      - '.github/workflows/_changes.yml'
   schedule:
     # Run security scans daily at 2 AM UTC
     - cron: '0 2 * * *'
@@ -93,29 +98,23 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-env:
-  NODE_VERSION: '20'
-
-
 permissions:
   contents: read
   security-events: write
 
 jobs:
   changes:
+    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
+    # every `always()` aggregate below reads `needs.changes.result`.
+    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
+    # context would report FAILED on every draft -- worse than no gate.
+    # Gate the expensive jobs, never the cheap thing others read.
     name: Detect changed paths
-    runs-on: ubuntu-latest
-    outputs:
-      python: ${{ steps.filter.outputs.python }}
-      deps: ${{ steps.filter.outputs.deps }}
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
-        id: filter
-        with:
-          # #12986: the `python` and `deps` sets live in the canonical filter
-          # file, which defines the backend-Python paths exactly once.
-          filters: .github/filters/backend-python-paths.yml
+    uses: ./.github/workflows/_changes.yml
+    with:
+      # #12986: the `python` and `deps` sets live in the canonical filter
+      # file, which defines the backend-Python paths exactly once.
+      filters: .github/filters/backend-python-paths.yml
 
   dependency-security:
     name: Dependency Security Scan
@@ -140,9 +139,20 @@ jobs:
     - name: Install Python dependencies
       run: |
         python -m pip install --upgrade pip setuptools wheel
-        python -m pip install pip-audit bandit safety
+        # #19426: the scanners live in their OWN venv. pip-audit audits an
+        # installed environment, so installing them beside the project put the
+        # scanners' dependencies in the audited set — safety pins
+        # `filelock<4.0`, which held a vulnerable filelock in place and failed
+        # the audit for a package the project does not choose. The audit below
+        # points pip-audit at the project interpreter via PIPAPI_PYTHON_LOCATION.
+        python -m venv "$RUNNER_TEMP/scanners"
+        "$RUNNER_TEMP/scanners/bin/python" -m pip install --upgrade pip
+        "$RUNNER_TEMP/scanners/bin/python" -m pip install pip-audit safety
+        echo "SCANNER_BIN=$RUNNER_TEMP/scanners/bin" >> "$GITHUB_ENV"
+        echo "PROJECT_PYTHON=$(command -v python)" >> "$GITHUB_ENV"
         # Use CI-safe requirements (excludes vllm and other GPU-dependent packages)
-        python -m pip install -r requirements-ci.txt --prefer-binary || {
+        # -c applies the shared floors (filelock>=4.2.1 among them) to the audited set.
+        python -m pip install -c constraints/shared.txt -r requirements-ci.txt --prefer-binary || {
           echo "::error::Some dependencies failed to install — security tools may be incomplete"
           exit 1
         }
@@ -160,34 +170,20 @@ jobs:
     # tracked as #15052: it is a core RAG dependency and the bump needs its own
     # verification, not a line in a CI-wiring change.
     #
-    # #15520 — PYSEC-2026-3740 (CVE-2026-81726, GHSA-8mgp-746c-j5xp) against
-    # `nltk<=3.10.3` is a fifth allowance, added deliberately rather than fixed
-    # by a bump: the nltk security advisory records `first_patched_version:
-    # null` — there is no fixed release to bump to. The finding is a pathsec
-    # bypass in `TransitionParser`, `AveragedPerceptron`, `PerceptronTagger`
-    # and the maxent save/load helpers; grepping the tree for `import nltk` /
-    # `from nltk` across autobot-backend, autobot-slm-backend and
-    # autobot_shared returns no matches — nothing in this repository imports
-    # nltk at all, so none of the vulnerable model-persistence APIs are ever
-    # called and pathsec enforcement (opt-in, off by default upstream) is
-    # never reached from AutoBot code. #15551 asked whether the cleaner fix is
-    # to delete the dependency instead of allowing the advisory, and resolved
-    # it: no. `llama-index-core` 0.14.24 -- the floor `requirements-ci/
-    # llama-index.txt` declares, and one `requirements-ai.txt` declares too --
-    # lists `nltk>=3.9.3` in its distribution metadata, so nltk is installed
-    # transitively whether or not it is named. Deleting the two declarations
-    # would unpin it and leave this advisory reported exactly as it is now.
-    # RE-CHECK BY 2026-12-01: re-run `pip-audit` for a patched nltk release and
-    # remove this allowance the moment the scanner stops reporting it (an
-    # allowance the scanner no longer reports fails the step, so removal is
-    # enforced, not optional).
+    # #15520 — the PYSEC-2026-3740 (nltk) allowance is retired: nltk 3.10.4 is no longer reported.
     - name: Python Dependency Audit
       run: |
         set -euo pipefail
         # `|| true` on the SCANNER only: its non-zero exit merely means
         # "advisories exist", which the gate below is what judges. The report
         # must still be written, and an absent report is a hard failure there.
-        pip-audit --format=json --output=python-audit.json || true
+        # #19426: audit the PROJECT interpreter, never the scanner venv.
+        PIPAPI_PYTHON_LOCATION="$PROJECT_PYTHON" \
+          "$SCANNER_BIN/pip-audit" --format=json --output=python-audit.json || true
+        # Control: the report must describe the project interpreter. If
+        # PIPAPI_PYTHON_LOCATION were ignored, pip-audit would audit the scanner
+        # venv and the gate below would judge the wrong set without an error.
+        python3 -c 'import json,sys; n={d["name"].lower() for d in json.load(open("python-audit.json"))["dependencies"]}; bad=[] if "fastapi" in n and "pip-audit" not in n and "safety" not in n else sorted(n)[:20]; sys.exit("::error::pip-audit did not audit the project interpreter (#19426): %s" % bad if bad else 0)'
         python3 pipeline-scripts/security_scan_gate.py \
           --format pip-audit \
           --report python-audit.json \
@@ -196,8 +192,7 @@ jobs:
           --allow-id PYSEC-2026-311 \
           --allow-id CVE-2026-45830 \
           --allow-id CVE-2026-45831 \
-          --allow-id CVE-2026-45833 \
-          --allow-id PYSEC-2026-3740
+          --allow-id CVE-2026-45833
 
     # REPORT ONLY, and the step name says so (#13543). `safety check` without
     # credentials is deprecated upstream and cannot be relied on to produce a
@@ -218,8 +213,11 @@ jobs:
           echo "**This step does not gate.** Unauthenticated \`safety check\` is deprecated"
           echo "upstream; the same advisories are gated by pip-audit above (#13543)."
         } >> "$GITHUB_STEP_SUMMARY"
-        safety check --json --output safety-report.json || true
-        safety check || true
+        # #19426: safety runs from the scanner venv, so it is fed the PROJECT's
+        # freeze on stdin — run bare it would report on its own venv instead.
+        set -o pipefail
+        "$PROJECT_PYTHON" -m pip freeze | "$SCANNER_BIN/safety" check --stdin --json --output safety-report.json || true
+        "$PROJECT_PYTHON" -m pip freeze | "$SCANNER_BIN/safety" check --stdin || true
 
     - name: Setup Node.js
       # #13543: `!cancelled()` so an earlier scanner's GATE failing does not skip
@@ -229,7 +227,7 @@ jobs:
       if: ${{ !cancelled() }}
       uses: actions/setup-node@v7
       with:
-        node-version: '22'
+        node-version-file: .nvmrc
         cache: 'npm'
         cache-dependency-path: autobot-frontend/package-lock.json
 
@@ -335,7 +333,7 @@ jobs:
         done < <(git ls-files -z '*package-lock.json' | grep -zv node_modules)
 
     - name: Upload Security Reports
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@v7.0.2
       if: always()
       with:
         name: dependency-security-reports
@@ -429,7 +427,7 @@ jobs:
           autobot-backend/ autobot-slm-backend/ autobot_shared/ || true
 
     - name: Upload Semgrep SARIF to GitHub Security tab
-      uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd  # v4.38.1
+      uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee  # v4.39.0
       if: always()
       with:
         sarif_file: semgrep.sarif
@@ -462,7 +460,7 @@ jobs:
     # directories, so the repository root was never read.
 
     - name: Upload SAST Reports
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@v7.0.2
       if: always()
       with:
         name: sast-security-reports
@@ -484,6 +482,11 @@ jobs:
   # exactly the change this job exists to catch. Replaces the SAST job's old
   # "Secret Detection" step, which grepped three shapes in three directories.
   secret-detection:
+    # DELIBERATELY UNGATED (#17957). Every other heavy job here is gated on
+    # draft == false, this one must not be: `no_tracked_key_material_test`
+    # asserts secret detection runs on every event with no `needs` and no
+    # `if`. Gating it would let a draft carry key material past the one scan
+    # that looks at the whole tree, and a draft is still a pushed branch.
     name: Secret Detection (whole tree)
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -573,6 +576,7 @@ jobs:
         exit "${status}"
 
   compliance-check:
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     name: Security Compliance Check
     runs-on: ubuntu-latest
 
@@ -688,7 +692,7 @@ jobs:
         } >> security-summary.md
 
     - name: Upload Security Summary
-      uses: actions/upload-artifact@v7.0.1
+      uses: actions/upload-artifact@v7.0.2
       with:
         name: security-summary
         path: security-summary.md

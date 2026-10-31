@@ -64,7 +64,7 @@ from llm_shared.decisions import (  # noqa: E402  -- after the sys.path setup ab
     ScoreQuestion,
     decide,
     get_backend,
-    registered_backends,
+    registered_decision_backends,
 )
 
 #: Where the checked-in labelled sample lives.
@@ -163,7 +163,7 @@ async def main_async(args: argparse.Namespace) -> int:
     if not cases:
         print("sample is empty -- nothing measured", file=sys.stderr)
         return 2
-    backends = args.backend or registered_backends()
+    backends = args.backend or registered_decision_backends()
     for backend_name in backends:
         print(f"\n=== {backend_name} x{args.repeat} ===")
         results: list[CaseResult] = []

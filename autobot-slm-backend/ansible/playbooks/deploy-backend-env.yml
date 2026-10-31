@@ -39,6 +39,12 @@
         - "{{ backend_data_dir }}"
         - "{{ backend_data_dir }}/conversation_files"
 
+    # #15502: an existing deployment keeps its embedding model; only a fresh install takes the default.
+    - name: Keep the deployed embedding model (#15502)
+      ansible.builtin.include_tasks: ../_shared/tasks/read_deployed_embedding_model.yml
+      vars:
+        deployed_embedding_env_files: ["{{ backend_code_dir }}/.env"]
+
     - name: Deploy backend environment file
       ansible.builtin.template:
         src: ../roles/backend/templates/backend.env.j2

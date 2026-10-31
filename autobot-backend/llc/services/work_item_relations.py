@@ -7,7 +7,8 @@ Removing either leg (by relation id) removes both.
 
 Transition guard (enforced in WorkItemService.transition_status):
   An item in ``blocked`` status cannot transition to ``in_progress`` while it has
-  at least one ``blocked_by`` relation whose source item is not ``done`` or ``cancelled``.
+  at least one ``blocked_by`` relation whose target (the blocker) is not ``done`` or ``cancelled``.
+  ``blocked_by`` reads source-is-blocked-by-target, so the blocked item is the source.
 """
 
 import logging
@@ -180,17 +181,21 @@ class WorkItemRelationService(LLCServiceBase):
         work_item_id: str,
         company_id: str,
     ) -> bool:
-        """Return True if item has any ``blocked_by`` relation whose source is not done/cancelled."""
+        """True if the item has a ``blocked_by`` relation whose target (the blocker) is not done/cancelled.
+
+        ``blocked_by`` reads source-is-blocked-by-target: ``A blocks B`` stores the mirror ``B -> A``,
+        so B's own rows are the ones with ``source_id == B`` (#20187).
+        """
         wid = uuid.UUID(work_item_id)
         cid = uuid.UUID(company_id)
         terminal = {WorkItemStatus.DONE.value, WorkItemStatus.CANCELLED.value}
 
         result = await session.execute(
             select(LLCWorkItemRelation)
-            .join(LLCWorkItem, LLCWorkItem.id == LLCWorkItemRelation.source_id)
+            .join(LLCWorkItem, LLCWorkItem.id == LLCWorkItemRelation.target_id)
             .where(
                 LLCWorkItemRelation.company_id == cid,
-                LLCWorkItemRelation.target_id == wid,
+                LLCWorkItemRelation.source_id == wid,
                 LLCWorkItemRelation.relation_type == WorkItemRelationType.BLOCKED_BY.value,
                 LLCWorkItem.status.notin_(terminal),
             )

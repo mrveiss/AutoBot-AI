@@ -45,11 +45,11 @@ from api.system_health import ComponentHealth, register_health_probe
 from auth_middleware import check_admin_permission
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.http_client import get_http_client
+from autobot_shared.http_egress_guard import EGRESS_POLICY
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
 from autobot_shared.singleton_factory import lazy_singleton
 from autobot_shared.ssot_config import config
-from constants.network_constants import NetworkConstants
 from services.mcp_bridge_manifest import MCPBridgeManifest
 from type_defs.common import Metadata
 
@@ -477,8 +477,7 @@ async def _fetch_bridge_tools(
     """Fetch tools from a single bridge. Returns (tools_list, success). (Issue #315 - extracted)"""
     try:
         async with await http_client.get(
-            f"{backend_url}{endpoint}",
-            timeout=aiohttp.ClientTimeout(total=3),
+            f"{backend_url}{endpoint}", timeout=aiohttp.ClientTimeout(total=3), guard_egress=EGRESS_POLICY
         ) as response:
             if response.status != 200:
                 logger.warning("MCP bridge %s returned status %s", bridge_name, response.status)
@@ -499,7 +498,7 @@ async def _fetch_tools_from_bridges() -> Metadata:
 
     This is the actual HTTP fetching logic, separated for caching support.
     """
-    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+    backend_url = config.backend_url
     all_tools = []
     bridge_count = 0
 
@@ -531,7 +530,7 @@ async def _fetch_bridges_info() -> Metadata:
     This is the actual HTTP fetching logic, separated for caching support.
     Includes manifest info and per-bridge enabled status (Issue #4462).
     """
-    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+    backend_url = config.backend_url
     bridges = []
     # Issue #380: Get http_client once before loop instead of per-iteration
     http_client = get_http_client()
@@ -572,8 +571,7 @@ async def _fetch_bridges_info() -> Metadata:
         else:
             try:
                 async with await http_client.get(
-                    f"{backend_url}{endpoint}",
-                    timeout=aiohttp.ClientTimeout(total=3),
+                    f"{backend_url}{endpoint}", timeout=aiohttp.ClientTimeout(total=3), guard_egress=EGRESS_POLICY
                 ) as response:
                     if response.status == 200:
                         tools = await response.json()
@@ -837,8 +835,7 @@ async def _fetch_tools_from_bridge(backend_url: str, endpoint: str) -> list:
     """
     http_client = get_http_client()
     async with await http_client.get(
-        f"{backend_url}{endpoint}",
-        timeout=aiohttp.ClientTimeout(total=3),
+        f"{backend_url}{endpoint}", timeout=aiohttp.ClientTimeout(total=3), guard_egress=EGRESS_POLICY
     ) as response:
         if response.status != 200:
             raise HTTPException(
@@ -911,7 +908,7 @@ async def get_mcp_tool_details(bridge_name: str, tool_name: str) -> Metadata:
     Returns:
         Detailed tool information including full schema and bridge info
     """
-    backend_url = f"http://{NetworkConstants.MAIN_MACHINE_IP}:{NetworkConstants.BACKEND_PORT}"
+    backend_url = config.backend_url
 
     # #13162: shape-check the tool name before any network work is done for it.
     _validate_tool_name(tool_name)

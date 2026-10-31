@@ -190,3 +190,16 @@ class TestDetectorSourceScoping:
         assert det_a._embedding_cache_model != det_b._embedding_cache_model
         assert det_a._embedding_cache_model.startswith("nomic-embed-text")
         assert det_a._embedding_cache_model.endswith("A")
+
+
+class TestDetectorIndexSpace18143:
+    """The detector's vectors are stored, so its model is the index's, not the active model (#18143)."""
+
+    def test_a_changed_active_model_does_not_move_the_detector(self):
+        from unittest.mock import patch
+
+        detector_cls = _load_real_detector_class()
+        with patch("autobot_shared.embedding_model.active_embedding_model", return_value="some-other-model"):
+            det = detector_cls(source_id="s")
+        assert det.embedding_model == "nomic-embed-text"
+        assert det._embedding_cache_model == "nomic-embed-text/768::src::s"

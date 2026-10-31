@@ -25,11 +25,15 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 from autobot_shared.doc_chunking import chunk_large_content as _chunk_large_content
+from autobot_shared.doc_chunking import chunk_plain_text
 from autobot_shared.doc_chunking import create_chunk as _create_chunk
 from autobot_shared.doc_chunking import estimate_tokens as _estimate_tokens
 from autobot_shared.doc_chunking import process_h2_sections as _process_h2_sections
+from autobot_shared.frontmatter import split_frontmatter
+from autobot_shared.kb_doc_set import in_doc_set
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.paths import shared_cache_path
+from autobot_shared.slug import sanitize_token
+from services.knowledge.index_cache_paths import doc_index_hashes
 
 if TYPE_CHECKING:
     from services.knowledge.sync_queue import SyncQueueEntry, SyncReason  # noqa: F401
@@ -37,7 +41,11 @@ if TYPE_CHECKING:
 from autobot_shared.ssot_config import get_ollama_url
 from constants.path_constants import PATH
 from constants.threshold_constants import CategoryDefaults
+from knowledge.chunk_identity import carry_store_id, stamp_chunk_id
+from knowledge.platform_docs import PLATFORM_DOCS_GRANT, PLATFORM_DOCS_GRANT_VERSION
 from knowledge.query_sanitizer import sanitize_document as _sanitize_document
+from services.knowledge.doc_index_orphans import chunk_base_id, reindex_file
+from services.knowledge.doc_taxonomy import category_of
 from services.knowledge.synthesis_schema_loader import SynthesisSchema, load_synthesis_schema
 
 logger = get_logger(__name__)
@@ -72,12 +80,11 @@ def _auto_reindex_on_dim_mismatch() -> bool:
 
 
 # ============================================================================
-# TIER DEFINITIONS (from CLI tool)
+# TIER DEFINITIONS: a priority order over kb_doc_set, and a curated subset of it (#20063)
 # ============================================================================
 
 TIER_1_FILES = [
     "CLAUDE.md",
-    "docs/system-state.md",
     "docs/api/COMPREHENSIVE_API_DOCUMENTATION.md",
     "docs/architecture/DISTRIBUTED_ARCHITECTURE.md",
     "docs/architecture/README.md",
@@ -211,8 +218,7 @@ def _extract_tags(content: str, file_path: str) -> List[str]:
             "opt",
             "autobot",
         ]:
-            tag = re.sub(r"[^a-zA-Z0-9-_]", "", part.lower())
-            if tag and len(tag) > 2:
+            if len(tag := sanitize_token(part, allowed="a-zA-Z0-9_-", replacement="", case="lower")) > 2:
                 tags.add(tag)
 
     keywords = [
@@ -255,16 +261,15 @@ def _parse_frontmatter(content: str) -> Tuple[str, List[str], List[str]]:
     ``---`` together with any ``tags`` and ``aliases`` values found inside it.
     If no frontmatter is present the original content is returned unchanged
     with empty tag and alias lists.
+
+    #18093: an EIGHTH fence variant, invisible to the regex-by-concept guard because it
+    used no regex -- `startswith("---")` plus `find("\n---", 3)` -- and it leaked `\r`
+    on CRLF and accepted `---yaml` as a fence. Key scanning below is unchanged.
     """
-    if not content.startswith("---"):
+    fm_block, body = split_frontmatter(content)
+    if fm_block is None:
         return content, [], []
-
-    end = content.find("\n---", 3)
-    if end == -1:
-        return content, [], []
-
-    fm_block = content[3:end]
-    body = content[end + 4 :].lstrip("\n")
+    body = body.lstrip("\n")  # preserved: blank lines after the fence are not body
 
     fm_tags: List[str] = []
     fm_aliases: List[str] = []
@@ -298,16 +303,9 @@ def _chunk_markdown(content: str, file_path: str) -> List[Dict[str, Any]]:
     # Intro content before first H2
     intro = h2_splits[0].strip() if h2_splits else ""
     if intro and _estimate_tokens(intro) > 50:
-        chunks.append(
-            _create_chunk(
-                intro,
-                "Introduction",
-                None,
-                file_path,
-                doc_type,
-                category,
-                doc_title,
-            )
+        chunks.extend(
+            _create_chunk(piece, "Introduction", None, file_path, doc_type, category, doc_title)
+            for piece in chunk_plain_text(intro)
         )
 
     _process_h2_sections(h2_splits, file_path, doc_type, category, doc_title, chunks)
@@ -342,50 +340,38 @@ def _should_exclude(file_path: str) -> bool:
 
 
 def _discover_files(root_dir: Path, tier: int | None = None) -> List[Tuple[str, int]]:
-    """Discover markdown files to index by tier."""
-    files: List[Tuple[str, int]] = []
+    """Discover markdown files to index by tier; only files in the canonical doc set qualify (#20063)."""
+    found: dict[str, int] = {}
+
+    def add(path: Path, number: int) -> None:
+        if in_doc_set(path.relative_to(root_dir).as_posix()):
+            found.setdefault(str(path), number)
 
     if tier is None or tier == 1:
         for file_rel in TIER_1_FILES:
-            file_path = root_dir / file_rel
-            if file_path.exists():
-                files.append((str(file_path), 1))
+            if (root_dir / file_rel).exists():
+                add(root_dir / file_rel, 1)
 
-    if tier is None or tier == 2:
-        for dir_rel in TIER_2_DIRS:
-            dir_path = root_dir / dir_rel
-            if dir_path.exists():
-                for md_file in dir_path.rglob("*.md"):
-                    file_str = str(md_file)
-                    if not _should_exclude(file_str):
-                        if not any(f[0] == file_str for f in files):
-                            files.append((file_str, 2))
+    for number, dirs in ((2, TIER_2_DIRS), (3, TIER_3_DIRS + TIER_3_DIRS_EXTRA)):
+        if tier is None or tier == number:
+            for dir_rel in dirs:
+                for md_file in (root_dir / dir_rel).rglob("*.md"):
+                    if not _should_exclude(str(md_file)):
+                        add(md_file, number)
 
-    if tier is None or tier == 3:
-        all_tier3 = TIER_3_DIRS + TIER_3_DIRS_EXTRA
-        for dir_rel in all_tier3:
-            dir_path = root_dir / dir_rel
-            if dir_path.exists():
-                for md_file in dir_path.rglob("*.md"):
-                    file_str = str(md_file)
-                    if not _should_exclude(file_str):
-                        if not any(f[0] == file_str for f in files):
-                            files.append((file_str, 3))
-
-    return files
+    return list(found.items())
 
 
 # ============================================================================
 # HASH CACHE for incremental indexing
 # ============================================================================
 
-# #16934: shared git-common-dir, not per-checkout PATH.DATA_DIR -- one shared collection.
-_HASH_CACHE_FALLBACK = PATH.DATA_DIR / ".doc_index_hashes.json"
-HASH_CACHE_FILE = shared_cache_path("autobot-doc-index", ".doc_index_hashes.json", fallback=_HASH_CACHE_FALLBACK)
+# None: the shared user cache, resolved on use, never at import (index_cache_paths, #19553); tests pin a path.
+HASH_CACHE_FILE: Path | None = None
 
 
 def _compute_file_hash(file_path: str) -> str:
-    """Compute SHA-256 hash of file content.
+    """Compute SHA-256 hash of the grant version plus file content.
 
     Resolves symlinks so the hash reflects the target file's content (#4382).
     Returns empty string on PermissionError, OSError, or RuntimeError (e.g.
@@ -395,7 +381,7 @@ def _compute_file_hash(file_path: str) -> str:
     try:
         resolved = str(Path(file_path).resolve())
         with open(resolved, "rb") as f:
-            return hashlib.sha256(f.read()).hexdigest()
+            return hashlib.sha256(PLATFORM_DOCS_GRANT_VERSION + f.read()).hexdigest()  # #16664
     except (PermissionError, OSError, RuntimeError) as e:
         logger.warning("Cannot hash %s: %s", file_path, e)
         return ""
@@ -403,9 +389,9 @@ def _compute_file_hash(file_path: str) -> str:
 
 def _load_hash_cache() -> Dict[str, str]:
     """Load cached file hashes from disk."""
-    if HASH_CACHE_FILE.exists():
+    if doc_index_hashes(HASH_CACHE_FILE).exists():
         try:
-            with open(HASH_CACHE_FILE, "r", encoding="utf-8") as f:
+            with open(doc_index_hashes(HASH_CACHE_FILE), "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
             logger.warning("Could not load hash cache: %s", e)
@@ -415,8 +401,8 @@ def _load_hash_cache() -> Dict[str, str]:
 def _save_hash_cache(hashes: Dict[str, str]) -> None:
     """Save file hashes to disk."""
     try:
-        HASH_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with open(HASH_CACHE_FILE, "w", encoding="utf-8") as f:
+        doc_index_hashes(HASH_CACHE_FILE).parent.mkdir(parents=True, exist_ok=True)
+        with open(doc_index_hashes(HASH_CACHE_FILE), "w", encoding="utf-8") as f:
             json.dump(hashes, f, indent=2)
     except Exception as e:
         logger.warning("Could not save hash cache: %s", e)
@@ -481,6 +467,14 @@ def _filter_changed_files(
             changed.append((file_path, tier))
 
     return changed, new_hashes
+
+
+def _select_files(root_dir: Path, tier: int | None = None, category: str | None = None) -> List[Tuple[str, int]]:
+    """Discover files for ``tier`` (None = all), keeping only those in ``category`` when given (#18129)."""
+    files = _discover_files(root_dir, tier)
+    if category:
+        files = [(p, t) for p, t in files if category_of(p, root_dir) == category]
+    return files
 
 
 # ============================================================================
@@ -563,7 +557,7 @@ class DocIndexerService:
             )
 
             effective = await get_org_knowledge_config_service().get_effective(self._org_id)
-            embed_model_name = effective.embedding_model or "nomic-embed-text"
+            embed_model_name = effective.embedding_model  # org override, else ssot; empty fails init (#18143)
             self.embedding_model_name = embed_model_name
 
             # Embed model is created first so the collection guard can probe the
@@ -765,19 +759,14 @@ class DocIndexerService:
         )
         return any(kw in msg for kw in _OVERSIZED_KEYWORDS)
 
-    def _embed_and_upsert(
-        self,
-        content: str,
-        chunk_id: str,
-        metadata: Dict[str, Any],
-    ) -> None:
+    def _embed_and_upsert(self, content: str, chunk_id: str, metadata: Dict[str, Any]) -> None:
         """Embed *content* and upsert into ChromaDB. Raises on failure."""
         embedding = self._embed_model.get_text_embedding(content)
         self._collection.upsert(
             ids=[chunk_id],
             embeddings=[embedding],
             documents=[content],
-            metadatas=[metadata],
+            metadatas=[stamp_chunk_id(metadata, chunk_id)],  # #18142: the Chroma id is also the stored chunk_id
         )
 
     def _split_and_embed(
@@ -848,6 +837,7 @@ class DocIndexerService:
         rel_path: str,
         file_tags: List[str],
         tier: int,
+        index_run: str = "",
     ) -> bool:
         """Index a single chunk into ChromaDB.
 
@@ -860,12 +850,11 @@ class DocIndexerService:
         Returns True when at least one (sub-)chunk was stored successfully.
         """
         priority_map = {1: "critical", 2: "high", 3: "medium"}
-        chunk_id = hashlib.md5(
-            f"{rel_path}:{chunk['section']}:{chunk_index}".encode(), usedforsecurity=False
-        ).hexdigest()[:12]
+        chunk_id = chunk_base_id(rel_path, chunk["section"], chunk_index)
 
         metadata: Dict[str, Any] = {
             "source": "autobot_documentation",
+            **PLATFORM_DOCS_GRANT,  # #16664: stamped at write so reads need no special case
             "doc_type": chunk["doc_type"],
             "category": chunk["category"],
             "priority": priority_map.get(tier, "low"),
@@ -876,6 +865,7 @@ class DocIndexerService:
             "title": chunk["title"],
             "tags": ",".join(str(t) for t in file_tags),
             "indexed_at": datetime.now(tz=timezone.utc).isoformat(),
+            "index_run": index_run,
             "chunk_index": chunk_index,
             "total_chunks": total_chunks,
             # Issue #4681: evolutionary lineage fields.
@@ -913,8 +903,6 @@ class DocIndexerService:
 
     async def _index_file_chunks(self, file_str: str, content: str, rel_path: str, tier: int) -> tuple[int, int]:
         """Chunk content and index all chunks; return (success_count, chunk_count). Issue #2735."""
-        import asyncio
-
         body, fm_tags, fm_aliases = _parse_frontmatter(content)
         # Issue #5064: sanitize ingested content before chunking / embedding.
         body = _sanitize_document(body, source="doc_indexer").sanitized_text
@@ -924,11 +912,8 @@ class DocIndexerService:
 
         file_tags = _extract_tags(body, file_str)
         file_tags = list(dict.fromkeys(fm_tags + fm_aliases + file_tags))[:20]
-        indexed = 0
-        for i, chunk in enumerate(chunks):
-            ok = await asyncio.to_thread(self._index_chunk, chunk, i, len(chunks), rel_path, file_tags, tier)
-            if ok:
-                indexed += 1
+        # Ids hash the section name: a renamed section leaves an orphan, dropped only once the new chunks are stored.
+        indexed = await reindex_file(self._collection, self._index_chunk, chunks, rel_path, file_tags, tier)
         return indexed, len(chunks)
 
     async def index_file(self, file_path: Path, tier: int = 3, force: bool = False) -> IndexResult:
@@ -982,29 +967,10 @@ class DocIndexerService:
                 result.skipped += 1
                 return
 
-            body, fm_tags, fm_aliases = _parse_frontmatter(content)
-            # Issue #5064: sanitize ingested content before chunking / embedding.
-            body = _sanitize_document(body, source="doc_indexer").sanitized_text
-            chunks = _chunk_markdown(body, file_path)
-            if not chunks:
+            indexed, total_chunks = await self._index_file_chunks(file_path, content, rel_path, tier)
+            if total_chunks == 0:
                 result.skipped += 1
                 return
-
-            file_tags = _extract_tags(body, file_path)
-            file_tags = list(dict.fromkeys(fm_tags + fm_aliases + file_tags))[:20]
-            indexed = 0
-            for i, chunk in enumerate(chunks):
-                ok = await asyncio.to_thread(
-                    self._index_chunk,
-                    chunk,
-                    i,
-                    len(chunks),
-                    rel_path,
-                    file_tags,
-                    tier,
-                )
-                if ok:
-                    indexed += 1
 
             if indexed > 0:
                 result.success += 1
@@ -1078,15 +1044,24 @@ class DocIndexerService:
         except Exception:
             logger.exception("DocIndexerService: KB synthesis failed (non-fatal)")
 
-    async def index_all(self, force: bool = False) -> IndexResult:
-        """Index every documentation file; force ignores the hash cache and re-indexes all of them."""
+    def plan(self, force: bool = False, tier: int | None = None, category: str | None = None) -> List[Tuple[str, int]]:
+        """Files index_all would embed (the dry-run view, #18129); touches no store."""
+        files = _select_files(self._root_dir, tier, category)
+        return files if force else _filter_changed_files(files, _load_hash_cache(), self._root_dir)[0]
+
+    def resolve_tier(self, file_path: Path) -> int:
+        """Tier of a discovered file; 3 when it is outside the discovery set (#18129)."""
+        return dict(_discover_files(self._root_dir)).get(str(file_path), 3)
+
+    async def index_all(self, force: bool = False, tier: int | None = None, category: str | None = None) -> IndexResult:
+        """Index every documentation file (or one ``tier`` / ``category``); force ignores the hash cache."""
         start_time = time.time()
 
         if not self._initialized:
             if not await self.initialize():
                 return IndexResult(errors=["Failed to initialize"])
 
-        files = _discover_files(self._root_dir)
+        files = _select_files(self._root_dir, tier, category)
         total_result = IndexResult(total_files=len(files))
 
         if not files:
@@ -1190,13 +1165,11 @@ class DocIndexerService:
         Issue #4953: expose doc search so RAGService can merge results with
         the main KB, giving the agent access to AutoBot's own documentation.
 
-        Returns SearchResult objects (from advanced_rag_optimizer).
+        Returns RankedResult objects (from advanced_rag_optimizer).
         Returns an empty list if not initialised, collection is empty, or on
         any error — callers always receive a safe (possibly empty) list.
         """
-        import asyncio
-
-        from advanced_rag_optimizer import SearchResult
+        from advanced_rag_optimizer import RankedResult
 
         if not self._initialized or self._collection is None or self._embed_model is None:
             return []
@@ -1221,15 +1194,15 @@ class DocIndexerService:
         documents = raw.get("documents", [[]])[0]
         metadatas = raw.get("metadatas", [[]])[0]
         distances = raw.get("distances", [[]])[0]
+        row_ids = (raw.get("ids") or [[""] * len(documents)])[0]
 
         results = []
         for i, (doc, meta, dist) in enumerate(zip(documents, metadatas, distances)):
-            # ChromaDB cosine distance → similarity score
-            score = max(0.0, 1.0 - dist)
+            score = max(0.0, 1.0 - dist)  # ChromaDB cosine distance → similarity score
             results.append(
-                SearchResult(
+                RankedResult(
                     content=doc or "",
-                    metadata={**meta, "source": "autobot_docs"},
+                    metadata={**carry_store_id(meta, row_ids[i] if i < len(row_ids) else ""), "source": "autobot_docs"},
                     semantic_score=score,
                     keyword_score=0.0,
                     hybrid_score=score,
