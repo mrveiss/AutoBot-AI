@@ -104,7 +104,7 @@ def _scanned_files(root: Path) -> list[str]:
 FILES = declare(
     "defined-twice-18094-scan",
     discover=_scanned_files,
-    floor=3622,  # mid-window; the arithmetic is in the commit message, which cannot drift from the tree
+    floor=3684,  # mid-window; the arithmetic is in the commit message, which cannot drift from the tree
     growth=150,
     what="production python files swept for a second definition of a #18094 value",
     roots=scan_mod.SCAN_ROOTS,
