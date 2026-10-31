@@ -145,6 +145,8 @@
       "value0Reports": "{value0} reports"
     },
     "processMonitorTab": {
+      "durationSeconds": "s",
+      "durationMinutes": "m",
       "actions": "Aktionen",
       "agentID": "Agenten-ID",
       "all": "All",
@@ -3889,7 +3891,7 @@
     "empty": "No active shared links.",
     "loading": "Loading shared links…",
     "never": "Nie",
-    "open": "Öffnen",
+    "open": "Open",
     "protected": "Protected",
     "refresh": "Aktualisieren",
     "subtitle": "Read-only audit of who has shared what — every active public chat link, by user. Users manage their own shares in the app.",
