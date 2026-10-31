@@ -5,13 +5,13 @@
 """#20191: a workflow installs requirements-ci.txt through one action, which frees disk first."""
 
 import re
-from pathlib import Path
 
 import pytest
 import yaml
+from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = repo_root()
 ACTION = REPO_ROOT / ".github" / "actions" / "install-ci-requirements" / "action.yml"
 _OWN_INSTALL = re.compile(r"pip install\b[^\n]*-r requirements-ci\.txt|requirements-file:\s*requirements-ci\.txt")
 _CALLERS = {
