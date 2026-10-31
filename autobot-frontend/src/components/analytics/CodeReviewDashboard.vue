@@ -346,7 +346,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, formatRelativeTime } from '@autobot/ui'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useNotificationBus } from '@/composables/useNotificationBus'
@@ -355,7 +355,7 @@ import api from '@/services/api'
 import { createLogger } from '@/utils/debugUtils'
 import { getApiBase } from '@/config/ssot-config'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const logger = createLogger('CodeReviewDashboard')
 
 // Issue #3436: read sourceId from route param set by codebase/:sourceId parent
@@ -597,8 +597,7 @@ function formatDate(timestamp: string): string {
   const diff = now.getTime() - date.getTime()
 
   if (diff < 60000) return t('analytics.codeReview.justNow')
-  if (diff < 3600000) return t('analytics.codeReview.minutesAgo', { count: Math.floor(diff / 60000) })
-  if (diff < 86400000) return t('analytics.codeReview.hoursAgo', { count: Math.floor(diff / 3600000) })
+  if (diff < 86400000) return formatRelativeTime(date, { locale: locale.value })
   return date.toLocaleDateString()
 }
 

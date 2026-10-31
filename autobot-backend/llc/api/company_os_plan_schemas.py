@@ -26,6 +26,7 @@ from llc.services.company_os.plan_types import (
     EntryPoint,
     Label,
     Lane,
+    PlanApprovalPolicy,
     ReturnKind,
     Step,
     SubStepState,
@@ -155,3 +156,9 @@ class GateResponse(BaseModel):
     status: WorkflowPlanStatus
     next_status: Optional[WorkflowPlanStatus]
     missing: List[GateItem]
+
+
+class ApprovalPoliciesBody(_Body):
+    """``on_timeout`` is hold, remind or escalate: a ``send`` is a 422 (FR-6.2)."""
+
+    policies: List[PlanApprovalPolicy] = Field(default_factory=list, max_length=200)
