@@ -195,14 +195,9 @@ export const CATEGORY_DEFAULTS = {
 } as const;
 
 /**
- * Permission rule interface.
+ * Permission rule: the kit declares it once for both apps (#19910).
  */
-export interface PermissionRule {
-  tool: string;
-  pattern: string;
-  action: PermissionAction;
-  description: string;
-}
+export type { PermissionRule } from '@autobot/ui';
 
 /**
  * Approval record interface for project memory.
