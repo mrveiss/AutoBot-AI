@@ -252,6 +252,7 @@ import ApiClient from '@/utils/ApiClient'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
 import { useBatchSelection } from '@/composables/useBatchSelection'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import Icon from '@/components/ui/Icon.vue'
 const { t } = useI18n()
 
@@ -419,7 +420,7 @@ const resetLinkForm = () => {
   requireLogin.value = false
 }
 
-const formatExpiry = (iso: string) => new Date(iso).toLocaleString()
+const formatExpiry = createDateFormatter()
 
 // ---- lifecycle ----
 watch(() => props.visible, (val) => {
