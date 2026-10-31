@@ -320,6 +320,7 @@ import Icon, { type IconName } from '@/components/ui/Icon.vue'
 import api from '@/services/api'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('BusinessIntelligenceView')
 const { t } = useI18n()
@@ -420,9 +421,7 @@ const formatNumber = (num: number): string => {
   return num.toLocaleString()
 }
 
-const formatDate = (dateStr: string): string => {
-  return new Date(dateStr).toLocaleString()
-}
+const formatDate = createDateFormatter()
 
 const getTrendClass = (trend: string | undefined): string => {
   if (trend === 'increasing') return 'trend-up'
