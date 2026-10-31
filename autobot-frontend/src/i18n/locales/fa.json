@@ -5502,6 +5502,13 @@
       "chatMessage": "Chat message",
       "attachFile": "Attach file",
       "retryUpload": "Retry upload",
+      "uploadError": {
+        "http": "بارگذاری ناموفق بود (وضعیت {status})",
+        "invalidResponse": "سرور پاسخ ناخوانایی ارسال کرد",
+        "network": "خطای شبکه هنگام بارگذاری",
+        "cancelled": "بارگذاری لغو شد",
+        "unknown": "بارگذاری ناموفق بود"
+      },
       "removeFile": "Remove file",
       "overseerLabel": "Overseer",
       "managePresets": "Manage slash command presets",
