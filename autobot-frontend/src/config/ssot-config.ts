@@ -90,7 +90,6 @@ export interface PortConfig {
  * and there is no schema to generate them from (ports never appear in any
  * OpenAPI response), so `src/config/__tests__/ssot-parity.spec.ts` parses the
  * Python source and asserts this table still matches it (#13074).
- *
  * A runtime value, so that parity test has something env-independent to compare.
  */
 export const PORT_DEFAULTS = {
