@@ -610,7 +610,6 @@
 1|other|autobot-frontend/src/components/settings/ApiKeySetupWizard.vue|https://huggingface.co/kyutai/pocket-tts
 1|other|autobot-frontend/src/components/settings/ApiKeySetupWizard.vue|https://platform.openai.com/api-keys
 1|other|autobot-frontend/src/components/terminal/AdvancedStepConfirmationModal.stories.ts|https://github.com/example/repo.git
-2|other|autobot-frontend/src/components/ui/LoadingSpinner.vue|offset=0
 1|ssot|autobot-frontend/src/components/ui/SystemStatusNotification.stories.ts|:8001
 5|other|autobot-frontend/src/components/visualizations/SystemArchitectureDiagram.vue|offset=0
 1|other|autobot-frontend/src/components/workflow/WorkflowCanvas.vue|offset=0
