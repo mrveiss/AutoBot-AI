@@ -838,7 +838,7 @@ class SessionMixin:
         """
         async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
             file_content = await f.read()
-        chat_data = json.loads(file_content)
+        chat_data = self._decrypt_data(file_content)  # #19864: raw JSON failed on an encrypted chat
 
         chat_data["name"] = name
         chat_data["last_modified"] = time.strftime("%Y-%m-%d %H:%M:%S")
