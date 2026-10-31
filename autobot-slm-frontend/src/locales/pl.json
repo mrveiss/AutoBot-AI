@@ -145,6 +145,8 @@
       "value0Reports": "{value0} reports"
     },
     "processMonitorTab": {
+      "durationSeconds": "s",
+      "durationMinutes": "m",
       "actions": "Actions",
       "agentID": "Agent ID",
       "all": "All",
@@ -392,6 +394,7 @@
     "deleteSchedule": "Delete schedule \"{name}\"?"
   },
   "common": {
+    "zeroSize": "0 B",
     "codeSyncBadge": {},
     "roleReachesNoDeployPath": "Assigned, but nothing will deploy {roles}: the role reaches no ansible group and has no dedicated playbook. Add a group mapping or a playbook for it.",
     "sidebar": {
@@ -1708,7 +1711,7 @@
   "performance": {
     "alertRulesView": {
       "actions": "Actions",
-      "alertRules": "Alert Rules",
+      "alertRules": "Reguły alertów",
       "areYouSureYou": "Czy na pewno chcesz usunąć",
       "cancel": "Anuluj",
       "condition": "Condition",
@@ -1820,7 +1823,13 @@
     "performanceSections": "Performance sections",
     "performanceSummary": "Performance summary",
     "refreshPerformanceData": "Refresh performance data",
-    "sLOCompliance": "SLO Compliance:"
+    "sLOCompliance": "SLO Compliance:",
+    "tabs": {
+      "alertRules": "Reguły alertów",
+      "overview": "Przegląd",
+      "slos": "SLO",
+      "traces": "Ślady"
+    }
   },
   "redisServicePanel": {
     "actionFailed": "Failed to {action} Redis service",
@@ -3882,7 +3891,7 @@
     "empty": "No active shared links.",
     "loading": "Loading shared links…",
     "never": "Nigdy",
-    "open": "Otwórz",
+    "open": "Open",
     "protected": "Protected",
     "refresh": "Odśwież",
     "subtitle": "Read-only audit of who has shared what — every active public chat link, by user. Users manage their own shares in the app.",

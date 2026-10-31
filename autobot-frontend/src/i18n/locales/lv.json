@@ -3816,10 +3816,11 @@
     },
     "treeNode": {
       "itemsCount": "Items count",
+      "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
       "vectorizeFolderTitle": "Vectorize folder title",
-      "retryTitle": "Retry title",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "share": {
       "searching": "Searching...",
@@ -4241,6 +4242,8 @@
     "stop": "Stop Workflow",
     "status": "Status",
     "history": {
+      "durationSeconds": "s",
+      "durationMinutes": "min",
       "searchPlaceholder": "Search workflows...",
       "allStatus": "All Status",
       "completed": "Completed",
@@ -4356,7 +4359,8 @@
       "agentsAriaLabel": "Agent capabilities",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "Atver jūsu uzņēmuma automatizāciju…",
-      "companyRequired": "Izvēlieties uzņēmumu, lai atvērtu automatizāciju."
+      "companyRequired": "Izvēlieties uzņēmumu, lai atvērtu automatizāciju.",
+      "planBeforeBuilding": "Plānot pirms veidošanas"
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -7376,7 +7380,16 @@
       "initComplete": "Inicializācija pabeigta"
     }
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "Brīdinājumu noteikumi",
+      "overview": "Pārskats",
+      "slos": "SLO",
+      "traces": "Izsekojumi"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "browser": {
       "contentsOf": "{path} Contents",
       "refresh": "Refresh",
@@ -8620,7 +8633,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "Rīku informācija pašlaik nav pieejama — šis saraksts var būt nepilnīgs.",
       "canvasNoToolsDefined": "Šim uzņēmumam nevienai lomai nav pievienots neviens rīks.",
-      "deepLinkNodeNotFound": "Šī saite norāda uz mezglu, kas šeit nav atrasts. Iespējams, tas ir noņemts, vai jums nav piekļuves tam."
+      "deepLinkNodeNotFound": "Šī saite norāda uz mezglu, kas šeit nav atrasts. Iespējams, tas ir noņemts, vai jums nav piekļuves tam.",
+      "viewPlanner": "Plānotājs"
     },
     "executorRollup": {
       "title": "Izpildītāju kopsavilkums",
@@ -8964,6 +8978,162 @@
         "notFound": "Šis uzdevums vairs netur šo pieprasījumu — atsvaidziniet, lai redzētu, kurš to tur tagad.",
         "unavailable": "Neizdevās sasniegt žurnālu; nekas netika nosūtīts.",
         "error": "Radās kļūda, un piegādi nevarēja apstiprināt. Atsvaidziniet, lai redzētu, vai rezervācija joprojām ir spēkā."
+      }
+    },
+    "workflowPlanner": {
+      "title": "Darbplūsmu plānotājs",
+      "plans": "Plāni",
+      "newPlan": "Jauns plāns",
+      "open": "Atvērt",
+      "back": "Atpakaļ uz plāniem",
+      "retry": "Mēģināt vēlreiz",
+      "loading": "Notiek plānu ielāde...",
+      "loadFailed": "Neizdevās ielādēt plānu.",
+      "saveFailed": "Neizdevās saglabāt izmaiņu.",
+      "createFailed": "Neizdevās izveidot plānu.",
+      "emptyTitle": "Plānu vēl nav",
+      "emptyHint": "Sāciet plānu, lai attēlotu vienu procesu, izmērītu to un izvēlētos vienu uzlabojamo skaitli.",
+      "unavailableTitle": "Darbplūsmu plānotājs nav pieejams",
+      "unavailableHint": "Šī funkcija jūsu darba telpā ir izslēgta, tāpēc šeit vēl nav ko rādīt.",
+      "statusFlow": "Plāna gaita",
+      "status": {
+        "draft": "Melnraksts",
+        "measured": "Izmērīts",
+        "labeled": "Marķēts",
+        "approved": "Apstiprināts",
+        "converted": "Pārveidots"
+      },
+      "col": {
+        "name": "Plāns",
+        "revision": "Redakcija",
+        "status": "Statuss",
+        "actions": "Darbības"
+      },
+      "form": {
+        "name": "Plāna nosaukums",
+        "startsAt": "Kur process sākas",
+        "endsAt": "Kur process beidzas",
+        "create": "Izveidot plānu"
+      },
+      "steps": {
+        "map": "Attēlot",
+        "measure": "Izmērīt",
+        "oneNumber": "Izvēlēties vienu skaitli",
+        "label": "Sadalīt un marķēt",
+        "convert": "Izveidot darbplūsmu"
+      },
+      "map": {
+        "empty": "Vēl nekas nav attēlots",
+        "emptyHint": "Vispirms pievienojiet iesaistītos (joslas), tad katra soļus.",
+        "handoffs": "Nodošanas: {count}",
+        "waitNote": "Kas gaida šajā nodošanā?",
+        "laneName": "Joslas nosaukums",
+        "addLane": "Pievienot joslu",
+        "stepLabel": "Solis",
+        "stepLane": "Soļa josla",
+        "addStep": "Pievienot soli"
+      },
+      "source": {
+        "self_reported": "Jūs teicāt",
+        "email": "Pārbaudīts ar e-pastu",
+        "calendar": "Pārbaudīts ar kalendāru"
+      },
+      "measure": {
+        "hint": "Cik bieži notiek katrs solis un cik ilgi tas aizņem?",
+        "needSteps": "Vispirms attēlojiet vismaz vienu soli.",
+        "perWeek": "Nedēļā",
+        "duration": "Ilgums",
+        "unit": "Ilguma vienība",
+        "save": "Saglabāt",
+        "clear": "Notīrīt"
+      },
+      "unit": {
+        "minutes": "minūtes",
+        "hours": "stundas",
+        "days": "dienas"
+      },
+      "oneNumber": {
+        "hint": "Izmērītie soļi, vispirms garākās gaidīšanas. Jūs izlemjat, kurš ir svarīgs.",
+        "needMetrics": "Vispirms izmēriet vismaz vienu soli.",
+        "rate": "{freq} nedēļā, {dur} {unit}",
+        "title": "Nosauciet šo skaitli",
+        "returnKind": "Ko jūs atgūstat",
+        "target": "Mērķis",
+        "save": "Saglabāt kā manu vienu skaitli"
+      },
+      "returnKind": {
+        "hours_back": "Atgūtas stundas",
+        "more_yeses": "Vairāk piekrišanu",
+        "money_sooner": "Nauda ātrāk"
+      },
+      "label": {
+        "needNumber": "Vispirms izvēlieties savu skaitli; tā solis tiek sadalīts šeit.",
+        "subStep": "Apakšsolis",
+        "addSubStep": "Pievienot apakšsoli",
+        "unlabel": "Noņemt marķējumu",
+        "edgeCase": "Robežgadījums: {text}",
+        "byHandNote": "Tas paliek cilvēkiem. MI tam nekad nepieskaras.",
+        "acknowledge": "Esmu izlasījis sarakstu Ar roku",
+        "acknowledged": "Saraksts Ar roku izlasīts"
+      },
+      "labels": {
+        "ai": "MI",
+        "automation": "Automatizācija",
+        "by_hand": "Ar roku"
+      },
+      "gate": {
+        "missing": "Vēl trūkst",
+        "title": "Gatavs izveidei?",
+        "unknown": "Cita pārbaude",
+        "state": {
+          "met": "Izpildīts",
+          "open": "Atvērts",
+          "pending": "Vēl nav pārbaudīts"
+        },
+        "name": {
+          "G1": "Karte ir derīga",
+          "G2": "Katrs solis ir izmērīts",
+          "G3": "Izvēlētais solis ir sadalīts",
+          "G4": "Katram apakšsolim un robežgadījumam ir iezīme",
+          "G5": "Saraksts „Ar roku” izlasīts, un MI soļus aptver apstiprinājumi",
+          "G6": "Priekšskatījumā nav kļūdu",
+          "G7": "Jūs apstiprinājāt šo plānu",
+          "converted": "Darbplūsmas ir izveidotas"
+        }
+      },
+      "readOnly": "Šī plāna statuss ir: {status}, tāpēc 1.–4. solis ir tikai lasāms.",
+      "firstProcess": {
+        "title": "Jūsu uzņēmums ir gatavs",
+        "body": "Plānojiet savu pirmo procesu: attēlojiet to, izmēriet un izvēlieties vienu skaitli, ko uzlabot.",
+        "plan": "Plānot manu pirmo procesu",
+        "later": "Vēlāk"
+      },
+      "convert": {
+        "notReady": "Vispirms pabeidziet 1.–4. soli. Augstāk redzamās pārbaudes rāda, kā vēl trūkst.",
+        "previewTitle": "Kas tiks izveidots (priekšskatījums, vēl nekas nepastāv)",
+        "createdTitle": "Kas tika izveidots",
+        "counts": "Darbplūsmas: {workflows}. Procesi: {processes}.",
+        "ownerLane": "Atbildīgais: {lane}",
+        "errors": "Kļūdas, kas jālabo pirms apstiprināšanas",
+        "warnings": "Brīdinājumi",
+        "documented": "Saglabāts kā rokasgrāmatas teksts, netiek būvēts:",
+        "failedProposals": "Neizdevās iesniegt {count} MI rindu priekšlikumus. Mēģiniet vēlreiz, lai tos iesniegtu.",
+        "turnOnNotAvailable": "Darbplūsmu ieslēgšana vēl nav pieejama: līdz tam nekas tās nepalaiž.",
+        "openWorkflows": "Atvērt darbplūsmas",
+        "unavailable": "Šī darbība nav pieejama: Darbplūsmu plānotājs jūsu darbvietā ir izslēgts, vai plāna vairs nav.",
+        "blocked": "Vēl nav gatavs. Augstāk redzamās pārbaudes rāda, kā trūkst.",
+        "approvedBy": "Apstiprināja {by}, {at}.",
+        "preview": "Priekšskatīt, kas tiks izveidots",
+        "previewAgain": "Atsvaidzināt priekšskatījumu",
+        "approve": "Apstiprināt",
+        "create": "Izveidot darbplūsmas",
+        "retry": "Atkārtot MI rindu priekšlikumus",
+        "approveTitle": "Apstiprināt šo plānu?",
+        "approveMessage": "Jūs apstiprināt redzamo priekšskatījumu. Jebkurš vēlāks plāna labojums atceļ šo apstiprinājumu.",
+        "previewFailed": "Neizdevās izveidot priekšskatījumu.",
+        "approveFailed": "Neizdevās apstiprināt plānu.",
+        "convertFailed": "Neizdevās izveidot darbplūsmas.",
+        "retryFailed": "Neizdevās atkārtot MI rindu priekšlikumus."
       }
     }
   },

@@ -145,16 +145,16 @@
 
       <!-- Save Button -->
       <div class="config-actions">
-        <button
-          class="btn-save"
+        <BaseButton
+          size="sm"
           :disabled="saving || hasValidationErrors"
           @click="handleSave"
         >
-          <svg v-if="saving" class="spinner btn-spinner" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <svg v-if="saving" class="spinner" viewBox="0 0 24 24" fill="none" aria-hidden="true">
             <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-dasharray="30 70" />
           </svg>
           {{ saving ? $t('workflow.notifications.saving') : $t('workflow.notifications.save') }}
-        </button>
+        </BaseButton>
         <span v-if="saveSuccess" class="save-success">
           {{ $t('workflow.notifications.saved') }}
         </span>
@@ -164,6 +164,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 /**
  * WorkflowNotificationConfig -- the one per-workflow notification form (#3139).
  *
@@ -455,28 +456,6 @@ watch(saveSuccess, (val) => {
   padding-top: var(--spacing-2);
 }
 
-.btn-save {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-1-5);
-  padding: var(--spacing-2) var(--spacing-5);
-  border: none;
-  border-radius: var(--radius-md);
-  background: var(--color-primary);
-  color: var(--wfnotif-on-accent);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  transition: background var(--duration-150);
-}
-.btn-save:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-}
-.btn-save:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
 .save-success {
   font-size: 0.8125rem;
   color: var(--color-success);
@@ -499,7 +478,7 @@ watch(saveSuccess, (val) => {
   animation: spin 0.8s linear infinite;
 }
 
-.btn-spinner {
+.config-actions .spinner {
   width: 1rem;
   height: 1rem;
 }

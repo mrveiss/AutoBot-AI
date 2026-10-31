@@ -37,6 +37,8 @@ migrations:
   - 'autobot-backend/llc/services/authz.py'
   - 'autobot-backend/llc/services/membership_policy.py'
   - 'autobot-backend/llc/services/membership_service.py'
+  - 'autobot-backend/llc/services/budget.py'
+  - 'autobot-backend/llc/exceptions.py'
   - 'autobot-backend/llc/scheduler/run_status.py'
   - 'autobot_shared/db_errors.py'
   - 'autobot-backend/canvas/models.py'

@@ -145,6 +145,8 @@
       "value0Reports": "{value0} reports"
     },
     "processMonitorTab": {
+      "durationSeconds": "s",
+      "durationMinutes": "m",
       "actions": "عملیات",
       "agentID": "Agent ID",
       "all": "All",
@@ -153,7 +155,7 @@
       "command": "دستور",
       "completed": "تکمیل‌شده",
       "dismiss": "Dismiss",
-      "duration": "Duration",
+      "duration": "مدت",
       "eGOrchestrator": "e.g. orchestrator",
       "exit": "Exit",
       "failed": "ناموفق",
@@ -392,6 +394,7 @@
     "deleteSchedule": "Delete schedule \"{name}\"?"
   },
   "common": {
+    "zeroSize": "0 B",
     "codeSyncBadge": {},
     "roleReachesNoDeployPath": "Assigned, but nothing will deploy {roles}: the role reaches no ansible group and has no dedicated playbook. Add a group mapping or a playbook for it.",
     "sidebar": {
@@ -606,7 +609,7 @@
     "categoryApplicationDescription": "Backend API and frontend web servers",
     "categoryAiLabel": "AI/ML Services",
     "categoryAiDescription": "LLM inference and AI processing",
-    "categoryAutomationLabel": "Automation",
+    "categoryAutomationLabel": "خودکارسازی",
     "categoryAutomationDescription": "Browser automation and scripting",
     "categoryObservabilityLabel": "Observability",
     "categoryObservabilityDescription": "Monitoring and logging stack",
@@ -915,7 +918,7 @@
       "clear": "پاک کردن",
       "clickCheckForUpdatesToScan": "Click \"Check for Updates\" to scan",
       "codeUpdateAvailable": "Code update available",
-      "duration": "Duration",
+      "duration": "مدت",
       "eventPlural": "event{plural}",
       "eventsWillAppearHereAsThey": "Events will appear here as they occur.",
       "installUpdates": "Install Updates",
@@ -1683,7 +1686,7 @@
     "system": "سیستمی",
     "systemValue0": "System ({value0})",
     "systemdService": "Systemd Service",
-    "target": "مقصد",
+    "target": "Target",
     "targetNode": "Target Node",
     "targetPath": "Target Path *",
     "targetPath2": "Target path:",
@@ -1708,7 +1711,7 @@
   "performance": {
     "alertRulesView": {
       "actions": "عملیات",
-      "alertRules": "Alert Rules",
+      "alertRules": "قوانین هشدار",
       "areYouSureYou": "آیا مطمئن هستید که می‌خواهید حذف کنید",
       "cancel": "لغو",
       "condition": "Condition",
@@ -1739,7 +1742,7 @@
     },
     "performanceOverview": {
       "avgLatency": "Avg Latency",
-      "duration": "Duration",
+      "duration": "مدت",
       "errorRate": "Error Rate",
       "name": "نام",
       "noTraceDataAvailable": "No trace data available",
@@ -1790,7 +1793,7 @@
     },
     "tracingView": {
       "apply": "Apply",
-      "duration": "Duration",
+      "duration": "مدت",
       "failedToLoadSpan": "Failed to load span details",
       "first": "First",
       "last": "Last",
@@ -1820,7 +1823,13 @@
     "performanceSections": "Performance sections",
     "performanceSummary": "Performance summary",
     "refreshPerformanceData": "Refresh performance data",
-    "sLOCompliance": "SLO Compliance:"
+    "sLOCompliance": "SLO Compliance:",
+    "tabs": {
+      "alertRules": "قوانین هشدار",
+      "overview": "نمای کلی",
+      "slos": "SLOها",
+      "traces": "ردیابی‌ها"
+    }
   },
   "redisServicePanel": {
     "actionFailed": "Failed to {action} Redis service",
@@ -2030,7 +2039,7 @@
     "sourcePathsCommaSeparated": "Source Paths (comma-separated)",
     "syncType": "Sync Type",
     "systemdService": "Systemd Service",
-    "target": "مقصد",
+    "target": "Target",
     "targetNode": "Target Node *",
     "targetPath": "Target Path *",
     "times": "×",
@@ -3579,7 +3588,7 @@
         "creating": "Creating...",
         "dataExport": "Data Export",
         "delete": "حذف",
-        "duration": "Duration",
+        "duration": "مدت",
         "enterJobName": "Enter job name",
         "failed": "ناموفق",
         "failedItems": "Failed Items",

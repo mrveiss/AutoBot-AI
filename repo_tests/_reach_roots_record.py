@@ -120,6 +120,7 @@ REACH_ROOTS = {
         "scripts",
     ),
     "repo_tests/file_type_sets_one_home_19339_test.py": ("autobot-backend",),
+    "repo_tests/frontend_hand_built_relative_time_19606_test.py": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "repo_tests/frontend_local_date_formatter_ratchet_19905_test.py": (
         "autobot-frontend/src",
         "autobot-slm-frontend/src",
@@ -138,6 +139,7 @@ REACH_ROOTS = {
     "repo_tests/generated_type_names_not_redeclared_19334_test.py": ("autobot-frontend/src",),
     "repo_tests/github_api_single_module_15411_test.py": ("pipeline-scripts", "scripts"),
     "repo_tests/hardcoded_ui_literal_ratchet_12732_test.py": ("autobot-frontend/src/", "autobot-slm-frontend/src/"),
+    "repo_tests/icon_rule_sets_font_size_only_19875_test.py": ("autobot-frontend/src",),
     "repo_tests/infra_scripts_no_backend_imports_18288_test.py": ("autobot-infrastructure",),
     "repo_tests/kb_admin_read_bypass_guard_test.py": ("autobot-backend/", "autobot_shared/"),
     "repo_tests/kb_construction_baseline_18122_test.py": (
@@ -187,6 +189,7 @@ REACH_ROOTS = {
     ),
     "repo_tests/no_doubled_api_prefix_18722_test.py": ("autobot-backend/api", "autobot-slm-backend/api"),
     "repo_tests/no_literal_secret_default_16299_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
+    "repo_tests/no_partial_key_mask_18221_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "repo_tests/node_major_one_home_19328_test.py": (
         ".github",
         "autobot-infrastructure/shared/scripts",

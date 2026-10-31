@@ -97,6 +97,10 @@
     deployed_embedding_env_files: ["{{ backend_services_env_dest }}"]
   tags: ['backend', 'config']
 
+- name: "Backend | Read the encryption key (#19864)"
+  ansible.builtin.include_tasks: ../../backend/tasks/read_encryption_key.yml
+  tags: ['backend', 'config']
+
 - name: Generate environment configuration
   template:
     src: backend.env.j2

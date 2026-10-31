@@ -3816,10 +3816,11 @@
     },
     "treeNode": {
       "itemsCount": "Items count",
+      "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
       "vectorizeFolderTitle": "Vectorize folder title",
-      "retryTitle": "Retry title",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "share": {
       "searching": "Searching...",
@@ -4241,6 +4242,8 @@
     "stop": "Stop Workflow",
     "status": "Status",
     "history": {
+      "durationSeconds": "s",
+      "durationMinutes": "min",
       "searchPlaceholder": "Search workflows...",
       "allStatus": "All Status",
       "completed": "Completed",
@@ -4356,7 +4359,8 @@
       "agentsAriaLabel": "Agent capabilities",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "Otwieranie automatyzacji Twojej firmy…",
-      "companyRequired": "Wybierz firmę, aby otworzyć automatyzację."
+      "companyRequired": "Wybierz firmę, aby otworzyć automatyzację.",
+      "planBeforeBuilding": "Zaplanuj przed budową"
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -7376,7 +7380,16 @@
       "initComplete": "Inicjalizacja zakończona"
     }
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "Reguły alertów",
+      "overview": "Przegląd",
+      "slos": "SLO",
+      "traces": "Ślady"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "browser": {
       "contentsOf": "{path} Contents",
       "refresh": "Refresh",
@@ -8620,7 +8633,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "Informacje o narzędziach są obecnie niedostępne — ta lista może być niepełna.",
       "canvasNoToolsDefined": "Żadne narzędzie nie jest dołączone do żadnej roli w tej firmie.",
-      "deepLinkNodeNotFound": "Ten link wskazuje węzeł, którego nie można tu znaleźć. Mógł zostać usunięty lub nie masz do niego dostępu."
+      "deepLinkNodeNotFound": "Ten link wskazuje węzeł, którego nie można tu znaleźć. Mógł zostać usunięty lub nie masz do niego dostępu.",
+      "viewPlanner": "Planer"
     },
     "executorRollup": {
       "title": "Zestawienie wykonawców",
@@ -8964,6 +8978,162 @@
         "notFound": "To zadanie nie trzyma już tej rezerwacji — odśwież, aby zobaczyć, kto ją trzyma.",
         "unavailable": "Nie można połączyć się z rejestrem; nic nie wysłano.",
         "error": "Coś poszło nie tak i nie udało się potwierdzić doręczenia. Odśwież, aby sprawdzić, czy blokada jest nadal utrzymywana."
+      }
+    },
+    "workflowPlanner": {
+      "title": "Planer przepływów pracy",
+      "plans": "Plany",
+      "newPlan": "Nowy plan",
+      "open": "Otwórz",
+      "back": "Wróć do planów",
+      "retry": "Spróbuj ponownie",
+      "loading": "Wczytywanie planów...",
+      "loadFailed": "Nie udało się wczytać planu.",
+      "saveFailed": "Nie udało się zapisać zmiany.",
+      "createFailed": "Nie udało się utworzyć planu.",
+      "emptyTitle": "Brak planów",
+      "emptyHint": "Zacznij plan, aby odwzorować jeden proces, zmierzyć go i wybrać jedną liczbę do poprawy.",
+      "unavailableTitle": "Planer przepływów pracy jest niedostępny",
+      "unavailableHint": "Ta funkcja jest wyłączona w Twojej przestrzeni roboczej, więc nie ma jeszcze nic do pokazania.",
+      "statusFlow": "Postęp planu",
+      "status": {
+        "draft": "Szkic",
+        "measured": "Zmierzony",
+        "labeled": "Oznaczony",
+        "approved": "Zatwierdzony",
+        "converted": "Przekonwertowany"
+      },
+      "col": {
+        "name": "Plan",
+        "revision": "Wersja",
+        "status": "Status",
+        "actions": "Akcje"
+      },
+      "form": {
+        "name": "Nazwa planu",
+        "startsAt": "Gdzie proces się zaczyna",
+        "endsAt": "Gdzie proces się kończy",
+        "create": "Utwórz plan"
+      },
+      "steps": {
+        "map": "Odwzoruj",
+        "measure": "Zmierz",
+        "oneNumber": "Wybierz jedną liczbę",
+        "label": "Rozbij i oznacz",
+        "convert": "Utwórz przepływ pracy"
+      },
+      "map": {
+        "empty": "Nic jeszcze nie odwzorowano",
+        "emptyHint": "Najpierw dodaj uczestników (tory), potem kroki każdego z nich.",
+        "handoffs": "Przekazania: {count}",
+        "waitNote": "Co czeka przy tym przekazaniu?",
+        "laneName": "Nazwa toru",
+        "addLane": "Dodaj tor",
+        "stepLabel": "Krok",
+        "stepLane": "Tor kroku",
+        "addStep": "Dodaj krok"
+      },
+      "source": {
+        "self_reported": "Tak twierdzisz",
+        "email": "Sprawdzono w poczcie",
+        "calendar": "Sprawdzono w kalendarzu"
+      },
+      "measure": {
+        "hint": "Jak często zdarza się każdy krok i ile trwa?",
+        "needSteps": "Najpierw odwzoruj co najmniej jeden krok.",
+        "perWeek": "Tygodniowo",
+        "duration": "Czas trwania",
+        "unit": "Jednostka czasu",
+        "save": "Zapisz",
+        "clear": "Wyczyść"
+      },
+      "unit": {
+        "minutes": "minuty",
+        "hours": "godziny",
+        "days": "dni"
+      },
+      "oneNumber": {
+        "hint": "Zmierzone kroki, od najdłuższych oczekiwań. To Ty decydujesz, który się liczy.",
+        "needMetrics": "Najpierw zmierz co najmniej jeden krok.",
+        "rate": "{freq} tygodniowo, {dur} {unit}",
+        "title": "Nazwij tę liczbę",
+        "returnKind": "Co odzyskujesz",
+        "target": "Cel",
+        "save": "Zapisz jako moją jedną liczbę"
+      },
+      "returnKind": {
+        "hours_back": "Odzyskane godziny",
+        "more_yeses": "Więcej zgód",
+        "money_sooner": "Szybciej pieniądze"
+      },
+      "label": {
+        "needNumber": "Najpierw wybierz swoją jedną liczbę; jej krok rozbijasz tutaj.",
+        "subStep": "Podkrok",
+        "addSubStep": "Dodaj podkrok",
+        "unlabel": "Usuń oznaczenie",
+        "edgeCase": "Przypadek brzegowy: {text}",
+        "byHandNote": "To zostaje po stronie ludzi. AI nigdy tego nie wykonuje.",
+        "acknowledge": "Przeczytałem listę Ręcznie",
+        "acknowledged": "Lista Ręcznie przeczytana"
+      },
+      "labels": {
+        "ai": "AI",
+        "automation": "Automatyzacja",
+        "by_hand": "Ręcznie"
+      },
+      "gate": {
+        "missing": "Nadal brakuje",
+        "title": "Gotowe do utworzenia?",
+        "unknown": "Inna kontrola",
+        "state": {
+          "met": "Spełnione",
+          "open": "Otwarte",
+          "pending": "Jeszcze nie sprawdzono"
+        },
+        "name": {
+          "G1": "Mapa jest poprawna",
+          "G2": "Każdy krok jest zmierzony",
+          "G3": "Wybrany krok jest rozbity na części",
+          "G4": "Każdy podkrok i przypadek brzegowy ma etykietę",
+          "G5": "Lista „Ręcznie” przeczytana, a kroki AI objęte zatwierdzeniami",
+          "G6": "Podgląd nie ma błędów",
+          "G7": "Zatwierdzono ten plan",
+          "converted": "Przepływy pracy są utworzone"
+        }
+      },
+      "readOnly": "Ten plan ma status: {status}, więc kroki 1–4 są tylko do odczytu.",
+      "firstProcess": {
+        "title": "Twoja firma jest gotowa",
+        "body": "Zaplanuj swój pierwszy proces: odwzoruj go, zmierz i wybierz jedną liczbę do poprawy.",
+        "plan": "Zaplanuj mój pierwszy proces",
+        "later": "Później"
+      },
+      "convert": {
+        "notReady": "Najpierw dokończ kroki 1–4. Kontrole powyżej pokazują, czego jeszcze brakuje.",
+        "previewTitle": "Co zostanie utworzone (podgląd, nic jeszcze nie istnieje)",
+        "createdTitle": "Co zostało utworzone",
+        "counts": "Przepływy pracy: {workflows}. Procesy: {processes}.",
+        "ownerLane": "Właściciel: {lane}",
+        "errors": "Błędy do poprawienia przed zatwierdzeniem",
+        "warnings": "Ostrzeżenia",
+        "documented": "Zachowane jako tekst podręcznika, nie zbudowane:",
+        "failedProposals": "Nie udało się złożyć propozycji linii AI: {count}. Ponów próbę, aby je złożyć.",
+        "turnOnNotAvailable": "Włączanie przepływów pracy nie jest jeszcze dostępne: do tego czasu nic ich nie uruchamia.",
+        "openWorkflows": "Otwórz przepływy pracy",
+        "unavailable": "Ta czynność jest niedostępna: Planer przepływów pracy jest wyłączony w Twojej przestrzeni roboczej albo plan już nie istnieje.",
+        "blocked": "Jeszcze nie gotowe. Kontrole powyżej pokazują, czego brakuje.",
+        "approvedBy": "Zatwierdził(a) {by}, {at}.",
+        "preview": "Pokaż podgląd tego, co powstanie",
+        "previewAgain": "Odśwież podgląd",
+        "approve": "Zatwierdź",
+        "create": "Utwórz przepływy pracy",
+        "retry": "Ponów propozycje linii AI",
+        "approveTitle": "Zatwierdzić ten plan?",
+        "approveMessage": "Zatwierdzasz wyświetlony podgląd. Każda późniejsza zmiana planu unieważnia to zatwierdzenie.",
+        "previewFailed": "Nie udało się utworzyć podglądu.",
+        "approveFailed": "Nie udało się zatwierdzić planu.",
+        "convertFailed": "Nie udało się utworzyć przepływów pracy.",
+        "retryFailed": "Nie udało się ponowić propozycji linii AI."
       }
     }
   },

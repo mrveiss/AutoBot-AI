@@ -4159,7 +4159,8 @@
       "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
       "vectorizeFolderTitle": "Vectorize folder title",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "verification": {
       "approve": "Approve",
@@ -4357,6 +4358,8 @@
     "stop": "Stop Workflow",
     "status": "Status",
     "history": {
+      "durationSeconds": "s",
+      "durationMinutes": "m",
       "searchPlaceholder": "Search workflows...",
       "allStatus": "All Status",
       "completed": "Completed",
@@ -4472,7 +4475,8 @@
       "sectionDescLiveDashboard": "Real-time workflow execution monitoring with agent observability",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "Opening automation for your company…",
-      "companyRequired": "Select a company to open automation."
+      "companyRequired": "Select a company to open automation.",
+      "planBeforeBuilding": "Plan before building"
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -7583,7 +7587,16 @@
       "initComplete": "Initialization complete"
     }
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "Alert Rules",
+      "overview": "Overview",
+      "slos": "SLOs",
+      "traces": "Traces"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "browser": {
       "contentsOf": "{path} Contents",
       "refresh": "Refresh",
@@ -8319,6 +8332,8 @@
     "roleChangeForbidden": "You are not allowed to make that role change.",
     "roleChangeLastOwner": "A company must keep an owner.",
     "roleChangeError": "Failed to change the role.",
+    "roleNotGrantable": "Your role in this company does not allow changing this role.",
+    "addNotAllowed": "Your role in this company does not allow adding members.",
     "usersLoadError": "Failed to load users.",
     "role": {
       "owner": "Owner",
@@ -8497,6 +8512,7 @@
       "coverage": "Coverage",
       "coverageComplete": "All steps costed",
       "coveragePartial": "{costed} of {total} steps costed",
+      "currencyAmount": "{amount} {currency}",
       "stepRollupEmpty": "No process steps are mapped yet, so there is nothing to total.",
       "stepRollupUnavailable": "The totals could not be loaded.",
       "stepRollupToolNote": "A step counts towards every tool its role carries, so the tool totals do not add up to the role totals.",
@@ -8707,8 +8723,13 @@
       "noActivity": "No activity recorded.",
       "noHandoffBrief": "No handoff brief available.",
       "loadingBrief": "Loading brief...",
+      "loadMoreComments": "Load more comments",
       "errors": {
-        "saveFailed": "Couldn't save your change. Please try again."
+        "saveFailed": "Couldn't save your change. Please try again.",
+        "commentsFailed": "Couldn't load the comments. Please try again.",
+        "artifactsFailed": "Couldn't load the artifacts. Please try again.",
+        "activityFailed": "Couldn't load the activity. Please try again.",
+        "handoffFailed": "Couldn't load the handoff brief. Please try again."
       }
     },
     "orgChart": {
@@ -8833,7 +8854,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "Tool information is unavailable right now — this list may be incomplete.",
       "canvasNoToolsDefined": "No tools are attached to any role in this company.",
-      "deepLinkNodeNotFound": "This link points to a node that could not be found here. It may have been removed, or you may not have access to it."
+      "deepLinkNodeNotFound": "This link points to a node that could not be found here. It may have been removed, or you may not have access to it.",
+      "viewPlanner": "Workflow Planner"
     },
     "executorRollup": {
       "title": "Executor Rollup",
@@ -9177,6 +9199,162 @@
         "notFound": "That claim is no longer held by this task — refresh to see who holds it now.",
         "unavailable": "Couldn't reach the ledger; nothing was sent.",
         "error": "Something went wrong and delivery could not be confirmed. Refresh to see whether the claim is still held."
+      }
+    },
+    "workflowPlanner": {
+      "title": "Workflow Planner",
+      "plans": "Plans",
+      "newPlan": "New plan",
+      "open": "Open",
+      "back": "Back to plans",
+      "retry": "Retry",
+      "loading": "Loading plans...",
+      "loadFailed": "Could not load the plan.",
+      "saveFailed": "Could not save the change.",
+      "createFailed": "Could not create the plan.",
+      "emptyTitle": "No plans yet",
+      "emptyHint": "Start a plan to map one process, measure it and pick the one number to improve.",
+      "unavailableTitle": "Workflow Planner is not available",
+      "unavailableHint": "This feature is switched off for your workspace, so there is nothing to show here yet.",
+      "statusFlow": "Plan progress",
+      "status": {
+        "draft": "Draft",
+        "measured": "Measured",
+        "labeled": "Labeled",
+        "approved": "Approved",
+        "converted": "Converted"
+      },
+      "col": {
+        "name": "Plan",
+        "revision": "Revision",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "form": {
+        "name": "Plan name",
+        "startsAt": "Where the process starts",
+        "endsAt": "Where the process ends",
+        "create": "Create plan"
+      },
+      "steps": {
+        "map": "Map it",
+        "measure": "Measure",
+        "oneNumber": "Pick one number",
+        "label": "Break down and label",
+        "convert": "Create workflow"
+      },
+      "map": {
+        "empty": "Nothing mapped yet",
+        "emptyHint": "Add who is involved (lanes), then the steps each of them does.",
+        "handoffs": "{count} handoffs",
+        "waitNote": "What waits at this handoff?",
+        "laneName": "Lane name",
+        "addLane": "Add lane",
+        "stepLabel": "Step",
+        "stepLane": "Lane of the step",
+        "addStep": "Add step"
+      },
+      "source": {
+        "self_reported": "You said",
+        "email": "Checked against email",
+        "calendar": "Checked against calendar"
+      },
+      "measure": {
+        "hint": "How often does each step happen, and how long does it take?",
+        "needSteps": "Map at least one step first.",
+        "perWeek": "Per week",
+        "duration": "Duration",
+        "unit": "Duration unit",
+        "save": "Save",
+        "clear": "Clear"
+      },
+      "unit": {
+        "minutes": "minutes",
+        "hours": "hours",
+        "days": "days"
+      },
+      "oneNumber": {
+        "hint": "The steps you measured, longest waits first. You decide which one matters.",
+        "needMetrics": "Measure at least one step first.",
+        "rate": "{freq} per week, {dur} {unit}",
+        "title": "Name this number",
+        "returnKind": "What you get back",
+        "target": "Target",
+        "save": "Save as my one number"
+      },
+      "returnKind": {
+        "hours_back": "Hours back",
+        "more_yeses": "More yeses",
+        "money_sooner": "Money sooner"
+      },
+      "label": {
+        "needNumber": "Pick your one number first; its step is what you break down here.",
+        "subStep": "Sub-step",
+        "addSubStep": "Add sub-step",
+        "unlabel": "Remove label",
+        "edgeCase": "Edge case: {text}",
+        "byHandNote": "These stay with people. AI never acts on them.",
+        "acknowledge": "I have read the By Hand list",
+        "acknowledged": "By Hand list read"
+      },
+      "labels": {
+        "ai": "AI",
+        "automation": "Automation",
+        "by_hand": "By Hand"
+      },
+      "gate": {
+        "missing": "Still missing",
+        "title": "Ready to create?",
+        "unknown": "Other check",
+        "state": {
+          "met": "Met",
+          "open": "Open",
+          "pending": "Not checked yet"
+        },
+        "name": {
+          "G1": "Map is valid",
+          "G2": "Every step is measured",
+          "G3": "The chosen step is broken down",
+          "G4": "Every sub-step and edge case is labelled",
+          "G5": "By Hand list read and AI steps covered by approvals",
+          "G6": "Preview has no errors",
+          "G7": "You approved this plan",
+          "converted": "The workflows are created"
+        }
+      },
+      "readOnly": "This plan is {status}, so steps 1 to 4 are read-only.",
+      "firstProcess": {
+        "title": "Your company is ready",
+        "body": "Plan your first process: map it, measure it and pick the one number to improve.",
+        "plan": "Plan my first process",
+        "later": "Later"
+      },
+      "convert": {
+        "notReady": "Finish steps 1 to 4 first. The checks above show what is still missing.",
+        "previewTitle": "What will be created (preview, nothing exists yet)",
+        "createdTitle": "What was created",
+        "counts": "Workflows: {workflows}. Processes: {processes}.",
+        "ownerLane": "Owner: {lane}",
+        "errors": "Errors to fix before approving",
+        "warnings": "Warnings",
+        "documented": "Kept as handbook text, not built:",
+        "failedProposals": "{count} AI line proposals could not be filed. Retry to file them.",
+        "turnOnNotAvailable": "Turning workflows on is not available yet: nothing runs these workflows until it is.",
+        "openWorkflows": "Open workflows",
+        "unavailable": "This action is not available: the Workflow Planner is switched off for your workspace, or the plan no longer exists.",
+        "blocked": "Not ready yet. The checks above show what is missing.",
+        "approvedBy": "Approved by {by} at {at}.",
+        "preview": "Preview what will be created",
+        "previewAgain": "Refresh the preview",
+        "approve": "Approve",
+        "create": "Create workflows",
+        "retry": "Retry AI line proposals",
+        "approveTitle": "Approve this plan?",
+        "approveMessage": "You approve the preview shown. Any later edit to the plan clears this approval.",
+        "previewFailed": "Could not build the preview.",
+        "approveFailed": "Could not approve the plan.",
+        "convertFailed": "Could not create the workflows.",
+        "retryFailed": "Could not retry the AI line proposals."
       }
     }
   },

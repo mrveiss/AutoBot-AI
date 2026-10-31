@@ -3816,10 +3816,11 @@
     },
     "treeNode": {
       "itemsCount": "Items count",
+      "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
       "vectorizeFolderTitle": "Vectorize folder title",
-      "retryTitle": "Retry title",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "share": {
       "searching": "Searching...",
@@ -4241,6 +4242,8 @@
     "stop": "Stop Workflow",
     "status": "Status",
     "history": {
+      "durationSeconds": "s",
+      "durationMinutes": "min",
       "searchPlaceholder": "Search workflows...",
       "allStatus": "All Status",
       "completed": "Completed",
@@ -4356,7 +4359,8 @@
       "agentsAriaLabel": "Agent capabilities",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "A abrir a automação da sua empresa…",
-      "companyRequired": "Selecione uma empresa para abrir a automação."
+      "companyRequired": "Selecione uma empresa para abrir a automação.",
+      "planBeforeBuilding": "Planejar antes de criar"
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -7376,7 +7380,16 @@
       "initComplete": "Inicialização concluída"
     }
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "Regras de alerta",
+      "overview": "Visão geral",
+      "slos": "SLOs",
+      "traces": "Rastreamentos"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "browser": {
       "contentsOf": "{path} Contents",
       "refresh": "Refresh",
@@ -8620,7 +8633,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "As informações de ferramentas estão indisponíveis neste momento — esta lista pode estar incompleta.",
       "canvasNoToolsDefined": "Nenhuma ferramenta está anexada a nenhuma função nesta empresa.",
-      "deepLinkNodeNotFound": "Este link aponta para um nó que não foi encontrado aqui. Ele pode ter sido removido ou você pode não ter acesso a ele."
+      "deepLinkNodeNotFound": "Este link aponta para um nó que não foi encontrado aqui. Ele pode ter sido removido ou você pode não ter acesso a ele.",
+      "viewPlanner": "Planejador"
     },
     "executorRollup": {
       "title": "Resumo de executores",
@@ -8964,6 +8978,162 @@
         "notFound": "Esta tarefa já não detém a reserva — atualize para ver quem a detém agora.",
         "unavailable": "Não foi possível contactar o registo; nada foi enviado.",
         "error": "Ocorreu um erro e não foi possível confirmar a entrega. Atualize para ver se a reserva ainda está ativa."
+      }
+    },
+    "workflowPlanner": {
+      "title": "Planejador de fluxos de trabalho",
+      "plans": "Planos",
+      "newPlan": "Novo plano",
+      "open": "Abrir",
+      "back": "Voltar aos planos",
+      "retry": "Tentar novamente",
+      "loading": "Carregando planos...",
+      "loadFailed": "Não foi possível carregar o plano.",
+      "saveFailed": "Não foi possível salvar a alteração.",
+      "createFailed": "Não foi possível criar o plano.",
+      "emptyTitle": "Ainda não há planos",
+      "emptyHint": "Comece um plano para mapear um processo, medi-lo e escolher o número que quer melhorar.",
+      "unavailableTitle": "O planejador de fluxos de trabalho não está disponível",
+      "unavailableHint": "Este recurso está desativado no seu espaço de trabalho, então ainda não há nada para mostrar.",
+      "statusFlow": "Andamento do plano",
+      "status": {
+        "draft": "Rascunho",
+        "measured": "Medido",
+        "labeled": "Rotulado",
+        "approved": "Aprovado",
+        "converted": "Convertido"
+      },
+      "col": {
+        "name": "Plano",
+        "revision": "Revisão",
+        "status": "Status",
+        "actions": "Ações"
+      },
+      "form": {
+        "name": "Nome do plano",
+        "startsAt": "Onde o processo começa",
+        "endsAt": "Onde o processo termina",
+        "create": "Criar plano"
+      },
+      "steps": {
+        "map": "Mapear",
+        "measure": "Medir",
+        "oneNumber": "Escolher um número",
+        "label": "Detalhar e rotular",
+        "convert": "Criar fluxo de trabalho"
+      },
+      "map": {
+        "empty": "Nada mapeado ainda",
+        "emptyHint": "Adicione primeiro quem participa (raias) e depois os passos de cada um.",
+        "handoffs": "{count} repasses",
+        "waitNote": "O que espera neste repasse?",
+        "laneName": "Nome da raia",
+        "addLane": "Adicionar raia",
+        "stepLabel": "Passo",
+        "stepLane": "Raia do passo",
+        "addStep": "Adicionar passo"
+      },
+      "source": {
+        "self_reported": "Você disse",
+        "email": "Conferido com o e-mail",
+        "calendar": "Conferido com a agenda"
+      },
+      "measure": {
+        "hint": "Com que frequência cada passo acontece e quanto tempo leva?",
+        "needSteps": "Mapeie primeiro pelo menos um passo.",
+        "perWeek": "Por semana",
+        "duration": "Duração",
+        "unit": "Unidade de duração",
+        "save": "Salvar",
+        "clear": "Limpar"
+      },
+      "unit": {
+        "minutes": "minutos",
+        "hours": "horas",
+        "days": "dias"
+      },
+      "oneNumber": {
+        "hint": "Os passos que você mediu, das esperas mais longas para as menores. Você decide qual importa.",
+        "needMetrics": "Meça primeiro pelo menos um passo.",
+        "rate": "{freq} por semana, {dur} {unit}",
+        "title": "Dê um nome a este número",
+        "returnKind": "O que você recupera",
+        "target": "Meta",
+        "save": "Salvar como meu número"
+      },
+      "returnKind": {
+        "hours_back": "Horas de volta",
+        "more_yeses": "Mais sins",
+        "money_sooner": "Dinheiro mais cedo"
+      },
+      "label": {
+        "needNumber": "Escolha primeiro o seu número; o passo dele é o que se detalha aqui.",
+        "subStep": "Subpasso",
+        "addSubStep": "Adicionar subpasso",
+        "unlabel": "Remover rótulo",
+        "edgeCase": "Caso extremo: {text}",
+        "byHandNote": "Isto fica com pessoas. A IA nunca age sobre isso.",
+        "acknowledge": "Li a lista Manual",
+        "acknowledged": "Lista Manual lida"
+      },
+      "labels": {
+        "ai": "IA",
+        "automation": "Automação",
+        "by_hand": "Manual"
+      },
+      "gate": {
+        "missing": "Ainda falta",
+        "title": "Pronto para criar?",
+        "unknown": "Outra verificação",
+        "state": {
+          "met": "Cumprido",
+          "open": "Em aberto",
+          "pending": "Ainda não verificado"
+        },
+        "name": {
+          "G1": "O mapa é válido",
+          "G2": "Cada passo está medido",
+          "G3": "O passo escolhido está detalhado",
+          "G4": "Cada subpasso e caso extremo está etiquetado",
+          "G5": "Lista «À mão» lida e passos de IA cobertos por aprovações",
+          "G6": "A pré-visualização não tem erros",
+          "G7": "Aprovou este plano",
+          "converted": "Os fluxos de trabalho estão criados"
+        }
+      },
+      "readOnly": "Este plano está {status}, por isso os passos 1 a 4 são somente leitura.",
+      "firstProcess": {
+        "title": "A sua empresa está pronta",
+        "body": "Planeie o seu primeiro processo: mapeie-o, meça-o e escolha o número a melhorar.",
+        "plan": "Planear o meu primeiro processo",
+        "later": "Mais tarde"
+      },
+      "convert": {
+        "notReady": "Conclua primeiro os passos 1 a 4. As verificações acima mostram o que ainda falta.",
+        "previewTitle": "O que será criado (pré-visualização, ainda não existe nada)",
+        "createdTitle": "O que foi criado",
+        "counts": "Fluxos de trabalho: {workflows}. Processos: {processes}.",
+        "ownerLane": "Responsável: {lane}",
+        "errors": "Erros a corrigir antes de aprovar",
+        "warnings": "Avisos",
+        "documented": "Mantido como texto de manual, não construído:",
+        "failedProposals": "Não foi possível submeter {count} propostas de linha de IA. Tente novamente para as submeter.",
+        "turnOnNotAvailable": "Ativar os fluxos de trabalho ainda não está disponível: nada os executa até lá.",
+        "openWorkflows": "Abrir fluxos de trabalho",
+        "unavailable": "Esta ação não está disponível: o Planeador de fluxos de trabalho está desativado no seu espaço de trabalho, ou o plano já não existe.",
+        "blocked": "Ainda não está pronto. As verificações acima mostram o que falta.",
+        "approvedBy": "Aprovado por {by} em {at}.",
+        "preview": "Pré-visualizar o que será criado",
+        "previewAgain": "Atualizar a pré-visualização",
+        "approve": "Aprovar",
+        "create": "Criar fluxos de trabalho",
+        "retry": "Repetir propostas de linha de IA",
+        "approveTitle": "Aprovar este plano?",
+        "approveMessage": "Aprova a pré-visualização apresentada. Qualquer edição posterior ao plano anula esta aprovação.",
+        "previewFailed": "Não foi possível gerar a pré-visualização.",
+        "approveFailed": "Não foi possível aprovar o plano.",
+        "convertFailed": "Não foi possível criar os fluxos de trabalho.",
+        "retryFailed": "Não foi possível repetir as propostas de linha de IA."
       }
     }
   },

@@ -114,12 +114,13 @@ def test_every_pattern_a_changes_job_read_is_still_read(case):
 #: separate from the regenerable pre-#15360 fixture, so removing an entry from gate-paths.yml still
 #: fails here. It was held by changes_job_equivalence_15360_test.py until #18208 retired that test.
 ISSUE_17822_FIXTURE = Path(__file__).parent / "fixtures" / "issue_17822_migration_gate_entries.json"
-#: 16 = the eleven #17822 entries plus `services/__init__.py`, `services/approval_gate_service.py` and
+#: 24 = the eleven #17822 entries plus `services/__init__.py`, `services/approval_gate_service.py` and
 #: `llc/services/workspace_lease.py` (#17996), and `llc/services/company.py` + `company_ceo.py` (#15907's
 #: concurrent-move test), which the migration tests import, plus `company_move_lock.py`, `authz.py`,
 #: `membership_service.py`, `scheduler/run_status.py` and `autobot_shared/db_errors.py` (#19634's move tests).
-#: `membership_policy.py` is #19985's two-session membership-lock test.
-ISSUE_17822_COUNT = 22
+#: `membership_policy.py` is #19985's two-session membership-lock test; `llc/services/budget.py` and
+#: `llc/exceptions.py` are #20168's cost event foreign key test.
+ISSUE_17822_COUNT = 24
 
 
 def test_the_issue_17822_migration_entries_are_still_read():

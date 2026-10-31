@@ -145,6 +145,8 @@
       "value0Reports": "{value0} reports"
     },
     "processMonitorTab": {
+      "durationSeconds": "s",
+      "durationMinutes": "m",
       "actions": "اقدامات",
       "agentID": "Agent ID",
       "all": "All",
@@ -153,7 +155,7 @@
       "command": "کمانڈ",
       "completed": "مکمل",
       "dismiss": "Dismiss",
-      "duration": "Duration",
+      "duration": "دورانیہ",
       "eGOrchestrator": "e.g. orchestrator",
       "exit": "Exit",
       "failed": "ناکام",
@@ -392,6 +394,7 @@
     "deleteSchedule": "Delete schedule \"{name}\"?"
   },
   "common": {
+    "zeroSize": "0 B",
     "codeSyncBadge": {},
     "roleReachesNoDeployPath": "Assigned, but nothing will deploy {roles}: the role reaches no ansible group and has no dedicated playbook. Add a group mapping or a playbook for it.",
     "sidebar": {
@@ -606,7 +609,7 @@
     "categoryApplicationDescription": "Backend API and frontend web servers",
     "categoryAiLabel": "AI/ML Services",
     "categoryAiDescription": "LLM inference and AI processing",
-    "categoryAutomationLabel": "Automation",
+    "categoryAutomationLabel": "آٹومیشن",
     "categoryAutomationDescription": "Browser automation and scripting",
     "categoryObservabilityLabel": "Observability",
     "categoryObservabilityDescription": "Monitoring and logging stack",
@@ -915,7 +918,7 @@
       "clear": "صاف کریں",
       "clickCheckForUpdatesToScan": "Click \"Check for Updates\" to scan",
       "codeUpdateAvailable": "Code update available",
-      "duration": "Duration",
+      "duration": "دورانیہ",
       "eventPlural": "event{plural}",
       "eventsWillAppearHereAsThey": "Events will appear here as they occur.",
       "installUpdates": "Install Updates",
@@ -1708,7 +1711,7 @@
   "performance": {
     "alertRulesView": {
       "actions": "اقدامات",
-      "alertRules": "Alert Rules",
+      "alertRules": "الرٹ کے اصول",
       "areYouSureYou": "کیا آپ واقعی حذف کرنا چاہتے ہیں",
       "cancel": "Cancel",
       "condition": "Condition",
@@ -1739,7 +1742,7 @@
     },
     "performanceOverview": {
       "avgLatency": "Avg Latency",
-      "duration": "Duration",
+      "duration": "دورانیہ",
       "errorRate": "Error Rate",
       "name": "نام",
       "noTraceDataAvailable": "No trace data available",
@@ -1790,7 +1793,7 @@
     },
     "tracingView": {
       "apply": "Apply",
-      "duration": "Duration",
+      "duration": "دورانیہ",
       "failedToLoadSpan": "Failed to load span details",
       "first": "First",
       "last": "Last",
@@ -1820,7 +1823,13 @@
     "performanceSections": "Performance sections",
     "performanceSummary": "Performance summary",
     "refreshPerformanceData": "Refresh performance data",
-    "sLOCompliance": "SLO Compliance:"
+    "sLOCompliance": "SLO Compliance:",
+    "tabs": {
+      "alertRules": "الرٹ کے اصول",
+      "overview": "جائزہ",
+      "slos": "SLOs",
+      "traces": "ٹریسز"
+    }
   },
   "redisServicePanel": {
     "actionFailed": "Failed to {action} Redis service",
@@ -3579,7 +3588,7 @@
         "creating": "Creating...",
         "dataExport": "Data Export",
         "delete": "Delete",
-        "duration": "Duration",
+        "duration": "دورانیہ",
         "enterJobName": "Enter job name",
         "failed": "ناکام",
         "failedItems": "Failed Items",

@@ -145,6 +145,8 @@
       "value0Reports": "{value0} reports"
     },
     "processMonitorTab": {
+      "durationSeconds": "s",
+      "durationMinutes": "m",
       "actions": "Ações",
       "agentID": "Agent ID",
       "all": "All",
@@ -392,6 +394,7 @@
     "deleteSchedule": "Delete schedule \"{name}\"?"
   },
   "common": {
+    "zeroSize": "0 B",
     "codeSyncBadge": {},
     "roleReachesNoDeployPath": "Assigned, but nothing will deploy {roles}: the role reaches no ansible group and has no dedicated playbook. Add a group mapping or a playbook for it.",
     "sidebar": {
@@ -1683,7 +1686,7 @@
     "system": "Sistema",
     "systemValue0": "System ({value0})",
     "systemdService": "Systemd Service",
-    "target": "Destino",
+    "target": "Target",
     "targetNode": "Target Node",
     "targetPath": "Target Path *",
     "targetPath2": "Target path:",
@@ -1708,7 +1711,7 @@
   "performance": {
     "alertRulesView": {
       "actions": "Ações",
-      "alertRules": "Alert Rules",
+      "alertRules": "Regras de alerta",
       "areYouSureYou": "Tem certeza de que deseja excluir",
       "cancel": "Cancelar",
       "condition": "Condition",
@@ -1820,7 +1823,13 @@
     "performanceSections": "Performance sections",
     "performanceSummary": "Performance summary",
     "refreshPerformanceData": "Refresh performance data",
-    "sLOCompliance": "SLO Compliance:"
+    "sLOCompliance": "SLO Compliance:",
+    "tabs": {
+      "alertRules": "Regras de alerta",
+      "overview": "Visão geral",
+      "slos": "SLOs",
+      "traces": "Rastreamentos"
+    }
   },
   "redisServicePanel": {
     "actionFailed": "Failed to {action} Redis service",
@@ -2030,7 +2039,7 @@
     "sourcePathsCommaSeparated": "Source Paths (comma-separated)",
     "syncType": "Sync Type",
     "systemdService": "Systemd Service",
-    "target": "Destino",
+    "target": "Target",
     "targetNode": "Target Node *",
     "targetPath": "Target Path *",
     "times": "×",
@@ -3882,7 +3891,7 @@
     "empty": "No active shared links.",
     "loading": "Loading shared links…",
     "never": "Nunca",
-    "open": "Abrir",
+    "open": "Open",
     "protected": "Protected",
     "refresh": "Atualizar",
     "subtitle": "Read-only audit of who has shared what — every active public chat link, by user. Users manage their own shares in the app.",
