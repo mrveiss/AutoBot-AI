@@ -10,7 +10,7 @@ Routes:
   POST   /api/llc/work-items/{work_item_id}/checkout
   POST   /api/llc/work-items/{work_item_id}/release
   POST   /api/llc/work-items/{work_item_id}/transition
-  POST   /api/llc/work-items/{work_item_id}/comments
+  POST   /api/llc/work-items/{work_item_id}/comments  (GET lives in work_item_comments.py — GH#18750)
   POST   /api/llc/work-items/{work_item_id}/claim    (human claim — GH#8223)
   POST   /api/llc/work-items/{work_item_id}/unclaim  (human unclaim — GH#8223)
   POST   /api/llc/work-items/{work_item_id}/handoff/to-agent  (GH#8232)
@@ -80,6 +80,7 @@ from ..services.work_product_service import WorkProductService
 from ._common import actor_id as verified_user_id
 from .activity import ActivityLogEntry, ActivityLogResponse
 from .github_webhooks import validate_github_pr_url
+from .work_item_comments import serialize_comment
 
 
 class HumanClaimRequest(BaseModel):
@@ -837,22 +838,14 @@ async def add_comment(
     comment = await _service().add_comment(
         session,
         work_item_id=work_item_id,
-        company_id=body.company_id,
+        company_id=str(ctx.org_id),
         body=body.body,
         author_agent_id=body.author_agent_id,
         author_user_id=body.author_user_id,
     )
     # GH#9624/#19582: add_comment queued the comment and @mention wakes; they dispatch on this commit.
     await session.commit()
-    return {
-        "id": str(comment.id),
-        "work_item_id": str(comment.work_item_id),
-        "company_id": str(comment.company_id),
-        "body": comment.body,
-        "author_agent_id": (str(comment.author_agent_id) if comment.author_agent_id else None),
-        "author_user_id": (str(comment.author_user_id) if comment.author_user_id else None),
-        "created_at": comment.created_at.isoformat() if comment.created_at else None,
-    }
+    return serialize_comment(comment)
 
 
 @router.post("/{work_item_id}/handoff/to-agent", status_code=200)

@@ -46,8 +46,8 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/audit/AuditLogTable.vue": 741,  # #14780 BasePagination: 758 -> 741
     "autobot-frontend/src/components/browser/BrowserSessionManager.vue": 653,  # #18849: 654 -> 653
     "autobot-frontend/src/components/charts/BaseChart.vue": 602,
-    "autobot-frontend/src/components/charts/FunctionCallGraph.vue": 2165,
-    "autobot-frontend/src/components/charts/ImportTreeChart.vue": 1365,
+    "autobot-frontend/src/components/charts/FunctionCallGraph.vue": 2153,  # #19906: 2165 -> 2153
+    "autobot-frontend/src/components/charts/ImportTreeChart.vue": 1353,  # #19906: 1365 -> 1353
     "autobot-frontend/src/components/chat/ChatInput.vue": 1672,
     "autobot-frontend/src/components/chat/ChatInterface.vue": 1521,
     "autobot-frontend/src/components/chat/ChatMessages.vue": 2118,  # #18849: 2119 -> 2118
@@ -79,7 +79,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/knowledge/KnowledgeSystemDocs.vue": 863,
     "autobot-frontend/src/components/knowledge/KnowledgeUpload.vue": 1634,
     "autobot-frontend/src/components/knowledge/KnowledgeVerificationQueue.vue": 799,
-    "autobot-frontend/src/components/knowledge/SystemKnowledgeManager.vue": 1034,  # #18849: 1035 -> 1034
+    "autobot-frontend/src/components/knowledge/SystemKnowledgeManager.vue": 1018,  # #19906: 1034 -> 1018
     "autobot-frontend/src/components/knowledge/WebResearchPanel.vue": 779,
     "autobot-frontend/src/components/knowledge/connectors/ConnectorConfigModal.vue": 1626,  # #18849: 1627 -> 1626
     "autobot-frontend/src/components/knowledge/modals/BulkEditModal.vue": 615,  # #18849: 616 -> 615
@@ -143,7 +143,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/DevSpeedupView.vue": 658,
     "autobot-frontend/src/views/ErrorMonitoringView.vue": 843,
     "autobot-frontend/src/views/EvolutionView.vue": 781,
-    "autobot-frontend/src/views/FailureAnalysisDashboard.vue": 782,  # #13422: 799 -> 782 (kit badges)
+    "autobot-frontend/src/views/FailureAnalysisDashboard.vue": 768,  # #13422: 799 -> 782; #19906: -> 768
     "autobot-frontend/src/views/MarketplaceView.vue": 711,
     "autobot-frontend/src/views/OnboardingWizard.vue": 836,
     "autobot-frontend/src/views/PluginsView.vue": 1094,
@@ -161,7 +161,8 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/llc/RolesView.vue": 1026,  # #18819 1029->1027; #18849 one kit import on the merge (-1)
     "autobot-frontend/src/views/llc/RoutinesView.vue": 688,
     "autobot-frontend/src/views/llc/SprintBoardView.vue": 666,
-    "autobot-frontend/src/views/llc/WorkItemDetail.vue": 996,  # #14780: 1046 -> 1013 (kit BaseDrawer)
+    # #14780: 1046 -> 1013 (kit BaseDrawer); #18750: 994 (comments tab returns)
+    "autobot-frontend/src/views/llc/WorkItemDetail.vue": 994,
     "autobot-infrastructure/shared/ide-extensions/vscode-autobot/src/extension.ts": 741,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/background-monitor.ts": 713,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/index.ts": 957,
