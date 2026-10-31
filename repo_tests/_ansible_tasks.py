@@ -21,7 +21,6 @@ home for that assertion and enforces it repo-wide.
 from __future__ import annotations
 
 import re
-import shlex
 from pathlib import Path
 from typing import Any
 
@@ -108,6 +107,15 @@ def eval_when(expr: str, **state: object) -> bool:
 
 _APT_MODULES = frozenset({"apt", "package", "ansible.builtin.apt", "ansible.builtin.package"})
 _ITEM = re.compile(r"^\{\{\s*item(?:\.name)?\s*\}\}$")
+#: ``key=value``, where a value may hold a Jinja span or quotes with spaces in them.
+_FREE_FORM_ARG = re.compile(r"""(\w+)=((?:\{\{.*?\}\}|"[^"]*"|'[^']*'|\S)+)""")
+#: The keys under which a play or a block holds tasks; anything else (``vars``) is data.
+_TASK_LISTS = ("tasks", "pre_tasks", "post_tasks", "handlers", "block", "rescue", "always")
+_INCLUDES = tuple(
+    f"{prefix}{verb}"
+    for prefix in ("", "ansible.builtin.")
+    for verb in ("include_tasks", "import_tasks", "include_role", "import_role")
+)
 
 
 def ansible_yaml_files(root: Path) -> list[Path]:
@@ -125,7 +133,7 @@ def _module_args(value: object) -> dict:
     if isinstance(value, dict):
         return value
     if isinstance(value, str):
-        return dict(part.split("=", 1) for part in shlex.split(value) if "=" in part)
+        return {key: raw.strip("\"'") for key, raw in _FREE_FORM_ARG.findall(value)}
     return {}
 
 
@@ -154,4 +162,18 @@ def installs_package(node: object, package: str) -> bool:
         args = _module_args(node[key])
         if args.get("state") != "absent" and any(n.split("=")[0] == package for n in _names(args, node)):
             return True
-    return any(installs_package(value, package) for value in node.values())
+    return any(installs_package(node.get(key), package) for key in _TASK_LISTS)
+
+
+def includes_tasks_file(node: object, filename: str) -> bool:
+    """True when a task anywhere in *node* includes *filename*; a mention in a ``debug`` message is not one."""
+    if isinstance(node, list):
+        return any(includes_tasks_file(item, filename) for item in node)
+    if not isinstance(node, dict):
+        return False
+    for key in _INCLUDES:
+        value = node.get(key)
+        args = value if isinstance(value, dict) else {"file": value}
+        if filename in str(args.get("tasks_from", args.get("file", ""))):
+            return True
+    return any(includes_tasks_file(node.get(key), filename) for key in _TASK_LISTS)
