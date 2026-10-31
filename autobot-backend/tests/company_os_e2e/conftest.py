@@ -47,4 +47,6 @@ def stack(tmp_path_factory):  # noqa: ANN001, ANN201
 
 @pytest.fixture(scope="session")
 def scenario(stack):  # noqa: ANN001, ANN201
-    return Scenario(api=Api(stack), stack=stack)
+    api = Api(stack)
+    api.wait_for_scheduler(stackmod.SCHEDULER_TIMEOUT_SECONDS)
+    return Scenario(api=api, stack=stack)

@@ -82,6 +82,22 @@ class Api:
         assert login.status_code == 200, f"login failed: {login.status_code} {login.text[:300]}"
         self.http.headers["Authorization"] = f"Bearer {login.json()['token']}"
 
+    def wait_for_scheduler(self, seconds: float) -> None:
+        """Block until the server reports its heartbeat scheduler running (GET /api/llc/health/probe).
+
+        /api/health answers as soon as the critical services are up, but the scheduler is started by
+        the BACKGROUND initialisation that follows, which takes minutes when a model must be fetched.
+        Every timed window in the scenario assumes a running scheduler, so it is a precondition,
+        asserted here with the probe the product itself exposes, not slept for.
+        """
+
+        def running() -> bool:
+            resp = self.http.get(f"{API}/health/probe")
+            return resp.status_code == 200 and bool(resp.json().get("data", {}).get("heartbeat_scheduler_running"))
+
+        if not wait_for(running, seconds, 5.0):
+            raise StepFailure(f"precondition: the heartbeat scheduler was not running {seconds:.0f}s after boot")
+
     def call(self, method: str, path: str, ok: tuple[int, ...] = (200, 201, 202, 204), **kw: Any) -> Any:
         resp = self.http.request(method, f"{API}{path}", **kw)
         assert resp.status_code in ok, f"{method} {path} -> {resp.status_code} {resp.text[:400]}"
