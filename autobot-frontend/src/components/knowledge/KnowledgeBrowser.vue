@@ -1462,7 +1462,7 @@ watch(() => props.mode, () => {
 }
 
 .refresh-status-btn .icon {
-  font-size: var(--text-sm);
+  width: var(--text-sm); height: var(--text-sm);
 }
 
 /* Batch Toolbar */
@@ -1493,7 +1493,7 @@ watch(() => props.mode, () => {
 }
 
 .toolbar-info .icon {
-  font-size: var(--text-xl);
+  width: var(--text-xl); height: var(--text-xl);
 }
 
 .toolbar-actions {
@@ -1616,7 +1616,7 @@ watch(() => props.mode, () => {
 }
 
 .loading-more .icon {
-  font-size: var(--text-base);
+  width: var(--text-base); height: var(--text-base);
 }
 
 /* States */
@@ -1632,10 +1632,10 @@ watch(() => props.mode, () => {
   color: var(--text-tertiary);
 }
 
-.loading-state .icon,
-.error-state .icon,
-.placeholder-state .icon {
-  font-size: var(--text-5xl);
+.loading-state > .icon,
+.error-state > .icon,
+.placeholder-state > .icon {
+  width: var(--text-5xl); height: var(--text-5xl);
   margin-bottom: var(--spacing-4);
   opacity: 0.5;
 }
@@ -1672,7 +1672,7 @@ watch(() => props.mode, () => {
 }
 
 .file-info > .icon {
-  font-size: 2rem;
+  width: 2rem; height: 2rem;
   color: var(--color-primary);
   margin-top: var(--spacing-1);
 }
