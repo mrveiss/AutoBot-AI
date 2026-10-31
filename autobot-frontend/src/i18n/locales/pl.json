@@ -4357,7 +4357,8 @@
       "agentsAriaLabel": "Agent capabilities",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "Otwieranie automatyzacji Twojej firmy…",
-      "companyRequired": "Wybierz firmę, aby otworzyć automatyzację."
+      "companyRequired": "Wybierz firmę, aby otworzyć automatyzację.",
+      "planBeforeBuilding": "Zaplanuj przed budową"
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -8630,7 +8631,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "Informacje o narzędziach są obecnie niedostępne — ta lista może być niepełna.",
       "canvasNoToolsDefined": "Żadne narzędzie nie jest dołączone do żadnej roli w tej firmie.",
-      "deepLinkNodeNotFound": "Ten link wskazuje węzeł, którego nie można tu znaleźć. Mógł zostać usunięty lub nie masz do niego dostępu."
+      "deepLinkNodeNotFound": "Ten link wskazuje węzeł, którego nie można tu znaleźć. Mógł zostać usunięty lub nie masz do niego dostępu.",
+      "viewPlanner": "Planer"
     },
     "executorRollup": {
       "title": "Zestawienie wykonawców",
@@ -8974,6 +8976,113 @@
         "notFound": "To zadanie nie trzyma już tej rezerwacji — odśwież, aby zobaczyć, kto ją trzyma.",
         "unavailable": "Nie można połączyć się z rejestrem; nic nie wysłano.",
         "error": "Coś poszło nie tak i nie udało się potwierdzić doręczenia. Odśwież, aby sprawdzić, czy blokada jest nadal utrzymywana."
+      }
+    },
+    "workflowPlanner": {
+      "title": "Planer przepływów pracy",
+      "plans": "Plany",
+      "newPlan": "Nowy plan",
+      "open": "Otwórz",
+      "back": "Wróć do planów",
+      "retry": "Spróbuj ponownie",
+      "loading": "Wczytywanie planów...",
+      "loadFailed": "Nie udało się wczytać planu.",
+      "saveFailed": "Nie udało się zapisać zmiany.",
+      "createFailed": "Nie udało się utworzyć planu.",
+      "emptyTitle": "Brak planów",
+      "emptyHint": "Zacznij plan, aby odwzorować jeden proces, zmierzyć go i wybrać jedną liczbę do poprawy.",
+      "unavailableTitle": "Planer przepływów pracy jest niedostępny",
+      "unavailableHint": "Ta funkcja jest wyłączona w Twojej przestrzeni roboczej, więc nie ma jeszcze nic do pokazania.",
+      "statusFlow": "Postęp planu",
+      "statusNotAvailable": "Ten plan ma status: {status}. Zatwierdzanie i konwersja nie są jeszcze dostępne, więc plan jest tylko do odczytu.",
+      "convertNotAvailable": "Tworzenie przepływów pracy z planu nie jest jeszcze dostępne.",
+      "status": {
+        "draft": "Szkic",
+        "measured": "Zmierzony",
+        "labeled": "Oznaczony",
+        "approved": "Zatwierdzony",
+        "converted": "Przekonwertowany"
+      },
+      "col": {
+        "name": "Plan",
+        "revision": "Wersja",
+        "status": "Status",
+        "actions": "Akcje"
+      },
+      "form": {
+        "name": "Nazwa planu",
+        "startsAt": "Gdzie proces się zaczyna",
+        "endsAt": "Gdzie proces się kończy",
+        "create": "Utwórz plan"
+      },
+      "steps": {
+        "map": "Odwzoruj",
+        "measure": "Zmierz",
+        "oneNumber": "Wybierz jedną liczbę",
+        "label": "Rozbij i oznacz",
+        "convert": "Utwórz przepływ pracy"
+      },
+      "map": {
+        "empty": "Nic jeszcze nie odwzorowano",
+        "emptyHint": "Najpierw dodaj uczestników (tory), potem kroki każdego z nich.",
+        "handoffs": "Przekazania: {count}",
+        "waitNote": "Co czeka przy tym przekazaniu?",
+        "laneName": "Nazwa toru",
+        "addLane": "Dodaj tor",
+        "stepLabel": "Krok",
+        "stepLane": "Tor kroku",
+        "addStep": "Dodaj krok"
+      },
+      "source": {
+        "self_reported": "Tak twierdzisz",
+        "email": "Sprawdzono w poczcie",
+        "calendar": "Sprawdzono w kalendarzu"
+      },
+      "measure": {
+        "hint": "Jak często zdarza się każdy krok i ile trwa?",
+        "needSteps": "Najpierw odwzoruj co najmniej jeden krok.",
+        "perWeek": "Tygodniowo",
+        "duration": "Czas trwania",
+        "unit": "Jednostka czasu",
+        "save": "Zapisz",
+        "clear": "Wyczyść"
+      },
+      "unit": {
+        "minutes": "minuty",
+        "hours": "godziny",
+        "days": "dni"
+      },
+      "oneNumber": {
+        "hint": "Zmierzone kroki, od najdłuższych oczekiwań. To Ty decydujesz, który się liczy.",
+        "needMetrics": "Najpierw zmierz co najmniej jeden krok.",
+        "rate": "{freq} tygodniowo, {dur} {unit}",
+        "title": "Nazwij tę liczbę",
+        "returnKind": "Co odzyskujesz",
+        "target": "Cel",
+        "save": "Zapisz jako moją jedną liczbę"
+      },
+      "returnKind": {
+        "hours_back": "Odzyskane godziny",
+        "more_yeses": "Więcej zgód",
+        "money_sooner": "Szybciej pieniądze"
+      },
+      "label": {
+        "needNumber": "Najpierw wybierz swoją jedną liczbę; jej krok rozbijasz tutaj.",
+        "subStep": "Podkrok",
+        "addSubStep": "Dodaj podkrok",
+        "unlabel": "Usuń oznaczenie",
+        "edgeCase": "Przypadek brzegowy: {text}",
+        "byHandNote": "To zostaje po stronie ludzi. AI nigdy tego nie wykonuje.",
+        "acknowledge": "Przeczytałem listę Ręcznie",
+        "acknowledged": "Lista Ręcznie przeczytana"
+      },
+      "labels": {
+        "ai": "AI",
+        "automation": "Automatyzacja",
+        "by_hand": "Ręcznie"
+      },
+      "gate": {
+        "missing": "Nadal brakuje"
       }
     }
   },

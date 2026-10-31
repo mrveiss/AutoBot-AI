@@ -18,7 +18,7 @@ import { ref, computed, onMounted } from 'vue'
 import { formatBytes } from '@/utils/formatHelpers'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import { useToast } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
 import type { Backup, BackupRequest } from '@/types/slm'
@@ -212,7 +212,7 @@ function getNodeHostname(nodeId: string): string {
               </span>
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              {{ formatDateTime(backup.started_at, '-') }}
+              {{ formatFleetDateTime(backup.started_at, '-') }}
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm space-x-3">
               <button
