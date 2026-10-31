@@ -16,7 +16,7 @@
 
     <!-- Loading state -->
     <div v-if="loading" class="chart-loading-overlay">
-      <div class="loading-spinner"></div>
+      <BaseSpinner size="md" />
       <span>{{ $t('charts.importTree.loading') }}</span>
     </div>
 
@@ -68,7 +68,7 @@
       <div v-show="viewMode === 'network'" class="network-view">
         <!-- Loading Cytoscape library -->
         <div v-if="cytoscapeLoading && !cy" class="cytoscape-loading">
-          <div class="loading-spinner"></div>
+          <BaseSpinner size="md" />
           <span>{{ $t('charts.importTree.loadingVisualization') }}</span>
         </div>
 
@@ -228,6 +228,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseSpinner } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, shallowRef, computed, watch, onUnmounted, nextTick } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
@@ -854,19 +855,6 @@ onUnmounted(() => {
   background: rgba(0, 0, 0, 0.3);
   z-index: 10;
   gap: var(--spacing-2);
-}
-
-.loading-spinner {
-  width: var(--spacing-8);
-  height: var(--spacing-8);
-  border: 3px solid var(--border-color);
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: spin 0.6s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .chart-error {
