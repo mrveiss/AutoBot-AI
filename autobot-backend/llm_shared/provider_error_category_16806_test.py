@@ -16,7 +16,7 @@ from llm_shared.models import LLMResponse
 from llm_shared.provider_auth import ProviderAuthError, TokenExpiredError
 from llm_shared.provider_error_category import (
     ProviderErrorCategory,
-    classify_error,
+    classify_provider_error,
     failure_from_exception,
     failure_from_response,
     failure_from_status,
@@ -46,11 +46,11 @@ C = ProviderErrorCategory
     ],
 )
 def test_text_is_classified(text, expected):
-    assert classify_error(text).category is expected
+    assert classify_provider_error(text).category is expected
 
 
 def test_a_plan_limit_outranks_the_429_it_arrives_in():
-    assert classify_error("429 insufficient_quota").category is C.BILLING
+    assert classify_provider_error("429 insufficient_quota").category is C.BILLING
 
 
 @pytest.mark.parametrize(
@@ -59,7 +59,7 @@ def test_a_plan_limit_outranks_the_429_it_arrives_in():
 def test_rate_limit_agrees_with_the_backoff_pattern_set(text):
     """The rate-limit special case is mapped, not copied: the same patterns decide it (#16806 AC2)."""
     flagged = extract_rate_limit_info(LLMResponse(content="", error=text))[0]
-    category = classify_error(text).category
+    category = classify_provider_error(text).category
     assert flagged == (category in (C.RATE_LIMIT, C.BILLING))
 
 

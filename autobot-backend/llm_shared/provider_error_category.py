@@ -122,7 +122,7 @@ def _category_of(text: str) -> ProviderErrorCategory:
     return ProviderErrorCategory.UNKNOWN
 
 
-def classify_error(text: str, retry_after: Optional[float] = None) -> ProviderFailure:
+def classify_provider_error(text: str, retry_after: Optional[float] = None) -> ProviderFailure:
     """Classify a provider error string. Rate limits are decided by ``rate_limit_backoff``'s pattern set."""
     return ProviderFailure(_category_of(text), text, retry_after)
 
@@ -132,12 +132,12 @@ def failure_from_response(response: LLMResponse) -> Optional[ProviderFailure]:
     if not response.error:
         return None
     _, retry_after = extract_rate_limit_info(response)
-    return classify_error(str(response.error), retry_after)
+    return classify_provider_error(str(response.error), retry_after)
 
 
 def failure_from_status(status: int) -> ProviderFailure:
     """Classify a bare HTTP status (the chat path sees the status, not a provider's error string)."""
-    return classify_error(f"HTTP {status}")
+    return classify_provider_error(f"HTTP {status}")
 
 
 def failure_from_exception(exc: BaseException) -> ProviderFailure:
@@ -151,13 +151,13 @@ def failure_from_exception(exc: BaseException) -> ProviderFailure:
         return failure_from_status(exc.status)
     if isinstance(exc, (aiohttp.ClientError, OSError)):
         return ProviderFailure(ProviderErrorCategory.NETWORK, message)
-    return classify_error(message)
+    return classify_provider_error(message)
 
 
 __all__ = [
     "ProviderErrorCategory",
     "ProviderFailure",
-    "classify_error",
+    "classify_provider_error",
     "failure_from_exception",
     "failure_from_response",
     "failure_from_status",

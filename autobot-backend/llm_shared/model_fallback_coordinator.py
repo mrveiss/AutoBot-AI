@@ -41,7 +41,7 @@ from .provider_degradation import AllCredentialsNeedReauthError, get_degradation
 from .provider_error_category import (
     ProviderErrorCategory,
     ProviderFailure,
-    classify_error,
+    classify_provider_error,
     failure_from_exception,
     failure_from_response,
 )
@@ -255,7 +255,7 @@ class ModelFallbackCoordinator:
     @staticmethod
     def _rate_limit_failure(exc: RateLimitError) -> ProviderFailure:
         """A backoff-exhausted 429 is a throttle, or a plan limit when its text says so."""
-        failure = classify_error(str(exc), getattr(exc, "retry_after", None))
+        failure = classify_provider_error(str(exc), getattr(exc, "retry_after", None))
         if failure.category is ProviderErrorCategory.BILLING:
             return failure
         return ProviderFailure(ProviderErrorCategory.RATE_LIMIT, failure.message, failure.retry_after)
