@@ -67,16 +67,50 @@ describe('UpdateProgressPanel', () => {
     expect(w.text()).toContain('install deps')
   })
 
-  it('does not poll while inactive, and stops when the run ends', async () => {
-    mountPanel(false)
+  it('shows a live run with no job on the page, as after a reload', async () => {
+    get.mockResolvedValue(running)
+    const w = mountPanel(false)
     await flushPromises()
+    expect(w.text()).toContain('install deps')
+    expect(get).toHaveBeenCalledWith('/code-sync/update-all/progress')
+  })
+
+  it('shows nothing for a finished run when no job is active, and polls slowly', async () => {
+    get.mockResolvedValue({ ...running, state: 'finished' })
+    const w = mountPanel(false)
+    await flushPromises()
+    expect(w.find('[data-testid="update-progress"]').exists()).toBe(false)
+    get.mockClear()
+    await vi.advanceTimersByTimeAsync(29000)
     expect(get).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(1000)
+    expect(get).toHaveBeenCalledTimes(1)
+  })
+
+  it('stops for good when unmounted with a request in flight', async () => {
+    let answer: (value: unknown) => void = () => {}
+    get.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)))
+    const w = mountPanel()
+    w.unmount()
+    answer(running)
+    await flushPromises()
+    get.mockClear()
+    await vi.advanceTimersByTimeAsync(120000)
+    expect(get).not.toHaveBeenCalled()
+  })
+
+  it('keeps one poll chain when active flips with a request in flight', async () => {
+    let answer: (value: unknown) => void = () => {}
+    get.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)))
     get.mockResolvedValue(running)
     const w = mountPanel()
-    await flushPromises()
     await w.setProps({ active: false })
+    await w.setProps({ active: true })
+    answer(running)
+    await flushPromises()
     get.mockClear()
-    await vi.advanceTimersByTimeAsync(20000)
-    expect(get).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(5000)
+    expect(get).toHaveBeenCalledTimes(1)
+    w.unmount()
   })
 })

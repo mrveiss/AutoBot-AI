@@ -1072,7 +1072,6 @@ onUnmounted(() => {
           </template>
         </div>
 
-        <UpdateProgressPanel :active="updateAllIsRunning" :since="updateAllJob.created_at" />
         <template v-for="stage in updateAllJob.stages" :key="`log-${stage.name}`">
           <div
             v-if="expandedStageLogs.has(stage.name) && stage.log_lines.length > 0"
@@ -1133,6 +1132,7 @@ onUnmounted(() => {
       </div>
     </div>
 
+    <UpdateProgressPanel :active="updateAllIsRunning" :since="updateAllJob?.created_at" class="mb-6" />
     <!-- #12593: reconnecting / lost-contact banner. Shows IMMEDIATELY (spinner)
          during the stage-3 self-restart window; a static warning once polling gives up. -->
     <BaseAlert

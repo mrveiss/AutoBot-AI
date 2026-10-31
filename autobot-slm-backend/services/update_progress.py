@@ -14,8 +14,8 @@ from pathlib import Path
 from typing import Any
 
 from autobot_shared.env_utils import env_int_clamped
-from services.self_update_log_reader import _read_tail, read_self_update_verdict
-from services.update_report import _TASK_LINE, _safe
+from services.self_update_log_reader import read_self_update_verdict
+from services.update_report import _safe
 
 #: A live run whose log has not moved for this long is reported as quiet. Not a failure: pip can be silent.
 STALL_SECONDS = env_int_clamped("SLM_UPDATE_PROGRESS_STALL_SECONDS", 600, min_v=30)
@@ -57,12 +57,11 @@ def build_update_progress(
     verdict = read_self_update_verdict(log_path, not_before=since)
     if not verdict.log_present or verdict.from_rotated_log:
         return {"state": "waiting", "play": None, "task": None, "last_line_at": None, "elapsed_seconds": None}
-    tasks = list(_TASK_LINE.finditer(_read_tail(log_path) or ""))
     last_line = _log_mtime(log_path)
     return {
         "state": _state(verdict.complete, run_active, _seconds_since(last_line, now)),
         "play": _safe(verdict.plays_seen[-1]) if verdict.plays_seen else None,
-        "task": _safe(tasks[-1].group("name")) if tasks else None,
+        "task": _safe(verdict.last_task) if verdict.last_task else None,
         "last_line_at": last_line.isoformat() if last_line else None,
         "elapsed_seconds": _seconds_since(_parse(verdict.run_started_at), now),
     }

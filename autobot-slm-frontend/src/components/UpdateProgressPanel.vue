@@ -1,6 +1,6 @@
 <template>
-  <div v-if="active && progress" class="mt-3 rounded-md border border-gray-200 p-3 text-sm" data-testid="update-progress">
-    <p class="font-medium">{{ $t('updateProgressPanel.title') }}</p>
+  <BaseAlert v-if="visible && progress" variant="info" data-testid="update-progress">
+    <template #title>{{ $t('updateProgressPanel.title') }}</template>
     <p v-if="progress.play">{{ $t('updateProgressPanel.play', { name: progress.play }) }}</p>
     <p v-if="progress.task">{{ $t('updateProgressPanel.task', { name: progress.task }) }}</p>
     <p v-if="progress.last_line_at">
@@ -9,21 +9,24 @@
     <p v-if="progress.elapsed_seconds != null">
       {{ $t('updateProgressPanel.elapsed', { minutes: Math.floor(progress.elapsed_seconds / 60) }) }}
     </p>
-    <p v-if="stateMessage" class="mt-1 font-medium" data-testid="update-progress-state">{{ $t(stateMessage) }}</p>
-    <p class="mt-1 text-gray-500">{{ $t('updateProgressPanel.note') }}</p>
-  </div>
+    <p v-if="stateMessage" data-testid="update-progress-state">{{ $t(stateMessage) }}</p>
+    <p>{{ $t('updateProgressPanel.note') }}</p>
+  </BaseAlert>
 </template>
 
 <script setup lang="ts">
-// #20254: what a running update is doing, from its own log, across the SLM's restart.
+// #20254: what a running update is doing, from its own log, across the SLM's restart. It follows the
+// run, not the page's job: a reload after the restart, or "Update This Server", has no job to tie to.
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { BaseAlert } from '@autobot/ui'
 import { formatFleetDateTime } from '@/composables/useTimezone'
 import slmApiClient from '@/utils/ApiClient'
 import type { components } from '@/types/generated/api'
 
 type UpdateProgress = components['schemas']['UpdateProgress']
 
-const POLL_MS = 5000
+const LIVE_POLL_MS = 5000
+const IDLE_POLL_MS = 30000
 const STATE_MESSAGES: Partial<Record<UpdateProgress['state'], string>> = {
   waiting: 'updateProgressPanel.waiting',
   quiet: 'updateProgressPanel.quiet',
@@ -33,30 +36,36 @@ const STATE_MESSAGES: Partial<Record<UpdateProgress['state'], string>> = {
 
 const props = defineProps<{ active: boolean; since?: string | null }>()
 const progress = ref<UpdateProgress | null>(null)
+const runIsLive = computed(() => progress.value?.state === 'running' || progress.value?.state === 'quiet')
+const visible = computed(() => props.active || runIsLive.value)
 const stateMessage = computed(() => (progress.value ? STATE_MESSAGES[progress.value.state] : undefined))
+
+// Each start takes a new generation; a request or timer from an older one does nothing when it returns.
+let generation = 0
 let timer: ReturnType<typeof setTimeout> | null = null
 
-async function poll(): Promise<void> {
+async function poll(mine: number): Promise<void> {
   try {
-    const query = props.since ? `?since=${encodeURIComponent(props.since)}` : ''
+    const query = props.active && props.since ? `?since=${encodeURIComponent(props.since)}` : ''
     const data: UpdateProgress = await slmApiClient.get(`/code-sync/update-all/progress${query}`)
-    progress.value = data
+    if (mine === generation) progress.value = data
   } catch {
     // The SLM is restarting, or this user may not read the log: keep what is on screen and try again.
   }
-  if (props.active) timer = setTimeout(poll, POLL_MS)
+  if (mine === generation) timer = setTimeout(() => void poll(mine), visible.value ? LIVE_POLL_MS : IDLE_POLL_MS)
 }
 
 function stop(): void {
+  generation += 1
   if (timer) clearTimeout(timer)
   timer = null
 }
 
 watch(
   () => props.active,
-  (active) => {
+  () => {
     stop()
-    if (active) void poll()
+    void poll(generation)
   },
   { immediate: true },
 )
