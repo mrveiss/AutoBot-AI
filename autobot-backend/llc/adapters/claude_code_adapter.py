@@ -406,7 +406,10 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         # stdout file (GH#9992).
         stderr_file: Optional[str] = state.get("stderr_file") if state else None
         stderr_tail = read_output_tail(stderr_file) if stderr_file else ""
-        if is_rate_limit_output(tail) or is_rate_limit_output(stderr_tail):
+        # #20202: an oversized result line can start before the tail, so read its own text too.
+        # Only that field, not the wider read, whose tool output can mention rate limits in passing.
+        result_text = str(result_event.get("result") or "") if result_event else ""
+        if is_rate_limit_output(tail) or is_rate_limit_output(stderr_tail) or is_rate_limit_output(result_text):
             logger.warning(
                 "ClaudeCodeAdapter: rate-limit markers in output/stderr for run %s — signalling RATE_LIMITED",
                 run_id,
