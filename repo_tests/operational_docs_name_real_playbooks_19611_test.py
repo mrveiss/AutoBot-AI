@@ -49,7 +49,7 @@ _QUALIFIED = re.compile(r"((?:tests/)?playbooks/[\w.-]*?\.ya?ml(?:\.[\w-]+)*)(?!
 #: under ``playbooks/`` (``$PLAYBOOK_DIR/$playbook`` in deploy.sh).
 _RUN_PLAYBOOK = re.compile(r"""\brun_playbook\s+(["'])([\w.-]+\.ya?ml)\1""")
 #: A role manifest's ``"ansible_playbook": "<name>"``; bare, it may sit at the ansible root or in ``playbooks/``.
-_MANIFEST = re.compile(r"""["']ansible_playbook["']:\s*(["'])(?:playbooks/)?([\w.-]+\.ya?ml)\1""")
+_MANIFEST = re.compile(r"""["']ansible_playbook["']\s*:\s*(["'])(?:playbooks/)?([\w.-]+\.ya?ml)\1""")
 #: A role table's ``| **Ansible playbook** | `<name>` |``: bare names hid here while the patterns above
 #: passed (`docs/developer/ROLES.md`), resolved the same way as a manifest's.
 _TABLE_ROW = re.compile(r"\*\*Ansible playbook\*\*\s*\|\s*`(?:playbooks/)?([\w.-]+\.ya?ml)`")
@@ -124,6 +124,7 @@ def test_contrast_single_quoted_run_playbook_is_read() -> None:
     assert _missing("run_playbook 'rollback.yml' 'Deployment rollback'", known) == {"playbooks/rollback.yml"}
     assert not _missing("run_playbook 'deploy_role.yml' 'x'", known)
     assert _missing("\"ansible_playbook\": 'gone.yml'", known) == {"playbooks/gone.yml"}
+    assert _missing('"ansible_playbook" : "gone.yml"', known) == {"playbooks/gone.yml"}
 
 
 def test_contrast_the_path_is_the_key_not_the_filename() -> None:
