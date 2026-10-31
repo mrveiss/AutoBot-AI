@@ -26,10 +26,11 @@ from knowledge.fact_redis_codec import (  # noqa: F401 -- names stay patchable h
     _decode_redis_hash,
 )
 from knowledge.fact_sharing import FactSharingMixin
-from knowledge.ingest_sanitize import guard_update, sanitize_fact_content, sanitize_new_fact, sanitize_update_metadata
+from knowledge.ingest_sanitize import guard_update, sanitize_fact_content, sanitize_update_metadata
 from knowledge.long_fact_embedding import embed_in_windows, window_metadata
 from knowledge.ownership_index import index_ownership, ownership_changed, reindex_ownership
 from knowledge.quarantine import QuarantineAuditFailed, apply_quarantine, require_audit_actor, without_quarantine
+from knowledge.write_scope import guard_caller_metadata
 
 if TYPE_CHECKING:
     import aioredis
@@ -760,10 +761,9 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         # to identical text and would otherwise collide, silently dropping the second,
         # genuinely different fact as a "duplicate" of the first (#17005's own risk,
         # reintroduced from the write side once redaction moved ahead of this check).
-        # Storage and embedding still use the redacted `content` below -- only the
-        # dedup hash keys off the raw original, kept just long enough to pass through.
+        # Storage and embedding use the redacted `content` below; only the dedup hash keys off the raw original.
         raw_content = content
-        content, metadata = sanitize_new_fact(content, metadata)  # #16770: the KB write chokepoint
+        content, metadata = sanitize_fact_content(content, guard_caller_metadata(metadata))  # #16770
 
         if not content or not content.strip():
             return {"status": "error", "message": "Empty content, or nothing left after injection sanitizing"}

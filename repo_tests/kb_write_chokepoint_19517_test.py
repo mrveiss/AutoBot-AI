@@ -316,8 +316,8 @@ def test_the_acknowledged_passthroughs_still_exist():
 def test_store_fact_and_update_fact_call_the_guard():
     facts = _SOURCES["autobot-backend/knowledge/facts.py"]
     assert _function_spells(
-        facts, "store_fact", frozenset({"sanitize_new_fact"})
-    ), "store_fact must call sanitize_new_fact (the ownership guard)."
+        facts, "store_fact", frozenset({"guard_caller_metadata"})
+    ), "store_fact must call guard_caller_metadata (the ownership guard)."
     assert _function_spells(
         facts, "update_fact", frozenset({"sanitize_update_metadata"})
     ), "update_fact must call sanitize_update_metadata."
