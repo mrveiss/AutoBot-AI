@@ -217,10 +217,6 @@ function copyToClipboard(text: string): void {
   setTimeout(() => (success.value = null), 3000)
 }
 
-function formatDate(dateStr: string | null | undefined): string {
-  return formatDateTime(dateStr)
-}
-
 onMounted(async () => {
   loading.value = true
   try {
@@ -247,7 +243,7 @@ onMounted(async () => {
           <p>{{ $t('settings.securitySettings.yourAccountIsProtectedWithValue0', { value0: mfaStatus.method }) }}</p>
           <div class="mt-2">
             <p>{{ $t('settings.securitySettings.backupCodesRemainingValue0', { value0: mfaStatus.backup_codes_remaining }) }}</p>
-            <p v-if="mfaStatus.last_verified_at">{{ $t('settings.securitySettings.lastVerifiedValue0', { value0: formatDate(mfaStatus.last_verified_at) }) }}</p>
+            <p v-if="mfaStatus.last_verified_at">{{ $t('settings.securitySettings.lastVerifiedValue0', { value0: formatDateTime(mfaStatus.last_verified_at) }) }}</p>
           </div>
         </BaseAlert>
 
@@ -381,10 +377,10 @@ onMounted(async () => {
               </td>
               <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
                 <div>{{ $t('settings.securitySettings.value0Uses', { value0: key.usage_count }) }}</div>
-                <div class="text-xs">{{ formatDate(key.last_used_at) }}</div>
+                <div class="text-xs">{{ formatDateTime(key.last_used_at) }}</div>
               </td>
               <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                {{ formatDate(key.expires_at) }}
+                {{ formatDateTime(key.expires_at) }}
               </td>
               <td class="px-4 py-3 whitespace-nowrap text-sm">
                 <button
