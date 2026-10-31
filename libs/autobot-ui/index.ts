@@ -152,6 +152,16 @@ export type {
 export type { DurationStyle } from './src/utils/duration'
 export { formatDuration, formatUptime, formatFileSize, formatBytes } from './src/utils/format'
 export type { FormatDurationOptions, FormatUptimeOptions, FormatBytesOptions } from './src/utils/format'
+export {
+  formatDate,
+  formatTime,
+  formatDateTime,
+  formatISOString,
+  formatTimeAgo,
+  createDateFormatter,
+  DEFAULT_DATE_TIME_INTL
+} from './src/utils/format'
+export type { DateInput, DateFormatterOptions } from './src/utils/format'
 
 // Scoped console logger (#14908) — canonical LogLevel/log/createLogger; both
 // apps' utils/debugUtils.ts re-export these rather than re-declaring them.
@@ -193,3 +203,9 @@ export type { LedgerStateLabels } from './src/components/LedgerSectionState.vue'
 // The one HTTP transport under both apps' ApiClients; each app subclasses it for auth (#14908).
 export { ApiClientBase, withQuery, parseRetryAfterMs, SERVICE_UNAVAILABLE_STATUS } from './src/utils/ApiClientBase'
 export type { TransportRequestOptions, RawRequestOptions, TransportLogger } from './src/utils/ApiClientBase'
+
+// The one spinner and the one skeleton for every loading state (#19906).
+export { default as BaseSpinner } from './src/components/BaseSpinner.vue'
+export type { SpinnerSize } from './src/components/BaseSpinner.vue'
+export { default as BaseSkeleton } from './src/components/BaseSkeleton.vue'
+export type { SkeletonShape } from './src/components/BaseSkeleton.vue'
