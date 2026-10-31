@@ -23,7 +23,7 @@ from typing import Optional, Tuple
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from autobot_shared.env_utils import env_int
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.logging_manager import get_logger
 from constants.ttl_constants import TTL_24_HOURS
 from llc.models.company_os import LLCProcess
@@ -51,7 +51,10 @@ from .workflows import CompanyOsWorkflowService
 logger = get_logger(__name__)
 
 #: How long an approval waits before its timeout transition fires, for a policy with ``wait_limit``.
-APPROVAL_WAIT_SECONDS = env_int("AUTOBOT_COMPANY_OS_WORKFLOW_PLANNER_APPROVAL_WAIT_SECONDS", TTL_24_HOURS)
+#: Clamped to 1 s..1 year: the graph contract refuses a ``timeout_seconds`` that is not positive (#20187).
+APPROVAL_WAIT_SECONDS = env_int_clamped(
+    "AUTOBOT_COMPANY_OS_WORKFLOW_PLANNER_APPROVAL_WAIT_SECONDS", TTL_24_HOURS, 1, 31536000
+)
 _PERSON_HOLDERS = (RoleHolderType.USER.value, RoleHolderType.CONTACT.value)
 _PREVIEW_ONLY = {"status", "converted_at", "converted_by", "turn_on", "turn_on_tracking_issue"}
 _AT_LEAST_LABELED = (WorkflowPlanStatus.LABELED, WorkflowPlanStatus.APPROVED)

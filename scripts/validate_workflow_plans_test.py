@@ -70,3 +70,50 @@ def test_earning_more_than_declared_is_a_mismatch(monkeypatch):
     plan = v.load_plan(EXAMPLES[0]).model_copy(update={"status": type(v.load_plan(EXAMPLES[0]).status).MEASURED})
     monkeypatch.setattr(v, "evaluate_plan_gate", lambda _p: _report(type(plan.status).LABELED, []))
     assert any("earns" in p for p in v.plan_problems(plan))
+
+
+def _single_lane_plan_doc():
+    doc = json.loads(EXAMPLES[0].read_text(encoding="utf-8"))
+    first = doc["lanes"][0]["key"]
+    doc["lanes"] = doc["lanes"][:1]
+    doc["steps"] = [dict(s, lane_key=first) for s in doc["steps"]]
+    doc["edges"] = []
+    doc["handoffs"] = []
+    return doc
+
+
+def test_a_plan_with_no_handoff_has_no_negative_control_to_plant():
+    plan = v.CompanyWorkflowPlan.model_validate(dict(_single_lane_plan_doc(), status="draft"))
+    assert v.negative_control(plan) is None
+
+
+def test_a_valid_single_lane_plan_is_not_failed_for_the_control(tmp_path):
+    doc = _single_lane_plan_doc()
+    plan = v.CompanyWorkflowPlan.model_validate(doc)
+    declared = v.evaluate_plan_gate(plan).status.value
+    (tmp_path / "solo.json").write_text(json.dumps(dict(doc, status=declared)), encoding="utf-8")
+    assert v.validate_dir(tmp_path) == []
+
+
+@pytest.mark.parametrize(
+    "content,word",
+    [("{not json", "JSONDecodeError"), ('{"key": 1}', "ValidationError"), ("[]", "ValidationError")],
+)
+def test_a_malformed_plan_is_a_named_failure_not_a_traceback(tmp_path, capsys, content, word):
+    (tmp_path / "broken.json").write_text(content, encoding="utf-8")
+    failures = v.validate_dir(tmp_path)
+    assert len(failures) == 1 and failures[0].startswith("broken.json: cannot be read") and word in failures[0]
+    assert v.main(["validate", str(tmp_path)]) == 1
+    assert "FAIL broken.json" in capsys.readouterr().out
+
+
+def test_a_malformed_file_does_not_hide_the_other_plans(tmp_path):
+    (tmp_path / "a-broken.json").write_text("{", encoding="utf-8")
+    (tmp_path / EXAMPLES[0].name).write_text(EXAMPLES[0].read_text(encoding="utf-8"), encoding="utf-8")
+    assert [f.split(":")[0] for f in v.validate_dir(tmp_path)] == ["a-broken.json"]
+
+
+def test_the_control_still_fires_when_the_gate_ignores_handoffs(monkeypatch):
+    plan = v.load_plan(EXAMPLES[0])
+    monkeypatch.setattr(v, "plan_problems", lambda _p: [])
+    assert v.negative_control(plan) is False
