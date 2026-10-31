@@ -11,7 +11,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRoute } from 'vue-router'
-import { BaseAlert, BaseButton, BaseInput, BaseTable, EmptyState, useToast, type BaseTableColumn } from '@autobot/ui'
+import { BaseAlert, BaseButton, BaseInput, BaseSkeleton, BaseSpinner, BaseTable, EmptyState, useToast, type BaseTableColumn } from '@autobot/ui'
 import WorkflowPlanDetail from './WorkflowPlanDetail.vue'
 import { describeApiError } from '@/composables/llc/apiErrorMessage'
 import { useWorkflowPlans } from '@/composables/llc/useWorkflowPlans'
@@ -75,9 +75,10 @@ onMounted(reload)
   <div data-testid="workflow-planner">
     <WorkflowPlanDetail v-if="openKey" :plan-key="openKey" :api="api" @back="closeDetail" />
 
-    <p v-else-if="api.state.value === 'loading'" role="status" class="py-8 text-center text-autobot-text-muted" data-testid="planner-loading">
-      {{ t('llc.workflowPlanner.loading') }}
-    </p>
+    <div v-else-if="api.state.value === 'loading'" class="py-8" data-testid="planner-loading">
+      <BaseSpinner :label="t('llc.workflowPlanner.loading')" />
+      <BaseSkeleton :lines="3" />
+    </div>
 
     <EmptyState v-else-if="api.state.value === 'unavailable'" :title="t('llc.workflowPlanner.unavailableTitle')" :description="t('llc.workflowPlanner.unavailableHint')" data-testid="planner-unavailable" />
 
