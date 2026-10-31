@@ -21,7 +21,9 @@ from __future__ import annotations
 
 import gzip
 import json
+import os
 import zlib
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -44,7 +46,7 @@ MAX_RETAINED_BYTES: int = env_int_clamped("AUTOBOT_TRANSCRIPT_MAX_RETAINED_BYTES
 #: Charged per retained event on top of its source bytes: the dataclass, its dicts and strings cost real memory.
 EVENT_OVERHEAD_BYTES: int = env_int_clamped("AUTOBOT_TRANSCRIPT_EVENT_OVERHEAD_BYTES", 1024, min_v=0)
 #: What a malformed line can raise from ``json.loads``: bad syntax, an oversized int, or recursion-deep nesting.
-_JSON_ERRORS = (ValueError, RecursionError)
+JSON_ERRORS = (ValueError, RecursionError)
 _GZIP_SUFFIX = ".gz"
 _TRANSCRIPT_GLOBS = ("*.jsonl", "*.jsonl.gz")
 _CODEX_TEXT_BLOCKS = frozenset({"input_text", "output_text", "text"})
@@ -130,7 +132,7 @@ def parse_cli_line(raw: str) -> Optional[StepEvent]:
         return None
     try:
         obj = json.loads(raw)
-    except _JSON_ERRORS:
+    except JSON_ERRORS:
         return None
     return parse_cli_event(obj) if isinstance(obj, dict) else None
 
@@ -188,7 +190,7 @@ def _codex_arguments(raw: Any) -> Any:
         return raw if raw is not None else {}
     try:
         return json.loads(raw)
-    except _JSON_ERRORS:
+    except JSON_ERRORS:
         return raw
 
 
@@ -252,7 +254,7 @@ def parse_history_line(raw: str) -> Optional[EvidenceEntry]:
     """One ``history.jsonl`` line as an evidence entry; None for blank/invalid/promptless lines."""
     try:
         obj = json.loads(raw)
-    except _JSON_ERRORS:
+    except JSON_ERRORS:
         return None
     prompt = obj.get("display") if isinstance(obj, dict) else None
     if not isinstance(prompt, str) or not prompt.strip():
@@ -327,9 +329,23 @@ def _checked(path: Path, allowed_roots: Sequence[str]) -> Path:
 def iter_lines(path: Path, result: ReadResult, allowed_roots: Sequence[str]) -> Iterator[str]:
     """Lines of the validated ``path`` (gunzipped for ``.gz``), bounded; limit hits are recorded on ``result``."""
     safe = _checked(path, allowed_roots)
-    opener = gzip.open if safe.suffix == _GZIP_SUFFIX else open
-    with opener(safe, "rb") as handle:
+    with _open_no_follow(safe) as handle:
         yield from _lines_of(handle, result)
+
+
+@contextmanager
+def _open_no_follow(safe: Path) -> Iterator[Any]:
+    """Binary handle on the validated ``safe`` (gunzipped for ``.gz``), refusing a symlink swapped in since validation.
+
+    ``O_NOFOLLOW`` makes the open fail (``OSError``, ELOOP) when the FINAL component is a symlink. It does not
+    cover parent components: a directory swapped for a symlink between validation and open is still followed.
+    """
+    with os.fdopen(os.open(safe, os.O_RDONLY | os.O_NOFOLLOW), "rb") as raw:
+        if safe.suffix != _GZIP_SUFFIX:
+            yield raw
+            return
+        with gzip.GzipFile(fileobj=raw, mode="rb") as unzipped:
+            yield unzipped
 
 
 def _children(directory: Path) -> List[Path]:
@@ -379,7 +395,7 @@ def read_transcript(path: Path, allowed_roots: Sequence[str]) -> ReadResult:
     for line in iter_lines(Path(path), result, allowed_roots):
         try:
             obj = json.loads(line)
-        except _JSON_ERRORS:
+        except JSON_ERRORS:
             result.skipped += 1
             continue
         if isinstance(obj, dict) and not _add_bounded(result, normalize_record(obj), len(line)):

@@ -290,6 +290,28 @@ class TestHostileInputAndPaths:
         assert [k.rsplit("/", 1)[1] for k in batch.results] == ["ok.jsonl"]
         assert [k.rsplit("/", 1)[1] for k in batch.failed] == ["link.jsonl"]
 
+    @pytest.mark.parametrize("name", ["a.jsonl", "a.jsonl.gz"])
+    def test_symlink_swapped_in_after_validation_is_refused(self, tmp_path, monkeypatch, name):
+        root, outside = tmp_path / "root", tmp_path / "outside"
+        root.mkdir()
+        outside.mkdir()
+        target = root / name
+        target.write_bytes(gzip.compress(b"{}\n") if name.endswith(".gz") else b"{}\n")
+        secret = outside / "secret"
+        payload = b'{"display": "stolen"}\n'
+        secret.write_bytes(gzip.compress(payload) if name.endswith(".gz") else payload)
+        real_validate = tn.validate_path
+
+        def validate_then_swap(*args, **kwargs):
+            checked = real_validate(*args, **kwargs)
+            checked.unlink()
+            checked.symlink_to(secret)  # the swap lands between validation and open
+            return checked
+
+        monkeypatch.setattr(tn, "validate_path", validate_then_swap)
+        with pytest.raises(OSError):
+            list(tn.iter_lines(target, tn.ReadResult(), [str(root)]))
+
     def test_path_outside_root_and_missing_path_are_refused_in_a_batch(self, tmp_path):
         root = tmp_path / "root"
         root.mkdir()
