@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.label import LLCLabel, LLCWorkItemLabel, _next_default_color
 from ..models.work_item import LLCWorkItem
+from .actor import resolve_actor
 from .base import LLCServiceBase
 
 logger = logging.getLogger(__name__)
@@ -132,6 +133,7 @@ class LLCLabelService(LLCServiceBase):
         work_item_id: str,
         label_ids: List[str],
         assigned_by: Optional[str] = None,
+        actor_user_id: Optional[str] = None,
     ) -> List[LLCWorkItemLabel]:
         wi_result = await session.execute(select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)))
         work_item = wi_result.scalar_one_or_none()
@@ -156,13 +158,17 @@ class LLCLabelService(LLCServiceBase):
         if added and self.activity_log:
             from ..models.enums import ActivityEventType
 
+            actor = resolve_actor(user_id=actor_user_id)
             await self.activity_log.record(
                 session,
                 company_id=str(work_item.company_id),
+                actor_type=actor.type,
+                actor_id=actor.id,
+                metadata=actor.metadata(),
                 event_type=ActivityEventType.WORK_ITEM_UPDATED,
                 entity_type="work_item",
                 entity_id=work_item_id,
-                after_state={"labels_assigned": [str(a.label_id) for a in added]},
+                after={"labels_assigned": [str(a.label_id) for a in added]},
             )
 
         return added
@@ -172,6 +178,7 @@ class LLCLabelService(LLCServiceBase):
         session: AsyncSession,
         work_item_id: str,
         label_id: str,
+        actor_user_id: Optional[str] = None,
     ) -> None:
         wi_result = await session.execute(select(LLCWorkItem).where(LLCWorkItem.id == uuid.UUID(work_item_id)))
         work_item = wi_result.scalar_one_or_none()
@@ -189,13 +196,17 @@ class LLCLabelService(LLCServiceBase):
         if self.activity_log:
             from ..models.enums import ActivityEventType
 
+            actor = resolve_actor(user_id=actor_user_id)
             await self.activity_log.record(
                 session,
                 company_id=str(work_item.company_id),
+                actor_type=actor.type,
+                actor_id=actor.id,
+                metadata=actor.metadata(),
                 event_type=ActivityEventType.WORK_ITEM_UPDATED,
                 entity_type="work_item",
                 entity_id=work_item_id,
-                after_state={"label_removed": label_id},
+                after={"label_removed": label_id},
             )
 
     async def get_work_item_label_ids(

@@ -43,6 +43,19 @@ def actor_id(current_user: dict) -> uuid.UUID:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated") from exc
 
 
+def acting_user_id(current_user: dict) -> Optional[str]:
+    """The acting user's id for the activity log, or None for a principal that is not a user.
+
+    A service principal, or one whose id is not a UUID, cannot be recorded as a user: its act
+    is recorded as the system's rather than refused (``actor_id`` refuses, for routes where an
+    unattributed write is the error).
+    """
+    try:
+        return str(uuid.UUID(str(current_user.get("id") or current_user.get("user_id"))))
+    except ValueError:
+        return None
+
+
 def bad_request(exc: Exception) -> HTTPException:
     return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 

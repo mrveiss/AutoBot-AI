@@ -145,6 +145,84 @@ env_registry.register_env_var(
 
 env_registry.register_env_var(
     env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_ATTACHMENT_STAGING_MAX_AGE_SECONDS",
+        type=int,
+        default=3600,
+        description=(
+            "Seconds a file with no database row must sit in the attachment staging directory before "
+            "the attachment file sweep moves it to the quarantine subdirectory (#19756). A staged file "
+            "whose row exists is committed content and is published at the next sweep whatever its age. "
+            "Nothing is deleted: quarantined files stay until a person decides. Only the staging "
+            "directory is ever touched. Floored at 300 seconds so a slow upload still in flight is "
+            "never mistaken for an abandoned one."
+        ),
+        range=(300, None),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_ATTACHMENT_SWEEP_INTERVAL_SECONDS",
+        type=int,
+        default=300,
+        description=(
+            "Seconds between runs of the attachment file sweep (#19756), which retries removals "
+            "recorded in the attachment deletion outbox until the file is gone and settles stale "
+            "staging files. Floored at 30 seconds."
+        ),
+        range=(30, None),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_ATTACHMENT_REMOVAL_MAX_ATTEMPTS",
+        type=int,
+        default=10,
+        description=(
+            "Failed attempts after which an attachment file-deletion outbox entry is marked stuck "
+            "(#19756). A stuck entry stays in the table with its last error, is skipped by the sweep "
+            "so it cannot starve newer entries, and is counted in the sweep result and log."
+        ),
+        range=(1, None),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_ATTACHMENT_REMOVAL_RETRY_SECONDS",
+        type=int,
+        default=300,
+        description=(
+            "Seconds an attachment file-deletion outbox entry waits after a failed attempt before "
+            "it is retried (#19756). Floored at 30 seconds."
+        ),
+        range=(30, None),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_ATTACHMENT_ROOT_ID",
+        type=str,
+        default="",
+        description=(
+            "Identity of the attachment storage this node owns (#19756). Every outbox row records the "
+            "identity of the node that deleted it, and a node only removes files for its own identity: "
+            "a missing file on a node that does not own the storage proves nothing. Empty derives the "
+            "identity from the host name and the storage root path. Set the same value on every node "
+            "that mounts one shared volume, or entries written by one will never be drained by the other."
+        ),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
         name="AUTOBOT_VOICE_REFERENCE_MAX_SECONDS",
         type=float,
         default=120.0,
