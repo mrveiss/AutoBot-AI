@@ -208,7 +208,7 @@ RAW_PALETTE_CLASSES: dict[str, int] = {
     "slm:bg-emerald-600": 3,
     "slm:bg-emerald-700": 1,
     "slm:bg-gray-100": 197,  # #14780 BaseDrawer: 199 -> 198; TabbedRouteLayout (#19858): 198 -> 197
-    "slm:bg-gray-200": 99,  # #14780 BaseSwitch: 118 -> 100, LoadBalancingView 100 -> 99
+    "slm:bg-gray-200": 92,  # #14780 BaseSwitch: 118 -> 100, LoadBalancingView 100 -> 99, #19906 -> 92
     "slm:bg-gray-300": 9,
     "slm:bg-gray-400": 41,
     "slm:bg-gray-50": 235,  # #14780 BasePagination: 249 -> 237; TabbedRouteLayout (#19858): 237 -> 235
