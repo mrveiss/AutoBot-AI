@@ -177,13 +177,24 @@ def frontend_served_by(value: object, environment: Optional[str]) -> str:
     return text or (FRONTEND_VITE if is_non_production(environment) else FRONTEND_NGINX)
 
 
-def frontend_url(config: Any) -> str:
-    """The URL *config* (an ``AutoBotConfig``) serves the frontend at; an unknown profile raises."""
+def frontend_url(config: Any, host: Optional[str] = None) -> str:
+    """The URL *config* (an ``AutoBotConfig``) serves the frontend at; an unknown profile raises.
+
+    *host* replaces the frontend's address for a caller on the frontend's own machine (#20058).
+    """
+    target = host or config.vm.frontend
     if frontend_served_by(config.frontend_served_by, config.environment) == FRONTEND_VITE:
-        return f"http://{config.vm.frontend}:{config.port.frontend}"
+        return f"http://{target}:{config.port.frontend}"
     if config.tls.frontend_tls_enabled:
-        return f"https://{config.vm.frontend}:{config.tls.frontend_tls_port}"
-    return f"http://{config.vm.frontend}:{config.port.frontend_http}"
+        return f"https://{target}:{config.tls.frontend_tls_port}"
+    return f"http://{target}:{config.port.frontend_http}"
+
+
+def served_frontend_url(host: Optional[str] = None) -> str:
+    """``frontend_url`` of the process's config, for ``ServiceURLs``; lazy because ssot_config imports this module."""
+    from autobot_shared.ssot_config import config
+
+    return frontend_url(config, host)
 
 
 def try_frontend_url(config: Any) -> Optional[str]:
