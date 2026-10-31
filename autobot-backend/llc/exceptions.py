@@ -125,3 +125,11 @@ class ProviderRateLimited(Exception):
         if retry_after_seconds:
             msg += f"; retry after {retry_after_seconds}s"
         super().__init__(msg)
+
+
+class WorkItemNotInCompany(Exception):
+    """A cost event named a work item that is unknown or belongs to another company (#16016)."""
+
+    def __init__(self, work_item_id: str) -> None:
+        self.work_item_id = work_item_id
+        super().__init__(f"Work item {work_item_id!r} not found")
