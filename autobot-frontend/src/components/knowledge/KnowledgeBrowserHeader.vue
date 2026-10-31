@@ -104,8 +104,9 @@ defineEmits<Emits>()
   transition: all var(--duration-200) var(--ease-in-out);
 }
 
-.category-tab i {
-  font-size: var(--text-sm);
+.category-tab .icon {
+  width: var(--text-sm);
+  height: var(--text-sm);
 }
 
 .category-count {
@@ -136,9 +137,10 @@ defineEmits<Emits>()
   flex: 1;
 }
 
-.search-bar i {
+.search-bar .icon {
   color: var(--text-tertiary);
-  font-size: var(--text-sm);
+  width: var(--text-sm);
+  height: var(--text-sm);
 }
 
 .search-input {

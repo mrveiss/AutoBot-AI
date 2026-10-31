@@ -510,21 +510,21 @@ watch(
   color: var(--text-secondary);
 }
 
-.chart-loading-overlay i,
-.chart-error i,
-.chart-no-data i {
-  font-size: 32px;
+.chart-loading-overlay .icon,
+.chart-error .icon,
+.chart-no-data .icon {
+  width: 32px; height: 32px;
 }
 
 .chart-error {
   color: var(--color-error-light);
 }
 
-.chart-error i {
+.chart-error .icon {
   color: var(--color-error);
 }
 
-.chart-no-data i {
+.chart-no-data .icon {
   color: var(--text-tertiary);
 }
 

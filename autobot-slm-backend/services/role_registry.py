@@ -16,6 +16,7 @@ from typing import Dict, List
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.chromadb_endpoints import CHROMADB_HEARTBEAT_PATH
 from autobot_shared.fleet_constants import FLEET_AGENT_DIR, FLEET_INSTALL_ROOT
 from autobot_shared.ssot_config import config
 from models.database import Role, SyncType
@@ -60,9 +61,7 @@ _SLM_ROLES = [
         "auto_restart": True,
         "health_check_port": 8000,
         "health_check_path": "/api/health",
-        # #16889: routed through build-filtered-requirements.sh -- same
-        # rationale as the backend role's post_sync_cmd above; a bare
-        # `pip install -r` can't resolve this file's constraints include.
+        # #16889: the filtered install; why is in _filtered_pip_install's docstring.
         # #14275: venv/bin, not bare (see the backend role below).
         "post_sync_cmd": _filtered_pip_install(
             "autobot-slm-backend", "slm-backend", then=" && venv/bin/alembic upgrade head"
@@ -299,7 +298,7 @@ _AI_STACK_ROLES = [
         "systemd_service": "autobot-chromadb",
         "auto_restart": True,
         "health_check_port": config.port.chromadb,  # #16025 /v2 heartbeat; #19321: the SSOT port, not a copy
-        "health_check_path": "/api/v2/heartbeat",
+        "health_check_path": CHROMADB_HEARTBEAT_PATH,  # #19423
         "required": True,
         "degraded_without": [],
         "ansible_playbook": "setup-ai-stack.yml",
@@ -318,7 +317,7 @@ _OPTIONAL_ROLES = [
         "target_path": f"{_BASE_DIR}/autobot-npu-worker",
         "systemd_service": "autobot-npu-worker",
         "auto_restart": True,
-        "health_check_port": 8081,
+        "health_check_port": config.port.npu,
         "health_check_path": "/health",
         # #14275: routed through the canonical
         # scripts/build-filtered-requirements.sh rather than a bare
@@ -342,17 +341,10 @@ _OPTIONAL_ROLES = [
         "target_path": f"{_BASE_DIR}/autobot-tts-worker",
         "systemd_service": "autobot-tts-worker",
         "auto_restart": True,
-        "health_check_port": 8082,
+        # #19325: was 8082, the Windows NPU worker's port; the TTS worker listens on port.tts (8083, #3431).
+        "health_check_port": config.port.tts,
         "health_check_path": "/health",
-        # #14275: routed through the canonical
-        # scripts/build-filtered-requirements.sh rather than a bare
-        # `pip install -r requirements.txt`. This file's requirements carries a
-        # sibling-relative `-c ../constraints/shared.txt` (#10524) that does not
-        # resolve from the deployed directory, and pip aborts the whole sync:
-        #   ERROR: Could not open constraint file: '/constraints/shared.txt'
-        # The backend entry above has delegated to this script since #11134; the
-        # ansible half of the same defect was #14272. Same script, so the two
-        # deploy paths cannot drift apart again.
+        # #14275: the canonical filtered install, for the reason the npu-worker entry above states.
         "post_sync_cmd": _filtered_pip_install("autobot-tts-worker", "tts-worker"),
         "required": False,
         "degraded_without": ["Voice synthesis — TTS features unavailable"],

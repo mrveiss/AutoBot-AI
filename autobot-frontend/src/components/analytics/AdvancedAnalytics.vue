@@ -668,7 +668,7 @@ onMounted(() => {
   color: var(--text-on-primary);
 }
 
-.tab-btn i {
+.tab-btn .icon {
   margin-right: var(--spacing-2);
 }
 
@@ -813,7 +813,7 @@ onMounted(() => {
   justify-content: center;
   gap: var(--spacing-4);
   color: var(--text-on-primary);
-  z-index: 100;
+  z-index: var(--z-dropdown);
 }
 
 /* User Behavior Tab Styles */

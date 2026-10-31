@@ -179,7 +179,12 @@
 
     - name: Test Redis connectivity
       shell: |
-        docker exec {{ container_name }} redis-cli --no-auth-warning --user {{ (autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default') | quote }} -a {{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) | quote }} ping
+        docker exec -e REDISCLI_AUTH {{ container_name }} redis-cli --no-auth-warning --user {{ (autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default') | quote }} ping
+      # #19846: REDISCLI_AUTH, not -a: the password stays out of the task log and of ps
+      vars:
+        _redis_password: "{{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
+      environment: "{{ {'REDISCLI_AUTH': _redis_password} if _redis_password else {} }}"
+      no_log: true
       register: redis_test
 
     - name: Display Redis status
@@ -246,6 +251,8 @@
         dest: /tmp/autobot/
         delete: false
         recursive: true
+        rsync_opts:
+          - "--chmod=o-w"  # #19503
       delegate_to: localhost
 
     - name: Build and start Frontend
@@ -272,6 +279,13 @@
   vars:
     ai_container: autobot-ai-stack
     npu_container: autobot-npu-worker
+  # One home for the pulled model set and its embedding role (#19736): the agent_config role's
+  # defaults, which the native agent install reads too -- no second copy of the list here.
+  # Play vars_files outrank inventory, so this play reads every name in that file at play
+  # precedence; its tasks use only ollama_models and ollama_embedding_model, and an inventory
+  # override of either is ignored here. Change the models in that file, not in group_vars.
+  vars_files:
+    - ../roles/agent_config/defaults/main.yml
 
   tasks:
     - name: Create AI Stack docker-compose.yml
@@ -369,6 +383,8 @@
         dest: /tmp/autobot/
         delete: false
         recursive: true
+        rsync_opts:
+          - "--chmod=o-w"  # #19503
       delegate_to: localhost
 
     - name: Build and start AI Stack and NPU Worker
@@ -383,17 +399,17 @@
     - name: Pull required Ollama models (6-tier mapping, #2553)
       shell: |
         docker exec autobot-ollama ollama pull {{ item }}
-      loop:
-        - "llama3.2:1b"           # Routing tier
-        - "gemma2:2b"             # Classification tier
-        - "phi3:mini"             # Light processing tier
-        - "mistral:7b-instruct"   # Instruction tier
-        - "dolphin-llama3:8b"     # System/uncensored tier
-        - "qwen3.5:9b"            # Quality tier
-        - "nomic-embed-text:latest"  # Embeddings (DEFAULT_EMBEDDING_MODEL)
+      loop: "{{ ollama_models }}"
       register: ollama_pull
       # Individual model pulls may fail due to network or availability (#2950)
       failed_when: false
+
+    - name: Check every pulled model is the right kind for its role (#19736)
+      ansible.builtin.include_tasks: ../_shared/tasks/assert_model_kinds.yml
+      vars:
+        model_kind_cli: "docker exec autobot-ollama ollama"
+        model_kind_embedding: "{{ ollama_embedding_model }}"
+        model_kind_completion: "{{ ollama_models }}"
 
     - name: Wait for services to be ready
       wait_for:

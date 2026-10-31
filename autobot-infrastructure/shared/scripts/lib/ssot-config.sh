@@ -110,8 +110,12 @@ fi
 
 # PortConfig
 : "${AUTOBOT_BACKEND_PORT:=8001}"
-: "${AUTOBOT_FRONTEND_PORT:=5173}"
+: "${AUTOBOT_FRONTEND_PORT:=5173}"  # Vite dev server only (#19326)
+: "${AUTOBOT_FRONTEND_HTTP_PORT:=80}"  # nginx HTTP; AUTOBOT_FRONTEND_SERVED_BY has no default (vite|nginx)
+: "${AUTOBOT_FRONTEND_TLS_PORT:=443}"  # nginx HTTPS
 : "${AUTOBOT_NPU_WORKER_PORT:=8081}"
+# PortConfig.npu_windows -- the Windows NPU worker, a separate service on 8082 (#19325)
+: "${AUTOBOT_NPU_WORKER_WINDOWS_PORT:=8082}"
 : "${AUTOBOT_REDIS_PORT:=6379}"
 : "${AUTOBOT_AI_STACK_PORT:=8080}"
 # Issue #4052: 9001 is the browser service; 3000 is Grafana. Several of the 56
@@ -126,8 +130,91 @@ fi
 
 # RedisConfig
 : "${AUTOBOT_REDIS_PASSWORD:=}"
-: "${AUTOBOT_REDIS_DB_CELERY_BROKER:=14}"
-: "${AUTOBOT_REDIS_DB_CELERY_RESULTS:=15}"
+
+# Redis database numbers: never a literal here (#19232). redis-databases.yaml is the
+# one table (autobot_shared/redis_management/types.py reads the same file), and an
+# AUTOBOT_REDIS_DB_<NAME> already in the environment wins, as it does in Python.
+_AUTOBOT_REDIS_DATABASES_YAML="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../config" 2>/dev/null && pwd)/redis-databases.yaml"
+if [ ! -f "${_AUTOBOT_REDIS_DATABASES_YAML}" ]; then
+    _AUTOBOT_REDIS_DATABASES_YAML="${PROJECT_ROOT}/autobot-infrastructure/shared/config/redis-databases.yaml"
+fi
+
+# _autobot_redis_yaml_table -- "name number" for every database redis-databases.yaml declares.
+_autobot_redis_yaml_table() {
+    awk '
+        /^redis_databases:/ { inside = 1; next }
+        inside && /^[^ #]/ { exit }
+        inside && /^  [a-z_]+:/ { name = $1; sub(":", "", name); next }
+        inside && name != "" && /^    db:/ { print name, $2; name = "" }
+    ' "${_AUTOBOT_REDIS_DATABASES_YAML}" 2>/dev/null
+}
+
+# _autobot_redis_override NAME -- the raw AUTOBOT_REDIS_DB_<NAME> value; workflows also
+# answers to the legacy AUTOBOT_REDIS_DB_TASKS (database_overrides.LEGACY_ENV_NAMES).
+# A blank or whitespace-only value is no request, as in database_overrides._requested.
+_autobot_redis_override() {
+    local var="AUTOBOT_REDIS_DB_${1^^}"
+    if [[ "${!var:-}" =~ [^[:space:]] ]]; then
+        echo "${var}=${!var}"
+    elif [ "$1" = "workflows" ] && [[ "${AUTOBOT_REDIS_DB_TASKS:-}" =~ [^[:space:]] ]]; then
+        echo "AUTOBOT_REDIS_DB_TASKS=${AUTOBOT_REDIS_DB_TASKS}"
+    fi
+}
+
+# Highest Redis index, as database_overrides.MAX_DATABASE_INDEX (pinned equal by a test).
+_AUTOBOT_REDIS_MAX_DB=15
+
+# _autobot_redis_number VALUE -- VALUE trimmed, if it is ASCII digits within 0.._AUTOBOT_REDIS_MAX_DB.
+_autobot_redis_number() {
+    local v="$1"
+    v="${v#"${v%%[![:space:]]*}"}"
+    v="${v%"${v##*[![:space:]]}"}"
+    [[ "$v" =~ ^[0-9]+$ ]] || return
+    local d="${v#"${v%%[!0]*}"}" # leading zeros stripped, as int() does
+    # Bound the digit count before any arithmetic: bash wraps at 2^64, int() does not.
+    (( ${#d} <= 2 )) && (( 10#${d:-0} <= _AUTOBOT_REDIS_MAX_DB )) && echo $((10#${d:-0}))
+}
+
+# autobot_redis_db NAME -- print NAME's database number; non-zero and a message if unknown.
+# Same rules as autobot_shared/redis_management/database_overrides.py: an override that is
+# not a non-negative integer, or that lands two databases on one number, is refused -- said
+# on stderr -- and that database keeps its YAML number.
+autobot_redis_db() {
+    local -A yaml=() accepted=() source=() final=()
+    local name number entry other parsed changed=1
+    while read -r name number; do yaml[$name]=$number; done < <(_autobot_redis_yaml_table)
+    if [ -z "${yaml[$1]:-}" ]; then
+        echo "ssot-config.sh: no Redis database '$1' in ${_AUTOBOT_REDIS_DATABASES_YAML}" >&2
+        return 1
+    fi
+    for name in "${!yaml[@]}"; do
+        entry="$(_autobot_redis_override "$name")"
+        [ -z "${entry}" ] && continue
+        source[$name]="${entry}"
+        if parsed="$(_autobot_redis_number "${entry#*=}")"; then
+            accepted[$name]=$parsed
+        elif [ "$name" = "$1" ]; then
+            echo "ssot-config.sh: refused ${entry}: not a Redis database number (0-${_AUTOBOT_REDIS_MAX_DB}) (keeping redis-databases.yaml)" >&2
+        fi
+    done
+    while [ "${changed}" = 1 ]; do
+        changed=0
+        for name in "${!yaml[@]}"; do final[$name]="${accepted[$name]:-${yaml[$name]}}"; done
+        for name in "${!accepted[@]}"; do
+            for other in "${!final[@]}"; do
+                [ "$other" = "$name" ] || [ "${final[$other]}" != "${final[$name]}" ] && continue
+                [ "$name" = "$1" ] && echo "ssot-config.sh: refused ${source[$name]}: collides with ${other} (keeping redis-databases.yaml)" >&2
+                unset "accepted[$name]"
+                changed=1
+                break
+            done
+        done
+    done
+    echo "${accepted[$1]:-${yaml[$1]}}"
+}
+
+# No AUTOBOT_REDIS_DB_* is exported from here: a script asks autobot_redis_db, and exporting
+# resolved values would turn them into overrides that the next lookup has to vet (#19232).
 
 # TimeoutConfig.api -- frontend API timeout in ms (#17856 row 6)
 : "${AUTOBOT_API_TIMEOUT:=60000}"
@@ -176,13 +263,22 @@ fi
 : "${AUTOBOT_VNC_SERVER_HOST:=${AUTOBOT_BACKEND_HOST}}"
 : "${AUTOBOT_VNC_SERVER_PORT:=5901}"
 
+# NodeSource: the base URL and the Node major each have one home (#19662). The major is
+# the repo-root .nvmrc; a checkout that does not ship it leaves NODE_MAJOR unset and the
+# installers refuse rather than guess.
+: "${AUTOBOT_NODESOURCE_BASE_URL:=https://deb.nodesource.com}"
+if [ -z "${NODE_MAJOR:-}" ] && [ -r "${PROJECT_ROOT}/.nvmrc" ]; then
+    NODE_MAJOR="$(sed -e 's/^v//' -e 's/[^0-9].*$//' -e q "${PROJECT_ROOT}/.nvmrc")"
+fi
+export AUTOBOT_NODESOURCE_BASE_URL NODE_MAJOR
+
 export AUTOBOT_BACKEND_HOST AUTOBOT_FRONTEND_HOST AUTOBOT_NPU_WORKER_HOST \
     AUTOBOT_REDIS_HOST AUTOBOT_AI_STACK_HOST AUTOBOT_BROWSER_SERVICE_HOST \
     AUTOBOT_SLM_HOST AUTOBOT_OLLAMA_HOST AUTOBOT_CHROMADB_HOST \
-    AUTOBOT_BACKEND_PORT AUTOBOT_FRONTEND_PORT AUTOBOT_NPU_WORKER_PORT \
+    AUTOBOT_BACKEND_PORT AUTOBOT_FRONTEND_PORT AUTOBOT_FRONTEND_HTTP_PORT AUTOBOT_FRONTEND_TLS_PORT AUTOBOT_NPU_WORKER_PORT AUTOBOT_NPU_WORKER_WINDOWS_PORT \
     AUTOBOT_REDIS_PORT AUTOBOT_AI_STACK_PORT AUTOBOT_BROWSER_SERVICE_PORT \
     AUTOBOT_OLLAMA_PORT AUTOBOT_VNC_PORT AUTOBOT_CHROMADB_PORT \
-    AUTOBOT_REDIS_PASSWORD AUTOBOT_REDIS_DB_CELERY_BROKER AUTOBOT_REDIS_DB_CELERY_RESULTS \
+    AUTOBOT_REDIS_PASSWORD \
     AUTOBOT_API_TIMEOUT \
     AUTOBOT_NOVNC_PATH NETWORK_SUBNET \
     AUTOBOT_SSH_KEY AUTOBOT_SSH_USER AUTOBOT_SLM_NODE_ID \

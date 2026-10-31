@@ -82,6 +82,7 @@
     src: "{{ playbook_dir }}/../"
     dest: "{{ autobot.base_dir }}/app/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=.git"
       - "--exclude=__pycache__"
       - "--exclude=*.pyc"
@@ -94,6 +95,10 @@
   ansible.builtin.include_tasks: ../../../_shared/tasks/read_deployed_embedding_model.yml
   vars:
     deployed_embedding_env_files: ["{{ backend_services_env_dest }}"]
+  tags: ['backend', 'config']
+
+- name: "Backend | Read the encryption key (#19864)"
+  ansible.builtin.include_tasks: ../../backend/tasks/read_encryption_key.yml
   tags: ['backend', 'config']
 
 - name: Generate environment configuration

@@ -7,10 +7,10 @@ redis>=8.1.0
 -c ../../constraints/shared.txt  # single source of truth for shared versions (#10524)
 numpy  # version from constraints/shared.txt
 scikit-learn>=1.9.1
-pandas>=3.0.6
+pandas>=3.1.0
 
 # Vector Database for Embeddings
-chromadb>=1.5.9
+chromadb  # version from constraints/shared.txt (#19478)
 
 # Optional: NPU/AI Acceleration
 # openvino>=2023.0.0  # Intel OpenVINO for NPU

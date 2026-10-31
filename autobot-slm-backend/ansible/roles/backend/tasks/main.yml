@@ -282,6 +282,10 @@
   ansible.builtin.include_tasks: read_secrets_root_key.yml
   tags: ['backend', 'config']
 
+- name: "Backend | Read the encryption key (#19864)"
+  ansible.builtin.include_tasks: read_encryption_key.yml
+  tags: ['backend', 'config', 'env']
+
 # #9914: Deploy the systemd unit BEFORE any stop/start so a fresh VM provisions
 # out-of-box. Previously the unit was deployed after the MVA-1633 start task, so
 # first-run on a clean node failed: "Could not find the requested service
@@ -455,6 +459,7 @@
     - claude
   changed_when: false
   tags: ['backend', 'packages', 'llc']
+  when: not ansible_check_mode
 
 
 - name: "Backend | Restart-guarded env-update + heavy-work window (#12139)"
@@ -593,6 +598,7 @@
       src: "{{ code_source_dir }}/autobot-backend/"
       dest: "{{ backend_code_dir }}/"
       rsync_opts:
+        - "--chmod=o-w"  # #19503
         - "--exclude=__pycache__"
         - "--exclude=*.pyc"
         - "--exclude=*.egg-info"
@@ -665,6 +671,7 @@
       src: "{{ code_source_dir }}/autobot-backend/config/"
       dest: "{{ backend_code_dir }}/config/"
       rsync_opts:
+        - "--chmod=o-w"  # #19503
         - "--exclude=__pycache__"
         - "--exclude=*.pyc"
     notify: restart backend
@@ -730,6 +737,7 @@
       src: "{{ code_source_dir }}/autobot_shared/"
       dest: "{{ backend_shared_standalone_dir }}/"
       rsync_opts:
+        - "--chmod=o-w"  # #19503
         - "--exclude=__pycache__"
         - "--exclude=*.pyc"
         - "--exclude=*.egg-info"
@@ -1002,19 +1010,15 @@
   # silently kept the CPU-only torch from requirements.txt. vllm itself stays
   # opt-in (#10251/#10287) since it drags the CUDA toolkit + extra wheels, but
   # CUDA torch/torchvision install whenever a GPU is present, vLLM or not.
-  - name: "Backend | Detect NVIDIA GPU (#10288, #15162)"
-    ansible.builtin.command:
-      cmd: nvidia-smi --query-gpu=name --format=csv,noheader
-    register: backend_nvidia_smi_result
-    changed_when: false
-    # nvidia-smi exits rc != 0 when no GPU is present; the result only gates the
-    # optional GPU-reqs installs below, so a non-zero rc is expected on CPU nodes.
-    failed_when: false
+  # nvidia-smi exits rc != 0 when no GPU is present; the result only gates the
+  # optional GPU-reqs installs below, so a non-zero rc is expected on CPU nodes.
+  - name: "Backend | Detect NVIDIA GPU (#10288, #15162, #19731)"
+    ansible.builtin.include_tasks: ../../_shared/tasks/detect_nvidia_gpu.yml
     when: backend_has_gpu == "auto"
 
   - name: "Backend | Resolve GPU availability (#10288, #15162)"
     ansible.builtin.set_fact:
-      backend_gpu_available: "{{ (backend_nvidia_smi_result.rc | default(1)) == 0 and (backend_nvidia_smi_result.stdout | default('') | trim | length > 0) if backend_has_gpu == 'auto' else (backend_has_gpu | bool) }}"
+      backend_gpu_available: "{{ (nvidia_smi_probe.rc | default(1)) == 0 and (nvidia_smi_probe.stdout | default('') | trim | length > 0) if backend_has_gpu == 'auto' else (backend_has_gpu | bool) }}"
 
   # Install CUDA-built torch/torchvision whenever a GPU is present, regardless
   # of vLLM. This is the fix for #15162: a GPU host that does not opt into
@@ -1033,8 +1037,9 @@
   #
   # Filtered through the canonical script rather than copied raw: a file copied
   # out of the repo lands at a different depth, so any relative -c/-r include it
-  # gains later would resolve somewhere else (#14272). None of the three carries
-  # one today, which makes this cheap now and correct if that changes.
+  # gains later would resolve somewhere else (#14272). requirements-gpu-torch.txt
+  # carries `-c constraints/shared.txt` since #19330, so the rewrite is load-bearing:
+  # it points that include at the staged constraints file on the node.
   #
   # One task per manifest, not a loop: a loop renders the destination as a
   # template, and the manifest-resolution guard cannot tie that back to the
@@ -1151,9 +1156,9 @@
     when: backend_gpu_available | default(false) | bool
 
   # Install vLLM only when vLLM is enabled AND a GPU is present. vLLM remains
-  # genuinely opt-in (#10251/#10287); it pins the same torch build the task
-  # above already installs whenever backend_gpu_available is true, so no
-  # duplicate CUDA-torch download happens here.
+  # genuinely opt-in (#10251/#10287); it pins its own torch, not the pair the
+  # task above installs, so this moves torch off that pair and downloads a
+  # second build (maintainer decision on #19682).
   - name: "Backend | Install GPU/vLLM requirements (requirements-gpu.txt) (#10288)"
     ansible.builtin.pip:
       requirements: "{{ backend_code_dir }}/filtered-requirements-gpu.txt"
@@ -1269,6 +1274,8 @@
   # ==========================================================
   - name: "Backend | Ensure the shared node TLS keypair exists (#16020)"
     ansible.builtin.include_tasks: ../../../_shared/tasks/ensure_node_tls_cert.yml
+    vars:
+      node_tls_cert_dir_override: "{{ backend_tls_cert_dir }}"
     tags: ['backend', 'tls']
 
   # #16020: the shared task has no restart handler of its own -- it also

@@ -8,6 +8,7 @@ adds the root but importlib mode requires explicit path insertion for namespace 
 Issue: #7458
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -15,6 +16,10 @@ from pathlib import Path
 _REPO_ROOT = str(Path(__file__).parent)
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
+
+# The test profile serves the frontend from the Vite dev server (#19326), whatever environment a
+# test module runs under; test modules read config.frontend_url at import.
+os.environ.setdefault("AUTOBOT_FRONTEND_SERVED_BY", "vite")
 
 # Repo-wide sys.modules leak guard (#13337). Declared here — the rootdir
 # conftest is the only conftest where ``pytest_plugins`` is still legal in
@@ -27,8 +32,11 @@ if _REPO_ROOT not in sys.path:
 # bare `pytest` runs that never touch scripts/pr-preflight.sh.
 # Empty HuggingFace cache per session (#16994): first, so it is set before any
 # plugin or test module imports huggingface_hub.
+# SSOT singleton restore (#19232): a test that clears get_config() leaves it as it found it,
+# so import-time bindings to the singleton (models/settings.py's aliases) never go stale.
 pytest_plugins = [
     "repo_tests.hermetic_model_cache",
     "repo_tests.sys_modules_leak_guard",
     "repo_tests.dependency_floor_banner",
+    "repo_tests.ssot_config_singleton_guard",
 ]

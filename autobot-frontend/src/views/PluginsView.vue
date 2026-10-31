@@ -7,7 +7,7 @@
           <h1 class="page-title">{{ $t('views.plugins.title') }}</h1>
           <p class="page-subtitle">{{ $t('views.plugins.subtitle') }}</p>
         </div>
-        <button v-if="!isMarketplaceActive" class="btn-refresh" :disabled="loading" @click="refresh" :title="$t('views.plugins.refresh')" :aria-label="$t('views.plugins.refresh')">
+        <BaseButton variant="outline" size="sm" v-if="!isMarketplaceActive" :disabled="loading" @click="refresh" :title="$t('views.plugins.refresh')" :aria-label="$t('views.plugins.refresh')">
           <svg
             class="refresh-icon"
             :class="{ spinning: loading }"
@@ -22,11 +22,10 @@
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
             />
           </svg>
-        </button>
+        </BaseButton>
         <!-- Issue #6464: Install plugin from ZIP/Git -->
-        <button
+        <BaseButton variant="info" size="sm"
           v-if="!isMarketplaceActive"
-          class="btn-install"
           @click="installModalOpen = true"
         >
           <svg
@@ -44,7 +43,7 @@
             />
           </svg>
           {{ $t('views.plugins.install.button') }}
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Error Banner -->
@@ -443,7 +442,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import { usePlugins, type PluginInfo, type PluginManifest } from '@/composables/usePlugins'
 import PluginInstallModal from '@/components/plugins/PluginInstallModal.vue'
 import CapabilityApprovalDialog from '@/components/plugins/CapabilityApprovalDialog.vue'
@@ -673,7 +672,6 @@ onMounted(async () => {
  * Issue #929 — Plugin Manager UI
  * ============================================ */
 
-
 .plugins-content {
   width: 100%;
   max-width: 1200px;
@@ -687,40 +685,6 @@ onMounted(async () => {
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: var(--spacing-xl);
-}
-
-.btn-refresh {
-  background: transparent;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  color: var(--text-secondary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  transition: background var(--duration-150) var(--ease-in-out), color var(--duration-150) var(--ease-in-out);
-}
-
-/* ---- Install Button — Issue #6464 ---- */
-.btn-install {
-  background: var(--color-info);
-  border: 1px solid var(--color-info);
-  color: white;
-  border-radius: var(--radius-md);
-  padding: var(--spacing-xs) var(--spacing-md);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  margin-left: var(--spacing-sm);
-  transition: filter var(--duration-150) var(--ease-in-out);
-}
-
-.btn-install:hover {
-  filter: brightness(1.1);
 }
 
 .install-icon {

@@ -1,7 +1,7 @@
-fastapi>=0.147.0                # SECURITY UPDATE - requires starlette >=0.52.1
+fastapi  # version from constraints/shared.txt (#18060); SECURITY UPDATE - requires starlette >=0.52.1
 uvicorn[standard]>=0.54.0
-transformers>=5.20.1
-torch>=2.14.1
+transformers>=5.20.2
+torch  # version from constraints/shared.txt (#19330)
 soundfile>=0.14.0
 -c ../constraints/shared.txt  # single source of truth for shared versions (#10524)
 numpy  # version from constraints/shared.txt

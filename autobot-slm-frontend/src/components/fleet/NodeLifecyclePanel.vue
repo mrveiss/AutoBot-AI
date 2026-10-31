@@ -15,12 +15,14 @@
  */
 
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
-import { BaseButton } from '@autobot/ui'
+import { BaseButton, PollingPausedAlert } from '@autobot/ui'
+import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
+import { formatDuration } from '@/utils/formatHelpers'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
 import { getConfig, getSlmApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
-import { formatRelativeTime } from '@/utils/dateUtils'
+import { formatCompactRelativeTime } from '@/utils/dateUtils'
 
 const logger = createLogger('NodeLifecyclePanel')
 
@@ -126,7 +128,6 @@ const hasMore = computed(() => events.value.length < totalEvents.value)
 
 // WebSocket connection
 let ws: WebSocket | null = null
-let refreshInterval: ReturnType<typeof setInterval> | null = null
 
 // Event type options
 const eventTypeOptions = [
@@ -284,17 +285,7 @@ function formatFullTime(timestamp: string): string {
   )
 }
 
-function formatDuration(ms: number): string {
-  if (ms < 1000) {
-    return `${ms}ms`
-  } else if (ms < 60000) {
-    return `${(ms / 1000).toFixed(1)}s`
-  } else {
-    const mins = Math.floor(ms / 60000)
-    const secs = Math.floor((ms % 60000) / 1000)
-    return `${mins}m ${secs}s`
-  }
-}
+const DURATION_OPTIONS = { style: 'msSecondsMinutes' } as const
 
 function formatDetailKey(key: string): string {
   return key
@@ -314,7 +305,7 @@ function getUpdateSeverityClass(severity: string): string {
 }
 
 // API Methods - wired to real backend endpoints
-async function fetchEvents(): Promise<void> {
+async function fetchEvents(): Promise<boolean> {
   const seq = ++fetchSeq
   try {
     const filters: EventFilters = { limit: pageSize, offset: 0 }
@@ -331,7 +322,7 @@ async function fetchEvents(): Promise<void> {
       offset: filters.offset,
     })
 
-    if (seq !== fetchSeq) return // stale
+    if (seq !== fetchSeq) return true // superseded: state not applied, but the result is this read's own (false counts for the poller)
     // Map backend events to local LifecycleEvent type
     events.value = nodeEvents.map((e) => ({
       id: e.id,
@@ -345,14 +336,16 @@ async function fetchEvents(): Promise<void> {
     currentOffset.value = events.value.length
     lastRefresh.value = new Date().toISOString()
     loadError.value = false
+    return true
   } catch (error) {
     logger.error('Failed to fetch lifecycle events:', error)
-    if (seq !== fetchSeq) return
+    if (seq !== fetchSeq) return false // superseded, but this read failed: the poller still counts it
     // Say the events could not be loaded; never show invented ones (#19270).
     events.value = []
     totalEvents.value = 0
     currentOffset.value = 0
     loadError.value = true
+    return false
   } finally {
     if (seq === fetchSeq) isLoading.value = false
   }
@@ -563,37 +556,35 @@ watch([eventTypeFilter, severityFilter], () => {
 })
 
 // Watch for auto-refresh changes
-watch(autoRefresh, (enabled) => {
-  if (enabled) {
-    refreshInterval = setInterval(fetchEvents, props.autoRefreshInterval)
-  } else if (refreshInterval) {
-    clearInterval(refreshInterval)
-    refreshInterval = null
-  }
-})
+watch(autoRefresh, (enabled) => (enabled ? eventsPoller.start('') : eventsPoller.stop()))
+
+// #19482: shared dashboard policy; fetchEvents() is false on a failed read. Retry clears the shown error and restarts it
+const eventsPoller = useDashboardPoller(async () => {
+  throwUnlessLoaded(await fetchEvents())
+}, props.autoRefreshInterval)
+
+const restartEvents = () => {
+  loadError.value = false
+  isLoading.value = true
+  return autoRefresh.value ? eventsPoller.start('') : fetchEvents()
+}
 
 // Lifecycle
 onMounted(() => {
-  fetchEvents()
+  restartEvents()
   connectWebSocket()
-
-  if (autoRefresh.value) {
-    refreshInterval = setInterval(fetchEvents, props.autoRefreshInterval)
-  }
 })
 
 onUnmounted(() => {
   if (ws) {
     ws.close()
   }
-  if (refreshInterval) {
-    clearInterval(refreshInterval)
-  }
 })
 </script>
 
 <template>
   <div class="flex flex-col h-full">
+    <PollingPausedAlert :poller="eventsPoller" :message="$t('common.polling.paused')" :retry-label="$t('common.polling.retry')" @retry="restartEvents" />
     <!-- Operation status indicator (shown when an operation is in progress) -->
     <div v-if="currentOperation" class="flex items-center gap-2 text-sm text-primary-600 px-4 py-2 border-b border-gray-200 bg-primary-50">
       <svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -801,7 +792,7 @@ onUnmounted(() => {
       data-testid="lifecycle-load-error"
     >
       <p class="text-center">{{ $t('fleet.nodeLifecyclePanel.eventsUnavailable') }}</p>
-      <BaseButton variant="secondary" size="sm" @click="fetchEvents">{{ $t('fleet.nodeLifecyclePanel.retry') }}</BaseButton>
+      <BaseButton variant="secondary" size="sm" @click="restartEvents">{{ $t('fleet.nodeLifecyclePanel.retry') }}</BaseButton>
     </div>
 
     <!-- Empty State -->
@@ -867,7 +858,7 @@ onUnmounted(() => {
             <!-- Time -->
             <td class="px-4 py-3">
               <div class="text-sm text-gray-900">{{ formatFullTime(event.timestamp) }}</div>
-              <div class="text-xs text-gray-500">{{ formatRelativeTime(event.timestamp) }}</div>
+              <div class="text-xs text-gray-500">{{ formatCompactRelativeTime(event.timestamp) }}</div>
             </td>
 
             <!-- Event Type -->
@@ -900,7 +891,7 @@ onUnmounted(() => {
             <!-- Duration -->
             <td class="px-4 py-3">
               <span v-if="event.duration_ms" class="text-sm font-mono text-gray-600">
-                {{ formatDuration(event.duration_ms) }}
+                {{ formatDuration(event.duration_ms, DURATION_OPTIONS) }}
               </span>
               <span v-else class="text-gray-400">-</span>
             </td>
@@ -937,7 +928,7 @@ onUnmounted(() => {
           v-model="autoRefresh"
           class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
         />{{ $t('fleet.nodeLifecyclePanel.autoRefreshEveryValue0S', { value0: Math.round(autoRefreshInterval / 1000) }) }}</label>
-      <span v-if="lastRefresh" class="text-xs text-gray-400">{{ $t('fleet.nodeLifecyclePanel.lastUpdatedValue0', { value0: formatRelativeTime(lastRefresh) }) }}</span>
+      <span v-if="lastRefresh" class="text-xs text-gray-400">{{ $t('fleet.nodeLifecyclePanel.lastUpdatedValue0', { value0: formatCompactRelativeTime(lastRefresh) }) }}</span>
     </div>
   </div>
 </template>

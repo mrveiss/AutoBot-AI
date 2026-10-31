@@ -16,8 +16,13 @@ const logger = createLogger('BatchTool')
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAutobotApi } from '@/composables/useAutobotApi'
-import { formatDateTime } from '@/composables/useTimezone'
-import { BaseAlert, BaseModal, usePollingJob } from '@autobot/ui'
+import { formatFleetDateTime } from '@/composables/useTimezone'
+import { BaseAlert, BaseModal, PollingPausedAlert } from '@autobot/ui'
+import { formatDuration } from '@/utils/formatHelpers'
+import { useDashboardPoller } from '@/composables/useDashboardPoller'
+import { POLL_CONSECUTIVE_ERROR_LIMIT } from '@/constants/api-timeouts'
+
+const DURATION_OPTIONS = { style: 'msCompound' } as const
 
 const api = useAutobotApi()
 
@@ -63,10 +68,9 @@ const newJob = ref({
 
 const { t } = useI18n()
 
+// Issue #1092: polling stops after repeated failures. Since #19482 that is the shared SLM
+// dashboard policy (useDashboardPoller, POLL_CONSECUTIVE_ERROR_LIMIT); Retry restarts it.
 const POLL_INTERVAL_MS = 10_000
-// Issue #1092: stop polling after repeated failures, now usePollingJob's
-// consecutiveErrorLimit (#19482); Retry restarts it.
-const MAX_CONSECUTIVE_ERRORS = 3
 
 /** Message of a thrown value, or the translated fallback. */
 function errorText(e: unknown, fallbackKey: string): string {
@@ -98,22 +102,6 @@ function getProgressColor(status: string): string {
     case 'failed': return 'bg-red-500'
     default: return 'bg-gray-400'
   }
-}
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '-'
-  return formatDateTime(dateStr)
-}
-
-function formatDuration(start: string | null, end: string | null): string {
-  if (!start) return '-'
-  const startDate = new Date(start)
-  const endDate = end ? new Date(end) : new Date()
-  const diff = Math.floor((endDate.getTime() - startDate.getTime()) / 1000)
-
-  if (diff < 60) return `${diff}s`
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ${diff % 60}s`
-  return `${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m`
 }
 
 async function fetchJobs(): Promise<void> {
@@ -159,31 +147,22 @@ async function pollTick(): Promise<void> {
   }
 }
 
-const poller = usePollingJob(() => pollTick(), {
-  intervalMs: POLL_INTERVAL_MS,
-  maxAttempts: Infinity,
-  consecutiveErrorLimit: MAX_CONSECUTIVE_ERRORS,
-})
-
-// Stopped with an error means the limit was reached: show the paused banner.
-const backendAvailable = computed(() => poller.isPolling.value || !poller.error.value)
+const poller = useDashboardPoller(pollTick, POLL_INTERVAL_MS)
 
 watch(poller.error, (e) => {
   if (e) error.value = errorText(e, 'tools.admin.batchTool.failedToLoadJobs')
 })
-watch(backendAvailable, (available) => {
-  if (available) return
-  error.value = t('tools.admin.batchTool.autoBotBackendUnreachablePolling')
-  logger.warn('Batch polling stopped after %d consecutive errors', MAX_CONSECUTIVE_ERRORS)
+// The shared PollingPausedAlert says it on screen; the per-tick error then steps aside.
+watch(poller.pausedOnErrors, (paused) => {
+  if (!paused) return
+  error.value = null
+  logger.warn('Batch polling stopped after %d consecutive errors', POLL_CONSECUTIVE_ERROR_LIMIT)
 })
-
-// A fresh key per restart lets usePollingJob's race guard drop a tick still in flight.
-let pollRun = 0
 
 /** Refresh now, and restart polling if it had paused (Refresh and Retry both). */
 function refreshData(): void {
   error.value = null
-  poller.start(String(++pollRun))
+  poller.start('')
 }
 
 async function createJob(): Promise<void> {
@@ -245,7 +224,7 @@ async function deleteJob(jobId: string): Promise<void> {
 }
 
 // usePollingJob stops itself when the component's scope is disposed.
-onMounted(() => poller.start(String(++pollRun)))
+onMounted(() => poller.start(''))
 </script>
 
 <template>
@@ -349,25 +328,17 @@ onMounted(() => poller.start(String(++pollRun)))
       </div>
     </div>
 
-    <!-- Issue #1092: Backend unavailable banner with retry -->
-    <BaseAlert
-      v-if="!backendAvailable"
-      variant="warning"
+    <!-- Issue #1092 / #19482: polling paused after repeated failures, with Retry -->
+    <PollingPausedAlert
       class="mb-6"
+      :poller="poller"
       :message="$t('tools.admin.batchTool.autoBotBackendUnreachablePolling')"
-    >
-      <template #actions>
-        <button
-          @click="refreshData"
-          class="px-3 py-1.5 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700"
-        >
-          {{ $t('tools.admin.batchTool.retry') }}
-        </button>
-      </template>
-    </BaseAlert>
+      :retry-label="$t('tools.admin.batchTool.retry')"
+      @retry="refreshData"
+    />
 
     <!-- Error Message -->
-    <BaseAlert v-if="error && backendAvailable" variant="error" class="mb-6" :message="error" />
+    <BaseAlert v-if="error" variant="error" class="mb-6" :message="error" />
 
     <!-- Jobs List -->
     <div v-if="loading && !jobs.length" class="text-center py-12">
@@ -447,15 +418,15 @@ onMounted(() => poller.start(String(++pollRun)))
         <div class="grid grid-cols-4 gap-4 text-sm">
           <div>
             <p class="text-gray-500">{{ $t('tools.admin.batchTool.created') }}</p>
-            <p class="text-gray-900">{{ formatDate(job.created_at) }}</p>
+            <p class="text-gray-900">{{ formatFleetDateTime(job.created_at, '-') }}</p>
           </div>
           <div>
             <p class="text-gray-500">{{ $t('tools.admin.batchTool.started') }}</p>
-            <p class="text-gray-900">{{ formatDate(job.started_at) }}</p>
+            <p class="text-gray-900">{{ formatFleetDateTime(job.started_at, '-') }}</p>
           </div>
           <div>
             <p class="text-gray-500">{{ $t('tools.admin.batchTool.duration') }}</p>
-            <p class="text-gray-900">{{ formatDuration(job.started_at, job.completed_at) }}</p>
+            <p class="text-gray-900">{{ formatDuration(job.started_at, job.completed_at, DURATION_OPTIONS) }}</p>
           </div>
           <div>
             <p class="text-gray-500">{{ $t('tools.admin.batchTool.failedItems') }}</p>

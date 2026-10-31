@@ -21,6 +21,7 @@ import os
 import re
 import sys
 import time
+from pathlib import Path
 
 # Stdlib logging, as in the other SLM code: the SLM test conftest mocks config, which
 # autobot_shared.logging_manager reads at import (CLAUDE.md's stated exception). This CLI also runs
@@ -32,35 +33,59 @@ logger = logging.getLogger("autobot-admin")
 #: here, and repo_tests/defined_twice_18094_test.py holds the two equal (#18094).
 _INSTALL_ROOT = "/opt/autobot"  # noqa: ssot-path -- the pinned standalone copy described above
 
+# The slm_manager role syncs autobot_shared under the install root on this host, so putting the root on
+# the path lets the one .env parser be imported instead of copied (#19232). Appended: never shadows stdlib.
+if _INSTALL_ROOT not in sys.path:
+    sys.path.append(_INSTALL_ROOT)
+
+try:
+    from autobot_shared import postgres_identity as pg  # noqa: E402 -- needs the path entry above
+    from autobot_shared.env_file import parse_env_text  # noqa: E402 -- needs the path entry above
+except ImportError as missing:
+    # Not a traceback: name where it looked and the two sanctioned ways to put autobot_shared there.
+    sys.exit(
+        f"autobot-admin: cannot import autobot_shared from the install root {_INSTALL_ROOT} ({missing}). "
+        "Sync it onto this host with the slm_manager role or the builtin updater, then re-run."
+    )
+
+
+#: Files the CLI reads, most general first; a later file wins per key. db-credentials.env is the
+#: canonical store the fleet postgresql role writes (SLM_DATABASE_URL, SLM_USERS_DATABASE_URL,
+#: SLM_DB_*), read last as the SLM's own config.py does (#19407).
+_SECRETS_FILES = (
+    "/etc/autobot/slm-secrets.env",
+    f"{_INSTALL_ROOT}/autobot-slm-backend/.env",
+    "/etc/autobot/db-credentials.env",
+)
+
 
 def load_env_file(path: str) -> dict:
-    """Load key=value pairs from an env file, ignoring comments and blanks."""
-    env: dict = {}
-    if not os.path.exists(path):
-        return env
-    with open(path, encoding="utf-8") as fh:
-        for line in fh:
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, _, val = line.partition("=")
-            env[key.strip()] = val.strip().strip('"').strip("'")
-    return env
+    """Key=value pairs of *path*; a missing file is ``{}``, an existing file that cannot be read exits.
+
+    The shared ``parse_env_file`` reads an unreadable file as empty, which here would pass for "no
+    credentials" and fall back to defaults; the file is read locally so that failure is loud. Moving
+    that contract into the shared parser is tracked in #19749.
+    """
+    try:
+        text = Path(path).read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return {}
+    except OSError as err:
+        reason = "permission denied" if isinstance(err, PermissionError) else err.strerror or type(err).__name__
+        sys.exit(f"autobot-admin: cannot read {path} ({reason}); run it as root or the autobot user.")
+    except UnicodeDecodeError as err:
+        sys.exit(f"autobot-admin: {path} is not UTF-8 (byte {err.start}); the store must be a UTF-8 env file.")
+    return parse_env_text(text)
 
 
-def get_db_url() -> str:
-    """Legacy DSN from SLM_DB_* keys, used only when the service URLs are not in the secrets files."""
+def get_db_url(database: str) -> str:
+    """Legacy DSN from SLM_DB_* keys for *database*, used only when the service URLs are not set."""
     env = _secrets_env()
-
-    host = env.get("SLM_DB_HOST", "127.0.0.1")
-    port = env.get("SLM_DB_PORT", "5432")
-    # The SLM_DB_* keys are what the fleet postgresql role writes (#19320: these
-    # defaults were the compose values, which no fleet host -- where this CLI is
-    # installed -- has). Pinned to autobot_shared/postgres_identity.py.
-    name = env.get("SLM_DB_NAME", "slm")
-    user = env.get("SLM_DB_USER", "slm_app")
+    host = env.get("SLM_DB_HOST", pg.SLM_DB_HOST)
+    port = env.get("SLM_DB_PORT", str(pg.DB_PORT))
+    user = env.get("SLM_DB_USER", pg.SLM_DB_ROLE)
     password = env.get("SLM_DB_PASSWORD", "")
-    return f"postgresql://{user}:{password}@{host}:{port}/{name}"
+    return f"postgresql://{user}:{password}@{host}:{port}/{database}"
 
 
 #: A reset records the subject's password epoch in the SLM's own store (#18663), so every token
@@ -74,15 +99,26 @@ _UPSERT_EPOCH_SQL = (
 def _secrets_env() -> dict:
     """Merged secrets files, later file wins per key."""
     env: dict = {}
-    for path in ("/etc/autobot/slm-secrets.env", f"{_INSTALL_ROOT}/autobot-slm-backend/.env"):
+    for path in _SECRETS_FILES:
         env.update(load_env_file(path))
     return env
 
 
+#: The database each service URL names, for the legacy fallback: the users DSN never falls back to
+#: the control-plane database (#19407).
+_FALLBACK_DATABASE = {
+    "SLM_DATABASE_URL": ("SLM_DB_NAME", pg.SLM_DB_NAME),
+    "SLM_USERS_DATABASE_URL": ("SLM_DB_SLM_USERS", pg.SLM_USERS_DB_NAME),  # the role's per-database key
+}
+
+
 def _dsn_from(env: dict, key: str) -> str:
-    """The service's own asyncpg URL for *key*, as a psycopg2 DSN; legacy SLM_DB_* when unset."""
+    """The service's own asyncpg URL for *key*, as a psycopg2 DSN; legacy SLM_DB_* for its database when unset."""
     url = env.get(key, "")
-    return url.replace("+asyncpg", "", 1) if url else get_db_url()  # the psycopg2 form of the same DSN
+    if url:
+        return url.replace("+asyncpg", "", 1)  # the psycopg2 form of the same DSN
+    name_key, default = _FALLBACK_DATABASE[key]
+    return get_db_url(env.get(name_key) or default)  # a present-but-empty key is unset
 
 
 def _read_password() -> str:

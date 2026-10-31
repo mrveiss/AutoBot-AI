@@ -186,7 +186,7 @@ REACH = declare(
     "hand-rolled-async-session-scan",
     discover=_population,
     # Mid-window, from REACH.window(): population 2431 (test files + tests/testkit helpers) -> (2231, 2431, 2331).
-    floor=2412,  # re-pinned mid-window (train 81 on main)
+    floor=2578,  # re-pinned mid-window (train 81 on main)
     what="test python source",
     roots=SCAN_ROOTS,
     growth=200,

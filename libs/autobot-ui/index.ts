@@ -27,7 +27,7 @@ export { default as BaseInput } from './src/components/BaseInput.vue'
 export type { InputSize, InputType } from './src/components/BaseInput.vue'
 
 export { default as BaseBadge } from './src/components/BaseBadge.vue'
-export type { BadgeVariant, BadgeSize } from './src/components/BaseBadge.vue'
+export type { BadgeVariant, BadgeSize, BadgeTone } from './src/components/BaseBadge.vue'
 // The one risk-tier badge (#13422): RiskTier is the backend's ladder, sent as risk_tier.
 export { default as RiskBadge } from './src/components/RiskBadge.vue'
 export { RISK_TIERS } from './src/types/riskTier'
@@ -41,9 +41,15 @@ export { default as BaseCard } from './src/components/BaseCard.vue'
 
 // The one data table (#14778) -- retires the main app's BaseTable and DataTable forks.
 export { default as BaseTable } from './src/components/BaseTable.vue'
-export type { BaseTableColumn, TableRow, TableRowKey, TableSize, SortOrder } from './src/components/BaseTable.vue'
+export type { BaseTableColumn, TableRow, TableRowKey, TableSize, TableRowVariant, SortOrder } from './src/components/BaseTable.vue'
+export { filterRows, pageRows, pageCountOf, clampPage, defaultVisibleKeys } from './src/utils/tableView'
+export type { TableFilters } from './src/utils/tableView'
 
 export { default as EmptyState } from './src/components/EmptyState.vue'
+
+// The one toast host for both apps (#19903); the caller supplies the translated labels.
+export { default as ToastContainer } from './src/components/ToastContainer.vue'
+export type { ToastContainerProps } from './src/components/ToastContainer.vue'
 
 export { default as SkipLink } from './src/components/SkipLink.vue'
 // One language picker for both apps (#18354); endonym labels live with it.
@@ -85,7 +91,7 @@ export type { AnnouncePriority } from './src/composables/useAnnounce'
 // Dialog-a11y composables — the focus-trap / scroll-lock / focus-restore /
 // initial-focus primitives shared by every dialog and modal consumer.
 export { useFocusTrap, isTabbable, FOCUSABLE_SELECTOR } from './src/composables/useFocusTrap'
-export type { UseFocusTrapReturn } from './src/composables/useFocusTrap'
+export type { UseFocusTrapOptions, UseFocusTrapReturn } from './src/composables/useFocusTrap'
 
 export { useFocusRestore } from './src/composables/useFocusRestore'
 
@@ -142,8 +148,21 @@ export type {
   MetricsSummaryDashboard,
 } from './src/composables/useMetricsSummary'
 
-// Shared duration-formatting vocabulary (#14908).
+// Shared duration, uptime and byte formatting (#14908).
 export type { DurationStyle } from './src/utils/duration'
+export { formatDuration, formatUptime, formatFileSize, formatBytes } from './src/utils/format'
+export type { DurationUnitLabels, FormatDurationOptions, FormatUptimeOptions, FormatBytesOptions } from './src/utils/format'
+export {
+  formatDate,
+  formatTime,
+  formatDateTime,
+  formatISOString,
+  formatTimeAgo,
+  formatRelativeTime,
+  createDateFormatter,
+  DEFAULT_DATE_TIME_INTL
+} from './src/utils/format'
+export type { DateInput, DateFormatterOptions, FormatRelativeTimeOptions } from './src/utils/format'
 
 // Scoped console logger (#14908) — canonical LogLevel/log/createLogger; both
 // apps' utils/debugUtils.ts re-export these rather than re-declaring them.
@@ -151,6 +170,8 @@ export { log, createLogger } from './src/utils/logger'
 // Managed polling with scoped disposal and a consecutive-error stop (#19482).
 export { usePollingJob } from './src/composables/usePollingJob'
 export type { UsePollingJobOptions, UsePollingJobReturn } from './src/composables/usePollingJob'
+// The one "updates have stopped" notice for a poller paused on errors (#19482).
+export { default as PollingPausedAlert } from './src/components/PollingPausedAlert.vue'
 
 // One DOMPurify-backed sanitiser for every v-html binding in both apps (#2847, #19118).
 export { sanitizeChatHtml, sanitizeKnowledgeHtml, sanitizeHtml, escapeHtml } from './src/utils/sanitize'
@@ -179,3 +200,54 @@ export {
 export type { LedgerSection, LedgerSectionStatus, LedgerAskOutcome } from './src/utils/ledger'
 export { default as LedgerSectionState } from './src/components/LedgerSectionState.vue'
 export type { LedgerStateLabels } from './src/components/LedgerSectionState.vue'
+
+// The one HTTP transport under both apps' ApiClients; each app subclasses it for auth (#14908).
+export { ApiClientBase, withQuery, parseRetryAfterMs, SERVICE_UNAVAILABLE_STATUS } from './src/utils/ApiClientBase'
+export type { TransportRequestOptions, RawRequestOptions, TransportLogger } from './src/utils/ApiClientBase'
+
+// The one spinner and the one skeleton for every loading state (#19906).
+export { default as BaseSpinner } from './src/components/BaseSpinner.vue'
+export type { SpinnerSize } from './src/components/BaseSpinner.vue'
+export { default as BaseSkeleton } from './src/components/BaseSkeleton.vue'
+export type { SkeletonShape } from './src/components/BaseSkeleton.vue'
+
+// The agent-ledger row shapes both consoles read, declared once (#19910).
+export type {
+  ActivityRow,
+  ClaimRow,
+  ConflictRow,
+  IdleSubscriberRow,
+  PeerMessageRow,
+  PresenceRow,
+  PresenceTaskRow,
+} from './src/types/ledger'
+
+// A tool permission rule as the backend serves it, declared once (#19910).
+export type { PermissionRule } from './src/types/permission'
+
+// Headless-library interaction primitives (#14779) -- behaviour from Reka UI, styling from the kit
+// tokens, copy supplied by the app. `BaseTooltip` above stays hand-written.
+export { default as BaseTabs } from './src/components/BaseTabs.vue'
+export type { TabsVariant, TabsSize, TabItem } from './src/components/BaseTabs.vue'
+export type { KitDirection } from './src/utils/direction'
+
+export { default as BaseDropdownMenu } from './src/components/BaseDropdownMenu.vue'
+export type { MenuSize, MenuItemVariant, MenuItem } from './src/components/BaseDropdownMenu.vue'
+
+export { default as BasePopover } from './src/components/BasePopover.vue'
+export type { PopoverSize } from './src/components/BasePopover.vue'
+
+export { default as BaseAccordion } from './src/components/BaseAccordion.vue'
+export type {
+  AccordionVariant,
+  AccordionSize,
+  AccordionValue,
+  AccordionItemSpec,
+} from './src/components/BaseAccordion.vue'
+
+export { default as BaseSelectMenu } from './src/components/BaseSelectMenu.vue'
+export type {
+  SelectMenuSize,
+  SelectMenuVariant,
+  SelectMenuOption,
+} from './src/components/BaseSelectMenu.vue'

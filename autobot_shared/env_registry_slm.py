@@ -21,6 +21,27 @@ from autobot_shared.env_registry import EnvVarSpec, register_env_var
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_UPDATE_CODE_SOURCE_FETCH_RETRY_DELAY_S",
+        type=int,
+        default=5,
+        description="Seconds before retrying a failed git fetch of the code source (#20089).",
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SLM_UPDATE_REPORT_DEPLOY_RUNS",
+        type=int,
+        default=50,
+        description="Newest role deploys listed in the update report (api/update_report.py, #19962).",
+        component="slm",
+        range=(1, 500),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_PLAYBOOK_PIPE_LINE_LIMIT",
         type=int,
         default=10 * 1024 * 1024,
@@ -469,6 +490,22 @@ register_env_var(
             "Seconds the code-sync orchestrator waits for one `sudo -n systemctl restart` "
             "over SSH before recording the restart as failed "
             "(autobot-slm-backend/services/post_sync_runner.py, #17455)."
+        ),
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="SLM_COMPOSE_NODES",
+        type=str,
+        default="",
+        description=(
+            "Surface each compose container as an SLM fleet node (#9761). Unset follows the deployment "
+            "mode: on for docker_local (the compose stack, or a dev checkout run inside a container), off "
+            "on a bare-metal/VM fleet and a host dev checkout; true|false overrides, a blank or unrecognised "
+            "value is warned about and treated as unset. The one default is autobot-slm-backend/config.py "
+            "Settings.compose_nodes_enabled (#19323); docker-compose.yml passes the name through only."
         ),
         component="slm",
     )

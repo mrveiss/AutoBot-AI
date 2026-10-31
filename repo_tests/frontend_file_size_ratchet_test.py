@@ -7,9 +7,8 @@
 `.ts` and `.vue` had no length measurement of any kind before this gate. These
 tests hold the four things that make it real rather than decorative:
 
-1. the two copies of the ceilings agree, so a shrink cannot be un-shrunk
-   (equality itself is owned by ``ceiling_record_parity_17872_test.py``, which
-   asserts it both ways for all three gates; the direction check is here);
+1. the ceilings are one table, checked against the base commit's, so a shrink
+   cannot be un-shrunk and nothing can be added (#19544);
 2. the ratchet's three-way verdict is enforced, including the branch that looks
    wrong -- a file UNDER its ceiling is a failure until the ceiling is lowered;
 3. the walk actually reaches the tree, so a clean run means "looked and found
@@ -31,8 +30,8 @@ import pytest
 import yaml
 from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_table, raised_entries
-from repo_tests.frontend_file_size_ratchet_baseline import RATCHET_BASELINE
 
+from tools.lint._file_size_guard import load_known_large
 from tools.lint._scan_helpers import tracked_paths
 
 #: Asks git first, so a worktree resolves to its own tree (#15925). Deriving it
@@ -53,7 +52,7 @@ PRE_COMMIT_CONFIG = REPO_ROOT / ".pre-commit-config.yaml"
 #: nothing outside .ts/.vue" and "the gate never looked outside .ts/.vue" are
 #: the same observation (MEASUREMENT_DISCIPLINE.md).
 _UNCOVERED_OVERSIZED: dict[str, int] = {
-    "autobot-frontend/src/config/AppConfig.js": 616,
+    "autobot-frontend/src/config/AppConfig.js": 612,
 }
 
 #: Suffixes the uncovered-population sweep enumerates. Everything a frontend
@@ -85,14 +84,25 @@ def hook():
     return module
 
 
-def test_no_ceiling_exceeds_its_recorded_baseline(hook):
-    """The ratchet turns one way. This is the direction check, stated separately."""
-    raised = {
-        rel: (ceiling, RATCHET_BASELINE[rel])
-        for rel, ceiling in hook.KNOWN_LARGE.items()
-        if rel in RATCHET_BASELINE and ceiling > RATCHET_BASELINE[rel]
-    }
-    assert not raised, f"ceilings raised above their baseline (never allowed): {raised}"
+def _base_known_large() -> dict[str, int]:
+    """``KNOWN_LARGE`` as the base commit had it; BaseUnavailable propagates (fail closed)."""
+    return base_table(REPO_ROOT, ("scripts/frontend_file_size_known_large.py",), "KNOWN_LARGE")
+
+
+def test_no_entry_may_be_added(hook):
+    """An entry the base commit did not have admits a new oversized file."""
+    added = set(hook.KNOWN_LARGE) - set(_base_known_large())
+    assert added == set(), (
+        f"new grandfathered files {sorted(added)} -- the exemption list only shrinks. "
+        "Split the file instead of exempting it."
+    )
+
+
+def test_no_ceiling_may_exceed_its_baseline(hook):
+    """No ceiling is above what the base commit's ``KNOWN_LARGE`` recorded for it."""
+    base = _base_known_large()
+    raised = {rel: v for rel, v in raised_entries(dict(hook.KNOWN_LARGE), base).items() if rel in base}
+    assert not raised, f"ceilings raised against the base commit (base, now): {raised}"
 
 
 def test_every_grandfathered_file_is_at_its_ceiling(hook):
@@ -105,7 +115,7 @@ def test_every_grandfathered_file_is_at_its_ceiling(hook):
     for rel, ceiling in hook.KNOWN_LARGE.items():
         path = REPO_ROOT / rel
         if not path.is_file():
-            wrong[rel] = "no such file — remove the entry from both copies"
+            wrong[rel] = "no such file — remove the entry"
             continue
         measured = hook.count_lines(path)
         if measured is None:
@@ -262,12 +272,13 @@ def test_the_generated_clients_are_excluded_by_a_recorded_prefix(hook):
     ], "a generated file carries a ceiling — remove it, the exclusion is the mechanism"
 
 
-#: The largest ceiling, read from the baseline rather than written as a literal.
+#: The largest ceiling, read from the table rather than written as a literal.
 #: A literal is how a parametrisation comes to assert that 900 is above a ceiling
 #: of 1265 -- the inputs have to move when the ceiling is lowered, and only a
 #: derived value does that.
-_SUBJECT = max(RATCHET_BASELINE, key=lambda rel: RATCHET_BASELINE[rel])
-_CEILING = RATCHET_BASELINE[_SUBJECT]
+_KNOWN_LARGE = load_known_large(str(HOOK_PATH), "frontend_file_size_known_large.py")
+_SUBJECT = max(_KNOWN_LARGE, key=lambda rel: _KNOWN_LARGE[rel])
+_CEILING = _KNOWN_LARGE[_SUBJECT]
 
 
 @pytest.mark.parametrize(
@@ -321,15 +332,3 @@ def test_the_commit_path_reports_an_unreadable_staged_file(hook, tmp_path, monke
     """End to end on the path that blocks a push, not just on the message builder."""
     monkeypatch.setattr(hook, "repo_root", lambda: tmp_path)
     assert hook.check_paths(["autobot-frontend/src/never_written.vue"]) == 1
-
-
-def test_no_ceiling_rose_against_the_base(hook):
-    """#19283: each KNOWN_LARGE entry is at most what the base commit's table recorded, and an
-    entry the base did not have is a raise. The fixed reference a sum or a mirrored pair could
-    not give: a two-sided raise moves both records together, never the base commit."""
-    base = base_table(repo_root(), ("scripts/frontend_file_size_known_large.py",), "KNOWN_LARGE")
-    rose = raised_entries(dict(hook.KNOWN_LARGE), base)
-    assert not rose, (
-        f"ceilings raised or added against the base (base, now): {rose}. Split the file instead "
-        "of raising its ceiling; raises are refused, against the base and the last green main."
-    )

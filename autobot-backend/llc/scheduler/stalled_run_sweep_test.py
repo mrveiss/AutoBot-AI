@@ -22,6 +22,7 @@ from sqlalchemy.dialects import postgresql
 from llc.models.enums import LLCRunStatus
 from testkit.fake_async_session import FakeAsyncSession
 from testkit.fake_result import FakeResult
+from testkit.module_snapshot import reloaded
 
 
 @pytest.fixture
@@ -29,7 +30,8 @@ def sweep(monkeypatch):
     """Import with a short timeout so the tests do not depend on the six-hour default."""
     monkeypatch.setenv("LLC_RUN_STALL_TIMEOUT_SECONDS", "60")
     module = importlib.import_module("llc.scheduler.stalled_run_sweep")
-    return importlib.reload(module)
+    with reloaded(module) as short:
+        yield short
 
 
 def test_the_timeout_is_env_var_backed_not_a_literal(sweep):
@@ -38,18 +40,18 @@ def test_the_timeout_is_env_var_backed_not_a_literal(sweep):
 
 def test_the_default_is_used_when_the_env_var_is_absent(monkeypatch):
     monkeypatch.delenv("LLC_RUN_STALL_TIMEOUT_SECONDS", raising=False)
-    module = importlib.reload(importlib.import_module("llc.scheduler.stalled_run_sweep"))
-    assert module.STALL_TIMEOUT_SECONDS == 6 * 60 * 60
+    with reloaded(importlib.import_module("llc.scheduler.stalled_run_sweep")) as module:
+        assert module.STALL_TIMEOUT_SECONDS == 6 * 60 * 60
 
 
 def test_a_run_older_than_the_cutoff_is_past_it(sweep):
     old = datetime.now(timezone.utc) - timedelta(seconds=120)
-    assert old <= sweep._cutoff()
+    assert old <= sweep.stall_cutoff()
 
 
 def test_a_fresh_run_is_not_past_the_cutoff(sweep):
     fresh = datetime.now(timezone.utc) - timedelta(seconds=5)
-    assert fresh > sweep._cutoff()
+    assert fresh > sweep.stall_cutoff()
 
 
 def test_only_non_terminal_statuses_are_candidates(sweep):

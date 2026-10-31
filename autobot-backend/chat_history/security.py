@@ -62,7 +62,11 @@ class SecurityMixin:
             ValueError: If data cannot be decoded
         """
         if not self.encryption_enabled:
-            return json.loads(data_str)
+            try:
+                return json.loads(data_str)
+            except json.JSONDecodeError as exc:
+                # #19864: an encrypted chat on a host without its key reads as this, not as corruption.
+                raise ValueError("Cannot decode chat data: not JSON, and no encryption key is set") from exc
 
         try:
             # Check if data is encrypted (base64-like format)

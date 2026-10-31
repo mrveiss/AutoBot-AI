@@ -35,7 +35,7 @@ def _modules(root: Path) -> list[Path]:
 REACH = declare(
     "llc-sigterm-grace-copies",
     discover=_modules,
-    floor=216,
+    floor=247,  # mid-window: population 257, window (237, 257)
     growth=20,  # ~9%: ordinary LLC growth between repins must not turn an unrelated PR red
     what="non-test LLC modules",
     roots=(_LLC,),
@@ -64,17 +64,33 @@ def _target_names(target: ast.AST) -> list[str]:
     return [target.attr] if isinstance(target, ast.Attribute) else []
 
 
+def _bound_pairs(target: ast.AST, value: ast.AST | None) -> list[tuple[str, ast.AST | None]]:
+    """``(name, value)`` for each name *target* writes; an unpacked tuple pairs element by element.
+
+    When the lengths differ (a starred target), every name keeps the whole value, so any literal in it
+    counts: an unpairable binding errs towards a report.
+    """
+    sequences = isinstance(target, ast.Tuple | ast.List) and isinstance(value, ast.Tuple | ast.List)
+    if sequences and len(value.elts) == len(target.elts):
+        return [pair for t, v in zip(target.elts, value.elts) for pair in _bound_pairs(t, v)]
+    return [(name, value) for name in _target_names(target)]
+
+
 def _binding_hits(node: ast.AST, rel: str) -> list[str]:
     """A numeric literal bound to a ``*SIGTERM_GRACE*`` name outside the home (incl. ``+=`` and unpacking)."""
     if rel == _HOME or not isinstance(node, ast.Assign | ast.AnnAssign | ast.AugAssign):
         return []
     targets = node.targets if isinstance(node, ast.Assign) else [node.target]
-    values = node.value.elts if isinstance(node.value, ast.Tuple) else [node.value]
-    names = [n for t in targets for n in _target_names(t)]
-    hit = [n for n in names if "SIGTERM_GRACE" in n.upper()]
-    if hit and any(_is_number(v) for v in values):
-        return [f"{rel}:{node.lineno}: {hit[0]} bound to a literal"]
-    return []
+    pairs = [pair for t in targets for pair in _bound_pairs(t, node.value)]
+    hit = [n for n, v in pairs if "SIGTERM_GRACE" in n.upper() and _bound_literal(v)]
+    return [f"{rel}:{node.lineno}: {hit[0]} bound to a literal"] if hit else []
+
+
+def _bound_literal(value: ast.AST | None) -> bool:
+    """A number, or a tuple that still carries one (the target could not be paired element by element)."""
+    if isinstance(value, ast.Tuple | ast.List):
+        return any(_is_number(v) for v in value.elts)
+    return _is_number(value)
 
 
 def _call_hits(node: ast.AST, rel: str, param: str) -> list[str]:
@@ -129,6 +145,9 @@ def test_the_keyword_this_guard_reads_is_terminate_pids_real_parameter() -> None
         "_SIGTERM_GRACE_SECONDS = 5\n",
         "_SIGTERM_GRACE_SECONDS += 5\n",
         "A_SIGTERM_GRACE, B = 5, 10\n",
+        "B, A_SIGTERM_GRACE = SIGTERM_GRACE_SECONDS, 5\n",
+        "A_SIGTERM_GRACE, B = pair = 5, 10\n",
+        "A_SIGTERM_GRACE, *rest = 5, 6, 7\n",
         "self.sigterm_grace_seconds = 5\n",
         "LOCAL_SIGTERM_GRACE: int = 5\n",
     ],
@@ -150,3 +169,5 @@ def test_the_home_may_define_it_and_an_import_is_not_a_copy() -> None:
         "from .subprocess_base import SIGTERM_GRACE_SECONDS\nawait terminate_pid(p, SIGTERM_GRACE_SECONDS, 'X', t)\n",
         "autobot-backend/llc/adapters/process_adapter.py",
     )
+    # Unpacking pairs each name with its own value: the grace name gets the constant, OTHER the literal (#19660).
+    assert not copies("OTHER, LOCAL_SIGTERM_GRACE = 5, SIGTERM_GRACE_SECONDS\n", "autobot-backend/llc/x.py")

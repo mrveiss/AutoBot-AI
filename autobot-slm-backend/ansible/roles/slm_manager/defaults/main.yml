@@ -158,9 +158,6 @@ grafana_configure: "{{ grafana_mode == 'local' }}"
 # Deploy dashboards (both local and external modes)
 grafana_deploy_dashboards: true
 
-# Grafana version (only used when grafana_install is true)
-grafana_version: latest
-
 # Prometheus URL for Grafana data source
 # When Grafana is external, this must be accessible from the external host
 prometheus_host: 127.0.0.1

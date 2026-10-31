@@ -1645,7 +1645,7 @@ watch(selectedScope, () => {
   gap: var(--spacing-2-5);
 }
 
-.sidebar-header i {
+.sidebar-header .icon {
   color: var(--color-primary);
 }
 
@@ -1660,11 +1660,11 @@ watch(selectedScope, () => {
   align-items: center;
 }
 
-.search-wrapper i {
+.search-wrapper > .icon {
   position: absolute;
   left: 12px;
   color: var(--text-muted);
-  font-size: var(--text-sm);
+  width: var(--text-sm); height: var(--text-sm);
 }
 
 .search-wrapper .search-input {
@@ -1732,7 +1732,7 @@ watch(selectedScope, () => {
   color: var(--color-primary);
 }
 
-.category-item i {
+.category-item .icon {
   width: var(--spacing-5);
   text-align: center;
   font-size: var(--text-sm);
@@ -1761,7 +1761,7 @@ watch(selectedScope, () => {
 }
 
 .category-item.alert .count.alert {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-error);
 }
 
@@ -1864,9 +1864,9 @@ watch(selectedScope, () => {
   gap: var(--spacing-2);
 }
 
-.stat-item i {
+.stat-item .icon {
   color: var(--text-muted);
-  font-size: var(--text-sm);
+  width: var(--text-sm); height: var(--text-sm);
 }
 
 .stat-item .stat-value {
@@ -1883,7 +1883,7 @@ watch(selectedScope, () => {
   color: var(--color-warning);
 }
 
-.stat-item.warning i,
+.stat-item.warning .icon,
 .stat-item.warning .stat-value {
   color: var(--color-warning);
 }
@@ -2142,7 +2142,7 @@ watch(selectedScope, () => {
   gap: var(--spacing-2-5);
 }
 
-.templates-section h3 i {
+.templates-section h3 .icon {
   color: var(--color-primary);
 }
 
@@ -2409,13 +2409,13 @@ watch(selectedScope, () => {
   display: none;
 }
 
-.scope-option i {
-  font-size: var(--text-xl);
+.scope-option .icon {
+  width: var(--text-xl); height: var(--text-xl);
   color: var(--text-muted);
   margin-top: var(--spacing-0-5);
 }
 
-.scope-option.active i {
+.scope-option.active .icon {
   color: var(--color-primary);
 }
 
@@ -2660,7 +2660,7 @@ watch(selectedScope, () => {
 
 .btn-danger {
   padding: var(--spacing-2-5) var(--spacing-5);
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-error);
   border: none;
   border-radius: var(--radius-lg);
@@ -2729,12 +2729,12 @@ watch(selectedScope, () => {
   cursor: default;
 }
 
-.checkbox-option i {
-  font-size: var(--text-sm);
+.checkbox-option .icon {
+  width: var(--text-sm); height: var(--text-sm);
   color: var(--text-muted);
 }
 
-.checkbox-option:has(input:checked) i {
+.checkbox-option:has(input:checked) .icon {
   color: var(--color-primary);
 }
 

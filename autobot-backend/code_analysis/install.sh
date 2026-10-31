@@ -93,20 +93,17 @@ mkdir -p logs reports patches
 # Set up configuration
 echo "⚙️ Setting up configuration..."
 
-# Check for existing AutoBot configuration or use defaults
-REDIS_HOST="${AUTOBOT_REDIS_HOST:-localhost}"
-REDIS_PORT="${AUTOBOT_REDIS_PORT:-6379}"
-# AUTOBOT_REDIS_DB_MAIN: 11 of the 12 code_analysis Redis call sites default
-# to get_async_redis_client() with no `database` arg, which resolves to
-# "main" (autobot_shared/redis_client.py) -- so the installer's fallback
-# tracks that default rather than the retired, unset bare-name variable
-# this replaced (#15577).
-REDIS_DB="${AUTOBOT_REDIS_DB_MAIN:-0}"
+# Redis: no URL, host or DB number here (#19232). The suite connects through
+# autobot_shared.redis_client (database "main", the get_async_redis_client()
+# default its call sites use), which resolves host, port, credentials and the
+# number -- redis-databases.yaml plus AUTOBOT_REDIS_DB_MAIN -- in one place.
+# The REDIS_URL this file used to write had no reader.
+_INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_REPO_ROOT="$(cd "${_INSTALL_DIR}/../.." && pwd)"
 
 cat > .env << EOF
 # AutoBot Code Analysis Suite Configuration
 # Values can be overridden via AUTOBOT_* environment variables
-REDIS_URL=redis://${REDIS_HOST}:${REDIS_PORT}/${REDIS_DB}
 LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
 CACHE_TTL=${AUTOBOT_CACHE_TTL:-3600}
 
@@ -134,17 +131,19 @@ import sklearn
 print('✅ All dependencies installed successfully')
 "
 
-# Test Redis connection - use environment-configured values
-python3 -c "
-import redis
-import os
-redis_host = os.getenv('AUTOBOT_REDIS_HOST', 'localhost')
-redis_port = int(os.getenv('AUTOBOT_REDIS_PORT', '6379'))
-redis_db = int(os.getenv('AUTOBOT_REDIS_DB_MAIN', '0'))
-r = redis.Redis(host=redis_host, port=redis_port, db=redis_db)
-r.ping()
+# Test Redis connection through the canonical client -- the endpoint and the "main"
+# database (redis-databases.yaml, AUTOBOT_REDIS_DB_MAIN) the suite itself will use.
+if ! PYTHONPATH="${_REPO_ROOT}" python3 -c "import autobot_shared.redis_client"; then
+    echo "⚠️  Could not import autobot_shared.redis_client (see the error above)."
+elif PYTHONPATH="${_REPO_ROOT}" python3 -c "
+from autobot_shared.redis_client import require_redis_client
+require_redis_client(database='main').ping()
 print('✅ Redis connection successful')
-" 2>/dev/null || echo "⚠️  Redis connection failed. Please check Redis server."
+" 2>/dev/null; then
+    :
+else
+    echo "⚠️  Redis connection failed. Please check Redis server."
+fi
 
 echo ""
 echo "🎉 Installation complete!"

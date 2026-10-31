@@ -30,9 +30,10 @@ from autobot_shared.doc_chunking import create_chunk as _create_chunk
 from autobot_shared.doc_chunking import estimate_tokens as _estimate_tokens
 from autobot_shared.doc_chunking import process_h2_sections as _process_h2_sections
 from autobot_shared.frontmatter import split_frontmatter
+from autobot_shared.kb_doc_set import in_doc_set
 from autobot_shared.logging_manager import get_logger
-from autobot_shared.paths import shared_cache_path
 from autobot_shared.slug import sanitize_token
+from services.knowledge.index_cache_paths import doc_index_hashes
 
 if TYPE_CHECKING:
     from services.knowledge.sync_queue import SyncQueueEntry, SyncReason  # noqa: F401
@@ -79,12 +80,11 @@ def _auto_reindex_on_dim_mismatch() -> bool:
 
 
 # ============================================================================
-# TIER DEFINITIONS (from CLI tool)
+# TIER DEFINITIONS: a priority order over kb_doc_set, and a curated subset of it (#20063)
 # ============================================================================
 
 TIER_1_FILES = [
     "CLAUDE.md",
-    "docs/system-state.md",
     "docs/api/COMPREHENSIVE_API_DOCUMENTATION.md",
     "docs/architecture/DISTRIBUTED_ARCHITECTURE.md",
     "docs/architecture/README.md",
@@ -340,46 +340,34 @@ def _should_exclude(file_path: str) -> bool:
 
 
 def _discover_files(root_dir: Path, tier: int | None = None) -> List[Tuple[str, int]]:
-    """Discover markdown files to index by tier."""
-    files: List[Tuple[str, int]] = []
+    """Discover markdown files to index by tier; only files in the canonical doc set qualify (#20063)."""
+    found: dict[str, int] = {}
+
+    def add(path: Path, number: int) -> None:
+        if in_doc_set(path.relative_to(root_dir).as_posix()):
+            found.setdefault(str(path), number)
 
     if tier is None or tier == 1:
         for file_rel in TIER_1_FILES:
-            file_path = root_dir / file_rel
-            if file_path.exists():
-                files.append((str(file_path), 1))
+            if (root_dir / file_rel).exists():
+                add(root_dir / file_rel, 1)
 
-    if tier is None or tier == 2:
-        for dir_rel in TIER_2_DIRS:
-            dir_path = root_dir / dir_rel
-            if dir_path.exists():
-                for md_file in dir_path.rglob("*.md"):
-                    file_str = str(md_file)
-                    if not _should_exclude(file_str):
-                        if not any(f[0] == file_str for f in files):
-                            files.append((file_str, 2))
+    for number, dirs in ((2, TIER_2_DIRS), (3, TIER_3_DIRS + TIER_3_DIRS_EXTRA)):
+        if tier is None or tier == number:
+            for dir_rel in dirs:
+                for md_file in (root_dir / dir_rel).rglob("*.md"):
+                    if not _should_exclude(str(md_file)):
+                        add(md_file, number)
 
-    if tier is None or tier == 3:
-        all_tier3 = TIER_3_DIRS + TIER_3_DIRS_EXTRA
-        for dir_rel in all_tier3:
-            dir_path = root_dir / dir_rel
-            if dir_path.exists():
-                for md_file in dir_path.rglob("*.md"):
-                    file_str = str(md_file)
-                    if not _should_exclude(file_str):
-                        if not any(f[0] == file_str for f in files):
-                            files.append((file_str, 3))
-
-    return files
+    return list(found.items())
 
 
 # ============================================================================
 # HASH CACHE for incremental indexing
 # ============================================================================
 
-# #16934: shared git-common-dir, not per-checkout PATH.DATA_DIR -- one shared collection.
-_HASH_CACHE_FALLBACK = PATH.DATA_DIR / ".doc_index_hashes.json"
-HASH_CACHE_FILE = shared_cache_path("autobot-doc-index", ".doc_index_hashes.json", fallback=_HASH_CACHE_FALLBACK)
+# None: the shared user cache, resolved on use, never at import (index_cache_paths, #19553); tests pin a path.
+HASH_CACHE_FILE: Path | None = None
 
 
 def _compute_file_hash(file_path: str) -> str:
@@ -401,9 +389,9 @@ def _compute_file_hash(file_path: str) -> str:
 
 def _load_hash_cache() -> Dict[str, str]:
     """Load cached file hashes from disk."""
-    if HASH_CACHE_FILE.exists():
+    if doc_index_hashes(HASH_CACHE_FILE).exists():
         try:
-            with open(HASH_CACHE_FILE, "r", encoding="utf-8") as f:
+            with open(doc_index_hashes(HASH_CACHE_FILE), "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception as e:
             logger.warning("Could not load hash cache: %s", e)
@@ -413,8 +401,8 @@ def _load_hash_cache() -> Dict[str, str]:
 def _save_hash_cache(hashes: Dict[str, str]) -> None:
     """Save file hashes to disk."""
     try:
-        HASH_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-        with open(HASH_CACHE_FILE, "w", encoding="utf-8") as f:
+        doc_index_hashes(HASH_CACHE_FILE).parent.mkdir(parents=True, exist_ok=True)
+        with open(doc_index_hashes(HASH_CACHE_FILE), "w", encoding="utf-8") as f:
             json.dump(hashes, f, indent=2)
     except Exception as e:
         logger.warning("Could not save hash cache: %s", e)

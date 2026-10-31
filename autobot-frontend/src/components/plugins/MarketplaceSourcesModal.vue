@@ -22,14 +22,13 @@
             <div v-if="src.url" class="source-url">{{ src.url }}</div>
             <div v-if="src.description" class="source-desc">{{ src.description }}</div>
           </div>
-          <button
+          <BaseButton variant="error"
             v-if="!src.is_builtin"
-            class="btn btn-danger"
             :disabled="busy"
             @click="onDelete(src.id)"
           >
             {{ $t('common.remove') }}
-          </button>
+          </BaseButton>
         </li>
       </ul>
 
@@ -74,20 +73,19 @@
           {{ error }}
         </div>
 
-        <button
-          class="btn btn-primary"
+        <BaseButton
           :disabled="!canAdd || busy"
           @click="onAdd"
         >
           {{ busy ? $t('views.marketplace.sources.adding') : $t('views.marketplace.sources.add') }}
-        </button>
+        </BaseButton>
       </div>
     </div>
 
     <template #actions>
-      <button class="btn btn-ghost" @click="onClose">
+      <BaseButton variant="ghost" @click="onClose">
         {{ $t('common.close') }}
-      </button>
+      </BaseButton>
     </template>
   </BaseModal>
 </template>
@@ -95,7 +93,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import { useMarketplaceSources } from '@/composables/useMarketplaceSources'
 
 const props = defineProps<{ open: boolean }>()
@@ -307,44 +305,5 @@ async function onDelete(id: string) {
   padding: var(--spacing-sm) var(--spacing-md);
   border-radius: var(--radius-md);
   font-size: var(--text-sm);
-}
-
-.btn {
-  padding: var(--spacing-sm) var(--spacing-md);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  border-radius: var(--radius-md);
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition: background var(--duration-150);
-}
-
-.btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-ghost {
-  background: transparent;
-  border-color: var(--border-default);
-  color: var(--text-primary);
-}
-
-.btn-primary {
-  background: var(--color-info);
-  color: white;
-}
-
-.btn-primary:hover:not(:disabled) {
-  filter: brightness(1.1);
-}
-
-.btn-danger {
-  background: var(--color-error);
-  color: white;
-}
-
-.btn-danger:hover:not(:disabled) {
-  filter: brightness(1.1);
 }
 </style>

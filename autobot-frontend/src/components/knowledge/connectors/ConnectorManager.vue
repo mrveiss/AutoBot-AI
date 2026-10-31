@@ -329,8 +329,9 @@ onMounted(() => {
   padding: var(--spacing-8);
 }
 
-.loading-state i {
-  font-size: var(--text-2xl);
+.loading-state .icon {
+  width: var(--text-2xl);
+  height: var(--text-2xl);
   margin-bottom: var(--spacing-3);
 }
 

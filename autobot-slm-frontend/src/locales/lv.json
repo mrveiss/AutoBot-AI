@@ -73,7 +73,7 @@
     "sSHPort": "SSH Port",
     "sSHPrivateKey": "SSH Private Key",
     "saveChanges": "Save Changes",
-    "saving": "Saving...",
+    "saving": "Saglabā...",
     "selectedRolesWillConfigure": "Selected roles will configure:",
     "showPasswordAria": "Show password",
     "sshKeyPemHint": "Paste your OpenSSH private key in PEM format",
@@ -116,7 +116,9 @@
       "rollingBack": "Rolling back...",
       "select": "Select...",
       "source": "Avots:",
-      "yesRollback": "Yes, rollback"
+      "yesRollback": "Yes, rollback",
+      "loadFailed": "Failed to load revisions",
+      "rollbackFailed": "Rollback failed"
     },
     "orgChartTab": {
       "agentHierarchy": "Agent Hierarchy",
@@ -135,12 +137,16 @@
       "selectReport": "Select report...",
       "submit": "Iesniegt",
       "task": "Uzdevums",
-      "total": "Kopā"
+      "total": "Kopā",
+      "loadFailed": "Failed to load org tree",
+      "delegationFailed": "Delegation failed"
     },
     "orgTreeNode": {
       "value0Reports": "{value0} reports"
     },
     "processMonitorTab": {
+      "durationSeconds": "s",
+      "durationMinutes": "m",
       "actions": "Darbības",
       "agentID": "Agent ID",
       "all": "All",
@@ -174,7 +180,10 @@
       "timedOut": "Timed Out",
       "timeoutS": "Timeout (s)",
       "usrBinPython3": "/usr/bin/python3",
-      "viewFullLog": "View Full Log"
+      "viewFullLog": "View Full Log",
+      "loadFailed": "Failed to load processes",
+      "signalFailed": "Signal failed",
+      "spawnFailed": "Spawn failed"
     }
   },
   "agentsView": {
@@ -242,7 +251,7 @@
     "loadingNodes": "Loading nodes...",
     "node": "Node",
     "repositoryPath": "Repository Path",
-    "saving": "Saving...",
+    "saving": "Saglabā...",
     "selectANode": "Select a node...",
     "update": "Atjaunināt"
   },
@@ -385,6 +394,7 @@
     "deleteSchedule": "Delete schedule \"{name}\"?"
   },
   "common": {
+    "zeroSize": "0 B",
     "codeSyncBadge": {},
     "roleReachesNoDeployPath": "Assigned, but nothing will deploy {roles}: the role reaches no ansible group and has no dedicated playbook. Add a group mapping or a playbook for it.",
     "sidebar": {
@@ -432,6 +442,15 @@
     },
     "app": {
       "mainContentAria": "Main content"
+    },
+    "polling": {
+      "paused": "Updates paused: the backend did not answer several times in a row, so the figures shown may be out of date.",
+      "readFailed": "A dashboard read did not load.",
+      "retry": "Retry"
+    },
+    "errors": {
+      "withStatus": "{message} (HTTP {status})",
+      "withCause": "{message}: {cause}"
     }
   },
   "deploymentLogViewer": {
@@ -734,7 +753,7 @@
       "refreshing": "Refreshing...",
       "roundRobin": "Round Robin",
       "saveStrategy": "Save Strategy",
-      "saving": "Saving...",
+      "saving": "Saglabā...",
       "strategyConfiguration": "Strategy Configuration",
       "taskDistribution": "Task Distribution",
       "totalQueueDepthAcross": "Total queue depth across all workers",
@@ -783,7 +802,7 @@
       "removeNPURole": "Remove NPU Role",
       "retryOnSameWorker": "Retry on Same Worker",
       "saveConfiguration": "Save Configuration",
-      "saving": "Saving...",
+      "saving": "Saglabā...",
       "skipTask": "Skip Task",
       "temperature": "Temperature",
       "throughputReqS": "Throughput (req/s)",
@@ -826,10 +845,12 @@
     "nPUWorkerMonitor": {
       "avgUtilization": "Avg utilization:",
       "currentTask": "Current Task",
+      "metricsUnavailable": "NPU fleet metrics are unavailable",
       "noNPUWorkers": "No NPU Workers",
       "noNodesWithThe": "No nodes with the npu-worker role are registered in the fleet.",
       "online": "online",
       "queueDepth": "Queue Depth",
+      "refreshFailed": "Refresh failed",
       "refreshNow": "Refresh now",
       "utilization": "Utilization"
     },
@@ -1134,6 +1155,11 @@
     "editMaintenanceWindow": "Edit Maintenance Window",
     "editWindow": "Edit window",
     "endTime": "End Time",
+    "failedToActivateWindow": "Neizdevās aktivizēt apkopes logu",
+    "failedToCompleteWindow": "Neizdevās pabeigt apkopes logu",
+    "failedToDeleteWindow": "Neizdevās izdzēst apkopes logu",
+    "failedToDrainNode": "Neizdevās iztukšot mezglu. Lūdzu, mēģiniet vēlreiz.",
+    "failedToResumeNode": "Neizdevās atsākt mezglu. Lūdzu, mēģiniet vēlreiz.",
     "fleetWideMaintenance": "Fleet-Wide Maintenance",
     "leaveEmptyForFleet": "Leave empty for fleet-wide maintenance",
     "loadingMaintenanceWindows": "Loading maintenance windows...",
@@ -1153,7 +1179,7 @@
     "resumeNode": "Resume Node",
     "resuming": "Resuming...",
     "returnAMaintenanceNode": "Return a maintenance node to active service.",
-    "saving": "Saving...",
+    "saving": "Saglabā...",
     "scheduleFirstWindow": "Schedule First Window",
     "scheduleMaintenance": "Schedule Maintenance",
     "scheduleMaintenanceAcrossAll": "Schedule maintenance across all nodes with rolling updates.",
@@ -1336,7 +1362,8 @@
       "showingCountOfCount2Entries": "Showing {count} of {count2} entries",
       "source": "Avots:",
       "source1": "Avots",
-      "time": "Time"
+      "time": "Time",
+      "loadError": "Neizdevās ielādēt žurnālus: {error}"
     },
     "metricsDetailsView": {
       "activeWorkers": "Active Workers",
@@ -1684,7 +1711,7 @@
   "performance": {
     "alertRulesView": {
       "actions": "Darbības",
-      "alertRules": "Alert Rules",
+      "alertRules": "Brīdinājumu noteikumi",
       "areYouSureYou": "Vai tiešām vēlaties dzēst",
       "cancel": "Atcelt",
       "condition": "Condition",
@@ -1796,7 +1823,13 @@
     "performanceSections": "Performance sections",
     "performanceSummary": "Performance summary",
     "refreshPerformanceData": "Refresh performance data",
-    "sLOCompliance": "SLO Compliance:"
+    "sLOCompliance": "SLO Compliance:",
+    "tabs": {
+      "alertRules": "Brīdinājumu noteikumi",
+      "overview": "Pārskats",
+      "slos": "SLO",
+      "traces": "Izsekojumi"
+    }
   },
   "redisServicePanel": {
     "actionFailed": "Failed to {action} Redis service",
@@ -2277,7 +2310,8 @@
         "failedToClearCache": "Failed to clear cache",
         "failedToWarmUpCaches": "Failed to warm up caches",
         "confirmClearRedisDatabase": "Are you sure you want to clear the {database} Redis database?",
-        "confirmClearCache": "Are you sure you want to clear the {type} cache?"
+        "confirmClearCache": "Are you sure you want to clear the {type} cache?",
+        "failedToClearRedisDatabase": "Failed to clear Redis database"
       },
       "configDefaultsSettings": {
         "actions": "Darbības",
@@ -2375,7 +2409,7 @@
         "remove": "Remove",
         "requireGPUForReasonable": "Require GPU for reasonable performance (>= 7B parameters)",
         "save": "Saglabāt",
-        "saving": "Saving...",
+        "saving": "Saglabā...",
         "setActive": "Set Active",
         "temperature": "Temperatūra:",
         "test": "Testēt",
@@ -2605,10 +2639,22 @@
         "failedToLoadPrompts": "Neizdevās ielādēt uzveicinājumus",
         "failedToSavePrompt": "Neizdevās saglabāt uzveicinājumu",
         "failedToRevertPrompt": "Neizdevās atjaunot uzveicinājumu",
-        "youHaveUnsavedChangesDiscardThem": "Jums ir nesaglābātas izmaiņas. Atgriezties?",
+        "youHaveUnsavedChangesDiscardThem": "Jums ir nesaglabātas izmaiņas. Vai tās atmest?",
         "areYouSureYouWantToRevert": "Are you sure you want to revert this prompt to its default content?"
       },
       "sSOSettings": {
+        "confirmDeleteProvider": "Delete SSO provider \"{name}\"? This cannot be undone.",
+        "providerCreated": "Provider created successfully",
+        "providerDeleted": "Provider deleted successfully",
+        "providerDisabled": "Provider disabled",
+        "providerEnabled": "Provider enabled",
+        "providerNameRequired": "Provider name is required",
+        "providerUpdated": "Provider updated successfully",
+        "connectionTestFailed": "Connection test failed",
+        "failedToDeleteProvider": "Failed to delete provider",
+        "failedToLoadProviders": "Failed to load SSO providers",
+        "failedToSaveProvider": "Failed to save provider",
+        "failedToToggleProvider": "Failed to toggle provider",
         "aCSURLAssertionConsumerService": "ACS URL (Assertion Consumer Service)",
         "addProvider": "Add Provider",
         "addYourFirstProvider": "Add your first provider",
@@ -2672,7 +2718,7 @@
         "sAMLConfiguration": "SAML Configuration",
         "sPEntityID": "SP Entity ID",
         "sSOOIDCConfiguration": "SSO / OIDC Configuration",
-        "saving": "Saving...",
+        "saving": "Saglabā...",
         "scope": "Tvērums",
         "searchFilter": "Search Filter",
         "searchFilterExample": "(uid={username})",
@@ -2728,7 +2774,7 @@
         "placeholderNewValue": "New value",
         "placeholderValue": "Secret value (will be encrypted)",
         "save": "Saglabāt",
-        "saving": "Saving...",
+        "saving": "Saglabā...",
         "secretCreated": "Secret \"{key}\" created",
         "secretDeleted": "Secret \"{key}\" deleted",
         "secretUpdated": "Secret \"{key}\" updated",
@@ -2858,6 +2904,7 @@
         "ssoProviderCreated": "SSO provider created successfully",
         "ssoProviderDeleted": "SSO provider deleted successfully",
         "ssoConnectionSuccessful": "SSO provider connection successful",
+        "ssoConnectionFailed": "SSO provider connection test failed",
         "failedToLoadSlmUsers": "Failed to load SLM users",
         "failedToLoadAutobotUsers": "Failed to load AutoBot users",
         "failedToLoadTeams": "Failed to load teams",
@@ -2875,7 +2922,8 @@
         "confirmDeleteTeam": "Are you sure you want to delete this team?",
         "confirmDeleteSsoProvider": "Are you sure you want to delete this SSO provider?",
         "confirmDeleteSlmAdmin": "Are you sure you want to delete this SLM admin?",
-        "checkingRbacStatus": "Checking RBAC status..."
+        "checkingRbacStatus": "Checking RBAC status...",
+        "failedToInitializeRbac": "Failed to initialize RBAC"
       },
       "webResearchSettings": {
         "title": "Tīmekļa Izpēte",
@@ -2899,7 +2947,7 @@
         "resetBreakers": "Reset circuit breakers ({count})",
         "formTitle": "Iestatījumi",
         "save": "Saglabāt izmaiņas",
-        "saving": "Saving...",
+        "saving": "Saglabā...",
         "discard": "Discard changes",
         "range": "Between {min} and {max}",
         "atLeast": "At least {min}",
@@ -3036,7 +3084,7 @@
       "resetting": "Resetting...",
       "runTheGuidedFleet": "Run the guided fleet configuration wizard to add nodes, enroll agents, assign roles, and provision your fleet.",
       "saveChanges": "Save Changes",
-      "saving": "Saving...",
+      "saving": "Saglabā...",
       "serversAreTriedIn": "Servers are tried in order. Changes are applied on next \"Save Changes\" or \"Sync All Nodes\".",
       "setupWizard": "Setup Wizard",
       "syncAllNodes": "Sync All Nodes",
@@ -3117,7 +3165,7 @@
       "performanceWarnings": "Performance Warnings",
       "remindersForScheduledMaintenance": "Reminders for scheduled maintenance windows",
       "saveChanges": "Save Changes",
-      "saving": "Saving...",
+      "saving": "Saglabā...",
       "securityAlerts": "Security Alerts",
       "sendNotificationsViaEmail": "Send notifications via email",
       "settingsSaved": "Notification settings saved successfully",
@@ -3283,7 +3331,7 @@
     "sSHUser": "SSH User",
     "saveAPIKeys": "Save API Keys",
     "saveContinue": "Save & Continue",
-    "saving": "Saving...",
+    "saving": "Saglabā...",
     "secretsSavedTheyWill": "Secrets saved. They will be injected during provisioning.",
     "setupComplete": "Setup Complete!",
     "sharedLibrary": "Shared Library",
@@ -3303,7 +3351,9 @@
     "yourAutoBotFleetIs": "Your AutoBot fleet is configured and ready to use.",
     "yourSLMServiceLifecycle": "Your SLM (Service Lifecycle Manager) is up and running. This wizard\n          will guide you through adding and configuring your fleet nodes.",
     "provisioningFailed": "Provisioning failed",
-    "retryProvisioning": "Retry provisioning"
+    "retryProvisioning": "Retry provisioning",
+    "failedToSaveKeys": "Neizdevās saglabāt API atslēgas. Skatiet detaļas konsolē.",
+    "failedToAddNode": "Neizdevās pievienot mezglu"
   },
   "skills": {
     "approvalsTab": {
@@ -3341,8 +3391,24 @@
       "noRepositoriesRegisteredAdd": "No repositories registered. Add a skill repo to install community skills.",
       "skills": "Skills",
       "sync": "Sinhronizēt",
+      "tableLabel": "Skill repositories",
       "type": "Type",
       "uRL": "URL"
+    },
+    "unknownSkill": "nezināms",
+    "newDraftNotification": "AutoBot generated a new skill: \"{skillId}\" — pending approval",
+    "errors": {
+      "generic": "Skills request failed",
+      "fetchReposFailed": "Failed to fetch repos",
+      "addRepoFailed": "Failed to add repo",
+      "syncRepoFailed": "Failed to sync repo",
+      "fetchApprovalsFailed": "Failed to fetch approvals",
+      "processApprovalFailed": "Failed to process approval",
+      "fetchDraftsFailed": "Failed to fetch drafts",
+      "testDraftFailed": "Test draft failed",
+      "promoteDraftFailed": "Failed to promote draft",
+      "fetchGovernanceFailed": "Failed to fetch governance config",
+      "updateGovernanceModeFailed": "Failed to update governance mode"
     }
   },
   "skillsView": {
@@ -3372,7 +3438,7 @@
     "repos": "Repos",
     "review": "Review",
     "saveConfiguration": "Save Configuration",
-    "saving": "Saving...",
+    "saving": "Saglabā...",
     "searchSkillsByNameDescriptionOr": "Search skills by name, description, or tags...",
     "skillsManagement": "Skills Management",
     "status": "Statuss",
@@ -3568,7 +3634,12 @@
           "disconnected": "disconnected",
           "unknown": "nezināms"
         },
-        "takeScreenshot": "Take Screenshot"
+        "takeScreenshot": "Take Screenshot",
+        "startFailed": "Failed to start browser",
+        "navigateFailed": "Navigācija neizdevās",
+        "backFailed": "Failed to go back",
+        "forwardFailed": "Failed to go forward",
+        "refreshFailed": "Failed to refresh"
       },
       "fileBrowserTool": {
         "actions": "Darbības",
@@ -3820,7 +3891,7 @@
     "empty": "No active shared links.",
     "loading": "Loading shared links…",
     "never": "Nekad",
-    "open": "Atvērt",
+    "open": "Open",
     "protected": "Protected",
     "refresh": "Refresh",
     "subtitle": "Read-only audit of who has shared what — every active public chat link, by user. Users manage their own shares in the app.",

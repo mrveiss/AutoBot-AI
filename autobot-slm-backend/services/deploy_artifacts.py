@@ -128,10 +128,13 @@ HOST_GENERATED_PATHS: dict[str, frozenset[str]] = {
         {
             # rendered by roles/backend/tasks/main.yml (#9084), read by startup_validation.py
             ".validation_vars",
-            # written by roles/backend/tasks/main.yml via scripts/build-filtered-requirements.sh (#11134)
-            "filtered-requirements.txt",
+            # written by roles/backend/tasks/main.yml via scripts/build-filtered-requirements.sh (#11134),
+            # plus its GPU variants (-gpu, -gpu-torch, -gpu-faiss; #17243)
+            "filtered-requirements*.txt",
         }
     ),
+    # written by roles/ai-stack/tasks/main.yml through the same script (#17242)
+    "autobot-ai-stack": frozenset({"filtered-requirements-ai.txt"}),
 }
 
 
@@ -177,6 +180,11 @@ def rsync_host_state_args() -> list[str]:
         *(f"--include={pattern}" for pattern in HOST_STATE_REINCLUDES),
         *(f"--exclude={pattern}" for pattern in HOST_STATE_EXCLUDES),
     ]
+
+
+# #19503: -a copies source modes, so a loose source mode would reach every node.
+RSYNC_NEVER_WORLD_WRITABLE = "--chmod=o-w"
+RSYNC_ARCHIVE_ARGS = ("-avz", RSYNC_NEVER_WORLD_WRITABLE)
 
 
 def rsync_artifact_excludes() -> list[str]:

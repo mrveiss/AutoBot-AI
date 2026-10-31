@@ -319,8 +319,9 @@ const getQualityClass = (score: number): string => {
   border-color: var(--color-info);
 }
 
-.export-btn i {
-  font-size: 0.7rem;
+.export-btn .icon {
+  width: 0.7rem;
+  height: 0.7rem;
 }
 
 .metrics-grid {

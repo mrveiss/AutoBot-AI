@@ -144,7 +144,7 @@ HOOK_PATH = Path(__file__).resolve().parent / "pre-commit-no-print-console"
 # is SKIPPED on any PR that touches no python path, and reports `success` when it
 # does (#16087) -- the same bypass that let a fixture path become a real file on
 # `bf6ee5583`. Pinned to the measured number, not to the arithmetic.
-_KNOWN_REPO_VIOLATIONS = 282  # train-43: -3, measured on the merged tree; train-9c: -12, the tools/lint scripts #18470 moved onto the shared reporter (scanner unchanged); #17576: npu_pipeline/dispatcher.py's usage example no longer prints; #12771: web_fetch/fetcher.py's docstring example now logs instead
+_KNOWN_REPO_VIOLATIONS = 281  # #19232: -1, measured on the merged tree; train-43: -3, measured on the merged tree; train-9c: -12, the tools/lint scripts #18470 moved onto the shared reporter (scanner unchanged); #17576: npu_pipeline/dispatcher.py's usage example no longer prints; #12771: web_fetch/fetcher.py's docstring example now logs instead
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess:

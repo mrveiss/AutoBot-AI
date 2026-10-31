@@ -171,13 +171,14 @@ FIELD_DEFAULT_FLOOR = 300
 
 #: Floor for the number of in-scope ``os.getenv``/``os.environ.get`` call
 #: sites this guard must find that name an existing ``ssot_config`` alias
-#: (i.e. an actually-comparable pair). Only 7 such pairs exist today — most
-#: direct env reads are for names ``ssot_config`` never migrated, and #19317
-#: routed the ``AUTOBOT_TLS_CERT_DIR`` reads through ``ssot_tls`` — so the
+#: (i.e. an actually-comparable pair). Only 10 such pairs exist today — most
+#: direct env reads are for names ``ssot_config`` never migrated — so the
 #: floor is set just below that, not at the much larger raw call-site count.
 #: An empty offender list from a sweep that matched zero pairs asserts
 #: nothing.
-GETENV_CALL_FLOOR = 6
+#: 8 until #19232 moved the Redis env reads into one resolver (6 matched after);
+#: #19317 routed the AUTOBOT_TLS_CERT_DIR reads through ssot_tls (5 matched after).
+GETENV_CALL_FLOOR = 5
 
 #: SSOT settings modules split out of ``ssot_config.py`` for its size ceiling; their
 #: ``Field`` aliases are SSOT config exactly like ``ssot_config.py``'s (#17312: ``TLSConfig``

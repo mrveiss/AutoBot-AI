@@ -97,25 +97,24 @@
         </div>
 
     <template #actions>
-        <button class="btn btn-secondary" @click="closeDialog">
+        <BaseButton variant="secondary" @click="closeDialog">
           {{ $t('knowledge.share.cancel') }}
-        </button>
-        <button
-          class="btn btn-primary"
+        </BaseButton>
+        <BaseButton
           @click="saveChanges"
           :disabled="saving || !hasChanges"
         >
           <Icon name="spinner" class="animate-spin" />
           <Icon name="save" />
           {{ saving ? $t('knowledge.share.saving') : $t('knowledge.share.saveChanges') }}
-        </button>
+        </BaseButton>
     </template>
   </BaseModal>
 </template>
 
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import { ref, computed, watch } from 'vue'
 import { displayNameOf } from '@/utils/displayName'
 import { useI18n } from 'vue-i18n'
@@ -447,7 +446,7 @@ const closeDialog = async () => {
   background-color: var(--bg-secondary);
 }
 
-.search-result-item i {
+.search-result-item .icon {
   color: var(--text-muted);
 }
 
@@ -501,7 +500,7 @@ const closeDialog = async () => {
   flex: 1;
 }
 
-.access-info i {
+.access-info .icon {
   color: var(--text-muted);
 }
 
@@ -544,41 +543,5 @@ const closeDialog = async () => {
 
 .remove-button:hover {
   background-color: var(--color-error-bg);
-}
-
-.btn {
-  padding: var(--spacing-2) var(--spacing-4);
-  border-radius: var(--radius-md);
-  font-weight: 500;
-  cursor: pointer;
-  transition: all var(--duration-200);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-}
-
-.btn-secondary {
-  background-color: var(--bg-card);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-default);
-}
-
-.btn-secondary:hover {
-  background-color: var(--bg-secondary);
-}
-
-.btn-primary {
-  background-color: var(--color-electric-500);
-  color: white;
-  border: none;
-}
-
-.btn-primary:hover:not(:disabled) {
-  background-color: var(--color-electric-600);
-}
-
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 </style>

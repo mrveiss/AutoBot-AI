@@ -12,10 +12,10 @@
  * No hardcoded values - everything derives from environment variables.
  *
  * Usage:
- *     import { NetworkConstants, ServiceURLs, DatabaseConstants } from '@/constants/network'
+ *     import { NetworkConstants, ServiceURLs } from '@/constants/network'
  *
- *     // Use VM IP addresses
- *     const redisUrl = `redis://${NetworkConstants.REDIS_VM_IP}:6379`
+ *     // Use VM IP addresses (no Redis URL: a browser never dials Redis, #19232)
+ *     const redisHost = NetworkConstants.REDIS_VM_IP
  *
  *     // Use service URLs
  *     const backendUrl = ServiceURLs.BACKEND_API
@@ -55,7 +55,7 @@ export const NetworkConstants = Object.freeze({
 
   // Standard ports - from SSOT config
   BACKEND_PORT: config.port.backend,
-  FRONTEND_PORT: config.port.frontend,
+  FRONTEND_PORT: config.port.frontendServed,
   REDIS_PORT: config.port.redis,
   OLLAMA_PORT: config.port.ollama,
   VNC_PORT: config.port.vnc,
@@ -80,11 +80,7 @@ export const ServiceURLs = Object.freeze({
 
   // Frontend URLs
   FRONTEND_VM: config.frontendUrl,
-  FRONTEND_LOCAL: `${config.httpProtocol}://${NetworkConstants.LOCALHOST_NAME}:${config.port.frontend}`,
-
-  // Redis URLs
-  REDIS_VM: config.redisUrl,
-  REDIS_LOCAL: `redis://${NetworkConstants.LOCALHOST_IP}:${config.port.redis}`,
+  FRONTEND_LOCAL: `${config.httpProtocol}://${NetworkConstants.LOCALHOST_NAME}:${config.port.frontendServed}`,
 
   // Ollama LLM URLs
   OLLAMA_LOCAL: `${config.httpProtocol}://${NetworkConstants.LOCALHOST_NAME}:${config.port.ollama}`,
@@ -135,13 +131,6 @@ export class NetworkConfig {
     return ServiceURLs.FRONTEND_VM
   }
 
-  get redisUrl(): string {
-    if (this._deploymentMode === 'local') {
-      return ServiceURLs.REDIS_LOCAL
-    }
-    return ServiceURLs.REDIS_VM
-  }
-
   get ollamaUrl(): string {
     return ServiceURLs.OLLAMA_LOCAL // Always local for now
   }
@@ -155,7 +144,6 @@ export class NetworkConfig {
     const serviceMap: Record<string, string> = {
       'backend': this.backendUrl,
       'frontend': this.frontendUrl,
-      'redis': this.redisUrl,
       'ollama': this.ollamaUrl,
       'browser': ServiceURLs.BROWSER_SERVICE,
       'ai_stack': ServiceURLs.AI_STACK_SERVICE,
@@ -186,28 +174,9 @@ export class NetworkConfig {
 // Global network configuration instance
 export const networkConfig = new NetworkConfig()
 
-/**
- * Redis database assignments to eliminate hardcoded database numbers.
- *
- * All values must match ssot_config.py RedisConfig db_* fields (Issue #2723).
- * ssot_config.py is the authoritative source of truth; this object mirrors it
- * for frontend callers that import from network constants.
- */
-export const DatabaseConstants = Object.freeze({
-  // Core databases — aligned with ssot_config.RedisConfig (Issue #2762)
-  MAIN_DB: 0,
-  KNOWLEDGE_DB: 1,
-  PROMPTS_DB: 2,
-  AGENTS_DB: 3,
-  METRICS_DB: 4,
-  CACHE_DB: 5,
-  SESSIONS_DB: 6,
-  TASKS_DB: 7,
-  LOGS_DB: 8,
-  TEMP_DB: 9,
-  BACKUP_DB: 10,
-  TESTING_DB: 15
-})
+// No DatabaseConstants (#19232): a browser never selects a Redis database, nothing imported
+// it, and its numbers had drifted (TESTING_DB 15 is celery_results). redis-databases.yaml is
+// the one table, owned by the backend.
 
 // Legacy compatibility exports
 export const BACKEND_URL = ServiceURLs.BACKEND_API

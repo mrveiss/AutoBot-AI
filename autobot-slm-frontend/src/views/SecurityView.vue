@@ -17,10 +17,10 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
-import { BaseAlert, BaseModal, usePagination, BasePagination } from '@autobot/ui'
+import { BaseAlert, BaseModal, usePagination, BasePagination, useToast } from '@autobot/ui'
 import type { TLSEndpointResponse, FleetCert } from '@/types/api-responses'
 import { createLogger } from '@/utils/debugUtils'
-import { formatRelativeTime } from '@/utils/dateUtils'
+import { formatCompactRelativeTime } from '@/utils/dateUtils'
 import config from '@/config/ssot-config'
 import { useI18n } from 'vue-i18n'
 import type {
@@ -32,6 +32,7 @@ import type {
 } from '@/types/slm'
 
 const { t } = useI18n()
+const { showToast } = useToast()
 const logger = createLogger('SecurityView')
 const slmApi = useSlmApi()
 const route = useRoute()
@@ -43,7 +44,6 @@ type AuditLog = AuditLogResponse
 type SecurityPolicy = SecurityPolicyResponse
 type SecurityOverview = SecurityOverviewResponse
 type ThreatSummary = ThreatSummaryType
-
 
 // Active tab — route-based
 type SecurityTab = 'overview' | 'tls-settings' | 'certificates' | 'audit' | 'threats' | 'policies'
@@ -166,8 +166,8 @@ const severityColors: Record<string, string> = {
   critical: 'bg-red-500',
 }
 
-// Format relative time
-
+// A known severity reads in the UI language in labels; an unknown one shows as sent.
+const severityName = (severity: string) => (severity in severityColors ? t(`securityView.${severity}`) : severity)
 
 // API calls
 async function fetchOverview() {
@@ -309,7 +309,7 @@ async function deleteTlsCertificate(credentialId: string) {
     logger.info('TLS certificate deleted:', credentialId)
   } catch (err) {
     logger.error('Failed to delete TLS certificate:', err)
-    alert(t('securityView.failedToDeleteCertificate'))
+    showToast(t('securityView.failedToDeleteCertificate'), 'error')
   }
 }
 
@@ -337,10 +337,10 @@ async function renewTlsCertificate(credentialId: string) {
     const result = await slmApi.renewTlsCertificate(credentialId, true)
     await fetchTlsEndpoints()
     logger.info('TLS certificate renewed:', result)
-    alert(t('securityView.certificateRenewed', { expiry: result.expires_at || t('securityView.unknownExpiry') }))
+    showToast(t('securityView.certificateRenewed', { expiry: result.expires_at || t('securityView.unknownExpiry') }), 'success')
   } catch (err) {
     logger.error('Failed to renew TLS certificate:', err)
-    alert(t('securityView.failedToRenewCertificate'))
+    showToast(t('securityView.failedToRenewCertificate'), 'error')
   } finally {
     renewingCredentialId.value = null
   }
@@ -356,10 +356,10 @@ async function rotateTlsCertificate(credentialId: string) {
     const result = await slmApi.rotateTlsCertificate(credentialId, true, true)
     await fetchTlsEndpoints()
     logger.info('TLS certificate rotated:', result)
-    alert(t('securityView.certificateRotated', { expiry: result.expires_at || t('securityView.unknownExpiry') }))
+    showToast(t('securityView.certificateRotated', { expiry: result.expires_at || t('securityView.unknownExpiry') }), 'success')
   } catch (err) {
     logger.error('Failed to rotate TLS certificate:', err)
-    alert(t('securityView.failedToRotateCertificate'))
+    showToast(t('securityView.failedToRotateCertificate'), 'error')
   } finally {
     rotatingCredentialId.value = null
   }
@@ -375,10 +375,10 @@ async function bulkRenewExpiring() {
     const result = await slmApi.bulkRenewExpiringCertificates(30, true)
     await fetchTlsEndpoints()
     logger.info('Bulk renewal completed:', result)
-    alert(t('securityView.bulkRenewalCompleteRenewedFailed', { renewed: result.renewed, failed: result.failed }))
+    showToast(t('securityView.bulkRenewalCompleteRenewedFailed', { renewed: result.renewed, failed: result.failed }), 'warning')
   } catch (err) {
     logger.error('Failed to bulk renew certificates:', err)
-    alert(t('securityView.failedToBulkRenewCertificates'))
+    showToast(t('securityView.failedToBulkRenewCertificates'), 'error')
   } finally {
     bulkRenewing.value = false
   }
@@ -392,11 +392,11 @@ function openUploadModal() {
 
 async function uploadTlsCertificate() {
   if (!selectedNodeId.value) {
-    alert(t('securityView.pleaseSelectANode'))
+    showToast(t('securityView.pleaseSelectANode'), 'warning')
     return
   }
   if (!uploadForm.value.ca_cert || !uploadForm.value.server_cert || !uploadForm.value.server_key) {
-    alert(t('securityView.pleaseProvideAllCertificateFiles'))
+    showToast(t('securityView.pleaseProvideAllCertificateFiles'), 'warning')
     return
   }
 
@@ -407,7 +407,7 @@ async function uploadTlsCertificate() {
     logger.info('TLS certificate uploaded for node:', selectedNodeId.value)
   } catch (err) {
     logger.error('Failed to upload TLS certificate:', err)
-    alert(t('securityView.failedToUploadCertificate'))
+    showToast(t('securityView.failedToUploadCertificate'), 'error')
   }
 }
 
@@ -473,7 +473,7 @@ function toggleTlsService(serviceName: string) {
 
 async function enableTlsOnSelectedServices() {
   if (selectedTlsServices.value.length === 0) {
-    alert(t('securityView.pleaseSelectAtLeastOneServiceTo'))
+    showToast(t('securityView.pleaseSelectAtLeastOneServiceTo'), 'warning')
     return
   }
 
@@ -654,7 +654,7 @@ const scoreColor = computed(() => {
                 <div
                   :class="['w-2 h-2 rounded-full', severityColors[event.severity] || 'bg-gray-500']"
                   role="img"
-                  :aria-label="$t('securityView.severityLabel', { severity: event.severity })"
+                  :aria-label="$t('securityView.severityLabel', { severity: severityName(event.severity) })"
                 ></div>
                 <div>
                   <div class="text-sm font-medium text-gray-900">{{ event.title }}</div>
@@ -664,7 +664,7 @@ const scoreColor = computed(() => {
                   </div>
                 </div>
               </div>
-              <div class="text-xs text-gray-500">{{ formatRelativeTime(event.timestamp) }}</div>
+              <div class="text-xs text-gray-500">{{ formatCompactRelativeTime(event.timestamp) }}</div>
             </div>
           </div>
         </div>
@@ -1033,7 +1033,7 @@ const scoreColor = computed(() => {
           <tbody class="bg-white divide-y divide-gray-200">
             <tr v-for="log in auditLogs" :key="log.log_id">
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ formatRelativeTime(log.timestamp) }}
+                {{ formatCompactRelativeTime(log.timestamp) }}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                 {{ log.username || '-' }}
@@ -1140,7 +1140,7 @@ const scoreColor = computed(() => {
                 <div
                   :class="['w-3 h-3 mt-1 rounded-full', severityColors[event.severity]]"
                   role="img"
-                  :aria-label="$t('securityView.severityLabel', { severity: event.severity })"
+                  :aria-label="$t('securityView.severityLabel', { severity: severityName(event.severity) })"
                 ></div>
                 <div>
                   <div class="font-medium text-gray-900">{{ event.title }}</div>
@@ -1148,7 +1148,7 @@ const scoreColor = computed(() => {
                   <div class="text-xs text-gray-400 mt-2">
                     {{ event.source_ip ? `IP: ${event.source_ip}` : '' }}
                     {{ event.source_user ? ` | User: ${event.source_user}` : '' }}
-                    | {{ formatRelativeTime(event.timestamp) }}
+                    | {{ formatCompactRelativeTime(event.timestamp) }}
                   </div>
                 </div>
               </div>

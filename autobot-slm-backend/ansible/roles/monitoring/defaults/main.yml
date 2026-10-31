@@ -22,7 +22,7 @@ monitoring_install_alertmanager: false
 
 # Prometheus settings. prometheus_version is the ONE Prometheus version: CI reads
 # it from this line to pin promtool (.github/workflows/ci.yml, #18556).
-prometheus_version: "2.48.0"
+prometheus_version: "2.53.0"
 prometheus_port: 9090
 prometheus_retention_time: "15d"
 prometheus_retention_size: "10GB"
@@ -67,8 +67,11 @@ alertmanager_rules_src: "{{ code_source_dir }}/autobot-infrastructure/shared/con
 alertmanager_health_check_retries: 12
 alertmanager_health_check_delay: 5
 
-# Grafana settings
-grafana_version: "10.2.0"
+# Grafana settings. grafana_version is the ONE Grafana version (#19329): the compose
+# stacks pin the same value, and repo_tests/monitoring_versions_one_home_19329_test.py
+# fails when one differs.
+grafana_version: "11.1.0"
+grafana_apt_host: "apt.grafana.com"
 grafana_port: 3000
 grafana_admin_user: "admin"
 grafana_admin_password: "admin"  # Should be overridden in production

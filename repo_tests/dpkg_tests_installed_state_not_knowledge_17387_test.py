@@ -271,8 +271,9 @@ DPKG_LIST_CALL_SITES = declare(
 )
 
 #: 6 today: the four rewritten by #17387 (postgresql, grafana, redis,
-#: disable-idle-nginx) plus check-system-updates' ESM version lookup and
-#: decommission-node's `^ii`-anchored check. Floor 4 rather than 3: at 3 the
+#: disable-idle-nginx), check-system-updates' ESM version lookup,
+#: and decommission-node's `^ii`-anchored check; #19661 folded the two Grafana
+#: presence checks #19329 added into the one install. Floor 4 rather than 3: at 3 the
 #: window was exactly the growth allowance, so a single removal reddened it.
 DPKG_REGISTRATIONS = declare(
     "dpkg-ansible-registrations",

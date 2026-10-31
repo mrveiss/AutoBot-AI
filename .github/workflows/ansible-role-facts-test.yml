@@ -51,6 +51,10 @@ on:
       - 'tools/lint/check_test_inventory_is_generated.py'
       - 'tools/lint/check_group_vars_no_shadow.py'
       - 'tools/lint/check_network_refusal.py'
+      # #19944: the fleet-address facts test runs the role's real task file.
+      - 'autobot-slm-backend/ansible/roles/postgresql/**'
+      - 'repo_tests/postgresql_fleet_address_gathers_its_facts_19944_test.py'
+      - 'repo_tests/gpu_detection_finds_wsl2_19731_test.py'
       - '.github/workflows/ansible-role-facts-test.yml'
   push:
     branches:
@@ -83,6 +87,10 @@ on:
       - 'tools/lint/check_test_inventory_is_generated.py'
       - 'tools/lint/check_group_vars_no_shadow.py'
       - 'tools/lint/check_network_refusal.py'
+      # #19944: the fleet-address facts test runs the role's real task file.
+      - 'autobot-slm-backend/ansible/roles/postgresql/**'
+      - 'repo_tests/postgresql_fleet_address_gathers_its_facts_19944_test.py'
+      - 'repo_tests/gpu_detection_finds_wsl2_19731_test.py'
 
 # #14434: without this, every push left its predecessors queued. 42 of a 271-run
 # sample were for commits no longer at their branch tip - work nothing would ever
@@ -107,7 +115,7 @@ jobs:
   test:
     if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
 
@@ -293,3 +301,18 @@ jobs:
           python3 -c "import yaml; yaml.safe_load(open('tests/playbooks/test_ensure_venv_version.yml'))"
           python3 -c "import yaml; yaml.safe_load(open('tests/inventory/test_role_facts.yml'))"
           python3 -c "import yaml; yaml.safe_load(open('tests/inventory/group_vars/all.yml'))"
+
+      # #19944: these tests drive real ansible and skip when ansible-playbook is absent, which the
+      # python suite cannot tell from a pass. This job has the fleet's ansible, so a skip is a failure.
+      - uses: ./.github/actions/setup-python-ci
+        with:
+          extra-packages: pyyaml pytest pytest-asyncio
+
+      - name: "The fleet-address facts tests ran, not skipped (#19944)"
+        run: |
+          out=$(python3 -m pytest repo_tests/postgresql_fleet_address_gathers_its_facts_19944_test.py repo_tests/gpu_detection_finds_wsl2_19731_test.py -q -rs) || { echo "$out"; exit 1; }
+          echo "$out"
+          if grep -q SKIPPED <<< "$out"; then
+            echo "::error::a fleet-address facts test was skipped"
+            exit 1
+          fi

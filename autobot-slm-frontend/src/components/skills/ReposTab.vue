@@ -13,55 +13,29 @@
       </button>
     </div>
 
-    <div v-if="repos.length === 0" class="text-center py-12 text-gray-400">
-      {{ $t('skills.reposTab.noRepositoriesRegisteredAdd') }}
-    </div>
-
-    <table v-else class="w-full text-sm text-left">
-      <thead>
-        <tr class="text-gray-400 border-b border-gray-700">
-          <th class="pb-2 pr-4">{{ $t('skills.reposTab.name') }}</th>
-          <th class="pb-2 pr-4">{{ $t('skills.reposTab.type') }}</th>
-          <th class="pb-2 pr-4">{{ $t('skills.reposTab.uRL') }}</th>
-          <th class="pb-2 pr-4">{{ $t('skills.reposTab.skills') }}</th>
-          <th class="pb-2 pr-4">{{ $t('skills.reposTab.lastSync') }}</th>
-          <th class="pb-2"></th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr
-          v-for="repo in repos"
-          :key="repo.id"
-          class="border-b border-gray-800 hover:bg-gray-800/50"
+    <BaseTable
+      :columns="columns"
+      :rows="rows"
+      :aria-label="$t('skills.reposTab.tableLabel')"
+      :empty-title="$t('skills.reposTab.noRepositoriesRegisteredAdd')"
+      :actions-label="$t('skills.reposTab.sync')"
+    >
+      <template #cell-repo_type="{ value }">
+        <BaseBadge size="sm" :variant="repoBadgeVariant(String(value))" :tone="repoBadgeTone(String(value))">{{ value }}</BaseBadge>
+      </template>
+      <template #cell-url="{ value }">
+        <span class="repo-url" :title="String(value)">{{ value }}</span>
+      </template>
+      <template #actions="{ row }">
+        <button
+          class="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs
+                 text-gray-300 transition-colors"
+          @click="$emit('sync', String(row.id))"
         >
-          <td class="py-3 pr-4 text-white font-medium">{{ repo.name }}</td>
-          <td class="py-3 pr-4">
-            <span
-              :class="[
-                'text-xs px-2 py-0.5 rounded-sm border',
-                repoBadgeClass(repo.repo_type),
-              ]"
-            >
-              {{ repo.repo_type }}
-            </span>
-          </td>
-          <td class="py-3 pr-4 text-gray-400 max-w-xs truncate">{{ repo.url }}</td>
-          <td class="py-3 pr-4 text-gray-300">{{ repo.skill_count }}</td>
-          <td class="py-3 pr-4 text-gray-400">
-            {{ formatDateTime(repo.last_synced) }}
-          </td>
-          <td class="py-3">
-            <button
-              class="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs
-                     text-gray-300 transition-colors"
-              @click="$emit('sync', repo.id)"
-            >
-              {{ $t('skills.reposTab.sync') }}
-            </button>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+          {{ $t('skills.reposTab.sync') }}
+        </button>
+      </template>
+    </BaseTable>
 
     <!-- Add Repo Modal -->
     <BaseModal
@@ -126,12 +100,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import type { SkillRepo } from '@/composables/useSkills'
-import { formatDateTime } from '@/composables/useTimezone'
-import { BaseModal } from '@autobot/ui'
+import { formatFleetDateTime } from '@/composables/useTimezone'
+import { BaseBadge, BaseModal, BaseTable, type BadgeTone, type BadgeVariant, type BaseTableColumn } from '@autobot/ui'
 
-defineProps<{ repos: readonly SkillRepo[] }>()
+const props = defineProps<{ repos: readonly SkillRepo[] }>()
+const { t } = useI18n()
 const emit = defineEmits<{
   sync: [id: string]
   add: [payload: Omit<SkillRepo, 'id' | 'skill_count' | 'status' | 'last_synced'>]
@@ -144,15 +120,20 @@ const newRepo = ref<Omit<SkillRepo, 'id' | 'skill_count' | 'status' | 'last_sync
   repo_type: 'git',
 })
 
-function repoBadgeClass(repoType: string): string {
-  const map: Record<string, string> = {
-    git: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
-    local: 'bg-gray-500/20 text-gray-300 border-gray-500/30',
-    http: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
-    mcp: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
-  }
-  return map[repoType] || 'bg-gray-500/20 text-gray-300 border-gray-500/30'
-}
+const BADGE_VARIANT: Record<string, BadgeVariant> = { git: 'primary', local: 'neutral', http: 'info', mcp: 'info' }
+const repoBadgeVariant = (repoType: string): BadgeVariant => BADGE_VARIANT[repoType] ?? 'neutral'
+// mcp shares http's colour, told apart by an outline instead of a tint; no status colour implies a state.
+const repoBadgeTone = (repoType: string): BadgeTone => (repoType === 'mcp' ? 'outline' : 'subtle')
+
+// BaseTable rows are plain records; SkillRepo carries no index signature.
+const rows = computed(() => props.repos.map((repo) => ({ ...repo })))
+const columns = computed<BaseTableColumn[]>(() => [
+  { key: 'name', label: t('skills.reposTab.name') },
+  { key: 'repo_type', label: t('skills.reposTab.type') },
+  { key: 'url', label: t('skills.reposTab.uRL') },
+  { key: 'skill_count', label: t('skills.reposTab.skills'), numeric: true },
+  { key: 'last_synced', label: t('skills.reposTab.lastSync'), formatter: (v) => formatFleetDateTime(v as string) },
+])
 
 function submitAdd(): void {
   emit('add', { ...newRepo.value })
@@ -160,3 +141,13 @@ function submitAdd(): void {
   newRepo.value = { name: '', url: '', repo_type: 'git' }
 }
 </script>
+
+<style scoped>
+.repo-url {
+  display: block;
+  max-width: 20rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>

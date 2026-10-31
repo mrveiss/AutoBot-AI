@@ -71,7 +71,7 @@ defineEmits<Emits>()
 .batch-toolbar {
   position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: var(--z-20);
   background: var(--color-primary);
   color: var(--text-on-primary);
   padding: var(--spacing-3) var(--spacing-6);
@@ -95,8 +95,9 @@ defineEmits<Emits>()
   font-weight: var(--font-medium);
 }
 
-.toolbar-info i {
-  font-size: var(--text-lg);
+.toolbar-info .icon {
+  width: var(--text-lg);
+  height: var(--text-lg);
 }
 
 .toolbar-actions {

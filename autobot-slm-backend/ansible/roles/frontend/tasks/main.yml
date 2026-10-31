@@ -57,6 +57,7 @@
   register: node_version
   changed_when: false
   tags: ['frontend', 'validation']
+  when: not ansible_check_mode
 
 - name: "Frontend | Ensure frontend directory exists"
   file:
@@ -73,6 +74,7 @@
     src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-frontend/"
     dest: "{{ frontend_install_dir }}/autobot-frontend/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=node_modules"
       - "--exclude=dist"
       - "--exclude=__pycache__"
@@ -115,6 +117,7 @@
     src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-plugins/"
     dest: "{{ frontend_install_dir }}/autobot-plugins/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=node_modules"
       - "--exclude=dist"
       - "--exclude=.git"
@@ -139,6 +142,7 @@
     src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/libs/"
     dest: "{{ frontend_install_dir }}/libs/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=node_modules"
       - "--exclude=dist"
       - "--exclude=.git"
@@ -335,7 +339,7 @@
 - name: "Frontend | Configure firewall - Allow HTTPS"
   ufw:
     rule: allow
-    port: "{{ frontend_port }}"
+    port: "{{ frontend_tls_port }}"
     proto: tcp
     comment: "HTTPS"
   become: true
@@ -370,7 +374,7 @@
   debug:
     msg:
       - "=== Frontend Configuration Complete ==="
-      - "Node.js: {{ node_version.stdout }}"
+      - "Node.js: {{ node_version.stdout | default('not probed under --check') }}"
       - "Frontend URL: https://{{ ansible_facts['default_ipv4'].address | default(ansible_host) }}"
       - "TLS: Enabled ({{ frontend_tls_cert }})"
       - "API Proxy: {{ backend_host | default(ansible_host) }}:{{ backend_port | default(8443) }}"

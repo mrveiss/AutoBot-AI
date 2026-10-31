@@ -498,7 +498,7 @@ export type TaskPriority = AgentTask['priority']
 // debugUtils type instead of re-declared; no consumer narrows as a result.
 export type { LogLevel } from '@/utils/debugUtils'
 export type TransportType = 'local' | 'redis'
-export type SystemHealth = DiagnosticsReport['system_health']
+export type DiagnosticsSystemHealth = DiagnosticsReport['system_health']
 export type IssueSeverity = DiagnosticIssue['severity']
 
 // Centralized common types

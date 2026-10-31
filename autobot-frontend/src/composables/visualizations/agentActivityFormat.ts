@@ -9,7 +9,7 @@
  * from i18n; an unmeasured figure reads "not reported", never 0.
  */
 
-import type { Agent } from '@/composables/visualizations/useAgentActivityData'
+import type { ActivityAgent } from '@/composables/visualizations/useAgentActivityData'
 
 type Translate = (key: string, params?: Record<string, unknown>) => string
 
@@ -24,7 +24,7 @@ const AGENT_ICONS: Record<string, string> = {
 export function agentActivityFormat(t: Translate) {
   const k = (key: string) => `visualizations.agentActivity.${key}`
 
-  function successText(agent: Agent): string {
+  function successText(agent: ActivityAgent): string {
     if (agent.tasksCompleted == null || agent.successRate == null) return t(k('notReported'))
     return agent.tasksCompleted === 0 ? t(k('notApplicable')) : `${agent.successRate}%`
   }
@@ -32,7 +32,7 @@ export function agentActivityFormat(t: Translate) {
   const getAgentIcon = (type: string): string => AGENT_ICONS[type] || '🤖'
   const formatAgentType = (type: string): string => t(k(`types.${type}`))
 
-  function formatUptime(seconds: number): string {
+  function uptimeText(seconds: number): string {
     if (seconds < 60) return t(k('seconds'), { n: seconds })
     if (seconds < 3600) return t(k('minutes'), { n: Math.floor(seconds / 60) })
     return t(k('hours'), { n: Math.floor(seconds / 3600) })
@@ -49,5 +49,5 @@ export function agentActivityFormat(t: Translate) {
     return text.length <= maxLength ? text : text.slice(0, maxLength - 1) + '…'
   }
 
-  return { successText, getAgentIcon, formatAgentType, formatUptime, formatTimeAgo, truncate }
+  return { successText, getAgentIcon, formatAgentType, formatUptime: uptimeText, formatTimeAgo, truncate }
 }

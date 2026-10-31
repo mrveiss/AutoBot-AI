@@ -129,8 +129,9 @@ const fileIcon = computed<IconName>(() => {
   color: var(--text-tertiary);
 }
 
-.placeholder-state i {
-  font-size: var(--text-4xl);
+.placeholder-state .icon {
+  width: var(--text-4xl);
+  height: var(--text-4xl);
   margin-bottom: var(--spacing-4);
   opacity: 0.5;
 }
@@ -169,8 +170,9 @@ const fileIcon = computed<IconName>(() => {
   gap: var(--spacing-3);
 }
 
-.file-info i {
-  font-size: var(--text-2xl);
+.file-info .icon {
+  width: var(--text-2xl);
+  height: var(--text-2xl);
   color: var(--color-primary);
 }
 
@@ -212,9 +214,10 @@ const fileIcon = computed<IconName>(() => {
   color: var(--text-secondary);
 }
 
-.loading-content i,
-.error-content i {
-  font-size: var(--text-3xl);
+.loading-content .icon,
+.error-content .icon {
+  width: var(--text-3xl);
+  height: var(--text-3xl);
   margin-bottom: var(--spacing-4);
 }
 

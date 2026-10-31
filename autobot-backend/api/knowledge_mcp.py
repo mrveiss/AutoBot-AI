@@ -27,7 +27,7 @@ from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import RedisDatabase, get_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
-from knowledge.ownership_index import drop_ownership_unless_admin, refuses_platform_wide
+from knowledge.ownership_index import refuses_platform_wide
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER, with_quarantine
 from knowledge.schemas.mcp import (
     DocumentAddRequest,
@@ -45,6 +45,7 @@ from knowledge.schemas.mcp import (
     McpVectorSimilarityResponse,
 )
 from knowledge.search_filters import caller_principal, filter_for_caller
+from knowledge.write_scope import add_document_as
 from knowledge_base import KnowledgeBase
 from services.mcp_bridge_manifest import MCPBridgeManifest
 from type_defs.common import Metadata
@@ -486,10 +487,8 @@ async def mcp_add_to_knowledge_base(
         raise HTTPException(status_code=403, detail="Only admins can make knowledge visible to every signed-in user")
     try:
         kb = get_knowledge_base()
-        doc_id = await kb.add_document(
-            content=request.content,
-            metadata=drop_ownership_unless_admin(request.metadata, current_user.get("role")),
-            source=request.source,
+        doc_id = await add_document_as(  # #19517: drops the caller's ownership, stamps their own id
+            kb, current_user, content=request.content, metadata=request.metadata, source=request.source
         )
         return {"success": True, "document_id": doc_id, "message": "Document added successfully"}
 
@@ -884,7 +883,7 @@ async def _vector_op_info(kb, redis_mgr, params: dict) -> dict:
         "operation": "info",
         "data": {
             "used_memory": info.get("used_memory_human", "unknown"),
-            "total_keys": info.get("db8", {}).get("keys", 0),
+            "total_keys": await asyncio.to_thread(vector_db.dbsize),  # its own DB, whichever number (#19232)
             "vector_index": kb.redis_index_name if kb else "unknown",
         },
     }

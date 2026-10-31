@@ -35,13 +35,13 @@ not an auth boundary — the caller is logged in — so a missing check reads as
 endpoint.
 
 **Canonical enforcement:** [`autobot-backend/security/session_ownership.py`](../../autobot-backend/security/session_ownership.py)
-— `build_owner_metadata` (:37) the one owner stamper · `validate_session_ownership` (:743) the one read-side gate · `validate_ownership` (:581).
+— `build_owner_metadata` (:44) the one owner stamper · `validate_session_ownership` (:742) the one read-side gate · `validate_ownership` (:580).
 Two postures, one validator (#14016): the contract is the docstring of [`security/session_posture.py`](../../autobot-backend/security/session_posture.py). A failed durable owner lookup denies under both and claims nothing: "unknown" is never "unowned" (#14033).
 
 **Invariants**
 - Redis keys are `chat:session:{session_id}` — **not** namespaced by user. Key construction is never an ownership check; the metadata comparison is.
 - Owner identity is `metadata.owner` = **username**, never a user id. A diff comparing against `user_id` is comparing the wrong field.
-- Redis is a TTL cache; the session file's `metadata.owner` is the record of truth. An absent Redis record means "not cached", never "unowned" — [`session_ownership.py`](../../autobot-backend/security/session_ownership.py) `_owner_when_cache_is_empty` (:507) asks disk first and rehydrates **for the real owner, never for the caller** (#14018).
+- Redis is a TTL cache; the session file's `metadata.owner` is the record of truth. An absent Redis record means "not cached", never "unowned" — [`session_ownership.py`](../../autobot-backend/security/session_ownership.py) `_owner_when_cache_is_empty` (:507) asks disk first and rehydrates **for the real owner, never for the caller** (#14018). Nobody claims an existing session with no owner, by reading or writing: an admin may act on it, anyone else gets the same 404 as a missing session, and nothing is written; an ownerless session is itself a defect. With no session at all, a read gets that 404 and a write creates it and records its owner. Not knowing which of the two it is denies (#20025).
 - Undetermined enforcement policy degrades, in [`security/enforcement_mode.py`](../../autobot-backend/security/enforcement_mode.py), to `DEGRADED_ENFORCEMENT_MODE` (:53) and never to `disabled`: checks still run and violations are still recorded (#14010). A new `except` that returns `"disabled"` is a fail-open.
 - A resolution that degraded stays marked `degraded` (:73), so a `log_only` decision record says which of the two `log_only` states produced it (#15159). It marks the record only — `log_only` is allow-and-audit in both, deliberately. A degraded route reporting the chosen `reason` is a finding.
 - Only two legitimate fast-path bypasses exist, in [`security/session_ownership.py`](../../autobot-backend/security/session_ownership.py) — `_resolve_fast_paths` (:457): global auth disabled, and enforcement explicitly `disabled`. A third one added in a diff is a finding.
@@ -87,7 +87,7 @@ response, a log line, an issue, a PR comment — is already redacted.
 - Every `ConnectorCredentialStore` read takes `owner_id` and passes `_require_owner`; a new
   method that skips it grants cross-tenant credential read.
 - Nothing reaches a log, HTTP error body, or outward artifact without
-  [`secret_redaction.py`](../../autobot_shared/secret_redaction.py) (`redact_text` (:323) / `redact_mapping` (:333)) or
+  [`secret_redaction.py`](../../autobot_shared/secret_redaction.py) (`redact_text` (:327) / `redact_mapping` (:337)) or
   [`security/redaction.py`](../../autobot_shared/security/redaction.py) (`redact_cloud_identifiers` (:67) / `redact_provider_error` (:81)).
   Exception text counts; a boto3 `ClientError` carries the account number in an ARN (#15324).
 - Keys come from SSOT config, never a literal. A default value for an encryption key is a

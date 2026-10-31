@@ -25,7 +25,8 @@ from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
 from autobot_shared.git_probe import start_git
 from services.ansible_secrets import fetch_deploy_secrets
 from services.ansible_utils import _find_ansible_playbook as _resolve_ansible_playbook
-from services.ansible_utils import ansible_config_env, ansible_exit_code
+from services.ansible_utils import ansible_config_env, ansible_exit_code, with_limit_proof
+from services.git_failure import GIT_FAILURE_DETAIL_CHARS, failure_detail, is_transient, redacted
 from services.inventory_builder import (
     build_registry_inventory,
     validate_inventory,
@@ -150,25 +151,12 @@ SELF_UPDATE_LOG_TAIL_POLL_SEC = env_float("SLM_SELF_UPDATE_LOG_TAIL_POLL_SEC", 1
 # #14524 grace between SIGTERM and SIGKILL; defined once in services/process_group.py (#19475).
 PLAYBOOK_KILL_GRACE_S = KILL_GRACE_S
 
-# Timeouts for the individual git subcommands _update_code_source runs
-# (#14524 round 2): previously bare literals (30, 10) inline at each call
-# site -- pulled out as named, env-backed constants both to follow this
-# repo's "no hardcoded TTL" convention and so tests can exercise the
-# timeout-kill path (_run_git -> _kill_process_group) at CI speed rather
-# than actually waiting out a 30s git hang.
-#
-# #14524 round 3 added a derived update_code_source_worst_case_s() here so
-# reconciler.py's escalation floor could fold this module's worst case into
-# its own margin -- reverted (review round 3 re-review): folding it in
-# required the service-restart sweep to run off the node pass so its own
-# duration didn't ALSO need bounding by the same floor, and that decoupling
-# was itself unsafe (a singleton PlaybookExecutor with two concurrent
-# callers racing _update_code_source's git operations against the one
-# shared code_source tree; see reconciler.py's SERVICE_RESTART_PLAYBOOK_
-# TIMEOUT_S comment and #14570). These two constants
-# remain -- they still bound _run_git/_kill_process_group directly.
+# Timeouts for the git subcommands _update_code_source runs (#14524): env-backed so tests can exercise
+# the timeout-kill path (_run_git -> _kill_process_group) at CI speed. See #14570 on why they stay out
+# of reconciler.py's escalation floor.
 GIT_COMMAND_TIMEOUT_S = env_int_clamped("AUTOBOT_UPDATE_CODE_SOURCE_GIT_TIMEOUT_S", 30, min_v=1)
 GIT_REV_PARSE_TIMEOUT_S = env_int_clamped("AUTOBOT_UPDATE_CODE_SOURCE_REV_PARSE_TIMEOUT_S", 10, min_v=1)
+GIT_FETCH_RETRY_DELAY_S = env_int_clamped("AUTOBOT_UPDATE_CODE_SOURCE_FETCH_RETRY_DELAY_S", 5, min_v=0)
 
 
 def link_group_vars(inventory_path: Path, ansible_dir: Path) -> None:
@@ -577,10 +565,11 @@ class PlaybookExecutor:
         ):  # nosec B108
             Path(tmp_dir).mkdir(mode=0o700, exist_ok=True)
 
-    async def _run_git(self, code_source_dir: Path, *args: str) -> int:
+    async def _run_git(self, code_source_dir: Path, *args: str) -> str | None:
         """Run a git command in code_source_dir with a 30-second timeout.
 
-        Helper for _update_code_source.
+        Helper for _update_code_source. Returns None on success, else why it failed (#20089): the
+        executor is a singleton with concurrent callers (#14570), so the reason is never stored on it.
 
         Review on #14524 (round 2): a lone ``proc.kill()`` only reaches
         git's own pid. ``git fetch``/``checkout`` over ssh can leave an
@@ -595,11 +584,13 @@ class PlaybookExecutor:
         """
         proc = await start_git("-C", str(code_source_dir), *args, start_new_session=True)
         try:
-            await asyncio.wait_for(proc.communicate(), timeout=GIT_COMMAND_TIMEOUT_S)
+            _, stderr = await asyncio.wait_for(proc.communicate(), timeout=GIT_COMMAND_TIMEOUT_S)
         except asyncio.TimeoutError:
             await self._kill_process_group(proc)
-            return -1
-        return proc.returncode
+            return f"git {args[0]} timed out after {GIT_COMMAND_TIMEOUT_S}s"
+        if proc.returncode == 0:
+            return None
+        return f"git {args[0]} exited {proc.returncode}: {failure_detail(stderr)}"
 
     async def _log_updated_head_commit(self, code_source_dir: Path, branch: str) -> None:
         """Log the resulting HEAD commit for traceability (#2896).
@@ -630,7 +621,16 @@ class PlaybookExecutor:
             branch,
         )
 
-    async def _update_code_source(self) -> bool:
+    async def _fetch_code_source(self, code_source_dir: Path) -> str | None:
+        """#20089: one retry, for a failure that can cure itself. Returns why the fetch failed, or None."""
+        failure = await self._run_git(code_source_dir, "fetch", "--prune", "origin")
+        if failure and is_transient(failure):
+            logger.warning("_update_code_source: %s; retrying", failure)
+            await asyncio.sleep(GIT_FETCH_RETRY_DELAY_S)
+            failure = await self._run_git(code_source_dir, "fetch", "--prune", "origin")
+        return failure
+
+    async def _update_code_source(self) -> str | None:
         """
         Pull latest code into code_source before running a playbook (#2896).
 
@@ -640,55 +640,42 @@ class PlaybookExecutor:
         sync, not a failure to sync it).
 
         Returns:
-            True if code_source is confirmed at `origin/<branch>` (or there
-            was nothing to sync); False if any step failed or timed out.
+            None if code_source is confirmed at `origin/<branch>` (or there
+            was nothing to sync); otherwise why it is not (#20089).
 
-        #14524 (round 3): this used to return None and its result was
-        DISCARDED at the call site -- a git step that failed (including one
-        that timed out, post round 2's own fix) was logged and swallowed,
-        and `execute_playbook` went on to run the playbook against whatever
-        revision code_source already held, reporting `success: True`. Never
-        blocking PROVISIONING is still the right default for the ordinary
-        per-role/per-node restart path (manage-service.yml barely depends on
-        code_source being current), but for the SELF-UPDATE path
-        (`detach=True`) that is a SILENT STALE DEPLOY across the whole
-        fleet -- worse than the hang this issue fixes, because it is
-        invisible. The caller now sees this result and decides; see
-        `execute_playbook`.
+        #14524 (round 3): the caller now sees this result and decides; see `execute_playbook`. Never
+        blocking provisioning is right for the per-role path, but on the self-update path (`detach=True`)
+        a swallowed failure would be a silent stale deploy across the fleet.
         """
         code_source_dir = self.ansible_dir.parent.parent
         git_dir = code_source_dir / ".git"
         if not git_dir.exists():
             logger.debug("_update_code_source: no .git at %s — skipping", code_source_dir)
-            return True
+            return None
 
         branch = os.getenv("AUTOBOT_GIT_BRANCH", "main")
-        synced = True
 
         try:
-            if await self._run_git(code_source_dir, "checkout", "--", ".") != 0:
-                logger.warning("_update_code_source: git checkout -- . failed; continuing")
-                synced = False
+            checkout_failure = await self._run_git(code_source_dir, "checkout", "--", ".")
+            if checkout_failure:
+                logger.warning("_update_code_source: %s; continuing", checkout_failure)
 
-            if await self._run_git(code_source_dir, "fetch", "--prune", "origin") != 0:
-                logger.warning("_update_code_source: git fetch --prune origin failed; continuing")
-                return False
-
-            if await self._run_git(code_source_dir, "reset", "--hard", f"origin/{branch}") != 0:
-                logger.warning(
-                    "_update_code_source: git reset --hard origin/%s failed; continuing",
-                    branch,
-                )
-                return False
+            failure = await self._fetch_code_source(code_source_dir) or await self._run_git(
+                code_source_dir, "reset", "--hard", f"origin/{branch}"
+            )
+            if failure:
+                logger.warning("_update_code_source: %s; continuing", failure)
+                return failure
 
             # Best-effort only: a failure here means the commit hash was not
             # LOGGED, not that the reset above did not happen -- does not
-            # affect `synced`.
+            # affect the result.
             await self._log_updated_head_commit(code_source_dir, branch)
-            return synced
+            return checkout_failure
         except Exception as exc:
-            logger.warning("_update_code_source: unexpected error — %s; continuing", exc)
-            return False
+            failure = f"unexpected error: {redacted(str(exc))[:GIT_FAILURE_DETAIL_CHARS]}"
+            logger.warning("_update_code_source: %s; continuing", failure)
+            return failure
 
     def _build_ansible_env(self) -> Dict[str, str]:
         """Build the ansible-playbook subprocess environment (#1088); helper for execute_playbook."""
@@ -1116,7 +1103,7 @@ class PlaybookExecutor:
 
     @staticmethod
     def _code_source_sync_failure_result(
-        playbook_name: str, detach: bool, code_source_synced: bool
+        playbook_name: str, detach: bool, sync_failure: str | None
     ) -> Dict[str, any] | None:
         """A failed code_source sync's consequence for THIS run. Helper for execute_playbook.
 
@@ -1130,24 +1117,26 @@ class PlaybookExecutor:
         ordinary per-role/per-node path (`detach=False`) keeps its original
         best-effort "never blocks provisioning" behaviour, only logged.
         """
-        if code_source_synced:
+        if sync_failure is None:
             return None
         if detach:
             logger.error(
                 "execute_playbook: code_source sync failed before a DETACHED (self-update) "
-                "run of %s -- refusing to deploy a possibly-stale revision fleet-wide (#14524)",
+                "run of %s -- refusing to deploy a possibly-stale revision fleet-wide (#14524): %s",
                 playbook_name,
+                sync_failure,
             )
             return {
                 "success": False,
-                "output": f"code_source sync failed before self-update of {playbook_name} (#14524)",
+                "output": f"code_source sync failed before self-update of {playbook_name}: {sync_failure}",
                 "returncode": -1,
                 "timed_out": False,
             }
         logger.warning(
             "execute_playbook: code_source sync failed for %s -- continuing with "
-            "whatever code_source currently holds (#14524)",
+            "whatever code_source currently holds (#14524): %s",
             playbook_name,
+            sync_failure,
         )
         return None
 
@@ -1195,8 +1184,7 @@ class PlaybookExecutor:
         When ``inventory_path`` is None (the normal path for all non-wizard
         calls), a dynamic inventory is generated from the DB node registry
         (#10109, #10095).  When ``inventory_path`` is provided explicitly
-        (wizard provisioning, Issue #1294), the caller's inventory is used
-        unchanged.
+        (wizard provisioning, Issue #1294), the caller's inventory is used unchanged.
 
         Args:
             playbook_name: Name of playbook file (e.g., "update-all-nodes.yml")
@@ -1225,10 +1213,9 @@ class PlaybookExecutor:
         validate_unit_extra_vars(extra_vars)  # #19005: ValueError before anything is spawned
         # #17150: re-detect before syncing, as _update_code_source derives its sync target from self.ansible_dir.
         self._refresh_ansible_dir()
-        code_source_synced = await self._update_code_source()
-        sync_failure = self._code_source_sync_failure_result(playbook_name, detach, code_source_synced)
-        if sync_failure is not None:
-            return sync_failure
+        refusal = self._code_source_sync_failure_result(playbook_name, detach, await self._update_code_source())
+        if refusal is not None:
+            return refusal
 
         playbook_path = self.ansible_dir / playbook_name
         if not playbook_path.exists():
@@ -1260,6 +1247,7 @@ class PlaybookExecutor:
             # with production.yml when wizard passes a temp inventory (#2836)
             env["ANSIBLE_INVENTORY"] = str(effective_inventory)
             proc_result = await self._run_subprocess(cmd, env, progress_callback, detach=detach, timeout_s=timeout_s)
+            proc_result = with_limit_proof(proc_result, limit)  # #19762: only-localhost-ran is no proof
             success = proc_result["returncode"] == 0
             if success:
                 logger.info(f"Playbook {playbook_name} completed successfully")

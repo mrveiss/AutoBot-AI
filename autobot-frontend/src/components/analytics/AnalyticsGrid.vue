@@ -270,8 +270,9 @@ const getEfficiencyClass = (score: number): string => {
   color: var(--color-success);
 }
 
-.refresh-indicator i {
-  font-size: 8px;
+.refresh-indicator .icon {
+  width: 8px;
+  height: 8px;
 }
 
 .refresh-btn {

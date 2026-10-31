@@ -12,11 +12,11 @@ llama-index-embeddings-ollama>=0.10.0,<1.0.0
 llama-index-llms-ollama>=0.11.0,<1.0.0
 
 # Vector Database
-chromadb>=1.5.9,<2.0.0           # upper bound guards against breaking API changes; 1.5.5+ uses regenerated protos compatible with protobuf 5.x (#4053)
+chromadb                         # version from constraints/shared.txt (#19478)
 sentence-transformers>=6.1.0
 
 # Model and Tokenization
-transformers>=5.20.0
+transformers>=5.20.2
 tokenizers>=0.22.2,<0.24  # #10331: transformers caps tokenizers<=0.23.0, so a floor above that is
                           # unsatisfiable. #10416 (a grouped dependency bump) raised it back to
                           # >=0.23.1 two days after #10332 fixed it, keeping this comment, and the
@@ -42,9 +42,9 @@ tiktoken>=0.14.0
 # Tensor Operations
 -c ../../../../constraints/shared.txt  # single source of truth for shared versions (#10524)
 numpy  # version from constraints/shared.txt
-torch>=2.14.1
-torchvision>=0.29.1
-torchaudio>=2.11.0
+torch  # version from constraints/shared.txt (#19330)
+torchvision  # version from constraints/shared.txt, paired with torch (#19330)
+# torchaudio removed (#19682): nothing imports it, and its floor was not held to the pinned torch
 
 # Text Processing
 # #15551: not directly imported -- kept because llama-index-core (declared at the
@@ -65,7 +65,7 @@ nltk>=3.10.3
 # 4.0.0.dev3 sdist and tried to build it on the node.
 
 # HTTP and API
-fastapi>=0.147.0
+fastapi  # version from constraints/shared.txt (#18060)
 uvicorn[standard]>=0.54.0
 aiohttp>=3.14.5
 httpx>=0.28.1
@@ -73,7 +73,7 @@ httpcore>=1.0.9
 requests>=2.34.2
 
 # Data Processing
-pandas>=3.0.6
+pandas>=3.1.0
 pydantic>=2.14.1
 
 # Utilities
@@ -126,7 +126,7 @@ accelerate>=1.15.0
 
 # Document Processing
 python-docx>=1.2.0
-pypdf>=6.21.0
+pypdf>=6.21.4
 
 # Development and Testing
 pytest>=9.1.1

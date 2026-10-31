@@ -7,7 +7,7 @@
           <h1 class="page-title">{{ $t('views.marketplace.title') }}</h1>
           <p class="page-subtitle">{{ $t('views.marketplace.subtitle') }}</p>
         </div>
-        <button class="btn-refresh" :disabled="loading" @click="load" :title="$t('views.marketplace.refresh')" :aria-label="$t('views.marketplace.refresh')">
+        <BaseButton variant="outline" size="sm" :disabled="loading" @click="load" :title="$t('views.marketplace.refresh')" :aria-label="$t('views.marketplace.refresh')">
           <svg
             class="refresh-icon"
             :class="{ spinning: loading }"
@@ -22,7 +22,7 @@
               d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
             />
           </svg>
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Error Banner -->
@@ -80,9 +80,9 @@
         </button>
 
         <!-- Issue #6481: Manage marketplace sources -->
-        <button class="btn-manage-sources" @click="manageSourcesOpen = true">
+        <BaseButton variant="secondary" size="sm" @click="manageSourcesOpen = true">
           {{ $t('views.marketplace.manageSources') }}
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Stats -->
@@ -208,6 +208,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 // Issue #1803 - Plugin and agent marketplace
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -398,18 +399,6 @@ onMounted(async () => {
   margin-bottom: var(--spacing-xl);
 }
 
-.btn-refresh {
-  background: transparent;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  color: var(--text-secondary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  transition: background var(--duration-150) var(--ease-in-out), color var(--duration-150) var(--ease-in-out);
-}
-
 /* ---- Filters ---- */
 .filters-bar {
   display: flex;
@@ -498,26 +487,6 @@ onMounted(async () => {
 }
 
 .btn-filter-toggle:hover:not(.active) {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-/* Issue #6481: manage marketplace sources button */
-.btn-manage-sources {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-1-5) var(--spacing-3);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  cursor: pointer;
-  transition: background var(--duration-150) var(--ease-in-out), color var(--duration-150) var(--ease-in-out);
-}
-
-.btn-manage-sources:hover {
   background: var(--bg-tertiary);
   color: var(--text-primary);
 }

@@ -34,6 +34,12 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test .ts/.vue/.js source is a subset of tracked files under three roots; the test-file share drifts.",
     ),
+    "ceiling-table-sweep-19544": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Tracked Python only, a subset of all tracked files; the non-Python share grows at its own rate, "
+        "so a share of all tracked files would sink with nothing wrong.",
+    ),
     "migration-gate-test-import-sweep": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -48,6 +54,16 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "NOT_PATHS",
         "Call sites, not paths: one id per literal-fallback env read in the sweep roots, a subset of tracked Python.",
+    ),
+    "dead-icon-selector-vue-files": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "One frontend tree's `.vue` files, against all tracked `.vue` including the other frontend and the kit.",
+    ),
+    "icon-font-size-rule-vue-files": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "One frontend tree's `.vue` files, against all tracked `.vue` including the other frontend and the kit.",
     ),
     "deployment-mode-detector-scan": (
         ABSOLUTE,
@@ -76,6 +92,12 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "Ansible variable files are a subset of tracked YAML; workflow and compose YAML grow "
         "independently of the ansible tree, so a share of all YAML sinks with nothing wrong.",
     ),
+    "ansible-status-queries-check-mode-sweep": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Ansible YAML is a subset of all tracked YAML under the SLM backend; templates, scripts and "
+        "docs beside it grow independently, so a share of the tree sinks with nothing wrong.",
+    ),
     "ansible-inventory-shell-sweep": (
         ABSOLUTE,
         "FRACTION_IS_COARSER",
@@ -85,6 +107,18 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "step of a fraction is worth more files than the constant's own band -- 0.99 implies a "
         "floor BELOW the constant it would replace, which #17914 AC2 refuses, and 1.00 fires on "
         "a single index-versus-filesystem skew.",
+    ),
+    "autobot-has-no-pro-name": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Every tracked file minus changelogs and the guard itself (#19982); files are added in every PR, "
+        "so an exact floor would fail any new file, and the changelog share grows at its own rate.",
+    ),
+    "autobot-has-no-pro-tier-in-user-text": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "The .vue components and locale JSON of two frontends (#19982), a subset of tracked files; "
+        "every new component grows it, and the rest of the tree grows at its own rate.",
     ),
     "audio-extension-allowlist": (
         ABSOLUTE,
@@ -138,6 +172,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test modules under `autobot-backend/api`; the api package's tests grow at their own "
         "rate, so a share of all its `.py` files would drift with nothing wrong (#18316).",
+    ),
+    "compose-nodes-restated-default": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test SLM, infrastructure and docker files plus the root compose file; drifts.",
     ),
     "compat-module-needs-importer": (
         ABSOLUTE,
@@ -227,6 +266,12 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test source is a subset of tracked .py under two detector packages; the test-file share drifts.",
     ),
+    "cache-never-in-repo": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test modules of both backends and autobot_shared, against all tracked .py under them; "
+        "the test-file share drifts.",
+    ),
     "generated-type-redeclarations": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -246,6 +291,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "All tracked files minus vendored/build parts, against the whole tracked tree; the skipped share drifts.",
+    ),
+    "file-type-sets-one-home-19339": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test Python under autobot-backend, a subset of all tracked Python; the test-file share drifts.",
     ),
     "llc-actor-id-scan": (
         ABSOLUTE,
@@ -312,6 +362,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test source is a subset of tracked .py under three roots; the test-file share drifts.",
     ),
+    "monitoring-version-literals": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Compose, infrastructure and Ansible files (yml/yaml/ini/sh), against all tracked files there; drifts.",
+    ),
     "model-tier-map-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -321,6 +376,31 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "Tracked ansible yml/yaml files, of which only those naming a template that carries the variable are parsed.",
+    ),
+    "ansible-credentials-never-logged": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Tracked ansible yml/yaml files; every one is parsed, but only task lists carry http tasks to judge.",
+    ),
+    "frontend-local-formatter-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Both GUIs' component, view and composable .ts/.vue, excluding tests, against all tracked frontend source.",
+    ),
+    "frontend-local-date-formatter-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Both GUIs' component, view and composable .ts/.vue, excluding tests, against all tracked frontend source.",
+    ),
+    "frontend-hand-built-relative-time-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Both GUIs' .ts/.vue source, excluding tests, generated types and locales, against all tracked frontend.",
+    ),
+    "frontend-hand-rolled-spinner-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Both GUIs' and the plugins' .vue/.css, excluding tests, against all tracked frontend source.",
     ),
     "frontend-model-literal-scan": (
         ABSOLUTE,
@@ -363,6 +443,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Python under the infrastructure tree, against all tracked Python; the backend grows independently.",
     ),
+    "kb-populate-doc-patterns": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test infrastructure Python, against all tracked .py under autobot-infrastructure; drifts.",
+    ),
     "kb-admin-read-bypass": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -400,10 +485,37 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Non-test Python under thirteen source roots, a subset of tracked Python; the test-file share drifts.",
     ),
+    "disaster-recovery-deployed-units": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Ansible role task files, a subset of tracked YAML; workflows and inventories grow on their own.",
+    ),
     "landing-page-declared-dependencies": (
         ABSOLUTE,
         "FIXED_INVENTORY",
         "The requirements files and the root pyproject.toml: a small, deliberately enumerable set.",
+    ),
+    "kit-export-names-14908": (ABSOLUTE, "NOT_PATHS", "Names parsed out of the kit's index, not files."),
+    "kit-shadow-ts-files-scanned-14908": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "The scanned .ts files are every non-test file under two app trees; no reference count co-moves with it.",
+    ),
+    "duplicate-type-names-ts-files-scanned-14908": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Every non-test .ts file under two app trees and the kit; no reference count co-moves with it.",
+    ),
+    "duplicate-util-filenames-scanned-14908": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test .ts/.js files under the two apps' src/utils; the test-file share and other trees drift on their own.",
+    ),
+    "frontend-url-served-by-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test Python, shell, YAML, Jinja, env and unit files under six roots plus the root .env profiles, a "
+        "subset of tracked files; the test share and the other extensions grow at their own rate.",
     ),
 }
 

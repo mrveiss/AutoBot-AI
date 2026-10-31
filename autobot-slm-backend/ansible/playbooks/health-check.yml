@@ -13,6 +13,11 @@
   gather_facts: true
   serial: "{{ ansible_facts['serial'] | default(0) }}"  # Check all VMs in parallel
 
+  # chromadb_heartbeat_path has ONE home, loaded by name so any inventory defines it
+  # (#19413). Only that file: vars_files outranks inventory group_vars.
+  vars_files:
+    - ../vars/chromadb_endpoints.yml
+
   vars:
     health_check_timeout: 30
     service_check_retries: 3
@@ -299,7 +304,7 @@
 
     - name: Test ChromaDB health endpoint (AI Stack)
       uri:
-        url: "http://127.0.0.1:8100/health"
+        url: "http://127.0.0.1:8100{{ chromadb_heartbeat_path }}"  # #19413: 1.x has no /health
         method: GET
         timeout: 20
       register: chromadb_health_test

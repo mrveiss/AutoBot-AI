@@ -65,7 +65,6 @@ def env(name: str, default: Any = None) -> Any:
 # ---------------------------------------------------------------------------
 # Per-component siblings split off at the size ceiling (#14236; ledger #18391). Imported after
 # REGISTRY/register_env_var exist and before anything below reads the registry.
-
 from autobot_shared import env_registry_agent_runtime  # noqa: E402,F401
 from autobot_shared import env_registry_ai  # noqa: E402,F401
 from autobot_shared import env_registry_backend  # noqa: E402,F401
@@ -79,6 +78,7 @@ from autobot_shared import env_registry_security  # noqa: E402,F401
 from autobot_shared import env_registry_slm  # noqa: E402,F401
 from autobot_shared import env_registry_tls  # noqa: E402,F401
 from autobot_shared import (  # noqa: E402,F401
+    env_registry_agent_tools,
     env_registry_analytics,
     env_registry_batch,
     env_registry_gateway,
@@ -354,8 +354,8 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_REDIS_DB_ANALYTICS",
         type=int,
-        default=11,
-        description="Redis logical database number for analytics data.",
+        default=None,
+        description="Redis DB number for analytics data; unset uses redis-databases.yaml (#19232).",
         component="redis",
         range=(0, 15),
     )
@@ -365,8 +365,8 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_REDIS_DB_KNOWLEDGE",
         type=int,
-        default=1,
-        description="Redis logical database number for knowledge-base vectors.",
+        default=None,
+        description="Redis DB number for knowledge-base vectors; unset uses redis-databases.yaml (#19232).",
         component="redis",
         range=(0, 15),
     )
@@ -376,8 +376,8 @@ register_env_var(
     EnvVarSpec(
         name="AUTOBOT_REDIS_DB_MAIN",
         type=int,
-        default=0,
-        description="Redis logical database number for primary application data.",
+        default=None,
+        description="Redis DB number for primary application data; unset uses redis-databases.yaml (#19232).",
         component="redis",
         range=(0, 15),
     )

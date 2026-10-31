@@ -3,7 +3,7 @@
 # Windows 11 24H2+ recommended for full Windows ML support
 
 # Core Web Framework
-fastapi>=0.147.0                # SECURITY UPDATE - requires starlette >=0.52.1 (#15661)
+fastapi  # version from constraints/shared.txt (#18060); SECURITY UPDATE - requires starlette >=0.52.1 (#15661)
 uvicorn[standard]>=0.54.0
 pydantic>=2.5.0
 
@@ -65,7 +65,7 @@ onnxscript>=0.1.0
 # CPU-only version keeps installation smaller - actual inference uses ONNX Runtime.
 # Note: This installs from PyTorch's CPU-only index for Windows.
 --extra-index-url https://download.pytorch.org/whl/cpu
-torch>=2.6.0  # GH#8324: CVE-2025-32434 — torch.load RCE via weights_only=True
+torch  # version from constraints/shared.txt (#19330); its pin is above the GH#8324 CVE-2025-32434 floor (2.6.0)
 
 # =============================================================================
 # Scientific Computing

@@ -28,6 +28,12 @@
   gather_facts: true
   become: true
 
+  # node_major (the Node.js major, #19328) comes from its single definition by
+  # name: a run with a bare `-i "<host>,"` loads no group_vars, the same reason
+  # deploy.yml and enroll-slm-agent.yml load it (#15348).
+  vars_files:
+    - ../inventory/group_vars/all.yml
+
   vars:
     enrollment_timestamp: "{{ ansible_facts['date_time'].iso8601 }}"
     autobot_user: "autobot"
@@ -48,7 +54,7 @@
     role_configs:
       frontend:
         services: ['nginx', 'node']
-        packages: ['nodejs', 'npm', 'nginx']
+        packages: ['nginx']  # Node.js comes from the nodejs role below (#19661)
         ports: [5173, 80, 443]
       npu-worker:
         services: ['npu-service']
@@ -230,18 +236,11 @@
         - name: "Setup Node.js for frontend"
           when: node_role == 'frontend'
           block:
-            - name: "Add NodeSource repository"
-              shell: |
-                curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-              args:
-                creates: /etc/apt/sources.list.d/nodesource.list
-
-            - name: "Install Node.js"
-              apt:
+            - name: Install Node.js
+              ansible.builtin.include_role:
                 name: nodejs
-                state: present
-                update_cache: true
-                cache_valid_time: 3600
+                apply:
+                  tags: ['role-setup']
 
         # Redis-specific setup
         - name: "Setup Redis Stack"

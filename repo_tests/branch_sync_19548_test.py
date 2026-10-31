@@ -49,6 +49,7 @@ def _load(name: str):
 
 core = _load("branch_sync_core")
 bs = _load("branch_sync")
+issue_api = sys.modules["issue_api"]  # the instance branch_sync imported
 
 
 class Runner:
@@ -285,8 +286,8 @@ def test_an_up_to_date_branch_without_sync_labels_costs_no_api_call() -> None:
 
 def test_the_comment_is_deduped_by_its_marker(monkeypatch: pytest.MonkeyPatch) -> None:
     """The sync calls the ONE upsert (#12984); a bot comment carrying the marker is updated, not added."""
-    upsert = bs.load_upsert()
-    module = sys.modules[upsert.__module__]
+    module = issue_api.load_upsert()
+    upsert = module.upsert
     ours = {"id": 99, "user": {"type": "Bot"}, "body": f"{core.MARKER_CONFLICT}\nolder", "created_at": "2"}
     quoted = {"id": 5, "user": {"type": "User"}, "body": core.MARKER_CONFLICT, "created_at": "3"}
     calls: List[Tuple[str, str]] = []
@@ -301,8 +302,9 @@ def test_the_comment_is_deduped_by_its_marker(monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_the_sync_reuses_the_canonical_upsert() -> None:
-    assert bs.load_upsert().__module__ == "upsert_pr_comment"
-    assert bs.UPSERT_SCRIPT.is_file(), "the canonical upsert moved; the sync would fail at its first comment"
+    """The sync holds no loader of its own: it uses issue_api's one by-path loader (#12984, #19522)."""
+    assert bs.load_upsert is issue_api.load_upsert
+    assert issue_api.UPSERT_PATH.is_file(), "the canonical upsert moved; the sync would fail at its first comment"
 
 
 def test_an_already_labelled_pr_gets_no_second_comment() -> None:
@@ -350,6 +352,15 @@ def test_dependabot_and_automation_branches_are_never_synced_pr_or_not() -> None
         "`automation/other` (no PR)",
     ):
         assert skipped in plan.skipped[core.POLICY], skipped
+
+
+def test_merge_train_branches_are_never_synced() -> None:
+    """A [skip ci] sync on a train supersedes the train's own full CI run (#19724)."""
+    pulls = [_pull(10, "train-2026-10-27-85t"), _pull(11, "issue-11")]
+    plan = core.plan_run(pulls, ["train-parked"], REPO)
+    assert [(t.branch, t.pr) for t in plan.targets] == [("issue-11", 11)]
+    assert "#10 `train-2026-10-27-85t`" in plan.skipped[core.POLICY]
+    assert "`train-parked` (no PR)" in plan.skipped[core.POLICY]
 
 
 def test_prs_are_synced_oldest_first_then_parked_branches() -> None:

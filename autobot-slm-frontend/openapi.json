@@ -582,7 +582,7 @@
         "type": "object"
       },
       "AgentResponse": {
-        "description": "Agent response with LLM config.",
+        "description": "Agent response with LLM config (the LLM fields are AgentLLMConfig's, #19730).",
         "properties": {
           "agent_id": {
             "title": "Agent Id",
@@ -669,11 +669,11 @@
           }
         },
         "required": [
+          "llm_provider",
+          "llm_model",
           "id",
           "agent_id",
           "name",
-          "llm_provider",
-          "llm_model",
           "created_at",
           "updated_at"
         ],
@@ -7655,9 +7655,9 @@
             "type": "string"
           },
           "timeout": {
-            "default": 30,
+            "default": 30.0,
             "title": "Timeout",
-            "type": "integer"
+            "type": "number"
           }
         },
         "required": [
@@ -21009,6 +21009,63 @@
           }
         ],
         "summary": "Start Update All",
+        "tags": [
+          "code-sync"
+        ]
+      }
+    },
+    "/api/code-sync/update-all/report": {
+      "get": {
+        "description": "The last update's target, stage, result, failed task, error and role deploys.",
+        "operationId": "get_update_report_api_code_sync_update_all_report_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Internal-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Internal-Api-Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Update Report Api Code Sync Update All Report Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Update Report",
         "tags": [
           "code-sync"
         ]

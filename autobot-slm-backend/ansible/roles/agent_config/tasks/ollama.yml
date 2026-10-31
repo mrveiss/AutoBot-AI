@@ -46,3 +46,9 @@
   until: model_pull_results.finished
   retries: 60
   delay: 30
+
+- name: Check every pulled model is the right kind for its role (#19736)
+  ansible.builtin.include_tasks: ../../../_shared/tasks/assert_model_kinds.yml
+  vars:
+    model_kind_embedding: "{{ ollama_embedding_model }}"
+    model_kind_completion: "{{ ollama_models }}"

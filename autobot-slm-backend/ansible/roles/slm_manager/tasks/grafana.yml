@@ -10,50 +10,13 @@
 # ==========================================================
 # Install Grafana (only when grafana_install is true)
 # ==========================================================
-- name: "Grafana | Add Grafana GPG key"
-  ansible.builtin.apt_key:
-    url: https://apt.grafana.com/gpg.key
-    state: present
-  when: grafana_install | bool
-  tags: ['grafana', 'packages']
-
-# #7218: idempotent repo-add — preserve device-shipped Grafana repo if present.
-# Refresh handled by the bounded-shell task below (#6719).
-- name: "Grafana | Add Grafana APT repository (idempotent, #7218)"
-  ansible.builtin.include_tasks: ../../_shared/tasks/add_apt_repository_idempotent.yml
-  vars:
-    apt_repo_match: "apt.grafana.com"
-    apt_repo_spec: "deb https://apt.grafana.com stable main"
-    apt_repo_filename: "grafana"
-    apt_repo_label: "Grafana"
-    # #17897: derived from this file's own "Grafana | Install Grafana" task
-    # (ansible.builtin.apt, name: grafana) -- the one package this repo exists
-    # to provide here. A device image carrying an inert
-    # `grafana.list.distUpgrade` made the helper report the repo PRESENT and
-    # preserve it; with no package named the verdict short-circuited to
-    # `usable`, the canonical source was never written, and the install died
-    # four tasks later with "No package matching 'grafana' is available".
-    apt_repo_verify_package: "grafana"
-  when: grafana_install | bool
-  tags: ['grafana', 'packages']
-
-# #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
-- name: "Grafana | Refresh apt cache after PPA add (best-effort; #6719)"
-  ansible.builtin.command:
-    cmd: >-
-      timeout 60 apt-get update -qq
-      -o Acquire::Retries=0
-      -o Acquire::http::Timeout=10
-  become: true
-  changed_when: false
-  failed_when: false
-  when: grafana_install | bool
-  tags: ['grafana', 'packages']
-
-- name: "Grafana | Install Grafana"
-  ansible.builtin.apt:
-    name: grafana
-    state: "{{ 'latest' if grafana_version == 'latest' else 'present' }}"
+# #19661: the monitoring role holds the one install and the one grafana_version.
+- name: "Grafana | Install or upgrade Grafana"
+  ansible.builtin.include_role:
+    name: monitoring
+    tasks_from: grafana_install.yml
+    apply:
+      tags: ['grafana', 'packages']
   when: grafana_install | bool
   tags: ['grafana', 'packages']
 

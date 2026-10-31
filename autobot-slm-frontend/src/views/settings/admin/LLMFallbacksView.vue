@@ -16,14 +16,17 @@
  * (-> /api/llm-providers/fallback-status).
  */
 
-import { ref, onMounted, onUnmounted } from 'vue'
-import { BaseAlert } from '@autobot/ui'
+import { ref, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { BaseAlert, PollingPausedAlert } from '@autobot/ui'
+import { throwIfFailed, useDashboardPoller } from '@/composables/useDashboardPoller'
 import {
   useAutobotApi,
   type LLMFallbackChain,
   type LLMActiveFallback,
 } from '@/composables/useAutobotApi'
 import { createLogger } from '@/utils/debugUtils'
+import { formatCompactRelativeTime } from '@/utils/dateUtils'
 
 const logger = createLogger('LLMFallbacksView')
 const api = useAutobotApi()
@@ -35,7 +38,6 @@ const configuredChains = ref<LLMFallbackChain[]>([])
 const activeFallbacks = ref<LLMActiveFallback[]>([])
 const loading = ref(false)
 const error = ref('')
-let refreshTimer: number | null = null
 
 async function fetchFallbackStatus(): Promise<void> {
   loading.value = true
@@ -55,31 +57,26 @@ async function fetchFallbackStatus(): Promise<void> {
 
 function formatTime(timestamp: number): string {
   const date = new Date(timestamp * 1000)
-  const now = new Date()
-  const diffSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
-  if (diffSeconds < 60) {
-    return `${diffSeconds}s ago`
-  } else if (diffSeconds < 3600) {
-    return `${Math.floor(diffSeconds / 60)}m ago`
-  }
+  if (Date.now() - date.getTime() < 3600000) return formatCompactRelativeTime(date)
   return date.toLocaleTimeString()
 }
 
-onMounted(() => {
-  fetchFallbackStatus()
-  refreshTimer = window.setInterval(fetchFallbackStatus, REFRESH_INTERVAL_MS)
-})
+const { t } = useI18n()
 
-onUnmounted(() => {
-  if (refreshTimer !== null) {
-    clearInterval(refreshTimer)
-    refreshTimer = null
-  }
-})
+// #19482: the shared dashboard policy (stop on unmount and after repeated failures, paused alert)
+const statusPoller = useDashboardPoller(throwIfFailed(fetchFallbackStatus, error), REFRESH_INTERVAL_MS)
+
+onMounted(() => statusPoller.start(''))
 </script>
 
 <template>
   <div class="p-6 max-w-7xl mx-auto">
+    <PollingPausedAlert
+      :poller="statusPoller"
+      :message="t('common.polling.paused')"
+      :retry-label="t('common.polling.retry')"
+      @retry="statusPoller.start('')"
+    />
     <div class="flex items-center justify-between mb-6">
       <div>
         <h1 class="text-2xl font-bold text-gray-900">
@@ -92,7 +89,7 @@ onUnmounted(() => {
       <button
         class="px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
         :disabled="loading"
-        @click="fetchFallbackStatus"
+        @click="statusPoller.start('')"
       >
         <svg
           class="w-4 h-4"

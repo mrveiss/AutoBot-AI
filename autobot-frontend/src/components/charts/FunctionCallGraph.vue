@@ -15,7 +15,7 @@
 
     <!-- Loading state -->
     <div v-if="loading" class="chart-loading-overlay">
-      <div class="loading-spinner"></div>
+      <BaseSpinner size="md" />
       <span>{{ $t('charts.callGraph.loading') }}</span>
     </div>
 
@@ -106,7 +106,7 @@
       <!-- Network view (Cytoscape) - DEFAULT, lazy-loaded on demand (#5158) -->
       <div v-show="viewMode === 'network'" class="network-view">
         <div v-if="cytoscapeLoading && !cy" class="cytoscape-loading">
-          <div class="loading-spinner"></div>
+          <BaseSpinner size="md" />
           <span>{{ $t('charts.callGraph.loadingVisualization', 'Loading visualization library...') }}</span>
         </div>
         <div v-else-if="cytoscapeError" class="chart-error">
@@ -347,6 +347,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseSpinner } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, shallowRef, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { useExpansion } from '@/composables/useExpansion'
@@ -1403,19 +1404,6 @@ watch(viewMode, async (newMode) => {
   padding: var(--spacing-0);
 }
 
-.loading-spinner {
-  width: var(--spacing-8);
-  height: var(--spacing-8);
-  border: 3px solid var(--border-default);
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 .error-icon {
   display: flex;
   align-items: center;
@@ -2086,7 +2074,7 @@ watch(viewMode, async (newMode) => {
   color: var(--text-muted);
 }
 
-.orphaned-item-details i {
+.orphaned-item-details .icon {
   margin-right: var(--spacing-1);
   opacity: 0.7;
 }
@@ -2122,8 +2110,8 @@ watch(viewMode, async (newMode) => {
   color: var(--text-muted);
 }
 
-.orphaned-empty i {
-  font-size: 2rem;
+.orphaned-empty .icon {
+  width: 2rem; height: 2rem;
   margin-bottom: var(--spacing-3);
   color: var(--color-success);
 }

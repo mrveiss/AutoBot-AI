@@ -83,22 +83,21 @@ adding fleet nodes, enrolling agents, assigning roles, and provisioning. See
 
 **Option B — Docker Compose (everyone else; quick eval / development).** A chat needs a
 language model, and every model tier points at the bundled Ollama container, which only
-starts with `--profile ollama`. Start it, then pull the default chat and embedding models
-(the `AUTOBOT_DEFAULT_LLM_MODEL` and `AUTOBOT_EMBEDDING_MODEL` values in
-`docker/.env.docker`):
+starts with `--profile ollama`. Start it, then pull every model `docker/.env.docker` names --
+each agent runs its tier's model (#19332), so pulling only the chat model leaves the others
+answering "model not found":
 ```bash
 git clone https://github.com/mrveiss/AutoBot-AI.git
 cd AutoBot-AI
 bash docker/generate-secrets.sh   # per-host secrets + a free network range
 docker compose --env-file docker/.env.docker --env-file docker/.env.secrets --profile ollama up -d --build
-docker compose --env-file docker/.env.docker --env-file docker/.env.secrets exec autobot-ollama ollama pull qwen3.5:9b
-docker compose --env-file docker/.env.docker --env-file docker/.env.secrets exec autobot-ollama ollama pull nomic-embed-text:latest
+# every model docker/.env.docker names, read from the file itself (about 21 GB with the defaults)
+sed -n 's/^AUTOBOT_[A-Z_]*_MODEL=//p' docker/.env.docker | sort -u | \
+  xargs -n1 docker compose --env-file docker/.env.docker --env-file docker/.env.secrets exec -T autobot-ollama ollama pull
 ```
 User UI at **http://localhost**, SLM admin at **http://localhost/slm/**. Without
 `--profile ollama` the stack starts but has no model to answer with.
 
-`docker/.env.docker` also names smaller models for some other tiers (for example
-`phi3:mini` and `mistral:7b-instruct`); pull those the same way if you use those tiers.
 To use Anthropic instead of a local model, set `ANTHROPIC_API_KEY` in the environment
 when you run `docker compose` (compose passes it to the backend). Provider settings live
 in **SLM Admin > Settings > LLM** (`http://localhost/slm/`, then Settings, then the
@@ -116,7 +115,8 @@ in **SLM Admin > Settings > LLM** (`http://localhost/slm/`, then Settings, then 
   the same file -- the SLM admin password (the installer prints it when it generated it). The main app is served by the
   node you assign the frontend role to.
 - Until onboarding is complete, the main app sends a newly logged-in user to its
-  `/onboarding` page.
+  `/onboarding` page, which has three steps: **System Check**, **Choose Preset**, and
+  **Review & Apply**.
 
 → Full install options and the two-phase deployment flow: [INSTALL.md](INSTALL.md).
 
@@ -488,7 +488,7 @@ the support contact path live in **[FUNDING.md](FUNDING.md)**.
 ### Under Consideration
 - Cloud deployment templates
 - Managed hosting option
-- Enterprise features (SAML)
+- SAML Single Logout
 
 ---
 

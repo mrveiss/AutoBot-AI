@@ -4,17 +4,18 @@
 // Author: mrveiss
 
 import { ref, computed, onMounted } from 'vue'
-import { BaseAlert, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseModal, useToast } from '@autobot/ui'
 import { useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useFleetStore } from '@/stores/fleet'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { createLogger } from '@/utils/debugUtils'
-import { formatDateTime as formatDateTimeTz } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import type { MaintenanceWindow, MaintenanceWindowCreate } from '@/types/slm'
-
 const route = useRoute()
+const { t } = useI18n()
+const { showToast } = useToast()
 const isUpdatesTab = computed(() => route.path.startsWith('/maintenance/updates'))
-
 const logger = createLogger('MaintenanceView')
 const fleetStore = useFleetStore()
 const api = useSlmApi()
@@ -53,7 +54,6 @@ const formError = ref<string | null>(null)
 // Computed
 const activeWindows = computed(() => windows.value.filter(w => w.status === 'active'))
 const scheduledWindows = computed(() => windows.value.filter(w => w.status === 'scheduled'))
-
 const filteredWindows = computed(() => {
   let filtered = windows.value
   if (statusFilter.value) {
@@ -181,7 +181,7 @@ async function activateWindow(windowId: string): Promise<void> {
     await fetchMaintenanceWindows()
   } catch (err) {
     logger.error('Failed to activate maintenance window:', err)
-    alert('Failed to activate maintenance window')
+    showToast(t('maintenanceView.failedToActivateWindow'), 'error')
   }
 }
 
@@ -192,7 +192,7 @@ async function completeWindow(windowId: string): Promise<void> {
     await fetchMaintenanceWindows()
   } catch (err) {
     logger.error('Failed to complete maintenance window:', err)
-    alert('Failed to complete maintenance window')
+    showToast(t('maintenanceView.failedToCompleteWindow'), 'error')
   }
 }
 
@@ -207,7 +207,7 @@ async function deleteWindow(windowId: string): Promise<void> {
     await fetchMaintenanceWindows()
   } catch (err) {
     logger.error('Failed to delete maintenance window:', err)
-    alert('Failed to delete maintenance window')
+    showToast(t('maintenanceView.failedToDeleteWindow'), 'error')
   }
 }
 
@@ -224,7 +224,7 @@ async function handleDrainNode(nodeId: string): Promise<void> {
     logger.info('Node drained successfully:', nodeId)
   } catch (err) {
     logger.error('Failed to drain node:', err)
-    alert('Failed to drain node. Please try again.')
+    showToast(t('maintenanceView.failedToDrainNode'), 'error')
   } finally {
     isDraining.value = false
   }
@@ -239,7 +239,7 @@ async function handleResumeNode(nodeId: string): Promise<void> {
     logger.info('Node resumed successfully:', nodeId)
   } catch (err) {
     logger.error('Failed to resume node:', err)
-    alert('Failed to resume node. Please try again.')
+    showToast(t('maintenanceView.failedToResumeNode'), 'error')
   } finally {
     isResuming.value = false
   }
@@ -251,10 +251,6 @@ function formatDateTimeLocal(isoString: string): string {
   const offset = date.getTimezoneOffset()
   const localDate = new Date(date.getTime() - offset * 60 * 1000)
   return localDate.toISOString().slice(0, 16)
-}
-
-function formatDateTime(isoString: string): string {
-  return formatDateTimeTz(isoString)
 }
 
 function getStatusBadgeClass(status: string): string {
@@ -565,10 +561,10 @@ function getNodeName(nodeId: string | null): string {
                 <span class="text-sm text-gray-900">{{ getNodeName(window.node_id) }}</span>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ formatDateTime(window.start_time) }}
+                {{ formatFleetDateTime(window.start_time) }}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ formatDateTime(window.end_time) }}
+                {{ formatFleetDateTime(window.end_time) }}
               </td>
               <td class="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
                 {{ window.reason || '-' }}

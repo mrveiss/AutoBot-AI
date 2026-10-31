@@ -1,5 +1,6 @@
 {
   "common": {
+    "appName": "AutoBot",
     "submit": "Einreichen",
     "cancel": "Stornieren",
     "save": "Speichern",
@@ -109,7 +110,8 @@
       "medium": "Mittel",
       "high": "Hoch",
       "critical": "Kritisch"
-    }
+    },
+    "logsLoadFailed": "Protokolle konnten nicht geladen werden: {error}"
   },
   "chat": {
     "sendMessage": "Senden Sie eine Nachricht...",
@@ -261,6 +263,13 @@
     },
     "input": {
       "retryUpload": "Versuchen Sie den Upload erneut",
+      "uploadError": {
+        "http": "Upload fehlgeschlagen (Status {status})",
+        "invalidResponse": "Der Server hat eine unlesbare Antwort gesendet",
+        "network": "Netzwerkfehler beim Hochladen",
+        "cancelled": "Upload abgebrochen",
+        "unknown": "Upload fehlgeschlagen"
+      },
       "filesAttached": "{count}-Dateien angehängt",
       "clearAll": "Alles löschen",
       "removeFile": "Datei entfernen",
@@ -305,7 +314,10 @@
       "thinkingOffLabel": "thinking Off",
       "thinkingOn": "Thinking on",
       "thinkingOnLabel": "thinking On",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "fileTooLarge": "Datei „{name}“ ist zu groß (max. {max})",
+      "voiceUnsupported": "Spracheingabe erfordert Chrome, Edge oder Safari 15+. Die Transkription ist in diesem Browser nicht verfügbar.",
+      "micDenied": "Der Mikrofonzugriff wurde verweigert. Bitte erlauben Sie den Mikrofonzugriff in den Browsereinstellungen."
     },
     "translate": {
       "title": "Text übersetzen",
@@ -521,6 +533,7 @@
         "pending": "Ausstehend",
         "running": "Läuft",
         "streaming": "Streaming",
+        "waiting_explanation": "Wartet auf Erklärung",
         "explaining": "Erklären",
         "completed": "Vollendet",
         "failed": "Fehlgeschlagen"
@@ -783,15 +796,7 @@
     "logging": "Protokollierung",
     "prompts": "Aufforderungen",
     "backend": "Backend",
-    "save": "Einstellungen speichern",
     "reset": "Auf Standardeinstellungen zurücksetzen",
-    "panelLoadFailed": "Das Einstellungsfenster konnte nicht geladen werden",
-    "loadingSettings": "Einstellungen werden geladen...",
-    "backendOffline": "Backend offline – zeigt zwischengespeicherte Einstellungen an",
-    "saving": "Sparen...",
-    "discardChanges": "Änderungen verwerfen",
-    "cacheApiUnavailable": "Cache-API nicht verfügbar",
-    "cachedSettings": "Zwischengespeicherte Einstellungen verwenden (Backend offline)",
     "appearanceDesc": "Passen Sie das Erscheinungsbild Ihres Arbeitsbereichs individuell an",
     "voiceDesc": "Konfigurieren Sie Text-to-Speech-Stimme und Sprachprofile",
     "languageDesc": "Wählen Sie Ihre bevorzugte Sprache für die Benutzeroberfläche und die KI-Antworten",
@@ -3811,10 +3816,11 @@
     },
     "treeNode": {
       "itemsCount": "Items count",
+      "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
       "vectorizeFolderTitle": "Vectorize folder title",
-      "retryTitle": "Retry title",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "share": {
       "searching": "Searching...",
@@ -4236,6 +4242,8 @@
     "stop": "Stop Workflow",
     "status": "Status",
     "history": {
+      "durationSeconds": "s",
+      "durationMinutes": "min",
       "searchPlaceholder": "Search workflows...",
       "allStatus": "All Status",
       "completed": "Completed",
@@ -4351,7 +4359,8 @@
       "agentsAriaLabel": "Agent capabilities",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "Automatisierung für Ihr Unternehmen wird geöffnet…",
-      "companyRequired": "Wählen Sie ein Unternehmen, um die Automatisierung zu öffnen."
+      "companyRequired": "Wählen Sie ein Unternehmen, um die Automatisierung zu öffnen.",
+      "planBeforeBuilding": "Vor dem Bauen planen"
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -4659,7 +4668,9 @@
       "channelSlack": "Slack",
       "emailHint": "Comma-separated email addresses",
       "channelWebhook": "Webhook",
-      "sectionDesc": "Configure per-workflow notification routing"
+      "sectionDesc": "Configure per-workflow notification routing",
+      "invalidEmail": "Ungültige E-Mail-Adresse: {emails}",
+      "invalidUrl": "Ungültiges URL-Format"
     },
     "liveDashboard": {
       "activeExecutions": "Active Executions",
@@ -4994,7 +5005,8 @@
       "emergencyKillFailed": "❌ Notabschaltung fehlgeschlagen: {message}",
       "interrupted": "^C (Prozess vom Benutzer unterbrochen)",
       "error": "Fehler: {error}"
-    }
+    },
+    "urlCopied": "Terminal-URL in die Zwischenablage kopiert!"
   },
   "llm": {
     "unavailable": "Nicht verfügbar",
@@ -5862,6 +5874,7 @@
       "dismiss": "Dismiss"
     },
     "themeToggle": {
+      "accentPurpleDescription": "Violett – Kreativ & Elegant",
       "system": "System",
       "highContrast": "Hoher Kontrast",
       "monochrome": "Monochrom",
@@ -7367,7 +7380,16 @@
       "initComplete": "Initialisierung abgeschlossen"
     }
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "Alarmregeln",
+      "overview": "Übersicht",
+      "slos": "SLOs",
+      "traces": "Traces"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "browser": {
       "contentsOf": "{path} Contents",
       "refresh": "Refresh",
@@ -7382,7 +7404,8 @@
       "errorDeletingFile": "Error deleting file",
       "errorRenamingFile": "Error renaming file",
       "refreshAriaLabel": "Refresh files",
-      "toggleViewAriaLabel": "Toggle view mode"
+      "toggleViewAriaLabel": "Toggle view mode",
+      "uploadFailedHint": "Bitte prüfen Sie die Dateigrößenbeschränkungen und Formatanforderungen"
     },
     "header": {
       "title": "File Browser",
@@ -8090,6 +8113,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "Wartungsfenster konnte nicht aktiviert werden",
+      "completeWindowFailed": "Wartungsfenster konnte nicht abgeschlossen werden",
+      "deleteWindowFailed": "Wartungsfenster konnte nicht gelöscht werden",
+      "drainNodeFailed": "Knoten konnte nicht entleert werden. Bitte versuchen Sie es erneut.",
+      "resumeNodeFailed": "Knoten konnte nicht fortgesetzt werden. Bitte versuchen Sie es erneut.",
+      "saveKeysFailed": "API-Schlüssel konnten nicht gespeichert werden. Details finden Sie in der Konsole.",
+      "addNodeFailed": "Knoten konnte nicht hinzugefügt werden"
     }
   },
   "mobile": {
@@ -8601,7 +8633,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "Werkzeuginformationen sind derzeit nicht verfügbar — diese Liste ist möglicherweise unvollständig.",
       "canvasNoToolsDefined": "Diesem Unternehmen sind keiner Rolle Werkzeuge zugeordnet.",
-      "deepLinkNodeNotFound": "Dieser Link verweist auf einen Knoten, der hier nicht gefunden werden konnte. Er wurde möglicherweise entfernt, oder Sie haben keinen Zugriff darauf."
+      "deepLinkNodeNotFound": "Dieser Link verweist auf einen Knoten, der hier nicht gefunden werden konnte. Er wurde möglicherweise entfernt, oder Sie haben keinen Zugriff darauf.",
+      "viewPlanner": "Workflow-Planer"
     },
     "executorRollup": {
       "title": "Ausführungs-Übersicht",
@@ -8945,6 +8978,162 @@
         "notFound": "Diese Aufgabe hält den Anspruch nicht mehr — aktualisieren Sie, um den aktuellen Inhaber zu sehen.",
         "unavailable": "Ledger nicht erreichbar; es wurde nichts gesendet.",
         "error": "Etwas ist schiefgelaufen, und die Zustellung konnte nicht bestätigt werden. Aktualisieren Sie, um zu sehen, ob der Claim noch gehalten wird."
+      }
+    },
+    "workflowPlanner": {
+      "title": "Workflow-Planer",
+      "plans": "Pläne",
+      "newPlan": "Neuer Plan",
+      "open": "Öffnen",
+      "back": "Zurück zu den Plänen",
+      "retry": "Erneut versuchen",
+      "loading": "Pläne werden geladen ...",
+      "loadFailed": "Der Plan konnte nicht geladen werden.",
+      "saveFailed": "Die Änderung konnte nicht gespeichert werden.",
+      "createFailed": "Der Plan konnte nicht erstellt werden.",
+      "emptyTitle": "Noch keine Pläne",
+      "emptyHint": "Starten Sie einen Plan, um einen Prozess abzubilden, zu messen und die eine Zahl zum Verbessern zu wählen.",
+      "unavailableTitle": "Der Workflow-Planer ist nicht verfügbar",
+      "unavailableHint": "Diese Funktion ist für Ihren Arbeitsbereich ausgeschaltet, daher gibt es hier noch nichts anzuzeigen.",
+      "statusFlow": "Planfortschritt",
+      "status": {
+        "draft": "Entwurf",
+        "measured": "Gemessen",
+        "labeled": "Beschriftet",
+        "approved": "Freigegeben",
+        "converted": "Umgewandelt"
+      },
+      "col": {
+        "name": "Plan",
+        "revision": "Revision",
+        "status": "Status",
+        "actions": "Aktionen"
+      },
+      "form": {
+        "name": "Planname",
+        "startsAt": "Wo der Prozess beginnt",
+        "endsAt": "Wo der Prozess endet",
+        "create": "Plan erstellen"
+      },
+      "steps": {
+        "map": "Abbilden",
+        "measure": "Messen",
+        "oneNumber": "Eine Zahl wählen",
+        "label": "Aufschlüsseln und beschriften",
+        "convert": "Workflow erstellen"
+      },
+      "map": {
+        "empty": "Noch nichts abgebildet",
+        "emptyHint": "Fügen Sie zuerst die Beteiligten (Bahnen) hinzu, dann ihre Schritte.",
+        "handoffs": "{count} Übergaben",
+        "waitNote": "Was wartet bei dieser Übergabe?",
+        "laneName": "Name der Bahn",
+        "addLane": "Bahn hinzufügen",
+        "stepLabel": "Schritt",
+        "stepLane": "Bahn des Schritts",
+        "addStep": "Schritt hinzufügen"
+      },
+      "source": {
+        "self_reported": "Ihre Angabe",
+        "email": "Mit E-Mail geprüft",
+        "calendar": "Mit Kalender geprüft"
+      },
+      "measure": {
+        "hint": "Wie oft passiert jeder Schritt und wie lange dauert er?",
+        "needSteps": "Bilden Sie zuerst mindestens einen Schritt ab.",
+        "perWeek": "Pro Woche",
+        "duration": "Dauer",
+        "unit": "Einheit der Dauer",
+        "save": "Speichern",
+        "clear": "Löschen"
+      },
+      "unit": {
+        "minutes": "Minuten",
+        "hours": "Stunden",
+        "days": "Tage"
+      },
+      "oneNumber": {
+        "hint": "Die gemessenen Schritte, längste Wartezeiten zuerst. Sie entscheiden, welcher zählt.",
+        "needMetrics": "Messen Sie zuerst mindestens einen Schritt.",
+        "rate": "{freq} pro Woche, {dur} {unit}",
+        "title": "Diese Zahl benennen",
+        "returnKind": "Was Sie zurückgewinnen",
+        "target": "Ziel",
+        "save": "Als meine eine Zahl speichern"
+      },
+      "returnKind": {
+        "hours_back": "Stunden zurück",
+        "more_yeses": "Mehr Zusagen",
+        "money_sooner": "Schneller Geld"
+      },
+      "label": {
+        "needNumber": "Wählen Sie zuerst Ihre eine Zahl; ihr Schritt wird hier aufgeschlüsselt.",
+        "subStep": "Teilschritt",
+        "addSubStep": "Teilschritt hinzufügen",
+        "unlabel": "Beschriftung entfernen",
+        "edgeCase": "Sonderfall: {text}",
+        "byHandNote": "Das bleibt bei Menschen. Die KI handelt dabei nie.",
+        "acknowledge": "Ich habe die Liste „Von Hand“ gelesen",
+        "acknowledged": "Liste „Von Hand“ gelesen"
+      },
+      "labels": {
+        "ai": "KI",
+        "automation": "Automatisierung",
+        "by_hand": "Von Hand"
+      },
+      "gate": {
+        "missing": "Noch offen",
+        "title": "Bereit zum Erstellen?",
+        "unknown": "Weitere Prüfung",
+        "state": {
+          "met": "Erfüllt",
+          "open": "Offen",
+          "pending": "Noch nicht geprüft"
+        },
+        "name": {
+          "G1": "Die Karte ist gültig",
+          "G2": "Jeder Schritt ist gemessen",
+          "G3": "Der gewählte Schritt ist aufgeschlüsselt",
+          "G4": "Jeder Teilschritt und Sonderfall ist beschriftet",
+          "G5": "Liste „Von Hand“ gelesen und KI-Schritte durch Freigaben abgedeckt",
+          "G6": "Die Vorschau hat keine Fehler",
+          "G7": "Sie haben diesen Plan freigegeben",
+          "converted": "Die Workflows sind erstellt"
+        }
+      },
+      "readOnly": "Dieser Plan ist {status}, daher sind die Schritte 1 bis 4 schreibgeschützt.",
+      "firstProcess": {
+        "title": "Ihr Unternehmen ist bereit",
+        "body": "Planen Sie Ihren ersten Prozess: abbilden, messen und die eine Kennzahl wählen, die besser werden soll.",
+        "plan": "Meinen ersten Prozess planen",
+        "later": "Später"
+      },
+      "convert": {
+        "notReady": "Schließen Sie zuerst die Schritte 1 bis 4 ab. Die Prüfungen oben zeigen, was noch fehlt.",
+        "previewTitle": "Was erstellt wird (Vorschau, noch existiert nichts)",
+        "createdTitle": "Was erstellt wurde",
+        "counts": "Workflows: {workflows}. Prozesse: {processes}.",
+        "ownerLane": "Verantwortlich: {lane}",
+        "errors": "Fehler, die vor der Freigabe zu beheben sind",
+        "warnings": "Warnungen",
+        "documented": "Als Handbuchtext beibehalten, nicht gebaut:",
+        "failedProposals": "{count} KI-Zeilenvorschläge konnten nicht eingereicht werden. Wiederholen Sie, um sie einzureichen.",
+        "turnOnNotAvailable": "Das Einschalten von Workflows ist noch nicht verfügbar: Bis dahin führt nichts diese Workflows aus.",
+        "openWorkflows": "Workflows öffnen",
+        "unavailable": "Diese Aktion ist nicht verfügbar: Der Workflow-Planer ist für Ihren Arbeitsbereich ausgeschaltet oder der Plan existiert nicht mehr.",
+        "blocked": "Noch nicht bereit. Die Prüfungen oben zeigen, was fehlt.",
+        "approvedBy": "Freigegeben von {by} am {at}.",
+        "preview": "Vorschau der Erstellung anzeigen",
+        "previewAgain": "Vorschau aktualisieren",
+        "approve": "Freigeben",
+        "create": "Workflows erstellen",
+        "retry": "KI-Zeilenvorschläge wiederholen",
+        "approveTitle": "Diesen Plan freigeben?",
+        "approveMessage": "Sie geben die gezeigte Vorschau frei. Jede spätere Änderung am Plan hebt diese Freigabe auf.",
+        "previewFailed": "Die Vorschau konnte nicht erstellt werden.",
+        "approveFailed": "Der Plan konnte nicht freigegeben werden.",
+        "convertFailed": "Die Workflows konnten nicht erstellt werden.",
+        "retryFailed": "Die KI-Zeilenvorschläge konnten nicht wiederholt werden."
       }
     }
   },

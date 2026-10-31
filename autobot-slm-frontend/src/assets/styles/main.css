@@ -28,6 +28,7 @@
 
   --color-error-500: #ef4444;
   --color-error-600: #dc2626;
+  --color-error-700: #b91c1c;
 }
 
 /*
@@ -57,19 +58,19 @@
 }
 
 @utility btn-primary {
-  @apply bg-primary-600 text-white hover:bg-primary-700;
+  @apply bg-primary-600 text-white enabled:hover:bg-primary-700;
 }
 
 @utility btn-secondary {
-  @apply bg-gray-200 text-gray-700 hover:bg-gray-300;
+  @apply bg-gray-200 text-gray-700 enabled:hover:bg-gray-300;
 }
 
 @utility btn-success {
-  @apply bg-success-500 text-white hover:bg-success-600;
+  @apply bg-success-500 text-(--text-on-success) enabled:hover:bg-success-600;
 }
 
 @utility btn-error {
-  @apply bg-error-500 text-white hover:bg-error-600;
+  @apply bg-(--color-error-solid) text-(--text-on-error) enabled:hover:bg-(--color-error-solid-hover);
 }
 
 @utility card {
@@ -229,6 +230,8 @@
 :root {
   /* Neutral constant (white text on coloured surfaces). */
   --color-white: #ffffff;
+  /* Ink for text on a light status fill (#19872). */
+  --color-black: #000000;
   /* Blue action shades used by the setup wizard's buttons/badges — distinct
    * from the sky --color-primary; captured verbatim pending palette
    * consolidation (#11515). */

@@ -12,18 +12,18 @@
  * Issue #590 - NPU Dashboard Improvements.
  */
 
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { PollingPausedAlert, BaseSkeleton } from '@autobot/ui'
+import { useDashboardPoller } from '@/composables/useDashboardPoller'
 import { formatUptime } from '@/utils/formatHelpers'
 import type { NPUFleetMetrics, NPUWorkerMetrics } from '@/types/slm'
 import { useFleetStore } from '@/stores/fleet'
-import { createLogger } from '@/utils/debugUtils'
 
-const logger = createLogger('NPUPerformanceMetrics')
 const fleetStore = useFleetStore()
 
 const isLoading = ref(true)
 const expandedNodes = ref<Set<string>>(new Set())
-let refreshTimer: ReturnType<typeof setInterval> | null = null
 
 const REFRESH_INTERVAL_MS = 5000
 
@@ -86,42 +86,34 @@ function isExpanded(nodeId: string): boolean {
 
 // -- Data Fetching --
 
+const { t } = useI18n()
+
+/** One tick; the store reports a failed read as null, so the tick throws for the poller to count. */
 async function loadMetrics(): Promise<void> {
   try {
-    await fleetStore.fetchNpuFleetMetrics()
-  } catch (err) {
-    logger.error('Failed to load NPU fleet metrics', err)
+    const metrics = await fleetStore.fetchNpuFleetMetrics()
+    if (metrics === null) throw new Error(fleetStore.error ?? 'NPU fleet metrics unavailable')
   } finally {
     isLoading.value = false
   }
 }
 
-function startAutoRefresh(): void {
-  stopAutoRefresh()
-  refreshTimer = setInterval(loadMetrics, REFRESH_INTERVAL_MS)
-}
-
-function stopAutoRefresh(): void {
-  if (refreshTimer !== null) {
-    clearInterval(refreshTimer)
-    refreshTimer = null
-  }
-}
+// #19482: the shared dashboard policy (stop on unmount and after repeated failures, paused alert)
+const metricsPoller = useDashboardPoller(loadMetrics, REFRESH_INTERVAL_MS)
 
 // -- Lifecycle --
 
-onMounted(async () => {
-  await loadMetrics()
-  startAutoRefresh()
-})
-
-onBeforeUnmount(() => {
-  stopAutoRefresh()
-})
+onMounted(() => metricsPoller.start(''))
 </script>
 
 <template>
   <div class="space-y-6">
+    <PollingPausedAlert
+      :poller="metricsPoller"
+      :message="t('common.polling.paused')"
+      :retry-label="t('common.polling.retry')"
+      @retry="metricsPoller.start('')"
+    />
     <!-- Loading Skeleton -->
     <template v-if="isLoading">
       <!-- Summary skeleton -->
@@ -131,12 +123,9 @@ onBeforeUnmount(() => {
           :key="i"
           class="bg-white rounded-lg shadow-xs border border-gray-200 p-4"
         >
-          <div class="animate-pulse flex items-center gap-3">
-            <div class="w-10 h-10 bg-gray-200 rounded-lg" />
-            <div class="flex-1 space-y-2">
-              <div class="h-5 bg-gray-200 rounded-sm w-16" />
-              <div class="h-3 bg-gray-200 rounded-sm w-24" />
-            </div>
+          <div class="flex items-center gap-3" role="status" aria-busy="true" :aria-label="t('fleet.loadBalancingView.loadingNPUFleetData')">
+            <div class="w-10 shrink-0"><BaseSkeleton shape="block" height="2.5rem" /></div>
+            <div class="flex-1"><BaseSkeleton :lines="2" /></div>
           </div>
         </div>
       </div>
@@ -148,14 +137,7 @@ onBeforeUnmount(() => {
           :key="i"
           class="bg-white rounded-lg shadow-xs border border-gray-200 p-4"
         >
-          <div class="animate-pulse space-y-3">
-            <div class="flex justify-between">
-              <div class="h-4 bg-gray-200 rounded-sm w-32" />
-              <div class="h-4 bg-gray-200 rounded-sm w-16" />
-            </div>
-            <div class="h-2 bg-gray-200 rounded-sm w-full" />
-            <div class="h-2 bg-gray-200 rounded-sm w-3/4" />
-          </div>
+          <div role="status" aria-busy="true" :aria-label="t('fleet.loadBalancingView.loadingNPUFleetData')"><BaseSkeleton :lines="3" /></div>
         </div>
       </div>
     </template>
