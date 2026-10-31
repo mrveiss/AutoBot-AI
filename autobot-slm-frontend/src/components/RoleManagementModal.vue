@@ -135,9 +135,6 @@ function getStatusClass(status: string): string {
   }
 }
 
-function formatDate(dateStr: string | null): string {
-  return formatFleetDateTime(dateStr)
-}
 </script>
 
 <template>
@@ -198,7 +195,7 @@ function formatDate(dateStr: string | null): string {
                 </span>
               </td>
               <td>{{ role.current_version?.slice(0, 12) || '-' }}</td>
-              <td>{{ formatDate(role.last_synced_at) }}</td>
+              <td>{{ formatFleetDateTime(role.last_synced_at) }}</td>
               <td class="actions">
                 <BaseButton size="sm"
                   :disabled="isSyncing"
