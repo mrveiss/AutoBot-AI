@@ -59,11 +59,11 @@ api_router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = get_logger(__name__)
 
 
-#: Roles whose ownership of the conversation stands in for a global ``files.<op>`` grant they lack, on the
-#: owner routes only (#20133, #20195). ``user`` holds view/download but lacks upload/delete by design, so
-#: ownership covers those two; ``readonly`` (view/download only) and every unknown role stay refused
-#: for them, and roles that hold the grant (editor, admin, ...) are decided by RBAC as before.
-_OWNER_UPLOAD_ROLES = frozenset({"user"})
+#: Roles that may write to a conversation they own, whose ownership stands in for a global ``files.<op>`` grant
+#: they lack, on the owner routes only (#20133, #20195): ``user`` lacks upload and delete, ``editor`` lacks
+#: delete. "Owners may delete their own conversation files" holds for every writing role. ``readonly`` (view and
+#: download only) and every unknown role stay refused; roles holding the grant are decided by RBAC as before.
+_OWNER_UPLOAD_ROLES = frozenset({"user", "editor"})
 
 
 def _owner_may_upload(user_data: dict | None) -> bool:

@@ -246,3 +246,41 @@ def test_the_graph_node_streams_the_notice_and_the_attachment_reaches_its_prompt
     out = asyncio.run(graph.prepare_llm(state, config))
     assert _FACT in out["llm_params"]["initial_prompt"]
     assert [m["type"] for m in seen] == ["attachment_notice"] and seen[0]["metadata"]["code"] == "unavailable"
+
+
+def _small_window(monkeypatch, tokens: int):
+    """A model window leaving *tokens* of prompt budget (the real estimator, 4 chars per token)."""
+    from context_window_manager import get_context_window_manager
+
+    real = get_context_window_manager()
+    monkeypatch.setattr(real, "get_prompt_budget", lambda model=None: tokens)
+    return real
+
+
+def test_the_attachment_block_counts_against_a_small_model_window(world, monkeypatch):
+    cwm = _small_window(monkeypatch, 400)
+    file_id = _seed(world, _ALICE, "big.txt", ("A" * 40 + "Z" * 8000).encode())
+    params, prompt = _turn(world, [file_id])
+    assert cwm.estimate_tokens(prompt) <= 400  # the whole prompt, frames included, fits the window
+    assert prompt.rstrip().endswith(_BASE)  # the question and instructions are never pushed out
+    assert "A" * 40 in prompt and "Z" * 8000 not in prompt
+    assert _codes(params) == ["truncated"]
+
+
+def test_a_window_with_no_room_left_sheds_the_attachment_and_keeps_the_prompt_whole(world, monkeypatch):
+    _small_window(monkeypatch, 1)
+    file_id = _seed(world, _ALICE, "report.txt", f"Revenue: {_FACT}".encode())
+    params, prompt = _turn(world, [file_id])
+    assert prompt == _BASE and _codes(params) == ["over_budget"]
+
+
+def test_an_unreadable_window_budget_falls_back_to_the_configured_bounds(world, monkeypatch):
+    from context_window_manager import get_context_window_manager
+
+    def _boom(model=None):
+        raise RuntimeError("no window")
+
+    monkeypatch.setattr(get_context_window_manager(), "get_prompt_budget", _boom)
+    file_id = _seed(world, _ALICE, "report.txt", f"Revenue: {_FACT}".encode())
+    _, prompt = _turn(world, [file_id])
+    assert _FACT in prompt

@@ -120,8 +120,14 @@ def _frame(name: str, text: str) -> str:
     )
 
 
-async def resolve_attachments(session_id: str, user_id: str, file_ids: List[str], invalid: int = 0) -> AttachmentResult:
-    """Read *file_ids* of *session_id* for *user_id*, bounded, into one prompt block plus user notices."""
+async def resolve_attachments(
+    session_id: str, user_id: str, file_ids: List[str], invalid: int = 0, char_budget: int | None = None
+) -> AttachmentResult:
+    """Read *file_ids* of *session_id* for *user_id*, bounded, into one prompt block plus user notices.
+
+    ``char_budget`` is the room the model window leaves for attachment text (frames excluded); it can only
+    lower the configured total, never raise it.
+    """
     result = AttachmentResult()
     if invalid:
         result.notices.append(_notice("unavailable"))
@@ -135,6 +141,8 @@ async def resolve_attachments(session_id: str, user_id: str, file_ids: List[str]
         result.notices.extend(_notice("unavailable") for _ in file_ids)
         return result
     remaining, blocks = limits.ATTACHMENT_MAX_CHARS_TOTAL, []
+    if char_budget is not None:
+        remaining = min(remaining, max(0, char_budget))
     for file_id in file_ids:
         info = await manager.get_file_info(session_id, file_id)  # session-scoped: never trust a client id
         if not info:
@@ -170,13 +178,34 @@ async def _file_manager():
         return None
 
 
+def _window_char_budget(llm_params: Dict[str, Any], file_count: int) -> int | None:
+    """Characters of attachment text the model window still has room for (#20195).
+
+    The prompt built so far (question, instructions, history, knowledge) is never touched: the attachments
+    take only what is left of ``get_prompt_budget``, after their own frames, so they are the first thing shed
+    and the user's question can never be pushed out. ``None`` when the window cannot be read (the configured
+    bounds still apply).
+    """
+    try:
+        from context_window_manager import get_context_window_manager
+
+        cwm = get_context_window_manager()
+        room_tokens = cwm.get_prompt_budget(llm_params.get("model")) - cwm.estimate_tokens(llm_params["prompt"])
+        overhead = len(_HEADER) + file_count * len(_frame("x" * _NAME_LIMIT, ""))
+        return room_tokens * cwm._chars_per_token() - overhead
+    except Exception as exc:  # noqa: BLE001 -- a budgeting failure must not cost the user their turn
+        logger.warning("Attachment window budget unavailable, using the configured bounds: %s", type(exc).__name__)
+        return None
+
+
 async def apply_attachments(session, context: Dict[str, Any] | None, llm_params: Dict[str, Any]) -> None:
     """Prepend the turn's attached files to ``llm_params["prompt"]``; park user notices in ``llm_params``."""
     file_ids, invalid = requested_ids(context)
     if not file_ids and not invalid:
         return
     user_id = str((session.metadata or {}).get("user_id") or "")
-    result = await resolve_attachments(session.session_id, user_id, file_ids, invalid)
+    budget = _window_char_budget(llm_params, len(file_ids))
+    result = await resolve_attachments(session.session_id, user_id, file_ids, invalid, budget)
     if result.block:
         llm_params["prompt"] = result.block + llm_params["prompt"]
     llm_params["attachment_notices"] = result.notices

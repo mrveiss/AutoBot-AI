@@ -10,7 +10,7 @@ Maintainer decision 2026-10-31. Each route is gated by ``_authorize_file_operati
 | list     | files.view | 200              | 200                  | 403       | 200   | 401           |
 | preview  | files.view | 200              | 200                  | 403       | 200   | 401           |
 | download | files.download | 200          | 200                  | 403       | 200   | 401           |
-| delete   | files.delete | 200 (ownership) | 403                 | 403       | 200   | 401           |
+| delete   | files.delete | 200 (ownership; also an owning editor) | 403   | 403       | 200   | 401           |
 
 Delete stays soft: the row is flagged, the bytes stay on disk (removal is #20234).
 """
@@ -25,6 +25,7 @@ from api.conversation_files_owner_upload_20133_test import (  # noqa: F401 -- fi
     _ADMIN,
     _ALICE,
     _BOB,
+    _EDITOR,
     _READONLY,
     world,
 )
@@ -114,11 +115,25 @@ def test_a_non_admin_gets_404_on_an_unowned_conversation_not_a_claim(real):
     assert _call(real, "list", file_id).status_code == 404
 
 
+def test_an_owning_editor_may_delete_though_it_lacks_the_global_grant(real):
+    file_id = _seed(real)
+    real.user = dict(_EDITOR)  # alice, role editor: files.view/download/upload, NOT files.delete
+    assert _call(real, "delete", file_id).status_code == 200
+    assert _rows(real, "SELECT is_deleted FROM conversation_files WHERE file_id = ?", (file_id,)) == [(1,)]
+
+
+def test_a_non_owning_editor_still_may_not_delete(real):
+    file_id = _seed(real)
+    real.user = {"username": "eve", "role": "editor"}
+    assert _call(real, "delete", file_id).status_code == 403
+    assert _rows(real, "SELECT is_deleted FROM conversation_files WHERE file_id = ?", (file_id,)) == [(0,)]
+
+
 def test_the_real_grants_behind_the_table(real):
     layer = real.security_layer
     grants = {
         (role, op): layer.check_permission(role, f"files.{op}")
-        for role in ("user", "readonly")
+        for role in ("user", "readonly", "editor")
         for op in ("view", "download", "delete")
     }
     assert grants == {
@@ -128,4 +143,7 @@ def test_the_real_grants_behind_the_table(real):
         ("readonly", "view"): True,
         ("readonly", "download"): True,
         ("readonly", "delete"): False,
+        ("editor", "view"): True,
+        ("editor", "download"): True,
+        ("editor", "delete"): False,
     }
