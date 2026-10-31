@@ -32,6 +32,7 @@ SOURCES_REACH = declare(
     "no_partial_key_mask_18221.sources",
     discover=_sources,
     what="Python sources a key mask could live in",
+    roots=_TREES,
     floor=3290,  # mid-window; repinned by scripts/repin_reach_floors.py
     growth=400,
 )
