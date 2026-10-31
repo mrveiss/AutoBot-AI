@@ -2073,8 +2073,8 @@ class ToolHandlerMixin:
                 stdout = result.get("stdout", "")
                 stdout = await _emit_after_tool_execute("execute_command", stdout, session_id, {})
 
-            # The call above may have created or recreated the session: the live one owns the approval card.
-            terminal_session_id = current_terminal_session(self.terminal_tool, session_id, terminal_session_id)
+            # The card binds to the session this execution ran in, not the mapping another request can change.
+            terminal_session_id = current_terminal_session(self.terminal_tool, session_id, terminal_session_id, result)
             async for msg in self._dispatch_command_by_status(
                 result.get("status"),
                 session_id,

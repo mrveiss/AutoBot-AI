@@ -321,7 +321,7 @@ class TerminalTool:
                 session_id=session_id, command=command, description=description, force_approval=force_approval
             )
             with post_execution_guard(result):
-                return self._format_execution_result(result, command, description)
+                return self._bound_to(session_id, self._format_execution_result(result, command, description))
         except PostExecutionError as exc:
             logger.error("Command ran; formatting its result failed: %s", exc, exc_info=True)
             return post_execution_failed_response(command, exc)
@@ -330,6 +330,13 @@ class TerminalTool:
         except Exception:
             logger.error("Terminal command execution error", exc_info=True)
             return execution_failed_response(command)
+
+    @staticmethod
+    def _bound_to(session_id: str, formatted: Dict[str, Any]) -> Dict[str, Any]:
+        """A held command names the session it was queued in, so its card cannot follow the mapping (#19950)."""
+        if formatted.get("status") == "pending_approval":
+            return {**formatted, "session_id": session_id}
+        return formatted
 
     async def get_session_info(self, conversation_id: str) -> Dict[str, Any]:
         """

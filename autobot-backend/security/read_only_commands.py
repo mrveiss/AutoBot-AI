@@ -70,6 +70,16 @@ _SHELL_EXPANSION_CHARS = frozenset("$*?[{~")
 _RECURSIVE_FLAGS = re.compile(r"^(-[a-zA-Z]*[rR]|--(dereference-)?rec)")
 _GREP_PATTERN_FLAGS = re.compile(r"^(-[a-zA-Z]*[ef]|--regexp|--file)")
 
+#: ``grep -d recurse`` is ``-r``: the action may be abbreviated (``rec``) and sits in the next word or after ``=``.
+_DIRECTORIES_FLAG = re.compile(r"^(-[a-zA-Z]*d|--di[a-z]*)$")
+_DIRECTORIES_RECURSE = re.compile(r"^--di[a-z]*=rec")
+
+#: Short flags whose next word is a number, not a file, per reader; ``cat -n 123`` reads a file named ``123``.
+_NUMERIC_VALUED_FLAGS = {"head": "nc", "tail": "nc", "grep": "mABC", "egrep": "mABC", "fgrep": "mABC"}
+_NUMERIC_VALUED_LONG = frozenset(
+    {"--lines", "--bytes", "--max-count", "--after-context", "--before-context", "--context"}
+)
+
 _SHELL_OPERATOR_CHARS = frozenset("<>&;|()")
 
 
@@ -105,14 +115,31 @@ def _names_a_secret(arg: str) -> bool:
     return any(is_secret_file_name(part) for part in re.split(r"[/:]", path) if part)
 
 
+def _recurses_by_directories(args: List[str]) -> bool:
+    """Whether ``-d recurse`` / ``--directories=recurse`` makes this grep read a tree it cannot name."""
+    spaced = any(_DIRECTORIES_FLAG.match(flag) and value.startswith("rec") for flag, value in zip(args, args[1:]))
+    return spaced or any(_DIRECTORIES_RECURSE.match(arg) for arg in args)
+
+
 def _reads_files_unseen(args: List[str]) -> bool:
     """A glob or a recursive grep reads files this check never gets to name, ``.env`` among them."""
-    return any(_SHELL_EXPANSION_CHARS & set(arg) or _RECURSIVE_FLAGS.match(arg) for arg in args)
+    return _recurses_by_directories(args) or any(
+        _SHELL_EXPANSION_CHARS & set(arg) or _RECURSIVE_FLAGS.match(arg) for arg in args
+    )
 
 
-def _operands(args: List[str]) -> List[str]:
+def _is_numeric_value(base: str, previous: str, arg: str) -> bool:
+    """Whether *arg* is the number a valued flag takes, as in ``head -n 5``, rather than a file named for digits."""
+    if not arg.isdigit():
+        return False
+    valued = _NUMERIC_VALUED_FLAGS.get(base, "")
+    return previous in _NUMERIC_VALUED_LONG or bool(re.match(r"^-[a-zA-Z]+$", previous) and previous[-1] in valued)
+
+
+def _operands(base: str, args: List[str]) -> List[str]:
     """The arguments that are not flags and not a flag's numeric value."""
-    return [arg for arg in args if not arg.startswith("-") and not arg.isdigit()]
+    pairs = zip([""] + args, args)
+    return [arg for previous, arg in pairs if not arg.startswith("-") and not _is_numeric_value(base, previous, arg)]
 
 
 def _reads_bounded_input(base: str, args: List[str], piped: bool) -> bool:
@@ -120,8 +147,8 @@ def _reads_bounded_input(base: str, args: List[str], piped: bool) -> bool:
     if piped:
         return True
     if base in _PATTERN_READERS:
-        return not any(_GREP_PATTERN_FLAGS.match(arg) for arg in args) and len(_operands(args)) >= 2
-    return bool(_operands(args))
+        return not any(_GREP_PATTERN_FLAGS.match(arg) for arg in args) and len(_operands(base, args)) >= 2
+    return bool(_operands(base, args))
 
 
 def _segment_is_read_only(segment: str, piped: bool) -> bool:

@@ -355,9 +355,29 @@ async def test_a_turn_cancelled_during_the_queue_write_does_not_strand_the_sessi
 
 def test_a_recreated_session_beats_the_stale_id_the_turn_started_with():
     tool = MagicMock(active_sessions={"chat-1": "new-session"})
-    assert current_terminal_session(tool, "chat-1", "stale-session") == "new-session"
-    assert current_terminal_session(tool, "other-chat", "stale-session") == "stale-session"
-    assert current_terminal_session(None, "chat-1", "stale-session") == "stale-session"
+    assert current_terminal_session(tool, "chat-1", "stale-session", {}) == "new-session"
+    assert current_terminal_session(tool, "other-chat", "stale-session", {}) == "stale-session"
+    assert current_terminal_session(None, "chat-1", "stale-session", {}) == "stale-session"
+
+
+def test_the_session_a_result_names_beats_a_mapping_another_request_rewrote():
+    """The card follows the session the command was queued in, not whatever the mapping holds after the await."""
+    tool = MagicMock(active_sessions={"chat-1": "other-requests-session"})
+    result = {"status": "pending_approval", "session_id": "mine"}
+    assert current_terminal_session(tool, "chat-1", "stale-session", result) == "mine"
+
+
+@pytest.mark.asyncio
+async def test_a_held_command_names_the_session_it_was_queued_in():
+    from tools.terminal_tool import TerminalTool
+
+    service = MagicMock(execute_command=AsyncMock(return_value={"status": "pending_approval", "reasons": []}))
+    tool = TerminalTool.__new__(TerminalTool)
+    tool.agent_terminal_service = service
+    held = await tool._run_and_format("session-a", "rm x", None)
+    assert held["status"] == "pending_approval" and held["session_id"] == "session-a"
+    service.execute_command.return_value = {"status": "success", "stdout": ""}
+    assert "session_id" not in await tool._run_and_format("session-a", "ls", None)
 
 
 @pytest.mark.asyncio

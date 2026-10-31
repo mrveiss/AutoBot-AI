@@ -70,10 +70,14 @@ def _status_for_return_code(return_code: Any) -> str:
         return "error"
 
 
-def current_terminal_session(terminal_tool: Any, session_id: str, turn_start_id: str) -> str:
-    """The session now live for this chat: the turn's own id may be gone if the PTY was recreated."""
+def current_terminal_session(terminal_tool: Any, session_id: str, turn_start_id: str, result: dict[str, Any]) -> str:
+    """The session this execution ran in: the one *result* names, else the mapping's, else the turn's own id.
+
+    The shared mapping can be rewritten by another request while the command awaits, so a result that
+    names its session is never overridden by it (#19950).
+    """
     live = terminal_tool.active_sessions.get(session_id) if terminal_tool else None
-    return live or turn_start_id
+    return result.get("session_id") or live or turn_start_id
 
 
 def command_params(tool_call: dict[str, Any]) -> tuple[str, str, str]:
