@@ -164,9 +164,10 @@
             </div>
 
     <template #actions>
-      <button class="btn-cancel" @click="handleClose" type="button">{{ $t('analytics.sources.form.cancel') }}</button>
-      <button
-        class="btn-submit"
+      <BaseButton variant="secondary" size="sm" @click="handleClose" type="button">{{ $t('analytics.sources.form.cancel') }}</BaseButton>
+      <BaseButton
+        variant="info"
+        size="sm"
         @click="handleSubmit"
         :disabled="submitting"
         type="button"
@@ -174,7 +175,7 @@
         <i v-if="submitting" class="fas fa-spinner fa-spin"></i>
         <Icon v-else :name="isEditMode ? 'save' : 'plus'" />
         {{ submitting ? $t('analytics.sources.form.saving') : (isEditMode ? $t('analytics.sources.form.saveChanges') : $t('analytics.sources.addSource')) }}
-      </button>
+      </BaseButton>
     </template>
   </BaseModal>
 </template>
@@ -191,7 +192,7 @@
  */
 
 import Icon from '@/components/ui/Icon.vue'
-import { BaseFormField, BaseModal } from '@autobot/ui'
+import { BaseFormField, BaseModal, BaseButton } from '@autobot/ui'
 import { ref, computed, watch, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { fetchSourceSecrets, saveCodeSource } from '@/composables/analytics/useSourceRegistry'
@@ -477,24 +478,5 @@ onMounted(() => {
 .type-btn--active {
   background: var(--color-info);
   color: var(--bg-secondary);
-}
-
-.btn-submit {
-  padding: var(--spacing-2-5) var(--spacing-5);
-  background: var(--color-info);
-  border: none;
-  border-radius: var(--radius-lg);
-  color: var(--bg-secondary);
-  font-size: var(--text-sm);
-  font-weight: var(--font-semibold);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  transition: background var(--duration-200);
-}
-
-.btn-submit:hover:not(:disabled) {
-  background: var(--color-info-dark);
 }
 </style>

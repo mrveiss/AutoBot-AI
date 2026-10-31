@@ -1,5 +1,6 @@
 <!-- Issue #1359: i18n string extraction -->
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -186,9 +187,9 @@ function selectSession(session: typeof sessions.value[0]) {
               <span class="card-title">{{ $t('views.browserAutomation.activeSession') }}</span>
               <span class="session-url">{{ currentSession.url }}</span>
             </div>
-            <button @click="closeSession(currentSession.id)" class="btn-action-danger">
+            <BaseButton variant="error" size="sm" @click="closeSession(currentSession.id)">
               {{ $t('views.browserAutomation.closeSession') }}
-            </button>
+            </BaseButton>
           </div>
         </div>
 
@@ -199,9 +200,9 @@ function selectSession(session: typeof sessions.value[0]) {
           <div class="card-body">
             <div class="input-action-row">
               <input v-model="urlInput" type="url" placeholder="https://example.com" class="field-input">
-              <button @click="handleLaunchSession" :disabled="isLoading" class="btn-action-primary">
+              <BaseButton size="sm" @click="handleLaunchSession" :disabled="isLoading">
                 {{ $t('views.browserAutomation.launchBrowser') }}
-              </button>
+              </BaseButton>
             </div>
           </div>
         </div>
@@ -213,9 +214,9 @@ function selectSession(session: typeof sessions.value[0]) {
           <div class="card-body">
             <div class="input-action-row">
               <input v-model="urlInput" type="url" placeholder="https://example.com" class="field-input">
-              <button @click="handleNavigate" :disabled="isLoading" class="btn-action-primary">
+              <BaseButton size="sm" @click="handleNavigate" :disabled="isLoading">
                 {{ $t('views.browserAutomation.navigate') }}
-              </button>
+              </BaseButton>
             </div>
           </div>
         </div>
@@ -227,15 +228,15 @@ function selectSession(session: typeof sessions.value[0]) {
           <div class="card-body interaction-fields">
             <div class="input-action-row">
               <input v-model="selectorInput" type="text" :placeholder="$t('views.browserAutomation.cssSelectorPlaceholder')" class="field-input">
-              <button @click="handleClick" :disabled="isLoading" class="btn-action-primary">
+              <BaseButton size="sm" @click="handleClick" :disabled="isLoading">
                 {{ $t('views.browserAutomation.click') }}
-              </button>
+              </BaseButton>
             </div>
             <div v-if="SESSION_INPUT_ENABLED" class="input-action-row">
               <input v-model="textInput" type="text" :placeholder="$t('views.browserAutomation.textToType')" class="field-input">
-              <button @click="handleType" :disabled="isLoading" class="btn-action-primary">
+              <BaseButton size="sm" @click="handleType" :disabled="isLoading">
                 {{ $t('views.browserAutomation.typeText') }}
-              </button>
+              </BaseButton>
             </div>
           </div>
         </div>
@@ -245,14 +246,14 @@ function selectSession(session: typeof sessions.value[0]) {
             <span class="card-title">{{ $t('views.browserAutomation.actions') }}</span>
           </div>
           <div class="card-body actions-panel">
-            <button @click="handleScreenshot" :disabled="isLoading" class="btn-action-secondary btn-full">
+            <BaseButton variant="secondary" size="sm" block @click="handleScreenshot" :disabled="isLoading">
               <Icon name="camera" /> {{ $t('views.browserAutomation.takeScreenshot') }}
-            </button>
+            </BaseButton>
             <div v-if="SESSION_INPUT_ENABLED" class="script-block">
               <textarea v-model="scriptInput" rows="4" :placeholder="$t('views.browserAutomation.jsPlaceholder')" class="field-input code-textarea"></textarea>
-              <button @click="handleExecuteScript" :disabled="isLoading" class="btn-action-primary btn-full">
+              <BaseButton size="sm" block @click="handleExecuteScript" :disabled="isLoading">
                 {{ $t('views.browserAutomation.executeScript') }}
-              </button>
+              </BaseButton>
             </div>
           </div>
         </div>
@@ -320,9 +321,9 @@ function selectSession(session: typeof sessions.value[0]) {
           <div class="card-body">
             <textarea v-model="automationScriptInput" rows="12" :placeholder="$t('views.browserAutomation.automationScriptPlaceholder')" class="field-input code-textarea"></textarea>
             <div class="action-row">
-              <button @click="handleRunAutomation" :disabled="isLoading || !automationScriptInput.trim()" class="btn-action-primary">
+              <BaseButton size="sm" @click="handleRunAutomation" :disabled="isLoading || !automationScriptInput.trim()">
                 {{ $t('views.browserAutomation.runAutomation') }}
-              </button>
+              </BaseButton>
             </div>
           </div>
         </div>
@@ -368,12 +369,9 @@ function selectSession(session: typeof sessions.value[0]) {
 .input-action-row .field-input { flex: 1; }
 .interaction-fields { display: flex; flex-direction: column; gap: var(--spacing-4); }
 .actions-panel { display: flex; flex-direction: column; gap: var(--spacing-4); }
-.btn-full { width: 100%; }
 .script-block { display: flex; flex-direction: column; gap: var(--spacing-2); }
 .code-textarea { font-family: var(--font-mono); font-size: var(--text-sm); resize: vertical; }
 .action-row { display: flex; gap: var(--spacing-3); margin-top: var(--spacing-4); }
-.btn-action-danger { display: inline-flex; align-items: center; gap: var(--spacing-2); padding: var(--spacing-2) var(--spacing-4); font-size: var(--text-sm); font-weight: var(--font-medium); color: var(--text-on-error); background: var(--color-error-solid); border: none; border-radius: var(--radius-md); cursor: pointer; transition: background var(--duration-150) var(--ease-in-out); }
-.btn-action-danger:hover { background: var(--color-error-hover); }
 .screenshots-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--spacing-4); }
 .screenshot-item { border: 1px solid var(--border-subtle); border-radius: var(--radius-md); overflow: hidden; }
 .screenshot-item img { width: 100%; height: auto; display: block; }
