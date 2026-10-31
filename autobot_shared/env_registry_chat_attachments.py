@@ -55,3 +55,45 @@ register_env_var(
         component="backend",
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_ATTACHMENT_MAX_FILE_BYTES",
+        type=int,
+        default=10 * 1024 * 1024,
+        range=(1, None),
+        description=(
+            "Bytes of one attached file on disk that text extraction is attempted for "
+            "(chat_workflow/limits.py, #20195). A larger file is reported to the user and never read. Minimum 1."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_ATTACHMENT_MAX_UNCOMPRESSED_BYTES",
+        type=int,
+        default=50 * 1024 * 1024,
+        range=(1, None),
+        description=(
+            "Bytes an attached Office or OpenDocument archive may expand to, summed from its own member index "
+            "(chat_workflow/limits.py, #20195). An archive declaring more is reported and never opened. Minimum 1."
+        ),
+        component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_CHAT_ATTACHMENT_EXTRACT_TIMEOUT_SECONDS",
+        type=int,
+        default=30,
+        range=(1, None),
+        description=(
+            "Seconds one attached file may take to yield its text (chat_workflow/limits.py, #20195). "
+            "Past it the file is reported unreadable and the turn goes on. Minimum 1."
+        ),
+        component="backend",
+    )
+)

@@ -19,7 +19,7 @@ import json
 import os
 from typing import List, Optional
 
-from autobot_shared.ai_lines import VERIFIED_COMPANY_KEY, VERIFIED_USER_KEY
+from autobot_shared.ai_lines import VERIFIED_ATTACHMENT_ACCESS_KEY, VERIFIED_COMPANY_KEY, VERIFIED_USER_KEY
 from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_mixin import AsyncRedisClientMixin
@@ -86,6 +86,10 @@ def apply_auth_role(context: "dict | None", role: Optional[str], scope: "dict | 
             merged[key] = str(value)
         else:
             merged.pop(key, None)
+    if (scope or {}).get("attachment_access") is True:  # #20195: the route's STRICT check, never the client's word
+        merged[VERIFIED_ATTACHMENT_ACCESS_KEY] = True
+    else:
+        merged.pop(VERIFIED_ATTACHMENT_ACCESS_KEY, None)
     if role:
         merged[AUTH_ROLE_CONTEXT_KEY] = role
     else:

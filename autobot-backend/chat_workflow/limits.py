@@ -38,3 +38,16 @@ ATTACHMENT_MAX_CHARS_PER_FILE: int = env_int("AUTOBOT_CHAT_ATTACHMENT_MAX_CHARS_
 
 #: Characters of attached-file text across ALL files of one message (#20195); a later file is cut to what is left.
 ATTACHMENT_MAX_CHARS_TOTAL: int = env_int("AUTOBOT_CHAT_ATTACHMENT_MAX_CHARS_TOTAL", default=60000)
+
+#: Bytes of one attached file on disk that extraction is attempted for (#20195); a larger file is reported, never read.
+#: Checked BEFORE any extraction, so a huge upload costs the turn nothing.
+ATTACHMENT_MAX_FILE_BYTES: int = env_int("AUTOBOT_CHAT_ATTACHMENT_MAX_FILE_BYTES", default=10 * 1024 * 1024)
+
+#: Bytes an Office/OpenDocument archive may expand to, summed over its members from the archive's own index (#20195).
+#: A small file that declares more is a decompression bomb and is reported, never opened.
+ATTACHMENT_MAX_UNCOMPRESSED_BYTES: int = env_int(
+    "AUTOBOT_CHAT_ATTACHMENT_MAX_UNCOMPRESSED_BYTES", default=50 * 1024 * 1024
+)
+
+#: Seconds one attached file may take to yield its text (#20195); past it the file is reported unreadable.
+ATTACHMENT_EXTRACT_TIMEOUT_SECONDS: int = env_int("AUTOBOT_CHAT_ATTACHMENT_EXTRACT_TIMEOUT_SECONDS", default=30)

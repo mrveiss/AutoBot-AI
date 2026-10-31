@@ -408,6 +408,17 @@ class LLMIterationContext:
     # enforces one, so no hop can widen it. None: nothing inherited.
     authority: "Authority | None" = None
 
+    @property
+    def approve_every_call(self) -> bool:
+        """True on a turn that carries attached files: every tool call needs a person's approval (#20195).
+
+        Read from ``context`` where the workflow stamps it each turn (``apply_attachments``); a client that sends
+        the key can only tighten its own turn, never loosen one.
+        """
+        from autobot_shared.ai_lines import ATTACHMENT_TURN_KEY
+
+        return (self.context or {}).get(ATTACHMENT_TURN_KEY) is True
+
 
 def _governable_agent_id(source: Dict[str, Any]) -> str | None:
     """The ``agent_id`` a context may govern its run with (#16950).

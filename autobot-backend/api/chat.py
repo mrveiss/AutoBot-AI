@@ -32,7 +32,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from api.chat_citations import retrieve_citations
-from api.chat_streaming import _stream_chat_workflow_messages, _stream_direct_response, principal_scope
+from api.chat_streaming import _stream_chat_workflow_messages, _stream_direct_response, attach_scope, principal_scope
 from api.schemas_chat import (
     ChatCapabilitiesData,
     ChatData,
@@ -1540,7 +1540,7 @@ async def send_chat_message_by_id(
             # request_data — `context` above is the caller's own bag and is
             # explicitly not trusted for this.
             auth_role=(current_user or {}).get("role"),
-            auth_scope=principal_scope(current_user),  # #18430: the AI lines' scope, server-verified
+            auth_scope=await attach_scope(current_user, chat_id, request, context),  # #18430/#20195: verified
         )
     )
 

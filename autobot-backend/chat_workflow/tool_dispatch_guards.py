@@ -311,7 +311,7 @@ async def enforce_ai_line(
     Line 1 -> ``None`` (the call runs; the point reports it). Line 2 -> held with a pending approval.
     Line 3 -> refused. A missing ``ctx`` still enforces, with no company and no declared categories.
     """
-    from services.ai_line_enforcement import Outcome, enforce_line
+    from services.ai_line_enforcement import Outcome, enforce_line, turn_requires_approval
 
     tool_name = tool_call.get("name", "")
     context = getattr(ctx, "context", None) or {}
@@ -323,6 +323,7 @@ async def enforce_ai_line(
         requested_by=str(getattr(ctx, "session_id", None) or "chat"),
         surface="chat_tool",
         declared_categories=getattr(ctx, "requires_approval_before", None) or (),
+        role_requires_approval=turn_requires_approval(tool_name, ctx),  # #20195: an attachment turn gates every call
         approved_fingerprints=getattr(ctx, "approved_fingerprints", frozenset()),
     )
     if verdict.outcome is Outcome.RUN:

@@ -47,7 +47,7 @@ from auth_middleware import check_admin_permission, get_auth_middleware
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from security.session_ownership import validate_session_ownership
-from security.session_posture import SessionPosture
+from security.session_posture import NotSessionOwner, SessionPosture
 from security.upload_filename_policy import ALLOWED_EXTENSIONS, is_safe_file  # noqa: F401 -- re-exported for tests
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 
@@ -59,10 +59,8 @@ api_router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = get_logger(__name__)
 
 
-#: Roles that may write to a conversation they own, whose ownership stands in for a global ``files.<op>`` grant
-#: they lack, on the owner routes only (#20133, #20195): ``user`` lacks upload and delete, ``editor`` lacks
-#: delete. "Owners may delete their own conversation files" holds for every writing role. ``readonly`` (view and
-#: download only) and every unknown role stay refused; roles holding the grant are decided by RBAC as before.
+#: Roles whose ownership of a conversation stands in for a global ``files.<op>`` grant they lack, on the owner routes
+#: only (#20133, #20195): ``user`` lacks upload and delete, ``editor`` lacks delete. ``readonly``/unknown stay refused.
 _OWNER_UPLOAD_ROLES = frozenset({"user", "editor"})
 
 
@@ -75,9 +73,8 @@ async def _authorize_file_operation(
 ) -> dict:
     """Authorize file operation and return user data (Issue #398: extracted).
 
-    ``existing_only`` (the owner routes, which a ``user`` may call on a conversation they own): ownership
-    replaces the role grant for ``_OWNER_UPLOAD_ROLES``, and a session the ownership gate would claim
-    (``legacy_unowned``) is a 404 -- a caller names a conversation they own (#20133, #20195).
+    ``existing_only`` (owner routes): ownership replaces the role grant for ``_OWNER_UPLOAD_ROLES``; another
+    user's conversation, an unknown one and one the gate would claim (``legacy_unowned``) are all 404 (#20195).
     """
     has_permission, user_data = await get_auth_middleware().check_file_permissions(request, operation)
     if user_data is None:  # no credential: the upload is no longer behind the admin gate's 401 (#20133)
@@ -85,7 +82,10 @@ async def _authorize_file_operation(
     if not has_permission and not (existing_only and _owner_may_upload(user_data)):
         raise HTTPException(status_code=403, detail=f"Insufficient permissions for file {operation}")
     request.state.user = user_data
-    ownership = await validate_session_ownership(session_id, request, posture=SessionPosture.STRICT)
+    try:
+        ownership = await validate_session_ownership(session_id, request, posture=SessionPosture.STRICT)
+    except NotSessionOwner as denied:  # #20195: an owner route answers 404 as for an unknown id (no existence leak)
+        raise (HTTPException(status_code=404, detail="Chat session not found") if existing_only else denied) from None
     if existing_only and ownership.get("reason") == "legacy_unowned":
         raise HTTPException(status_code=404, detail="Chat session not found")
     return user_data

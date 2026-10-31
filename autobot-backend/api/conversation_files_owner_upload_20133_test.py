@@ -148,12 +148,12 @@ def test_an_editor_who_holds_the_grant_still_needs_to_own_the_conversation(world
     world.user, world.owner = dict(_EDITOR), "alice"
     assert _upload(world).status_code == 200
     world.user = {"username": "eve", "role": "editor"}
-    assert _upload(world).status_code == 403
+    assert _upload(world).status_code == 404
 
 
 def test_a_non_owner_is_refused_and_nothing_is_stored(world):
     world.user, world.owner = dict(_BOB), "alice"
-    assert _upload(world).status_code == 403
+    assert _upload(world).status_code == 404
     world.manager.upload_file.assert_not_awaited()
 
 

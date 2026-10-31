@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import json
 import logging
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -18,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from redis.exceptions import ConnectionError as RedisConnectionError
 
-from autobot_shared.ai_lines import VERIFIED_USER_KEY
+from autobot_shared.ai_lines import VERIFIED_ATTACHMENT_ACCESS_KEY, VERIFIED_USER_KEY
 from chat_workflow import attachment_context, limits
 from chat_workflow.manager import ChatWorkflowManager
 from conversation_file_manager import ConversationFileManager
@@ -62,12 +63,14 @@ def _seed(w, session, name, body: bytes, mime="text/plain", user="alice") -> str
     return stored["file_id"]
 
 
-def _turn(w, ids, session_id=_ALICE, user="alice", attachments=None):
+def _turn(w, ids, session_id=_ALICE, user="alice", attachments=None, authorized=True):
     """One turn through the real seam; returns (params, what the fake LLM was handed)."""
     session = SimpleNamespace(session_id=session_id, metadata={}, conversation_history=[])
     context = {"attachments": ids if attachments is None else attachments}
     if user:
         context[VERIFIED_USER_KEY] = user  # what the endpoint's verified principal overlays
+    if authorized:
+        context[VERIFIED_ATTACHMENT_ACCESS_KEY] = True  # the route's STRICT session-posture verdict
     params = asyncio.run(w.chat._prepare_llm_workflow_params(session, "what does the file say?", context))
     w.llm.generate(params["prompt"])
     return params, w.llm.prompts[-1]
@@ -240,11 +243,17 @@ def test_the_graph_node_streams_the_notice_and_the_attachment_reaches_its_prompt
         "session_id": _ALICE,
         "user_message": "q",
         "terminal_session_id": "t",
-        "context": {"attachments": [file_id, "no-such-id"], VERIFIED_USER_KEY: "alice"},
+        "context": {
+            "attachments": [file_id, "no-such-id"],
+            VERIFIED_USER_KEY: "alice",
+            VERIFIED_ATTACHMENT_ACCESS_KEY: True,
+        },
     }
     config = {"configurable": {"manager": chat, "stream_callback": seen.append}}
     out = asyncio.run(graph.prepare_llm(state, config))
-    assert _FACT in out["llm_params"]["initial_prompt"]
+    assert _FACT not in json.dumps(out)  # #20195: nothing the node returns to the Redis checkpoint holds file text
+    ctx = graph._build_llm_iteration_context({**state, **out})  # what generate_response builds from the checkpoint
+    assert _FACT in asyncio.run(attachment_context.attachment_prompt(chat, ctx))  # re-resolved when the LLM is called
     assert [m["type"] for m in seen] == ["attachment_notice"] and seen[0]["metadata"]["code"] == "unavailable"
 
 

@@ -31,7 +31,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 from chat_workflow import limits
 from chat_workflow.approval_binding import ai_line_calls_shown, bind_decision
-from chat_workflow.attachment_context import attachment_notice_messages
+from chat_workflow.attachment_context import attachment_prompt, stream_notices, without_block
 from chat_workflow.checkpointer_connection import describe_connection, describe_error, get_checkpointer_connection
 from chat_workflow.tool_loop_fingerprint import (  # noqa: F401 -- re-exported: graph._detect_tool_call_loop
     _LOOP_DETECTION_WINDOW,
@@ -244,9 +244,7 @@ async def prepare_llm(state: ChatState, config: RunnableConfig) -> dict:
 
     session = await manager.get_or_create_session(state["session_id"])
     llm_params = await manager._prepare_llm_workflow_params(session, state["user_message"], state.get("context", {}))
-    for notice in attachment_notice_messages(llm_params):  # #20195: streamed, not persisted as a turn message
-        if stream_cb := config["configurable"].get("stream_callback"):
-            stream_cb(notice.to_dict())
+    stream_notices(llm_params, config["configurable"].get("stream_callback"))  # #20195: streamed, not persisted
     ctx = manager._create_llm_iteration_context(
         llm_params,
         state["session_id"],
@@ -268,7 +266,7 @@ async def prepare_llm(state: ChatState, config: RunnableConfig) -> dict:
             "ollama_endpoint": ctx.ollama_endpoint,
             "selected_model": ctx.selected_model,
             "system_prompt": ctx.system_prompt,
-            "initial_prompt": ctx.initial_prompt,
+            "initial_prompt": without_block(llm_params),  # #20195: file text never rides the Redis checkpoint
         },
         "used_knowledge": ctx.used_knowledge,
         "rag_citations": [c for c in (ctx.rag_citations or [])],
@@ -403,7 +401,7 @@ async def _run_llm_iteration(manager, ctx, iteration, messages, stream_cb):
 
     async for item in manager._run_continuation_loop_iteration(
         http_client,
-        ctx.initial_prompt,
+        await attachment_prompt(manager, ctx),  # #20195: file text re-resolved per call, never checkpointed
         iteration,
         ctx,
     ):
@@ -460,7 +458,7 @@ async def _run_llm_iteration_plan(manager, ctx, iteration, messages, stream_cb):
 
     async for item in manager._run_llm_iteration_plan_only(
         http_client,
-        ctx.initial_prompt,
+        await attachment_prompt(manager, ctx),  # #20195: file text re-resolved per call, never checkpointed
         iteration,
         ctx,
     ):

@@ -42,6 +42,7 @@ from typing import Any, Iterable, Mapping, Optional
 from sqlalchemy import select
 
 from autobot_shared.ai_lines import (
+    CONVERSATION_TOOLS,
     SCOPE_COMPANY,
     VERIFIED_COMPANY_KEY,
     VERIFIED_USER_KEY,
@@ -149,6 +150,16 @@ async def resolve_action_line(
     )
 
 
+def turn_requires_approval(tool_name: str, ctx: Any) -> bool:
+    """Whether the turn itself puts *tool_name* behind a person's approval (#20195).
+
+    A turn that carries attached files holds untrusted text in its prompt, so every tool call of it needs a
+    yes, reads included. The two conversation tools stay free: gating them would stall the answer itself. This
+    is the existing ``role_requires_approval`` floor of ``resolve_line`` (a stored ``never`` still refuses).
+    """
+    return bool(getattr(ctx, "approve_every_call", False)) and tool_name not in CONVERSATION_TOOLS
+
+
 async def call_needs_approval(tool_call: Mapping[str, Any], ctx: Any) -> bool:
     """Plan-time projection for the chat graph's interrupt: any line stricter than line 1 (GH#11202).
 
@@ -161,6 +172,7 @@ async def call_needs_approval(tool_call: Mapping[str, Any], ctx: Any) -> bool:
         (getattr(ctx, "context", None) or {}).get(VERIFIED_COMPANY_KEY),
         user_id=(getattr(ctx, "context", None) or {}).get(VERIFIED_USER_KEY),
         declared_categories=getattr(ctx, "requires_approval_before", None) or (),
+        role_requires_approval=turn_requires_approval(tool_call.get("name", ""), ctx),
     )
     return resolution.line is not AiLine.AUTONOMOUS
 

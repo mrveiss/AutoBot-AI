@@ -16,6 +16,16 @@ Trust model
   found, and is reported as ``unavailable`` without saying whether the id exists elsewhere. The route itself
   already refused a chat the caller does not own (``validate_chat_ownership``). A turn with no verified
   principal reads nothing (fail closed).
+* Nothing is read unless the chat route's STRICT session posture passed for this turn
+  (``VERIFIED_ATTACHMENT_ACCESS_KEY``, set from ``validate_strict``: a global admin, or the recorded owner by
+  username; no shared-session, org-admin or ``log_only`` pass). Any other entry point has no verdict and reads
+  nothing.
+* A turn that names attachments is stamped ``ATTACHMENT_TURN_KEY``: every tool call of it asks for approval,
+  pre-approved or not (``services.ai_line_enforcement.turn_requires_approval``).
+* Graph state is checkpointed to Redis, so it never holds file text (``without_block``); the block is re-resolved
+  from the file store for each turn (``restore_block``), so a soft-deleted file stops reaching the answer.
+* Before any extraction: a file-size cap, a declared-uncompressed-size cap for archives, and a timeout
+  (``attachment_guards``).
 * The text is untrusted DATA. It is framed with the repo's ``frame_untrusted_block`` after
   ``neutralize_frame_markers`` (the same treatment as retrieved transcripts and trajectories), so it cannot
   forge the closing delimiter and is labelled "not instructions".
@@ -27,13 +37,15 @@ Readers: text through the manager (``get_file_content``); PDF and Office files t
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List
 
+from autobot_shared.ai_lines import ATTACHMENT_TURN_KEY, VERIFIED_ATTACHMENT_ACCESS_KEY, VERIFIED_USER_KEY
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.prompt_rules import frame_untrusted_block, neutralize_frame_markers, sanitize_injected
-from chat_workflow import limits
+from chat_workflow import attachment_guards, limits
 
 logger = get_logger(__name__)
 
@@ -88,6 +100,13 @@ def requested_ids(context: Dict[str, Any] | None) -> tuple[List[str], int]:
     return ids, len([x for x in raw if not (isinstance(x, str) and x.strip())])
 
 
+async def _extract(parser, manager, session_id: str, info: Dict[str, Any], suffix: str) -> str:
+    if suffix in parser.supported_formats:  # PDF / Office / OpenDocument: the canonical extractor
+        text, _meta = await parser.extract_text(Path(info["file_path"]), info.get("mime_type"))
+        return text
+    return (await manager.get_file_content(session_id, info["file_id"]))["content"]
+
+
 async def _read_text(manager, session_id: str, info: Dict[str, Any]) -> str:
     mime = (info.get("mime_type") or "").lower()
     if mime.startswith("image/"):
@@ -96,13 +115,16 @@ async def _read_text(manager, session_id: str, info: Dict[str, Any]) -> str:
 
     parser = DocumentParser()
     suffix = Path(str(info.get("original_filename") or info.get("filename") or "")).suffix.lower()
+    # #20195: size and decompressed-size bounds BEFORE any reader opens the file, a timeout around the reader.
+    if code := await asyncio.to_thread(attachment_guards.refusal_code, Path(str(info.get("file_path") or "")), suffix):
+        raise _Skip(code)
     try:
-        if suffix in parser.supported_formats:  # PDF / Office / OpenDocument: the canonical extractor
-            text, _meta = await parser.extract_text(Path(info["file_path"]), info.get("mime_type"))
-            return text
-        return (await manager.get_file_content(session_id, info["file_id"]))["content"]
+        return await attachment_guards.bounded(_extract(parser, manager, session_id, info, suffix))
     except RuntimeError as exc:  # the manager's words for "binary" or "not found"
         raise _Skip("unsupported" if "binary" in str(exc) else "unreadable") from exc
+    except asyncio.TimeoutError as exc:
+        logger.warning("Attachment %s extraction timed out", info.get("file_id"))
+        raise _Skip("unreadable") from exc
     except Exception as exc:  # noqa: BLE001 -- an extractor failing is a notice, never the turn's failure
         logger.warning("Attachment %s unreadable: %s", info.get("file_id"), type(exc).__name__)
         raise _Skip("unreadable") from exc
@@ -121,9 +143,17 @@ def _frame(name: str, text: str) -> str:
 
 
 async def resolve_attachments(
-    session_id: str, user_id: str, file_ids: List[str], invalid: int = 0, char_budget: int | None = None
+    session_id: str,
+    user_id: str,
+    file_ids: List[str],
+    invalid: int = 0,
+    char_budget: int | None = None,
+    authorized: bool = False,
 ) -> AttachmentResult:
     """Read *file_ids* of *session_id* for *user_id*, bounded, into one prompt block plus user notices.
+
+    ``authorized`` is the route's STRICT session-posture verdict for this turn (``VERIFIED_ATTACHMENT_ACCESS_KEY``,
+    #20195): admin or the recorded owner. Without it nothing is read, whoever holds a file id.
 
     ``char_budget`` is the room the model window leaves for attachment text (frames excluded); it can only
     lower the configured total, never raise it.
@@ -137,7 +167,7 @@ async def resolve_attachments(
     if not file_ids:
         return result
     manager = await _file_manager()
-    if not user_id or manager is None:  # no verified principal, or no file service: read nothing
+    if not authorized or not user_id or manager is None:  # not the owner/admin, or no file service: read nothing
         result.notices.extend(_notice("unavailable") for _ in file_ids)
         return result
     remaining, blocks = limits.ATTACHMENT_MAX_CHARS_TOTAL, []
@@ -198,17 +228,68 @@ def _window_char_budget(llm_params: Dict[str, Any], file_count: int) -> int | No
         return None
 
 
-async def apply_attachments(session, context: Dict[str, Any] | None, llm_params: Dict[str, Any]) -> None:
-    """Prepend the turn's attached files to ``llm_params["prompt"]``; park user notices in ``llm_params``."""
+async def _resolve_turn(session, context: Dict[str, Any] | None, llm_params: Dict[str, Any]) -> AttachmentResult:
+    """Resolve this turn's attachments for *session*; nothing is read unless the route's STRICT check passed."""
     file_ids, invalid = requested_ids(context)
+    user_id = str((context or {}).get(VERIFIED_USER_KEY) or "")  # as stamp_verified_identity records; survives a resume
+    authorized = (context or {}).get(VERIFIED_ATTACHMENT_ACCESS_KEY) is True
+    budget = _window_char_budget(llm_params, len(file_ids))
+    return await resolve_attachments(session.session_id, user_id, file_ids, invalid, budget, authorized)
+
+
+async def apply_attachments(session, context: Dict[str, Any] | None, llm_params: Dict[str, Any]) -> None:
+    """Prepend the turn's attached files to ``llm_params["prompt"]``; park user notices in ``llm_params``.
+
+    A turn that names attachments is stamped ``ATTACHMENT_TURN_KEY`` in *context* (cleared otherwise), which puts
+    every tool call of the turn behind approval. The block is also parked as ``llm_params["attachment_block"]``
+    so graph state can leave file text out (``without_block``) and re-resolve it each turn (``restore_block``).
+    """
+    file_ids, invalid = requested_ids(context)
+    if isinstance(context, dict):
+        context.pop(ATTACHMENT_TURN_KEY, None)
+        if file_ids or invalid:
+            context[ATTACHMENT_TURN_KEY] = True
     if not file_ids and not invalid:
         return
-    user_id = str((session.metadata or {}).get("user_id") or "")
-    budget = _window_char_budget(llm_params, len(file_ids))
-    result = await resolve_attachments(session.session_id, user_id, file_ids, invalid, budget)
+    result = await _resolve_turn(session, context, llm_params)
     if result.block:
         llm_params["prompt"] = result.block + llm_params["prompt"]
+        llm_params["attachment_block"] = result.block
     llm_params["attachment_notices"] = result.notices
+
+
+def without_block(llm_params: Dict[str, Any]) -> str:
+    """The turn's prompt with the attachment block taken off: what graph state may keep (#20195).
+
+    Graph state is checkpointed to Redis and outlives a soft delete, so file text stays out of it; the block is
+    put back from the file store when a node needs the prompt (``restore_block``).
+    """
+    return llm_params["prompt"].removeprefix(llm_params.get("attachment_block") or "")
+
+
+async def restore_block(manager, session_id: str, context: Dict[str, Any], model: str | None, prompt: str) -> str:
+    """*prompt* with the attachment block re-resolved NOW for the turn described by *context* (#20195).
+
+    A file soft-deleted since the turn began, or one the caller may no longer read, is simply not found, so it
+    cannot reach a later node or a resumed turn. Notices are not repeated: they were sent when the turn began.
+    """
+    if not requested_ids(context)[0]:
+        return prompt
+    session = await manager.get_or_create_session(session_id)
+    result = await _resolve_turn(session, context, {"prompt": prompt, "model": model})
+    return result.block + prompt if result.block else prompt
+
+
+async def attachment_prompt(manager, ctx) -> str:
+    """The prompt of the graph's iteration context *ctx* with this turn's attachments put back in front."""
+    return await restore_block(manager, ctx.session_id, ctx.context or {}, ctx.selected_model, ctx.initial_prompt)
+
+
+def stream_notices(llm_params: Dict[str, Any], stream_callback) -> None:
+    """Send the turn's attachment notices through the graph's *stream_callback*, once (#20195)."""
+    for notice in attachment_notice_messages(llm_params):
+        if stream_callback:
+            stream_callback(notice.to_dict())
 
 
 def attachment_notice_messages(llm_params: Dict[str, Any]) -> list:

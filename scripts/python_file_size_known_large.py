@@ -146,7 +146,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_history/context_overflow.py": 845,
     "autobot-backend/chat_history/session.py": 923,
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
-    "autobot-backend/chat_workflow/graph.py": 1575,  # #20195: 1643 -> 1575 (loop-detection helpers split out)
+    "autobot-backend/chat_workflow/graph.py": 1573,  # #20195: 1643 -> 1573 (loop-detection helpers split out)
     "autobot-backend/chat_workflow/llm_handler.py": 1300,
     "autobot-backend/chat_workflow/manager.py": 3862,  # #20195: 3885 -> 3862 (lightweight-mode split out)
     "autobot-backend/chat_workflow/tool_handler.py": 3697,  # #11542 dispatch merge + #14068 mirror

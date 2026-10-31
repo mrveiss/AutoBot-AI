@@ -7,10 +7,14 @@ Maintainer decision 2026-10-31. Each route is gated by ``_authorize_file_operati
 
 | route    | grant      | ``user`` (owner) | ``readonly`` (owner) | non-owner | admin | no credential |
 |----------|------------|------------------|----------------------|-----------|-------|---------------|
-| list     | files.view | 200              | 200                  | 403       | 200   | 401           |
-| preview  | files.view | 200              | 200                  | 403       | 200   | 401           |
-| download | files.download | 200          | 200                  | 403       | 200   | 401           |
-| delete   | files.delete | 200 (ownership; also an owning editor) | 403   | 403       | 200   | 401           |
+| list     | files.view | 200              | 200                  | 404       | 200   | 401           |
+| preview  | files.view | 200              | 200                  | 404       | 200   | 401           |
+| download | files.download | 200          | 200                  | 404       | 200   | 401           |
+| delete   | files.delete | 200 (ownership; also an owning editor) | 403   | 404       | 200   | 401           |
+
+A non-owner gets the same 404 an unknown conversation gets (#20195): a 403 told a caller which ids exist. Only
+``NotSessionOwner`` is mapped; an unreadable owner stays 403, and the admin-only file routes and the other STRICT
+callers (``chat_turn``, ``chat_trace``) are unchanged.
 
 Delete stays soft: the row is flagged, the bytes stay on disk (removal is #20234).
 """
@@ -34,12 +38,13 @@ from api.conversation_files_real_manager_20225_test import _BODY, _SESSION, _row
 _BASE = f"/api/conversation/{_SESSION}"
 
 
-def _call(w, kind: str, file_id: str):
+def _call(w, kind: str, file_id: str, session: str = _SESSION):
+    base = f"/api/conversation/{session}"
     return {
-        "list": lambda: w.client.get(f"{_BASE}/list"),
-        "preview": lambda: w.client.get(f"{_BASE}/preview/{file_id}"),
-        "download": lambda: w.client.get(f"{_BASE}/download/{file_id}"),
-        "delete": lambda: w.client.delete(f"{_BASE}/files/{file_id}"),
+        "list": lambda: w.client.get(f"{base}/list"),
+        "preview": lambda: w.client.get(f"{base}/preview/{file_id}"),
+        "download": lambda: w.client.get(f"{base}/download/{file_id}"),
+        "delete": lambda: w.client.delete(f"{base}/files/{file_id}"),
     }[kind]()
 
 
@@ -73,10 +78,13 @@ def test_the_owner_delete_is_soft_the_bytes_stay_on_disk(real):
 
 
 @pytest.mark.parametrize("kind", [*_READS, "delete"])
-def test_a_non_owner_is_refused_on_every_panel_route(real, kind):
+def test_a_non_owner_is_refused_on_every_panel_route_with_the_same_404_as_an_unknown_chat(real, kind):
+    """#20195: 403 for another user's chat and 404 for an unknown one told a caller which ids exist."""
     file_id = _seed(real)
     real.user = dict(_BOB)
-    assert _call(real, kind, file_id).status_code == 403
+    foreign = _call(real, kind, file_id)
+    unknown = _call(real, kind, file_id, session="no-such-chat")
+    assert (foreign.status_code, foreign.json()) == (404, unknown.json()) and unknown.status_code == 404
     assert _rows(real, "SELECT is_deleted FROM conversation_files WHERE file_id = ?", (file_id,)) == [(0,)]
 
 
@@ -125,7 +133,7 @@ def test_an_owning_editor_may_delete_though_it_lacks_the_global_grant(real):
 def test_a_non_owning_editor_still_may_not_delete(real):
     file_id = _seed(real)
     real.user = {"username": "eve", "role": "editor"}
-    assert _call(real, "delete", file_id).status_code == 403
+    assert _call(real, "delete", file_id).status_code == 404
     assert _rows(real, "SELECT is_deleted FROM conversation_files WHERE file_id = ?", (file_id,)) == [(0,)]
 
 

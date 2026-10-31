@@ -50,6 +50,14 @@ DEFAULT_LINE = AiLine.DRAFT_THEN_SEND
 VERIFIED_COMPANY_KEY = "verified_company_id"
 #: ``context`` key holding the AUTHENTICATED user (never the request's ``user_id`` claim): the personal scope.
 VERIFIED_USER_KEY = "verified_user_id"
+#: ``context`` key set by the chat route ONLY when the STRICT session posture (admin, or the recorded owner)
+#: passed for this turn: attached conversation files are read for this turn only then (#20195). Written or removed
+#: on every overlay by ``apply_auth_role``, never left as a client sent it.
+VERIFIED_ATTACHMENT_ACCESS_KEY = "verified_attachment_access"
+#: ``context`` key the workflow sets each turn that carries attached files: file text is untrusted data in the
+#: prompt, so EVERY tool call of that turn waits for a person's approval (#20195). Set from the server's own
+#: check on every turn; a client sending it can only tighten its own turn.
+ATTACHMENT_TURN_KEY = "attachment_turn"
 
 #: A line is stored under a scope: a company, or -- for a user with no company -- the user alone (#18430).
 SCOPE_COMPANY = "company"
