@@ -90,7 +90,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BaseBadge, BaseTable, type BaseTableColumn, type TableRow, type TableRowVariant } from '@autobot/ui'
-import { usePlugins, type AuditLogEntry } from '@/composables/usePlugins'
+import { usePlugins, type PluginAuditEntry } from '@/composables/usePlugins'
 import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { getAuditLog } = usePlugins()
@@ -98,7 +98,7 @@ const { t } = useI18n()
 
 const loading = ref(false)
 const error = ref<string | null>(null)
-const entries = ref<AuditLogEntry[]>([])
+const entries = ref<PluginAuditEntry[]>([])
 const filterPluginName = ref('')
 
 // #17562: the audit log is the kit table; the status cell is a kit badge.
