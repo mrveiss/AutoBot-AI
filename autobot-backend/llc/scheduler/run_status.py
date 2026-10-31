@@ -6,7 +6,6 @@ Sits beside `run_context` and `run_workspace`: one small module per per-run conc
 rather than another few dozen lines inside the scheduler.
 """
 
-import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID
@@ -15,13 +14,14 @@ from sqlalchemy import exists, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
+from autobot_shared.logging_manager import get_logger
 from models.agent_org import AgentOrgNode
 
 from ..models.enums import LLCRunStatus
 from ..models.heartbeat_run import LLCHeartbeatRun
 from .stalled_run_sweep import run_age_anchor, stall_cutoff
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 #: A run in one of these states is "this agent is already being worked" (#19582): an
 #: event wake is not started beside it, the same rule replay and the comment wake had.
