@@ -30,6 +30,7 @@ from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 _ALLOWED = {
     "autobot-backend/knowledge/search_filters.py": "the canonical helper, and the bulk search-result filter",
     "autobot-backend/knowledge/ownership.py": "defines check_access; its own bulk reader calls it",
+    "autobot-backend/knowledge/ingest_sanitize.py": "a caller's update needs ownership as well as read access (#19517)",
 }
 
 

@@ -30,6 +30,7 @@ from constants.model_constants import (
 )
 from llm_shared.providers.anthropic import _route_sampling_kwargs
 from memory import MemoryManager, TaskPriority
+from modern_ai_local_mapping import ai_response_fields, build_chat_messages
 from screen_analysis_prompt import build_screen_analysis_prompts
 from task_execution_tracker import get_task_tracker as _get_task_tracker
 
@@ -596,7 +597,7 @@ class LocalModelProvider(BaseAIProvider):
     """Local model provider — thin shim delegating to the canonical OllamaProvider.
 
     Replaces the duplicate HTTP client implementation (#949). All requests are
-    forwarded to OllamaProvider via LLMInterface which uses the SSOT config for
+    forwarded to OllamaProvider via LLMService which uses the SSOT config for
     URL resolution, circuit breaking, and streaming.
     """
 
@@ -605,50 +606,41 @@ class LocalModelProvider(BaseAIProvider):
         super().__init__(config)
 
     def _initialize_client(self):
-        """Initialize LLMInterface for OllamaProvider delegation."""
+        """Resolve the LLMService that delegates to the local provider (#19649)."""
         try:
-            from llm_shared import LLMInterface
+            from services.llm_service import get_llm_service
 
-            self._llm_interface = LLMInterface()
-            logger.info("LocalModelProvider initialized via OllamaProvider delegation")
+            self._llm_service = get_llm_service()
+            logger.info("LocalModelProvider initialized via LLMService delegation")
         except Exception as e:
-            self._llm_interface = None
-            logger.warning("LocalModelProvider: LLMInterface unavailable: %s", e)
+            self._llm_service = None
+            logger.warning("LocalModelProvider: LLMService unavailable: %s", e)
 
     async def generate_text(self, request: AIRequest) -> AIResponse:
-        """Generate text by delegating to OllamaProvider via LLMInterface."""
+        """Generate text through LLMService.chat(), which records the spend (#19649)."""
         start_time = time.time()
 
-        if self._llm_interface is None:
-            return self._create_error_response(request, "LLMInterface not available")
+        if self._llm_service is None:
+            return self._create_error_response(request, "LLMService not available")
 
         try:
-            from llm_shared.models import LLMRequest
-
-            messages = []
-            if request.system_message:
-                messages.append({"role": "system", "content": request.system_message})
-            messages.append({"role": "user", "content": request.prompt})
-
-            llm_req = LLMRequest(
-                messages=messages,
+            llm_resp = await self._llm_service.chat(
+                build_chat_messages(request),
+                conversation_id=(request.metadata or {}).get("session_id"),
                 model_name=self.config.model_name,
                 temperature=request.temperature or self.config.temperature,
+                max_tokens=request.max_tokens,
                 request_id=request.request_id,
             )
-            llm_resp = await self._llm_interface.chat_completion(llm_req)
-
+            if llm_resp.error:
+                return self._create_error_response(request, f"Local model request failed: {llm_resp.error}")
             return AIResponse(
                 request_id=request.request_id,
                 provider=self.config.provider,
-                model_name=llm_resp.model,
-                content=llm_resp.content,
-                usage=llm_resp.usage or {"prompt_tokens": 0, "completion_tokens": 0},
-                finish_reason="stop",
                 tool_calls=None,
                 confidence=0.8,
                 processing_time=time.time() - start_time,
-                metadata=llm_resp.metadata or {},
+                **ai_response_fields(llm_resp),
             )
         except Exception as e:
             logger.error("LocalModelProvider.generate_text failed: %s", e)
