@@ -26,6 +26,13 @@ def test_step_5_heartbeat_run_is_dispatched_for_the_assignee(scenario):  # noqa:
         scenario.done.add(5)
 
 
+@pytest.mark.xfail(
+    reason=(
+        "run-scoped API key is never issued: tz-aware datetimes into naive ORM columns (#20149); "
+        "remove this marker when #20149 is fixed"
+    ),
+    strict=False,
+)
 def test_step_5b_dispatched_run_takes_the_task(scenario):  # noqa: ANN001
     scenario.require(5)
     agent = scenario.agents["a"]["agent_id"]

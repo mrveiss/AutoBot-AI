@@ -38,12 +38,12 @@ STEPS: dict[str, tuple[str, str]] = {
     "5": ("a scheduled heartbeat run is dispatched for the assignee", "M2.5 heartbeat scheduling (#20117, #19189)"),
     "5b": (
         "the dispatched run can reach the Agent API and take the task",
-        "M2.5 run dispatch (run-scoped API key is never issued; no issue filed for it yet)",
+        "M2.5 run dispatch (run-scoped API key is never issued, #20149)",
     ),
     "6": ("an exhausted budget stops dispatch", "M2.6 dispatch gate (#19240, PR #19958)"),
     "7": (
         "pause and resume an agent through the API",
-        "M2.7 controls (#14189, #14164; pause 500s on the activity-log write, no issue filed for it yet)",
+        "M2.7 controls (#14189, #14164; pause 500s on the activity-log write, #20150)",
     ),
     "7b": ("a paused agent is not dispatched until resumed", "M2.6 dispatch gate (#19240, PR #19958)"),
     "8": ("a hire waits for its approval", "M2.7 board approval gates (#8214)"),

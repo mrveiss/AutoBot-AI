@@ -42,6 +42,38 @@ LOGIN_USERNAME = "e2e-owner"
 LOGIN_PASSWORD = secrets.token_urlsafe(24)
 
 
+# Every other service the backend may reach for. Each one's default is this machine's loopback on
+# its usual port, where a developer's own install may be listening (loopback is the whole
+# 127.0.0.0/8 range, so another loopback ADDRESS would reach it too). Each is pointed instead at one
+# port nothing listens on, so the run cannot read or write a service it was not given. The vector
+# store host is empty, which selects the embedded store.
+DEAD_PORT_ENV = (
+    "AUTOBOT_FRONTEND_PORT",
+    "AUTOBOT_FRONTEND_HTTP_PORT",
+    "AUTOBOT_OLLAMA_PORT",
+    "AUTOBOT_VNC_PORT",
+    "AUTOBOT_VNC_SERVER_PORT",
+    "AUTOBOT_BROWSER_SERVICE_PORT",
+    "AUTOBOT_AI_STACK_PORT",
+    "AUTOBOT_CHROMADB_PORT",
+    "AUTOBOT_NPU_WORKER_PORT",
+    "AUTOBOT_NPU_WORKER_WINDOWS_PORT",
+    "AUTOBOT_TTS_WORKER_PORT",
+    "AUTOBOT_SLM_PORT",
+    "AUTOBOT_PROMETHEUS_PORT",
+    "AUTOBOT_GRAFANA_PORT",
+    "AUTOBOT_CHROME_CDP_PORT",
+)
+DEAD_ENDPOINT_ENV = (
+    "AUTOBOT_OLLAMA_ENDPOINT",
+    "AUTOBOT_LLAMAINDEX_LLM_ENDPOINT",
+    "AUTOBOT_LLAMAINDEX_EMBEDDING_ENDPOINT",
+    "OLLAMA_HOST",
+    "LMSTUDIO_HOST",
+    "VLLM_HOST",
+)
+
+
 @dataclass(frozen=True)
 class Endpoints:
     """Where the disposable Postgres and Redis are; read from env, never from a URL literal."""
@@ -154,8 +186,14 @@ def _server_env(ep: Endpoints, database: str, port: int, stub_log: Path) -> dict
         # Empty host selects the embedded ChromaDB the knowledge base falls back to, so the run
         # never reaches for a vector service of the machine it happens to run on.
         AUTOBOT_CHROMADB_HOST="",
+        AUTOBOT_BACKEND_HOST="127.0.0.1",
+        AUTOBOT_BACKEND_PORT=str(port),
+        REDIS_HOST=ep.redis_host,
         PYTHONPATH=f"{BACKEND_ROOT}{os.pathsep}{REPO_ROOT}",
     )
+    dead = free_port()  # bound and released: nothing listens on it
+    env.update({name: str(dead) for name in DEAD_PORT_ENV})
+    env.update({name: f"http://127.0.0.1:{dead}" for name in DEAD_ENDPOINT_ENV})
     return env
 
 
