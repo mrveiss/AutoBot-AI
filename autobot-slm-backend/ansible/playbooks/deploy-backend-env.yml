@@ -25,6 +25,9 @@
       changed_when: false
       become_user: "{{ backend_user }}"
 
+    - name: Read the encryption key (#19864)
+      ansible.builtin.include_tasks: ../roles/backend/tasks/read_encryption_key.yml
+
   tasks:
     - name: Create backend directories if they don't exist
       ansible.builtin.file:
