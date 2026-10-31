@@ -37,11 +37,6 @@ _EXCLUDED_DIRS = (
     "docs/research/",
     "docs/superpowers/",
 )
-#: (file, playbook) named on purpose, with the reason.
-_EXPECTED = {
-    # The guide's own step 2 has the reader create this playbook.
-    ("docs/guides/slm-docker-ansible-deployment.md", "deploy-docker-app.yml"),
-}
 
 
 def _is_test_file(rel: str) -> bool:
@@ -88,15 +83,12 @@ def test_every_named_playbook_exists() -> None:
     root = repo_root()
     existing = _existing_playbooks(root)
     assert len(existing) >= 50, "the playbook list is nearly empty: this would flag everything"
-    missing, found = [], set()
+    missing = []
     for rel in REACH_FILES.examined(root):
         for name in named_playbooks((root / rel).read_text(encoding="utf-8", errors="replace")):
-            if (rel, name) in _EXPECTED:
-                found.add((rel, name))
-            elif name not in existing:
+            if name not in existing:
                 missing.append(f"{rel}: {name}")
     assert not missing, "these name a playbook that does not exist (#19611):\n  " + "\n  ".join(sorted(missing))
-    assert found == _EXPECTED, f"stale _EXPECTED entries: {sorted(_EXPECTED - found)}"
 
 
 def test_each_reference_form_is_read() -> None:
@@ -112,5 +104,5 @@ def test_a_templated_reference_is_not_read_as_a_name() -> None:
 
 def test_historical_and_test_files_are_excluded_by_the_declared_list() -> None:
     files = _operational_files(repo_root())
-    assert "docs/runbooks/CODE_UPDATE.md" in files
-    assert not any(f.startswith("docs/audit/") or f.endswith("_test.py") for f in files)
+    assert any(f.endswith("CODE_UPDATE.md") for f in files)
+    assert not any(f.startswith(_EXCLUDED_DIRS) or f.endswith("_test.py") for f in files)

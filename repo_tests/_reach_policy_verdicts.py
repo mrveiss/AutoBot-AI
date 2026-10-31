@@ -377,6 +377,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Tracked ansible yml/yaml files, of which only those naming a template that carries the variable are parsed.",
     ),
+    "playbook-references-exist": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Tracked docs, agent guides, scripts and templates; every one is read, and few name a playbook.",
+    ),
     "ansible-credentials-never-logged": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
