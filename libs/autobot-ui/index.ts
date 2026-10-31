@@ -210,3 +210,17 @@ export { default as BaseSpinner } from './src/components/BaseSpinner.vue'
 export type { SpinnerSize } from './src/components/BaseSpinner.vue'
 export { default as BaseSkeleton } from './src/components/BaseSkeleton.vue'
 export type { SkeletonShape } from './src/components/BaseSkeleton.vue'
+
+// The agent-ledger row shapes both consoles read, declared once (#19910).
+export type {
+  ActivityRow,
+  ClaimRow,
+  ConflictRow,
+  IdleSubscriberRow,
+  PeerMessageRow,
+  PresenceRow,
+  PresenceTaskRow,
+} from './src/types/ledger'
+
+// A tool permission rule as the backend serves it, declared once (#19910).
+export type { PermissionRule } from './src/types/permission'
