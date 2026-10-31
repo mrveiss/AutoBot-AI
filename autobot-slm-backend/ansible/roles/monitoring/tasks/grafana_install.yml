@@ -21,11 +21,26 @@
   check_mode: false  # read-only query; the install guard below needs it under --check
   when: ansible_facts['os_family'] == "Debian"
 
-- name: Compare the installed Grafana with grafana_version
+- name: Note what the installed Grafana is
   ansible.builtin.set_fact:
     _grafana_present: "{{ 'ok installed' in _grafana_installed.stdout | default('') }}"
-    _grafana_current: "{{ _grafana_installed.stdout | default('') | regex_search('[:]([0-9]+(?:[.][0-9]+)*)', '\\1') | default([''], true) | first }}"
+    # Everything after the status, so an epoch and a Debian suffix survive: 2:12.0.0, 11.1.0~rc1.
+    _grafana_current: "{{ _grafana_installed.stdout | default('') | regex_replace('^[^:]*:', '') }}"
   when: ansible_facts['os_family'] == "Debian"
+
+- name: Compare the installed Grafana with grafana_version, by dpkg's rules
+  ansible.builtin.command:
+    argv: [dpkg, --compare-versions, "{{ _grafana_current }}", "{{ item.op }}", "{{ grafana_version }}"]
+  loop:
+    - { op: lt }
+    - { op: gt }
+  register: _grafana_compared
+  changed_when: false
+  failed_when: _grafana_compared.rc not in [0, 1]
+  check_mode: false  # read-only query; the install guard below needs it under --check
+  when:
+    - ansible_facts['os_family'] == "Debian"
+    - _grafana_present | bool
 
 - name: Report a Grafana newer than grafana_version
   ansible.builtin.debug:
@@ -33,13 +48,13 @@
   when:
     - ansible_facts['os_family'] == "Debian"
     - _grafana_present | bool
-    - _grafana_current is version(grafana_version, '>')
+    - _grafana_compared.results[1].rc == 0
 
 - name: Install or upgrade Grafana
   when:
     - ansible_facts['os_family'] == "Debian"
     - >-
-      (_grafana_present | bool and _grafana_current is version(grafana_version, '<'))
+      (_grafana_present | bool and _grafana_compared.results[0].rc == 0)
       or (not (_grafana_present | bool) and (grafana_fresh_install | default(true) | bool))
   block:
     # First: if the download fails, the host still has its working repo entries.
@@ -56,14 +71,6 @@
       # (#2872) Intentional: legacy key may not exist; removal is best-effort
       # cleanup before adding the new signed keyring file.
       failed_when: false
-
-    - name: Remove conflicting Grafana repo entries
-      ansible.builtin.file:
-        path: "{{ item }}"
-        state: absent
-      loop:
-        - /etc/apt/sources.list.d/grafana.list
-        - /etc/apt/sources.list.d/grafana.sources
 
     # #7218: idempotent repo-add — preserve device-shipped Grafana repo if present.
     # Refresh handled by the bounded-shell task below (#6719).
@@ -112,7 +119,7 @@
 
         - name: Find the Grafana database
           ansible.builtin.stat:
-            path: /var/lib/grafana/grafana.db
+            path: "{{ grafana_data_dir }}/grafana.db"
           register: _grafana_db
           when: _grafana_present | bool
 
@@ -120,8 +127,8 @@
         # force: false keeps the first copy when a failed run is retried.
         - name: Keep a copy of the Grafana database from before the upgrade
           ansible.builtin.copy:
-            src: /var/lib/grafana/grafana.db
-            dest: "/var/lib/grafana/grafana.db.before-{{ grafana_version }}"
+            src: "{{ grafana_data_dir }}/grafana.db"
+            dest: "{{ grafana_data_dir }}/grafana.db.before-{{ grafana_version }}"
             remote_src: true
             force: false
             owner: grafana
@@ -144,3 +151,16 @@
           when:
             - _grafana_present | bool
             - _grafana_active.stdout | default('') == 'active'
+
+    # The database migrates during this first start, so "started" is not yet "works".
+    - name: Wait for Grafana to answer after the upgrade
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ grafana_port }}/api/health"
+        status_code: 200
+      register: _grafana_upgrade_health
+      retries: 60
+      delay: 5
+      until: _grafana_upgrade_health is succeeded
+      when:
+        - _grafana_present | bool
+        - _grafana_active.stdout | default('') == 'active'
