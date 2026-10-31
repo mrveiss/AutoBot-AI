@@ -39,6 +39,7 @@ Each ADR follows a consistent template (see [template.md](template.md)):
 | [ADR-008](008-frontend-shared-code-boundary.md) | Frontend Shared-Code Boundary Between the Two SPAs | Accepted | 2026-07-31 |
 | [ADR-009](009-canonical-browser-interface.md) | One Canonical Browser Interface, With Execution Backends Behind It | Proposed | 2026-08-01 |
 | [ADR-010](010-role-separation-count-agnostic-placement.md) | Role Separation with Count-Agnostic Placement | Accepted | 2026-09-12 |
+| [ADR-011](011-one-frontend-admin-namespace.md) | One Frontend — the SLM Back Office Becomes `/admin`, the SLM Backend Stays Remote Behind `/slm/api` | Proposed | 2026-10-31 |
 
 ## Creating a New ADR
 
