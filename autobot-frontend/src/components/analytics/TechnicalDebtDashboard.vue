@@ -7,14 +7,14 @@
         <p class="dashboard-subtitle">{{ $t('analytics.technicalDebt.subtitle') }}</p>
       </div>
       <div class="header-actions">
-        <button class="btn-refresh" @click="refreshData" :disabled="loading">
+        <BaseButton variant="secondary" size="sm" @click="refreshData" :disabled="loading">
           <span class="icon">↻</span>
           {{ loading ? $t('analytics.technicalDebt.loading') : $t('analytics.technicalDebt.refresh') }}
-        </button>
-        <button class="btn-export" @click="exportReport">
+        </BaseButton>
+        <BaseButton size="sm" @click="exportReport">
           <span class="icon">↓</span>
           {{ $t('analytics.technicalDebt.exportReport') }}
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -185,7 +185,7 @@
                 </div>
               </div>
               <div class="priority-action">
-                <button class="btn-fix" @click="showFixDetails(item)">{{ $t('analytics.technicalDebt.fix') }}</button>
+                <BaseButton variant="success" size="xs" @click="showFixDetails(item)">{{ $t('analytics.technicalDebt.fix') }}</BaseButton>
               </div>
             </div>
             <TruncationNotice :shown="roiPriorities.length" :total="roiTotal" :step="ROI_PAGE" :server-limited="roiAtCap" @show-more="onLoadMoreRoi" />
@@ -357,7 +357,7 @@
                   </span>
                 </td>
                 <td class="actions-cell">
-                  <button class="btn-view" @click="showItemDetails(item)">{{ $t('analytics.technicalDebt.view') }}</button>
+                  <BaseButton variant="outline" size="xs" @click="showItemDetails(item)">{{ $t('analytics.technicalDebt.view') }}</BaseButton>
                 </td>
               </tr>
             </tbody>
@@ -426,8 +426,8 @@
           </div>
       </template>
       <template #actions>
-        <button class="btn-secondary" @click="selectedItem = null">{{ $t('analytics.technicalDebt.close') }}</button>
-        <button v-if="selectedItem" class="btn-primary" @click="navigateToFile(selectedItem)">{{ $t('analytics.technicalDebt.openInEditor') }}</button>
+        <BaseButton variant="secondary" size="sm" @click="selectedItem = null">{{ $t('analytics.technicalDebt.close') }}</BaseButton>
+        <BaseButton size="sm" v-if="selectedItem" @click="navigateToFile(selectedItem)">{{ $t('analytics.technicalDebt.openInEditor') }}</BaseButton>
       </template>
     </BaseModal>
   </div>
@@ -436,7 +436,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
 import TruncationNotice from './TruncationNotice.vue';
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils';
 import { getCssVar } from '@/composables/useCssVars'
@@ -873,44 +873,6 @@ watch(selectedPeriod, () => {
 .header-actions {
   display: flex;
   gap: var(--spacing-sm);
-}
-
-.btn-refresh,
-.btn-export {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-2) var(--spacing-4);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  cursor: pointer;
-  transition: all var(--duration-200);
-}
-
-.btn-refresh {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-default);
-  color: var(--text-primary);
-}
-
-.btn-refresh:hover:not(:disabled) {
-  background: var(--bg-tertiary);
-  border-color: var(--border-strong);
-}
-
-.btn-refresh:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-export {
-  background: var(--color-primary);
-  border: none;
-  color: var(--text-on-primary);
-}
-
-.btn-export:hover {
-  background: var(--color-primary-hover);
 }
 
 .icon {
@@ -1392,22 +1354,6 @@ watch(selectedPeriod, () => {
   flex-shrink: 0;
 }
 
-.btn-fix {
-  padding: var(--spacing-xs) var(--spacing-sm);
-  background: var(--color-success);
-  border: none;
-  border-radius: var(--radius-sm);
-  color: var(--text-on-success);
-  font-size: var(--text-xs);
-  font-weight: var(--font-semibold);
-  cursor: pointer;
-  transition: background var(--duration-150);
-}
-
-.btn-fix:hover {
-  background: var(--color-success-dark);
-}
-
 /* Empty State */
 .empty-state {
   display: flex;
@@ -1685,23 +1631,6 @@ watch(selectedPeriod, () => {
   color: var(--text-tertiary);
 }
 
-.btn-view {
-  padding: var(--spacing-xs) var(--spacing-sm);
-  background: transparent;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
-  cursor: pointer;
-  transition: all var(--duration-150);
-}
-
-.btn-view:hover {
-  background: var(--bg-secondary);
-  border-color: var(--color-primary);
-  color: var(--color-primary);
-}
-
 /* Pagination */
 .pagination {
   display: flex;
@@ -1780,34 +1709,4 @@ watch(selectedPeriod, () => {
   margin-top: var(--spacing-sm);
 }
 
-.btn-secondary {
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  color: var(--text-secondary);
-  font-size: var(--text-sm);
-  cursor: pointer;
-  transition: all var(--duration-150);
-}
-
-.btn-secondary:hover {
-  background: var(--bg-hover);
-  border-color: var(--border-emphasis);
-}
-
-.btn-primary {
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: var(--color-primary);
-  border: none;
-  border-radius: var(--radius-md);
-  color: var(--text-on-primary);
-  font-size: var(--text-sm);
-  cursor: pointer;
-  transition: background var(--duration-150);
-}
-
-.btn-primary:hover {
-  background: var(--color-primary-dark);
-}
 </style>
