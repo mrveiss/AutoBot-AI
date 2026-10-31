@@ -30,7 +30,7 @@ import {
   type FleetSyncJobStatus,
 } from '@/composables/useCodeSync'
 import { createLogger } from '@/utils/debugUtils'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import { getCommitHashDisplay, getCommitUrl } from '@/utils/commitHashUtils'
 import ScheduleModal from '@/components/ScheduleModal.vue'
 import CodeSourceModal from '@/components/CodeSourceModal.vue'
@@ -562,7 +562,7 @@ async function handleRunSchedule(schedule: DeepReadonly<UpdateSchedule>): Promis
 
 function formatNextRun(dateStr: string | null): string {
   if (!dateStr) return 'Not scheduled'
-  return formatDateTime(dateStr)
+  return formatFleetDateTime(dateStr)
 }
 
 function describeCron(expression: string): string {
@@ -1186,7 +1186,7 @@ onUnmounted(() => {
         <div>
           <span class="text-sm text-gray-500 block mb-1">{{ $t('codeSyncView.lastFetch') }}</span>
           <span class="text-lg font-semibold text-gray-900">
-            {{ formatDateTime(codeSync.status.value?.last_fetch ?? null) }}
+            {{ formatFleetDateTime(codeSync.status.value?.last_fetch ?? null) }}
           </span>
         </div>
         <div>
@@ -1423,7 +1423,7 @@ onUnmounted(() => {
             <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
             </svg>{{ $t('codeSyncView.noDriftDetectedValue0FilesCompared', { value0: driftReport.total_compared }) }}</span>
-          <span class="text-sm text-gray-400">{{ $t('codeSyncView.checkedValue0', { value0: formatDateTime(driftReport.checked_at) }) }}</span>
+          <span class="text-sm text-gray-400">{{ $t('codeSyncView.checkedValue0', { value0: formatFleetDateTime(driftReport.checked_at) }) }}</span>
         </div>
 
         <div class="text-xs text-gray-400 mb-3">
@@ -1716,7 +1716,7 @@ onUnmounted(() => {
               :class="['px-2 py-0.5 rounded-sm text-xs font-medium', fleetJobStatusClass(job.status)]"
             >{{ $t(fleetJobStatusI18nKey(job.status)) }}</span>
             <span class="font-mono text-xs text-gray-500">{{ job.job_id }}</span>
-            <span class="text-xs text-gray-500">{{ formatDateTime(job.created_at) }}</span>
+            <span class="text-xs text-gray-500">{{ formatFleetDateTime(job.created_at) }}</span>
             <span class="text-xs text-gray-700">{{
               $t('codeSyncView.fleetJobProgress', {
                 completed: job.completed_nodes,

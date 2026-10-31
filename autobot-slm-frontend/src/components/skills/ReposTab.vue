@@ -103,7 +103,7 @@
 import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { SkillRepo } from '@/composables/useSkills'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import { BaseBadge, BaseModal, BaseTable, type BadgeTone, type BadgeVariant, type BaseTableColumn } from '@autobot/ui'
 
 const props = defineProps<{ repos: readonly SkillRepo[] }>()
@@ -132,7 +132,7 @@ const columns = computed<BaseTableColumn[]>(() => [
   { key: 'repo_type', label: t('skills.reposTab.type') },
   { key: 'url', label: t('skills.reposTab.uRL') },
   { key: 'skill_count', label: t('skills.reposTab.skills'), numeric: true },
-  { key: 'last_synced', label: t('skills.reposTab.lastSync'), formatter: (v) => formatDateTime(v as string) },
+  { key: 'last_synced', label: t('skills.reposTab.lastSync'), formatter: (v) => formatFleetDateTime(v as string) },
 ])
 
 function submitAdd(): void {
