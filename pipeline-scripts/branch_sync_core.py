@@ -58,6 +58,7 @@ _ISSUE_REF = re.compile(r"#\d+")
 SYNCED, CURRENT, CONFLICT, WORKFLOW = "synced", "up-to-date", "conflict", "workflow-push-refused"
 HEAD_MOVED, FORK, ERROR, UNREACHABLE = "head-moved", "fork-skipped", "error", "unreachable"
 OTHER_BASE, POLICY = "other-base", "excluded-by-policy"
+NO_OPEN_PR = "no-open-pr"
 
 
 def merge_message(branch: str, base: str = "main") -> str:
@@ -168,19 +169,16 @@ def _plan_pulls(plan: Plan, pulls: Sequence[Dict[str, Any]], repository: str, ba
 
 
 def plan_run(pulls: Sequence[Dict[str, Any]], branches: Iterable[str], repository: str, base: str = "main") -> Plan:
-    """Every target for one run: same-repo PRs into ``base`` oldest first, then PR-less branches.
+    """Every target for one run: same-repo PRs into ``base``, oldest first. Nothing else (#20261).
 
-    A same-repo PR into another base is never merged into AND never treated as
-    parked: either would put main into a branch whose PR says it belongs elsewhere.
+    A branch with no open PR is skipped: merging main into one whose PR had closed made it look
+    ahead of main forever with nothing of its own. A same-repo PR into another base is never merged
+    into either: that would put main into a branch whose PR says it belongs elsewhere.
     """
     plan = Plan()
     claimed = _plan_pulls(plan, pulls, repository, base)
     for branch in sorted(set(branches) - claimed):
-        bucket = _policy_bucket(branch)
-        if bucket:
-            plan.skip(bucket, f"{code(branch)} (no PR)")
-        else:
-            plan.targets.append(SyncTarget(branch))
+        plan.skip(_policy_bucket(branch) or NO_OPEN_PR, f"{code(branch)} (no PR)")
     return plan
 
 

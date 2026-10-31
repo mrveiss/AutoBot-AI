@@ -314,6 +314,45 @@ class TestHostileInputAndPaths:
         with pytest.raises(OSError):
             list(tn.iter_lines(target, tn.ReadResult(), [str(root)]))
 
+    @pytest.mark.parametrize("name", ["a.jsonl", "a.jsonl.gz"])
+    def test_parent_swapped_for_a_symlink_after_validation_is_refused(self, tmp_path, monkeypatch, name):
+        root, outside = tmp_path / "root", tmp_path / "outside"
+        (root / "sub").mkdir(parents=True)
+        outside.mkdir()
+        payload = b'{"display": "stolen"}\n'
+        body = gzip.compress(payload) if name.endswith(".gz") else payload
+        (root / "sub" / name).write_bytes(body)
+        (outside / name).write_bytes(body)  # the same file name, so only the parent decides where the read lands
+        real_validate = tn.validate_path
+
+        def validate_then_swap_parent(*args, **kwargs):
+            checked = real_validate(*args, **kwargs)
+            (root / "sub" / name).unlink()
+            (root / "sub").rmdir()
+            (root / "sub").symlink_to(outside, target_is_directory=True)  # swap lands between validation and open
+            return checked
+
+        monkeypatch.setattr(tn, "validate_path", validate_then_swap_parent)
+        before = len(os.listdir("/proc/self/fd"))
+        with pytest.raises(OSError):
+            list(tn.iter_lines(root / "sub" / name, tn.ReadResult(), [str(root)]))
+        assert len(os.listdir("/proc/self/fd")) == before
+
+    def test_symlinked_root_and_nested_parents_still_read(self, tmp_path):
+        real = tmp_path / "real"
+        (real / "a" / "b").mkdir(parents=True)
+        (real / "a" / "b" / "t.jsonl").write_text(json.dumps(_saved_claude()[0]) + "\n", encoding="utf-8")
+        (real / "a" / "b" / "t.jsonl.gz").write_bytes(gzip.compress(b"{}\n"))
+        link = tmp_path / "link"
+        link.symlink_to(real, target_is_directory=True)
+        before = len(os.listdir("/proc/self/fd"))
+        for _ in range(5):
+            for name in ("t.jsonl", "t.jsonl.gz"):
+                result = tn.read_transcript(link / "a" / "b" / name, [str(link)])
+                assert result.skipped == 0
+        assert len(tn.read_transcript(link / "a" / "b" / "t.jsonl", [str(link)]).items) >= 1
+        assert len(os.listdir("/proc/self/fd")) == before
+
     def test_a_directory_named_like_a_transcript_fails_without_leaking_a_descriptor(self, tmp_path):
         root = tmp_path / "root"
         (root / "x.jsonl").mkdir(parents=True)

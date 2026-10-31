@@ -1,8 +1,10 @@
 # Keep every branch 0 behind main, at zero CI cost (#19548)
 #
 # ONE mechanism. On every push to main, a periodic catch-up and on demand, this
-# merges origin/main into EVERY open same-repo PR branch into main (drafts too:
-# the owner rule is all branches) and every PR-less branch. It replaces two
+# merges origin/main into EVERY open same-repo PR branch into main (drafts too).
+# A branch with no open PR is left alone (maintainer decision on #20261, reversing
+# #19548's "all branches" for those): merging into one whose PR had closed made it
+# look ahead of main forever with nothing of its own. It replaces two
 # workflows: auto-update-pr-branches.yml (#14022, one `update-branch` per main
 # push, which could not keep ~48 PRs current) and
 # auto-merge-base-into-parked-branches.yml (#15306, PR-less branches every 6h).
