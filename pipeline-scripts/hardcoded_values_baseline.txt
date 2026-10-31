@@ -1114,7 +1114,6 @@
 1|ssot|autobot-slm-backend/ansible/roles/llm/defaults/main.yml|llama3.2:1b
 1|ssot|autobot-slm-backend/ansible/roles/llm/defaults/main.yml|qwen3.5:9b
 1|other|autobot-slm-backend/ansible/roles/llm/tasks/main.yml|https://ollama.ai/install.sh
-1|other|autobot-slm-backend/ansible/roles/monitoring/defaults/main.yml|https://apt.grafana.com
 1|other|autobot-slm-backend/ansible/roles/monitoring/tasks/node_exporter.yml|https://github.com/prometheus/node_exporter/releases/download/v{{
 1|other|autobot-slm-backend/ansible/roles/monitoring/tasks/prometheus.yml|https://github.com/prometheus/prometheus/releases/download/v{{
 1|other|autobot-slm-backend/ansible/roles/npu-worker/tasks/main.yml|120

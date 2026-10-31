@@ -45,13 +45,13 @@
     # First: if the download fails, the host still has its working repo entries.
     - name: Add Grafana APT signing key
       ansible.builtin.get_url:
-        url: "{{ grafana_apt_base_url }}/gpg.key"
+        url: "https://{{ grafana_apt_host }}/gpg.key"
         dest: /usr/share/keyrings/grafana.key
         mode: "0644"
 
     - name: Remove legacy Grafana APT key from trusted keyring
       ansible.builtin.apt_key:
-        url: "{{ grafana_apt_base_url }}/gpg.key"
+        url: "https://{{ grafana_apt_host }}/gpg.key"
         state: absent
       # (#2872) Intentional: legacy key may not exist; removal is best-effort
       # cleanup before adding the new signed keyring file.
@@ -70,8 +70,8 @@
     - name: "Add Grafana repository (idempotent, #7218)"
       ansible.builtin.include_tasks: ../../_shared/tasks/add_apt_repository_idempotent.yml
       vars:
-        apt_repo_match: "apt.grafana.com"
-        apt_repo_spec: "deb [signed-by=/usr/share/keyrings/grafana.key] {{ grafana_apt_base_url }} stable main"
+        apt_repo_match: "{{ grafana_apt_host }}"
+        apt_repo_spec: "deb [signed-by=/usr/share/keyrings/grafana.key] https://{{ grafana_apt_host }} stable main"
         apt_repo_filename: "grafana"
         apt_repo_label: "Grafana (monitoring)"
         # #17897: derived from this file's own "Install Grafana" task
