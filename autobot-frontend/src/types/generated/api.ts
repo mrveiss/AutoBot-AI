@@ -67576,9 +67576,7 @@ export interface components {
              */
             uploaded_at: string;
             /** Uploaded By */
-            uploaded_by: string;
-            /** File Path */
-            file_path: string;
+            uploaded_by?: string | null;
             /** Extension */
             extension?: string | null;
         } & {
@@ -79278,18 +79276,21 @@ export interface components {
         /** HumanClaimRequest */
         HumanClaimRequest: {
             /** User Id */
-            user_id: string;
+            user_id?: string | null;
             /** Company Id */
-            company_id: string;
+            company_id?: string | null;
         } & {
             [key: string]: unknown;
         };
-        /** HumanUnclaimRequest */
+        /**
+         * HumanUnclaimRequest
+         * @description The same accepted-and-ignored fields as a claim.
+         */
         HumanUnclaimRequest: {
             /** User Id */
-            user_id: string;
+            user_id?: string | null;
             /** Company Id */
-            company_id: string;
+            company_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -96968,9 +96969,9 @@ export interface components {
             value: string;
             /**
              * Actor
-             * @description Agent ID performing the operation
+             * @description Deprecated and ignored: the actor is the authenticated caller (#20102)
              */
-            actor: string;
+            actor?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -176206,8 +176207,8 @@ export interface operations {
     };
     revoke_secret_api_llc_secrets__company_id___name__delete: {
         parameters: {
-            query: {
-                actor: string;
+            query?: {
+                actor?: string | null;
             };
             header?: never;
             path: {

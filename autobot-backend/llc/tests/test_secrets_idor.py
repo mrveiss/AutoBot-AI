@@ -262,3 +262,28 @@ class TestSecretsNeedCompanyAdmin:
     def test_a_plain_member_may_still_list_names(self):
         org = str(uuid.uuid4())
         assert _make_client(org, membership="member").get(f"/api/llc/secrets/{org}").status_code == 200
+
+
+class TestSecretsActorIsTheAuthenticatedCaller:
+    """#20102: the recorded actor is the session user; a client-supplied ``actor`` is ignored."""
+
+    def test_set_and_revoke_ignore_a_forged_or_non_uuid_actor(self):
+        from llc.api.secrets import SecretService  # noqa: PLC0415
+
+        org = str(uuid.uuid4())
+        client = _make_client(org)
+        forged = str(uuid.uuid4())
+        for actor in (forged, "not-a-uuid"):
+            assert (
+                client.post(f"/api/llc/secrets/{org}", json={"name": "k", "value": "v", "actor": actor}).status_code
+                == 201
+            )
+            assert SecretService.set.await_args.kwargs["actor"] == str(_FIXED_USER_ID)
+            assert client.delete(f"/api/llc/secrets/{org}/k", params={"actor": actor}).status_code == 204
+            assert SecretService.revoke.await_args.kwargs["actor"] == str(_FIXED_USER_ID)
+
+    def test_the_actor_field_is_optional_for_new_clients(self):
+        org = str(uuid.uuid4())
+        client = _make_client(org)
+        assert client.post(f"/api/llc/secrets/{org}", json={"name": "k", "value": "v"}).status_code == 201
+        assert client.delete(f"/api/llc/secrets/{org}/k").status_code == 204
