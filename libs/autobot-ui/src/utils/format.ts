@@ -1,11 +1,12 @@
 // Copyright 2025-2026 mrveiss
 // SPDX-License-Identifier: Apache-2.0
 /**
- * @autobot/ui — byte, uptime and duration formatting for both apps (#14908).
+ * @autobot/ui — byte, uptime, duration and date/time formatting for both apps (#14908, #19905).
  *
  * Each app had its own copy; the SLM one was an exact subset of the user app's, so the
  * shared part lives here once and each app's `utils/formatHelpers.ts` re-exports it.
- * Date/time formatting stays per-app (timezone handling differs).
+ * A timezone is passed per call (`intl: { timeZone }`), so an app that stores one keeps that
+ * state itself and the formatting still lives here.
  *
  * The default texts ('—', 'Invalid', the unit names) are English fallbacks. A caller that
  * shows them to a user passes translated `nullText` / `invalidText` / `zeroText` / `units`.
@@ -234,3 +235,150 @@ export function formatFileSize(
 
 /** Alias for formatFileSize (backward compatibility). */
 export const formatBytes = formatFileSize
+
+// ==================== DATE & TIME FORMATTING ====================
+
+/** Anything the date formatters accept. A number is milliseconds unless `unit: 'seconds'`. */
+export type DateInput = Date | string | number | null | undefined
+
+/** `Intl` fields of {@link formatDateTime} when the caller passes none. */
+export const DEFAULT_DATE_TIME_INTL: Intl.DateTimeFormatOptions = {
+  year: 'numeric',
+  month: 'numeric',
+  day: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit'
+}
+
+function toValidDate(input: DateInput): Date | null {
+  if (input === null || input === undefined || input === '') return null
+  const date = input instanceof Date ? input : new Date(input)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+/** Format a date as a localized date string; empty string when missing or invalid. */
+export function formatDate(
+  dateInput: string | Date | undefined | null,
+  options?: Intl.DateTimeFormatOptions
+): string {
+  const date = toValidDate(dateInput)
+  return date ? date.toLocaleDateString(undefined, options) : ''
+}
+
+/** Format a time as `HH:MM` (12-hour unless `use24Hour`); an invalid value reads as now. */
+export function formatTime(
+  timestamp: Date | string | undefined | null,
+  use24Hour: boolean = false
+): string {
+  if (!timestamp) return ''
+  const date = toValidDate(timestamp) ?? new Date()
+  return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: !use24Hour })
+}
+
+/** Format date and time together; `options` override {@link DEFAULT_DATE_TIME_INTL}, whose fields Intl rejects beside a style. */
+export function formatDateTime(
+  timestamp: Date | string | undefined | null,
+  options?: Intl.DateTimeFormatOptions
+): string {
+  const date = toValidDate(timestamp)
+  if (!date) return ''
+  const styled = options?.dateStyle !== undefined || options?.timeStyle !== undefined
+  return date.toLocaleString(undefined, styled ? options : { ...DEFAULT_DATE_TIME_INTL, ...options })
+}
+
+/** Format an ISO string with the browser's default locale string; an invalid one is returned as-is. */
+export function formatISOString(isoString: string | undefined | null): string {
+  if (!isoString) return ''
+  return toValidDate(isoString)?.toLocaleString() ?? isoString
+}
+
+/** Units of {@link formatRelativeTime}, largest first, with their size in seconds. */
+const RELATIVE_UNITS: ReadonlyArray<readonly [Intl.RelativeTimeFormatUnit, number]> = [
+  ['year', 31536000],
+  ['month', 2592000],
+  ['week', 604800],
+  ['day', 86400],
+  ['hour', 3600],
+  ['minute', 60],
+  ['second', 1]
+]
+
+/** Options for {@link formatRelativeTime}. */
+export interface FormatRelativeTimeOptions {
+  /** BCP 47 locale; pass the app's current one (default: the browser's). */
+  locale?: string
+  /** `Intl.RelativeTimeFormat` style: `'long'` is `2 hours ago`, `'narrow'` is `2h ago` in English. */
+  style?: 'long' | 'short' | 'narrow'
+  /** The largest unit used; a longer span is counted in it (default `'year'`, `'day'` gives `45 days ago`). */
+  maxUnit?: Intl.RelativeTimeFormatUnit
+  /** Text for a missing or unparseable moment (default `'—'`). */
+  nullText?: string
+  /** The reference moment, as epoch milliseconds (default `Date.now()`); fixed in tests. */
+  now?: number
+}
+
+/**
+ * Format a moment relative to now with `Intl.RelativeTimeFormat` (`5 seconds ago`, `in 2 hours`),
+ * so the platform localises it. The unit is the largest whole one that fits, never above `maxUnit`.
+ */
+export function formatRelativeTime(timestamp: DateInput, options: FormatRelativeTimeOptions = {}): string {
+  const date = toValidDate(timestamp)
+  if (!date) return options.nullText ?? '—'
+  const seconds = Math.trunc((date.getTime() - (options.now ?? Date.now())) / 1000)
+  const ceiling = RELATIVE_UNITS.findIndex(([unit]) => unit === (options.maxUnit ?? 'year'))
+  const [unit, size] = RELATIVE_UNITS.slice(Math.max(ceiling, 0)).find(([, s]) => Math.abs(seconds) >= s) ?? RELATIVE_UNITS[6]
+  const formatter = new Intl.RelativeTimeFormat(options.locale, { numeric: 'always', style: options.style ?? 'long' })
+  const value = Math.trunc(seconds / size)
+  return formatter.format(value === 0 && seconds <= 0 ? -0 : value, unit) // -0 reads as past: 0 seconds ago
+}
+
+/**
+ * English `2 hours ago`, `'just now'` under a minute (or in the future), `'unknown'` when invalid.
+ * It is {@link formatRelativeTime} fixed to English; a caller that shows it to a user passes a locale there.
+ */
+export function formatTimeAgo(timestamp: Date | string | number): string {
+  const date = toValidDate(timestamp)
+  if (!date) return 'unknown'
+  return Date.now() - date.getTime() < 60000 ? 'just now' : formatRelativeTime(date, { locale: 'en' })
+}
+
+/** Options for {@link createDateFormatter}. */
+export interface DateFormatterOptions {
+  /** Which part to show (default `'dateTime'`). */
+  kind?: 'date' | 'time' | 'dateTime'
+  /** BCP 47 locale; default is the browser's. */
+  locale?: string
+  /** `Intl` fields, or a function returning them (for a timezone that can change). */
+  intl?: Intl.DateTimeFormatOptions | (() => Intl.DateTimeFormatOptions)
+  /** Unit of a numeric input (default `'ms'`). */
+  unit?: 'ms' | 'seconds'
+  /** Text for null / undefined / empty input (default `''`); a function is read per call. */
+  emptyText?: string | (() => string)
+  /** Text for an unparseable input (default: the input as a string). */
+  invalidText?: string
+}
+
+function toLocaleText(date: Date, options: DateFormatterOptions): string {
+  const intl = typeof options.intl === 'function' ? options.intl() : options.intl
+  if (options.kind === 'date') return date.toLocaleDateString(options.locale, intl)
+  if (options.kind === 'time') return date.toLocaleTimeString(options.locale, intl)
+  return date.toLocaleString(options.locale, intl)
+}
+
+/**
+ * Build a date formatter with fixed fields. It replaces a component's own
+ * `new Date(x).toLocale…String(…)` helper without changing the fields it showed.
+ */
+export function createDateFormatter(
+  options: DateFormatterOptions = {}
+): (input: DateInput) => string {
+  return (input) => {
+    if (input === null || input === undefined || input === '') {
+      const empty = options.emptyText
+      return typeof empty === 'function' ? empty() : (empty ?? '')
+    }
+    const ms = typeof input === 'number' && options.unit === 'seconds' ? input * 1000 : input
+    const date = toValidDate(ms)
+    return date ? toLocaleText(date, options) : (options.invalidText ?? String(input))
+  }
+}

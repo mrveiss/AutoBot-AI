@@ -392,6 +392,7 @@
     "deleteSchedule": "Delete schedule \"{name}\"?"
   },
   "common": {
+    "zeroSize": "0 B",
     "codeSyncBadge": {},
     "roleReachesNoDeployPath": "Assigned, but nothing will deploy {roles}: the role reaches no ansible group and has no dedicated playbook. Add a group mapping or a playbook for it.",
     "sidebar": {
@@ -1152,11 +1153,11 @@
     "editMaintenanceWindow": "Edit Maintenance Window",
     "editWindow": "Edit window",
     "endTime": "End Time",
-    "failedToActivateWindow": "Failed to activate maintenance window",
-    "failedToCompleteWindow": "Failed to complete maintenance window",
-    "failedToDeleteWindow": "Failed to delete maintenance window",
-    "failedToDrainNode": "Failed to drain node. Please try again.",
-    "failedToResumeNode": "Failed to resume node. Please try again.",
+    "failedToActivateWindow": "Wartungsfenster konnte nicht aktiviert werden",
+    "failedToCompleteWindow": "Wartungsfenster konnte nicht abgeschlossen werden",
+    "failedToDeleteWindow": "Wartungsfenster konnte nicht gelöscht werden",
+    "failedToDrainNode": "Knoten konnte nicht entleert werden. Bitte versuchen Sie es erneut.",
+    "failedToResumeNode": "Knoten konnte nicht fortgesetzt werden. Bitte versuchen Sie es erneut.",
     "fleetWideMaintenance": "Fleet-Wide Maintenance",
     "leaveEmptyForFleet": "Leave empty for fleet-wide maintenance",
     "loadingMaintenanceWindows": "Loading maintenance windows...",
@@ -1359,7 +1360,8 @@
       "showingCountOfCount2Entries": "Showing {count} of {count2} entries",
       "source": "Quelle:",
       "source1": "Quelle",
-      "time": "Time"
+      "time": "Time",
+      "loadError": "Protokolle konnten nicht geladen werden: {error}"
     },
     "metricsDetailsView": {
       "activeWorkers": "Active Workers",
@@ -1707,7 +1709,7 @@
   "performance": {
     "alertRulesView": {
       "actions": "Aktionen",
-      "alertRules": "Alert Rules",
+      "alertRules": "Alarmregeln",
       "areYouSureYou": "Are you sure you want to delete",
       "cancel": "Abbrechen",
       "condition": "Condition",
@@ -1819,7 +1821,13 @@
     "performanceSections": "Performance sections",
     "performanceSummary": "Performance summary",
     "refreshPerformanceData": "Refresh performance data",
-    "sLOCompliance": "SLO Compliance:"
+    "sLOCompliance": "SLO Compliance:",
+    "tabs": {
+      "alertRules": "Alarmregeln",
+      "overview": "Overview",
+      "slos": "SLOs",
+      "traces": "Traces"
+    }
   },
   "redisServicePanel": {
     "actionFailed": "Failed to {action} Redis service",
@@ -3342,8 +3350,8 @@
     "yourSLMServiceLifecycle": "Your SLM (Service Lifecycle Manager) is up and running. This wizard\n          will guide you through adding and configuring your fleet nodes.",
     "provisioningFailed": "Provisioning failed",
     "retryProvisioning": "Retry provisioning",
-    "failedToSaveKeys": "Failed to save API keys. Check the console for details.",
-    "failedToAddNode": "Failed to add node"
+    "failedToSaveKeys": "API-Schlüssel konnten nicht gespeichert werden. Details finden Sie in der Konsole.",
+    "failedToAddNode": "Knoten konnte nicht hinzugefügt werden"
   },
   "skills": {
     "approvalsTab": {

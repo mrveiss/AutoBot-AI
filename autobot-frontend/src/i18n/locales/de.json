@@ -110,7 +110,8 @@
       "medium": "Mittel",
       "high": "Hoch",
       "critical": "Kritisch"
-    }
+    },
+    "logsLoadFailed": "Protokolle konnten nicht geladen werden: {error}"
   },
   "chat": {
     "sendMessage": "Senden Sie eine Nachricht...",
@@ -262,6 +263,13 @@
     },
     "input": {
       "retryUpload": "Versuchen Sie den Upload erneut",
+      "uploadError": {
+        "http": "Upload fehlgeschlagen (Status {status})",
+        "invalidResponse": "Der Server hat eine unlesbare Antwort gesendet",
+        "network": "Netzwerkfehler beim Hochladen",
+        "cancelled": "Upload abgebrochen",
+        "unknown": "Upload fehlgeschlagen"
+      },
       "filesAttached": "{count}-Dateien angehängt",
       "clearAll": "Alles löschen",
       "removeFile": "Datei entfernen",
@@ -525,6 +533,7 @@
         "pending": "Ausstehend",
         "running": "Läuft",
         "streaming": "Streaming",
+        "waiting_explanation": "Wartet auf Erklärung",
         "explaining": "Erklären",
         "completed": "Vollendet",
         "failed": "Fehlgeschlagen"
@@ -3807,10 +3816,11 @@
     },
     "treeNode": {
       "itemsCount": "Items count",
+      "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
       "vectorizeFolderTitle": "Vectorize folder title",
-      "retryTitle": "Retry title",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "share": {
       "searching": "Searching...",
@@ -4347,7 +4357,8 @@
       "agentsAriaLabel": "Agent capabilities",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "Automatisierung für Ihr Unternehmen wird geöffnet…",
-      "companyRequired": "Wählen Sie ein Unternehmen, um die Automatisierung zu öffnen."
+      "companyRequired": "Wählen Sie ein Unternehmen, um die Automatisierung zu öffnen.",
+      "planBeforeBuilding": "Vor dem Bauen planen"
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -7367,7 +7378,16 @@
       "initComplete": "Initialisierung abgeschlossen"
     }
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "Alarmregeln",
+      "overview": "Übersicht",
+      "slos": "SLOs",
+      "traces": "Traces"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "browser": {
       "contentsOf": "{path} Contents",
       "refresh": "Refresh",
@@ -8091,6 +8111,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "Wartungsfenster konnte nicht aktiviert werden",
+      "completeWindowFailed": "Wartungsfenster konnte nicht abgeschlossen werden",
+      "deleteWindowFailed": "Wartungsfenster konnte nicht gelöscht werden",
+      "drainNodeFailed": "Knoten konnte nicht entleert werden. Bitte versuchen Sie es erneut.",
+      "resumeNodeFailed": "Knoten konnte nicht fortgesetzt werden. Bitte versuchen Sie es erneut.",
+      "saveKeysFailed": "API-Schlüssel konnten nicht gespeichert werden. Details finden Sie in der Konsole.",
+      "addNodeFailed": "Knoten konnte nicht hinzugefügt werden"
     }
   },
   "mobile": {
@@ -8602,7 +8631,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "Werkzeuginformationen sind derzeit nicht verfügbar — diese Liste ist möglicherweise unvollständig.",
       "canvasNoToolsDefined": "Diesem Unternehmen sind keiner Rolle Werkzeuge zugeordnet.",
-      "deepLinkNodeNotFound": "Dieser Link verweist auf einen Knoten, der hier nicht gefunden werden konnte. Er wurde möglicherweise entfernt, oder Sie haben keinen Zugriff darauf."
+      "deepLinkNodeNotFound": "Dieser Link verweist auf einen Knoten, der hier nicht gefunden werden konnte. Er wurde möglicherweise entfernt, oder Sie haben keinen Zugriff darauf.",
+      "viewPlanner": "Workflow-Planer"
     },
     "executorRollup": {
       "title": "Ausführungs-Übersicht",
@@ -8946,6 +8976,113 @@
         "notFound": "Diese Aufgabe hält den Anspruch nicht mehr — aktualisieren Sie, um den aktuellen Inhaber zu sehen.",
         "unavailable": "Ledger nicht erreichbar; es wurde nichts gesendet.",
         "error": "Etwas ist schiefgelaufen, und die Zustellung konnte nicht bestätigt werden. Aktualisieren Sie, um zu sehen, ob der Claim noch gehalten wird."
+      }
+    },
+    "workflowPlanner": {
+      "title": "Workflow-Planer",
+      "plans": "Pläne",
+      "newPlan": "Neuer Plan",
+      "open": "Öffnen",
+      "back": "Zurück zu den Plänen",
+      "retry": "Erneut versuchen",
+      "loading": "Pläne werden geladen ...",
+      "loadFailed": "Der Plan konnte nicht geladen werden.",
+      "saveFailed": "Die Änderung konnte nicht gespeichert werden.",
+      "createFailed": "Der Plan konnte nicht erstellt werden.",
+      "emptyTitle": "Noch keine Pläne",
+      "emptyHint": "Starten Sie einen Plan, um einen Prozess abzubilden, zu messen und die eine Zahl zum Verbessern zu wählen.",
+      "unavailableTitle": "Der Workflow-Planer ist nicht verfügbar",
+      "unavailableHint": "Diese Funktion ist für Ihren Arbeitsbereich ausgeschaltet, daher gibt es hier noch nichts anzuzeigen.",
+      "statusFlow": "Planfortschritt",
+      "statusNotAvailable": "Dieser Plan ist {status}. Freigabe und Umwandlung sind noch nicht verfügbar, daher wird er nur lesend angezeigt.",
+      "convertNotAvailable": "Workflows aus einem Plan zu erstellen ist noch nicht verfügbar.",
+      "status": {
+        "draft": "Entwurf",
+        "measured": "Gemessen",
+        "labeled": "Beschriftet",
+        "approved": "Freigegeben",
+        "converted": "Umgewandelt"
+      },
+      "col": {
+        "name": "Plan",
+        "revision": "Revision",
+        "status": "Status",
+        "actions": "Aktionen"
+      },
+      "form": {
+        "name": "Planname",
+        "startsAt": "Wo der Prozess beginnt",
+        "endsAt": "Wo der Prozess endet",
+        "create": "Plan erstellen"
+      },
+      "steps": {
+        "map": "Abbilden",
+        "measure": "Messen",
+        "oneNumber": "Eine Zahl wählen",
+        "label": "Aufschlüsseln und beschriften",
+        "convert": "Workflow erstellen"
+      },
+      "map": {
+        "empty": "Noch nichts abgebildet",
+        "emptyHint": "Fügen Sie zuerst die Beteiligten (Bahnen) hinzu, dann ihre Schritte.",
+        "handoffs": "{count} Übergaben",
+        "waitNote": "Was wartet bei dieser Übergabe?",
+        "laneName": "Name der Bahn",
+        "addLane": "Bahn hinzufügen",
+        "stepLabel": "Schritt",
+        "stepLane": "Bahn des Schritts",
+        "addStep": "Schritt hinzufügen"
+      },
+      "source": {
+        "self_reported": "Ihre Angabe",
+        "email": "Mit E-Mail geprüft",
+        "calendar": "Mit Kalender geprüft"
+      },
+      "measure": {
+        "hint": "Wie oft passiert jeder Schritt und wie lange dauert er?",
+        "needSteps": "Bilden Sie zuerst mindestens einen Schritt ab.",
+        "perWeek": "Pro Woche",
+        "duration": "Dauer",
+        "unit": "Einheit der Dauer",
+        "save": "Speichern",
+        "clear": "Löschen"
+      },
+      "unit": {
+        "minutes": "Minuten",
+        "hours": "Stunden",
+        "days": "Tage"
+      },
+      "oneNumber": {
+        "hint": "Die gemessenen Schritte, längste Wartezeiten zuerst. Sie entscheiden, welcher zählt.",
+        "needMetrics": "Messen Sie zuerst mindestens einen Schritt.",
+        "rate": "{freq} pro Woche, {dur} {unit}",
+        "title": "Diese Zahl benennen",
+        "returnKind": "Was Sie zurückgewinnen",
+        "target": "Ziel",
+        "save": "Als meine eine Zahl speichern"
+      },
+      "returnKind": {
+        "hours_back": "Stunden zurück",
+        "more_yeses": "Mehr Zusagen",
+        "money_sooner": "Schneller Geld"
+      },
+      "label": {
+        "needNumber": "Wählen Sie zuerst Ihre eine Zahl; ihr Schritt wird hier aufgeschlüsselt.",
+        "subStep": "Teilschritt",
+        "addSubStep": "Teilschritt hinzufügen",
+        "unlabel": "Beschriftung entfernen",
+        "edgeCase": "Sonderfall: {text}",
+        "byHandNote": "Das bleibt bei Menschen. Die KI handelt dabei nie.",
+        "acknowledge": "Ich habe die Liste „Von Hand“ gelesen",
+        "acknowledged": "Liste „Von Hand“ gelesen"
+      },
+      "labels": {
+        "ai": "KI",
+        "automation": "Automatisierung",
+        "by_hand": "Von Hand"
+      },
+      "gate": {
+        "missing": "Noch offen"
       }
     }
   },

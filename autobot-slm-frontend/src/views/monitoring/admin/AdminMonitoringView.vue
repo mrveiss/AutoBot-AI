@@ -19,7 +19,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useAutobotApi, type SystemHealthReport } from '@/composables/useAutobotApi'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 
 const api = useAutobotApi()
 const { t } = useI18n()
@@ -98,10 +98,6 @@ function serviceBadgeClass(status: string): string {
 }
 
 // Methods
-
-function formatDate(dateStr: string): string {
-  return formatDateTime(dateStr)
-}
 
 function getErrorLevelClass(level: string): string {
   switch (level.toLowerCase()) {
@@ -380,7 +376,7 @@ onMounted(() => restartRefresh())
                     </span>
                   </div>
                   <p class="text-sm text-gray-900 font-medium">{{ err.message }}</p>
-                  <p class="text-xs text-gray-500 mt-1">{{ formatDate(err.timestamp) }}</p>
+                  <p class="text-xs text-gray-500 mt-1">{{ formatFleetDateTime(err.timestamp) }}</p>
                 </div>
               </div>
             </div>

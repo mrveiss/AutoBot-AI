@@ -40,7 +40,7 @@ def _live_paths(root) -> list[str]:
 REACH = declare(
     "browser-service-routes-scan-19490",
     discover=_live_paths,
-    floor=6365,  # measured at 6515 tracked files, pinned mid-window (#15928)
+    floor=6489,  # measured at 6515 tracked files, pinned mid-window (#15928)
     growth=300,
     what="tracked Python files swept for a browser-port URL path (#19490)",
     roots=_ROOTS,

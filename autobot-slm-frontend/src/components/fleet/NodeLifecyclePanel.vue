@@ -22,7 +22,7 @@ import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
 import { getConfig, getSlmApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
-import { formatRelativeTime } from '@/utils/dateUtils'
+import { formatCompactRelativeTime } from '@/utils/dateUtils'
 
 const logger = createLogger('NodeLifecyclePanel')
 
@@ -858,7 +858,7 @@ onUnmounted(() => {
             <!-- Time -->
             <td class="px-4 py-3">
               <div class="text-sm text-gray-900">{{ formatFullTime(event.timestamp) }}</div>
-              <div class="text-xs text-gray-500">{{ formatRelativeTime(event.timestamp) }}</div>
+              <div class="text-xs text-gray-500">{{ formatCompactRelativeTime(event.timestamp) }}</div>
             </td>
 
             <!-- Event Type -->
@@ -928,7 +928,7 @@ onUnmounted(() => {
           v-model="autoRefresh"
           class="w-4 h-4 text-primary-600 border-gray-300 rounded-sm focus:ring-primary-500"
         />{{ $t('fleet.nodeLifecyclePanel.autoRefreshEveryValue0S', { value0: Math.round(autoRefreshInterval / 1000) }) }}</label>
-      <span v-if="lastRefresh" class="text-xs text-gray-400">{{ $t('fleet.nodeLifecyclePanel.lastUpdatedValue0', { value0: formatRelativeTime(lastRefresh) }) }}</span>
+      <span v-if="lastRefresh" class="text-xs text-gray-400">{{ $t('fleet.nodeLifecyclePanel.lastUpdatedValue0', { value0: formatCompactRelativeTime(lastRefresh) }) }}</span>
     </div>
   </div>
 </template>

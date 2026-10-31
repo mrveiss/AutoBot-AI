@@ -39,7 +39,8 @@ from autobot_shared.kb_doc_set import DOC_PATTERNS, EXCLUDE_PATTERNS, should_exc
 from autobot_shared.logging_manager import get_llm_logger
 from constants.threshold_constants import TimingConstants
 from knowledge.ingestion_visibility import stamp_if_document
-from knowledge_base import KnowledgeBase, get_knowledge_base
+from knowledge_base import get_knowledge_base
+from knowledge_sync_replacement import SYNC_INGEST_ROUTE, _delete_fact_safe, delete_replaced_facts, fact_ids_held_by
 from utils.semantic_chunker_gpu import get_gpu_semantic_chunker
 
 logger = get_llm_logger("knowledge_sync_incremental")
@@ -47,16 +48,6 @@ logger = get_llm_logger("knowledge_sync_incremental")
 # O(1) lookup optimization constants (Issue #326)
 APPROVAL_KEYWORDS = {"approved", "denied", "executed", "rejected"}
 PROJECT_ROOT_FILES = {"README.md", "CLAUDE.md"}
-
-
-async def _delete_fact_safe(kb: "KnowledgeBase", fact_id: str) -> bool:
-    """Safely delete a fact from knowledge base (Issue #315 - extracted helper)."""
-    try:
-        await kb.delete_fact(fact_id)
-        return True
-    except Exception as e:
-        logger.warning("Failed to delete fact %s: %s", fact_id, e)
-        return False
 
 
 async def _process_file_with_semaphore(
@@ -128,6 +119,7 @@ class FileMetadata:
     sync_time: float | None = None
     vector_ids: List[str] = None
     fact_ids: List[str] = None
+    shared_fact_ids: List[str] = None  # chunks the KB already held: this file relies on them, did not create them
     chunk_count: int = 0
     processing_time: float = 0.0
 
@@ -137,6 +129,8 @@ class FileMetadata:
             self.vector_ids = []
         if self.fact_ids is None:
             self.fact_ids = []
+        if self.shared_fact_ids is None:
+            self.shared_fact_ids = []
 
 
 @dataclass
@@ -343,7 +337,6 @@ class IncrementalKnowledgeSync:
                 ):
                     all_files.append(path_obj)
 
-        # Remove duplicates and sort
         unique_files = sorted(list(set(all_files)))
         logger.info("Found %d files to analyze", len(unique_files))
 
@@ -425,14 +418,16 @@ class IncrementalKnowledgeSync:
             processing_time = time.time() - start_time
 
             # Store chunks using extracted helper (Issue #665)
-            vector_ids, fact_ids = await self._store_chunks_in_knowledge_base(chunks, relative_path, base_metadata)
+            vector_ids, fact_ids, shared_ids = await self._store_chunks_in_knowledge_base(
+                chunks, relative_path, base_metadata
+            )
 
             # Issue #12808: sync state must advance on durable success, not on intent. Recording
             # the content hash for a file the KB did not fully accept makes the next run classify
             # it as unchanged, so the missing chunks are never retried and the content is silently
             # absent from the KB. Returning None keeps the file out of the manifest, and the next
             # run re-offers it: bounded re-work instead of silent loss.
-            if not self._is_durably_stored(chunks, fact_ids, relative_path):
+            if not self._is_durably_stored(chunks, fact_ids + shared_ids, relative_path):
                 return None
 
             # Create file metadata using extracted helper (Issue #665)
@@ -443,14 +438,15 @@ class IncrementalKnowledgeSync:
                 file_stat,
                 vector_ids,
                 fact_ids,
-                len(fact_ids),
+                shared_ids,
+                len(chunks),
                 processing_time,
             )
 
             logger.info(
                 "Processed: %s -> %d chunks stored in %.3fs",
                 relative_path,
-                len(fact_ids),
+                len(chunks),
                 processing_time,
             )
             return metadata
@@ -495,7 +491,6 @@ class IncrementalKnowledgeSync:
             "sync_time": self.current_sync_time,
         }
 
-        # Determine category for better organization
         category = self._determine_category(relative_path)
         base_metadata["category"] = category
 
@@ -503,16 +498,17 @@ class IncrementalKnowledgeSync:
 
     async def _store_chunks_in_knowledge_base(
         self, chunks: List[Any], relative_path: Path, base_metadata: Dict[str, Any]
-    ) -> Tuple[List[str], List[str]]:
+    ) -> Tuple[List[str], List[str], List[str]]:
         """Store each chunk as a KB fact, surfacing every rejection.
 
         Issue #665: Extracted from _process_file_with_gpu_chunking to reduce function length.
         Issue #12808: a chunk the KB refuses is logged rather than silently dropped, so the
         caller can compare ``len(fact_ids)`` against ``len(chunks)`` and decide whether the
-        file was durably stored.
+        file was durably stored. #20074: a chunk the KB already holds is present; third list, not created here.
         """
         vector_ids = []
         fact_ids = []
+        shared_ids = []
 
         for i, chunk in enumerate(chunks):
             chunk_text = f"FILE: {relative_path}\nSECTION: {i+1}/{len(chunks)}\nCONTENT:\n{chunk.content}"
@@ -525,9 +521,11 @@ class IncrementalKnowledgeSync:
                 "character_count": len(chunk.content),
                 "gpu_optimized": True,
             }
-            result = await self.kb.store_fact(chunk_text, {**chunk_metadata, "ingest_route": "incremental_sync"})
+            result = await self.kb.store_fact(chunk_text, {**chunk_metadata, "ingest_route": SYNC_INGEST_ROUTE})
             if result["status"] == "success":
                 fact_ids.append(result["fact_id"])
+            elif result["status"] == "duplicate" and result.get("fact_id") not in (None, "?"):
+                shared_ids.append(result["fact_id"])
             else:
                 logger.error(
                     "Knowledge base rejected chunk %d/%d of %s: status=%s",
@@ -537,7 +535,7 @@ class IncrementalKnowledgeSync:
                     result.get("status"),
                 )
 
-        return vector_ids, fact_ids
+        return vector_ids, fact_ids, shared_ids
 
     @staticmethod
     def _is_durably_stored(chunks: List[Any], fact_ids: List[str], relative_path: Path) -> bool:
@@ -568,6 +566,7 @@ class IncrementalKnowledgeSync:
         file_stat: Any,
         vector_ids: List[str],
         fact_ids: List[str],
+        shared_fact_ids: List[str],
         chunk_count: int,
         processing_time: float,
     ) -> FileMetadata:
@@ -581,6 +580,7 @@ class IncrementalKnowledgeSync:
             sync_time=self.current_sync_time,
             vector_ids=vector_ids,
             fact_ids=fact_ids,
+            shared_fact_ids=shared_fact_ids,
             chunk_count=chunk_count,
             processing_time=processing_time,
         )
@@ -622,34 +622,32 @@ class IncrementalKnowledgeSync:
 
             metadata = self.file_metadata[file_path]
 
-            # Remove all facts in parallel - eliminates N+1 sequential deletions
-            if metadata.fact_ids:
-                await asyncio.gather(
-                    *[_delete_fact_safe(self.kb, fid) for fid in metadata.fact_ids],
-                    return_exceptions=True,
-                )
-
-            # Remove from metadata
             del self.file_metadata[file_path]
+            held = fact_ids_held_by(self.file_metadata.values())  # another file's chunk stays (#20074)
+            await self._delete_facts([fid for fid in metadata.fact_ids if fid not in held])
+            shared = [fid for fid in metadata.shared_fact_ids if fid not in held and fid not in metadata.fact_ids]
+            await delete_replaced_facts(self.kb, shared)  # not this file's own: only if the sync made it
+            logger.info("Removed knowledge for: %s", Path(file_path).relative_to(self.project_root))
 
-            logger.info(
-                "Removed knowledge for: %s",
-                Path(file_path).relative_to(self.project_root),
-            )
+    async def _delete_facts(self, fact_ids: List[str]) -> None:
+        """Delete facts in parallel - eliminates N+1 sequential deletions."""
+        await asyncio.gather(*[_delete_fact_safe(self.kb, fid) for fid in fact_ids], return_exceptions=True)
 
     def _update_metadata_from_results(
-        self,
-        changed_files: List[Path],
-        results: List[Any],
-        metrics: SyncMetrics,
-    ) -> None:
-        """Update metadata from processing results (Issue #315 - extracted helper)."""
+        self, changed_files: List[Path], results: List[Any], metrics: SyncMetrics
+    ) -> List[str]:
+        """Record each stored result; returns the fact ids it replaced, now safe to delete (#20026)."""
+        replaced: List[str] = []
         for file_path, result in zip(changed_files, results):
             if isinstance(result, FileMetadata):
+                previous = self.file_metadata.get(str(file_path))
+                replaced += [*previous.fact_ids, *previous.shared_fact_ids] if previous else []
                 self.file_metadata[str(file_path)] = result
                 metrics.total_chunks_processed += result.chunk_count
             elif isinstance(result, Exception):
                 logger.error("Failed to process %s: %s", file_path, result)
+        held = fact_ids_held_by(self.file_metadata.values())  # the new version's, and any other file's (#20074)
+        return [fid for fid in dict.fromkeys(replaced) if fid not in held]
 
     def _expired_paths(self) -> List[str]:
         """Scanned files past their TTL; expiry re-indexes, and outside the scan nothing would."""
@@ -696,15 +694,17 @@ class IncrementalKnowledgeSync:
                 len(changed_files),
             )
 
-            # Process files in parallel batches for maximum performance
             semaphore = asyncio.Semaphore(self.max_concurrent_files)
 
-            # Process files concurrently using extracted helper (Issue #315)
             tasks = [_process_file_with_semaphore(semaphore, self, fp) for fp in changed_files]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
             # Update metadata for successful results
-            self._update_metadata_from_results(changed_files, results, metrics)
+            replaced = self._update_metadata_from_results(changed_files, results, metrics)
+            # Saved first: a crash before the delete leaves stray facts, never a state naming deleted ones.
+            if replaced:
+                await self._save_sync_state()
+                await delete_replaced_facts(self.kb, replaced)
             metrics.gpu_acceleration_used = True
         else:
             logger.info("No files to process - all up to date!")

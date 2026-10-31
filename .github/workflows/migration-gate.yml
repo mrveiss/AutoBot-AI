@@ -34,7 +34,10 @@ on:
       - 'autobot-backend/llc/services/company_ceo.py'
       - 'autobot-backend/llc/services/company_move_lock.py'
       - 'autobot-backend/llc/services/authz.py'
+      - 'autobot-backend/llc/services/membership_policy.py'
       - 'autobot-backend/llc/services/membership_service.py'
+      - 'autobot-backend/llc/services/budget.py'
+      - 'autobot-backend/llc/exceptions.py'
       - 'autobot-backend/llc/scheduler/run_status.py'
       - 'autobot-backend/canvas/models.py'
       - 'autobot-backend/models/**'
@@ -121,7 +124,10 @@ jobs:
           - 'autobot-backend/llc/services/company_ceo.py'
           - 'autobot-backend/llc/services/company_move_lock.py'
           - 'autobot-backend/llc/services/authz.py'
+          - 'autobot-backend/llc/services/membership_policy.py'
           - 'autobot-backend/llc/services/membership_service.py'
+          - 'autobot-backend/llc/services/budget.py'
+          - 'autobot-backend/llc/exceptions.py'
           - 'autobot-backend/llc/scheduler/run_status.py'
           - 'autobot-backend/canvas/models.py'
           - 'autobot-backend/models/**'
@@ -254,6 +260,7 @@ jobs:
       - name: Run migration matrix
         env:
           AUTOBOT_MIGRATION_TEST_ADMIN_URL: postgresql+asyncpg://migtest:migtest@127.0.0.1:5432/postgres
+          AUTOBOT_MIGRATION_TEST_REQUIRE_DB: "1"  # #20080: a missing URL fails, never skips
         run: |
           python -m pytest autobot-backend/tests/migrations/ \
             -m migration_gate -v --tb=short -p no:cacheprovider
