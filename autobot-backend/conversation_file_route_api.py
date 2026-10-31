@@ -66,8 +66,20 @@ class ConversationFileRouteApi:
         finally:
             await connection.close()
 
+    async def _release_session_file(self, connection, session_id: str, file_id: str) -> None:
+        """Drop this session's link to the file; soft-delete the file only if no session still links it."""
+        await connection.execute(
+            "DELETE FROM session_file_associations WHERE session_id = ? AND file_id = ?", (session_id, file_id)
+        )
+        async with connection.execute(
+            "SELECT 1 FROM session_file_associations WHERE file_id = ? LIMIT 1", (file_id,)
+        ) as cursor:
+            still_linked = await cursor.fetchone()
+        if not still_linked:
+            await self._soft_delete_file(connection, file_id)
+
     async def delete_file(self, session_id: str, file_id: str, user_id: str | None = None) -> bool:
-        """Soft-delete one file of a session (the cleanup queue owns removal from disk); False if absent."""
+        """Remove one file from a session; soft-delete it only when no other session still links it."""
         async with self._lock:
             connection = await self._get_async_db_connection()
             try:
@@ -75,7 +87,7 @@ class ConversationFileRouteApi:
                     await self._lookup_session_file(connection, session_id, file_id)
                 except RuntimeError:
                     return False
-                await self._soft_delete_file(connection, file_id)
+                await self._release_session_file(connection, session_id, file_id)
                 await connection.commit()
             except Exception:
                 await connection.rollback()
@@ -102,19 +114,35 @@ class ConversationFileRouteApi:
         done: List[Dict[str, str]] = []
         failed: List[Dict[str, str]] = []
         for file_id in file_ids:
-            info = await self.get_file_info(session_id, file_id)
             try:
+                info = await self.get_file_info(session_id, file_id)
                 if info is None:
                     raise LookupError("File not found in this conversation")
-                done.append(await transfer_one(info, destination, target_path, tags, user_id))
-                if not copy:
-                    await self.delete_file(session_id, file_id, user_id)
+                entry = await transfer_one(info, destination, target_path, tags, user_id)
             except Exception as exc:  # one file failing must not abort the rest of the batch
                 logger.warning("Transfer of %s failed: %s", file_id, exc)
                 failed.append({"file_id": file_id, "error": str(exc)})
+                continue
+            if not copy:
+                await self._remove_moved_source(session_id, file_id, user_id, entry)
+            done.append(entry)
         return {
             "transferred_files": done,
             "failed_files": failed,
             "total_transferred": len(done),
             "total_failed": len(failed),
         }
+
+    async def _remove_moved_source(
+        self, session_id: str, file_id: str, user_id: str | None, entry: Dict[str, str]
+    ) -> None:
+        """Remove a moved file's source. The copy exists, so a failure here never un-reports the transfer.
+
+        It is recorded on the transferred entry as ``source_delete_error`` and nothing is rolled back: undoing
+        the destination would delete data that is correct and may already be in use there.
+        """
+        try:
+            await self.delete_file(session_id, file_id, user_id)
+        except Exception as exc:
+            logger.warning("Transferred %s but could not remove its source: %s", file_id, exc)
+            entry["source_delete_error"] = str(exc)

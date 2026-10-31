@@ -651,14 +651,14 @@ class ConversationFileManager(ConversationFileRouteApi):
         message_id: str | None,
         association_type: str,
     ) -> None:
-        """Create session file association record."""
+        """Create the association unless the session already has it (NULL message_ids are distinct under UNIQUE)."""
         await connection.execute(
             """
-            INSERT INTO session_file_associations
-            (session_id, file_id, message_id, association_type)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO session_file_associations (session_id, file_id, message_id, association_type)
+            SELECT ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM session_file_associations
+                WHERE session_id = ? AND file_id = ? AND message_id IS ?)
             """,
-            (session_id, file_id, message_id, association_type),
+            (session_id, file_id, message_id, association_type, session_id, file_id, message_id),
         )
 
     async def _handle_deduplicated_file(self, connection, existing_file, file_info: UploadInfo) -> Dict[str, Any]:
