@@ -151,7 +151,7 @@ export type {
 // Shared duration, uptime and byte formatting (#14908).
 export type { DurationStyle } from './src/utils/duration'
 export { formatDuration, formatUptime, formatFileSize, formatBytes } from './src/utils/format'
-export type { FormatDurationOptions, FormatUptimeOptions, FormatBytesOptions } from './src/utils/format'
+export type { DurationUnitLabels, FormatDurationOptions, FormatUptimeOptions, FormatBytesOptions } from './src/utils/format'
 export {
   formatDate,
   formatTime,
