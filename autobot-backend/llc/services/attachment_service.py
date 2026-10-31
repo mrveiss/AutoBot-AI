@@ -14,7 +14,6 @@ Text-extractable extensions: .txt .md .py .ts .js .json .yaml .yml .toml .csv
 Binary files are stored without extraction (text_extracted remains False).
 """
 
-import logging
 import os
 import uuid
 from pathlib import Path
@@ -24,11 +23,13 @@ import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.env_utils import env_int
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
 from llc.models.attachment import LLCWorkItemAttachment
-from llc.storage_root import llc_local_storage_root
+from llc.services import attachment_files as files
+from llc.storage_root import LLC_ATTACHMENT_STAGING_MAX_AGE_SECONDS, llc_local_storage_root
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Configurable max upload size (bytes). Default 20 MB.
 _DEFAULT_MAX_BYTES = 20 * 1024 * 1024
@@ -139,22 +140,48 @@ def _extract_text(path: Path, filename: str) -> Optional[str]:
         return None
 
 
-def _write_local(content: bytes, dest: Path) -> None:
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_bytes(content)
+def _read_local(path: Path, staged: Optional[Path] = None) -> bytes:
+    """Read the published file; fall back to the staged copy of a committed-but-unpublished upload."""
+    if path.exists():
+        return path.read_bytes()
+    if staged is not None and staged.exists():
+        logger.warning("#19756: %s is not published yet; serving its staged copy %s", path, staged)
+        return staged.read_bytes()
+    raise AttachmentNotFound(f"File not found: {path}")
 
 
-def _read_local(path: Path) -> bytes:
-    if not path.exists():
-        raise AttachmentNotFound(f"File not found: {path}")
-    return path.read_bytes()
+def _dest_for_row(row: LLCWorkItemAttachment) -> Path:
+    """The final path re-derived from the row's ids, so a stored string is never trusted as a destination."""
+    return _storage_path(str(row.company_id), str(row.work_item_id), str(row.id), row.filename)
 
 
-def _delete_local(path: Path) -> None:
-    try:
-        path.unlink(missing_ok=True)
-    except Exception as exc:
-        logger.warning("Failed to delete %s: %s", path, exc)
+def _new_row(
+    *,
+    attachment_id: str,
+    company_id: str,
+    work_item_id: str,
+    agent_id: Optional[uuid.UUID],
+    user_id: Optional[uuid.UUID],
+    filename: str,
+    content_type: str,
+    content: bytes,
+    dest: Path,
+    extracted: Optional[str],
+) -> LLCWorkItemAttachment:
+    return LLCWorkItemAttachment(
+        id=uuid.UUID(attachment_id),
+        company_id=uuid.UUID(company_id),
+        work_item_id=uuid.UUID(work_item_id),
+        uploaded_by_agent_id=agent_id,
+        uploaded_by_user_id=user_id,
+        filename=filename,
+        content_type=content_type,
+        size_bytes=len(content),
+        sha256=files.sha256_hex(content),
+        storage_path=str(dest),
+        text_extracted=extracted is not None,
+        extracted_text=extracted,
+    )
 
 
 class AttachmentService:
@@ -178,37 +205,62 @@ class AttachmentService:
             raise StorageBackendNotImplemented(f"Backend '{_STORAGE_BACKEND}' not implemented")
 
         attachment_id = str(uuid.uuid4())
-        # EVERY id is parsed before anything reaches the filesystem (#17300).
-        # _storage_path covers the three that form the path; these two do not,
-        # and were still cast below -- after the write. A malformed one raised
-        # there and left an orphaned file behind, repeatably, which is a disk
-        # filler. The same order-of-operations defect as the original, in the
-        # same function, for the parameters that happened not to be path
-        # segments.
+        # EVERY id is parsed before anything reaches the filesystem (#17300): a malformed one
+        # raised after the write and left an orphaned file, repeatably -- a disk filler.
         uploaded_by_agent_uuid = uuid.UUID(uploaded_by_agent_id) if uploaded_by_agent_id else None
         uploaded_by_user_uuid = uuid.UUID(uploaded_by_user_id) if uploaded_by_user_id else None
         dest = _storage_path(company_id, work_item_id, attachment_id, filename)
-        _write_local(content, dest)
-
-        extracted = _extract_text(dest, filename)
-
-        row = LLCWorkItemAttachment(
-            id=uuid.UUID(attachment_id),
-            company_id=uuid.UUID(company_id),
-            work_item_id=uuid.UUID(work_item_id),
-            uploaded_by_agent_id=uploaded_by_agent_uuid,
-            uploaded_by_user_id=uploaded_by_user_uuid,
+        # Stage -> commit -> publish (#19756). Nothing reaches `dest` until the row is durable.
+        staged = files.stage_bytes(_resolve_storage_root(), attachment_id, content)
+        row = _new_row(
+            attachment_id=attachment_id,
+            company_id=company_id,
+            work_item_id=work_item_id,
+            agent_id=uploaded_by_agent_uuid,
+            user_id=uploaded_by_user_uuid,
             filename=filename,
             content_type=content_type,
-            size_bytes=len(content),
-            storage_path=str(dest),
-            text_extracted=extracted is not None,
-            extracted_text=extracted,
+            content=content,
+            dest=dest,
+            extracted=_extract_text(staged, filename),
         )
         session.add(row)
-        await session.commit()
+        await self._commit_staged(session, staged)
+        self._publish_committed(staged, dest, attachment_id)
         await session.refresh(row)
         return row
+
+    @staticmethod
+    async def _commit_staged(session: AsyncSession, staged: Path) -> None:
+        """Commit the row. On failure the staged file is kept, not unlinked.
+
+        A commit that raises is not proof the row is absent (the connection can drop after the
+        server committed), and unlinking would then destroy the only copy of committed content.
+        The staging sweep settles it by asking whether the row exists.
+        """
+        try:
+            await session.commit()
+        except Exception:
+            logger.error("#19756: attachment commit failed; staged file %s kept for the staging sweep", staged)
+            raise
+
+    @staticmethod
+    def _publish_committed(staged: Path, dest: Path, attachment_id: str) -> None:
+        """Move the file into place once its row is durable.
+
+        A failure here leaves a committed row whose file is still staged. That is not hidden: it
+        is logged at error, readers are served from the staged copy (`_read_local`), and the
+        staging sweep retries the move.
+        """
+        try:
+            files.publish(staged, dest)
+        except OSError as exc:
+            logger.error(
+                "#19756: attachment %s committed but publishing %s failed: %s; the staging sweep will retry",
+                attachment_id,
+                dest,
+                exc,
+            )
 
     async def list_attachments(
         self,
@@ -259,7 +311,8 @@ class AttachmentService:
             work_item_id=work_item_id,
             company_id=company_id,
         )
-        content = _read_local(Path(row.storage_path))
+        staged = files.staging_path(_resolve_storage_root(), str(row.id))
+        content = _read_local(Path(row.storage_path), staged)
         return row, content
 
     async def get_text(
@@ -292,6 +345,19 @@ class AttachmentService:
             work_item_id=work_item_id,
             company_id=company_id,
         )
-        _delete_local(Path(row.storage_path))
+        # The removal is recorded in this transaction (#19756); the unlink happens after it commits.
+        entry = files.enqueue_removal(session, row)
         await session.delete(row)
         await session.commit()
+        await files.drain_removals(session, _resolve_storage_root(), [entry])
+
+    async def drain_removals(self, session: AsyncSession) -> int:
+        """Retry every outbox entry; returns how many files are now gone."""
+        entries = await files.pending_removals(session)
+        return await files.drain_removals(session, _resolve_storage_root(), entries)
+
+    async def sweep_staging(self, session: AsyncSession) -> dict[str, int]:
+        """Publish committed-but-unpublished uploads and unlink stale uncommitted ones."""
+        return await files.sweep_staging(
+            session, _resolve_storage_root(), LLC_ATTACHMENT_STAGING_MAX_AGE_SECONDS, _dest_for_row
+        )

@@ -128,6 +128,36 @@ env_registry.register_env_var(
 
 env_registry.register_env_var(
     env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_ATTACHMENT_STAGING_MAX_AGE_SECONDS",
+        type=int,
+        default=3600,
+        description=(
+            "Seconds a file must sit in the attachment staging directory before the attachment "
+            "file sweep acts on it (#19756). A staged file whose row was committed is published "
+            "to its final path; one with no row is the remains of an upload that never committed "
+            "and is unlinked. Only the staging directory is ever touched. Floored at 300 seconds "
+            "so a slow upload still in flight is never mistaken for an abandoned one."
+        ),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_ATTACHMENT_SWEEP_INTERVAL_SECONDS",
+        type=int,
+        default=300,
+        description=(
+            "Seconds between runs of the attachment file sweep (#19756), which retries removals "
+            "recorded in the attachment deletion outbox until the file is gone and repairs stale "
+            "staging files. Floored at 30 seconds."
+        ),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
         name="AUTOBOT_VOICE_REFERENCE_MAX_SECONDS",
         type=float,
         default=120.0,

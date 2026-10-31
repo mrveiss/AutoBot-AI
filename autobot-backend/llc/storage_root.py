@@ -32,6 +32,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from autobot_shared.env_utils import env_int_clamped
+
 #: Env var naming the local storage root. Unprefixed and pre-existing; kept as
 #: the single spelling rather than introduced here.
 LLC_STORAGE_PATH_ENV = "LLC_STORAGE_PATH"
@@ -43,3 +45,14 @@ def llc_local_storage_root() -> Path:
     if configured:
         return Path(configured)
     return Path.home() / ".autobot" / "llc" / "attachments"
+
+
+#: How old a file in the staging directory must be before the sweep looks at it (#19756).
+#: A staged file is either an upload mid-flight or an upload whose publish step did not
+#: run, so the window has to outlast the slowest upload; it is a floor, not a schedule.
+LLC_ATTACHMENT_STAGING_MAX_AGE_SECONDS = env_int_clamped(
+    "AUTOBOT_LLC_ATTACHMENT_STAGING_MAX_AGE_SECONDS", 3600, min_v=300
+)
+
+#: Seconds between runs of the attachment file sweep (#19756).
+LLC_ATTACHMENT_SWEEP_INTERVAL_SECONDS = env_int_clamped("AUTOBOT_LLC_ATTACHMENT_SWEEP_INTERVAL_SECONDS", 300, min_v=30)
