@@ -30,11 +30,12 @@ from __future__ import annotations
 
 import ast
 import functools
-from pathlib import Path
+
+from repo_tests._paths import repo_root
 
 from tools.lint._scan_helpers import tracked_paths
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = repo_root()
 
 WRITE_APIS = frozenset({"store_fact", "add_document", "add_file", "add_content", "_add_document_internal"})
 INGEST_HELPERS = frozenset(
