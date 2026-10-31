@@ -73,3 +73,18 @@ def test_a_handoff_transition_is_claimed_only_between_neighbouring_lanes():
     assert _handoff_kind(_handoff("c", "a"), "s2", adjacent, owning, {}) is H.OUT_OF_SCOPE  # against the chain
     assert _handoff_kind(_handoff("x", "a"), "s2", adjacent, owning, {}) is H.TRIGGER
     assert _handoff_kind(_handoff("a", "b"), "s9", adjacent, owning, {}) is H.OUT_OF_SCOPE
+
+
+def _segs(*lanes):
+    return [[NS(key=f"{ln}1", lane_key=ln)] for ln in lanes]
+
+
+def test_a_handoff_that_skips_a_lane_of_the_chain_is_a_named_error():
+    from llc.services.company_os.plan_convert_build import _handoff_errors
+
+    plan = NS(one_number=NS(step_key="s2"), handoffs=[_handoff("a", "c"), _handoff("a", "b"), _handoff("x", "y")])
+    errors = _handoff_errors(plan, _segs("a", "b", "c"))
+    assert len(errors) == 1 and "'h'" in errors[0] and "'a'" in errors[0] and "'c'" in errors[0]
+    assert _handoff_errors(NS(one_number=NS(step_key="s2"), handoffs=[_handoff("a", "b")]), _segs("a", "b", "c")) == []
+    out_of_chain = NS(one_number=NS(step_key="s2"), handoffs=[_handoff("a", "c", "s8", "s9")])
+    assert _handoff_errors(out_of_chain, _segs("a", "b", "c")) == []  # genuinely out of scope stays quiet

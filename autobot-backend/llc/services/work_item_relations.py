@@ -7,7 +7,8 @@ Removing either leg (by relation id) removes both.
 
 Transition guard (enforced in WorkItemService.transition_status):
   An item in ``blocked`` status cannot transition to ``in_progress`` while it has
-  at least one ``blocked_by`` relation whose source item is not ``done`` or ``cancelled``.
+  at least one ``blocked_by`` relation whose target (the blocker) is not ``done`` or ``cancelled``.
+  ``blocked_by`` reads source-is-blocked-by-target, so the blocked item is the source.
 """
 
 import logging
