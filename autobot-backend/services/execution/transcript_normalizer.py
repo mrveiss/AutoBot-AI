@@ -22,6 +22,7 @@ from __future__ import annotations
 import gzip
 import json
 import os
+import stat
 import zlib
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -340,12 +341,28 @@ def _open_no_follow(safe: Path) -> Iterator[Any]:
     ``O_NOFOLLOW`` makes the open fail (``OSError``, ELOOP) when the FINAL component is a symlink. It does not
     cover parent components: a directory swapped for a symlink between validation and open is still followed.
     """
-    with os.fdopen(os.open(safe, os.O_RDONLY | os.O_NOFOLLOW), "rb") as raw:
+    with os.fdopen(_open_regular_fd(safe), "rb") as raw:
         if safe.suffix != _GZIP_SUFFIX:
             yield raw
             return
         with gzip.GzipFile(fileobj=raw, mode="rb") as unzipped:
             yield unzipped
+
+
+def _open_regular_fd(safe: Path) -> int:
+    """A read-only descriptor on ``safe``, which must be a regular file; closed again on every failure path.
+
+    ``O_NONBLOCK`` keeps a FIFO swapped in after validation from hanging the open; it has no effect on reads
+    of a regular file. ``ValueError`` (like a validation failure) when the target is not a regular file.
+    """
+    fd = os.open(safe, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise ValueError("not a regular file")
+    except BaseException:
+        os.close(fd)
+        raise
+    return fd
 
 
 def _children(directory: Path) -> List[Path]:

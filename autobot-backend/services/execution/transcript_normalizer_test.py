@@ -6,6 +6,8 @@
 
 import gzip
 import json
+import os
+import threading
 
 import pytest
 
@@ -311,6 +313,33 @@ class TestHostileInputAndPaths:
         monkeypatch.setattr(tn, "validate_path", validate_then_swap)
         with pytest.raises(OSError):
             list(tn.iter_lines(target, tn.ReadResult(), [str(root)]))
+
+    def test_a_directory_named_like_a_transcript_fails_without_leaking_a_descriptor(self, tmp_path):
+        root = tmp_path / "root"
+        (root / "x.jsonl").mkdir(parents=True)
+        before = len(os.listdir("/proc/self/fd"))
+        for _ in range(5):
+            batch = tn.read_transcripts([root], [str(root)])
+        assert batch.results == {} and list(batch.failed.values()) == ["ValueError"]
+        assert len(os.listdir("/proc/self/fd")) == before
+
+    def test_a_fifo_swapped_in_after_validation_does_not_block_the_read(self, tmp_path):
+        root = tmp_path / "root"
+        root.mkdir()
+        fifo = root / "pipe.jsonl"
+        os.mkfifo(fifo)
+        outcome = []
+
+        def read():
+            try:
+                list(tn.iter_lines(fifo, tn.ReadResult(), [str(root)]))
+            except ValueError as exc:
+                outcome.append(type(exc).__name__)
+
+        worker = threading.Thread(target=read, daemon=True)
+        worker.start()
+        worker.join(timeout=10)
+        assert not worker.is_alive() and outcome == ["ValueError"]
 
     def test_path_outside_root_and_missing_path_are_refused_in_a_batch(self, tmp_path):
         root = tmp_path / "root"
