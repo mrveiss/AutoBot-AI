@@ -8708,8 +8708,13 @@
       "noActivity": "No activity recorded.",
       "noHandoffBrief": "No handoff brief available.",
       "loadingBrief": "Loading brief...",
+      "loadMoreComments": "Load more comments",
       "errors": {
-        "saveFailed": "Couldn't save your change. Please try again."
+        "saveFailed": "Couldn't save your change. Please try again.",
+        "commentsFailed": "Couldn't load the comments. Please try again.",
+        "artifactsFailed": "Couldn't load the artifacts. Please try again.",
+        "activityFailed": "Couldn't load the activity. Please try again.",
+        "handoffFailed": "Couldn't load the handoff brief. Please try again."
       }
     },
     "orgChart": {
