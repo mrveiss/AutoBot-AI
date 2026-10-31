@@ -399,6 +399,14 @@
       environment:
         PYTHONPATH: "{{ autobot.base_dir }}"
       register: rbac_init_result
+      # #19846: the command line carries the admin password hash; the check below keeps a failure readable
+      no_log: true
+      failed_when: false
+
+    - name: Check RBAC initialization succeeded
+      assert:
+        that: rbac_init_result.rc == 0
+        fail_msg: "init_rbac.py exited {{ rbac_init_result.rc }}: {{ rbac_init_result.stderr_lines | default([]) | last | default('') }}"
 
     - name: Display RBAC initialization results
       debug:

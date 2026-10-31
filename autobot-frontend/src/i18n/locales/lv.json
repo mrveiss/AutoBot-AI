@@ -4242,6 +4242,8 @@
     "stop": "Stop Workflow",
     "status": "Status",
     "history": {
+      "durationSeconds": "s",
+      "durationMinutes": "min",
       "searchPlaceholder": "Search workflows...",
       "allStatus": "All Status",
       "completed": "Completed",
@@ -8994,8 +8996,6 @@
       "unavailableTitle": "Darbplūsmu plānotājs nav pieejams",
       "unavailableHint": "Šī funkcija jūsu darba telpā ir izslēgta, tāpēc šeit vēl nav ko rādīt.",
       "statusFlow": "Plāna gaita",
-      "statusNotAvailable": "Šī plāna statuss ir: {status}. Apstiprināšana un pārveidošana vēl nav pieejama, tāpēc plāns tiek rādīts tikai lasīšanai.",
-      "convertNotAvailable": "Darbplūsmu izveide no plāna vēl nav pieejama.",
       "status": {
         "draft": "Melnraksts",
         "measured": "Izmērīts",
@@ -9082,7 +9082,58 @@
         "by_hand": "Ar roku"
       },
       "gate": {
-        "missing": "Vēl trūkst"
+        "missing": "Vēl trūkst",
+        "title": "Gatavs izveidei?",
+        "unknown": "Cita pārbaude",
+        "state": {
+          "met": "Izpildīts",
+          "open": "Atvērts",
+          "pending": "Vēl nav pārbaudīts"
+        },
+        "name": {
+          "G1": "Karte ir derīga",
+          "G2": "Katrs solis ir izmērīts",
+          "G3": "Izvēlētais solis ir sadalīts",
+          "G4": "Katram apakšsolim un robežgadījumam ir iezīme",
+          "G5": "Saraksts „Ar roku” izlasīts, un MI soļus aptver apstiprinājumi",
+          "G6": "Priekšskatījumā nav kļūdu",
+          "G7": "Jūs apstiprinājāt šo plānu",
+          "converted": "Darbplūsmas ir izveidotas"
+        }
+      },
+      "readOnly": "Šī plāna statuss ir: {status}, tāpēc 1.–4. solis ir tikai lasāms.",
+      "firstProcess": {
+        "title": "Jūsu uzņēmums ir gatavs",
+        "body": "Plānojiet savu pirmo procesu: attēlojiet to, izmēriet un izvēlieties vienu skaitli, ko uzlabot.",
+        "plan": "Plānot manu pirmo procesu",
+        "later": "Vēlāk"
+      },
+      "convert": {
+        "notReady": "Vispirms pabeidziet 1.–4. soli. Augstāk redzamās pārbaudes rāda, kā vēl trūkst.",
+        "previewTitle": "Kas tiks izveidots (priekšskatījums, vēl nekas nepastāv)",
+        "createdTitle": "Kas tika izveidots",
+        "counts": "Darbplūsmas: {workflows}. Procesi: {processes}.",
+        "ownerLane": "Atbildīgais: {lane}",
+        "errors": "Kļūdas, kas jālabo pirms apstiprināšanas",
+        "warnings": "Brīdinājumi",
+        "documented": "Saglabāts kā rokasgrāmatas teksts, netiek būvēts:",
+        "failedProposals": "Neizdevās iesniegt {count} MI rindu priekšlikumus. Mēģiniet vēlreiz, lai tos iesniegtu.",
+        "turnOnNotAvailable": "Darbplūsmu ieslēgšana vēl nav pieejama: līdz tam nekas tās nepalaiž.",
+        "openWorkflows": "Atvērt darbplūsmas",
+        "unavailable": "Šī darbība nav pieejama: Darbplūsmu plānotājs jūsu darbvietā ir izslēgts, vai plāna vairs nav.",
+        "blocked": "Vēl nav gatavs. Augstāk redzamās pārbaudes rāda, kā trūkst.",
+        "approvedBy": "Apstiprināja {by}, {at}.",
+        "preview": "Priekšskatīt, kas tiks izveidots",
+        "previewAgain": "Atsvaidzināt priekšskatījumu",
+        "approve": "Apstiprināt",
+        "create": "Izveidot darbplūsmas",
+        "retry": "Atkārtot MI rindu priekšlikumus",
+        "approveTitle": "Apstiprināt šo plānu?",
+        "approveMessage": "Jūs apstiprināt redzamo priekšskatījumu. Jebkurš vēlāks plāna labojums atceļ šo apstiprinājumu.",
+        "previewFailed": "Neizdevās izveidot priekšskatījumu.",
+        "approveFailed": "Neizdevās apstiprināt plānu.",
+        "convertFailed": "Neizdevās izveidot darbplūsmas.",
+        "retryFailed": "Neizdevās atkārtot MI rindu priekšlikumus."
       }
     }
   },
