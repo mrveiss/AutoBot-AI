@@ -239,7 +239,7 @@ class AuditLogger:
         try:
             event = self._entry(operation, result, **fields).to_event()
             if durable:
-                written = await canonical.record(event)
+                written = await canonical.record_committed(event)
                 self._total_logged += int(written)
                 self._total_failed += int(not written)
                 return written

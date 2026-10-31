@@ -9,11 +9,12 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from fastapi import HTTPException
 
 from autobot_shared.scoping import Principal, ResourceDescriptor, ScopeLevel, is_visible
 from autobot_shared.user_management.base_service import TenantContext
 from knowledge.ownership import KnowledgeOwnership
-from knowledge.root_read import is_superadmin_role
+from knowledge.root_read import is_superadmin_role, is_superadmin_user
 from knowledge.search_filters import (
     filter_for_caller,
     filter_for_principal,
@@ -146,10 +147,11 @@ async def test_a_read_that_needed_no_bypass_writes_no_audit_record():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failure", [{"side_effect": RuntimeError("down")}, {"return_value": False}])
-async def test_when_the_audit_cannot_be_written_the_bypassed_facts_are_withheld(failure):
+async def test_when_the_audit_cannot_be_written_the_root_read_is_refused_with_503(failure):
     with patch(AUDIT, new=AsyncMock(**failure)):
-        kept = await filter_for_principal(ALL_FACTS, kb_principal(SUPERADMIN), _kb().ownership_manager)
-    assert _ids(kept) == ["f-a"]
+        with pytest.raises(HTTPException) as refused:
+            await filter_for_principal(ALL_FACTS, kb_principal(SUPERADMIN), _kb().ownership_manager)
+    assert refused.value.status_code == 503
 
 
 @pytest.mark.asyncio
@@ -194,10 +196,14 @@ def test_the_development_header_and_auth_disabled_identities_are_not_superadmin(
     assert kb_principal(dev_user).user_id == "dev_superadmin"
 
 
-def test_an_orm_user_object_is_judged_by_its_role():
-    orm = SimpleNamespace(id=1, org_id=None, team_memberships=[], role="superadmin")
-    assert kb_principal(orm).is_superadmin is True
-    assert kb_principal(SimpleNamespace(id=1, org_id=None, team_memberships=[], role="admin")).is_superadmin is False
+def test_only_the_orm_user_type_is_trusted_outside_a_verified_mapping():
+    from user_management.models.user import User
+
+    lookalike = SimpleNamespace(id=1, org_id=None, team_memberships=[], role="superadmin")
+    assert kb_principal(lookalike).is_superadmin is False  # an object that merely says so (#19860)
+    orm = User(id=1, username="root")
+    assert kb_principal(orm).is_superadmin is False  # the model has no role column: fails closed
+    assert is_superadmin_user(lookalike) is False and is_superadmin_user(None) is False
 
 
 class _NoStore:
@@ -224,7 +230,15 @@ class _NoStore:
 @pytest.mark.asyncio
 async def test_a_failing_audit_store_withholds_the_bypassed_facts_of_a_superadmin():
     with _NoStore(AsyncMock(side_effect=RuntimeError("db down"))):
-        kept = await filter_for_principal(ALL_FACTS, kb_principal(SUPERADMIN), _kb().ownership_manager)
+        with pytest.raises(HTTPException) as refused:
+            await filter_for_principal(ALL_FACTS, kb_principal(SUPERADMIN), _kb().ownership_manager)
+    assert refused.value.status_code == 503
+
+
+@pytest.mark.asyncio
+async def test_a_superadmin_read_that_bypassed_nothing_is_not_refused_when_the_store_is_down():
+    with _NoStore(AsyncMock(side_effect=RuntimeError("db down"))):
+        kept = await filter_for_principal([OWN], kb_principal(SUPERADMIN), _kb().ownership_manager)
     assert _ids(kept) == ["f-a"]
 
 
@@ -239,8 +253,9 @@ async def test_a_committed_audit_row_is_awaited_before_the_bypassed_facts_are_re
 
 @pytest.mark.asyncio
 async def test_a_failing_audit_store_withholds_a_plain_admins_explicit_read_too():
-    with _NoStore(AsyncMock(side_effect=RuntimeError("db down"))):
-        assert await filter_for_caller(ALL_FACTS, _kb(), ADMIN) == []
+    with _NoStore(AsyncMock(side_effect=RuntimeError("db down"))), pytest.raises(HTTPException) as refused:
+        await filter_for_caller(ALL_FACTS, _kb(), ADMIN)
+    assert refused.value.status_code == 503
     with _NoStore(AsyncMock()):
         assert _ids(await filter_for_caller(ALL_FACTS, _kb(), ADMIN)) == ["f-b", "f-t", "f-a"]
 
@@ -255,5 +270,6 @@ async def test_a_superadmin_with_no_ownership_manager_reads_nothing_extra_and_it
 @pytest.mark.asyncio
 async def test_a_withheld_root_read_is_logged_with_the_user_and_the_count(caplog):
     with _NoStore(AsyncMock(side_effect=RuntimeError("db down"))), caplog.at_level("ERROR"):
-        await filter_for_principal(ALL_FACTS, kb_principal(SUPERADMIN), _kb().ownership_manager)
+        with pytest.raises(HTTPException):
+            await filter_for_principal(ALL_FACTS, kb_principal(SUPERADMIN), _kb().ownership_manager)
     assert "root read WITHHELD" in caplog.text and "2 bypassed" in caplog.text

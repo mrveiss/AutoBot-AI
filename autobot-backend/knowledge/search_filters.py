@@ -21,7 +21,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.scoping import Principal
 from autobot_shared.ssot_config import config
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
-from knowledge.root_read import audit_admin_read, is_superadmin_user, root_view
+from knowledge.root_read import AdminReadLedger, audit_admin_read, audit_unavailable, is_superadmin_user, root_view
 from knowledge.where_combine import and_where
 
 logger = get_logger(__name__)
@@ -146,6 +146,9 @@ async def filter_search_results_by_permission(
 
         if has_access:
             filtered_results.append(result)
+
+    if isinstance(is_admin, AdminReadLedger):  # an explicit admin read: audited once by the route (#19860)
+        is_admin.record(filtered_results)
 
     logger.debug(
         "Filtered search results: %d/%d accessible to user %s",
@@ -545,7 +548,9 @@ async def _admin_read(results: List[Dict], reader: KbReader, ownership_manager) 
         results, reader.user_id, reader.principal.company_id, [], ownership_manager=ownership_manager, is_admin=True
     )
     details = {"fact_ids": _fact_ids(kept), "count": len(kept)}
-    return kept if await audit_admin_read(reader.user_id, details) else []
+    if not await audit_admin_read(reader.user_id, details):
+        raise audit_unavailable()  # 503, not an empty 200 that reads as "no facts"
+    return kept
 
 
 async def _filter_reader(results: List[Dict], kb, reader: KbReader) -> List[Dict]:
