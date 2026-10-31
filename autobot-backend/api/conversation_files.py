@@ -336,9 +336,7 @@ async def download_conversation_file(request: Request, session_id: str, file_id:
         raise_internal_error("Error downloading file")
 
 
-async def _generate_file_preview(
-    file_info: ConversationFileInfo,
-) -> tuple[str | None, str, bool]:
+async def _generate_file_preview(file_info: ConversationFileInfo, file_path: Path) -> tuple[str | None, str, bool]:
     """
     Generate preview content based on file type.
 
@@ -346,7 +344,8 @@ async def _generate_file_preview(
     Handles text file reading and image type detection for preview generation.
 
     Args:
-        file_info: File information including path and MIME type.
+        file_info: File information including MIME type.
+        file_path: On-disk location; server-side only, never in the response (#20133).
 
     Returns:
         Tuple of (preview_content, preview_type, preview_available).
@@ -354,7 +353,6 @@ async def _generate_file_preview(
         - preview_type: "text", "image", or "metadata_only"
         - preview_available: True if preview can be shown
     """
-    file_path = Path(file_info.file_path)
     preview_content = None
     preview_type = "metadata_only"
     preview_available = False
@@ -429,7 +427,9 @@ async def preview_conversation_file(request: Request, session_id: str, file_id: 
         file_info = ConversationFileInfo(**file_info_dict)
 
         # Generate preview (Issue #665: use extracted helper)
-        preview_content, preview_type, preview_available = await _generate_file_preview(file_info)
+        preview_content, preview_type, preview_available = await _generate_file_preview(
+            file_info, Path(file_info_dict["file_path"])
+        )
 
         return ConversationFilePreviewResponse(
             file_info=file_info,

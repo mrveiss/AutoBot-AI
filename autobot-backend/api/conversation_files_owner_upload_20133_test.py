@@ -127,6 +127,15 @@ def test_the_owner_may_upload_to_their_own_conversation(world):
     assert (kwargs["session_id"], kwargs["user_id"], kwargs["filename"]) == ("s-1", "alice", "notes.txt")
 
 
+def test_the_owners_upload_response_carries_no_server_path(world):
+    world.user, world.owner = dict(_ALICE), "alice"
+    response = _upload(world)
+    assert response.status_code == 200, response.text
+    info = response.json()["file_info"]
+    assert "file_path" not in info
+    assert "/x/notes.txt" not in response.text
+
+
 def test_a_readonly_owner_is_refused(world):
     world.user, world.owner = dict(_READONLY), "alice"
     assert _upload(world).status_code == 403

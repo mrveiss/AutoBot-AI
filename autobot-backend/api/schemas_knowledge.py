@@ -3661,8 +3661,7 @@ class ConversationFileInfo(BaseModel):
     session_id: str
     uploaded_at: datetime
     uploaded_by: str
-    file_path: str
-    extension: str | None = None
+    extension: str | None = None  # no server filesystem path is part of the response (#20133)
 
 
 class ConversationFileListResponse(BaseModel):
