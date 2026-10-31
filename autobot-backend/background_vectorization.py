@@ -239,7 +239,11 @@ class BackgroundVectorizer:
         return result
 
     async def _embedding_backend_answers(self, kb) -> bool:
-        """One short embedding, no retries: did the backend fail, or only that fact?"""
+        """One short embedding, no retries: did the backend fail, or only that fact?
+
+        A backend slower than the embedding call's own timeout reads as down, by design: the pass
+        stops and the remaining facts stay pending for the next one (#20076).
+        """
         from knowledge.embedding_space_binding import current_space
         from knowledge.facts import _generate_embedding_with_npu_fallback
 

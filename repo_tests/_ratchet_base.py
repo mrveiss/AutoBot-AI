@@ -36,6 +36,7 @@ import ast
 import os
 import subprocess
 from pathlib import Path
+from typing import Any
 
 from autobot_shared.paths import scrubbed_git_env
 
@@ -114,7 +115,7 @@ class _ModuleConstants(ast.NodeTransformer):
 
 
 def literal_in(source: str, name: str) -> object:
-    """The literal assigned to module-level *name* in *source* (``NAME = {...}`` or annotated).
+    """The literal assigned to module-level *name* in *source* (``NAME = {...}``, annotated, or ``frozenset({...})``).
 
     A table may key its entries by a module-level string constant (``PINS = {NAMED: 24}``).
     """
@@ -125,11 +126,14 @@ def literal_in(source: str, name: str) -> object:
             node.targets if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
         )
         if any(isinstance(t, ast.Name) and t.id == name for t in targets) and node.value is not None:
-            return ast.literal_eval(constants.visit(node.value))
+            value = constants.visit(node.value)
+            if isinstance(value, ast.Call) and getattr(value.func, "id", "") == "frozenset" and len(value.args) == 1:
+                return frozenset(ast.literal_eval(value.args[0]))
+            return ast.literal_eval(value)
     raise BaseUnavailable(f"no literal {name} = ... in the base source")
 
 
-def base_table(root: Path, rels: tuple[str, ...], name: str) -> dict[str, int]:
+def base_table(root: Path, rels: tuple[str, ...], name: str) -> Any:
     """The literal *name* at the base: the ratchet's reference.
 
     *rels* is the table's path, then any path it had before a move; the first one the base has

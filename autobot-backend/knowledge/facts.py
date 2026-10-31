@@ -27,7 +27,7 @@ from knowledge.fact_redis_codec import (  # noqa: F401 -- names stay patchable h
 )
 from knowledge.fact_sharing import FactSharingMixin
 from knowledge.ingest_sanitize import guard_update, sanitize_fact_content, sanitize_update_metadata
-from knowledge.long_fact_embedding import embed_in_windows, window_metadata
+from knowledge.long_fact_embedding import embed_in_windows, window_metadata, with_window_metadata
 from knowledge.ownership_index import index_ownership, ownership_changed, reindex_ownership
 from knowledge.quarantine import QuarantineAuditFailed, apply_quarantine, require_audit_actor, without_quarantine
 from knowledge.write_scope import guard_caller_metadata
@@ -1039,11 +1039,11 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         """
         from knowledge.utils import sanitize_metadata_for_chromadb as _sanitize
 
-        sanitized_metadata = _sanitize(current_metadata)
+        sanitized_metadata = _sanitize(with_window_metadata(current_metadata, content))  # #20076
         sanitized_metadata["fact_id"] = fact_id
         space = await current_space(self)  # #19379: one model and its store for the re-vectorize
         await asyncio.to_thread(space.vector_store.delete, fact_id)
-        embedding = await _generate_embedding_with_npu_fallback(content, model_name=space.model)  # Issue #165
+        embedding = await embed_in_windows(_generate_embedding_with_npu_fallback, content, model_name=space.model)
 
         # Issue #12312: The stale vector was already deleted above; if embedding
         # generation failed the fact is now unvectorized. Record a queryable,
