@@ -249,14 +249,13 @@ import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
 
 const logger = createLogger('WorkItemDetail')
 
-// Comments return with their read route (#18750): only POST .../comments is served, no GET.
-const COMMENTS_ENABLED = false
 const api = useApiClient()
 const { t } = useI18n()
 
 import type { WorkItem } from './workItemTypes'
 import { commentAuthor, toArtifact, toActivityEvent } from './workItemDetailTypes'
 import type { Comment, Artifact, ActivityEvent, GoalAncestor, RawWorkProduct, RawActivityEntry } from './workItemDetailTypes'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const props = defineProps<{
   item: WorkItem
@@ -274,7 +273,7 @@ const TABS = computed(() => [
   { key: 'artifacts', label: t('llc.workItem.tabArtifacts') },
   { key: 'activity', label: t('llc.workItem.tabActivity') },
   { key: 'handoff', label: t('llc.workItem.tabHandoff') },
-].filter((tab) => COMMENTS_ENABLED || tab.key !== 'comments'))
+])
 
 const activeTab = ref('details')
 const localItem = ref<WorkItem>({ ...props.item })
@@ -350,9 +349,7 @@ const availableActions = computed(() => {
   return [...transitions, ...extras]
 })
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
+const formatTime = createDateFormatter({ intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } })
 
 function renderMarkdown(text: string) {
   return text
@@ -470,7 +467,7 @@ async function postComment() {
   isPosting.value = true
   try {
     const comment = await api.post<Comment>(`/api/llc/work-items/${props.item.id}/comments`, {
-      body: newComment.value,
+      company_id: props.companyId, body: newComment.value,
     })
     comments.value.push(comment)
     newComment.value = ''

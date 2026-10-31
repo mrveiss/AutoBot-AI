@@ -168,6 +168,7 @@ import InformationCircleIcon from '@heroicons/vue/24/outline/InformationCircleIc
 import XCircleIcon from '@heroicons/vue/24/outline/XCircleIcon'
 import CheckCircleIcon from '@heroicons/vue/24/outline/CheckCircleIcon'
 import type { SystemStatusDetails } from '@/types/system'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 export interface SystemStatusNotificationProps {
   visible?: boolean
@@ -332,13 +333,7 @@ const TONES = {
 } as const
 const tone = (severity: string | undefined) => TONES[severity as keyof typeof TONES] ?? TONES.success
 
-const formatTimestamp = (timestamp: number): string => {
-  return new Date(timestamp).toLocaleTimeString(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit'
-  })
-}
+const formatTimestamp = createDateFormatter({ kind: 'time', intl: { hour: '2-digit', minute: '2-digit', second: '2-digit' } })
 
 // Cleanup on unmount
 onUnmounted(() => {

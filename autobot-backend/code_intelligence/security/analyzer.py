@@ -13,6 +13,7 @@ import re
 from typing import Any, Callable, Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 from code_intelligence.shared.analysis_base import SIMILARITY_MEDIUM, BaseCodeAnalyzer
 
 from ..shared.line_index import LineIndex
@@ -288,8 +289,7 @@ class SecurityAnalyzer(BaseCodeAnalyzer):
     def _get_top_recommendations(self) -> List[str]:
         """Get top security recommendations based on findings."""
         recommendations = []
-        severity_priority = {"critical": 0, "high": 1, "medium": 2, "low": 3}
-        sorted_findings = sorted(self.results, key=lambda f: severity_priority.get(f.severity.value, 4))
+        sorted_findings = sorted(self.results, key=lambda f: -Severity.rank_of(f.severity.value))
 
         seen_types = set()
         for finding in sorted_findings[:10]:

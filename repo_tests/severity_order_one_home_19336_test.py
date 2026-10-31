@@ -13,7 +13,7 @@ has ``hint``, which ``Severity`` deliberately lacks).
 A copy comes back as a literal that orders the ``Severity`` vocabulary itself: a tuple/list made
 only of severity words (three or more), or a dict mapping three or more of them to integer ranks.
 
-The six orderings #19336 listed are gone; the sweep then measured 43 more hand-written severity
+The six orderings #19336 listed are gone; the sweep then measured 43 more (24 after the analytics endpoints and sort-key sites batch) hand-written severity
 sequences across the backends (the class's remainder, listed and sampled on #19336). ``PIN`` holds that count
 exactly and only goes down against the base: each follow-up batch lowers it by what it converts.
 """
@@ -38,7 +38,7 @@ _WORDS = frozenset(member.value for member in Severity)
 _THIS = "repo_tests/severity_order_one_home_19336_test.py"
 
 #: Hand-written severity sequences still in the tree (measured at #19336). Down-only, exact.
-PIN = {"severity_order_copies": 43}
+PIN = {"severity_order_copies": 24}
 
 
 def _modules(root: Path) -> list[Path]:
@@ -145,3 +145,18 @@ def test_other_vocabularies_and_short_lists_are_not_copies() -> None:
         'COUNTS = {"critical": 0, "high": 0, "medium": 5}\n'
     )
     assert not order_copies(clean, "x.py")
+
+
+def test_triage_ladder_derives_the_orderings_the_endpoints_used_to_spell_out() -> None:
+    assert Severity.triage_ladder() == (Severity.LOW, Severity.MEDIUM, Severity.HIGH)
+    assert [s.rank for s in Severity.triage_ladder()] == sorted(s.rank for s in Severity.triage_ladder())
+    worst_first = (Severity.CRITICAL, *reversed(Severity.triage_ladder()))
+    assert [s.value for s in worst_first] == ["critical", "high", "medium", "low"]
+    risk = (Severity.CRITICAL, *reversed(Severity.triage_ladder()), Severity.MINIMAL)
+    assert [s.value for s in risk] == ["critical", "high", "medium", "low", "minimal"]
+    assert [s.value for s in reversed(Severity.finding_ladder())] == ["critical", "high", "medium", "low", "info"]
+    assert [s.value for s in reversed(Severity.triage_ladder())] == ["high", "medium", "low"]
+
+
+def test_the_risk_ladder_is_the_listing_the_risk_reports_used_to_spell_out() -> None:
+    assert [s.value for s in Severity.risk_ladder()] == ["critical", "high", "medium", "low", "minimal"]

@@ -110,7 +110,8 @@
       "medium": "Mittel",
       "high": "Hoch",
       "critical": "Kritisch"
-    }
+    },
+    "logsLoadFailed": "Protokolle konnten nicht geladen werden: {error}"
   },
   "chat": {
     "sendMessage": "Senden Sie eine Nachricht...",
@@ -262,6 +263,13 @@
     },
     "input": {
       "retryUpload": "Versuchen Sie den Upload erneut",
+      "uploadError": {
+        "http": "Upload fehlgeschlagen (Status {status})",
+        "invalidResponse": "Der Server hat eine unlesbare Antwort gesendet",
+        "network": "Netzwerkfehler beim Hochladen",
+        "cancelled": "Upload abgebrochen",
+        "unknown": "Upload fehlgeschlagen"
+      },
       "filesAttached": "{count}-Dateien angehängt",
       "clearAll": "Alles löschen",
       "removeFile": "Datei entfernen",
@@ -525,6 +533,7 @@
         "pending": "Ausstehend",
         "running": "Läuft",
         "streaming": "Streaming",
+        "waiting_explanation": "Wartet auf Erklärung",
         "explaining": "Erklären",
         "completed": "Vollendet",
         "failed": "Fehlgeschlagen"
@@ -8091,6 +8100,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "Wartungsfenster konnte nicht aktiviert werden",
+      "completeWindowFailed": "Wartungsfenster konnte nicht abgeschlossen werden",
+      "deleteWindowFailed": "Wartungsfenster konnte nicht gelöscht werden",
+      "drainNodeFailed": "Knoten konnte nicht entleert werden. Bitte versuchen Sie es erneut.",
+      "resumeNodeFailed": "Knoten konnte nicht fortgesetzt werden. Bitte versuchen Sie es erneut.",
+      "saveKeysFailed": "API-Schlüssel konnten nicht gespeichert werden. Details finden Sie in der Konsole.",
+      "addNodeFailed": "Knoten konnte nicht hinzugefügt werden"
     }
   },
   "mobile": {

@@ -111,7 +111,8 @@
       "medium": "Medium",
       "high": "High",
       "critical": "Critical"
-    }
+    },
+    "logsLoadFailed": "Failed to load logs: {error}"
   },
   "chat": {
     "contextWindow": {
@@ -314,6 +315,13 @@
     },
     "input": {
       "retryUpload": "Retry upload",
+      "uploadError": {
+        "http": "Upload failed (status {status})",
+        "invalidResponse": "The server sent an unreadable response",
+        "network": "Network error during upload",
+        "cancelled": "Upload cancelled",
+        "unknown": "Upload failed"
+      },
       "filesAttached": "{count} files attached",
       "clearAll": "Clear all",
       "removeFile": "Remove file",
@@ -578,6 +586,7 @@
         "pending": "Pending",
         "running": "Running",
         "streaming": "Streaming",
+        "waiting_explanation": "Waiting for explanation",
         "explaining": "Explaining",
         "completed": "Completed",
         "failed": "Failed"
@@ -7942,6 +7951,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "Failed to activate maintenance window",
+      "completeWindowFailed": "Failed to complete maintenance window",
+      "deleteWindowFailed": "Failed to delete maintenance window",
+      "drainNodeFailed": "Failed to drain node. Please try again.",
+      "resumeNodeFailed": "Failed to resume node. Please try again.",
+      "saveKeysFailed": "Failed to save API keys. Check the console for details.",
+      "addNodeFailed": "Failed to add node"
     }
   },
   "desktop": {
@@ -8296,6 +8314,11 @@
     "loadError": "Failed to load members.",
     "addError": "Failed to add member.",
     "removeError": "Failed to remove member.",
+    "colChangeRole": "Change role",
+    "changeRole": "Change role for {name}",
+    "roleChangeForbidden": "You are not allowed to make that role change.",
+    "roleChangeLastOwner": "A company must keep an owner.",
+    "roleChangeError": "Failed to change the role.",
     "usersLoadError": "Failed to load users.",
     "role": {
       "owner": "Owner",
