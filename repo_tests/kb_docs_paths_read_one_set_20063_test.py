@@ -114,7 +114,7 @@ def test_membership_agrees_with_the_scan_the_sync_runs() -> None:
         ("docs/x.md", True),
         ("docs/a/b.md", True),
         ("autobot-backend/resources/prompts/a/b.md", True),
-        ("docs/system-state.md", False),
+        ("docs/run/system-state.md", False),
         ("docs/node_modules/a.md", False),
         ("src/x.md", False),
         ("docs/x.txt", False),
