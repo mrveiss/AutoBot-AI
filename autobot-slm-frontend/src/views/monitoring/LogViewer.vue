@@ -16,8 +16,9 @@ import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboar
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
 import { createLogger } from '@/utils/debugUtils'
-import { getTimezone } from '@/composables/useTimezone'
+import { getTimezoneOption } from '@/composables/useTimezone'
 import type { AppLogEntry } from '@/types/api-responses'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('LogViewer')
 const { t } = useI18n()
@@ -98,27 +99,9 @@ function getLevelClass(level: string): string {
   }
 }
 
-function formatTimestamp(ts: string): string {
-  const date = new Date(ts)
-  const tz = getTimezone()
-  return date.toLocaleTimeString('en-US', {
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    ...(tz ? { timeZone: tz } : {}),
-  })
-}
+const formatTimestamp = createDateFormatter({ kind: 'time', locale: 'en-US', intl: () => ({ hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', ...getTimezoneOption() }) })
 
-function formatDate(ts: string): string {
-  const date = new Date(ts)
-  const tz = getTimezone()
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    ...(tz ? { timeZone: tz } : {}),
-  })
-}
+const formatDate = createDateFormatter({ kind: 'date', locale: 'en-US', intl: () => ({ month: 'short', day: 'numeric', ...getTimezoneOption() }) })
 
 const severityToLevel: Record<string, LogRow['level']> = {
   debug: 'debug',
