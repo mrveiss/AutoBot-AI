@@ -9540,6 +9540,11 @@
       "subtitle": "Szczegółowe słownictwo uprawnień i pakiety zakresów dla kluczy API",
       "comingSoonTitle": "Dostępne w kolejnej wersji",
       "comingSoonMessage": "Szczegółowe zakresy uprawnień — słownictwo uprawnień, pakiety zakresów oraz egzekwowanie zakresów kluczy API — nie są dostępne w tej wersji. Ta strona umożliwi ich definiowanie i przypisywanie po ich udostępnieniu."
+    },
+    "layout": {
+      "title": "Administracja",
+      "subtitle": "Narzędzia zaplecza dla administratorów",
+      "ariaLabel": "Sekcja administracji"
     }
   },
   "components": {
