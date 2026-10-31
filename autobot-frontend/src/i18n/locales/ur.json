@@ -110,7 +110,8 @@
       "medium": "درمیانہ",
       "high": "زیادہ",
       "critical": "Critical"
-    }
+    },
+    "logsLoadFailed": "لاگز لوڈ کرنے میں ناکامی: {error}"
   },
   "nav": {
     "chat": "چیٹ",
@@ -3768,7 +3769,8 @@
       "agentsAriaLabel": "Agent capabilities",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "آپ کی کمپنی کی آٹومیشن کھولی جا رہی ہے…",
-      "companyRequired": "آٹومیشن کھولنے کے لیے کمپنی منتخب کریں۔"
+      "companyRequired": "آٹومیشن کھولنے کے لیے کمپنی منتخب کریں۔",
+      "planBeforeBuilding": "بنانے سے پہلے منصوبہ بنائیں"
     },
     "runner": {
       "completed": "Completed",
@@ -5234,6 +5236,7 @@
       "status": {
         "failed": "Failed",
         "streaming": "Streaming",
+        "waiting_explanation": "وضاحت کا انتظار",
         "explaining": "Explaining",
         "pending": "Pending",
         "completed": "Completed",
@@ -5501,6 +5504,13 @@
       "chatMessage": "Chat message",
       "attachFile": "Attach file",
       "retryUpload": "Retry upload",
+      "uploadError": {
+        "http": "اپ لوڈ ناکام ہو گیا (اسٹیٹس {status})",
+        "invalidResponse": "سرور نے ناقابل مطالعہ جواب بھیجا",
+        "network": "اپ لوڈ کے دوران نیٹ ورک کی خرابی",
+        "cancelled": "اپ لوڈ منسوخ کر دیا گیا",
+        "unknown": "اپ لوڈ ناکام ہو گیا"
+      },
       "removeFile": "Remove file",
       "overseerLabel": "Overseer",
       "managePresets": "Manage slash command presets",
@@ -8091,6 +8101,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "مینٹیننس ونڈو فعال کرنے میں ناکامی",
+      "completeWindowFailed": "مینٹیننس ونڈو مکمل کرنے میں ناکامی",
+      "deleteWindowFailed": "مینٹیننس ونڈو حذف کرنے میں ناکامی",
+      "drainNodeFailed": "نوڈ کو خالی کرنے میں ناکامی۔ براہ کرم دوبارہ کوشش کریں۔",
+      "resumeNodeFailed": "نوڈ کو دوبارہ شروع کرنے میں ناکامی۔ براہ کرم دوبارہ کوشش کریں۔",
+      "saveKeysFailed": "API کیز محفوظ کرنے میں ناکامی۔ تفصیلات کے لیے کنسول دیکھیں۔",
+      "addNodeFailed": "نوڈ شامل کرنے میں ناکامی"
     }
   },
   "mobile": {
@@ -8602,7 +8621,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "ٹول کی معلومات اس وقت دستیاب نہیں ہیں — یہ فہرست نامکمل ہو سکتی ہے۔",
       "canvasNoToolsDefined": "اس کمپنی میں کسی کردار کے ساتھ کوئی ٹول منسلک نہیں۔",
-      "deepLinkNodeNotFound": "یہ لنک ایک ایسے نوڈ کی طرف اشارہ کرتا ہے جو یہاں نہیں ملا۔ ہو سکتا ہے یہ ہٹا دیا گیا ہو، یا آپ کو اس تک رسائی حاصل نہ ہو۔"
+      "deepLinkNodeNotFound": "یہ لنک ایک ایسے نوڈ کی طرف اشارہ کرتا ہے جو یہاں نہیں ملا۔ ہو سکتا ہے یہ ہٹا دیا گیا ہو، یا آپ کو اس تک رسائی حاصل نہ ہو۔",
+      "viewPlanner": "پلانر"
     },
     "executorRollup": {
       "title": "عمل کنندہ خلاصہ",
@@ -8946,6 +8966,113 @@
         "notFound": "یہ کام اب اس دعوے کو نہیں رکھتا — یہ دیکھنے کے لیے ریفریش کریں کہ اب اسے کون رکھتا ہے۔",
         "unavailable": "لیجر تک رسائی نہیں ہو سکی؛ کچھ نہیں بھیجا گیا۔",
         "error": "کچھ غلط ہو گیا اور ترسیل کی تصدیق نہیں ہو سکی۔ یہ دیکھنے کے لیے ریفریش کریں کہ آیا دعویٰ اب بھی برقرار ہے۔"
+      }
+    },
+    "workflowPlanner": {
+      "title": "ورک فلو پلانر",
+      "plans": "منصوبے",
+      "newPlan": "نیا منصوبہ",
+      "open": "کھولیں",
+      "back": "منصوبوں پر واپس",
+      "retry": "دوبارہ کوشش کریں",
+      "loading": "منصوبے لوڈ ہو رہے ہیں...",
+      "loadFailed": "منصوبہ لوڈ نہیں ہو سکا۔",
+      "saveFailed": "تبدیلی محفوظ نہیں ہو سکی۔",
+      "createFailed": "منصوبہ بنایا نہیں جا سکا۔",
+      "emptyTitle": "ابھی کوئی منصوبہ نہیں",
+      "emptyHint": "ایک منصوبہ شروع کریں تاکہ ایک عمل کا نقشہ بنائیں، اسے ناپیں اور بہتر بنانے کے لیے ایک عدد چنیں۔",
+      "unavailableTitle": "ورک فلو پلانر دستیاب نہیں ہے",
+      "unavailableHint": "یہ فیچر آپ کے ورک اسپیس کے لیے بند ہے، اس لیے یہاں ابھی دکھانے کو کچھ نہیں۔",
+      "statusFlow": "منصوبے کی پیش رفت",
+      "statusNotAvailable": "اس منصوبے کی حالت: {status}۔ منظوری اور تبدیلی ابھی دستیاب نہیں، اس لیے یہ صرف پڑھنے کے لیے دکھایا گیا ہے۔",
+      "convertNotAvailable": "منصوبے سے ورک فلو بنانا ابھی دستیاب نہیں۔",
+      "status": {
+        "draft": "مسودہ",
+        "measured": "ناپا گیا",
+        "labeled": "لیبل لگا",
+        "approved": "منظور شدہ",
+        "converted": "تبدیل شدہ"
+      },
+      "col": {
+        "name": "منصوبہ",
+        "revision": "نظرثانی",
+        "status": "حالت",
+        "actions": "کارروائیاں"
+      },
+      "form": {
+        "name": "منصوبے کا نام",
+        "startsAt": "عمل کہاں سے شروع ہوتا ہے",
+        "endsAt": "عمل کہاں ختم ہوتا ہے",
+        "create": "منصوبہ بنائیں"
+      },
+      "steps": {
+        "map": "نقشہ بنائیں",
+        "measure": "ناپیں",
+        "oneNumber": "ایک عدد چنیں",
+        "label": "تقسیم کریں اور لیبل لگائیں",
+        "convert": "ورک فلو بنائیں"
+      },
+      "map": {
+        "empty": "ابھی کچھ نقشے میں نہیں",
+        "emptyHint": "پہلے شامل افراد (لینز) اور پھر ہر ایک کے مراحل شامل کریں۔",
+        "handoffs": "{count} حوالگیاں",
+        "waitNote": "اس حوالگی پر کیا رکا ہوا ہے؟",
+        "laneName": "لین کا نام",
+        "addLane": "لین شامل کریں",
+        "stepLabel": "مرحلہ",
+        "stepLane": "مرحلے کی لین",
+        "addStep": "مرحلہ شامل کریں"
+      },
+      "source": {
+        "self_reported": "آپ نے کہا",
+        "email": "ای میل سے جانچا گیا",
+        "calendar": "کیلنڈر سے جانچا گیا"
+      },
+      "measure": {
+        "hint": "ہر مرحلہ کتنی بار ہوتا ہے اور کتنا وقت لیتا ہے؟",
+        "needSteps": "پہلے کم از کم ایک مرحلے کا نقشہ بنائیں۔",
+        "perWeek": "فی ہفتہ",
+        "duration": "دورانیہ",
+        "unit": "دورانیے کی اکائی",
+        "save": "محفوظ کریں",
+        "clear": "صاف کریں"
+      },
+      "unit": {
+        "minutes": "منٹ",
+        "hours": "گھنٹے",
+        "days": "دن"
+      },
+      "oneNumber": {
+        "hint": "ناپے گئے مراحل، سب سے لمبے انتظار پہلے۔ آپ طے کرتے ہیں کون سا اہم ہے۔",
+        "needMetrics": "پہلے کم از کم ایک مرحلہ ناپیں۔",
+        "rate": "{freq} فی ہفتہ، {dur} {unit}",
+        "title": "اس عدد کو نام دیں",
+        "returnKind": "آپ کو کیا واپس ملتا ہے",
+        "target": "ہدف",
+        "save": "میرے ایک عدد کے طور پر محفوظ کریں"
+      },
+      "returnKind": {
+        "hours_back": "واپس ملے گھنٹے",
+        "more_yeses": "زیادہ ہاں",
+        "money_sooner": "رقم جلدی"
+      },
+      "label": {
+        "needNumber": "پہلے اپنا ایک عدد چنیں؛ اس کا مرحلہ یہاں تقسیم ہوتا ہے۔",
+        "subStep": "ذیلی مرحلہ",
+        "addSubStep": "ذیلی مرحلہ شامل کریں",
+        "unlabel": "لیبل ہٹائیں",
+        "edgeCase": "حدی صورت: {text}",
+        "byHandNote": "یہ لوگوں کے پاس رہتا ہے۔ اے آئی اس پر کبھی عمل نہیں کرتا۔",
+        "acknowledge": "میں نے ہاتھ سے کی فہرست پڑھ لی ہے",
+        "acknowledged": "ہاتھ سے کی فہرست پڑھ لی گئی"
+      },
+      "labels": {
+        "ai": "اے آئی",
+        "automation": "آٹومیشن",
+        "by_hand": "ہاتھ سے"
+      },
+      "gate": {
+        "missing": "ابھی کمی ہے"
       }
     }
   },

@@ -103,7 +103,7 @@ def _swept(root: Path) -> list[str]:
 SCAN = declare(
     "slm-node-id-one-home-scan",
     discover=_swept,
-    floor=7113,  # mid-window: population 7197, window (7038, 7188)
+    floor=7122,  # mid-window: population 7206, window (7047, 7197)
     growth=150,
     skips=9,  # tracked binaries (images, icons, executables) that do not decode as UTF-8
     what="tracked non-doc, non-test files swept for a literal SLM manager node id default",
