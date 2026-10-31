@@ -25,13 +25,16 @@ export type StepMetric = S['StepMetric']
 export type Label = S['Label']
 export type MetricSource = S['MetricSource']
 export type GateResponse = S['GateResponse']
+export type GateItem = S['GateItem']
+export type PlanConversion = S['PlanConversion']
+export type WorkflowDraft = S['WorkflowDraft']
 export type MapBody = S['MapBody']
 export type MapResponse = S['MapResponse']
 export type OneNumberBody = S['OneNumberBody']
 export type BreakdownBody = S['BreakdownBody']
 export type PlanCreate = S['PlanCreate']
 
-/** Statuses the screens can act on today. Approval and conversion arrive with #19936. */
+/** Statuses whose map, metrics and labels can still be edited; approved and converted are read-only. */
 export const ACTIVE_STATUSES: readonly PlanStatus[] = ['draft', 'measured', 'labeled'] as const
 export const STATUS_ORDER: readonly PlanStatus[] = [
   'draft',
