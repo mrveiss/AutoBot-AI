@@ -13,10 +13,11 @@
 
   A member's role changes in place via PATCH /members/{user_id} (#19960). The
   server owns the rules (membership_policy.py): it answers 403 / 409 and the row
-  reverts. The viewer's own company role is not available to this view (the user
-  store's id is a username, the member rows carry UUIDs), so the control stays
-  enabled and the server decides. Loading and role changes are scoped to the
-  company shown: see useCompanyMembers.
+  reverts. The list also carries the roles the viewer may grant (#20073), computed
+  by the server from the verified caller; the control is disabled for a member the
+  viewer may not change and the roles they may not grant are not offered. That only
+  reflects the server, which still refuses what the viewer may not do. Loading and
+  role changes are scoped to the company shown: see useCompanyMembers.
 -->
 <template>
   <div class="members-view">
@@ -55,10 +56,16 @@
             class="members-select members-role-select"
             :aria-label="t('llcMembers.changeRole', { name: row.display_name })"
             :value="row.role"
-            :disabled="pendingUserId !== null"
+            :disabled="pendingUserId !== null || !canChangeRole(grantableRoles, String(row.role))"
+            :title="canChangeRole(grantableRoles, String(row.role)) ? undefined : t('llcMembers.roleNotGrantable')"
             @change="onRoleChange(row as unknown as Member, $event)"
           >
-            <option v-for="role in MEMBERSHIP_ROLES" :key="role" :value="role">
+            <option
+              v-for="role in MEMBERSHIP_ROLES"
+              :key="role"
+              :value="role"
+              :disabled="!canGrantRole(grantableRoles, role, String(row.role))"
+            >
               {{ roleLabel(role) }}
             </option>
           </select>
@@ -144,7 +151,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import { useCompanyMembers, type Member } from '@/composables/llc/useCompanyMembers'
+import { useCompanyMembers, canChangeRole, canGrantRole, type Member } from '@/composables/llc/useCompanyMembers'
 import { useCollaborationInvite } from '@/composables/collaboration/useCollaborationInvite'
 import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseModal, BaseTable, type BaseTableColumn } from '@autobot/ui'
 
@@ -160,7 +167,7 @@ const { t } = useI18n()
 const props = defineProps<{ companyId?: string }>()
 const companyId = computed(() => (route.params.companyId as string) ?? props.companyId ?? '')
 
-const { members, isLoading, errorMessage, pendingUserId, load: fetchMembers, changeRole, removeMember } =
+const { members, grantableRoles, isLoading, errorMessage, pendingUserId, load: fetchMembers, changeRole, removeMember } =
   useCompanyMembers(api, () => companyId.value)
 // BaseTable rows are plain records; Member carries no index signature.
 const rows = computed(() => members.value.map((m) => ({ ...m })))

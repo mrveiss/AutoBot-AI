@@ -105,7 +105,7 @@ describe('MembersView role change (#19960)', () => {
     expect((sel.element as HTMLSelectElement).value).toBe('member')
   })
 
-  it('leaves every control enabled (the viewer role is unknown) and disables them only while a change is in flight', async () => {
+  it('leaves the controls the viewer may use enabled and disables them only while a change is in flight', async () => {
     let resolve!: (v: unknown) => void
     patch.mockReturnValue(new Promise((r) => (resolve = r)))
     const wrapper = await mountView()
@@ -116,5 +116,31 @@ describe('MembersView role change (#19960)', () => {
     resolve({})
     await flushPromises()
     expect(selects().every((s) => !s.attributes('disabled'))).toBe(true)
+  })
+
+  it('disables every role control for a viewer who may grant nothing', async () => {
+    members = membersFor('member', [])
+    const wrapper = await mountView()
+    const selects = wrapper.findAll('select.members-role-select')
+    expect(selects).toHaveLength(2)
+    expect(selects.every((s) => s.attributes('disabled') !== undefined)).toBe(true)
+    expect(selects[0].attributes('title')).toBe(en.llcMembers.roleNotGrantable)
+  })
+
+  it('does not offer owner to an admin, and locks the owner row', async () => {
+    members = membersFor('admin', NO_OWNER)
+    const wrapper = await mountView()
+    const bobOptions = bobSelect(wrapper).findAll('option')
+    expect(bobOptions.find((o) => o.element.value === 'owner')!.attributes('disabled')).toBeDefined()
+    expect(bobOptions.find((o) => o.element.value === 'admin')!.attributes('disabled')).toBeUndefined()
+    expect(bobSelect(wrapper).attributes('disabled')).toBeUndefined()
+    const alice = wrapper.find('select[aria-label="Change role for Alice"]')
+    expect(alice.attributes('disabled')).toBeDefined()
+  })
+
+  it('treats a server that sends no standing as one that grants nothing', async () => {
+    members = members.map(({ viewer_role, viewer_grantable_roles, ...m }) => m) as typeof members
+    const wrapper = await mountView()
+    expect(bobSelect(wrapper).attributes('disabled')).toBeDefined()
   })
 })
