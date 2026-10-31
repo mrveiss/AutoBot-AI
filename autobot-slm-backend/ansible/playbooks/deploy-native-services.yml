@@ -582,6 +582,9 @@
   hosts: aiml
   become: true
   vars: *deploy_paths
+  # One home for the pulled model set and its embedding role (#19736), as in deploy-hybrid-docker.yml.
+  vars_files:
+    - ../roles/agent_config/defaults/main.yml
 
   tasks:
     - name: Install Python dependencies for AI services
@@ -698,14 +701,14 @@
           become_user: autobot-service
           async: 600
           poll: 15
-          loop:
-            - "llama3.2:1b"           # Routing tier
-            - "gemma2:2b"             # Classification tier
-            - "phi3:mini"             # Light processing tier
-            - "mistral:7b-instruct"   # Instruction tier
-            - "dolphin-llama3:8b"     # System/uncensored tier
-            - "qwen3.5:9b"            # Quality tier
-            - "nomic-embed-text:latest"  # Embeddings (DEFAULT_EMBEDDING_MODEL)
+          loop: "{{ ollama_models }}"
+
+        - name: Check every pulled model is the right kind for its role (#19736)
+          ansible.builtin.include_tasks: ../_shared/tasks/assert_model_kinds.yml
+          vars:
+            model_kind_cli: /usr/local/bin/ollama
+            model_kind_embedding: "{{ ollama_embedding_model }}"
+            model_kind_completion: "{{ ollama_models }}"
 
     - name: Create AI Stack service
       copy:

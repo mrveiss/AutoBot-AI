@@ -23,7 +23,15 @@ from repo_tests._paths import repo_root
 
 _ANS = "autobot-slm-backend/ansible"
 _TASK = f"{_ANS}/_shared/tasks/assert_model_kinds.yml"
-_SITES = (f"{_ANS}/roles/agent_config/tasks/ollama.yml", f"{_ANS}/playbooks/deploy-hybrid-docker.yml")
+_SCRIPT = f"{_ANS}/_shared/files/check_model_kinds.sh"
+_BARE_METAL = "autobot-infrastructure/shared/scripts/install-bare-metal.sh"
+_BARE_METAL_LIB = "autobot-infrastructure/shared/scripts/lib/pull-embedding-model.sh"
+_SITES = (
+    f"{_ANS}/roles/agent_config/tasks/ollama.yml",
+    f"{_ANS}/playbooks/deploy-hybrid-docker.yml",
+    f"{_ANS}/playbooks/deploy-native-services.yml",
+    f"{_ANS}/roles/llm/tasks/main.yml",
+)
 
 # What the fake CLI answers per model: a capability list, or None for "not installed".
 _CAPS = {"embedder": ["embedding"], "chatty": ["completion", "tools"], "nocaps": []}
@@ -52,14 +60,13 @@ def _fake_ollama(bin_dir: Path, reachable: bool = True) -> Path:
 
 def _run(tmp_path: Path, embedding: str, completion: list[str], reachable: bool = True):
     cli = _fake_ollama(tmp_path, reachable)
-    cmd = _tasks(_TASK)[0]["ansible.builtin.shell"]["cmd"]
     env = {
         **os.environ,
         "MODEL_CLI": str(cli),
         "EMBEDDING_MODEL": embedding,
         "COMPLETION_MODELS": "\n".join(completion),
     }
-    return subprocess.run(["sh", "-c", cmd], capture_output=True, text=True, check=False, env=env)
+    return subprocess.run(["sh", str(repo_root() / _SCRIPT)], capture_output=True, text=True, check=False, env=env)
 
 
 def _probe(tmp_path: Path, embedding: str, completion: list[str]) -> list[str]:
@@ -124,7 +131,9 @@ def _includes_check(node) -> list[dict]:
         return [inc for item in node for inc in _includes_check(item)]
     if not isinstance(node, dict):
         return []
-    found = [node] if str(node.get("ansible.builtin.include_tasks", "")).endswith("assert_model_kinds.yml") else []
+    target = node.get("ansible.builtin.include_tasks", "")
+    target = target.get("file", "") if isinstance(target, dict) else str(target)
+    found = [node] if target.endswith("assert_model_kinds.yml") else []
     for key in ("tasks", "block", "rescue", "always", "pre_tasks", "post_tasks"):
         found += _includes_check(node.get(key))
     return found
@@ -148,3 +157,38 @@ def test_the_hybrid_play_reads_the_embedding_model_from_the_shared_list() -> Non
     playbook = repo_root() / _SITES[1]
     names = [play_vars(p, playbook) for p in _tasks(_SITES[1]) if isinstance(p, dict) and "vars_files" in p]
     assert names and names[0]["ollama_embedding_model"] in names[0]["ollama_models"]
+
+
+def test_the_task_runs_the_one_script() -> None:
+    assert _tasks(_TASK)[0]["ansible.builtin.script"] == "../files/check_model_kinds.sh"
+    assert (repo_root() / _TASK).parent.joinpath("../files/check_model_kinds.sh").resolve() == repo_root() / _SCRIPT
+
+
+def _run_bare_metal_check(tmp_path: Path, model: str, reachable: bool = True):
+    """The installer's real library, sourced, against the fake model server."""
+    _fake_ollama(tmp_path, reachable)
+    stubs = 'log_warn() { echo "WARN $*"; }; log_error() { echo "ERROR $*"; }'
+    script = f'{stubs}\nsource "{repo_root() / _BARE_METAL_LIB}"\npull_embedding_model {model}'
+    env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}"}
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False, env=env)
+
+
+def test_the_bare_metal_install_stops_on_a_chat_model_in_the_embedding_role(tmp_path: Path) -> None:
+    out = _run_bare_metal_check(tmp_path, "chatty")
+    assert out.returncode == 1 and "WRONG-KIND chatty" in out.stdout
+
+
+def test_the_bare_metal_install_accepts_an_embedder(tmp_path: Path) -> None:
+    out = _run_bare_metal_check(tmp_path, "embedder")
+    assert out.returncode == 0 and "ERROR" not in out.stdout
+
+
+def test_the_bare_metal_install_only_warns_when_the_server_is_unreachable(tmp_path: Path) -> None:
+    out = _run_bare_metal_check(tmp_path, "embedder", reachable=False)
+    assert out.returncode == 0 and "WARN Could not check" in out.stdout
+
+
+def test_the_bare_metal_install_pulls_through_the_library() -> None:
+    text = (repo_root() / _BARE_METAL).read_text(encoding="utf-8")
+    assert "lib/pull-embedding-model.sh" in text and "pull_embedding_model nomic-embed-text:latest" in text
+    assert "ollama pull nomic-embed-text:latest ||" not in text

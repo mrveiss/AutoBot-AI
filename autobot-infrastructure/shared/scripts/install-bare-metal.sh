@@ -260,7 +260,7 @@ install_ollama() {
     # Pull default models if GPU available or enough RAM
     if [[ "$GPU_DETECTED" == true ]] || [[ "$TOTAL_RAM_MB" -ge 16384 ]]; then
         log_info "Pulling default embedding model..."
-        ollama pull nomic-embed-text:latest || log_warn "Failed to pull embedding model"
+        source "$(dirname "${BASH_SOURCE[0]}")/lib/pull-embedding-model.sh" && pull_embedding_model nomic-embed-text:latest
     else
         log_warn "Skipping model pull — insufficient resources (need GPU or 16GB+ RAM)"
         log_info "Pull models manually: ollama pull nomic-embed-text:latest"

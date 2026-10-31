@@ -66,6 +66,10 @@ llm_gpu_models:
   - mistral:7b-instruct       # INSTRUCTION_MODEL tier — RAG, entity extraction
   - dolphin-llama3:8b         # SYSTEM_MODEL tier — system commands, security
 
+# The embedding role's model, so the kind check (#19736) knows which pulled model must embed and
+# not complete. Using a different embedder in llm_cpu_models means changing this too.
+llm_embedding_model: nomic-embed-text:latest
+
 # Lightweight models that run well on CPU (<= 4B parameters)
 llm_cpu_models:
   - nomic-embed-text:latest   # Embeddings (vectorization, RAG, memory graph)
