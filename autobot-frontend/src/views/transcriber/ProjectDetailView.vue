@@ -2,7 +2,7 @@
 <!-- Copyright (c) 2025-2026 mrveiss -->
 <script setup lang="ts">
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
-import { formatDuration } from '@/utils/formatHelpers'
+import { formatDuration, createDateFormatter } from '@/utils/formatHelpers'
 import { useRoute, useRouter } from 'vue-router'
 import UploadModal from '@/components/transcriber/UploadModal.vue'
 import ProcessingProgress from '@/components/transcriber/ProcessingProgress.vue'
@@ -102,10 +102,7 @@ function isInProgress(r: Recording): boolean {
   return r.status === 'pending' || r.status === 'processing'
 }
 
-function formatDate(iso: string): string {
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
-}
+const formatDate = createDateFormatter({ emptyText: '—', invalidText: '—' })
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 

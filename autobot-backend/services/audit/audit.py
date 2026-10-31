@@ -69,8 +69,10 @@ async def _analyse_for_threats(event: AuditEvent) -> None:
         logger.error("Threat analysis could not run for %s: %s", event.action, type(exc).__name__)
 
 
-async def record(event: AuditEvent) -> None:
+async def record(event: AuditEvent) -> bool:
     """Persist one audit event: the ``audit_logs`` row first, then the Redis projection.
+
+    Returns whether the durable row was written, for a caller that must not act without one (#20026).
 
     #13562: this is also where the bus feeds ``ThreatDetectionEngine``. Analysis
     runs BEFORE the write and never depends on it: a detector that only sees the
@@ -80,16 +82,19 @@ async def record(event: AuditEvent) -> None:
     """
     _remember_loop()
     await _analyse_for_threats(event)
-    await _persist(event)
+    written = await _persist(event)
     await _project(event)
+    return written
 
 
-async def _persist(event: AuditEvent) -> None:
+async def _persist(event: AuditEvent) -> bool:
     try:
         await store.insert_event(event)
+        return True
     except Exception as exc:  # noqa: BLE001 -- counted below; an audit write must not raise
         logger.error("audit: system-of-record write failed for %s: %s", event.action, type(exc).__name__)
         record_audit_write_failure_safely(event.action, type(exc).__name__)
+        return False
 
 
 async def _project(event: AuditEvent) -> None:
