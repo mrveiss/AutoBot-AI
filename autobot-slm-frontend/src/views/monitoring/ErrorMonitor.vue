@@ -22,7 +22,8 @@ import type {
 } from '@/types/api-responses'
 import { createLogger } from '@/utils/debugUtils'
 import { formatRelativeTime } from '@/utils/dateUtils'
-import { getTimezone } from '@/composables/useTimezone'
+import { getTimezoneOption } from '@/composables/useTimezone'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('ErrorMonitor')
 const api = useSlmApi()
@@ -120,17 +121,10 @@ function getTrendColor(trend: string): string {
   }
 }
 
-function formatTimestamp(ts: string): string {
-  const date = new Date(ts)
-  const tz = getTimezone()
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    ...(tz ? { timeZone: tz } : {}),
-  })
-}
+const formatTimestamp = createDateFormatter({
+  locale: 'en-US',
+  intl: () => ({ month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', ...getTimezoneOption() }),
+})
 
 
 

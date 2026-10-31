@@ -138,7 +138,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/AdminUsersView.vue": 833,
     "autobot-frontend/src/views/AdvancedControlView.vue": 1103,
     "autobot-frontend/src/views/BudgetPolicies.vue": 940,
-    "autobot-frontend/src/views/BusinessIntelligenceView.vue": 988,
+    "autobot-frontend/src/views/BusinessIntelligenceView.vue": 987,  # #20004: 988 -> 987
     "autobot-frontend/src/views/CustomDashboard.vue": 878,  # #18242: 1106 -> 884; train-42 review: -5, then -1
     "autobot-frontend/src/views/DevSpeedupView.vue": 658,
     "autobot-frontend/src/views/ErrorMonitoringView.vue": 839,
@@ -162,7 +162,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/llc/RoutinesView.vue": 688,
     "autobot-frontend/src/views/llc/SprintBoardView.vue": 664,
     # #14780: 1046 -> 1013 (kit BaseDrawer); #18750: 994 (comments tab returns)
-    "autobot-frontend/src/views/llc/WorkItemDetail.vue": 993,
+    "autobot-frontend/src/views/llc/WorkItemDetail.vue": 948,  # #20068: 994 -> 949
     "autobot-infrastructure/shared/ide-extensions/vscode-autobot/src/extension.ts": 741,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/background-monitor.ts": 713,
     "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/index.ts": 957,
@@ -176,16 +176,16 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-frontend/src/types/slm.ts": 838,
     "autobot-slm-frontend/src/views/AgentsView.vue": 737,
     "autobot-slm-frontend/src/views/CodeSyncView.vue": 2035,  # #18819: 2080 -> 2069
-    "autobot-slm-frontend/src/views/DeploymentsView.vue": 1621,  # #18819 + #14777: 1703 -> 1623
+    "autobot-slm-frontend/src/views/DeploymentsView.vue": 1614,  # #18819 + #14777: 1703 -> 1623; #20003: -> 1614
     "autobot-slm-frontend/src/views/FleetOverview.vue": 708,  # #14780: 786 -> 708
-    "autobot-slm-frontend/src/views/MaintenanceView.vue": 794,  # #14777 batch 2: 817 -> 794
+    "autobot-slm-frontend/src/views/MaintenanceView.vue": 790,  # #14777 batch 2: 817 -> 794; #20003: -> 790
     "autobot-slm-frontend/src/views/OrchestrationView.vue": 2189,
     "autobot-slm-frontend/src/views/ReplicationView.vue": 699,  # #18819 + #14777: 731 -> 706
     "autobot-slm-frontend/src/views/SecurityView.vue": 1368,  # #14780 BasePagination: 1386 -> 1374
     "autobot-slm-frontend/src/views/SetupWizardView.vue": 1790,
     "autobot-slm-frontend/src/views/SkillsView.vue": 631,  # #18819 + #14777: 645 -> 633; #19482: -> 631
     "autobot-slm-frontend/src/views/SystemUpdatesTab.vue": 621,  # #18819: 638 -> 635; #19482: -> 632; #18863: -> 626
-    "autobot-slm-frontend/src/views/monitoring/ErrorMonitor.vue": 608,  # #14780: 617 -> 609; #19482: -> 608
+    "autobot-slm-frontend/src/views/monitoring/ErrorMonitor.vue": 602,  # #14780: 617 -> 609; #19482: 608; #20004: 602
     "autobot-slm-frontend/src/views/settings/SecuritySettings.vue": 706,  # #18819 + #14777: 807 -> 773
     "autobot-slm-frontend/src/views/settings/admin/DataHygieneView.vue": 656,  # #18819 + #14777: 669 -> 662
     "autobot-slm-frontend/src/views/settings/admin/LogForwardingSettings.vue": 650,  # #14780: 664 -> 655 (BaseSwitch)

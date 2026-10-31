@@ -113,3 +113,15 @@ def test_redaction_runs_before_the_cut_so_a_secret_at_the_edge_cannot_survive():
     padding = "x" * _report._ERROR_LIMIT
     error = _report._safe("api_key=%s %s" % (_SECRET, padding))
     assert _SECRET not in error and len(error) == _report._ERROR_LIMIT
+
+
+def test_a_task_name_or_stage_carrying_a_secret_is_redacted(tmp_path):
+    """Every value from the log goes through the redactors, not only the error."""
+    log = tmp_path / "self-update.log"
+    log.write_text(
+        f"PLAY [deploy password={_SECRET}] ****\n"  # pragma: allowlist secret
+        f"TASK [login token={_SECRET}] ****\n"  # pragma: allowlist secret
+        'fatal: [n]: FAILED! => {"msg": "x"}\n',
+        encoding="utf-8",
+    )
+    assert _SECRET not in json.dumps(build_update_report(log, None, []))
