@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { defineAsyncComponent } from 'vue'
 import TruncationNotice from './TruncationNotice.vue'
-import { useShowMore } from '@autobot/ui'
+import { useShowMore, BaseButton } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import DependencyTreemap from '@/components/charts/DependencyTreemap.vue'
@@ -117,7 +117,7 @@ const emit = defineEmits<{
     <div v-else-if="dependencyError" class="charts-error">
       <Icon name="exclamation-triangle" />
       <span>{{ dependencyError }}</span>
-      <button @click="emit('load-dependency-data')" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
+      <BaseButton variant="link" size="sm" @click="emit('load-dependency-data')">{{ $t('analytics.codebase.actions.retry') }}</BaseButton>
     </div>
 
     <div v-else-if="dependencyData" class="dependency-grid">
@@ -212,9 +212,9 @@ const emit = defineEmits<{
       :message="$t('analytics.codebase.dependencies.noData')"
     >
       <template #actions>
-        <button @click="emit('load-dependency-data')" class="btn-primary" :disabled="dependencyLoading">
+        <BaseButton variant="success" @click="emit('load-dependency-data')" :disabled="dependencyLoading">
           <Icon name="project-diagram" /> {{ $t('analytics.codebase.dependencies.analyze') }}
-        </button>
+        </BaseButton>
       </template>
     </EmptyState>
   </div>
@@ -233,7 +233,7 @@ const emit = defineEmits<{
     <div v-if="importTreeError" class="section-error">
       <Icon name="exclamation-triangle" />
       <span>{{ importTreeError }}</span>
-      <button @click="emit('load-import-tree')" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
+      <BaseButton variant="link" size="sm" @click="emit('load-import-tree')">{{ $t('analytics.codebase.actions.retry') }}</BaseButton>
     </div>
 
     <!-- Import Tree Content with Suspense -->
@@ -267,9 +267,9 @@ const emit = defineEmits<{
       variant="info"
     >
       <template #actions>
-        <button @click="emit('load-import-tree')" class="btn-primary" :disabled="importTreeLoading">
+        <BaseButton variant="success" @click="emit('load-import-tree')" :disabled="importTreeLoading">
           <Icon name="sitemap" /> {{ $t('analytics.codebase.importTree.analyze') }}
-        </button>
+        </BaseButton>
       </template>
     </EmptyState>
   </div>
@@ -288,7 +288,7 @@ const emit = defineEmits<{
     <div v-if="callGraphError" class="section-error">
       <Icon name="exclamation-triangle" />
       <span>{{ callGraphError }}</span>
-      <button @click="emit('load-call-graph')" class="btn-link">{{ $t('analytics.codebase.actions.retry') }}</button>
+      <BaseButton variant="link" size="sm" @click="emit('load-call-graph')">{{ $t('analytics.codebase.actions.retry') }}</BaseButton>
     </div>
 
     <!-- Call Graph Content with Suspense -->
@@ -324,9 +324,9 @@ const emit = defineEmits<{
       variant="info"
     >
       <template #actions>
-        <button @click="emit('load-call-graph')" class="btn-primary" :disabled="callGraphLoading">
+        <BaseButton variant="success" @click="emit('load-call-graph')" :disabled="callGraphLoading">
           <Icon name="project-diagram" /> {{ $t('analytics.codebase.callGraph.analyze') }}
-        </button>
+        </BaseButton>
       </template>
     </EmptyState>
   </div>
@@ -335,46 +335,6 @@ const emit = defineEmits<{
 <style scoped src="@/design-system/styles/panel-dependencies-charts-shared.css"></style>
 
 <style scoped>
-/* Shared button styles */
-.btn-primary {
-  padding: var(--spacing-2-5) var(--spacing-5);
-  border: none;
-  border-radius: var(--radius-lg);
-  font-weight: var(--font-semibold);
-  cursor: pointer;
-  transition: var(--transition-all);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  background: var(--chart-green);
-  color: var(--text-on-success);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-success-dark);
-  transform: translateY(-1px);
-}
-
-.btn-primary:disabled {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  cursor: not-allowed;
-  transform: none;
-}
-
-.btn-link {
-  background: none;
-  border: none;
-  color: var(--chart-blue);
-  cursor: pointer;
-  text-decoration: underline;
-  font-size: 0.9em;
-}
-
-.btn-link:hover {
-  color: var(--color-info-dark);
-}
-
 .refresh-btn {
   background: var(--bg-tertiary);
   border: 1px solid var(--bg-hover);
