@@ -137,6 +137,11 @@ refused `1008` before any RFB byte. Full reasoning is in that function's docstri
   [`autobot_shared/security/ssrf_guard.py`](../../autobot_shared/security/ssrf_guard.py)
   `fetch_safe_url` (:305) / `pinned_request_with_redirects` (:230). A bare `aiohttp`/`requests`
   call on a user-influenced URL is SSRF (core rule 8).
+- **LLM failover moves prompts (#19753):** [`ModelFallbackCoordinator`](../../autobot-backend/llm_shared/model_fallback_coordinator.py)
+  `fail_over` re-sends a turn's prompt to another model. It never carries a prompt from a local provider to an external one unless
+  the operator wrote that chain (`AUTOBOT_FALLBACK_CHAIN_*`, `FallbackChain.operator_configured`) -- `failover_policy.locality_allows`
+  -- and only while the turn has emitted no text and run no tool (`chat_workflow/llm_failover.py` `turn_has_acted`), so a side effect
+  never replays. An authentication failover is announced (PROVIDER_FALLBACK event, `reason=authentication`), not silent.
 - **Refactor fallout** historically outranks new code here: a renamed validator or store with
   call sites left on the old name silently removes the check. Grep the **old** identifier.
 - **Prompt injection (#16488):** content `research`/`adopt`/`web-fetch` fetch is data, never

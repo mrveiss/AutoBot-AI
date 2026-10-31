@@ -30,12 +30,21 @@ from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
-from .fallback_chain import get_fallback_chain_manager
+from .failover_policy import hold_seconds, locality_allows
+from .fallback_chain import FallbackHop, get_fallback_chain_manager
 from .fallback_events import emit_fallback_event
 from .headroom_routing import exhausted_window
 from .models import LLMRequest, LLMResponse
 from .optimization.rate_limiter import RateLimitError
+from .provider_auth import ProviderAuthError
 from .provider_degradation import AllCredentialsNeedReauthError, get_degradation_store
+from .provider_error_category import (
+    ProviderErrorCategory,
+    ProviderFailure,
+    classify_error,
+    failure_from_exception,
+    failure_from_response,
+)
 
 if TYPE_CHECKING:
     from .provider_registry import ProviderRegistry
@@ -47,6 +56,20 @@ _MAX_FALLBACK_ATTEMPTS: int = env_int("AUTOBOT_MAX_FALLBACK_ATTEMPTS", 3)
 REASON_RATE_LIMIT = "rate_limit_429"
 #: Pre-emptive switch on observed headroom (#15028) -- no 429 was paid for.
 REASON_HEADROOM_PREEMPT = "headroom_preempt"
+
+
+def _reason_for(category: ProviderErrorCategory) -> str:
+    """The audit/event reason of a hop: the historic 429 string for a throttle, else the category."""
+    return REASON_RATE_LIMIT if category is ProviderErrorCategory.RATE_LIMIT else category.value
+
+
+class _ProviderFailureError(Exception):
+    """Internal: a provider answered with a failover-eligible error response (#19753)."""
+
+    def __init__(self, failure: ProviderFailure, response: LLMResponse) -> None:
+        super().__init__(failure.message)
+        self.failure = failure
+        self.response = response
 
 
 class _FallbackTrail:
@@ -162,20 +185,54 @@ class ModelFallbackCoordinator:
         """
         if not request.fallback_enabled:
             return await self._dispatch(request, registry)
+        return await self._run_loop(_FallbackRun(request), registry, max_attempts, first_attempt=0)
 
+    async def fail_over(
+        self,
+        request: LLMRequest,
+        registry: "ProviderRegistry",
+        failure: ProviderFailure,
+        *,
+        acted: bool,
+        held: bool = False,
+        max_attempts: int = _MAX_FALLBACK_ATTEMPTS,
+    ) -> LLMResponse | None:
+        """Continue *request* on the next model after a caller's own dispatch of it failed (#19753).
+
+        For a caller that already made the first call itself -- the streaming chat path, which posts
+        to the provider directly. ``None`` means "do not fail over, surface the original error":
+        the turn already ``acted`` (emitted text or ran a tool, so a retry could replay a side
+        effect), the failure is not failover-eligible, or no permitted model is left. Otherwise
+        the request runs on the chain exactly as :meth:`execute_with_fallback` runs it, so the
+        once-per-model rule, the skip window / quota hold and the locality rule are the same.
+        ``held`` says the model was already held out when the call was skipped, so it is not
+        marked again -- re-marking on every message would stretch a skip window without end.
+        """
+        if acted or not failure.category.failover_eligible or max_attempts < 1:
+            logger.info("failover: not attempted (acted=%s category=%s)", acted, failure.category.value)
+            return None
         run = _FallbackRun(request)
-        for attempt in range(max_attempts + 1):
+        run.last_error = LLMResponse(content="", model=run.model, provider=run.provider or "", error=failure.message)
+        if not await self._on_failure(run, failure, 0, max_attempts, mark=not held):
+            return None
+        return await self._run_loop(run, registry, max_attempts, first_attempt=1)
+
+    async def _run_loop(
+        self, run: "_FallbackRun", registry: "ProviderRegistry", max_attempts: int, *, first_attempt: int
+    ) -> LLMResponse:
+        """Dispatch ``run.request``, hopping down the chain on a failover-eligible failure."""
+        for attempt in range(first_attempt, max_attempts + 1):
             try:
                 # Last attempt never hops: an all-exhausted chain can't cycle (#15028).
                 guard = self._headroom_guard(run.model, run.chain_tried) if attempt < max_attempts else None
-                response = await self._dispatch(run.request, registry, hop_guard=guard)
+                response = await self._dispatch(run.request, registry, hop_guard=guard, raise_failures=True)
                 await self._finish_success(run, response, attempt)
                 return response
             except _PreemptiveSwitch as hop:
                 run.trail.note_preempt(hop, run.model)
                 run.switch_to(hop.next_model, hop.next_provider)
-            except RateLimitError as exc:
-                if not await self._on_rate_limit(run, exc, attempt, max_attempts):
+            except (RateLimitError, _ProviderFailureError, ProviderAuthError) as exc:
+                if not await self._on_failure(run, self._record_failure(run, exc), attempt, max_attempts):
                     break
 
         # All fallbacks exhausted.
@@ -183,6 +240,25 @@ class ModelFallbackCoordinator:
         self._annotate(run.last_error, **run.audit(len(run.chain_tried), fallback_used=True, exhausted=True))
         await self._emit(run, exhausted=True)
         return run.last_error
+
+    @staticmethod
+    def _record_failure(run: "_FallbackRun", exc: Exception) -> ProviderFailure:
+        """Keep the failed attempt's response as the run's last error; return its classified failure."""
+        if isinstance(exc, _ProviderFailureError):
+            run.last_error = exc.response
+            return exc.failure
+        run.last_error = LLMResponse(content="", model=run.model, provider=run.provider or "", error=str(exc))
+        if isinstance(exc, RateLimitError):
+            return ModelFallbackCoordinator._rate_limit_failure(exc)
+        return failure_from_exception(exc)
+
+    @staticmethod
+    def _rate_limit_failure(exc: RateLimitError) -> ProviderFailure:
+        """A backoff-exhausted 429 is a throttle, or a plan limit when its text says so."""
+        failure = classify_error(str(exc), getattr(exc, "retry_after", None))
+        if failure.category is ProviderErrorCategory.BILLING:
+            return failure
+        return ProviderFailure(ProviderErrorCategory.RATE_LIMIT, failure.message, failure.retry_after)
 
     async def _finish_success(self, run: "_FallbackRun", response: LLMResponse, attempt: int) -> None:
         """Annotate the audit metadata of a successful response and announce any fallback."""
@@ -199,38 +275,70 @@ class ModelFallbackCoordinator:
         )
         await self._emit(run)
 
-    async def _on_rate_limit(self, run: "_FallbackRun", exc: RateLimitError, attempt: int, max_attempts: int) -> bool:
-        """Handle a 429 that survived backoff: mark the provider, pick the next model.
+    async def _on_failure(
+        self, run: "_FallbackRun", failure: ProviderFailure, attempt: int, max_attempts: int, *, mark: bool = True
+    ) -> bool:
+        """Hold the failed model out, then pick the next usable one.
 
         Returns True when the loop should retry on the fallback, False when the chain is exhausted.
         """
-        run.last_error = LLMResponse(content="", model=run.model, provider=run.provider or "", error=str(exc))
-        # Mark the exhausted provider:model degraded so sibling workers skip it immediately
-        # (Issue #11519), using the provider the registry actually resolved at dispatch time --
-        # the request may carry none. Marked before the max-attempts break so the final provider is too.
-        failed_provider = run.request.metadata.get("selected_provider") or run.provider
-        if failed_provider:
-            await get_degradation_store().mark_degraded(failed_provider, run.model or None)
-        else:
-            logger.debug("degradation: provider unresolved for model=%r — mark skipped", run.model)
+        if mark:
+            await self._mark_failed(run, failure)
         if attempt >= max_attempts:
             logger.warning(
                 "quota-fallback: all %d fallback attempts exhausted for model=%r", max_attempts, run.primary_model
             )
             return False
-        fallback = get_fallback_chain_manager().get_next_fallback(run.model, run.provider)
-        if fallback is None:
-            logger.warning("quota-fallback: no fallback registered for model=%r provider=%r", run.model, run.provider)
+        hop = await self._next_usable_hop(run)
+        if hop is None:
+            logger.warning("quota-fallback: no usable fallback for model=%r provider=%r", run.model, run.provider)
             return False
         logger.info(
-            "quota-fallback: model=%r hit rate limit (attempt %d), switching to fallback model=%r provider=%r",
+            "quota-fallback: model=%r failed (%s, attempt %d), switching to fallback model=%r provider=%r",
             run.model,
+            failure.category.value,
             attempt + 1,
-            *fallback,
+            hop.model,
+            hop.provider,
         )
-        run.trail.reasons.append(REASON_RATE_LIMIT)
-        run.switch_to(*fallback)
+        run.trail.reasons.append(_reason_for(failure.category))
+        run.switch_to(hop.model, hop.provider)
         return True
+
+    @staticmethod
+    async def _mark_failed(run: "_FallbackRun", failure: ProviderFailure) -> None:
+        """Mark the failed provider:model degraded so sibling workers skip it (Issue #11519).
+
+        A transient failure is skipped for the degradation window; a plan/quota limit is held until
+        the provider's reset (#19753). Uses the provider the registry actually resolved at dispatch
+        time -- the request may carry none. Marked before the max-attempts break so the final one is too.
+        """
+        failed_provider = run.request.metadata.get("selected_provider") or run.provider
+        if not failed_provider:
+            logger.debug("degradation: provider unresolved for model=%r — mark skipped", run.model)
+            return
+        ttl = hold_seconds(failure)
+        extra = {"ttl_seconds": ttl} if ttl else {}
+        await get_degradation_store().mark_degraded(failed_provider, run.model or None, **extra)
+
+    @staticmethod
+    async def _next_usable_hop(run: "_FallbackRun") -> FallbackHop | None:
+        """The next chain hop that is untried, not held out, and allowed to receive this prompt.
+
+        Each model is tried at most once per request (``chain_tried``). A hop that would move the
+        prompt from a local provider to an external one is skipped unless the operator wrote the chain.
+        """
+        manager, store = get_fallback_chain_manager(), get_degradation_store()
+        tried = {m.lower() for m in run.chain_tried}
+        from_provider = run.request.metadata.get("selected_provider") or run.provider
+        model, owner = run.model, run.provider
+        while (hop := manager.get_next_hop(model, owner)) is not None and hop.model.lower() not in tried:
+            tried.add(hop.model.lower())
+            allowed = locality_allows(from_provider, hop.provider, operator_configured=hop.operator_configured)
+            if allowed and not (hop.provider and await store.is_degraded(hop.provider, hop.model)):
+                return hop
+            model, owner = hop.model, hop.provider
+        return None
 
     @staticmethod
     async def _emit(run: "_FallbackRun", *, exhausted: bool = False) -> None:
@@ -258,9 +366,11 @@ class ModelFallbackCoordinator:
         registry: "ProviderRegistry",
         *,
         hop_guard: Optional[Callable[[str], Awaitable[None]]] = None,
+        raise_failures: bool = False,
     ) -> LLMResponse:
         """Select provider for *request* and call chat_completion, raising on rate limit.
 
+        *raise_failures* (#19753) also raises for a failover-eligible error response; off, it is returned as before.
         *hop_guard* (#15028) sees the resolved provider name before the call and
         may raise ``_PreemptiveSwitch``; ``None`` is exactly the reactive path.
         """
@@ -271,15 +381,21 @@ class ModelFallbackCoordinator:
             # Not a rate limit: no fallback hop can help, and retrying is futile (#15022).
             return LLMResponse(content="", error=str(exc), model=request.model_name or "")
         if provider is None:
-            return LLMResponse(
-                content="",
-                error="All providers unavailable",
-                model=request.model_name or "",
-            )
+            return LLMResponse(content="", error="All providers unavailable", model=request.model_name or "")
         if hop_guard is not None:
             await hop_guard(request.metadata.get("selected_provider") or provider.provider_name)
         # BaseProvider.chat_completion() raises RateLimitError when backoff exhausted.
-        return await provider.chat_completion(request)
+        response = await provider.chat_completion(request)
+        if raise_failures:
+            ModelFallbackCoordinator._raise_if_failover_eligible(response)
+        return response
+
+    @staticmethod
+    def _raise_if_failover_eligible(response: LLMResponse) -> None:
+        """Raise ``_ProviderFailureError`` for an error response a different model could answer (#19753)."""
+        failure = failure_from_response(response)
+        if failure is not None and failure.category.failover_eligible:
+            raise _ProviderFailureError(failure, response)
 
     @staticmethod
     def _headroom_guard(current_model: str, chain_tried: list[str]) -> Callable[[str], Awaitable[None]]:

@@ -19,7 +19,9 @@ from testkit.module_stubs import real_load_and_bind
 #: (module name under ``llm_shared``, path relative to it), dependencies first.
 _COORDINATOR_AND_DEPS = (
     ("rate_limit_backoff", "rate_limit_backoff.py"),
+    ("optimization.router", "optimization/router.py"),
     ("provider_error_category", "provider_error_category.py"),
+    ("failover_policy", "failover_policy.py"),
     ("model_fallback_coordinator", "model_fallback_coordinator.py"),
 )
 
