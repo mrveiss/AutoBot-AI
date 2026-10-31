@@ -59,7 +59,7 @@ psycopg2-binary>=2.9.13  # Sync PostgreSQL driver for migrations
 
 # Data validation
 pydantic[email]>=2.14.1
-pydantic-settings>=2.16.1
+pydantic-settings  # floor from constraints/shared.txt
 typing_extensions>=4.16.0  # For Python 3.8 compatibility
 
 # Authentication
