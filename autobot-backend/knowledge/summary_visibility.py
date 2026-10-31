@@ -13,14 +13,14 @@ when the source is research-quarantined, for an admin too (as the summaries' own
 """
 
 import asyncio
-import os
 from typing import Any, Callable, Dict, List
 
+from autobot_shared.env_utils import env_int_clamped
 from knowledge.quarantine import is_quarantined
 from knowledge.search_filters import KbReader, filter_for_user_id
 
 #: How many source-fact lookups run at once for one visibility pass.
-SOURCE_LOOKUP_CONCURRENCY = int(os.environ.get("AUTOBOT_KB_SOURCE_LOOKUP_CONCURRENCY", "8"))
+SOURCE_LOOKUP_CONCURRENCY = env_int_clamped("AUTOBOT_KB_SOURCE_LOOKUP_CONCURRENCY", 8, min_v=1)
 
 
 def _source_metadata(kb, document_id: str) -> Dict[str, Any] | None:

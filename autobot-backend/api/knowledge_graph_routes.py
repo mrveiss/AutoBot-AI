@@ -9,7 +9,6 @@ Issue #759: ECL Pipeline endpoints for entity extraction, temporal events,
 hierarchical summarization, and document processing.
 """
 
-import os
 import re
 from uuid import UUID
 
@@ -27,6 +26,7 @@ from api.schemas_knowledge import (
     PipelineRunResponse,
 )
 from auth_middleware import get_current_user
+from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from knowledge.search_filters import authorize_fact_write, caller_reader
@@ -174,8 +174,8 @@ async def get_entity_relationships(
 
 
 #: Events fetched per requested event, so the visibility pass still fills a page; bounded by EVENT_FETCH_CAP.
-EVENT_OVERFETCH_FACTOR = int(os.environ.get("AUTOBOT_KB_EVENT_OVERFETCH_FACTOR", "5"))
-EVENT_FETCH_CAP = int(os.environ.get("AUTOBOT_KB_EVENT_FETCH_CAP", "2500"))
+EVENT_OVERFETCH_FACTOR = env_int_clamped("AUTOBOT_KB_EVENT_OVERFETCH_FACTOR", 5, min_v=1)
+EVENT_FETCH_CAP = env_int_clamped("AUTOBOT_KB_EVENT_FETCH_CAP", 2500, min_v=1)
 
 
 async def _visible_page(events: list, reader, limit: int) -> list:
