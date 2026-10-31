@@ -65,17 +65,12 @@ _KNOWN_UNRECORDED = {
     "autobot-backend/llm_shared/adapters/groq_adapter.py::GroqAdapter.execute": (1, "#19650"),
     "autobot-backend/llm_shared/adapters/ollama_adapter.py::OllamaAdapter.execute": (1, "#19650"),
     "autobot-backend/llm_shared/adapters/openai_adapter.py::OpenAIAdapter.execute": (1, "#19650"),
-    # chat_completion on an LLMService, which has no such method since #3185: #19649.
-    "autobot-backend/agents/agent_orchestration/routing.py::AgentRouter._determine_routing_base": (1, "#19649"),
-    "autobot-backend/async_chat_workflow.py::AsyncChatWorkflow._generate_llm_response": (1, "#19649"),
-    "autobot-backend/modern_ai_integration.py::LocalModelProvider.generate_text": (1, "#19649"),
-    "autobot-backend/task_handlers/llm_handlers.py::LLMChatCompletionHandler.execute": (1, "#19649"),
 }
 
 # Ratchet (see docs/developer/RATCHET_BASELINES.md): the known-unrecorded population
 # measured when this guard landed. It ONLY goes down -- lower it in the same change
 # that fixes an entry. Never raise it to admit a new site; record that site instead.
-_KNOWN_UNRECORDED_CEILING = 10
+_KNOWN_UNRECORDED_CEILING = 6
 
 # Raw-HTTP inference no method-name scan can see, exempt by a stated condition.
 _OLLAMA_DIRECT = _REPO / "autobot-backend" / "chat_workflow" / "manager.py"
