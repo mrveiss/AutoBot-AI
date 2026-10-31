@@ -426,7 +426,7 @@ def test_a_file_stem_is_judged_by_the_shared_vocabulary(stem: str, data_file: bo
     assert sr.is_credential_file_stem(stem, data_file=data_file) is expected
 
 
-def test_redact_text_masks_the_json_quoted_spelling_19963():
+def test_redact_text_masks_the_json_quoted_spelling_19962():
     from autobot_shared.secret_redaction import redact_text
 
     assert "pw-1" not in redact_text('{"password": "pw-1"}')  # pragma: allowlist secret

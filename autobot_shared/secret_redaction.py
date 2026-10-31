@@ -318,7 +318,7 @@ _AUTH_HEADER_RE = re.compile(r"""(?i)(authorization["']?\s*[:=]\s*).+""")
 # the word sits right before ``[:=]`` so near-miss keys (``password_hash_algorithm=``) never match. Every noun is
 # in the shared vocabulary (asserted by test): this is its text SHAPE, not a copy.
 _SECRET_KV_RE = re.compile(
-    # #19963: the optional quotes are the JSON spelling, `"password": "x"`; a quoted value is masked whole.
+    # #19962: the optional quotes are the JSON spelling, `"password": "x"`; a quoted value is masked whole.
     r"(?i)\b([a-z0-9_]*[_-]?(?:api[_-]?key|token|secret|password|passwd))\b"
     r"([\"']?\s*[:=]\s*)(\"[^\"]*\"|'[^']*'|[^\s,;\"']+)"
 )
