@@ -21,6 +21,16 @@ from autobot_shared.env_registry import EnvVarSpec, register_env_var
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_UPDATE_CODE_SOURCE_FETCH_RETRY_DELAY_S",
+        type=int,
+        default=5,
+        description="Seconds before retrying a failed git fetch of the code source (#20089).",
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_SLM_UPDATE_REPORT_DEPLOY_RUNS",
         type=int,
         default=50,
