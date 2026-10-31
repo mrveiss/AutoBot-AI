@@ -195,7 +195,7 @@ function getNodeHostname(nodeId: string): string {
               {{ backup.service_type }}
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              {{ formatBytes(backup.size_bytes, { units: ['B', 'KB', 'MB', 'GB', 'TB'], zeroText: '0 B' }) }}
+              {{ formatBytes(backup.size_bytes, { units: ['B', 'KB', 'MB', 'GB', 'TB'], zeroText: t('common.zeroSize') }) }}
             </td>
             <!-- #13307: backup_path was already in the API response and the
                  page never rendered it, which is the whole of "no idea where
