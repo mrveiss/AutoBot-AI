@@ -22,7 +22,7 @@ SLM_TOKEN=$(curl -sk -X POST https://<slm-manager-ip>/api/auth/login \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 ```
 
-**2. Create the Ansible playbook** (a new file of your own, such as `ansible/playbooks/<your-app>.yml`):
+**2. Create the Ansible playbook** (`ansible/playbooks/deploy-docker-app.yml`):
 
 ```yaml
 ---

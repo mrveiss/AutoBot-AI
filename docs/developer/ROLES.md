@@ -425,7 +425,7 @@ These conflicts drive the default fleet layout:
 | **Node.js** | — |
 | **System packages** | `python3 python3-venv` |
 | **External deps** | — |
-| **Ansible playbook** | `deploy-shared.yml` |
+| **Ansible playbook** | `playbooks/deploy_role.yml` |
 | **Source path** | `autobot_shared/` |
 | **Post-sync** | `pip install -e .` |
 | **Notes** | Must be deployed before any other Python service. Provides `get_redis_client()`, `ssot_config`, and shared utilities. |

@@ -451,7 +451,6 @@ _DECLARED_SCOPES = {
     "model-tier-map-scan": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "embedding-model-render-sites": ("autobot-slm-backend/ansible",),
     "ansible-credentials-never-logged": ("autobot-slm-backend/ansible",),
-    "playbook-references-exist": ("docs", ".claude", "scripts", "autobot-slm-backend", "autobot-infrastructure"),
     "frontend-model-literal-scan": ("autobot-frontend/src",),
     "one-bm25-formula": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "one-hybrid-search": ("autobot-backend", "autobot_shared"),

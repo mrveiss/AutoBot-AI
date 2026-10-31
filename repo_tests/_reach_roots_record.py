@@ -287,13 +287,6 @@ REACH_ROOTS = {
         "autobot-slm-backend",
         "autobot_shared",
     ),
-    "repo_tests/playbook_references_exist_19611_test.py": (
-        ".claude",
-        "autobot-infrastructure",
-        "autobot-slm-backend",
-        "docs",
-        "scripts",
-    ),
     "repo_tests/pr_comment_upsert_12984_test.py": (
         ".github/workflows",
         "autobot_shared",
