@@ -43,36 +43,8 @@ _ICON_CLASS = re.compile(r"(?<![\w-])\.icon(?![\w-])")
 _FONT_SIZE = re.compile(r"(?<![\w-])font-size\s*:")
 _BOX_SIZE = re.compile(r"(?<![\w-])(?:width|height)\s*:")
 
-# Measured on the base this landed on: rules in files held by open PRs. Delete an entry when fixed.
+# Rules in files still held by an open PR (WorkflowRunner.vue: #20166). Delete an entry when fixed.
 PINS = {
-    "components/audit/AuditTimeline.vue :: .loading-state .icon, .empty-state .icon": 1,
-    "components/charts/FunctionCallGraph.vue :: .orphaned-empty .icon": 1,
-    "components/chat/VoiceConversationOverlay.vue :: .voice-overlay__lang-badge .icon": 1,
-    "components/chat/VoiceConversationPanel.vue :: .voice-panel__lang-badge .icon": 1,
-    "components/knowledge/KnowledgeBatchToolbar.vue :: .toolbar-info .icon": 1,
-    "components/knowledge/KnowledgeBrowser.vue :: .file-info > .icon": 1,
-    "components/knowledge/KnowledgeBrowser.vue :: .loading-more .icon": 1,
-    "components/knowledge/KnowledgeBrowser.vue :: .loading-state .icon, .error-state .icon, .placeholder-state .icon": 1,
-    "components/knowledge/KnowledgeBrowser.vue :: .refresh-status-btn .icon": 1,
-    "components/knowledge/KnowledgeBrowser.vue :: .toolbar-info .icon": 1,
-    "components/knowledge/KnowledgeGraph.vue :: .relation-target .icon": 1,
-    "components/knowledge/KnowledgeMainCategories.vue :: .populate-btn .icon": 1,
-    "components/knowledge/KnowledgeUpload.vue :: .drop-icon-wrapper .icon": 1,
-    "components/knowledge/KnowledgeUpload.vue :: .method-header .icon": 1,
-    "components/knowledge/KnowledgeUpload.vue :: .suggested-category .icon": 1,
-    "components/knowledge/KnowledgeVerificationQueue.vue :: .loading-state .icon": 1,
-    "components/knowledge/panels/SourcePreviewPanel.vue :: .empty-state .icon": 1,
-    "components/knowledge/temporal/EventTimeline.vue :: .loading-state .icon, .empty-state .icon": 1,
-    "components/knowledge/temporal/EventTimeline.vue :: .timeline-dot .icon": 2,
-    "components/profile/ProfileModal.vue :: .tab-btn .icon": 1,
-    "components/ui/HostSelectionDialog.vue :: .default-badge .icon": 1,
-    "components/ui/HostSelectionDialog.vue :: .loading-state .icon, .empty-state .icon": 1,
-    "components/vision/ScreenCaptureViewer.vue :: .no-elements .icon": 1,
-    "components/visualizations/ServiceMessageTimeline.vue :: .smt-route .icon": 1,
-    "components/workflow/PhaseProgressionIndicator.vue :: .loading-spinner .icon": 1,
-    "components/workflow/PhaseProgressionIndicator.vue :: .no-data-content .icon": 1,
-    "components/workflow/WorkflowCanvas.vue :: .empty-state .icon": 1,
-    "components/workflow/WorkflowHistory.vue :: .empty-state .icon": 1,
     "components/workflow/WorkflowRunner.vue :: .empty-list .icon": 1,
     "components/workflow/WorkflowRunner.vue :: .no-selection .icon": 1,
 }

@@ -188,6 +188,7 @@ REACH_ROOTS = {
     ),
     "repo_tests/no_doubled_api_prefix_18722_test.py": ("autobot-backend/api", "autobot-slm-backend/api"),
     "repo_tests/no_literal_secret_default_16299_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
+    "repo_tests/no_partial_key_mask_18221_test.py": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "repo_tests/node_major_one_home_19328_test.py": (
         ".github",
         "autobot-infrastructure/shared/scripts",
