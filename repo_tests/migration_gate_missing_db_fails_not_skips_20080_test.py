@@ -15,11 +15,13 @@ The conftest is copied next to planted tests in a temp dir and run in a subproce
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 from repo_tests._paths import repo_root
 
@@ -51,7 +53,7 @@ def test_unrelated_skip():
 def _run(tmp_path: Path, extra_env: dict[str, str]) -> subprocess.CompletedProcess:
     shutil.copy(repo_root() / _CONFTEST, tmp_path / "conftest.py")
     (tmp_path / "test_planted.py").write_text(_PLANTED, encoding="utf-8")
-    env = {k: v for k, v in os.environ.items() if k not in (_ADMIN, _REQUIRE)}
+    env = {k: v for k, v in os.environ.items() if k not in (_ADMIN, _REQUIRE, "PYTEST_ADDOPTS", "PYTEST_PLUGINS")}
     env.update(extra_env)
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     return subprocess.run(
@@ -75,19 +77,33 @@ def _run(tmp_path: Path, extra_env: dict[str, str]) -> subprocess.CompletedProce
     )
 
 
+def _count(out: str, word: str) -> int:
+    """The exact count pytest's summary line reports for `word`, 0 when absent."""
+    m = re.search(rf"\b(\d+) {word}\b", out.splitlines()[-1])
+    return int(m.group(1)) if m else 0
+
+
 def test_marker_set_and_url_missing_fails_the_run(tmp_path: Path) -> None:
     proc = _run(tmp_path, {_REQUIRE: "1"})
     out = proc.stdout + proc.stderr
     assert proc.returncode != 0, out
-    assert "2 errors" in out, out  # both database paths error in setup rather than skip
-    assert "1 skipped" in out, out  # the unrelated skip is still a skip: only the database skip is converted
+    assert _count(out, "errors?") == 2, out  # both database paths error in setup rather than skip
+    assert _count(out, "skipped") == 1, out  # the unrelated skip is still a skip: only the database skip is converted
 
 
 def test_no_marker_keeps_the_skip_for_developers(tmp_path: Path) -> None:
     proc = _run(tmp_path, {})
     out = proc.stdout + proc.stderr
     assert proc.returncode == 0, out
-    assert "3 skipped" in out, out
+    assert _count(out, "skipped") == 3 and _count(out, "errors?") == 0, out
+
+
+@pytest.mark.parametrize("value", ["0", "false", "no", ""])
+def test_a_falsy_marker_does_not_demand_a_database(tmp_path: Path, value: str) -> None:
+    proc = _run(tmp_path, {_REQUIRE: value})
+    out = proc.stdout + proc.stderr
+    assert proc.returncode == 0, out
+    assert _count(out, "skipped") == 3, out
 
 
 def test_the_gate_step_that_sets_the_admin_url_also_sets_the_marker() -> None:

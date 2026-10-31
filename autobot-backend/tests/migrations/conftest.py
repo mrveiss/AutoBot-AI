@@ -7,7 +7,8 @@
 Every test gets a disposable database created on the Postgres server named by
 ``AUTOBOT_MIGRATION_TEST_ADMIN_URL`` (an asyncpg URL with rights to CREATE
 DATABASE, e.g. ``postgresql+asyncpg://migtest:migtest@127.0.0.1:5499/postgres``).
-Without that variable the whole directory is skipped — these tests need a real
+Without that variable the whole directory is skipped, unless ``AUTOBOT_MIGRATION_TEST_REQUIRE_DB``
+is set (the Migration Gate sets it, #20080), in which case they fail instead — these tests need a real
 Postgres because the migration chain uses Postgres-only constructs
 (postgresql.ENUM, JSONB, TIMESTAMPTZ conversions).
 
@@ -31,6 +32,7 @@ ADMIN_URL_ENV = "AUTOBOT_MIGRATION_TEST_ADMIN_URL"
 # The Migration Gate sets this (#20080): a missing admin URL then FAILS the tests instead of
 # skipping them, so a lost URL turns the job red. Unset (a developer without Postgres), they skip.
 REQUIRE_DB_ENV = "AUTOBOT_MIGRATION_TEST_REQUIRE_DB"
+_TRUTHY = frozenset({"1", "true", "yes"})
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_ROOT.parent
@@ -43,7 +45,7 @@ def _admin_url() -> str | None:
 
 
 def _db_required() -> bool:
-    return bool(os.environ.get(REQUIRE_DB_ENV))
+    return os.environ.get(REQUIRE_DB_ENV, "").strip().lower() in _TRUTHY
 
 
 def _missing_db_message() -> str:
