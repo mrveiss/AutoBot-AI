@@ -8297,6 +8297,11 @@
     "loadError": "Failed to load members.",
     "addError": "Failed to add member.",
     "removeError": "Failed to remove member.",
+    "colChangeRole": "Change role",
+    "changeRole": "Change role for {name}",
+    "roleChangeForbidden": "You are not allowed to make that role change.",
+    "roleChangeLastOwner": "A company must keep an owner.",
+    "roleChangeError": "Failed to change the role.",
     "usersLoadError": "Failed to load users.",
     "role": {
       "owner": "Owner",
