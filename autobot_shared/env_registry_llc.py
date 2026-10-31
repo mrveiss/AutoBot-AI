@@ -139,3 +139,18 @@ env_registry.register_env_var(
         component="voice",
     )
 )
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_COMPANY_OS_WORKFLOW_PLANNER_APPROVAL_WAIT_SECONDS",
+        type=int,
+        default=86400,
+        description=(
+            "How long an AI sub-step waits for a person's approval before the timeout transition of the workflow "
+            "a Workflow Plan converts into is taken, for an approval policy with a wait limit. The plan names "
+            "the policy, never the number (llc/services/company_os/plan_convert.py, #19936)."
+        ),
+        range=(1, 31536000),
+        component="llc",
+    )
+)
