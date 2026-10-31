@@ -9,14 +9,14 @@
         <p class="page-subtitle">{{ t('adminUsers.subtitle') }}</p>
       </div>
       <div class="header-actions">
-        <button class="btn-action-primary" @click="showCreateModal = true">
+        <BaseButton size="sm" @click="showCreateModal = true">
           <Icon name="user-plus" />
           {{ t('adminUsers.addUser') }}
-        </button>
-        <button class="btn-action-secondary" :disabled="loading" @click="loadUsers">
+        </BaseButton>
+        <BaseButton variant="secondary" size="sm" :disabled="loading" @click="loadUsers">
           <Icon name="sync-alt" :spin="loading" />
           {{ t('common.refresh') }}
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -179,11 +179,11 @@
         <button type="submit" class="sr-only" tabindex="-1" aria-hidden="true"></button>
       </form>
       <template #actions>
-        <button type="button" class="btn-action-secondary" @click="showCreateModal = false">{{ t('common.cancel') }}</button>
-        <button type="button" class="btn-action-primary" :disabled="creating" @click="createUser">
+        <BaseButton variant="secondary" size="sm" type="button" @click="showCreateModal = false">{{ t('common.cancel') }}</BaseButton>
+        <BaseButton size="sm" type="button" :disabled="creating" @click="createUser">
           <Icon v-if="creating" name="sync-alt" :spin="true" />
           {{ t('adminUsers.createUser') }}
-        </button>
+        </BaseButton>
       </template>
     </BaseModal>
 
@@ -211,16 +211,15 @@
         <div v-if="bundleError" class="error-inline">{{ bundleError }}</div>
       </template>
       <template #actions>
-        <button type="button" class="btn-action-secondary" @click="closeBundleModal">{{ t('common.cancel') }}</button>
-        <button
+        <BaseButton variant="secondary" size="sm" type="button" @click="closeBundleModal">{{ t('common.cancel') }}</BaseButton>
+        <BaseButton size="sm"
           type="button"
-          class="btn-action-primary"
           :disabled="bundleSaving || bundleModalLoading"
           @click="doAssignBundle"
         >
           <Icon v-if="bundleSaving || bundleModalLoading" name="sync-alt" :spin="true" />
           {{ t('common.save') }}
-        </button>
+        </BaseButton>
       </template>
     </BaseModal>
 
@@ -235,8 +234,8 @@
     >
       <p v-if="deleteTarget">{{ t('adminUsers.deleteConfirm') }} <strong>{{ deleteTarget.username }}</strong>? {{ t('adminUsers.deleteUndone') }}</p>
       <template #actions>
-        <button class="btn-action-secondary" @click="deleteTarget = null">{{ t('common.cancel') }}</button>
-        <button class="btn-action-danger" @click="deleteUser">{{ t('common.delete') }}</button>
+        <BaseButton variant="secondary" size="sm" @click="deleteTarget = null">{{ t('common.cancel') }}</BaseButton>
+        <BaseButton variant="error" size="sm" @click="deleteUser">{{ t('common.delete') }}</BaseButton>
       </template>
     </BaseModal>
   </div>
@@ -249,7 +248,7 @@ import type { Role } from '@/types/_generated/workflow'
 import { createLogger } from '@/utils/debugUtils'
 import apiClient from '@/utils/ApiClient'
 import Icon from '@/components/ui/Icon.vue'
-import { BaseModal, HttpError } from '@autobot/ui'
+import { BaseModal, HttpError, BaseButton } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import {
   useAdminVoiceBundle,
@@ -766,42 +765,6 @@ onMounted(loadUsers)
 .page-info {
   font-size: var(--text-sm);
   color: var(--text-secondary);
-}
-
-.btn-action-primary,
-.btn-action-secondary,
-.btn-action-danger {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-1-5);
-  padding: var(--spacing-2) var(--spacing-4);
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  border: 1px solid transparent;
-  cursor: pointer;
-}
-
-.btn-action-primary {
-  background: var(--color-primary);
-  color: var(--text-on-primary);
-}
-
-.btn-action-secondary {
-  background: transparent;
-  border-color: var(--border-default);
-  color: var(--text-primary);
-}
-
-.btn-action-danger {
-  background: var(--color-error-solid);
-  color: var(--text-on-error);
-}
-
-.btn-action-primary:disabled,
-.btn-action-secondary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .form-group {

@@ -74,6 +74,7 @@
     "pinia": "^3.0.4",
     "pinia-plugin-persistedstate": "^4.7.1",
     "qrcode": "^1.5.4",
+    "reka-ui": "2.11.0",
     "three": "^0.186.1",
     "three-spritetext": "^1.10.0",
     "vega": "^6.4.0",
