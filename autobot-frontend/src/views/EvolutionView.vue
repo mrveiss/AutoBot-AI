@@ -514,7 +514,7 @@ onMounted(async () => {
 
 .summary-icon.refactor {
   background: var(--color-purple-bg, rgba(139, 92, 246, 0.1));
-  color: var(--color-purple, #8b5cf6);
+  color: var(--color-purple);
 }
 
 .summary-value {
