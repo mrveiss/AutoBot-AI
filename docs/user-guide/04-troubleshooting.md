@@ -8,11 +8,8 @@
 **Symptoms**: "Permission denied" errors during setup
 **Solution**:
 ```bash
-# Make script executable
-chmod +x setup_agent.sh
-
-# Run with proper permissions
-sudo ./setup_agent.sh
+# The installer must run as root
+sudo ./install.sh
 ```
 
 #### Issue: Python version conflicts
@@ -256,7 +253,7 @@ cp -r data/ data.backup/
 cp config/config.yaml config.backup.yaml
 
 # Reset to defaults
-./setup_agent.sh --reset
+sudo ./install.sh --reinstall
 
 # Restore data if needed
 cp -r data.backup/* data/

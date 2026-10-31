@@ -23,7 +23,14 @@ from tools.lint._scan_helpers import EmptyEnumeration, tracked_paths
 
 _ANS = "autobot-slm-backend/ansible"
 _HTTP_MODULES = ("ansible.builtin.uri", "uri", "ansible.builtin.get_url", "get_url")
-_SECRET = re.compile(r"Authorization|Bearer|X-API-Key|api[_-]?key|password|token|secret", re.IGNORECASE)
+_SECRET = re.compile(r"Authorization|Bearer|X-API-Key|api[_-]?key|password|token(?!_type)|secret", re.IGNORECASE)
+_COMMAND_MODULES = tuple(
+    f"{prefix}{name}" for prefix in ("", "ansible.builtin.", "ansible.legacy.") for name in ("shell", "command", "raw")
+)
+_SECRET_NAME = r"(?:password|passwd|secret|token(?!_type)|api_?key|private_key)"
+_SECRET_IN_COMMAND = re.compile(rf"Authorization:|Bearer\s|X-API-Key|\{{\{{[^}}]*{_SECRET_NAME}", re.IGNORECASE)
+_SECRET_ENV_KEY = re.compile(rf"{_SECRET_NAME}|credential|_auth$", re.IGNORECASE)
+_SECRET_TEMPLATE = re.compile(rf"\{{\{{[^}}]*{_SECRET_NAME}", re.IGNORECASE)
 _SECRET_ARGS = ("headers", "body", "url_password", "client_key")
 _MESSAGE_MODULES = (
     "ansible.builtin.debug",
@@ -113,6 +120,37 @@ def _whole_response_dumps(tasks: list[dict], secret_results: set[str]) -> list[s
     return found
 
 
+def _command_text(task: dict) -> str:
+    """The command line of a shell/command/raw task, in the module-key or the ``action:`` form."""
+    direct = next((task[m] for m in _COMMAND_MODULES if m in task), None)
+    if direct is not None:
+        return str(direct)
+    action = task.get("action")
+    module = action.get("module") if isinstance(action, dict) else next(iter(str(action or "").split()), "")
+    return f"{action} {task.get('args') or ''}" if module in _COMMAND_MODULES else ""
+
+
+def _environment_carries_secret(task: dict) -> bool:
+    env = task.get("environment")
+    if isinstance(env, dict):
+        return any(_SECRET_ENV_KEY.search(str(k)) or _SECRET_TEMPLATE.search(str(v)) for k, v in env.items())
+    return bool(_SECRET_TEMPLATE.search(str(env or "")))
+
+
+def _process_leaks(tasks: list[dict]) -> list[str]:
+    """Secrets on a command line or in an ``environment:`` block of a task that logs its arguments (#19846)."""
+    found = []
+    for task in tasks:
+        if _no_log_on(task):
+            continue
+        label = task.get("name", "<unnamed>")
+        if _SECRET_IN_COMMAND.search(_command_text(task)):
+            found.append(f"{label} puts a secret on a command line without no_log")
+        if _environment_carries_secret(task):
+            found.append(f"{label} puts a secret in environment without no_log")
+    return found
+
+
 def findings_in(text: str) -> list[str]:
     """Every credential leak in one YAML document's text."""
     docs = yaml.load_all(text, Loader=_AnsibleLoader)  # noqa: S506 -- SafeLoader subclass; every document
@@ -120,7 +158,7 @@ def findings_in(text: str) -> list[str]:
     secret = [t for t in tasks if _carries_credentials(t)]
     found = [f"{t.get('name', '<unnamed>')} sends credentials without no_log" for t in secret if not _no_log_on(t)]
     results = {t["register"] for t in secret if isinstance(t.get("register"), str)}
-    return found + _whole_response_dumps(tasks, results)
+    return found + _whole_response_dumps(tasks, results) + _process_leaks(tasks)
 
 
 def _ansible_yaml(root: Path) -> list[str]:
@@ -233,3 +271,61 @@ def test_an_inline_vault_value_is_parsed_not_skipped() -> None:
 def test_every_document_of_a_multi_document_file_is_judged() -> None:
     two = '- name: ok\n  uri: {url: "https://x/health"}\n---\n- name: t\n  uri: {url: "https://x", headers: {Authorization: "Bearer {{ t }}"}}\n'
     assert findings_in(two) == ["t sends credentials without no_log"]
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        "- name: t\n  shell: 'curl -H \"Authorization: Bearer {{ t }}\" https://x'\n",
+        "- name: t\n  ansible.builtin.command: redis-cli -a {{ redis_password }} ping\n",
+        "- name: t\n  command:\n    cmd: tool --key {{ vault_api_key }}\n",
+        "- name: t\n  action: ansible.builtin.shell tool {{ admin_password }}\n",
+        '- name: t\n  command: tool {{ pw_password }}\n  no_log: "{{ x | bool }}"\n',
+    ],
+    ids=["curl-bearer", "redis-cli", "cmd-mapping", "action-string", "templated-no-log"],
+)
+def test_a_secret_on_a_command_line_without_no_log_is_flagged(task: str) -> None:
+    assert findings_in(task) == ["t puts a secret on a command line without no_log"]
+
+
+@pytest.mark.parametrize(
+    "env",
+    [
+        '{HF_TOKEN: "{{ x }}"}',
+        '{FOO: "{{ vault_password }}"}',
+        "\"{{ {'A': my_token} }}\"",
+        '{REDISCLI_AUTH: "{{ x }}"}',
+    ],
+    ids=["secret-key", "secret-value", "templated-mapping", "auth-key"],
+)
+def test_a_secret_in_environment_without_no_log_is_flagged(env: str) -> None:
+    assert findings_in(f"- name: t\n  command: tool\n  environment: {env}\n") == [
+        "t puts a secret in environment without no_log"
+    ]
+
+
+def test_no_log_clears_the_command_and_environment_findings() -> None:
+    task = '- name: t\n  command: tool {{ my_password }}\n  environment: {HF_TOKEN: "{{ x }}"}\n  no_log: true\n'
+    assert findings_in(task) == []
+
+
+def test_a_plain_command_and_a_token_type_field_are_not_flagged() -> None:
+    assert findings_in('- name: t\n  command: tool {{ path }}\n  environment: {HF_HOME: "{{ d }}"}\n') == []
+    assert findings_in('- name: t\n  uri: {url: "https://x/list?token_type=refresh"}\n') == []
+
+
+@pytest.mark.parametrize(
+    ("path", "name"),
+    [
+        ("playbooks/deploy-native-services.yml", "Test Redis connectivity"),
+        ("playbooks/deploy-hybrid-docker.yml", "Test Redis connectivity"),
+        ("roles/redis/tasks/main.yml", "Redis | Wait for Redis to be ready (retry-based)"),
+    ],
+)
+def test_redis_cli_takes_the_password_from_the_environment(path: str, name: str) -> None:
+    text = (repo_root() / _ANS / path).read_text(encoding="utf-8")
+    docs = yaml.load_all(text, Loader=_AnsibleLoader)  # noqa: S506 -- SafeLoader subclass; every document
+    task = next(t for doc in docs for t in _tasks(doc) if t.get("name") == name)
+    assert " -a " not in _command_text(task)
+    assert "REDISCLI_AUTH" in str(task["environment"])
+    assert _no_log_on(task)
