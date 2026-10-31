@@ -1877,6 +1877,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chat/sessions/{session_id}/trace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Session Trace
+         * @description The turns of *session_id* in order: iterations, tool verdicts, approvals, results.
+         */
+        get: operations["get_session_trace_api_chat_sessions__session_id__trace_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/benchmarks/prompt-sets": {
         parameters: {
             query?: never;
@@ -52437,7 +52457,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List Comments
+         * @description List a work item's comments, oldest first, in the caller's tenant.
+         */
+        get: operations["list_comments_api_llc_work_items__work_item_id__comments_get"];
         put?: never;
         /** Add Comment */
         post: operations["add_comment_api_llc_work_items__work_item_id__comments_post"];
@@ -71927,6 +71951,21 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["SessionSharePreviewData"] | null;
+            /** Message */
+            message?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DataResponse[SessionTraceData] */
+        DataResponse_SessionTraceData_: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            data?: components["schemas"]["SessionTraceData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -97994,6 +98033,18 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * SessionTraceData
+         * @description The trace of one session.
+         */
+        SessionTraceData: {
+            /** Session Id */
+            session_id: string;
+            /** Turns */
+            turns: components["schemas"]["TraceTurn"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * SessionUpdate
          * @description Session update model
          */
@@ -102771,6 +102822,88 @@ export interface components {
             ttl?: number | null;
             /** Enabled */
             enabled?: boolean | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * TraceApproval
+         * @description The approval a held call points at, and its state as looked up now.
+         */
+        TraceApproval: {
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "gate" | "terminal";
+            /** State */
+            state: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * TraceIteration
+         * @description One continuation iteration of a turn; ``iteration`` is None for untagged entries.
+         */
+        TraceIteration: {
+            /** Iteration */
+            iteration?: number | null;
+            /** Model */
+            model?: string | null;
+            /** Replied */
+            replied: boolean;
+            /** Tool Calls */
+            tool_calls: components["schemas"]["TraceToolCall"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * TraceToolCall
+         * @description One tool call a turn recorded.
+         */
+        TraceToolCall: {
+            /** Id */
+            id?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+            /** Tool */
+            tool: string;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "ran" | "held" | "refused" | "unknown";
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            };
+            /** Output */
+            output: string;
+            approval?: components["schemas"]["TraceApproval"] | null;
+            /**
+             * Result Returned
+             * @enum {string}
+             */
+            result_returned: "no" | "unknown";
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * TraceTurn
+         * @description One user message and what the assistant did in answer.
+         */
+        TraceTurn: {
+            /** Turn */
+            turn: number;
+            /** User Message Id */
+            user_message_id?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Iterations */
+            iterations: components["schemas"]["TraceIteration"][];
         } & {
             [key: string]: unknown;
         };
@@ -109943,6 +110076,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_session_trace_api_chat_sessions__session_id__trace_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_SessionTraceData_"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -178329,6 +178493,42 @@ export interface operations {
                 "application/json": components["schemas"]["CoworkerRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_comments_api_llc_work_items__work_item_id__comments_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                work_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {
