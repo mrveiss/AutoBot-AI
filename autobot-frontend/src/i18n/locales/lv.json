@@ -110,7 +110,8 @@
       "medium": "Vidējs",
       "high": "Augsts",
       "critical": "Kritisks"
-    }
+    },
+    "logsLoadFailed": "Neizdevās ielādēt žurnālus: {error}"
   },
   "chat": {
     "sendMessage": "Nosūtīt ziņu...",
@@ -532,6 +533,7 @@
         "pending": "Gaida",
         "running": "Skriešana",
         "streaming": "Straumēšana",
+        "waiting_explanation": "Gaida paskaidrojumu",
         "explaining": "Izskaidrojot",
         "completed": "Pabeigts",
         "failed": "Neizdevās"
@@ -3814,10 +3816,11 @@
     },
     "treeNode": {
       "itemsCount": "Items count",
+      "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
       "vectorizeFolderTitle": "Vectorize folder title",
-      "retryTitle": "Retry title",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "share": {
       "searching": "Searching...",
@@ -4354,7 +4357,8 @@
       "agentsAriaLabel": "Agent capabilities",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "Atver jūsu uzņēmuma automatizāciju…",
-      "companyRequired": "Izvēlieties uzņēmumu, lai atvērtu automatizāciju."
+      "companyRequired": "Izvēlieties uzņēmumu, lai atvērtu automatizāciju.",
+      "planBeforeBuilding": "Plānot pirms veidošanas"
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -7374,7 +7378,16 @@
       "initComplete": "Inicializācija pabeigta"
     }
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "Brīdinājumu noteikumi",
+      "overview": "Pārskats",
+      "slos": "SLO",
+      "traces": "Izsekojumi"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "browser": {
       "contentsOf": "{path} Contents",
       "refresh": "Refresh",
@@ -8098,6 +8111,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "Neizdevās aktivizēt apkopes logu",
+      "completeWindowFailed": "Neizdevās pabeigt apkopes logu",
+      "deleteWindowFailed": "Neizdevās izdzēst apkopes logu",
+      "drainNodeFailed": "Neizdevās iztukšot mezglu. Lūdzu, mēģiniet vēlreiz.",
+      "resumeNodeFailed": "Neizdevās atsākt mezglu. Lūdzu, mēģiniet vēlreiz.",
+      "saveKeysFailed": "Neizdevās saglabāt API atslēgas. Skatiet detaļas konsolē.",
+      "addNodeFailed": "Neizdevās pievienot mezglu"
     }
   },
   "mobile": {
@@ -8609,7 +8631,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "Rīku informācija pašlaik nav pieejama — šis saraksts var būt nepilnīgs.",
       "canvasNoToolsDefined": "Šim uzņēmumam nevienai lomai nav pievienots neviens rīks.",
-      "deepLinkNodeNotFound": "Šī saite norāda uz mezglu, kas šeit nav atrasts. Iespējams, tas ir noņemts, vai jums nav piekļuves tam."
+      "deepLinkNodeNotFound": "Šī saite norāda uz mezglu, kas šeit nav atrasts. Iespējams, tas ir noņemts, vai jums nav piekļuves tam.",
+      "viewPlanner": "Plānotājs"
     },
     "executorRollup": {
       "title": "Izpildītāju kopsavilkums",
@@ -8953,6 +8976,113 @@
         "notFound": "Šis uzdevums vairs netur šo pieprasījumu — atsvaidziniet, lai redzētu, kurš to tur tagad.",
         "unavailable": "Neizdevās sasniegt žurnālu; nekas netika nosūtīts.",
         "error": "Radās kļūda, un piegādi nevarēja apstiprināt. Atsvaidziniet, lai redzētu, vai rezervācija joprojām ir spēkā."
+      }
+    },
+    "workflowPlanner": {
+      "title": "Darbplūsmu plānotājs",
+      "plans": "Plāni",
+      "newPlan": "Jauns plāns",
+      "open": "Atvērt",
+      "back": "Atpakaļ uz plāniem",
+      "retry": "Mēģināt vēlreiz",
+      "loading": "Notiek plānu ielāde...",
+      "loadFailed": "Neizdevās ielādēt plānu.",
+      "saveFailed": "Neizdevās saglabāt izmaiņu.",
+      "createFailed": "Neizdevās izveidot plānu.",
+      "emptyTitle": "Plānu vēl nav",
+      "emptyHint": "Sāciet plānu, lai attēlotu vienu procesu, izmērītu to un izvēlētos vienu uzlabojamo skaitli.",
+      "unavailableTitle": "Darbplūsmu plānotājs nav pieejams",
+      "unavailableHint": "Šī funkcija jūsu darba telpā ir izslēgta, tāpēc šeit vēl nav ko rādīt.",
+      "statusFlow": "Plāna gaita",
+      "statusNotAvailable": "Šī plāna statuss ir: {status}. Apstiprināšana un pārveidošana vēl nav pieejama, tāpēc plāns tiek rādīts tikai lasīšanai.",
+      "convertNotAvailable": "Darbplūsmu izveide no plāna vēl nav pieejama.",
+      "status": {
+        "draft": "Melnraksts",
+        "measured": "Izmērīts",
+        "labeled": "Marķēts",
+        "approved": "Apstiprināts",
+        "converted": "Pārveidots"
+      },
+      "col": {
+        "name": "Plāns",
+        "revision": "Redakcija",
+        "status": "Statuss",
+        "actions": "Darbības"
+      },
+      "form": {
+        "name": "Plāna nosaukums",
+        "startsAt": "Kur process sākas",
+        "endsAt": "Kur process beidzas",
+        "create": "Izveidot plānu"
+      },
+      "steps": {
+        "map": "Attēlot",
+        "measure": "Izmērīt",
+        "oneNumber": "Izvēlēties vienu skaitli",
+        "label": "Sadalīt un marķēt",
+        "convert": "Izveidot darbplūsmu"
+      },
+      "map": {
+        "empty": "Vēl nekas nav attēlots",
+        "emptyHint": "Vispirms pievienojiet iesaistītos (joslas), tad katra soļus.",
+        "handoffs": "Nodošanas: {count}",
+        "waitNote": "Kas gaida šajā nodošanā?",
+        "laneName": "Joslas nosaukums",
+        "addLane": "Pievienot joslu",
+        "stepLabel": "Solis",
+        "stepLane": "Soļa josla",
+        "addStep": "Pievienot soli"
+      },
+      "source": {
+        "self_reported": "Jūs teicāt",
+        "email": "Pārbaudīts ar e-pastu",
+        "calendar": "Pārbaudīts ar kalendāru"
+      },
+      "measure": {
+        "hint": "Cik bieži notiek katrs solis un cik ilgi tas aizņem?",
+        "needSteps": "Vispirms attēlojiet vismaz vienu soli.",
+        "perWeek": "Nedēļā",
+        "duration": "Ilgums",
+        "unit": "Ilguma vienība",
+        "save": "Saglabāt",
+        "clear": "Notīrīt"
+      },
+      "unit": {
+        "minutes": "minūtes",
+        "hours": "stundas",
+        "days": "dienas"
+      },
+      "oneNumber": {
+        "hint": "Izmērītie soļi, vispirms garākās gaidīšanas. Jūs izlemjat, kurš ir svarīgs.",
+        "needMetrics": "Vispirms izmēriet vismaz vienu soli.",
+        "rate": "{freq} nedēļā, {dur} {unit}",
+        "title": "Nosauciet šo skaitli",
+        "returnKind": "Ko jūs atgūstat",
+        "target": "Mērķis",
+        "save": "Saglabāt kā manu vienu skaitli"
+      },
+      "returnKind": {
+        "hours_back": "Atgūtas stundas",
+        "more_yeses": "Vairāk piekrišanu",
+        "money_sooner": "Nauda ātrāk"
+      },
+      "label": {
+        "needNumber": "Vispirms izvēlieties savu skaitli; tā solis tiek sadalīts šeit.",
+        "subStep": "Apakšsolis",
+        "addSubStep": "Pievienot apakšsoli",
+        "unlabel": "Noņemt marķējumu",
+        "edgeCase": "Robežgadījums: {text}",
+        "byHandNote": "Tas paliek cilvēkiem. MI tam nekad nepieskaras.",
+        "acknowledge": "Esmu izlasījis sarakstu Ar roku",
+        "acknowledged": "Saraksts Ar roku izlasīts"
+      },
+      "labels": {
+        "ai": "MI",
+        "automation": "Automatizācija",
+        "by_hand": "Ar roku"
+      },
+      "gate": {
+        "missing": "Vēl trūkst"
       }
     }
   },

@@ -392,6 +392,7 @@
     "deleteSchedule": "Delete schedule \"{name}\"?"
   },
   "common": {
+    "zeroSize": "0 B",
     "codeSyncBadge": {},
     "roleReachesNoDeployPath": "Assigned, but nothing will deploy {roles}: the role reaches no ansible group and has no dedicated playbook. Add a group mapping or a playbook for it.",
     "sidebar": {
@@ -1152,11 +1153,11 @@
     "editMaintenanceWindow": "Edit Maintenance Window",
     "editWindow": "Edit window",
     "endTime": "End Time",
-    "failedToActivateWindow": "Failed to activate maintenance window",
-    "failedToCompleteWindow": "Failed to complete maintenance window",
-    "failedToDeleteWindow": "Failed to delete maintenance window",
-    "failedToDrainNode": "Failed to drain node. Please try again.",
-    "failedToResumeNode": "Failed to resume node. Please try again.",
+    "failedToActivateWindow": "No se pudo activar la ventana de mantenimiento",
+    "failedToCompleteWindow": "No se pudo completar la ventana de mantenimiento",
+    "failedToDeleteWindow": "No se pudo eliminar la ventana de mantenimiento",
+    "failedToDrainNode": "No se pudo drenar el nodo. Inténtalo de nuevo.",
+    "failedToResumeNode": "No se pudo reanudar el nodo. Inténtalo de nuevo.",
     "fleetWideMaintenance": "Fleet-Wide Maintenance",
     "leaveEmptyForFleet": "Leave empty for fleet-wide maintenance",
     "loadingMaintenanceWindows": "Loading maintenance windows...",
@@ -1359,7 +1360,8 @@
       "showingCountOfCount2Entries": "Showing {count} of {count2} entries",
       "source": "Fuente:",
       "source1": "Fuente",
-      "time": "Time"
+      "time": "Time",
+      "loadError": "No se pudieron cargar los registros: {error}"
     },
     "metricsDetailsView": {
       "activeWorkers": "Active Workers",
@@ -1682,7 +1684,7 @@
     "system": "Sistema",
     "systemValue0": "System ({value0})",
     "systemdService": "Systemd Service",
-    "target": "Destino",
+    "target": "Target",
     "targetNode": "Target Node",
     "targetPath": "Target Path *",
     "targetPath2": "Target path:",
@@ -1707,7 +1709,7 @@
   "performance": {
     "alertRulesView": {
       "actions": "Acciones",
-      "alertRules": "Alert Rules",
+      "alertRules": "Reglas de alerta",
       "areYouSureYou": "¿Está seguro de que desea eliminar",
       "cancel": "Cancelar",
       "condition": "Condition",
@@ -1819,7 +1821,13 @@
     "performanceSections": "Performance sections",
     "performanceSummary": "Performance summary",
     "refreshPerformanceData": "Refresh performance data",
-    "sLOCompliance": "SLO Compliance:"
+    "sLOCompliance": "SLO Compliance:",
+    "tabs": {
+      "alertRules": "Reglas de alerta",
+      "overview": "Overview",
+      "slos": "SLO",
+      "traces": "Trazas"
+    }
   },
   "redisServicePanel": {
     "actionFailed": "Failed to {action} Redis service",
@@ -2029,7 +2037,7 @@
     "sourcePathsCommaSeparated": "Source Paths (comma-separated)",
     "syncType": "Sync Type",
     "systemdService": "Systemd Service",
-    "target": "Destino",
+    "target": "Target",
     "targetNode": "Target Node *",
     "targetPath": "Target Path *",
     "times": "×",
@@ -3342,8 +3350,8 @@
     "yourSLMServiceLifecycle": "Your SLM (Service Lifecycle Manager) is up and running. This wizard\n          will guide you through adding and configuring your fleet nodes.",
     "provisioningFailed": "Provisioning failed",
     "retryProvisioning": "Retry provisioning",
-    "failedToSaveKeys": "Failed to save API keys. Check the console for details.",
-    "failedToAddNode": "Failed to add node"
+    "failedToSaveKeys": "No se pudieron guardar las claves de API. Consulta la consola para más detalles.",
+    "failedToAddNode": "No se pudo añadir el nodo"
   },
   "skills": {
     "approvalsTab": {

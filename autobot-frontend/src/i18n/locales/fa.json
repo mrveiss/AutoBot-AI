@@ -110,7 +110,8 @@
       "medium": "متوسط",
       "high": "بالا",
       "critical": "Critical"
-    }
+    },
+    "logsLoadFailed": "بارگذاری گزارش‌ها ناموفق بود: {error}"
   },
   "nav": {
     "chat": "گفتگو",
@@ -3313,11 +3314,12 @@
       "preservedSuffix": "; {count} preserved"
     },
     "treeNode": {
-      "vectorizeFolderTitle": "Vectorize folder title",
+      "itemsCount": "Items count",
       "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
-      "itemsCount": "Items count",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeFolderTitle": "Vectorize folder title",
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "memoryOrphan": {
       "title": "Title",
@@ -3768,7 +3770,8 @@
       "agentsAriaLabel": "Agent capabilities",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "در حال باز کردن خودکارسازی شرکت شما…",
-      "companyRequired": "برای باز کردن خودکارسازی یک شرکت انتخاب کنید."
+      "companyRequired": "برای باز کردن خودکارسازی یک شرکت انتخاب کنید.",
+      "planBeforeBuilding": "پیش از ساخت برنامه‌ریزی کنید"
     },
     "runner": {
       "completed": "Completed",
@@ -5234,6 +5237,7 @@
       "status": {
         "failed": "Failed",
         "streaming": "Streaming",
+        "waiting_explanation": "در انتظار توضیح",
         "explaining": "Explaining",
         "pending": "Pending",
         "completed": "Completed",
@@ -7283,7 +7287,16 @@
     },
     "progress": {}
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "قوانین هشدار",
+      "overview": "نمای کلی",
+      "slos": "SLOها",
+      "traces": "ردیابی‌ها"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "treeView": {
       "noStructure": "No directory structure available",
       "title": "Directory Structure",
@@ -8098,6 +8111,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "فعال‌سازی پنجره نگهداری ناموفق بود",
+      "completeWindowFailed": "تکمیل پنجره نگهداری ناموفق بود",
+      "deleteWindowFailed": "حذف پنجره نگهداری ناموفق بود",
+      "drainNodeFailed": "تخلیه گره ناموفق بود. لطفاً دوباره تلاش کنید.",
+      "resumeNodeFailed": "از سرگیری گره ناموفق بود. لطفاً دوباره تلاش کنید.",
+      "saveKeysFailed": "ذخیره کلیدهای API ناموفق بود. برای جزئیات کنسول را بررسی کنید.",
+      "addNodeFailed": "افزودن گره ناموفق بود"
     }
   },
   "mobile": {
@@ -8609,7 +8631,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "اطلاعات ابزارها در حال حاضر در دسترس نیست — این فهرست ممکن است ناقص باشد.",
       "canvasNoToolsDefined": "هیچ ابزاری به هیچ نقشی در این شرکت پیوست نشده است.",
-      "deepLinkNodeNotFound": "این پیوند به گره‌ای اشاره دارد که در اینجا یافت نشد. ممکن است حذف شده باشد یا شما به آن دسترسی نداشته باشید."
+      "deepLinkNodeNotFound": "این پیوند به گره‌ای اشاره دارد که در اینجا یافت نشد. ممکن است حذف شده باشد یا شما به آن دسترسی نداشته باشید.",
+      "viewPlanner": "برنامه‌ریز"
     },
     "executorRollup": {
       "title": "خلاصه مجریان",
@@ -8953,6 +8976,113 @@
         "notFound": "این وظیفه دیگر این ادعا را در اختیار ندارد — برای دیدن دارندهٔ فعلی بازخوانی کنید.",
         "unavailable": "دسترسی به دفتر ممکن نشد؛ چیزی ارسال نشد.",
         "error": "خطایی رخ داد و تحویل تأیید نشد. صفحه را تازه کنید تا ببینید آیا ادعا هنوز نگه داشته شده است."
+      }
+    },
+    "workflowPlanner": {
+      "title": "برنامه‌ریز گردش کار",
+      "plans": "برنامه‌ها",
+      "newPlan": "برنامه جدید",
+      "open": "باز کردن",
+      "back": "بازگشت به برنامه‌ها",
+      "retry": "تلاش دوباره",
+      "loading": "در حال بارگذاری برنامه‌ها...",
+      "loadFailed": "بارگذاری برنامه ممکن نشد.",
+      "saveFailed": "ذخیره تغییر ممکن نشد.",
+      "createFailed": "ایجاد برنامه ممکن نشد.",
+      "emptyTitle": "هنوز برنامه‌ای نیست",
+      "emptyHint": "یک برنامه شروع کنید تا یک فرایند را ترسیم و اندازه‌گیری کنید و یک عدد برای بهبود انتخاب کنید.",
+      "unavailableTitle": "برنامه‌ریز گردش کار در دسترس نیست",
+      "unavailableHint": "این قابلیت برای فضای کار شما خاموش است، پس هنوز چیزی برای نمایش نیست.",
+      "statusFlow": "پیشرفت برنامه",
+      "statusNotAvailable": "وضعیت این برنامه: {status}. تأیید و تبدیل هنوز در دسترس نیست، بنابراین فقط‌خواندنی نمایش داده می‌شود.",
+      "convertNotAvailable": "ساخت گردش کار از روی برنامه هنوز در دسترس نیست.",
+      "status": {
+        "draft": "پیش‌نویس",
+        "measured": "اندازه‌گیری‌شده",
+        "labeled": "برچسب‌خورده",
+        "approved": "تأییدشده",
+        "converted": "تبدیل‌شده"
+      },
+      "col": {
+        "name": "برنامه",
+        "revision": "بازنگری",
+        "status": "وضعیت",
+        "actions": "عملیات"
+      },
+      "form": {
+        "name": "نام برنامه",
+        "startsAt": "فرایند از کجا شروع می‌شود",
+        "endsAt": "فرایند کجا تمام می‌شود",
+        "create": "ایجاد برنامه"
+      },
+      "steps": {
+        "map": "ترسیم",
+        "measure": "اندازه‌گیری",
+        "oneNumber": "انتخاب یک عدد",
+        "label": "تفکیک و برچسب‌زنی",
+        "convert": "ایجاد گردش کار"
+      },
+      "map": {
+        "empty": "هنوز چیزی ترسیم نشده",
+        "emptyHint": "ابتدا افراد درگیر (مسیرها) و سپس گام‌های هرکدام را اضافه کنید.",
+        "handoffs": "{count} تحویل",
+        "waitNote": "در این تحویل چه چیزی منتظر می‌ماند؟",
+        "laneName": "نام مسیر",
+        "addLane": "افزودن مسیر",
+        "stepLabel": "گام",
+        "stepLane": "مسیر گام",
+        "addStep": "افزودن گام"
+      },
+      "source": {
+        "self_reported": "شما گفتید",
+        "email": "با ایمیل بررسی شد",
+        "calendar": "با تقویم بررسی شد"
+      },
+      "measure": {
+        "hint": "هر گام چند بار رخ می‌دهد و چقدر طول می‌کشد؟",
+        "needSteps": "ابتدا دست‌کم یک گام ترسیم کنید.",
+        "perWeek": "در هفته",
+        "duration": "مدت",
+        "unit": "واحد مدت",
+        "save": "ذخیره",
+        "clear": "پاک کردن"
+      },
+      "unit": {
+        "minutes": "دقیقه",
+        "hours": "ساعت",
+        "days": "روز"
+      },
+      "oneNumber": {
+        "hint": "گام‌های اندازه‌گیری‌شده، با طولانی‌ترین انتظار در ابتدا. شما تصمیم می‌گیرید کدام مهم است.",
+        "needMetrics": "ابتدا دست‌کم یک گام را اندازه‌گیری کنید.",
+        "rate": "{freq} در هفته، {dur} {unit}",
+        "title": "نامی برای این عدد بگذارید",
+        "returnKind": "آنچه پس می‌گیرید",
+        "target": "هدف",
+        "save": "ذخیره به‌عنوان عدد من"
+      },
+      "returnKind": {
+        "hours_back": "ساعت‌های بازگشتی",
+        "more_yeses": "پاسخ مثبت بیشتر",
+        "money_sooner": "پول سریع‌تر"
+      },
+      "label": {
+        "needNumber": "ابتدا عدد خود را انتخاب کنید؛ گام آن اینجا تفکیک می‌شود.",
+        "subStep": "زیرگام",
+        "addSubStep": "افزودن زیرگام",
+        "unlabel": "حذف برچسب",
+        "edgeCase": "مورد مرزی: {text}",
+        "byHandNote": "این‌ها نزد انسان‌ها می‌ماند. هوش مصنوعی هرگز روی آن‌ها اقدام نمی‌کند.",
+        "acknowledge": "فهرست دستی را خواندم",
+        "acknowledged": "فهرست دستی خوانده شد"
+      },
+      "labels": {
+        "ai": "هوش مصنوعی",
+        "automation": "خودکارسازی",
+        "by_hand": "دستی"
+      },
+      "gate": {
+        "missing": "هنوز کم است"
       }
     }
   },

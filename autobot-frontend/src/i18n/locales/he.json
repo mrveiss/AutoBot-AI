@@ -110,7 +110,8 @@
       "medium": "בינוני",
       "high": "גבוה",
       "critical": "Critical"
-    }
+    },
+    "logsLoadFailed": "טעינת היומנים נכשלה: {error}"
   },
   "nav": {
     "chat": "צ'אט",
@@ -3313,11 +3314,12 @@
       "preservedSuffix": "; {count} preserved"
     },
     "treeNode": {
-      "vectorizeFolderTitle": "Vectorize folder title",
+      "itemsCount": "Items count",
       "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
-      "itemsCount": "Items count",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeFolderTitle": "Vectorize folder title",
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "memoryOrphan": {
       "title": "Title",
@@ -3768,7 +3770,8 @@
       "agentsAriaLabel": "Agent capabilities",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "פותח את האוטומציה של החברה שלך…",
-      "companyRequired": "בחר חברה כדי לפתוח את האוטומציה."
+      "companyRequired": "בחר חברה כדי לפתוח את האוטומציה.",
+      "planBeforeBuilding": "תכננו לפני הבנייה"
     },
     "runner": {
       "completed": "Completed",
@@ -5234,6 +5237,7 @@
       "status": {
         "failed": "Failed",
         "streaming": "Streaming",
+        "waiting_explanation": "ממתין להסבר",
         "explaining": "Explaining",
         "pending": "Pending",
         "completed": "Completed",
@@ -7283,7 +7287,16 @@
     },
     "progress": {}
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "כללי התראה",
+      "overview": "סקירה",
+      "slos": "SLOs",
+      "traces": "עקבות"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "treeView": {
       "noStructure": "No directory structure available",
       "title": "Directory Structure",
@@ -8098,6 +8111,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "הפעלת חלון התחזוקה נכשלה",
+      "completeWindowFailed": "השלמת חלון התחזוקה נכשלה",
+      "deleteWindowFailed": "מחיקת חלון התחזוקה נכשלה",
+      "drainNodeFailed": "ריקון הצומת נכשל. נא לנסות שוב.",
+      "resumeNodeFailed": "חידוש הצומת נכשל. נא לנסות שוב.",
+      "saveKeysFailed": "שמירת מפתחות ה-API נכשלה. פרטים נוספים זמינים בקונסולה.",
+      "addNodeFailed": "הוספת הצומת נכשלה"
     }
   },
   "mobile": {
@@ -8609,7 +8631,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "מידע על כלים אינו זמין כעת — רשימה זו עשויה להיות חלקית.",
       "canvasNoToolsDefined": "לא צורפו כלים לאף תפקיד בחברה זו.",
-      "deepLinkNodeNotFound": "קישור זה מפנה לצומת שלא נמצא כאן. ייתכן שהוא הוסר, או שאין לך גישה אליו."
+      "deepLinkNodeNotFound": "קישור זה מפנה לצומת שלא נמצא כאן. ייתכן שהוא הוסר, או שאין לך גישה אליו.",
+      "viewPlanner": "מתכנן"
     },
     "executorRollup": {
       "title": "סיכום מבצעים",
@@ -8953,6 +8976,113 @@
         "notFound": "המשימה הזו כבר לא מחזיקה בתפיסה — רעננו כדי לראות מי מחזיק בה כעת.",
         "unavailable": "לא ניתן היה להגיע ליומן; דבר לא נשלח.",
         "error": "משהו השתבש ולא ניתן היה לאשר את המסירה. רעננו כדי לראות אם התביעה עדיין מוחזקת."
+      }
+    },
+    "workflowPlanner": {
+      "title": "מתכנן תהליכי עבודה",
+      "plans": "תוכניות",
+      "newPlan": "תוכנית חדשה",
+      "open": "פתיחה",
+      "back": "חזרה לתוכניות",
+      "retry": "ניסיון חוזר",
+      "loading": "טוען תוכניות...",
+      "loadFailed": "לא ניתן לטעון את התוכנית.",
+      "saveFailed": "לא ניתן לשמור את השינוי.",
+      "createFailed": "לא ניתן ליצור את התוכנית.",
+      "emptyTitle": "אין עדיין תוכניות",
+      "emptyHint": "התחילו תוכנית כדי למפות תהליך אחד, למדוד אותו ולבחור את המספר האחד לשיפור.",
+      "unavailableTitle": "מתכנן תהליכי העבודה אינו זמין",
+      "unavailableHint": "התכונה כבויה בסביבת העבודה שלכם, ולכן אין עדיין מה להציג כאן.",
+      "statusFlow": "התקדמות התוכנית",
+      "statusNotAvailable": "מצב התוכנית: {status}. אישור והמרה עדיין אינם זמינים, ולכן היא מוצגת לקריאה בלבד.",
+      "convertNotAvailable": "יצירת תהליכי עבודה מתוכנית עדיין אינה זמינה.",
+      "status": {
+        "draft": "טיוטה",
+        "measured": "נמדדה",
+        "labeled": "תויגה",
+        "approved": "אושרה",
+        "converted": "הומרה"
+      },
+      "col": {
+        "name": "תוכנית",
+        "revision": "גרסה",
+        "status": "מצב",
+        "actions": "פעולות"
+      },
+      "form": {
+        "name": "שם התוכנית",
+        "startsAt": "איפה התהליך מתחיל",
+        "endsAt": "איפה התהליך מסתיים",
+        "create": "יצירת תוכנית"
+      },
+      "steps": {
+        "map": "מיפוי",
+        "measure": "מדידה",
+        "oneNumber": "בחירת מספר אחד",
+        "label": "פירוק ותיוג",
+        "convert": "יצירת תהליך עבודה"
+      },
+      "map": {
+        "empty": "עדיין לא מופה דבר",
+        "emptyHint": "הוסיפו קודם את המשתתפים (נתיבים) ואחר כך את הצעדים של כל אחד.",
+        "handoffs": "{count} העברות",
+        "waitNote": "מה ממתין בהעברה הזו?",
+        "laneName": "שם הנתיב",
+        "addLane": "הוספת נתיב",
+        "stepLabel": "צעד",
+        "stepLane": "נתיב הצעד",
+        "addStep": "הוספת צעד"
+      },
+      "source": {
+        "self_reported": "אתם אמרתם",
+        "email": "נבדק מול הדואר",
+        "calendar": "נבדק מול היומן"
+      },
+      "measure": {
+        "hint": "באיזו תדירות כל צעד מתרחש וכמה זמן הוא לוקח?",
+        "needSteps": "מפו קודם לפחות צעד אחד.",
+        "perWeek": "בשבוע",
+        "duration": "משך",
+        "unit": "יחידת משך",
+        "save": "שמירה",
+        "clear": "ניקוי"
+      },
+      "unit": {
+        "minutes": "דקות",
+        "hours": "שעות",
+        "days": "ימים"
+      },
+      "oneNumber": {
+        "hint": "הצעדים שמדדתם, ההמתנות הארוכות ביותר קודם. אתם מחליטים איזה חשוב.",
+        "needMetrics": "מדדו קודם לפחות צעד אחד.",
+        "rate": "{freq} בשבוע, {dur} {unit}",
+        "title": "תנו שם למספר הזה",
+        "returnKind": "מה אתם מקבלים בחזרה",
+        "target": "יעד",
+        "save": "שמירה כמספר האחד שלי"
+      },
+      "returnKind": {
+        "hours_back": "שעות שחזרו",
+        "more_yeses": "יותר כן",
+        "money_sooner": "כסף מהר יותר"
+      },
+      "label": {
+        "needNumber": "בחרו קודם את המספר האחד; הצעד שלו הוא מה שמפרקים כאן.",
+        "subStep": "תת־צעד",
+        "addSubStep": "הוספת תת־צעד",
+        "unlabel": "הסרת תיוג",
+        "edgeCase": "מקרה קצה: {text}",
+        "byHandNote": "אלה נשארים אצל אנשים. הבינה המלאכותית לא פועלת עליהם לעולם.",
+        "acknowledge": "קראתי את רשימת ידני",
+        "acknowledged": "רשימת ידני נקראה"
+      },
+      "labels": {
+        "ai": "בינה מלאכותית",
+        "automation": "אוטומציה",
+        "by_hand": "ידני"
+      },
+      "gate": {
+        "missing": "עדיין חסר"
       }
     }
   },

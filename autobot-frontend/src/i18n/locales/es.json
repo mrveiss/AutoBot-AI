@@ -110,7 +110,8 @@
       "medium": "Medio",
       "high": "Alto",
       "critical": "Crítico"
-    }
+    },
+    "logsLoadFailed": "No se pudieron cargar los registros: {error}"
   },
   "chat": {
     "sendMessage": "Enviar un mensaje...",
@@ -532,6 +533,7 @@
         "pending": "Pendiente",
         "running": "Correr",
         "streaming": "Transmitiendo",
+        "waiting_explanation": "Esperando explicación",
         "explaining": "explicando",
         "completed": "Terminado",
         "failed": "Fallido"
@@ -3814,10 +3816,11 @@
     },
     "treeNode": {
       "itemsCount": "Items count",
+      "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
       "vectorizeFolderTitle": "Vectorize folder title",
-      "retryTitle": "Retry title",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "share": {
       "searching": "Searching...",
@@ -4354,7 +4357,8 @@
       "agentsAriaLabel": "Agent capabilities",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "Abriendo la automatización de tu empresa…",
-      "companyRequired": "Selecciona una empresa para abrir la automatización."
+      "companyRequired": "Selecciona una empresa para abrir la automatización.",
+      "planBeforeBuilding": "Planificar antes de crear"
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -7374,7 +7378,16 @@
       "initComplete": "Inicialización completada"
     }
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "Reglas de alerta",
+      "overview": "Resumen",
+      "slos": "SLO",
+      "traces": "Trazas"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "browser": {
       "contentsOf": "{path} Contents",
       "refresh": "Refresh",
@@ -8098,6 +8111,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "No se pudo activar la ventana de mantenimiento",
+      "completeWindowFailed": "No se pudo completar la ventana de mantenimiento",
+      "deleteWindowFailed": "No se pudo eliminar la ventana de mantenimiento",
+      "drainNodeFailed": "No se pudo drenar el nodo. Inténtalo de nuevo.",
+      "resumeNodeFailed": "No se pudo reanudar el nodo. Inténtalo de nuevo.",
+      "saveKeysFailed": "No se pudieron guardar las claves de API. Consulta la consola para más detalles.",
+      "addNodeFailed": "No se pudo añadir el nodo"
     }
   },
   "mobile": {
@@ -8609,7 +8631,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "La información de herramientas no está disponible ahora mismo: esta lista puede estar incompleta.",
       "canvasNoToolsDefined": "No hay herramientas adjuntas a ningún rol en esta empresa.",
-      "deepLinkNodeNotFound": "Este enlace apunta a un nodo que no se pudo encontrar aquí. Puede que se haya eliminado o que no tengas acceso a él."
+      "deepLinkNodeNotFound": "Este enlace apunta a un nodo que no se pudo encontrar aquí. Puede que se haya eliminado o que no tengas acceso a él.",
+      "viewPlanner": "Planificador"
     },
     "executorRollup": {
       "title": "Resumen de ejecutores",
@@ -8953,6 +8976,113 @@
         "notFound": "Esta tarea ya no tiene esa reserva; actualiza para ver quién la tiene ahora.",
         "unavailable": "No se pudo contactar con el registro; no se envió nada.",
         "error": "Algo salió mal y no se pudo confirmar la entrega. Actualiza para ver si la reserva sigue activa."
+      }
+    },
+    "workflowPlanner": {
+      "title": "Planificador de flujos de trabajo",
+      "plans": "Planes",
+      "newPlan": "Nuevo plan",
+      "open": "Abrir",
+      "back": "Volver a los planes",
+      "retry": "Reintentar",
+      "loading": "Cargando planes...",
+      "loadFailed": "No se pudo cargar el plan.",
+      "saveFailed": "No se pudo guardar el cambio.",
+      "createFailed": "No se pudo crear el plan.",
+      "emptyTitle": "Aún no hay planes",
+      "emptyHint": "Empiece un plan para mapear un proceso, medirlo y elegir el número que quiere mejorar.",
+      "unavailableTitle": "El planificador de flujos de trabajo no está disponible",
+      "unavailableHint": "Esta función está desactivada en su espacio de trabajo, así que aún no hay nada que mostrar.",
+      "statusFlow": "Progreso del plan",
+      "statusNotAvailable": "Este plan está {status}. La aprobación y la conversión aún no están disponibles, así que se muestra solo de lectura.",
+      "convertNotAvailable": "Crear flujos de trabajo desde un plan aún no está disponible.",
+      "status": {
+        "draft": "Borrador",
+        "measured": "Medido",
+        "labeled": "Etiquetado",
+        "approved": "Aprobado",
+        "converted": "Convertido"
+      },
+      "col": {
+        "name": "Plan",
+        "revision": "Revisión",
+        "status": "Estado",
+        "actions": "Acciones"
+      },
+      "form": {
+        "name": "Nombre del plan",
+        "startsAt": "Dónde empieza el proceso",
+        "endsAt": "Dónde termina el proceso",
+        "create": "Crear plan"
+      },
+      "steps": {
+        "map": "Mapear",
+        "measure": "Medir",
+        "oneNumber": "Elegir un número",
+        "label": "Desglosar y etiquetar",
+        "convert": "Crear flujo de trabajo"
+      },
+      "map": {
+        "empty": "Aún no hay nada mapeado",
+        "emptyHint": "Añada primero quién participa (carriles) y luego los pasos de cada uno.",
+        "handoffs": "{count} traspasos",
+        "waitNote": "¿Qué espera en este traspaso?",
+        "laneName": "Nombre del carril",
+        "addLane": "Añadir carril",
+        "stepLabel": "Paso",
+        "stepLane": "Carril del paso",
+        "addStep": "Añadir paso"
+      },
+      "source": {
+        "self_reported": "Usted lo dijo",
+        "email": "Comprobado con el correo",
+        "calendar": "Comprobado con el calendario"
+      },
+      "measure": {
+        "hint": "¿Con qué frecuencia ocurre cada paso y cuánto tarda?",
+        "needSteps": "Mapee primero al menos un paso.",
+        "perWeek": "Por semana",
+        "duration": "Duración",
+        "unit": "Unidad de duración",
+        "save": "Guardar",
+        "clear": "Borrar"
+      },
+      "unit": {
+        "minutes": "minutos",
+        "hours": "horas",
+        "days": "días"
+      },
+      "oneNumber": {
+        "hint": "Los pasos que midió, primero las esperas más largas. Usted decide cuál importa.",
+        "needMetrics": "Mida primero al menos un paso.",
+        "rate": "{freq} por semana, {dur} {unit}",
+        "title": "Ponga nombre a este número",
+        "returnKind": "Lo que recupera",
+        "target": "Objetivo",
+        "save": "Guardar como mi número"
+      },
+      "returnKind": {
+        "hours_back": "Horas recuperadas",
+        "more_yeses": "Más síes",
+        "money_sooner": "Cobrar antes"
+      },
+      "label": {
+        "needNumber": "Elija primero su número; su paso es el que se desglosa aquí.",
+        "subStep": "Subpaso",
+        "addSubStep": "Añadir subpaso",
+        "unlabel": "Quitar etiqueta",
+        "edgeCase": "Caso límite: {text}",
+        "byHandNote": "Esto lo hacen personas. La IA nunca actúa sobre ello.",
+        "acknowledge": "He leído la lista A mano",
+        "acknowledged": "Lista A mano leída"
+      },
+      "labels": {
+        "ai": "IA",
+        "automation": "Automatización",
+        "by_hand": "A mano"
+      },
+      "gate": {
+        "missing": "Aún falta"
       }
     }
   },
