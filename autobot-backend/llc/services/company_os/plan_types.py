@@ -9,9 +9,9 @@ called ``WorkflowPlan`` (``orchestration/types.py``) or the deprecated planner c
 (``orchestration/workflow_planner.py``): both exist and mean something else.
 
 Wire style mirrors ``graph_types.py``: keys on the wire, UUIDs only for role references.
-Only what plan creation, the self-reported measure, the One Number, the breakdown and the
-labels need lives here. Approval policies, the conversion and re-plans belong to the issues
-that deliver them and are added to this document there.
+Plan creation, the self-reported measure, the One Number, the breakdown and the labels live
+here, with the approval policies and the conversion contract (#19936). Re-plans belong to the
+issue that delivers them and are added to this document there.
 """
 
 from __future__ import annotations
@@ -23,9 +23,13 @@ from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from .graph_types import NodeSpec, TransitionSpec
+
 KEY_PATTERN = r"^[A-Za-z0-9_.-]+$"
 SCHEMA_VERSION = "0.2.0"
 DURATION_DEFINITION = "landing_to_done"
+#: The issue tracking a workflow executor: "Turn on" stays unavailable until it lands (FR-6.7).
+TURN_ON_TRACKING_ISSUE = 16763
 
 
 class Label(str, Enum):
@@ -225,6 +229,146 @@ class StatusChange(_Doc):
     reason: Optional[str] = Field(None, max_length=1000)
 
 
+class PlanApprovalType(str, Enum):
+    """The one kind of approval a plan may ask for: it waits in Approvals (FR-6.2)."""
+
+    WORKFLOW_GATE = "workflow_gate"
+
+
+class PlanApprovalTimeout(str, Enum):
+    """What an unanswered approval does. There is no ``send``: a wait never sends on its own (FR-6.2)."""
+
+    HOLD = "hold"
+    REMIND = "remind"
+    ESCALATE = "escalate"
+
+
+class PlanApprovalPolicy(_Doc):
+    """Covers the AI sub-steps it names. ``wait_limit`` adds a timeout whose length is a setting, never a literal.
+
+    The gate is recorded, not enforced: nothing executes workflows yet and no approval-gate model exists, so G5
+    only checks that the plan carries a policy for every AI sub-step. It is enforced once an executor reads the
+    policies kept in the committed conversion. ``hold`` waits indefinitely, so it never yields a timeout
+    transition; ``remind`` and ``escalate`` do, when ``wait_limit`` is set.
+    """
+
+    key: str = Field(..., min_length=1, max_length=64, pattern=KEY_PATTERN)
+    approval_type: PlanApprovalType = PlanApprovalType.WORKFLOW_GATE
+    sub_step_keys: List[str] = Field(default_factory=list, max_length=200)
+    on_timeout: PlanApprovalTimeout = PlanApprovalTimeout.HOLD
+    wait_limit: bool = False
+
+
+class ConversionStatus(str, Enum):
+    PREVIEW = "preview"
+    COMMITTED = "committed"
+
+
+class TurnOn(str, Enum):
+    """Whether a created workflow can be switched on. Nothing executes workflows yet (FR-6.7)."""
+
+    NOT_AVAILABLE = "not_available"
+
+
+class HandoffTreatmentKind(str, Enum):
+    HANDOFF_TRANSITION = "handoff_transition"
+    TRIGGER = "trigger"
+    END = "end"
+    OUT_OF_SCOPE = "out_of_scope"
+
+
+class EdgeCaseTreatmentKind(str, Enum):
+    BRANCH = "branch"
+    HANDLED_IN_STEP = "handled_in_step"
+    DOCUMENTATION = "documentation"
+
+
+class ProcessExecutor(str, Enum):
+    """Who carries a process out. A By Hand sub-step is always ``person`` (FR-6.4)."""
+
+    PERSON = "person"
+    ROLE = "role"
+
+
+class ProcessDraft(_Doc):
+    process_key: str
+    name: str
+    owner_lane_key: str
+    sub_step_key: str
+    required_skills: List[str] = Field(default_factory=list)
+    executor: ProcessExecutor
+
+
+class WorkflowDraft(_Doc):
+    workflow_id: str
+    name: str
+    owner_lane_key: str
+    trigger_type: str
+    trigger_config: dict = Field(default_factory=dict)
+    nodes: List[NodeSpec] = Field(default_factory=list)
+    transitions: List[TransitionSpec] = Field(default_factory=list)
+    approval_policy_keys: List[str] = Field(default_factory=list)
+
+
+class DocumentationOnly(_Doc):
+    sub_step_key: str
+    reason: str
+
+
+class HandoffTreatment(_Doc):
+    handoff_key: str
+    treatment: HandoffTreatmentKind
+
+
+class EdgeCaseTreatment(_Doc):
+    edge_case_key: str
+    treatment: EdgeCaseTreatmentKind
+
+
+class ProposalOutcome(str, Enum):
+    UNFILED = "unfiled"
+    FILED = "filed"
+    FAILED = "failed"
+
+
+class AiLineProposal(_Doc):
+    """One proposed AI-line change and what happened when it was filed in Approvals (after the commit)."""
+
+    tool_action: str
+    line: str
+    sub_step_key: str
+    outcome: ProposalOutcome = ProposalOutcome.UNFILED
+    approval_id: Optional[str] = None
+    error: Optional[str] = Field(None, max_length=500)
+
+
+class PlanConversion(_Doc):
+    """What crosses from the planner to Company OS (section 7A.2).
+
+    ``preview_errors`` and ``preview_warnings`` are the graph validator's own strings, unchanged.
+    ``contract_errors`` are what the builder found before any graph exists (a lane with no role, a
+    tool action that is not a key). Either one non-empty keeps G6 open.
+    """
+
+    processes: List[ProcessDraft] = Field(default_factory=list)
+    workflows: List[WorkflowDraft] = Field(default_factory=list)
+    creation_order: List[str] = Field(default_factory=list)
+    documentation_only: List[DocumentationOnly] = Field(default_factory=list)
+    handoff_treatments: List[HandoffTreatment] = Field(default_factory=list)
+    edge_case_treatments: List[EdgeCaseTreatment] = Field(default_factory=list)
+    ai_line_proposals: List[AiLineProposal] = Field(default_factory=list)
+    #: The approval policies this conversion was built under, kept for a future executor to read (D13).
+    approval_policies: List[PlanApprovalPolicy] = Field(default_factory=list)
+    contract_errors: List[str] = Field(default_factory=list)
+    preview_errors: List[str] = Field(default_factory=list)
+    preview_warnings: List[str] = Field(default_factory=list)
+    status: ConversionStatus = ConversionStatus.PREVIEW
+    converted_at: Optional[datetime] = None
+    converted_by: Optional[uuid.UUID] = None
+    turn_on: TurnOn = TurnOn.NOT_AVAILABLE
+    turn_on_tracking_issue: int = TURN_ON_TRACKING_ISSUE
+
+
 class CompanyWorkflowPlan(_Doc):
     """The document of one revision (section 9)."""
 
@@ -247,6 +391,8 @@ class CompanyWorkflowPlan(_Doc):
     one_number: Optional[OneNumber] = None
     sub_steps: List[SubStep] = Field(default_factory=list)
     edge_cases: List[EdgeCase] = Field(default_factory=list)
+    approval_policies: List[PlanApprovalPolicy] = Field(default_factory=list)
     by_hand_acknowledged_at: Optional[datetime] = None
     approved_at: Optional[datetime] = None
     approved_by: Optional[uuid.UUID] = None
+    conversion: Optional[PlanConversion] = None
