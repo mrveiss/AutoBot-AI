@@ -7,9 +7,10 @@
 from __future__ import annotations
 
 from collections import Counter
-from typing import List, Sequence
+from typing import Any, Dict, List, Sequence
 
 from .errors import CompanyOsConflict, CompanyOsNotFound, GraphInvalid
+from .plan_map import changed, find_index
 from .plan_measure import find_step
 from .plan_types import CompanyWorkflowPlan, EdgeCase, Label, PlanApprovalPolicy, SubStep, SubStepState
 
@@ -30,6 +31,8 @@ def _breakdown_errors(sub_steps: Sequence[SubStep], edge_cases: Sequence[EdgeCas
             for r in s.replaces
             if r not in current
         ]
+    case_keys = [c.key for c in edge_cases]
+    errors += [f"duplicate edge case key {k!r}" for k in sorted({k for k in case_keys if case_keys.count(k) > 1})]
     errors += [
         f"edge case {c.key!r} names sub-step {c.sub_step_key!r}, which does not exist"
         for c in edge_cases
@@ -56,6 +59,50 @@ def replace_breakdown(
     plan.sub_steps = [s for s in plan.sub_steps if s.step_key != step_key] + fixed
     plan.edge_cases = [c for c in plan.edge_cases if c.step_key != step_key] + cases
     plan.by_hand_acknowledged_at = None  # an acknowledgement covers the breakdown it was given for
+
+
+def _step_cases(plan: CompanyWorkflowPlan, step_key: str) -> List[EdgeCase]:
+    return [c for c in plan.edge_cases if c.step_key == step_key]
+
+
+def _store_cases(plan: CompanyWorkflowPlan, step_key: str, cases: List[EdgeCase]) -> None:
+    """Check *cases* against the step's sub-steps, then replace that step's edge cases with them."""
+    errors = _breakdown_errors([s for s in plan.sub_steps if s.step_key == step_key], cases)
+    if errors:
+        raise GraphInvalid(errors)
+    plan.edge_cases = [c for c in plan.edge_cases if c.step_key != step_key] + cases
+
+
+def _case_index(cases: Sequence[EdgeCase], case_key: str) -> int:
+    return find_index(cases, "edge case", repr(case_key), lambda c: c.key == case_key)
+
+
+def add_edge_case(plan: CompanyWorkflowPlan, step_key: str, case: EdgeCase) -> None:
+    """Add one edge case to the chosen step (FR-4.2); a key the step already uses is a 422."""
+    find_step(plan, step_key)
+    if plan.one_number is None or plan.one_number.step_key != step_key:
+        raise CompanyOsConflict("pick the One Number on this step before breaking it down")
+    added = case.model_copy(update={"step_key": step_key})
+    _store_cases(plan, step_key, [*_step_cases(plan, step_key), added])
+
+
+def _edge_case_step(plan: CompanyWorkflowPlan, case_key: str) -> str:
+    return plan.edge_cases[_case_index(plan.edge_cases, case_key)].step_key
+
+
+def patch_edge_case(plan: CompanyWorkflowPlan, case_key: str, fields: Dict[str, Any]) -> None:
+    step_key = _edge_case_step(plan, case_key)
+    cases = _step_cases(plan, step_key)
+    i = _case_index(cases, case_key)
+    cases[i] = changed(cases[i], fields)
+    _store_cases(plan, step_key, cases)
+
+
+def remove_edge_case(plan: CompanyWorkflowPlan, case_key: str) -> None:
+    step_key = _edge_case_step(plan, case_key)
+    cases = _step_cases(plan, step_key)
+    del cases[_case_index(cases, case_key)]
+    _store_cases(plan, step_key, cases)
 
 
 def relabel_sub_step(plan: CompanyWorkflowPlan, sub_step_key: str, fields: dict) -> None:
