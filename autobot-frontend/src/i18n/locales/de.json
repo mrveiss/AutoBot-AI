@@ -262,6 +262,13 @@
     },
     "input": {
       "retryUpload": "Versuchen Sie den Upload erneut",
+      "uploadError": {
+        "http": "Upload fehlgeschlagen (Status {status})",
+        "invalidResponse": "Der Server hat eine unlesbare Antwort gesendet",
+        "network": "Netzwerkfehler beim Hochladen",
+        "cancelled": "Upload abgebrochen",
+        "unknown": "Upload fehlgeschlagen"
+      },
       "filesAttached": "{count}-Dateien angehängt",
       "clearAll": "Alles löschen",
       "removeFile": "Datei entfernen",

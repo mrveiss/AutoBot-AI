@@ -569,6 +569,7 @@ import type {
   CodeSuggestion,
   CodeAnalysisResult,
 } from './codebaseIntelligenceScoresTypes'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 // Analysis history returns with its route (#18748): GET /code-intelligence/history is not served.
 const ANALYSIS_HISTORY_ENABLED = false
@@ -659,15 +660,7 @@ function getHealthGrade(score: number): string {
   return 'F'
 }
 
-function formatTimestamp(timestamp: string): string {
-  const date = new Date(timestamp)
-  return date.toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-}
+const formatTimestamp = createDateFormatter({ kind: 'date', intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } })
 </script>
 
 <style scoped>

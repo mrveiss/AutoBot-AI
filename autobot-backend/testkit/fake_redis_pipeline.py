@@ -51,6 +51,7 @@ __all__ = ["COMMANDS", "DualReply", "FakeAsyncPipeline", "FakePipeline", "WatchE
 COMMANDS = frozenset(
     {
         "delete",
+        "exists",
         "expire",
         "get",
         "hget",

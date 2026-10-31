@@ -5502,6 +5502,13 @@
       "chatMessage": "Chat message",
       "attachFile": "Attach file",
       "retryUpload": "Retry upload",
+      "uploadError": {
+        "http": "ההעלאה נכשלה (סטטוס {status})",
+        "invalidResponse": "השרת שלח תגובה לא קריאה",
+        "network": "שגיאת רשת במהלך ההעלאה",
+        "cancelled": "ההעלאה בוטלה",
+        "unknown": "ההעלאה נכשלה"
+      },
       "removeFile": "Remove file",
       "overseerLabel": "Overseer",
       "managePresets": "Manage slash command presets",

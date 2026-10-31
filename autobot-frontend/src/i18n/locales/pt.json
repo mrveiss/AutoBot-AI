@@ -262,6 +262,13 @@
     },
     "input": {
       "retryUpload": "Tentar enviar novamente",
+      "uploadError": {
+        "http": "Falha no envio (estado {status})",
+        "invalidResponse": "O servidor enviou uma resposta ilegível",
+        "network": "Erro de rede durante o envio",
+        "cancelled": "Envio cancelado",
+        "unknown": "Falha no envio"
+      },
       "filesAttached": "Arquivos {count} anexados",
       "clearAll": "Limpar tudo",
       "removeFile": "Remover arquivo",
