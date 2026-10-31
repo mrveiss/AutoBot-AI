@@ -11,8 +11,11 @@
   removing a member. Roles are the backend MembershipRole enum
   (owner/admin/member/guest/lead — see autobot-backend/llc/models/enums.py).
 
-  Backend has no PATCH-role endpoint; changing a member's role is therefore a
-  remove + re-add against the existing endpoints.
+  A member's role changes in place via PATCH /members/{user_id} (#19960). The
+  server owns the rules (membership_policy.py): it answers 403 / 409 and the row
+  reverts. The viewer's own company role is not available to this view (the user
+  store's id is a username, the member rows carry UUIDs), so the control stays
+  enabled and the server decides.
 -->
 <template>
   <div class="members-view">
@@ -45,6 +48,19 @@
           <BaseBadge size="sm" :variant="roleBadgeVariant(String(value))">
             {{ roleLabel(String(value)) }}
           </BaseBadge>
+        </template>
+        <template #cell-role_control="{ row }">
+          <select
+            class="members-select members-role-select"
+            :aria-label="t('llcMembers.changeRole', { name: row.display_name })"
+            :value="row.role"
+            :disabled="pendingUserId !== null"
+            @change="changeRole(row as unknown as Member, $event)"
+          >
+            <option v-for="role in MEMBERSHIP_ROLES" :key="role" :value="role">
+              {{ roleLabel(role) }}
+            </option>
+          </select>
         </template>
         <template #actions="{ row }">
           <BaseButton
@@ -155,6 +171,7 @@ const rows = computed(() => members.value.map((m) => ({ ...m })))
 const columns = computed<BaseTableColumn[]>(() => [
   { key: 'display_name', label: t('llcMembers.colName') },
   { key: 'role', label: t('llcMembers.colRole') },
+  { key: 'role_control', label: t('llcMembers.colChangeRole') },
 ])
 const isLoading = ref(false)
 const errorMessage = ref('')
@@ -268,6 +285,34 @@ async function confirmRemove(member: Member): Promise<void> {
   } catch (err) {
     logger.error('Failed to remove member', err)
     errorMessage.value = t('llcMembers.removeError')
+  } finally {
+    pendingUserId.value = null
+  }
+}
+
+function roleChangeMessage(err: unknown): string {
+  const status = (err as { status?: number })?.status
+  if (status === 403) return t('llcMembers.roleChangeForbidden')
+  if (status === 409) return t('llcMembers.roleChangeLastOwner')
+  return t('llcMembers.roleChangeError')
+}
+
+// PATCH the role; the row only changes once the server accepts it, and a
+// refusal puts the select back on the role the row still has.
+async function changeRole(member: Member, event: Event): Promise<void> {
+  const select = event.target as HTMLSelectElement
+  const newRole = select.value
+  if (newRole === member.role || !isMembershipRole(newRole)) return
+  pendingUserId.value = member.user_id
+  errorMessage.value = ''
+  try {
+    await api.patch(`/api/llc/companies/${companyId.value}/members/${member.user_id}`, { role: newRole })
+    const row = members.value.find((m) => m.user_id === member.user_id)
+    if (row) row.role = newRole
+  } catch (err) {
+    logger.error('Failed to change member role', err)
+    errorMessage.value = roleChangeMessage(err)
+    select.value = member.role
   } finally {
     pendingUserId.value = null
   }
