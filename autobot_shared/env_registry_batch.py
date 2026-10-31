@@ -5,7 +5,8 @@
 """Env vars for the batch-load dispatch (api/batch_dispatch.py, #18765).
 
 A sibling of ``env_registry_backend_services.py``, which sits too close to the file-size ceiling
-to take them. Also holds the PR merge-conflict gate retry knobs (#19769).
+to take them. Also holds the PR merge-conflict gate retry knobs (#19769) and the LLM-call bounds for
+routing and task chat (#19649).
 """
 
 from __future__ import annotations
@@ -80,5 +81,34 @@ register_env_var(
             "mergeable state; doubles each retry, clamped to 0..60 (#19769)."
         ),
         component="backend",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_ROUTING_LLM_TIMEOUT_SECONDS",
+        type=float,
+        default=8.0,
+        range=(0.1, 600.0),
+        description=(
+            "Seconds the agent router's LLM call may take before it gives up and uses pattern "
+            "routing instead (agents/agent_orchestration/routing_validation.py, #19649). "
+            "Lower fails over sooner; higher waits longer for a decision that costs a model call."
+        ),
+        component="ai",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_TASK_MAX_TOKENS_CAP",
+        type=int,
+        default=4096,
+        range=(1, 1000000),
+        description=(
+            "Ceiling on the max_tokens an llm_chat_completion task payload may request "
+            "(task_handlers/llm_handlers.py, #19649); a larger request is capped, not refused."
+        ),
+        component="ai",
     )
 )
