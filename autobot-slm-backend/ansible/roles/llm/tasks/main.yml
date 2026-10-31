@@ -11,21 +11,16 @@
 # Phase 1: GPU Detection
 # -----------------------------------------------------------------
 
-- name: "GPU | Detect NVIDIA GPU via nvidia-smi"
-  ansible.builtin.command:
-    cmd: nvidia-smi --query-gpu=name --format=csv,noheader
-  register: _nvidia_smi_result
-  changed_when: false
-  # (#2872) Intentional: nvidia-smi exits rc != 0 when no GPU is present;
-  # the result drives GPU vs CPU model selection below.
-  failed_when: false
+# (#2872) nvidia-smi exits rc != 0 when no GPU is present; the result drives GPU vs CPU model selection below.
+- name: "GPU | Detect NVIDIA GPU"
+  ansible.builtin.include_tasks: ../../_shared/tasks/detect_nvidia_gpu.yml
   when: llm_has_gpu == "auto"
 
 - name: "GPU | Set GPU fact from detection"
   ansible.builtin.set_fact:
     _llm_gpu_detected: >-
-      {{ _nvidia_smi_result.rc == 0
-         and _nvidia_smi_result.stdout | default('') | length > 0 }}
+      {{ nvidia_smi_probe.rc == 0
+         and nvidia_smi_probe.stdout | default('') | length > 0 }}
   when: llm_has_gpu == "auto"
 
 - name: "GPU | Set GPU fact from override"
@@ -37,8 +32,8 @@
   ansible.builtin.debug:
     msg: >-
       GPU detected: {{ _llm_gpu_detected }}
-      {% if _nvidia_smi_result is defined and _nvidia_smi_result.rc == 0 %}
-      ({{ _nvidia_smi_result.stdout | default('unknown') | trim }})
+      {% if nvidia_smi_probe is defined and nvidia_smi_probe.rc == 0 %}
+      ({{ nvidia_smi_probe.stdout | default('unknown') | trim }})
       {% endif %}
 
 - name: "GPU | Build model list for this node"
