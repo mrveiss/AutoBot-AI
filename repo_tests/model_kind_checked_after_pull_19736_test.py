@@ -201,3 +201,58 @@ def test_the_bare_metal_install_pulls_through_the_library() -> None:
     text = (repo_root() / _BARE_METAL).read_text(encoding="utf-8")
     assert "lib/pull-embedding-model.sh" in text
     assert "nomic-embed-text" not in text, "the name's one home is agent_config's defaults"
+
+
+def _copied_scripts(tmp_path: Path, defaults: str | None) -> Path:
+    """The library at its real depth in a temporary tree; defaults None leaves the Ansible tree out."""
+    lib = tmp_path / "autobot-infrastructure/shared/scripts/lib/pull-embedding-model.sh"
+    lib.parent.mkdir(parents=True)
+    lib.write_text((repo_root() / _BARE_METAL_LIB).read_text(encoding="utf-8"), encoding="utf-8")
+    if defaults is not None:
+        target = tmp_path / _ANS / "roles/agent_config/defaults/main.yml"
+        target.parent.mkdir(parents=True)
+        target.write_text(defaults, encoding="utf-8")
+    return lib
+
+
+def _source_from_root(lib: Path) -> subprocess.CompletedProcess:
+    """As main() runs it: set -e, sourced, then the ``cd /``, then the read the env file needs."""
+    script = f'set -euo pipefail\nsource "{lib}"\ncd /\nmodel="$(embedding_model_name)"\necho "MODEL=$model"'
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False, cwd="/")
+
+
+def test_an_absent_ansible_tree_stops_the_install_and_writes_no_model(tmp_path: Path) -> None:
+    out = _source_from_root(_copied_scripts(tmp_path, None))
+    assert out.returncode != 0
+    assert "MODEL=" not in out.stdout
+
+
+def test_a_defaults_file_with_no_model_stops_the_install(tmp_path: Path) -> None:
+    out = _source_from_root(_copied_scripts(tmp_path, "other: 1\n"))
+    assert out.returncode != 0
+    assert "MODEL=" not in out.stdout
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        'ollama_embedding_model: "m:latest"',
+        "ollama_embedding_model: 'm:latest'",
+        "ollama_embedding_model: m:latest  # x",
+    ],
+    ids=["double", "single", "bare-with-comment"],
+)
+def test_the_model_reads_in_any_yaml_quoting_after_the_cd(tmp_path: Path, line: str) -> None:
+    out = _source_from_root(_copied_scripts(tmp_path, line + "\n"))
+    assert out.returncode == 0 and out.stdout.strip() == "MODEL=m:latest"
+
+
+def test_the_installer_cannot_skip_or_empty_the_model_silently() -> None:
+    text = (repo_root() / _BARE_METAL).read_text(encoding="utf-8")
+    assert "AUTOBOT_EMBEDDING_MODEL=${embedding_model}" in text
+    assert text.index('embedding_model="$(embedding_model_name)"') < text.index(
+        "AUTOBOT_EMBEDDING_MODEL=${embedding_model}"
+    )
+    assert "&& pull_embedding_model" not in text
+    main = text[text.index("main() {") :]
+    assert main.index("lib/pull-embedding-model.sh") < main.index("cd /")

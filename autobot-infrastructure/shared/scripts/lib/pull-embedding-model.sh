@@ -6,12 +6,14 @@
 #
 # #19736: pull the embedding model, then run the same kind check the Ansible pull sites run. A wrong
 # kind stops the install; a failed pull or an unreachable model server is only a warning.
-# Sourced by install-bare-metal.sh, which provides log_warn and log_error.
-_ANSIBLE_DIR="$(dirname "${BASH_SOURCE[0]}")/../../../../autobot-slm-backend/ansible"
+# Sourced by install-bare-metal.sh before its `cd /`, which provides log_warn and log_error. Paths are
+# absolute for that reason, and a checkout without the Ansible tree stops the install here (set -e).
+_BARE_METAL_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_ANSIBLE_DIR="$(cd "${_BARE_METAL_LIB_DIR}/../../../../autobot-slm-backend/ansible" && pwd)"
 
 # The one home of the embedding role's model. No fallback: a second name here is the defect.
 embedding_model_name() {
-    grep -oP '^ollama_embedding_model:\s*"\K[^"]+' "${_ANSIBLE_DIR}/roles/agent_config/defaults/main.yml"
+    grep -oP '^ollama_embedding_model:\s*["\x27]?\K[^"\x27\s#]+' "${_ANSIBLE_DIR}/roles/agent_config/defaults/main.yml"
 }
 
 pull_embedding_model() {

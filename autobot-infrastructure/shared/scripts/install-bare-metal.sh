@@ -203,7 +203,7 @@ install_prerequisites() {
 
     # Node.js for frontend build
     if ! command -v node &>/dev/null; then
-        source "$(dirname "${BASH_SOURCE[0]}")/lib/ssot-config.sh" && log_info "Installing Node.js ${NODE_MAJOR:?no .nvmrc}.x"
+        source "${_BARE_METAL_LIB_DIR}/ssot-config.sh" && log_info "Installing Node.js ${NODE_MAJOR:?no .nvmrc}.x"
         curl -fsSL "${AUTOBOT_NODESOURCE_BASE_URL}/setup_${NODE_MAJOR}.x" | bash -
         apt-get install -y -qq nodejs
     fi
@@ -257,10 +257,9 @@ install_ollama() {
         curl -fsSL https://ollama.com/install.sh | sh
     fi
 
-    # Pull default models if GPU available or enough RAM
     if [[ "$GPU_DETECTED" == true ]] || [[ "$TOTAL_RAM_MB" -ge 16384 ]]; then
         log_info "Pulling default embedding model..."
-        source "$(dirname "${BASH_SOURCE[0]}")/lib/pull-embedding-model.sh" && pull_embedding_model
+        pull_embedding_model
     else
         log_warn "Skipping model pull — insufficient resources (need GPU or 16GB+ RAM)"
         log_info "Re-run the installer on a host with a GPU or 16GB+ RAM to pull the embedding model"
@@ -480,7 +479,8 @@ generate_env() {
     fi
 
     # Generate secret key
-    local secret_key
+    local secret_key embedding_model
+    embedding_model="$(embedding_model_name)"  # before the heredoc, where set -e would not stop a failed read
     secret_key=$(${PYTHON_BIN} -c "import secrets; print(secrets.token_urlsafe(64))")
 
     cat > "${env_file}" <<EOF
@@ -517,7 +517,7 @@ AUTOBOT_CHROMADB_PORT=${CHROMADB_PORT}
 # === LLM ===
 AUTOBOT_LLM_PROVIDER=ollama
 AUTOBOT_DEFAULT_LLM_MODEL=qwen3.5:9b
-AUTOBOT_EMBEDDING_MODEL=$(source "$(dirname "${BASH_SOURCE[0]}")/lib/pull-embedding-model.sh" && embedding_model_name)
+AUTOBOT_EMBEDDING_MODEL=${embedding_model}
 EOF
 
     chown "${AUTOBOT_USER}:${AUTOBOT_GROUP}" "${env_file}"
@@ -855,7 +855,7 @@ print_summary() {
 # =============================================================================
 
 main() {
-    parse_args "$@"; cd /  # the service user cannot read the caller's cwd, and git aborts in it (#19403)
+    parse_args "$@"; source "$(dirname "${BASH_SOURCE[0]}")/lib/pull-embedding-model.sh"; cd /  # the service user cannot read the caller's cwd, and git aborts in it (#19403)
     check_root
 
     echo -e "${BLUE}AutoBot Bare-Metal Installer v${SCRIPT_VERSION}${NC}"
