@@ -106,14 +106,14 @@ async def test_request_approval_creates_pending_record() -> None:
         approval = await svc.request_approval(
             session,
             company_id=company_id,
-            gate_type=ApprovalType.HIRE,
+            gate_type=ApprovalType.STRATEGY,  # a HIRE payload must be a full hire spec (#8214)
             payload={"role": "engineer"},
             requested_by=requester,
         )
 
     session.add.assert_called_once_with(approval)
     session.flush.assert_awaited_once()
-    assert approval.approval_type == ApprovalType.HIRE.value
+    assert approval.approval_type == ApprovalType.STRATEGY.value
     assert approval.status == ApprovalStatus.PENDING.value
     assert approval.company_id == company_id
     assert approval.requested_by_agent == str(requester)
@@ -161,7 +161,7 @@ async def test_request_approval_survives_redis_unavailable() -> None:
         approval = await svc.request_approval(
             session,
             company_id=uuid.uuid4(),
-            gate_type=ApprovalType.BUDGET_OVERRIDE,
+            gate_type=ApprovalType.STRATEGY,
             payload={},
             requested_by=uuid.uuid4(),
         )

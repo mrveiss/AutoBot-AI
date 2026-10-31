@@ -50,12 +50,13 @@
         <BaseSwitch v-model="heartbeatEnabled" :label="t('hireAgent.runOnHeartbeat')" data-testid="hire-heartbeat" />
       </div>
 
+      <p v-if="pending" class="form-notice" role="status" data-testid="hire-pending">{{ t('hireAgent.pendingApproval') }}</p>
       <p v-if="error" class="form-error">{{ error }}</p>
     </form>
 
     <template #actions>
       <BaseButton variant="ghost" type="button" @click="emit('close')">{{ t('common.cancel') }}</BaseButton>
-      <BaseButton type="submit" :disabled="submitting || !agentName" @click="submit">
+      <BaseButton type="submit" :disabled="submitting || pending || !agentName" @click="submit">
         {{ submitting ? t('hireAgent.hiring') : t('hireAgent.hire') }}
       </BaseButton>
     </template>
@@ -86,19 +87,25 @@ const adapterType = ref('')
 const heartbeatEnabled = ref(false)
 const submitting = ref(false)
 const error = ref('')
+// A company that requires approval for hires answers 202 `pending_approval`: a request exists, no agent does (#8214).
+const pending = ref(false)
 
 async function submit(): Promise<void> {
   if (!agentName.value) return
   submitting.value = true
   error.value = ''
   try {
-    await api.post(`/api/llc/companies/${props.companyId}/agent-hires`, {
+    const result = await api.post<{ status?: string }>(`/api/llc/companies/${props.companyId}/agent-hires`, {
       agent_name: agentName.value,
       org_role: orgRole.value,
       model: model.value,
       adapter_type: adapterType.value,
       heartbeat_enabled: heartbeatEnabled.value,
     })
+    if (result?.status === 'pending_approval') {
+      pending.value = true
+      return
+    }
     emit('hired')
     emit('close')
   } catch (err: unknown) {
@@ -117,6 +124,12 @@ async function submit(): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.form-notice {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--autobot-text-secondary, inherit);
 }
 
 .field {

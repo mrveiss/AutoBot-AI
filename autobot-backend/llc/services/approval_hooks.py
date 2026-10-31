@@ -141,8 +141,14 @@ async def run_post_decision_hook(
         return {}
     try:
         return await hook(session, approval, decided_by)
+    except ApprovalHookError:
+        raise
     except ValidationError as exc:
         raise ApprovalHookError(f"{approval.approval_type} payload is invalid: {exc.error_count()} error(s)") from exc
+    except Exception as exc:
+        # One path for every other failure (a database error, a unique-key clash): the decision is not recorded.
+        logger.exception("Approval %s (%s): applying the approved action failed", approval.id, approval.approval_type)
+        raise ApprovalHookError(f"the approved {approval.approval_type} action failed: {type(exc).__name__}") from exc
 
 
 async def run_post_commit_hook(approval: Approval) -> None:
@@ -156,6 +162,11 @@ async def run_post_commit_hook(approval: Approval) -> None:
 
         ask = BudgetOverridePayload.model_validate(approval.context or {})
         await BudgetService.invalidate_cache(ask.agent_id, str(approval.company_id))
+    elif approval.approval_type == ApprovalType.SPRINT_CLOSE.value:
+        from .sprint_autoclose import SprintAutoCloseService  # noqa: PLC0415 -- it imports ApprovalService
+
+        ask = SprintClosePayload.model_validate(approval.context or {})
+        await SprintAutoCloseService().summarize_closed_sprint(ask.sprint_id)
 
 
 async def record_approval_event(

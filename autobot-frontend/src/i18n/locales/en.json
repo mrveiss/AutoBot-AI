@@ -9685,6 +9685,7 @@
     "runOnHeartbeat": "Run on heartbeat",
     "runOnHeartbeatHint": "Wake this agent on a fixed schedule. Leave off for an agent you wake yourself.",
     "failed": "Failed to hire agent.",
+    "pendingApproval": "This company requires board approval for hires. The request is waiting for a decision; no agent has been created yet.",
     "hiring": "Hiring…",
     "hire": "Hire"
   },

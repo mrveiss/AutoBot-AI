@@ -559,6 +559,10 @@ async def hire_agent(
     resolved_model = _validate_hire(body)
     hire = _hire_payload(company_id, body, resolved_model)
     if await company_requires_hire_approval(session, company_id):
+        if ctx.user_id is None:  # the request must name a verified requester, never the string "None"
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, detail="The hire cannot be attributed to a verified user"
+            )
         response.status_code = status.HTTP_202_ACCEPTED
         return await request_hire_approval(session, svc, company_id, hire, ctx.user_id)
 

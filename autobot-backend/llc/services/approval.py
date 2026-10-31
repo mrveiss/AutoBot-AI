@@ -19,7 +19,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
@@ -27,7 +27,13 @@ from models.approval import Approval
 
 from ..kb.decision_log import DecisionLogWriter
 from ..models.enums import ActivityEventType, ApprovalStatus, ApprovalType
-from .approval_hooks import ApprovalHookError, record_approval_event, run_post_commit_hook, run_post_decision_hook
+from .approval_hooks import (
+    ApprovalHookError,
+    record_approval_event,
+    run_post_commit_hook,
+    run_post_decision_hook,
+    validate_payload,
+)
 from .base import LLCServiceBase
 from .wake_events import wake_for_decided_approval
 
@@ -93,6 +99,9 @@ class ApprovalService(LLCServiceBase):
             The newly created ``Approval`` row (status=PENDING), scoped to
             *company_id* -- the unified platform approval table (#17043).
         """
+        # A gate whose approval executes its payload must carry one that can be executed (#8214); every
+        # requester -- route, scheduler, chat tool -- is held to it here, not in one caller.
+        validate_payload(gate_type, payload)
         approval = Approval(
             title=f"{gate_type.value} approval",
             approval_type=gate_type.value,
@@ -191,7 +200,9 @@ class ApprovalService(LLCServiceBase):
         """Run the half of the approved action that cannot be rolled back -- call AFTER the commit.
 
         A failure here is logged, not raised: the decision is committed and cannot be undone, and
-        the database already holds the authority (the agent row, the new limit).
+        the database already holds the authority (the agent row, the new limit). A hire that failed to reach
+        the heartbeat schedule is put back by the schedule reconciler (#20151, not on main yet); until it lands,
+        by the next scheduler start.
         """
         try:
             await run_post_commit_hook(approval)
@@ -256,6 +267,15 @@ class ApprovalService(LLCServiceBase):
 
         result = await session.execute(stmt)
         return list(result.scalars().all())
+
+    async def count_pending(self, session: AsyncSession, company_id: uuid.UUID) -> int:
+        """Number of PENDING approvals in *company_id* (sidebar badge)."""
+        result = await session.execute(
+            select(func.count())
+            .select_from(Approval)
+            .where(Approval.company_id == company_id, Approval.status == ApprovalStatus.PENDING.value)
+        )
+        return int(result.scalar_one())
 
     @staticmethod
     async def _publish(channel: str, payload: Dict[str, Any]) -> None:

@@ -60,3 +60,25 @@ describe('HireAgentModal heartbeat switch (#15907)', () => {
     expect(body.heartbeat_enabled).toBe(true)
   })
 })
+
+describe('HireAgentModal pending approval (#8214)', () => {
+  it('a pending_approval answer shows the notice and does not claim a hire', async () => {
+    post.mockResolvedValue({ status: 'pending_approval', approval_id: 'a1' })
+    const wrapper = mountModal()
+    await hire(wrapper)
+
+    expect(wrapper.get('[data-testid="hire-pending"]').text()).toBe(en.hireAgent.pendingApproval)
+    expect(wrapper.emitted('hired')).toBeUndefined()
+    expect(wrapper.emitted('close')).toBeUndefined()
+  })
+
+  it('a hired agent still closes the modal and announces the hire', async () => {
+    post.mockResolvedValue({ agent_id: 'x' })
+    const wrapper = mountModal()
+    await hire(wrapper)
+
+    expect(wrapper.emitted('hired')).toHaveLength(1)
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    expect(wrapper.find('[data-testid="hire-pending"]').exists()).toBe(false)
+  })
+})

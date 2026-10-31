@@ -48,6 +48,17 @@ class HirePayload(BaseModel):
     instructions_file_path: str
 
 
+class HireApprovalRequiredError(Exception):
+    """A company that requires board approval for hires was asked to add an agent another way (GH#8214)."""
+
+    def __init__(self, company_id: uuid.UUID) -> None:
+        self.company_id = company_id
+        super().__init__(
+            f"Company {company_id} requires board approval for hires; "
+            "request the hire through POST /companies/{company_id}/agent-hires"
+        )
+
+
 class AgentHirePending(BaseModel):
     """Answer to a hire that needs board approval: the request exists, the agent does not (GH#8214)."""
 
@@ -61,6 +72,16 @@ async def company_requires_hire_approval(session: AsyncSession, company_id: uuid
     """Whether *company_id* has ``require_approval_for_hires`` on; an unknown company does not."""
     row = await session.execute(select(Organization.require_approval_for_hires).where(Organization.id == company_id))
     return bool(row.scalar_one_or_none())
+
+
+async def refuse_unapproved_hire(session: AsyncSession, company_id: uuid.UUID) -> None:
+    """Raise :class:`HireApprovalRequiredError` when *company_id* gates hires; for every other way to add an agent.
+
+    Exempt on purpose, each with its reason at the call site: the company's first (default CEO) agent, and
+    an import into a company the import itself creates.
+    """
+    if await company_requires_hire_approval(session, company_id):
+        raise HireApprovalRequiredError(company_id)
 
 
 async def insert_hired_agent(session: AsyncSession, company_id: uuid.UUID, hire: HirePayload) -> uuid.UUID:
@@ -103,7 +124,7 @@ async def request_hire_approval(
     svc: "ApprovalService",
     company_id: uuid.UUID,
     hire: HirePayload,
-    requested_by_user: Optional[uuid.UUID],
+    requested_by_user: uuid.UUID,
 ) -> AgentHirePending:
     """Record the hire as a pending approval and commit it.
 
