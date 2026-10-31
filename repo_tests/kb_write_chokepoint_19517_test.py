@@ -29,6 +29,7 @@ metadata without entering the scope; the set may only shrink.
 from __future__ import annotations
 
 import ast
+import functools
 import subprocess
 from pathlib import Path
 
@@ -47,7 +48,8 @@ SCOPE_NAMES = frozenset({"caller_write_scope", "caller_write_scope_for", "agent_
 
 CALLER_SCOPED = "CALLER_SCOPED"  # takes metadata from a caller; must reference a scope helper
 DELEGATED = "DELEGATED"  # a shared layer below the entry points, or a dispatcher onto one
-ROUTE_AUTHORIZED = "ROUTE_AUTHORIZED"  # HTTP route: authorises at the route, metadata built or validated there
+ROUTE_ADMIN = "ROUTE_ADMIN"  # HTTP route: spells check_admin_permission or drop_ownership_unless_admin (checked)
+ROUTE_BUILT = "ROUTE_BUILT"  # HTTP route: builds its metadata; reads no ownership key from a request (checked)
 SYSTEM = "SYSTEM"  # system-internal ingest: no caller metadata, ownership set by its own code
 OPEN_GAP = "OPEN_GAP"  # caller metadata, no principal in reach, not scoped
 
@@ -62,16 +64,16 @@ WRITE_PATHS: dict[str, tuple[str, str]] = {
     _B + "knowledge/document_ingest.py": (DELEGATED, "ingest_document -> _add_document_internal"),
     _B + "knowledge/kb_ingest_result.py": (DELEGATED, "ingest_in_kb -> add_document"),
     _B + "knowledge/bulk.py": (SYSTEM, "backup restore / bulk import: admin routes, stored facts"),
-    _B + "api/knowledge.py": (ROUTE_AUTHORIZED, "upload / add_text routes: admin or owner checks at the route"),
-    _B + "api/knowledge_extract.py": (ROUTE_AUTHORIZED, "extraction route"),
-    _B + "api/knowledge_scrape.py": (ROUTE_AUTHORIZED, "scrape route"),
-    _B + "api/knowledge_maintenance.py": (ROUTE_AUTHORIZED, "man-page vectorization: metadata built by code"),
-    _B + "api/knowledge_population.py": (ROUTE_AUTHORIZED, "population routes: metadata built by code"),
-    _B + "api/knowledge_ai_stack_extraction.py": (ROUTE_AUTHORIZED, "extraction route"),
-    _B + "api/transcripts.py": (ROUTE_AUTHORIZED, "transcript push: owner stamped from the verified caller"),
+    _B + "api/knowledge.py": (ROUTE_ADMIN, "upload / add_text routes: admin or owner checks at the route"),
+    _B + "api/knowledge_extract.py": (ROUTE_BUILT, "extraction route"),
+    _B + "api/knowledge_scrape.py": (ROUTE_BUILT, "scrape route"),
+    _B + "api/knowledge_maintenance.py": (ROUTE_ADMIN, "man-page vectorization: metadata built by code"),
+    _B + "api/knowledge_population.py": (ROUTE_ADMIN, "population routes: metadata built by code"),
+    _B + "api/knowledge_ai_stack_extraction.py": (ROUTE_BUILT, "extraction route"),
+    _B + "api/transcripts.py": (ROUTE_BUILT, "transcript push: owner stamped from the verified caller"),
     _B + "api/workflow.py": (SYSTEM, "workflow step result: metadata built by code"),
-    _B + "api/chat_knowledge_manager.py": (ROUTE_AUTHORIZED, "guarded at site with drop_ownership_unless_admin"),
-    _B + "conversation_file_manager.py": (ROUTE_AUTHORIZED, "conversation uploads"),
+    _B + "api/chat_knowledge_manager.py": (ROUTE_ADMIN, "guarded at site with drop_ownership_unless_admin"),
+    _B + "conversation_file_manager.py": (ROUTE_BUILT, "conversation uploads"),
     _B + "services/kb_folder_watcher.py": (SYSTEM, "admin-configured watch folders"),
     _B + "services/kb_watch_ingest.py": (SYSTEM, "admin-configured watch folders"),
     _B + "knowledge_sync_incremental.py": (SYSTEM, "repo documentation sync"),
@@ -120,20 +122,42 @@ def _is_production_python(path: str) -> bool:
     )
 
 
+#: Every name any detector below looks for. A file whose text holds none of them is never parsed.
+_CANDIDATES = (
+    WRITE_APIS
+    | INGEST_HELPERS
+    | LOW_LEVEL_WRITES
+    | SCOPE_NAMES
+    | {"check_admin_permission", "drop_ownership_unless_admin"}
+)
+#: Metadata keys a caller names to own, scope or show a fact (``OWNERSHIP_KEYS`` and the owner keys).
+OWNERSHIP_FIELDS = frozenset(
+    {"visibility", "source_type", "shared_with", "organization_id", "group_ids", "access_level", "owner_id", "user_id"}
+)
+
+
 def _tracked_sources() -> dict[str, str]:
+    """Text of the production ``.py`` files that spell a candidate name; the rest are not read into the scan."""
     out = subprocess.check_output(
-        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "*.py"],
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "*.py"],
         cwd=REPO,
-        text=True,
         env=scrubbed_git_env(),
     )
-    return {p: (REPO / p).read_text(encoding="utf-8") for p in out.split() if _is_production_python(p)}
+    paths = [p for p in out.decode("utf-8").split("\0") if p and _is_production_python(p)]
+    texts = {p: (REPO / p).read_text(encoding="utf-8") for p in paths}
+    return {p: t for p, t in texts.items() if any(name in t for name in _CANDIDATES)}
+
+
+@functools.lru_cache(maxsize=None)
+def _tree(source: str) -> ast.AST:
+    """One parse per distinct source text, shared by every detector."""
+    return ast.parse(source)
 
 
 def _spelled(source: str, names: frozenset[str]) -> set[str]:
     """The ``names`` spelled as a Name or Attribute anywhere in *source*."""
     found = set()
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(_tree(source)):
         if isinstance(node, ast.Name) and node.id in names:
             found.add(node.id)
         elif isinstance(node, ast.Attribute) and node.attr in names:
@@ -154,44 +178,164 @@ def low_level_bypasses(sources: dict[str, str]) -> set[str]:
     return {p for p, s in sources.items() if p not in LOW_LEVEL_HOMES and _spelled(s, LOW_LEVEL_WRITES)}
 
 
+def routes_without_admin_check(sources: dict[str, str]) -> set[str]:
+    admin = frozenset({"check_admin_permission", "drop_ownership_unless_admin"})
+    return {
+        p for p, (kind, _) in WRITE_PATHS.items() if kind == ROUTE_ADMIN and not _spelled(sources.get(p, ""), admin)
+    }
+
+
+def request_ownership_reads(source: str) -> list[int]:
+    """Lines reading an ownership field out of something: ``x.get("owner_id")`` or ``x["owner_id"]``."""
+    lines = []
+    for node in ast.walk(_tree(source)):
+        key = None
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "get"
+            and node.args
+        ):
+            key = node.args[0]
+        elif isinstance(node, ast.Subscript) and isinstance(node.ctx, ast.Load):
+            key = node.slice
+        if isinstance(key, ast.Constant) and key.value in OWNERSHIP_FIELDS:
+            lines.append(node.lineno)
+    return lines
+
+
+def built_routes_reading_ownership(sources: dict[str, str]) -> dict[str, list[int]]:
+    found = {
+        p: request_ownership_reads(sources[p]) for p, (k, _) in WRITE_PATHS.items() if k == ROUTE_BUILT and p in sources
+    }
+    return {p: lines for p, lines in found.items() if lines}
+
+
+def passthrough_writes(source: str) -> set[str]:
+    """Functions that hand one of their own parameters to a KB write as its metadata."""
+    found = set()
+    for fn in ast.walk(_tree(source)):
+        if not isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        params = {a.arg for a in fn.args.args + fn.args.kwonlyargs}
+        for call in ast.walk(fn):
+            if isinstance(call, ast.Call) and isinstance(call.func, ast.Attribute) and call.func.attr in WRITE_APIS:
+                meta = [kw.value for kw in call.keywords if kw.arg == "metadata"] or call.args[1:2]
+                if meta and isinstance(meta[0], ast.Name) and meta[0].id in params:
+                    found.add(fn.name)
+    return found
+
+
+#: SYSTEM functions that forward a parameter as metadata. Each is reached only from system code (see the
+#: reason); a new one fails until someone reads its callers and adds it here.
+PASSTHROUGH_ACKNOWLEDGED: dict[tuple[str, str], str] = {
+    (_B + "agents/kb_librarian/stable_ids.py", "store_or_update_fact"): "librarian: metadata built in librarian.py",
+    (_B + "knowledge/bulk.py", "_store_restored_fact"): "backup restore: metadata is the stored fact's own",
+    (_B + "services/codebase_indexing_service.py", "_store_single_chunk"): "indexer builds the chunk metadata",
+    (
+        "autobot-infrastructure/shared/scripts/identity_config_utility.py",
+        "_add_identity_to_kb",
+    ): "operator script, literal identity metadata",
+}
+
+
+def unacknowledged_passthroughs(sources: dict[str, str]) -> set[tuple[str, str]]:
+    found = {
+        (p, fn)
+        for p, (k, _) in WRITE_PATHS.items()
+        if k == SYSTEM and p in sources
+        for fn in passthrough_writes(sources[p])
+    }
+    return found - set(PASSTHROUGH_ACKNOWLEDGED)
+
+
 def _function_spells(source: str, func: str, names: frozenset[str]) -> bool:
-    for node in ast.walk(ast.parse(source)):
-        if isinstance(node, ast.AsyncFunctionDef) and node.name == func and _spelled(ast.unparse(node), names):
-            return True
+    for node in ast.walk(_tree(source)):
+        if isinstance(node, ast.AsyncFunctionDef) and node.name == func:
+            if any(
+                isinstance(n, ast.Name) and n.id in names or isinstance(n, ast.Attribute) and n.attr in names
+                for n in ast.walk(node)
+            ):
+                return True
     return False
 
 
 _SOURCES = _tracked_sources()
+_HOW = "Add the module to WRITE_PATHS in repo_tests/kb_write_chokepoint_19517_test.py with a class and reason; "
 
 
 def test_every_write_module_is_classified_and_every_classification_still_writes():
     found = write_modules(_SOURCES)
-    assert not found - set(WRITE_PATHS), f"unclassified KB write path(s): {sorted(found - set(WRITE_PATHS))}"
-    assert not set(WRITE_PATHS) - found, f"stale entries: {sorted(set(WRITE_PATHS) - found)}"
+    new, stale = sorted(found - set(WRITE_PATHS)), sorted(set(WRITE_PATHS) - found)
+    assert (
+        not new
+    ), f"{new} write to the KB with no WRITE_PATHS row. {_HOW}if it takes a caller's metadata, enter caller_write_scope (knowledge/write_scope.py)."
+    assert not stale, f"{stale} no longer write to the KB. Delete their WRITE_PATHS rows."
 
 
 def test_a_caller_scoped_module_enters_the_write_scope():
-    assert not unscoped_caller_modules(_SOURCES)
+    bare = sorted(unscoped_caller_modules(_SOURCES))
+    assert (
+        not bare
+    ), f"{bare} are CALLER_SCOPED but spell no scope helper. Wrap the write in caller_write_scope / agent_write_scope / add_document_as."
 
 
 def test_the_open_gaps_may_only_shrink():
-    gaps = {p for p, (kind, _) in WRITE_PATHS.items() if kind == OPEN_GAP}
-    assert len(gaps) <= 1, f"a new OPEN_GAP: {sorted(gaps)}"
+    gaps = sorted(p for p, (kind, _) in WRITE_PATHS.items() if kind == OPEN_GAP)
+    assert len(gaps) <= 1, f"{gaps}: OPEN_GAP may only shrink. Give the new write a principal and a scope instead."
 
 
 def test_no_write_reaches_the_persistence_steps_around_the_guard():
-    assert not low_level_bypasses(_SOURCES)
+    bypass = sorted(low_level_bypasses(_SOURCES))
+    assert (
+        not bypass
+    ), f"{bypass} call persist_fact / _store_and_vectorize_fact / _project_fact_to_redis directly. Go through KnowledgeBase.store_fact so the ownership guard runs."
+
+
+def test_an_admin_route_checks_admin():
+    bare = sorted(routes_without_admin_check(_SOURCES))
+    assert (
+        not bare
+    ), f"{bare} are ROUTE_ADMIN but spell neither check_admin_permission nor drop_ownership_unless_admin. Add the check, or reclassify the route."
+
+
+def test_a_built_route_reads_no_ownership_from_a_request():
+    reads = built_routes_reading_ownership(_SOURCES)
+    assert (
+        not reads
+    ), f"{reads} read an ownership field out of a mapping. A route that takes owner/visibility from its request is ROUTE_ADMIN: add check_admin_permission, or stamp from the verified principal."
+
+
+def test_a_system_site_forwards_no_unacknowledged_parameter_as_metadata():
+    new = sorted(unacknowledged_passthroughs(_SOURCES))
+    assert (
+        not new
+    ), f"{new} pass a parameter through as KB metadata. If a caller reaches it, enter caller_write_scope at that caller; else add it to PASSTHROUGH_ACKNOWLEDGED with the reason."
+
+
+def test_the_acknowledged_passthroughs_still_exist():
+    stale = sorted(k for k in PASSTHROUGH_ACKNOWLEDGED if k[1] not in passthrough_writes(_SOURCES.get(k[0], "")))
+    assert not stale, f"{stale} no longer forward a parameter as metadata. Delete them from PASSTHROUGH_ACKNOWLEDGED."
 
 
 def test_store_fact_and_update_fact_call_the_guard():
     facts = _SOURCES["autobot-backend/knowledge/facts.py"]
-    assert _function_spells(facts, "store_fact", frozenset({"sanitize_new_fact"}))
-    assert _function_spells(facts, "update_fact", frozenset({"sanitize_update_metadata"}))
+    assert _function_spells(
+        facts, "store_fact", frozenset({"sanitize_new_fact"})
+    ), "store_fact must call sanitize_new_fact (the ownership guard)."
+    assert _function_spells(
+        facts, "update_fact", frozenset({"sanitize_update_metadata"})
+    ), "update_fact must call sanitize_update_metadata."
+    assert _function_spells(
+        facts, "update_fact", frozenset({"guard_update"})
+    ), "update_fact must call guard_update (caller owns the fact)."
 
 
 def test_the_agent_tool_registry_carries_the_scoped_write_tools():
     registry = _SOURCES["autobot-backend/tools/tool_registry.py"]
-    assert "KnowledgeWriteToolsMixin" in _spelled(registry, frozenset({"KnowledgeWriteToolsMixin"}))
+    assert _spelled(
+        registry, frozenset({"KnowledgeWriteToolsMixin"})
+    ), "ToolRegistry must extend KnowledgeWriteToolsMixin."
 
 
 def test_the_chokepoint_scope_is_not_read_from_metadata():
@@ -232,3 +376,21 @@ def test_the_low_level_check_flags_a_planted_bypass_and_not_the_home():
     planted = "async def f(store):\n    await store.persist_fact('i', 'c', {'visibility': 'system'})\n"
     assert low_level_bypasses({"autobot-backend/api/x.py": planted}) == {"autobot-backend/api/x.py"}
     assert low_level_bypasses({"autobot-backend/knowledge/facts.py": planted}) == set()
+
+
+def test_the_admin_route_check_flags_a_route_with_no_check_and_passes_one_with_it():
+    path = next(p for p, (k, _) in WRITE_PATHS.items() if k == ROUTE_ADMIN)
+    assert routes_without_admin_check({path: "async def r(kb):\n    await kb.store_fact('x', {})\n"}) >= {path}
+    assert path not in routes_without_admin_check({path: "def r(a=Depends(check_admin_permission)):\n    pass\n"})
+
+
+def test_the_ownership_read_check_sees_get_and_subscript_and_ignores_a_dict_literal():
+    assert request_ownership_reads("def r(req):\n    return req.get('owner_id')\n")
+    assert request_ownership_reads("def r(req):\n    return req['visibility']\n")
+    assert not request_ownership_reads("def r(uid):\n    return {'owner_id': uid}\n")
+
+
+def test_the_passthrough_check_sees_positional_and_keyword_metadata_and_not_a_literal():
+    assert passthrough_writes("async def f(kb, m):\n    await kb.store_fact('x', m)\n") == {"f"}
+    assert passthrough_writes("async def f(kb, m):\n    await kb.add_document(content='x', metadata=m)\n") == {"f"}
+    assert not passthrough_writes("async def f(kb, m):\n    await kb.store_fact('x', {'a': m})\n")

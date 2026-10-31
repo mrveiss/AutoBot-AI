@@ -26,7 +26,7 @@ from knowledge.fact_redis_codec import (  # noqa: F401 -- names stay patchable h
     _decode_redis_hash,
 )
 from knowledge.fact_sharing import FactSharingMixin
-from knowledge.ingest_sanitize import sanitize_fact_content, sanitize_new_fact, sanitize_update_metadata
+from knowledge.ingest_sanitize import guard_update, sanitize_fact_content, sanitize_new_fact, sanitize_update_metadata
 from knowledge.long_fact_embedding import embed_in_windows, window_metadata
 from knowledge.ownership_index import index_ownership, ownership_changed, reindex_ownership
 from knowledge.quarantine import QuarantineAuditFailed, apply_quarantine, require_audit_actor, without_quarantine
@@ -1109,7 +1109,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
             if current is None:
                 return {"status": "error", "message": "Fact not found"}
             decoded, current_metadata = current
-            previous = dict(current_metadata)  # #16663: the indexes the fact is filed under now
+            previous = await guard_update(self, fact_id, current_metadata)  # #16663 filed-under now; #19517
 
             # #13708 round 4 review (BLOCK 2): stays None for a metadata-only update, so
             # _durable_update_or_adopt/fact_store fall back to hashing the (unchanged)

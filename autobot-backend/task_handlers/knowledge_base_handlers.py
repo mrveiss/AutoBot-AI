@@ -31,7 +31,7 @@ class KBAddFileHandler(TaskHandler):
         metadata = ctx.get_payload_value("metadata")
 
         kb = await ctx.worker.resolve_knowledge_base()
-        with caller_write_scope(ctx.metadata.get("user_id"), ctx.metadata.get("org_id")):  # #19517
+        with caller_write_scope(ctx.metadata.get("user_id"), ctx.metadata.get("org_id"), ctx.user_role):  # #19517
             result = await kb.add_file(file_path, file_type, metadata)
 
         ctx.audit_log(
@@ -77,7 +77,7 @@ class KBStoreFactHandler(TaskHandler):
         metadata = ctx.get_payload_value("metadata")
 
         kb = await ctx.worker.resolve_knowledge_base()
-        with caller_write_scope(ctx.metadata.get("user_id"), ctx.metadata.get("org_id")):  # #19517
+        with caller_write_scope(ctx.metadata.get("user_id"), ctx.metadata.get("org_id"), ctx.user_role):  # #19517
             result = await kb.store_fact(content, metadata)
 
         ctx.audit_log(

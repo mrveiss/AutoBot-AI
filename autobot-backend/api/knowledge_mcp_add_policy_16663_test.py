@@ -85,4 +85,4 @@ async def test_a_non_admin_cannot_file_a_fact_into_another_org_group_or_share():
         response = await mod.mcp_add_to_knowledge_base(request, current_user={"user_id": "u1", "role": "user"})
 
     assert response["success"] is True
-    assert seen == [{"title": "t", "owner_id": "u1"}]
+    assert seen == [{"title": "t", "owner_id": "u1", "source": "mcp"}]

@@ -11,14 +11,16 @@ duplicate check are stubbed, so what is asserted is the metadata that would have
 """
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, create_autospec, patch
 
 import pytest
 
-from knowledge.ingest_sanitize import sanitize_update_metadata
+from knowledge.ingest_sanitize import guard_update, sanitize_update_metadata
+from knowledge.ingestion_visibility import system_backfill_class
 from knowledge.write_scope import KbWriteDenied, add_document_as, caller_write_scope, guard_caller_metadata
+from knowledge_base import KnowledgeBase
 from llm_shared.run_credentials import llm_principal_scope
-from task_handlers.knowledge_base_handlers import KBStoreFactHandler
+from task_handlers.executor import TaskExecutor
 from tests.helpers.fake_kb import FactsFakeKB
 from tools.tool_registry import ToolRegistry
 
@@ -136,18 +138,105 @@ async def test_the_mcp_write_stamps_the_caller_and_drops_the_payloads_ownership(
     assert kb.persisted[0]["owner_id"] == "user-2" and "visibility" not in kb.persisted[0]
 
 
-@pytest.mark.asyncio
-async def test_a_task_handler_write_is_owned_by_the_tasks_user_not_the_payload(kb):
-    ctx = SimpleNamespace(
-        require_payload_value=lambda _k: "content",
-        get_payload_value=lambda _k, default=None: dict(_FORGED),
-        worker=SimpleNamespace(resolve_knowledge_base=AsyncMock(return_value=kb)),
-        metadata={"user_id": "user-3"},
-        audit_log=lambda *_a, **_k: None,
+def _executor(kb):
+    worker = SimpleNamespace(
+        resolve_knowledge_base=AsyncMock(return_value=kb), security_layer=MagicMock(), worker_id="w1"
     )
-    await KBStoreFactHandler().execute(ctx)
+    return TaskExecutor(worker)
 
-    assert kb.persisted[0]["owner_id"] == "user-3" and "visibility" not in kb.persisted[0]
+
+def _task(task_type: str, **envelope):
+    payload = {"type": task_type, "content": "content", "file_path": "/x.txt", "file_type": "txt"}
+    return {**payload, "metadata": dict(_FORGED), **envelope}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("task_type", ["kb_store_fact", "kb_add_file"])
+async def test_a_task_is_owned_by_its_submitter_not_by_its_payload(kb, task_type):
+    """Through the real TaskExecutor: the envelope's user, never the payload's ``user_id: victim``."""
+    result = await _executor(kb).execute(_task(task_type, user_id="user-3", org_id="org-3"), "user", "t1")
+
+    assert result["status"] == "success", result
+    assert kb.persisted[0]["owner_id"] == "user-3" and kb.persisted[0]["organization_id"] == "org-3"
+    assert "visibility" not in kb.persisted[0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("task_type", ["kb_store_fact", "kb_add_file"])
+async def test_a_task_with_no_submitting_user_is_refused(kb, task_type):
+    """A schedule or system origin carries no user: there is no owner to stamp, so nothing is written."""
+    result = await _executor(kb).execute(_task(task_type), "user", "t2")
+
+    assert result["status"] == "error"
+    assert kb.persisted == []
+
+
+@pytest.mark.asyncio
+async def test_the_mcp_route_passes_the_real_add_document_signature():
+    """``add_document`` takes no ``source``: it must arrive in the metadata, or the route always fails."""
+    kb = create_autospec(KnowledgeBase, instance=True)
+    kb.add_document = AsyncMock(spec=KnowledgeBase.add_document, return_value={"status": "success"})
+    user = {"user_id": "user-2", "role": "user"}
+
+    await add_document_as(kb, user, content="doc", metadata=dict(_FORGED), source="mcp")
+
+    sent = kb.add_document.await_args.kwargs
+    assert set(sent) == {"content", "metadata"}
+    assert sent["metadata"]["source"] == "mcp" and sent["metadata"]["owner_id"] == "user-2"
+    assert "visibility" not in sent["metadata"]
+
+
+@pytest.mark.asyncio
+async def test_a_forged_system_source_stays_non_system_in_scope(kb):
+    """A ``source`` the backfill reads as SYSTEM does not make an owned fact SYSTEM."""
+    with llm_principal_scope("user-1"):
+        await ToolRegistry(knowledge_base=kb).store_fact("doc", {"source": "manual_pages_population", "type": "file"})
+
+    meta = kb.persisted[0]
+    assert meta["owner_id"] == "user-1"
+    assert system_backfill_class(meta) is None
+
+
+def test_a_caller_cannot_file_a_fact_under_a_board():
+    with caller_write_scope("user-1", None, "user"):
+        assert "board_id" not in guard_caller_metadata({"board_id": "b-1", "title": "t"})
+
+
+def _stored_fact_kb(owner: str, allowed: bool = True):
+    manager = SimpleNamespace(check_access=AsyncMock(return_value=allowed))
+    return SimpleNamespace(ownership_manager=manager), {"owner_id": owner, "visibility": "system"}
+
+
+@pytest.mark.asyncio
+async def test_a_caller_updates_only_a_fact_it_owns():
+    fake, stored = _stored_fact_kb("user-1")
+    with caller_write_scope("user-1", None, "user"):
+        assert await guard_update(fake, "f1", stored) == stored
+    fake, stored = _stored_fact_kb("someone-else")  # readable by everyone (SYSTEM), still not theirs to edit
+    with caller_write_scope("user-1", None, "user"):
+        with pytest.raises(KbWriteDenied):
+            await guard_update(fake, "f1", stored)
+
+
+@pytest.mark.asyncio
+async def test_update_fact_refuses_a_foreign_fact_and_asks_the_ownership_manager():
+    fake, stored = _stored_fact_kb("user-1", allowed=False)
+    kb = FactsFakeKB()
+    kb.ownership_manager = fake.ownership_manager
+    with patch.object(FactsFakeKB, "_read_fact_for_write", new=AsyncMock(return_value=({"content": "c"}, stored))):
+        with caller_write_scope("user-1", "org-1", "user"):
+            result = await kb.update_fact("f1", metadata={"title": "t"})
+
+    assert result["status"] == "error"
+    fake.ownership_manager.check_access.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_an_update_outside_a_scope_or_by_an_admin_needs_no_ownership():
+    fake, stored = _stored_fact_kb("someone-else")
+    assert await guard_update(fake, "f1", stored) == stored
+    with caller_write_scope("admin-1", None, "admin"):
+        assert await guard_update(fake, "f1", stored) == stored
 
 
 def test_an_update_by_a_caller_cannot_change_ownership_and_does_not_reown_the_fact():

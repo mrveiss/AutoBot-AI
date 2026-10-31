@@ -40,6 +40,11 @@ from llm_shared.run_credentials import get_llm_principal
 logger = get_logger(__name__)
 
 
+#: Scope fields a caller never sets through a scoped write, beyond ``OWNERSHIP_KEYS``: ``board_id`` files a
+#: fact under a project board's members, and nothing that takes a caller's metadata sets it (#19517).
+_CALLER_SCOPE_KEYS = ("board_id",)
+
+
 class KbWriteDenied(PermissionError):
     """A caller-controlled write with no verified principal to own it."""
 
@@ -73,10 +78,24 @@ def caller_write_scope_for(user: Optional[Dict[str, Any]]) -> Any:
     return caller_write_scope(resolve_principal_id(user), user.get("org_id"), user.get("role"))
 
 
-async def add_document_as(kb: Any, user: Optional[Dict[str, Any]], **document: Any) -> Any:
-    """``kb.add_document(**document)`` as the authenticated *user*: their ownership, never the payload's."""
+async def add_document_as(
+    kb: Any,
+    user: Optional[Dict[str, Any]],
+    *,
+    content: str,
+    metadata: Optional[Dict[str, Any]] = None,
+    source: Any = None,
+) -> Any:
+    """``kb.add_document`` as the authenticated *user*: their ownership, never the payload's.
+
+    ``add_document`` takes no ``source``; it is folded into the metadata after the guard (it names
+    no owner), so the route's ``source`` still reaches the stored fact.
+    """
     with caller_write_scope_for(user):
-        return await kb.add_document(**document)
+        guarded = dict(guard_caller_metadata(metadata) or {})
+        if source:
+            guarded["source"] = source
+        return await kb.add_document(content=content, metadata=guarded)
 
 
 def agent_write_scope() -> Any:
@@ -103,7 +122,9 @@ def guard_caller_metadata(metadata: Optional[Dict[str, Any]], *, stamp: bool = T
     if stamp and not caller.user_id:
         logger.warning("Refused a KB write from a caller scope with no verified principal")
         raise KbWriteDenied("A knowledge-base write needs a verified principal to own it")
-    guarded = drop_ownership_unless_admin(metadata, caller.role)
+    guarded = {
+        k: v for k, v in drop_ownership_unless_admin(metadata, caller.role).items() if k not in _CALLER_SCOPE_KEYS
+    }
     if stamp:
         guarded["owner_id"] = caller.user_id
         if caller.org_id:
