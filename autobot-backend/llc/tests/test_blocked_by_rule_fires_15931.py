@@ -29,9 +29,10 @@ import pytest
 import pytest_asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from llc.models.enums import WorkItemRelationType, WorkItemStatus, WorkItemType
+from llc.models.enums import WorkItemStatus, WorkItemType
 from llc.services.work_item_service import InvalidTransition, WorkItemService
 from llc.tests import _e2e_harness as harness
+from llc.tests._blocked_by_seed import block
 
 pytestmark = pytest.mark.asyncio
 
@@ -64,19 +65,6 @@ async def _item(session: AsyncSession, company: str, *, status: WorkItemStatus, 
     return item
 
 
-async def _block(session: AsyncSession, company: str, blocker, blocked) -> None:
-    from llc.services.work_item_relations import WorkItemRelationService
-
-    await WorkItemRelationService().add(
-        session,
-        company_id=company,
-        source_id=str(blocker.id),
-        target_id=str(blocked.id),
-        relation_type=WorkItemRelationType.BLOCKED_BY,
-    )
-    await session.commit()
-
-
 async def test_the_rule_fires_without_an_injected_relation_service(session):  # noqa: ANN001
     """Called as production calls it: no `relation_svc`.
 
@@ -86,7 +74,7 @@ async def test_the_rule_fires_without_an_injected_relation_service(session):  # 
     company = str(uuid.uuid4())
     blocker = await _item(session, company, status=WorkItemStatus.READY, title="blocker")
     blocked = await _item(session, company, status=WorkItemStatus.BLOCKED, title="blocked")
-    await _block(session, company, blocker, blocked)
+    await block(session, company, blocker, blocked)
 
     with pytest.raises(InvalidTransition, match="unresolved blocked_by"):
         await WorkItemService().transition_status(
@@ -107,7 +95,7 @@ async def test_the_rule_fires_without_company_id_either(session):  # noqa: ANN00
     company = str(uuid.uuid4())
     blocker = await _item(session, company, status=WorkItemStatus.READY, title="blocker-2")
     blocked = await _item(session, company, status=WorkItemStatus.BLOCKED, title="blocked-2")
-    await _block(session, company, blocker, blocked)
+    await block(session, company, blocker, blocked)
 
     with pytest.raises(InvalidTransition, match="unresolved blocked_by"):
         await WorkItemService().transition_status(session, str(blocked.id), WorkItemStatus.IN_PROGRESS)
@@ -122,7 +110,7 @@ async def test_a_resolved_blocker_does_not_refuse(session):  # noqa: ANN001
     company = str(uuid.uuid4())
     blocker = await _item(session, company, status=WorkItemStatus.DONE, title="finished blocker")
     blocked = await _item(session, company, status=WorkItemStatus.BLOCKED, title="unblocked")
-    await _block(session, company, blocker, blocked)
+    await block(session, company, blocker, blocked)
 
     item = await WorkItemService().transition_status(session, str(blocked.id), WorkItemStatus.IN_PROGRESS)
 
@@ -149,7 +137,7 @@ async def test_another_companys_blocker_does_not_refuse(session):  # noqa: ANN00
     mine, theirs = str(uuid.uuid4()), str(uuid.uuid4())
     blocker = await _item(session, theirs, status=WorkItemStatus.READY, title="their blocker")
     blocked = await _item(session, mine, status=WorkItemStatus.BLOCKED, title="my item")
-    await _block(session, theirs, blocker, blocked)
+    await block(session, theirs, blocker, blocked)
 
     item = await WorkItemService().transition_status(session, str(blocked.id), WorkItemStatus.IN_PROGRESS)
 
@@ -192,7 +180,7 @@ async def test_the_blocker_lookup_uses_the_items_company_not_the_callers(session
     company = str(uuid.uuid4())
     blocker = await _item(session, company, status=WorkItemStatus.READY, title="blocker-x")
     blocked = await _item(session, company, status=WorkItemStatus.BLOCKED, title="blocked-x")
-    await _block(session, company, blocker, blocked)
+    await block(session, company, blocker, blocked)
 
     seen: list = []
 
