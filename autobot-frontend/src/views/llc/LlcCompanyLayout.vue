@@ -9,11 +9,16 @@
   switcher is populated on deep links.
 -->
 <script setup lang="ts">
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
 import LlcSidebar from '@/components/llc/LlcSidebar.vue'
+import PlanFirstProcessCard from '@/components/llc/workflowPlanner/PlanFirstProcessCard.vue'
 import { useLlcCompanyStore } from '@/stores/useLlcCompanyStore'
 
 const companyStore = useLlcCompanyStore()
+const route = useRoute()
+// The creation wizard lands here with ?welcome=plan (#19938 E2).
+const showPlanCard = computed(() => route.query.welcome === 'plan')
 
 onMounted(() => {
   if (!companyStore.hasCompanies && !companyStore.isLoading) {
@@ -26,6 +31,7 @@ onMounted(() => {
   <div class="llc-company-layout">
     <LlcSidebar />
     <main class="llc-company-content">
+      <PlanFirstProcessCard v-if="showPlanCard" class="m-3" />
       <RouterView />
     </main>
   </div>

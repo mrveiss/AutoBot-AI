@@ -64848,19 +64848,6 @@ export interface components {
         CodeAnalyticsRequest: {
             /** Root Path */
             root_path: string;
-            /** Include Patterns */
-            include_patterns?: string[] | null;
-            /**
-             * Exclude Patterns
-             * @default [
-             *       "*.pyc",
-             *       "*.git*",
-             *       "*__pycache__*"
-             *     ]
-             */
-            exclude_patterns: string[] | null;
-            /** Languages */
-            languages?: string[] | null;
         } & {
             [key: string]: unknown;
         };
@@ -67589,9 +67576,7 @@ export interface components {
              */
             uploaded_at: string;
             /** Uploaded By */
-            uploaded_by: string;
-            /** File Path */
-            file_path: string;
+            uploaded_by?: string | null;
             /** Extension */
             extension?: string | null;
         } & {
