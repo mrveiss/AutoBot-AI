@@ -102,6 +102,7 @@ import {
   useServiceMessages,
   type ServiceMessageEntry
 } from '@/composables/useServiceMessages'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { t } = useI18n()
 const {
@@ -144,9 +145,7 @@ function togglePolling() {
 
 function loadChain(id: string) { fetchChain(id) }
 
-function formatTime(iso: string): string {
-  try { return new Date(iso).toLocaleTimeString() } catch { return iso }
-}
+const formatTime = createDateFormatter({ kind: 'time' })
 
 function formatFull(iso: string): string {
   try { return new Date(iso).toLocaleString() } catch { return iso }

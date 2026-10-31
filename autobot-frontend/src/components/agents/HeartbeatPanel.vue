@@ -194,6 +194,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { useEventBus } from '@/composables/useEventBus'
 import { useExpansion } from '@/composables/useExpansion'
 import type { LiveEvent } from '@/services/LiveEventService'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('HeartbeatPanel')
 const { subscribe, unsubscribe } = useEventBus()
@@ -454,10 +455,7 @@ function toggleEvents(runId: string): void {
   if (!wasExpanded) expandRun(runId)
 }
 
-function formatTime(iso: string | null): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString()
-}
+const formatTime = createDateFormatter({ emptyText: '—' })
 
 function duration(run: HeartbeatRun): string {
   if (!run.started_at || !run.finished_at) return '—'
