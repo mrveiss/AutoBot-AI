@@ -373,7 +373,7 @@ function onRawJson(text: string) {
   cursor: pointer;
   color: var(--text-secondary, #9ca3af);
   padding: 0;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   line-height: 1;
 }
 

@@ -56,7 +56,7 @@ const expanded = ref(false)
   gap: 0.4rem;
   width: 100%;
   cursor: default;
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   color: var(--text-primary, #e0e0e0);
   padding: 0.15rem 0.5rem 0.15rem 0;
   border-radius: 0.25rem;

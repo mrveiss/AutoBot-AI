@@ -125,7 +125,7 @@ async function submit(): Promise<void> {
 }
 .handoff-select,
 .handoff-notes {
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   padding: 0.5rem;
   border: 1px solid var(--border-default, #e5e7eb);
   border-radius: var(--radius-md, 8px);
@@ -141,7 +141,7 @@ async function submit(): Promise<void> {
 .handoff-confirm {
   padding: 0.5rem 0.875rem;
   border-radius: var(--radius-md, 8px);
-  font-size: 0.875rem;
+  font-size: var(--text-sm);
   font-weight: 500;
 }
 .handoff-confirm {
