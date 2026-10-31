@@ -4159,7 +4159,8 @@
       "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
       "vectorizeFolderTitle": "Vectorize folder title",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "verification": {
       "approve": "Approve",
@@ -7584,7 +7585,16 @@
       "initComplete": "Initialization complete"
     }
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "Alert Rules",
+      "overview": "Overview",
+      "slos": "SLOs",
+      "traces": "Traces"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "browser": {
       "contentsOf": "{path} Contents",
       "refresh": "Refresh",
@@ -8498,6 +8508,7 @@
       "coverage": "Coverage",
       "coverageComplete": "All steps costed",
       "coveragePartial": "{costed} of {total} steps costed",
+      "currencyAmount": "{amount} {currency}",
       "stepRollupEmpty": "No process steps are mapped yet, so there is nothing to total.",
       "stepRollupUnavailable": "The totals could not be loaded.",
       "stepRollupToolNote": "A step counts towards every tool its role carries, so the tool totals do not add up to the role totals.",
