@@ -9548,6 +9548,11 @@
       "subtitle": "Vocabulaire de permissions fin et lots de portées pour les clés API",
       "comingSoonTitle": "Disponible dans une version ultérieure",
       "comingSoonMessage": "Les portées de permissions fines — un vocabulaire de permissions, des lots de portées et l'application des portées aux clés API — ne sont pas disponibles dans cette version. Cette page vous permettra de les définir et de les attribuer une fois disponibles."
+    },
+    "layout": {
+      "title": "Espace d'administration",
+      "subtitle": "Outils d'administration pour les administrateurs",
+      "ariaLabel": "Section d'administration"
     }
   },
   "components": {

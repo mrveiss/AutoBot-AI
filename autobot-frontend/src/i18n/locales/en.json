@@ -9781,6 +9781,11 @@
       "subtitle": "Fine-grained permission vocabulary and scope bundles for API keys",
       "comingSoonTitle": "Coming in a later release",
       "comingSoonMessage": "Fine-grained permission scopes — a permission vocabulary, scope bundles, and API-key scope enforcement — are not available in this release. This page will let you define and assign them once they ship."
+    },
+    "layout": {
+      "title": "Administration",
+      "subtitle": "Back-office tools for administrators",
+      "ariaLabel": "Administration section"
     }
   },
   "components": {
