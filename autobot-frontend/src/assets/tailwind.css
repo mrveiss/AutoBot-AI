@@ -9,7 +9,7 @@
 
 /* Wire dark: variant to AutoBot's [data-theme="dark"] attribute system.
  * Without this, dark: classes only respond to OS preference, not the toggle. */
-@variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+@variant dark (&:where([data-theme="dark"], [data-theme="dark"] *, [data-theme="contrast-dark"], [data-theme="contrast-dark"] *));
 
 @theme {
   --color-blueGray-50: #f8fafc;

@@ -1,0 +1,110 @@
+/* Copyright 2025-2026 mrveiss
+   SPDX-License-Identifier: Apache-2.0 */
+/**
+ * AutoBot - AI-Powered Automation Platform
+ * Author: mrveiss
+ *
+ * contrast-dark.css - High contrast Dark Theme (#18253)
+ * Issue #14785: one token system. Follows themes/_template.css.
+ *
+ * The dark counterpart of contrast.css: white on black, 2px white borders,
+ * bordered pills, 4px active-nav underline. It replaces the second,
+ * attribute-based mechanism the High Contrast Dark preset used (#18253).
+ * Activated via [data-theme="contrast-dark"] on document root (useTheme.ts).
+ * Dark-based: themes/dark.css supplies the non-colour-name tokens (charts,
+ * badges, scrollbars); surfaces, text and borders reach the existing names
+ * through themes/refined-map.css. Loaded after dark.css so these values win.
+ */
+
+[data-theme="contrast-dark"] {
+  /* Surfaces and borders */
+  --bg: #000000;
+  --surface: #000000;
+  --surface2: #000000;
+  --border: #FFFFFF;
+  --line: #FFFFFF;
+  --bw: 2px;
+  /* Text and links */
+  --text: #FFFFFF;
+  --text2: #FFFFFF;
+  --muted: #E6E6E6;
+  --link: #7DB8FF;
+  --link-h: #B3D4FF;
+  /* Brand, accent and focus */
+  --primary: #FFFFFF;
+  --primary-h: #FFFFFF;
+  --on-primary: #000000;
+  --accent: #FF6B7F;
+  --focus: #FFD60A;
+  --brand-bg: #FFFFFF;
+  --brand-fg: #000000;
+  --nav-on-bw: 4px;
+  /* Illustration */
+  --tile: #000000;
+  --tile-b: #FFFFFF;
+  --stroke: #FFFFFF;
+  --i1: #000000;
+  --i2: #000000;
+  --i3: #000000;
+  --i1t: #000000;
+  --i2t: #000000;
+  --i3t: #000000;
+  /* Bars and alert text */
+  --bar: #FFFFFF;
+  --bar-alert: #FF6B7F;
+  --bar-track: #000000;
+  --alert-text: #FF6B7F;
+  /* Status pills */
+  --ok-bg: #000000;
+  --ok-fg: #FFFFFF;
+  --warn-bg: #000000;
+  --warn-fg: #FFFFFF;
+  --bad-bg: #FF6B7F;
+  --bad-fg: #000000;
+  --idle-bg: #000000;
+  --idle-fg: #FFFFFF;
+  --info-bg: #000000;
+  --info-fg: #FFFFFF;
+  --pill-b: 1.5px solid #FFFFFF;
+  /* Status dots */
+  --dot-ok: #FFFFFF;
+  --dot-idle: #000000;
+  --dot-warn: #FFFFFF;
+  --dot-bad: #FF6B7F;
+  /* Danger tile */
+  --danger-tile: #000000;
+  --danger-tile-b: #FF6B7F;
+
+  /* Dark supplies a slate strong border; here every border is already white. */
+  --border-strong: var(--border);
+  /* Code syntax: white ink, pale link blue and a soft red, every one AA or
+     better on the black code surface (themeContrastDark.test.ts computes it);
+     keywords also carry weight. Replaces dark.css's palette here. */
+  --code-bg: #000000;
+  --code-text: #FFFFFF;
+  --code-keyword: #FF6B7F;
+  --code-operator: #FF6B7F;
+  --code-string: #B3D4FF;
+  --code-number: #7DB8FF;
+  --code-comment: #E6E6E6;
+  --code-function: #7DB8FF;
+  --code-variable: #FFFFFF;
+  --code-class: #FF6B7F;
+  --code-tag: #FF6B7F;
+  --code-attribute: #B3D4FF;
+  --code-keyword-weight: 700;
+}
+
+/* This theme owns the primary colour: an accent preset (accents.css) would swap
+   in a hue and drop the white-on-black contrast, so the accent attribute is
+   matched here at higher specificity. */
+[data-theme="contrast-dark"],
+[data-theme="contrast-dark"][data-accent] {
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-h);
+  --color-primary-active: var(--primary-h);
+  --color-primary-light: var(--muted);
+  --color-primary-dark: var(--primary-h);
+  --color-primary-bg: color-mix(in srgb, var(--primary) 10%, transparent);
+  --color-primary-bg-hover: color-mix(in srgb, var(--primary) 15%, transparent);
+}
