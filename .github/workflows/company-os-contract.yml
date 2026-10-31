@@ -26,6 +26,7 @@ on:
       - 'autobot-frontend/src/composables/llc/**'
       - 'scripts/audit_api_wiring.py'
       - '.github/workflows/company-os-contract.yml'
+      - '.github/actions/free-disk-space/**'
   pull_request:
     # ready_for_review is REQUIRED here: the jobs below are gated on
     # draft == false, and marking a PR ready fires ONLY this event. Without
@@ -48,6 +49,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+
+      # torch and its CUDA packages fill a stock runner's disk (#20191)
+      - name: Free disk space
+        uses: ./.github/actions/free-disk-space
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v7
@@ -81,6 +86,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+
+      # torch and its CUDA packages fill a stock runner's disk (#20191)
+      - name: Free disk space
+        uses: ./.github/actions/free-disk-space
 
       - name: Set up Python 3.12
         uses: actions/setup-python@v7
