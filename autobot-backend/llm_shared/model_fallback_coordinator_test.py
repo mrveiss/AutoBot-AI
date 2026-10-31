@@ -44,6 +44,8 @@ def _make_registry(side_effects: list) -> MagicMock:
     call_count = [0]
 
     async def dispatch(request: LLMRequest) -> LLMResponse:
+        # The real registry records the provider it resolved here (provider_registry.py); locality is judged on it (#19753).
+        request.metadata["selected_provider"] = "anthropic"
         idx = call_count[0]
         call_count[0] += 1
         effect = side_effects[min(idx, len(side_effects) - 1)]

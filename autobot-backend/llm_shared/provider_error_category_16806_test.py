@@ -43,6 +43,9 @@ C = ProviderErrorCategory
         ("model 'x' not found", C.PERMANENT),
         ("something nobody anticipated", C.UNKNOWN),
         ("listening on port 5432 with 512 tokens", C.UNKNOWN),  # a bare number is not a status
+        ("error: limit 512", C.UNKNOWN),  # "error" is not a status marker, and 512 is not a status
+        ("Invalid value for max_tokens", C.UNKNOWN),  # not an auth failure: "token" inside a parameter name
+        ("HTTP 408 Request Timeout", C.TIMEOUT),
     ],
 )
 def test_text_is_classified(text, expected):
@@ -101,3 +104,46 @@ def test_only_recoverable_categories_are_failover_eligible():
         C.AUTHENTICATION,
     }
     assert [c for c in C if c.holds_until_reset] == [C.BILLING]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "HTTP 400: max_tokens must be at most 4096",
+        "HTTP 400: the timeout parameter is invalid",
+        "HTTP 400: billing address is malformed",
+        "Error code: 400 - the request timed out while validating billing",
+        "HTTP 404 model not found",
+        "HTTP 413 request too large",
+        "HTTP 422 unprocessable",
+        "HTTP 418",
+    ],
+)
+def test_a_4xx_outside_the_auth_billing_timeout_set_is_permanent_whatever_its_body_says(body):
+    """The status decides; the body only refines inside it. A 400 that mentions timeout/billing is still a bad request."""
+    failure = classify_provider_error(body)
+    assert failure.category is C.PERMANENT
+    assert not failure.category.failover_eligible
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [(401, C.AUTHENTICATION), (402, C.BILLING), (403, C.AUTHENTICATION), (408, C.TIMEOUT), (429, C.RATE_LIMIT),
+     (500, C.PROVIDER_UNAVAILABLE), (503, C.PROVIDER_UNAVAILABLE), (529, C.PROVIDER_UNAVAILABLE), (400, C.PERMANENT)],
+)  # fmt: skip
+def test_the_status_alone_decides(status, expected):
+    assert failure_from_status(status).category is expected
+
+
+def test_a_429_that_names_a_plan_limit_is_billing_and_a_plain_429_is_a_throttle():
+    assert classify_provider_error("HTTP 429 insufficient_quota").category is C.BILLING
+    assert classify_provider_error("HTTP 429 slow down").category is C.RATE_LIMIT
+
+
+def test_an_explicit_status_beats_the_words_around_it():
+    assert classify_provider_error("connection refused", status=503).category is C.PROVIDER_UNAVAILABLE
+    assert classify_provider_error("HTTP 503 but the text says unauthorized").category is C.PROVIDER_UNAVAILABLE
+
+
+def test_an_exception_type_beats_its_message():
+    assert failure_from_exception(asyncio.TimeoutError("HTTP 401")).category is C.TIMEOUT

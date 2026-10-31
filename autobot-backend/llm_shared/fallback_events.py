@@ -42,6 +42,7 @@ def _build_fallback_payload(
     degraded_skipped: Optional[List[str]],
     exhausted: bool,
     request_id: Optional[str],
+    operator_configured: bool,
 ) -> Dict[str, Any]:
     """Assemble the canonical PROVIDER_FALLBACK payload shape (#11995)."""
     return {
@@ -55,6 +56,7 @@ def _build_fallback_payload(
         "chain_tried": chain_tried or [],
         "degraded_skipped": degraded_skipped or [],
         "exhausted": exhausted,
+        "operator_configured": operator_configured,
         "timestamp": time.time(),
     }
 
@@ -71,6 +73,7 @@ async def emit_fallback_event(
     degraded_skipped: Optional[List[str]] = None,
     exhausted: bool = False,
     request_id: Optional[str] = None,
+    operator_configured: bool = False,
 ) -> None:
     """Publish a PROVIDER_FALLBACK event to the "global" channel.
 
@@ -88,6 +91,7 @@ async def emit_fallback_event(
         degraded_skipped=degraded_skipped,
         exhausted=exhausted,
         request_id=request_id,
+        operator_configured=operator_configured,
     )
     try:
         await publish_event("global", PROVIDER_FALLBACK, payload)

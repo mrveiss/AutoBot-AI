@@ -30,7 +30,7 @@ from autobot_shared.env_utils import env_int
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 
-from .failover_policy import hold_seconds, locality_allows
+from .failover_policy import hold_seconds, locality_allows, marks_provider_wide, may_fail_over
 from .fallback_chain import FallbackHop, get_fallback_chain_manager
 from .fallback_events import emit_fallback_event
 from .headroom_routing import exhausted_window
@@ -109,12 +109,15 @@ class _FallbackRun:
         self.model = self.primary_model
         self.provider = self.primary_provider
         self.chain_tried: list[str] = [self.model] if self.model else []
+        self.operator_configured = (
+            False  # whether the chain that moved us to ``self.model`` was written by the operator
+        )
         self.last_error: LLMResponse | None = None
         self.trail = _FallbackTrail()
 
-    def switch_to(self, model: str, provider: Optional[str]) -> None:
+    def switch_to(self, model: str, provider: Optional[str], operator_configured: bool = False) -> None:
         """Move the request onto the next model of the chain."""
-        self.model, self.provider = model, provider
+        self.model, self.provider, self.operator_configured = model, provider, operator_configured
         self.chain_tried.append(model)
         self.request = ModelFallbackCoordinator._clone_with_model(self.request, model, provider)
 
@@ -129,15 +132,31 @@ class _FallbackRun:
             "exhausted": exhausted,
             "degraded_skipped": self.request.metadata.get("degraded_skipped"),
             "reason": self.trail.reason,
-            "preempted": self.trail.preempted,
+            "extra": self._hop_extra(fallback_used),
+        }
+
+    def _hop_extra(self, fallback_used: bool) -> dict:
+        """Hop facts for the response: pre-emptive switches (#15028), destination provider, chain author (#19753)."""
+        hop = {"fallback_provider": self.provider, "operator_configured": self.operator_configured}
+        return {
+            **({"preemptive_switches": list(self.trail.preempted)} if self.trail.preempted else {}),
+            **(hop if fallback_used else {"fallback_provider": None, "operator_configured": None}),
         }
 
 
 class _PreemptiveSwitch(Exception):
     """Internal: the selected provider is near-exhausted and a fallback has room (#15028)."""
 
-    def __init__(self, provider: str, window: str, next_model: str, next_provider: Optional[str]) -> None:
+    def __init__(
+        self,
+        provider: str,
+        window: str,
+        next_model: str,
+        next_provider: Optional[str],
+        operator_configured: bool = False,
+    ) -> None:
         super().__init__(f"{provider} window {window!r} near-exhausted")
+        self.operator_configured = operator_configured
         self.provider = provider
         self.window = window
         self.next_model = next_model
@@ -230,7 +249,7 @@ class ModelFallbackCoordinator:
                 return response
             except _PreemptiveSwitch as hop:
                 run.trail.note_preempt(hop, run.model)
-                run.switch_to(hop.next_model, hop.next_provider)
+                run.switch_to(hop.next_model, hop.next_provider, hop.operator_configured)
             except (RateLimitError, _ProviderFailureError, ProviderAuthError) as exc:
                 if not await self._on_failure(run, self._record_failure(run, exc), attempt, max_attempts):
                     break
@@ -267,21 +286,27 @@ class ModelFallbackCoordinator:
         if not fallback_used:
             return
         logger.info(
-            "quota-fallback: request succeeded on attempt %d using model=%r (primary=%r) chain=%s",
+            "quota-fallback: request succeeded on attempt %d using model=%r provider=%r (primary=%r) chain=%s "
+            "operator_configured=%s",
             attempt + 1,
             run.model,
+            run.provider,
             run.primary_model,
             run.chain_tried,
+            run.operator_configured,
         )
         await self._emit(run)
 
     async def _on_failure(
         self, run: "_FallbackRun", failure: ProviderFailure, attempt: int, max_attempts: int, *, mark: bool = True
     ) -> bool:
-        """Hold the failed model out, then pick the next usable one.
+        """Hold the failed model out where that is fair to everyone, then pick the next usable one.
 
-        Returns True when the loop should retry on the fallback, False when the chain is exhausted.
+        Returns True when the loop should retry on the fallback, False when the chain is exhausted or
+        the failure is not one to fail over on (a caller's own credential, see ``may_fail_over``).
         """
+        if not may_fail_over(failure):
+            return False
         if mark:
             await self._mark_failed(run, failure)
         if attempt >= max_attempts:
@@ -293,29 +318,44 @@ class ModelFallbackCoordinator:
         if hop is None:
             logger.warning("quota-fallback: no usable fallback for model=%r provider=%r", run.model, run.provider)
             return False
-        logger.info(
-            "quota-fallback: model=%r failed (%s, attempt %d), switching to fallback model=%r provider=%r",
+        self._log_hop(run, failure, attempt, hop)
+        run.trail.reasons.append(_reason_for(failure.category))
+        run.switch_to(hop.model, hop.provider, hop.operator_configured)
+        return True
+
+    @staticmethod
+    def _log_hop(run: "_FallbackRun", failure: ProviderFailure, attempt: int, hop: FallbackHop) -> None:
+        """One log line per hop, naming the destination provider and whether the operator wrote the chain."""
+        logger.warning(
+            "failover: model=%r failed (%s, attempt %d) -> model=%r provider=%r operator_configured=%s",
             run.model,
             failure.category.value,
             attempt + 1,
             hop.model,
             hop.provider,
+            hop.operator_configured,
         )
-        run.trail.reasons.append(_reason_for(failure.category))
-        run.switch_to(hop.model, hop.provider)
-        return True
 
     @staticmethod
     async def _mark_failed(run: "_FallbackRun", failure: ProviderFailure) -> None:
-        """Mark the failed provider:model degraded so sibling workers skip it (Issue #11519).
+        """Mark the failed provider:model degraded for sibling workers (Issue #11519), if the provider is at fault.
 
-        A transient failure is skipped for the degradation window; a plan/quota limit is held until
-        the provider's reset (#19753). Uses the provider the registry actually resolved at dispatch
-        time -- the request may carry none. Marked before the max-attempts break so the final one is too.
+        The mark is shared by every user and worker, so ``marks_provider_wide`` decides whether this
+        failure may set it. A transient failure is skipped for the degradation window; a plan/quota
+        limit is held until the provider's reset (#19753). Uses the provider the registry actually
+        resolved at dispatch time -- the request may carry none.
         """
         failed_provider = run.request.metadata.get("selected_provider") or run.provider
         if not failed_provider:
             logger.debug("degradation: provider unresolved for model=%r — mark skipped", run.model)
+            return
+        if not marks_provider_wide(failure, failed_provider):
+            logger.info(
+                "degradation: %s failure of %s:%s is not provider-wide -- not marked",
+                failure.category.value,
+                failed_provider,
+                run.model,
+            )
             return
         ttl = hold_seconds(failure)
         extra = {"ttl_seconds": ttl} if ttl else {}
@@ -354,6 +394,7 @@ class ModelFallbackCoordinator:
             exhausted=exhausted,
             reason=run.trail.reason,
             request_id=run.request.request_id,
+            operator_configured=run.operator_configured,
         )
 
     # ------------------------------------------------------------------
@@ -407,11 +448,12 @@ class ModelFallbackCoordinator:
                 return  # no (fresh) headroom data: today's reactive path, untouched
             manager = get_fallback_chain_manager()
             visited, model, owner = set(chain_tried), current_model, provider
-            while (nxt := manager.get_next_fallback(model, owner)) is not None and nxt[0] not in visited:
-                visited.add(nxt[0])
-                if nxt[1] is None or await exhausted_window(nxt[1]) is None:
-                    raise _PreemptiveSwitch(provider, entry.window, nxt[0], nxt[1])
-                model, owner = nxt[0], nxt[1]
+            while (nxt := manager.get_next_hop(model, owner)) is not None and nxt.model not in visited:
+                visited.add(nxt.model)
+                permitted = locality_allows(provider, nxt.provider, operator_configured=nxt.operator_configured)
+                if permitted and (nxt.provider is None or await exhausted_window(nxt.provider) is None):
+                    raise _PreemptiveSwitch(provider, entry.window, nxt.model, nxt.provider, nxt.operator_configured)
+                model, owner = nxt.model, nxt.provider
 
         return _guard
 
@@ -447,9 +489,9 @@ class ModelFallbackCoordinator:
         exhausted: bool = False,
         degraded_skipped: list[str] | None = None,
         reason: str = REASON_RATE_LIMIT,
-        preempted: list[dict] | None = None,
+        extra: dict | None = None,
     ) -> None:
-        """Extend response.provider_metadata with fallback audit fields (+ ``preemptive_switches`` when any, #15028)."""
+        """Extend response.provider_metadata with fallback audit fields (+ the hop's *extra*, #15028, #19753)."""
         if response.provider_metadata is None:
             response.provider_metadata = {}
         response.fallback_used = fallback_used
@@ -463,7 +505,7 @@ class ModelFallbackCoordinator:
                 "fallback_chain_tried": chain_tried,
                 "fallback_exhausted": exhausted,
                 "degraded_skipped": degraded_skipped or [],
-                **({"preemptive_switches": list(preempted)} if preempted else {}),
+                **(extra or {}),
             }
         )
 

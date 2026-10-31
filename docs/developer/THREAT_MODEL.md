@@ -141,7 +141,11 @@ refused `1008` before any RFB byte. Full reasoning is in that function's docstri
   `fail_over` re-sends a turn's prompt to another model. It never carries a prompt from a local provider to an external one unless
   the operator wrote that chain (`AUTOBOT_FALLBACK_CHAIN_*`, `FallbackChain.operator_configured`) -- `failover_policy.locality_allows`
   -- and only while the turn has emitted no text and run no tool (`chat_workflow/llm_failover.py` `turn_has_acted`), so a side effect
-  never replays. An authentication failover is announced (PROVIDER_FALLBACK event, `reason=authentication`), not silent.
+  never replays. A model the user picked by hand never fails over. The shared degradation mark is set only by provider-wide causes
+(`failover_policy.marks_provider_wide`): a caller's own credential failure (a principal is in scope, `caller_owns_credential`) is
+surfaced and neither hops nor marks, and one local request's 5xx or timeout does not degrade a local model for everyone. A hop with no
+provider, or from an unknown origin, counts as external and needs an operator-written chain; "local" is by provider type, not host. The
+event, the response metadata and the log line carry `fallback_provider` and `operator_configured`.
 - **Refactor fallout** historically outranks new code here: a renamed validator or store with
   call sites left on the old name silently removes the check. Grep the **old** identifier.
 - **Prompt injection (#16488):** content `research`/`adopt`/`web-fetch` fetch is data, never

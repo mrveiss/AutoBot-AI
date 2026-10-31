@@ -19,6 +19,7 @@ from llm_shared.fallback_chain import FallbackChain, FallbackChainManager
 from llm_shared.model_fallback_coordinator import ModelFallbackCoordinator
 from llm_shared.models import LLMRequest, LLMResponse, ProviderType
 from llm_shared.provider_error_category import ProviderErrorCategory, ProviderFailure
+from llm_shared.run_credentials import llm_principal_scope
 
 MODULE = "llm_shared.model_fallback_coordinator"
 UNAVAILABLE = ProviderFailure(ProviderErrorCategory.PROVIDER_UNAVAILABLE, "HTTP 503")
@@ -45,18 +46,22 @@ def _request(model="claude-opus-4", provider="anthropic", **kwargs) -> LLMReques
     return req
 
 
-def _registry(*effects):
-    """Registry whose provider answers ``effects`` in order (an Exception is raised); records the models asked."""
+def _registry(*effects, provider_name="anthropic"):
+    """Registry whose provider answers ``effects`` in order (an Exception is raised); records the models asked.
+
+    Like the real registry, it records the provider it resolved on ``request.metadata["selected_provider"]``.
+    """
     asked: list[str] = []
 
     async def dispatch(request):
+        request.metadata["selected_provider"] = request.provider.value if request.provider else provider_name
         asked.append(request.model_name)
         effect = effects[min(len(asked) - 1, len(effects) - 1)]
         if isinstance(effect, Exception):
             raise effect
         return effect
 
-    provider = MagicMock(provider_name="anthropic", chat_completion=dispatch)
+    provider = MagicMock(provider_name=provider_name, chat_completion=dispatch)
     registry = MagicMock()
     registry.get_provider_for_request = AsyncMock(return_value=provider)
     registry.asked = asked
@@ -280,3 +285,125 @@ def test_the_default_chains_are_never_operator_configured(monkeypatch):
         monkeypatch.delenv(key)
     manager = FallbackChainManager()
     assert not any(chain.operator_configured for chain in manager._chains.values())
+
+
+# --------------------------------------------------------------------------------------------------
+# Whose failure it is: the degradation mark is shared by every user and worker
+# --------------------------------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_callers_expired_credential_surfaces_as_before_on_a_compat_route():
+    """A principal is in scope on the compat routes: a 401 may be that user's own token, not the provider's."""
+    registry = _registry(_error("HTTP 401 Unauthorized"), _ok("gpt-4o"))
+    with _env(_chains("claude-opus-4", ["gpt-4o"], ["openai"])) as (store, emitted), llm_principal_scope("u1", "o1"):
+        result = await ModelFallbackCoordinator().execute_with_fallback(_request(), registry)
+    assert result.error == "HTTP 401 Unauthorized"
+    assert registry.asked == ["claude-opus-4"]  # no hop to another provider
+    assert store.marks == []  # and no shared mark that would change another user's route
+    assert emitted.await_count == 0 or emitted.await_args.kwargs.get("exhausted") is True
+
+
+@pytest.mark.asyncio
+async def test_a_system_credential_failure_with_no_principal_fails_over_and_is_marked_for_the_window():
+    registry = _registry(_error("HTTP 401 Unauthorized"), _ok("gpt-4o"))
+    with _env(_chains("claude-opus-4", ["gpt-4o"], ["openai"])) as (store, _):
+        result = await ModelFallbackCoordinator().execute_with_fallback(_request(), registry)
+    assert result.content == "backup answer"
+    assert store.marks == [("anthropic", "claude-opus-4", {})]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("category", [ProviderErrorCategory.PROVIDER_UNAVAILABLE, ProviderErrorCategory.TIMEOUT])
+async def test_one_local_request_that_fails_does_not_degrade_the_local_model_for_everyone(category):
+    """A local server answers 500 / times out for the one request it cannot serve; it still serves the rest."""
+    registry = _registry(_ok("llama3-small"), provider_name="ollama")
+    mgr = _chains("llama3", ["llama3-small"], ["ollama"], primary_provider="ollama")
+    failure = ProviderFailure(category, "HTTP 500")
+    with _env(mgr) as (store, _):
+        result = await ModelFallbackCoordinator().fail_over(
+            _request("llama3", "ollama"), registry, failure, acted=False
+        )
+        assert result.content == "backup answer"  # this request is still answered by the backup
+        assert store.marks == []  # but nobody else's route changes
+        assert await store.is_degraded("ollama", "llama3") is False
+
+
+@pytest.mark.asyncio
+async def test_a_local_server_that_is_unreachable_is_marked_because_it_is_down_for_everyone():
+    registry = _registry(_ok("llama3-small"), provider_name="ollama")
+    mgr = _chains("llama3", ["llama3-small"], ["ollama"], primary_provider="ollama")
+    network = ProviderFailure(ProviderErrorCategory.NETWORK, "connection refused")
+    with _env(mgr) as (store, _):
+        await ModelFallbackCoordinator().fail_over(_request("llama3", "ollama"), registry, network, acted=False)
+    assert store.marks == [("ollama", "llama3", {})]
+
+
+@pytest.mark.asyncio
+async def test_a_hosted_providers_outage_is_marked_for_everyone():
+    registry = _registry(_ok())
+    with _env(_chains("claude-opus-4", ["claude-sonnet-4"], ["anthropic"])) as (store, _):
+        await ModelFallbackCoordinator().fail_over(_request(), registry, UNAVAILABLE, acted=False)
+    assert store.marks == [("anthropic", "claude-opus-4", {})]
+
+
+# --------------------------------------------------------------------------------------------------
+# Locality: unknown origin, provider-less hop; and what the metadata, event and log say about the hop
+# --------------------------------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_an_unresolved_origin_cannot_hop_to_an_external_provider_on_a_default_chain():
+    registry = _registry(_ok("gpt-4o"))
+    request = LLMRequest(messages=[{"role": "user", "content": "hi"}])
+    request.model_name = "m-a"  # no provider on the request, none selected by a registry
+    with _env(_chains("m-a", ["gpt-4o"], ["openai"], primary_provider=None)):
+        assert await ModelFallbackCoordinator().fail_over(request, registry, UNAVAILABLE, acted=False) is None
+    assert registry.asked == []
+
+
+@pytest.mark.asyncio
+async def test_a_hop_with_no_provider_is_external_for_a_local_origin_unless_the_operator_wrote_it():
+    for operator, expected in ((False, None), (True, "backup answer")):
+        registry = _registry(_ok("m-b"), provider_name="ollama")
+        mgr = _chains("m-a", ["m-b"], [None], primary_provider="ollama", operator=operator)
+        with _env(mgr):
+            result = await ModelFallbackCoordinator().fail_over(
+                _request("m-a", "ollama"), registry, UNAVAILABLE, acted=False
+            )
+        assert (result.content if result else None) == expected
+
+
+@pytest.mark.asyncio
+async def test_the_selected_provider_the_registry_records_is_what_locality_is_judged_against():
+    """On the compat path the request has no provider; the registry's ``selected_provider`` is the origin."""
+    registry = _registry(_error("HTTP 503"), _ok("gpt-4o"), provider_name="ollama")
+    request = LLMRequest(messages=[{"role": "user", "content": "hi"}])
+    request.model_name = "llama3"  # no provider on the request
+    with _env(_chains("llama3", ["gpt-4o"], ["openai"], primary_provider=None)):
+        result = await ModelFallbackCoordinator().execute_with_fallback(request, registry)
+    assert result.error == "HTTP 503"  # the primary resolved to a local provider: no hop to openai
+    assert registry.asked == ["llama3"]
+
+
+@pytest.mark.asyncio
+async def test_the_hop_names_its_destination_provider_and_chain_author_in_metadata_event_and_log():
+    registry = _registry(_error("HTTP 503"), _ok("gpt-4o"))
+    mgr = _chains("claude-opus-4", ["gpt-4o"], ["openai"], operator=True)
+    with _env(mgr) as (_, emitted), patch(f"{MODULE}.logger") as log:
+        result = await ModelFallbackCoordinator().execute_with_fallback(_request(), registry)
+    meta = result.provider_metadata
+    assert (meta["fallback_provider"], meta["operator_configured"]) == ("openai", True)
+    assert emitted.await_args.kwargs["fallback_provider"] == "openai"
+    assert emitted.await_args.kwargs["operator_configured"] is True
+    hop_lines = [c.args[0] % c.args[1:] for c in log.warning.call_args_list if c.args[0].startswith("failover:")]
+    assert any("provider='openai'" in m and "operator_configured=True" in m for m in hop_lines)
+
+
+@pytest.mark.asyncio
+async def test_a_response_that_did_not_fail_over_names_no_destination():
+    registry = _registry(_ok("claude-opus-4"))
+    with _env(_chains("claude-opus-4", ["claude-sonnet-4"], ["anthropic"])):
+        result = await ModelFallbackCoordinator().execute_with_fallback(_request(), registry)
+    assert result.provider_metadata["fallback_provider"] is None
+    assert result.provider_metadata["operator_configured"] is None

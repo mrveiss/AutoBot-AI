@@ -172,7 +172,7 @@ async def test_a_503_from_the_primary_is_followed_by_a_completed_answer_from_the
     assert items[0].metadata["failover"]["from_model"] == "primary-model"
     assert registry.asked == ["backup-model"]
     assert http.decrements == 1  # the primary connection was released
-    assert world.store.marks == [("ollama", "primary-model", {})]
+    assert world.store.marks == []  # one local request's 500 is not a reason to degrade the model for everyone
     assert world.emitted.await_args.kwargs["reason"] == "provider_unavailable"
 
 
@@ -195,9 +195,10 @@ async def test_the_backup_gets_the_same_prompt_the_primary_got():
 @pytest.mark.asyncio
 async def test_a_connection_failure_before_any_output_fails_over():
     http, registry = _Http(error=aiohttp.ClientConnectionError("refused")), _registry()
-    with _world(registry):
+    with _world(registry) as world:
         items = await _run(http, _ctx())
     assert items[-1] == ("backup answer", [])
+    assert world.store.marks == [("ollama", "primary-model", {})]  # an unreachable server is down for everyone
 
 
 @pytest.mark.asyncio
@@ -361,3 +362,92 @@ async def test_a_local_primary_fails_over_to_an_external_provider_on_an_operator
     with _world(registry, mgr=_chains(provider="openai", operator=True)):
         items = await _run(http, _ctx())
     assert items[-1] == ("backup answer", [])
+
+
+# --------------------------------------------------------------------------------------------------
+# Hand-picked model; image; what the backup request carries; one user's failure and another's route
+# --------------------------------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_hand_picked_model_never_fails_over_silently_and_is_not_marked():
+    http, registry = _Http(_Reply(503)), _registry()
+    with _world(registry) as world:
+        items = await _run(http, _ctx(), hand_picked=True)
+    assert _texts(items) == ["LLM service error: 503"]
+    assert items[-1] == (None, None)
+    assert registry.asked == []
+    assert world.store.marks == []
+    assert world.emitted.await_count == 0
+
+
+@pytest.mark.asyncio
+async def test_a_hand_picked_model_whose_connection_fails_raises_as_before():
+    http, registry = _Http(error=aiohttp.ClientConnectionError("refused")), _registry()
+    with _world(registry) as world, pytest.raises(aiohttp.ClientConnectionError):
+        await _run(http, _ctx(), hand_picked=True)
+    assert registry.asked == []
+    assert world.store.marks == []
+
+
+@pytest.mark.asyncio
+async def test_a_turn_carrying_a_screenshot_surfaces_because_a_screenshot_means_a_tool_ran():
+    from chat_workflow.manager import _extract_latest_tool_screenshot
+
+    history = [{"tool": "browser", "status": "success", "base64_image": "AAAA"}]
+    assert _extract_latest_tool_screenshot(history) == "AAAA"
+    assert _extract_latest_tool_screenshot([]) is None  # no tool, no image: it cannot exist on a fresh turn
+
+    http, registry = _Http(_Reply(503)), _registry()
+    with _world(registry):
+        items = await _run(http, _ctx(execution_history=history))
+    assert _texts(items) == ["LLM service error: 503"]
+    assert registry.asked == []
+
+
+@pytest.mark.asyncio
+async def test_the_backup_request_carries_the_primarys_temperature_and_top_p_and_nothing_provider_specific():
+    seen = []
+    registry = _registry()
+    provider = registry.get_provider_for_request.return_value
+    inner = provider.chat_completion
+
+    async def spy(request):
+        seen.append(request)
+        return await inner(request)
+
+    provider.chat_completion = spy
+    # Values that differ from LLMRequest's own defaults, so "carried" cannot be confused with "defaulted".
+    options = {"temperature": 0.123, "top_p": 0.456, "num_ctx": 99999}
+    payload = patch.object(ChatWorkflowManager, "_get_llm_request_payload", return_value={"options": options})
+    with _world(registry), payload:
+        await _run(_Http(_Reply(503)), _ctx())
+    (request,) = seen
+    assert (request.temperature, request.top_p) == (0.123, 0.456)
+    assert request.stream is False and not request.tools and request.json_schema is None
+    assert 99999 not in (request.max_tokens, *request.metadata.values())  # num_ctx is an Ollama option: not carried
+
+
+@pytest.mark.asyncio
+async def test_one_users_local_failure_leaves_the_next_users_route_unchanged():
+    registry = _registry()
+    with _world(registry) as world:
+        await _run(
+            _Http(_Reply(503)), _ctx(session_id="user-a")
+        )  # user A's request fails and is answered by the backup
+        healthy = _Http(_Reply(200, _Body([_chunk("b's answer", done=True)])))
+        items = await _run(healthy, _ctx(session_id="user-b"))
+    assert world.store.marks == []
+    assert len(healthy.posts) == 1  # user B still goes to the primary
+    assert items[-1][0] == "b's answer"
+
+
+@pytest.mark.asyncio
+async def test_a_callers_rejected_credential_surfaces_on_the_chat_path():
+    from llm_shared.run_credentials import llm_principal_scope
+
+    http, registry = _Http(_Reply(401)), _registry()
+    with _world(registry) as world, llm_principal_scope("u1", "o1"):
+        items = await _run(http, _ctx())
+    assert _texts(items) == ["LLM service error: 401"]
+    assert registry.asked == [] and world.store.marks == []

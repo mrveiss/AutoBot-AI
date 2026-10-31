@@ -14,6 +14,21 @@ Where "acted" is decided, in order of when it becomes true:
 1. ``iteration > 1`` or a non-empty ``execution_history`` -- an earlier iteration already streamed and/or ran tools.
 2. a non-error message already in ``ctx.workflow_messages`` -- something was shown before the first LLM call.
 3. ``emitted`` below -- this iteration yielded a chunk before it failed.
+
+A model the user picked by hand (``model_override``) never fails over: its error is surfaced.
+
+Images: the only image on this path is the last tool screenshot (``_extract_latest_tool_screenshot``),
+read from ``execution_history``; a turn that has one has run a tool, so it is already "acted" and
+surfaces. ``LLMRequest`` has no image field, so an image could not be carried to a backup anyway.
+
+What the backup request carries: the system prompt, the prompt, and ``temperature`` / ``top_p`` as the
+primary's own payload sets them. Not carried: ``num_ctx`` (an Ollama option), ``api_kwargs`` (thinking
+budgets, ``betas`` and effort parameters are provider-specific payload fields, not ``LLMRequest`` fields),
+and the image. Neither path redacts the prompt (redaction is for logs and traces only), so the backup
+receives exactly the text the primary did.
+
+Default chains name only hosted model families (``claude-*``, ``gpt-*``), so an Ollama chat model has a
+chain only from an operator's ``AUTOBOT_FALLBACK_CHAIN_*`` variable; without one a failure is surfaced.
 """
 
 from __future__ import annotations
@@ -75,12 +90,15 @@ def _service_failure(item: Any) -> Optional[ProviderFailure]:
 def _build_request(call: IterationCall) -> LLMRequest:
     """The same prompt the primary got, as a registry request for the failed model."""
     ctx = call.ctx
+    options = call.manager._get_llm_request_payload(ctx.selected_model, call.prompt, ctx.system_prompt or "")["options"]
     system = [{"role": CategoryDefaults.ROLE_SYSTEM, "content": ctx.system_prompt}] if ctx.system_prompt else []
     return LLMRequest(
         messages=[*system, {"role": CategoryDefaults.ROLE_USER, "content": call.prompt}],
         llm_type=LLMType.CHAT,
         provider=ProviderType.OLLAMA,
         model_name=ctx.selected_model,
+        temperature=options["temperature"],
+        top_p=options["top_p"],
         metadata={"conversation_id": ctx.session_id},
     )
 
@@ -101,16 +119,17 @@ async def _recover(call: IterationCall, failure: ProviderFailure, *, acted: bool
     return response
 
 
-async def _primary_is_held(call: IterationCall) -> bool:
-    """True while the primary sits in its skip window / quota hold and the user did not pick it by hand.
+async def _hand_picked(call: IterationCall) -> bool:
+    """True when the user chose this model by hand: the session's ``model_override`` (#11585)."""
+    session = await call.manager.get_or_create_session(call.ctx.session_id)
+    return bool((session.metadata or {}).get("model_override"))
 
-    A hand-picked model is the session's ``model_override`` (#11585), the same field that chose it.
-    """
-    ctx = call.ctx
-    if not await get_degradation_store().is_degraded(ProviderType.OLLAMA.value, ctx.selected_model):
+
+async def _primary_is_held(call: IterationCall) -> bool:
+    """True while the primary sits in its skip window / quota hold and the user did not pick it by hand."""
+    if not await get_degradation_store().is_degraded(ProviderType.OLLAMA.value, call.ctx.selected_model):
         return False
-    session = await call.manager.get_or_create_session(ctx.session_id)
-    return not (session.metadata or {}).get("model_override")
+    return not await _hand_picked(call)
 
 
 async def _recovered_items(call: IterationCall, response: LLMResponse) -> AsyncIterator[Any]:
@@ -127,6 +146,8 @@ async def _recovered_items(call: IterationCall, response: LLMResponse) -> AsyncI
                 "from_model": ctx.selected_model,
                 "to_model": response.model,
                 "reason": meta.get("fallback_reason"),
+                "to_provider": meta.get("fallback_provider"),
+                "operator_configured": meta.get("operator_configured"),
             }
         }
     )
@@ -149,6 +170,9 @@ async def _held_primary_items(call: IterationCall) -> Optional[list]:
 async def _failure_items(call: IterationCall, failure: ProviderFailure, *, emitted: bool) -> Optional[list]:
     """Items from the next model after the primary failed, or ``None`` to surface the original error."""
     acted = emitted or turn_has_acted(call.ctx, call.iteration)
+    if not acted and await _hand_picked(call):
+        logger.info("failover: %s failure on a hand-picked model -- surfaced, no hop", failure.category.value)
+        return None
     response = await _recover(call, failure, acted=acted, held=False)
     return None if response is None else [item async for item in _recovered_items(call, response)]
 

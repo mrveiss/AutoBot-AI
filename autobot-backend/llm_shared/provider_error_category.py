@@ -66,41 +66,42 @@ class ProviderErrorCategory(str, Enum):
 
 @dataclass(frozen=True)
 class ProviderFailure:
-    """A classified failure: the category, the provider's words, and its stated reset if any."""
+    """A classified failure: the category, the provider's words, its stated reset and HTTP status if any."""
 
     category: ProviderErrorCategory
     message: str
     retry_after: Optional[float] = None
+    status: Optional[int] = None
 
 
-#: A bare number is only a status when something says so ("HTTP 503", "status: 503", "error code 503").
-_CODE = r"(?:http|status|error|code)\D{0,8}"
+#: An HTTP status is only read where the text says so ("HTTP 503", "status: 503", "Error code: 503").
+_STATUS_RE = re.compile(r"\b(?:http(?:/\d(?:\.\d)?)?|status(?: code)?|error code)\b[\s:=]*(\d{3})\b", re.IGNORECASE)
 
 _BILLING_RE = re.compile(
-    r"insufficient.quota|exceeded your current quota|billing|credit balance|payment required|plan limit|"
-    + _CODE
-    + r"402",
+    r"\binsufficient[_ ]quota\b|\bexceeded your current quota\b|\bbilling\b|\bcredit balance\b"
+    r"|\bpayment required\b|\bplan limit\b",
     re.IGNORECASE,
 )
 _AUTH_RE = re.compile(
-    _CODE + r"40[13]|unauthori[sz]ed|forbidden|invalid.{0,12}(api.?key|token|credential)|authentication",
+    r"\bunauthori[sz]ed\b|\bforbidden\b|\binvalid[_ -]?(?:api[_ -]?key|token|credentials?)\b"
+    r"|\bauthentication (?:failed|error)\b",
     re.IGNORECASE,
 )
 _UNAVAILABLE_RE = re.compile(
-    _CODE + r"5\d\d|overloaded|service unavailable|bad gateway|temporarily unavailable|server error",
+    r"\boverloaded\b|\bservice unavailable\b|\bbad gateway\b|\btemporarily unavailable\b|\binternal server error\b",
     re.IGNORECASE,
 )
-_TIMEOUT_RE = re.compile(r"time.?d? ?out|deadline exceeded", re.IGNORECASE)
+_TIMEOUT_RE = re.compile(r"\btimed out\b|\b(?:read|connect|request) time-?out\b|\bdeadline exceeded\b", re.IGNORECASE)
 _NETWORK_RE = re.compile(
-    r"connection (refused|reset|error|aborted)|cannot connect|unreachable|name resolution|dns|broken pipe",
+    r"\bconnection (?:refused|reset|error|aborted)\b|\bcannot connect\b|\bunreachable\b|\bname resolution\b"
+    r"|\bbroken pipe\b",
     re.IGNORECASE,
 )
 _PERMANENT_RE = re.compile(
-    _CODE + r"(400|404|413|422)|invalid request|model.{0,20}not found|context.length|content.policy",
-    re.IGNORECASE,
+    r"\binvalid request\b|\bmodel\b.{0,20}\bnot found\b|\bcontext length\b|\bcontent policy\b", re.IGNORECASE
 )
 
-#: Checked in order, after BILLING and RATE_LIMIT: the first match wins.
+#: Used only when the error carries no status; first match wins, after BILLING and RATE_LIMIT.
 _TEXT_RULES: tuple[tuple[re.Pattern, ProviderErrorCategory], ...] = (
     (_AUTH_RE, ProviderErrorCategory.AUTHENTICATION),
     (_TIMEOUT_RE, ProviderErrorCategory.TIMEOUT),
@@ -109,9 +110,34 @@ _TEXT_RULES: tuple[tuple[re.Pattern, ProviderErrorCategory], ...] = (
     (_PERMANENT_RE, ProviderErrorCategory.PERMANENT),
 )
 
+#: The only 4xx statuses that mean something other than "the request is wrong".
+_STATUS_CATEGORIES = {
+    401: ProviderErrorCategory.AUTHENTICATION,
+    402: ProviderErrorCategory.BILLING,
+    403: ProviderErrorCategory.AUTHENTICATION,
+    408: ProviderErrorCategory.TIMEOUT,
+    429: ProviderErrorCategory.RATE_LIMIT,
+}
 
-def _category_of(text: str) -> ProviderErrorCategory:
-    """BILLING before RATE_LIMIT: a 429 that names billing is a plan limit, not a throttle."""
+
+def _category_of_status(status: int, text: str) -> Optional[ProviderErrorCategory]:
+    """The category a status decides on its own, or ``None`` for a status that says nothing (2xx, 3xx).
+
+    Any 4xx outside ``_STATUS_CATEGORIES`` is PERMANENT whatever its body mentions: a 400 about
+    ``max_tokens``, a timeout setting or billing is still a malformed request. A 429 is a throttle,
+    or a plan limit when its body says so (the one place text refines a status).
+    """
+    if status == 429 and _BILLING_RE.search(text):
+        return ProviderErrorCategory.BILLING
+    if status in _STATUS_CATEGORIES:
+        return _STATUS_CATEGORIES[status]
+    if 500 <= status <= 599:
+        return ProviderErrorCategory.PROVIDER_UNAVAILABLE
+    return ProviderErrorCategory.PERMANENT if 400 <= status <= 499 else None
+
+
+def _category_of_text(text: str) -> ProviderErrorCategory:
+    """Text-only classification, for an error that carries no status. BILLING outranks RATE_LIMIT."""
     if _BILLING_RE.search(text):
         return ProviderErrorCategory.BILLING
     if extract_rate_limit_info(LLMResponse(content="", error=text))[0]:
@@ -122,9 +148,15 @@ def _category_of(text: str) -> ProviderErrorCategory:
     return ProviderErrorCategory.UNKNOWN
 
 
-def classify_provider_error(text: str, retry_after: Optional[float] = None) -> ProviderFailure:
-    """Classify a provider error string. Rate limits are decided by ``rate_limit_backoff``'s pattern set."""
-    return ProviderFailure(_category_of(text), text, retry_after)
+def classify_provider_error(
+    text: str, retry_after: Optional[float] = None, status: Optional[int] = None
+) -> ProviderFailure:
+    """Classify a provider error: *status* (given, or read from the text) first; text only when none decides."""
+    if status is None:
+        found = _STATUS_RE.search(text)
+        status = int(found.group(1)) if found else None
+    category = None if status is None else _category_of_status(status, text)
+    return ProviderFailure(category or _category_of_text(text), text, retry_after, status)
 
 
 def failure_from_response(response: LLMResponse) -> Optional[ProviderFailure]:
@@ -137,7 +169,7 @@ def failure_from_response(response: LLMResponse) -> Optional[ProviderFailure]:
 
 def failure_from_status(status: int) -> ProviderFailure:
     """Classify a bare HTTP status (the chat path sees the status, not a provider's error string)."""
-    return classify_provider_error(f"HTTP {status}")
+    return classify_provider_error(f"HTTP {status}", status=status)
 
 
 def failure_from_exception(exc: BaseException) -> ProviderFailure:
@@ -148,7 +180,7 @@ def failure_from_exception(exc: BaseException) -> ProviderFailure:
     if isinstance(exc, (asyncio.TimeoutError, TimeoutError)):
         return ProviderFailure(ProviderErrorCategory.TIMEOUT, message)
     if isinstance(exc, aiohttp.ClientResponseError):
-        return failure_from_status(exc.status)
+        return classify_provider_error(message, status=exc.status)
     if isinstance(exc, (aiohttp.ClientError, OSError)):
         return ProviderFailure(ProviderErrorCategory.NETWORK, message)
     return classify_provider_error(message)
