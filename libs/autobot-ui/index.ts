@@ -151,7 +151,7 @@ export type {
 // Shared duration, uptime and byte formatting (#14908).
 export type { DurationStyle } from './src/utils/duration'
 export { formatDuration, formatUptime, formatFileSize, formatBytes } from './src/utils/format'
-export type { FormatDurationOptions, FormatUptimeOptions, FormatBytesOptions } from './src/utils/format'
+export type { DurationUnitLabels, FormatDurationOptions, FormatUptimeOptions, FormatBytesOptions } from './src/utils/format'
 export {
   formatDate,
   formatTime,
@@ -224,3 +224,30 @@ export type {
 
 // A tool permission rule as the backend serves it, declared once (#19910).
 export type { PermissionRule } from './src/types/permission'
+
+// Headless-library interaction primitives (#14779) -- behaviour from Reka UI, styling from the kit
+// tokens, copy supplied by the app. `BaseTooltip` above stays hand-written.
+export { default as BaseTabs } from './src/components/BaseTabs.vue'
+export type { TabsVariant, TabsSize, TabItem } from './src/components/BaseTabs.vue'
+export type { KitDirection } from './src/utils/direction'
+
+export { default as BaseDropdownMenu } from './src/components/BaseDropdownMenu.vue'
+export type { MenuSize, MenuItemVariant, MenuItem } from './src/components/BaseDropdownMenu.vue'
+
+export { default as BasePopover } from './src/components/BasePopover.vue'
+export type { PopoverSize } from './src/components/BasePopover.vue'
+
+export { default as BaseAccordion } from './src/components/BaseAccordion.vue'
+export type {
+  AccordionVariant,
+  AccordionSize,
+  AccordionValue,
+  AccordionItemSpec,
+} from './src/components/BaseAccordion.vue'
+
+export { default as BaseSelectMenu } from './src/components/BaseSelectMenu.vue'
+export type {
+  SelectMenuSize,
+  SelectMenuVariant,
+  SelectMenuOption,
+} from './src/components/BaseSelectMenu.vue'

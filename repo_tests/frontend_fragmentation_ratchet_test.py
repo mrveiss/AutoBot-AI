@@ -100,7 +100,7 @@ BASELINE = {
     # cross-referencing sibling admin views) -- this pair is documented above
     # as measuring page SIZE, not duplication, and is interim until #15455
     # replaces them with a real duplication measure.
-    "distinct_class_names": 5381,  # #19904 batch 1 and #19906: 5391 -> 5381, per-view .btn* and loading classes
+    "distinct_class_names": 5360,  # #19904 batch 2: 5381 -> 5360, 29 more views onto BaseButton; #19904 batch 1: 5391 -> 5388, per-view .btn* rules retired into BaseButton; #19903 AC2: both app ToastContainers retired into the kit (-14) on 5405; #19903: the retired NotificationConfigModal and the toast/result reuse (-16) on main's 5421; #17562 batch 2: five tables onto BaseTable (-4) on 5425; #19532: the retired main-GUI SettingsPanel (-6); #19217: the retired main-app web research editors (-23) on main's 5454; #17562: six hand-rolled tables onto the kit BaseTable (-12) on main's 5466; #13422: risk-badge, risk-pill, cost-pill and the level-* risk classes left for the kit RiskBadge (-3) on main's 5476; train-85b: #12741 show-more rules moved to TruncationNotice (-3) on main's 5479; train-84: #14780 BaseAvatar (-2) on main's 5481; #17829: the chat input status bar classes became utilities (-3); #14780 drawer adoption: 5492 -> 5484 (SourcePreviewPanel, WorkItemDetail on BaseDrawer); #14778: -10, the local BaseInput fork retired into the kit (on main's 5502); #18242: -1 on main's 5503 (CustomDashboard onto DashboardGrid); #18849: -14, the local BaseButton fork retired into the kit; #18819: -14 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-26);  #14776: local BaseBadge retired (5594 -> 5585), then local BaseCard + BasePanel (5585 -> 5557); #17565: App.vue's hand-rolled .skip-links/.skip-link; train-85h merge: main's 5469 + this train's -3
     # replaced by the shared kit SkipLink (lowered from 5615). Earlier: #17020,
     # Terminal.vue removed -- pure deletion of dead code, lowered, not held.
     # #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit (5611 -> 5594).
@@ -109,8 +109,8 @@ BASELINE = {
     # so PRs that each remove rules never edit a shared line.
     # Files declaring at least one `.btn-*` CSS rule. Target is 1 — a single
     # shared stylesheet.
-    "button_definition_files": 79,  # #19904 batch 1: 98 -> 79, 25 views moved to BaseButton; #19217: the retired main-app web research editors (100 -> 99); #18849: 101 -> 100, the local BaseButton fork retired into the kit; Distinct `.btn-*` class names declared anywhere.
-    "button_class_names": 100,  # #19904 batch 1: 103 -> 100; #18849: 115 -> 103, the local BaseButton fork retired into the kit; Distinct notification entry points. Target is 1 canonical API, the rest
+    "button_definition_files": 66,  # #19904 batch 2: 79 -> 66, 29 views onto BaseButton, the ones keeping icon or tinted buttons keep those rules; #19904 batch 1: 98 -> 79, 25 views moved to BaseButton; #19217: the retired main-app web research editors (100 -> 99); #18849: 101 -> 100, the local BaseButton fork retired into the kit; Distinct `.btn-*` class names declared anywhere.
+    "button_class_names": 79,  # #19904 batch 2: 100 -> 79; #19904 batch 1: 103 -> 100; #18849: 115 -> 103, the local BaseButton fork retired into the kit; Distinct notification entry points. Target is 1 canonical API, the rest
     # thin shims or removed.
     "notification_entry_points": 4,
     # Distinct date-formatting approaches in use.
@@ -127,7 +127,7 @@ BASELINE = {
 # system shape as `btn` versus `btn-action`, and consolidating them should show
 # up as one number falling to zero rather than as noise in the total.
 FAMILY_BASELINE = {
-    "btn": 101,  # #19904 batch 1: 104 -> 101; #18849: 116 -> 104, the local BaseButton fork retired into the kit
+    "btn": 80,  # #19904 batch 2: 101 -> 80; #19904 batch 1: 104 -> 101; #18849: 116 -> 104, the local BaseButton fork retired into the kit
     "status": 113,  # #17829: .status-left/.status-right became utilities in ChatInputStatusBar.vue
     "header": 23,  # #14776: local BaseCard + BasePanel merged into the kit card (24 -> 23)
     "card": 57,  # #14776: local BaseCard + BasePanel merged into the kit card (67 -> 57)
