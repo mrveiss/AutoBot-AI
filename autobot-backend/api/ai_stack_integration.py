@@ -384,12 +384,15 @@ async def knowledge_search(
 async def get_system_knowledge(
     knowledge_category: str | None = None,
     admin_check: bool = Depends(check_admin_permission),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Get system-wide knowledge insights.
 
     Issue #744: Requires admin authentication.
+    #16665: the remote read is audited before the call (``knowledge.remote_read``).
     """
+    await admit_remote_read(current_user, "knowledge_system")
     ai_client = await get_ai_stack_client()
     result = await ai_client.get_system_knowledge(knowledge_category)
 

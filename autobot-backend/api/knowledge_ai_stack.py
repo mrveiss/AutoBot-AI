@@ -272,6 +272,18 @@ async def get_system_knowledge_insights(
 # ====================================================================
 
 
+async def _local_kb_stats(req: Request, current_user: dict) -> dict:
+    """The local KB statistics: admin only, as the equivalent ``/stats`` is (#16665); withheld otherwise."""
+    if not remote_read_is_admin(current_user):
+        return {"withheld": "admin permission required"}
+    try:
+        kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
+        return await kb_to_use.get_stats() if kb_to_use else {}
+    except Exception as e:
+        logger.warning("Failed to get local KB stats: %s", e)
+        return {"error": "Internal server error"}
+
+
 async def _ai_stack_insights(current_user: dict) -> dict:
     """The AI Stack's system knowledge for the stats payload: admin only, audited; withheld otherwise (#16665)."""
     if not remote_read_is_admin(current_user):
@@ -305,16 +317,7 @@ async def get_aistack_stats(
     Issue #744: Requires authenticated user.
     """
     try:
-        # Get local KB stats
-        local_stats = {}
-        try:
-            kb_to_use = await get_or_create_knowledge_base(req.app, force_refresh=False)
-            if kb_to_use:
-                local_stats = await kb_to_use.get_stats()
-        except Exception as e:
-            logger.warning("Failed to get local KB stats: %s", e)
-            local_stats = {"error": "Internal server error"}
-
+        local_stats = await _local_kb_stats(req, current_user)
         ai_stats = await _ai_stack_insights(current_user)
 
         return create_success_response(

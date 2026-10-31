@@ -141,3 +141,26 @@ def test_a_caller_who_is_not_an_admin_never_reaches_the_remote_half():
 
     assert response.status_code == 200 and "remote-hit" not in response.text
     client.search_knowledge.assert_not_awaited()
+
+
+def test_knowledge_system_is_audited_as_an_admin_read_and_withheld_when_the_audit_fails():
+    def call(audit):
+        app = FastAPI()
+        app.include_router(ai_stack_integration.router)
+        app.dependency_overrides[get_current_user] = lambda: ADMIN
+        app.dependency_overrides[check_admin_permission] = lambda: True
+        client = AsyncMock()
+        client.get_system_knowledge.return_value = {"x": "remote-system"}
+        with (
+            patch.object(ai_stack_integration, "get_ai_stack_client", AsyncMock(return_value=client)),
+            patch("services.audit_logger.audit_log", new=audit),
+        ):
+            return TestClient(app).get("/knowledge/system"), client
+
+    audit = AsyncMock(return_value=True)
+    ok, _ = call(audit)
+    refused, client = call(AsyncMock(side_effect=RuntimeError("down")))
+
+    assert ok.status_code == 200 and audit.await_args.args[0] == "kb.admin_read"
+    assert refused.status_code == 503
+    client.get_system_knowledge.assert_not_awaited()

@@ -61,13 +61,13 @@ class _Service:
         return list(EVENTS)
 
 
-def _get(user, path, audit=None):
+def _get(user, path, audit=None, service=_Service):
     app = FastAPI()
     app.include_router(knowledge_graph_routes.router)
     app.dependency_overrides[get_current_user] = lambda: user
     with (
         patch("autobot_shared.redis_client.get_async_redis_client", AsyncMock(return_value=object())),
-        patch("knowledge.temporal_search.TemporalSearchService", _Service),
+        patch("knowledge.temporal_search.TemporalSearchService", service),
         patch("knowledge.get_knowledge_base", AsyncMock(return_value=_EventKB())),
         patch("services.audit_logger.audit_log", new=audit or AsyncMock(return_value=True)),
     ):
@@ -109,3 +109,49 @@ def test_an_event_of_a_quarantined_document_or_an_unresolvable_source_is_never_r
 @pytest.mark.parametrize("path", PATHS)
 def test_an_unresolvable_caller_is_denied(path):
     assert _get({"role": "user"}, path).status_code == 401
+
+
+@pytest.mark.parametrize("path", PATHS + ["/summaries/search?query=q"])
+def test_a_503_from_the_visibility_pass_is_not_turned_into_a_500(path):
+    from fastapi import HTTPException
+
+    boom = AsyncMock(side_effect=HTTPException(status_code=503, detail="audit unavailable"))
+    with (
+        patch.object(knowledge_graph_routes, "visible_events", boom),
+        patch.object(knowledge_graph_routes, "visible_summaries", boom),
+        patch("knowledge.summary_search.SummarySearchService", _SummaryService),
+        patch("knowledge.backends.get_async_default_client", AsyncMock(return_value=object())),
+    ):
+        assert _get(ALICE, path).status_code == 503
+
+
+class _SummaryService:
+    def __init__(self, _client):
+        pass
+
+    async def search_summaries(self, **_):
+        return [{"id": "s", "metadata": {"document_id": DOC_S}}]
+
+
+class _CrowdedService(_Service):
+    """The oldest events belong to another user; the caller's one visible event sits beyond ``limit``."""
+
+    async def search_events_in_range(self, limit, **_):
+        crowd = [_event(DOC_A, f"alice-{i}") for i in range(5)] + [_event(DOC_S, "late-platform-event")]
+        return crowd[:limit]
+
+    async def get_event_timeline(self, entity_name, limit):
+        return await self.search_events_in_range(limit)
+
+
+@pytest.mark.parametrize("path", ["/events?limit=2", "/events/Acme/timeline?limit=2"])
+def test_a_visible_event_beyond_the_page_is_found_and_the_page_is_cut_to_limit(path):
+    body = _get(BOB, path, service=_CrowdedService).json()
+
+    assert [e["name"] for e in body["events"]] == ["late-platform-event"] and body["total"] == 1
+
+
+def test_the_page_never_exceeds_limit():
+    body = _get(ALICE, "/events?limit=2", service=_CrowdedService).json()
+
+    assert body["total"] == 2

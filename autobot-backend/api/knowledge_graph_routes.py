@@ -9,6 +9,7 @@ Issue #759: ECL Pipeline endpoints for entity extraction, temporal events,
 hierarchical summarization, and document processing.
 """
 
+import os
 import re
 from uuid import UUID
 
@@ -172,6 +173,22 @@ async def get_entity_relationships(
 # --- Temporal Event Endpoints ---
 
 
+#: Events fetched per requested event, so the visibility pass still fills a page; bounded by EVENT_FETCH_CAP.
+EVENT_OVERFETCH_FACTOR = int(os.environ.get("AUTOBOT_KB_EVENT_OVERFETCH_FACTOR", "5"))
+EVENT_FETCH_CAP = int(os.environ.get("AUTOBOT_KB_EVENT_FETCH_CAP", "2500"))
+
+
+async def _visible_page(events: list, reader, limit: int) -> list:
+    """The first *limit* of *events* the reader may read (#16665)."""
+    from knowledge import get_knowledge_base
+
+    return (await visible_events(events, await get_knowledge_base(), reader))[:limit]
+
+
+def _fetch_limit(limit: int) -> int:
+    return min(limit * EVENT_OVERFETCH_FACTOR, max(limit, EVENT_FETCH_CAP))
+
+
 def _event_window(start_date: str | None, end_date: str | None):
     """The (start, end) datetimes of an event search; open-ended sides default to the beginning and to now."""
     from datetime import datetime, timezone
@@ -200,7 +217,6 @@ async def search_events(
     reader = caller_reader(current_user)  # 401 before the try below swallows it
     try:
         from autobot_shared.redis_client import get_async_redis_client
-        from knowledge import get_knowledge_base
         from knowledge.temporal_search import TemporalSearchService
 
         redis_client = await get_async_redis_client(database="knowledge")
@@ -213,11 +229,13 @@ async def search_events(
             start_date=start,
             end_date=end,
             event_types=types_list,
-            limit=limit,
+            limit=_fetch_limit(limit),
         )
-        events = await visible_events(events, await get_knowledge_base(), reader)
+        events = await _visible_page(events, reader, limit)
         return {"events": events, "total": len(events)}
 
+    except HTTPException:
+        raise  # a 401/503 from the visibility pass is the answer, not a 500
     except Exception as e:
         logger.error("Event search failed: %s", e)
         raise HTTPException(status_code=500, detail="Event search failed")
@@ -240,20 +258,21 @@ async def get_event_timeline(
         raise HTTPException(status_code=400, detail="Invalid entity name")
     try:
         from autobot_shared.redis_client import get_async_redis_client
-        from knowledge import get_knowledge_base
         from knowledge.temporal_search import TemporalSearchService
 
         redis_client = await get_async_redis_client(database="knowledge")
         temporal_svc = TemporalSearchService(redis_client)
 
-        events = await temporal_svc.get_event_timeline(entity_name=entity_name, limit=limit)
-        events = await visible_events(events, await get_knowledge_base(), reader)
+        events = await temporal_svc.get_event_timeline(entity_name=entity_name, limit=_fetch_limit(limit))
+        events = await _visible_page(events, reader, limit)
         return {
             "entity_name": entity_name,
             "events": events,
             "total": len(events),
         }
 
+    except HTTPException:
+        raise  # a 401/503 from the visibility pass is the answer, not a 500
     except Exception as e:
         logger.error("Timeline fetch failed for %s: %s", entity_name, e)
         raise HTTPException(status_code=500, detail="Timeline fetch failed")
@@ -291,6 +310,8 @@ async def search_summaries(
         summaries = await visible_summaries(summaries, await get_knowledge_base(), reader)
         return {"summaries": summaries, "total": len(summaries)}
 
+    except HTTPException:
+        raise  # a 401/503 from the visibility pass is the answer, not a 500
     except Exception as e:
         logger.error("Summary search failed: %s", e)
         raise HTTPException(status_code=500, detail="Summary search failed")
@@ -320,6 +341,8 @@ async def get_document_overview(
         overview = await summary_svc.get_document_overview(UUID(document_id))
         return overview
 
+    except HTTPException:
+        raise  # a 401/503 from the visibility pass is the answer, not a 500
     except Exception as e:
         logger.error("Document overview failed for %s: %s", document_id, e)
         raise HTTPException(status_code=500, detail="Document overview failed")
@@ -352,6 +375,8 @@ async def drill_down_summary(
             return {"summary": None, "children": []}
         return result
 
+    except HTTPException:
+        raise  # a 401/503 from the visibility pass is the answer, not a 500
     except Exception as e:
         logger.error("Drill down failed for %s: %s", summary_id, e)
         raise HTTPException(status_code=500, detail="Drill down failed")
