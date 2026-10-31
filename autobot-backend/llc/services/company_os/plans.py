@@ -26,7 +26,7 @@ from llc.services.base import LLCServiceBase
 from . import plan_breakdown, plan_map, plan_measure, plan_store
 from .errors import CompanyOsConflict, CompanyOsNotFound
 from .plan_gate import GateReport, evaluate_plan_gate, map_errors
-from .plan_types import CompanyWorkflowPlan, Edge, Lane, Step, WorkflowPlanStatus
+from .plan_types import CompanyWorkflowPlan, Edge, Lane, PlanApprovalPolicy, Step, WorkflowPlanStatus
 
 _META_FIELDS = ("name", "industry", "headcount", "starts_at", "ends_at")
 
@@ -255,3 +255,17 @@ class CompanyOsPlanService(LLCServiceBase):
         row, plan = await self._writable(session, company_id, plan_key, actor)
         plan.by_hand_acknowledged_at = datetime.now(timezone.utc)
         return await plan_store.save_plan(session, row, plan, actor=actor, clears_approval=False)
+
+    async def put_approval_policies(
+        self,
+        session: AsyncSession,
+        company_id: uuid.UUID,
+        plan_key: str,
+        *,
+        actor: Optional[uuid.UUID],
+        policies: Sequence[PlanApprovalPolicy],
+    ) -> CompanyWorkflowPlan:
+        """G5's cover: the approval policies that make every AI sub-step wait for a person (FR-6.2)."""
+        row, plan = await self._writable(session, company_id, plan_key, actor)
+        plan_breakdown.replace_policies(plan, policies)
+        return await plan_store.save_plan(session, row, plan, actor=actor)
