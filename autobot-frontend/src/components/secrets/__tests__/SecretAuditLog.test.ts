@@ -56,4 +56,26 @@ describe('SecretAuditLog (#20173)', () => {
     expect(text).toContain('5m ago')
     expect(text).not.toContain('1970')
   })
+
+  // #20176: the action filter offers what api/secrets_audit.py SECRET_OPERATIONS writes, no more.
+  it('offers exactly the operations the backend writes, each with a label', async () => {
+    get.mockResolvedValue({ success: true, total_returned: 0, has_more: false, entries: [], query: {} })
+    const wrapper = mount(SecretAuditLog, { global: { plugins: [i18n] } })
+    await flushPromises()
+    const options = wrapper.find('select').findAll('option')
+    expect(options.map((o) => o.attributes('value'))).toEqual([
+      'all', 'access', 'list', 'create', 'update', 'delete', 'transfer', 'bulk_delete'
+    ])
+    expect(options.every((o) => o.text().length > 0 && !o.text().includes('secrets.auditLog'))).toBe(true)
+  })
+
+  it('sends the filtered operation as secret.<verb>', async () => {
+    get.mockClear()
+    get.mockResolvedValue({ success: true, total_returned: 0, has_more: false, entries: [], query: {} })
+    const wrapper = mount(SecretAuditLog, { global: { plugins: [i18n] } })
+    await flushPromises()
+    await wrapper.find('select').setValue('bulk_delete')
+    await flushPromises()
+    expect(String(get.mock.calls.at(-1)?.[0])).toContain('operation=secret.bulk_delete')
+  })
 })

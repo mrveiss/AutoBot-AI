@@ -6632,9 +6632,6 @@
       "title": "Dziennik audytu sekretów",
       "allActions": "Wszystkie akcje",
       "access": "Dostęp",
-      "inject": "Wstaw",
-      "copy": "Kopiuj",
-      "reveal": "Pokaż",
       "allUsers": "Wszyscy użytkownicy",
       "by": "przez",
       "details": "Szczegóły",
@@ -6645,8 +6642,10 @@
       "hoursAgo": "{hours} godz. temu",
       "create": "Create",
       "delete": "Delete",
-      "read": "Read",
-      "update": "Update"
+      "update": "Update",
+      "list": "Lista",
+      "transfer": "Przeniesienie",
+      "bulkDelete": "Usuwanie zbiorcze"
     },
     "vault": {
       "title": "Skarbiec sekretów",
@@ -7689,7 +7688,6 @@
       "vmName": "Nazwa VM",
       "vmSource": "Źródło VM",
       "ipAddress": "Adres IP",
-      "errorMessage": "Komunikat błędu",
       "details": "Szczegóły",
       "loading": "Ładowanie dzienników audytu...",
       "viewDetails": "Zobacz szczegóły"

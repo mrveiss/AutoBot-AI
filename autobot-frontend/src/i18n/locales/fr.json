@@ -6632,9 +6632,6 @@
       "title": "Journal d'audit des secrets",
       "allActions": "Toutes les actions",
       "access": "Accès",
-      "inject": "Injecter",
-      "copy": "Copier",
-      "reveal": "Révéler",
       "allUsers": "Tous les utilisateurs",
       "by": "par",
       "details": "Détails",
@@ -6645,8 +6642,10 @@
       "hoursAgo": "il y a {hours} h",
       "create": "Create",
       "delete": "Delete",
-      "read": "Read",
-      "update": "Update"
+      "update": "Update",
+      "list": "Lister",
+      "transfer": "Transférer",
+      "bulkDelete": "Suppression en masse"
     },
     "vault": {
       "title": "Coffre-fort de secrets",
@@ -7689,7 +7688,6 @@
       "vmName": "Nom de la VM",
       "vmSource": "Source de la VM",
       "ipAddress": "Adresse IP",
-      "errorMessage": "Message d'erreur",
       "details": "Détails",
       "loading": "Chargement des journaux d'audit...",
       "viewDetails": "Voir les détails"

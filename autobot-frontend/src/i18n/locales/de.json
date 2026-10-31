@@ -6632,9 +6632,6 @@
       "title": "Secret-Prüfprotokoll",
       "allActions": "Alle Aktionen",
       "access": "Zugriff",
-      "inject": "Einsetzen",
-      "copy": "Kopieren",
-      "reveal": "Anzeigen",
       "allUsers": "Alle Benutzer",
       "by": "von",
       "details": "Details",
@@ -6645,8 +6642,10 @@
       "hoursAgo": "vor {hours} Std.",
       "create": "Create",
       "delete": "Delete",
-      "read": "Read",
-      "update": "Update"
+      "update": "Update",
+      "list": "Auflisten",
+      "transfer": "Übertragen",
+      "bulkDelete": "Massenlöschung"
     },
     "vault": {
       "title": "Secret-Tresor",
@@ -7689,7 +7688,6 @@
       "vmName": "VM-Name",
       "vmSource": "VM-Quelle",
       "ipAddress": "IP-Adresse",
-      "errorMessage": "Fehlermeldung",
       "details": "Details",
       "loading": "Prüfprotokolle werden geladen...",
       "viewDetails": "Details anzeigen"

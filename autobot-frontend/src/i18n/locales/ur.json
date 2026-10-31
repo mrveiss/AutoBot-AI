@@ -7174,7 +7174,6 @@
       "noLogs": "No audit logs found",
       "moreAvailable": "(more available)",
       "vmName": "VM Name",
-      "errorMessage": "Error Message",
       "vm": "VM",
       "sortByOperation": "Sort by operation",
       "next": "Next",
@@ -7502,8 +7501,6 @@
       "shareWithParticipants": "Share with participants"
     },
     "auditLog": {
-      "copy": "Copy",
-      "inject": "Inject",
       "allUsers": "All Users",
       "noEntries": "No audit entries",
       "noEntriesHint": "Secret usage will be logged here",
@@ -7512,14 +7509,15 @@
       "access": "Access",
       "by": "by",
       "hoursAgo": "{hours}h ago",
-      "reveal": "Reveal",
       "title": "Secret Audit Log",
       "minutesAgo": "{minutes}m ago",
       "allActions": "All Actions",
       "delete": "Delete",
-      "read": "Read",
       "create": "Create",
-      "update": "Update"
+      "update": "Update",
+      "list": "فہرست",
+      "transfer": "منتقلی",
+      "bulkDelete": "اجتماعی حذف"
     }
   },
   "research": {

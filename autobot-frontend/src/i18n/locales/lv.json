@@ -6632,9 +6632,6 @@
       "title": "Noslēpumu audita žurnāls",
       "allActions": "Visas darbības",
       "access": "Piekļuve",
-      "inject": "Ievietot",
-      "copy": "Kopēt",
-      "reveal": "Atklāt",
       "allUsers": "Visi lietotāji",
       "by": "no",
       "details": "Detaļas",
@@ -6645,8 +6642,10 @@
       "hoursAgo": "pirms {hours} st.",
       "create": "Create",
       "delete": "Delete",
-      "read": "Read",
-      "update": "Update"
+      "update": "Update",
+      "list": "Saraksts",
+      "transfer": "Pārsūtīšana",
+      "bulkDelete": "Masveida dzēšana"
     },
     "vault": {
       "title": "Noslēpumu glabātuve",
@@ -7689,7 +7688,6 @@
       "vmName": "VM nosaukums",
       "vmSource": "VM avots",
       "ipAddress": "IP adrese",
-      "errorMessage": "Kļūdas ziņojums",
       "details": "Detaļas",
       "loading": "Ielādē audita žurnālus...",
       "viewDetails": "Skatīt detaļas"
