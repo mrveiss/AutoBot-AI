@@ -23,10 +23,10 @@ from typing import Callable, Dict, List
 from autobot_shared.env_utils import env_float, env_int_clamped
 from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
 from autobot_shared.git_probe import start_git
-from autobot_shared.secret_redaction import redact_content, redact_text
 from services.ansible_secrets import fetch_deploy_secrets
 from services.ansible_utils import _find_ansible_playbook as _resolve_ansible_playbook
 from services.ansible_utils import ansible_config_env, ansible_exit_code, with_limit_proof
+from services.git_failure import GIT_FAILURE_DETAIL_CHARS, failure_detail, is_transient, redacted
 from services.inventory_builder import (
     build_registry_inventory,
     validate_inventory,
@@ -157,17 +157,6 @@ PLAYBOOK_KILL_GRACE_S = KILL_GRACE_S
 GIT_COMMAND_TIMEOUT_S = env_int_clamped("AUTOBOT_UPDATE_CODE_SOURCE_GIT_TIMEOUT_S", 30, min_v=1)
 GIT_REV_PARSE_TIMEOUT_S = env_int_clamped("AUTOBOT_UPDATE_CODE_SOURCE_REV_PARSE_TIMEOUT_S", 10, min_v=1)
 GIT_FETCH_RETRY_DELAY_S = env_int_clamped("AUTOBOT_UPDATE_CODE_SOURCE_FETCH_RETRY_DELAY_S", 5, min_v=0)
-GIT_FAILURE_DETAIL_CHARS = 400
-# #20089: failures one retry can cure. An auth failure or a timeout is not one of them.
-GIT_FETCH_TRANSIENT = re.compile(
-    r"\.lock|another git process|could not resolve host|temporary failure|connection (reset|refused|timed out)"
-    r"|remote end hung up|early eof|returned error: 5\d\d",
-    re.IGNORECASE,
-)
-
-
-def _redacted(text: str) -> str:
-    return redact_content(redact_text(text))
 
 
 def link_group_vars(inventory_path: Path, ansible_dir: Path) -> None:
@@ -601,8 +590,7 @@ class PlaybookExecutor:
             return f"git {args[0]} timed out after {GIT_COMMAND_TIMEOUT_S}s"
         if proc.returncode == 0:
             return None
-        detail = _redacted((stderr or b"").decode("utf-8", errors="replace").strip())
-        return f"git {args[0]} exited {proc.returncode}: {detail[-GIT_FAILURE_DETAIL_CHARS:]}"
+        return f"git {args[0]} exited {proc.returncode}: {failure_detail(stderr)}"
 
     async def _log_updated_head_commit(self, code_source_dir: Path, branch: str) -> None:
         """Log the resulting HEAD commit for traceability (#2896).
@@ -636,7 +624,7 @@ class PlaybookExecutor:
     async def _fetch_code_source(self, code_source_dir: Path) -> str | None:
         """#20089: one retry, for a failure that can cure itself. Returns why the fetch failed, or None."""
         failure = await self._run_git(code_source_dir, "fetch", "--prune", "origin")
-        if failure and GIT_FETCH_TRANSIENT.search(failure):
+        if failure and is_transient(failure):
             logger.warning("_update_code_source: %s; retrying", failure)
             await asyncio.sleep(GIT_FETCH_RETRY_DELAY_S)
             failure = await self._run_git(code_source_dir, "fetch", "--prune", "origin")
@@ -685,7 +673,7 @@ class PlaybookExecutor:
             await self._log_updated_head_commit(code_source_dir, branch)
             return checkout_failure
         except Exception as exc:
-            failure = f"unexpected error: {_redacted(str(exc))[-GIT_FAILURE_DETAIL_CHARS:]}"
+            failure = f"unexpected error: {redacted(str(exc))[:GIT_FAILURE_DETAIL_CHARS]}"
             logger.warning("_update_code_source: %s; continuing", failure)
             return failure
 

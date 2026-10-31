@@ -19,7 +19,10 @@ vi.mock('@/plugins/api', () => ({
 }))
 
 let routeQuery: Record<string, unknown> = {}
-vi.mock('vue-router', () => ({ useRoute: () => ({ query: routeQuery }) }))
+vi.mock('vue-router', () => ({
+  useRoute: () => ({ query: routeQuery, params: { companyId: 'co-1' } }),
+  useRouter: () => ({ push: vi.fn() }),
+}))
 
 import WorkflowPlannerPanel from '../WorkflowPlannerPanel.vue'
 
@@ -176,7 +179,7 @@ describe('WorkflowPlannerPanel main path', () => {
     expect(w.find('[data-testid="source-pill-email"]').exists()).toBe(false)
   })
 
-  it('shows a plan past labeled read-only with a not-available note, never a broken page', async () => {
+  it('shows an approved plan read-only in steps 1 to 4 and opens the create step', async () => {
     get.mockImplementation((url: string) => {
       if (url === BASE) return Promise.resolve([{ ...SUMMARY, status: 'approved' }])
       if (url === `${BASE}/quote`) return Promise.resolve(plan({ status: 'approved' }))
@@ -186,9 +189,11 @@ describe('WorkflowPlannerPanel main path', () => {
     await flushPromises()
     await w.find('[data-testid="open-quote"]').trigger('click')
     await flushPromises()
-    expect(w.find('[data-testid="status-not-available"]').exists()).toBe(true)
+    expect(w.find('[data-testid="status-read-only"]').exists()).toBe(true)
     expect(w.find('fieldset').attributes('disabled')).toBeDefined()
-    expect(w.find('[data-testid="step-convert"]').attributes('disabled')).toBeDefined()
+    expect(w.find('[data-testid="step-convert"]').attributes('disabled')).toBeUndefined()
+    await w.find('[data-testid="step-convert"]').trigger('click')
+    expect(w.find('[data-testid="convert-step"]').attributes('data-phase')).toBe('approved')
   })
 
   it('reports a failed write as an error and keeps the page', async () => {
