@@ -321,7 +321,7 @@ onMounted(() => {
   flex: 1;
 }
 
-.query-header h4 i {
+.query-header h4 .icon {
   color: var(--color-primary);
 }
 
@@ -383,7 +383,7 @@ onMounted(() => {
   margin-bottom: var(--spacing-sm);
 }
 
-.form-group label i {
+.form-group label .icon {
   color: var(--text-tertiary);
 }
 
@@ -454,7 +454,7 @@ onMounted(() => {
   color: var(--text-primary);
 }
 
-.toggle-text i {
+.toggle-text .icon {
   color: var(--color-primary);
 }
 
@@ -640,8 +640,8 @@ onMounted(() => {
   color: var(--text-secondary);
 }
 
-.no-results i {
-  font-size: 2rem;
+.no-results .icon {
+  width: 2rem; height: 2rem;
   margin-bottom: var(--spacing-md);
   color: var(--text-tertiary);
 }

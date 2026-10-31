@@ -22,12 +22,18 @@ from __future__ import annotations
 UNSCOPED = frozenset(
     {
         "ansible-apt-repo-budget-override-sweep",
+        # #19982: every tracked non-changelog file, since the product name can be misspelled into an
+        # edition in any component; the population is the whole tree, so no prefix describes it.
+        "autobot-has-no-pro-name",
         # Whole tree (#18940): every tracked test file, wherever a test lives; the population is
         # the test suite itself, so a roots= list would only go stale as tests move.
         "isolated-git-env",
         # #19317: every tracked code/config/env/shell file outside docs -- the whole tree by suffix,
         # since a re-added default can land in any component; a roots= list would only shrink it.
         "tls-cert-dir-one-home-19317",
+        # #19437: docs and deployment files by extension (*.md, *.yml, *.j2, *.sh, *.json, ...) over the
+        # whole tree, since a tenancy value can be written in any component -- not a set of prefixes.
+        "user-mode-values-sweep-19437",
         # #19076: items are (role, unit) pairs from one registry file, not paths -- no roots= to check.
         "role-registry-installed-units",
         # #19413: every tracked file, so a ChromaDB heartbeat path written anywhere is seen.
@@ -41,11 +47,16 @@ UNSCOPED = frozenset(
         # #19310: every tracked text file in the repository, so a runtime-dir literal written
         # anywhere is seen; no roots= list could name "wherever someone writes it".
         "system-knowledge-runtime-literal-scan",
+        # #19523: items are (ecosystem, directory) pairs from every tracked file name, at any
+        # depth -- a new package root can appear anywhere, so no roots= list could name it.
+        "dependabot-package-roots",
         "ansible-inventory-shell-sweep",
         "audio-extension-allowlist",
         "blanket-skip-test-module-sweep",
         # #19324: an extension filter (*.py, *.sh, *.yml, .env*, ...) over the whole tree, not a set of prefixes.
         "browser-port-single-home-scan",
+        # #19544: every tracked .py in the repository, wherever a second path->ceiling table could be written.
+        "ceiling-table-sweep-19544",
         # #19279: requirements files live in every package directory; a glob, not a set of prefixes.
         "landing-page-declared-dependencies",
         "chromadb-bind-host-override-candidates",

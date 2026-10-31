@@ -2687,7 +2687,7 @@ function runContextMenuAction(action: CanvasContextMenuAction): void {
 .canvas-search-clear { display: flex; align-items: center; padding: var(--spacing-0); background: transparent; border: none; color: var(--text-tertiary); cursor: pointer; }
 .canvas-search-clear:hover { color: var(--text-primary); }
 .canvas-search-clear:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
-.canvas-search-results { position: absolute; top: 100%; inset-inline-start: 0; z-index: 10; margin-top: var(--spacing-1); width: 260px; max-height: 260px; overflow-y: auto; list-style: none; padding: var(--spacing-1) var(--spacing-0); background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); }
+.canvas-search-results { position: absolute; top: 100%; inset-inline-start: 0; z-index: var(--z-10); margin-top: var(--spacing-1); width: 260px; max-height: 260px; overflow-y: auto; list-style: none; padding: var(--spacing-1) var(--spacing-0); background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-md); box-shadow: var(--shadow-lg); }
 .canvas-search-result { padding: var(--spacing-2) var(--spacing-3); font-size: var(--text-sm); color: var(--text-primary); cursor: pointer; }
 .canvas-search-result:hover, .canvas-search-result.active { background: var(--bg-tertiary); }
 .canvas-search-empty { padding: var(--spacing-2) var(--spacing-3); font-size: var(--text-sm); color: var(--text-tertiary); font-style: italic; }
@@ -2699,7 +2699,7 @@ function runContextMenuAction(action: CanvasContextMenuAction): void {
 .canvas-minimap-viewport { position: absolute; border: 1px solid var(--color-primary); background: var(--color-primary-bg); pointer-events: none; }
 
 .dropdown-container { position: relative; display: inline-block; }
-.dropdown-menu { position: absolute; top: 100%; left: 0; z-index: 10; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: var(--spacing-1) var(--spacing-0); min-width: 180px; box-shadow: var(--shadow-lg); }
+.dropdown-menu { position: absolute; top: 100%; left: 0; z-index: var(--z-10); background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: var(--spacing-1) var(--spacing-0); min-width: 180px; box-shadow: var(--shadow-lg); }
 .dropdown-menu button { display: flex; align-items: center; gap: var(--spacing-2); width: 100%; padding: var(--spacing-2) var(--spacing-3); border: none; background: none; color: var(--text-primary); cursor: pointer; font-size: 0.85rem; }
 .dropdown-menu button:hover { background: var(--bg-tertiary); }
 .target-label { font-size: var(--text-xs); color: var(--text-secondary); }
@@ -2757,14 +2757,14 @@ function runContextMenuAction(action: CanvasContextMenuAction): void {
 }
 
 .empty-state { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; padding: var(--spacing-10); }
-.empty-state i { font-size: var(--text-5xl); color: var(--text-muted); margin-bottom: var(--spacing-4); }
+.empty-state > .icon { width: var(--text-5xl); height: var(--text-5xl); color: var(--text-muted); margin-bottom: var(--spacing-4); }
 .empty-state h3 { margin: var(--spacing-0) var(--spacing-0) var(--spacing-2); color: var(--text-primary); }
 .empty-state p { margin: var(--spacing-0) var(--spacing-0) var(--spacing-5); color: var(--text-tertiary); }
 
 .dialog-overlay { position: fixed; inset: 0; background: var(--bg-overlay); display: flex; align-items: center; justify-content: center; z-index: var(--z-modal-backdrop); }
 .dialog { width: 400px; background: var(--bg-secondary); border-radius: var(--radius-xl); padding: var(--spacing-6); }
 .dialog h3 { margin: var(--spacing-0) var(--spacing-0) var(--spacing-5); display: flex; align-items: center; gap: var(--spacing-2-5); color: var(--text-primary); }
-.dialog h3 i { color: var(--color-primary); }
+.dialog h3 .icon { color: var(--color-primary); }
 .dialog input, .dialog textarea { width: 100%; padding: var(--spacing-2-5) var(--spacing-3); margin-bottom: var(--spacing-3); background: var(--bg-primary); border: 1px solid var(--border-default); border-radius: var(--radius-md); color: var(--text-primary); font-size: var(--text-sm); font-family: inherit; }
 .dialog input:focus, .dialog textarea:focus { outline: none; border-color: var(--color-primary); }
 .dialog input:focus-visible, .dialog textarea:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 2px; }
@@ -2871,7 +2871,7 @@ function runContextMenuAction(action: CanvasContextMenuAction): void {
 
 /* #14612: marquee — screen-space, a sibling of `.canvas-content` so it never
    inherits the pan/zoom transform (see the template comment above it). */
-.canvas-marquee { position: absolute; border: 1px dashed var(--color-primary); background: var(--color-primary-bg); pointer-events: none; z-index: 5; }
+.canvas-marquee { position: absolute; border: 1px dashed var(--color-primary); background: var(--color-primary-bg); pointer-events: none; z-index: var(--z-raised); }
 
 /* #14612: context menu — fixed-position, clamped to the viewport in script.
    The clamp works identically in LTR and RTL (it is measured against

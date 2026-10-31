@@ -449,8 +449,9 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
   font-size: var(--font-size-sm);
 }
 
-.warning-message i {
-  font-size: var(--font-size-base);
+.warning-message .icon {
+  width: var(--font-size-base);
+  height: var(--font-size-base);
 }
 
 .command-footer {
@@ -473,8 +474,9 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
   font-size: var(--font-size-xs);
 }
 
-.security-note i {
-  font-size: var(--font-size-sm);
+.security-note .icon {
+  width: var(--font-size-sm);
+  height: var(--font-size-sm);
 }
 
 /* Comment Section Styles */

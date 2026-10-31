@@ -39,7 +39,7 @@
                 {{ agent.last_run_status ?? $t('llc.heartbeat.statusUnknown') }}
               </span>
             </td>
-            <td class="agent-duration">{{ formatDuration(agent.current_run_started_at) }}</td>
+            <td class="agent-duration">{{ runningFor(agent.current_run_started_at) }}</td>
             <td @click.stop>
               <button
                 class="btn-trigger"
@@ -167,7 +167,7 @@ import { useApiClient } from '@/plugins/api'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
 import { getApiBase } from '@/config/ssot-config'
 import { createLogger } from '@/utils/debugUtils'
-import { formatDateTime, formatDuration as fmtDuration } from '@/utils/formatHelpers'
+import { formatDuration as fmtDuration, createDateFormatter, DEFAULT_DATE_TIME_INTL } from '@/utils/formatHelpers'
 import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{ companyId?: string }>()
@@ -238,11 +238,9 @@ const downloadingFixture = ref<Set<string>>(new Set())
 
 const heartbeatAgents = computed(() => agents.value.filter(a => a.heartbeat_enabled))
 
-function formatDate(iso?: string) {
-  return formatDateTime(iso) || '—'
-}
+const formatDate = createDateFormatter({ intl: DEFAULT_DATE_TIME_INTL, emptyText: '—', invalidText: '—' })
 
-function formatDuration(startedAt?: string) {
+function runningFor(startedAt?: string) {
   return startedAt ? fmtDuration(startedAt, null) : '—'
 }
 

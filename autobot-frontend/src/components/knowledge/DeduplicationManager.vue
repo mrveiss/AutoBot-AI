@@ -322,12 +322,14 @@ const cleanupOrphans = async () => {
   color: var(--text-secondary);
 }
 
-.scanning-state i,
-.error-state i,
-.initial-state i {
-  font-size: var(--text-5xl);
+.scanning-state .icon,
+.error-state .icon,
+.initial-state .icon {
+  width: var(--text-5xl);
+  height: var(--text-5xl);
   margin-bottom: var(--spacing-4);
   display: block;
+  margin-inline: auto;
 }
 
 .error-state {
@@ -470,7 +472,7 @@ const cleanupOrphans = async () => {
   color: var(--color-success);
 }
 
-.kept-fact i {
+.kept-fact .icon {
   color: var(--color-success);
 }
 

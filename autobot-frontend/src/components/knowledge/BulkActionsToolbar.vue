@@ -318,7 +318,7 @@ function handleClickOutside(event: MouseEvent): void {
 }
 
 .action-btn.danger:hover {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-primary);
 }
 
@@ -342,7 +342,7 @@ function handleClickOutside(event: MouseEvent): void {
   border: 1px solid var(--border-default);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-lg);
-  z-index: 50;
+  z-index: var(--z-50);
   overflow: hidden;
 }
 
@@ -365,13 +365,13 @@ function handleClickOutside(event: MouseEvent): void {
   background: var(--bg-hover);
 }
 
-.dropdown-item i {
+.dropdown-item .icon {
   width: 1rem;
   text-align: center;
   color: var(--text-secondary);
 }
 
-.dropdown-item:hover i {
+.dropdown-item:hover .icon {
   color: var(--color-primary);
 }
 

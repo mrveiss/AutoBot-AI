@@ -390,11 +390,12 @@ async def test_run_adapter_applies_backoff_for_registry_rate_limit():
     redis = _make_redis()
 
     session_mock = AsyncMock()
-    # First execute call: SELECT retry_count + UPDATE to RUNNING.
+    # Execute calls, in order (#19582): SELECT retry_count + agent_id, the per-agent row
+    # lock, then the UPDATE that claims RUNNING -- reported as one row claimed, so the
+    # run is not superseded.
     retry_count_result = MagicMock()
-    retry_count_result.scalar_one_or_none.return_value = 0
-    # #19582: the RUNNING claim reports one row claimed, so the run is not superseded.
-    session_mock.execute = AsyncMock(side_effect=[retry_count_result, MagicMock(rowcount=1)])
+    retry_count_result.first.return_value = MagicMock(retry_count=0, agent_id=_AGENT_ID)
+    session_mock.execute = AsyncMock(side_effect=[retry_count_result, MagicMock(), MagicMock(rowcount=1)])
     session_mock.commit = AsyncMock()
     ctx_mgr_running = MagicMock()
     ctx_mgr_running.__aenter__ = AsyncMock(return_value=session_mock)

@@ -11,8 +11,13 @@
   removing a member. Roles are the backend MembershipRole enum
   (owner/admin/member/guest/lead — see autobot-backend/llc/models/enums.py).
 
-  Backend has no PATCH-role endpoint; changing a member's role is therefore a
-  remove + re-add against the existing endpoints.
+  A member's role changes in place via PATCH /members/{user_id} (#19960). The
+  server owns the rules (membership_policy.py): it answers 403 / 409 and the row
+  reverts. The list also carries the roles the viewer may grant (#20073), computed
+  by the server from the verified caller; the control is disabled for a member the
+  viewer may not change and the roles they may not grant are not offered. That only
+  reflects the server, which still refuses what the viewer may not do. Loading and
+  role changes are scoped to the company shown: see useCompanyMembers.
 -->
 <template>
   <div class="members-view">
@@ -37,40 +42,49 @@
         {{ t('llcMembers.empty') }}
       </BaseCard>
 
-      <BaseCard v-else>
-        <table class="members-table">
-          <thead>
-            <tr>
-              <th scope="col">{{ t('llcMembers.colName') }}</th>
-              <th scope="col">{{ t('llcMembers.colRole') }}</th>
-              <th scope="col" class="members-col-actions">{{ t('llcMembers.colActions') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="member in members" :key="member.user_id">
-              <td>
-                <span class="members-name">{{ member.display_name }}</span>
-              </td>
-              <td>
-                <BaseBadge size="sm" :variant="roleBadgeVariant(member.role)">
-                  {{ roleLabel(member.role) }}
-                </BaseBadge>
-              </td>
-              <td class="members-col-actions">
-                <BaseButton
-                  variant="error"
-                  size="sm"
-                  :loading="pendingUserId === member.user_id"
-                  :disabled="pendingUserId !== null"
-                  @click="confirmRemove(member)"
-                >
-                  {{ t('llcMembers.remove') }}
-                </BaseButton>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </BaseCard>
+      <BaseTable v-else :columns="columns" :rows="rows" row-key="user_id" :aria-label="t('llcMembers.title')" :actions-label="t('llcMembers.colActions')">
+        <template #cell-display_name="{ value }">
+          <span class="members-name">{{ value }}</span>
+        </template>
+        <template #cell-role="{ value }">
+          <BaseBadge size="sm" :variant="roleBadgeVariant(String(value))">
+            {{ roleLabel(String(value)) }}
+          </BaseBadge>
+        </template>
+        <template #cell-role_control="{ row }">
+          <select
+            class="members-select members-role-select"
+            :aria-label="t('llcMembers.changeRole', { name: row.display_name })"
+            :value="row.role"
+            :disabled="pendingUserId !== null || !canChangeRole(grantableRoles, String(row.role))"
+            :aria-describedby="canChangeRole(grantableRoles, String(row.role)) ? undefined : hintId(row)"
+            @change="onRoleChange(row as unknown as Member, $event)"
+          >
+            <option
+              v-for="role in MEMBERSHIP_ROLES"
+              :key="role"
+              :value="role"
+              :disabled="!canGrantRole(grantableRoles, role, String(row.role))"
+            >
+              {{ roleLabel(role) }}
+            </option>
+          </select>
+          <span v-if="!canChangeRole(grantableRoles, String(row.role))" :id="hintId(row)" class="sr-only">
+            {{ t('llcMembers.roleNotGrantable') }}
+          </span>
+        </template>
+        <template #actions="{ row }">
+          <BaseButton
+            variant="error"
+            size="sm"
+            :loading="pendingUserId === row.user_id"
+            :disabled="pendingUserId !== null"
+            @click="confirmRemove(row as unknown as Member)"
+          >
+            {{ t('llcMembers.remove') }}
+          </BaseButton>
+        </template>
+      </BaseTable>
     </template>
 
     <!-- Add member modal -->
@@ -108,11 +122,12 @@
           <label class="members-label" for="member-role-select">
             {{ t('llcMembers.roleLabel') }}
           </label>
-          <select id="member-role-select" v-model="roleModel" class="members-select">
-            <option v-for="role in MEMBERSHIP_ROLES" :key="role" :value="role">
+          <select id="member-role-select" v-model="roleModel" class="members-select" :disabled="!canAdd">
+            <option v-for="role in addRoleOptions" :key="role" :value="role">
               {{ roleLabel(role) }}
             </option>
           </select>
+          <p v-if="!canAdd" class="members-hint">{{ t('llcMembers.addNotAllowed') }}</p>
         </div>
       </div>
 
@@ -123,7 +138,7 @@
         <BaseButton
           variant="primary"
           :loading="isAdding"
-          :disabled="!selectedUserId || isAdding"
+          :disabled="!selectedUserId || isAdding || !canAdd"
           @click="submitAdd"
         >
           {{ t('llcMembers.confirmAdd') }}
@@ -140,19 +155,13 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { useCompanyMembers, canChangeRole, canGrantRole, rolesToOffer, type Member } from '@/composables/llc/useCompanyMembers'
 import { useCollaborationInvite } from '@/composables/collaboration/useCollaborationInvite'
-import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseModal, BaseTable, type BaseTableColumn } from '@autobot/ui'
 
 // Backend MembershipRole enum (autobot-backend/llc/models/enums.py).
 const MEMBERSHIP_ROLES = ['owner', 'admin', 'member', 'guest', 'lead'] as const
 type MembershipRole = (typeof MEMBERSHIP_ROLES)[number]
-
-interface Member {
-  user_id: string
-  /** Never null: `list_members` resolves the whole ladder server-side (#14939). */
-  display_name: string
-  role: string
-}
 
 const logger = createLogger('MembersView')
 const api = useApiClient()
@@ -162,10 +171,15 @@ const { t } = useI18n()
 const props = defineProps<{ companyId?: string }>()
 const companyId = computed(() => (route.params.companyId as string) ?? props.companyId ?? '')
 
-const members = ref<Member[]>([])
-const isLoading = ref(false)
-const errorMessage = ref('')
-const pendingUserId = ref<string | null>(null)
+const { members, grantableRoles, standingKnown, isLoading, errorMessage, pendingUserId, load: fetchMembers, changeRole, removeMember } =
+  useCompanyMembers(api, () => companyId.value)
+// BaseTable rows are plain records; Member carries no index signature.
+const rows = computed(() => members.value.map((m) => ({ ...m })))
+const columns = computed<BaseTableColumn[]>(() => [
+  { key: 'display_name', label: t('llcMembers.colName') },
+  { key: 'role', label: t('llcMembers.colRole') },
+  { key: 'role_control', label: t('llcMembers.colChangeRole') },
+])
 
 const showAddModal = ref(false)
 const selectedUserId = ref('')
@@ -220,24 +234,15 @@ function roleBadgeVariant(role: string): 'primary' | 'success' | 'warning' | 'ne
   }
 }
 
-async function fetchMembers(): Promise<void> {
-  if (!companyId.value) return
-  isLoading.value = true
-  errorMessage.value = ''
-  try {
-    members.value = await api.get<Member[]>(`/api/llc/companies/${companyId.value}/members`)
-  } catch (err) {
-    logger.error('Failed to load members', err)
-    errorMessage.value = t('llcMembers.loadError')
-    members.value = []
-  } finally {
-    isLoading.value = false
-  }
-}
+// The add form offers what the server would let the viewer grant (an empty company has no standing: all).
+const addRoleOptions = computed(() => rolesToOffer(MEMBERSHIP_ROLES, grantableRoles.value, standingKnown.value))
+const canAdd = computed(() => addRoleOptions.value.length > 0)
+const hintId = (row: Record<string, unknown>) => `members-role-hint-${String(row.user_id)}`
 
 function openAddModal(): void {
   selectedUserId.value = ''
-  selectedRole.value = 'member'
+  const offered = addRoleOptions.value
+  selectedRole.value = offered.includes('member') ? 'member' : (offered[0] ?? 'member')
   addError.value = ''
   showAddModal.value = true
   if (users.value.length === 0) {
@@ -258,26 +263,23 @@ async function submitAdd(): Promise<void> {
     await fetchMembers()
   } catch (err) {
     logger.error('Failed to add member', err)
-    addError.value = t('llcMembers.addError')
+    addError.value = (err as { status?: number })?.status === 403 ? t('llcMembers.roleChangeForbidden') : t('llcMembers.addError')
   } finally {
     isAdding.value = false
   }
 }
 
 async function confirmRemove(member: Member): Promise<void> {
-  const name = member.display_name
-  if (!window.confirm(t('llcMembers.confirmRemove', { name }))) return
-  pendingUserId.value = member.user_id
-  errorMessage.value = ''
-  try {
-    await api.delete(`/api/llc/companies/${companyId.value}/members/${member.user_id}`)
-    await fetchMembers()
-  } catch (err) {
-    logger.error('Failed to remove member', err)
-    errorMessage.value = t('llcMembers.removeError')
-  } finally {
-    pendingUserId.value = null
-  }
+  if (!window.confirm(t('llcMembers.confirmRemove', { name: member.display_name }))) return
+  await removeMember(member)
+}
+
+// A refusal puts the select back on the role the row still has.
+async function onRoleChange(member: Member, event: Event): Promise<void> {
+  const select = event.target as HTMLSelectElement
+  const newRole = select.value
+  if (newRole === member.role || !isMembershipRole(newRole)) return
+  if (!(await changeRole(member, newRole))) select.value = member.role
 }
 
 // Surface a picker-load failure inline within the modal.
@@ -333,33 +335,6 @@ onMounted(() => {
 
 .members-error {
   margin-bottom: 0.5rem;
-}
-
-.members-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.members-table th,
-.members-table td {
-  text-align: left;
-  padding: 0.625rem 0.75rem;
-  border-bottom: 1px solid var(--border-default);
-  font-size: 0.875rem;
-}
-
-.members-table th {
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-size: 0.6875rem;
-}
-
-.members-col-actions {
-  text-align: right;
-  width: 1%;
-  white-space: nowrap;
 }
 
 .members-name {

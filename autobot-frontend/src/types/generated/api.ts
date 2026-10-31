@@ -1877,6 +1877,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/chat/sessions/{session_id}/trace": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Session Trace
+         * @description The turns of *session_id* in order: iterations, tool verdicts, approvals, results.
+         */
+        get: operations["get_session_trace_api_chat_sessions__session_id__trace_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/benchmarks/prompt-sets": {
         parameters: {
             query?: never;
@@ -6218,6 +6238,8 @@ export interface paths {
          *     using AI Stack's system knowledge manager.
          *
          *     Issue #744: Requires authenticated user.
+         *     #16665: the remote service gets no caller identity and its store is not visible from this repo, so only an
+         *     admin reads it, audited (``knowledge.remote_read``); anyone else is refused.
          */
         get: operations["get_system_knowledge_insights_api_knowledge_base_ai_stack_system_insights_get"];
         put?: never;
@@ -6406,7 +6428,8 @@ export interface paths {
          *     - Metadata about retrieved content
          *
          *     #16665: every fact entering the context is filtered to what the calling
-         *     user may see -- this feeds an LLM prompt, not just a display list.
+         *     user may see -- this feeds an LLM prompt, not just a display list. Owner ruling
+         *     2026-10-26: an admin is an ordinary caller here, with no visibility bypass.
          */
         post: operations["get_llm_context_api_knowledge_base_multi_source_context_post"];
         delete?: never;
@@ -9912,6 +9935,8 @@ export interface paths {
          *     using AI Stack's system knowledge manager.
          *
          *     Issue #744: Requires authenticated user.
+         *     #16665: the remote service gets no caller identity and its store is not visible from this repo, so only an
+         *     admin reads it, audited (``knowledge.remote_read``); anyone else is refused.
          */
         get: operations["get_system_knowledge_insights_api_knowledge_base_system_insights_get"];
         put?: never;
@@ -33480,6 +33505,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/embeddings/switch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start Embedding Switch
+         * @description Rebuild the knowledge base with another embedding model, then cut over (#19379, admins only).
+         *
+         *     The rebuild runs in the background into a new collection; search and writes keep the active
+         *     one until a complete, zero-failure build. 409 when a switch is already running or the model
+         *     is already active; 400 for a model that is not an embedding model.
+         */
+        post: operations["start_embedding_switch_api_embeddings_switch_post"];
+        /**
+         * Cancel Embedding Switch
+         * @description Stop a running switch at its next batch, or force-close a stale one; the active space stays (#19379).
+         */
+        delete: operations["cancel_embedding_switch_api_embeddings_switch_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/embeddings/switch/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Embedding Switch Status
+         * @description Progress of the current or last embedding-model switch: done/total, failures, reason (#19379).
+         */
+        get: operations["get_embedding_switch_status_api_embeddings_switch_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/multimodal/process/image": {
         parameters: {
             query?: never;
@@ -45953,6 +46026,8 @@ export interface paths {
          * @description Knowledge search combining local KB and AI Stack capabilities.
          *
          *     Issue #744: Requires admin authentication.
+         *     Issue #16665: an explicit read API, not prompt grounding -- local KB hits are
+         *     scoped to the caller (an admin reads any fact, audited).
          */
         post: operations["knowledge_search_api_ai_stack_knowledge_search_post"];
         delete?: never;
@@ -45973,6 +46048,7 @@ export interface paths {
          * @description Get system-wide knowledge insights.
          *
          *     Issue #744: Requires admin authentication.
+         *     #16665: the remote read is audited before the call (``knowledge.remote_read``).
          */
         get: operations["get_system_knowledge_api_ai_stack_knowledge_system_get"];
         put?: never;
@@ -47906,7 +47982,7 @@ export interface paths {
         };
         /**
          * Search Events
-         * @description Search temporal events with filters.
+         * @description Search temporal events with filters; only events of documents the caller may read (#16665).
          */
         get: operations["search_events_api_knowledge_graph_events_get"];
         put?: never;
@@ -47926,7 +48002,7 @@ export interface paths {
         };
         /**
          * Get Event Timeline
-         * @description Get chronological timeline of events for an entity.
+         * @description Chronological timeline of events for an entity; only events of documents the caller may read (#16665).
          */
         get: operations["get_event_timeline_api_knowledge_graph_events__entity_name__timeline_get"];
         put?: never;
@@ -50369,16 +50445,7 @@ export interface paths {
         put?: never;
         /**
          * Create Company
-         * @description Create a company (root, or a sub-company under an owned parent).
-         *
-         *     Tenant scope (#12233): previously unauthenticated — any caller could create
-         *     a company and, by supplying ``parent_org_id``, graft one under *another*
-         *     tenant's company. Now authenticated; a non-admin may only create a
-         *     sub-company under a parent they belong to (cross-tenant parent → 404, so the
-         *     parent's existence is not disclosed). Root creation (no ``parent_org_id``,
-         *     the creation-wizard flow) is open to any authenticated user. The creator is
-         *     recorded as the company ``OWNER`` so they can immediately access it and it
-         *     surfaces in their tenant-scoped ``list_companies``.
+         * @description Create a root company, or one under a parent the caller owns/admins (#12233, #19634); creator is OWNER.
          */
         post: operations["create_company_api_llc_companies__post"];
         delete?: never;
@@ -50571,23 +50638,6 @@ export interface paths {
         /** Add Member */
         post: operations["add_member_api_llc_companies__company_id__members_post"];
         delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/llc/companies/{company_id}/members/{user_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Remove Member */
-        delete: operations["remove_member_api_llc_companies__company_id__members__user_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -50880,6 +50930,24 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/llc/companies/{company_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Member */
+        delete: operations["remove_member_api_llc_companies__company_id__members__user_id__delete"];
+        options?: never;
+        head?: never;
+        /** Change Member Role */
+        patch: operations["change_member_role_api_llc_companies__company_id__members__user_id__patch"];
         trace?: never;
     };
     "/api/llc/companies/{company_id}/ceo": {
@@ -52394,7 +52462,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * List Comments
+         * @description List a work item's comments, oldest first, in the caller's tenant.
+         */
+        get: operations["list_comments_api_llc_work_items__work_item_id__comments_get"];
         put?: never;
         /** Add Comment */
         post: operations["add_comment_api_llc_work_items__work_item_id__comments_post"];
@@ -52537,40 +52609,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/llc/work-items/{work_item_id}/relations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Add Relation */
-        post: operations["add_relation_api_llc_work_items__work_item_id__relations_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/llc/work-items/{work_item_id}/relations/{relation_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Remove Relation */
-        delete: operations["remove_relation_api_llc_work_items__work_item_id__relations__relation_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/llc/work-items/suggest-ac": {
         parameters: {
             query?: never;
@@ -52661,6 +52699,40 @@ export interface paths {
         post?: never;
         /** Delete Attachment */
         delete: operations["delete_attachment_api_llc_work_items__work_item_id__attachments__attachment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/work-items/{work_item_id}/relations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Relation */
+        post: operations["add_relation_api_llc_work_items__work_item_id__relations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/work-items/{work_item_id}/relations/{relation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Relation */
+        delete: operations["remove_relation_api_llc_work_items__work_item_id__relations__relation_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -52808,6 +52880,9 @@ export interface paths {
          *     point of ingesting the event is that exceeding the limit stops the agent.
          *     ``UnpricedModel`` is 422 -- the event is well-formed but its cost cannot be
          *     computed, and charging zero is what #15860 was.
+         *
+         *     A ``work_item_id`` that is unknown, or belongs to another company, is 404 and
+         *     charges nothing: a ``200`` means the cost landed on the item named (#16016).
          */
         post: operations["ingest_cost_event_api_llc_agent_cost_events_post"];
         delete?: never;
@@ -54167,6 +54242,314 @@ export interface paths {
         get: operations["validate_stored_graph_api_llc_company_os_workflows__workflow_id__validation_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Plans */
+        get: operations["list_plans_api_llc_company_os_workflow_plans_get"];
+        put?: never;
+        /** Create Plan */
+        post: operations["create_plan_api_llc_company_os_workflow_plans_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Plan */
+        get: operations["get_plan_api_llc_company_os_workflow_plans__plan_key__get"];
+        put?: never;
+        post?: never;
+        /** Delete Plan */
+        delete: operations["delete_plan_api_llc_company_os_workflow_plans__plan_key__delete"];
+        options?: never;
+        head?: never;
+        /** Update Plan */
+        patch: operations["update_plan_api_llc_company_os_workflow_plans__plan_key__patch"];
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/revisions/{revision}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Revision */
+        get: operations["get_revision_api_llc_company_os_workflow_plans__plan_key__revisions__revision__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/gate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Gate */
+        get: operations["get_gate_api_llc_company_os_workflow_plans__plan_key__gate_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Map */
+        put: operations["put_map_api_llc_company_os_workflow_plans__plan_key__map_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/map/validate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Validate Map */
+        post: operations["validate_map_api_llc_company_os_workflow_plans__plan_key__map_validate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/handoffs/{handoff_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Handoff */
+        patch: operations["patch_handoff_api_llc_company_os_workflow_plans__plan_key__handoffs__handoff_key__patch"];
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/steps/{step_key}/metric": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Metric */
+        put: operations["put_metric_api_llc_company_os_workflow_plans__plan_key__steps__step_key__metric_put"];
+        post?: never;
+        /** Delete Metric */
+        delete: operations["delete_metric_api_llc_company_os_workflow_plans__plan_key__steps__step_key__metric_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/one-number": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put One Number */
+        put: operations["put_one_number_api_llc_company_os_workflow_plans__plan_key__one_number_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/steps/{step_key}/breakdown": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Breakdown */
+        put: operations["put_breakdown_api_llc_company_os_workflow_plans__plan_key__steps__step_key__breakdown_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/sub-steps/{sub_step_key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Patch Sub Step */
+        patch: operations["patch_sub_step_api_llc_company_os_workflow_plans__plan_key__sub_steps__sub_step_key__patch"];
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/by-hand-acknowledgement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Acknowledge By Hand */
+        post: operations["acknowledge_by_hand_api_llc_company_os_workflow_plans__plan_key__by_hand_acknowledgement_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/approval-policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Approval Policies */
+        put: operations["put_approval_policies_api_llc_company_os_workflow_plans__plan_key__approval_policies_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/convert/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Conversion
+         * @description Build the rows a conversion would create and run the graph validator over each; writes only the preview.
+         */
+        post: operations["preview_conversion_api_llc_company_os_workflow_plans__plan_key__convert_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Conversion
+         * @description G7: an owner or admin approves the stored preview. Any later edit clears it. A person, not an agent.
+         */
+        post: operations["approve_conversion_api_llc_company_os_workflow_plans__plan_key__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/convert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Convert Plan
+         * @description Create the processes, workflows and graphs in one transaction. 409 with the unmet gates until G1-G7 pass.
+         *
+         *     Filing AI-line proposals is what an interactive person may do (as ``POST /ai-lines/{id}/changes``), so a
+         *     run or service credential is refused.
+         */
+        post: operations["convert_plan_api_llc_company_os_workflow_plans__plan_key__convert_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/convert/retry-ai-line-proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Ai Line Proposals
+         * @description File the AI-line proposals that failed or were never filed. The only write a converted plan accepts.
+         */
+        post: operations["retry_ai_line_proposals_api_llc_company_os_workflow_plans__plan_key__convert_retry_ai_line_proposals_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -57566,6 +57949,26 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * AiLineProposal
+         * @description One proposed AI-line change and what happened when it was filed in Approvals (after the commit).
+         */
+        AiLineProposal: {
+            /** Tool Action */
+            tool_action: string;
+            /** Line */
+            line: string;
+            /** Sub Step Key */
+            sub_step_key: string;
+            /** @default unfiled */
+            outcome: components["schemas"]["ProposalOutcome"];
+            /** Approval Id */
+            approval_id?: string | null;
+            /** Error */
+            error?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** AiLinesResponse */
         AiLinesResponse: {
             /** Company Id */
@@ -59279,6 +59682,16 @@ export interface components {
              * @default github_issue
              */
             task_type: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ApprovalPoliciesBody
+         * @description ``on_timeout`` is hold, remind or escalate: a ``send`` is a 422 (FR-6.2).
+         */
+        ApprovalPoliciesBody: {
+            /** Policies */
+            policies?: components["schemas"]["PlanApprovalPolicy"][];
         } & {
             [key: string]: unknown;
         };
@@ -61130,6 +61543,15 @@ export interface components {
              * @description ISO format datetime or null
              */
             last_activity?: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** BreakdownBody */
+        BreakdownBody: {
+            /** Sub Steps */
+            sub_steps?: components["schemas"]["SubStepBody"][];
+            /** Edge Cases */
+            edge_cases?: components["schemas"]["EdgeCaseBody"][];
         } & {
             [key: string]: unknown;
         };
@@ -64426,19 +64848,6 @@ export interface components {
         CodeAnalyticsRequest: {
             /** Root Path */
             root_path: string;
-            /** Include Patterns */
-            include_patterns?: string[] | null;
-            /**
-             * Exclude Patterns
-             * @default [
-             *       "*.pyc",
-             *       "*.git*",
-             *       "*__pycache__*"
-             *     ]
-             */
-            exclude_patterns: string[] | null;
-            /** Languages */
-            languages?: string[] | null;
         } & {
             [key: string]: unknown;
         };
@@ -65851,6 +66260,65 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * CompanyWorkflowPlan
+         * @description The document of one revision (section 9).
+         */
+        CompanyWorkflowPlan: {
+            /**
+             * Schema Version
+             * @default 0.2.0
+             */
+            schema_version: string;
+            /** Key */
+            key: string;
+            /**
+             * Revision
+             * @default 1
+             */
+            revision: number;
+            /** Name */
+            name: string;
+            /** Industry */
+            industry?: string | null;
+            /** Headcount */
+            headcount?: number | null;
+            entry_point: components["schemas"]["EntryPoint"];
+            /** Starts At */
+            starts_at: string;
+            /** Ends At */
+            ends_at: string;
+            /** @default draft */
+            status: components["schemas"]["WorkflowPlanStatus"];
+            /** Status History */
+            status_history?: components["schemas"]["StatusChange"][];
+            /** Lanes */
+            lanes?: components["schemas"]["Lane"][];
+            /** Steps */
+            steps?: components["schemas"]["Step"][];
+            /** Edges */
+            edges?: components["schemas"]["Edge"][];
+            /** Handoffs */
+            handoffs?: components["schemas"]["Handoff"][];
+            /** Step Metrics */
+            step_metrics?: components["schemas"]["StepMetric"][];
+            one_number?: components["schemas"]["OneNumber"] | null;
+            /** Sub Steps */
+            sub_steps?: components["schemas"]["SubStep"][];
+            /** Edge Cases */
+            edge_cases?: components["schemas"]["EdgeCase"][];
+            /** Approval Policies */
+            approval_policies?: components["schemas"]["PlanApprovalPolicy"][];
+            /** By Hand Acknowledged At */
+            by_hand_acknowledged_at?: string | null;
+            /** Approved At */
+            approved_at?: string | null;
+            /** Approved By */
+            approved_by?: string | null;
+            conversion?: components["schemas"]["PlanConversion"] | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** CompanyWorkflowResponse */
         CompanyWorkflowResponse: {
             /** Workflow Id */
@@ -67108,9 +67576,7 @@ export interface components {
              */
             uploaded_at: string;
             /** Uploaded By */
-            uploaded_by: string;
-            /** File Path */
-            file_path: string;
+            uploaded_by?: string | null;
             /** Extension */
             extension?: string | null;
         } & {
@@ -67277,6 +67743,11 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * ConversionStatus
+         * @enum {string}
+         */
+        ConversionStatus: "preview" | "committed";
         /**
          * CorrelationChainResponse
          * @description Response for GET /chain/{correlation_id}.
@@ -68098,6 +68569,18 @@ export interface components {
             total_found: number;
             /** Processing Time */
             processing_time: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CurrencyAmountOut
+         * @description A monthly amount in exactly one currency.
+         */
+        CurrencyAmountOut: {
+            /** Currency */
+            currency: string;
+            /** Per Month */
+            per_month: string;
         } & {
             [key: string]: unknown;
         };
@@ -70295,6 +70778,21 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** DataResponse[EmbeddingSwitchData] */
+        DataResponse_EmbeddingSwitchData_: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            data?: components["schemas"]["EmbeddingSwitchData"] | null;
+            /** Message */
+            message?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** DataResponse[EnterpriseBulkEnableResponse] */
         DataResponse_EnterpriseBulkEnableResponse_: {
             /**
@@ -71596,6 +72094,21 @@ export interface components {
              */
             success: boolean;
             data?: components["schemas"]["SessionSharePreviewData"] | null;
+            /** Message */
+            message?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** DataResponse[SessionTraceData] */
+        DataResponse_SessionTraceData_: {
+            /**
+             * Success
+             * @default true
+             */
+            success: boolean;
+            data?: components["schemas"]["SessionTraceData"] | null;
             /** Message */
             message?: string | null;
             /** Timestamp */
@@ -73383,6 +73896,11 @@ export interface components {
          */
         DiagnosticSeverity: "error" | "warning" | "information" | "hint";
         /**
+         * Direction
+         * @enum {string}
+         */
+        Direction: "up" | "down";
+        /**
          * DirectoryCreateResponse
          * @description Response for POST /files/create_directory.
          */
@@ -73881,6 +74399,15 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** DocumentationOnly */
+        DocumentationOnly: {
+            /** Sub Step Key */
+            sub_step_key: string;
+            /** Reason */
+            reason: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** DomainSecurityStatsResponse */
         DomainSecurityStatsResponse: {
             /** Success */
@@ -73892,6 +74419,60 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** Edge */
+        Edge: {
+            /** From Step */
+            from_step: string;
+            /** To Step */
+            to_step: string;
+            /** Condition */
+            condition?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** EdgeCase */
+        EdgeCase: {
+            /** Key */
+            key: string;
+            /** Step Key */
+            step_key: string;
+            /** Description */
+            description: string;
+            classification: components["schemas"]["Label"];
+            /** Handling */
+            handling?: string | null;
+            /** Sub Step Key */
+            sub_step_key?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** EdgeCaseBody */
+        EdgeCaseBody: {
+            /** Key */
+            key: string;
+            /** Description */
+            description: string;
+            classification: components["schemas"]["Label"];
+            /** Handling */
+            handling?: string | null;
+            /** Sub Step Key */
+            sub_step_key?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** EdgeCaseTreatment */
+        EdgeCaseTreatment: {
+            /** Edge Case Key */
+            edge_case_key: string;
+            treatment: components["schemas"]["EdgeCaseTreatmentKind"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * EdgeCaseTreatmentKind
+         * @enum {string}
+         */
+        EdgeCaseTreatmentKind: "branch" | "handled_in_step" | "documentation";
         /**
          * EditFileRequest
          * @description Request model for editing files.
@@ -74194,6 +74775,61 @@ export interface components {
          * @description data payload for GET /status.
          */
         EmbeddingStatusData: {
+            [key: string]: unknown;
+        };
+        /**
+         * EmbeddingSwitchData
+         * @description The current or last switch.
+         *
+         *     ``state``: idle, building, settling, completed, completed_with_warnings, failed, cancelled, or
+         *     stale (an active build whose heartbeat stopped). ``previous_vectors`` is the active collection's
+         *     count when the build started; the rebuild writes one vector per fact.
+         */
+        EmbeddingSwitchData: {
+            /** State */
+            state: string;
+            /** Model */
+            model?: string | null;
+            /** Collection */
+            collection?: string | null;
+            /**
+             * Done
+             * @default 0
+             */
+            done: number;
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Failed
+             * @default 0
+             */
+            failed: number;
+            /** Failed Ids */
+            failed_ids?: string[];
+            /** Previous Vectors */
+            previous_vectors?: number | null;
+            /** Reason */
+            reason?: string | null;
+            /** Started */
+            started?: string | null;
+            /** Heartbeat */
+            heartbeat?: string | null;
+            /** Finished */
+            finished?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * EmbeddingSwitchRequest
+         * @description Start an embedding-model switch (#19379): the model to rebuild the knowledge base with.
+         */
+        EmbeddingSwitchRequest: {
+            /** Model */
+            model: string;
+        } & {
             [key: string]: unknown;
         };
         /**
@@ -74672,6 +75308,11 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * EntryPoint
+         * @enum {string}
+         */
+        EntryPoint: "org_chart" | "wizard_exit" | "workflow_area" | "replan";
+        /**
          * ErrorBudgetResetResponse
          * @description Response for POST /error-budgets/{component}/reset.
          */
@@ -74785,6 +75426,19 @@ export interface components {
              * @description End time (unix timestamp)
              */
             end?: number | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * EvidenceRef
+         * @description An opaque reference; never a subject, body or attendee list.
+         */
+        EvidenceRef: {
+            source: components["schemas"]["MetricSource"];
+            /** Ref */
+            ref: string;
+            /** Occurred At */
+            occurred_at?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -76720,6 +77374,26 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** GateItem */
+        GateItem: {
+            /** Gate */
+            gate: string;
+            /** Message */
+            message: string;
+            /** Step */
+            step?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** GateResponse */
+        GateResponse: {
+            status: components["schemas"]["WorkflowPlanStatus"];
+            next_status: components["schemas"]["WorkflowPlanStatus"] | null;
+            /** Missing */
+            missing: components["schemas"]["GateItem"][];
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * GenerateSummaryRequest
          * @description Request model for generating thinking summary.
@@ -78107,6 +78781,26 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * Handoff
+         * @description Derived by the server from the edges; the client can only annotate ``wait_note``.
+         */
+        Handoff: {
+            /** Key */
+            key: string;
+            /** From Step */
+            from_step: string;
+            /** To Step */
+            to_step: string;
+            /** From Lane */
+            from_lane: string;
+            /** To Lane */
+            to_lane: string;
+            /** Wait Note */
+            wait_note?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** HandoffAttachmentRequest */
         HandoffAttachmentRequest: {
             /** Attachment Id */
@@ -78117,6 +78811,13 @@ export interface components {
             content: string;
             /** Mime Type */
             mime_type?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** HandoffPatch */
+        HandoffPatch: {
+            /** Wait Note */
+            wait_note?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -78153,6 +78854,19 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** HandoffTreatment */
+        HandoffTreatment: {
+            /** Handoff Key */
+            handoff_key: string;
+            treatment: components["schemas"]["HandoffTreatmentKind"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * HandoffTreatmentKind
+         * @enum {string}
+         */
+        HandoffTreatmentKind: "handoff_transition" | "trigger" | "end" | "out_of_scope";
         /** HardwarePriorityRequest */
         HardwarePriorityRequest: {
             /** Priority Order */
@@ -78398,6 +79112,11 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * HolderKind
+         * @enum {string}
+         */
+        HolderKind: "user" | "agent" | "contact" | "customer" | "external";
+        /**
          * HolderRef
          * @description One end of a reporting edge.
          */
@@ -78557,18 +79276,21 @@ export interface components {
         /** HumanClaimRequest */
         HumanClaimRequest: {
             /** User Id */
-            user_id: string;
+            user_id?: string | null;
             /** Company Id */
-            company_id: string;
+            company_id?: string | null;
         } & {
             [key: string]: unknown;
         };
-        /** HumanUnclaimRequest */
+        /**
+         * HumanUnclaimRequest
+         * @description The same accepted-and-ignored fields as a claim.
+         */
         HumanUnclaimRequest: {
             /** User Id */
-            user_id: string;
+            user_id?: string | null;
             /** Company Id */
-            company_id: string;
+            company_id?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -82924,6 +83646,11 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * Label
+         * @enum {string}
+         */
+        Label: "ai" | "automation" | "by_hand";
         /** LabelAssign */
         LabelAssign: {
             /** Label Ids */
@@ -82954,6 +83681,23 @@ export interface components {
             color?: string | null;
             /** Description */
             description?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** Lane */
+        Lane: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            holder_kind: components["schemas"]["HolderKind"];
+            /** Role Id */
+            role_id?: string | null;
+            /**
+             * Position
+             * @default 0
+             */
+            position: number;
         } & {
             [key: string]: unknown;
         };
@@ -84830,6 +85574,27 @@ export interface components {
         ManualMCPToolItem: {
             [key: string]: unknown;
         };
+        /**
+         * MapBody
+         * @description Lanes, steps and edges in authoring order. Handoffs are never sent: the server derives them.
+         */
+        MapBody: {
+            /** Lanes */
+            lanes?: components["schemas"]["Lane"][];
+            /** Steps */
+            steps?: components["schemas"]["Step"][];
+            /** Edges */
+            edges?: components["schemas"]["Edge"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /** MapResponse */
+        MapResponse: {
+            plan: components["schemas"]["CompanyWorkflowPlan"];
+            validation: components["schemas"]["GraphValidation"];
+        } & {
+            [key: string]: unknown;
+        };
         /** MarkFactsPreservedRequest */
         MarkFactsPreservedRequest: {
             /** Fact Ids */
@@ -85211,6 +85976,32 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** Measurement */
+        Measurement: {
+            /** Value */
+            value: number;
+            unit: components["schemas"]["Unit"];
+            source: components["schemas"]["MetricSource"];
+            /** Window Start */
+            window_start?: string | null;
+            /** Window End */
+            window_end?: string | null;
+            /** Sample Size */
+            sample_size?: number | null;
+            /** Statistic */
+            statistic?: string | null;
+            /** Evidence */
+            evidence?: components["schemas"]["EvidenceRef"][];
+            /**
+             * Recorded At
+             * Format: date-time
+             */
+            recorded_at: string;
+            /** Recorded By */
+            recorded_by?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** MemberAddRequest */
         MemberAddRequest: {
             /**
@@ -85265,6 +86056,12 @@ export interface components {
             role: string;
             /** Joined At */
             joined_at: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** MemberRoleRequest */
+        MemberRoleRequest: {
+            role: components["schemas"]["MembershipRole"];
         } & {
             [key: string]: unknown;
         };
@@ -85831,11 +86628,26 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * MetricBody
+         * @description Self-reported only: the server stamps the source, time and author.
+         */
+        MetricBody: {
+            frequency: components["schemas"]["QuantityBody"];
+            duration: components["schemas"]["QuantityBody"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * MetricCategory
          * @description Categories of quality metrics.
          * @enum {string}
          */
         MetricCategory: "maintainability" | "reliability" | "security" | "performance" | "testability" | "documentation" | "runtime_risk";
+        /**
+         * MetricSource
+         * @enum {string}
+         */
+        MetricSource: "self_reported" | "email" | "calendar";
         /**
          * MetricsDashboardResponse
          * @description Response for GET /dashboard.
@@ -87599,6 +88411,50 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** OneNumber */
+        OneNumber: {
+            /**
+             * Key
+             * @default one-number
+             */
+            key: string;
+            /** Title */
+            title: string;
+            /** Step Key */
+            step_key: string;
+            return_kind: components["schemas"]["ReturnKind"];
+            direction: components["schemas"]["Direction"];
+            unit: components["schemas"]["Unit"];
+            baseline: components["schemas"]["Measurement"];
+            /** Target Value */
+            target_value?: number | null;
+            /** Goal Id */
+            goal_id?: string | null;
+            /** Why This One */
+            why_this_one?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** OneNumberBody */
+        OneNumberBody: {
+            /** Title */
+            title: string;
+            /** Step Key */
+            step_key: string;
+            return_kind: components["schemas"]["ReturnKind"];
+            direction: components["schemas"]["Direction"];
+            unit: components["schemas"]["Unit"];
+            /** Baseline Value */
+            baseline_value: number;
+            /** Target Value */
+            target_value?: number | null;
+            /** Goal Id */
+            goal_id?: string | null;
+            /** Why This One */
+            why_this_one?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /**
          * OptimizationByTypeResponse
          * @description Response for GET /optimization/type/{resource_type}.
@@ -87966,11 +88822,6 @@ export interface components {
                 [key: string]: unknown;
             } | null;
             /**
-             * Subscription Tier
-             * @default free
-             */
-            subscription_tier: string;
-            /**
              * Max Users
              * @default -1
              */
@@ -88075,8 +88926,6 @@ export interface components {
             settings: {
                 [key: string]: unknown;
             };
-            /** Subscription Tier */
-            subscription_tier: string;
             /** Max Users */
             max_users: number;
             /** Is Active */
@@ -88096,8 +88945,6 @@ export interface components {
             name: string;
             /** Slug */
             slug: string;
-            /** Subscription Tier */
-            subscription_tier: string;
             /** Users */
             users: {
                 [key: string]: unknown;
@@ -88123,8 +88970,6 @@ export interface components {
             settings?: {
                 [key: string]: unknown;
             } | null;
-            /** Subscription Tier */
-            subscription_tier?: string | null;
             /** Max Users */
             max_users?: number | null;
         } & {
@@ -89909,6 +90754,32 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * PlanApprovalPolicy
+         * @description Covers the AI sub-steps it names. ``wait_limit`` adds a timeout whose length is a setting, never a literal.
+         *
+         *     The gate is recorded, not enforced: nothing executes workflows yet and no approval-gate model exists, so G5
+         *     only checks that the plan carries a policy for every AI sub-step. It is enforced once an executor reads the
+         *     policies kept in the committed conversion. ``hold`` waits indefinitely, so it never yields a timeout
+         *     transition; ``remind`` and ``escalate`` do, when ``wait_limit`` is set.
+         */
+        PlanApprovalPolicy: {
+            /** Key */
+            key: string;
+            /** @default workflow_gate */
+            approval_type: components["schemas"]["PlanApprovalType"];
+            /** Sub Step Keys */
+            sub_step_keys?: string[];
+            /** @default hold */
+            on_timeout: components["schemas"]["PlanApprovalTimeout"];
+            /**
+             * Wait Limit
+             * @default false
+             */
+            wait_limit: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * PlanApprovalResponse
          * @description User response to plan approval request.
          *
@@ -89928,6 +90799,89 @@ export interface components {
             modifications?: string[] | null;
             /** Reason */
             reason?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * PlanApprovalTimeout
+         * @description What an unanswered approval does. There is no ``send``: a wait never sends on its own (FR-6.2).
+         * @enum {string}
+         */
+        PlanApprovalTimeout: "hold" | "remind" | "escalate";
+        /**
+         * PlanApprovalType
+         * @description The one kind of approval a plan may ask for: it waits in Approvals (FR-6.2).
+         * @enum {string}
+         */
+        PlanApprovalType: "workflow_gate";
+        /**
+         * PlanConversion
+         * @description What crosses from the planner to Company OS (section 7A.2).
+         *
+         *     ``preview_errors`` and ``preview_warnings`` are the graph validator's own strings, unchanged.
+         *     ``contract_errors`` are what the builder found before any graph exists (a lane with no role, a
+         *     tool action that is not a key). Either one non-empty keeps G6 open.
+         */
+        PlanConversion: {
+            /** Processes */
+            processes?: components["schemas"]["ProcessDraft"][];
+            /** Workflows */
+            workflows?: components["schemas"]["WorkflowDraft"][];
+            /** Creation Order */
+            creation_order?: string[];
+            /** Documentation Only */
+            documentation_only?: components["schemas"]["DocumentationOnly"][];
+            /** Handoff Treatments */
+            handoff_treatments?: components["schemas"]["HandoffTreatment"][];
+            /** Edge Case Treatments */
+            edge_case_treatments?: components["schemas"]["EdgeCaseTreatment"][];
+            /** Ai Line Proposals */
+            ai_line_proposals?: components["schemas"]["AiLineProposal"][];
+            /** Approval Policies */
+            approval_policies?: components["schemas"]["PlanApprovalPolicy"][];
+            /** Contract Errors */
+            contract_errors?: string[];
+            /** Preview Errors */
+            preview_errors?: string[];
+            /** Preview Warnings */
+            preview_warnings?: string[];
+            /** @default preview */
+            status: components["schemas"]["ConversionStatus"];
+            /** Converted At */
+            converted_at?: string | null;
+            /** Converted By */
+            converted_by?: string | null;
+            /** @default not_available */
+            turn_on: components["schemas"]["TurnOn"];
+            /**
+             * Turn On Tracking Issue
+             * @default 16763
+             */
+            turn_on_tracking_issue: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /** PlanCreate */
+        PlanCreate: {
+            /** Lanes */
+            lanes?: components["schemas"]["Lane"][];
+            /** Steps */
+            steps?: components["schemas"]["Step"][];
+            /** Edges */
+            edges?: components["schemas"]["Edge"][];
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            entry_point: components["schemas"]["EntryPoint"];
+            /** Starts At */
+            starts_at: string;
+            /** Ends At */
+            ends_at: string;
+            /** Industry */
+            industry?: string | null;
+            /** Headcount */
+            headcount?: number | null;
         } & {
             [key: string]: unknown;
         };
@@ -89955,6 +90909,38 @@ export interface components {
              * @default 300
              */
             timeout_seconds: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /** PlanSummary */
+        PlanSummary: {
+            /** Plan Key */
+            plan_key: string;
+            /** Revision */
+            revision: number;
+            /** Name */
+            name: string;
+            status: components["schemas"]["WorkflowPlanStatus"];
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /** PlanUpdate */
+        PlanUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Industry */
+            industry?: string | null;
+            /** Headcount */
+            headcount?: number | null;
+            /** Starts At */
+            starts_at?: string | null;
+            /** Ends At */
+            ends_at?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -90658,6 +91644,28 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** ProcessDraft */
+        ProcessDraft: {
+            /** Process Key */
+            process_key: string;
+            /** Name */
+            name: string;
+            /** Owner Lane Key */
+            owner_lane_key: string;
+            /** Sub Step Key */
+            sub_step_key: string;
+            /** Required Skills */
+            required_skills?: string[];
+            executor: components["schemas"]["ProcessExecutor"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ProcessExecutor
+         * @description Who carries a process out. A By Hand sub-step is always ``person`` (FR-6.4).
+         * @enum {string}
+         */
+        ProcessExecutor: "person" | "role";
         /**
          * ProcessNode
          * @description One workflow a role runs, as an org-chart-adjacent node.
@@ -91374,6 +92382,11 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * ProposalOutcome
+         * @enum {string}
+         */
+        ProposalOutcome: "unfiled" | "filed" | "failed";
         /** ProposeLineChange */
         ProposeLineChange: {
             /**
@@ -91646,6 +92659,14 @@ export interface components {
          * @description Response for GET /quality/trends — dual shape (success vs no_data).
          */
         QualityTrendsResponse: {
+            [key: string]: unknown;
+        };
+        /** QuantityBody */
+        QuantityBody: {
+            /** Value */
+            value: number;
+            unit: components["schemas"]["Unit"];
+        } & {
             [key: string]: unknown;
         };
         /** QueryAnalysisRequest */
@@ -92795,10 +93816,13 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** RelationCreate */
+        /**
+         * RelationCreate
+         * @description ``company_id`` and ``created_by_*`` are accepted for compatibility and ignored.
+         */
         RelationCreate: {
             /** Company Id */
-            company_id: string;
+            company_id?: string | null;
             /** Target Id */
             target_id: string;
             relation_type: components["schemas"]["WorkItemRelationType"];
@@ -93539,6 +94563,11 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * ReturnKind
+         * @enum {string}
+         */
+        ReturnKind: "hours_back" | "more_yeses" | "money_sooner";
+        /**
          * RevertToVersionRequest
          * @description Request model for reverting a fact to a previous version (Issue #414).
          */
@@ -93843,7 +94872,9 @@ export interface components {
          * RollupBucketOut
          * @description One grouping's monthly total, with the coverage behind it.
          *
-         *     ``per_month`` is the sum of the steps that could be costed. It is reported
+         *     ``per_month`` is the sum of the steps that could be costed, or ``None``
+         *     when the bucket spans currencies (``per_currency`` then has the amounts).
+         *     It is reported
          *     beside ``costed`` / ``not_costable`` rather than alone, because a partial
          *     total presented as a complete one is indistinguishable from a complete one
          *     by looking at it — the arithmetic form of the failure #14064, #13617 and
@@ -93855,7 +94886,11 @@ export interface components {
             /** Label */
             label: string;
             /** Per Month */
-            per_month: string;
+            per_month: string | null;
+            /** Per Currency */
+            per_currency: components["schemas"]["CurrencyAmountOut"][];
+            /** Is Mixed Currency */
+            is_mixed_currency: boolean;
             /** Costed */
             costed: number;
             /** Not Costable */
@@ -95934,9 +96969,9 @@ export interface components {
             value: string;
             /**
              * Actor
-             * @description Agent ID performing the operation
+             * @description Deprecated and ignored: the actor is the authenticated caller (#20102)
              */
-            actor: string;
+            actor?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -97296,6 +98331,18 @@ export interface components {
             secret_id: string;
             /** Shared With Count */
             shared_with_count: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SessionTraceData
+         * @description The trace of one session.
+         */
+        SessionTraceData: {
+            /** Session Id */
+            session_id: string;
+            /** Turns */
+            turns: components["schemas"]["TraceTurn"][];
         } & {
             [key: string]: unknown;
         };
@@ -98949,12 +99996,48 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** StatusChange */
+        StatusChange: {
+            from_status?: components["schemas"]["WorkflowPlanStatus"] | null;
+            to_status: components["schemas"]["WorkflowPlanStatus"];
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+            /** By */
+            by?: string | null;
+            /** Reason */
+            reason?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** StatusUpdate */
         StatusUpdate: {
             /** Status */
             status: string;
             /** Comment */
             comment?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /** Step */
+        Step: {
+            /** Key */
+            key: string;
+            /** Lane Key */
+            lane_key: string;
+            /** Label */
+            label: string;
+            /**
+             * Position
+             * @default 0
+             */
+            position: number;
+            /** Process Key */
+            process_key?: string | null;
+            /** Note */
+            note?: string | null;
         } & {
             [key: string]: unknown;
         };
@@ -99000,6 +100083,25 @@ export interface components {
             currency: string | null;
             /** Missing */
             missing: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /** StepMetric */
+        StepMetric: {
+            /** Step Key */
+            step_key: string;
+            frequency: components["schemas"]["Measurement"];
+            duration: components["schemas"]["Measurement"];
+            /**
+             * Duration Definition
+             * @default landing_to_done
+             */
+            duration_definition: string;
+            /**
+             * Verified
+             * @default false
+             */
+            verified: boolean;
         } & {
             [key: string]: unknown;
         };
@@ -99291,6 +100393,62 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** SubStep */
+        SubStep: {
+            /** Key */
+            key: string;
+            /** Step Key */
+            step_key: string;
+            /** Label */
+            label: string;
+            /**
+             * Position
+             * @default 0
+             */
+            position: number;
+            /** Lane Key */
+            lane_key: string;
+            state: components["schemas"]["SubStepState"];
+            classification?: components["schemas"]["Label"] | null;
+            /** Rationale */
+            rationale?: string | null;
+            /** Tool Action */
+            tool_action?: string | null;
+            /** Replaces */
+            replaces?: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /** SubStepBody */
+        SubStepBody: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            state: components["schemas"]["SubStepState"];
+            classification?: components["schemas"]["Label"] | null;
+            /** Rationale */
+            rationale?: string | null;
+            /** Tool Action */
+            tool_action?: string | null;
+            /** Replaces */
+            replaces?: string[];
+        } & {
+            [key: string]: unknown;
+        };
+        /** SubStepPatch */
+        SubStepPatch: {
+            classification?: components["schemas"]["Label"] | null;
+            /** Rationale */
+            rationale?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * SubStepState
+         * @enum {string}
+         */
+        SubStepState: "current" | "proposed";
         /** SubmitScoreRequest */
         SubmitScoreRequest: {
             /** Score */
@@ -101970,6 +103128,88 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * TraceApproval
+         * @description The approval a held call points at, and its state as looked up now.
+         */
+        TraceApproval: {
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "gate" | "terminal";
+            /** State */
+            state: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * TraceIteration
+         * @description One continuation iteration of a turn; ``iteration`` is None for untagged entries.
+         */
+        TraceIteration: {
+            /** Iteration */
+            iteration?: number | null;
+            /** Model */
+            model?: string | null;
+            /** Replied */
+            replied: boolean;
+            /** Tool Calls */
+            tool_calls: components["schemas"]["TraceToolCall"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * TraceToolCall
+         * @description One tool call a turn recorded.
+         */
+        TraceToolCall: {
+            /** Id */
+            id?: string | null;
+            /** Timestamp */
+            timestamp?: string | null;
+            /** Tool */
+            tool: string;
+            /**
+             * Verdict
+             * @enum {string}
+             */
+            verdict: "ran" | "held" | "refused" | "unknown";
+            /** Params */
+            params: {
+                [key: string]: unknown;
+            };
+            /** Output */
+            output: string;
+            approval?: components["schemas"]["TraceApproval"] | null;
+            /**
+             * Result Returned
+             * @enum {string}
+             */
+            result_returned: "no" | "unknown";
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * TraceTurn
+         * @description One user message and what the assistant did in answer.
+         */
+        TraceTurn: {
+            /** Turn */
+            turn: number;
+            /** User Message Id */
+            user_message_id?: string | null;
+            /** Started At */
+            started_at?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Iterations */
+            iterations: components["schemas"]["TraceIteration"][];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * TrackEventRequest
          * @description Request model for tracking user events.
          */
@@ -102442,6 +103682,12 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * TurnOn
+         * @description Whether a created workflow can be switched on. Nothing executes workflows yet (FR-6.7).
+         * @enum {string}
+         */
+        TurnOn: "not_available";
+        /**
          * UIElementResponse
          * @description Response model for UI element
          */
@@ -102502,6 +103748,11 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * Unit
+         * @enum {string}
+         */
+        Unit: "per_week" | "minutes" | "hours" | "days" | "percent" | "count" | "currency";
         /** UnsubscribeRequest */
         UnsubscribeRequest: {
             /** Endpoint */
@@ -105905,6 +107156,29 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** WorkflowDraft */
+        WorkflowDraft: {
+            /** Workflow Id */
+            workflow_id: string;
+            /** Name */
+            name: string;
+            /** Owner Lane Key */
+            owner_lane_key: string;
+            /** Trigger Type */
+            trigger_type: string;
+            /** Trigger Config */
+            trigger_config?: {
+                [key: string]: unknown;
+            };
+            /** Nodes */
+            nodes?: components["schemas"]["NodeSpec"][];
+            /** Transitions */
+            transitions?: components["schemas"]["TransitionSpec"][];
+            /** Approval Policy Keys */
+            approval_policy_keys?: string[];
+        } & {
+            [key: string]: unknown;
+        };
         /** WorkflowExecutionRequest */
         WorkflowExecutionRequest: {
             /** User Message */
@@ -106035,6 +107309,12 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * WorkflowPlanStatus
+         * @description Server-computed (section 7B); the client never sets it.
+         * @enum {string}
+         */
+        WorkflowPlanStatus: "draft" | "measured" | "labeled" | "approved" | "converted";
         /**
          * WorkflowRequest
          * @description Request body for orchestration workflow execution.
@@ -109127,6 +110407,37 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_session_trace_api_chat_sessions__session_id__trace_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_SessionTraceData_"];
+                };
             };
             /** @description Validation Error */
             422: {
@@ -150541,6 +151852,79 @@ export interface operations {
             };
         };
     };
+    start_embedding_switch_api_embeddings_switch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmbeddingSwitchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_EmbeddingSwitchData_"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_embedding_switch_api_embeddings_switch_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_EmbeddingSwitchData_"];
+                };
+            };
+        };
+    };
+    get_embedding_switch_status_api_embeddings_switch_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataResponse_EmbeddingSwitchData_"];
+                };
+            };
+        };
+    };
     process_image_api_multimodal_process_image_post: {
         parameters: {
             query?: never;
@@ -173508,36 +174892,6 @@ export interface operations {
             };
         };
     };
-    remove_member_api_llc_companies__company_id__members__user_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                company_id: string;
-                user_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     set_pm_config_api_llc_companies__company_id__pm_config_patch: {
         parameters: {
             query?: never;
@@ -173883,6 +175237,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_member_api_llc_companies__company_id__members__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    change_member_role_api_llc_companies__company_id__members__user_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                company_id: string;
+                user_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MemberRoleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */
@@ -174785,8 +176207,8 @@ export interface operations {
     };
     revoke_secret_api_llc_secrets__company_id___name__delete: {
         parameters: {
-            query: {
-                actor: string;
+            query?: {
+                actor?: string | null;
             };
             header?: never;
             path: {
@@ -177425,6 +178847,42 @@ export interface operations {
             };
         };
     };
+    list_comments_api_llc_work_items__work_item_id__comments_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path: {
+                work_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     add_comment_api_llc_work_items__work_item_id__comments_post: {
         parameters: {
             query?: never;
@@ -177713,77 +179171,6 @@ export interface operations {
             };
         };
     };
-    add_relation_api_llc_work_items__work_item_id__relations_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                work_item_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RelationCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    remove_relation_api_llc_work_items__work_item_id__relations__relation_id__delete: {
-        parameters: {
-            query: {
-                company_id: string;
-                actor_agent_id?: string | null;
-                actor_user_id?: string | null;
-            };
-            header?: never;
-            path: {
-                work_item_id: string;
-                relation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     suggest_acceptance_criteria_api_llc_work_items_suggest_ac_post: {
         parameters: {
             query?: never;
@@ -177972,6 +179359,80 @@ export interface operations {
             path: {
                 work_item_id: string;
                 attachment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_relation_api_llc_work_items__work_item_id__relations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                work_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RelationCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_relation_api_llc_work_items__work_item_id__relations__relation_id__delete: {
+        parameters: {
+            query?: {
+                /** @description Accepted for compatibility; ignored. */
+                company_id?: string | null;
+                /** @description Accepted for compatibility; ignored. */
+                actor_agent_id?: string | null;
+                /** @description Accepted for compatibility; ignored. */
+                actor_user_id?: string | null;
+            };
+            header?: never;
+            path: {
+                work_item_id: string;
+                relation_id: string;
             };
             cookie?: never;
         };
@@ -181177,6 +182638,699 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GraphValidation"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_plans_api_llc_company_os_workflow_plans_get: {
+        parameters: {
+            query?: {
+                status_filter?: components["schemas"]["WorkflowPlanStatus"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanSummary"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_plan_api_llc_company_os_workflow_plans_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_plan_api_llc_company_os_workflow_plans__plan_key__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_plan_api_llc_company_os_workflow_plans__plan_key__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_plan_api_llc_company_os_workflow_plans__plan_key__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PlanUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_revision_api_llc_company_os_workflow_plans__plan_key__revisions__revision__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+                revision: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_gate_api_llc_company_os_workflow_plans__plan_key__gate_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_map_api_llc_company_os_workflow_plans__plan_key__map_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MapResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    validate_map_api_llc_company_os_workflow_plans__plan_key__map_validate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MapBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GraphValidation"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_handoff_api_llc_company_os_workflow_plans__plan_key__handoffs__handoff_key__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+                handoff_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HandoffPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_metric_api_llc_company_os_workflow_plans__plan_key__steps__step_key__metric_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+                step_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MetricBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_metric_api_llc_company_os_workflow_plans__plan_key__steps__step_key__metric_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+                step_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_one_number_api_llc_company_os_workflow_plans__plan_key__one_number_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OneNumberBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_breakdown_api_llc_company_os_workflow_plans__plan_key__steps__step_key__breakdown_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+                step_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BreakdownBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_sub_step_api_llc_company_os_workflow_plans__plan_key__sub_steps__sub_step_key__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+                sub_step_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubStepPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    acknowledge_by_hand_api_llc_company_os_workflow_plans__plan_key__by_hand_acknowledgement_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_approval_policies_api_llc_company_os_workflow_plans__plan_key__approval_policies_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalPoliciesBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_conversion_api_llc_company_os_workflow_plans__plan_key__convert_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanConversion"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_conversion_api_llc_company_os_workflow_plans__plan_key__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    convert_plan_api_llc_company_os_workflow_plans__plan_key__convert_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_ai_line_proposals_api_llc_company_os_workflow_plans__plan_key__convert_retry_ai_line_proposals_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
                 };
             };
             /** @description Validation Error */

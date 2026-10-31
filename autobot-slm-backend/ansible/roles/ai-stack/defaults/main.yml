@@ -39,9 +39,9 @@ chromadb_auth_token: ""
 # EnvironmentFile= line, and it is written before the unit is deployed (#12513).
 chromadb_authn_env_file: /etc/autobot/chromadb.env
 
-# Ollama (remote on backend node - resolved from inventory)
-ollama_host: "{{ backend_host | default(ansible_host) }}"
-ollama_port: 11434
+# Ollama: the LLM node when the wizard placed one (#19861), else the backend's node
+ollama_host: "{{ ai_stack_ollama_host | default(backend_host | default(ansible_host)) }}"
+ollama_port: "{{ ai_stack_ollama_port | default(11434) }}"
 
 # Agent LLM endpoints — injected into ai-stack.env; default to Ollama (#4661)
 ai_chat_endpoint: "http://{{ ollama_host }}:{{ ollama_port }}"
@@ -75,10 +75,9 @@ ai_translation_model: "mistral:7b-instruct"
 # Classification tier (gemma2:2b)
 ai_classification_model: "gemma2:2b"
 ai_sentiment_analysis_model: "gemma2:2b"
-# Light tier (phi3:mini)
-ai_llm_failsafe_model: "phi3:mini"
-# System tier (dolphin-llama3:8b)
+# System tier (dolphin-llama3:8b) -- the failsafe matches the backend's (#19332)
 ai_system_commands_model: "dolphin-llama3:8b"
+ai_llm_failsafe_model: "{{ ai_system_commands_model }}"
 
 # #13870: which role owns /etc/systemd/system/autobot-chromadb.service.
 #

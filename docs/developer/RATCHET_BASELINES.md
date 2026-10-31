@@ -234,7 +234,7 @@ units are implicit is a baseline that cannot be checked.
 
 ## Worked example — the one that passes
 
-`repo_tests/python_file_size_ratchet_baseline.py`, measured against
+`scripts/python_file_size_known_large.py`, measured against
 `origin/main`:
 
 | | |
@@ -498,6 +498,27 @@ an entry above the base, or a key the base lacks, is a raise.
   "nothing rose".
 - **Moving a table:** pass the old path after the new one,
   `base_table(root, ("new.py", "old.py"), NAME)`. Without it every entry reads as an addition.
+
+## Local date and time formatters (#19905)
+
+`repo_tests/frontend_local_date_formatter_ratchet_19905_test.py` pins the local declarations named
+`formatDate`, `formatTime`, `formatDateTime`, `formatTimestamp`, `formatRelativeTime` and
+`formatTimeAgo` under `components/`, `views/` and `composables/` of both frontends. It is modelled
+on the byte/duration ratchet (#19680): one number in `PINS`, held down-only against the base by
+`_ratchet_base.base_table`, and a reach floor from `repo_tests._reach.declare(...)` so a moved
+folder cannot read as a clean 0.
+
+- **Boundary:** a `function` or `const` bound to an arrow/function expression, or an object or
+  class method/property, with one of those names. `const formatTime = createDateFormatter({...})`
+  and `const formatDate = formatDateTime` are bindings of the kit's functions and are not counted.
+- **What the pin holds:** i18n-aware relative-time formatters (the kit's `formatTimeAgo` is
+  English only), formatters whose name says time but that format a duration (#19680, #19929), and declarations in files an
+  open PR held when the ratchet landed. Lower `PINS` in the PR that moves one.
+- **Not independently re-derived.** Rule 3 asks for a second enumeration; this ratchet has only the
+  detector's, so its count is as good as the regex. The fixtures in the test file are its positive
+  and negative controls.
+- **Re-pinning the floor:** `python scripts/repin_reach_floors.py` after the tree grows or shrinks
+  past the window.
 
 ## Checklist for a new ratchet
 

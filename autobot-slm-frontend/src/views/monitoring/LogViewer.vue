@@ -9,13 +9,16 @@
  * Displays logs from all services with real-time updates and filtering.
  */
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { PollingPausedAlert } from '@autobot/ui'
+import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useFleetStore } from '@/stores/fleet'
 import { createLogger } from '@/utils/debugUtils'
-import { getTimezone } from '@/composables/useTimezone'
+import { getTimezoneOption } from '@/composables/useTimezone'
 import type { AppLogEntry } from '@/types/api-responses'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('LogViewer')
 const { t } = useI18n()
@@ -53,7 +56,6 @@ const searchQuery = ref('')
 const selectedLevel = ref<string>('all')
 const selectedSource = ref<string>('all')
 
-let refreshInterval: ReturnType<typeof setInterval> | null = null
 
 // Available log levels and sources
 const logLevels = ['all', 'debug', 'info', 'warning', 'error', 'critical']
@@ -97,27 +99,9 @@ function getLevelClass(level: string): string {
   }
 }
 
-function formatTimestamp(ts: string): string {
-  const date = new Date(ts)
-  const tz = getTimezone()
-  return date.toLocaleTimeString('en-US', {
-    hour12: false,
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    ...(tz ? { timeZone: tz } : {}),
-  })
-}
+const formatTimestamp = createDateFormatter({ kind: 'time', locale: 'en-US', intl: () => ({ hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', ...getTimezoneOption() }) })
 
-function formatDate(ts: string): string {
-  const date = new Date(ts)
-  const tz = getTimezone()
-  return date.toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    ...(tz ? { timeZone: tz } : {}),
-  })
-}
+const formatDate = createDateFormatter({ kind: 'date', locale: 'en-US', intl: () => ({ month: 'short', day: 'numeric', ...getTimezoneOption() }) })
 
 const severityToLevel: Record<string, LogRow['level']> = {
   debug: 'debug',
@@ -127,7 +111,10 @@ const severityToLevel: Record<string, LogRow['level']> = {
   critical: 'critical',
 }
 
-async function fetchLogs() {
+// Set while the latest fleet-log read failed; cleared by the next success
+const logLoadError = ref<string | null>(null)
+
+async function fetchLogs(): Promise<boolean> {
   isLoading.value = true
   try {
     const data = await getMonitoringLogs({ per_page: 200 })
@@ -139,9 +126,13 @@ async function fetchLogs() {
       event_id: entry.event_id,
       node_id: entry.node_id,
     }))
+    logLoadError.value = null
+    return true
   } catch (err) {
+    // #19887: keep the last good rows; a failed read is not an empty result
     logger.error('Failed to fetch logs:', err)
-    logs.value = []
+    logLoadError.value = err instanceof Error ? err.message : String(err)
+    return false
   } finally {
     isLoading.value = false
   }
@@ -151,25 +142,21 @@ function clearLogs() {
   logs.value = []
 }
 
+// #19482: shared dashboard policy (stop on unmount and after repeated failures, paused alert)
+const logsPoller = useDashboardPoller(async () => {
+  throwUnlessLoaded(await fetchLogs())
+}, 5000)
+
+// Refresh restarts the poller (also a paused one); with auto-refresh off it is a one-off read
+function refreshLogs() {
+  if (isAutoRefresh.value) logsPoller.start('')
+  else void fetchLogs()
+}
+
 function toggleAutoRefresh() {
   isAutoRefresh.value = !isAutoRefresh.value
-  if (isAutoRefresh.value) {
-    startAutoRefresh()
-  } else {
-    stopAutoRefresh()
-  }
-}
-
-function startAutoRefresh() {
-  if (refreshInterval) return
-  refreshInterval = setInterval(fetchLogs, 5000)
-}
-
-function stopAutoRefresh() {
-  if (refreshInterval) {
-    clearInterval(refreshInterval)
-    refreshInterval = null
-  }
+  if (isAutoRefresh.value) logsPoller.start('')
+  else logsPoller.stop()
 }
 
 // =============================================================================
@@ -252,20 +239,14 @@ function switchSubTab(tab: LogSubTab) {
 }
 
 onMounted(() => {
-  fetchLogs()
-  if (isAutoRefresh.value) {
-    startAutoRefresh()
-  }
+  refreshLogs()
   fleetStore.fetchNodes()
-})
-
-onUnmounted(() => {
-  stopAutoRefresh()
 })
 </script>
 
 <template>
   <div class="p-6">
+    <PollingPausedAlert :poller="logsPoller" :message="t('common.polling.paused')" :retry-label="t('common.polling.retry')" class="mb-6" @retry="logsPoller.start('')" />
     <!-- Header -->
     <div class="flex items-center justify-between mb-6">
       <h2 class="text-xl font-bold text-gray-900">{{ $t('monitoring.logViewer.logViewer') }}</h2>
@@ -283,7 +264,7 @@ onUnmounted(() => {
           {{ isAutoRefresh ? $t('monitoring.logViewer.live') : $t('monitoring.logViewer.paused') }}
         </button>
         <button
-          @click="fetchLogs"
+          @click="refreshLogs"
           :disabled="isLoading"
           class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
         >
@@ -379,6 +360,14 @@ onUnmounted(() => {
     </div>
 
     <!-- Log Count -->
+    <div
+      v-if="logLoadError"
+      role="alert"
+      class="bg-error-50 text-error-700 border border-error-200 rounded-lg px-4 py-2 mb-4 text-sm"
+    >
+      {{ $t('monitoring.logViewer.loadError', { error: logLoadError }) }}
+    </div>
+
     <div class="text-sm text-gray-500 mb-2">{{ $t('monitoring.logViewer.showingCountOfCount2Entries', { count: filteredLogs.length, count2: logs.length }) }}</div>
 
     <!-- Log Table -->
@@ -425,7 +414,7 @@ onUnmounted(() => {
             </tr>
             <tr v-if="filteredLogs.length === 0">
               <td colspan="4" class="px-4 py-8 text-center text-gray-500">
-                {{ isLoading ? $t('monitoring.logViewer.loadingLogs') : $t('monitoring.logViewer.noLogsFound') }}
+                {{ isLoading ? $t('monitoring.logViewer.loadingLogs') : logLoadError ? $t('monitoring.logViewer.loadError', { error: logLoadError }) : $t('monitoring.logViewer.noLogsFound') }}
               </td>
             </tr>
           </tbody>

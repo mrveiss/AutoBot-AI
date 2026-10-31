@@ -69,7 +69,13 @@
     </div>
 
     <div v-else>
-      <BaseTable :columns="auditColumns" :rows="auditRows" size="compact" :aria-label="$t('plugins.capabilities.auditLogTitle')">
+      <BaseTable
+        :columns="auditColumns"
+        :rows="auditRows"
+        :row-variant="auditVariant"
+        size="compact"
+        :aria-label="$t('plugins.capabilities.auditLogTitle')"
+      >
         <template #cell-granted="{ row }">
           <BaseBadge size="sm" :variant="row.granted ? 'success' : 'error'">
             {{ row.granted ? $t('plugins.capabilities.granted') : $t('plugins.capabilities.denied') }}
@@ -83,15 +89,16 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { BaseBadge, BaseTable, type BaseTableColumn } from '@autobot/ui'
-import { usePlugins, type AuditLogEntry } from '@/composables/usePlugins'
+import { BaseBadge, BaseTable, type BaseTableColumn, type TableRow, type TableRowVariant } from '@autobot/ui'
+import { usePlugins, type PluginAuditEntry } from '@/composables/usePlugins'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { getAuditLog } = usePlugins()
 const { t } = useI18n()
 
 const loading = ref(false)
 const error = ref<string | null>(null)
-const entries = ref<AuditLogEntry[]>([])
+const entries = ref<PluginAuditEntry[]>([])
 const filterPluginName = ref('')
 
 // #17562: the audit log is the kit table; the status cell is a kit badge.
@@ -105,6 +112,8 @@ const auditColumns = computed<BaseTableColumn[]>(() => [
 const auditRows = computed(() =>
   filteredEntries.value.map((entry, index) => ({ ...entry, id: index, when: formatTimestamp(entry.timestamp) })),
 )
+// #19640: a denied row is what an audit reader scans for.
+const auditVariant = (row: TableRow): TableRowVariant | undefined => (row.granted ? undefined : 'error')
 
 const filteredEntries = computed(() => {
   if (!filterPluginName.value) {
@@ -129,14 +138,7 @@ async function fetchAuditLog() {
   }
 }
 
-function formatTimestamp(timestamp: string): string {
-  try {
-    const date = new Date(timestamp)
-    return date.toLocaleString()
-  } catch {
-    return timestamp
-  }
-}
+const formatTimestamp = createDateFormatter()
 
 onMounted(() => {
   fetchAuditLog()

@@ -16,10 +16,13 @@ const logger = createLogger('BatchTool')
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAutobotApi } from '@/composables/useAutobotApi'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import { BaseAlert, BaseModal, PollingPausedAlert } from '@autobot/ui'
+import { formatDuration } from '@/utils/formatHelpers'
 import { useDashboardPoller } from '@/composables/useDashboardPoller'
 import { POLL_CONSECUTIVE_ERROR_LIMIT } from '@/constants/api-timeouts'
+
+const DURATION_OPTIONS = { style: 'msCompound' } as const
 
 const api = useAutobotApi()
 
@@ -99,22 +102,6 @@ function getProgressColor(status: string): string {
     case 'failed': return 'bg-red-500'
     default: return 'bg-gray-400'
   }
-}
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '-'
-  return formatDateTime(dateStr)
-}
-
-function formatDuration(start: string | null, end: string | null): string {
-  if (!start) return '-'
-  const startDate = new Date(start)
-  const endDate = end ? new Date(end) : new Date()
-  const diff = Math.floor((endDate.getTime() - startDate.getTime()) / 1000)
-
-  if (diff < 60) return `${diff}s`
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ${diff % 60}s`
-  return `${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m`
 }
 
 async function fetchJobs(): Promise<void> {
@@ -431,15 +418,15 @@ onMounted(() => poller.start(''))
         <div class="grid grid-cols-4 gap-4 text-sm">
           <div>
             <p class="text-gray-500">{{ $t('tools.admin.batchTool.created') }}</p>
-            <p class="text-gray-900">{{ formatDate(job.created_at) }}</p>
+            <p class="text-gray-900">{{ formatFleetDateTime(job.created_at, '-') }}</p>
           </div>
           <div>
             <p class="text-gray-500">{{ $t('tools.admin.batchTool.started') }}</p>
-            <p class="text-gray-900">{{ formatDate(job.started_at) }}</p>
+            <p class="text-gray-900">{{ formatFleetDateTime(job.started_at, '-') }}</p>
           </div>
           <div>
             <p class="text-gray-500">{{ $t('tools.admin.batchTool.duration') }}</p>
-            <p class="text-gray-900">{{ formatDuration(job.started_at, job.completed_at) }}</p>
+            <p class="text-gray-900">{{ formatDuration(job.started_at, job.completed_at, DURATION_OPTIONS) }}</p>
           </div>
           <div>
             <p class="text-gray-500">{{ $t('tools.admin.batchTool.failedItems') }}</p>

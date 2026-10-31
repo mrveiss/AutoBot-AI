@@ -119,7 +119,7 @@ readonly DATA_PATHS=(
     /root/autobot-credentials.txt /root/slm-credentials.txt
 )
 readonly DATABASES=(slm slm_users autobot_users)
-readonly DB_ROLES=(slm_app)
+readonly DB_ROLES=(slm_app autobot_app)  # every role provisioning creates (#19409)
 # PostgreSQL itself: only with --purge-data AND when it holds nothing but AutoBot's.
 readonly POSTGRES_PACKAGES=("postgresql-*" "postgresql-contrib-*" postgresql-common)
 # The client stays even then (KEPT_PACKAGES): other workloads use psql/pg_dump. `postgresql-*`
@@ -148,7 +148,7 @@ readonly KEPT_PACKAGES=(
     # build toolchain and development headers -- other software on the host builds with them
     build-essential cmake ninja-build pkg-config portaudio19-dev python3-dev tk-dev zlib1g-dev "lib*-dev"
     # language runtimes and their distro libraries
-    npm python3 python3-opencv python3-pip python3-prometheus-client python3-redis
+    python3 python3-opencv python3-pip python3-prometheus-client python3-redis
     python3-tk python3-venv
     # desktop, VNC and browser stack, with the runtime libraries browsers load
     chromium-browser dbus-x11 firefox fluxbox tightvncserver "tigervnc-*" ubuntu-desktop-minimal

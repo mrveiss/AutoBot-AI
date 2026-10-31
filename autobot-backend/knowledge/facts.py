@@ -19,15 +19,18 @@ from typing import TYPE_CHECKING, Any, Dict, List
 from autobot_shared.content_digest import fact_dedup_key
 from autobot_shared.env_utils import env_float, env_int
 from autobot_shared.logging_manager import get_logger
+from knowledge.embedding_space_binding import current_space
 from knowledge.fact_projection import FactProjectionMixin
 from knowledge.fact_redis_codec import (  # noqa: F401 -- names stay patchable here
     _apply_usage_fields,
     _decode_redis_hash,
 )
 from knowledge.fact_sharing import FactSharingMixin
-from knowledge.ingest_sanitize import redact_url_metadata_fields, sanitize_fact_content
+from knowledge.ingest_sanitize import guard_update, sanitize_fact_content, sanitize_update_metadata
+from knowledge.long_fact_embedding import embed_in_windows, window_metadata, with_window_metadata
 from knowledge.ownership_index import index_ownership, ownership_changed, reindex_ownership
 from knowledge.quarantine import QuarantineAuditFailed, apply_quarantine, require_audit_actor, without_quarantine
+from knowledge.write_scope import guard_caller_metadata
 
 if TYPE_CHECKING:
     import aioredis
@@ -171,12 +174,13 @@ def get_npu_warmup_status() -> Dict[str, Any]:
     }
 
 
-async def _generate_embedding_with_npu_fallback(text: str, max_attempts: int = 1) -> List[float]:
+async def _generate_embedding_with_npu_fallback(
+    text: str, max_attempts: int = 1, model_name: str | None = None
+) -> List[float]:
     """Generate a single embedding via the canonical NPU-fallback path.
 
-    Issue #5105: Thin shim — delegates to
-    ``services.npu_client.generate_embedding_with_fallback`` which is the
-    single source of truth for NPU-first / Ollama-fallback embedding
+    Issue #5105: Thin shim — delegates to ``services.npu_client.generate_embedding_with_fallback``,
+    the single source of truth for NPU-first / Ollama-fallback embedding
     generation. Prometheus counter
     ``autobot_embedding_generated_total{backend, status}`` is emitted by
     the canonical helper.
@@ -196,7 +200,8 @@ async def _generate_embedding_with_npu_fallback(text: str, max_attempts: int = 1
     """
     from services.npu_client import generate_embedding_with_fallback
 
-    embedding = await generate_embedding_with_fallback(text, max_attempts=max_attempts)
+    # #19379: callers pass the model of the space the KB is bound to; None means the active model.
+    embedding = await generate_embedding_with_fallback(text, model_name=model_name, max_attempts=max_attempts)
     return embedding or []
 
 
@@ -413,8 +418,9 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         if not self.vector_store:
             return None
         try:
-            embedding = await _generate_embedding_with_npu_fallback(content)
-            chroma_collection = self.vector_store._collection
+            space = await current_space(self)  # #19379: one model and its store for this check
+            embedding = await embed_in_windows(_generate_embedding_with_npu_fallback, content, model_name=space.model)
+            chroma_collection = space.vector_store._collection
             results = await asyncio.to_thread(
                 chroma_collection.query,
                 query_embeddings=[embedding],
@@ -628,7 +634,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
 
     async def _vectorize_fact_in_chromadb(
         self, fact_id: str, content: str, metadata: Dict[str, Any], max_attempts: int = 1
-    ) -> None:
+    ) -> bool:
         """
         Vectorize and store fact in ChromaDB vector store.
 
@@ -636,51 +642,54 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         Issue #165: Uses NPU worker for hardware-accelerated embedding generation.
 
         Args:
-            fact_id: Fact identifier
-            content: Fact content text
-            metadata: Fact metadata dict
             max_attempts: Embedding attempts before giving up. Issue #12312: defaults
                 to 1 (fast-fail) for inline user-facing creates; the on-demand /
                 reconcile path (``vectorize_existing_fact``) passes a higher count.
         """
         if not self.vector_store:
-            return
+            return False
 
         # Import sanitization utility
         from knowledge.utils import sanitize_metadata_for_chromadb as _sanitize_metadata_for_chromadb
 
         # Sanitize metadata for ChromaDB
-        sanitized_metadata = _sanitize_metadata_for_chromadb(metadata)
+        sanitized_metadata = _sanitize_metadata_for_chromadb({**metadata, **window_metadata(content)})
 
-        # Issue #165: Generate embedding using NPU worker with fallback
-        # ChromaVectorStore.add() expects nodes with embeddings already set
-        embedding = await _generate_embedding_with_npu_fallback(content, max_attempts=max_attempts)
+        # Issue #165: NPU worker with fallback. #19379: the bound space's model, written to its store.
+        space = await current_space(self)
+        embedding = await embed_in_windows(
+            _generate_embedding_with_npu_fallback, content, max_attempts=max_attempts, model_name=space.model
+        )
 
         # Issue #12312: an empty embedding means generation failed upstream (backend blip, timeout). Do NOT
         # silently drop the vector and log success — record a queryable, retriable failure so the background
         # reconciler backfills it once the backend recovers.
         if not embedding:
             await self._record_failed_vectorization(fact_id, "embedding generation returned an empty result")
-            return
+            return False
 
-        # Issue #8391: Route through VectorWriteBuffer when available (LSM-style batching).
-        # Falls back to direct LlamaIndex add() when buffer is not yet started.
-        write_buffer = getattr(self, "_write_buffer", None)
-        if write_buffer is not None:
-            # Issue #12312: honour the write buffer's drop signal so the empty-embedding
-            # contract self-enforces even if the guard above ever moves.
-            if not await write_buffer.write(fact_id, embedding, content, sanitized_metadata):
-                await self._record_failed_vectorization(fact_id, "write buffer rejected the embedding")
-                return
-        else:
-            from llama_index.core import Document
-
-            doc = Document(text=content, doc_id=fact_id, metadata=sanitized_metadata)
-            doc.embedding = embedding
-            await asyncio.to_thread(self.vector_store.add, [doc])
-
+        if not await self._write_vector(space, fact_id, embedding, content, sanitized_metadata, ""):
+            return False
         await self._mark_vectorization_succeeded(fact_id)
         logger.info("Vectorized fact %s in ChromaDB", fact_id)
+        return True
+
+    async def _write_vector(self, space, fact_id, embedding, content, metadata, context: str) -> bool:
+        """Into *space*, buffered while its buffer runs (#8391, #8405); False + recorded when refused (#12312)."""
+        buffer = space.write_buffer
+        if buffer is not None and buffer.stopped is not True:
+            if await buffer.write(fact_id, embedding, content, metadata):
+                return True
+            if buffer.stopped is not True:
+                await self._record_failed_vectorization(fact_id, f"write buffer rejected the embedding{context}")
+                return False
+        # Stopped by a rebind mid-operation (#19379): the vector belongs to this snapshot's store.
+        from llama_index.core import Document
+
+        doc = Document(text=content, doc_id=fact_id, metadata=metadata)
+        doc.embedding = embedding
+        await asyncio.to_thread(space.vector_store.add, [doc])
+        return True
 
     def _prepare_fact_metadata(
         self, fact_id: str, metadata: Dict[str, Any] | None, content: str = ""
@@ -752,10 +761,9 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         # to identical text and would otherwise collide, silently dropping the second,
         # genuinely different fact as a "duplicate" of the first (#17005's own risk,
         # reintroduced from the write side once redaction moved ahead of this check).
-        # Storage and embedding still use the redacted `content` below -- only the
-        # dedup hash keys off the raw original, kept just long enough to pass through.
+        # Storage and embedding use the redacted `content` below; only the dedup hash keys off the raw original.
         raw_content = content
-        content, metadata = sanitize_fact_content(content, metadata)  # #16770: the KB write chokepoint
+        content, metadata = sanitize_fact_content(content, guard_caller_metadata(metadata))  # #16770
 
         if not content or not content.strip():
             return {"status": "error", "message": "Empty content, or nothing left after injection sanitizing"}
@@ -812,9 +820,11 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
             # transient embedding failures with backoff here where latency is hidden.
             from services.npu_client import EMBEDDING_MAX_ATTEMPTS
 
-            await self._vectorize_fact_in_chromadb(
+            # #20007: a failed embedding is recorded, not raised; reporting success would mark it done.
+            if not await self._vectorize_fact_in_chromadb(
                 fact_id, fact_info["content"], fact_info["metadata"], max_attempts=EMBEDDING_MAX_ATTEMPTS
-            )
+            ):
+                return {"status": "error", "message": "Fact could not be vectorized"}
 
             logger.info("Vectorized existing fact %s", fact_id)
             return {
@@ -1029,12 +1039,11 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         """
         from knowledge.utils import sanitize_metadata_for_chromadb as _sanitize
 
-        sanitized_metadata = _sanitize(current_metadata)
+        sanitized_metadata = _sanitize(with_window_metadata(current_metadata, content))  # #20076
         sanitized_metadata["fact_id"] = fact_id
-        await asyncio.to_thread(self.vector_store.delete, fact_id)
-
-        # Issue #165: Generate embedding using NPU worker with fallback
-        embedding = await _generate_embedding_with_npu_fallback(content)
+        space = await current_space(self)  # #19379: one model and its store for the re-vectorize
+        await asyncio.to_thread(space.vector_store.delete, fact_id)
+        embedding = await embed_in_windows(_generate_embedding_with_npu_fallback, content, model_name=space.model)
 
         # Issue #12312: The stale vector was already deleted above; if embedding
         # generation failed the fact is now unvectorized. Record a queryable,
@@ -1045,19 +1054,8 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
             )
             return
 
-        # Issue #8405: Route through VectorWriteBuffer when available, like _vectorize_fact_in_chromadb.
-        write_buffer = getattr(self, "_write_buffer", None)
-        if write_buffer is not None:
-            # Issue #12312: honour the write buffer's drop signal (self-enforcing contract).
-            if not await write_buffer.write(fact_id, embedding, content, sanitized_metadata):
-                await self._record_failed_vectorization(fact_id, "write buffer rejected the embedding (re-vectorize)")
-                return
-        else:
-            from llama_index.core import Document
-
-            doc = Document(text=content, doc_id=fact_id, metadata=sanitized_metadata)
-            doc.embedding = embedding
-            await asyncio.to_thread(self.vector_store.add, [doc])
+        if not await self._write_vector(space, fact_id, embedding, content, sanitized_metadata, " (re-vectorize)"):
+            return
         await self._mark_vectorization_succeeded(fact_id)
         logger.info("Re-vectorized updated fact %s", fact_id)
 
@@ -1111,7 +1109,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
             if current is None:
                 return {"status": "error", "message": "Fact not found"}
             decoded, current_metadata = current
-            previous = dict(current_metadata)  # #16663: the indexes the fact is filed under now
+            previous = await guard_update(self, fact_id, current_metadata)  # #16663 filed-under now; #19517
 
             # #13708 round 4 review (BLOCK 2): stays None for a metadata-only update, so
             # _durable_update_or_adopt/fact_store fall back to hashing the (unchanged)
@@ -1134,7 +1132,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
                 # (deliberately, to keep the fact's own route -- see that call's comment),
                 # never against this caller's OWN metadata, so a URL-shaped field in it
                 # (e.g. a re-fetch updating "source") would merge in unredacted otherwise.
-                redact_url_metadata_fields(metadata)
+                metadata = sanitize_update_metadata(metadata)  # #19517: also drops caller-set ownership
                 current_metadata.update(metadata)
             current_metadata["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
 

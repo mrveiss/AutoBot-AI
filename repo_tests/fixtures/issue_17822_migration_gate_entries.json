@@ -2,6 +2,12 @@
  "autobot-backend/llc/services/workspace_lease.py",
  "autobot-backend/llc/services/company.py",
  "autobot-backend/llc/services/company_ceo.py",
+ "autobot-backend/llc/services/company_move_lock.py",
+ "autobot-backend/llc/services/authz.py",
+ "autobot-backend/llc/services/membership_policy.py",
+ "autobot-backend/llc/services/membership_service.py",
+ "autobot-backend/llc/services/budget.py",
+ "autobot-backend/llc/exceptions.py",
  "autobot-backend/llc/scheduler/run_status.py",
  "autobot-backend/services/*secret*.py",
  "autobot-backend/services/credential_*.py",
@@ -15,5 +21,6 @@
  "autobot_shared/time_utils.py",
  "autobot_shared/auth/device_capabilities.py",
  "autobot_shared/secrets_vault.py",
- "autobot_shared/legacy_secret_keys.py"
+ "autobot_shared/legacy_secret_keys.py",
+ "autobot_shared/db_errors.py"
 ]

@@ -1,5 +1,6 @@
 {
   "common": {
+    "appName": "AutoBot",
     "submit": "Soumettre",
     "cancel": "Annuler",
     "save": "Sauvegarder",
@@ -109,7 +110,8 @@
       "medium": "Moyen",
       "high": "Élevé",
       "critical": "Critique"
-    }
+    },
+    "logsLoadFailed": "Échec du chargement des journaux : {error}"
   },
   "chat": {
     "sendMessage": "Envoyer un message...",
@@ -261,6 +263,13 @@
     },
     "input": {
       "retryUpload": "Réessayez de télécharger",
+      "uploadError": {
+        "http": "Échec du téléversement (statut {status})",
+        "invalidResponse": "Le serveur a envoyé une réponse illisible",
+        "network": "Erreur réseau pendant le téléversement",
+        "cancelled": "Téléversement annulé",
+        "unknown": "Échec du téléversement"
+      },
       "filesAttached": "Fichiers {count} joints",
       "clearAll": "Tout effacer",
       "removeFile": "Supprimer le fichier",
@@ -305,7 +314,10 @@
       "thinkingOffLabel": "thinking Off",
       "thinkingOn": "Thinking on",
       "thinkingOnLabel": "thinking On",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "fileTooLarge": "Le fichier « {name} » est trop volumineux (max. {max})",
+      "voiceUnsupported": "La saisie vocale nécessite Chrome, Edge ou Safari 15+. La transcription n'est pas disponible dans ce navigateur.",
+      "micDenied": "L'accès au microphone a été refusé. Veuillez autoriser l'accès au microphone dans les paramètres de votre navigateur."
     },
     "translate": {
       "title": "Traduire le texte",
@@ -521,6 +533,7 @@
         "pending": "En attente",
         "running": "En cours d'exécution",
         "streaming": "Diffusion",
+        "waiting_explanation": "En attente d'explication",
         "explaining": "Expliquer",
         "completed": "Complété",
         "failed": "Échoué"
@@ -783,15 +796,7 @@
     "logging": "Enregistrement",
     "prompts": "Invites",
     "backend": "Backend",
-    "save": "Enregistrer les paramètres",
     "reset": "Réinitialiser aux valeurs par défaut",
-    "panelLoadFailed": "Échec du chargement du panneau des paramètres",
-    "loadingSettings": "Chargement des paramètres...",
-    "backendOffline": "Backend hors ligne : affichage des paramètres mis en cache",
-    "saving": "Économie...",
-    "discardChanges": "Ignorer les modifications",
-    "cacheApiUnavailable": "API de cache non disponible",
-    "cachedSettings": "Utilisation des paramètres mis en cache (backend hors ligne)",
     "appearanceDesc": "Personnalisez l'apparence et la convivialité de votre espace de travail",
     "voiceDesc": "Configurer la voix de synthèse vocale et les profils vocaux",
     "languageDesc": "Choisissez votre langue préférée pour l'interface et les réponses de l'IA",
@@ -3811,10 +3816,11 @@
     },
     "treeNode": {
       "itemsCount": "Items count",
+      "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
       "vectorizeFolderTitle": "Vectorize folder title",
-      "retryTitle": "Retry title",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "share": {
       "searching": "Searching...",
@@ -4236,6 +4242,8 @@
     "stop": "Stop Workflow",
     "status": "Status",
     "history": {
+      "durationSeconds": "s",
+      "durationMinutes": "min",
       "searchPlaceholder": "Search workflows...",
       "allStatus": "All Status",
       "completed": "Completed",
@@ -4351,7 +4359,8 @@
       "agentsAriaLabel": "Agent capabilities",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "Ouverture de l'automatisation de votre entreprise…",
-      "companyRequired": "Sélectionnez une entreprise pour ouvrir l'automatisation."
+      "companyRequired": "Sélectionnez une entreprise pour ouvrir l'automatisation.",
+      "planBeforeBuilding": "Planifier avant de créer"
     },
     "modal": {
       "executeStep": "Execute This Step",
@@ -4659,7 +4668,9 @@
       "channelSlack": "Slack",
       "emailHint": "Comma-separated email addresses",
       "channelWebhook": "Webhook",
-      "sectionDesc": "Configure per-workflow notification routing"
+      "sectionDesc": "Configure per-workflow notification routing",
+      "invalidEmail": "Adresse e-mail invalide : {emails}",
+      "invalidUrl": "Format d'URL invalide"
     },
     "liveDashboard": {
       "activeExecutions": "Active Executions",
@@ -4994,7 +5005,8 @@
       "emergencyKillFailed": "❌ Échec de l'arrêt d'urgence : {message}",
       "interrupted": "^C (Processus interrompu par l'utilisateur)",
       "error": "Erreur : {error}"
-    }
+    },
+    "urlCopied": "URL du terminal copiée dans le presse-papiers !"
   },
   "llm": {
     "unavailable": "Indisponible",
@@ -5862,6 +5874,7 @@
       "dismiss": "Dismiss"
     },
     "themeToggle": {
+      "accentPurpleDescription": "Violet — Créatif et élégant",
       "system": "Système",
       "highContrast": "Contraste élevé",
       "monochrome": "Monochrome",
@@ -7367,7 +7380,16 @@
       "initComplete": "Initialisation terminée"
     }
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "Règles d'alerte",
+      "overview": "Aperçu",
+      "slos": "SLO",
+      "traces": "Traces"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "browser": {
       "contentsOf": "{path} Contents",
       "refresh": "Refresh",
@@ -7382,7 +7404,8 @@
       "errorDeletingFile": "Error deleting file",
       "errorRenamingFile": "Error renaming file",
       "refreshAriaLabel": "Refresh files",
-      "toggleViewAriaLabel": "Toggle view mode"
+      "toggleViewAriaLabel": "Toggle view mode",
+      "uploadFailedHint": "Veuillez vérifier les limites de taille de fichier et les exigences de format"
     },
     "header": {
       "title": "File Browser",
@@ -8090,6 +8113,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "Échec de l'activation de la fenêtre de maintenance",
+      "completeWindowFailed": "Échec de la finalisation de la fenêtre de maintenance",
+      "deleteWindowFailed": "Échec de la suppression de la fenêtre de maintenance",
+      "drainNodeFailed": "Échec du drainage du nœud. Veuillez réessayer.",
+      "resumeNodeFailed": "Échec de la reprise du nœud. Veuillez réessayer.",
+      "saveKeysFailed": "Échec de l'enregistrement des clés API. Consultez la console pour plus de détails.",
+      "addNodeFailed": "Échec de l'ajout du nœud"
     }
   },
   "mobile": {
@@ -8601,7 +8633,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "Les informations sur les outils sont indisponibles pour le moment — cette liste peut être incomplète.",
       "canvasNoToolsDefined": "Aucun outil n'est associé à un rôle dans cette entreprise.",
-      "deepLinkNodeNotFound": "Ce lien pointe vers un nœud introuvable ici. Il a peut-être été supprimé, ou vous n'y avez pas accès."
+      "deepLinkNodeNotFound": "Ce lien pointe vers un nœud introuvable ici. Il a peut-être été supprimé, ou vous n'y avez pas accès.",
+      "viewPlanner": "Planificateur"
     },
     "executorRollup": {
       "title": "Récapitulatif des exécutants",
@@ -8945,6 +8978,162 @@
         "notFound": "Cette tâche ne détient plus la réservation — actualisez pour voir qui la détient.",
         "unavailable": "Impossible de joindre le registre ; rien n'a été envoyé.",
         "error": "Un problème est survenu et la remise n'a pas pu être confirmée. Actualisez pour voir si la réservation est toujours détenue."
+      }
+    },
+    "workflowPlanner": {
+      "title": "Planificateur de workflows",
+      "plans": "Plans",
+      "newPlan": "Nouveau plan",
+      "open": "Ouvrir",
+      "back": "Retour aux plans",
+      "retry": "Réessayer",
+      "loading": "Chargement des plans...",
+      "loadFailed": "Impossible de charger le plan.",
+      "saveFailed": "Impossible d'enregistrer la modification.",
+      "createFailed": "Impossible de créer le plan.",
+      "emptyTitle": "Aucun plan pour l'instant",
+      "emptyHint": "Commencez un plan pour cartographier un processus, le mesurer et choisir le chiffre à améliorer.",
+      "unavailableTitle": "Le planificateur de workflows n'est pas disponible",
+      "unavailableHint": "Cette fonctionnalité est désactivée pour votre espace de travail, il n'y a donc encore rien à afficher.",
+      "statusFlow": "Avancement du plan",
+      "status": {
+        "draft": "Brouillon",
+        "measured": "Mesuré",
+        "labeled": "Étiqueté",
+        "approved": "Approuvé",
+        "converted": "Converti"
+      },
+      "col": {
+        "name": "Plan",
+        "revision": "Révision",
+        "status": "Statut",
+        "actions": "Actions"
+      },
+      "form": {
+        "name": "Nom du plan",
+        "startsAt": "Où le processus commence",
+        "endsAt": "Où le processus se termine",
+        "create": "Créer le plan"
+      },
+      "steps": {
+        "map": "Cartographier",
+        "measure": "Mesurer",
+        "oneNumber": "Choisir un chiffre",
+        "label": "Détailler et étiqueter",
+        "convert": "Créer le workflow"
+      },
+      "map": {
+        "empty": "Rien de cartographié pour l'instant",
+        "emptyHint": "Ajoutez d'abord les personnes impliquées (couloirs), puis leurs étapes.",
+        "handoffs": "{count} passations",
+        "waitNote": "Qu'est-ce qui attend à cette passation ?",
+        "laneName": "Nom du couloir",
+        "addLane": "Ajouter un couloir",
+        "stepLabel": "Étape",
+        "stepLane": "Couloir de l'étape",
+        "addStep": "Ajouter une étape"
+      },
+      "source": {
+        "self_reported": "Vous l'avez dit",
+        "email": "Vérifié avec la messagerie",
+        "calendar": "Vérifié avec l'agenda"
+      },
+      "measure": {
+        "hint": "À quelle fréquence chaque étape a-t-elle lieu, et combien de temps dure-t-elle ?",
+        "needSteps": "Cartographiez d'abord au moins une étape.",
+        "perWeek": "Par semaine",
+        "duration": "Durée",
+        "unit": "Unité de durée",
+        "save": "Enregistrer",
+        "clear": "Effacer"
+      },
+      "unit": {
+        "minutes": "minutes",
+        "hours": "heures",
+        "days": "jours"
+      },
+      "oneNumber": {
+        "hint": "Les étapes mesurées, attentes les plus longues en premier. Vous décidez laquelle compte.",
+        "needMetrics": "Mesurez d'abord au moins une étape.",
+        "rate": "{freq} par semaine, {dur} {unit}",
+        "title": "Nommer ce chiffre",
+        "returnKind": "Ce que vous récupérez",
+        "target": "Objectif",
+        "save": "Enregistrer comme mon chiffre"
+      },
+      "returnKind": {
+        "hours_back": "Heures récupérées",
+        "more_yeses": "Plus de oui",
+        "money_sooner": "Payé plus vite"
+      },
+      "label": {
+        "needNumber": "Choisissez d'abord votre chiffre ; son étape est détaillée ici.",
+        "subStep": "Sous-étape",
+        "addSubStep": "Ajouter une sous-étape",
+        "unlabel": "Retirer l'étiquette",
+        "edgeCase": "Cas limite : {text}",
+        "byHandNote": "Cela reste aux personnes. L'IA n'agit jamais dessus.",
+        "acknowledge": "J'ai lu la liste À la main",
+        "acknowledged": "Liste À la main lue"
+      },
+      "labels": {
+        "ai": "IA",
+        "automation": "Automatisation",
+        "by_hand": "À la main"
+      },
+      "gate": {
+        "missing": "Il manque encore",
+        "title": "Prêt à créer ?",
+        "unknown": "Autre contrôle",
+        "state": {
+          "met": "Satisfait",
+          "open": "Ouvert",
+          "pending": "Pas encore contrôlé"
+        },
+        "name": {
+          "G1": "La carte est valide",
+          "G2": "Chaque étape est mesurée",
+          "G3": "L'étape choisie est détaillée",
+          "G4": "Chaque sous-étape et cas limite est étiqueté",
+          "G5": "Liste « À la main » lue et étapes d'IA couvertes par des approbations",
+          "G6": "L'aperçu ne contient aucune erreur",
+          "G7": "Vous avez approuvé ce plan",
+          "converted": "Les workflows sont créés"
+        }
+      },
+      "readOnly": "Ce plan est {status} : les étapes 1 à 4 sont donc en lecture seule.",
+      "firstProcess": {
+        "title": "Votre entreprise est prête",
+        "body": "Planifiez votre premier processus : cartographiez-le, mesurez-le et choisissez le chiffre à améliorer.",
+        "plan": "Planifier mon premier processus",
+        "later": "Plus tard"
+      },
+      "convert": {
+        "notReady": "Terminez d'abord les étapes 1 à 4. Les contrôles ci-dessus montrent ce qui manque encore.",
+        "previewTitle": "Ce qui sera créé (aperçu, rien n'existe encore)",
+        "createdTitle": "Ce qui a été créé",
+        "counts": "Workflows : {workflows}. Processus : {processes}.",
+        "ownerLane": "Responsable : {lane}",
+        "errors": "Erreurs à corriger avant d'approuver",
+        "warnings": "Avertissements",
+        "documented": "Conservé comme texte de manuel, non construit :",
+        "failedProposals": "{count} propositions de ligne d'IA n'ont pas pu être déposées. Réessayez pour les déposer.",
+        "turnOnNotAvailable": "L'activation des workflows n'est pas encore disponible : rien ne les exécute d'ici là.",
+        "openWorkflows": "Ouvrir les workflows",
+        "unavailable": "Cette action n'est pas disponible : le Planificateur de workflows est désactivé pour votre espace de travail, ou le plan n'existe plus.",
+        "blocked": "Pas encore prêt. Les contrôles ci-dessus montrent ce qui manque.",
+        "approvedBy": "Approuvé par {by} le {at}.",
+        "preview": "Aperçu de ce qui sera créé",
+        "previewAgain": "Actualiser l'aperçu",
+        "approve": "Approuver",
+        "create": "Créer les workflows",
+        "retry": "Réessayer les propositions de ligne d'IA",
+        "approveTitle": "Approuver ce plan ?",
+        "approveMessage": "Vous approuvez l'aperçu affiché. Toute modification ultérieure du plan annule cette approbation.",
+        "previewFailed": "Impossible de générer l'aperçu.",
+        "approveFailed": "Impossible d'approuver le plan.",
+        "convertFailed": "Impossible de créer les workflows.",
+        "retryFailed": "Impossible de réessayer les propositions de ligne d'IA."
       }
     }
   },

@@ -664,8 +664,8 @@ onMounted(() => {
   color: var(--text-tertiary);
 }
 
-.empty-state i {
-  font-size: var(--text-3xl);
+.empty-state .icon {
+  width: var(--text-3xl); height: var(--text-3xl);
   margin-bottom: var(--spacing-3);
   opacity: 0.5;
 }
@@ -734,9 +734,9 @@ onMounted(() => {
   color: var(--text-primary);
 }
 
-.recent-item i {
+.recent-item .icon {
   color: var(--text-secondary);
-  font-size: 0.625rem;
+  width: var(--text-xs); height: var(--text-xs);
 }
 
 .recent-title {

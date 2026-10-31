@@ -35,8 +35,8 @@ wrong fix.
 
 | Instrument | Read as | Actually answered |
 |---|---|---|
-| `gh pr checks --json bucket` | is this PR green | required contexts only; `python-suite shard 8/12` is not one |
-| branch protection's ten contexts | the tests must pass | `python-suite` and its twelve shards are **not required at all** |
+| `gh pr checks --json bucket` | is this PR green | required contexts only; `python-suite shard 8/8` is not one |
+| branch protection's ten contexts | the tests must pass | `python-suite` and its eight shards are **not required at all** |
 | `git log --oneline -3` per branch | how many bot pushes exist | the last three commits — the real count was 8, reported as 0 |
 | `git merge-base --is-ancestor` | did this branch land | **NO for every squash merge**, by construction |
 | check-runs on a merge commit | did this PR's checks pass | a squash creates a *new* commit that was never tested |

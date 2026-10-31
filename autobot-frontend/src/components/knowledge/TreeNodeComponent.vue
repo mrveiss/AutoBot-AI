@@ -48,7 +48,7 @@
         {{ $t('knowledge.treeNode.itemsCount', { count: node.children.length }) }}
       </span>
       <span v-else-if="node.type === 'file' && node.size !== undefined" class="node-size">
-        {{ formatSize(node.size) }}
+        {{ formatFileSize(node.size, sizeOptions) }}
       </span>
 
       <!-- Unvectorized count badge for folders -->
@@ -107,6 +107,8 @@
 <script setup lang="ts">
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { formatFileSize } from '@/utils/formatHelpers'
 import VectorizationStatusBadge from './VectorizationStatusBadge.vue'
 import type { DocumentVectorizationState } from '@/composables/useKnowledgeVectorization'
 
@@ -206,12 +208,16 @@ const unvectorizedCount = computed(() => {
   return countUnvectorized(props.node)
 })
 
-// Helper function
-const formatSize = (bytes: number): string => {
-  if (bytes < 1024) return `${bytes}B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)}MB`
-}
+const { t } = useI18n()
+
+const sizeOptions = computed(() => ({
+  decimals: [0, 0, 1],
+  units: ['B', 'KB', 'MB'],
+  integerBase: true,
+  keepTrailingZeros: true,
+  separator: '',
+  zeroText: t('knowledge.treeNode.zeroSize'),
+}))
 </script>
 
 <style scoped>

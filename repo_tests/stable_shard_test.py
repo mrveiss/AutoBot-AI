@@ -13,6 +13,7 @@ import json
 from pathlib import Path
 
 import pytest
+from repo_tests._ci_shards import python_shard_count
 from repo_tests.stable_shard import (
     DEFAULT_BUCKETS,
     bucket_of,
@@ -22,7 +23,9 @@ from repo_tests.stable_shard import (
     shard_of,
 )
 
-SPLITS = 12
+#: The count CI runs (#19527), so the real-durations balance checks below judge
+#: the split the PR gate actually uses rather than a number restated here.
+SPLITS = python_shard_count()
 
 
 def _weights(n_modules=400, tests_per_module=8):

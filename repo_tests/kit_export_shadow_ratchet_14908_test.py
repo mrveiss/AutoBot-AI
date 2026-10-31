@@ -44,11 +44,11 @@ _REEXPORT = re.compile(r"export\s+(?:type\s+)?\{([^}]*)\}\s*from", re.S)
 _STAR = re.compile(r"^export\s+\*\s+from\s+['\"](\.[^'\"]+)['\"]", re.M)
 _COMMENTS = re.compile(r"//[^\n]*|/\*.*?\*/", re.S)
 
-# 9 measured on ee1bfa15dc; 4 after this PR (BadgeVariant, ButtonVariant, the two
-# MetricsSummary and SystemHealth left). Lower it by exactly what a PR removes: #19683
-# retires the SLM debugUtils createLogger, so whichever of it and this guard lands second
-# lowers the pin to 3. The SLM's useFocusTrap fork is the other removable one.
-PINS = {"kit_export_shadows": 3}  # #19683 retired the SLM createLogger shadow
+# 9 measured on ee1bfa15dc; 4 after #14908 (BadgeVariant, ButtonVariant, the two
+# MetricsSummary and SystemHealth left). Lower it by exactly what a PR removes: #19683 retired
+# the SLM debugUtils createLogger (to 3) and #19688 removed the SLM useFocusTrap fork (to 2,
+# the FLOOR), the last removable one.
+PINS = {"kit_export_shadows": 2}  # #19688 merged the SLM useFocusTrap into the kit; only the FLOOR remains
 
 # RiskTier (generated wire type) and ServiceHealth (#15401), see the docstring.
 FLOOR = 2
@@ -151,7 +151,7 @@ def _scanned_ts_files(root: Path) -> list[str]:
 KIT_NAMES_REACH = declare(
     "kit-export-names-14908",
     discover=_kit_names,
-    floor=162,  # mid-window: population 172, window (152, 172)
+    floor=221,  # mid-window: population 231, window (211, 231)
     growth=20,
     what="names the shared kit exports",
 )

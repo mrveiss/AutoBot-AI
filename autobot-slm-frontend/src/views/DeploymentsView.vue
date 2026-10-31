@@ -14,13 +14,13 @@ import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
-import { formatDateTime as formatDateTimeTz } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import { createLogger } from '@/utils/debugUtils'
 import type { Deployment, BlueGreenDeployment, BlueGreenDeploymentCreate, BlueGreenStatus, NodeRole } from '@/types/slm'
-import { BaseAlert, BaseModal } from '@autobot/ui'
+import { BaseAlert, BaseModal, useToast } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
-
 const { t } = useI18n()
+const { showToast } = useToast()
 const logger = createLogger('DeploymentsView')
 const api = useSlmApi()
 const ws = useSlmWebSocket()
@@ -293,7 +293,7 @@ async function handleRetry(deploymentId: string): Promise<void> {
     await fetchDeployments()
   } catch (err) {
     logger.error('Failed to retry deployment:', err)
-    alert(t('deploymentsView.failedToRetryDeployment'))
+    showToast(t('deploymentsView.failedToRetryDeployment'), 'error')
   } finally {
     isRetrying.value = null
   }
@@ -310,7 +310,7 @@ async function handleCancel(deploymentId: string): Promise<void> {
     await fetchDeployments()
   } catch (err) {
     logger.error('Failed to cancel deployment:', err)
-    alert(t('deploymentsView.failedToCancelDeployment'))
+    showToast(t('deploymentsView.failedToCancelDeployment'), 'error')
   } finally {
     isCancelling.value = null
   }
@@ -328,7 +328,7 @@ async function handleRollback(deploymentId: string): Promise<void> {
     await fetchDeployments()
   } catch (err) {
     logger.error('Failed to rollback deployment:', err)
-    alert(t('deploymentsView.failedToRollbackDeployment'))
+    showToast(t('deploymentsView.failedToRollbackDeployment'), 'error')
   } finally {
     isRollingBack.value = null
   }
@@ -377,15 +377,15 @@ async function fetchEligibleNodes(roles: string[]): Promise<void> {
 
 async function handleCreateBgDeployment(): Promise<void> {
   if (!newBgDeployment.value.blue_node_id) {
-    alert(t('deploymentsView.pleaseSelectABlueSourceNode'))
+    showToast(t('deploymentsView.pleaseSelectABlueSourceNode'), 'warning')
     return
   }
   if (!newBgDeployment.value.green_node_id) {
-    alert(t('deploymentsView.pleaseSelectAGreenTargetNode'))
+    showToast(t('deploymentsView.pleaseSelectAGreenTargetNode'), 'warning')
     return
   }
   if (newBgDeployment.value.roles.length === 0) {
-    alert(t('deploymentsView.pleaseSelectRoleToMigrate'))
+    showToast(t('deploymentsView.pleaseSelectRoleToMigrate'), 'warning')
     return
   }
 
@@ -403,9 +403,9 @@ async function handleCreateBgDeployment(): Promise<void> {
     const detail = axiosError?.response?.data?.detail || errorMessage
     const status = axiosError?.response?.status
     if (status === 403) {
-      alert(t('deploymentsView.accessDeniedBlueGreenDeploymentsRequireAdmin'))
+      showToast(t('deploymentsView.accessDeniedBlueGreenDeploymentsRequireAdmin'), 'error')
     } else {
-      alert(t('deploymentsView.failedToCreateBlueGreenDeployment', { detail }))
+      showToast(t('deploymentsView.failedToCreateBlueGreenDeployment', { detail }), 'error')
     }
   } finally {
     isCreatingBg.value = false
@@ -422,7 +422,7 @@ async function handleBgSwitch(deploymentId: string): Promise<void> {
     await fetchBgDeployments()
   } catch (err) {
     logger.error('Failed to switch traffic:', err)
-    alert(t('deploymentsView.failedToSwitchTraffic'))
+    showToast(t('deploymentsView.failedToSwitchTraffic'), 'error')
   }
 }
 
@@ -436,7 +436,7 @@ async function handleBgRollback(deploymentId: string): Promise<void> {
     await fetchBgDeployments()
   } catch (err) {
     logger.error('Failed to rollback:', err)
-    alert(t('deploymentsView.failedToRollback'))
+    showToast(t('deploymentsView.failedToRollback'), 'error')
   }
 }
 
@@ -450,7 +450,7 @@ async function handleBgCancel(deploymentId: string): Promise<void> {
     await fetchBgDeployments()
   } catch (err) {
     logger.error('Failed to cancel deployment:', err)
-    alert(t('deploymentsView.failedToCancel'))
+    showToast(t('deploymentsView.failedToCancel'), 'error')
   }
 }
 
@@ -465,7 +465,7 @@ async function handleBgRetry(deploymentId: string): Promise<void> {
     await fetchBgDeployments()
   } catch (err) {
     logger.error('Failed to retry deployment:', err)
-    alert(t('deploymentsView.failedToRetryDeployment'))
+    showToast(t('deploymentsView.failedToRetryDeployment'), 'error')
   } finally {
     isRetryingBg.value = null
   }
@@ -507,11 +507,11 @@ function toggleRole(role: NodeRole): void {
 // ===== STANDARD DEPLOYMENT CREATE METHODS =====
 async function handleCreateDeployment(): Promise<void> {
   if (!newDeployment.value.node_id) {
-    alert(t('deploymentsView.pleaseSelectATargetNode'))
+    showToast(t('deploymentsView.pleaseSelectATargetNode'), 'warning')
     return
   }
   if (newDeployment.value.roles.length === 0) {
-    alert(t('deploymentsView.pleaseSelectRoleToDeploy'))
+    showToast(t('deploymentsView.pleaseSelectRoleToDeploy'), 'warning')
     return
   }
 
@@ -536,7 +536,7 @@ async function handleCreateDeployment(): Promise<void> {
     const errorMessage = err instanceof Error ? err.message : String(err)
     const axiosError = err as { response?: { data?: { detail?: string } } }
     const detail = axiosError?.response?.data?.detail || errorMessage
-    alert(t('deploymentsView.failedToCreateDeployment', { detail }))
+    showToast(t('deploymentsView.failedToCreateDeployment', { detail }), 'error')
   } finally {
     isCreatingDeployment.value = false
   }
@@ -588,13 +588,6 @@ function getStatusIcon(status: string): string {
     case 'rolled_back': return 'M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6'
     default: return 'M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z'
   }
-}
-
-// #13138: the blue-green timestamps are optional AND nullable in the contract,
-// so an absent value arrives as `undefined`.
-function formatDateTime(isoString: string | null | undefined): string {
-  if (!isoString) return '-'
-  return formatDateTimeTz(isoString)
 }
 
 function getNodeHostname(nodeId: string): string {
@@ -847,10 +840,10 @@ function getNodeHostname(nodeId: string): string {
                   </div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {{ formatDateTime(deployment.started_at) }}
+                  {{ formatFleetDateTime(deployment.started_at, '-') }}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {{ formatDateTime(deployment.completed_at) }}
+                  {{ formatFleetDateTime(deployment.completed_at, '-') }}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
                   <div class="flex items-center justify-end gap-2">
@@ -1056,7 +1049,7 @@ function getNodeHostname(nodeId: string): string {
                   </div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {{ formatDateTime(deployment.started_at) }}
+                  {{ formatFleetDateTime(deployment.started_at, '-') }}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-right">
                   <div class="flex items-center justify-end gap-2">
@@ -1259,8 +1252,8 @@ function getNodeHostname(nodeId: string): string {
         </div>
 
         <!-- Selected Roles Summary -->
-        <div v-if="newDeployment.roles.length > 0" class="bg-green-50 border border-green-200 rounded-md p-3">
-          <p class="text-sm font-medium text-green-800 mb-1">{{ $t('deploymentsView.selectedRolesCount', { count: newDeployment.roles.length }) }}</p>
+        <BaseAlert v-if="newDeployment.roles.length > 0" variant="success" size="compact" :icon="false">
+          <p class="text-sm font-medium mb-1">{{ $t('deploymentsView.selectedRolesCount', { count: newDeployment.roles.length }) }}</p>
           <div class="flex flex-wrap gap-1">
             <span
               v-for="role in newDeployment.roles"
@@ -1270,7 +1263,7 @@ function getNodeHostname(nodeId: string): string {
               {{ role }}
             </span>
           </div>
-        </div>
+        </BaseAlert>
 
         <!-- Force Option -->
         <div class="flex items-center gap-2">
@@ -1468,11 +1461,11 @@ function getNodeHostname(nodeId: string): string {
         </div>
         <div>
           <p class="text-sm text-gray-500">{{ $t('deploymentsView.startedAt') }}</p>
-          <p class="text-sm">{{ formatDateTime(selectedDeployment.started_at) }}</p>
+          <p class="text-sm">{{ formatFleetDateTime(selectedDeployment.started_at, '-') }}</p>
         </div>
         <div>
           <p class="text-sm text-gray-500">{{ $t('deploymentsView.completedAt') }}</p>
-          <p class="text-sm">{{ formatDateTime(selectedDeployment.completed_at) }}</p>
+          <p class="text-sm">{{ formatFleetDateTime(selectedDeployment.completed_at, '-') }}</p>
         </div>
       </div>
 
@@ -1592,7 +1585,7 @@ function getNodeHostname(nodeId: string): string {
         </div>
         <div>
           <p class="text-sm text-gray-500">{{ $t('deploymentsView.started') }}</p>
-          <p class="text-sm font-medium">{{ formatDateTime(selectedBgDeployment.started_at) }}</p>
+          <p class="text-sm font-medium">{{ formatFleetDateTime(selectedBgDeployment.started_at, '-') }}</p>
         </div>
       </div>
       <template #actions>

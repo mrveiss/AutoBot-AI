@@ -317,8 +317,9 @@ watch(() => props.modelValue, (isOpen) => {
   font-size: var(--text-sm);
 }
 
-.export-summary i {
-  font-size: var(--text-xl);
+.export-summary .icon {
+  width: var(--text-xl);
+  height: var(--text-xl);
   color: var(--color-info);
 }
 
@@ -376,7 +377,7 @@ watch(() => props.modelValue, (isOpen) => {
 }
 
 .format-option.selected .format-icon {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: var(--text-on-primary);
 }
 

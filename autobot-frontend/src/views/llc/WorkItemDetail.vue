@@ -168,9 +168,13 @@
               </div>
               <div class="comment-body" v-html="renderMarkdown(c.body)" />
             </div>
-            <div v-if="comments.length === 0 && !isLoadingComments" class="meta-empty">
+            <div v-if="comments.length === 0 && !loading.comments && !failed.comments" class="meta-empty">
               {{ $t('llc.workItem.noComments') }}
             </div>
+            <div v-if="failed.comments" class="save-error" role="alert">{{ $t('llc.workItem.errors.commentsFailed') }}</div>
+            <button v-if="hasMoreComments" class="btn-primary" :disabled="loading.comments" @click="fetchComments(true)">
+              {{ $t('llc.workItem.loadMoreComments') }}
+            </button>
           </div>
           <div class="comment-input-row">
             <textarea
@@ -196,9 +200,10 @@
               </div>
               <a v-if="a.url" :href="a.url" target="_blank" class="artifact-link" rel="noopener">{{ $t('llc.workItem.viewArtifact') }}</a>
             </div>
-            <div v-if="artifacts.length === 0 && !isLoadingArtifacts" class="meta-empty">
+            <div v-if="artifacts.length === 0 && !loading.artifacts && !failed.artifacts" class="meta-empty">
               {{ $t('llc.workItem.noArtifacts') }}
             </div>
+            <div v-if="failed.artifacts" class="save-error" role="alert">{{ $t('llc.workItem.errors.artifactsFailed') }}</div>
           </div>
         </template>
 
@@ -210,17 +215,19 @@
               <span class="activity-actor">{{ evt.actor_name }}</span>
               <span class="activity-text">{{ evt.description }}</span>
             </div>
-            <div v-if="activity.length === 0 && !isLoadingActivity" class="meta-empty">
+            <div v-if="activity.length === 0 && !loading.activity && !failed.activity" class="meta-empty">
               {{ $t('llc.workItem.noActivity') }}
             </div>
+            <div v-if="failed.activity" class="save-error" role="alert">{{ $t('llc.workItem.errors.activityFailed') }}</div>
           </div>
         </template>
 
         <!-- Handoff Brief tab -->
         <template v-if="activeTab === 'handoff'">
           <div v-if="handoffBrief" class="handoff-brief" v-html="renderMarkdown(handoffBrief)" />
-          <div v-else-if="!isLoadingHandoff" class="meta-empty">{{ $t('llc.workItem.noHandoffBrief') }}</div>
-          <div v-if="isLoadingHandoff" class="meta-empty">{{ $t('llc.workItem.loadingBrief') }}</div>
+          <div v-else-if="!loading.handoff && !failed.handoff" class="meta-empty">{{ $t('llc.workItem.noHandoffBrief') }}</div>
+          <div v-if="loading.handoff" class="meta-empty">{{ $t('llc.workItem.loadingBrief') }}</div>
+          <div v-if="failed.handoff" class="save-error" role="alert">{{ $t('llc.workItem.errors.handoffFailed') }}</div>
         </template>
       </div>
     </div>
@@ -244,19 +251,19 @@ import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import HandoffModal from '@/components/llc/HandoffModal.vue'
+import { useWorkItemPanels } from '@/composables/llc/useWorkItemPanels'
 import { useCompanyPeople } from '@/composables/llc/useCompanyPeople'
 import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
 
 const logger = createLogger('WorkItemDetail')
 
-// Comments return with their read route (#18750): only POST .../comments is served, no GET.
-const COMMENTS_ENABLED = false
 const api = useApiClient()
 const { t } = useI18n()
 
 import type { WorkItem } from './workItemTypes'
-import { commentAuthor, toArtifact, toActivityEvent } from './workItemDetailTypes'
-import type { Comment, Artifact, ActivityEvent, GoalAncestor, RawWorkProduct, RawActivityEntry } from './workItemDetailTypes'
+import { commentAuthor } from './workItemDetailTypes'
+import type { Comment, GoalAncestor } from './workItemDetailTypes'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const props = defineProps<{
   item: WorkItem
@@ -274,7 +281,7 @@ const TABS = computed(() => [
   { key: 'artifacts', label: t('llc.workItem.tabArtifacts') },
   { key: 'activity', label: t('llc.workItem.tabActivity') },
   { key: 'handoff', label: t('llc.workItem.tabHandoff') },
-].filter((tab) => COMMENTS_ENABLED || tab.key !== 'comments'))
+])
 
 const activeTab = ref('details')
 const localItem = ref<WorkItem>({ ...props.item })
@@ -289,18 +296,14 @@ const origDesc = ref('')
 // #12348: message shown when an optimistic edit could not be persisted.
 const saveError = ref<string | null>(null)
 
-const comments = ref<Comment[]>([])
-const artifacts = ref<Artifact[]>([])
-const activity = ref<ActivityEvent[]>([])
+const {
+  comments, artifacts, activity, handoffBrief, hasMoreComments, loading, failed, addPostedComment,
+  fetchComments, fetchArtifacts, fetchActivity, fetchHandoffBrief,
+} = useWorkItemPanels(api, () => props.item.id)
 const goalAncestry = ref<GoalAncestor[]>([])
-const handoffBrief = ref<string | null>(null)
 const newComment = ref('')
 const isPosting = ref(false)
 const isActioning = ref(false)
-const isLoadingComments = ref(false)
-const isLoadingArtifacts = ref(false)
-const isLoadingActivity = ref(false)
-const isLoadingHandoff = ref(false)
 
 // #10531 handoff dialog + #10532 assignee picker.
 const handoffDirection = ref<'to_agent' | 'to_human' | null>(null)
@@ -350,9 +353,7 @@ const availableActions = computed(() => {
   return [...transitions, ...extras]
 })
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
+const formatTime = createDateFormatter({ intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } })
 
 function renderMarkdown(text: string) {
   return text
@@ -468,66 +469,17 @@ function onHandoffDone() {
 async function postComment() {
   if (!newComment.value.trim()) return
   isPosting.value = true
+  const postedTo = props.item.id
   try {
-    const comment = await api.post<Comment>(`/api/llc/work-items/${props.item.id}/comments`, {
-      body: newComment.value,
+    const comment = await api.post<Comment>(`/api/llc/work-items/${postedTo}/comments`, {
+      company_id: props.companyId, body: newComment.value,
     })
-    comments.value.push(comment)
+    addPostedComment(postedTo, comment)
     newComment.value = ''
   } catch (err) {
     logger.error('Post comment failed', err)
   } finally {
     isPosting.value = false
-  }
-}
-
-async function fetchComments() {
-  isLoadingComments.value = true
-  try {
-    const result = await api.get<{ comments: Comment[] }>(`/api/llc/work-items/${props.item.id}/comments`)
-    comments.value = result.comments ?? []
-  } catch (err) {
-    logger.error('Failed to load comments', err)
-  } finally {
-    isLoadingComments.value = false
-  }
-}
-
-async function fetchArtifacts() {
-  isLoadingArtifacts.value = true
-  try {
-    // GH#9851: the backend calls these work "products" and returns {products:[...]}.
-    const result = await api.get<{ products: RawWorkProduct[] }>(`/api/llc/work-items/${props.item.id}/products`)
-    artifacts.value = (result.products ?? []).map(toArtifact)
-  } catch (err) {
-    logger.error('Failed to load artifacts', err)
-  } finally {
-    isLoadingArtifacts.value = false
-  }
-}
-
-async function fetchActivity() {
-  isLoadingActivity.value = true
-  try {
-    // GH#9851: /activity returns an ActivityLogResponse ({items:[...]}).
-    const result = await api.get<{ items: RawActivityEntry[] }>(`/api/llc/work-items/${props.item.id}/activity`)
-    activity.value = (result.items ?? []).map(toActivityEvent)
-  } catch (err) {
-    logger.error('Failed to load activity', err)
-  } finally {
-    isLoadingActivity.value = false
-  }
-}
-
-async function fetchHandoffBrief() {
-  isLoadingHandoff.value = true
-  try {
-    const result = await api.get<{ brief: string }>(`/api/llc/work-items/${props.item.id}/handoff-brief`)
-    handoffBrief.value = result.brief ?? null
-  } catch {
-    handoffBrief.value = null
-  } finally {
-    isLoadingHandoff.value = false
   }
 }
 

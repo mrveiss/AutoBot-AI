@@ -175,7 +175,9 @@ celery_app.autodiscover_tasks(["tasks", "workers", "llc.scheduler"], related_nam
 # pricing.refresh_if_empty, and connect the worker_ready handler that queues
 # the latter on worker startup (#16231, #16250).
 import services.pricing_refresh  # noqa: F401
+from llc.storage_root import LLC_ATTACHMENT_SWEEP_INTERVAL_SECONDS  # noqa: E402
 from llm_shared.pricing.redis_store import REFRESH_INTERVAL_HOURS as _PRICING_REFRESH_INTERVAL_HOURS  # noqa: E402
+from services.trigger_secrets import TRIGGER_SECRET_AUDIT_SCHEDULE  # noqa: E402
 from utils.celery_schedules import crontab_from_string  # noqa: E402
 
 # =========================================================================
@@ -228,6 +230,19 @@ celery_app.conf.beat_schedule = {
     "llc-workspace-lease-sweep": {
         "task": "llc.scheduler.workspace_lease_sweep.run_workspace_lease_sweep",
         "schedule": crontab(minute=50),
+    },
+    # #19756: retry attachment file removals recorded in the deletion outbox until the file is
+    # gone, and settle stale staging files (publish a committed upload, quarantine an uncommitted
+    # one). It completes deletes callers already asked for; it decides none (#17038).
+    "llc-attachment-file-sweep": {
+        "task": "llc.scheduler.attachment_file_sweep.run_attachment_file_sweep",
+        "schedule": timedelta(seconds=LLC_ATTACHMENT_SWEEP_INTERVAL_SECONDS),
+    },
+    # #19759: propose (never perform) a human-approved re-encryption of webhook
+    # secrets still stored in plaintext. Schedule from AUTOBOT_TRIGGER_SECRET_AUDIT_SCHEDULE (crontab).
+    "llc-trigger-secret-audit": {
+        "task": "llc.scheduler.trigger_secret_audit.run_trigger_secret_audit",
+        "schedule": crontab_from_string(TRIGGER_SECRET_AUDIT_SCHEDULE),
     },
     # GH#7356: background audit daemon — testgaps, dead-code, claims
     # Beat pidfile must NOT reside on tmpfs (/run/autobot/ is wiped on reboot).

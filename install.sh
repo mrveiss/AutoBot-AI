@@ -23,7 +23,7 @@ if [ -z "${BASH_VERSION:-}" ]; then
     exit 1
 fi
 
-set -euo pipefail
+set -euo pipefail; umask 022  # #19503: the root-run code tree must not take a loose caller umask (world-writable)
 
 # =============================================================================
 # Constants
@@ -58,7 +58,7 @@ readonly DEFAULT_REPO="https://${REPO_HOST}/${REPO_SLUG}.git"
 readonly NODESOURCE_HOST="deb.nodesource.com"
 # #19239: each pinned to its source of truth by a repo test -- autobot-frontend/package.json
 # engines.node, the slm_manager role's slm_backend_port -- since the installer runs before the code exists.
-readonly NODE_MIN_VERSION="20.19.0" SLM_BACKEND_PORT="8000"
+readonly NODE_MIN_VERSION="22.22.2" SLM_BACKEND_PORT="8000"
 readonly IP_CACHE_FILE="/run/autobot-install-ip"  # root-only, unlike /tmp, which any user can plant a file in
 readonly DEFAULT_BRANCH="main" PINNED_COMMIT=""  # a release build pins both: tag and its commit (#18666)
 # #18586: where this script was started from, resolved before any cd; empty under `curl | bash`
@@ -77,7 +77,7 @@ VALIDATE=false
 CONFIRM_YES=false
 ROTATE_SECRETS=false  # #7075: --rotate-secrets opts in to replacing existing SLM_ADMIN_PASSWORD
 INSTALL_TMP="" ADMIN_PASSWORD_GENERATED=false ADMIN_PASSWORD_PRESERVED=false  # #19236: private temp dir; print the password only if generated. PRESERVED: a reinstall kept the stored one
-GIT_BRANCH="${DEFAULT_BRANCH}"
+GIT_BRANCH=""  # empty until --branch=, AUTOBOT_INSTALL_BRANCH, unattended or the prompt sets it -- a default here made the prompt unreachable (#7060, #19403)
 ADMIN_PASSWORD=""
 OVERRIDE_IP=""  # --ip= override for multi-interface hosts (#2832)
 
@@ -268,11 +268,9 @@ detect_local_ip() {
             echo -e "    ${CYAN}[$((i+1))]${NC} ${ifaces[$i]}: ${ips[$i]}" >&2
         done
         local choice=""  # /dev/tty, never stdin: under curl | bash stdin is the script itself (#17929)
-        prompt_from_tty choice "  Select interface for AutoBot [1-${#ips[@]}]: " || fatal "No terminal to choose an interface: rerun with AUTOBOT_INSTALL_INTERFACE=<name> (one of: ${ifaces[*]})."
+        prompt_from_tty choice "  Select interface for AutoBot [1-${#ips[@]}]: " || fatal "No terminal to choose an interface. sudo drops variables set before it, so pass the choice after it: curl -fsSL <installer-url> | sudo AUTOBOT_INSTALL_INTERFACE=<name> bash (one of: ${ifaces[*]}), or | sudo bash -s -- --ip=<address>."
         [[ "${choice}" =~ ^[0-9]+$ ]] || fatal "Invalid selection"; choice=$((choice - 1))
-        if [[ $choice -lt 0 || $choice -ge ${#ips[@]} ]]; then
-            fatal "Invalid selection"
-        fi
+        [[ $choice -ge 0 && $choice -lt ${#ips[@]} ]] || fatal "Invalid selection"
         detected_ip="${ips[$choice]}"
         success "Using ${ifaces[$choice]}: ${detected_ip}" >&2
     fi
@@ -483,7 +481,7 @@ system_setup() {
 
     if ! command -v node &>/dev/null; then
         run_ok "Adding NodeSource repository" \
-            bash -c "curl -fsSL https://${NODESOURCE_HOST}/setup_20.x | bash -"
+            bash -c "curl -fsSL https://${NODESOURCE_HOST}/setup_${NODE_MIN_VERSION%%.*}.x | bash -"
         apt_install_recorded "Installing Node.js" nodejs; record_install apt_source nodesource
     elif [[ "$(printf '%s\n' "${NODE_MIN_VERSION}" "$(node --version | tr -d v)" | sort -V | head -1)" != "${NODE_MIN_VERSION}" ]]; then
         fatal "Node.js $(node --version) is installed, but AutoBot needs ${NODE_MIN_VERSION} or newer. Upgrade or remove it, then rerun this installer."
@@ -502,6 +500,7 @@ system_setup() {
         success "  User '${AUTOBOT_USER}' already exists"
     fi
 
+    local fresh_base=false; [[ -d "${AUTOBOT_BASE}" ]] || fresh_base=true
     run_ok "Creating directory structure" \
         mkdir -p \
             "${AUTOBOT_BASE}" \
@@ -513,6 +512,7 @@ system_setup() {
             /etc/autobot \
             /etc/autobot/ssh
 
+    if ${fresh_base} && command -v setfacl >/dev/null 2>&1; then setfacl -R -b -k "${AUTOBOT_BASE}" || warn "Could not clear inherited ACLs on ${AUTOBOT_BASE}"; fi  # #19503: a parent's default ACL overrides the umask; only a tree created just now
     chown -R "${AUTOBOT_USER}:${AUTOBOT_USER}" "${AUTOBOT_BASE}"
     success "  Directory ownership set"
 
@@ -593,7 +593,7 @@ code_deployment() {
     for dir in "${CRITICAL_DIRS[@]}"; do
         if [[ -d "${CODE_SOURCE}/${dir}" ]]; then
             run_ok "Copying ${dir} to ${AUTOBOT_BASE}/${dir}" \
-                sudo -u "${AUTOBOT_USER}" rsync -a --delete "${CODE_SOURCE}/${dir}/" "${AUTOBOT_BASE}/${dir}/"
+                sudo -u "${AUTOBOT_USER}" rsync -a --chmod=o-w --delete "${CODE_SOURCE}/${dir}/" "${AUTOBOT_BASE}/${dir}/"
             if [[ ! -d "${AUTOBOT_BASE}/${dir}" ]]; then
                 fatal "Distribution of ${dir} failed — destination directory not created"
             fi
@@ -656,15 +656,17 @@ INVENTORY
 
     if [[ ! -f "${SECRETS_FILE}" ]] || [[ "${REINSTALL}" == true ]]; then
         info "Writing secrets file..."
-        local secret_key encryption_key hmac_api_key_secret local_ip network_subnet network_gateway
+        local secret_key encryption_key hmac_api_key_secret local_ip network_subnet network_gateway autobot_encryption_key
+        autobot_encryption_key=$(if [[ -f "${SECRETS_FILE}" ]]; then grep -oP '^AUTOBOT_ENCRYPTION_KEY=\K.+' "${SECRETS_FILE}" || true; else openssl rand -hex 32; fi)  # #19864: new installs only; a reinstall keeps what it has
         secret_key=$(openssl rand -hex 32) encryption_key=$(openssl rand -hex 32) hmac_api_key_secret=$(grep -oP '^SLM_HMAC_API_KEY_SECRET=\K.+' "${SECRETS_FILE}" 2>/dev/null | head -1 || true); hmac_api_key_secret=${hmac_api_key_secret:-$(openssl rand -hex 32)}  # #16299, #19120: a reinstall keeps an existing pepper
         # Issue #2758: detect the machine's primary outbound IP so that
         # SLM_EXTERNAL_URL is set correctly and not left to the Python fallback.
         local_ip="$(detect_local_ip)"
         detect_network
-        cat > "${SECRETS_FILE}" << EOF
+        (umask 077; cat > "${SECRETS_FILE}") << EOF  # created 0600, never briefly world-readable under the tree's 022
 SLM_SECRET_KEY=${secret_key}
 SLM_ENCRYPTION_KEY=${encryption_key}
+AUTOBOT_ENCRYPTION_KEY=${autobot_encryption_key}
 SLM_HMAC_API_KEY_SECRET=${hmac_api_key_secret}
 SLM_ADMIN_PASSWORD=${ADMIN_PASSWORD}
 SLM_EXTERNAL_URL=https://${local_ip}
@@ -683,10 +685,7 @@ EOF
         local local_ip network_subnet network_gateway
         local_ip="$(detect_local_ip)"
         detect_network
-        # Upsert each key: replace the line if it exists, append if missing.
-        # Plain sed s/// silently does nothing when the key is absent — which
-        # causes SLM_HOST / NETWORK_* to stay missing on secrets files written
-        # before those keys were introduced (#3194).
+        # Upsert, as plain sed s/// does nothing on a file written before the key existed (#3194).
         _upsert_secrets_key() {
             local key="$1" value="$2" file="$3"
             if grep -q "^${key}=" "${file}"; then
@@ -713,10 +712,9 @@ EOF
     chown "${AUTOBOT_USER}:${AUTOBOT_USER}" /tmp/ansible_fact_cache /tmp/ansible-retry /tmp/.ansible-cp
 
     info "Running Ansible deployment (this may take several minutes)..."
-    # #6600: keep `provision` so backend role applies to the SLM manager node in
-    # single-host mode. Skip only `seed` — fleet seeding requires SLM DB
-    # rows that don't exist yet on a fresh install.
-    log "  Playbook: deploy-slm-manager.yml --skip-tags seed"
+    # #6600: keep `provision` so backend role applies to the SLM manager node in single-host mode. Skip only
+    # `seed` — fleet seeding requires SLM DB rows absent on a fresh install. #19867: the re-run hint shares this set.
+    local skip_tags="seed"; log "  Playbook: deploy-slm-manager.yml --skip-tags ${skip_tags}"
     info "  Live progress below — full output also in ${LOG_FILE}"
     echo
 
@@ -726,13 +724,13 @@ EOF
     ansible-playbook \
         -i "${inventory}" \
         playbooks/deploy-slm-manager.yml \
-        --skip-tags "seed" \
+        --skip-tags "${skip_tags}" \
         -e "@${vars_file}" \
         -e "target_host=localhost" \
         2>&1 | tee -a "${LOG_FILE}" | \
-        grep --line-buffered -E \
-            "^(PLAY \[|TASK \[|ok: \[|changed: \[|failed: \[|skipping: \[|fatal:|PLAY RECAP|[A-Za-z0-9_-].*: ok=)"
-    _ansible_exit=${PIPESTATUS[0]}
+        { grep --line-buffered -E \
+            "^(PLAY \[|TASK \[|ok: \[|changed: \[|failed: \[|skipping: \[|fatal:|PLAY RECAP|[A-Za-z0-9_-].*: ok=)" || true; }
+    _ansible_exit=${PIPESTATUS[0]}  # #19493: `|| true` -- a no-match grep exit killed the run here, silently, under set -e
     set -o pipefail
 
     echo
@@ -741,7 +739,7 @@ EOF
     else
         error "Ansible deployment failed (exit ${_ansible_exit})"
         error "Check ${LOG_FILE} for details"
-        error "Re-run: cd ${ansible_dir} && ansible-playbook -i ${inventory} playbooks/deploy-slm-manager.yml --skip-tags seed,provision"
+        error "Re-run: cd ${ansible_dir} && ansible-playbook -i ${inventory} playbooks/deploy-slm-manager.yml --skip-tags ${skip_tags}"
         exit 1
     fi
 }
@@ -1064,6 +1062,11 @@ prompt_config() {
 # Distribution Validation (#4130)
 # =============================================================================
 
+report_world_writable_code() {
+    local found; found="$(find "${CODE_SOURCE}" "${CRITICAL_DIRS[@]/#/${AUTOBOT_BASE}/}" -xdev \( -type d -o -type f \) -perm -0002 -print 2>/dev/null | wc -l)" || true  # #19503: read-only, approval changes a live tree (#17038); a missing dir must not end --validate
+    [[ "${found}" -eq 0 ]] || warn "${found} world-writable paths in the code tree: any local account can change what root runs. List them: find ${CODE_SOURCE} ${AUTOBOT_BASE} -xdev -perm -0002"
+}
+
 validate_distributions() {
     # Verify all critical service directories are present in AUTOBOT_BASE.
     # Called standalone via --validate or at the end of code_deployment().
@@ -1104,7 +1107,7 @@ parse_args() {
             --yes|-y)         CONFIRM_YES=true;        shift ;;
             --branch=*)       GIT_BRANCH="${1#*=}";    shift ;;
             --admin-pass-file=*) read_admin_pass_file "${1#*=}"; shift ;;
-            --admin-pass=*)   arg_error "--admin-pass= puts the password on the command line, readable by every local user (#19236). Use --admin-pass-file=PATH, AUTOBOT_SLM_ADMIN_PASSWORD, or the prompt." ;;
+            --admin-pass=*)   arg_error "--admin-pass= puts the password on the command line, readable by every local user (#19236). Use --admin-pass-file=PATH, SLM_ADMIN_PASSWORD, or the prompt." ;;
             --ip=*)           OVERRIDE_IP="${1#*=}";    shift ;;
             --rotate-secrets) ROTATE_SECRETS=true;     shift ;;
             --help|-h)        print_usage; exit 0 ;;
@@ -1136,18 +1139,14 @@ uninstall() {
 # =============================================================================
 
 main() {
-    parse_args "$@"
+    parse_args "$@"; cd /  # the service user cannot read the caller's cwd, and git aborts in it (#19403)
 
     if ${UNINSTALL}; then
         uninstall
         exit 0
     fi
 
-    if ${VALIDATE}; then
-        _log_init
-        validate_distributions
-        exit 0
-    fi
+    if ${VALIDATE}; then _log_init; report_world_writable_code; validate_distributions; exit 0; fi
 
     _log_init
     # #19236: one owner-only temp dir for the run, removed however it ends -- exit, fatal, Ctrl-C.

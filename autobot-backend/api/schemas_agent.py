@@ -11,6 +11,7 @@ from typing import Any, Dict, List
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
+from autobot_shared.ssot_config import config
 from models.session_collaboration import PermissionLevel
 from services.personality_service import SUPPORTED_LANGUAGES
 from skills.models import GovernanceMode, SkillActivationLevel
@@ -1504,7 +1505,6 @@ class OrganizationCreate(BaseModel):
     slug: str | None = Field(None, max_length=100)
     description: str | None = Field(None, max_length=500)
     settings: dict | None = Field(default_factory=dict)
-    subscription_tier: str = Field("free")
     max_users: int = Field(-1)
 
 
@@ -1512,7 +1512,6 @@ class OrganizationUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=255)
     description: str | None = Field(None, max_length=500)
     settings: dict | None = None
-    subscription_tier: str | None = None
     max_users: int | None = None
 
 
@@ -1522,7 +1521,6 @@ class OrganizationResponse(BaseModel):
     slug: str
     description: str | None
     settings: dict
-    subscription_tier: str
     max_users: int
     is_active: bool
     created_at: str
@@ -1553,7 +1551,6 @@ class OrganizationStatsResponse(BaseModel):
     organization_id: str
     name: str
     slug: str
-    subscription_tier: str
     users: dict
     teams: dict
     is_active: bool
@@ -1769,10 +1766,9 @@ class InferenceOptimizationSettings(BaseModel):
     prompt_compression_min_length: int = 100
     prompt_compression_preserve_code: bool = True
     prompt_compression_aggressive: bool = False
-
     cache_enabled: bool = True
-    cache_l1_size: int = 100
-    cache_l2_ttl: int = 300
+    cache_l1_size: int = config.misc.cache_l1_size  # #19730
+    cache_l2_ttl: int = config.misc.cache_l2_ttl
 
     cloud_connection_pool_size: int = 100
     cloud_batch_window_ms: int = 50
@@ -1958,7 +1954,7 @@ class AgentModelUpdate(BaseModel):
 
     agent_id: str
     model: str
-    provider: str | None = "ollama"
+    provider: str | None = config.llm.provider  # #19730
 
 
 # ---------------------------------------------------------------------------

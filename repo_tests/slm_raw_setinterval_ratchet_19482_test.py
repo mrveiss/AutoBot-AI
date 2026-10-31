@@ -38,9 +38,14 @@ _COMMENT = re.compile(r"^\s*(//|\*|/\*)")
 
 # 35 measured on 129148ebe9; 29 after the first batch (BatchTool, InfrastructureWizard,
 # SystemUpdatesTab); 23 after the second (RedisServicePanel, NPUPerformanceMetrics,
-# NPUWorkerMonitor, LLMFallbacksView, Sidebar, CodeSyncBadge;
-# #19482). Lower it by exactly what a PR migrates.
-PINS = {"raw_setinterval_calls": 23}
+# NPUWorkerMonitor, LLMFallbacksView, Sidebar, CodeSyncBadge); 4 after the third (AgentsTool,
+# MCPTool, NPUWorkersSettings, LogViewer, PerformanceOverview, usePerformanceMonitoring,
+# AlertsMonitor, MetricsDetailsView, useFleetMetrics, ErrorMonitor, OrchestrationView,
+# AdminMonitoringView, LoadBalancingView, NodeServicesPanel, NodeLifecyclePanel's event
+# poller, the provision store's status poller; #19482); 3 after the fourth (``useSkills``'s
+# approval poll). The 3 left are the non-pollers, so the pin is at FLOOR. Lower it by exactly
+# what a PR migrates.
+PINS = {"raw_setinterval_calls": 3}
 
 # The non-poller calls that keep setInterval; the count cannot go below these.
 FLOOR = 3

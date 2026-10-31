@@ -1634,6 +1634,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/code-sync/update-all/report": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Update Report
+         * @description The last update's target, stage, result, failed task, error and role deploys.
+         */
+        get: operations["get_update_report_api_code_sync_update_all_report_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/code-sync/update-all/status": {
         parameters: {
             query?: never;
@@ -7618,7 +7638,7 @@ export interface components {
         };
         /**
          * AgentResponse
-         * @description Agent response with LLM config.
+         * @description Agent response with LLM config (the LLM fields are AgentLLMConfig's, #19730).
          */
         AgentResponse: {
             /** Agent Id */
@@ -17947,6 +17967,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UpdateAllJob"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_update_report_api_code_sync_update_all_report_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "X-Internal-API-Key"?: string | null;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
                 };
             };
             /** @description Validation Error */

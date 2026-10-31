@@ -1,7 +1,7 @@
 # Shared environment setup for every job that runs the Python test suite.
 #
-# #13316: sharding python-suite turns one copy of this block into many (twelve
-# matrix shards on the PR gate, twelve more on the nightly coverage run, plus
+# #13316: sharding python-suite turns one copy of this block into many (eight
+# matrix shards on the PR gate, twelve on the nightly coverage run, plus
 # the durations job). Duplicating an interpreter version, a dependency set and a
 # config fixture that many times guarantees they drift, and a shard that
 # installs different packages from the one that measured the durations produces
@@ -549,33 +549,4 @@ runs:
 
         # Minimal config.yaml for CI testing. `redis.host`/`redis.port` point at
         # the service container the calling job declares (#13316).
-        cat > config/config.yaml << 'EOF'
-        # CI Testing Configuration
-        llm:
-          orchestrator_llm: "mock"
-          task_llm: "mock"
-          ollama:
-            model: "mock-model"
-            models: {}
-          unified:
-            embedding:
-              providers:
-                ollama:
-                  selected_model: "mock-embed"
-
-        # #19316: no deployment.mode -- AUTOBOT_DEPLOYMENT_MODE is the one home; unset is auto-detect.
-
-        data:
-          reliability_stats_file: "data/reliability_stats.json"
-
-        diagnostics:
-          enabled: false
-          use_llm_for_analysis: false
-          use_web_search_for_analysis: false
-          auto_apply_fixes: false
-
-        redis:
-          host: "localhost"
-          port: 6379
-          db: 0
-        EOF
+        cp "${{ github.action_path }}/ci-config.yaml" config/config.yaml

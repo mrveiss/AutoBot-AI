@@ -33,6 +33,7 @@ from typing import NamedTuple, Sequence
 
 import pytest
 from repo_tests._paths import repo_root
+from repo_tests._pinned_sweep import masked
 from repo_tests._reach import declare
 
 from autobot_shared.ssot_config import PortConfig
@@ -87,7 +88,7 @@ PINNED: tuple[Pin, ...] = (
     Pin(
         "npu_windows",
         "autobot-infrastructure/shared/mcp/tools/mcp-autobot-tracker/src/constants/network.ts",
-        r"NPU_WORKER_WINDOWS_PORT \|\| '(\d+)'",
+        r"'NPU_WORKER_WINDOWS_PORT', '(\d+)'",
         1,
     ),
     Pin(
@@ -172,7 +173,7 @@ def _scanned_files(root: Path) -> list[str]:
 FILES = declare(
     "service-port-homes-scan",
     discover=_scanned_files,
-    floor=5444,  # mid-window: population 5519, window (5369, 5519)
+    floor=5507,  # mid-window: population 5582, window (5432, 5582)
     growth=150,
     what="production python and text sources swept for a second definition of a service port",
     roots=_SCAN_ROOTS,
@@ -237,24 +238,6 @@ def _homes(number: int) -> set[str]:
     if ssot_port(field) != number:
         return set()
     return {_SSOT_HOME} | {pin.rel for pin in PINNED if pin.field == field}
-
-
-def masked(text: str, pattern: str) -> str:
-    """*text* with each capture of *pattern* overwritten by ``_``: the pinned sites, and only them.
-
-    ``_`` keeps a masked Python literal parseable (it becomes a name), and every line keeps its
-    length and number, so the sites left over are reported where they stand.
-    """
-
-    def _blank(m: re.Match[str]) -> str:
-        out, last = [], m.start()
-        for group in range(1, (m.re.groups or 0) + 1):
-            if m.start(group) >= 0:
-                out += [text[last : m.start(group)], "_" * (m.end(group) - m.start(group))]
-                last = m.end(group)
-        return "".join(out) + text[last : m.end()]
-
-    return re.sub(pattern, _blank, text, flags=re.MULTILINE)
 
 
 def _unpinned(rel: str, text: str, number: int) -> str:

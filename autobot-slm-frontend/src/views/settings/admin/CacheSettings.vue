@@ -151,7 +151,7 @@ async function clearRedisCache(database: string): Promise<void> {
     await fetchCacheStats()
     setTimeout(() => { success.value = null }, 3000)
   } catch (e) {
-    error.value = autobotApiErrorMessage(e, 'Failed to clear Redis database')
+    error.value = autobotApiErrorMessage(e, t('settings.admin.cacheSettings.failedToClearRedisDatabase'))
   } finally {
     clearing.value = false
   }
@@ -333,7 +333,7 @@ onMounted(async () => {
           </div>
           <div class="p-4 bg-gray-50 rounded-lg">
             <p class="text-sm text-gray-500">{{ $t('settings.admin.cacheSettings.cacheSize') }}</p>
-            <p class="text-2xl font-semibold text-gray-900">{{ formatBytes((cacheStats.size_mb || 0) * 1024 * 1024, { units: ['B', 'KB', 'MB', 'GB'], zeroText: '0 B' }) }}</p>
+            <p class="text-2xl font-semibold text-gray-900">{{ formatBytes((cacheStats.size_mb || 0) * 1024 * 1024, { units: ['B', 'KB', 'MB', 'GB'], zeroText: t('common.zeroSize') }) }}</p>
           </div>
           <div class="p-4 bg-gray-50 rounded-lg">
             <p class="text-sm text-gray-500">{{ $t('settings.admin.cacheSettings.hitRate') }}</p>

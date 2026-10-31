@@ -193,6 +193,7 @@ import { KnowledgeRepository } from '@/models/repositories'
 import type { SearchResult, KnowledgeDocument } from '@/stores/useKnowledgeStore'
 import { createLogger } from '@/utils/debugUtils'
 import { preferredScrollBehavior } from '@/composables/useReducedMotion'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('KBSearchResultPanel')
 
@@ -396,13 +397,7 @@ function scoreClass(score: number): string {
   return 'score-low'
 }
 
-function formatDate(date: Date | string): string {
-  try {
-    return new Date(date).toLocaleDateString()
-  } catch {
-    return ''
-  }
-}
+const formatDate = createDateFormatter({ kind: 'date', invalidText: '' })
 
 async function copyContent(): Promise<void> {
   if (!viewerContent.value) return
@@ -435,7 +430,7 @@ async function copyContent(): Promise<void> {
   @apply flex items-center gap-2 text-sm font-medium text-autobot-text-primary;
 }
 
-.panel-title i {
+.panel-title .icon {
   @apply text-blue-500;
 }
 
@@ -486,7 +481,7 @@ async function copyContent(): Promise<void> {
   @apply text-xs px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 font-medium shrink-0 flex items-center gap-1;
 }
 
-.rerank-badge i {
+.rerank-badge .icon {
   @apply text-blue-500;
 }
 
@@ -506,7 +501,7 @@ async function copyContent(): Promise<void> {
   @apply flex gap-3 text-xs text-autobot-text-muted mb-1;
 }
 
-.result-item-meta i {
+.result-item-meta .icon {
   @apply mr-0.5;
 }
 
@@ -523,7 +518,7 @@ async function copyContent(): Promise<void> {
   @apply flex flex-col items-center justify-center h-full text-autobot-text-muted gap-2 px-6 text-center;
 }
 
-.viewer-empty i {
+.viewer-empty .icon {
   @apply text-3xl text-autobot-text-muted;
 }
 
@@ -555,7 +550,7 @@ async function copyContent(): Promise<void> {
   @apply flex flex-wrap gap-3 text-xs text-autobot-text-muted;
 }
 
-.viewer-meta i {
+.viewer-meta .icon {
   @apply mr-0.5;
 }
 
@@ -609,7 +604,7 @@ async function copyContent(): Promise<void> {
   @apply flex flex-col items-center justify-center py-12 text-autobot-text-muted gap-2;
 }
 
-.empty-state i {
+.empty-state .icon {
   @apply text-3xl;
 }
 

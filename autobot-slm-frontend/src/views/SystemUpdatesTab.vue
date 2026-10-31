@@ -15,7 +15,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BaseAlert, usePollingJob } from '@autobot/ui'
 import { useFleetStore } from '@/stores/fleet'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import {
   useSystemUpdates,
   type UpdatePackage,
@@ -206,11 +206,6 @@ function getSeverityBadge(severity: string): string {
   return map[severity] || 'bg-gray-100 text-gray-600'
 }
 
-function formatDate(d: string | null): string {
-  if (!d) return '-'
-  return formatDateTime(d)
-}
-
 // Watch for running jobs to start polling
 watch(
   () => systemUpdates.hasRunningJobs.value,
@@ -366,7 +361,7 @@ onMounted(async () => {
       <div class="bg-white rounded-lg border p-4">
         <p class="text-sm text-gray-500">{{ $t('systemUpdatesTab.lastChecked') }}</p>
         <p class="text-sm font-medium mt-1">
-          {{ formatDate(systemUpdates.lastChecked.value) }}
+          {{ formatFleetDateTime(systemUpdates.lastChecked.value, '-') }}
         </p>
       </div>
     </div>
@@ -593,7 +588,7 @@ onMounted(async () => {
               </div>
             </td>
             <td class="px-4 py-3 text-sm text-gray-500">
-              {{ formatDate(job.started_at) }}
+              {{ formatFleetDateTime(job.started_at, '-') }}
             </td>
             <td class="px-4 py-3 text-right">
               <button

@@ -73,11 +73,6 @@ MAX_LINES = 600
 #: Repo-relative path of this hook, quoted in every message that asks for an edit.
 SELF_REL = "scripts/check_shell_file_size.py"
 
-#: The ratchet test holding RATCHET_BASELINE, the second copy of these numbers.
-#: A ceiling lowered in one file alone leaves the other holding the old size,
-#: and the gap between them is spendable (#14498).
-RATCHET_REL = "repo_tests/shell_file_size_ratchet_baseline.py"
-
 #: Prefixes this gate does not cover, mirrored from its own `exclude:` in
 #: `.pre-commit-config.yaml`. The tree walk runs independently of pre-commit,
 #: so without this it would flag files pre-commit was never configured to gate.
@@ -92,8 +87,8 @@ MIN_TRACKED_SH_FILES = 180
 
 #: Grandfathered files: over MAX_LINES when this gate landed, mapped to the
 #: line count recorded for each. THIS MAPPING ONLY SHRINKS. Never add an entry
-#: to make a new file pass — split the file. Mirrored in RATCHET_REL; lower an
-#: entry in both in the same commit.
+#: to make a new file pass — split the file. The only copy
+#: (#19544): the ratchet test checks it against the base commit's.
 #:
 #: Ten entries, not the 509 the Python gate had to carry, which is why they sit
 #: inline here rather than in a sibling data module.
@@ -109,7 +104,7 @@ KNOWN_LARGE: dict[str, int] = {
     # aborted silently at the password prompt -- stdin is the script pipe, `read`
     # got EOF, `set -e` killed it. The file is delivered BY curl, so it cannot
     # source a helper and cannot be split; the exemption's own reason still holds.
-    "install.sh": 1169,  # #18653: the uninstaller moved to scripts/uninstall.sh; single-file installer cannot be split
+    "install.sh": 1168,  # #18653: the uninstaller moved to scripts/uninstall.sh; single-file installer cannot be split
     "scripts/lib/hardcoded-value-rules.sh": 842,
     "scripts/pr-preflight.sh": 815,
 }

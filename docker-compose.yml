@@ -87,15 +87,20 @@ services:
       - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./docker/postgres/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql
+      - ./docker/postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh
     environment:
-      - POSTGRES_USER=${AUTOBOT_DB_USER:-autobot}
+      # Canonical names first; AUTOBOT_DB_USER, AUTOBOT_DB_NAME and AUTOBOT_USERS_DB_NAME still
+      # work for one release, and the SLM logs a deprecation warning naming them (#19408).
+      - POSTGRES_USER=${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}}
       - POSTGRES_PASSWORD=${AUTOBOT_DB_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}
-      - POSTGRES_DB=${AUTOBOT_DB_NAME:-autobot_slm}
+      - POSTGRES_DB=${SLM_DB_NAME:-${AUTOBOT_DB_NAME:-autobot_slm}}
+      # Read by docker/postgres/init-databases.sh, which creates this database. Postgres runs that
+      # script only on an empty volume; on an existing one, create a renamed database by hand.
+      - AUTOBOT_POSTGRES_DB=${AUTOBOT_POSTGRES_DB:-${AUTOBOT_USERS_DB_NAME:-autobot_users}}
     healthcheck:
       # -d targets an existing DB; without it pg_isready connects to db=user
       # ("autobot"), which is never created → FATAL spam every interval (#9713).
-      test: ["CMD-SHELL", "pg_isready -U ${AUTOBOT_DB_USER:-autobot} -d ${AUTOBOT_DB_NAME:-autobot_slm}"]
+      test: ["CMD-SHELL", "pg_isready -U ${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}} -d ${SLM_DB_NAME:-${AUTOBOT_DB_NAME:-autobot_slm}}"]
       interval: 10s
       timeout: 3s
       retries: 5
@@ -280,8 +285,8 @@ services:
       - AUTOBOT_ADMIN_USERNAME=${AUTOBOT_ADMIN_USERNAME:-admin}
       - AUTOBOT_POSTGRES_HOST=autobot-postgres
       - AUTOBOT_POSTGRES_PORT=5432
-      - AUTOBOT_POSTGRES_DB=${AUTOBOT_USERS_DB_NAME:-autobot_users}
-      - AUTOBOT_POSTGRES_USER=${AUTOBOT_DB_USER:-autobot}
+      - AUTOBOT_POSTGRES_DB=${AUTOBOT_POSTGRES_DB:-${AUTOBOT_USERS_DB_NAME:-autobot_users}}
+      - AUTOBOT_POSTGRES_USER=${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}}
       - AUTOBOT_POSTGRES_PASSWORD=${AUTOBOT_DB_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}
       - AUTOBOT_ENCRYPTION_KEY=${AUTOBOT_ENCRYPTION_KEY:-}
       # config.slm_url builds from AUTOBOT_SLM_HOST/PORT. The 127.0.0.1 default
@@ -417,8 +422,8 @@ services:
       - AUTOBOT_USER_MODE=${AUTOBOT_USER_MODE:-single_company}
       - AUTOBOT_POSTGRES_HOST=autobot-postgres
       - AUTOBOT_POSTGRES_PORT=5432
-      - AUTOBOT_POSTGRES_DB=${AUTOBOT_USERS_DB_NAME:-autobot_users}
-      - AUTOBOT_POSTGRES_USER=${AUTOBOT_DB_USER:-autobot}
+      - AUTOBOT_POSTGRES_DB=${AUTOBOT_POSTGRES_DB:-${AUTOBOT_USERS_DB_NAME:-autobot_users}}
+      - AUTOBOT_POSTGRES_USER=${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}}
       - AUTOBOT_POSTGRES_PASSWORD=${AUTOBOT_DB_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}
       - AUTOBOT_ENCRYPTION_KEY=${AUTOBOT_ENCRYPTION_KEY:-}
       - AUTOBOT_SLM_HOST=autobot-slm
@@ -588,8 +593,12 @@ services:
       - AUTOBOT_LOG_LEVEL=${AUTOBOT_LOG_LEVEL:-INFO}
       - AUTOBOT_REDIS_HOST=autobot-redis
       - AUTOBOT_REDIS_PORT=6379
-      - SLM_DATABASE_URL=postgresql+asyncpg://${AUTOBOT_DB_USER:-autobot}:${AUTOBOT_DB_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}@autobot-postgres:5432/${AUTOBOT_DB_NAME:-autobot_slm}
-      - SLM_USERS_DATABASE_URL=postgresql+asyncpg://${AUTOBOT_DB_USER:-autobot}:${AUTOBOT_DB_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}@autobot-postgres:5432/slm_users
+      - SLM_DATABASE_URL=postgresql+asyncpg://${SLM_POSTGRES_USER:-${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}}}:${AUTOBOT_DB_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}@autobot-postgres:5432/${SLM_DB_NAME:-${AUTOBOT_DB_NAME:-autobot_slm}}
+      - SLM_USERS_DATABASE_URL=postgresql+asyncpg://${SLM_POSTGRES_USER:-${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}}}:${AUTOBOT_DB_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}@autobot-postgres:5432/slm_users
+      # #19406: without this the SLM falls back to 127.0.0.1 and role slm_app for autobot_users.
+      # A non-default SLM_POSTGRES_USER must already exist: compose creates only the owner role (#19408).
+      - AUTOBOT_USERS_DATABASE_URL=postgresql+asyncpg://${SLM_POSTGRES_USER:-${AUTOBOT_POSTGRES_USER:-${AUTOBOT_DB_USER:-autobot}}}:${AUTOBOT_DB_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}@autobot-postgres:5432/${AUTOBOT_POSTGRES_DB:-${AUTOBOT_USERS_DB_NAME:-autobot_users}}
+      - AUTOBOT_COMPOSE_LEGACY_DB_VARS=${AUTOBOT_DB_USER:+AUTOBOT_DB_USER }${AUTOBOT_DB_NAME:+AUTOBOT_DB_NAME }${AUTOBOT_USERS_DB_NAME:+AUTOBOT_USERS_DB_NAME}
       - SLM_POSTGRES_HOST=autobot-postgres
       - SLM_ADMIN_PASSWORD=${SLM_ADMIN_PASSWORD:?run docker/generate-secrets.sh and pass --env-file docker/.env.secrets (INSTALL.md)}
       - SLM_DATA_DIR=/app/data
@@ -597,9 +606,10 @@ services:
       # in the hardened overlay doesn't fail with EROFS when mkdir("logs") is
       # called relative to the /app/autobot-slm-backend working directory (#11574).
       - AUTOBOT_LOGS_DIR=/app/logs
-      # Surface each compose service container as a fleet node (#9761). Off by
-      # default so production/Ansible VM fleets are unaffected; on for compose.
-      - SLM_COMPOSE_NODES=${SLM_COMPOSE_NODES:-true}
+      # Surface each compose service container as a fleet node (#9761). The default
+      # lives in the SLM config (#19323): on here, because the SLM detects docker_local.
+      # Passed through only when set (true|false) -- never restated.
+      - SLM_COMPOSE_NODES
       - AUTOBOT_DOCKER_MGMT_PREFIX=${AUTOBOT_DOCKER_MGMT_PREFIX}  # compose_fleet node IPs (#16833)
       # Shared signing secrets so the backend node's JWT verifies on SLM —
       # without a shared secret each service generates its own and SLM rejects

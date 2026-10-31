@@ -118,7 +118,7 @@ REACH = declare(
     "hand-rolled-circuit-breaker-scan",
     discover=_population,
     # Mid-window, from REACH.window(): population 3209 at eabcae7394 -> (2909, 3209, 3059).
-    floor=3183,  # re-pinned mid-window (train 82 on main)
+    floor=3305,  # re-pinned mid-window (train 82 on main)
     what="non-test python source",
     roots=SCAN_ROOTS,
     growth=300,

@@ -43,9 +43,16 @@
   --color-primary-hover: var(--color-primary-600);
   --color-primary-active: var(--color-primary-700);
   --text-on-primary: var(--color-white);
-  --text-on-success: var(--color-white);
-  --text-on-warning: var(--color-white);
+  /* #19872: white on the green and yellow fills is 2.28 / 1.92:1, so those two
+     take dark ink (as the main app does). Red and sky carry white on their
+     darker solid-fill shades below, not on --color-error / --color-info. */
+  --text-on-success: var(--color-black);
+  --text-on-warning: var(--color-black);
   --text-on-error: var(--color-white);
+  --text-on-info: var(--color-white);
+  --color-error-solid: var(--color-error-600);
+  --color-error-solid-hover: var(--color-error-700);
+  --color-info-solid: var(--color-primary-700);
   --border-strong: var(--a11y-text-muted);
   --border-focus: var(--a11y-focus-ring);
   --focus-ring-width: var(--a11y-focus-width);
@@ -489,10 +496,12 @@
   --color-autobot-warning-light: var(--color-warning-light);
   --color-autobot-warning-bg: var(--color-warning-bg);
   --color-autobot-error: var(--color-error);
+  --color-autobot-error-solid: var(--color-error-solid);
   --color-autobot-error-hover: var(--color-error-hover);
   --color-autobot-error-light: var(--color-error-light);
   --color-autobot-error-bg: var(--color-error-bg);
   --color-autobot-info: var(--color-info);
+  --color-autobot-info-solid: var(--color-info-solid);
   --color-autobot-info-hover: var(--color-info-hover);
   --color-autobot-info-light: var(--color-info-light);
   --color-autobot-info-bg: var(--color-info-bg);

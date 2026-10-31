@@ -152,7 +152,7 @@ logged.
 | `--branch=BRANCH` | Git branch to install (default: `main`) |
 | `--admin-pass-file=PATH` | Read the SLM admin password from the first line of PATH (auto-generated if not set). The file must be non-empty and mode `600` or tighter (`chmod 600 PATH`), or the installer refuses it. `--admin-pass=` is refused: a command-line argument is readable by every local user (#19236). |
 | `--ip=IP` | Override the auto-detected IP address (multi-interface hosts) |
-| `--rotate-secrets` | On reinstall, replace the existing SLM admin password. By default a reinstall keeps the password set in the wizard and ignores `--admin-pass=` |
+| `--rotate-secrets` | On reinstall, replace the existing SLM admin password. By default a reinstall keeps the password set in the wizard and ignores `--admin-pass-file=` |
 | `--help`, `-h` | Show help |
 
 Environment variables skip the matching interactive prompt:
@@ -164,6 +164,13 @@ Environment variables skip the matching interactive prompt:
 | `AUTOBOT_INSTALL_INTERFACE=<iface>` | Pick the network interface by name instead of the menu |
 | `OVERRIDE_IP=<ip>` | Skip IP detection and use this address |
 | `NETWORK_SUBNET=<cidr>` / `NETWORK_GATEWAY=<ip>` | Use this network instead of detecting it. The subnet is the source the firewall rules allow, so if it cannot be detected the installer stops and asks for these instead of guessing |
+
+**Headless host with more than one interface** (a Docker bridge counts): the installer cannot show its menu without a terminal, and `sudo` drops variables set before it. Pass the choice after `sudo`:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/mrveiss/AutoBot-AI/main/install.sh | sudo AUTOBOT_INSTALL_INTERFACE=eth0 bash
+curl -fsSL https://raw.githubusercontent.com/mrveiss/AutoBot-AI/main/install.sh | sudo bash -s -- --ip=<address>
+```
 
 ### Log Files
 
@@ -285,8 +292,9 @@ provider in **SLM Admin > Settings > LLM**. With the `ollama` profile, Ollama st
 pull the models `docker/.env.docker` names, or the ones you set there instead:
 
 ```bash
-docker compose --env-file docker/.env.docker --env-file docker/.env.secrets exec autobot-ollama ollama pull qwen3.5:9b
-docker compose --env-file docker/.env.docker --env-file docker/.env.secrets exec autobot-ollama ollama pull nomic-embed-text:latest
+# every model docker/.env.docker names, read from the file itself (about 21 GB with the defaults)
+sed -n 's/^AUTOBOT_[A-Z_]*_MODEL=//p' docker/.env.docker | sort -u | \
+  xargs -n1 docker compose --env-file docker/.env.docker --env-file docker/.env.secrets exec -T autobot-ollama ollama pull
 ```
 
 ### Exposed Services
@@ -337,12 +345,13 @@ login the setup wizard launches automatically and guides you through:
 |------|--------|
 | Welcome | Overview of the setup process |
 | Add Nodes | Enter hostname/IP and SSH credentials for each fleet node |
-| Test Connections | Verify SSH connectivity to every node |
-| Enroll Agents | Install the AutoBot agent on each node |
-| Assign Roles | Choose which role(s) each node performs |
-| Provision Fleet | Run Ansible provisioning across the fleet |
-| Verify Health | Confirm all nodes and required roles are healthy |
-| Complete | Setup finished — redirects to Fleet Overview |
+| Test | Verify SSH connectivity to every node |
+| Enroll | Install the AutoBot agent on each node |
+| Roles | Choose which role(s) each node performs |
+| API Keys | Configure the secrets the fleet needs |
+| Provision | Run Ansible provisioning across the fleet |
+| Verify | Confirm all nodes and required roles are healthy |
+| Done | Setup finished — redirects to Fleet Overview |
 
 You can skip the wizard at any time and return to it later from
 **Settings > General > Launch Wizard**.

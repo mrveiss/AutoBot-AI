@@ -361,11 +361,13 @@ onMounted(() => {
   color: var(--text-tertiary);
 }
 
-.loading-state i,
-.empty-state i {
-  font-size: 2rem;
+.loading-state .icon,
+.empty-state .icon {
+  width: 2rem;
+  height: 2rem;
   margin-bottom: var(--spacing-2);
   display: block;
+  margin-inline: auto;
 }
 
 .backups-list {
@@ -466,7 +468,7 @@ onMounted(() => {
 }
 
 .action-btn.delete:hover {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-primary);
 }
 

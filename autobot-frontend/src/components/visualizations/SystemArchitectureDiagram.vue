@@ -726,7 +726,7 @@ function generateArchitecture(serviceHealth: Record<string, unknown>) {
       height: 80,
       status: getServiceStatus(serviceHealth, 'frontend'),
       host: config.vm.frontend,
-      port: config.port.frontend,
+      port: config.port.frontendServed,
       description: 'Vue 3 + TypeScript web interface',
       metrics: 'Active',
       group: 'presentation'
@@ -1248,7 +1248,7 @@ watch(() => currentView.value, () => {
   color: var(--text-primary);
 }
 
-.header-content h3 i {
+.header-content h3 .icon {
   color: var(--color-primary);
 }
 

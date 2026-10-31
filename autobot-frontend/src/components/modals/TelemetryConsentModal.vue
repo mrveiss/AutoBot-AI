@@ -47,24 +47,22 @@ Issue #9035: Operator-controlled local usage metrics (never transmitted)
     </div>
 
     <template #actions>
-      <button
+      <BaseButton variant="secondary"
         type="button"
-        class="btn btn-secondary"
         @click="handleDecline"
         :disabled="isProcessing"
       >
         <Icon name="times" aria-hidden="true" />
         {{ t('telemetryConsent.keepOff') }}
-      </button>
-      <button
+      </BaseButton>
+      <BaseButton
         type="button"
-        class="btn btn-primary"
         @click="handleAccept"
         :disabled="isProcessing"
       >
         <Icon name="check" aria-hidden="true" />
         {{ isProcessing ? t('common.saving') : t('telemetryConsent.enable') }}
-      </button>
+      </BaseButton>
     </template>
   </BaseModal>
 </template>
@@ -74,7 +72,7 @@ import { ref, onMounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
 import Icon from '@/components/ui/Icon.vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 const { t } = useI18n()
 
@@ -194,7 +192,7 @@ async function updateConsent(enabled: boolean) {
   margin: 0 0 var(--spacing-sm) 0;
 }
 
-.summary-title i {
+.summary-title .icon {
   color: var(--color-info);
 }
 
@@ -222,7 +220,7 @@ async function updateConsent(enabled: boolean) {
   color: var(--text-primary);
 }
 
-.privacy-note i {
+.privacy-note .icon {
   color: var(--color-success);
   flex-shrink: 0;
   margin-top: 2px;
@@ -233,45 +231,5 @@ async function updateConsent(enabled: boolean) {
   color: var(--text-secondary);
   text-align: center;
   margin: var(--spacing-sm) 0 0 0;
-}
-
-.btn {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-lg);
-  border-radius: var(--radius-md);
-  font-size: var(--font-size-md);
-  font-weight: 500;
-  border: 1px solid transparent;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-primary {
-  background: var(--color-primary);
-  color: white;
-  border-color: var(--color-primary);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-  border-color: var(--color-primary-hover);
-}
-
-.btn-secondary {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border-color: var(--border-color);
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: var(--bg-hover);
-  border-color: var(--border-hover);
 }
 </style>

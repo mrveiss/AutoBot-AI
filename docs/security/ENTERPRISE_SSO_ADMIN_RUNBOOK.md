@@ -12,7 +12,7 @@
 |---|---|---|---|
 | **Certified** (tested end-to-end, documented, PKCE) | Okta · Microsoft Entra ID (Azure AD) · Google Workspace | OIDC authorization-code + **PKCE (S256)** | Recommended for production. |
 | **Supported** | Generic OIDC (any spec-compliant IdP) · SAML 2.0 · LDAP / Active Directory | OIDC / SAML / LDAP | Functional; SAML **Single Logout** is tracked separately ([#10281](https://github.com/mrveiss/AutoBot-AI/issues/10281)). |
-| **Social (non-enterprise)** | GitHub · Facebook · Google consumer | OAuth2 | Not part of the enterprise tier; unchanged. |
+| **Social (non-enterprise)** | GitHub · Facebook · Google consumer | OAuth2 | Not covered by this runbook; unchanged. |
 
 All OIDC logins use **PKCE (S256)** — the authorization-code flow is bound to a
 per-login verifier, mitigating code-interception.
@@ -70,7 +70,7 @@ Behavior (enforced on **every** login, not just first JIT):
   made (avoids accidental mass-revocation when the claim is temporarily absent).
 - Role names resolve against org-scoped roles first, falling back to system roles
   (`org_id IS NULL`). Names with no matching role are skipped and logged.
-- LLC `MembershipRole` is **out of scope** — group mapping grants instance roles only.
+- Company OS `MembershipRole` is **out of scope** — group mapping grants instance roles only.
 
 Pre-requisite: request the `groups` scope (OIDC) or configure
 `attribute_mapping.groups` (SAML/LDAP) so groups reach AutoBot.

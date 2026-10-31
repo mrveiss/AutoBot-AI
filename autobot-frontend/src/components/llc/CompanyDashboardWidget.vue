@@ -11,6 +11,7 @@
 import { BaseBadge, BaseButton, BaseTable, type BadgeVariant, type BaseTableColumn } from '@autobot/ui'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { formatDuration, createDateFormatter } from '@/utils/formatHelpers'
 import { agentStatusColor, type RunDisplayStatus } from '@/composables/llc/llcStatus'
 import type { CompanyWidgetType } from '@/composables/dashboard/companyOsDashboard'
 import type { BudgetInfo, CompanyDashboardData } from '@/views/llc/companyDashboardTypes'
@@ -35,16 +36,9 @@ function budgetBarColor(b: BudgetInfo): string {
   return 'bg-autobot-success'
 }
 
-function formatDuration(ms: number | null): string {
-  if (ms === null) return '—'
-  if (ms < 1000) return `${ms}ms`
-  return `${(ms / 1000).toFixed(1)}s`
-}
+const DURATION_OPTIONS = { style: 'msSeconds1dp' } as const
 
-function formatTime(ts: string): string {
-  if (!ts) return '—'
-  return new Date(ts).toLocaleTimeString()
-}
+const formatTime = createDateFormatter({ kind: 'time', emptyText: '—' })
 
 const { t } = useI18n()
 // #17562: the runs list is the kit table; time and duration are formatted before they reach it.
@@ -60,7 +54,7 @@ const runRows = computed(() =>
     agent_name: run.agent_name,
     status: run.status,
     started: formatTime(run.started_at),
-    duration: formatDuration(run.duration_ms),
+    duration: formatDuration(run.duration_ms, DURATION_OPTIONS),
   })),
 )
 </script>
