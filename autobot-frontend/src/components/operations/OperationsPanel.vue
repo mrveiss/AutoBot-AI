@@ -166,7 +166,8 @@ function handleClearFilter() {
 }
 
 .empty-placeholder .icon {
-  font-size: var(--text-4xl);
+  width: var(--text-4xl);
+  height: var(--text-4xl);
   color: var(--text-tertiary);
 }
 
