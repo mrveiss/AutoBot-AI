@@ -62,6 +62,12 @@ def _sql(session) -> str:
     return str(stmt.compile(dialect=postgresql.dialect()))
 
 
+def _bound(session) -> dict:
+    """The values the query binds, so a test can assert the tenant and not only the predicate text."""
+    stmt = session.execute.call_args.args[0]
+    return stmt.compile(dialect=postgresql.dialect()).params
+
+
 class TestListComments:
     def test_lists_comments_in_order_with_the_fetch_shape(self):
         org, item_id = str(uuid.uuid4()), str(uuid.uuid4())
@@ -77,6 +83,9 @@ class TestListComments:
         sql = _sql(session)
         assert "ORDER BY llc_work_item_comments.created_at ASC" in sql
         assert "LIMIT" in sql and "llc_work_item_comments.company_id =" in sql
+        bound = _bound(session)
+        assert uuid.UUID(org) in bound.values()
+        assert uuid.UUID(item_id) in bound.values()
 
     def test_other_companys_item_is_404_and_never_queries_comments(self):
         caller, other = str(uuid.uuid4()), str(uuid.uuid4())
@@ -101,6 +110,42 @@ class TestListComments:
             url = f"/work-items/{uuid.uuid4()}/comments"
             assert client.get(url, params={"limit": COMMENTS_PAGE_MAX + 1}).status_code == 422
             assert client.get(url, params={"limit": 0}).status_code == 422
+
+
+class TestPaging:
+    def test_a_full_page_with_more_behind_it_says_so_and_drops_the_probe_row(self):
+        org, item_id = str(uuid.uuid4()), str(uuid.uuid4())
+        rows = [_comment(org, item_id, f"c{i}", i) for i in range(3)]
+        client, session, item = _make_app(org, org, rows)
+        with patch("llc.services.work_item_service.WorkItemService.get", AsyncMock(return_value=item)):
+            body = client.get(f"/work-items/{item_id}/comments", params={"limit": 2}).json()
+        assert [c["body"] for c in body["comments"]] == ["c0", "c1"]
+        assert body["has_more"] is True
+        assert 3 in _bound(session).values()  # LIMIT is limit + 1
+
+    def test_the_last_page_says_nothing_more(self):
+        org, item_id = str(uuid.uuid4()), str(uuid.uuid4())
+        rows = [_comment(org, item_id, f"c{i}", i) for i in range(2)]
+        client, _, item = _make_app(org, org, rows)
+        with patch("llc.services.work_item_service.WorkItemService.get", AsyncMock(return_value=item)):
+            body = client.get(f"/work-items/{item_id}/comments", params={"limit": 2, "offset": 4}).json()
+        assert len(body["comments"]) == 2 and body["has_more"] is False and body["offset"] == 4
+
+
+class TestPageSizeSettings:
+    def test_a_zero_or_negative_setting_is_floored_at_one(self, monkeypatch):
+        import importlib  # noqa: PLC0415
+
+        import llc.api.work_item_comments as mod  # noqa: PLC0415
+
+        monkeypatch.setenv("LLC_COMMENTS_PAGE_DEFAULT", "-5")
+        monkeypatch.setenv("LLC_COMMENTS_PAGE_MAX", "0")
+        try:
+            reloaded = importlib.reload(mod)
+            assert reloaded.COMMENTS_PAGE_DEFAULT >= 1 and reloaded.COMMENTS_PAGE_MAX >= 1
+        finally:
+            monkeypatch.undo()
+            importlib.reload(mod)
 
 
 class TestPostSiblingStillWorks:

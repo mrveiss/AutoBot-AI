@@ -52609,40 +52609,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/llc/work-items/{work_item_id}/relations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Add Relation */
-        post: operations["add_relation_api_llc_work_items__work_item_id__relations_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/llc/work-items/{work_item_id}/relations/{relation_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Remove Relation */
-        delete: operations["remove_relation_api_llc_work_items__work_item_id__relations__relation_id__delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/llc/work-items/suggest-ac": {
         parameters: {
             query?: never;
@@ -52733,6 +52699,40 @@ export interface paths {
         post?: never;
         /** Delete Attachment */
         delete: operations["delete_attachment_api_llc_work_items__work_item_id__attachments__attachment_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/work-items/{work_item_id}/relations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Relation */
+        post: operations["add_relation_api_llc_work_items__work_item_id__relations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/work-items/{work_item_id}/relations/{relation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Relation */
+        delete: operations["remove_relation_api_llc_work_items__work_item_id__relations__relation_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -52880,6 +52880,9 @@ export interface paths {
          *     point of ingesting the event is that exceeding the limit stops the agent.
          *     ``UnpricedModel`` is 422 -- the event is well-formed but its cost cannot be
          *     computed, and charging zero is what #15860 was.
+         *
+         *     A ``work_item_id`` that is unknown, or belongs to another company, is 404 and
+         *     charges nothing: a ``200`` means the cost landed on the item named (#16016).
          */
         post: operations["ingest_cost_event_api_llc_agent_cost_events_post"];
         delete?: never;
@@ -54447,6 +54450,106 @@ export interface paths {
         put?: never;
         /** Acknowledge By Hand */
         post: operations["acknowledge_by_hand_api_llc_company_os_workflow_plans__plan_key__by_hand_acknowledgement_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/approval-policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Approval Policies */
+        put: operations["put_approval_policies_api_llc_company_os_workflow_plans__plan_key__approval_policies_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/convert/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Conversion
+         * @description Build the rows a conversion would create and run the graph validator over each; writes only the preview.
+         */
+        post: operations["preview_conversion_api_llc_company_os_workflow_plans__plan_key__convert_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Approve Conversion
+         * @description G7: an owner or admin approves the stored preview. Any later edit clears it. A person, not an agent.
+         */
+        post: operations["approve_conversion_api_llc_company_os_workflow_plans__plan_key__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/convert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Convert Plan
+         * @description Create the processes, workflows and graphs in one transaction. 409 with the unmet gates until G1-G7 pass.
+         *
+         *     Filing AI-line proposals is what an interactive person may do (as ``POST /ai-lines/{id}/changes``), so a
+         *     run or service credential is refused.
+         */
+        post: operations["convert_plan_api_llc_company_os_workflow_plans__plan_key__convert_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/llc/company-os/workflow-plans/{plan_key}/convert/retry-ai-line-proposals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Ai Line Proposals
+         * @description File the AI-line proposals that failed or were never filed. The only write a converted plan accepts.
+         */
+        post: operations["retry_ai_line_proposals_api_llc_company_os_workflow_plans__plan_key__convert_retry_ai_line_proposals_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -57846,6 +57949,26 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * AiLineProposal
+         * @description One proposed AI-line change and what happened when it was filed in Approvals (after the commit).
+         */
+        AiLineProposal: {
+            /** Tool Action */
+            tool_action: string;
+            /** Line */
+            line: string;
+            /** Sub Step Key */
+            sub_step_key: string;
+            /** @default unfiled */
+            outcome: components["schemas"]["ProposalOutcome"];
+            /** Approval Id */
+            approval_id?: string | null;
+            /** Error */
+            error?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
         /** AiLinesResponse */
         AiLinesResponse: {
             /** Company Id */
@@ -59559,6 +59682,16 @@ export interface components {
              * @default github_issue
              */
             task_type: string;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ApprovalPoliciesBody
+         * @description ``on_timeout`` is hold, remind or escalate: a ``send`` is a 422 (FR-6.2).
+         */
+        ApprovalPoliciesBody: {
+            /** Policies */
+            policies?: components["schemas"]["PlanApprovalPolicy"][];
         } & {
             [key: string]: unknown;
         };
@@ -66187,12 +66320,15 @@ export interface components {
             sub_steps?: components["schemas"]["SubStep"][];
             /** Edge Cases */
             edge_cases?: components["schemas"]["EdgeCase"][];
+            /** Approval Policies */
+            approval_policies?: components["schemas"]["PlanApprovalPolicy"][];
             /** By Hand Acknowledged At */
             by_hand_acknowledged_at?: string | null;
             /** Approved At */
             approved_at?: string | null;
             /** Approved By */
             approved_by?: string | null;
+            conversion?: components["schemas"]["PlanConversion"] | null;
         } & {
             [key: string]: unknown;
         };
@@ -67623,6 +67759,11 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * ConversionStatus
+         * @enum {string}
+         */
+        ConversionStatus: "preview" | "committed";
+        /**
          * CorrelationChainResponse
          * @description Response for GET /chain/{correlation_id}.
          */
@@ -68443,6 +68584,18 @@ export interface components {
             total_found: number;
             /** Processing Time */
             processing_time: number;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * CurrencyAmountOut
+         * @description A monthly amount in exactly one currency.
+         */
+        CurrencyAmountOut: {
+            /** Currency */
+            currency: string;
+            /** Per Month */
+            per_month: string;
         } & {
             [key: string]: unknown;
         };
@@ -74261,6 +74414,15 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** DocumentationOnly */
+        DocumentationOnly: {
+            /** Sub Step Key */
+            sub_step_key: string;
+            /** Reason */
+            reason: string;
+        } & {
+            [key: string]: unknown;
+        };
         /** DomainSecurityStatsResponse */
         DomainSecurityStatsResponse: {
             /** Success */
@@ -74313,6 +74475,19 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** EdgeCaseTreatment */
+        EdgeCaseTreatment: {
+            /** Edge Case Key */
+            edge_case_key: string;
+            treatment: components["schemas"]["EdgeCaseTreatmentKind"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * EdgeCaseTreatmentKind
+         * @enum {string}
+         */
+        EdgeCaseTreatmentKind: "branch" | "handled_in_step" | "documentation";
         /**
          * EditFileRequest
          * @description Request model for editing files.
@@ -78694,6 +78869,19 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** HandoffTreatment */
+        HandoffTreatment: {
+            /** Handoff Key */
+            handoff_key: string;
+            treatment: components["schemas"]["HandoffTreatmentKind"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * HandoffTreatmentKind
+         * @enum {string}
+         */
+        HandoffTreatmentKind: "handoff_transition" | "trigger" | "end" | "out_of_scope";
         /** HardwarePriorityRequest */
         HardwarePriorityRequest: {
             /** Priority Order */
@@ -90578,6 +90766,32 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * PlanApprovalPolicy
+         * @description Covers the AI sub-steps it names. ``wait_limit`` adds a timeout whose length is a setting, never a literal.
+         *
+         *     The gate is recorded, not enforced: nothing executes workflows yet and no approval-gate model exists, so G5
+         *     only checks that the plan carries a policy for every AI sub-step. It is enforced once an executor reads the
+         *     policies kept in the committed conversion. ``hold`` waits indefinitely, so it never yields a timeout
+         *     transition; ``remind`` and ``escalate`` do, when ``wait_limit`` is set.
+         */
+        PlanApprovalPolicy: {
+            /** Key */
+            key: string;
+            /** @default workflow_gate */
+            approval_type: components["schemas"]["PlanApprovalType"];
+            /** Sub Step Keys */
+            sub_step_keys?: string[];
+            /** @default hold */
+            on_timeout: components["schemas"]["PlanApprovalTimeout"];
+            /**
+             * Wait Limit
+             * @default false
+             */
+            wait_limit: boolean;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
          * PlanApprovalResponse
          * @description User response to plan approval request.
          *
@@ -90597,6 +90811,65 @@ export interface components {
             modifications?: string[] | null;
             /** Reason */
             reason?: string | null;
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * PlanApprovalTimeout
+         * @description What an unanswered approval does. There is no ``send``: a wait never sends on its own (FR-6.2).
+         * @enum {string}
+         */
+        PlanApprovalTimeout: "hold" | "remind" | "escalate";
+        /**
+         * PlanApprovalType
+         * @description The one kind of approval a plan may ask for: it waits in Approvals (FR-6.2).
+         * @enum {string}
+         */
+        PlanApprovalType: "workflow_gate";
+        /**
+         * PlanConversion
+         * @description What crosses from the planner to Company OS (section 7A.2).
+         *
+         *     ``preview_errors`` and ``preview_warnings`` are the graph validator's own strings, unchanged.
+         *     ``contract_errors`` are what the builder found before any graph exists (a lane with no role, a
+         *     tool action that is not a key). Either one non-empty keeps G6 open.
+         */
+        PlanConversion: {
+            /** Processes */
+            processes?: components["schemas"]["ProcessDraft"][];
+            /** Workflows */
+            workflows?: components["schemas"]["WorkflowDraft"][];
+            /** Creation Order */
+            creation_order?: string[];
+            /** Documentation Only */
+            documentation_only?: components["schemas"]["DocumentationOnly"][];
+            /** Handoff Treatments */
+            handoff_treatments?: components["schemas"]["HandoffTreatment"][];
+            /** Edge Case Treatments */
+            edge_case_treatments?: components["schemas"]["EdgeCaseTreatment"][];
+            /** Ai Line Proposals */
+            ai_line_proposals?: components["schemas"]["AiLineProposal"][];
+            /** Approval Policies */
+            approval_policies?: components["schemas"]["PlanApprovalPolicy"][];
+            /** Contract Errors */
+            contract_errors?: string[];
+            /** Preview Errors */
+            preview_errors?: string[];
+            /** Preview Warnings */
+            preview_warnings?: string[];
+            /** @default preview */
+            status: components["schemas"]["ConversionStatus"];
+            /** Converted At */
+            converted_at?: string | null;
+            /** Converted By */
+            converted_by?: string | null;
+            /** @default not_available */
+            turn_on: components["schemas"]["TurnOn"];
+            /**
+             * Turn On Tracking Issue
+             * @default 16763
+             */
+            turn_on_tracking_issue: number;
         } & {
             [key: string]: unknown;
         };
@@ -91383,6 +91656,28 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /** ProcessDraft */
+        ProcessDraft: {
+            /** Process Key */
+            process_key: string;
+            /** Name */
+            name: string;
+            /** Owner Lane Key */
+            owner_lane_key: string;
+            /** Sub Step Key */
+            sub_step_key: string;
+            /** Required Skills */
+            required_skills?: string[];
+            executor: components["schemas"]["ProcessExecutor"];
+        } & {
+            [key: string]: unknown;
+        };
+        /**
+         * ProcessExecutor
+         * @description Who carries a process out. A By Hand sub-step is always ``person`` (FR-6.4).
+         * @enum {string}
+         */
+        ProcessExecutor: "person" | "role";
         /**
          * ProcessNode
          * @description One workflow a role runs, as an org-chart-adjacent node.
@@ -92099,6 +92394,11 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        /**
+         * ProposalOutcome
+         * @enum {string}
+         */
+        ProposalOutcome: "unfiled" | "filed" | "failed";
         /** ProposeLineChange */
         ProposeLineChange: {
             /**
@@ -93528,10 +93828,13 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
-        /** RelationCreate */
+        /**
+         * RelationCreate
+         * @description ``company_id`` and ``created_by_*`` are accepted for compatibility and ignored.
+         */
         RelationCreate: {
             /** Company Id */
-            company_id: string;
+            company_id?: string | null;
             /** Target Id */
             target_id: string;
             relation_type: components["schemas"]["WorkItemRelationType"];
@@ -94581,7 +94884,9 @@ export interface components {
          * RollupBucketOut
          * @description One grouping's monthly total, with the coverage behind it.
          *
-         *     ``per_month`` is the sum of the steps that could be costed. It is reported
+         *     ``per_month`` is the sum of the steps that could be costed, or ``None``
+         *     when the bucket spans currencies (``per_currency`` then has the amounts).
+         *     It is reported
          *     beside ``costed`` / ``not_costable`` rather than alone, because a partial
          *     total presented as a complete one is indistinguishable from a complete one
          *     by looking at it — the arithmetic form of the failure #14064, #13617 and
@@ -94593,7 +94898,11 @@ export interface components {
             /** Label */
             label: string;
             /** Per Month */
-            per_month: string;
+            per_month: string | null;
+            /** Per Currency */
+            per_currency: components["schemas"]["CurrencyAmountOut"][];
+            /** Is Mixed Currency */
+            is_mixed_currency: boolean;
             /** Costed */
             costed: number;
             /** Not Costable */
@@ -103385,6 +103694,12 @@ export interface components {
             [key: string]: unknown;
         };
         /**
+         * TurnOn
+         * @description Whether a created workflow can be switched on. Nothing executes workflows yet (FR-6.7).
+         * @enum {string}
+         */
+        TurnOn: "not_available";
+        /**
          * UIElementResponse
          * @description Response model for UI element
          */
@@ -106850,6 +107165,29 @@ export interface components {
             workflow: {
                 [key: string]: unknown;
             };
+        } & {
+            [key: string]: unknown;
+        };
+        /** WorkflowDraft */
+        WorkflowDraft: {
+            /** Workflow Id */
+            workflow_id: string;
+            /** Name */
+            name: string;
+            /** Owner Lane Key */
+            owner_lane_key: string;
+            /** Trigger Type */
+            trigger_type: string;
+            /** Trigger Config */
+            trigger_config?: {
+                [key: string]: unknown;
+            };
+            /** Nodes */
+            nodes?: components["schemas"]["NodeSpec"][];
+            /** Transitions */
+            transitions?: components["schemas"]["TransitionSpec"][];
+            /** Approval Policy Keys */
+            approval_policy_keys?: string[];
         } & {
             [key: string]: unknown;
         };
@@ -178845,77 +179183,6 @@ export interface operations {
             };
         };
     };
-    add_relation_api_llc_work_items__work_item_id__relations_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                work_item_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RelationCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    remove_relation_api_llc_work_items__work_item_id__relations__relation_id__delete: {
-        parameters: {
-            query: {
-                company_id: string;
-                actor_agent_id?: string | null;
-                actor_user_id?: string | null;
-            };
-            header?: never;
-            path: {
-                work_item_id: string;
-                relation_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     suggest_acceptance_criteria_api_llc_work_items_suggest_ac_post: {
         parameters: {
             query?: never;
@@ -179104,6 +179371,80 @@ export interface operations {
             path: {
                 work_item_id: string;
                 attachment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_relation_api_llc_work_items__work_item_id__relations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                work_item_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RelationCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_relation_api_llc_work_items__work_item_id__relations__relation_id__delete: {
+        parameters: {
+            query?: {
+                /** @description Accepted for compatibility; ignored. */
+                company_id?: string | null;
+                /** @description Accepted for compatibility; ignored. */
+                actor_agent_id?: string | null;
+                /** @description Accepted for compatibility; ignored. */
+                actor_user_id?: string | null;
+            };
+            header?: never;
+            path: {
+                work_item_id: string;
+                relation_id: string;
             };
             cookie?: never;
         };
@@ -182826,6 +183167,165 @@ export interface operations {
         };
     };
     acknowledge_by_hand_api_llc_company_os_workflow_plans__plan_key__by_hand_acknowledgement_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_approval_policies_api_llc_company_os_workflow_plans__plan_key__approval_policies_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalPoliciesBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_conversion_api_llc_company_os_workflow_plans__plan_key__convert_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanConversion"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_conversion_api_llc_company_os_workflow_plans__plan_key__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    convert_plan_api_llc_company_os_workflow_plans__plan_key__convert_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CompanyWorkflowPlan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_ai_line_proposals_api_llc_company_os_workflow_plans__plan_key__convert_retry_ai_line_proposals_post: {
         parameters: {
             query?: never;
             header?: never;
