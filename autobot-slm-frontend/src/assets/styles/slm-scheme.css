@@ -51,6 +51,7 @@
   --text-on-error: var(--color-white);
   --text-on-info: var(--color-white);
   --color-error-solid: var(--color-error-600);
+  --color-error-solid-hover: var(--color-error-700);
   --color-info-solid: var(--color-primary-700);
   --border-strong: var(--a11y-text-muted);
   --border-focus: var(--a11y-focus-ring);
