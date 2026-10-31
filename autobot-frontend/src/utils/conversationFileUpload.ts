@@ -19,6 +19,39 @@ import { readStoredAuthToken } from '@/utils/authToken'
 
 export type ConversationUploadResponse = components['schemas']['FileUploadResponse']
 
+export type UploadErrorCode = 'http' | 'invalid_response' | 'network' | 'cancelled'
+
+/**
+ * Why a chat attachment upload failed. `message` is a diagnostic for logs, never UI text:
+ * the chat shows `describeUploadError(error, t)` so the wording is translated.
+ */
+export class ConversationUploadError extends Error {
+  constructor(
+    readonly code: UploadErrorCode,
+    readonly status?: number
+  ) {
+    super(`conversation upload failed: ${code}${status === undefined ? '' : ` (${status})`}`)
+    this.name = 'ConversationUploadError'
+  }
+}
+
+type Translate = (key: string, params?: Record<string, unknown>) => string
+
+const UPLOAD_ERROR_KEYS: Record<UploadErrorCode, string> = {
+  http: 'chat.input.uploadError.http',
+  invalid_response: 'chat.input.uploadError.invalidResponse',
+  network: 'chat.input.uploadError.network',
+  cancelled: 'chat.input.uploadError.cancelled',
+}
+
+/** The translated text the chat shows for a rejected upload; any other rejection gets the generic key. */
+export function describeUploadError(error: unknown, t: Translate): string {
+  if (!(error instanceof ConversationUploadError)) return t('chat.input.uploadError.unknown')
+  return error.code === 'http'
+    ? t(UPLOAD_ERROR_KEYS.http, { status: error.status })
+    : t(UPLOAD_ERROR_KEYS[error.code])
+}
+
 /** POST `file` to the conversation's upload route; rejects on a non-200, a bad body, a network error or an abort. */
 export function postConversationUpload(
   sessionId: string,
@@ -33,15 +66,15 @@ export function postConversationUpload(
       if (event.lengthComputable) onProgress(event.loaded, event.total)
     })
     xhr.addEventListener('load', () => {
-      if (xhr.status !== 200) return reject(new Error(`Upload failed with status: ${xhr.status}`))
+      if (xhr.status !== 200) return reject(new ConversationUploadError('http', xhr.status))
       try {
         resolve(JSON.parse(xhr.responseText) as ConversationUploadResponse)
       } catch {
-        reject(new Error('Invalid response from server'))
+        reject(new ConversationUploadError('invalid_response'))
       }
     })
-    xhr.addEventListener('error', () => reject(new Error('Network error during upload')))
-    xhr.addEventListener('abort', () => reject(new Error('Upload cancelled')))
+    xhr.addEventListener('error', () => reject(new ConversationUploadError('network')))
+    xhr.addEventListener('abort', () => reject(new ConversationUploadError('cancelled')))
     xhr.open('POST', `${getApiBase()}/conversation-files/conversation/${sessionId}/upload`)
     const token = readStoredAuthToken()
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)

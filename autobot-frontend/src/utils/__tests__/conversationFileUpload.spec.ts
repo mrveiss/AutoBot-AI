@@ -11,7 +11,11 @@ vi.mock('@/utils/authToken', async (importOriginal) => ({
   readStoredAuthToken: () => token.value,
 }))
 
-import { postConversationUpload } from '@/utils/conversationFileUpload'
+import {
+  ConversationUploadError,
+  describeUploadError,
+  postConversationUpload,
+} from '@/utils/conversationFileUpload'
 
 type Listener = (event?: unknown) => void
 
@@ -76,23 +80,50 @@ describe('postConversationUpload (#20133)', () => {
     expect(seen).toEqual([[1, 3]])
   })
 
-  it('rejects with the status on a 401 so the chat shows it inline', async () => {
+  it('rejects with code http and the status on a 401 so the chat shows it inline', async () => {
     const p = postConversationUpload('s1', file(), () => {})
     FakeXhr.last.status = 401
     FakeXhr.last.listeners.load()
-    await expect(p).rejects.toThrow('Upload failed with status: 401')
+    const error = await p.catch((e) => e)
+    expect(error).toBeInstanceOf(ConversationUploadError)
+    expect(error).toMatchObject({ code: 'http', status: 401 })
   })
 
-  it('rejects on abort, network error and an unparseable body', async () => {
+  it('rejects with a code on abort, network error and an unparseable body', async () => {
     const a = postConversationUpload('s1', file(), () => {})
     FakeXhr.last.listeners.abort()
-    await expect(a).rejects.toThrow('Upload cancelled')
+    await expect(a).rejects.toMatchObject({ code: 'cancelled', status: undefined })
     const n = postConversationUpload('s1', file(), () => {})
     FakeXhr.last.listeners.error()
-    await expect(n).rejects.toThrow('Network error during upload')
+    await expect(n).rejects.toMatchObject({ code: 'network', status: undefined })
     const b = postConversationUpload('s1', file(), () => {})
     FakeXhr.last.responseText = 'not json'
     FakeXhr.last.listeners.load()
-    await expect(b).rejects.toThrow('Invalid response from server')
+    await expect(b).rejects.toMatchObject({ code: 'invalid_response', status: undefined })
+  })
+})
+
+describe('describeUploadError (#20133)', () => {
+  const t = (key: string, params?: Record<string, unknown>) => `${key}|${JSON.stringify(params ?? {})}`
+
+  it('maps each code to its translation key, passing the status for http', () => {
+    expect(describeUploadError(new ConversationUploadError('http', 413), t)).toBe(
+      'chat.input.uploadError.http|{"status":413}'
+    )
+    expect(describeUploadError(new ConversationUploadError('invalid_response'), t)).toBe(
+      'chat.input.uploadError.invalidResponse|{}'
+    )
+    expect(describeUploadError(new ConversationUploadError('network'), t)).toBe(
+      'chat.input.uploadError.network|{}'
+    )
+    expect(describeUploadError(new ConversationUploadError('cancelled'), t)).toBe(
+      'chat.input.uploadError.cancelled|{}'
+    )
+  })
+
+  it('never shows the diagnostic message, and falls back to the generic key for other errors', () => {
+    const typed = new ConversationUploadError('network')
+    expect(describeUploadError(typed, t)).not.toContain(typed.message)
+    expect(describeUploadError(new Error('boom'), t)).toBe('chat.input.uploadError.unknown|{}')
   })
 })

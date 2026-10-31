@@ -462,7 +462,7 @@ import McpPromptPicker from './McpPromptPicker.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
 import { getFileIconNameByMimeType } from '@/utils/iconMappings'
 import { createLogger } from '@/utils/debugUtils'
-import { postConversationUpload } from '@/utils/conversationFileUpload'
+import { postConversationUpload, describeUploadError } from '@/utils/conversationFileUpload'
 import type { MultiModalResponse } from '@/utils/VisionMultimodalApiClient'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useSlashCommands } from '@/composables/useSlashCommands'
@@ -861,7 +861,7 @@ const handleFileSelect = async (event: Event) => {
       attachedFiles.value.push(result.value)
     } else {
       const upload = uploads[index].upload
-      upload.error = result.reason instanceof Error ? result.reason.message : 'Upload failed'
+      upload.error = describeUploadError(result.reason, t)
       upload.status = 'Failed'
     }
   })
@@ -1094,7 +1094,7 @@ const uploadFile = async (upload: UploadItem, file: File): Promise<void> => {
       if (index !== -1) uploadProgress.value.splice(index, 1)
     }, 2000)
   } catch (error) {
-    upload.error = error instanceof Error ? error.message : 'Upload failed'
+    upload.error = describeUploadError(error, t)
     upload.status = 'Failed'
     upload.progress = 0
     throw error
@@ -1122,7 +1122,7 @@ const retryUpload = async (uploadId: string) => {
       attachedFiles.value.push(upload.file)
     }
   } catch (error) {
-    upload.error = error instanceof Error ? error.message : 'Retry failed'
+    upload.error = describeUploadError(error, t)
     upload.status = 'Failed'
   }
 }
