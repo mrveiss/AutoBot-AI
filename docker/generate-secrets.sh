@@ -41,6 +41,11 @@ if ! command -v openssl >/dev/null 2>&1; then
     exit 1
 fi
 
+# #19864: decided before the file is created, for the encryption key below. An empty file is
+# still new: a run refused by the volume check below has already created it.
+NEW_INSTALL=true
+[ -s "$SECRETS_FILE" ] && NEW_INSTALL=false
+
 # Created owner-only from the first byte, not chmod-ed after a world-readable moment.
 (umask 077 && touch "$SECRETS_FILE")
 chmod 600 "$SECRETS_FILE"
@@ -115,6 +120,11 @@ ensure_secret AUTOBOT_SECRETS_ROOT_KEY b64_32
 # default. Hex, because the DB password is interpolated into SLM_DATABASE_URL
 # and must need no URL escaping.
 ensure_secret AUTOBOT_DB_PASSWORD
+# #19864: new installs only. Losing this key makes everything encrypted with it unreadable, so an
+# existing deployment opts in by setting it here rather than having a re-run switch it on.
+if [ "$NEW_INSTALL" = true ]; then
+    ensure_secret AUTOBOT_ENCRYPTION_KEY
+fi
 ensure_secret GRAFANA_ADMIN_PASSWORD
 # #18729: the main app seeds its first admin from this on first start; without it a
 # fresh Docker install has no account to log in with. Read it back from this file.
