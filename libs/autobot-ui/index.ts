@@ -232,3 +232,6 @@ export type { KitDirection } from './src/utils/direction'
 
 export { default as BaseDropdownMenu } from './src/components/BaseDropdownMenu.vue'
 export type { MenuSize, MenuItemVariant, MenuItem } from './src/components/BaseDropdownMenu.vue'
+
+export { default as BasePopover } from './src/components/BasePopover.vue'
+export type { PopoverSize } from './src/components/BasePopover.vue'
