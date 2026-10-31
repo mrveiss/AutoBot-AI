@@ -1819,7 +1819,13 @@
     "performanceSections": "Performance sections",
     "performanceSummary": "Performance summary",
     "refreshPerformanceData": "Refresh performance data",
-    "sLOCompliance": "SLO Compliance:"
+    "sLOCompliance": "SLO Compliance:",
+    "tabs": {
+      "alertRules": "قوانین هشدار",
+      "overview": "نمای کلی",
+      "slos": "SLOها",
+      "traces": "ردیابی‌ها"
+    }
   },
   "redisServicePanel": {
     "actionFailed": "Failed to {action} Redis service",
