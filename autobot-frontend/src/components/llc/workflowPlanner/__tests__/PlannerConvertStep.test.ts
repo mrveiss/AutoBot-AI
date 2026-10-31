@@ -146,3 +146,24 @@ describe('PlannerConvertStep approve and convert', () => {
     expect(w.find('[data-testid="convert-approve"]').attributes('disabled')).toBeDefined()
   })
 })
+
+describe('PlannerConvertStep open criteria before approval', () => {
+  it('disables Approve and names the open G5 criterion, without a confirm dialog', async () => {
+    const w = mountStep(plan({ conversion: PREVIEW }), gate([{ gate: 'G5', message: 'the owner has not acknowledged the By Hand sub-steps' }]))
+    const btn = w.find('[data-testid="convert-approve"]')
+    expect(btn.attributes('disabled')).toBeDefined()
+    expect(w.find('[data-testid="approve-blocker-G5"]').text()).toContain('has not acknowledged the By Hand')
+    await btn.trigger('click')
+    await flushPromises()
+    expect(confirm).not.toHaveBeenCalled()
+    expect(post).not.toHaveBeenCalled()
+  })
+
+  it('keeps Approve enabled when only G7 (the approval itself) is open, or no gate was read', async () => {
+    const g7 = mountStep(plan({ conversion: PREVIEW }), gate([{ gate: 'G7', message: 'an owner or admin has not approved this preview' }]))
+    expect(g7.find('[data-testid="convert-approve"]').attributes('disabled')).toBeUndefined()
+    expect(g7.find('[data-testid="approve-blockers"]').exists()).toBe(false)
+    const none = mountStep(plan({ conversion: PREVIEW }), null)
+    expect(none.find('[data-testid="convert-approve"]').attributes('disabled')).toBeUndefined()
+  })
+})

@@ -9208,6 +9208,8 @@
       "retry": "Retry",
       "loading": "Loading plans...",
       "loadFailed": "Could not load the plan.",
+      "stale": "This plan could not be refreshed, so what is shown may be out of date. {reason}",
+      "rereadRetry": "Reload the plan",
       "saveFailed": "Could not save the change.",
       "createFailed": "Could not create the plan.",
       "emptyTitle": "No plans yet",
@@ -9351,6 +9353,7 @@
         "approveMessage": "You approve the preview shown. Any later edit to the plan clears this approval.",
         "previewFailed": "Could not build the preview.",
         "approveFailed": "Could not approve the plan.",
+        "approveBlocked": "Approval is blocked until these are resolved:",
         "convertFailed": "Could not create the workflows.",
         "retryFailed": "Could not retry the AI line proposals."
       }

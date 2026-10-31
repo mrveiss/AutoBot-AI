@@ -8987,6 +8987,8 @@
       "retry": "Reintentar",
       "loading": "Cargando planes...",
       "loadFailed": "No se pudo cargar el plan.",
+      "stale": "No se pudo actualizar este plan, por lo que lo mostrado puede estar desactualizado. {reason}",
+      "rereadRetry": "Recargar el plan",
       "saveFailed": "No se pudo guardar el cambio.",
       "createFailed": "No se pudo crear el plan.",
       "emptyTitle": "Aún no hay planes",
@@ -9130,6 +9132,7 @@
         "approveMessage": "Usted aprueba la vista previa mostrada. Cualquier edición posterior del plan anula esta aprobación.",
         "previewFailed": "No se pudo generar la vista previa.",
         "approveFailed": "No se pudo aprobar el plan.",
+        "approveBlocked": "La aprobación está bloqueada hasta que se resuelva lo siguiente:",
         "convertFailed": "No se pudieron crear los flujos de trabajo.",
         "retryFailed": "No se pudieron reintentar las propuestas de línea de IA."
       }

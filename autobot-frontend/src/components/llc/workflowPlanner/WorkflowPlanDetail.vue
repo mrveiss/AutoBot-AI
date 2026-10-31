@@ -30,6 +30,8 @@ const plan = ref<Plan | null>(null)
 const gate = ref<GateResponse | null>(null)
 const warnings = ref<string[]>([])
 const loadError = ref('')
+/** Set when a re-read failed: what is on screen may not be what the server holds. */
+const staleError = ref('')
 const busy = ref(false)
 const step = ref<StepId>('map')
 const editable = computed(() => !!plan.value && isActiveStatus(plan.value.status))
@@ -64,14 +66,22 @@ async function run(call: () => Promise<Plan>) {
 
 /** A convert-step action finished: take the plan it returned, or re-read both when it was refused. */
 async function onConverted(next?: Plan) {
+  if (next) plan.value = next
+  await reread(!next)
+}
+
+/** Re-read gate (and plan when asked). A failure marks the screen stale with a retry, never a silent toast. */
+async function reread(withPlan: boolean) {
   try {
-    if (next) plan.value = next
-    else plan.value = await props.api.get(props.planKey)
+    if (withPlan) plan.value = await props.api.get(props.planKey)
     await refreshGate()
+    staleError.value = ''
   } catch (err: unknown) {
-    showToast(describeApiError(err, t('llc.workflowPlanner.loadFailed')), 'error')
+    staleError.value = describeApiError(err, t('llc.workflowPlanner.loadFailed'))
   }
 }
+
+const retryReread = () => reread(true)
 
 const saveMap = (body: Parameters<WorkflowPlansApi['putMap']>[1]) =>
   run(async () => {
@@ -97,6 +107,12 @@ onMounted(load)
     </div>
 
     <template v-else>
+      <BaseAlert v-if="staleError" variant="warning" class="mb-3" :message="t('llc.workflowPlanner.stale', { reason: staleError })" data-testid="plan-stale">
+        <template #actions>
+          <BaseButton size="sm" variant="outline" data-testid="plan-reread" @click="retryReread">{{ t('llc.workflowPlanner.rereadRetry') }}</BaseButton>
+        </template>
+      </BaseAlert>
+
       <ol class="mb-3 flex flex-wrap gap-2" :aria-label="t('llc.workflowPlanner.statusFlow')">
         <li v-for="s in STATUS_ORDER" :key="s">
           <BaseBadge :variant="s === plan.status ? 'primary' : 'neutral'" :tone="s === plan.status ? 'solid' : 'subtle'" size="sm" :label="t(`llc.workflowPlanner.status.${s}`)" :data-testid="`status-${s}`" />
@@ -111,7 +127,7 @@ onMounted(load)
         </BaseButton>
       </div>
 
-      <PlannerConvertStep v-if="step === 'convert'" :plan="plan" :gate="gate" :api="api" @changed="onConverted" />
+      <PlannerConvertStep v-if="step === 'convert'" :plan="plan" :gate="gate" :api="api" :stale="!!staleError" @changed="onConverted" />
 
       <fieldset v-else :disabled="!editable" class="border-0 p-0">
         <PlannerMapStep v-if="step === 'map'" :plan="plan" :busy="busy" :warnings="warnings" @map="saveMap" @wait-note="(k, n) => run(() => api.setWaitNote(planKey, k, n))" />

@@ -8987,6 +8987,8 @@
       "retry": "Mēģināt vēlreiz",
       "loading": "Notiek plānu ielāde...",
       "loadFailed": "Neizdevās ielādēt plānu.",
+      "stale": "Šo plānu neizdevās atsvaidzināt, tāpēc redzamais var būt novecojis. {reason}",
+      "rereadRetry": "Pārlādēt plānu",
       "saveFailed": "Neizdevās saglabāt izmaiņu.",
       "createFailed": "Neizdevās izveidot plānu.",
       "emptyTitle": "Plānu vēl nav",
@@ -9130,6 +9132,7 @@
         "approveMessage": "Jūs apstiprināt redzamo priekšskatījumu. Jebkurš vēlāks plāna labojums atceļ šo apstiprinājumu.",
         "previewFailed": "Neizdevās izveidot priekšskatījumu.",
         "approveFailed": "Neizdevās apstiprināt plānu.",
+        "approveBlocked": "Apstiprināšana ir bloķēta, kamēr nav atrisināts šis:",
         "convertFailed": "Neizdevās izveidot darbplūsmas.",
         "retryFailed": "Neizdevās atkārtot MI rindu priekšlikumus."
       }
