@@ -9,6 +9,7 @@ detection, TTL caching, and defensive per-component isolation."""
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 from pathlib import Path
 
@@ -45,9 +46,18 @@ if isinstance(_schemas_stub, MagicMock):
         setattr(_schemas_stub, _name, dict)
 
 
+def _real_cache_class():
+    """The conftest stubs ``services.*``; the cache under test here must be the real one (#20250)."""
+    path = _BACKEND_ROOT / "services" / "single_flight_cache.py"
+    spec = importlib.util.spec_from_file_location("single_flight_cache_for_11820", path)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module.SingleFlightCache
+
+
 def _reset_cache(cs) -> None:
-    cs._stale_components_cache["ts"] = -1.0e9
-    cs._stale_components_cache["value"] = []
+    cs._stale_components_cache = _real_cache_class()(cs._STALE_COMPONENTS_TTL_SECONDS)
 
 
 async def test_flags_only_drifted_deployed_components(monkeypatch, tmp_path):
@@ -137,8 +147,9 @@ async def test_pull_invalidates_stale_components_cache(monkeypatch, tmp_path):
     # Seed the cache with a fresh "clean" snapshot — the exact pre-pull state
     # that must NOT survive a successful pull, since the pull is what
     # introduced the drift.
-    cs._stale_components_cache["ts"] = time.monotonic()
-    cs._stale_components_cache["value"] = []
+    _reset_cache(cs)
+    cs._stale_components_cache._refreshed_at = time.monotonic()
+    cs._stale_components_cache._value = []
 
     class _FakeOrchestrator:
         async def pull_from_source(self):
@@ -155,7 +166,7 @@ async def test_pull_invalidates_stale_components_cache(monkeypatch, tmp_path):
 
     # Cache is busted (expired), not eagerly recomputed — pull() stays fast
     # and the next /status call pays the recompute cost exactly once.
-    assert cs._stale_components_cache["ts"] < 0
+    assert cs._stale_components_cache._refreshed_at is None
 
     # The next status-path read is a cache MISS: it recomputes and reports
     # the real (drifted) state instead of the stale cached "clean" list.
@@ -176,12 +187,12 @@ async def test_status_read_alone_never_busts_cache(monkeypatch, tmp_path):
 
     first = await cs._compute_stale_components()
     assert first == ["autobot_shared"]
-    ts_after_first = cs._stale_components_cache["ts"]
+    ts_after_first = cs._stale_components_cache._refreshed_at
 
     monkeypatch.setattr(cs, "build_drift_report", lambda *a: {"drifted_files": [], "total_compared": 1})
     second = await cs._compute_stale_components()
     assert second == ["autobot_shared"]  # still cached, not re-walked
-    assert cs._stale_components_cache["ts"] == ts_after_first
+    assert cs._stale_components_cache._refreshed_at == ts_after_first
 
 
 async def test_extended_scan_covers_ai_stack_with_correct_path_map(monkeypatch, tmp_path):
