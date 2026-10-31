@@ -23,9 +23,7 @@ Architecture:
     - RLM reflection evaluates response quality before persisting
 """
 
-import hashlib
-import json
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List
 
 from langchain_core.runnables import RunnableConfig
 
@@ -33,7 +31,13 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.ssot_config import config as _ssot_config
 from chat_workflow import limits
 from chat_workflow.approval_binding import ai_line_calls_shown, bind_decision
+from chat_workflow.attachment_context import attachment_notice_messages
 from chat_workflow.checkpointer_connection import describe_connection, describe_error, get_checkpointer_connection
+from chat_workflow.tool_loop_fingerprint import (  # noqa: F401 -- re-exported: graph._detect_tool_call_loop
+    _LOOP_DETECTION_WINDOW,
+    _detect_tool_call_loop,
+    _fingerprint_tool_call,
+)
 
 try:
     from langgraph.checkpoint.redis.aio import AsyncRedisSaver
@@ -51,9 +55,6 @@ logger = get_logger(__name__)
 # ---------------------------------------------------------------------------
 # Tool-call loop detection constants (#3254)
 # ---------------------------------------------------------------------------
-
-# Number of identical-fingerprint iterations required to declare a loop.
-_LOOP_DETECTION_WINDOW: int = 3
 
 # Maximum consecutive loop events before the graph halts tool execution.
 _LOOP_ABORT_THRESHOLD: int = 2
@@ -133,78 +134,6 @@ class ChatState(TypedDict, total=False):
 
     # Error tracking
     error: str | None
-
-
-# ---------------------------------------------------------------------------
-# Tool-call loop detection helpers (#3254)
-# ---------------------------------------------------------------------------
-
-
-def _fingerprint_tool_call(tool_call: Dict[str, Any]) -> str:
-    """Return a stable string fingerprint for one tool call.
-
-    The fingerprint is built from the tool name plus a SHA-1 digest of the
-    canonically sorted JSON-serialised params dict.  Using a digest (rather
-    than the raw params string) keeps fingerprints constant-length and avoids
-    false negatives caused by key-ordering differences.
-
-    Issue #3254: content-aware detection — two calls are considered identical
-    when *both* the tool name and the arguments are the same.
-
-    Args:
-        tool_call: A parsed tool-call dict with at least a "name" key and an
-                   optional "params" key (dict or scalar).
-
-    Returns:
-        A short string of the form ``"<name>:<hex_digest>"``.
-    """
-    name = tool_call.get("name", "")
-    params = tool_call.get("params", {})
-    try:
-        canonical = json.dumps(params, sort_keys=True, ensure_ascii=False)
-    except (TypeError, ValueError):
-        canonical = str(params)
-    digest = hashlib.sha1(canonical.encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
-    return f"{name}:{digest}"
-
-
-def _detect_tool_call_loop(
-    new_fingerprints: List[str],
-    history: List[str],
-    window: int = _LOOP_DETECTION_WINDOW,
-) -> Tuple[bool, List[str]]:
-    """Detect whether the current iteration is a repetition of recent ones.
-
-    A loop is declared when the last ``window - 1`` entries in ``history``
-    are all identical to the current set of fingerprints.  This requires at
-    least ``window`` consecutive identical iterations before triggering.
-
-    Issue #3254: content-aware (not just count-based) — two iterations are
-    considered identical only when they produce *the same tool calls in the
-    same order*.
-
-    Args:
-        new_fingerprints: Fingerprint strings for the current iteration's
-                          tool calls (one entry per tool call).
-        history:          Accumulated per-iteration fingerprint strings from
-                          previous iterations (each entry is one iteration's
-                          comma-joined fingerprints).
-        window:           How many identical consecutive iterations trigger
-                          the loop alarm (default: ``_LOOP_DETECTION_WINDOW``).
-
-    Returns:
-        ``(is_loop, updated_history)`` where ``updated_history`` has the new
-        iteration's fingerprint appended.
-    """
-    current_key = ",".join(new_fingerprints)
-    updated = (list(history) + [current_key])[-window:]
-
-    if len(updated) < window:
-        return False, updated
-
-    recent = updated[-(window):]
-    is_loop = len(set(recent)) == 1 and recent[0] != ""
-    return is_loop, updated
 
 
 # ---------------------------------------------------------------------------
@@ -315,6 +244,9 @@ async def prepare_llm(state: ChatState, config: RunnableConfig) -> dict:
 
     session = await manager.get_or_create_session(state["session_id"])
     llm_params = await manager._prepare_llm_workflow_params(session, state["user_message"], state.get("context", {}))
+    for notice in attachment_notice_messages(llm_params):  # #20195: streamed, not persisted as a turn message
+        if stream_cb := config["configurable"].get("stream_callback"):
+            stream_cb(notice.to_dict())
     ctx = manager._create_llm_iteration_context(
         llm_params,
         state["session_id"],

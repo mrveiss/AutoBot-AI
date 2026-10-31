@@ -40,7 +40,9 @@ from llm_shared.run_credentials import llm_principal_scope_for
 from services.tool_output_filter import cap_unmatched_output, get_tool_output_filter
 from slash_command_handler import get_slash_command_handler
 
+from .attachment_context import apply_attachments, attachment_notice_messages
 from .conversation import ConversationHandlerMixin
+from .lightweight_mode import decide_lightweight_mode
 from .llm_handler import LLMHandlerMixin, _emit_after_continuation, _emit_before_continuation
 from .models import (
     LLMIterationContext,
@@ -3414,41 +3416,14 @@ before summarizing.
             if context.get("model"):
                 session.metadata["model_override"] = str(context["model"])
 
-        # Issue MVA-1992: Determine if query qualifies for lightweight mode.
-        # Trivial tier (GH#9050, score < trivial_threshold) is the primary
-        # signal; simple tier (score < complexity_threshold) is used as a
-        # fallback when trivial tier is not configured.
-        lightweight_mode = False
-        try:
-            from llm_shared.tiered_routing.complexity_router import ComplexityRouter
-            from llm_shared.tiered_routing.tier_config import TierConfig
-
-            tier_config = TierConfig.from_config()
-            if tier_config.enabled:
-                router = ComplexityRouter(config=tier_config)
-                messages = [{"role": "user", "content": message}]
-                _, complexity_result = router.route(messages)
-                # Trivial tier is the canonical lightweight signal (GH#9050).
-                # Fall back to simple tier when trivial is not configured.
-                is_trivial = complexity_result.tier == "trivial"
-                is_simple_fallback = complexity_result.tier == "simple" and not getattr(
-                    tier_config.models, "trivial", ""
-                )
-                lightweight_mode = is_trivial or is_simple_fallback
-                if lightweight_mode:
-                    logger.info(
-                        "[MVA-1992] Lightweight mode enabled (tier=%s, score=%.1f)",
-                        complexity_result.tier,
-                        complexity_result.score,
-                    )
-        except Exception as e:
-            logger.warning("[MVA-1992] Complexity routing failed, defaulting to full mode: %s", e)
+        lightweight_mode = decide_lightweight_mode([{"role": "user", "content": message}])  # MVA-1992, GH#9050
 
         llm_params = await self._prepare_llm_request_params(
             session, message, use_knowledge=use_knowledge, language=language, lightweight_mode=lightweight_mode
         )
         # MVA-1993: Store lightweight_mode in params for response metadata
         llm_params["lightweight_mode_used"] = lightweight_mode
+        await apply_attachments(session, context, llm_params)  # #20195: attached files reach the prompt
 
         logger.info(
             "[ChatWorkflowManager] Initial prompt length: %d characters",
@@ -3539,6 +3514,8 @@ before summarizing.
             yield progress.to_workflow_message()
 
         llm_params = await self._prepare_llm_workflow_params(session, message, context)
+        for notice in attachment_notice_messages(llm_params):  # #20195: say why an attached file was not used
+            yield notice
 
         ctx = self._create_llm_iteration_context(
             llm_params, session_id, terminal_session_id, message, workflow_messages, context

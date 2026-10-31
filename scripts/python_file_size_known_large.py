@@ -146,9 +146,9 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/chat_history/context_overflow.py": 845,
     "autobot-backend/chat_history/session.py": 923,
     "autobot-backend/chat_workflow/chat_intent_detector_test.py": 621,
-    "autobot-backend/chat_workflow/graph.py": 1643,  # train 50: #18993 on main's 1652
+    "autobot-backend/chat_workflow/graph.py": 1575,  # #20195: 1643 -> 1575 (loop-detection helpers split out)
     "autobot-backend/chat_workflow/llm_handler.py": 1300,
-    "autobot-backend/chat_workflow/manager.py": 3885,  # #17273: graph turn lifecycle moved to turn_control
+    "autobot-backend/chat_workflow/manager.py": 3862,  # #20195: 3885 -> 3862 (lightweight-mode split out)
     "autobot-backend/chat_workflow/tool_handler.py": 3697,  # #11542 dispatch merge + #14068 mirror
     "autobot-backend/chat_workflow/wired_hooks_test.py": 653,
     "autobot-backend/chat_workflow/workflow_plan_approval_test.py": 624,

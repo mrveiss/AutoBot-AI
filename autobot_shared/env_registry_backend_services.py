@@ -583,3 +583,5 @@ register_env_var(
         component="backend",
     )
 )
+
+from autobot_shared import env_registry_chat_attachments  # noqa: E402,F401 -- registers #20195 vars; see its docstring
