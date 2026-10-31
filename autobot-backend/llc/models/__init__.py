@@ -8,6 +8,8 @@ from .activity import ActorType, LLCActivityLog, LLCBase
 from .agent_wiki import LLCAgentWikiEntry
 from .ai_line import LLCAiLine
 from .approval import LLCApproval
+from .attachment import LLCWorkItemAttachment
+from .attachment_deletion import LLCAttachmentFileDeletion
 from .board import LLCBoard, LLCBoardColumn
 from .budget import LLCAgentBudget
 from .company import (
@@ -97,6 +99,8 @@ __all__ = [
     "LLCWorkspaceLease",
     "LLCRunReplayLog",
     "LLCApproval",
+    "LLCAttachmentFileDeletion",
+    "LLCWorkItemAttachment",
     "LLCBase",
     "LLCBoard",
     "LLCBoardColumn",
