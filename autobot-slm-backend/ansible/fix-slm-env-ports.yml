@@ -59,11 +59,12 @@
         regexp: '^AUTOBOT_FRONTEND_URL='
         line: "AUTOBOT_FRONTEND_URL=https://{{ frontend_host }}"
 
-    - name: "Fix | VITE frontend port 5173 → 443"
+    # VITE_FRONTEND_PORT is the dev port; the SPA's OAuth callback reads the served one (#20058)
+    - name: "Fix | SPA served port goes under its own name"
       lineinfile:
         path: "{{ env_file }}"
-        regexp: '^VITE_FRONTEND_PORT='
-        line: "VITE_FRONTEND_PORT={{ frontend_tls_port }}"
+        regexp: '^VITE_FRONTEND_(SERVED_)?PORT='
+        line: "VITE_FRONTEND_SERVED_PORT={{ frontend_tls_port }}"
 
     - name: "Fix | NPU Worker port 8082 → 8081"
       lineinfile:

@@ -287,3 +287,45 @@ class TestPerThemeStatusPairs:
         selector, at, _ = blocks[0]
 
         assert not any(contrast._layer_applies((selector, at), layer) for layer in modelled.layers)
+
+
+class TestHoverPair:
+    """#19953: a declared -solid-hover fill keeps AA under the on-status text and differs from rest."""
+
+    CSS = """
+    [data-theme="fx"] {
+      --color-error-solid: #dc2626;
+      --color-error-solid-hover: %s;
+      --text-on-error: #ffffff;
+    }
+    """
+
+    def _run(self, tmp_path, hover):
+        path = tmp_path / "fx.css"
+        path.write_text(self.CSS % hover, encoding="utf-8")
+        theme = contrast.ThemeSpec("fx", [(path, '[data-theme="fx"]', "")])
+        return contrast.check_status_themes([theme])
+
+    def test_darker_hover_passes(self, tmp_path):
+        lines, failures = self._run(tmp_path, "#b91c1c")
+
+        assert not [f for f in failures if "hover" in f]
+        assert any("on --color-error-solid-hover #b91c1c" in line and "ok" in line for line in lines)
+
+    def test_hover_equal_to_rest_is_reported(self, tmp_path):
+        _, failures = self._run(tmp_path, "#dc2626")
+
+        assert any("gives no feedback" in f for f in failures)
+
+    def test_hover_below_aa_is_reported(self, tmp_path):
+        _, failures = self._run(tmp_path, "#ef4444")
+
+        assert any("--color-error-solid-hover = 3.76:1 < 4.5" in f for f in failures)
+
+    def test_slm_declares_a_distinct_passing_error_hover(self):
+        slm = next(t for t in contrast.THEMES if t.name.startswith("slm"))
+        decls = contrast.theme_declarations(slm)
+
+        hover = contrast.resolve_colour("--color-error-solid-hover", decls)
+        assert hover and hover != contrast.resolve_colour("--color-error-solid", decls)
+        assert contrast.contrast_ratio(contrast.resolve_colour("--text-on-error", decls), hover) >= 4.5
