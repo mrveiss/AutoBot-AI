@@ -164,6 +164,7 @@ import {
   avgQuality,
   totalCost,
 } from '@/utils/benchmark'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { t } = useI18n()
 const logger = createLogger('BenchmarkView')
@@ -331,9 +332,7 @@ async function loadPromptSets(): Promise<void> {
 function formatCost(v: number): string {
   return `$${v.toFixed(4)}`
 }
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString()
-}
+const formatDate = createDateFormatter()
 
 onMounted(() => {
   loadPromptSets()
