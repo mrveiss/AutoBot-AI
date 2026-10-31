@@ -53,6 +53,8 @@ from .subprocess_support import (
     extract_usage,
     final_result_event,
     inject_agent_credentials,
+    is_auth_failure_output,
+    is_failed_result_event,
     is_rate_limit_output,
     read_output_tail,
     serialize_invoke_context,
@@ -64,6 +66,11 @@ logger = get_logger(__name__)
 
 _SESSION_TTL_SECONDS = 4 * 3600
 _SESSION_KEY = "llc:agent:{agent_id}:claude_session"
+
+# Fixed run-failure reasons (#20202). Short and constant on purpose: they reach the
+# run record and the log, so they never carry CLI output, tokens or transcript text.
+AUTH_FAILED_REASON = "claude CLI authentication failed - re-authenticate the agent's Claude login"
+ERROR_RESULT_REASON = "claude CLI reported an error result"
 
 # Re-exported for the import contract (subscription adapter + tests rely on these).
 __all__ = [
@@ -384,6 +391,11 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
             tokens_in, tokens_out = extract_usage(result_event)
             return replace(base, tokens_in=tokens_in, tokens_out=tokens_out)
 
+        # #20202: an expired/revoked login fails every run the same way and no retry
+        # helps. The CLI marks it with structured fields (not just message text).
+        if is_failed_result_event(result_event) and is_auth_failure_output(tail, result_event):
+            return self._failed_status(run_id, AUTH_FAILED_REASON)
+
         # Either no result event (mid-stream kill) or an error/non-success result:
         # scan the stdout tail AND the stderr sidecar for rate-limit markers —
         # some CLI rate-limit errors only reach stderr, never the stream-json
@@ -423,7 +435,18 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
                 stderr_tail.strip()[-1000:],
             )
 
+        # #20202: ``is_error`` marks a failed run even when ``subtype`` says
+        # "success"; reading it as COMPLETED hid every error result.
+        if is_failed_result_event(result_event):
+            return self._failed_status(run_id, ERROR_RESULT_REASON)
+
         return base
+
+    @staticmethod
+    def _failed_status(run_id: str, reason: str) -> AdapterRunStatus:
+        """FAILED status with a fixed *reason*, logged at ERROR so operators see it."""
+        logger.error("ClaudeCodeAdapter: run %s failed: %s", run_id, reason)
+        return AdapterRunStatus(status=LLCRunStatus.FAILED, exit_code=1, error=reason)
 
     async def _post_cancel(self, agent_config: dict, run_id: str) -> None:
         """Clear the Redis resume session so the next run starts fresh (GH#9834)."""
