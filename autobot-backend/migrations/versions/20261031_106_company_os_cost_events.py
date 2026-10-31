@@ -35,7 +35,7 @@ def upgrade() -> None:
     op.create_table(
         TABLE,
         sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True),
-        sa.Column("company_id", sa.String(255), nullable=False),
+        sa.Column("company_id", sa.Uuid(as_uuid=True), nullable=False),
         sa.Column("agent_id", sa.String(255), nullable=False),
         sa.Column("work_item_id", sa.Uuid(as_uuid=True), nullable=True),
         sa.Column("model", sa.String(255), nullable=False),
