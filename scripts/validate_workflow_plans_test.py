@@ -44,3 +44,29 @@ def test_gate_is_the_service_gate_not_a_copy():
 
 def test_empty_directory_fails(tmp_path):
     assert v.validate_dir(tmp_path)
+
+
+def _report(status, missing):
+    return plan_gate.GateReport(status, None, missing)
+
+
+def test_next_rung_gaps_at_the_declared_status_still_pass(monkeypatch):
+    plan = v.load_plan(EXAMPLES[0])
+    gaps = [plan_gate.Missing("G5", "next rung gap")]
+    monkeypatch.setattr(v, "evaluate_plan_gate", lambda _p: _report(plan.status, gaps))
+    assert v.plan_problems(plan) == []
+
+
+def test_earning_less_than_declared_reports_the_gaps(monkeypatch):
+    plan = v.load_plan(EXAMPLES[0])
+    gaps = [plan_gate.Missing("G3", "no current sub-step")]
+    low = type(plan.status).MEASURED
+    monkeypatch.setattr(v, "evaluate_plan_gate", lambda _p: _report(low, gaps))
+    problems = v.plan_problems(plan)
+    assert any("G3" in p for p in problems) and any("earns" in p for p in problems)
+
+
+def test_earning_more_than_declared_is_a_mismatch(monkeypatch):
+    plan = v.load_plan(EXAMPLES[0]).model_copy(update={"status": type(v.load_plan(EXAMPLES[0]).status).MEASURED})
+    monkeypatch.setattr(v, "evaluate_plan_gate", lambda _p: _report(type(plan.status).LABELED, []))
+    assert any("earns" in p for p in v.plan_problems(plan))

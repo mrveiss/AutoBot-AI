@@ -34,15 +34,24 @@ for _p in (str(REPO_ROOT), str(BACKEND)):
         sys.path.insert(0, _p)
 
 from llc.services.company_os.plan_gate import evaluate_plan_gate  # noqa: E402
-from llc.services.company_os.plan_types import CompanyWorkflowPlan  # noqa: E402
+from llc.services.company_os.plan_types import CompanyWorkflowPlan, WorkflowPlanStatus  # noqa: E402
+
+_RANK = {status: i for i, status in enumerate(WorkflowPlanStatus)}
 
 
 def plan_problems(plan: CompanyWorkflowPlan) -> List[str]:
-    """Why the real gate does not accept this plan as the status it declares; empty when it does."""
+    """Why the real gate does not earn exactly the status this plan declares; empty when it does.
+
+    Only the declared status is judged: ``missing`` also lists what the *next* rung lacks, which a
+    plan that earned its declared status is allowed to have. Gaps are reported only when the gate
+    earns less than the plan declares.
+    """
     report = evaluate_plan_gate(plan)
-    problems = [f"{m.gate}: {m.message}" for m in report.missing]
-    if report.status is not plan.status:
-        problems.append(f"declares {plan.status.value!r} but the gate earns {report.status.value!r}")
+    if report.status is plan.status:
+        return []
+    problems = [f"declares {plan.status.value!r} but the gate earns {report.status.value!r}"]
+    if _RANK[report.status] < _RANK[plan.status]:
+        problems += [f"{m.gate}: {m.message}" for m in report.missing]
     return problems
 
 
