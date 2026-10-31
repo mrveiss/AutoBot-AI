@@ -16,7 +16,7 @@ import uuid
 from autobot_shared.logging_manager import get_logger
 
 from .tracing_config import LangSmithTracingConfig
-from .tracing_policy import trace_messages, trace_text
+from .tracing_policy import trace_ident, trace_messages, trace_text
 
 logger = get_logger(__name__)
 
@@ -44,8 +44,8 @@ class LangSmithObserver:
             inputs={"messages": trace_messages(request.messages)},
             extra={
                 "metadata": {
-                    "agent_id": request.metadata.get("agent_id"),
-                    "run_id": request.metadata.get("run_id"),
+                    "agent_id": trace_ident(request.metadata.get("agent_id")),
+                    "run_id": trace_ident(request.metadata.get("run_id")),
                 }
             },
             project_name=self._project,

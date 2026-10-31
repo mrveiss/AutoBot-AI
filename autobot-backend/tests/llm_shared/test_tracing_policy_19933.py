@@ -95,37 +95,127 @@ def test_error_text_is_not_sent_by_default(factory, monkeypatch):
     assert PRIVATE_TEXT not in sent
 
 
+LISTED = "http://lf.example:3000"
+
+
+@pytest.fixture()
+def listed(monkeypatch):
+    monkeypatch.setenv("AUTOBOT_LLM_TRACING_ALLOWED_ORIGINS", LISTED + ", https://[::1]:3000, http://[fe80::1]:3000")
+    monkeypatch.delenv("AUTOBOT_LLM_TRACING_ALLOW_EXTERNAL", raising=False)
+
+
+def _allowed(url: str) -> bool:
+    from llm_shared.observability.tracing_policy import destination_allowed
+
+    return destination_allowed("langfuse", url)
+
+
 class TestDestination:
     def test_external_refused_by_default(self, monkeypatch):
-        from llm_shared.observability.tracing_policy import destination_allowed
-
         monkeypatch.delenv("AUTOBOT_LLM_TRACING_ALLOW_EXTERNAL", raising=False)
-        assert destination_allowed("langsmith", "https://api.smith.langchain.com") is False
+        monkeypatch.delenv("AUTOBOT_LLM_TRACING_ALLOWED_ORIGINS", raising=False)
+        assert _allowed("https://api.smith.langchain.com") is False
 
     def test_public_allowed_with_opt_in(self, monkeypatch):
         from llm_shared.observability import tracing_policy
 
         monkeypatch.setenv("AUTOBOT_LLM_TRACING_ALLOW_EXTERNAL", "true")
         with patch.object(tracing_policy, "is_public_url", return_value=True):
-            assert tracing_policy.destination_allowed("langsmith", "https://t.example.com") is True
+            assert _allowed("https://t.example.com") is True
 
     def test_non_public_refused_even_with_opt_in(self, monkeypatch):
         from llm_shared.observability import tracing_policy
 
         monkeypatch.setenv("AUTOBOT_LLM_TRACING_ALLOW_EXTERNAL", "true")
         with patch.object(tracing_policy, "is_public_url", return_value=False):
-            assert tracing_policy.destination_allowed("langfuse", "http://169.254.169.254:80") is False
+            assert _allowed("http://private.example:3000") is False
 
-    def test_internal_origin_allowed_without_opt_in(self, monkeypatch):
-        from llm_shared.observability import tracing_policy
+    def test_listed_private_origin_allowed_without_opt_in(self, listed):
+        assert _allowed(LISTED + "/api") is True
 
-        monkeypatch.delenv("AUTOBOT_LLM_TRACING_ALLOW_EXTERNAL", raising=False)
-        with patch.object(tracing_policy, "static_internal_origins", return_value=frozenset({"http://lf:3000"})):
-            assert tracing_policy.destination_allowed("langfuse", "http://lf:3000") is True
+    def test_ssot_service_origin_is_not_trusted(self, listed, monkeypatch):
+        from autobot_shared import egress_allowlist
+
+        monkeypatch.setattr(
+            egress_allowlist, "static_internal_origins", lambda: frozenset({"http://llm.example:11434"})
+        )
+        assert _allowed("http://llm.example:11434") is False
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "http://evil.example\\@lf.example:3000",  # backslash: clients send to evil.example
+            "http://user:x@lf.example:3000",  # userinfo
+            "http://lf.example.:3000",  # trailing dot is a different origin
+            "http://lf.example:03000",  # zero-padded port
+            "http://lf.example:3001",  # other port
+            "https://lf.example:3000",  # other scheme
+            "http://[fe80::1]:3000",  # listed but link-local: never allowed
+            "http://169.254.169.254:80",  # metadata
+        ],
+    )
+    def test_non_matching_shapes_are_refused(self, listed, url):
+        assert _allowed(url) is False
+
+    @pytest.mark.parametrize("url", ["HTTP://LF.Example:3000/x", "https://[::1]:3000/"])
+    def test_case_and_ipv6_match_exactly(self, listed, url):
+        assert _allowed(url) is True
 
     def test_log_never_carries_a_key(self, monkeypatch, caplog):
-        from llm_shared.observability.tracing_policy import destination_allowed
-
         monkeypatch.delenv("AUTOBOT_LLM_TRACING_ALLOW_EXTERNAL", raising=False)
-        destination_allowed("langsmith", "https://user:" + "pw" + "-hidden@api.example.com/x?api_key=zzz")
+        _allowed("https://user:" + "pw" + "-hidden@api.example.com/x?api_key=zzz")
         assert "pw-hidden" not in caplog.text and "zzz" not in caplog.text
+
+
+class TestOutboundPolicy:
+    def test_blocked_pii_sends_the_marker_and_does_not_raise(self, monkeypatch):
+        from a2a.pii_pipeline import PIIBlocked, PIIType
+        from llm_shared.observability import tracing_policy
+
+        monkeypatch.setenv("AUTOBOT_LLM_TRACING_INCLUDE_CONTENT", "true")
+        err = PIIBlocked([next(iter(PIIType))])
+        with patch.object(tracing_policy, "scrub_outbound", side_effect=err):
+            assert tracing_policy.trace_text("anything") == tracing_policy.CONTENT_OMITTED
+            assert tracing_policy.trace_messages([{"content": "x"}]) == tracing_policy.CONTENT_OMITTED
+
+    def test_content_goes_through_the_outbound_pipeline(self, monkeypatch):
+        from llm_shared.observability import tracing_policy
+
+        monkeypatch.setenv("AUTOBOT_LLM_TRACING_INCLUDE_CONTENT", "true")
+        with patch.object(tracing_policy, "scrub_outbound") as scrub:
+            scrub.return_value.text = "SCRUBBED"
+            assert tracing_policy.trace_messages([{"role": "user", "content": "hi"}])[0]["content"] == "SCRUBBED"
+            assert tracing_policy.trace_text("hi") == "SCRUBBED"
+
+    @pytest.mark.parametrize("value", ["agent-7", "run_01:a.b"])
+    def test_id_tokens_pass(self, value):
+        from llm_shared.observability.tracing_policy import trace_ident
+
+        assert trace_ident(value) == value
+
+    @pytest.mark.parametrize("value", ["call me at home", "x" * 200, "a\nb", 7, None])
+    def test_free_text_ids_are_dropped(self, value):
+        from llm_shared.observability.tracing_policy import trace_ident
+
+        assert trace_ident(value) is None
+
+    @pytest.mark.parametrize("factory", [_langsmith, _langfuse])
+    def test_free_text_run_id_is_not_sent(self, factory):
+        obs, client = factory()
+        req = Req(metadata={"agent_id": "free text pii", "run_id": "more free text"})
+        asyncio.run(obs.on_request(req, {}))
+        assert "free text" not in _sent(client) + _sent(client.generation.return_value)
+
+
+class TestOtelErrorText:
+    def test_error_text_is_withheld_from_span_status_and_event(self, monkeypatch):
+        from llm_shared.observability import otel_observer
+
+        monkeypatch.delenv("AUTOBOT_LLM_TRACING_INCLUDE_CONTENT", raising=False)
+        span = MagicMock()
+        tracer = MagicMock()
+        tracer.start_as_current_span.return_value.__enter__.return_value = span
+        with patch.object(otel_observer, "_tracer", tracer):
+            asyncio.run(otel_observer.OTELObserver().on_error(RuntimeError(f"echoed {PRIVATE_TEXT}"), Req()))
+        assert PRIVATE_TEXT not in repr(span.mock_calls)
+        span.record_exception.assert_not_called()
