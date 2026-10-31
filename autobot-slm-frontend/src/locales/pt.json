@@ -392,6 +392,7 @@
     "deleteSchedule": "Delete schedule \"{name}\"?"
   },
   "common": {
+    "zeroSize": "0 B",
     "codeSyncBadge": {},
     "roleReachesNoDeployPath": "Assigned, but nothing will deploy {roles}: the role reaches no ansible group and has no dedicated playbook. Add a group mapping or a playbook for it.",
     "sidebar": {
@@ -1152,11 +1153,11 @@
     "editMaintenanceWindow": "Edit Maintenance Window",
     "editWindow": "Edit window",
     "endTime": "End Time",
-    "failedToActivateWindow": "Failed to activate maintenance window",
-    "failedToCompleteWindow": "Failed to complete maintenance window",
-    "failedToDeleteWindow": "Failed to delete maintenance window",
-    "failedToDrainNode": "Failed to drain node. Please try again.",
-    "failedToResumeNode": "Failed to resume node. Please try again.",
+    "failedToActivateWindow": "Falha ao ativar a janela de manutenção",
+    "failedToCompleteWindow": "Falha ao concluir a janela de manutenção",
+    "failedToDeleteWindow": "Falha ao excluir a janela de manutenção",
+    "failedToDrainNode": "Falha ao drenar o nó. Tente novamente.",
+    "failedToResumeNode": "Falha ao retomar o nó. Tente novamente.",
     "fleetWideMaintenance": "Fleet-Wide Maintenance",
     "leaveEmptyForFleet": "Leave empty for fleet-wide maintenance",
     "loadingMaintenanceWindows": "Loading maintenance windows...",
@@ -1359,7 +1360,8 @@
       "showingCountOfCount2Entries": "Showing {count} of {count2} entries",
       "source": "Fonte:",
       "source1": "Fonte",
-      "time": "Time"
+      "time": "Time",
+      "loadError": "Falha ao carregar os registos: {error}"
     },
     "metricsDetailsView": {
       "activeWorkers": "Active Workers",
@@ -1682,7 +1684,7 @@
     "system": "Sistema",
     "systemValue0": "System ({value0})",
     "systemdService": "Systemd Service",
-    "target": "Destino",
+    "target": "Target",
     "targetNode": "Target Node",
     "targetPath": "Target Path *",
     "targetPath2": "Target path:",
@@ -1707,7 +1709,7 @@
   "performance": {
     "alertRulesView": {
       "actions": "Ações",
-      "alertRules": "Alert Rules",
+      "alertRules": "Regras de alerta",
       "areYouSureYou": "Tem certeza de que deseja excluir",
       "cancel": "Cancelar",
       "condition": "Condition",
@@ -1819,7 +1821,13 @@
     "performanceSections": "Performance sections",
     "performanceSummary": "Performance summary",
     "refreshPerformanceData": "Refresh performance data",
-    "sLOCompliance": "SLO Compliance:"
+    "sLOCompliance": "SLO Compliance:",
+    "tabs": {
+      "alertRules": "Regras de alerta",
+      "overview": "Visão geral",
+      "slos": "SLOs",
+      "traces": "Rastreamentos"
+    }
   },
   "redisServicePanel": {
     "actionFailed": "Failed to {action} Redis service",
@@ -2029,7 +2037,7 @@
     "sourcePathsCommaSeparated": "Source Paths (comma-separated)",
     "syncType": "Sync Type",
     "systemdService": "Systemd Service",
-    "target": "Destino",
+    "target": "Target",
     "targetNode": "Target Node *",
     "targetPath": "Target Path *",
     "times": "×",
@@ -3342,8 +3350,8 @@
     "yourSLMServiceLifecycle": "Your SLM (Service Lifecycle Manager) is up and running. This wizard\n          will guide you through adding and configuring your fleet nodes.",
     "provisioningFailed": "Provisioning failed",
     "retryProvisioning": "Retry provisioning",
-    "failedToSaveKeys": "Failed to save API keys. Check the console for details.",
-    "failedToAddNode": "Failed to add node"
+    "failedToSaveKeys": "Falha ao salvar as chaves de API. Consulte o console para mais detalhes.",
+    "failedToAddNode": "Falha ao adicionar o nó"
   },
   "skills": {
     "approvalsTab": {
@@ -3881,7 +3889,7 @@
     "empty": "No active shared links.",
     "loading": "Loading shared links…",
     "never": "Nunca",
-    "open": "Abrir",
+    "open": "Open",
     "protected": "Protected",
     "refresh": "Atualizar",
     "subtitle": "Read-only audit of who has shared what — every active public chat link, by user. Users manage their own shares in the app.",

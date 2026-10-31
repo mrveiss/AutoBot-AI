@@ -10,6 +10,7 @@ import re
 from pathlib import Path
 from typing import Any, Dict, List
 
+from autobot_shared.status_enums import Severity
 from utils.line_index import LineIndex  # #12884
 
 
@@ -178,7 +179,7 @@ class SimplePerformanceAnalyzer:
 def _print_severity_and_category(results: dict) -> None:
     """Print issues grouped by severity and category. Issue #1183."""
     print("\n=== Issues by Severity ===")  # noqa: print
-    for severity in ["critical", "high", "medium", "low"]:
+    for severity in (level.value for level in reversed(Severity.finding_ladder()[1:])):
         if severity in results["by_severity"]:
             print(f"{severity.title()}: {len(results['by_severity'][severity])} issues")  # noqa: print
     print("\n=== Issues by Category ===")  # noqa: print

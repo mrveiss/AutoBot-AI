@@ -10,6 +10,7 @@
 
 import { computed } from 'vue'
 import type { FleetMetricsDetailed } from '@/composables/useFleetMetrics'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 interface Props {
   metrics: FleetMetricsDetailed | null
@@ -36,9 +37,7 @@ function getMetricColor(value: number): string {
   return 'text-success-600'
 }
 
-function formatTimestamp(timestamp: string): string {
-  return new Date(timestamp).toLocaleTimeString()
-}
+const formatTimestamp = createDateFormatter({ kind: 'time' })
 </script>
 
 <template>

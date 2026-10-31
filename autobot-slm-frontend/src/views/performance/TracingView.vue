@@ -15,7 +15,7 @@ import { ref, onMounted, watch } from 'vue'
 import { formatDuration } from '@/utils/formatHelpers'
 import { BaseAlert, usePagination, BasePagination } from '@autobot/ui'
 import { usePerformanceMonitoring } from '@/composables/usePerformanceMonitoring'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import type {
   TraceItem,
   TraceDetail,
@@ -202,10 +202,6 @@ function spanBarColor(status: string): string {
  * Format duration for display.
  */
 
-function formatDate(dateStr: string): string {
-  return formatDateTime(dateStr)
-}
-
 // Watch for filter changes that require immediate reload
 watch([timeRange, statusFilter], () => {
   onFilterChange()
@@ -356,7 +352,7 @@ onMounted(() => {
                   {{ trace.source_node_id ?? '-' }}
                 </td>
                 <td class="px-4 py-2 text-sm text-gray-500 whitespace-nowrap">
-                  {{ formatDate(trace.created_at) }}
+                  {{ formatFleetDateTime(trace.created_at) }}
                 </td>
               </tr>
 

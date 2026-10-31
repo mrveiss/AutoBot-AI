@@ -11,21 +11,16 @@
 # Phase 1: GPU Detection
 # -----------------------------------------------------------------
 
-- name: "GPU | Detect NVIDIA GPU via nvidia-smi"
-  ansible.builtin.command:
-    cmd: nvidia-smi --query-gpu=name --format=csv,noheader
-  register: _nvidia_smi_result
-  changed_when: false
-  # (#2872) Intentional: nvidia-smi exits rc != 0 when no GPU is present;
-  # the result drives GPU vs CPU model selection below.
-  failed_when: false
+# (#2872) nvidia-smi exits rc != 0 when no GPU is present; the result drives GPU vs CPU model selection below.
+- name: "GPU | Detect NVIDIA GPU"
+  ansible.builtin.include_tasks: ../../_shared/tasks/detect_nvidia_gpu.yml
   when: llm_has_gpu == "auto"
 
 - name: "GPU | Set GPU fact from detection"
   ansible.builtin.set_fact:
     _llm_gpu_detected: >-
-      {{ _nvidia_smi_result.rc == 0
-         and _nvidia_smi_result.stdout | default('') | length > 0 }}
+      {{ nvidia_smi_probe.rc == 0
+         and nvidia_smi_probe.stdout | default('') | length > 0 }}
   when: llm_has_gpu == "auto"
 
 - name: "GPU | Set GPU fact from override"
@@ -37,8 +32,8 @@
   ansible.builtin.debug:
     msg: >-
       GPU detected: {{ _llm_gpu_detected }}
-      {% if _nvidia_smi_result is defined and _nvidia_smi_result.rc == 0 %}
-      ({{ _nvidia_smi_result.stdout | default('unknown') | trim }})
+      {% if nvidia_smi_probe is defined and nvidia_smi_probe.rc == 0 %}
+      ({{ nvidia_smi_probe.stdout | default('unknown') | trim }})
       {% endif %}
 
 - name: "GPU | Build model list for this node"
@@ -200,6 +195,19 @@
 # Phase 4: Model Pulling (conditional on hardware)
 # -----------------------------------------------------------------
 
+# #19862: "All 0 models present" read as success when Apply sent empty lists. This fails rather than
+# warns, unlike the skipped-GPU-tier warning below: there a node still gets its CPU models, here it gets
+# none. llm_pull_models: false is how an operator asks for a node with no models.
+- name: "Models | There is something to pull"
+  ansible.builtin.assert:
+    that:
+      - _llm_models_to_pull | length > 0
+    fail_msg: >-
+      No models to pull for this node (GPU detected: {{ _llm_gpu_detected }}): the model lists that apply
+      to it are empty. Set them, or set llm_pull_models to false to provision this node without models.
+    quiet: true
+  when: llm_pull_models | default(true)
+
 - name: "Models | Pull models appropriate for this node"
   ansible.builtin.command:
     cmd: "ollama pull {{ item }}"
@@ -239,6 +247,23 @@
     _llm_missing: >-
       {{ _llm_models_to_pull | map('regex_replace', ':latest$', '')
          | reject('in', _llm_held) | list }}
+  when:
+    - llm_pull_models | default(true)
+    - not ansible_check_mode
+  tags: ['llm', 'models']
+
+- name: "Models | Check every pulled model is the right kind for its role (#19736)"
+  ansible.builtin.include_tasks:
+    file: ../../../_shared/tasks/assert_model_kinds.yml
+    apply:
+      tags: ['llm', 'models']
+  vars:
+    # The one home of the embedding role's model. Set llm_embedding_model only when llm_cpu_models holds a
+    # different embedder, which would otherwise fail this check as a chat model.
+    model_kind_embedding: >-
+      {{ llm_embedding_model | default((lookup('file', role_path ~ '/../agent_config/defaults/main.yml')
+         | from_yaml).ollama_embedding_model) }}
+    model_kind_completion: "{{ _llm_models_to_pull }}"
   when:
     - llm_pull_models | default(true)
     - not ansible_check_mode
