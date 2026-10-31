@@ -94,6 +94,7 @@ REACH_ROOTS = {
         "autobot-slm-frontend/src",
         "autobot-slm-frontend/src/utils",
         "libs/autobot-ui",
+        "libs/slm-contract",
     ),
     "repo_tests/egress_default_guard_17576_test.py": (
         "autobot-",
@@ -162,7 +163,11 @@ REACH_ROOTS = {
         "autobot-infrastructure/shared/mcp/",
         "autobot_shared/",
     ),
-    "repo_tests/kit_export_shadow_ratchet_14908_test.py": ("autobot-frontend/src", "autobot-slm-frontend/src"),
+    "repo_tests/kit_export_shadow_ratchet_14908_test.py": (
+        "autobot-frontend/src",
+        "autobot-slm-frontend/src",
+        "libs/slm-contract",
+    ),
     "repo_tests/kit_loading_ratchet_19906_test.py": (
         "autobot-frontend/src",
         "autobot-plugins",
