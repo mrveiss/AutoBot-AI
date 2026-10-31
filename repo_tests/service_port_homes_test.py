@@ -173,7 +173,7 @@ def _scanned_files(root: Path) -> list[str]:
 FILES = declare(
     "service-port-homes-scan",
     discover=_scanned_files,
-    floor=5444,  # mid-window: population 5519, window (5369, 5519)
+    floor=5505,  # mid-window: population 5580, window (5430, 5580)
     growth=150,
     what="production python and text sources swept for a second definition of a service port",
     roots=_SCAN_ROOTS,
