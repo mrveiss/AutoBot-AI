@@ -6,9 +6,9 @@
 /**
  * The chat attachment upload transport (#20133).
  *
- * The route (`/conversation-files/conversation/{id}/upload`) is gated by `check_admin_permission`,
- * which accepts a bearer JWT, `X-Session-ID`, a dev header or an internal key, and no cookie, so the
- * request carries the stored bearer, read through the canonical reader `readStoredAuthToken`.
+ * The route (`/conversation-files/conversation/{id}/upload`) admits an admin or the user who owns the
+ * conversation (#20133); it resolves a bearer JWT, `X-Session-ID`, a dev header or an internal key, and
+ * no cookie, so the request carries the stored bearer, read through the canonical reader `readStoredAuthToken`.
  * It stays a raw XHR rather than `ApiClient.uploadFile` because the chat UI needs the byte-level
  * progress (for ETA), the response's `file_info`/`upload_id`, and an exact `200` success check,
  * none of which the kit method exposes.
