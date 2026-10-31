@@ -309,7 +309,7 @@ async def get_agent_recommendations(
                 }
             )
 
-    severity_order = {"high": 0, "medium": 1, "low": 2}
+    severity_order = {s.value: i for i, s in enumerate(reversed(Severity.triage_ladder()))}
     recommendations.sort(key=lambda x: min(severity_order.get(r["severity"], 3) for r in x["recommendations"]))
 
     return {
