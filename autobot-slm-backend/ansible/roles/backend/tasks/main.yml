@@ -282,6 +282,10 @@
   ansible.builtin.include_tasks: read_secrets_root_key.yml
   tags: ['backend', 'config']
 
+- name: "Backend | Read the encryption key (#19864)"
+  ansible.builtin.include_tasks: read_encryption_key.yml
+  tags: ['backend', 'config', 'env']
+
 # #9914: Deploy the systemd unit BEFORE any stop/start so a fresh VM provisions
 # out-of-box. Previously the unit was deployed after the MVA-1633 start task, so
 # first-run on a clean node failed: "Could not find the requested service
