@@ -4242,6 +4242,8 @@
     "stop": "Stop Workflow",
     "status": "Status",
     "history": {
+      "durationSeconds": "s",
+      "durationMinutes": "min",
       "searchPlaceholder": "Search workflows...",
       "allStatus": "All Status",
       "completed": "Completed",
@@ -8994,8 +8996,6 @@
       "unavailableTitle": "Der Workflow-Planer ist nicht verfügbar",
       "unavailableHint": "Diese Funktion ist für Ihren Arbeitsbereich ausgeschaltet, daher gibt es hier noch nichts anzuzeigen.",
       "statusFlow": "Planfortschritt",
-      "statusNotAvailable": "Dieser Plan ist {status}. Freigabe und Umwandlung sind noch nicht verfügbar, daher wird er nur lesend angezeigt.",
-      "convertNotAvailable": "Workflows aus einem Plan zu erstellen ist noch nicht verfügbar.",
       "status": {
         "draft": "Entwurf",
         "measured": "Gemessen",
@@ -9082,7 +9082,58 @@
         "by_hand": "Von Hand"
       },
       "gate": {
-        "missing": "Noch offen"
+        "missing": "Noch offen",
+        "title": "Bereit zum Erstellen?",
+        "unknown": "Weitere Prüfung",
+        "state": {
+          "met": "Erfüllt",
+          "open": "Offen",
+          "pending": "Noch nicht geprüft"
+        },
+        "name": {
+          "G1": "Die Karte ist gültig",
+          "G2": "Jeder Schritt ist gemessen",
+          "G3": "Der gewählte Schritt ist aufgeschlüsselt",
+          "G4": "Jeder Teilschritt und Sonderfall ist beschriftet",
+          "G5": "Liste „Von Hand“ gelesen und KI-Schritte durch Freigaben abgedeckt",
+          "G6": "Die Vorschau hat keine Fehler",
+          "G7": "Sie haben diesen Plan freigegeben",
+          "converted": "Die Workflows sind erstellt"
+        }
+      },
+      "readOnly": "Dieser Plan ist {status}, daher sind die Schritte 1 bis 4 schreibgeschützt.",
+      "firstProcess": {
+        "title": "Ihr Unternehmen ist bereit",
+        "body": "Planen Sie Ihren ersten Prozess: abbilden, messen und die eine Kennzahl wählen, die besser werden soll.",
+        "plan": "Meinen ersten Prozess planen",
+        "later": "Später"
+      },
+      "convert": {
+        "notReady": "Schließen Sie zuerst die Schritte 1 bis 4 ab. Die Prüfungen oben zeigen, was noch fehlt.",
+        "previewTitle": "Was erstellt wird (Vorschau, noch existiert nichts)",
+        "createdTitle": "Was erstellt wurde",
+        "counts": "Workflows: {workflows}. Prozesse: {processes}.",
+        "ownerLane": "Verantwortlich: {lane}",
+        "errors": "Fehler, die vor der Freigabe zu beheben sind",
+        "warnings": "Warnungen",
+        "documented": "Als Handbuchtext beibehalten, nicht gebaut:",
+        "failedProposals": "{count} KI-Zeilenvorschläge konnten nicht eingereicht werden. Wiederholen Sie, um sie einzureichen.",
+        "turnOnNotAvailable": "Das Einschalten von Workflows ist noch nicht verfügbar: Bis dahin führt nichts diese Workflows aus.",
+        "openWorkflows": "Workflows öffnen",
+        "unavailable": "Diese Aktion ist nicht verfügbar: Der Workflow-Planer ist für Ihren Arbeitsbereich ausgeschaltet oder der Plan existiert nicht mehr.",
+        "blocked": "Noch nicht bereit. Die Prüfungen oben zeigen, was fehlt.",
+        "approvedBy": "Freigegeben von {by} am {at}.",
+        "preview": "Vorschau der Erstellung anzeigen",
+        "previewAgain": "Vorschau aktualisieren",
+        "approve": "Freigeben",
+        "create": "Workflows erstellen",
+        "retry": "KI-Zeilenvorschläge wiederholen",
+        "approveTitle": "Diesen Plan freigeben?",
+        "approveMessage": "Sie geben die gezeigte Vorschau frei. Jede spätere Änderung am Plan hebt diese Freigabe auf.",
+        "previewFailed": "Die Vorschau konnte nicht erstellt werden.",
+        "approveFailed": "Der Plan konnte nicht freigegeben werden.",
+        "convertFailed": "Die Workflows konnten nicht erstellt werden.",
+        "retryFailed": "Die KI-Zeilenvorschläge konnten nicht wiederholt werden."
       }
     }
   },
