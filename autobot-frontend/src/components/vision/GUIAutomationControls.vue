@@ -7,10 +7,10 @@
         <p>{{ t('vision.guiAutomation.subtitle') }}</p>
       </div>
       <div class="header-actions">
-        <button @click="$emit('refresh')" class="btn-refresh" :disabled="loading">
+        <BaseButton variant="secondary" size="sm" @click="$emit('refresh')" :disabled="loading">
           <Icon name="sync-alt" />
           {{ t('vision.guiAutomation.refresh') }}
-        </button>
+        </BaseButton>
       </div>
     </div>
 
@@ -54,14 +54,14 @@
             {{ opportunity.description }}
           </div>
           <div class="card-actions">
-            <button @click.stop="executeAction(opportunity)" class="btn-execute" :disabled="executing">
+            <BaseButton size="xs" @click.stop="executeAction(opportunity)" :disabled="executing">
               <i :class="executing ? 'fas fa-spinner fa-spin' : 'play'"></i>
               {{ executing ? t('vision.guiAutomation.verifying') : t('vision.guiAutomation.execute') }}
-            </button>
-            <button @click.stop="viewDetails(opportunity)" class="btn-details">
+            </BaseButton>
+            <BaseButton variant="secondary" size="xs" @click.stop="viewDetails(opportunity)">
               <Icon name="info-circle" />
               {{ t('vision.guiAutomation.details') }}
-            </button>
+            </BaseButton>
           </div>
         </div>
       </div>
@@ -153,13 +153,13 @@
           </div>
         </div>
         <div class="modal-actions">
-          <button @click="executeAction(selectedOpportunity)" class="btn-primary" :disabled="executing">
+          <BaseButton size="sm" @click="executeAction(selectedOpportunity)" :disabled="executing">
             <i :class="executing ? 'fas fa-spinner fa-spin' : 'play'"></i>
             {{ executing ? t('vision.guiAutomation.verifying') : t('vision.guiAutomation.executeAction') }}
-          </button>
-          <button @click="selectedOpportunity = null" class="btn-secondary">
+          </BaseButton>
+          <BaseButton variant="secondary" size="sm" @click="selectedOpportunity = null">
             {{ t('vision.guiAutomation.close') }}
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>
@@ -167,7 +167,7 @@
 </template>
 
 <script setup lang="ts">
-import { BaseAlert } from '@autobot/ui'
+import { BaseAlert, BaseButton } from '@autobot/ui'
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue';
 import { ref, onMounted } from 'vue';
@@ -361,30 +361,6 @@ onMounted(() => {
   color: var(--text-tertiary);
 }
 
-.btn-refresh {
-  padding: var(--spacing-2-5) var(--spacing-4);
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  transition: all var(--duration-200);
-}
-
-.btn-refresh:hover:not(:disabled) {
-  background: var(--bg-hover);
-}
-
-.btn-refresh:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
 /* Loading State */
 .loading-state {
   display: flex;
@@ -496,39 +472,8 @@ onMounted(() => {
   gap: var(--spacing-2);
 }
 
-.btn-execute,
-.btn-details {
+.card-actions :deep(.aui-btn) {
   flex: 1;
-  padding: var(--spacing-2) var(--spacing-3);
-  border-radius: var(--radius-md);
-  font-size: var(--text-xs);
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-1-5);
-  transition: all var(--duration-200);
-}
-
-.btn-execute {
-  background: var(--color-primary);
-  color: var(--text-on-primary);
-  border: none;
-}
-
-.btn-execute:hover {
-  background: var(--color-primary-hover);
-}
-
-.btn-details {
-  background: var(--bg-secondary);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-default);
-}
-
-.btn-details:hover {
-  background: var(--bg-hover);
 }
 
 /* Empty State */
@@ -756,38 +701,8 @@ onMounted(() => {
   border-top: 1px solid var(--border-default);
 }
 
-.btn-primary {
+.modal-actions :deep(.aui-btn--primary) {
   flex: 1;
-  padding: var(--spacing-3);
-  background: var(--color-primary);
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-2);
 }
 
-.btn-primary:hover {
-  background: var(--color-primary-hover);
-}
-
-.btn-secondary {
-  padding: var(--spacing-3) var(--spacing-5);
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.btn-secondary:hover {
-  background: var(--bg-hover);
-}
 </style>

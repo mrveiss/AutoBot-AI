@@ -20,10 +20,10 @@
       </div>
 
       <div class="widget-controls">
-        <button v-if="hasApprovalPending" @click.stop="openApprovals" class="btn-approval" :aria-label="$t('workflow.progress.warningAriaLabel')">
+        <BaseButton variant="warning" size="xs" v-if="hasApprovalPending" @click.stop="openApprovals" :aria-label="$t('workflow.progress.warningAriaLabel')">
           <Icon name="exclamation-circle" />
           {{ $t('workflow.progress.approvalRequired') }}
-        </button>
+        </BaseButton>
         <button @click.stop="toggleExpanded" class="btn-toggle" :aria-label="$t('workflow.progress.expandAriaLabel')">
           <Icon :name="expanded ? 'chevron-up' : 'chevron-down'" />
         </button>
@@ -62,20 +62,21 @@
       </div>
 
       <div class="widget-actions">
-        <button @click="openFullWorkflowView" class="btn-view" :aria-label="$t('workflow.progress.viewAriaLabel')">
+        <BaseButton size="xs" @click="openFullWorkflowView" :aria-label="$t('workflow.progress.viewAriaLabel')">
           <Icon name="external-link-alt" />
           {{ $t('workflow.progress.viewFullWorkflow') }}
-        </button>
-        <button @click="cancelWorkflow" class="btn-cancel" :aria-label="$t('workflow.progress.cancelAriaLabel')">
+        </BaseButton>
+        <BaseButton variant="error" size="xs" @click="cancelWorkflow" :aria-label="$t('workflow.progress.cancelAriaLabel')">
           <Icon name="stop" />
           {{ $t('workflow.progress.cancel') }}
-        </button>
+        </BaseButton>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
+import { BaseButton } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -255,24 +256,6 @@ onUnmounted(() => {
   margin-left: var(--spacing-3);
 }
 
-.btn-approval {
-  background: var(--color-warning);
-  color: var(--text-on-warning);
-  border: none;
-  padding: var(--spacing-1-5) var(--spacing-2-5);
-  border-radius: var(--radius-default);
-  font-size: var(--text-xs);
-  font-weight: var(--font-semibold);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-1);
-}
-
-.btn-approval:hover {
-  background: var(--color-warning-hover);
-}
-
 .btn-toggle {
   background: none;
   border: none;
@@ -358,36 +341,8 @@ onUnmounted(() => {
   gap: var(--spacing-2);
 }
 
-.btn-view,
-.btn-cancel {
+.widget-actions :deep(.aui-btn) {
   flex: 1;
-  padding: var(--spacing-2) var(--spacing-3);
-  border: none;
-  border-radius: var(--radius-default);
-  font-size: var(--text-xs);
-  font-weight: var(--font-semibold);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-1);
 }
 
-.btn-view {
-  background: var(--color-primary);
-  color: var(--text-on-primary);
-}
-
-.btn-view:hover {
-  background: var(--color-primary-hover);
-}
-
-.btn-cancel {
-  background: var(--color-error-solid);
-  color: var(--text-on-error);
-}
-
-.btn-cancel:hover {
-  background: var(--color-error-hover);
-}
 </style>

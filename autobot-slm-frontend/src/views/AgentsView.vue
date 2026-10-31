@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -308,10 +309,10 @@ onMounted(() => {
         <div class="detail-header">
           <h2>{{ selectedAgent.name }}</h2>
           <div class="actions">
-            <button v-if="!isEditing" class="btn-edit" @click="startEditing">{{ $t('agentsView.edit') }}</button>
+            <BaseButton size="sm" v-if="!isEditing" @click="startEditing">{{ $t('agentsView.edit') }}</BaseButton>
             <template v-else>
-              <button class="btn-save" @click="saveAgent">{{ $t('agentsView.save') }}</button>
-              <button class="btn-cancel" @click="cancelEditing">{{ $t('agentsView.cancel') }}</button>
+              <BaseButton variant="success" size="sm" @click="saveAgent">{{ $t('agentsView.save') }}</BaseButton>
+              <BaseButton variant="secondary" size="sm" @click="cancelEditing">{{ $t('agentsView.cancel') }}</BaseButton>
             </template>
           </div>
         </div>
@@ -701,32 +702,6 @@ onMounted(() => {
 .actions {
   display: flex;
   gap: var(--spacing-2);
-}
-
-.btn-edit,
-.btn-save,
-.btn-cancel {
-  padding: var(--spacing-2) var(--spacing-4);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-}
-
-.btn-edit {
-  background: var(--slm-indigo-500);
-  color: var(--color-white);
-}
-
-.btn-save {
-  background: var(--slm-emerald-500);
-  color: var(--color-white);
-}
-
-.btn-cancel {
-  background: var(--slm-gray-200);
-  color: var(--slm-gray-700);
 }
 
 .loading {
