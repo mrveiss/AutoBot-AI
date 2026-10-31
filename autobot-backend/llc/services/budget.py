@@ -77,7 +77,7 @@ async def _record_event(
     model, tokens_in, tokens_out, cost = usage
     session.add(
         CompanyOsCostEvent(
-            company_id=company_id,
+            company_id=uuid.UUID(str(company_id)),
             agent_id=agent_id,
             work_item_id=item_id,
             model=model,

@@ -126,7 +126,7 @@ async def test_the_event_row_carries_the_work_item(client, factory):  # noqa: AN
     resp = await _post(client, 1_000_000, item)
     assert resp.status_code == 200, resp.text
     (event,) = await _events(factory)
-    assert (event.work_item_id, event.company_id, event.agent_id) == (item, _COMPANY, _AGENT)
+    assert (event.work_item_id, str(event.company_id), event.agent_id) == (item, _COMPANY, _AGENT)
     assert (event.model, event.tokens_in, event.tokens_out) == (_MODEL, 1_000_000, 0)
     assert event.cost == Decimal("3") == await _spent(factory)
 

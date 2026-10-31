@@ -54,6 +54,7 @@ def replace_breakdown(
         raise GraphInvalid(errors)
     plan.sub_steps = [s for s in plan.sub_steps if s.step_key != step_key] + fixed
     plan.edge_cases = [c for c in plan.edge_cases if c.step_key != step_key] + cases
+    plan.by_hand_acknowledged_at = None  # an acknowledgement covers the breakdown it was given for
 
 
 def relabel_sub_step(plan: CompanyWorkflowPlan, sub_step_key: str, fields: dict) -> None:
@@ -64,6 +65,7 @@ def relabel_sub_step(plan: CompanyWorkflowPlan, sub_step_key: str, fields: dict)
         if fields.get("classification") is not None and s.state is SubStepState.CURRENT:
             raise GraphInvalid([f"sub-step {s.key!r} is current: only proposed sub-steps are labeled"])
         plan.sub_steps[i] = s.model_copy(update=fields)
+        plan.by_hand_acknowledged_at = None  # an acknowledgement covers the labels it was given for
         return
     raise CompanyOsNotFound(f"sub-step {sub_step_key!r} does not exist in this plan")
 
