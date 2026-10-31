@@ -32,7 +32,11 @@ _REMAPPED = {
 
 
 def _run(held: list[str], roles: dict | None = None) -> dict:
-    payload = {"held": held, "gpu_models": _GPU, "roles": roles or _ROLES, "fallback": "phi3:mini"}
+    return _run_reply(json.dumps({"models": [{"name": m} for m in held]}), roles)
+
+
+def _run_reply(reply, roles: dict | None = None) -> dict:
+    payload = {"tags_reply": reply, "gpu_models": _GPU, "roles": roles or _ROLES, "fallback": "phi3:mini"}
     done = subprocess.run(
         [sys.executable, str(repo_root() / _SCRIPT)],
         capture_output=True,
@@ -40,7 +44,9 @@ def _run(held: list[str], roles: dict | None = None) -> dict:
         check=True,
         env={**os.environ, "BACKEND_MODEL_INPUT": json.dumps(payload)},
     )
-    return json.loads(done.stdout)
+    out = json.loads(done.stdout)
+    out.pop("moved")
+    return out
 
 
 def test_a_cpu_only_server_points_gpu_roles_at_a_model_it_holds() -> None:
@@ -75,6 +81,39 @@ def test_an_unset_gpu_tier_role_is_remapped_on_a_cpu_only_server() -> None:
         "remap": {"backend_instruction_model": "phi3:mini"},
         "missing": {},
     }
+
+
+@pytest.mark.parametrize(
+    "reply",
+    ["<html>not json</html>", "", "{}", '{"models": null}', '{"models": [{"size": 1}]}', "[]", '"text"'],
+    ids=["html", "empty", "no-key", "null", "no-name", "list", "string"],
+)
+def test_a_reply_it_cannot_read_changes_nothing(reply: str) -> None:
+    assert _run_reply(reply) == {"remap": {}, "missing": {}}
+
+
+def test_a_reply_ansible_already_parsed_into_a_mapping_is_read() -> None:
+    assert _run_reply({"models": [{"name": m} for m in _CPU]}) == {"remap": _REMAPPED, "missing": {}}
+
+
+def test_a_move_names_the_role_and_both_models() -> None:
+    payload = {
+        "tags_reply": json.dumps({"models": [{"name": m} for m in _CPU]}),
+        "gpu_models": _GPU,
+        "roles": {"backend_instruction_model": "mistral:7b-instruct", "backend_system_model": ""},
+        "fallback": "phi3:mini",
+    }
+    done = subprocess.run(
+        [sys.executable, str(repo_root() / _SCRIPT)],
+        capture_output=True,
+        text=True,
+        check=True,
+        env={**os.environ, "BACKEND_MODEL_INPUT": json.dumps(payload)},
+    )
+    assert json.loads(done.stdout)["moved"] == [
+        ["backend_instruction_model", "mistral:7b-instruct", "phi3:mini"],
+        ["backend_system_model", "(template default)", "phi3:mini"],
+    ]
 
 
 def test_an_empty_server_proves_nothing() -> None:

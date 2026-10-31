@@ -8,7 +8,8 @@ A server holding none of those models is CPU-only for this purpose, wherever it 
 then use the fallback, a model it does hold (maintainer decision on #19731). Whatever is still absent is
 reported, naming the role. An empty answer proves nothing: on a new install the pull may not have run.
 
-Reads JSON from BACKEND_MODEL_INPUT: held, gpu_models, roles ({var: model}), fallback. Prints JSON: remap, missing.
+Reads JSON from BACKEND_MODEL_INPUT: tags_reply, gpu_models, roles ({var: model}), fallback.
+Prints JSON: remap, moved ([var, from, to]), missing. A reply it cannot read changes nothing.
 """
 
 import json
@@ -22,11 +23,23 @@ def _name(model: str) -> str:
     return model[: -len(":latest")] if model.endswith(":latest") else model
 
 
-def resolve_backend_models(held: list, gpu_models: list, roles: dict, fallback: str) -> dict:
-    held_names = {_name(m) for m in held}
+def _held_models(tags_reply) -> list:
+    """The model names in the server's reply; empty for anything that is not the expected shape.
+
+    Ansible's templating turns a reply that looks like JSON into a mapping on the way here, so both arrive.
+    """
+    try:
+        models = (json.loads(tags_reply) if isinstance(tags_reply, str) else tags_reply)["models"]
+        return [model["name"] for model in models]
+    except (ValueError, KeyError, TypeError):
+        return []
+
+
+def resolve_backend_models(tags_reply, gpu_models: list, roles: dict, fallback: str) -> dict:
+    held_names = {_name(m) for m in _held_models(tags_reply)}
     gpu_names = {_name(m) for m in gpu_models}
     if not held_names:
-        return {"remap": {}, "missing": {}}
+        return {"remap": {}, "moved": [], "missing": {}}
     cpu_only = not held_names & gpu_names and _name(fallback) in held_names
     remap = {
         var: fallback
@@ -34,7 +47,11 @@ def resolve_backend_models(held: list, gpu_models: list, roles: dict, fallback: 
         if cpu_only and (_name(model) in gpu_names or (not model and var in GPU_TIER_VARS))
     }
     final = {var: model for var, model in {**roles, **remap}.items() if model}  # unset: the template's default
-    return {"remap": remap, "missing": {v: m for v, m in final.items() if _name(m) not in held_names}}
+    return {
+        "remap": remap,
+        "moved": [[var, roles[var] or "(template default)", to] for var, to in remap.items()],
+        "missing": {v: m for v, m in final.items() if _name(m) not in held_names},
+    }
 
 
 if __name__ == "__main__":

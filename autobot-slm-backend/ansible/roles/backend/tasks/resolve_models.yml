@@ -26,7 +26,8 @@
     BACKEND_MODEL_INPUT: "{{ _backend_model_input | to_json }}"
   vars:
     _backend_model_input:
-      held: "{{ (_backend_model_tags.content | from_json).models | map(attribute='name') | list }}"
+      # Raw: the script treats a reply it cannot read as an unreachable server, so it cannot stop an update.
+      tags_reply: "{{ _backend_model_tags.content | default('') }}"
       gpu_models: "{{ (lookup('file', '../../llm/defaults/main.yml') | from_yaml).llm_gpu_models }}"
       # The light tier: the last of the role's own CPU list when no value is set here.
       fallback: "{{ backend_light_model | default((lookup('file', '../../llm/defaults/main.yml') | from_yaml).llm_cpu_models | last, true) }}"
@@ -51,6 +52,16 @@
   loop: "{{ (_backend_model_plan.stdout | default('{}') | from_json).remap | default({}) | dict2items }}"
   loop_control:
     label: "{{ item.key }} -> {{ item.value }}"
+  tags: ['backend', 'config', 'env']
+
+- name: "Backend | Report which roles moved to another model, and why (#19731)"
+  ansible.builtin.debug:
+    msg: >-
+      The model server holds none of the GPU-class models, so these roles now use a model it holds
+      (role var, from, to): {{ _backend_models_remapped }}. If this node should have them, pull them again.
+  vars:
+    _backend_models_remapped: "{{ (_backend_model_plan.stdout | default('{}') | from_json).moved | default([]) }}"
+  when: _backend_models_remapped | length > 0
   tags: ['backend', 'config', 'env']
 
 - name: "Backend | Report models the env names that the server does not hold (#19731)"
