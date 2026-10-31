@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Tuple
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -21,10 +21,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.logging_manager import get_logger
 from llc.models.company_os_plan import CompanyOsWorkflowPlan
+from llc.services.authz import require_company_admin
 
 from .errors import CompanyOsConflict, CompanyOsNotFound
 from .plan_gate import GateReport, evaluate_plan_gate
-from .plan_types import CompanyWorkflowPlan, ConversionStatus, StatusChange, WorkflowPlanStatus
+from .plan_types import (
+    TURN_ON_TRACKING_ISSUE,
+    CompanyWorkflowPlan,
+    ConversionStatus,
+    PolicyEnforcement,
+    StatusChange,
+    WorkflowPlanStatus,
+)
 
 logger = get_logger(__name__)
 
@@ -59,6 +67,19 @@ async def load_writable(session: AsyncSession, company_id: uuid.UUID, plan_key: 
     return row
 
 
+async def locked_plan(
+    session: AsyncSession, company_id: uuid.UUID, plan_key: str, actor: Optional[uuid.UUID]
+) -> Tuple[CompanyOsWorkflowPlan, CompanyWorkflowPlan]:
+    """The latest revision under the row lock, for a company owner/admin; the one door every plan edit uses.
+
+    The lock is what makes two people editing at once safe: the second waits, then reads the first's
+    committed document and applies its own change to that, so neither overwrites the other (#20086).
+    """
+    await require_company_admin(session, company_id, actor)
+    row = await load_writable(session, company_id, plan_key)
+    return row, read_plan(row)
+
+
 async def plan_key_taken(session: AsyncSession, company_id: uuid.UUID, plan_key: str) -> bool:
     count = (
         await session.execute(
@@ -70,8 +91,20 @@ async def plan_key_taken(session: AsyncSession, company_id: uuid.UUID, plan_key:
     return count > 0
 
 
+_ENFORCEMENT_FROM = (WorkflowPlanStatus.APPROVED, WorkflowPlanStatus.CONVERTED)
+
+
+def state_enforcement(plan: CompanyWorkflowPlan) -> None:
+    """An approved or converted plan says its policies are recorded, not enforced (#16763); below that, nothing."""
+    unenforced = plan.status in _ENFORCEMENT_FROM
+    plan.policy_enforcement = PolicyEnforcement.NOT_ENFORCED if unenforced else None
+    plan.policy_enforcement_tracking_issue = TURN_ON_TRACKING_ISSUE if unenforced else None
+
+
 def read_plan(row: CompanyOsWorkflowPlan) -> CompanyWorkflowPlan:
-    return CompanyWorkflowPlan.model_validate(row.document)
+    plan = CompanyWorkflowPlan.model_validate(row.document)
+    state_enforcement(plan)
+    return plan
 
 
 def _reason(prev: Optional[WorkflowPlanStatus], report: GateReport) -> str:
@@ -118,6 +151,7 @@ async def save_plan(
         if plan.conversion is not None and plan.conversion.status is ConversionStatus.PREVIEW:
             plan.conversion = None
     changed = _record_status(plan, evaluate_plan_gate(plan), actor)
+    state_enforcement(plan)
     row.document = plan.model_dump(mode="json")
     row.status, row.name = plan.status.value, plan.name
     session.add(row)

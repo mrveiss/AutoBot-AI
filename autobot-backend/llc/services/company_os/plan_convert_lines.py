@@ -25,9 +25,13 @@ logger = get_logger(__name__)
 
 
 async def file_proposals(
-    company_id: uuid.UUID, plan_key: str, proposals: List[AiLineProposal], actor: Optional[uuid.UUID]
+    company_id: uuid.UUID, plan_key: str, revision: int, proposals: List[AiLineProposal], actor: Optional[uuid.UUID]
 ) -> None:
-    """Update each not-yet-filed proposal in place with its outcome."""
+    """Update each not-yet-filed proposal in place with its outcome.
+
+    The request's identity is the plan revision, so a retry after a person decided it finds that request
+    and records it as filed, rather than filing a second one (#20115).
+    """
     for prop in proposals:
         if prop.outcome is ProposalOutcome.FILED:
             continue
@@ -38,7 +42,7 @@ async def file_proposals(
                 line=AiLine(prop.line),
                 requested_by=str(actor),
                 reason=f"Workflow plan {plan_key!r}, sub-step {prop.sub_step_key!r}",
-                plan_ref=f"workflow-plan:{plan_key}",
+                plan_ref=f"workflow-plan:{plan_key}:{revision}",
             )
         except Exception as exc:  # noqa: BLE001 -- recorded on the proposal and logged; the conversion stands
             prop.outcome, prop.approval_id, prop.error = ProposalOutcome.FAILED, None, type(exc).__name__

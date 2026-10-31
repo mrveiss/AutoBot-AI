@@ -17,6 +17,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
+from models.approval import ApprovalType
+
 from .plan_types import (
     CompanyWorkflowPlan,
     ConversionStatus,
@@ -24,7 +26,6 @@ from .plan_types import (
     Handoff,
     Label,
     Lane,
-    PlanApprovalType,
     PlanConversion,
     ProcessExecutor,
     Step,
@@ -178,7 +179,7 @@ def _g5_people_safe(plan: CompanyWorkflowPlan) -> List[Missing]:
     if any(s.classification is Label.BY_HAND for s in proposed) and plan.by_hand_acknowledged_at is None:
         found.append(Missing("G5", "the owner has not acknowledged the By Hand sub-steps", step))
     covered = {
-        k for p in plan.approval_policies if p.approval_type is PlanApprovalType.WORKFLOW_GATE for k in p.sub_step_keys
+        k for p in plan.approval_policies if p.approval_type is ApprovalType.WORKFLOW_GATE for k in p.sub_step_keys
     }
     found += [
         Missing("G5", f"AI sub-step {s.key!r} is not covered by a workflow_gate approval policy", step)

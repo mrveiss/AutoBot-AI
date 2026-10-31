@@ -24,16 +24,29 @@ from user_management.database import get_async_session_factory
 logger = get_logger(__name__)
 
 REQUESTER_PREFIX = "ai-line-change"
+#: A request carrying a *plan_ref* stays the plan's own once a person has acted on it, so a retry never files it
+#: again (#20115). Withdrawn and expired ones are over and do not count: a new request may follow them.
+_PLAN_OWN_STATUSES = (
+    ApprovalStatus.PENDING.value,
+    ApprovalStatus.APPROVED.value,
+    ApprovalStatus.REJECTED.value,
+    ApprovalStatus.REVISION_REQUESTED.value,
+)
 
 
 async def _pending_match(session, *, company_id, requester, wanted: tuple, plan_ref: str | None):  # noqa: ANN001
-    """The pending request equal to *wanted*, or None.
+    """The request equal to *wanted* that is still open, or None.
 
     With a *plan_ref* the identity is the plan's, so a retry by another admin finds the request the first
-    attempt filed; without one it stays the requester's own (#20168).
+    attempt filed, and so does a retry after a person decided it (#20115); without one it stays the
+    requester's own and only a pending one counts (#20168).
     """
     where = [
-        Approval.status == ApprovalStatus.PENDING.value,
+        (
+            Approval.status == ApprovalStatus.PENDING.value
+            if plan_ref is None
+            else Approval.status.in_(_PLAN_OWN_STATUSES)
+        ),
         Approval.approval_type == ApprovalType.WORKFLOW_GATE.value,
         Approval.company_id == company_id if company_id else Approval.company_id.is_(None),
     ]

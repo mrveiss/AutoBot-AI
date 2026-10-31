@@ -80,9 +80,7 @@ class PlanConversionService(LLCServiceBase):
     async def _locked(
         self, session: AsyncSession, company_id: uuid.UUID, plan_key: str, actor: Optional[uuid.UUID]
     ) -> Tuple[PlanRow, CompanyWorkflowPlan]:
-        await require_company_admin(session, company_id, actor)
-        row = await plan_store.load_writable(session, company_id, plan_key)
-        return row, plan_store.read_plan(row)
+        return await plan_store.locked_plan(session, company_id, plan_key, actor)
 
     # ------------------------------------------------------------ the facts and the preview
 
@@ -219,7 +217,7 @@ class PlanConversionService(LLCServiceBase):
         plan = plan_store.read_plan(row)
         if plan.conversion is None or plan.conversion.status is not ConversionStatus.COMMITTED:
             raise CompanyOsConflict("this plan has not been converted: there is nothing to file")
-        await file_proposals(company_id, plan.key, plan.conversion.ai_line_proposals, actor)
+        await file_proposals(company_id, plan.key, plan.revision, plan.conversion.ai_line_proposals, actor)
         return await plan_store.save_plan(session, row, plan, actor=actor, clears_approval=False)
 
     # ------------------------------------------------------------ the writes
