@@ -28,7 +28,10 @@ const BACKEND = 'http://autobot.example/autobot-api'
 vi.mock('@/utils/ApiClient', async (importOriginal) =>
   (await import('@/testing/mockAutobotBackendClient')).withMockedBackendClient(importOriginal),
 )
-vi.mock('@/config/ssot-config', () => ({ getBackendUrl: () => BACKEND }))
+vi.mock('@/config/ssot-config', () => ({
+  getBackendUrl: () => BACKEND,
+  getEnvPositiveInt: (_key: string, fallback: number) => fallback,
+}))
 
 import { useAutobotApi, autobotApiErrorMessage } from './useAutobotApi'
 

@@ -81,7 +81,9 @@ _BASELINES = {
         # response shapes were replaced with `components['schemas'][...]` aliases
         # in api-contract.ts -- back to main's contract-derived approach, so the
         # baseline returns to 187 rather than staying raised.
-        "responses": 187,
+        # #20173: the secret audit log's private AuditQueryResponse is gone; it reads
+        # the one in types/audit.ts (187 -> 186).
+        "responses": 186,
         # #15455: raised for the four typed detail fetches #15429 added. Same
         # limitation — this counts assertions, and a correct new call is one.
         # #16245: SettingsPanel.vue's unrendered /system/health/detailed loader was
