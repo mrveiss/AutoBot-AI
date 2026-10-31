@@ -31,7 +31,31 @@ def test_population_builders_write_system():
 
     assert _is_system_document(pop._get_command_metadata({"command": "ls"}), "system_commands")
     assert _is_system_document(pop._get_man_page_metadata("ls"), "man_page")
-    assert _is_system_document(pop._get_doc_metadata("guide.md", "docs/guide.md", "guides"), "documentation")
+
+
+def test_the_documentation_index_writes_system():
+    """The live documentation writer since #1385; the grant is what makes it readable by every user."""
+    from knowledge.platform_docs import PLATFORM_DOCS_GRANT
+    from services.knowledge.doc_indexer import DocIndexerService
+
+    svc = DocIndexerService.__new__(DocIndexerService)
+    svc._embed_model = MagicMock()
+    svc._embed_model.get_text_embedding.return_value = [0.1]
+    svc._collection = MagicMock()
+    svc._model_name = "test-model"
+    chunk = {
+        "content": "text",
+        "section": "Intro",
+        "subsection": None,
+        "file_path": "docs/guide.md",
+        "doc_type": "documentation",
+        "category": "guides",
+        "title": "Guide",
+    }
+    assert svc._index_chunk(chunk, 0, 1, "docs/guide.md", [], 2) is True
+    metadata = svc._collection.upsert.call_args.kwargs["metadatas"][0]
+    assert metadata["visibility"] == "system"
+    assert metadata["access_level"] == PLATFORM_DOCS_GRANT["access_level"]
 
 
 @pytest.mark.asyncio

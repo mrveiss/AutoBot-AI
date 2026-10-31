@@ -55,7 +55,7 @@ export const NetworkConstants = Object.freeze({
 
   // Standard ports - from SSOT config
   BACKEND_PORT: config.port.backend,
-  FRONTEND_PORT: config.port.frontend,
+  FRONTEND_PORT: config.port.frontendServed,
   REDIS_PORT: config.port.redis,
   OLLAMA_PORT: config.port.ollama,
   VNC_PORT: config.port.vnc,
@@ -80,7 +80,7 @@ export const ServiceURLs = Object.freeze({
 
   // Frontend URLs
   FRONTEND_VM: config.frontendUrl,
-  FRONTEND_LOCAL: `${config.httpProtocol}://${NetworkConstants.LOCALHOST_NAME}:${config.port.frontend}`,
+  FRONTEND_LOCAL: `${config.httpProtocol}://${NetworkConstants.LOCALHOST_NAME}:${config.port.frontendServed}`,
 
   // Ollama LLM URLs
   OLLAMA_LOCAL: `${config.httpProtocol}://${NetworkConstants.LOCALHOST_NAME}:${config.port.ollama}`,
