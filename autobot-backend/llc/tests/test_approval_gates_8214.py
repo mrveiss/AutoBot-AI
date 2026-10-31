@@ -7,7 +7,9 @@
 # flake8: noqa: F811 -- fixtures imported from the support module are re-bound as parameters
 from __future__ import annotations
 
+import asyncio
 import uuid
+from decimal import Decimal
 from typing import AsyncIterator
 from unittest.mock import AsyncMock, patch
 
@@ -147,6 +149,7 @@ async def test_an_import_of_agents_into_an_existing_gated_company_is_refused(ses
     from llc.services.portability import ImportNeedsApprovalError, PortabilityService
 
     stack, insert = _import_patches()
+    stack.enter_context(patch.object(PortabilityService, "_agent_names_exist", AsyncMock(return_value=[])))
     async with session_factory() as session:
         with stack, pytest.raises(ImportNeedsApprovalError):
             await PortabilityService(session=session).execute_import(
@@ -251,6 +254,7 @@ async def test_sprint_kb_summary_runs_after_the_commit_not_in_the_decision(sessi
         (approval,) = await _rows(session_factory, Approval)
         assert approval.status == "pending" and order == ["close"]  # rolled back: no KB work happened
         await _decide(session_factory, aid, ApprovalStatus.APPROVED)
+    await asyncio.sleep(0)  # the summary runs as a background task
     assert order == ["close", "close", "summary"]
 
 
@@ -360,3 +364,67 @@ async def test_a_service_level_hire_request_with_a_valid_payload_is_accepted(ses
     }
     aid = await _request(session_factory, ApprovalType.HIRE, payload)
     assert aid is not None
+
+
+@pytest.mark.asyncio
+async def test_a_slow_kb_summary_does_not_hold_the_decision_open(session_factory) -> None:  # noqa: ANN001
+    aid = await _request(session_factory, ApprovalType.SPRINT_CLOSE, {"sprint_id": str(uuid.uuid4())})
+    release, finished = asyncio.Event(), asyncio.Event()
+
+    async def _slow(self, sprint_id):  # noqa: ANN001
+        await release.wait()
+        finished.set()
+
+    with (
+        patch("llc.services.sprint_autoclose.SprintAutoCloseService.execute_close", new=AsyncMock()),
+        patch("llc.services.sprint_autoclose.SprintAutoCloseService.summarize_closed_sprint", new=_slow),
+    ):
+        await asyncio.wait_for(_decide(session_factory, aid, ApprovalStatus.APPROVED), timeout=5)
+        assert not finished.is_set()  # the decision returned while the summary is still running
+        release.set()
+        await asyncio.wait_for(finished.wait(), timeout=5)
+
+
+def test_the_409_hint_names_the_company_not_a_template() -> None:
+    from llc.services.agent_hire_service import HireApprovalRequiredError
+
+    cid = uuid.uuid4()
+    message = str(HireApprovalRequiredError(cid))
+    assert f"/companies/{cid}/agent-hires" in message and "{company_id}" not in message
+
+
+@pytest.mark.asyncio
+async def test_a_token_limited_budget_cannot_take_a_dollar_override(session_factory) -> None:  # noqa: ANN001
+    from llc.models.budget import LLCAgentBudget
+
+    async with session_factory() as session:
+        session.add(
+            LLCAgentBudget(
+                company_id=str(_ORG), agent_id="a1", budget_limit=Decimal("10"), budget_mode="tokens", token_limit=1000
+            )
+        )
+        await session.commit()
+    aid = await _request(session_factory, ApprovalType.BUDGET_OVERRIDE, {"agent_id": "a1", "budget_limit": "50"})
+    with pytest.raises(ApprovalHookError, match="token-limited"):
+        await _decide(session_factory, aid, ApprovalStatus.APPROVED)
+    (approval,) = await _rows(session_factory, Approval)
+    assert approval.status == "pending"
+
+
+@pytest.mark.asyncio
+async def test_an_import_whose_agents_all_exist_adds_no_hire_and_is_not_refused(
+    session_factory,
+) -> None:  # noqa: ANN001
+    from llc.services.portability import ImportNeedsApprovalError, PortabilityService
+
+    stack, insert = _import_patches()
+    names = AsyncMock(return_value=["A"])
+    async with session_factory() as session:
+        svc = PortabilityService(session=session)
+        with stack, patch.object(PortabilityService, "_agent_names_exist", names):
+            await svc.execute_import(_template([{"name": "A", "agent_id": "a"}], require=False), target_company_id=_ORG)
+            with pytest.raises(ImportNeedsApprovalError):  # one name is new: that one IS a hire
+                await svc.execute_import(
+                    _template([{"name": "A", "agent_id": "a"}, {"name": "B", "agent_id": "b"}], require=False),
+                    target_company_id=_ORG,
+                )

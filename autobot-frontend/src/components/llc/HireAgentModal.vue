@@ -91,7 +91,8 @@ const error = ref('')
 const pending = ref(false)
 
 async function submit(): Promise<void> {
-  if (!agentName.value) return
+  // Enter in the name field submits the form even while the button is disabled (#8214).
+  if (!agentName.value || submitting.value || pending.value) return
   submitting.value = true
   error.value = ''
   try {

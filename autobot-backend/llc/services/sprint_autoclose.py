@@ -249,6 +249,15 @@ class SprintAutoCloseService(LLCServiceBase):
         )
         return sprint
 
+    def schedule_closed_sprint_summary(self, sprint_id: uuid.UUID) -> None:
+        """Run :meth:`summarize_closed_sprint` in the background so a slow LLM call cannot hold the request open.
+
+        The close is already committed; the summary takes only the id and opens its own session.
+        """
+        from autobot_shared.async_compat import fire_and_forget  # noqa: PLC0415
+
+        fire_and_forget(self.summarize_closed_sprint(sprint_id), name=f"sprint-summary-{sprint_id}")
+
     async def summarize_closed_sprint(self, sprint_id: uuid.UUID) -> None:
         """Archive and summarise a closed sprint's KB, in its own transaction, after the close committed.
 

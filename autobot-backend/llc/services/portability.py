@@ -411,10 +411,15 @@ class PortabilityService(PortabilityExportMixin, PortabilityImportMixin, LLCServ
         admin bootstrapping a company, and the setting it carries comes from the template, so there is no
         board yet to approve anything. Its default CEO is exempt for the same reason as in ``company_ceo``.
         """
-        if target_company_id is None or not template.get("agents"):
+        names = [a.get("name", "") for a in template.get("agents") or []]
+        if target_company_id is None or not names:
             return
         from llc.services.agent_hire_service import company_requires_hire_approval  # noqa: PLC0415
 
+        # An agent already in the company is skipped by the import, so it adds no hire.
+        existing = set(await self._agent_names_exist(names, target_company_id))
+        if existing.issuperset(names):
+            return
         if await company_requires_hire_approval(self.session, target_company_id):
             raise ImportNeedsApprovalError(
                 f"Company {target_company_id} requires board approval for hires; import without agents "

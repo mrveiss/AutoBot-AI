@@ -942,7 +942,7 @@ async def close_sprint(
             decided_by=body.decided_by,
         )
         await session.commit()
-        await _autoclose_svc.summarize_closed_sprint(sprint_id)  # after the commit: KB and LLM work (#8214)
+        _autoclose_svc.schedule_closed_sprint_summary(sprint_id)  # after the commit, off the request (#8214)
         await session.refresh(sprint)
         return sprint
     except (ApprovalNotFoundError, ApprovalStateError) as exc:

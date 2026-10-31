@@ -82,3 +82,21 @@ describe('HireAgentModal pending approval (#8214)', () => {
     expect(wrapper.find('[data-testid="hire-pending"]').exists()).toBe(false)
   })
 })
+
+describe('HireAgentModal submit guard and notice wording (#8214)', () => {
+  it('a second submit while the first is in flight, or after a pending answer, sends nothing', async () => {
+    post.mockResolvedValue({ status: 'pending_approval' })
+    const wrapper = mountModal()
+    await wrapper.get('input[type="text"]').setValue('Builder-1')
+    await wrapper.get('form').trigger('submit')
+    await wrapper.get('form').trigger('submit') // Enter while the first request is in flight
+    await flushPromises()
+    await wrapper.get('form').trigger('submit') // Enter after the pending answer
+    await flushPromises()
+    expect(post).toHaveBeenCalledTimes(1)
+  })
+
+  it('the notice describes the submission only, not a state the board can change', () => {
+    expect(en.hireAgent.pendingApproval).not.toMatch(/waiting|no agent has been created/i)
+  })
+})

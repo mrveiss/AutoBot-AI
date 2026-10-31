@@ -55,7 +55,7 @@ class HireApprovalRequiredError(Exception):
         self.company_id = company_id
         super().__init__(
             f"Company {company_id} requires board approval for hires; "
-            "request the hire through POST /companies/{company_id}/agent-hires"
+            f"request the hire through POST /companies/{company_id}/agent-hires"
         )
 
 

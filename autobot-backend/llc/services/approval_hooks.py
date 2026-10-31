@@ -99,6 +99,10 @@ async def _budget_override_approved(session: AsyncSession, approval: Approval, d
     ).scalar_one_or_none()
     if row is None:
         raise ApprovalHookError(f"agent {ask.agent_id!r} has no budget in this company")
+    if row.budget_mode == "tokens" and row.token_limit is not None:
+        # Token enforcement reads token_limit and ignores budget_limit, so raising it would record an approval
+        # that changes nothing.
+        raise ApprovalHookError("this agent's budget is token-limited; a dollar override would not change it")
     if ask.budget_limit <= Decimal(str(row.budget_limit)):
         raise ApprovalHookError("a budget override must raise the limit")
     before = Decimal(str(row.budget_limit))
@@ -166,7 +170,7 @@ async def run_post_commit_hook(approval: Approval) -> None:
         from .sprint_autoclose import SprintAutoCloseService  # noqa: PLC0415 -- it imports ApprovalService
 
         ask = SprintClosePayload.model_validate(approval.context or {})
-        await SprintAutoCloseService().summarize_closed_sprint(ask.sprint_id)
+        SprintAutoCloseService().schedule_closed_sprint_summary(ask.sprint_id)
 
 
 async def record_approval_event(
