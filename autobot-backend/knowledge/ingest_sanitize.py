@@ -29,6 +29,7 @@ from typing import Any, Dict, Tuple
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secret_redaction import redact_content, redact_url_credentials
 from knowledge.query_sanitizer import sanitize_for_storage
+from knowledge.write_scope import guard_caller_metadata
 
 logger = get_logger(__name__)
 
@@ -129,3 +130,13 @@ def sanitize_fact_content(content: str, metadata: Dict[str, Any] | None) -> Tupl
     if metadata[CREDENTIAL_REDACTED]:
         logger.warning("Credential pattern redacted in a stored fact: route=%s", route)
     return redacted, metadata
+
+
+def sanitize_new_fact(content: str, metadata: Dict[str, Any] | None) -> Tuple[str, Dict[str, Any]]:
+    """:func:`sanitize_fact_content` after the caller-ownership guard (#19517) -- ``store_fact``'s one entry."""
+    return sanitize_fact_content(content, guard_caller_metadata(metadata))
+
+
+def sanitize_update_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
+    """A caller's ``update_fact`` metadata, URL-redacted and without ownership the caller may not set (#19517)."""
+    return redact_url_metadata_fields(guard_caller_metadata(metadata, stamp=False))

@@ -26,7 +26,7 @@ from knowledge.fact_redis_codec import (  # noqa: F401 -- names stay patchable h
     _decode_redis_hash,
 )
 from knowledge.fact_sharing import FactSharingMixin
-from knowledge.ingest_sanitize import redact_url_metadata_fields, sanitize_fact_content
+from knowledge.ingest_sanitize import sanitize_fact_content, sanitize_new_fact, sanitize_update_metadata
 from knowledge.long_fact_embedding import embed_in_windows, window_metadata
 from knowledge.ownership_index import index_ownership, ownership_changed, reindex_ownership
 from knowledge.quarantine import QuarantineAuditFailed, apply_quarantine, require_audit_actor, without_quarantine
@@ -763,7 +763,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         # Storage and embedding still use the redacted `content` below -- only the
         # dedup hash keys off the raw original, kept just long enough to pass through.
         raw_content = content
-        content, metadata = sanitize_fact_content(content, metadata)  # #16770: the KB write chokepoint
+        content, metadata = sanitize_new_fact(content, metadata)  # #16770: the KB write chokepoint
 
         if not content or not content.strip():
             return {"status": "error", "message": "Empty content, or nothing left after injection sanitizing"}
@@ -1132,7 +1132,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
                 # (deliberately, to keep the fact's own route -- see that call's comment),
                 # never against this caller's OWN metadata, so a URL-shaped field in it
                 # (e.g. a re-fetch updating "source") would merge in unredacted otherwise.
-                redact_url_metadata_fields(metadata)
+                metadata = sanitize_update_metadata(metadata)  # #19517: also drops caller-set ownership
                 current_metadata.update(metadata)
             current_metadata["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
 
