@@ -19,8 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from user_management.models.user import User
 
-from ..models.enums import MembershipRole
-from ..models.membership import LLCCompanyMembership
+from .authz import membership_role
 from .membership_policy import grantable_roles
 
 
@@ -71,16 +70,7 @@ async def viewer_standing(
     ``viewer_role`` is ``None`` for a caller with no membership (a platform admin in a company it
     does not belong to). ``viewer_grantable_roles`` is what :mod:`membership_policy` would allow.
     """
-    role = None
-    if viewer_id is not None:
-        found = (
-            await session.execute(
-                select(LLCCompanyMembership.role).where(
-                    LLCCompanyMembership.company_id == company_id, LLCCompanyMembership.user_id == viewer_id
-                )
-            )
-        ).scalar_one_or_none()
-        role = found.value if isinstance(found, MembershipRole) else found
+    role = None if viewer_id is None else await membership_role(session, company_id, viewer_id, for_update=False)
     return {
         "viewer_role": role,
         "viewer_grantable_roles": grantable_roles(role, platform_admin=platform_admin),

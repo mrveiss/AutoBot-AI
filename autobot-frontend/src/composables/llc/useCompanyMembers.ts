@@ -11,7 +11,7 @@
  * longer shown is discarded. The server stays the authority on who may change what; the viewer's role
  * and grantable roles it sends are only reflected, to hide what it would refuse.
  */
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { createLogger } from '@/utils/debugUtils'
 
@@ -48,6 +48,14 @@ function statusOf(err: unknown): number | undefined {
   return (err as { status?: number })?.status
 }
 
+/**
+ * The roles the add form offers. With no rows the list carries no standing (it rides on the rows), so an
+ * empty company is not read as a refusal: every role is offered and the server decides.
+ */
+export function rolesToOffer<T extends string>(all: readonly T[], grantable: readonly string[], known: boolean): T[] {
+  return known ? all.filter((r) => grantable.includes(r)) : [...all]
+}
+
 export function useCompanyMembers(api: MembersApi, companyId: () => string) {
   const { t } = useI18n()
   const members = ref<Member[]>([])
@@ -57,6 +65,8 @@ export function useCompanyMembers(api: MembersApi, companyId: () => string) {
   const pendingUserId = ref<string | null>(null)
   // Bumped when the company changes: a response captured under an older generation is discarded.
   let generation = 0
+  // Counts loads: of overlapping reloads in one company only the newest may land.
+  let loadSeq = 0
 
   const base = (id: string) => `/api/llc/companies/${id}/members`
 
@@ -64,21 +74,24 @@ export function useCompanyMembers(api: MembersApi, companyId: () => string) {
     const id = companyId()
     if (!id) return
     const mine = generation
-    isLoading.value = true
+    const req = ++loadSeq
+    const current = () => mine === generation && req === loadSeq
+    // A reload keeps the table on screen; only the first load of a company shows the loading state.
+    isLoading.value = members.value.length === 0
     errorMessage.value = ''
     try {
       const rows = await api.get<Member[]>(base(id))
-      if (mine !== generation) return
+      if (!current()) return
       members.value = rows
       grantableRoles.value = rows[0]?.viewer_grantable_roles ?? []
     } catch (err) {
       logger.error('Failed to load members', err)
-      if (mine !== generation) return
+      if (!current()) return
       errorMessage.value = t('llcMembers.loadError')
       members.value = []
       grantableRoles.value = []
     } finally {
-      if (mine === generation) isLoading.value = false
+      if (current()) isLoading.value = false
     }
   }
 
@@ -100,6 +113,8 @@ export function useCompanyMembers(api: MembersApi, companyId: () => string) {
       if (mine !== generation) return false
       const row = members.value.find((m) => m.user_id === member.user_id)
       if (row) row.role = newRole
+      // The change may alter the viewer's own standing (an owner demoting themselves): ask again.
+      await load()
       return true
     } catch (err) {
       logger.error('Failed to change member role', err)
@@ -137,5 +152,8 @@ export function useCompanyMembers(api: MembersApi, companyId: () => string) {
     void load()
   })
 
-  return { members, grantableRoles, isLoading, errorMessage, pendingUserId, load, changeRole, removeMember }
+  // Without rows there is no standing to read; see rolesToOffer.
+  const standingKnown = computed(() => members.value.length > 0)
+
+  return { members, grantableRoles, standingKnown, isLoading, errorMessage, pendingUserId, load, changeRole, removeMember }
 }
