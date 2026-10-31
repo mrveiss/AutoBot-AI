@@ -8,9 +8,10 @@ import re
 from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = repo_root()
 _TREES = ("autobot_shared", "autobot-backend", "autobot-slm-backend")
 _TEST = re.compile(r"(_test|^test_.*)\.py$")
 _PARTIAL_MASK = re.compile(
