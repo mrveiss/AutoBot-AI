@@ -367,6 +367,7 @@
             <div class="overview-card">
               <h4><Icon name="bolt" /> {{ $t('workflow.views.quickActions') }}</h4>
               <div class="quick-actions-grid">
+                <PlanBeforeBuildingAction />
                 <button class="quick-action" @click="navigateTo('canvas')">
                   <Icon name="plus-circle" />
                   <span>{{ $t('workflow.views.newWorkflow') }}</span>
@@ -698,10 +699,9 @@ import { BaseBadge, RiskBadge } from '@autobot/ui';
 import { createLogger } from '@/utils/debugUtils';
 import { useNotificationBus } from '@/composables/useNotificationBus';
 import {
-  useWorkflowBuilder,
-  type WorkflowNode,
-  type WorkflowTemplate,
+  useWorkflowBuilder, type WorkflowNode, type WorkflowTemplate,
 } from '@/composables/useWorkflowBuilder';
+import PlanBeforeBuildingAction from '@/components/llc/workflowPlanner/PlanBeforeBuildingAction.vue';
 import type { WorkflowTemplateSummary } from '@/types/workflowTemplates';
 import { useWorkflowTemplates } from '@/composables/useWorkflowTemplates';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
