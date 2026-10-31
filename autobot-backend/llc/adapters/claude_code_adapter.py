@@ -189,7 +189,9 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         Tool-permission flags (``--allowedTools``/``--disallowedTools``) apply on
         BOTH fresh and resumed invocations — they scope the current run, so a
         governed agent's forbidden tools stay enforced across ``--resume``.
-        ``--model``/``--max-turns`` are session-establishment options (fresh only).
+        ``--model`` applies on BOTH too: the CLI honours it with ``--resume`` (init event
+        reports the requested model, #20268), so a configured change takes effect on the
+        next run. ``--max-turns`` is a session-establishment option (fresh only).
         The prompt is passed positionally after ``--`` so a prompt starting with
         ``-`` can never be parsed as an option (matches the execution backend).
 
@@ -213,12 +215,12 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
             # Verified against Claude Code 2.1.220: --session-id is adopted
             # verbatim and --resume with that id replays the conversation.
             cmd += ["--session-id", session_id]
-            model = cfg.get("model")
-            if model:
-                cmd += ["--model", str(model)]
             max_turns = cfg.get("max_turns")
             if max_turns is not None:
                 cmd += ["--max-turns", str(max_turns)]
+        model = cfg.get("model")
+        if model:
+            cmd += ["--model", str(model)]
         cmd += ClaudeCodeAdapter._tool_permission_args(cfg, agent_api_tool)
         cmd.append("--")
         cmd.append(prompt)
@@ -259,6 +261,7 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         cmd = self._build_command(
             cli, resume_session_id, cfg, prompt, session_id=session_id, agent_api_tool=agent_api_tool_pattern(context)
         )
+        logger.info("ClaudeCodeAdapter: agent %s model=%s", agent_id, cfg.get("model") or "<cli default>")
         env, workspace_dir = self._build_env(context)
 
         # GH#9992: redirect stderr to a sidecar file instead of an unread PIPE.
