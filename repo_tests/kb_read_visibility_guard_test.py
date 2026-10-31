@@ -248,7 +248,7 @@ def _production_files(root: Path) -> list[str]:
 REACH = declare(
     "kb-read-visibility-production-sweep",
     discover=_production_files,
-    floor=2968,  # mid-window: population 3093, window (2843, 3093)
+    floor=2975,  # mid-window: population 3100, window (2850, 3100)
     growth=250,
     skips=0,
     what="production python files",
