@@ -348,7 +348,7 @@ onUnmounted(() => {
 }
 
 .vision-modal {
-  background: var(--bg-secondary, #fff);
+  background: var(--bg-secondary);
   border-radius: var(--radius-xl);
   width: 90%;
   max-width: 640px;

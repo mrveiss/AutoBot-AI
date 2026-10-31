@@ -627,7 +627,7 @@ defineExpose({ loadSources })
   flex-shrink: 0;
   font-size: 0.7em;
   font-weight: 500;
-  color: var(--color-accent-text, var(--color-accent, #c4651a));
+  color: var(--color-accent-text, var(--color-accent));
   background: var(--bg-hover);
   padding: 0.1rem 0.4rem;
   border-radius: 999px;
