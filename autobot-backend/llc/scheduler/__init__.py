@@ -44,6 +44,7 @@ from typing import Any
 from .project_disposal_sweep import run_disposal_sweep
 from .sprint_autoclose import run_daily_check
 from .stalled_run_sweep import run_stalled_run_sweep
+from .trigger_secret_audit import run_trigger_secret_audit
 from .workspace_lease_sweep import run_workspace_lease_sweep
 
 __all__ = [
@@ -55,6 +56,7 @@ __all__ = [
     "run_stalled_run_sweep",
     "run_daily_check",
     "run_workspace_lease_sweep",
+    "run_trigger_secret_audit",
 ]
 
 # name -> submodule it lives in, so __getattr__ imports exactly one module.
