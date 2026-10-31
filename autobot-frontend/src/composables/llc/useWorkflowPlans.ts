@@ -62,6 +62,14 @@ export function useWorkflowPlans() {
     planRequest(api, 'patch', '/api/llc/company-os/workflow-plans/{plan_key}/sub-steps/{sub_step_key}', { plan_key: key, sub_step_key: sub }, { classification })
   const acknowledgeByHand = (key: string) =>
     planRequest(api, 'post', '/api/llc/company-os/workflow-plans/{plan_key}/by-hand-acknowledgement', { plan_key: key })
+  const previewConversion = (key: string) =>
+    planRequest(api, 'post', '/api/llc/company-os/workflow-plans/{plan_key}/convert/preview', { plan_key: key })
+  const approve = (key: string) =>
+    planRequest(api, 'post', '/api/llc/company-os/workflow-plans/{plan_key}/approve', { plan_key: key })
+  const convert = (key: string) =>
+    planRequest(api, 'post', '/api/llc/company-os/workflow-plans/{plan_key}/convert', { plan_key: key })
+  const retryAiLineProposals = (key: string) =>
+    planRequest(api, 'post', '/api/llc/company-os/workflow-plans/{plan_key}/convert/retry-ai-line-proposals', { plan_key: key })
 
   return {
     plans,
@@ -79,6 +87,10 @@ export function useWorkflowPlans() {
     putBreakdown,
     classifySubStep,
     acknowledgeByHand,
+    previewConversion,
+    approve,
+    convert,
+    retryAiLineProposals,
   }
 }
 
