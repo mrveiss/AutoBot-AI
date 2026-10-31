@@ -16,6 +16,7 @@ import { BaseButton } from '@autobot/ui'
 
 import { useI18n } from 'vue-i18n'
 import { ref, watch } from 'vue'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import {
   useAutobotApi,
   autobotApiErrorMessage,
@@ -83,10 +84,7 @@ function sourceBadgeClass(source: string): string {
   return source === 'rollback' ? 'badge-orange' : source === 'api' ? 'badge-blue' : 'badge-gray'
 }
 
-function formatTime(iso: string | null): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString()
-}
+const formatTime = createDateFormatter({ emptyText: '—' })
 
 watch([entityType, entityId], () => {
   if (entityId.value) fetchRevisions()

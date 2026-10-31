@@ -324,7 +324,8 @@ onMounted(() => {
 }
 
 .error-state .icon {
-  font-size: 32px;
+  width: 32px;
+  height: 32px;
   margin-bottom: var(--spacing-3);
 }
 

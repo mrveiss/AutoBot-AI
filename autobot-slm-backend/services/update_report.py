@@ -47,7 +47,7 @@ def first_failure(log_text: str) -> dict[str, str] | None:
         return None
     tasks = list(_TASK_LINE.finditer(log_text, 0, failure.start()))
     return {
-        "task": tasks[-1].group("name") if tasks else "unknown",
+        "task": _safe(tasks[-1].group("name")) if tasks else "unknown",
         "error": _safe(_error_text(failure.group("detail"))),
     }
 
@@ -72,7 +72,7 @@ def build_update_report(log_path: Path, target_commit: str | None, deploy_runs: 
         "run_started_at": verdict.run_started_at,
         "log_present": verdict.log_present,
         "finished": verdict.complete,
-        "last_stage": verdict.plays_seen[-1] if verdict.plays_seen else None,
+        "last_stage": _safe(verdict.plays_seen[-1]) if verdict.plays_seen else None,
         "failed_hosts": verdict.failed_hosts,
         "unreachable_hosts": verdict.unreachable_hosts,
         "from_rotated_log": verdict.from_rotated_log,

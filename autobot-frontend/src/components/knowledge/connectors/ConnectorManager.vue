@@ -330,7 +330,8 @@ onMounted(() => {
 }
 
 .loading-state .icon {
-  font-size: var(--text-2xl);
+  width: var(--text-2xl);
+  height: var(--text-2xl);
   margin-bottom: var(--spacing-3);
 }
 
