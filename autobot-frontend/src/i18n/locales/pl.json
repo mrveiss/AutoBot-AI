@@ -4242,6 +4242,8 @@
     "stop": "Stop Workflow",
     "status": "Status",
     "history": {
+      "durationSeconds": "s",
+      "durationMinutes": "min",
       "searchPlaceholder": "Search workflows...",
       "allStatus": "All Status",
       "completed": "Completed",
@@ -8994,8 +8996,6 @@
       "unavailableTitle": "Planer przepływów pracy jest niedostępny",
       "unavailableHint": "Ta funkcja jest wyłączona w Twojej przestrzeni roboczej, więc nie ma jeszcze nic do pokazania.",
       "statusFlow": "Postęp planu",
-      "statusNotAvailable": "Ten plan ma status: {status}. Zatwierdzanie i konwersja nie są jeszcze dostępne, więc plan jest tylko do odczytu.",
-      "convertNotAvailable": "Tworzenie przepływów pracy z planu nie jest jeszcze dostępne.",
       "status": {
         "draft": "Szkic",
         "measured": "Zmierzony",
@@ -9082,7 +9082,58 @@
         "by_hand": "Ręcznie"
       },
       "gate": {
-        "missing": "Nadal brakuje"
+        "missing": "Nadal brakuje",
+        "title": "Gotowe do utworzenia?",
+        "unknown": "Inna kontrola",
+        "state": {
+          "met": "Spełnione",
+          "open": "Otwarte",
+          "pending": "Jeszcze nie sprawdzono"
+        },
+        "name": {
+          "G1": "Mapa jest poprawna",
+          "G2": "Każdy krok jest zmierzony",
+          "G3": "Wybrany krok jest rozbity na części",
+          "G4": "Każdy podkrok i przypadek brzegowy ma etykietę",
+          "G5": "Lista „Ręcznie” przeczytana, a kroki AI objęte zatwierdzeniami",
+          "G6": "Podgląd nie ma błędów",
+          "G7": "Zatwierdzono ten plan",
+          "converted": "Przepływy pracy są utworzone"
+        }
+      },
+      "readOnly": "Ten plan ma status: {status}, więc kroki 1–4 są tylko do odczytu.",
+      "firstProcess": {
+        "title": "Twoja firma jest gotowa",
+        "body": "Zaplanuj swój pierwszy proces: odwzoruj go, zmierz i wybierz jedną liczbę do poprawy.",
+        "plan": "Zaplanuj mój pierwszy proces",
+        "later": "Później"
+      },
+      "convert": {
+        "notReady": "Najpierw dokończ kroki 1–4. Kontrole powyżej pokazują, czego jeszcze brakuje.",
+        "previewTitle": "Co zostanie utworzone (podgląd, nic jeszcze nie istnieje)",
+        "createdTitle": "Co zostało utworzone",
+        "counts": "Przepływy pracy: {workflows}. Procesy: {processes}.",
+        "ownerLane": "Właściciel: {lane}",
+        "errors": "Błędy do poprawienia przed zatwierdzeniem",
+        "warnings": "Ostrzeżenia",
+        "documented": "Zachowane jako tekst podręcznika, nie zbudowane:",
+        "failedProposals": "Nie udało się złożyć propozycji linii AI: {count}. Ponów próbę, aby je złożyć.",
+        "turnOnNotAvailable": "Włączanie przepływów pracy nie jest jeszcze dostępne: do tego czasu nic ich nie uruchamia.",
+        "openWorkflows": "Otwórz przepływy pracy",
+        "unavailable": "Ta czynność jest niedostępna: Planer przepływów pracy jest wyłączony w Twojej przestrzeni roboczej albo plan już nie istnieje.",
+        "blocked": "Jeszcze nie gotowe. Kontrole powyżej pokazują, czego brakuje.",
+        "approvedBy": "Zatwierdził(a) {by}, {at}.",
+        "preview": "Pokaż podgląd tego, co powstanie",
+        "previewAgain": "Odśwież podgląd",
+        "approve": "Zatwierdź",
+        "create": "Utwórz przepływy pracy",
+        "retry": "Ponów propozycje linii AI",
+        "approveTitle": "Zatwierdzić ten plan?",
+        "approveMessage": "Zatwierdzasz wyświetlony podgląd. Każda późniejsza zmiana planu unieważnia to zatwierdzenie.",
+        "previewFailed": "Nie udało się utworzyć podglądu.",
+        "approveFailed": "Nie udało się zatwierdzić planu.",
+        "convertFailed": "Nie udało się utworzyć przepływów pracy.",
+        "retryFailed": "Nie udało się ponowić propozycji linii AI."
       }
     }
   },
