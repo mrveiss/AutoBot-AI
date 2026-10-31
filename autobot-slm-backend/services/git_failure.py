@@ -9,7 +9,8 @@ import re
 from autobot_shared.secret_redaction import redact_content, redact_text
 
 GIT_FAILURE_DETAIL_CHARS = 400
-# Failures one retry can cure. An auth failure or a timeout is not one of them.
+# Failures one retry can cure, as git reports them. An auth failure is not one, nor is the step's own
+# timeout in _run_git, which never reaches this text as git output. "connection timed out" is the network.
 _TRANSIENT = re.compile(
     r"\.lock|another git process|could not resolve host|temporary failure|connection (reset|refused|timed out)"
     r"|couldn't connect to server|remote end hung up|early eof|returned error: 5\d\d",
