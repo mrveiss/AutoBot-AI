@@ -106,15 +106,15 @@ _SERVICE_DEFINITIONS = {
         name="frontend",
         service_type=AutoBotServiceType.FRONTEND,
         default_host_env="AUTOBOT_FRONTEND_HOST",
-        default_port_env="AUTOBOT_FRONTEND_PORT",
+        default_port_env="AUTOBOT_FRONTEND_TLS_PORT",  # nginx HTTPS; AUTOBOT_FRONTEND_PORT is Vite (#19326)
         default_host=os.environ.get("AUTOBOT_FRONTEND_HOST", ""),  # noqa: ssot-fallback
-        default_port=443,  # Production nginx serves HTTPS on 443
+        default_port=config.tls.frontend_tls_port,
         systemd_service="nginx",  # Production uses nginx
         start_command=(
             f"cd {FLEET_INSTALL_ROOT}/autobot-slm-frontend && "
-            "nohup npm run dev -- --host 0.0.0.0 --port 5173 > /tmp/vite.log 2>&1 &"
+            f"nohup npm run dev -- --host 0.0.0.0 --port {config.port.frontend} > /tmp/vite.log 2>&1 &"
         ),
-        stop_command="pkill -f 'npm.*dev' || pkill -f 'vite.*5173'",
+        stop_command=f"pkill -f 'npm.*dev' || pkill -f 'vite.*{config.port.frontend}'",
         health_check_path="/",
         health_check_type="https",  # Production nginx serves HTTPS
         requires_sudo=False,
@@ -308,7 +308,7 @@ _SERVICE_DEFINITIONS = {
         default_host_env="AUTOBOT_FRONTEND_HOST",
         default_port_env="AUTOBOT_FRONTEND_PORT",
         default_host=os.environ.get("AUTOBOT_FRONTEND_HOST", ""),  # noqa: ssot-fallback
-        default_port=5173,
+        default_port=config.port.frontend,
         systemd_service="autobot-frontend",
         health_check_type="http",
         requires_sudo=True,
