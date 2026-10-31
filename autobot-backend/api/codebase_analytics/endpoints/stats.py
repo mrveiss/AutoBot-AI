@@ -17,6 +17,7 @@ from fastapi.responses import JSONResponse
 from api.analytics_shared import no_data_response
 from autobot_shared.error_boundaries import ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 from autobot_shared.time_utils import parse_utc_iso
 from utils.chromadb_client import get_all_paginated
 
@@ -643,8 +644,7 @@ async def get_codebase_problems(
             }
         )
 
-    # Sort by severity (high, medium, low)
-    severity_order = {"high": 0, "medium": 1, "low": 2}
+    severity_order = {s.value: i for i, s in enumerate(reversed(Severity.triage_ladder()))}
     all_problems.sort(
         key=lambda x: (
             severity_order.get(x.get("severity", "low"), 3),
