@@ -143,7 +143,7 @@ describe('MembersView role change (#19960)', () => {
   })
 
   it('treats a server that sends no standing as one that grants nothing', async () => {
-    members = members.map(({ viewer_role, viewer_grantable_roles, ...m }) => m) as typeof members
+    members = members.map(({ viewer_role: _role, viewer_grantable_roles: _grantable, ...m }) => m) as typeof members
     const wrapper = await mountView()
     expect(bobSelect(wrapper).attributes('disabled')).toBeDefined()
   })
