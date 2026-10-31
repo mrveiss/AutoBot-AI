@@ -14,7 +14,7 @@ import { formatFileSize } from '@/utils/formatHelpers'
 
 import { ref, computed, onMounted } from 'vue'
 import { useAutobotApi } from '@/composables/useAutobotApi'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 
 const api = useAutobotApi()
 
@@ -275,7 +275,7 @@ onMounted(() => {
                   {{ entry.type === 'directory' ? '-' : formatFileSize(entry.size, SIZE_OPTIONS) }}
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                  {{ formatDateTime(entry.modified) }}
+                  {{ formatFleetDateTime(entry.modified) }}
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-mono">
                   {{ entry.permissions }}
