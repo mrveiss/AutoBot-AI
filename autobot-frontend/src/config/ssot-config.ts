@@ -96,6 +96,7 @@ export interface PortConfig {
 export const PORT_DEFAULTS = {
   backend: 8001,
   frontend: 5173,
+  frontendServed: 5173,
   redis: 6379,
   ollama: 11434,
   vnc: 6080,

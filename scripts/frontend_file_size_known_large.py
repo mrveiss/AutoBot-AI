@@ -122,7 +122,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/composables/useVoiceOutput.ts": 1089,
     "autobot-frontend/src/composables/useWorkflowBuilder.ts": 1293,
     "autobot-frontend/src/config/__tests__/ssot-config.spec.ts": 653,
-    "autobot-frontend/src/config/ssot-config.ts": 829,
+    "autobot-frontend/src/config/ssot-config.ts": 830,
     "autobot-frontend/src/models/controllers/ChatController.ts": 1156,
     "autobot-frontend/src/models/controllers/KnowledgeController.ts": 645,
     "autobot-frontend/src/models/repositories/ChatRepository.ts": 674,
