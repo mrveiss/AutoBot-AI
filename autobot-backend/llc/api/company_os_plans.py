@@ -309,6 +309,7 @@ async def acknowledge_by_hand(
     user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> CompanyWorkflowPlan:
+    require_interactive_human(user, "By Hand acknowledgement")
     return await _write(session, _plans.acknowledge_by_hand(session, ctx.org_id, plan_key, actor=actor_id(user)))
 
 
