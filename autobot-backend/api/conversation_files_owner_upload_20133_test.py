@@ -9,7 +9,9 @@ Maintainer decision 2026-10-31. The upload route is gated by the ONE session-own
 ``check_admin_permission``. Every other route on the router stays admin-only.
 
 Under pytest ``auth_middleware`` is a stub, so these tests execute a FRESH copy of the route module
-with the REAL gate bound and fake only the identity it reads, the owner store and the file manager.
+with the REAL gate bound. The role grant is the REAL ``SecurityLayer.check_permission`` (through the real
+``AuthenticationMiddleware.check_file_permissions``): only the identity it reads, the owner store and the
+file manager are faked. ``user`` lacks ``files.upload`` there, which is why ownership has to stand in.
 """
 
 from __future__ import annotations
@@ -26,6 +28,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from autobot_shared.api_routing.router_routes import effective_routes
+from security_layer import SecurityLayer
 from testkit.canonical_gate import install_canonical_resolver
 from tests.conftest import load_real_auth_middleware
 
@@ -33,6 +36,8 @@ _MODULE = Path(__file__).parent / "conversation_files.py"
 _UPLOAD = "/api/conversation/{session_id}/upload"
 _ALICE = {"username": "alice", "role": "user"}
 _BOB = {"username": "bob", "role": "user"}
+_READONLY = {"username": "alice", "role": "readonly"}
+_EDITOR = {"username": "alice", "role": "editor"}
 _ADMIN = {"username": "root", "role": "admin"}
 _FILES = {"file": ("notes.txt", b"hello", "text/plain")}
 
@@ -58,11 +63,15 @@ def world(monkeypatch):
     state = SimpleNamespace(user=None, owner=None, owner_error=None, exists=True)
     real = load_real_auth_middleware()
 
-    async def _check_file_permissions(_request, _operation):
-        return (True, state.user) if state.user else (False, None)
-
     middleware = MagicMock()
     middleware.get_user_from_request = lambda _request: state.user
+    middleware.security_layer = SecurityLayer()  # the REAL role grants
+    middleware._log_file_access_denied = lambda *a, **k: None
+    middleware._log_file_access_granted = lambda *a, **k: None
+
+    async def _check_file_permissions(request, operation):
+        return await real.AuthenticationMiddleware.check_file_permissions(middleware, request, operation)
+
     middleware.check_file_permissions = _check_file_permissions
     middleware._extract_user_from_run_jwt = AsyncMock(return_value=None)
     middleware._extract_user_from_device_jwt = AsyncMock(return_value=None)
@@ -94,11 +103,20 @@ def world(monkeypatch):
     state.client = TestClient(app, raise_server_exceptions=False)
     state.manager = manager
     state.module = module
+    state.security_layer = middleware.security_layer
     return state
 
 
 def _upload(world, session_id="s-1"):
     return world.client.post(f"/api/conversation/{session_id}/upload", files=_FILES)
+
+
+def test_the_real_role_grants_this_decision_rests_on(world):
+    """If ``user`` ever gains ``files.upload`` the ownership stand-in is redundant, not wrong; if
+    ``readonly`` ever gains it, the readonly refusal below no longer tests the stand-in."""
+    layer = world.security_layer
+    grants = {role: layer.check_permission(role, "files.upload") for role in ("user", "readonly", "editor", "admin")}
+    assert grants == {"user": False, "readonly": False, "editor": True, "admin": True}
 
 
 def test_the_owner_may_upload_to_their_own_conversation(world):
@@ -107,6 +125,19 @@ def test_the_owner_may_upload_to_their_own_conversation(world):
     assert response.status_code == 200, response.text
     kwargs = world.manager.upload_file.await_args.kwargs
     assert (kwargs["session_id"], kwargs["user_id"], kwargs["filename"]) == ("s-1", "alice", "notes.txt")
+
+
+def test_a_readonly_owner_is_refused(world):
+    world.user, world.owner = dict(_READONLY), "alice"
+    assert _upload(world).status_code == 403
+    world.manager.upload_file.assert_not_awaited()
+
+
+def test_an_editor_who_holds_the_grant_still_needs_to_own_the_conversation(world):
+    world.user, world.owner = dict(_EDITOR), "alice"
+    assert _upload(world).status_code == 200
+    world.user = {"username": "eve", "role": "editor"}
+    assert _upload(world).status_code == 403
 
 
 def test_a_non_owner_is_refused_and_nothing_is_stored(world):

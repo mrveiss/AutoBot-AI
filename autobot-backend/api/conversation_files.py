@@ -59,22 +59,33 @@ _admin_router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = get_logger(__name__)
 
 
+#: Roles whose ownership of the conversation stands in for the global ``files.upload`` grant, on the
+#: upload route only (#20133). ``user`` lacks that grant by design; ``readonly`` and every unknown role
+#: stay refused, and roles that hold it (editor, admin, ...) are decided by RBAC as before.
+_OWNER_UPLOAD_ROLES = frozenset({"user"})
+
+
+def _owner_may_upload(user_data: dict | None) -> bool:
+    return str(getattr(user_data.get("role"), "value", user_data.get("role"))).lower() in _OWNER_UPLOAD_ROLES
+
+
 async def _authorize_file_operation(
-    request: Request, session_id: str, operation: str, existing_only: bool = False
+    request: Request, session_id: str, operation: str, owner_upload: bool = False
 ) -> dict:
     """Authorize file operation and return user data (Issue #398: extracted).
 
-    ``existing_only`` (the upload, which non-admins may call): a session the ownership gate would
-    create on a write (``legacy_unowned``) is a 404 instead -- a caller names a conversation they own.
+    ``owner_upload`` (the upload, which a ``user`` may call on a conversation they own): ownership
+    replaces the role grant for ``_OWNER_UPLOAD_ROLES``, and a session the ownership gate would create
+    on a write (``legacy_unowned``) is a 404 -- a caller names a conversation they own (#20133).
     """
     has_permission, user_data = await get_auth_middleware().check_file_permissions(request, operation)
     if user_data is None:  # no credential: the upload is no longer behind the admin gate's 401 (#20133)
         raise HTTPException(status_code=401, detail="Authentication required")
-    if not has_permission:
+    if not has_permission and not (owner_upload and _owner_may_upload(user_data)):
         raise HTTPException(status_code=403, detail=f"Insufficient permissions for file {operation}")
     request.state.user = user_data
     ownership = await validate_session_ownership(session_id, request, posture=SessionPosture.STRICT)
-    if existing_only and ownership.get("reason") == "legacy_unowned":
+    if owner_upload and ownership.get("reason") == "legacy_unowned":
         raise HTTPException(status_code=404, detail="Chat session not found")
     return user_data
 
@@ -128,7 +139,7 @@ async def upload_conversation_file(
 ):
     """Upload a file to a conversation session (Issue #398: refactored)."""
     try:
-        user_data = await _authorize_file_operation(request, session_id, "upload", existing_only=True)
+        user_data = await _authorize_file_operation(request, session_id, "upload", owner_upload=True)
         content = await validate_and_read_upload_file(file)
         file_manager = _get_required_file_manager(request)
 

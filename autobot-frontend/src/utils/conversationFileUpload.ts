@@ -81,3 +81,23 @@ export function postConversationUpload(
     xhr.send(formData)
   })
 }
+
+let sessionBeingCreated: Promise<string> | null = null
+
+/**
+ * The conversation a chat attachment uploads into, creating one first when the chat has none.
+ *
+ * A chat with no current session only gets one when its first message is sent, but the upload route
+ * answers 404 for a conversation that does not exist (a non-admin names one they own, #20133), so the
+ * attachment cannot ride a made-up id such as `default`. Files picked together share one creation.
+ */
+export function ensureUploadSession(
+  store: { currentSessionId: string | null },
+  controller: { createNewSession: () => Promise<string> },
+): Promise<string> {
+  if (store.currentSessionId) return Promise.resolve(store.currentSessionId)
+  sessionBeingCreated ??= controller.createNewSession().finally(() => {
+    sessionBeingCreated = null
+  })
+  return sessionBeingCreated
+}
