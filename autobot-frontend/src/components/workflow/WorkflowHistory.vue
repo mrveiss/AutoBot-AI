@@ -72,6 +72,7 @@
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { formatDuration, createDateFormatter } from '@/utils/formatHelpers';
 import type { ActiveWorkflow } from '@/composables/useWorkflowBuilder';
 
@@ -169,12 +170,23 @@ function getSkippedCount(wf: ActiveWorkflow): number {
   return wf.steps.filter(s => s.status === 'skipped').length;
 }
 
-// Whole seconds, floored, as 'Ns' or 'Nm Ns'; '-' unless the run has both a start and an end.
-const DURATION_FORMAT = { style: 'msMinutesSeconds', rounding: 'floor', nullText: '-' } as const
+const { t } = useI18n();
+
+// Whole seconds, floored, as 'N<s>' or 'N<m> N<s>' with translated unit labels; '-' unless the
+// run has both a start and an end.
+const durationFormat = computed(() => ({
+  style: 'msMinutesSeconds',
+  rounding: 'floor',
+  nullText: '-',
+  units: {
+    seconds: t('workflow.history.durationSeconds'),
+    minutes: t('workflow.history.durationMinutes'),
+  },
+}) as const)
 
 function workflowDuration(wf: ActiveWorkflow): string {
   if (!wf.started_at || !wf.completed_at) return '-';
-  return formatDuration(wf.started_at, wf.completed_at, DURATION_FORMAT);
+  return formatDuration(wf.started_at, wf.completed_at, durationFormat.value);
 }
 
 const formatDate = createDateFormatter({ kind: 'date', emptyText: '-' })
