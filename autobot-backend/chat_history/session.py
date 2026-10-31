@@ -838,7 +838,7 @@ class SessionMixin:
         """
         async with aiofiles.open(chat_file, "r", encoding="utf-8") as f:
             file_content = await f.read()
-        chat_data = json.loads(file_content)
+        chat_data = self._decrypt_data(file_content)  # #19864: raw JSON failed on an encrypted chat
 
         chat_data["name"] = name
         chat_data["last_modified"] = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -864,7 +864,7 @@ class SessionMixin:
         # Save updated data (always use new format, #1721)
         chat_file_new = str(validate_relative_path(f"{session_id}_chat.json", chats_directory))
         async with aiofiles.open(chat_file_new, "w", encoding="utf-8") as f:
-            await f.write(json.dumps(chat_data, indent=2, ensure_ascii=False))
+            await f.write(self._encrypt_data(chat_data))  # #19864: a rename must not leave plaintext
 
         # Update Redis cache using existing helper
         await self._update_redis_session_cache(session_id, chat_data)
