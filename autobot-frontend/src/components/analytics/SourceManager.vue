@@ -22,10 +22,10 @@
               <Icon name="clock" />
               {{ queueLength }} {{ $t('analytics.sources.queued') }}
             </span>
-            <button class="btn-add" @click="$emit('open-add-source')">
+            <BaseButton variant="info" size="sm" @click="$emit('open-add-source')">
               <Icon name="plus" />
               {{ $t('analytics.sources.addSource') }}
-            </button>
+            </BaseButton>
             <button class="close-btn" @click="$emit('close')" :aria-label="$t('common.close')">
               <Icon name="times" />
             </button>
@@ -42,7 +42,7 @@
         <div v-else-if="loadError" class="panel-error">
           <Icon name="exclamation-triangle" />
           {{ loadError }}
-          <button class="btn-retry" @click="loadSources">{{ $t('analytics.sources.retry') }}</button>
+          <BaseButton variant="secondary" size="sm" @click="loadSources">{{ $t('analytics.sources.retry') }}</BaseButton>
         </div>
 
         <!-- Empty State -->
@@ -50,10 +50,10 @@
           <Icon name="folder-open" />
           <p>{{ $t('analytics.sources.noSources') }}</p>
           <p class="panel-empty-hint">{{ $t('analytics.sources.noSourcesHint') }}</p>
-          <button class="btn-add" @click="$emit('open-add-source')">
+          <BaseButton variant="info" size="sm" @click="$emit('open-add-source')">
             <Icon name="plus" />
             {{ $t('analytics.sources.addFirstSource') }}
-          </button>
+          </BaseButton>
         </div>
 
         <!-- Sources List -->
@@ -191,7 +191,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref, watch, toRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
-import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock } from '@autobot/ui'
+import { useFocusTrap, useFocusRestore, useInitialFocus, useBodyScrollLock, BaseButton } from '@autobot/ui'
 import { usePollingJob } from '@/composables/usePollingJob'
 import { useAnalyticsSourceManagement } from '@/composables/analytics/useAnalyticsSourceManagement'
 import { createLogger } from '@/utils/debugUtils'
@@ -481,25 +481,6 @@ defineExpose({ loadSources })
   gap: var(--spacing-1);
 }
 
-.btn-add {
-  background: var(--color-info);
-  color: var(--bg-secondary);
-  border: none;
-  border-radius: var(--radius-lg);
-  padding: var(--spacing-2) var(--spacing-4);
-  font-size: var(--text-sm);
-  font-weight: var(--font-semibold);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-1-5);
-  transition: background var(--duration-200);
-}
-
-.btn-add:hover {
-  background: var(--color-info-dark);
-}
-
 .close-btn {
   width: 2rem;
   height: 2rem;
@@ -557,16 +538,6 @@ defineExpose({ loadSources })
 .panel-empty-hint {
   color: var(--text-muted);
   font-size: var(--text-xs);
-}
-
-.btn-retry {
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  color: var(--text-primary);
-  padding: var(--spacing-1-5) var(--spacing-3);
-  cursor: pointer;
-  font-size: var(--text-sm);
 }
 
 /* Sources List */
@@ -656,7 +627,7 @@ defineExpose({ loadSources })
   flex-shrink: 0;
   font-size: 0.7em;
   font-weight: 500;
-  color: var(--color-accent-text, var(--color-accent, #c4651a));
+  color: var(--color-accent-text, var(--color-accent));
   background: var(--bg-hover);
   padding: 0.1rem 0.4rem;
   border-radius: 999px;
