@@ -316,6 +316,7 @@ import { useI18n } from 'vue-i18n'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { useShowMore } from '@autobot/ui'
 import TruncationNotice from '../TruncationNotice.vue'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { t } = useI18n()
 
@@ -486,14 +487,7 @@ function formatFactorName(factor: string): string {
   return factor.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase())
 }
 
-function formatTimestamp(timestamp: string | undefined): string {
-  if (!timestamp) return 'Unknown'
-  try {
-    return new Date(timestamp).toLocaleString()
-  } catch {
-    return String(timestamp)
-  }
-}
+const formatTimestamp = createDateFormatter({ emptyText: 'Unknown' })
 </script>
 
 <style scoped>
