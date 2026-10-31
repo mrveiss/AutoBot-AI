@@ -654,22 +654,12 @@ class LLCHeartbeatScheduler:
                 new_retry_count,
                 run_id,
             )
-            factory = get_async_session_factory()
-            try:
-                async with factory() as session:
-                    await session.execute(
-                        update(LLCHeartbeatRun)
-                        .where(LLCHeartbeatRun.id == run_id)
-                        .values(
-                            status=LLCRunStatus.FAILED.value,
-                            finished_at=datetime.now(tz=timezone.utc),
-                            error=f"Rate-limit retries exhausted ({new_retry_count}): {exc}",
-                            retry_count=new_retry_count,
-                        )
-                    )
-                    await session.commit()
-            except Exception:
-                logger.exception("Could not write FAILED status for rate-exhausted run %s", run_id)
+            await _write_rate_limit_outcome(
+                run_id,
+                status=LLCRunStatus.FAILED.value,
+                error=f"Rate-limit retries exhausted ({new_retry_count}): {exc}",
+                retry_count=new_retry_count,
+            )
             return
 
         # Exponential backoff: use provider hint if available, else compute.
@@ -690,23 +680,13 @@ class LLCHeartbeatScheduler:
             retry_after_dt.isoformat(),
         )
 
-        factory = get_async_session_factory()
-        try:
-            async with factory() as session:
-                await session.execute(
-                    update(LLCHeartbeatRun)
-                    .where(LLCHeartbeatRun.id == run_id)
-                    .values(
-                        status=LLCRunStatus.RATE_LIMITED.value,
-                        finished_at=datetime.now(tz=timezone.utc),
-                        error=str(exc),
-                        retry_after=retry_after_dt,
-                        retry_count=new_retry_count,
-                    )
-                )
-                await session.commit()
-        except Exception:
-            logger.exception("Could not write RATE_LIMITED status for run %s", run_id)
+        if not await _write_rate_limit_outcome(
+            run_id,
+            status=LLCRunStatus.RATE_LIMITED.value,
+            error=str(exc),
+            retry_after=retry_after_dt,
+            retry_count=new_retry_count,
+        ):
             return
 
         # Re-queue the agent in Redis at retry_after so it fires automatically.
@@ -784,6 +764,22 @@ def get_heartbeat_scheduler() -> LLCHeartbeatScheduler:
 # ------------------------------------------------------------------
 # Module-level helpers
 # ------------------------------------------------------------------
+
+
+async def _write_rate_limit_outcome(run_id: uuid.UUID, *, status: str, **values: Any) -> bool:
+    """Close a rate-limited run; False when the write failed, which is logged here."""
+    try:
+        async with get_async_session_factory()() as session:
+            await session.execute(
+                update(LLCHeartbeatRun)
+                .where(LLCHeartbeatRun.id == run_id)
+                .values(status=status, finished_at=datetime.now(tz=timezone.utc), **values)
+            )
+            await session.commit()
+    except Exception:
+        logger.exception("Could not write %s status for run %s", status, run_id)
+        return False
+    return True
 
 
 def _next_fire(cron_expr: str, base_ts: float) -> float:
@@ -931,21 +927,21 @@ async def _dispatch_registry_adapter(adapter: Any, agent: Dict[str, Any], contex
     if final_status == LLCRunStatus.QUOTA_EXHAUSTED:
         raise SubscriptionQuotaExhausted(agent_id, str(result.error or "subscription quota exhausted"))
 
-    # GH#9622: surface non-success terminal states so _run_adapter records the
-    # run as FAILED (and the liveness monitor can act) instead of COMPLETED.
-    if final_status != LLCRunStatus.COMPLETED:
-        raise AdapterRunFailed(agent.get("adapter_type") or "", str(external_run_id), final_status)
-
     # GH#10220: forward parsed token usage to the agent's budget. BudgetExhausted
     # is re-raised (GH#8215 hard-stop → run marked FAILED); other cost errors are
     # best-effort and never fail an otherwise-successful run.
     await _ingest_adapter_usage(agent, result)
 
+    # GH#9622: surface non-success terminal states so _run_adapter records the
+    # run as FAILED (and the liveness monitor can act) instead of COMPLETED.
+    if final_status != LLCRunStatus.COMPLETED:
+        raise AdapterRunFailed(agent.get("adapter_type") or "", str(external_run_id), final_status)
+
     return external_run_id
 
 
 async def _ingest_adapter_usage(agent: Dict[str, Any], result: AdapterRunStatus) -> None:
-    """Record a completed registry run's token usage against the agent budget."""
+    """Record a finished registry run's token usage: a failed run spent tokens too (#20202)."""
     if result.tokens_in is None and result.tokens_out is None:
         return  # adapter did not report usage (e.g. CLI without stream-json result)
     agent_id: str = agent["agent_id"]
