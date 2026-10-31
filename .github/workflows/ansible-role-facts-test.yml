@@ -54,6 +54,7 @@ on:
       # #19944: the fleet-address facts test runs the role's real task file.
       - 'autobot-slm-backend/ansible/roles/postgresql/**'
       - 'repo_tests/postgresql_fleet_address_gathers_its_facts_19944_test.py'
+      - 'repo_tests/gpu_detection_finds_wsl2_19731_test.py'
       - '.github/workflows/ansible-role-facts-test.yml'
   push:
     branches:
@@ -89,6 +90,7 @@ on:
       # #19944: the fleet-address facts test runs the role's real task file.
       - 'autobot-slm-backend/ansible/roles/postgresql/**'
       - 'repo_tests/postgresql_fleet_address_gathers_its_facts_19944_test.py'
+      - 'repo_tests/gpu_detection_finds_wsl2_19731_test.py'
 
 # #14434: without this, every push left its predecessors queued. 42 of a 271-run
 # sample were for commits no longer at their branch tip - work nothing would ever
@@ -308,7 +310,7 @@ jobs:
 
       - name: "The fleet-address facts tests ran, not skipped (#19944)"
         run: |
-          out=$(python3 -m pytest repo_tests/postgresql_fleet_address_gathers_its_facts_19944_test.py -q -rs) || { echo "$out"; exit 1; }
+          out=$(python3 -m pytest repo_tests/postgresql_fleet_address_gathers_its_facts_19944_test.py repo_tests/gpu_detection_finds_wsl2_19731_test.py -q -rs) || { echo "$out"; exit 1; }
           echo "$out"
           if grep -q SKIPPED <<< "$out"; then
             echo "::error::a fleet-address facts test was skipped"
