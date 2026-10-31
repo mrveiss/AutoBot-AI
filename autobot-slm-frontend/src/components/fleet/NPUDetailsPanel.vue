@@ -17,7 +17,7 @@ import { ref, computed, reactive, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useFleetStore } from '@/stores/fleet'
 import type { SLMNode, NPUNodeStatus, NPUWorkerMetrics, NPUWorkerConfig } from '@/types/slm'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 
 const props = defineProps<{
   node: SLMNode
@@ -79,7 +79,7 @@ const deviceTypeLabel = computed(() => {
 
 const lastHealthCheck = computed(() => {
   if (!props.npuStatus?.lastHealthCheck) return 'Never'
-  return formatDateTime(props.npuStatus.lastHealthCheck)
+  return formatFleetDateTime(props.npuStatus.lastHealthCheck)
 })
 
 const availableModels = computed(() => props.npuStatus?.capabilities?.models ?? [])

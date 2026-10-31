@@ -1664,7 +1664,7 @@ watch(selectedScope, () => {
   position: absolute;
   left: 12px;
   color: var(--text-muted);
-  font-size: var(--text-sm);
+  width: var(--text-sm); height: var(--text-sm);
 }
 
 .search-wrapper .search-input {
@@ -1866,7 +1866,7 @@ watch(selectedScope, () => {
 
 .stat-item .icon {
   color: var(--text-muted);
-  font-size: var(--text-sm);
+  width: var(--text-sm); height: var(--text-sm);
 }
 
 .stat-item .stat-value {
@@ -2410,7 +2410,7 @@ watch(selectedScope, () => {
 }
 
 .scope-option .icon {
-  font-size: var(--text-xl);
+  width: var(--text-xl); height: var(--text-xl);
   color: var(--text-muted);
   margin-top: var(--spacing-0-5);
 }
@@ -2730,7 +2730,7 @@ watch(selectedScope, () => {
 }
 
 .checkbox-option .icon {
-  font-size: var(--text-sm);
+  width: var(--text-sm); height: var(--text-sm);
   color: var(--text-muted);
 }
 

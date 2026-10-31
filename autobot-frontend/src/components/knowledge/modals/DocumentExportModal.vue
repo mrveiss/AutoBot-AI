@@ -318,7 +318,8 @@ watch(() => props.modelValue, (isOpen) => {
 }
 
 .export-summary .icon {
-  font-size: var(--text-xl);
+  width: var(--text-xl);
+  height: var(--text-xl);
   color: var(--color-info);
 }
 
