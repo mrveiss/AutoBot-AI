@@ -20,7 +20,7 @@ import { useNodeConnectionTest } from '@/composables/useNodeConnectionTest'
 import { useRoles } from '@/composables/useRoles'
 import type { SLMNode, NodeHealth } from '@/types/slm'
 import { createLogger } from '@/utils/debugUtils'
-import { formatRelativeTime } from '@/utils/dateUtils'
+import { formatCompactRelativeTime } from '@/utils/dateUtils'
 import NodeCard from '@/components/fleet/NodeCard.vue'
 import FleetSummary from '@/components/fleet/FleetSummary.vue'
 import AddNodeModal from '@/components/AddNodeModal.vue'
@@ -387,7 +387,7 @@ function nodeStatusBadgeClass(status: string): string {
   }
 }
 
-const formatLastSeen = formatRelativeTime
+const formatLastSeen = formatCompactRelativeTime
 </script>
 
 <template>
