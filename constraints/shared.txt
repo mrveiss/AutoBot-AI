@@ -52,3 +52,6 @@ fastapi>=0.162.0
 # `==2.14.1` also matches the CPU index's `2.14.1+cpu` and CUDA builds' `2.14.1+cuNNN` local versions.
 torch==2.14.1
 torchvision==0.29.1
+
+# #20092: autobot_shared and the SLM both need it, and declared different floors.
+pydantic-settings>=2.16.1
