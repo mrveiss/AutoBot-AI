@@ -10,7 +10,7 @@ from typing import List, Sequence
 
 from .errors import CompanyOsConflict, CompanyOsNotFound, GraphInvalid
 from .plan_measure import find_step
-from .plan_types import CompanyWorkflowPlan, EdgeCase, SubStep, SubStepState
+from .plan_types import CompanyWorkflowPlan, EdgeCase, PlanApprovalPolicy, SubStep, SubStepState
 
 
 def _breakdown_errors(sub_steps: Sequence[SubStep], edge_cases: Sequence[EdgeCase]) -> List[str]:
@@ -54,6 +54,7 @@ def replace_breakdown(
         raise GraphInvalid(errors)
     plan.sub_steps = [s for s in plan.sub_steps if s.step_key != step_key] + fixed
     plan.edge_cases = [c for c in plan.edge_cases if c.step_key != step_key] + cases
+    plan.by_hand_acknowledged_at = None  # an acknowledgement covers the breakdown it was given for
 
 
 def relabel_sub_step(plan: CompanyWorkflowPlan, sub_step_key: str, fields: dict) -> None:
@@ -64,5 +65,26 @@ def relabel_sub_step(plan: CompanyWorkflowPlan, sub_step_key: str, fields: dict)
         if fields.get("classification") is not None and s.state is SubStepState.CURRENT:
             raise GraphInvalid([f"sub-step {s.key!r} is current: only proposed sub-steps are labeled"])
         plan.sub_steps[i] = s.model_copy(update=fields)
+        plan.by_hand_acknowledged_at = None  # an acknowledgement covers the labels it was given for
         return
     raise CompanyOsNotFound(f"sub-step {sub_step_key!r} does not exist in this plan")
+
+
+def replace_policies(plan: CompanyWorkflowPlan, policies: Sequence[PlanApprovalPolicy]) -> None:
+    """Whole replace of the approval policies (FR-6.2). Each names sub-steps of this plan, and no sub-step twice."""
+    known = {s.key for s in plan.sub_steps}
+    keys = [p.key for p in policies]
+    covered = [k for p in policies for k in p.sub_step_keys]
+    errors = [f"duplicate approval policy key {k!r}" for k in sorted({k for k in keys if keys.count(k) > 1})]
+    errors += [
+        f"policy {p.key!r} names sub-step {k!r}, which does not exist"
+        for p in policies
+        for k in p.sub_step_keys
+        if k not in known
+    ]
+    errors += [
+        f"sub-step {k!r} is covered by two policies" for k in sorted({k for k in covered if covered.count(k) > 1})
+    ]
+    if errors:
+        raise GraphInvalid(errors)
+    plan.approval_policies = list(policies)
