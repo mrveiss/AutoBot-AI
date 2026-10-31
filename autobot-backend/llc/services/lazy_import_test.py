@@ -102,10 +102,10 @@ def test_importing_secret_alone_does_not_import_the_other_twelve_services(isolat
     from llc.services.secret import SecretService  # noqa: F401
 
     imported = {m for m in sys.modules if m.startswith("llc.services.")}
-    # llc.services.base is a genuine dependency (LLCServiceBase); the eagerly
-    # -imported set this guards against is everything __init__.py used to
-    # pull in regardless of what was actually asked for.
-    unexpected = imported - {"llc.services.secret", "llc.services.base"}
+    # llc.services.base (LLCServiceBase) and llc.services.actor (resolve_actor, stdlib and the
+    # activity model only) are genuine dependencies; the eagerly-imported set this guards
+    # against is everything __init__.py used to pull in regardless of what was actually asked for.
+    unexpected = imported - {"llc.services.secret", "llc.services.base", "llc.services.actor"}
     assert not unexpected, f"importing llc.services.secret pulled in unrelated modules: {unexpected}"
 
 
