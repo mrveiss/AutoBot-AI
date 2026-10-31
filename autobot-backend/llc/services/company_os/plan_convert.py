@@ -52,6 +52,8 @@ logger = get_logger(__name__)
 
 #: How long an approval waits before its timeout transition fires, for a policy with ``wait_limit``.
 APPROVAL_WAIT_SECONDS = env_int("AUTOBOT_COMPANY_OS_WORKFLOW_PLANNER_APPROVAL_WAIT_SECONDS", TTL_24_HOURS)
+#: A zero or negative setting would draft a timeout transition the graph contract refuses (``timeout_seconds > 0``).
+MIN_APPROVAL_WAIT_SECONDS = 1
 _PERSON_HOLDERS = (RoleHolderType.USER.value, RoleHolderType.CONTACT.value)
 _PREVIEW_ONLY = {"status", "converted_at", "converted_by", "turn_on", "turn_on_tracking_issue"}
 _AT_LEAST_LABELED = (WorkflowPlanStatus.LABELED, WorkflowPlanStatus.APPROVED)
@@ -111,7 +113,7 @@ class PlanConversionService(LLCServiceBase):
             frozenset(r for r, t in holders if t == RoleHolderType.AGENT.value),
             frozenset(procs.scalars()),
             frozenset(wfs.scalars()),
-            APPROVAL_WAIT_SECONDS,
+            max(MIN_APPROVAL_WAIT_SECONDS, APPROVAL_WAIT_SECONDS),
         )
 
     async def _validate(

@@ -70,8 +70,8 @@ async def _block(session: AsyncSession, company: str, blocker, blocked) -> None:
     await WorkItemRelationService().add(
         session,
         company_id=company,
-        source_id=str(blocker.id),
-        target_id=str(blocked.id),
+        source_id=str(blocked.id),
+        target_id=str(blocker.id),
         relation_type=WorkItemRelationType.BLOCKED_BY,
     )
     await session.commit()

@@ -86,6 +86,22 @@ async def _record_event(
             cost=cost,
         )
     )
+    if item_id is not None:
+        await _flush_event(session, work_item_id)
+
+
+async def _flush_event(session: AsyncSession, work_item_id: str) -> None:
+    """Write the event now, so an item deleted since the ownership check is a refusal, not a 500 later (#20168).
+
+    The foreign key would otherwise fail on the caller's next statement. A savepoint keeps the caller's
+    transaction usable.
+    """
+    try:
+        async with session.begin_nested():
+            await session.flush()
+    except IntegrityError:
+        logger.info("cost event refused: work item %s was deleted after the ownership check", work_item_id)
+        raise WorkItemNotInCompany(work_item_id) from None
 
 
 def _cost_of(model: str, agent_id: str, tokens_in: int, tokens_out: int) -> Decimal:
