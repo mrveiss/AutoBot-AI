@@ -99,10 +99,6 @@ function serviceBadgeClass(status: string): string {
 
 // Methods
 
-function formatDate(dateStr: string): string {
-  return formatDateTime(dateStr)
-}
-
 function getErrorLevelClass(level: string): string {
   switch (level.toLowerCase()) {
     case 'error': return 'bg-red-100 text-red-800'
@@ -380,7 +376,7 @@ onMounted(() => restartRefresh())
                     </span>
                   </div>
                   <p class="text-sm text-gray-900 font-medium">{{ err.message }}</p>
-                  <p class="text-xs text-gray-500 mt-1">{{ formatDate(err.timestamp) }}</p>
+                  <p class="text-xs text-gray-500 mt-1">{{ formatDateTime(err.timestamp) }}</p>
                 </div>
               </div>
             </div>
