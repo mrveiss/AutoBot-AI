@@ -110,7 +110,8 @@
       "medium": "متوسط",
       "high": "مرتفع",
       "critical": "Critical"
-    }
+    },
+    "logsLoadFailed": "فشل تحميل السجلات: {error}"
   },
   "chat": {
     "sendMessage": "أرسل رسالة...",
@@ -532,6 +533,7 @@
         "pending": "في الانتظار",
         "running": "جارٍ التشغيل",
         "streaming": "Streaming",
+        "waiting_explanation": "في انتظار الشرح",
         "explaining": "Explaining",
         "completed": "مكتمل",
         "failed": "فشل"
@@ -8099,6 +8101,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "فشل تفعيل نافذة الصيانة",
+      "completeWindowFailed": "فشل إكمال نافذة الصيانة",
+      "deleteWindowFailed": "فشل حذف نافذة الصيانة",
+      "drainNodeFailed": "فشل تفريغ العقدة. يرجى المحاولة مرة أخرى.",
+      "resumeNodeFailed": "فشل استئناف العقدة. يرجى المحاولة مرة أخرى.",
+      "saveKeysFailed": "فشل حفظ مفاتيح API. تحقق من وحدة التحكم للحصول على التفاصيل.",
+      "addNodeFailed": "فشلت إضافة العقدة"
     }
   },
   "mobile": {

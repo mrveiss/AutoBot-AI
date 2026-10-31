@@ -111,7 +111,8 @@
       "medium": "Medium",
       "high": "High",
       "critical": "Critical"
-    }
+    },
+    "logsLoadFailed": "Failed to load logs: {error}"
   },
   "chat": {
     "contextWindow": {
@@ -585,6 +586,7 @@
         "pending": "Pending",
         "running": "Running",
         "streaming": "Streaming",
+        "waiting_explanation": "Waiting for explanation",
         "explaining": "Explaining",
         "completed": "Completed",
         "failed": "Failed"
@@ -7950,6 +7952,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "Failed to activate maintenance window",
+      "completeWindowFailed": "Failed to complete maintenance window",
+      "deleteWindowFailed": "Failed to delete maintenance window",
+      "drainNodeFailed": "Failed to drain node. Please try again.",
+      "resumeNodeFailed": "Failed to resume node. Please try again.",
+      "saveKeysFailed": "Failed to save API keys. Check the console for details.",
+      "addNodeFailed": "Failed to add node"
     }
   },
   "desktop": {
