@@ -261,7 +261,7 @@ def test_the_generated_clients_are_excluded_by_a_recorded_prefix(hook):
     named prefix, and they must not appear in the ceilings — an entry for a
     generated file is a ceiling nobody can ever lower.
     """
-    generated = [prefix for prefix in hook.EXCLUDED_PREFIXES if prefix.endswith("src/types/generated/")]
+    generated = [prefix for prefix in hook.EXCLUDED_PREFIXES if prefix.endswith("/generated/")]
     assert len(generated) == 2, f"both generated client trees must be named as prefixes: {hook.EXCLUDED_PREFIXES}"
     for prefix in generated:
         assert (REPO_ROOT / prefix).is_dir(), f"{prefix} names no directory — a stranded exclusion gates nothing"

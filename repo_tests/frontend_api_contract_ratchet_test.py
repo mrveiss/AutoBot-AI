@@ -57,6 +57,10 @@ _REPO_ROOT = repo_root()
 
 _MAIN_SRC = _REPO_ROOT / "autobot-frontend" / "src"
 _SLM_SRC = _REPO_ROOT / "autobot-slm-frontend" / "src"
+# #19834: the SLM types moved to this package, which both apps import. It stays on the SLM
+# side of this ratchet: a hand-typed `*Response` there is the same sprawl, not a new home
+# the count cannot see.
+_SLM_CONTRACT = _REPO_ROOT / "libs" / "slm-contract"
 
 # --- The ratchet ---------------------------------------------------------
 #
@@ -228,7 +232,8 @@ def _axios_importers(root: Path) -> list[str]:
 
 
 def _hand_typed_response_count(root: Path) -> int:
-    return sum(len(_RESPONSE_INTERFACE_RE.findall(_read(path))) for path in _source_files(root))
+    roots = (root, _SLM_CONTRACT) if root == _SLM_SRC else (root,)
+    return sum(len(_RESPONSE_INTERFACE_RE.findall(_read(p))) for r in roots for p in _source_files(r))
 
 
 def _inline_generic_count(root: Path) -> int:

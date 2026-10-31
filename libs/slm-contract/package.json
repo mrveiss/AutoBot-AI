@@ -1,0 +1,16 @@
+{
+  "name": "@autobot/slm-contract",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The SLM backend's API contract as TypeScript types: the OpenAPI-generated schema and the hand-written SLM types built on it. Types only, no runtime code and no dependencies; both frontends import it (ADR 011, #19834).",
+  "type": "module",
+  "types": "./index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./generated": "./src/generated/api.ts"
+  },
+  "files": [
+    "index.ts",
+    "src"
+  ]
+}

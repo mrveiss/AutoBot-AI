@@ -7,7 +7,7 @@
 `verify-generated-types.yml` runs TWO independent freshness checks:
 `verify-types-run` diffs the backend's `autobot-frontend/src/types/generated/api.ts`,
 and `verify-generated-types-slm` diffs the SLM backend's
-`autobot-slm-frontend/openapi.json` + `.../src/types/generated/api.ts`. Before
+`autobot-slm-frontend/openapi.json` + `libs/slm-contract/src/generated/api.ts`. Before
 #14368, `auto-fix-generated-types.yml` only regenerated and committed the
 first of those three files — an SLM schema change turned
 `verify-generated-types-slm` red with no self-heal, and the author had to
@@ -123,7 +123,7 @@ def test_dropping_the_slm_commit_paths_is_caught_by_the_invariant():
     missing = checked - pre_14368_committed
     assert missing == {
         "autobot-slm-frontend/openapi.json",
-        "autobot-slm-frontend/src/types/generated/api.ts",
+        "libs/slm-contract/src/generated/api.ts",
     }, (
         "the pre-#14368 auto-fix commit-step artifact set should be reported "
         f"as missing exactly the two SLM files; got {missing}"

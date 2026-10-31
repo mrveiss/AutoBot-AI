@@ -37,7 +37,7 @@ on:
       # enforced by pipeline-scripts/check_workflow_path_filters.py.
       - '.github/filters/backend-python-paths.yml'
       - 'autobot-slm-frontend/openapi.json'
-      - 'autobot-slm-frontend/src/types/generated/api.ts'
+      - 'libs/slm-contract/src/generated/api.ts'
       - '.github/workflows/auto-fix-generated-types.yml'
 
 # #16360: a run caused by this workflow's OWN push (github-actions[bot]

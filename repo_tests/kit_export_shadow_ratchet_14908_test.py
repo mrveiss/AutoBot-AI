@@ -32,7 +32,9 @@ from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_table
 from repo_tests._reach import declare
 
-_APPS = ("autobot-frontend/src", "autobot-slm-frontend/src")
+# #19834: libs/slm-contract holds the SLM types that used to live in the SLM app's src, so it is
+# scanned with the apps; moving a declaration there must not take it out of the count.
+_APPS = ("autobot-frontend/src", "autobot-slm-frontend/src", "libs/slm-contract")
 _KIT_INDEX = "libs/autobot-ui/index.ts"
 _EXCLUDED = re.compile(r"(\.test\.|\.spec\.|\.stories\.|/__tests__/|/generated/|/_generated/)")
 _DECL = re.compile(

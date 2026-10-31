@@ -14,6 +14,7 @@ exception. This documents the existing roles; it introduces no new abstraction.
 | Several calls batched at chat start | `BatchApiService` (`services/BatchApiService.ts`) | Aggregates multiple `apiClient` calls with per-call error isolation; takes an injected client for tests. |
 | Workflow builder REST calls | `WorkflowBuilderApiClient` (`composables/useWorkflowBuilder.ts`) | Private to the composable; wraps `httpClient` with a 60 s timeout and a `{ success, data, error }` envelope. |
 | The SLM admin backend (separate origin, separate token) | `SlmClient` (`utils/slmClient.ts`) | Must not receive the main-app JWT. |
+| The SLM control plane under `/slm/api` with the main-app session (fleet, provisioning; ADR 011, #19834) | `slmApi` (`utils/slmApi/`) | One dedicated `ApiClient` instance on the page origin, so the main session token, 401 handling and 503 retry apply. Path, method and response are typed by `@autobot/slm-contract/generated`; a route whose 200 body the contract leaves undeclared is typed once, at the adapter (`slmRequestAs`). Never reads `slm_access_token`. |
 
 Raw `fetch(` that is none of the above must be recorded, with a reason, in
 `_RAW_FETCH_EXCEPTIONS` in `repo_tests/frontend_api_contract_ratchet_test.py`; the

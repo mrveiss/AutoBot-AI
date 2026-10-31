@@ -34,6 +34,9 @@ from repo_tests.kit_export_shadow_ratchet_14908_test import _COMMENTS, _EXCLUDED
 
 _APPS = ("autobot-frontend/src", "autobot-slm-frontend/src")
 _UTILS = tuple(f"{app}/utils" for app in _APPS)
+# #19834: the SLM types moved here; it counts as SLM-side, so a name it shares with the main app
+# or the kit is still counted.
+_SLM_CONTRACT = "libs/slm-contract"
 _KIT = "libs/autobot-ui"
 _TYPE_DECL = re.compile(r"^[ \t]*export\s+(?:declare\s+)?(?:type|interface)\s+([A-Za-z_$][\w$]*)", re.M)
 _MODULE_STMT = re.compile(r"\b(?:import|export)\b[^;'\"]*?\bfrom\s*['\"]([^'\"]+)['\"]\s*;?")
@@ -184,7 +187,7 @@ class TestTheDetectorsWorkBeforeTheirOutputIsRead:
 
 def _type_files(root: Path) -> list[str]:
     found: list[str] = []
-    for rel in (*_APPS, _KIT):
+    for rel in (*_APPS, _SLM_CONTRACT, _KIT):
         base = root / rel
         if base.is_dir():
             found += [p.relative_to(root).as_posix() for p in _ts_files(base)]
@@ -206,7 +209,7 @@ TYPE_FILES_REACH = declare(
     floor=519,  # mid-window: population 544, window (494, 544)
     growth=50,
     what="non-test .ts files in both apps and the kit scanned for repeated type names",
-    roots=(*_APPS, _KIT),
+    roots=(*_APPS, _SLM_CONTRACT, _KIT),
 )
 
 UTIL_FILES_REACH = declare(
@@ -223,7 +226,9 @@ def _measure() -> tuple[list[str], list[str], list[str]]:
     root = repo_root()
     TYPE_FILES_REACH.examined(root)
     UTIL_FILES_REACH.examined(root)
-    first, second, kit = (declared_types([root / rel]) for rel in (*_APPS, _KIT))
+    first = declared_types([root / _APPS[0]])
+    second = declared_types([root / _APPS[1], root / _SLM_CONTRACT])
+    kit = declared_types([root / _KIT])
     both = type_name_overlaps(first, second)
     with_kit = sorted(set(type_name_overlaps(first, kit)) | set(type_name_overlaps(second, kit)))
     utils = duplicate_util_names(*(root / rel for rel in _UTILS))

@@ -36,7 +36,8 @@ None for missing, unreadable, not-a-file and not-UTF-8 alike, and None means
 the second one is what exit 0 is entitled to report.
 
 GENERATED OUTPUT IS EXCLUDED BY PREFIX, NOT BY SPECIAL CASE. The two
-``src/types/generated/`` trees hold OpenAPI-derived clients — 178894 and 26584
+generated trees (``autobot-frontend/src/types/generated/`` and
+``libs/slm-contract/src/generated/``) hold OpenAPI-derived clients — 178894 and 26584
 lines — which no human edits and no split would help. They are named in
 ``EXCLUDED_PREFIXES`` below and mirrored in this hook's ``exclude:`` in
 ``.pre-commit-config.yaml``; the ratchet test parses that YAML independently
@@ -89,14 +90,14 @@ SELF_REL = "scripts/check_frontend_file_size.py"
 #: configured to gate. ``test_excluded_prefixes_mirror_the_pre_commit_config``
 #: parses the YAML independently to catch exactly that drift.
 #:
-#: The two ``types/generated/`` trees are OpenAPI-derived clients, regenerated
+#: The two ``generated/`` trees are OpenAPI-derived clients, regenerated
 #: from the backend schema and never hand-edited. Excluding them is the only
 #: judgement in this file, and it is recorded here rather than applied as a
 #: special case inside the walk.
 EXCLUDED_PREFIXES = (
     ".worktrees/",
     "autobot-frontend/src/types/generated/",
-    "autobot-slm-frontend/src/types/generated/",
+    "libs/slm-contract/src/generated/",
 )
 
 #: Suffixes this gate measures. `.vue` is in because a single-file component is

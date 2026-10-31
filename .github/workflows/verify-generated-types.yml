@@ -15,7 +15,7 @@
 # backend and commit the result.
 #
 # #12662: a second job (verify-generated-types-slm) applies the identical
-# recipe to autobot-slm-frontend/src/types/generated/api.ts, generated from
+# recipe to libs/slm-contract/src/generated/api.ts, generated from
 # autobot-slm-backend's OpenAPI schema via scripts/dump_openapi.py (no live
 # server needed — it imports `main.app` directly). Before this job existed,
 # the SLM generated file had zero CI freshness guard and had already drifted
@@ -132,7 +132,7 @@ jobs:
         slm_types:
           - 'autobot-slm-backend/**/*.py'
           - 'autobot_shared/**/*.py'
-          - 'autobot-slm-frontend/src/types/generated/api.ts'
+          - 'libs/slm-contract/src/generated/api.ts'
           - 'autobot-slm-frontend/package.json'
           - 'autobot-slm-frontend/package-lock.json'
           - 'scripts/audit_api_wiring.py'
@@ -292,11 +292,11 @@ jobs:
 
       - name: Regenerate api.ts from authoritative schema
         working-directory: autobot-slm-frontend
-        run: npx --no-install openapi-typescript openapi.json -o src/types/generated/api.ts --additional-properties
+        run: npx --no-install openapi-typescript openapi.json -o ../libs/slm-contract/src/generated/api.ts --additional-properties
 
       - name: Fail if generated types drifted
         run: |
-          if ! git diff --exit-code autobot-slm-frontend/openapi.json autobot-slm-frontend/src/types/generated/api.ts; then
+          if ! git diff --exit-code autobot-slm-frontend/openapi.json libs/slm-contract/src/generated/api.ts; then
             echo "::error::autobot-slm-frontend generated types are stale."
             echo "The SLM backend OpenAPI schema changed but the committed generated types were not updated."
             echo "Fix: run 'npm run gen:types:openapi && npm run gen:types' in autobot-slm-frontend and commit the result."

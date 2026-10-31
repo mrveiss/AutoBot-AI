@@ -1033,7 +1033,7 @@ repos:
         # OpenAPI-derived clients (178894 and 26584 lines) that no human edits
         # and no split would help -- excluded by a recorded prefix rather than by
         # a special case inside the walk.
-        exclude: ^(\.worktrees/|autobot-frontend/src/types/generated/|autobot-slm-frontend/src/types/generated/)
+        exclude: ^(\.worktrees/|autobot-frontend/src/types/generated/|libs/slm-contract/src/generated/)
         stages: [pre-commit]
         description: "Reject .ts/.vue files exceeding 600 lines; grandfathered files may not grow (#17885)"
 
