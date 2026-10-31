@@ -21,7 +21,7 @@ import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import { formatTimeAgo } from '@/utils/formatHelpers'
+import { formatTimeAgo, createDateFormatter } from '@/utils/formatHelpers'
 import type { components } from '@/types/generated/api'
 import type { OrgNode } from '@/views/llc/OrgTreeNode.vue'
 import type { WorkItem } from '@/views/llc/workItemTypes'
@@ -187,10 +187,7 @@ function onHandoffDone(): void {
   void ensureAssignedItems()
 }
 
-function formatTime(ts: string | null): string {
-  if (!ts) return t('llc.orgChart.never')
-  return new Date(ts).toLocaleString()
-}
+const formatTime = createDateFormatter({ emptyText: () => t('llc.orgChart.never') })
 
 </script>
 
