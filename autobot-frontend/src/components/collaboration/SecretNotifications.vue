@@ -8,22 +8,21 @@
  */
 
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { formatRelativeTime } from '@autobot/ui'
 import {
   useSessionCollaboration,
   type SecretSharingNotification
 } from '@/composables/useSessionCollaboration'
 
 const { secretNotifications, clearSecretNotifications } = useSessionCollaboration()
+const { locale } = useI18n()
 
 // Format timestamp
 const formatTime = (date: Date): string => {
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-  const seconds = Math.floor(diff / 1000)
-  const minutes = Math.floor(seconds / 60)
-
-  if (seconds < 60) return 'just now'
-  if (minutes < 60) return `${minutes}m ago`
+  if (Date.now() - date.getTime() < 3600000) {
+    return formatRelativeTime(date, { locale: locale.value, style: 'narrow' })
+  }
   return date.toLocaleTimeString()
 }
 
