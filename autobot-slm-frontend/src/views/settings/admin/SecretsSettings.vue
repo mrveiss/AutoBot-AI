@@ -19,6 +19,7 @@ import {
   type SecretResponse,
   type SecretCreate,
 } from '@/composables/useSecretsApi'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const api = useSecretsApi()
 const { t } = useI18n()
@@ -195,9 +196,7 @@ function cancelEdit(): void {
   editValue.value = ''
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString()
-}
+const formatDate = createDateFormatter()
 
 function categoryLabel(value: string): string {
   return categories.find((c) => c.value === value)?.label || value
