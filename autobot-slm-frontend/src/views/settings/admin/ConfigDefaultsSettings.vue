@@ -16,7 +16,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import slmApiClient from '@/utils/ApiClient'
 import { createLogger } from '@/utils/debugUtils'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 
 const logger = createLogger('ConfigDefaultsSettings')
 const { t } = useI18n()
@@ -225,7 +225,7 @@ onMounted(() => { fetchDefaults() })
             <td class="px-4 py-3">
               <span class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-700">{{ cfg.value_type }}</span>
             </td>
-            <td class="px-4 py-3 text-sm text-gray-500">{{ formatDateTime(cfg.updated_at) }}</td>
+            <td class="px-4 py-3 text-sm text-gray-500">{{ formatFleetDateTime(cfg.updated_at) }}</td>
             <td class="px-4 py-3 text-right">
               <button @click="openEditForm(cfg)"
                 class="px-2 py-1 text-xs bg-gray-100 text-gray-700 rounded-sm hover:bg-gray-200 mr-1">{{ $t('settings.admin.configDefaultsSettings.edit') }}</button>
