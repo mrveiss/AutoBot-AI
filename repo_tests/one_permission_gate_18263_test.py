@@ -94,7 +94,7 @@ REACH = declare(
     "one-permission-gate-scan",
     discover=_source_population,
     # Same population as fact-read-authorization-scan (#18184): 2997 at its measurement, growth 300.
-    floor=3111,  # re-pinned mid-window (train 80 on main)
+    floor=3233,  # re-pinned mid-window (train 80 on main)
     what="non-test python source",
     roots=("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     growth=300,
