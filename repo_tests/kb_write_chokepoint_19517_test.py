@@ -30,10 +30,9 @@ from __future__ import annotations
 
 import ast
 import functools
-import subprocess
 from pathlib import Path
 
-from autobot_shared.paths import scrubbed_git_env
+from tools.lint._scan_helpers import tracked_paths
 
 REPO = Path(__file__).resolve().parent.parent
 
@@ -138,12 +137,7 @@ OWNERSHIP_FIELDS = frozenset(
 
 def _tracked_sources() -> dict[str, str]:
     """Text of the production ``.py`` files that spell a candidate name; the rest are not read into the scan."""
-    out = subprocess.check_output(
-        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "*.py"],
-        cwd=REPO,
-        env=scrubbed_git_env(),
-    )
-    paths = [p for p in out.decode("utf-8").split("\0") if p and _is_production_python(p)]
+    paths = [p for p in tracked_paths(REPO, "*.py") if _is_production_python(p)]
     texts = {p: (REPO / p).read_text(encoding="utf-8") for p in paths}
     return {p: t for p, t in texts.items() if any(name in t for name in _CANDIDATES)}
 

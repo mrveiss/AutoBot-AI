@@ -76,7 +76,7 @@ REACH = declare(
     "redis-direct-constructor-scan",
     discover=_population,
     # Mid-window, from REACH.window(): population 3827 at d050455c7e -> (3527, 3827, 3677).
-    floor=3798,  # mid-window: population 3948, window (3648, 3948)
+    floor=3920,  # mid-window: population 4070, window (3770, 4070)
     what="non-test python and shell source",
     roots=SCAN_ROOTS,
     growth=300,
