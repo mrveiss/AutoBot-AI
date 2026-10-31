@@ -122,6 +122,7 @@ REACH_ROOTS = {
     "repo_tests/frontend_local_formatter_ratchet_19680_test.py": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "repo_tests/frontend_single_api_client_12363_test.py": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "repo_tests/frontend_url_served_by_19326_test.py": (
+        ".env",
         "autobot-backend",
         "autobot-infrastructure",
         "autobot-npu-worker",
@@ -156,6 +157,11 @@ REACH_ROOTS = {
         "autobot_shared/",
     ),
     "repo_tests/kit_export_shadow_ratchet_14908_test.py": ("autobot-frontend/src", "autobot-slm-frontend/src"),
+    "repo_tests/kit_loading_ratchet_19906_test.py": (
+        "autobot-frontend/src",
+        "autobot-plugins",
+        "autobot-slm-frontend/src",
+    ),
     "repo_tests/knowledge_metadata_parse_canonical_18220_test.py": ("autobot-backend/api",),
     "repo_tests/migration_gate_filter_covers_what_its_tests_import_test.py": ("autobot-backend/tests/migrations",),
     "repo_tests/model_revision_pinning_enforced_17804_test.py": (

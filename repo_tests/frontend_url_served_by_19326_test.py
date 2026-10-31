@@ -135,7 +135,7 @@ FILES = declare(
     floor=4308,  # mid-window: population 4358, window (4258, 4358)
     growth=100,
     what="production sources and env profiles",
-    roots=_SCAN_ROOTS,
+    roots=(*_SCAN_ROOTS, ".env"),
 )
 
 

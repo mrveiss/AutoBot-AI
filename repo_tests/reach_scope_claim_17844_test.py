@@ -384,6 +384,7 @@ _DECLARED_SCOPES = {
     "llc-sigterm-grace-copies": ("autobot-backend/llc",),
     "frontend-http-transports": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "frontend-local-formatter-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
+    "frontend-hand-rolled-spinner-scan": ("autobot-frontend/src", "autobot-slm-frontend/src", "autobot-plugins"),
     "search-mode-copies": ("autobot-backend",),
     "redaction-placeholder-literals": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "one-system-knowledge-template-tree": ("autobot-backend",),
@@ -472,6 +473,7 @@ _DECLARED_SCOPES = {
         "autobot-infrastructure",
         "autobot-npu-worker",
         "scripts",
+        ".env",
     ),
     "kb-admin-read-bypass": ("autobot-backend/", "autobot_shared/"),
     "kb-construction-18122-scan": (
