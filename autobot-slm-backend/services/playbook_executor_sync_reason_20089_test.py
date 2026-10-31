@@ -155,3 +155,43 @@ def test_the_refusal_names_the_reason() -> None:
 
 def test_a_synced_run_has_nothing_to_refuse() -> None:
     assert pe.PlaybookExecutor._code_source_sync_failure_result("u.yml", True, None) is None
+
+
+def _load_git_failure():
+    """By path, past the conftest's services stub."""
+    path = Path(__file__).resolve().parent / "git_failure.py"
+    spec = importlib.util.spec_from_file_location("git_failure_under_sync_reason_test", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+gf = _load_git_failure()
+
+
+def test_the_reason_is_one_line_of_gits_own_messages() -> None:
+    stderr = (
+        b"remote: Counting objects: 100%\nfatal: unable to access 'https://host/r'\nerror: could not fetch origin\n"
+    )
+    assert gf.failure_detail(stderr) == "fatal: unable to access 'https://host/r'; error: could not fetch origin"
+
+
+def test_stderr_with_no_git_message_is_kept_on_one_line() -> None:
+    assert gf.failure_detail(b"first\nsecond\n") == "first; second"
+    assert gf.failure_detail(None) == ""
+
+
+def test_long_progress_cannot_push_the_transient_marker_out_of_the_bound() -> None:
+    stderr = b"fatal: the remote end hung up unexpectedly\n" + b"remote: progress\n" * 200
+    assert gf.is_transient(gf.failure_detail(stderr))
+
+
+def test_the_bound_cuts_a_redacted_value() -> None:
+    url = f"https://user:{_SECRET}@host/r"  # pragma: allowlist secret
+    detail = gf.failure_detail(f"fatal: {url} {'x' * 1000}".encode())
+    assert _SECRET not in detail and len(detail) == gf.GIT_FAILURE_DETAIL_CHARS
+
+
+@pytest.mark.parametrize("text", ["fatal: unable to access u: Couldn't connect to server"])
+def test_a_refused_connection_in_curls_wording_counts_as_transient(text: str) -> None:
+    assert gf.is_transient(text)
