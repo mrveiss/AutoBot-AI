@@ -1359,7 +1359,8 @@
       "showingCountOfCount2Entries": "Showing {count} of {count2} entries",
       "source": "Źródło:",
       "source1": "Źródło",
-      "time": "Time"
+      "time": "Time",
+      "loadError": "Nie udało się wczytać dzienników: {error}"
     },
     "metricsDetailsView": {
       "activeWorkers": "Active Workers",

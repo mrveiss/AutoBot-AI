@@ -110,7 +110,8 @@
       "medium": "Mittel",
       "high": "Hoch",
       "critical": "Kritisch"
-    }
+    },
+    "logsLoadFailed": "Protokolle konnten nicht geladen werden: {error}"
   },
   "chat": {
     "sendMessage": "Senden Sie eine Nachricht...",

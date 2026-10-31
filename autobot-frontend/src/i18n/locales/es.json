@@ -110,7 +110,8 @@
       "medium": "Medio",
       "high": "Alto",
       "critical": "Crítico"
-    }
+    },
+    "logsLoadFailed": "No se pudieron cargar los registros: {error}"
   },
   "chat": {
     "sendMessage": "Enviar un mensaje...",

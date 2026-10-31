@@ -110,7 +110,8 @@
       "medium": "בינוני",
       "high": "גבוה",
       "critical": "Critical"
-    }
+    },
+    "logsLoadFailed": "טעינת היומנים נכשלה: {error}"
   },
   "nav": {
     "chat": "צ'אט",

@@ -111,7 +111,8 @@
       "medium": "Medium",
       "high": "High",
       "critical": "Critical"
-    }
+    },
+    "logsLoadFailed": "Failed to load logs: {error}"
   },
   "chat": {
     "contextWindow": {

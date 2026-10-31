@@ -110,7 +110,8 @@
       "medium": "متوسط",
       "high": "مرتفع",
       "critical": "Critical"
-    }
+    },
+    "logsLoadFailed": "فشل تحميل السجلات: {error}"
   },
   "chat": {
     "sendMessage": "أرسل رسالة...",

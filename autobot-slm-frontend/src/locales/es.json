@@ -1359,7 +1359,8 @@
       "showingCountOfCount2Entries": "Showing {count} of {count2} entries",
       "source": "Fuente:",
       "source1": "Fuente",
-      "time": "Time"
+      "time": "Time",
+      "loadError": "No se pudieron cargar los registros: {error}"
     },
     "metricsDetailsView": {
       "activeWorkers": "Active Workers",
