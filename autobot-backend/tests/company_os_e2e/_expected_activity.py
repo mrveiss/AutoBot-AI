@@ -19,7 +19,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 AUDIT = "#20101"
-PAUSE = "#20150"
 
 
 @dataclass(frozen=True)
@@ -50,8 +49,8 @@ EXPECTED: tuple[Expected, ...] = (
     ),
     Expected("5", "heartbeat.completed", "system", "agent:a", AUDIT, "none"),
     Expected("6", None, "user", "agent:a", AUDIT, "no budget event type exists", after="t_budget"),
-    Expected("7", "control.agent_paused", "user", "agent:b", PAUSE, "controls_service.pause_agent"),
-    Expected("7", "control.agent_resumed", "user", "agent:b", PAUSE, "controls_service.resume_agent"),
+    Expected("7", "control.agent_paused", "user", "agent:b", None, "controls_service.pause_agent"),
+    Expected("7", "control.agent_resumed", "user", "agent:b", None, "controls_service.resume_agent"),
     Expected("8", "approval.requested", "user", "approval", AUDIT, "none (sprint_autoclose only)"),
     Expected("8", "approval.approved", "user", "approval", AUDIT, "none"),
 )

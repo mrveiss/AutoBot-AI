@@ -50,6 +50,21 @@ def make_ready_tasks(scn: Scenario, title: str, assignee_node_id: str, count: in
         make_ready_task(scn, f"{title} {n + 1}", assignee_node_id)
 
 
+TERMINAL_RUN_STATUSES = {"completed", "failed", "cancelled", "skipped"}
+QUIESCE_SECONDS = 60.0
+
+
+def quiesce(scn: Scenario, agent_id: str) -> None:
+    """Wait until none of the agent's runs is queued or running, so a late run is not read as a new wake.
+
+    A real stub run now acts during the scenario (takes a task, spends tokens), and assignment wakes the
+    agent at once; a run still in flight from the previous step would otherwise be counted as a dispatch
+    of THIS step. This waits on the run table, it does not sleep for a guessed time.
+    """
+    idle = wait_for(lambda: all(r["status"] in TERMINAL_RUN_STATUSES for r in scn.runs(agent_id)), QUIESCE_SECONDS, 1.0)
+    assert idle, f"agent {agent_id} still has a run in flight after {QUIESCE_SECONDS:.0f}s: {scn.runs(agent_id)[:2]}"
+
+
 def observe_silence(scn: Scenario, control: str, subject: str, arrange: Callable[[], None]) -> tuple[int, int]:
     """Baseline, ``arrange`` (which gives both agents work), then watch until the control has run twice.
 
@@ -60,6 +75,8 @@ def observe_silence(scn: Scenario, control: str, subject: str, arrange: Callable
     scheduler is not working and nothing can be concluded: that raises, it is not a defect of the
     subject.
     """
+    quiesce(scn, control)
+    quiesce(scn, subject)
     before_c, before_s = len(scn.stub_invocations(control)), len(scn.stub_invocations(subject))
     arrange()
     reached = wait_for(

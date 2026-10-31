@@ -6,7 +6,7 @@
 
 import pytest
 
-from tests.company_os_e2e._scenario import step
+from tests.company_os_e2e._scenario import step, wait_for
 
 pytestmark = pytest.mark.e2e
 
@@ -57,11 +57,18 @@ def test_step_4_assign_a_task(scenario):  # noqa: ANN001
     api = scenario.api
     scenario.require(2, 3)
     with step(4):
-        node = scenario.agents["a"]["node_id"]
+        node = scenario.agent("a")["node_id"]
+        agent_id = scenario.agent("a")["agent_id"]
         item_id = scenario.ids["task"]
         api.call("PATCH", f"/work-items/{item_id}", json={"assignee_agent_id": node})
         api.call("POST", f"/work-items/{item_id}/transition", json={"status": "ready"})
         item = api.call("GET", f"/work-items/{item_id}")
         assert item["assignee_agent_id"] == node, f"assignee is {item['assignee_agent_id']!r}, expected {node!r}"
-        assert item["status"] == "ready", f"status is {item['status']!r}"
+        # Assigning wakes the assignee at once, so by the time of this read its run may already hold the
+        # task. That is ready or in_progress under the assignee; anything else, or in_progress with no
+        # run of the assignee that took it, is something else moving the task.
+        assert item["status"] in ("ready", "in_progress"), f"status is {item['status']!r}"
+        if item["status"] == "in_progress":
+            took = wait_for(lambda: [c for c in scenario.stub_invocations(agent_id) if c["work_item"] == item_id], 60)
+            assert took, "the task is in_progress under its assignee but no run of the assignee took it"
         scenario.done.add(4)

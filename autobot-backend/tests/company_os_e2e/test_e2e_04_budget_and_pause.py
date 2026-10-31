@@ -19,6 +19,7 @@ from tests.company_os_e2e._helpers import (
     make_ready_task,
     make_ready_tasks,
     observe_silence,
+    quiesce,
     set_paused_directly,
 )
 from tests.company_os_e2e._scenario import WAKE_WINDOW_SECONDS, step, wait_for
@@ -30,7 +31,6 @@ GATE = "PR #19958 (dispatch gate: budget exhaustion, pause, terminate; issue #19
 # cost event is refused as unpriced); its tokens still count against a TOKEN budget.
 MODEL = "llama3"
 HEADROOM_TOKENS = 1000
-PAUSE_BUG_LOG = ("NoReferencedTableError", "llc_activity_log")
 
 
 def _remaining(api, agent_id: str) -> int:
@@ -63,8 +63,9 @@ def _exhaust(api, agent_id: str) -> None:
 
 def test_step_6_exhausted_budget_is_not_dispatched(scenario):  # noqa: ANN001
     scenario.require(2, 4)
-    a, b = scenario.agents["a"], scenario.agents["b"]
+    a, b = scenario.agent("a"), scenario.agent("b")
     with step(6):
+        quiesce(scenario, a["agent_id"])  # a run still in flight is not this step's dispatch
         scenario.ids["t_budget"] = datetime.now(timezone.utc).isoformat()
         _exhaust(scenario.api, a["agent_id"])  # precondition: asserted, not xfailed
 
@@ -83,18 +84,10 @@ def test_step_6_exhausted_budget_is_not_dispatched(scenario):  # noqa: ANN001
 
 def test_step_7_pause_and_resume_through_the_api(scenario):  # noqa: ANN001
     scenario.require(2)
-    api, agent = scenario.api, scenario.agents["b"]["agent_id"]
+    api, agent = scenario.api, scenario.agent("b")["agent_id"]
     with step(7):
-        pause = api.refuse("POST", api.company(f"/controls/agents/{agent}/pause"), json={"reason": "e2e"})
-        if pause.status_code == 500:
-            assert scenario.server_log_has(
-                *PAUSE_BUG_LOG
-            ), f"pause answered 500 and the server log does not show the known cause: {pause.text[:200]}"
-            pytest.xfail(
-                "pause returns 500: the activity-log write cannot resolve its organizations foreign key "
-                "(#20150); remove this xfail when #20150 is fixed"
-            )
-        assert pause.status_code == 200 and pause.json()["status"] == "paused", (pause.status_code, pause.text[:200])
+        paused = api.call("POST", api.company(f"/controls/agents/{agent}/pause"), json={"reason": "e2e"})
+        assert paused["status"] == "paused", paused
         resumed = api.call("POST", api.company(f"/controls/agents/{agent}/resume"))
         assert resumed["status"] != "paused", resumed
         scenario.done.add(7)
@@ -120,8 +113,9 @@ def _resume(scenario, agent: str, direct: bool) -> None:  # noqa: ANN001
 
 def test_step_7b_paused_agent_is_not_dispatched_until_resumed(scenario):  # noqa: ANN001
     scenario.require(2, 4)
-    ceo, b = scenario.agents["ceo"], scenario.agents["b"]
+    ceo, b = scenario.agent("ceo"), scenario.agent("b")
     with step("7b"):
+        quiesce(scenario, b["agent_id"])
         direct = _pause(scenario, b["agent_id"])
 
         def arrange() -> None:
