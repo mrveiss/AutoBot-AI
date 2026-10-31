@@ -55,7 +55,7 @@ REACH = declare(
     "migration-gate-test-import-sweep",
     discover=_migration_test_files,
     # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
-    floor=36,  # #15907: mid-window, population 39, window (33, 39)
+    floor=39,  # #15907: mid-window, population 39, window (33, 39)
     what="tracked migration test modules",
     roots=(_TEST_DIR.as_posix(),),
     growth=6,
