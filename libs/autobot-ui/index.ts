@@ -193,3 +193,9 @@ export type { LedgerStateLabels } from './src/components/LedgerSectionState.vue'
 // The one HTTP transport under both apps' ApiClients; each app subclasses it for auth (#14908).
 export { ApiClientBase, withQuery, parseRetryAfterMs, SERVICE_UNAVAILABLE_STATUS } from './src/utils/ApiClientBase'
 export type { TransportRequestOptions, RawRequestOptions, TransportLogger } from './src/utils/ApiClientBase'
+
+// The one spinner and the one skeleton for every loading state (#19906).
+export { default as BaseSpinner } from './src/components/BaseSpinner.vue'
+export type { SpinnerSize } from './src/components/BaseSpinner.vue'
+export { default as BaseSkeleton } from './src/components/BaseSkeleton.vue'
+export type { SkeletonShape } from './src/components/BaseSkeleton.vue'
