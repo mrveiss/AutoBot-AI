@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 /**
  * VisionAnalysisModal — Modal dialog for image analysis from the chat input.
  *
@@ -223,14 +224,13 @@ onUnmounted(() => {
         </div>
 
         <!-- Analyze Button -->
-        <button
+        <BaseButton
           @click="analyzeImage"
-          class="btn-analyze"
           :disabled="!selectedFile || processing"
         >
           <i :class="processing ? 'fas fa-spinner fa-spin' : 'search'"></i>
           {{ processing ? $t('chat.vision.analyzing') : $t('chat.vision.analyzeImage') }}
-        </button>
+        </BaseButton>
 
         <!-- Error -->
         <div v-if="error" class="error-banner">
@@ -306,10 +306,10 @@ onUnmounted(() => {
             </div>
 
             <!-- Raw JSON toggle -->
-            <button @click="showRawJson = !showRawJson" class="btn-toggle-json">
+            <BaseButton variant="ghost" size="xs" @click="showRawJson = !showRawJson">
               <Icon :name="showRawJson ? 'chevron-up' : 'chevron-down'" />
               {{ showRawJson ? $t('chat.vision.hideRawJson') : $t('chat.vision.showRawJson') }}
-            </button>
+            </BaseButton>
             <pre v-if="showRawJson" class="json-display">{{
               JSON.stringify(analysisResult, null, 2)
             }}</pre>
@@ -319,18 +319,17 @@ onUnmounted(() => {
 
       <!-- Footer -->
       <div class="modal-footer">
-        <button @click="exportResults" class="btn-secondary" :disabled="!analysisResult">
+        <BaseButton variant="secondary" size="sm" @click="exportResults" :disabled="!analysisResult">
           <Icon name="download" /> {{ $t('chat.vision.exportJson') }}
-        </button>
+        </BaseButton>
         <div class="footer-right">
-          <button @click="emit('close')" class="btn-secondary">{{ $t('common.cancel') }}</button>
-          <button
+          <BaseButton variant="secondary" size="sm" @click="emit('close')">{{ $t('common.cancel') }}</BaseButton>
+          <BaseButton size="sm"
             @click="sendToChat"
-            class="btn-primary"
             :disabled="!analysisResult"
           >
             <Icon name="paper-plane" /> {{ $t('chat.vision.sendToChat') }}
-          </button>
+          </BaseButton>
         </div>
       </div>
     </div>
@@ -349,7 +348,7 @@ onUnmounted(() => {
 }
 
 .vision-modal {
-  background: var(--bg-secondary, #fff);
+  background: var(--bg-secondary);
   border-radius: var(--radius-xl);
   width: 90%;
   max-width: 640px;
@@ -410,6 +409,10 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-4);
+}
+
+.modal-body > :deep(.aui-btn) {
+  align-self: center;
 }
 
 /* Drop zone */
@@ -550,32 +553,6 @@ onUnmounted(() => {
   outline-offset: 2px;
 }
 
-/* Analyze button */
-.btn-analyze {
-  padding: var(--spacing-2-5) var(--spacing-6);
-  background: var(--color-primary);
-  color: var(--text-on-primary, #fff);
-  border: none;
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-2);
-  align-self: center;
-}
-
-.btn-analyze:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-}
-
-.btn-analyze:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 /* Error */
 .error-banner {
   display: flex;
@@ -697,22 +674,6 @@ onUnmounted(() => {
   color: var(--text-tertiary);
 }
 
-.btn-toggle-json {
-  padding: var(--spacing-1-5) var(--spacing-2-5);
-  background: none;
-  border: none;
-  color: var(--text-tertiary);
-  font-size: var(--text-xs);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-1-5);
-}
-
-.btn-toggle-json:hover {
-  color: var(--text-secondary);
-}
-
 .json-display {
   padding: var(--spacing-3);
   background: var(--bg-secondary);
@@ -738,49 +699,4 @@ onUnmounted(() => {
   gap: var(--spacing-2);
 }
 
-.btn-primary {
-  padding: var(--spacing-2-5) var(--spacing-5);
-  background: var(--color-primary);
-  color: var(--text-on-primary, #fff);
-  border: none;
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-1-5);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-}
-
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  padding: var(--spacing-2-5) var(--spacing-4);
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-1-5);
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: var(--bg-hover);
-}
-
-.btn-secondary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 </style>
