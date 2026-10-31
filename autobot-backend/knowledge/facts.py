@@ -26,10 +26,11 @@ from knowledge.fact_redis_codec import (  # noqa: F401 -- names stay patchable h
     _decode_redis_hash,
 )
 from knowledge.fact_sharing import FactSharingMixin
-from knowledge.ingest_sanitize import redact_url_metadata_fields, sanitize_fact_content
+from knowledge.ingest_sanitize import guard_update, sanitize_fact_content, sanitize_update_metadata
 from knowledge.long_fact_embedding import embed_in_windows, window_metadata
 from knowledge.ownership_index import index_ownership, ownership_changed, reindex_ownership
 from knowledge.quarantine import QuarantineAuditFailed, apply_quarantine, require_audit_actor, without_quarantine
+from knowledge.write_scope import guard_caller_metadata
 
 if TYPE_CHECKING:
     import aioredis
@@ -760,10 +761,9 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
         # to identical text and would otherwise collide, silently dropping the second,
         # genuinely different fact as a "duplicate" of the first (#17005's own risk,
         # reintroduced from the write side once redaction moved ahead of this check).
-        # Storage and embedding still use the redacted `content` below -- only the
-        # dedup hash keys off the raw original, kept just long enough to pass through.
+        # Storage and embedding use the redacted `content` below; only the dedup hash keys off the raw original.
         raw_content = content
-        content, metadata = sanitize_fact_content(content, metadata)  # #16770: the KB write chokepoint
+        content, metadata = sanitize_fact_content(content, guard_caller_metadata(metadata))  # #16770
 
         if not content or not content.strip():
             return {"status": "error", "message": "Empty content, or nothing left after injection sanitizing"}
@@ -1109,7 +1109,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
             if current is None:
                 return {"status": "error", "message": "Fact not found"}
             decoded, current_metadata = current
-            previous = dict(current_metadata)  # #16663: the indexes the fact is filed under now
+            previous = await guard_update(self, fact_id, current_metadata)  # #16663 filed-under now; #19517
 
             # #13708 round 4 review (BLOCK 2): stays None for a metadata-only update, so
             # _durable_update_or_adopt/fact_store fall back to hashing the (unchanged)
@@ -1132,7 +1132,7 @@ class FactsMixin(FactProjectionMixin, FactSharingMixin):
                 # (deliberately, to keep the fact's own route -- see that call's comment),
                 # never against this caller's OWN metadata, so a URL-shaped field in it
                 # (e.g. a re-fetch updating "source") would merge in unredacted otherwise.
-                redact_url_metadata_fields(metadata)
+                metadata = sanitize_update_metadata(metadata)  # #19517: also drops caller-set ownership
                 current_metadata.update(metadata)
             current_metadata["updated_at"] = datetime.now(tz=timezone.utc).isoformat()
 
