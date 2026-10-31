@@ -28,6 +28,7 @@
 
   --color-error-500: #ef4444;
   --color-error-600: #dc2626;
+  --color-error-700: #b91c1c;
 }
 
 /*
@@ -69,7 +70,7 @@
 }
 
 @utility btn-error {
-  @apply bg-(--color-error-solid) text-(--text-on-error) hover:bg-error-600;
+  @apply bg-(--color-error-solid) text-(--text-on-error) hover:bg-(--color-error-solid-hover);
 }
 
 @utility card {

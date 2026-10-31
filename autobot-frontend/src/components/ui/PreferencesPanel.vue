@@ -332,7 +332,8 @@ function handleReset() {
 }
 
 .preference-label .icon {
-  font-size: var(--font-size-xs);
+  width: var(--font-size-xs);
+  height: var(--font-size-xs);
   color: var(--text-tertiary);
 }
 
