@@ -682,16 +682,16 @@ class ConversationFileManager:
             raise ValueError(f"File size ({file_size} bytes) exceeds maximum " f"({self.MAX_FILE_SIZE} bytes)")
         return file_size
 
-    async def _check_existing_file(self, connection, file_hash: str):
-        """Check for existing file with same hash for deduplication."""
+    async def _check_existing_file(self, connection, session_id: str, file_hash: str):
+        """Find an identical file stored by THIS session; never another session's (#20133)."""
         async with connection.execute(
             """
             SELECT file_id, stored_filename, file_path
             FROM conversation_files
-            WHERE file_hash = ? AND is_deleted = 0
+            WHERE file_hash = ? AND session_id = ? AND is_deleted = 0
             LIMIT 1
             """,
-            (file_hash,),
+            (file_hash, session_id),
         ) as cursor:
             return await cursor.fetchone()
 
@@ -869,7 +869,7 @@ class ConversationFileManager:
 
             connection = await self._get_async_db_connection()
             try:
-                existing_file = await self._check_existing_file(connection, file_info.file_hash)
+                existing_file = await self._check_existing_file(connection, file_info.session_id, file_info.file_hash)
                 if existing_file:
                     return await self._handle_deduplicated_file(connection, existing_file, file_info)
                 return await self._store_new_file(connection, file_info, file_content)
