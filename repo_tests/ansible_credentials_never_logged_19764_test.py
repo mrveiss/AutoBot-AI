@@ -61,15 +61,17 @@ def _no_log_on(task: dict) -> bool:
     return value is True or (isinstance(value, (str, int)) and str(value).strip().lower() in _TRUE)
 
 
-def _tasks(node):
+def _tasks(node, inherited=None):
+    """Every task, carrying a block or play's ``no_log`` to the tasks under it, as Ansible does."""
     if isinstance(node, list):
         for item in node:
-            yield from _tasks(item)
+            yield from _tasks(item, inherited)
     elif isinstance(node, dict):
-        yield node
+        task = node if inherited is None or "no_log" in node else {**node, "no_log": inherited}
+        yield task
         for key in _CHILD_LISTS:
             if key in node:
-                yield from _tasks(node[key])
+                yield from _tasks(node[key], task.get("no_log"))
 
 
 def _http_args(task: dict) -> dict | None:
@@ -329,3 +331,12 @@ def test_redis_cli_takes_the_password_from_the_environment(path: str, name: str)
     assert " -a " not in _command_text(task)
     assert "REDISCLI_AUTH" in str(task["environment"])
     assert _no_log_on(task)
+
+
+def test_a_block_no_log_covers_its_tasks_and_a_child_can_turn_it_off() -> None:
+    covered = "- block:\n    - name: t\n      command: tool {{ my_password }}\n  no_log: true\n"
+    assert findings_in(covered) == []
+    uncovered = covered.replace(
+        "command: tool {{ my_password }}", "command: tool {{ my_password }}\n      no_log: false"
+    )
+    assert findings_in(uncovered) == ["t puts a secret on a command line without no_log"]
