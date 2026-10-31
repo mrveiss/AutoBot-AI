@@ -382,6 +382,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Both GUIs' component, view and composable .ts/.vue, excluding tests, against all tracked frontend source.",
     ),
+    "frontend-hand-rolled-spinner-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Both GUIs' and the plugins' .vue/.css, excluding tests, against all tracked frontend source.",
+    ),
     "frontend-model-literal-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -490,6 +495,12 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "Non-test .ts/.js files under the two apps' src/utils; the test-file share and other trees drift on their own.",
+    ),
+    "frontend-url-served-by-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test Python, shell, YAML, Jinja, env and unit files under six roots plus the root .env profiles, a "
+        "subset of tracked files; the test share and the other extensions grow at their own rate.",
     ),
 }
 

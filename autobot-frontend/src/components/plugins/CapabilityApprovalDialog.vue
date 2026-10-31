@@ -32,14 +32,7 @@
       </div>
 
       <div v-if="loading" class="dialog-loading">
-        <svg class="spinner" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-          <path
-            class="opacity-75"
-            fill="currentColor"
-            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-          />
-        </svg>
+        <BaseSpinner size="md" />
         <span>{{ $t('plugins.capabilities.loading') }}</span>
       </div>
 
@@ -116,6 +109,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseSpinner } from '@autobot/ui'
 import { ref, watch } from 'vue'
 import { usePlugins, type CapabilityInfo } from '@/composables/usePlugins'
 
@@ -313,17 +307,6 @@ watch(() => props.open, (isOpen) => {
   color: var(--color-error);
 }
 
-.spinner {
-  width: 24px;
-  height: 24px;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
 .dialog-body {
   flex: 1;
   overflow-y: auto;
@@ -353,22 +336,22 @@ watch(() => props.open, (isOpen) => {
 }
 
 .tier-official {
-  background-color: #10b981;
+  background-color: var(--color-success);
   color: white;
 }
 
 .tier-verified {
-  background-color: #3b82f6;
+  background-color: var(--color-info);
   color: white;
 }
 
 .tier-community {
-  background-color: #f59e0b;
+  background-color: var(--color-warning);
   color: white;
 }
 
 .tier-unverified {
-  background-color: #ef4444;
+  background-color: var(--color-error);
   color: white;
 }
 
