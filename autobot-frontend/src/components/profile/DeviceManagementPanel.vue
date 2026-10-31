@@ -90,6 +90,7 @@ import Icon from '@/components/ui/Icon.vue'
 import PairDeviceDialog from '@/components/mobile/PairDeviceDialog.vue'
 import { useDevices } from '@/composables/useDevices'
 import { createLogger } from '@/utils/debugUtils'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('DeviceManagementPanel')
 const { t } = useI18n()
@@ -154,13 +155,7 @@ function formatPlatform(platform: string): string {
   return labels[platform] || platform
 }
 
-function formatDate(dateStr: string): string {
-  try {
-    return new Date(dateStr).toLocaleDateString()
-  } catch {
-    return dateStr
-  }
-}
+const formatDate = createDateFormatter({ kind: 'date' })
 
 function formatRelativeTime(dateStr: string): string {
   try {
