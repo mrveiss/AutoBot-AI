@@ -21,6 +21,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.scoping import Principal
 from autobot_shared.ssot_config import config
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
+from knowledge.root_read import is_superadmin_role, root_view
 from knowledge.where_combine import and_where
 
 logger = get_logger(__name__)
@@ -413,32 +414,36 @@ def kb_principal(current_user) -> Principal:
 
     Built from :func:`extract_user_context_from_request`, so the user, org and groups are the
     ones every other KB read path resolves. There is deliberately no admin flag: RAG and chat
-    grounding never bypass visibility.
+    grounding never bypass visibility -- except for the superadmin (#19860, owner decision
+    2026-10-28, overriding #16654 T2 for that role only): the verified role claim sets
+    ``is_superadmin`` and the one filter, :func:`filter_for_principal`, audits and lets it read all.
     """
     user_id, org_id, group_ids = extract_user_context_from_request(current_user)
-    return _authenticated_principal(user_id, org_id, group_ids)
+    return _authenticated_principal(user_id, org_id, group_ids, is_superadmin_role(_user_field(current_user, "role")))
 
 
-def _authenticated_principal(user_id, org_id, group_ids) -> Principal:
+def _authenticated_principal(user_id, org_id, group_ids, is_superadmin: bool = False) -> Principal:
     """The one place a KB ``Principal`` is constructed; no user id is refused (#16664)."""
     if not user_id:
         raise ValueError("kb_principal needs an authenticated user; use SYSTEM_SCOPE for a no-user read")
-    return Principal(user_id=user_id, company_id=org_id, group_ids=frozenset(group_ids), is_authenticated=True)
+    return Principal(user_id, org_id, frozenset(group_ids), is_authenticated=True, is_superadmin=is_superadmin)
 
 
-async def kb_principal_from_tenant(tenant, session) -> Principal:
+async def kb_principal_from_tenant(tenant, session, *, is_superadmin: bool = False) -> Principal:
     """The visibility principal of a verified ``TenantContext`` (#16664, #18825, #19007).
 
     For routes that take ``get_tenant_context`` and no user dict. Same ``Principal`` as
     :func:`kb_principal`: user and org come from the verified context, the team memberships from
     the canonical team service via *session* (cached; a failed lookup gives no groups). No admin bypass.
+    *is_superadmin* is the caller's verified role claim, never ``tenant.is_platform_admin`` (true for a
+    plain admin too); the route derives it from the authenticated user (#19860).
     """
     from knowledge.tenant_groups import tenant_group_ids  # noqa: PLC0415 -- keeps the ORM off this import
 
     user_id = str(tenant.user_id) if getattr(tenant, "user_id", None) else None
     org_id = str(tenant.org_id) if getattr(tenant, "org_id", None) else None
     group_ids = await tenant_group_ids(tenant, session) if user_id else []
-    return _authenticated_principal(user_id, org_id, group_ids)
+    return _authenticated_principal(user_id, org_id, group_ids, is_superadmin)
 
 
 def principal_for_identity(user_id: str | None, org_id: str | None = None) -> KbPrincipal:
@@ -465,18 +470,22 @@ async def filter_for_principal(results: List[Dict], principal: KbPrincipal, owne
     """*results* the principal may read: the one result filter for RAG and chat grounding (#16664).
 
     ``SYSTEM_SCOPE`` keeps non-private facts only; a ``Principal`` goes through
-    :func:`filter_search_results_by_permission` with no admin bypass.
+    :func:`filter_search_results_by_permission` with no admin bypass -- except a superadmin, whose
+    audited root read is :func:`knowledge.root_read.root_view` (#19860).
     """
     principal = require_kb_principal(principal)
     if principal is SYSTEM_SCOPE:
         return filter_non_private_results(results)
-    return await filter_search_results_by_permission(
+    kept = await filter_search_results_by_permission(
         results,
         principal.user_id,
         principal.company_id,
         list(principal.group_ids),
         ownership_manager=ownership_manager,
     )
+    if principal.is_superadmin and ownership_manager:
+        return await root_view(results, principal, ownership_manager, kept)
+    return kept
 
 
 def caller_principal(current_user) -> Principal:
@@ -536,13 +545,15 @@ async def audit_admin_read(user_id: str, details: Dict) -> bool:
     from services.audit_logger import audit_log
 
     try:
-        await audit_log(
+        written = await audit_log(
             AuditAction.KNOWLEDGE_ADMIN_READ.value, user_id=user_id, resource="knowledge_base", details=details
         )
     except Exception:
         logger.error("kb.admin_read audit failed; withholding the admin read (#16665)", exc_info=True)
         return False
-    return True
+    if not written:  # audit_log reports a failed write as False, not an exception (#19860)
+        logger.error("kb.admin_read audit was not written; withholding the read (#19860)")
+    return bool(written)
 
 
 async def _admin_read(results: List[Dict], reader: KbReader, ownership_manager) -> List[Dict]:
