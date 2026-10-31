@@ -35,7 +35,7 @@ import uuid
 from dataclasses import replace
 from typing import Optional
 
-from autobot_shared.cli_tool_flags import sanitize_tool_names
+from autobot_shared.cli_tool_flags import safe_model_arg, sanitize_tool_names
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.ssot_config import config as _ssot_config
@@ -175,6 +175,22 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
         return args
 
     @staticmethod
+    def _model_args(cfg: dict) -> list[str]:
+        """``--model <name>`` for a safe configured model; nothing otherwise (#20268).
+
+        A value that is not a plain model name (leading ``-``, whitespace) would be parsed
+        as another flag, so it is refused and logged without its content.
+        """
+        configured = cfg.get("model")
+        if not configured:
+            return []
+        model = safe_model_arg(configured)
+        if model is None:
+            logger.warning("ClaudeCodeAdapter: configured model is not a safe model name - omitting --model")
+            return []
+        return ["--model", model]
+
+    @staticmethod
     def _build_command(
         cli: str,
         resume_session_id: Optional[str],
@@ -218,9 +234,7 @@ class ClaudeCodeAdapter(SubprocessLifecycleAdapter):
             max_turns = cfg.get("max_turns")
             if max_turns is not None:
                 cmd += ["--max-turns", str(max_turns)]
-        model = cfg.get("model")
-        if model:
-            cmd += ["--model", str(model)]
+        cmd += ClaudeCodeAdapter._model_args(cfg)
         cmd += ClaudeCodeAdapter._tool_permission_args(cfg, agent_api_tool)
         cmd.append("--")
         cmd.append(prompt)
