@@ -224,3 +224,7 @@ export type {
 
 // A tool permission rule as the backend serves it, declared once (#19910).
 export type { PermissionRule } from './src/types/permission'
+
+// The one numeric env reader both apps use (#20135).
+export { getEnvPositiveInt } from './src/utils/env'
+export type { EnvSource } from './src/utils/env'
