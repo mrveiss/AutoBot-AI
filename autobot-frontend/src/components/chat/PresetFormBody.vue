@@ -80,7 +80,7 @@
     <!-- Preset list -->
     <section class="preset-list" :aria-label="$t('chat.presets.listLabel')">
       <div v-if="store.isLoading" class="list-loading" aria-live="polite">
-        <Icon name="spinner" class="spin" aria-hidden="true" />
+        <BaseSpinner size="sm" />
         {{ $t('chat.presets.loading') }}
       </div>
 
@@ -156,7 +156,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useChatPresetsStore } from '@/stores/useChatPresetsStore'
-import { BaseButton } from '@autobot/ui'
+import { BaseButton, BaseSpinner } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import type { SlashCommandPreset } from '@/types/api'
 
@@ -360,14 +360,6 @@ async function executeDelete(id: string): Promise<void> {
   align-items: center;
   justify-content: center;
   gap: var(--spacing-2);
-}
-
-.spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .preset-row {

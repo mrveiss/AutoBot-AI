@@ -173,6 +173,7 @@ const PYTHON_ONLY_PORTS = [
   // stated plainly instead of re-attaching an unrelated issue number.
   'chromadb', // ChromaDB vector store — the backend talks to it directly; the frontend only ever goes through backend API routes
   'tts', // TTS worker — backend-to-worker only, no frontend consumer
+  'frontend_http', // nginx's plain-HTTP port, read only by the backend's config.frontend_url (#19326) — the browser frontend is served from it and addresses itself by its runtime origin
   'chrome_cdp', // Chrome DevTools Protocol — backend browser-automation only
   // raw VNC protocol port (x11vnc), consumed by the node's own systemd
   // service + the Ansible vnc role. The frontend's desktop viewer only ever
