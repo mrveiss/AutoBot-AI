@@ -104,11 +104,6 @@ function getProgressColor(status: string): string {
   }
 }
 
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '-'
-  return formatDateTime(dateStr)
-}
-
 async function fetchJobs(): Promise<void> {
   const data = await api.listBatchJobs()
   jobs.value = (data.jobs as BatchJob[]) || []
@@ -423,11 +418,11 @@ onMounted(() => poller.start(''))
         <div class="grid grid-cols-4 gap-4 text-sm">
           <div>
             <p class="text-gray-500">{{ $t('tools.admin.batchTool.created') }}</p>
-            <p class="text-gray-900">{{ formatDate(job.created_at) }}</p>
+            <p class="text-gray-900">{{ formatDateTime(job.created_at, '-') }}</p>
           </div>
           <div>
             <p class="text-gray-500">{{ $t('tools.admin.batchTool.started') }}</p>
-            <p class="text-gray-900">{{ formatDate(job.started_at) }}</p>
+            <p class="text-gray-900">{{ formatDateTime(job.started_at, '-') }}</p>
           </div>
           <div>
             <p class="text-gray-500">{{ $t('tools.admin.batchTool.duration') }}</p>
