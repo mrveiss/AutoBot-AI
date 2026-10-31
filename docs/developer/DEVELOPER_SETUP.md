@@ -19,7 +19,8 @@ sudo ./install.sh
 # Then complete configuration via the Setup Wizard at https://<server-ip>
 
 # 2b. Docker install (recommended for development)
-docker compose up -d --build
+bash docker/generate-secrets.sh
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d --build
 # Optional profiles: --profile ollama, --profile monitoring
 
 # 3. Access development interface
@@ -150,7 +151,8 @@ sudo ./install.sh
 
 ```bash
 # Start core services
-docker compose up -d --build
+bash docker/generate-secrets.sh
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d --build
 
 # Include Ollama for local LLM inference
 docker compose --profile ollama up -d --build
