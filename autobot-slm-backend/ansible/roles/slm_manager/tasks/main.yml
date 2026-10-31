@@ -474,6 +474,13 @@
       {{ autobot_secrets_root_key
          if (autobot_secrets_root_key | default('') | trim | length > 0)
          else lookup('pipe', 'openssl rand -base64 32') | replace('+', '-') | replace('/', '_') }}
+    # #19864: chat-history and device-token encryption, on for new installs only. No back-fill
+    # below: losing this key makes everything written after it unreadable, so an existing
+    # install opts in rather than having an update switch it on (owner decision).
+    autobot_encryption_key: >-
+      {{ autobot_encryption_key
+         if (autobot_encryption_key | default('') | trim | length > 0)
+         else lookup('pipe', 'openssl rand -hex 32') }}
     # #16299: backend_secret_key's own role default (roles/backend/defaults/main.yml)
     # was the guessable literal "change-me-in-production", shipped unchanged on every
     # deployment that never overrode it. Generated here, once, the same way

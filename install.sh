@@ -656,7 +656,8 @@ INVENTORY
 
     if [[ ! -f "${SECRETS_FILE}" ]] || [[ "${REINSTALL}" == true ]]; then
         info "Writing secrets file..."
-        local secret_key encryption_key hmac_api_key_secret local_ip network_subnet network_gateway
+        local secret_key encryption_key hmac_api_key_secret local_ip network_subnet network_gateway autobot_encryption_key
+        autobot_encryption_key=$(if [[ -f "${SECRETS_FILE}" ]]; then grep -oP '^AUTOBOT_ENCRYPTION_KEY=\K.+' "${SECRETS_FILE}" || true; else openssl rand -hex 32; fi)  # #19864: new installs only; a reinstall keeps what it has
         secret_key=$(openssl rand -hex 32) encryption_key=$(openssl rand -hex 32) hmac_api_key_secret=$(grep -oP '^SLM_HMAC_API_KEY_SECRET=\K.+' "${SECRETS_FILE}" 2>/dev/null | head -1 || true); hmac_api_key_secret=${hmac_api_key_secret:-$(openssl rand -hex 32)}  # #16299, #19120: a reinstall keeps an existing pepper
         # Issue #2758: detect the machine's primary outbound IP so that
         # SLM_EXTERNAL_URL is set correctly and not left to the Python fallback.
@@ -665,6 +666,7 @@ INVENTORY
         (umask 077; cat > "${SECRETS_FILE}") << EOF  # created 0600, never briefly world-readable under the tree's 022
 SLM_SECRET_KEY=${secret_key}
 SLM_ENCRYPTION_KEY=${encryption_key}
+AUTOBOT_ENCRYPTION_KEY=${autobot_encryption_key}
 SLM_HMAC_API_KEY_SECRET=${hmac_api_key_secret}
 SLM_ADMIN_PASSWORD=${ADMIN_PASSWORD}
 SLM_EXTERNAL_URL=https://${local_ip}
@@ -683,10 +685,7 @@ EOF
         local local_ip network_subnet network_gateway
         local_ip="$(detect_local_ip)"
         detect_network
-        # Upsert each key: replace the line if it exists, append if missing.
-        # Plain sed s/// silently does nothing when the key is absent — which
-        # causes SLM_HOST / NETWORK_* to stay missing on secrets files written
-        # before those keys were introduced (#3194).
+        # Upsert, as plain sed s/// does nothing on a file written before the key existed (#3194).
         _upsert_secrets_key() {
             local key="$1" value="$2" file="$3"
             if grep -q "^${key}=" "${file}"; then
