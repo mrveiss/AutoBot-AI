@@ -152,7 +152,7 @@ logged.
 | `--branch=BRANCH` | Git branch to install (default: `main`) |
 | `--admin-pass-file=PATH` | Read the SLM admin password from the first line of PATH (auto-generated if not set). The file must be non-empty and mode `600` or tighter (`chmod 600 PATH`), or the installer refuses it. `--admin-pass=` is refused: a command-line argument is readable by every local user (#19236). |
 | `--ip=IP` | Override the auto-detected IP address (multi-interface hosts) |
-| `--rotate-secrets` | On reinstall, replace the existing SLM admin password. By default a reinstall keeps the password set in the wizard and ignores `--admin-pass=` |
+| `--rotate-secrets` | On reinstall, replace the existing SLM admin password. By default a reinstall keeps the password set in the wizard and ignores `--admin-pass-file=` |
 | `--help`, `-h` | Show help |
 
 Environment variables skip the matching interactive prompt:
