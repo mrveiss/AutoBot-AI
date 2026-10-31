@@ -17,7 +17,10 @@ import { backendClient } from '@/testing/mockAutobotBackendClient'
 vi.mock('@/utils/ApiClient', async (importOriginal) =>
   (await import('@/testing/mockAutobotBackendClient')).withMockedBackendClient(importOriginal),
 )
-vi.mock('@/config/ssot-config', () => ({ getBackendUrl: () => '/autobot-api' }))
+vi.mock('@/config/ssot-config', () => ({
+  getBackendUrl: () => '/autobot-api',
+  getEnvPositiveInt: (_key: string, fallback: number) => fallback,
+}))
 
 import {
   useWebResearchAdminApi,
