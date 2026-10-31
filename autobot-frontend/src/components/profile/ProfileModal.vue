@@ -351,7 +351,8 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 }
 
 .tab-btn .icon {
-  font-size: var(--text-sm);
+  width: var(--text-sm);
+  height: var(--text-sm);
 }
 
 .profile-section {
