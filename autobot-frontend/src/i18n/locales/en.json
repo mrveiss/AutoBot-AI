@@ -8301,6 +8301,8 @@
     "roleChangeForbidden": "You are not allowed to make that role change.",
     "roleChangeLastOwner": "A company must keep an owner.",
     "roleChangeError": "Failed to change the role.",
+    "roleNotGrantable": "Your role in this company does not allow changing this role.",
+    "addNotAllowed": "Your role in this company does not allow adding members.",
     "usersLoadError": "Failed to load users.",
     "role": {
       "owner": "Owner",

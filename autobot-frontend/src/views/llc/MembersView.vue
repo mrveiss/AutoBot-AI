@@ -13,9 +13,11 @@
 
   A member's role changes in place via PATCH /members/{user_id} (#19960). The
   server owns the rules (membership_policy.py): it answers 403 / 409 and the row
-  reverts. The viewer's own company role is not available to this view (the user
-  store's id is a username, the member rows carry UUIDs), so the control stays
-  enabled and the server decides.
+  reverts. The list also carries the roles the viewer may grant (#20073), computed
+  by the server from the verified caller; the control is disabled for a member the
+  viewer may not change and the roles they may not grant are not offered. That only
+  reflects the server, which still refuses what the viewer may not do. Loading and
+  role changes are scoped to the company shown: see useCompanyMembers.
 -->
 <template>
   <div class="members-view">
@@ -54,13 +56,22 @@
             class="members-select members-role-select"
             :aria-label="t('llcMembers.changeRole', { name: row.display_name })"
             :value="row.role"
-            :disabled="pendingUserId !== null"
-            @change="changeRole(row as unknown as Member, $event)"
+            :disabled="pendingUserId !== null || !canChangeRole(grantableRoles, String(row.role))"
+            :aria-describedby="canChangeRole(grantableRoles, String(row.role)) ? undefined : hintId(row)"
+            @change="onRoleChange(row as unknown as Member, $event)"
           >
-            <option v-for="role in MEMBERSHIP_ROLES" :key="role" :value="role">
+            <option
+              v-for="role in MEMBERSHIP_ROLES"
+              :key="role"
+              :value="role"
+              :disabled="!canGrantRole(grantableRoles, role, String(row.role))"
+            >
               {{ roleLabel(role) }}
             </option>
           </select>
+          <span v-if="!canChangeRole(grantableRoles, String(row.role))" :id="hintId(row)" class="sr-only">
+            {{ t('llcMembers.roleNotGrantable') }}
+          </span>
         </template>
         <template #actions="{ row }">
           <BaseButton
@@ -111,11 +122,12 @@
           <label class="members-label" for="member-role-select">
             {{ t('llcMembers.roleLabel') }}
           </label>
-          <select id="member-role-select" v-model="roleModel" class="members-select">
-            <option v-for="role in MEMBERSHIP_ROLES" :key="role" :value="role">
+          <select id="member-role-select" v-model="roleModel" class="members-select" :disabled="!canAdd">
+            <option v-for="role in addRoleOptions" :key="role" :value="role">
               {{ roleLabel(role) }}
             </option>
           </select>
+          <p v-if="!canAdd" class="members-hint">{{ t('llcMembers.addNotAllowed') }}</p>
         </div>
       </div>
 
@@ -126,7 +138,7 @@
         <BaseButton
           variant="primary"
           :loading="isAdding"
-          :disabled="!selectedUserId || isAdding"
+          :disabled="!selectedUserId || isAdding || !canAdd"
           @click="submitAdd"
         >
           {{ t('llcMembers.confirmAdd') }}
@@ -143,19 +155,13 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
+import { useCompanyMembers, canChangeRole, canGrantRole, rolesToOffer, type Member } from '@/composables/llc/useCompanyMembers'
 import { useCollaborationInvite } from '@/composables/collaboration/useCollaborationInvite'
 import { BaseAlert, BaseBadge, BaseButton, BaseCard, BaseModal, BaseTable, type BaseTableColumn } from '@autobot/ui'
 
 // Backend MembershipRole enum (autobot-backend/llc/models/enums.py).
 const MEMBERSHIP_ROLES = ['owner', 'admin', 'member', 'guest', 'lead'] as const
 type MembershipRole = (typeof MEMBERSHIP_ROLES)[number]
-
-interface Member {
-  user_id: string
-  /** Never null: `list_members` resolves the whole ladder server-side (#14939). */
-  display_name: string
-  role: string
-}
 
 const logger = createLogger('MembersView')
 const api = useApiClient()
@@ -165,7 +171,8 @@ const { t } = useI18n()
 const props = defineProps<{ companyId?: string }>()
 const companyId = computed(() => (route.params.companyId as string) ?? props.companyId ?? '')
 
-const members = ref<Member[]>([])
+const { members, grantableRoles, standingKnown, isLoading, errorMessage, pendingUserId, load: fetchMembers, changeRole, removeMember } =
+  useCompanyMembers(api, () => companyId.value)
 // BaseTable rows are plain records; Member carries no index signature.
 const rows = computed(() => members.value.map((m) => ({ ...m })))
 const columns = computed<BaseTableColumn[]>(() => [
@@ -173,9 +180,6 @@ const columns = computed<BaseTableColumn[]>(() => [
   { key: 'role', label: t('llcMembers.colRole') },
   { key: 'role_control', label: t('llcMembers.colChangeRole') },
 ])
-const isLoading = ref(false)
-const errorMessage = ref('')
-const pendingUserId = ref<string | null>(null)
 
 const showAddModal = ref(false)
 const selectedUserId = ref('')
@@ -230,24 +234,15 @@ function roleBadgeVariant(role: string): 'primary' | 'success' | 'warning' | 'ne
   }
 }
 
-async function fetchMembers(): Promise<void> {
-  if (!companyId.value) return
-  isLoading.value = true
-  errorMessage.value = ''
-  try {
-    members.value = await api.get<Member[]>(`/api/llc/companies/${companyId.value}/members`)
-  } catch (err) {
-    logger.error('Failed to load members', err)
-    errorMessage.value = t('llcMembers.loadError')
-    members.value = []
-  } finally {
-    isLoading.value = false
-  }
-}
+// The add form offers what the server would let the viewer grant (an empty company has no standing: all).
+const addRoleOptions = computed(() => rolesToOffer(MEMBERSHIP_ROLES, grantableRoles.value, standingKnown.value))
+const canAdd = computed(() => addRoleOptions.value.length > 0)
+const hintId = (row: Record<string, unknown>) => `members-role-hint-${String(row.user_id)}`
 
 function openAddModal(): void {
   selectedUserId.value = ''
-  selectedRole.value = 'member'
+  const offered = addRoleOptions.value
+  selectedRole.value = offered.includes('member') ? 'member' : (offered[0] ?? 'member')
   addError.value = ''
   showAddModal.value = true
   if (users.value.length === 0) {
@@ -268,54 +263,23 @@ async function submitAdd(): Promise<void> {
     await fetchMembers()
   } catch (err) {
     logger.error('Failed to add member', err)
-    addError.value = t('llcMembers.addError')
+    addError.value = (err as { status?: number })?.status === 403 ? t('llcMembers.roleChangeForbidden') : t('llcMembers.addError')
   } finally {
     isAdding.value = false
   }
 }
 
 async function confirmRemove(member: Member): Promise<void> {
-  const name = member.display_name
-  if (!window.confirm(t('llcMembers.confirmRemove', { name }))) return
-  pendingUserId.value = member.user_id
-  errorMessage.value = ''
-  try {
-    await api.delete(`/api/llc/companies/${companyId.value}/members/${member.user_id}`)
-    await fetchMembers()
-  } catch (err) {
-    logger.error('Failed to remove member', err)
-    errorMessage.value = t('llcMembers.removeError')
-  } finally {
-    pendingUserId.value = null
-  }
+  if (!window.confirm(t('llcMembers.confirmRemove', { name: member.display_name }))) return
+  await removeMember(member)
 }
 
-function roleChangeMessage(err: unknown): string {
-  const status = (err as { status?: number })?.status
-  if (status === 403) return t('llcMembers.roleChangeForbidden')
-  if (status === 409) return t('llcMembers.roleChangeLastOwner')
-  return t('llcMembers.roleChangeError')
-}
-
-// PATCH the role; the row only changes once the server accepts it, and a
-// refusal puts the select back on the role the row still has.
-async function changeRole(member: Member, event: Event): Promise<void> {
+// A refusal puts the select back on the role the row still has.
+async function onRoleChange(member: Member, event: Event): Promise<void> {
   const select = event.target as HTMLSelectElement
   const newRole = select.value
   if (newRole === member.role || !isMembershipRole(newRole)) return
-  pendingUserId.value = member.user_id
-  errorMessage.value = ''
-  try {
-    await api.patch(`/api/llc/companies/${companyId.value}/members/${member.user_id}`, { role: newRole })
-    const row = members.value.find((m) => m.user_id === member.user_id)
-    if (row) row.role = newRole
-  } catch (err) {
-    logger.error('Failed to change member role', err)
-    errorMessage.value = roleChangeMessage(err)
-    select.value = member.role
-  } finally {
-    pendingUserId.value = null
-  }
+  if (!(await changeRole(member, newRole))) select.value = member.role
 }
 
 // Surface a picker-load failure inline within the modal.
