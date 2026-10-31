@@ -126,6 +126,7 @@ describe('step rollup on the cost dashboard (#14599)', () => {
     // No total, and no joined currency list standing in for one.
     expect(amounts.text()).not.toContain('800')
     expect(amounts.text()).not.toContain('EUR / USD')
+    expect(amounts.text()).not.toContain('null')
   })
 
   it('renders a single-currency bucket as one figure with its currency', async () => {
