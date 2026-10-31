@@ -94,7 +94,7 @@ def _production_files(root: Path) -> list[str]:
 REACH = declare(
     "kb-admin-read-bypass",
     discover=_production_files,
-    floor=2911,  # re-pinned mid-window (train 48): population 2929, window [2729, 2929]
+    floor=2992,  # re-pinned mid-window (train 48): population 2929, window [2729, 2929]
     growth=200,
     skips=0,
     # The scope moves from prose to data (#17844): `declare` renders the same sentence from

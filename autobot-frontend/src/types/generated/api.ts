@@ -67589,9 +67589,7 @@ export interface components {
              */
             uploaded_at: string;
             /** Uploaded By */
-            uploaded_by: string;
-            /** File Path */
-            file_path: string;
+            uploaded_by?: string | null;
             /** Extension */
             extension?: string | null;
         } & {
