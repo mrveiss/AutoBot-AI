@@ -50,7 +50,7 @@
         <BaseSwitch v-model="heartbeatEnabled" :label="t('hireAgent.runOnHeartbeat')" data-testid="hire-heartbeat" />
       </div>
 
-      <p v-if="pending" class="form-notice" role="status" data-testid="hire-pending">{{ t('hireAgent.pendingApproval') }}</p>
+      <BaseAlert v-if="pending" variant="info" :message="t('hireAgent.pendingApproval')" data-testid="hire-pending" />
       <p v-if="error" class="form-error">{{ error }}</p>
     </form>
 
@@ -67,7 +67,7 @@
 import { ref } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import { BaseModal, BaseSwitch, BaseButton } from '@autobot/ui'
+import { BaseAlert, BaseModal, BaseSwitch, BaseButton } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 import AdapterTypeSelect from './AdapterTypeSelect.vue'
 const { t } = useI18n()
@@ -95,7 +95,7 @@ async function submit(): Promise<void> {
   submitting.value = true
   error.value = ''
   try {
-    const result = await api.post<{ status?: string }>(`/api/llc/companies/${props.companyId}/agent-hires`, {
+    const result = await api.post(`/api/llc/companies/${props.companyId}/agent-hires`, {
       agent_name: agentName.value,
       org_role: orgRole.value,
       model: model.value,
@@ -124,12 +124,6 @@ async function submit(): Promise<void> {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-}
-
-.form-notice {
-  margin: 0;
-  font-size: 0.8125rem;
-  color: var(--autobot-text-secondary, inherit);
 }
 
 .field {
