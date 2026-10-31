@@ -139,3 +139,18 @@ env_registry.register_env_var(
         component="voice",
     )
 )
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_TRIGGER_SECRET_AUDIT_SCHEDULE",
+        type=str,
+        default="25 * * * *",
+        description=(
+            "5-field cron ('m h dom mon dow') for the audit that proposes a human review of webhook "
+            "trigger secrets still stored in plaintext (#19759). It files at most one pending "
+            "approval per set of trigger ids and rewrites nothing. A malformed value falls back "
+            "to the daily 03:00 UTC schedule with a warning."
+        ),
+        component="orchestrator",
+    )
+)

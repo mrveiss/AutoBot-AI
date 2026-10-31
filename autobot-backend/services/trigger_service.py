@@ -46,7 +46,7 @@ from autobot_shared.time_utils import now_utc
 from autobot_shared.webhook_signature import verify_webhook_signature
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_90_DAYS
-from services.trigger_secrets import SECRET_PREFIX, decode_stored_secret, encrypt_secret
+from services.trigger_secrets import SECRET_PREFIX, decode_stored_secret, discard_secret, encrypt_secret, store_secret
 
 logger = get_logger(__name__)
 
@@ -327,18 +327,23 @@ class TriggerService:
             created_at=now,
         )
 
-        await self._persist_trigger(tdef)
+        # Secret first, then the trigger: a failure at either step leaves neither (#19759).
+        redis = get_redis_client(database="workflows")
+        if encrypted_secret:
+            store_secret(redis, trigger_id, encrypted_secret, _TRIGGER_TTL_SECONDS)
+        try:
+            await self._persist_trigger(tdef)
+        except Exception:
+            discard_secret(redis, trigger_id)
+            raise
+        if secret:
+            self._webhook_secrets[trigger_id] = secret
         logger.info(
             "Trigger registered: id=%s type=%s workflow=%s",
             trigger_id,
             config.trigger_type.value,
             config.workflow_id,
         )
-
-        # Generate HMAC secret for webhook triggers
-        if secret:
-            self._webhook_secrets[trigger_id] = secret
-            await self._store_webhook_secret(trigger_id, encrypted_secret)
 
         # Start background task for non-webhook triggers if service is running
         if self._running and config.enabled and config.trigger_type != TriggerType.WEBHOOK:
@@ -775,22 +780,6 @@ class TriggerService:
             redis.delete(f"{_SECRET_PREFIX}{trigger_id}")
         except Exception as exc:
             logger.error("_delete_trigger %s failed: %s", trigger_id, exc)
-
-    async def _store_webhook_secret(self, trigger_id: str, stored: str) -> None:
-        """Persist the already-encrypted HMAC secret (see ``encrypt_secret``).
-
-        Callers encrypt first so a Redis dump never exposes raw HMAC signing keys
-        and an unavailable encryption service refuses the write (#19759).
-        """
-        try:
-            redis = get_redis_client(database="workflows")
-            redis.setex(
-                f"{_SECRET_PREFIX}{trigger_id}",
-                _TRIGGER_TTL_SECONDS,
-                stored,
-            )
-        except Exception as exc:
-            logger.warning("_store_webhook_secret failed for %s: %s", trigger_id, exc)
 
     async def _get_webhook_secret(self, trigger_id: str) -> str | None:
         """Retrieve HMAC secret; prefer in-memory cache, fall back to Redis."""
