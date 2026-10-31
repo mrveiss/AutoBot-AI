@@ -108,7 +108,7 @@ import Icon from '@/components/ui/Icon.vue'
 import AgentAbstentionBadge from './AgentAbstentionBadge.vue'
 import liveEventService from '@/services/LiveEventService'
 import type { AgentTask } from '@/types/models'
-import { formatDuration } from '@/utils/formatHelpers'
+import { formatDuration, createDateFormatter } from '@/utils/formatHelpers'
 
 /**
  * Agent Task Detail Component (GH#6626)
@@ -184,9 +184,7 @@ const statusLabel = computed(() => {
   return props.task.status.charAt(0).toUpperCase() + props.task.status.slice(1)
 })
 
-const formatDate = (dateStr: string): string => {
-  return new Date(dateStr).toLocaleString()
-}
+const formatDate = createDateFormatter()
 
 const DURATION_OPTIONS = { style: 'msCompound' } as const
 </script>
