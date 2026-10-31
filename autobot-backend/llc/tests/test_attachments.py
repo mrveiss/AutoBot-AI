@@ -205,7 +205,13 @@ async def test_delete_removes_file(tmp_path: Path):
 
     row = _make_row(storage_path=str(fake_file))
     session = _make_session(scalar_one_or_none=row)
-    session.add = MagicMock()
+    enqueued = []
+    session.add = enqueued.append
+    session.add_all = enqueued.extend
+    # The drain claims what the delete enqueued; a real session returns those rows.
+    session.execute = AsyncMock(
+        side_effect=lambda *_a, **_k: MagicMock(scalars=lambda: MagicMock(all=lambda: list(enqueued)))
+    )
 
     # #19756: the outbox only unlinks inside the storage root, so the root is the tmp dir.
     with (
