@@ -918,9 +918,15 @@ async function executePlaybookMigration(): Promise<void> {
 // Lifecycle
 // =============================================================================
 
+const REFRESH_READS = ['fleetServices', 'fleetStatus', 'serviceDefinitions', 'nodes', 'roles', 'fleetHealth']
+
+// A loader that catches its own failure resolves null/false (or rejects); only a real result is a success
+const readSucceeded = (r: PromiseSettledResult<unknown>): boolean =>
+  r.status === 'fulfilled' && r.value !== null && r.value !== false
+
 async function refresh(): Promise<boolean> {
   try {
-    // Use Promise.allSettled to continue even if some calls fail
+    // allSettled so one failed read does not stop the others
     const results = await Promise.allSettled([
       orchestration.fetchFleetServices(),
       orchestration.fetchFleetStatus(),
@@ -929,15 +935,9 @@ async function refresh(): Promise<boolean> {
       roles.fetchRoles(),
       roles.fetchFleetHealth(),
     ])
-
-    // Log any failures for debugging
-    results.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        const names = ['fleetServices', 'fleetStatus', 'serviceDefinitions', 'nodes', 'roles', 'fleetHealth']
-        logger.warn(`Failed to fetch ${names[index]}:`, result.reason)
-      }
-    })
-    return results.some((result) => result.status === 'fulfilled')
+    const failed = REFRESH_READS.filter((_, i) => !readSucceeded(results[i]))
+    if (failed.length) logger.warn(`Failed to fetch: ${failed.join(', ')}`)
+    return failed.length < results.length
   } catch (err) {
     logger.error('Unexpected error during refresh:', err)
     return false
