@@ -32,7 +32,7 @@
 
           <!-- Loading State -->
           <div v-if="loading" class="picker-loading">
-            <Icon name="spinner" class="animate-spin" />
+            <BaseSpinner size="sm" />
             <p>Loading templates...</p>
           </div>
 
@@ -114,7 +114,7 @@
                   class="btn-apply"
                   :disabled="submitting"
                 >
-                  <Icon v-if="submitting" name="spinner" class="animate-spin" />
+                  <BaseSpinner v-if="submitting" size="sm" />
                   {{ submitting ? 'Applying...' : 'Apply Template' }}
                 </button>
               </div>
@@ -127,6 +127,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseSpinner } from '@autobot/ui'
 import { ref, onMounted, computed, type Ref } from 'vue'
 import Icon from '@/components/ui/Icon.vue'
 import { useMCPResources, type MCPPromptTemplate } from '@/composables/useMCPResources'
@@ -535,18 +536,5 @@ async function applyTemplate() {
 .btn-apply:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-}
-
-.animate-spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
 }
 </style>
