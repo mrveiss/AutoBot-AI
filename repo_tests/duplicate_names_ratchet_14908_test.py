@@ -47,15 +47,10 @@ _SKIPPED_DIRS = {"node_modules", "dist"}
 # agent-ledger rows and the permission rule into the kit (one declaration, both apps import it) and
 # renamed the different-concept names (Agent, CacheStats, WebResearchSettings, the plugin audit row,
 # the TLS upload body). 2 left, each stated in TYPE_EXCEPTIONS with its reason.
-PINS = {"type_names_in_both_apps": 2, "type_names_in_app_and_kit": 2, "util_filenames_in_both_apps": 1}
+PINS = {"type_names_in_both_apps": 1, "type_names_in_app_and_kit": 2, "util_filenames_in_both_apps": 1}
 
 # Stated exceptions: a type name declared in both apps until the audit-entry shape is fixed once.
 TYPE_EXCEPTIONS = {
-    "AuditLogEntry": (
-        "one backend row (`AuditEntry.to_response_dict`, GET /audit/logs); the SLM copy matches it, the main copy "
-        "(composables/useSecretsAuditApi.ts) types timestamp as a string and reads a `metadata` the backend does not "
-        "send; unifying changes how SecretAuditLog.vue reads the row, so it lands with that component's fix"
-    ),
     "AuditQueryResponse": (
         "one backend envelope (`AuditQueryResponse`, entries are untyped dicts so no generated row type exists); the "
         "main copy (types/audit.ts) is typed on the main `AuditEntry` (timestamp string, error_message, user_agent), "
