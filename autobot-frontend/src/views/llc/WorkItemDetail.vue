@@ -296,8 +296,9 @@ const origDesc = ref('')
 const saveError = ref<string | null>(null)
 
 const {
-  comments, artifacts, activity, handoffBrief, hasMoreComments, loading, failed, addPostedComment, fetchComments,
-  fetchArtifacts, fetchActivity, fetchHandoffBrief } = useWorkItemPanels(api, () => props.item.id)
+  comments, artifacts, activity, handoffBrief, hasMoreComments, loading, failed, addPostedComment,
+  fetchComments, fetchArtifacts, fetchActivity, fetchHandoffBrief,
+} = useWorkItemPanels(api, () => props.item.id)
 const goalAncestry = ref<GoalAncestor[]>([])
 const newComment = ref('')
 const isPosting = ref(false)

@@ -51,9 +51,9 @@ describe('item changes while a load is in flight', () => {
     expect(calls[1].url).toBe('/api/llc/work-items/A/comments?offset=2')
     id.value = 'B'
     await tick()
-    calls[1].resolve({ comments: [c('a3')], has_more: true })
-    await tick()
     calls[2].resolve({ comments: [c('b1')], has_more: true })
+    await tick()
+    calls[1].resolve({ comments: [c('a3')], has_more: true })
     await tick()
     expect(p.comments.value.map((x) => x.id)).toEqual(['b1'])
     p.fetchComments(true)
