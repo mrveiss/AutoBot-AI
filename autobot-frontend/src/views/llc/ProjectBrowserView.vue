@@ -431,7 +431,7 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import { formatDate as fmtDate } from '@/utils/formatHelpers'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import { useClipboard } from '@/composables/useClipboard'
 import Icon from '@/components/ui/Icon.vue'
 import LlcBreadcrumb, { type BreadcrumbItem } from '@/components/llc/LlcBreadcrumb.vue'
@@ -615,9 +615,7 @@ const breadcrumb = computed<BreadcrumbItem[]>(() => [
   { label: t('llcBrowser.projects.title') },
 ])
 
-function formatDate(value: string | null): string {
-  return fmtDate(value) || '—'
-}
+const formatDate = createDateFormatter({ kind: 'date', emptyText: '—', invalidText: '—' })
 
 async function loadProjects(): Promise<void> {
   loading.value = true
