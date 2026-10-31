@@ -458,7 +458,7 @@ function formatStatus(status: string): string {
 }
 
 .no-data-content .icon {
-  font-size: var(--text-3xl);
+  width: var(--text-3xl); height: var(--text-3xl);
   color: var(--color-info);
 }
 
@@ -624,7 +624,7 @@ function formatStatus(status: string): string {
 }
 
 .loading-spinner .icon {
-  font-size: var(--text-3xl);
+  width: var(--text-3xl); height: var(--text-3xl);
 }
 
 @media (max-width: 640px) {
