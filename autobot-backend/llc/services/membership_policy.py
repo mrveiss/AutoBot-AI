@@ -10,7 +10,7 @@ is always in control, and a superadmin can assign ``owner`` and ``admin``.
 - A platform admin may make any change, in a company it is not a member of,
   including one with no owner left.
 - An owner may change any role.
-- An admin may change ``admin``, ``member`` and ``viewer``, never an ``owner``.
+- An admin may change ``admin``, ``member``, ``guest`` and ``lead``, never an ``owner``.
 - Anyone else may change nothing.
 - The last owner cannot be removed or demoted, except by a platform admin.
 """
@@ -25,9 +25,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.enums import MembershipRole
 from ..models.membership import LLCCompanyMembership
-from .authz import NotAuthorisedError, require_company_admin
+from .authz import GRANTING_ROLES, NotAuthorisedError, require_company_admin
 
 _OWNER = MembershipRole.OWNER.value
+
+
+def grantable_roles(actor_role: Optional[str], *, platform_admin: bool) -> list[str]:
+    """The roles the actor may grant or revoke, as :func:`authorize_member_change` decides them.
+
+    For a client to reflect, not to enforce: the server re-checks every change. Uses the same
+    rules, so the two cannot drift. ``MembershipRole`` is owner, admin, member, guest and lead.
+    """
+    everyone = [role.value for role in MembershipRole]
+    if platform_admin or actor_role == _OWNER:
+        return everyone
+    if actor_role in GRANTING_ROLES:
+        return [role for role in everyone if role != _OWNER]
+    return []
 
 
 class LastOwnerError(Exception):
