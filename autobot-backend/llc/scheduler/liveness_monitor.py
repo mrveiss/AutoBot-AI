@@ -15,13 +15,13 @@ For each stuck run:
   6. Writes an activity log entry
 """
 
-import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.redis_utils import delete_if_value
 from user_management.database import get_async_session_factory
@@ -33,7 +33,7 @@ from ..services.activity_log import LLCActivityLogService
 from ..services.work_item_service import WorkItemService
 from .base import PollLoopScheduler
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _DEFAULT_TIMEOUT_MINUTES = 30
 _POLL_INTERVAL_SECONDS = 60
