@@ -356,7 +356,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/workflow_automation/executor.py": 1104,
     "autobot-backend/services/workflow_export_test.py": 611,
     "autobot-backend/services/workflow_io.py": 693,
-    "autobot-backend/slash_command_handler.py": 1663,
+    "autobot-backend/slash_command_handler.py": 1662,
     "autobot-backend/takeover_manager.py": 1364,
     "autobot-backend/tasks/knowledge_tasks.py": 862,
     "autobot-backend/tests/agents/test_librarian_assistant_extract.py": 635,
