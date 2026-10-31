@@ -2757,7 +2757,7 @@ function runContextMenuAction(action: CanvasContextMenuAction): void {
 }
 
 .empty-state { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); text-align: center; padding: var(--spacing-10); }
-.empty-state .icon { font-size: var(--text-5xl); color: var(--text-muted); margin-bottom: var(--spacing-4); }
+.empty-state > .icon { width: var(--text-5xl); height: var(--text-5xl); color: var(--text-muted); margin-bottom: var(--spacing-4); }
 .empty-state h3 { margin: var(--spacing-0) var(--spacing-0) var(--spacing-2); color: var(--text-primary); }
 .empty-state p { margin: var(--spacing-0) var(--spacing-0) var(--spacing-5); color: var(--text-tertiary); }
 
