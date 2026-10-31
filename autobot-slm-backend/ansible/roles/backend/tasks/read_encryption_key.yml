@@ -1,0 +1,30 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# #19864: the ONE home of the backend's encryption key read, included by every render of
+# backend.env.j2. A render that skipped it would drop the key from the env, leaving what was
+# encrypted with it unreadable. An install whose secrets file has no key stays without one.
+---
+- name: "Backend | Read AUTOBOT_ENCRYPTION_KEY from slm-secrets.env (#19864)"
+  ansible.builtin.shell:
+    cmd: >-
+      grep -oP '^\s*(export\s+)?AUTOBOT_ENCRYPTION_KEY=\K.+' /etc/autobot/slm-secrets.env 2>/dev/null || true
+  register: _backend_encryption_key_read
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  no_log: true
+  tags: ['backend', 'config', 'env']
+
+# The same line shapes read_secrets_root_key.yml accepts: an `export ` prefix, a quoted value.
+- name: "Backend | Use the encryption key from slm-secrets.env (#19864)"
+  ansible.builtin.set_fact:
+    autobot_encryption_key: "{{ _backend_encryption_key_value }}"
+  vars:
+    _backend_encryption_key_value: >-
+      {{ _backend_encryption_key_read.stdout | default('') | trim | regex_replace('^[\x22\x27]|[\x22\x27]$', '') }}
+  when: _backend_encryption_key_value | length > 0
+  no_log: true
+  tags: ['backend', 'config', 'env']
