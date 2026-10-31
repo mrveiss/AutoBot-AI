@@ -254,6 +254,14 @@ export class ApiClient extends ApiClientBase<RequestOptions> {
     return appConfig.getTimeout('upload');
   }
 
+  // Uploads go through XHR, which has no shared header path. The routes the main app uploads to
+  // (e.g. /conversation-files/.../upload, gated by check_admin_permission) accept only an
+  // Authorization bearer, X-Session-ID or the internal key, never a cookie, so send the bearer (#19983).
+  protected authorizeUpload(xhr: XMLHttpRequest): void {
+    const token = this.getAuthToken();
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+  }
+
   // Raw Response access (streaming, blobs); `circuitBreaker` opts in to fail-fast (#11682).
   async rawRequest(endpoint: string, options: RawRequestOptions<RequestOptions> = {}): Promise<Response> {
     const key = options.circuitBreaker;
