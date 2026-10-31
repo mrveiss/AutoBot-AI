@@ -227,6 +227,9 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "autobot-backend/knowledge/vector_search_engine.py",
         "_CPUBackend.search",
     ): "IMPL: the KB's own CPU backend calling its vector primitive",
+    ("autobot-backend/knowledge_sync_replacement.py", "_delete_one"): (
+        "NOT_USER_FACING: the sync reads a fact it is replacing, to check it is untouched before deleting it"
+    ),
     ("autobot-backend/mcp_server/autobot_server.py", "AutoBotMCPServer._kb_get_document"): _MCP_NON_PRIVATE,
     ("autobot-backend/mcp_server/autobot_server.py", "AutoBotMCPServer._kb_search"): _MCP_NON_PRIVATE,
     ("autobot-backend/npu_semantic_search.py", "NPUSemanticSearch._handle_search_error"): _T2,

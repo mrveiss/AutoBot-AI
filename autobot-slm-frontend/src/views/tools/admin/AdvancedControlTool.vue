@@ -33,6 +33,7 @@ import {
   type AdvancedControlSessionAction,
 } from '@/composables/useAutobotApi'
 import { createLogger } from '@/utils/debugUtils'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { t } = useI18n()
 const logger = createLogger('AdvancedControlTool')
@@ -176,11 +177,7 @@ async function onSessionAction(sessionId: string, action: AdvancedControlSession
 function yesNo(v: boolean | undefined): string {
   return v ? t('tools.admin.advancedControlTool.yes') : t('tools.admin.advancedControlTool.no')
 }
-function formatTime(iso: string | undefined): string {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString()
-}
+const formatTime = createDateFormatter({ emptyText: '—' })
 function badgeClass(status: string | undefined): string {
   if (status === 'active' || status === 'approved') return 'bg-green-100 text-green-700'
   if (status === 'paused') return 'bg-yellow-100 text-yellow-700'
