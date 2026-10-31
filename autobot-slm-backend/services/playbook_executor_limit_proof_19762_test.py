@@ -41,7 +41,7 @@ def _run(tmp_path: Path, monkeypatch, output: str) -> dict:
     (tmp_path / "update-all-nodes.yml").write_text("- hosts: all\n", encoding="utf-8")
     executor = playbook_executor.PlaybookExecutor(ansible_dir=tmp_path)
     monkeypatch.setattr(executor, "_refresh_ansible_dir", lambda: None)
-    monkeypatch.setattr(executor, "_update_code_source", AsyncMock(return_value=True))
+    monkeypatch.setattr(executor, "_update_code_source", AsyncMock(return_value=None))
     monkeypatch.setattr(executor, "_code_source_sync_failure_result", lambda *_a: None)
     monkeypatch.setattr(executor, "_select_inventory", AsyncMock(return_value=(tmp_path / "inventory", None)))
     monkeypatch.setattr(executor, "_stage_extra_vars", lambda *_a: None)

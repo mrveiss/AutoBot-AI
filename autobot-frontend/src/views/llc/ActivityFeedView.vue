@@ -73,7 +73,7 @@
           <span class="event-entity">{{ entry.entity_type }}<span class="event-entity-id" :title="entry.entity_id">#{{ shortId(entry.entity_id) }}</span></span>
           <span v-if="actorName(entry)" class="event-actor-name">· {{ actorName(entry) }}</span>
         </div>
-        <time class="event-time" :title="formatDateTime(entry.occurred_at)">{{ formatTimeAgo(entry.occurred_at) }}</time>
+        <time class="event-time" :title="formatDateTime(entry.occurred_at)">{{ timeAgo(entry.occurred_at) }}</time>
       </li>
     </ul>
 
@@ -92,11 +92,11 @@
 </template>
 
 <script setup lang="ts">
-import { BaseButton } from '@autobot/ui'
+import { BaseButton, formatRelativeTime } from '@autobot/ui'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import { formatDateTime, formatTimeAgo } from '@/utils/formatHelpers'
+import { formatDateTime } from '@/utils/formatHelpers'
 import type { components } from '@/types/generated/api'
 import { useI18n } from 'vue-i18n'
 
@@ -104,7 +104,8 @@ const props = defineProps<{ companyId?: string }>()
 
 const logger = createLogger('ActivityFeedView')
 const api = useApiClient()
-const { t } = useI18n()
+const { t, locale } = useI18n()
+const timeAgo = (at: string) => formatRelativeTime(at, { locale: locale.value })
 
 // No backend push stream exists; poll at a fixed cadence when auto-refresh is on.
 const POLL_INTERVAL_MS = 15000
