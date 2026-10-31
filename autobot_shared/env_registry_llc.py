@@ -108,6 +108,23 @@ env_registry.register_env_var(
 
 env_registry.register_env_var(
     env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_SCHEDULE_RECONCILE_INTERVAL_SECONDS",
+        type=float,
+        default=60.0,
+        description=(
+            "Seconds between passes that put a heartbeat-enabled agent or an active routine "
+            "back on the heartbeat schedule when it is missing (#20117). A pass is the longest "
+            "a member lost between a poller's claim and its re-add stays lost; each restore is "
+            "logged. Agents that are paused, terminated or heartbeat-disabled, and routines that "
+            "are not active, are left off. Floored at 5 seconds, because each pass reads the "
+            "agent and routine tables."
+        ),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
         name="AUTOBOT_LLC_DISPOSAL_EXECUTION_WINDOW_DAYS",
         type=float,
         default=7.0,
