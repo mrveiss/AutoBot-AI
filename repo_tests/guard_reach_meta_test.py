@@ -43,6 +43,7 @@ Four boundaries a reader should not have to discover:
 
 THE GRANDFATHERED LIST SHRINKS ONLY, AND FAILS IN BOTH DIRECTIONS
 -----------------------------------------------------------------
+Growth is judged against the base commit's list (#19704); a stale entry by the sweep.
 An unrecorded *shrink* is as much a defect as growth: if a guard gains a floor
 and nobody removes its entry, the list silently permits the next guard to lose
 one. Same shape as an allowance the scanner has stopped reporting.
@@ -60,13 +61,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pytest  # noqa: E402
 from repo_tests._guard_reach_census import (  # noqa: E402
     _ENUMERATOR,
-    _EXEMPT_BASELINE,
     _EXEMPT_NON_SCANNING,
     MIN_GUARDS_EXAMINED,
     _examined_with,
     _tracked_guards,
 )
 from repo_tests._paths import repo_root  # noqa: E402
+from repo_tests._ratchet_base import base_table  # noqa: E402
 
 #: WHAT THIS MODULE CHECKS, AND WHAT IT DOES NOT (#16154).
 #:
@@ -91,6 +92,9 @@ from repo_tests._paths import repo_root  # noqa: E402
 #: naming a raising `discover` as the cause rather than letting a bare traceback
 #: read as a broken guard.
 
+_THIS_FILE = "repo_tests/guard_reach_meta_test.py"
+_CENSUS_FILE = "repo_tests/_guard_reach_census.py"
+
 #: Tree-scanning `*_test.py` guards with no floor of any kind, frozen so a NEW
 #: one fails. May only shrink, and a shrink must be recorded here.
 GRANDFATHERED = frozenset(
@@ -101,21 +105,6 @@ GRANDFATHERED = frozenset(
         # detector. Recorded here rather than fixed in the same change, so the
         # enumerator widening is reviewable on its own -- the alternative is a
         # diff where a detector change and a guard change explain each other.
-        "repo_tests/promtool_rules_test.py",
-        "repo_tests/workflow_planner_deprecation_test.py",
-    }
-)
-
-#: GRANDFATHERED as last recorded -- a mirrored second copy (#16147 AC4), the
-#: two-copy shape the file-size ratchet had until #19544 replaced its copy with a
-#: base-commit check (``_ratchet_base``). The staleness
-#: test forces removals; without this copy, ADDING an entry to GRANDFATHERED
-#: silences a new unfloored guard and no test fails. Growing the list now takes
-#: editing both sets -- a recorded decision a reviewer sees -- and a shrink is
-#: mirrored here too, so a removed entry cannot quietly come back.
-_GRANDFATHERED_BASELINE = frozenset(
-    {
-        "repo_tests/fixture_fixed_path_teardown_guard_gating_test.py",
         "repo_tests/promtool_rules_test.py",
         "repo_tests/workflow_planner_deprecation_test.py",
     }
@@ -394,31 +383,25 @@ def test_the_grandfathered_list_has_not_gone_stale() -> None:
     ), "GRANDFATHERED entries that now have a floor -- remove them, the list only shrinks:\n  " + "\n  ".join(stale)
 
 
-def _grown(current: frozenset[str]) -> list[str]:
-    return sorted(current - _GRANDFATHERED_BASELINE)
+def _grown(current: frozenset[str], base: frozenset[str]) -> list[str]:
+    return sorted(current - base)
 
 
 def test_the_grandfathered_list_never_grows_silently() -> None:
-    """#16147 AC4: the list only shrinks, and it is compared as a SET.
+    """#16147 AC4: compared as a SET against the base commit, which refuses to judge if unreadable (#19704).
 
-    A count would pass one entry swapped for another; the set difference in each
-    direction is the assertion worth making (RATCHET_BASELINES.md, rule 4).
+    A count would pass one entry swapped for another (RATCHET_BASELINES.md, rule 4).
     """
-    grown = _grown(GRANDFATHERED)
+    grown = _grown(GRANDFATHERED, base_table(repo_root(), (_THIS_FILE,), "GRANDFATHERED"))
     assert not grown, (
-        "GRANDFATHERED gained entries missing from _GRANDFATHERED_BASELINE -- a new "
-        "tree-scanning guard needs a floor, not an exemption:\n  " + "\n  ".join(grown)
-    )
-    unmirrored = sorted(_GRANDFATHERED_BASELINE - GRANDFATHERED)
-    assert not unmirrored, (
-        "entries removed from GRANDFATHERED but not from _GRANDFATHERED_BASELINE -- mirror "
-        "the shrink, or a removed exemption can quietly return:\n  " + "\n  ".join(unmirrored)
+        "GRANDFATHERED gained entries against the base commit -- a new tree-scanning guard "
+        "needs a floor, not an exemption:\n  " + "\n  ".join(grown)
     )
 
 
 def test_the_growth_check_finds_an_added_entry() -> None:
     """Known positive (rule 6): the check must see an addition before its silence means anything."""
-    assert _grown(GRANDFATHERED | {"repo_tests/planted_unfloored_guard_test.py"}) == [
+    assert _grown(GRANDFATHERED | {"repo_tests/planted_unfloored_guard_test.py"}, GRANDFATHERED) == [
         "repo_tests/planted_unfloored_guard_test.py"
     ]
 
@@ -536,17 +519,12 @@ def test_the_non_scanning_exemptions_still_match_the_enumerator() -> None:
 
 
 def test_the_exemption_list_only_shrinks() -> None:
-    """Same #16147 AC4 shape as GRANDFATHERED: two copies, compared as SETS in both directions."""
-    grown = sorted(_EXEMPT_NON_SCANNING - _EXEMPT_BASELINE)
+    """Same #16147 AC4 shape as GRANDFATHERED: a SET against the base commit (#19704)."""
+    base = base_table(repo_root(), (_CENSUS_FILE,), "_EXEMPT_NON_SCANNING")
+    grown = _grown(_EXEMPT_NON_SCANNING, base)
     assert not grown, (
-        "_EXEMPT_NON_SCANNING gained entries missing from _EXEMPT_BASELINE -- a member that "
-        "matches the enumerator and scans nothing needs resolving by binding, not exempting on "
-        "sight:\n  " + "\n  ".join(grown)
-    )
-    unmirrored = sorted(_EXEMPT_BASELINE - _EXEMPT_NON_SCANNING)
-    assert not unmirrored, (
-        "entries removed from _EXEMPT_NON_SCANNING but not from _EXEMPT_BASELINE -- mirror the "
-        "shrink, or a removed exemption can quietly return:\n  " + "\n  ".join(unmirrored)
+        "_EXEMPT_NON_SCANNING gained entries against the base commit -- a member that matches "
+        "the enumerator and scans nothing needs resolving by binding, not exempting on sight:\n  " + "\n  ".join(grown)
     )
 
 

@@ -311,9 +311,9 @@
         </div>
         <h3>{{ $t('workflow.views.failedToLoad') }}</h3>
         <p>{{ error }}</p>
-        <button @click="refreshAll" class="btn-primary">
+        <BaseButton size="sm" @click="refreshAll">
           <Icon name="redo" /> {{ $t('workflow.views.retry') }}
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Content Sections -->
@@ -484,14 +484,13 @@
               </div>
 
               <div class="nl-actions">
-                <button
-                  class="btn-primary"
+                <BaseButton size="sm"
                   @click="createFromNaturalLanguage"
                   :disabled="!naturalLanguageInput.trim() || executingWorkflow"
                 >
                   <Icon name="wand-magic-sparkles" />
                   {{ executingWorkflow ? $t('workflow.views.creating') : $t('workflow.views.createWorkflow') }}
-                </button>
+                </BaseButton>
               </div>
             </div>
 
@@ -527,12 +526,12 @@
               </div>
 
               <div class="approval-actions">
-                <button class="btn-success" @click="handleApprovePlan">
+                <BaseButton variant="success" size="sm" @click="handleApprovePlan">
                   <Icon name="check" /> {{ $t('workflow.views.approveAndRun') }}
-                </button>
-                <button class="btn-danger" @click="handleRejectPlan">
+                </BaseButton>
+                <BaseButton variant="error" size="sm" @click="handleRejectPlan">
                   <Icon name="times" /> {{ $t('workflow.views.reject') }}
-                </button>
+                </BaseButton>
               </div>
             </div>
           </div>
@@ -695,7 +694,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { workflowIdFromQuery } from '@/composables/workflow/workflowDeepLink';
 import { useI18n } from 'vue-i18n';
-import { BaseBadge, RiskBadge } from '@autobot/ui';
+import { BaseBadge, RiskBadge, BaseButton } from '@autobot/ui';
 import { createLogger } from '@/utils/debugUtils';
 import { useNotificationBus } from '@/composables/useNotificationBus';
 import {
@@ -2017,7 +2016,6 @@ watch(hasActiveWorkflows, (hasActive) => {
   color: var(--text-primary);
 }
 
-
 .step-command {
   display: block;
   padding: var(--spacing-2);
@@ -2174,70 +2172,6 @@ watch(hasActiveWorkflows, (hasActive) => {
   color: var(--text-primary);
   min-width: 40px;
   text-align: right;
-}
-
-/* Buttons */
-.btn-primary {
-  padding: var(--spacing-2-5) var(--spacing-5);
-  background: var(--color-primary);
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-2);
-  transition: all var(--duration-200);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-primary-hover);
-}
-
-.btn-primary:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-success {
-  padding: var(--spacing-2-5) var(--spacing-5);
-  background: var(--color-success);
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  transition: all var(--duration-200);
-}
-
-.btn-success:hover {
-  filter: brightness(1.1);
-}
-
-.btn-danger {
-  padding: var(--spacing-2-5) var(--spacing-5);
-  background: var(--color-error-solid);
-  color: var(--text-on-primary);
-  border: none;
-  border-radius: var(--radius-lg);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  transition: all var(--duration-200);
-}
-
-.btn-danger:hover {
-  filter: brightness(1.1);
 }
 
 /* Responsive */
