@@ -179,6 +179,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import { formatRelativeTime as formatRelativeMoment } from '@autobot/ui'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { useFetchEndpoint } from '@/composables/api/useFetchEndpoint'
 import { useSourcesListEndpoint } from '@/composables/analytics/useSourcesListEndpoint'
@@ -188,7 +189,7 @@ import AddSourceModal from '@/components/analytics/AddSourceModal.vue'
 
 const logger = createLogger('CodebaseAnalyticsLanding')
 const router = useRouter()
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const { confirm } = useConfirmDialog()
 
 // ---- Types ----------------------------------------------------------------
@@ -283,15 +284,9 @@ function openProject(sourceId: string) {
 // ---- Display Helpers ------------------------------------------------------
 
 function formatRelativeTime(isoString: string): string {
-  const now = Date.now()
-  const then = new Date(isoString).getTime()
-  const diffMs = now - then
-  const diffMins = Math.floor(diffMs / 60000)
-  if (diffMins < 1) return t('common.justNow', 'just now')
-  if (diffMins < 60) return t('common.timeAgo.minutes', { n: diffMins })
-  const diffHours = Math.floor(diffMins / 60)
-  if (diffHours < 24) return t('common.timeAgo.hours', { n: diffHours })
-  return t('common.timeAgo.days', { n: Math.floor(diffHours / 24) })
+  const diffMs = Date.now() - new Date(isoString).getTime()
+  if (diffMs < 60000) return t('common.justNow', 'just now')
+  return formatRelativeMoment(isoString, { locale: locale.value, style: 'narrow', maxUnit: 'day' })
 }
 
 function getStatusIcon(status: string): IconName {
