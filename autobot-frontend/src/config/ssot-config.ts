@@ -68,6 +68,7 @@ export interface VMConfig {
 export interface PortConfig {
   backend: number;
   frontend: number;
+  frontendServed: number;  // nginx's port on a nginx host, else the dev port (#20058)
   redis: number;
   ollama: number;
   vnc: number;
@@ -90,8 +91,7 @@ export interface PortConfig {
  * OpenAPI response), so `src/config/__tests__/ssot-parity.spec.ts` parses the
  * Python source and asserts this table still matches it (#13074).
  *
- * Exported as a runtime value (not inlined into the `getEnvNumber` calls) so
- * that parity test has something env-independent to compare against.
+ * A runtime value, so that parity test has something env-independent to compare.
  */
 export const PORT_DEFAULTS = {
   backend: 8001,
@@ -408,10 +408,10 @@ function buildConfig(): AutoBotConfig {
     slm:      getEnv('VITE_SLM_HOST', ''),  // intentionally empty — slmUrl guards this
   };
 
-  // Service ports
   const port: PortConfig = {
     backend: getEnvNumber('VITE_BACKEND_PORT', PORT_DEFAULTS.backend),
     frontend: getEnvNumber('VITE_FRONTEND_PORT', PORT_DEFAULTS.frontend),
+    frontendServed: getEnvNumber('VITE_FRONTEND_SERVED_PORT', getEnvNumber('VITE_FRONTEND_PORT', PORT_DEFAULTS.frontend)),
     redis: getEnvNumber('VITE_REDIS_PORT', PORT_DEFAULTS.redis),
     ollama: getEnvNumber('VITE_OLLAMA_PORT', PORT_DEFAULTS.ollama),
     vnc: getEnvNumber('VITE_DESKTOP_VNC_PORT', PORT_DEFAULTS.vnc),
@@ -489,7 +489,7 @@ function buildConfig(): AutoBotConfig {
     },
 
     get frontendUrl(): string {
-      return `${runtimeHttpProto()}://${vm.frontend}:${port.frontend}`;
+      return `${runtimeHttpProto()}://${vm.frontend}:${port.frontendServed}`;
     },
 
     get ollamaUrl(): string {
