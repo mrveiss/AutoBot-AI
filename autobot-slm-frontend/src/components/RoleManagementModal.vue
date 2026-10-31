@@ -16,7 +16,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { BaseModal, BaseButton } from '@autobot/ui'
 import { useRoles, type NodeRolesInfo } from '@/composables/useRoles'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 
 const props = defineProps<{
   nodeId: string
@@ -135,9 +135,6 @@ function getStatusClass(status: string): string {
   }
 }
 
-function formatDate(dateStr: string | null): string {
-  return formatDateTime(dateStr)
-}
 </script>
 
 <template>
@@ -198,7 +195,7 @@ function formatDate(dateStr: string | null): string {
                 </span>
               </td>
               <td>{{ role.current_version?.slice(0, 12) || '-' }}</td>
-              <td>{{ formatDate(role.last_synced_at) }}</td>
+              <td>{{ formatFleetDateTime(role.last_synced_at) }}</td>
               <td class="actions">
                 <BaseButton size="sm"
                   :disabled="isSyncing"
