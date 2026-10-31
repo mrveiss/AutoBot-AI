@@ -232,6 +232,7 @@ import { useShowMore } from '@autobot/ui'
 import TruncationNotice from '../TruncationNotice.vue'
 import { useExpansion } from '@/composables/useExpansion'
 import Icon from '@/components/ui/Icon.vue'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 interface ApiEndpointInfo {
   path: string
@@ -288,14 +289,7 @@ function getCoverageClass(percentage: number): string {
   return 'success'
 }
 
-function formatTimestamp(timestamp: string | number | Date | undefined): string {
-  if (!timestamp) return 'Unknown'
-  try {
-    return new Date(timestamp).toLocaleString()
-  } catch {
-    return String(timestamp)
-  }
-}
+const formatTimestamp = createDateFormatter({ emptyText: 'Unknown' })
 </script>
 
 <style scoped src="@/design-system/styles/panel-api-cross-shared.css"></style>

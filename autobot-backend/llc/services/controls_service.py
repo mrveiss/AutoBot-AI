@@ -52,7 +52,7 @@ class AgentNotSchedulableError(Exception):
 
 #: Statuses no heartbeat may wake: the terminal pair ``llc/api/replay.py`` rejects,
 #: and the one migration 090 writes for a node that is not a company's CEO.
-_NEVER_SCHEDULED_STATUSES = frozenset({LLCAgentStatus.INACTIVE.value, LLCAgentStatus.TERMINATED.value})
+NEVER_SCHEDULED_STATUSES = frozenset({LLCAgentStatus.INACTIVE.value, LLCAgentStatus.TERMINATED.value})
 
 
 def _agent_in_company(company_id: str, agent_id: str) -> tuple:
@@ -250,7 +250,7 @@ class ControlsService:
         row = await self._get_heartbeat_row(session, company_id, agent_id)
         if row is None:
             raise AgentNotFoundError(agent_id)
-        if enabled and row["status"] in _NEVER_SCHEDULED_STATUSES:
+        if enabled and row["status"] in NEVER_SCHEDULED_STATUSES:
             raise AgentNotSchedulableError(agent_id, row["status"])
 
         cron = row["heartbeat_cron"] or (default_cron if enabled else None)
