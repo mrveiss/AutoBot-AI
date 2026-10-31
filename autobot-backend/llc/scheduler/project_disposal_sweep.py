@@ -19,12 +19,12 @@ The schedule is registered in celery_app.py so that beat picks it up.
 """
 
 import asyncio
-import logging
 from datetime import datetime, timezone
 
 from celery import shared_task
 from sqlalchemy import or_, select
 
+from autobot_shared.logging_manager import get_logger
 from llc.models.enums import ApprovalStatus
 from llc.models.sprint import LLCProject
 from llc.services.project_disposal import dispose
@@ -37,7 +37,7 @@ from utils.celery_reliability import (
     DeadLetterTask,
 )
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 # #11586: transient errors (ConnectionError/TimeoutError/OSError) retry with
