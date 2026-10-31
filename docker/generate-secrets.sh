@@ -111,6 +111,12 @@ ensure_secret() {
 }
 
 echo "Writing secrets to ${SECRETS_FILE}"
+# #19864: new installs only. Losing this key makes everything encrypted with it unreadable, so an
+# existing deployment opts in by setting it here rather than having a re-run switch it on.
+# First of all: a run stopped part-way leaves a non-empty file, which reads as existing on the rerun.
+if [ "$NEW_INSTALL" = true ]; then
+    ensure_secret AUTOBOT_ENCRYPTION_KEY
+fi
 ensure_secret AUTOBOT_JWT_SECRET
 ensure_secret SECRET_KEY
 # The canonical envelope secret store is unreachable without this, and every
@@ -120,11 +126,6 @@ ensure_secret AUTOBOT_SECRETS_ROOT_KEY b64_32
 # default. Hex, because the DB password is interpolated into SLM_DATABASE_URL
 # and must need no URL escaping.
 ensure_secret AUTOBOT_DB_PASSWORD
-# #19864: new installs only. Losing this key makes everything encrypted with it unreadable, so an
-# existing deployment opts in by setting it here rather than having a re-run switch it on.
-if [ "$NEW_INSTALL" = true ]; then
-    ensure_secret AUTOBOT_ENCRYPTION_KEY
-fi
 ensure_secret GRAFANA_ADMIN_PASSWORD
 # #18729: the main app seeds its first admin from this on first start; without it a
 # fresh Docker install has no account to log in with. Read it back from this file.
