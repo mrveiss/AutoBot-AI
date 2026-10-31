@@ -28,6 +28,9 @@
     - name: Read the encryption key (#19864)
       ansible.builtin.include_tasks: ../roles/backend/tasks/read_encryption_key.yml
 
+    - name: Resolve the models for this model server (#19731)
+      ansible.builtin.include_tasks: ../roles/backend/tasks/resolve_models.yml
+
   tasks:
     - name: Create backend directories if they don't exist
       ansible.builtin.file:
