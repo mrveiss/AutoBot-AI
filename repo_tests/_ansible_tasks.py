@@ -31,6 +31,8 @@ import pytest
 import yaml
 from repo_tests._paths import repo_root
 
+from tools.lint._comment_syntax import code_text
+
 
 def load_tasks(path: Path) -> list[dict]:
     """The task list at `path`, or a failure naming what moved."""
@@ -115,7 +117,7 @@ def ansible_yaml_files(root: Path) -> list[Path]:
 
 def without_comment_lines(text: str) -> str:
     """*text* with its full-line YAML comments removed, so a comment never reads as a task."""
-    return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith("#"))
+    return code_text(text, name="tasks.yml")
 
 
 def _module_args(value: object) -> dict:
