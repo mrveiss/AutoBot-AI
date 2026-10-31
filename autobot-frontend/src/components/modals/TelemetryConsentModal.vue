@@ -186,7 +186,7 @@ async function updateConsent(enabled: boolean) {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 var(--spacing-sm) 0;
@@ -200,7 +200,7 @@ async function updateConsent(enabled: boolean) {
   margin: 0;
   padding-left: var(--spacing-lg);
   color: var(--text-secondary);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   line-height: 1.6;
 }
 
@@ -216,7 +216,7 @@ async function updateConsent(enabled: boolean) {
   background: var(--color-success-bg);
   border-left: 3px solid var(--color-success);
   border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   color: var(--text-primary);
 }
 
@@ -227,7 +227,7 @@ async function updateConsent(enabled: boolean) {
 }
 
 .consent-footer {
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   color: var(--text-secondary);
   text-align: center;
   margin: var(--spacing-sm) 0 0 0;

@@ -261,7 +261,7 @@ function handleReset() {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
   font-weight: 600;
   color: var(--text-primary);
   margin: var(--spacing-0);
@@ -280,7 +280,7 @@ function handleReset() {
   color: var(--text-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-sm);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
@@ -324,7 +324,7 @@ function handleReset() {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: 600;
   color: var(--text-primary);
   text-transform: uppercase;
@@ -332,8 +332,8 @@ function handleReset() {
 }
 
 .preference-label .icon {
-  width: var(--font-size-xs);
-  height: var(--font-size-xs);
+  width: var(--text-xs);
+  height: var(--text-xs);
   color: var(--text-tertiary);
 }
 
@@ -363,7 +363,7 @@ function handleReset() {
   color: var(--text-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
   font-weight: 500;
   cursor: pointer;
   transition: all var(--transition-fast);
@@ -453,7 +453,7 @@ function handleReset() {
 }
 
 .color-label {
-  font-size: var(--font-size-xs);
+  font-size: var(--text-xs);
   font-weight: 500;
   color: var(--text-secondary);
 }

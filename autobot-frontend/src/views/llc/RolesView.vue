@@ -866,7 +866,7 @@ onMounted(loadRoles)
 
 .roles-title {
   margin: 0;
-  font-size: var(--font-size-xl);
+  font-size: var(--text-xl);
   color: var(--text-primary);
 }
 
@@ -926,7 +926,7 @@ onMounted(loadRoles)
 
 .roles-detail-name {
   margin: 0;
-  font-size: var(--font-size-lg);
+  font-size: var(--text-lg);
   color: var(--text-primary);
 }
 
@@ -963,7 +963,7 @@ onMounted(loadRoles)
   background: var(--color-surface-hover);
   color: var(--text-primary);
   font-family: var(--font-family-mono, monospace);
-  font-size: var(--font-size-sm);
+  font-size: var(--text-sm);
 }
 
 .roles-chip-note {

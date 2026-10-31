@@ -381,8 +381,13 @@
   --font-sans: "Schibsted Grotesk", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
 
-  --text-xs: 0.75rem;  --text-sm: 0.875rem; --text-base: 1rem;
-  --text-lg: 1.125rem; --text-xl: 1.375rem; --text-2xl: 1.75rem;
+  /* Steps are multiplied by --font-scale so the font-size preference applies. */
+  --text-xs: calc(0.75rem * var(--font-scale));
+  --text-sm: calc(0.875rem * var(--font-scale));
+  --text-base: calc(1rem * var(--font-scale));
+  --text-lg: calc(1.125rem * var(--font-scale));
+  --text-xl: calc(1.375rem * var(--font-scale));
+  --text-2xl: calc(1.75rem * var(--font-scale));
   --leading-tight: 1.25; --leading-normal: 1.55;
   --weight-normal: 400; --weight-medium: 500; --weight-semibold: 600;
 
