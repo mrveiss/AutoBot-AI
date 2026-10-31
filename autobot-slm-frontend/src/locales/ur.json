@@ -1152,11 +1152,11 @@
     "editMaintenanceWindow": "Edit Maintenance Window",
     "editWindow": "Edit window",
     "endTime": "End Time",
-    "failedToActivateWindow": "Failed to activate maintenance window",
-    "failedToCompleteWindow": "Failed to complete maintenance window",
-    "failedToDeleteWindow": "Failed to delete maintenance window",
-    "failedToDrainNode": "Failed to drain node. Please try again.",
-    "failedToResumeNode": "Failed to resume node. Please try again.",
+    "failedToActivateWindow": "مینٹیننس ونڈو فعال کرنے میں ناکامی",
+    "failedToCompleteWindow": "مینٹیننس ونڈو مکمل کرنے میں ناکامی",
+    "failedToDeleteWindow": "مینٹیننس ونڈو حذف کرنے میں ناکامی",
+    "failedToDrainNode": "نوڈ کو خالی کرنے میں ناکامی۔ براہ کرم دوبارہ کوشش کریں۔",
+    "failedToResumeNode": "نوڈ کو دوبارہ شروع کرنے میں ناکامی۔ براہ کرم دوبارہ کوشش کریں۔",
     "fleetWideMaintenance": "Fleet-Wide Maintenance",
     "leaveEmptyForFleet": "Leave empty for fleet-wide maintenance",
     "loadingMaintenanceWindows": "Loading maintenance windows...",
@@ -3343,8 +3343,8 @@
     "yourSLMServiceLifecycle": "Your SLM (Service Lifecycle Manager) is up and running. This wizard\n          will guide you through adding and configuring your fleet nodes.",
     "provisioningFailed": "Provisioning failed",
     "retryProvisioning": "Retry provisioning",
-    "failedToSaveKeys": "Failed to save API keys. Check the console for details.",
-    "failedToAddNode": "Failed to add node"
+    "failedToSaveKeys": "API کیز محفوظ کرنے میں ناکامی۔ تفصیلات کے لیے کنسول دیکھیں۔",
+    "failedToAddNode": "نوڈ شامل کرنے میں ناکامی"
   },
   "skills": {
     "approvalsTab": {

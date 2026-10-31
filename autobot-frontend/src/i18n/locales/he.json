@@ -8100,6 +8100,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "הפעלת חלון התחזוקה נכשלה",
+      "completeWindowFailed": "השלמת חלון התחזוקה נכשלה",
+      "deleteWindowFailed": "מחיקת חלון התחזוקה נכשלה",
+      "drainNodeFailed": "ריקון הצומת נכשל. נא לנסות שוב.",
+      "resumeNodeFailed": "חידוש הצומת נכשל. נא לנסות שוב.",
+      "saveKeysFailed": "שמירת מפתחות ה-API נכשלה. פרטים נוספים זמינים בקונסולה.",
+      "addNodeFailed": "הוספת הצומת נכשלה"
     }
   },
   "mobile": {

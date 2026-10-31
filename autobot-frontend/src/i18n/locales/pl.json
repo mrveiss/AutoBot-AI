@@ -8100,6 +8100,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "Nie udało się aktywować okna konserwacji",
+      "completeWindowFailed": "Nie udało się zakończyć okna konserwacji",
+      "deleteWindowFailed": "Nie udało się usunąć okna konserwacji",
+      "drainNodeFailed": "Nie udało się opróżnić węzła. Spróbuj ponownie.",
+      "resumeNodeFailed": "Nie udało się wznowić węzła. Spróbuj ponownie.",
+      "saveKeysFailed": "Nie udało się zapisać kluczy API. Szczegóły znajdziesz w konsoli.",
+      "addNodeFailed": "Nie udało się dodać węzła"
     }
   },
   "mobile": {
