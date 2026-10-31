@@ -279,7 +279,8 @@ defineExpose({ fetchAgentCosts })
 }
 
 .summary-card > .icon {
-  font-size: var(--text-xl);
+  width: var(--text-xl);
+  height: var(--text-xl);
   color: var(--color-primary);
   opacity: 0.8;
 }

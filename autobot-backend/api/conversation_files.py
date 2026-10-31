@@ -19,6 +19,7 @@ import aiofiles
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 
+from api.conversation_file_upload import validate_and_read_upload_file
 from api.files import get_security_layer
 from api.schemas_chat import (
     ConvFileInfoData,
@@ -50,23 +51,42 @@ from security.session_posture import SessionPosture
 from security.upload_filename_policy import ALLOWED_EXTENSIONS, is_safe_file  # noqa: F401 -- re-exported for tests
 from utils.catalog_http_exceptions import raise_internal_error, raise_invalid_input, raise_not_found
 
-router = APIRouter(
-    dependencies=[Depends(check_admin_permission)],
-)
+# Every route except the upload is admin-only (#20133). The upload sits on ``router`` itself and is
+# gated by ownership in ``_authorize_file_operation``; the rest hang off ``api_router`` and are
+# included into ``router`` at the foot of this module, so the registry still mounts one ``router``.
+router = APIRouter()
+api_router = APIRouter(dependencies=[Depends(check_admin_permission)])
 logger = get_logger(__name__)
 
 
-# Maximum file size (50MB) - consistent with general file API
-MAX_FILE_SIZE = 50 * 1024 * 1024
+#: Roles whose ownership of the conversation stands in for the global ``files.upload`` grant, on the
+#: upload route only (#20133). ``user`` lacks that grant by design; ``readonly`` and every unknown role
+#: stay refused, and roles that hold it (editor, admin, ...) are decided by RBAC as before.
+_OWNER_UPLOAD_ROLES = frozenset({"user"})
 
 
-async def _authorize_file_operation(request: Request, session_id: str, operation: str) -> dict:
-    """Authorize file operation and return user data (Issue #398: extracted)."""
+def _owner_may_upload(user_data: dict | None) -> bool:
+    return str(getattr(user_data.get("role"), "value", user_data.get("role"))).lower() in _OWNER_UPLOAD_ROLES
+
+
+async def _authorize_file_operation(
+    request: Request, session_id: str, operation: str, owner_upload: bool = False
+) -> dict:
+    """Authorize file operation and return user data (Issue #398: extracted).
+
+    ``owner_upload`` (the upload, which a ``user`` may call on a conversation they own): ownership
+    replaces the role grant for ``_OWNER_UPLOAD_ROLES``, and a session the ownership gate would create
+    on a write (``legacy_unowned``) is a 404 -- a caller names a conversation they own (#20133).
+    """
     has_permission, user_data = await get_auth_middleware().check_file_permissions(request, operation)
-    if not has_permission:
+    if user_data is None:  # no credential: the upload is no longer behind the admin gate's 401 (#20133)
+        raise HTTPException(status_code=401, detail="Authentication required")
+    if not has_permission and not (owner_upload and _owner_may_upload(user_data)):
         raise HTTPException(status_code=403, detail=f"Insufficient permissions for file {operation}")
     request.state.user = user_data
-    await validate_session_ownership(session_id, request, posture=SessionPosture.STRICT)
+    ownership = await validate_session_ownership(session_id, request, posture=SessionPosture.STRICT)
+    if owner_upload and ownership.get("reason") == "legacy_unowned":
+        raise HTTPException(status_code=404, detail="Chat session not found")
     return user_data
 
 
@@ -105,44 +125,6 @@ def get_conversation_file_manager(request: Request):
     return getattr(request.app.state, "conversation_file_manager", None)
 
 
-async def _validate_and_read_upload_file(
-    file: UploadFile,
-) -> bytes:
-    """
-    Validate and read uploaded file content.
-
-    Issue #281: Extracted from upload_conversation_file to reduce function
-    length and improve reusability of validation logic.
-
-    Args:
-        file: Uploaded file object
-
-    Returns:
-        File content as bytes
-
-    Raises:
-        HTTPException: If validation fails (400, 413)
-    """
-    # Validate filename
-    if not file.filename:
-        raise_invalid_input("filename", "required")
-
-    if not is_safe_file(file.filename):
-        raise_invalid_input("filename", f"file type not allowed: {file.filename}")
-
-    # Read file content
-    content = await file.read()
-
-    # Check file size
-    if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File too large. Maximum size: {MAX_FILE_SIZE // (1024*1024)}MB",
-        )
-
-    return content
-
-
 @router.post("/conversation/{session_id}/upload", response_model=FileUploadResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -157,8 +139,8 @@ async def upload_conversation_file(
 ):
     """Upload a file to a conversation session (Issue #398: refactored)."""
     try:
-        user_data = await _authorize_file_operation(request, session_id, "upload")
-        content = await _validate_and_read_upload_file(file)
+        user_data = await _authorize_file_operation(request, session_id, "upload", owner_upload=True)
+        content = await validate_and_read_upload_file(file)
         file_manager = _get_required_file_manager(request)
 
         file_info_dict = await file_manager.upload_file(
@@ -224,7 +206,7 @@ def _build_file_list_response(session_id: str, result: Dict, page: int, page_siz
     )
 
 
-@router.get("/conversation/{session_id}/list", response_model=ConversationFileListResponse)
+@api_router.get("/conversation/{session_id}/list", response_model=ConversationFileListResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="list_conversation_files",
@@ -308,7 +290,7 @@ def _build_download_response(file_info_dict: Dict, file_path: Path) -> FileRespo
     )
 
 
-@router.get("/conversation/{session_id}/download/{file_id}", response_model=None)
+@api_router.get("/conversation/{session_id}/download/{file_id}", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="download_conversation_file",
@@ -354,9 +336,7 @@ async def download_conversation_file(request: Request, session_id: str, file_id:
         raise_internal_error("Error downloading file")
 
 
-async def _generate_file_preview(
-    file_info: ConversationFileInfo,
-) -> tuple[str | None, str, bool]:
+async def _generate_file_preview(file_info: ConversationFileInfo, file_path: Path) -> tuple[str | None, str, bool]:
     """
     Generate preview content based on file type.
 
@@ -364,7 +344,8 @@ async def _generate_file_preview(
     Handles text file reading and image type detection for preview generation.
 
     Args:
-        file_info: File information including path and MIME type.
+        file_info: File information including MIME type.
+        file_path: On-disk location; server-side only, never in the response (#20133).
 
     Returns:
         Tuple of (preview_content, preview_type, preview_available).
@@ -372,7 +353,6 @@ async def _generate_file_preview(
         - preview_type: "text", "image", or "metadata_only"
         - preview_available: True if preview can be shown
     """
-    file_path = Path(file_info.file_path)
     preview_content = None
     preview_type = "metadata_only"
     preview_available = False
@@ -395,7 +375,7 @@ async def _generate_file_preview(
     return preview_content, preview_type, preview_available
 
 
-@router.get("/conversation/{session_id}/preview/{file_id}", response_model=ConversationFilePreviewResponse)
+@api_router.get("/conversation/{session_id}/preview/{file_id}", response_model=ConversationFilePreviewResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="preview_conversation_file",
@@ -447,7 +427,9 @@ async def preview_conversation_file(request: Request, session_id: str, file_id: 
         file_info = ConversationFileInfo(**file_info_dict)
 
         # Generate preview (Issue #665: use extracted helper)
-        preview_content, preview_type, preview_available = await _generate_file_preview(file_info)
+        preview_content, preview_type, preview_available = await _generate_file_preview(
+            file_info, Path(file_info_dict["file_path"])
+        )
 
         return ConversationFilePreviewResponse(
             file_info=file_info,
@@ -486,7 +468,7 @@ def _build_delete_response(session_id: str, file_id: str) -> JSONResponse:
     )
 
 
-@router.delete("/conversation/{session_id}/files/{file_id}", response_model=None)
+@api_router.delete("/conversation/{session_id}/files/{file_id}", response_model=None)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="delete_conversation_file",
@@ -530,7 +512,7 @@ async def delete_conversation_file(request: Request, session_id: str, file_id: s
         raise_internal_error("Error deleting file")
 
 
-@router.post("/conversation/{session_id}/transfer", response_model=FileTransferResponse)
+@api_router.post("/conversation/{session_id}/transfer", response_model=FileTransferResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="transfer_conversation_files",
@@ -587,7 +569,7 @@ async def transfer_conversation_files(request: Request, session_id: str, transfe
 # ============================================================
 
 
-@router.post("/conversation/{session_id}/files/create", response_model=DataResponse[ConvFileInfoData])
+@api_router.post("/conversation/{session_id}/files/create", response_model=DataResponse[ConvFileInfoData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="create_conversation_file",
@@ -628,7 +610,7 @@ async def create_conversation_file(request: Request, session_id: str, body: Conv
         raise_internal_error("Error creating file")
 
 
-@router.put("/conversation/{session_id}/files/{file_id}/rename", response_model=DataResponse[ConvFileOpData])
+@api_router.put("/conversation/{session_id}/files/{file_id}/rename", response_model=DataResponse[ConvFileOpData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="rename_conversation_file",
@@ -664,7 +646,7 @@ async def rename_conversation_file(request: Request, session_id: str, file_id: s
         raise_internal_error("Error renaming file")
 
 
-@router.get("/conversation/{session_id}/files/{file_id}/content", response_model=DataResponse[ConvFileOpData])
+@api_router.get("/conversation/{session_id}/files/{file_id}/content", response_model=DataResponse[ConvFileOpData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_file_content",
@@ -691,7 +673,7 @@ async def get_file_content(request: Request, session_id: str, file_id: str):
         raise_internal_error("Error reading file")
 
 
-@router.put("/conversation/{session_id}/files/{file_id}/content", response_model=DataResponse[ConvFileOpData])
+@api_router.put("/conversation/{session_id}/files/{file_id}/content", response_model=DataResponse[ConvFileOpData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="update_file_content",
@@ -726,7 +708,7 @@ async def update_file_content(request: Request, session_id: str, file_id: str, b
         raise_internal_error("Error updating file")
 
 
-@router.post("/conversation/{session_id}/files/{file_id}/copy", response_model=DataResponse[ConvFileInfoData])
+@api_router.post("/conversation/{session_id}/files/{file_id}/copy", response_model=DataResponse[ConvFileInfoData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="copy_conversation_file",
@@ -762,7 +744,7 @@ async def copy_conversation_file(request: Request, session_id: str, file_id: str
         raise_internal_error("Error copying file")
 
 
-@router.get("/conversation/{session_id}/files/search", response_model=DataResponse[ConvFileSearchData])
+@api_router.get("/conversation/{session_id}/files/search", response_model=DataResponse[ConvFileSearchData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="search_conversation_files",
@@ -785,7 +767,7 @@ async def search_conversation_files(request: Request, session_id: str, q: str = 
         raise_internal_error("Error searching files")
 
 
-@router.post("/conversation/{session_id}/generate", response_model=DataResponse[ConvFileInfoData])
+@api_router.post("/conversation/{session_id}/generate", response_model=DataResponse[ConvFileInfoData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="agent_generate_file",
@@ -901,7 +883,7 @@ SESSION_MCP_TOOLS = [
 ]
 
 
-@router.get("/conversation/{session_id}/mcp/tools", response_model=DataResponse[SessionMcpToolsData])
+@api_router.get("/conversation/{session_id}/mcp/tools", response_model=DataResponse[SessionMcpToolsData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="get_session_mcp_tools",
@@ -961,7 +943,7 @@ async def _dispatch_mcp_tool(file_manager, session_id: str, tool_name: str, args
     raise_invalid_input("tool_name", f"unknown tool: {tool_name}")
 
 
-@router.post("/conversation/{session_id}/mcp/call", response_model=DataResponse[SessionMcpCallData])
+@api_router.post("/conversation/{session_id}/mcp/call", response_model=DataResponse[SessionMcpCallData])
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
     operation="session_mcp_call_tool",
@@ -994,3 +976,6 @@ async def session_mcp_call_tool(request: Request, session_id: str, body: MCPTool
     except Exception as e:
         logger.error("Error in MCP tool call: %s", e)
         raise_internal_error("Error executing tool")
+
+
+router.include_router(api_router)

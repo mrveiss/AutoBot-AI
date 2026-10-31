@@ -25,7 +25,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/agent_loop/types.py": 669,
     "autobot-backend/agents/agent_orchestration/distributed_management.py": 649,
     "autobot-backend/agents/agent_orchestration/distributed_management_test.py": 731,
-    "autobot-backend/agents/agent_orchestration/routing.py": 681,
+    "autobot-backend/agents/agent_orchestration/routing.py": 649,
     "autobot-backend/agents/browser/captcha_solver.py": 663,
     "autobot-backend/agents/development_speedup_agent.py": 831,
     "autobot-backend/agents/graph_entity_extractor.py": 790,
@@ -85,7 +85,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 817,
     "autobot-backend/api/codebase_analytics/endpoints/report.py": 2262,
     "autobot-backend/api/codebase_analytics/endpoints/stats.py": 663,
-    "autobot-backend/api/conversation_files.py": 996,
+    "autobot-backend/api/conversation_files.py": 981,
     "autobot-backend/api/database_mcp.py": 1056,
     "autobot-backend/api/development_speedup.py": 611,
     "autobot-backend/api/enterprise_features.py": 700,
@@ -101,8 +101,8 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/knowledge_collections.py": 726,
     "autobot-backend/api/knowledge_connectors.py": 929,
     "autobot-backend/api/knowledge_maintenance.py": 1960,
-    "autobot-backend/api/knowledge_mcp.py": 1441,
-    "autobot-backend/api/knowledge_population.py": 1425,
+    "autobot-backend/api/knowledge_mcp.py": 1440,
+    "autobot-backend/api/knowledge_population.py": 1238,
     "autobot-backend/api/knowledge_search.py": 809,  # #16665: analytics endpoints moved out
     "autobot-backend/api/knowledge_search_aggregator.py": 950,  # #16665: doc-search moved out
     "autobot-backend/api/knowledge_tags.py": 887,
@@ -125,7 +125,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/schemas_analytics.py": 3533,
     "autobot-backend/api/schemas_chat.py": 702,
     "autobot-backend/api/schemas_code.py": 3257,
-    "autobot-backend/api/schemas_knowledge.py": 5120,
+    "autobot-backend/api/schemas_knowledge.py": 5119,
     "autobot-backend/api/schemas_system.py": 4176,  # #18734: log-forwarding schemas moved out (4345 -> 4176)
     "autobot-backend/api/schemas_workflows.py": 2824,
     "autobot-backend/api/secrets.py": 1172,  # #19476 one model_dump serialization (was 1178, #16444)
@@ -190,7 +190,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/context_aware_decision/decision_engine.py": 815,
     "autobot-backend/context_aware_decision/tests/test_counterfactual_reasoner.py": 663,
     "autobot-backend/context_window_manager.py": 626,
-    "autobot-backend/conversation_file_manager.py": 1277,
+    "autobot-backend/conversation_file_manager.py": 1220,
     "autobot-backend/conversation_file_manager_init_test.py": 729,
     "autobot-backend/desktop_streaming_manager.py": 1419,
     "autobot-backend/enterprise_feature_manager.py": 955,
@@ -234,13 +234,13 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/knowledge/tags.py": 834,
     "autobot-backend/knowledge_sync_incremental.py": 867,
     "autobot-backend/llc/adapters/tests/test_claude_code_adapter.py": 602,
-    "autobot-backend/llc/api/companies.py": 1671,
+    "autobot-backend/llc/api/companies.py": 1627,
     "autobot-backend/llc/api/roles.py": 713,
     "autobot-backend/llc/api/sprints.py": 1223,
     "autobot-backend/llc/api/work_items.py": 1303,  # #19582: comment wake moved into the service
-    "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 1023,  # #19582 (shared run finder)
+    "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 1019,  # #19582 (shared run finder)
     "autobot-backend/llc/services/template.py": 643,
-    "autobot-backend/llc/services/work_item_service.py": 1086,  # #19582: approval-category check moved out
+    "autobot-backend/llc/services/work_item_service.py": 1023,  # #20102: completion effects moved out
     "autobot-backend/llc/tests/conftest.py": 832,
     "autobot-backend/llc/tests/test_autobot_agent_adapter.py": 663,
     "autobot-backend/llc/tests/test_heartbeat_scheduler.py": 1042,
@@ -265,7 +265,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/middleware/audit_middleware.py": 659,
     "autobot-backend/middleware/extension_hooks_test.py": 802,
     "autobot-backend/migrations/versions/20260623_062_rbac_colon_to_dot_reconcile.py": 622,
-    "autobot-backend/modern_ai_integration.py": 1142,
+    "autobot-backend/modern_ai_integration.py": 1134,
     "autobot-backend/monitoring/alertmanager_webhook_test.py": 782,
     "autobot-backend/multimodal_processor/multimodal_integration_test.py": 633,
     "autobot-backend/multimodal_processor/processor.py": 774,
@@ -327,7 +327,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/graph_rag_service_test.py": 890,
     "autobot-backend/services/knowledge/autonomous_loop.py": 798,
     "autobot-backend/services/knowledge/code_indexer.py": 1176,
-    "autobot-backend/services/knowledge/doc_indexer.py": 1258,
+    "autobot-backend/services/knowledge/doc_indexer.py": 1247,
     "autobot-backend/services/knowledge/service.py": 849,  # train 48: #18935 merged onto #18945
     "autobot-backend/services/knowledge/test_autonomous_loop.py": 708,
     "autobot-backend/services/knowledge/test_doc_indexer.py": 1466,
@@ -356,7 +356,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/workflow_automation/executor.py": 1104,
     "autobot-backend/services/workflow_export_test.py": 611,
     "autobot-backend/services/workflow_io.py": 693,
-    "autobot-backend/slash_command_handler.py": 1663,
+    "autobot-backend/slash_command_handler.py": 1662,
     "autobot-backend/takeover_manager.py": 1364,
     "autobot-backend/tasks/knowledge_tasks.py": 862,
     "autobot-backend/tests/agents/test_librarian_assistant_extract.py": 635,
@@ -390,7 +390,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/tests/unit/chat_workflow/test_code_exec.py": 1093,
     "autobot-backend/tests/unit/knowledge/connectors/test_web_crawler.py": 655,
     "autobot-backend/tests/utils/gpu_optimization/test_gpu_detection.py": 718,
-    "autobot-backend/tools/tool_registry.py": 874,
+    "autobot-backend/tools/tool_registry.py": 809,
     "autobot-backend/utils/advanced_cache_manager.py": 1213,
     "autobot-backend/utils/claude_api_integration.py": 917,
     "autobot-backend/utils/error_catalog.py": 775,
@@ -442,7 +442,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-slm-backend/services/drift_checker.py": 838,
     "autobot-slm-backend/services/drift_checker_test.py": 1351,
     "autobot-slm-backend/services/inventory_builder.py": 710,
-    "autobot-slm-backend/services/playbook_executor.py": 1321,  # #17150: ansible_dir self-heal, re-detect before sync
+    "autobot-slm-backend/services/playbook_executor.py": 1309,  # #17150: ansible_dir self-heal, re-detect before sync
     "autobot-slm-backend/services/reconciler.py": 2193,
     # Not legacy debt: created after this guard existed (#14465/#14548). Tracked
     # as a live violation, not #5060 backlog -- see #14630.

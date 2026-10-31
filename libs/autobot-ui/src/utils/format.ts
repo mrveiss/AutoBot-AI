@@ -9,9 +9,20 @@
  * state itself and the formatting still lives here.
  *
  * The default texts ('—', 'Invalid', the unit names) are English fallbacks. A caller that
- * shows them to a user passes translated `nullText` / `invalidText` / `zeroText` / `units`.
+ * shows them to a user passes translated `nullText` / `invalidText` / `zeroText`, and for byte
+ * sizes `units`. Durations in the `msMinutesSeconds` style take translated `units`
+ * (`{ seconds, minutes }`); the other duration styles keep their fixed suffixes. No unit label
+ * comes from `Intl.DurationFormat`, so the output does not depend on the engine supporting it.
  */
 import type { DurationStyle } from './duration'
+
+/** Translated unit labels for the `msMinutesSeconds` style; each defaults to its English suffix. */
+export interface DurationUnitLabels {
+  /** Suffix after the seconds count (default `'s'`). */
+  seconds?: string
+  /** Suffix after the minutes count (default `'m'`). */
+  minutes?: string
+}
 
 /** Options for the numeric form of {@link formatDuration}. */
 export interface FormatDurationOptions {
@@ -23,6 +34,14 @@ export interface FormatDurationOptions {
   zeroText?: string
   /** Rounding for the top tier of `clock` / `msMinutes` styles and the seconds of `msMinutesSeconds` (default `'round'`). */
   rounding?: 'round' | 'floor'
+  /** Translated unit labels; only the `msMinutesSeconds` style reads them (default `'s'` / `'m'`). */
+  units?: DurationUnitLabels
+}
+
+function formatMinutesSeconds(secs: number, units: DurationUnitLabels = {}): string {
+  const s = units.seconds ?? 's'
+  const m = units.minutes ?? 'm'
+  return secs < 60 ? `${secs}${s}` : `${Math.floor(secs / 60)}${m} ${secs % 60}${s}`
 }
 
 function formatDurationValue(
@@ -63,7 +82,7 @@ function formatDurationValue(
     }
     case 'msMinutesSeconds': {
       const secs = Math.max(0, roundFn(value / 1000))
-      return secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`
+      return formatMinutesSeconds(secs, options.units)
     }
     case 'msCompound': {
       const secs = Math.max(0, Math.floor(value / 1000))
@@ -292,23 +311,54 @@ export function formatISOString(isoString: string | undefined | null): string {
   return toValidDate(isoString)?.toLocaleString() ?? isoString
 }
 
-/** Unit sizes in seconds, largest first, for {@link formatTimeAgo}. */
-const AGO_UNITS: ReadonlyArray<readonly [number, string]> = [
-  [31536000, 'years'],
-  [2592000, 'months'],
-  [604800, 'weeks'],
-  [86400, 'days'],
-  [3600, 'hours'],
-  [60, 'minutes']
+/** Units of {@link formatRelativeTime}, largest first, with their size in seconds. */
+const RELATIVE_UNITS: ReadonlyArray<readonly [Intl.RelativeTimeFormatUnit, number]> = [
+  ['year', 31536000],
+  ['month', 2592000],
+  ['week', 604800],
+  ['day', 86400],
+  ['hour', 3600],
+  ['minute', 60],
+  ['second', 1]
 ]
 
-/** Format a moment as English relative time (`2 hours ago`); `'unknown'` when invalid. */
+/** Options for {@link formatRelativeTime}. */
+export interface FormatRelativeTimeOptions {
+  /** BCP 47 locale; pass the app's current one (default: the browser's). */
+  locale?: string
+  /** `Intl.RelativeTimeFormat` style: `'long'` is `2 hours ago`, `'narrow'` is `2h ago` in English. */
+  style?: 'long' | 'short' | 'narrow'
+  /** The largest unit used; a longer span is counted in it (default `'year'`, `'day'` gives `45 days ago`). */
+  maxUnit?: Intl.RelativeTimeFormatUnit
+  /** Text for a missing or unparseable moment (default `'—'`). */
+  nullText?: string
+  /** The reference moment, as epoch milliseconds (default `Date.now()`); fixed in tests. */
+  now?: number
+}
+
+/**
+ * Format a moment relative to now with `Intl.RelativeTimeFormat` (`5 seconds ago`, `in 2 hours`),
+ * so the platform localises it. The unit is the largest whole one that fits, never above `maxUnit`.
+ */
+export function formatRelativeTime(timestamp: DateInput, options: FormatRelativeTimeOptions = {}): string {
+  const date = toValidDate(timestamp)
+  if (!date) return options.nullText ?? '—'
+  const seconds = Math.trunc((date.getTime() - (options.now ?? Date.now())) / 1000)
+  const ceiling = RELATIVE_UNITS.findIndex(([unit]) => unit === (options.maxUnit ?? 'year'))
+  const [unit, size] = RELATIVE_UNITS.slice(Math.max(ceiling, 0)).find(([, s]) => Math.abs(seconds) >= s) ?? RELATIVE_UNITS[6]
+  const formatter = new Intl.RelativeTimeFormat(options.locale, { numeric: 'always', style: options.style ?? 'long' })
+  const value = Math.trunc(seconds / size)
+  return formatter.format(value === 0 && seconds <= 0 ? -0 : value, unit) // -0 reads as past: 0 seconds ago
+}
+
+/**
+ * English `2 hours ago`, `'just now'` under a minute (or in the future), `'unknown'` when invalid.
+ * It is {@link formatRelativeTime} fixed to English; a caller that shows it to a user passes a locale there.
+ */
 export function formatTimeAgo(timestamp: Date | string | number): string {
   const date = toValidDate(timestamp)
   if (!date) return 'unknown'
-  const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
-  const unit = AGO_UNITS.find(([size]) => seconds >= size)
-  return unit ? `${Math.floor(seconds / unit[0])} ${unit[1]} ago` : 'just now'
+  return Date.now() - date.getTime() < 60000 ? 'just now' : formatRelativeTime(date, { locale: 'en' })
 }
 
 /** Options for {@link createDateFormatter}. */

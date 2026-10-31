@@ -145,6 +145,8 @@
       "value0Reports": "{value0} reports"
     },
     "processMonitorTab": {
+      "durationSeconds": "s",
+      "durationMinutes": "m",
       "actions": "Actions",
       "agentID": "Agent ID",
       "all": "All",
@@ -153,7 +155,7 @@
       "command": "الأمر",
       "completed": "مكتمل",
       "dismiss": "Dismiss",
-      "duration": "Duration",
+      "duration": "المدة",
       "eGOrchestrator": "e.g. orchestrator",
       "exit": "Exit",
       "failed": "فشل",
@@ -392,6 +394,7 @@
     "deleteSchedule": "Delete schedule \"{name}\"?"
   },
   "common": {
+    "zeroSize": "0 B",
     "codeSyncBadge": {},
     "roleReachesNoDeployPath": "Assigned, but nothing will deploy {roles}: the role reaches no ansible group and has no dedicated playbook. Add a group mapping or a playbook for it.",
     "sidebar": {
@@ -606,7 +609,7 @@
     "categoryApplicationDescription": "Backend API and frontend web servers",
     "categoryAiLabel": "AI/ML Services",
     "categoryAiDescription": "LLM inference and AI processing",
-    "categoryAutomationLabel": "Automation",
+    "categoryAutomationLabel": "أتمتة",
     "categoryAutomationDescription": "Browser automation and scripting",
     "categoryObservabilityLabel": "Observability",
     "categoryObservabilityDescription": "Monitoring and logging stack",
@@ -915,7 +918,7 @@
       "clear": "مسح",
       "clickCheckForUpdatesToScan": "Click \"Check for Updates\" to scan",
       "codeUpdateAvailable": "Code update available",
-      "duration": "Duration",
+      "duration": "المدة",
       "eventPlural": "event{plural}",
       "eventsWillAppearHereAsThey": "Events will appear here as they occur.",
       "installUpdates": "Install Updates",
@@ -1152,11 +1155,11 @@
     "editMaintenanceWindow": "Edit Maintenance Window",
     "editWindow": "Edit window",
     "endTime": "End Time",
-    "failedToActivateWindow": "Failed to activate maintenance window",
-    "failedToCompleteWindow": "Failed to complete maintenance window",
-    "failedToDeleteWindow": "Failed to delete maintenance window",
-    "failedToDrainNode": "Failed to drain node. Please try again.",
-    "failedToResumeNode": "Failed to resume node. Please try again.",
+    "failedToActivateWindow": "فشل تفعيل نافذة الصيانة",
+    "failedToCompleteWindow": "فشل إكمال نافذة الصيانة",
+    "failedToDeleteWindow": "فشل حذف نافذة الصيانة",
+    "failedToDrainNode": "فشل تفريغ العقدة. يرجى المحاولة مرة أخرى.",
+    "failedToResumeNode": "فشل استئناف العقدة. يرجى المحاولة مرة أخرى.",
     "fleetWideMaintenance": "Fleet-Wide Maintenance",
     "leaveEmptyForFleet": "Leave empty for fleet-wide maintenance",
     "loadingMaintenanceWindows": "Loading maintenance windows...",
@@ -1359,7 +1362,8 @@
       "showingCountOfCount2Entries": "Showing {count} of {count2} entries",
       "source": "Source:",
       "source1": "Source",
-      "time": "Time"
+      "time": "Time",
+      "loadError": "فشل تحميل السجلات: {error}"
     },
     "metricsDetailsView": {
       "activeWorkers": "Active Workers",
@@ -1682,7 +1686,7 @@
     "system": "النظام",
     "systemValue0": "System ({value0})",
     "systemdService": "Systemd Service",
-    "target": "الوجهة",
+    "target": "Target",
     "targetNode": "Target Node",
     "targetPath": "Target Path *",
     "targetPath2": "Target path:",
@@ -1707,7 +1711,7 @@
   "performance": {
     "alertRulesView": {
       "actions": "Actions",
-      "alertRules": "Alert Rules",
+      "alertRules": "قواعد التنبيه",
       "areYouSureYou": "هل أنت متأكد من رغبتك في الحذف",
       "cancel": "إلغاء",
       "condition": "Condition",
@@ -1738,7 +1742,7 @@
     },
     "performanceOverview": {
       "avgLatency": "Avg Latency",
-      "duration": "Duration",
+      "duration": "المدة",
       "errorRate": "Error Rate",
       "name": "الاسم",
       "noTraceDataAvailable": "No trace data available",
@@ -1789,7 +1793,7 @@
     },
     "tracingView": {
       "apply": "Apply",
-      "duration": "Duration",
+      "duration": "المدة",
       "failedToLoadSpan": "Failed to load span details",
       "first": "First",
       "last": "Last",
@@ -1819,7 +1823,13 @@
     "performanceSections": "Performance sections",
     "performanceSummary": "Performance summary",
     "refreshPerformanceData": "Refresh performance data",
-    "sLOCompliance": "SLO Compliance:"
+    "sLOCompliance": "SLO Compliance:",
+    "tabs": {
+      "alertRules": "قواعد التنبيه",
+      "overview": "نظرة عامة",
+      "slos": "أهداف مستوى الخدمة",
+      "traces": "التتبعات"
+    }
   },
   "redisServicePanel": {
     "actionFailed": "Failed to {action} Redis service",
@@ -2029,7 +2039,7 @@
     "sourcePathsCommaSeparated": "Source Paths (comma-separated)",
     "syncType": "Sync Type",
     "systemdService": "Systemd Service",
-    "target": "الوجهة",
+    "target": "Target",
     "targetNode": "Target Node *",
     "targetPath": "Target Path *",
     "times": "×",
@@ -3342,8 +3352,8 @@
     "yourSLMServiceLifecycle": "Your SLM (Service Lifecycle Manager) is up and running. This wizard\n          will guide you through adding and configuring your fleet nodes.",
     "provisioningFailed": "Provisioning failed",
     "retryProvisioning": "Retry provisioning",
-    "failedToSaveKeys": "Failed to save API keys. Check the console for details.",
-    "failedToAddNode": "Failed to add node"
+    "failedToSaveKeys": "فشل حفظ مفاتيح API. تحقق من وحدة التحكم للحصول على التفاصيل.",
+    "failedToAddNode": "فشلت إضافة العقدة"
   },
   "skills": {
     "approvalsTab": {
@@ -3578,7 +3588,7 @@
         "creating": "Creating...",
         "dataExport": "Data Export",
         "delete": "حذف",
-        "duration": "Duration",
+        "duration": "المدة",
         "enterJobName": "Enter job name",
         "failed": "فشل",
         "failedItems": "Failed Items",

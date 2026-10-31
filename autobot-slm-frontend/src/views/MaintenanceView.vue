@@ -10,7 +10,7 @@ import { useI18n } from 'vue-i18n'
 import { useFleetStore } from '@/stores/fleet'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { createLogger } from '@/utils/debugUtils'
-import { formatDateTime as formatDateTimeTz } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import type { MaintenanceWindow, MaintenanceWindowCreate } from '@/types/slm'
 const route = useRoute()
 const { t } = useI18n()
@@ -251,10 +251,6 @@ function formatDateTimeLocal(isoString: string): string {
   const offset = date.getTimezoneOffset()
   const localDate = new Date(date.getTime() - offset * 60 * 1000)
   return localDate.toISOString().slice(0, 16)
-}
-
-function formatDateTime(isoString: string): string {
-  return formatDateTimeTz(isoString)
 }
 
 function getStatusBadgeClass(status: string): string {
@@ -565,10 +561,10 @@ function getNodeName(nodeId: string | null): string {
                 <span class="text-sm text-gray-900">{{ getNodeName(window.node_id) }}</span>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ formatDateTime(window.start_time) }}
+                {{ formatFleetDateTime(window.start_time) }}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ formatDateTime(window.end_time) }}
+                {{ formatFleetDateTime(window.end_time) }}
               </td>
               <td class="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">
                 {{ window.reason || '-' }}

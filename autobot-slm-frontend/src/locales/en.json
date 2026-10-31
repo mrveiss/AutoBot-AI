@@ -145,6 +145,8 @@
       "value0Reports": "{value0} reports"
     },
     "processMonitorTab": {
+      "durationSeconds": "s",
+      "durationMinutes": "m",
       "actions": "Actions",
       "agentID": "Agent ID",
       "all": "All",
@@ -392,6 +394,7 @@
     "deleteSchedule": "Delete schedule \"{name}\"?"
   },
   "common": {
+    "zeroSize": "0 B",
     "codeSyncBadge": {},
     "roleReachesNoDeployPath": "Assigned, but nothing will deploy {roles}: the role reaches no ansible group and has no dedicated playbook. Add a group mapping or a playbook for it.",
     "sidebar": {
@@ -1359,7 +1362,8 @@
       "showingCountOfCount2Entries": "Showing {count} of {count2} entries",
       "source": "Source:",
       "source1": "Source",
-      "time": "Time"
+      "time": "Time",
+      "loadError": "Failed to load logs: {error}"
     },
     "metricsDetailsView": {
       "activeWorkers": "Active Workers",
@@ -1819,7 +1823,13 @@
     "performanceSections": "Performance sections",
     "performanceSummary": "Performance summary",
     "refreshPerformanceData": "Refresh performance data",
-    "sLOCompliance": "SLO Compliance:"
+    "sLOCompliance": "SLO Compliance:",
+    "tabs": {
+      "alertRules": "Alert Rules",
+      "overview": "Overview",
+      "slos": "SLOs",
+      "traces": "Traces"
+    }
   },
   "redisServicePanel": {
     "actionFailed": "Failed to {action} Redis service",
