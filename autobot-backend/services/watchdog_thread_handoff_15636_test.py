@@ -31,7 +31,7 @@ from typing import Any, List
 
 import pytest
 
-from services.documentation_watcher import DocumentationChangeHandler, DocumentationWatcherService
+from services.documentation_watcher import DOCS_DIR, DocumentationChangeHandler, DocumentationWatcherService
 from services.kb_folder_watcher import KBFolderChangeHandler, KBFolderWatcherService, WatchFolderConfig
 from utils.hot_reload_manager import HotReloadManager, ModuleReloadHandler
 
@@ -76,6 +76,10 @@ async def _drain(predicate: Any, timeout: float = 2.0) -> bool:
     return False
 
 
+#: In the canonical doc set, under the root: the watcher ignores anything else (#20063).
+_GUIDE = DOCS_DIR / "developer" / "guide.md"
+
+
 class TestDocumentationWatcher:
     async def test_an_event_raised_off_the_loop_thread_reaches_the_queue(self) -> None:
         service = DocumentationWatcherService()
@@ -85,13 +89,13 @@ class TestDocumentationWatcher:
         service._process_pending_changes = _noop_batch_pass  # type: ignore[method-assign]
         handler = DocumentationChangeHandler(service)
 
-        raised = _raise_on_observer_thread(handler.on_modified, _Event("/docs/guide.md"))
+        raised = _raise_on_observer_thread(handler.on_modified, _Event(str(_GUIDE)))
         assert raised == [], f"the observer thread raised instead of scheduling: {raised!r}"
 
         assert await _drain(lambda: bool(service._pending_changes)), (
             "the file change never reached the queue — the coroutine was not scheduled from " "the observer thread"
         )
-        assert service._pending_changes == {Path("/docs/guide.md"): "modified"}
+        assert service._pending_changes == {_GUIDE: "modified"}
 
     async def test_a_failed_dispatch_does_not_stamp_the_debounce_record(self) -> None:
         """A dropped event must not be suppressed as a duplicate next time."""
@@ -99,7 +103,7 @@ class TestDocumentationWatcher:
         service._loop = None  # start() never ran, so there is no loop to hand off to
         handler = DocumentationChangeHandler(service)
 
-        _raise_on_observer_thread(handler.on_modified, _Event("/docs/guide.md"))
+        _raise_on_observer_thread(handler.on_modified, _Event(str(_GUIDE)))
 
         assert handler._last_event_time == {}, (
             "the debounce timestamp was recorded for an event that was never scheduled — the "

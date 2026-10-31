@@ -38,6 +38,7 @@ async def file_proposals(
                 line=AiLine(prop.line),
                 requested_by=str(actor),
                 reason=f"Workflow plan {plan_key!r}, sub-step {prop.sub_step_key!r}",
+                plan_ref=f"workflow-plan:{plan_key}",
             )
         except Exception as exc:  # noqa: BLE001 -- recorded on the proposal and logged; the conversion stands
             prop.outcome, prop.approval_id, prop.error = ProposalOutcome.FAILED, None, type(exc).__name__

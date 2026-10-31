@@ -28,9 +28,9 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/components/analytics/CodeEvolutionTimeline.vue": 772,
     "autobot-frontend/src/components/analytics/CodeGenerationDashboard.vue": 1108,
     "autobot-frontend/src/components/analytics/CodeQualityDashboard.vue": 1837,
-    "autobot-frontend/src/components/analytics/CodeReviewDashboard.vue": 1221,
+    "autobot-frontend/src/components/analytics/CodeReviewDashboard.vue": 1220,
     "autobot-frontend/src/components/analytics/CodebaseAnalytics.vue": 1297,
-    "autobot-frontend/src/components/analytics/CodebaseAnalyticsLanding.vue": 763,
+    "autobot-frontend/src/components/analytics/CodebaseAnalyticsLanding.vue": 758,
     "autobot-frontend/src/components/analytics/ConversationFlowDashboard.vue": 909,
     "autobot-frontend/src/components/analytics/LLMPatternDashboard.vue": 1080,
     "autobot-frontend/src/components/analytics/LogPatternDashboard.vue": 941,
@@ -153,7 +153,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-frontend/src/views/llc/BacklogView.vue": 823,
     "autobot-frontend/src/views/llc/CompanyCreationWizard.vue": 909,
     "autobot-frontend/src/views/llc/CompanyPortabilityView.vue": 761,
-    "autobot-frontend/src/views/llc/CostDashboard.vue": 1015,
+    "autobot-frontend/src/views/llc/CostDashboard.vue": 1012,  # #20123: 1015 -> 1012 (mixed bucket lists each currency)
     "autobot-frontend/src/views/llc/GanttTimelineView.vue": 817,
     "autobot-frontend/src/views/llc/HeartbeatMonitor.vue": 805,
     "autobot-frontend/src/views/llc/OrgChart.vue": 1517,  # #14780: 1527 -> 1522 (kit BaseDrawer)
