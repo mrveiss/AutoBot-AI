@@ -229,3 +229,6 @@ export type { PermissionRule } from './src/types/permission'
 export { default as BaseTabs } from './src/components/BaseTabs.vue'
 export type { TabsVariant, TabsSize, TabItem } from './src/components/BaseTabs.vue'
 export type { KitDirection } from './src/utils/direction'
+
+export { default as BaseDropdownMenu } from './src/components/BaseDropdownMenu.vue'
+export type { MenuSize, MenuItemVariant, MenuItem } from './src/components/BaseDropdownMenu.vue'
