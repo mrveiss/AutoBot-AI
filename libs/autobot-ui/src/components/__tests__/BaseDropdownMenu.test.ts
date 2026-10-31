@@ -4,7 +4,7 @@
 // BaseDropdownMenu (#14779): trigger aria, menu/menuitem roles, keyboard opening, Arrow/Home/End
 // navigation, disabled skip, select, Escape closing, and the arrow direction under dir="rtl".
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { h } from 'vue'
 import BaseDropdownMenu from '../BaseDropdownMenu.vue'
@@ -128,7 +128,7 @@ describe('BaseDropdownMenu keyboard', () => {
     await flushPromises()
     expect(menu()).toBeNull()
     expect(w.emitted('update:open')?.at(-1)).toEqual([false])
-    expect(document.activeElement).toBe(trigger())
+    await vi.waitFor(() => expect(document.activeElement).toBe(trigger()))
   })
 
   it('a disabled item never emits select', async () => {
