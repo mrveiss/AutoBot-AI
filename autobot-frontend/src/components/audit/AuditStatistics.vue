@@ -415,7 +415,8 @@ function formatOperationName(operation: string): string {
 }
 
 .loading-overlay .icon {
-  font-size: var(--text-2xl);
+  width: var(--text-2xl);
+  height: var(--text-2xl);
   color: var(--color-primary);
 }
 
