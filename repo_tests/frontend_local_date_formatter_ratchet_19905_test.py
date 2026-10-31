@@ -9,10 +9,15 @@
 or a ``const`` bound to an arrow/function expression, or an object/class method or property) in a
 ``.vue`` or ``.ts`` file under the ``components``, ``views`` and ``composables`` folders of
 ``autobot-frontend/src`` and ``autobot-slm-frontend/src``, excluding tests, specs, stories and
-comment lines. ``const formatTime = createDateFormatter({...})`` and an alias such as
+comment lines. Since #20004 the count also holds every named local function that *formats a date
+through its body* -- ``toLocaleDateString``/``toLocaleTimeString``/``Intl.DateTimeFormat``, or
+``toLocaleString`` beside a ``Date`` -- whatever it is called (``fmtDate``, ``formatExpiry``,
+``renderStamp``, a ``private`` method); the detector is ``_local_date_formatter_detect.py``. A
+function is counted once, by name or by behaviour. ``Intl.DateTimeFormat().resolvedOptions()``
+(asking for the browser timezone) and ``toLocaleString`` on a number are not date formatting. ``const formatTime = createDateFormatter({...})`` and an alias such as
 ``const formatDate = formatDateTime`` are bindings of the kit's function, not copies, and are not
 counted. The kit (``libs/autobot-ui``) and ``utils/`` hold the canonical helpers and are not scanned.
-Baseline measured on main at 00dce2fb4c with this detector.
+Baseline re-measured for #20004 on main at 5b0014f63a plus that PR's migrations.
 
 **What the pin holds.** Three groups remain, each on purpose: (1) relative-time formatters that
 take their wording from i18n keys with their own thresholds (``formatRelativeTime``,
@@ -32,6 +37,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from repo_tests._local_date_formatter_detect import date_formatter_names
 from repo_tests._paths import repo_root
 from repo_tests._ratchet_base import base_table
 from repo_tests._reach import declare
@@ -54,8 +60,13 @@ _DECLARATION = re.compile(
 )
 _COMMENT_LINE = re.compile(r"^[ \t]*(?://|\*|/\*).*$", re.M)
 
-# Measured on 00dce2fb4c; lowered as the remaining groups move to the kit.
-PINS = {"local_date_formatter_declarations": 32}
+# Two measures, so the down-only comparison against the base stays meaningful (#20004): the first is
+# the name-only count this guard has always pinned (32 at the base, 24 now); the second is the
+# functions only the behavioural detector finds, a measure that did not exist at the base.
+# Measured on 5b0014f63a plus #20004's migrations.
+NAMED = "local_date_formatter_declarations"
+BEHAVIOUR = "local_date_formatter_functions_by_behaviour"
+PINS = {NAMED: 24, BEHAVIOUR: 20}
 
 
 def _sources(src: Path) -> list[Path]:
@@ -69,14 +80,29 @@ def _sources(src: Path) -> list[Path]:
     return found
 
 
-def _declarations(path: Path) -> int:
-    return len(_DECLARATION.findall(_COMMENT_LINE.sub("", path.read_text(encoding="utf-8"))))
+_NAMED = re.compile(rf"^{_NAMES}$")
+
+
+def _counts(text: str) -> dict[str, int]:
+    """Declarations by name, and the behavioural formatters whose name the list does not hold."""
+    text = _COMMENT_LINE.sub("", text)
+    by_behaviour = [n for n in date_formatter_names(text) if not _NAMED.match(n)]
+    return {NAMED: len(_DECLARATION.findall(text)), BEHAVIOUR: len(by_behaviour)}
+
+
+def _measure(paths: list[Path]) -> dict[str, int]:
+    """Both measures summed over *paths*."""
+    totals = dict.fromkeys(PINS, 0)
+    for path in paths:
+        for key, n in _counts(path.read_text(encoding="utf-8")).items():
+            totals[key] += n
+    return totals
 
 
 def scan(src: Path) -> tuple[int, int]:
     """Return (declarations, files scanned) for one app's ``src``."""
     sources = _sources(src)
-    return sum(_declarations(p) for p in sources), len(sources)
+    return sum(_measure(sources).values()), len(sources)
 
 
 def _population(root: Path) -> list[str]:
@@ -141,25 +167,67 @@ class TestTheDetectorWorksBeforeItsOutputIsRead:
         assert scan(tmp_path) == (0, 1)
 
 
+def test_a_hand_rolled_formatter_is_found_whatever_it_is_called(tmp_path: Path) -> None:
+    """Controls for #20004: the name never decides, the body does."""
+    w = TestTheDetectorWorksBeforeItsOutputIsRead()._w
+    w(tmp_path, "components/A.vue", "const zzStampify = (v: string) => new Date(v).toLocaleString()\n")
+    w(
+        tmp_path,
+        "components/B.vue",
+        "function qq(d: Date) {\n  return d.toLocaleTimeString('en', { hour: '2-digit' })\n}\n",
+    )
+    w(
+        tmp_path,
+        "components/C.vue",
+        "class K {\n  private static renderStamp(d: Date): string {\n    return d.toLocaleDateString()\n  }\n}\n",
+    )
+    w(
+        tmp_path,
+        "components/D.vue",
+        "const o = {\n  wibble: (iso: string) => new Intl.DateTimeFormat('en').format(new Date(iso)),\n}\n",
+    )
+    w(tmp_path, "components/E.vue", "const f = (v: string) =>\n  new Date(v)\n    .toLocaleString()\n")
+    assert scan(tmp_path)[0] == 5
+
+
+def test_a_number_a_timezone_probe_a_nested_use_and_a_kit_call_are_not_date_formatters(tmp_path: Path) -> None:
+    w = TestTheDetectorWorksBeforeItsOutputIsRead()._w
+    w(tmp_path, "components/A.vue", "const group = (n: number) => n.toLocaleString()\n")
+    w(tmp_path, "components/B.vue", "function zone() {\n  return Intl.DateTimeFormat().resolvedOptions().timeZone\n}\n")
+    w(
+        tmp_path,
+        "components/C.vue",
+        "const shown = createDateFormatter({ kind: 'time' })\nconst x = (a).toLocaleString()\n",
+    )
+    w(tmp_path, "components/D.vue", "function outer() {\n  return items.map((n) => n.toLocaleString())\n}\n")
+    assert scan(tmp_path)[0] == 0
+
+
+def test_a_formatter_counts_once_when_it_is_named_and_formats(tmp_path: Path) -> None:
+    w = TestTheDetectorWorksBeforeItsOutputIsRead()._w
+    w(tmp_path, "components/A.vue", "function formatDate(d: string) {\n  return new Date(d).toLocaleDateString()\n}\n")
+    assert scan(tmp_path)[0] == 1
+
+
 def test_the_apps_do_not_hand_roll_more_date_formatters_than_pinned() -> None:
     root = repo_root()
     for rel in _ROOTS:
         assert (root / rel).is_dir(), f"{rel} has moved; this guard reads it by path"
-    now = sum(_declarations(root / rel) for rel in REACH.examined(root))
-    pinned = PINS["local_date_formatter_declarations"]
-    assert now <= pinned, (
-        f"{now} local date formatter declarations, pin allows {pinned} (#19905). "
-        "Use formatDate / formatDateTime / formatISOString / formatTimeAgo or createDateFormatter "
-        "from utils/formatHelpers (@autobot/ui)."
-    )
-    assert (
-        now == pinned
-    ), f"{now} local date formatter declarations, pin says {pinned}: lower PINS to {now} in this PR (#19905)."
+    now = _measure([root / rel for rel in REACH.examined(root)])
+    assert now.keys() == PINS.keys()
+    for key, pinned in PINS.items():
+        assert now[key] <= pinned, (
+            f"{now[key]} {key}, pin allows {pinned} (#19905, #20004). "
+            "Use formatDate / formatDateTime / formatISOString / formatTimeAgo or createDateFormatter "
+            "from utils/formatHelpers (@autobot/ui)."
+        )
+        assert now[key] == pinned, f"{now[key]} {key}, pin says {pinned}: lower PINS[{key!r}] to {now[key]} (#20004)."
 
 
 def test_the_pin_was_not_raised_against_the_base() -> None:
     base = base_table(repo_root(), ("repo_tests/frontend_local_date_formatter_ratchet_19905_test.py",), "PINS")
     if not base:
         return  # the guard is new at this base; nothing to compare against yet
-    key = "local_date_formatter_declarations"
-    assert PINS[key] <= base[key], f"PINS rose from {base[key]} to {PINS[key]} (#19905); the pin only goes down."
+    for key, pinned in PINS.items():
+        if key in base:  # a measure the base did not have starts at its first measurement (#20004)
+            assert pinned <= base[key], f"PINS[{key!r}] rose from {base[key]} to {pinned}; the pin only goes down."
