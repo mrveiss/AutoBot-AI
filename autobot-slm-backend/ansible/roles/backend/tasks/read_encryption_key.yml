@@ -10,7 +10,7 @@
 - name: "Backend | Read AUTOBOT_ENCRYPTION_KEY from slm-secrets.env (#19864)"
   ansible.builtin.shell:
     cmd: >-
-      grep -oP '^\s*(export\s+)?AUTOBOT_ENCRYPTION_KEY=\K.+' /etc/autobot/slm-secrets.env 2>/dev/null || true
+      grep -oP '^\s*(export\s+)?AUTOBOT_ENCRYPTION_KEY=\K.+' {{ (slm_credentials_dir | default('/etc/autobot') ~ '/' ~ slm_credentials_file | default('slm-secrets.env')) | quote }} 2>/dev/null || true
   register: _backend_encryption_key_read
   changed_when: false
   failed_when: false
