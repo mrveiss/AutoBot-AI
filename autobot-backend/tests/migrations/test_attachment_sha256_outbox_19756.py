@@ -61,3 +61,19 @@ def test_the_migration_is_idempotent_on_a_create_all_database():
 def test_the_revision_chains_from_the_current_head():
     module = importlib.import_module(_MODULE)
     assert (module.revision, module.down_revision) == ("20261031_107", "20261031_106")
+
+
+def test_the_downgrade_locks_the_outbox_before_counting_so_no_entry_is_dropped_in_flight():
+    module = importlib.import_module(_MODULE)
+    op, bind = MagicMock(), MagicMock()
+    bind.execute.return_value.scalar.return_value = 0
+    op.get_bind.return_value = bind
+    with (
+        patch.object(module, "op", op),
+        patch.object(module, "has_column", return_value=False),
+        patch.object(module, "has_table", return_value=True),
+    ):
+        module.downgrade()
+    statements = [str(call.args[0]) for call in bind.execute.call_args_list]
+    assert "EXCLUSIVE MODE" in statements[0] and "count(*)" in statements[1]
+    op.drop_table.assert_called_once()

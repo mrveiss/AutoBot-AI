@@ -60,7 +60,12 @@ def downgrade() -> None:
     # A pending outbox row is an owed file removal; dropping the table forgets it. Refuse
     # rather than lose it silently: drain the outbox before downgrading.
     if has_table(_TABLE):
-        pending = op.get_bind().execute(sa.text("SELECT count(*) FROM llc_attachment_file_deletions")).scalar()
+        bind = op.get_bind()
+        # EXCLUSIVE blocks concurrent inserts until this transaction ends, so no outbox entry can
+        # commit between the count and the DROP and be discarded with the table. A blocked
+        # delete waits, then fails with the table gone and keeps its attachment row.
+        bind.execute(sa.text("LOCK TABLE llc_attachment_file_deletions IN EXCLUSIVE MODE"))
+        pending = bind.execute(sa.text("SELECT count(*) FROM llc_attachment_file_deletions")).scalar()
         if pending:
             raise NotImplementedError(
                 f"{pending} attachment file removal(s) still pending in {_TABLE}; drain them first"

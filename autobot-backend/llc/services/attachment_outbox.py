@@ -146,11 +146,13 @@ async def drain_removals(session: AsyncSession, root: Path, root_id: str, only_i
 
 
 async def outbox_counts(session: AsyncSession, root_id: str) -> dict[str, int]:
-    """Entries needing a person (stuck) and entries belonging to another node's storage."""
+    """Entries needing a person (stuck here) and every entry belonging to another node's storage.
+
+    ``other_root`` counts foreign entries whether or not they are stuck: a foreign stuck entry
+    is still not drainable here, and leaving it out would hide it from the warning.
+    """
     stuck = await session.scalar(
         sa.select(sa.func.count()).select_from(Entry).where(Entry.root_id == root_id, Entry.stuck_at.is_not(None))
     )
-    other = await session.scalar(
-        sa.select(sa.func.count()).select_from(Entry).where(Entry.root_id != root_id, Entry.stuck_at.is_(None))
-    )
+    other = await session.scalar(sa.select(sa.func.count()).select_from(Entry).where(Entry.root_id != root_id))
     return {"stuck": int(stuck or 0), "other_root": int(other or 0)}

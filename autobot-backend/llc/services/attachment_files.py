@@ -21,7 +21,7 @@ import os
 import time
 import uuid
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Optional
 
 import sqlalchemy as sa
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -37,7 +37,7 @@ QUARANTINE_DIRNAME = "quarantine"
 STAGED_SUFFIX = ".part"
 _HASH_CHUNK = 1024 * 1024
 
-_COUNT_KEYS = ("published", "quarantined", "waiting", "skipped", "failed", "duplicate", "conflict")
+_COUNT_KEYS = ("restored", "published", "quarantined", "waiting", "skipped", "failed", "duplicate", "conflict")
 
 
 def sha256_hex(content: bytes) -> str:
@@ -155,19 +155,25 @@ async def _publish_for_row(row: LLCWorkItemAttachment, staged: Path, dest: Path)
     return "published"
 
 
+async def lock_attachment_row(session: AsyncSession, attachment_id: uuid.UUID) -> Optional[LLCWorkItemAttachment]:
+    """The attachment row, locked until the caller's next commit, or None if it does not exist.
+
+    A blocking lock, not SKIP LOCKED: a skipped row would read as "no row". The lock is what
+    serialises a publish with a concurrent delete of the same row.
+    """
+    result = await session.execute(
+        sa.select(LLCWorkItemAttachment).where(LLCWorkItemAttachment.id == attachment_id).with_for_update()
+    )
+    return result.scalar_one_or_none()
+
+
 async def _settle(session: AsyncSession, root: Path, staged: Path, max_age_seconds: int, resolve_dest: Callable) -> str:
     try:
         attachment_id = uuid.UUID(staged.stem)
     except ValueError:
         logger.warning("#19756: staging file %s is not named for an attachment; left alone", staged.name)
         return "skipped"
-    # A blocking row lock (not SKIP LOCKED: a skipped row would read as "no row"), held until
-    # the commit below, so a concurrent delete of this row waits for the publish to finish.
-    row = (
-        await session.execute(
-            sa.select(LLCWorkItemAttachment).where(LLCWorkItemAttachment.id == attachment_id).with_for_update()
-        )
-    ).scalar_one_or_none()
+    row = await lock_attachment_row(session, attachment_id)
     if row is not None:
         return await _publish_for_row(row, staged, resolve_dest(row))
     if await asyncio.to_thread(_quarantine_if_old, root, staged, max_age_seconds):
@@ -176,16 +182,61 @@ async def _settle(session: AsyncSession, root: Path, staged: Path, max_age_secon
     return "waiting"
 
 
+async def _settle_one(
+    session: AsyncSession, root: Path, staged: Path, max_age_seconds: int, resolve_dest: Callable
+) -> str:
+    """Settle one file; an I/O error is counted and logged, not allowed to stop the files after it."""
+    try:
+        return await _settle(session, root, staged, max_age_seconds, resolve_dest)
+    except OSError as exc:
+        logger.error("#19756: settling staged file %s failed: %s; the next sweep will retry", staged.name, exc)
+        await session.rollback()
+        return "failed"
+
+
+def _quarantined_files(root: Path) -> list[Path]:
+    directory = staging_dir(root) / QUARANTINE_DIRNAME
+    if not directory.is_dir():
+        return []
+    return [e for e in directory.iterdir() if not e.is_symlink() and e.is_file() and e.suffix == STAGED_SUFFIX]
+
+
+async def _restore_one(session: AsyncSession, quarantined: Path, resolve_dest: Callable) -> bool:
+    """Move a quarantined file back into place if its row has since appeared (a commit that was slow, not absent)."""
+    try:
+        attachment_id = uuid.UUID(quarantined.name.split(".", 1)[0])
+    except ValueError:
+        return False
+    row = await lock_attachment_row(session, attachment_id)
+    if row is None:
+        return False
+    dest = resolve_dest(row)
+    if await asyncio.to_thread(dest.exists):
+        return False
+    await asyncio.to_thread(publish_staged, quarantined, dest)
+    logger.warning("#19756: restored attachment %s from quarantine; its row was committed after the move", row.id)
+    return True
+
+
 async def sweep_staging(
     session: AsyncSession, root: Path, max_age_seconds: int, resolve_dest: Callable[[LLCWorkItemAttachment], Path]
 ) -> dict[str, int]:
     """Settle the staging directory, touching nothing outside it.
 
     A staged file with a row is published at once (the row is proof, so age is irrelevant). One
-    with no row waits out ``max_age_seconds`` and is then quarantined.
+    with no row waits out ``max_age_seconds`` and is then quarantined. A quarantined file whose
+    row has since been committed (an upload that stalled past the window) is restored. Nothing
+    here deletes.
     """
     counts = dict.fromkeys(_COUNT_KEYS, 0)
     for staged in await asyncio.to_thread(_staged_files, root):
-        counts[await _settle(session, root, staged, max_age_seconds, resolve_dest)] += 1
+        counts[await _settle_one(session, root, staged, max_age_seconds, resolve_dest)] += 1
+        await session.commit()
+    for quarantined in await asyncio.to_thread(_quarantined_files, root):
+        try:
+            counts["restored"] += await _restore_one(session, quarantined, resolve_dest)
+        except OSError as exc:
+            logger.error("#19756: restoring %s from quarantine failed: %s", quarantined.name, exc)
+            counts["failed"] += 1
         await session.commit()
     return counts

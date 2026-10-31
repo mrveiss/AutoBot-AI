@@ -230,7 +230,8 @@ class AttachmentService:
         )
         session.add(row)
         await self._commit_staged(session, staged)
-        await self._publish_committed(staged, dest, attachment_id)
+        if not await self._publish_committed(session, staged, dest, attachment_id):
+            raise AttachmentNotFound(attachment_id)
         await session.refresh(row)
         return row
 
@@ -249,14 +250,21 @@ class AttachmentService:
             raise
 
     @staticmethod
-    async def _publish_committed(staged: Path, dest: Path, attachment_id: str) -> None:
-        """Move the file into place once its row is durable.
+    async def _publish_committed(session: AsyncSession, staged: Path, dest: Path, attachment_id: str) -> bool:
+        """Move the file into place while holding the row's lock; False if the row is already gone.
 
-        A failure here leaves a committed row whose file is still staged. That is not hidden: it
+        The lock serialises the move with a concurrent delete: a delete that won leaves no row,
+        and publishing then would recreate a file nothing refers to. In that case the staged
+        copy is left for the sweep, which quarantines it.
+
+        A failed move leaves a committed row whose file is still staged. That is not hidden: it
         is logged at error, readers are served from the staged copy (`_read_local`), and the
         staging sweep retries the move.
         """
         try:
+            if await files.lock_attachment_row(session, uuid.UUID(attachment_id)) is None:
+                logger.warning("#19756: attachment %s was deleted before publish; staged copy left", attachment_id)
+                return False
             await asyncio.to_thread(files.publish_staged, staged, dest)
         except OSError as exc:
             logger.error(
@@ -265,6 +273,9 @@ class AttachmentService:
                 dest,
                 exc,
             )
+        finally:
+            await session.commit()  # releases the row lock
+        return True
 
     async def list_attachments(
         self,

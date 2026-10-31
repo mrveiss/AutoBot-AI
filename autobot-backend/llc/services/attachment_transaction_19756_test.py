@@ -56,7 +56,14 @@ def _staged(root: Path) -> list[Path]:
     return list((root / files.STAGING_DIRNAME).glob("*")) if (root / files.STAGING_DIRNAME).is_dir() else []
 
 
+def _answer_with_added_rows(session) -> None:
+    """Let the row lock that upload() takes on publish see the row it just added."""
+    if session.default_result is None:
+        session.default_result = lambda _stmt: [o for o in session.added if isinstance(o, LLCWorkItemAttachment)]
+
+
 async def _upload(session, content: bytes = b"hello", filename: str = "notes.txt") -> LLCWorkItemAttachment:
+    _answer_with_added_rows(session)
     return await AttachmentService().upload(
         session, company_id=_COMPANY, work_item_id=_ITEM, filename=filename, content_type="text/plain", content=content
     )
@@ -92,7 +99,7 @@ async def test_the_final_path_is_empty_when_the_commit_runs(root):
 
     session = FakeAsyncSession(commit_error=at_commit)
     row = await _upload(session)
-    assert seen == [([], seen[0][1])] and len(seen[0][1]) == 1
+    assert seen[0][0] == [] and len(seen[0][1]) == 1  # the first commit is the row; the second ends the publish lock
     assert [Path(row.storage_path)] == _published(root)
     assert _staged(root) == []
 
@@ -112,7 +119,7 @@ async def test_a_publish_failure_after_commit_is_loud_readable_and_repaired_by_t
     session = FakeAsyncSession()
     with patch("llc.services.attachment_files.os.replace", side_effect=OSError("disk full")):
         row = await _upload(session)
-    assert session.commits == 1 and not Path(row.storage_path).exists()
+    assert session.commits == 2 and not Path(row.storage_path).exists()
     assert any("committed but publishing" in r.getMessage() and r.levelname == "ERROR" for r in caplog.records)
 
     service = AttachmentService()
@@ -517,3 +524,73 @@ def test_module_constants_agree_with_the_registry_defaults_and_floors():
         spec = env_registry.REGISTRY[name]
         assert spec.range == (floor, None), name
         assert value == spec.default, name
+
+
+# --- review threads on PR 20171 ----------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_an_io_error_on_one_staged_file_does_not_stop_the_files_after_it(root):
+    first, second = uuid.uuid4(), uuid.uuid4()
+    for attachment_id in (first, second):
+        files.stage_bytes(root, str(attachment_id), b"x")
+    outcomes = iter([OSError("unreadable"), "published"])
+
+    async def settle(*_args, **_kw):
+        outcome = next(outcomes)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    session = FakeAsyncSession()
+    with patch("llc.services.attachment_files._settle", settle):
+        counts = await files.sweep_staging(session, root, 3600, lambda row: root)
+    assert counts["failed"] == 1 and counts["published"] == 1 and session.rollbacks == 1
+
+
+@pytest.mark.asyncio
+async def test_a_quarantined_file_whose_row_was_committed_late_is_restored(root):
+    """An upload that stalled past the window: the sweep quarantined its file, then the commit landed."""
+    row = await _upload(FakeAsyncSession())
+    Path(row.storage_path).unlink()
+    staged = files.stage_bytes(root, str(row.id), b"hello")
+    _age(staged)
+    await AttachmentService().sweep_staging(FakeAsyncSession(default_result=FakeResult([])))  # no row yet: quarantined
+    assert not Path(row.storage_path).exists() and not staged.exists()
+
+    counts = await AttachmentService().sweep_staging(FakeAsyncSession(default_result=FakeResult([row])))
+    assert counts["restored"] == 1 and _read(Path(row.storage_path)) == b"hello"
+
+
+@pytest.mark.asyncio
+async def test_a_quarantined_file_with_no_row_stays_quarantined(root):
+    staged = files.stage_bytes(root, str(uuid.uuid4()), b"x")
+    _age(staged)
+    session = FakeAsyncSession(default_result=FakeResult([]))
+    await AttachmentService().sweep_staging(session)
+    counts = await AttachmentService().sweep_staging(session)
+    assert (
+        counts["restored"] == 0 and len(list((root / files.STAGING_DIRNAME / files.QUARANTINE_DIRNAME).iterdir())) == 1
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_delete_that_won_the_race_stops_the_publish_from_recreating_the_file(root):
+    """The row is gone by the time upload() locks it, so the staged file must not reach the final path."""
+    session = FakeAsyncSession(default_result=FakeResult([]))  # the lock finds no row
+    with pytest.raises(AttachmentNotFound):
+        await AttachmentService().upload(
+            session, company_id=_COMPANY, work_item_id=_ITEM, filename="a.txt", content_type="text/plain", content=b"x"
+        )
+    assert _published(root) == [] and len(_staged(root)) == 1
+    assert "FOR UPDATE" in str(session.statements[0])
+
+
+@pytest.mark.asyncio
+async def test_foreign_stuck_entries_are_counted_as_another_nodes(root):
+    session = FakeAsyncSession(results=[FakeResult([0]), FakeResult([2])])
+    assert await outbox.outbox_counts(session, "me") == {"stuck": 0, "other_root": 2}
+    from sqlalchemy.dialects import postgresql
+
+    other_sql = str(session.statements[1].compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+    assert "root_id != 'me'" in other_sql and "stuck_at" not in other_sql
