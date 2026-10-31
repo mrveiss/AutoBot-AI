@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from pathlib import Path
 
 import pytest
 
@@ -183,3 +184,22 @@ async def test_real_server_delay_past_the_timeout_is_a_missed_heartbeat(tmp_path
                 assert await agent._send_heartbeat_request({"x": 1}) is False
     assert len([r for r in caplog.records if r.levelno == logging.WARNING]) == 1
     assert not [r for r in caplog.records if r.levelno >= logging.ERROR]
+
+
+def _render_unit(**variables):
+    """The agent unit's lines for these two timeouts, rendered from the real template."""
+    jinja2 = pytest.importorskip("jinja2")
+    template = Path(__file__).parents[1] / "ansible/roles/slm_agent/templates/slm-agent.service.j2"
+    block = template.read_text(encoding="utf-8").split("request_timeouts.py keeps the one default.\n")[1]
+    block = block.split("# #11450:")[0]
+    rendered = jinja2.Environment(trim_blocks=True, lstrip_blocks=True).from_string(block).render(**variables)
+    return [line for line in rendered.splitlines() if line]
+
+
+def test_an_operators_timeouts_reach_the_agent_unit():
+    lines = _render_unit(slm_agent_heartbeat_timeout=15, slm_agent_event_sync_timeout=45)
+    assert lines == ["Environment=SLM_HEARTBEAT_TIMEOUT=15", "Environment=SLM_EVENT_SYNC_TIMEOUT=45"]
+
+
+def test_unset_timeouts_leave_the_one_default_in_the_agent():
+    assert _render_unit() == []
