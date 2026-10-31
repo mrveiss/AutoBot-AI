@@ -10,7 +10,7 @@ including RAG (Retrieval-Augmented Generation), knowledge extraction, and
 intelligent content analysis using the AI Stack VM.
 """
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from api.schemas_common import DataResponse
@@ -30,6 +30,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.time_utils import utc_timestamp
 from dependencies import provide_knowledge_base
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
+from knowledge.remote_read import admit_remote_read, remote_read_is_admin
 from knowledge.search_filters import (
     extract_user_context_from_request,
     filter_search_results_by_permission,
@@ -251,7 +252,10 @@ async def get_system_knowledge_insights(
     using AI Stack's system knowledge manager.
 
     Issue #744: Requires authenticated user.
+    #16665: the remote service gets no caller identity and its store is not visible from this repo, so only an
+    admin reads it, audited (``knowledge.remote_read``); anyone else is refused.
     """
+    await admit_remote_read(current_user, "system_insights")
     try:
         ai_client = await get_ai_stack_client()
 
@@ -266,6 +270,18 @@ async def get_system_knowledge_insights(
 # ====================================================================
 # Enhanced Statistics and Health
 # ====================================================================
+
+
+async def _ai_stack_insights(current_user: dict) -> dict:
+    """The AI Stack's system knowledge for the stats payload: admin only, audited; withheld otherwise (#16665)."""
+    if not remote_read_is_admin(current_user):
+        return {"withheld": "admin permission required"}
+    await admit_remote_read(current_user, "ai_stack_stats")
+    try:
+        return await (await get_ai_stack_client()).get_system_knowledge()
+    except Exception as e:
+        logger.warning("Failed to get AI Stack stats: %s", e)
+        return {"error": "Internal server error"}
 
 
 @router.get("/ai-stack/stats", response_model=DataResponse[AIStackStatsData])
@@ -299,15 +315,7 @@ async def get_aistack_stats(
             logger.warning("Failed to get local KB stats: %s", e)
             local_stats = {"error": "Internal server error"}
 
-        # Get AI Stack system knowledge insights
-        ai_stats = {}
-        try:
-            ai_client = await get_ai_stack_client()
-            ai_insights = await ai_client.get_system_knowledge()
-            ai_stats = ai_insights
-        except Exception as e:
-            logger.warning("Failed to get AI Stack stats: %s", e)
-            ai_stats = {"error": "Internal server error"}
+        ai_stats = await _ai_stack_insights(current_user)
 
         return create_success_response(
             {
@@ -318,6 +326,8 @@ async def get_aistack_stats(
             }
         )
 
+    except HTTPException:
+        raise  # an unwritable audit entry (503) is the answer, not a 500 envelope
     except Exception as e:
         logger.error("Enhanced stats retrieval failed: %s", e)
         return create_error_response(

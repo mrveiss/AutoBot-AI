@@ -29,7 +29,7 @@ from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
 from knowledge.search_filters import authorize_fact_write, caller_reader
-from knowledge.summary_visibility import document_is_visible, visible_summaries
+from knowledge.summary_visibility import document_is_visible, visible_events, visible_summaries
 from knowledge_factory import get_or_create_knowledge_base
 
 logger = get_logger(__name__)
@@ -172,6 +172,16 @@ async def get_entity_relationships(
 # --- Temporal Event Endpoints ---
 
 
+def _event_window(start_date: str | None, end_date: str | None):
+    """The (start, end) datetimes of an event search; open-ended sides default to the beginning and to now."""
+    from datetime import datetime, timezone
+
+    from autobot_shared.time_utils import parse_utc_iso
+
+    start = parse_utc_iso(start_date) if start_date else datetime.min.replace(tzinfo=timezone.utc)
+    return start, parse_utc_iso(end_date) if end_date else datetime.now(tz=timezone.utc)
+
+
 @router.get("/events", response_model=KnowledgeGraphEventsResponse)
 @with_error_handling(
     category=ErrorCategory.SERVER_ERROR,
@@ -186,19 +196,17 @@ async def search_events(
     limit: int = Query(100, ge=1, le=500),
     current_user: dict = Depends(get_current_user),
 ):
-    """Search temporal events with filters."""
+    """Search temporal events with filters; only events of documents the caller may read (#16665)."""
+    reader = caller_reader(current_user)  # 401 before the try below swallows it
     try:
-        from datetime import datetime, timezone
-
         from autobot_shared.redis_client import get_async_redis_client
-        from autobot_shared.time_utils import parse_utc_iso
+        from knowledge import get_knowledge_base
         from knowledge.temporal_search import TemporalSearchService
 
         redis_client = await get_async_redis_client(database="knowledge")
         temporal_svc = TemporalSearchService(redis_client)
 
-        start = parse_utc_iso(start_date) if start_date else datetime.min.replace(tzinfo=timezone.utc)
-        end = parse_utc_iso(end_date) if end_date else datetime.now(tz=timezone.utc)
+        start, end = _event_window(start_date, end_date)
         types_list = [t.strip() for t in event_types.split(",")] if event_types else None
 
         events = await temporal_svc.search_events_in_range(
@@ -207,6 +215,7 @@ async def search_events(
             event_types=types_list,
             limit=limit,
         )
+        events = await visible_events(events, await get_knowledge_base(), reader)
         return {"events": events, "total": len(events)}
 
     except Exception as e:
@@ -225,17 +234,20 @@ async def get_event_timeline(
     limit: int = Query(50, ge=1, le=200),
     current_user: dict = Depends(get_current_user),
 ):
-    """Get chronological timeline of events for an entity."""
+    """Chronological timeline of events for an entity; only events of documents the caller may read (#16665)."""
+    reader = caller_reader(current_user)  # 401 before the try below swallows it
     if not _SAFE_NAME_RE.match(entity_name):
         raise HTTPException(status_code=400, detail="Invalid entity name")
     try:
         from autobot_shared.redis_client import get_async_redis_client
+        from knowledge import get_knowledge_base
         from knowledge.temporal_search import TemporalSearchService
 
         redis_client = await get_async_redis_client(database="knowledge")
         temporal_svc = TemporalSearchService(redis_client)
 
         events = await temporal_svc.get_event_timeline(entity_name=entity_name, limit=limit)
+        events = await visible_events(events, await get_knowledge_base(), reader)
         return {
             "entity_name": entity_name,
             "events": events,

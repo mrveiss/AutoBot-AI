@@ -103,3 +103,41 @@ async def test_an_enhanced_mode_dict_answer_is_unwrapped_not_dropped():
     kb.search = AsyncMock(return_value={"results": all_facts()})
 
     assert PRIVATE_A in await _search(ALICE, kb)
+
+
+def _remote_search(user, audit):
+    app = FastAPI()
+    app.include_router(ai_stack_integration.router)
+    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[check_admin_permission] = lambda: True
+    app.dependency_overrides[provide_knowledge_base] = lambda: FakeKB()
+    client = AsyncMock()
+    client.search_knowledge.return_value = {"hits": ["remote-hit"]}
+    with (
+        patch.object(ai_stack_integration, "get_ai_stack_client", AsyncMock(return_value=client)),
+        patch("services.audit_logger.audit_log", new=audit),
+    ):
+        return TestClient(app).post("/knowledge/search", params={"query": "q"}), client
+
+
+def test_the_remote_half_is_audited_as_an_admin_read_before_it_is_returned():
+    audit = AsyncMock(return_value=True)
+    response, _ = _remote_search(ADMIN, audit)
+
+    assert "remote-hit" in response.text
+    sources = [c.kwargs["details"].get("source") for c in audit.await_args_list]
+    assert "ai_stack_remote" in sources and audit.await_args.args[0] == "kb.admin_read"
+
+
+def test_the_remote_half_is_withheld_when_its_audit_cannot_be_written():
+    response, client = _remote_search(ADMIN, AsyncMock(side_effect=RuntimeError("down")))
+
+    assert response.status_code == 503 and "remote-hit" not in response.text
+    client.search_knowledge.assert_not_awaited()
+
+
+def test_a_caller_who_is_not_an_admin_never_reaches_the_remote_half():
+    response, client = _remote_search(ALICE, AsyncMock(return_value=True))
+
+    assert response.status_code == 200 and "remote-hit" not in response.text
+    client.search_knowledge.assert_not_awaited()
