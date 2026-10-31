@@ -3660,7 +3660,7 @@ class ConversationFileInfo(BaseModel):
     mime_type: str | None = None
     session_id: str
     uploaded_at: datetime
-    uploaded_by: str
+    uploaded_by: str | None = None  # NULL in storage for agent-created files
     extension: str | None = None  # no server filesystem path is part of the response (#20133)
 
 

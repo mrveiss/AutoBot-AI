@@ -21,13 +21,14 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, create_autospec
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from autobot_shared.api_routing.router_routes import effective_routes
+from conversation_file_manager import ConversationFileManager
 from security_layer import SecurityLayer
 from testkit.canonical_gate import install_canonical_resolver
 from tests.conftest import load_real_auth_middleware
@@ -93,13 +94,14 @@ def world(monkeypatch):
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
-    manager = MagicMock()
-    manager.upload_file = AsyncMock(side_effect=lambda **kw: _file_info(kw["session_id"], kw["user_id"]))
-    manager.list_files = AsyncMock(return_value={"files": [], "total_files": 0, "total_size": 0})
+    manager = create_autospec(ConversationFileManager, instance=True)  # a method it lacks would fail here (#20225)
+    manager.upload_file.side_effect = lambda **kw: _file_info(kw["session_id"], kw["user_id"])
+    manager.list_files.return_value = {"files": [], "total_files": 0, "total_size": 0}
     app = FastAPI()
     app.include_router(module.router, prefix="/api")
     app.state.conversation_file_manager = manager
     app.state.security_layer = MagicMock()
+    state.app = app
     state.client = TestClient(app, raise_server_exceptions=False)
     state.manager = manager
     state.module = module
