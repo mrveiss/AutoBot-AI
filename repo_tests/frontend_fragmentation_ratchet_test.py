@@ -100,7 +100,7 @@ BASELINE = {
     # cross-referencing sibling admin views) -- this pair is documented above
     # as measuring page SIZE, not duplication, and is interim until #15455
     # replaces them with a real duplication measure.
-    "distinct_class_names": 5388,  # #19904 batch 1: 5391 -> 5388, per-view .btn* rules retired into BaseButton; #19903 AC2: both app ToastContainers retired into the kit (-14) on 5405; #19903: the retired NotificationConfigModal and the toast/result reuse (-16) on main's 5421; #17562 batch 2: five tables onto BaseTable (-4) on 5425; #19532: the retired main-GUI SettingsPanel (-6); #19217: the retired main-app web research editors (-23) on main's 5454; #17562: six hand-rolled tables onto the kit BaseTable (-12) on main's 5466; #13422: risk-badge, risk-pill, cost-pill and the level-* risk classes left for the kit RiskBadge (-3) on main's 5476; train-85b: #12741 show-more rules moved to TruncationNotice (-3) on main's 5479; train-84: #14780 BaseAvatar (-2) on main's 5481; #17829: the chat input status bar classes became utilities (-3); #14780 drawer adoption: 5492 -> 5484 (SourcePreviewPanel, WorkItemDetail on BaseDrawer); #14778: -10, the local BaseInput fork retired into the kit (on main's 5502); #18242: -1 on main's 5503 (CustomDashboard onto DashboardGrid); #18849: -14, the local BaseButton fork retired into the kit; #18819: -14 (ErrorBanner and ui/BaseAlert retired into the kit BaseAlert);  #14778: BaseTable and DataTable forks left for the kit (-26);  #14776: local BaseBadge retired (5594 -> 5585), then local BaseCard + BasePanel (5585 -> 5557); #17565: App.vue's hand-rolled .skip-links/.skip-link; train-85h merge: main's 5469 + this train's -3
+    "distinct_class_names": 5381,  # #19904 batch 1 and #19906: 5391 -> 5381, per-view .btn* and loading classes
     # replaced by the shared kit SkipLink (lowered from 5615). Earlier: #17020,
     # Terminal.vue removed -- pure deletion of dead code, lowered, not held.
     # #18354: DarkModeToggle and the main-app LanguageSwitcher left for the kit (5611 -> 5594).
@@ -157,9 +157,9 @@ FAMILY_BASELINE = {
     # Three vocabularies for "the user is waiting": 60 distinct names across
     # 105 files. #12731 records this as "inconsistent loading"; this is the
     # measurement of it. They should collapse to one.
-    "loading": 29,  # #14778: DataTable loading-cell left (30 -> 29)
+    "loading": 28,  # #19906: 29 -> 28; #14778: DataTable loading-cell left (30 -> 29)
     "skeleton": 26,
-    "spinner": 4,
+    "spinner": 2,  # #19906: 4 -> 2
     "table": 12,  # #14778: BaseTable and DataTable table-* left (18 -> 12)
     "input": 15,  # #14778: 18 -> 15, the local BaseInput fork retired into the kit;
     "dialog": 11,
