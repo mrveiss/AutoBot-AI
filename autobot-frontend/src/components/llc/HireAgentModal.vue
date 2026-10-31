@@ -102,7 +102,7 @@ async function submit(): Promise<void> {
       adapter_type: adapterType.value,
       heartbeat_enabled: heartbeatEnabled.value,
     })
-    if (result?.status === 'pending_approval') {
+    if (result && 'status' in result && result.status === 'pending_approval') {
       pending.value = true
       return
     }
