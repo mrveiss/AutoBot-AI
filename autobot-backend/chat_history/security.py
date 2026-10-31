@@ -66,7 +66,7 @@ class SecurityMixin:
                 return json.loads(data_str)
             except json.JSONDecodeError as exc:
                 # #19864: an encrypted chat on a host without its key reads as this, not as corruption.
-                raise ValueError("Cannot decode chat data: not JSON, and no encryption key is set") from exc
+                raise ValueError(f"Cannot decode chat data ({exc}); if it is encrypted, no key is set") from exc
 
         try:
             # Check if data is encrypted (base64-like format)
