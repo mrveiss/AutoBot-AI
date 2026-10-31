@@ -255,6 +255,7 @@ import { watch, onMounted, reactive } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useConfirmDialog } from '@/composables/useConfirmDialog'
 import { usePatternAnalysis, type PatternAnalysisReport, type CodeLocation } from '@/composables/usePatternAnalysis'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { t } = useI18n()
 const { confirm } = useConfirmDialog()
@@ -351,13 +352,7 @@ const formatLocation = (loc: CodeLocation | null | undefined): string => {
   return result
 }
 
-const formatTimestamp = (ts: string): string => {
-  try {
-    return new Date(ts).toLocaleString()
-  } catch {
-    return ts
-  }
-}
+const formatTimestamp = createDateFormatter()
 
 const getMetricClass = (value: number, type: string): string => {
   if (type === 'cc') {
