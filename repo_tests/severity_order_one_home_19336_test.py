@@ -13,7 +13,7 @@ has ``hint``, which ``Severity`` deliberately lacks).
 A copy comes back as a literal that orders the ``Severity`` vocabulary itself: a tuple/list made
 only of severity words (three or more), or a dict mapping three or more of them to integer ranks.
 
-The six orderings #19336 listed are gone; the sweep then measured 43 more (35 after the analytics endpoints batch) hand-written severity
+The six orderings #19336 listed are gone; the sweep then measured 43 more (24 after the analytics endpoints and sort-key sites batch) hand-written severity
 sequences across the backends (the class's remainder, listed and sampled on #19336). ``PIN`` holds that count
 exactly and only goes down against the base: each follow-up batch lowers it by what it converts.
 """
@@ -38,7 +38,7 @@ _WORDS = frozenset(member.value for member in Severity)
 _THIS = "repo_tests/severity_order_one_home_19336_test.py"
 
 #: Hand-written severity sequences still in the tree (measured at #19336). Down-only, exact.
-PIN = {"severity_order_copies": 35}
+PIN = {"severity_order_copies": 24}
 
 
 def _modules(root: Path) -> list[Path]:
