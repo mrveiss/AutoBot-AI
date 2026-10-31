@@ -35,6 +35,7 @@ logger = get_logger(__name__)
 
 _SCHEDULE_KEY = "llc:heartbeat:schedule"
 _POLL_INTERVAL = 5.0  # seconds between sorted-set polls
+_RETRY_DELAY = 60  # seconds before a routine that failed to dispatch is tried again
 
 
 class RoutineScheduler:
@@ -155,6 +156,12 @@ class RoutineScheduler:
         try:
             from croniter import croniter
         except ImportError:
+            logger.error(
+                "croniter not installed — routine %s cannot be rescheduled; retrying in %ds",
+                routine_id_str,
+                _RETRY_DELAY,
+            )
+            await self._readd_for_retry(routine_id_str)
             return
 
         try:
@@ -208,17 +215,18 @@ class RoutineScheduler:
 
         except Exception as exc:
             logger.error("Failed to dispatch routine %s: %s", routine_id_str, exc)
-            # Re-add with a short retry delay so the routine isn't permanently lost
-            try:
-                redis = await get_async_redis_client()
-                if redis is not None:
-                    await redis.zadd(
-                        _SCHEDULE_KEY,
-                        {f"routine:{routine_id_str}": time.time() + 60},
-                        nx=True,
-                    )
-            except Exception:
-                pass
+            await self._readd_for_retry(routine_id_str)
+
+    async def _readd_for_retry(self, routine_id_str: str) -> None:
+        """Put a claimed routine back a short delay from now so it is not lost (nx: never move a fire time)."""
+        try:
+            redis = await get_async_redis_client()
+            if redis is None:
+                logger.error("Redis unavailable — routine %s not re-added after a failed dispatch", routine_id_str)
+                return
+            await redis.zadd(_SCHEDULE_KEY, {f"routine:{routine_id_str}": time.time() + _RETRY_DELAY}, nx=True)
+        except Exception as exc:
+            logger.error("Could not re-add routine %s after a failed dispatch: %s", routine_id_str, exc)
 
     async def on_run_complete(
         self,
