@@ -35,6 +35,7 @@ from sqlalchemy.exc import OperationalError, ProgrammingError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.redis_client import get_async_redis_client
+from autobot_shared.redis_utils import delete_if_value
 from autobot_shared.ssot_constants import QueryDefaults
 
 from ..models.activity import ActorType
@@ -53,6 +54,7 @@ from .base import LLCServiceBase
 from .wake_events import wake_for_comment, wake_for_item_changes
 from .work_item_actor_role import resolve_actor_role  # noqa: F401 -- re-exported for the API and tests
 from .work_item_approval_categories import validated_approval_categories as _validated_approval_categories
+from .work_item_completion_effects import release_workspace_for_task
 from .work_item_relations import WorkItemRelationService
 
 logger = logging.getLogger(__name__)
@@ -525,6 +527,7 @@ class WorkItemService(LLCServiceBase):
         redis_value = f"user:{user_id}"
         redis = await get_async_redis_client()
 
+        acquired = False
         if redis is not None:
             acquired = await redis.set(redis_key, redis_value, nx=True, ex=_CHECKOUT_TTL)
             if not acquired:
@@ -572,8 +575,8 @@ class WorkItemService(LLCServiceBase):
                 after={"assignee_user_id": user_id, "assignee_type": AssigneeType.USER.value},
             )
         except ActivityRecordError:
-            if redis is not None:  # the DB claim rolls back; the lock taken above must not outlive it
-                await redis.delete(redis_key)
+            if acquired:  # the DB claim rolls back; only a lock THIS call took goes with it (#20102)
+                await delete_if_value(redis, redis_key, redis_value)
             raise
 
         return item
@@ -898,16 +901,6 @@ class WorkItemService(LLCServiceBase):
         item.version += 1
         await session.flush()
 
-        await self._trigger_artifact_ingest(session, item)
-
-        # Release per-task workspace (MVA-1152)
-        try:
-            from services.task_workspace import release_for_task
-
-            await release_for_task(work_item_id, session)
-        except Exception:
-            logger.warning("workspace release skipped for task=%s", work_item_id, exc_info=True)
-
         actor = resolve_actor(actor_agent_id, actor_user_id)
         meta: dict = {}
         if is_board_override:
@@ -927,6 +920,10 @@ class WorkItemService(LLCServiceBase):
             before={"status": current.value},
             after={"status": WorkItemStatus.DONE.value, **meta},
         )
+
+        # External effects (Chroma upsert, worktree removal) only once the audit has succeeded (#20102)
+        await self._trigger_artifact_ingest(session, item)
+        await release_workspace_for_task(work_item_id, session)
 
         return item
 

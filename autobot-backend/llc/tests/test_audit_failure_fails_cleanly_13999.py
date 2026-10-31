@@ -44,6 +44,13 @@ class _Redis:
     async def delete(self, key):
         self.data.pop(key, None)
 
+    async def eval(self, _script, _numkeys, key, expected):
+        """The compare-and-delete the service's release-if-owner sends."""
+        if self.data.get(key) != expected:
+            return 0
+        del self.data[key]
+        return 1
+
 
 def _failing_log() -> MagicMock:
     return MagicMock(record=AsyncMock(side_effect=ValueError("Invalid entity_id UUID")))
@@ -81,6 +88,33 @@ async def test_failed_audit_on_claim_fails_the_claim_and_gives_the_lock_back():
             await svc.claim_human(session, wid, str(_USER), str(_ORG))
     assert redis.data == {}
     session.commit.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_failed_audit_on_claim_keeps_a_same_user_fence_this_call_did_not_take():
+    wid = str(uuid.uuid4())
+    held = {f"llc:checkout:{wid}": f"user:{_USER}"}
+    redis = _Redis(held)
+    svc = wis.WorkItemService(activity_log=_failing_log())
+    with patch.object(wis, "get_async_redis_client", new=AsyncMock(return_value=redis)):
+        with pytest.raises(ActivityRecordError):
+            await svc.claim_human(_session(_item()), wid, str(_USER), str(_ORG))
+    assert redis.data == held
+
+
+@pytest.mark.asyncio
+async def test_failed_audit_on_transition_to_done_runs_no_external_side_effect():
+    can_finish = next(st for st, to in wis._ALLOWED_TRANSITIONS.items() if WorkItemStatus.DONE in to)
+    svc = wis.WorkItemService(activity_log=_failing_log())
+    svc._trigger_artifact_ingest = AsyncMock()
+    release = AsyncMock()
+    with patch("services.task_workspace.release_for_task", new=release):
+        with pytest.raises(ActivityRecordError):
+            await svc.transition_to_done(
+                _session(_item(status=can_finish.value)), str(uuid.uuid4()), str(_ORG), actor_user_id=str(_USER)
+            )
+    svc._trigger_artifact_ingest.assert_not_called()
+    release.assert_not_called()
 
 
 @pytest.mark.asyncio
