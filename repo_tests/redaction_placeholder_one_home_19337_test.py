@@ -40,13 +40,7 @@ _SPELLINGS = frozenset(
 )
 
 #: Placeholder literals still outside the home, per file (measured at #19337, per-file since #19698). Down-only.
-PIN: dict[str, int] = {
-    "autobot-backend/api/terminal.py": 1,
-    "autobot-backend/api/user_provider_credentials.py": 1,
-    "autobot-backend/integrations/whatsapp_integration.py": 2,
-    "autobot-backend/services/workflow_automation/executor.py": 1,
-    "autobot-backend/slash_command_handler.py": 1,
-}
+PIN: dict[str, int] = {}
 
 
 def _modules(root: Path) -> list[Path]:
