@@ -12,7 +12,8 @@ The rules are not restated: each plan is parsed into ``CompanyWorkflowPlan`` and
 ``evaluate_plan_gate`` (``plan_gate.py``), the function the service runs on every write. A plan
 passes when it parses, the gate finds nothing missing, and the status it declares is the status
 the gate earns. ``negative_control`` plants a missing handoff and must see the gate object, so
-an all-green run means the rule is live.
+an all-green run means the rule is live; a plan with no handoff has none to plant, so it is not
+applicable there. A file that cannot be read as a plan is a named failure, never a traceback.
 
 Exit code:
   0 - every plan passes and the negative control fired
@@ -22,7 +23,7 @@ Exit code:
 import json
 import sys
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 BACKEND = REPO_ROOT / "autobot-backend"
@@ -59,12 +60,33 @@ def load_plan(path: Path) -> CompanyWorkflowPlan:
     return CompanyWorkflowPlan.model_validate(json.loads(path.read_text(encoding="utf-8")))
 
 
-def negative_control(plan: CompanyWorkflowPlan) -> bool:
-    """True when the gate flags the plan once its handoffs are removed; False if it does not object."""
+def negative_control(plan: CompanyWorkflowPlan) -> Optional[bool]:
+    """True when the gate flags the plan once its handoffs are removed; False if it does not object.
+
+    None when the plan has no handoff: there is none to remove, so the control does not apply (a valid
+    single-lane plan has no handoff by construction).
+    """
     if not plan.handoffs:
-        return False
+        return None
     planted = plan.model_copy(update={"handoffs": []})
     return any(HANDOFF_RULE in p for p in plan_problems(planted))
+
+
+def _read_failure(path: Path, exc: Exception) -> str:
+    reason = str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__
+    return f"{path.name}: cannot be read as a workflow plan ({type(exc).__name__}: {reason})"
+
+
+def _plan_failures(path: Path) -> List[str]:
+    """Why one file fails: it is unreadable or malformed, the gate disagrees, or the control did not fire."""
+    try:
+        plan = load_plan(path)
+    except (OSError, ValueError) as exc:  # ValueError covers bad JSON, bad encoding and pydantic's ValidationError
+        return [_read_failure(path, exc)]
+    failures = [f"{path.name}: {p}" for p in plan_problems(plan)]
+    if negative_control(plan) is False:
+        failures.append(f"{path.name}: negative control did not fire (planted missing handoff accepted)")
+    return failures
 
 
 def validate_dir(directory: Path) -> List[str]:
@@ -72,13 +94,7 @@ def validate_dir(directory: Path) -> List[str]:
     paths = sorted(directory.glob("*.json"))
     if not paths:
         return [f"no example plans in {directory}"]
-    failures: List[str] = []
-    for path in paths:
-        plan = load_plan(path)
-        failures += [f"{path.name}: {p}" for p in plan_problems(plan)]
-        if not negative_control(plan):
-            failures.append(f"{path.name}: negative control did not fire (planted missing handoff accepted)")
-    return failures
+    return [line for path in paths for line in _plan_failures(path)]
 
 
 def main(argv: List[str]) -> int:
