@@ -22,7 +22,7 @@ def _name(model: str) -> str:
     return model[: -len(":latest")] if model.endswith(":latest") else model
 
 
-def resolve(held: list, gpu_models: list, roles: dict, fallback: str) -> dict:
+def resolve_backend_models(held: list, gpu_models: list, roles: dict, fallback: str) -> dict:
     held_names = {_name(m) for m in held}
     gpu_names = {_name(m) for m in gpu_models}
     if not held_names:
@@ -38,4 +38,4 @@ def resolve(held: list, gpu_models: list, roles: dict, fallback: str) -> dict:
 
 
 if __name__ == "__main__":
-    print(json.dumps(resolve(**json.loads(os.environ["BACKEND_MODEL_INPUT"]))))
+    print(json.dumps(resolve_backend_models(**json.loads(os.environ["BACKEND_MODEL_INPUT"]))))
