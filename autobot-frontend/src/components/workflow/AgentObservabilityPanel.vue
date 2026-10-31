@@ -239,7 +239,8 @@ function formatPercent(score: number): string {
 
 .empty-state .icon,
 .loading-state .icon {
-  font-size: var(--text-4xl);
+  width: var(--text-4xl);
+  height: var(--text-4xl);
   margin-bottom: var(--spacing-2-5);
 }
 
