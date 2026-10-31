@@ -456,8 +456,8 @@ async function createCompany() {
 
     // Redirect into the new company's PM workspace (LlcCompanyLayout → backlog,
     // boards, sprints, etc. with the sidebar) rather than the sidebar-less
-    // standalone /llc/dashboard, which left all PM features unreachable.
-    await router.push(`/llc/companies/${createdCompany.id}`)
+    // standalone /llc/dashboard. ?welcome=plan shows the planner card (#19938).
+    await router.push({ path: `/llc/companies/${createdCompany.id}`, query: { welcome: 'plan' } })
   } catch (err) {
     logger.error('Failed to create company', err)
     const e = err as { response?: { data?: { detail?: string } }; message?: string }
