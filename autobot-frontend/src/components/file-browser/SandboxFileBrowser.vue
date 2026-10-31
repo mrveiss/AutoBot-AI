@@ -8,15 +8,14 @@
         <Icon name="folder-open" />
         Sandbox Files
       </h3>
-      <button
-        class="btn-action-secondary btn-sm"
+      <BaseButton variant="secondary" size="sm"
         :disabled="loading"
         :aria-label="loading ? 'Loading…' : 'Refresh sandbox files'"
         @click="refresh"
       >
         <i :class="['fas', loading ? 'fa-spinner fa-spin' : 'fa-sync-alt']"></i>
         Refresh
-      </button>
+      </BaseButton>
     </div>
 
     <div v-if="error" class="sbfb-error" role="alert">
@@ -65,6 +64,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 import Icon from '@/components/ui/Icon.vue'
 import { onMounted } from 'vue'
 import { useFileSandbox } from '@/composables/useFileSandbox'
@@ -160,8 +160,4 @@ onMounted(refresh)
   justify-content: center;
 }
 
-.btn-sm {
-  font-size: 0.8rem;
-  padding: 0.25rem 0.6rem;
-}
 </style>

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -153,9 +154,9 @@ const templateCategories = computed(() => {
                 <option value="code">{{ $t('views.devSpeedup.code') }}</option>
                 <option value="symbol">{{ $t('views.devSpeedup.symbols') }}</option>
               </select>
-              <button @click="handleSearch" :disabled="isLoading || !searchQuery.trim()" class="btn-action-primary">
+              <BaseButton size="sm" @click="handleSearch" :disabled="isLoading || !searchQuery.trim()">
                 {{ $t('views.devSpeedup.search') }}
-              </button>
+              </BaseButton>
             </div>
           </div>
         </div>
@@ -201,9 +202,9 @@ const templateCategories = computed(() => {
               <label class="field-label">{{ $t('views.devSpeedup.description') }}</label>
               <textarea v-model="snippetDescription" rows="3" :placeholder="$t('views.devSpeedup.snippetPlaceholder')" class="field-input"></textarea>
             </div>
-            <button @click="handleGenerateSnippet" :disabled="isLoading || !snippetDescription.trim()" class="btn-action-primary btn-full">
+            <BaseButton size="sm" block @click="handleGenerateSnippet" :disabled="isLoading || !snippetDescription.trim()">
               {{ $t('views.devSpeedup.generateSnippet') }}
-            </button>
+            </BaseButton>
           </div>
         </div>
 
@@ -215,7 +216,7 @@ const templateCategories = computed(() => {
                   <span class="badge badge-info">{{ snippet.language }}</span>
                   <span v-for="tag in snippet.tags" :key="tag" class="badge badge-neutral">{{ tag }}</span>
                 </div>
-                <button @click="copyToClipboard(snippet.code)" class="btn-copy">{{ $t('views.devSpeedup.copy') }}</button>
+                <BaseButton variant="ghost" size="xs" @click="copyToClipboard(snippet.code)">{{ $t('views.devSpeedup.copy') }}</BaseButton>
               </div>
               <p class="snippet-desc">{{ snippet.description }}</p>
               <pre class="code-block"><code>{{ snippet.code }}</code></pre>
@@ -238,7 +239,7 @@ const templateCategories = computed(() => {
               <option :value="undefined">{{ $t('views.devSpeedup.allCategories') }}</option>
               <option v-for="cat in templateCategories" :key="cat" :value="cat">{{ cat }}</option>
             </select>
-            <button @click="handleFetchTemplates" :disabled="isLoading" class="btn-action-primary">{{ $t('views.devSpeedup.refresh') }}</button>
+            <BaseButton size="sm" @click="handleFetchTemplates" :disabled="isLoading">{{ $t('views.devSpeedup.refresh') }}</BaseButton>
           </div>
         </div>
 
@@ -253,7 +254,7 @@ const templateCategories = computed(() => {
                     <span class="badge badge-purple">{{ template.category }}</span>
                   </div>
                 </div>
-                <button @click="copyToClipboard(template.template)" class="btn-copy">{{ $t('views.devSpeedup.copy') }}</button>
+                <BaseButton variant="ghost" size="xs" @click="copyToClipboard(template.template)">{{ $t('views.devSpeedup.copy') }}</BaseButton>
               </div>
               <p class="template-desc">{{ template.description }}</p>
               <p v-if="template.variables.length > 0" class="template-vars">
@@ -299,9 +300,9 @@ const templateCategories = computed(() => {
               <label class="field-label">{{ $t('views.devSpeedup.code') }}</label>
               <textarea v-model="codeInput" rows="12" :placeholder="$t('views.devSpeedup.codePlaceholder')" class="field-input code-textarea"></textarea>
             </div>
-            <button @click="handleCodeAction" :disabled="isLoading || !codeInput.trim()" class="btn-action-primary btn-full">
+            <BaseButton size="sm" block @click="handleCodeAction" :disabled="isLoading || !codeInput.trim()">
               {{ isLoading ? $t('views.devSpeedup.processing') : $t('views.devSpeedup.runAction') }}
-            </button>
+            </BaseButton>
           </div>
         </div>
 
@@ -349,7 +350,7 @@ const templateCategories = computed(() => {
                   <h4 class="test-name">{{ test.name }}</h4>
                   <span class="badge badge-success">{{ test.framework }}</span>
                 </div>
-                <button @click="copyToClipboard(test.code)" class="btn-copy">{{ $t('views.devSpeedup.copy') }}</button>
+                <BaseButton variant="ghost" size="xs" @click="copyToClipboard(test.code)">{{ $t('views.devSpeedup.copy') }}</BaseButton>
               </div>
               <p class="test-desc">{{ test.description }}</p>
               <pre class="code-block"><code>{{ test.code }}</code></pre>
@@ -539,19 +540,6 @@ const templateCategories = computed(() => {
   margin: var(--spacing-2) 0 0;
 }
 
-.btn-copy {
-  background: none;
-  border: none;
-  color: var(--color-primary);
-  cursor: pointer;
-  font-size: var(--text-sm);
-  padding: var(--spacing-1) var(--spacing-2);
-  border-radius: var(--radius-sm);
-  transition: background var(--duration-150) var(--ease-in-out);
-}
-
-.btn-copy:hover { background: var(--color-primary-bg); }
-
 /* Code blocks */
 .code-block {
   background: var(--code-bg);
@@ -574,8 +562,6 @@ const templateCategories = computed(() => {
   gap: var(--spacing-4);
   margin-bottom: var(--spacing-4);
 }
-
-.btn-full { width: 100%; }
 
 /* Filter row */
 .filter-row {
