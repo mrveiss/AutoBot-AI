@@ -9,11 +9,11 @@ and each keeps a documented command working (#18129).
 """
 
 import re
-from pathlib import Path
 
 import pytest
+from repo_tests._paths import repo_root
 
-NATIVE_VM = Path(__file__).resolve().parent.parent / "autobot-infrastructure/shared/scripts/native-vm"
+NATIVE_VM = repo_root() / "autobot-infrastructure/shared/scripts/native-vm"
 SCRIPTS = ("start_autobot_native.sh", "stop_autobot_native.sh", "status_autobot_native.sh")
 _OWN_BLOCK = re.compile(r"^\s*(?:declare -A (?:VMS|SERVICES)\b|RED=|SSH_USER=)", re.MULTILINE)
 
