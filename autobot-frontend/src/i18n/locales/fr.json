@@ -110,7 +110,8 @@
       "medium": "Moyen",
       "high": "Élevé",
       "critical": "Critique"
-    }
+    },
+    "logsLoadFailed": "Échec du chargement des journaux : {error}"
   },
   "chat": {
     "sendMessage": "Envoyer un message...",
@@ -532,6 +533,7 @@
         "pending": "En attente",
         "running": "En cours d'exécution",
         "streaming": "Diffusion",
+        "waiting_explanation": "En attente d'explication",
         "explaining": "Expliquer",
         "completed": "Complété",
         "failed": "Échoué"
@@ -8098,6 +8100,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "Échec de l'activation de la fenêtre de maintenance",
+      "completeWindowFailed": "Échec de la finalisation de la fenêtre de maintenance",
+      "deleteWindowFailed": "Échec de la suppression de la fenêtre de maintenance",
+      "drainNodeFailed": "Échec du drainage du nœud. Veuillez réessayer.",
+      "resumeNodeFailed": "Échec de la reprise du nœud. Veuillez réessayer.",
+      "saveKeysFailed": "Échec de l'enregistrement des clés API. Consultez la console pour plus de détails.",
+      "addNodeFailed": "Échec de l'ajout du nœud"
     }
   },
   "mobile": {
