@@ -825,7 +825,7 @@ export default {
 
 .not-integrated .icon {
   color: var(--color-info);
-  font-size: var(--text-2xl);
+  width: var(--text-2xl); height: var(--text-2xl);
 }
 
 .error {
@@ -834,7 +834,7 @@ export default {
 
 .error .icon {
   color: var(--color-error);
-  font-size: var(--text-2xl);
+  width: var(--text-2xl); height: var(--text-2xl);
 }
 
 .integration-stats {
@@ -1052,7 +1052,7 @@ export default {
 
 .loading .icon,
 .no-data .icon {
-  font-size: var(--text-xl);
+  width: var(--text-xl); height: var(--text-xl);
 }
 
 /* Responsive Design */

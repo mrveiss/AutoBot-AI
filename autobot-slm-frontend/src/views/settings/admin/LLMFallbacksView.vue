@@ -26,6 +26,7 @@ import {
   type LLMActiveFallback,
 } from '@/composables/useAutobotApi'
 import { createLogger } from '@/utils/debugUtils'
+import { formatCompactRelativeTime } from '@/utils/dateUtils'
 
 const logger = createLogger('LLMFallbacksView')
 const api = useAutobotApi()
@@ -56,13 +57,7 @@ async function fetchFallbackStatus(): Promise<void> {
 
 function formatTime(timestamp: number): string {
   const date = new Date(timestamp * 1000)
-  const now = new Date()
-  const diffSeconds = Math.floor((now.getTime() - date.getTime()) / 1000)
-  if (diffSeconds < 60) {
-    return `${diffSeconds}s ago`
-  } else if (diffSeconds < 3600) {
-    return `${Math.floor(diffSeconds / 60)}m ago`
-  }
+  if (Date.now() - date.getTime() < 3600000) return formatCompactRelativeTime(date)
   return date.toLocaleTimeString()
 }
 

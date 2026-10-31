@@ -16,6 +16,7 @@ import { throwUnlessLoaded, useDashboardPoller } from '@/composables/useDashboar
 import { useFleetMetrics } from '@/composables/useFleetMetrics'
 import { createLogger } from '@/utils/debugUtils'
 import { slmApiClient } from '@/utils/ApiClient'
+import { formatCompactRelativeTime } from '@/utils/dateUtils'
 
 const logger = createLogger('AlertsMonitor')
 
@@ -112,14 +113,7 @@ function getPriorityBadgeClass(priority: string): string {
 function formatTimestamp(ts: number): string {
   // ts is already in milliseconds (from Date.now() / .getTime())
   const date = new Date(ts)
-  const now = new Date()
-  const diffMs = now.getTime() - date.getTime()
-  const diffMins = Math.floor(diffMs / 60000)
-
-  if (diffMins < 1) return 'Just now'
-  if (diffMins < 60) return `${diffMins}m ago`
-  const diffHours = Math.floor(diffMins / 60)
-  if (diffHours < 24) return `${diffHours}h ago`
+  if (Date.now() - date.getTime() < 86400000) return formatCompactRelativeTime(date)
   return date.toLocaleDateString()
 }
 
