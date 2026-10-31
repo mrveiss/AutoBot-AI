@@ -85,7 +85,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/codebase_analytics/endpoints/pattern_analysis.py": 817,
     "autobot-backend/api/codebase_analytics/endpoints/report.py": 2262,
     "autobot-backend/api/codebase_analytics/endpoints/stats.py": 663,
-    "autobot-backend/api/conversation_files.py": 996,
+    "autobot-backend/api/conversation_files.py": 981,
     "autobot-backend/api/database_mcp.py": 1056,
     "autobot-backend/api/development_speedup.py": 611,
     "autobot-backend/api/enterprise_features.py": 700,
@@ -125,7 +125,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/api/schemas_analytics.py": 3533,
     "autobot-backend/api/schemas_chat.py": 702,
     "autobot-backend/api/schemas_code.py": 3257,
-    "autobot-backend/api/schemas_knowledge.py": 5120,
+    "autobot-backend/api/schemas_knowledge.py": 5119,
     "autobot-backend/api/schemas_system.py": 4176,  # #18734: log-forwarding schemas moved out (4345 -> 4176)
     "autobot-backend/api/schemas_workflows.py": 2824,
     "autobot-backend/api/secrets.py": 1172,  # #19476 one model_dump serialization (was 1178, #16444)
@@ -190,7 +190,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/context_aware_decision/decision_engine.py": 815,
     "autobot-backend/context_aware_decision/tests/test_counterfactual_reasoner.py": 663,
     "autobot-backend/context_window_manager.py": 626,
-    "autobot-backend/conversation_file_manager.py": 1277,
+    "autobot-backend/conversation_file_manager.py": 1220,
     "autobot-backend/conversation_file_manager_init_test.py": 729,
     "autobot-backend/desktop_streaming_manager.py": 1419,
     "autobot-backend/enterprise_feature_manager.py": 955,
@@ -238,9 +238,9 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/llc/api/roles.py": 713,
     "autobot-backend/llc/api/sprints.py": 1223,
     "autobot-backend/llc/api/work_items.py": 1303,  # #19582: comment wake moved into the service
-    "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 1023,  # #19582 (shared run finder)
+    "autobot-backend/llc/scheduler/heartbeat_scheduler.py": 1019,  # #19582 (shared run finder)
     "autobot-backend/llc/services/template.py": 643,
-    "autobot-backend/llc/services/work_item_service.py": 1086,  # #19582: approval-category check moved out
+    "autobot-backend/llc/services/work_item_service.py": 1023,  # #20102: completion effects moved out
     "autobot-backend/llc/tests/conftest.py": 832,
     "autobot-backend/llc/tests/test_autobot_agent_adapter.py": 663,
     "autobot-backend/llc/tests/test_heartbeat_scheduler.py": 1042,
@@ -356,7 +356,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/services/workflow_automation/executor.py": 1104,
     "autobot-backend/services/workflow_export_test.py": 611,
     "autobot-backend/services/workflow_io.py": 693,
-    "autobot-backend/slash_command_handler.py": 1663,
+    "autobot-backend/slash_command_handler.py": 1662,
     "autobot-backend/takeover_manager.py": 1364,
     "autobot-backend/tasks/knowledge_tasks.py": 862,
     "autobot-backend/tests/agents/test_librarian_assistant_extract.py": 635,

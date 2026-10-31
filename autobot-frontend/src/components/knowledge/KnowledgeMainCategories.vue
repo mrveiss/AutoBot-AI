@@ -302,7 +302,8 @@ const showEmptyStateHint = computed(
 }
 
 .populate-btn .icon {
-  font-size: var(--text-xs);
+  width: var(--text-xs);
+  height: var(--text-xs);
 }
 
 /* Issue #5201: status panels for empty-KB / broken-KB states */
