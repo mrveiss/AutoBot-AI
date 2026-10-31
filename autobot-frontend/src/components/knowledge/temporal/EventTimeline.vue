@@ -231,7 +231,8 @@ function toggleExpand(eventId: string): void {
 
 .loading-state .icon,
 .empty-state .icon {
-  font-size: var(--text-2xl);
+  width: var(--text-2xl);
+  height: var(--text-2xl);
 }
 
 .empty-hint {
@@ -293,7 +294,8 @@ function toggleExpand(eventId: string): void {
 
 .timeline-dot .icon {
   color: white;
-  font-size: var(--text-xs);
+  width: var(--text-xs);
+  height: var(--text-xs);
 }
 
 /* Event Card */
@@ -420,7 +422,8 @@ function toggleExpand(eventId: string): void {
   }
 
   .timeline-dot .icon {
-    font-size: 8px;
+    width: var(--text-xs);
+    height: var(--text-xs);
   }
 }
 </style>
