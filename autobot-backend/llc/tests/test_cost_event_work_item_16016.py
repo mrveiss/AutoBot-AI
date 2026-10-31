@@ -163,7 +163,7 @@ async def test_another_companys_item_is_refused_and_charges_nothing(client, fact
     assert await _spent(factory) == Decimal("0")
 
 
-@pytest.mark.parametrize("bad", [str(uuid.uuid4()), "not-a-uuid"])
+@pytest.mark.parametrize("bad", ["00000000-0000-4000-8000-000000000001", "not-a-uuid"])
 async def test_an_unknown_or_malformed_item_is_refused(client, factory, bad):  # noqa: ANN001
     resp = await _post(client, 1_000_000, bad)
     assert resp.status_code == 404
