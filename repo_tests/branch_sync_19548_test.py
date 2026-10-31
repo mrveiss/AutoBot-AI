@@ -449,6 +449,13 @@ def test_the_summary_names_every_outcome() -> None:
     assert "| synced | 1 |" in summary and "- #1 `a`" in summary
 
 
+def test_the_summary_reports_branches_skipped_for_having_no_open_pr() -> None:
+    """The largest skip category: left out of the table, the totals would not add up (#20261)."""
+    plan = core.plan_run([], ["parked-a", "parked-b"], REPO)
+    summary = bs.render_summary(plan.skipped, dry_run=False)
+    assert f"| {core.NO_OPEN_PR} | 2 |" in summary and "- `parked-a` (no PR)" in summary
+
+
 # ------------------------------------------- real git: --no-ff and 0 behind
 
 

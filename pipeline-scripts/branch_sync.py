@@ -315,7 +315,7 @@ def _emit(text: str) -> None:
 
 def render_summary(results: Dict[str, List[str]], dry_run: bool) -> str:
     order = (core.SYNCED, core.CURRENT, core.CONFLICT, core.WORKFLOW, core.HEAD_MOVED, core.FORK)
-    order += (core.OTHER_BASE, core.POLICY, core.UNREACHABLE, core.ERROR)
+    order += (core.OTHER_BASE, core.NO_OPEN_PR, core.POLICY, core.UNREACHABLE, core.ERROR)
     lines = ["## Branch sync with main (#19548)", ""]
     if dry_run:
         lines += ["**Dry run: nothing was pushed, labelled or commented.**", ""]
