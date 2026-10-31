@@ -16,7 +16,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { BaseModal, BaseButton } from '@autobot/ui'
 import { useRoles, type NodeRolesInfo } from '@/composables/useRoles'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 
 const props = defineProps<{
   nodeId: string
@@ -136,7 +136,7 @@ function getStatusClass(status: string): string {
 }
 
 function formatDate(dateStr: string | null): string {
-  return formatDateTime(dateStr)
+  return formatFleetDateTime(dateStr)
 }
 </script>
 
