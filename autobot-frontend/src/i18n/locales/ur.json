@@ -3655,6 +3655,8 @@
       "executionStrategies": "Execution Strategies"
     },
     "history": {
+      "durationSeconds": "سیکنڈ",
+      "durationMinutes": "منٹ",
       "allStatus": "All Status",
       "reRun": "Re-run",
       "passed": "passed",
