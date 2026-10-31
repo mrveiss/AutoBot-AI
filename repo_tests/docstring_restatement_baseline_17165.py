@@ -119,9 +119,9 @@ KNOWN_RESTATEMENTS: dict[str, frozenset[str]] = {
     "autobot-backend/services/wake_word_service.py": frozenset({"remove_callback"}),
     "autobot-backend/services/workflow_automation/models.py": frozenset({"WorkflowStepStatus"}),
     "autobot-backend/temporal_knowledge_manager.py": frozenset({"stop_background_processing"}),
+    "autobot-backend/tools/kb_write_tools.py": frozenset({"add_file_to_knowledge_base"}),
     "autobot-backend/tools/tool_registry.py": frozenset(
         {
-            "add_file_to_knowledge_base",
             "bring_window_to_front",
             "execute_system_command",
             "list_system_services",
