@@ -174,7 +174,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--app", required=True, help="the app's locales directory (must contain en.json)")
     parser.add_argument("--repo-root", default=".", help="repository root (default: cwd)")
-    parser.add_argument("--refusals", action="store_true", help="print per-locale counts of keys kept in English, by reason")
+    parser.add_argument(
+        "--refusals", action="store_true", help="print per-locale counts of keys kept in English, by reason"
+    )
     parser.add_argument("--check", action="store_true", help="fail instead of writing when a file would change")
     args = parser.parse_args(argv)
 
