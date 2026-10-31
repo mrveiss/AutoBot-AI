@@ -1850,7 +1850,7 @@ watch(layoutMode, () => {
 }
 
 .relation-target .icon {
-  font-size: var(--text-xs);
+  width: var(--text-xs); height: var(--text-xs);
   color: var(--text-tertiary);
 }
 
