@@ -33,6 +33,7 @@ from pathlib import Path
 from typing import Dict, List
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.secret_redaction import REDACTED_PLACEHOLDER
 from autobot_shared.singleton_factory import lazy_singleton
 
 logger = get_logger(__name__)
@@ -1242,9 +1243,7 @@ class SecretsShowSubcommand(Command):
 
         Issue #620.
         """
-        if len(value) > 12:
-            return f"{value[:4]}...{value[-4:]}"
-        return "****" if value else "(empty)"
+        return REDACTED_PLACEHOLDER if value else "(empty)"
 
     def _format_secret_display(self, full_secret: dict) -> str:
         """
