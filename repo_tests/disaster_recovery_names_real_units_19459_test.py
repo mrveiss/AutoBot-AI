@@ -37,7 +37,7 @@ def _role_tasks(root) -> list[str]:
 REACH = declare(
     "disaster-recovery-deployed-units",
     discover=_role_tasks,
-    floor=130,  # 138 measured at filing, pinned mid-window
+    floor=137,  # 138 measured at filing, pinned mid-window
     growth=16,
     what="role task files read for the systemd units they install (#19459)",
     roots=(_ROLES,),
