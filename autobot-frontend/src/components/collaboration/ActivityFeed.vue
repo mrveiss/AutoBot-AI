@@ -11,23 +11,18 @@
 import Icon from '@/components/ui/Icon.vue'
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { formatRelativeTime } from '@autobot/ui'
 import { useSessionCollaboration, type CollaboratorActivity } from '@/composables/useSessionCollaboration'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 
 const { recentCollaboratorActivities, sessionPresence, isConnected } = useSessionCollaboration()
 
 // Format timestamp relative to now
 const formatTime = (date: Date): string => {
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-  const seconds = Math.floor(diff / 1000)
-  const minutes = Math.floor(seconds / 60)
-  const hours = Math.floor(minutes / 60)
-
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
   if (seconds < 60) return t('collaboration.activityFeed.justNow')
-  if (minutes < 60) return t('collaboration.activityFeed.minutesAgo', { count: minutes })
-  if (hours < 24) return t('collaboration.activityFeed.hoursAgo', { count: hours })
+  if (seconds < 86400) return formatRelativeTime(date, { locale: locale.value, style: 'narrow' })
   return date.toLocaleDateString()
 }
 
