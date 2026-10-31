@@ -145,6 +145,8 @@
       "value0Reports": "{value0} reports"
     },
     "processMonitorTab": {
+      "durationSeconds": "s",
+      "durationMinutes": "m",
       "actions": "Ações",
       "agentID": "Agent ID",
       "all": "All",
