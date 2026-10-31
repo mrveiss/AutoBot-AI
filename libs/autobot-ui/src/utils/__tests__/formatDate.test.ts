@@ -7,7 +7,8 @@ import {
   formatDateTime,
   formatISOString,
   formatTime,
-  formatTimeAgo
+  formatTimeAgo,
+  formatRelativeTime
 } from '../format'
 
 const ISO = '2025-10-30T14:30:15Z'
@@ -118,5 +119,56 @@ describe('formatTimeAgo (#19905)', () => {
 
   it('reads an invalid value as unknown', () => {
     expect(formatTimeAgo('nope')).toBe('unknown')
+  })
+})
+
+describe('formatRelativeTime (#19606)', () => {
+  const NOW = Date.parse('2026-01-01T00:00:00Z')
+  const ago = (seconds: number, options = {}) =>
+    formatRelativeTime(NOW - seconds * 1000, { locale: 'en', now: NOW, ...options })
+
+  it('walks the units on Intl.RelativeTimeFormat', () => {
+    expect(ago(0)).toBe('0 seconds ago')
+    expect(ago(5)).toBe('5 seconds ago')
+    expect(ago(1)).toBe('1 second ago')
+    expect(ago(180)).toBe('3 minutes ago')
+    expect(ago(7200)).toBe('2 hours ago')
+    expect(ago(345600)).toBe('4 days ago')
+    expect(ago(1209600)).toBe('2 weeks ago')
+    expect(ago(5184000)).toBe('2 months ago')
+    expect(ago(63072000)).toBe('2 years ago')
+  })
+
+  it('reads a future moment as in the future', () => {
+    expect(ago(-7200)).toBe('in 2 hours')
+  })
+
+  it('narrow style is the compact 5s / 3m / 2h / 4d form', () => {
+    expect(ago(5, { style: 'narrow' })).toBe('5s ago')
+    expect(ago(180, { style: 'narrow' })).toBe('3m ago')
+    expect(ago(7200, { style: 'narrow' })).toBe('2h ago')
+    expect(ago(345600, { style: 'narrow' })).toBe('4d ago')
+  })
+
+  it('maxUnit counts a longer span in that unit', () => {
+    expect(ago(3888000, { maxUnit: 'day' })).toBe('45 days ago')
+  })
+
+  it('localises through the locale argument', () => {
+    expect(ago(7200, { locale: 'de' })).toBe('vor 2 Stunden')
+    expect(ago(7200, { locale: 'fr' })).toBe('il y a 2 heures')
+  })
+
+  it('keeps the dash, or the caller text, for a missing or unparseable moment', () => {
+    expect(formatRelativeTime(null)).toBe('—')
+    expect(formatRelativeTime('nope')).toBe('—')
+    expect(formatRelativeTime(undefined, { nullText: 'Never' })).toBe('Never')
+  })
+
+  it('defaults to the current time', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(NOW)
+    expect(formatRelativeTime(NOW - 120000, { locale: 'en' })).toBe('2 minutes ago')
+    vi.useRealTimers()
   })
 })
