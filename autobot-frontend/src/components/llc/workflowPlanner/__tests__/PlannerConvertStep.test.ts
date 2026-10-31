@@ -92,7 +92,8 @@ describe('PlannerConvertStep approve and convert', () => {
     await flushPromises()
     expect(confirm).toHaveBeenCalledTimes(1)
     expect(post).toHaveBeenCalledWith(`${BASE}/approve`)
-    expect((w.emitted('changed')?.[0]?.[0] as { status: string }).status).toBe('approved')
+    const changed = w.emitted('changed') as Array<[{ status: string }]>
+    expect(changed[0][0].status).toBe('approved')
   })
 
   it('does not approve when the owner cancels the confirmation', async () => {
