@@ -255,6 +255,7 @@ const { t } = useI18n()
 import type { WorkItem } from './workItemTypes'
 import { commentAuthor, toArtifact, toActivityEvent } from './workItemDetailTypes'
 import type { Comment, Artifact, ActivityEvent, GoalAncestor, RawWorkProduct, RawActivityEntry } from './workItemDetailTypes'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const props = defineProps<{
   item: WorkItem
@@ -348,9 +349,7 @@ const availableActions = computed(() => {
   return [...transitions, ...extras]
 })
 
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
-}
+const formatTime = createDateFormatter({ intl: { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' } })
 
 function renderMarkdown(text: string) {
   return text

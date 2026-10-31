@@ -5501,6 +5501,13 @@
       "chatMessage": "Chat message",
       "attachFile": "Attach file",
       "retryUpload": "Retry upload",
+      "uploadError": {
+        "http": "اپ لوڈ ناکام ہو گیا (اسٹیٹس {status})",
+        "invalidResponse": "سرور نے ناقابل مطالعہ جواب بھیجا",
+        "network": "اپ لوڈ کے دوران نیٹ ورک کی خرابی",
+        "cancelled": "اپ لوڈ منسوخ کر دیا گیا",
+        "unknown": "اپ لوڈ ناکام ہو گیا"
+      },
       "removeFile": "Remove file",
       "overseerLabel": "Overseer",
       "managePresets": "Manage slash command presets",
