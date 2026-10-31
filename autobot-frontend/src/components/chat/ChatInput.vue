@@ -462,7 +462,7 @@ import McpPromptPicker from './McpPromptPicker.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
 import { getFileIconNameByMimeType } from '@/utils/iconMappings'
 import { createLogger } from '@/utils/debugUtils'
-import { getApiBase } from '@/config/ssot-config'
+import { postConversationUpload } from '@/utils/conversationFileUpload'
 import type { MultiModalResponse } from '@/utils/VisionMultimodalApiClient'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useSlashCommands } from '@/composables/useSlashCommands'
@@ -1063,77 +1063,36 @@ const generateId = (): string => {
   return crypto.randomUUID()
 }
 
-// Real file upload implementation
+// Real file upload implementation (transport and bearer: utils/conversationFileUpload.ts, #20133)
 const uploadFile = async (upload: UploadItem, file: File): Promise<void> => {
-  const formData = new FormData()
-  formData.append('file', file)
-
   const startTime = Date.now()
   upload.status = 'Uploading...'
 
   try {
-    await new Promise<string>((resolve, reject) => {
-      const xhr = new XMLHttpRequest()
+    const response = await postConversationUpload(store.currentSessionId || 'default', file, (loaded, total) => {
+      upload.current = loaded
+      upload.total = total
+      upload.progress = (loaded / total) * 100
 
-      // Track upload progress
-      xhr.upload.addEventListener('progress', (event) => {
-        if (event.lengthComputable) {
-          upload.current = event.loaded
-          upload.total = event.total
-          upload.progress = (event.loaded / event.total) * 100
+      // Calculate ETA
+      const elapsed = Date.now() - startTime
+      if (elapsed > 0) {
+        const rate = loaded / elapsed // bytes per millisecond
+        const remaining = (total - loaded) / rate / 1000 // seconds
+        upload.eta = remaining > 1 ? remaining : undefined
+      }
 
-          // Calculate ETA
-          const elapsed = Date.now() - startTime
-          if (elapsed > 0) {
-            const rate = event.loaded / elapsed // bytes per millisecond
-            const remaining = (event.total - event.loaded) / rate / 1000 // seconds
-            upload.eta = remaining > 1 ? remaining : undefined
-          }
-
-          upload.status = `Uploading... ${Math.round(upload.progress)}%`
-        }
-      })
-
-      // Handle successful completion
-      xhr.addEventListener('load', () => {
-        if (xhr.status === 200) {
-          upload.status = 'Complete'
-          upload.progress = 100
-
-          try {
-            const response = JSON.parse(xhr.responseText)
-            upload.fileId = response.file_info?.file_id
-            upload.uploadId = response.upload_id
-
-            // Remove from progress after delay
-            setTimeout(() => {
-              const index = uploadProgress.value.findIndex(u => u.id === upload.id)
-              if (index !== -1) uploadProgress.value.splice(index, 1)
-            }, 2000)
-
-            resolve(response.file_info?.file_id || '')
-          } catch {
-            reject(new Error('Invalid response from server'))
-          }
-        } else {
-          reject(new Error(`Upload failed with status: ${xhr.status}`))
-        }
-      })
-
-      // Handle errors
-      xhr.addEventListener('error', () => {
-        reject(new Error('Network error during upload'))
-      })
-
-      xhr.addEventListener('abort', () => {
-        reject(new Error('Upload cancelled'))
-      })
-
-      // Send request
-      const sessionId = store.currentSessionId || 'default'
-      xhr.open('POST', `${getApiBase()}/conversation-files/conversation/${sessionId}/upload`)
-      xhr.send(formData)
+      upload.status = `Uploading... ${Math.round(upload.progress)}%`
     })
+    upload.status = 'Complete'
+    upload.progress = 100
+    upload.fileId = response.file_info?.file_id
+    upload.uploadId = response.upload_id
+    // Remove from progress after delay
+    setTimeout(() => {
+      const index = uploadProgress.value.findIndex(u => u.id === upload.id)
+      if (index !== -1) uploadProgress.value.splice(index, 1)
+    }, 2000)
   } catch (error) {
     upload.error = error instanceof Error ? error.message : 'Upload failed'
     upload.status = 'Failed'
