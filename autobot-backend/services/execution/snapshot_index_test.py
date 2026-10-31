@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import importlib
 
+import pytest
+
 import services.execution.snapshot_index as snapshot_index
 from autobot_shared.paths import project_root
 
@@ -53,3 +55,33 @@ def test_deployed_install_still_resolves_to_the_original_default(monkeypatch):
     finally:
         monkeypatch.delenv("AUTOBOT_PROJECT_ROOT", raising=False)
         importlib.reload(snapshot_index)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    ["[" * 200_000, '{"n": ' + "9" * 5000 + "}"],
+    ids=["deeply-nested", "over-long-integer"],
+)
+def test_unparseable_index_is_a_bad_record_not_an_exception(tmp_path, payload):
+    (tmp_path / snapshot_index._INDEX_FILENAME).write_text(payload, encoding="utf-8")
+    index = snapshot_index.SnapshotIndex(storage_path=tmp_path)
+    assert index.get("any") is None
+    assert index.list_by_session("any") == []
+
+
+@pytest.mark.parametrize("stored", ["{not json", "[" * 200_000, '["a list"]'])
+def test_add_and_remove_refuse_an_unreadable_index_and_leave_it_as_it_is(tmp_path, stored):
+    """#20169: writing back after a failed read would lose every existing record."""
+    index = snapshot_index.SnapshotIndex(storage_path=tmp_path)
+    index._index_path.write_text(stored, encoding="utf-8")
+    record = snapshot_index.SnapshotRecord(
+        snapshot_id="s1", session_id="sess", container_id="c1", image_name="img", created_at="2026-10-31T00:00:00+00:00"
+    )
+
+    with pytest.raises(snapshot_index.SnapshotIndexUnreadable):
+        index.add(record)
+    with pytest.raises(snapshot_index.SnapshotIndexUnreadable):
+        index.remove(record.snapshot_id)
+
+    assert index._index_path.read_text(encoding="utf-8") == stored
+    assert index.list_all() == []

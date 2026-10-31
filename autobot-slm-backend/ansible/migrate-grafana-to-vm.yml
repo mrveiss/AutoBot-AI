@@ -72,7 +72,6 @@
   hosts: monitoring_vm
   become: true
   vars:
-    grafana_version: "11.1.0"  # pinned copy of the monitoring role's grafana_version (#19329)
     grafana_host: "{{ ansible_host }}"
     grafana_port: 3000
     slm_server_ip: "{{ infrastructure.hosts.slm }}"
@@ -83,35 +82,13 @@
     # ==========================================================
     # Install Grafana
     # ==========================================================
-    - name: "Install | Add Grafana GPG key"
-      ansible.builtin.apt_key:
-        url: https://apt.grafana.com/gpg.key
-        state: present
-      tags: ['install']
-
-    - name: "Install | Add Grafana APT repository"
-      ansible.builtin.apt_repository:
-        repo: deb https://apt.grafana.com stable main
-        state: present
-        filename: grafana
-      tags: ['install']
-
-    # #19329: pinned on a fresh install only; a rerun never downgrades an installed Grafana.
-    - name: "Install | Check whether Grafana is installed"
-      ansible.builtin.command:
-        cmd: "dpkg-query -W --showformat=${Status} grafana"
-      register: _grafana_installed
-      changed_when: false
-      failed_when: false
-      check_mode: false  # read-only query; the install guard below needs it under --check
-      tags: ['install']
-
-    - name: "Install | Install Grafana"
-      ansible.builtin.apt:
-        name: "grafana={{ grafana_version }}"
-        state: present
-        update_cache: true
-      when: "'ok installed' not in _grafana_installed.stdout"
+    # #19661: the monitoring role holds the one install and the one grafana_version.
+    - name: "Install | Install or upgrade Grafana"
+      ansible.builtin.include_role:
+        name: monitoring
+        tasks_from: grafana_install.yml
+        apply:
+          tags: ['install']
       tags: ['install']
 
     # ==========================================================
