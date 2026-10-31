@@ -161,7 +161,7 @@ KIT_NAMES_REACH = declare(
 TS_FILES_REACH = declare(
     "kit-shadow-ts-files-scanned-14908",
     discover=_scanned_ts_files,
-    floor=474,  # mid-window: population 499, window (449, 499)
+    floor=507,  # mid-window: population 532, window (482, 532)
     growth=50,
     what="non-test .ts files scanned for kit-name redeclarations",
     roots=_APPS,

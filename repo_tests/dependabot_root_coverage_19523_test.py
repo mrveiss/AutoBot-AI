@@ -118,7 +118,7 @@ def _roots(root: Path) -> list[tuple[str, str]]:
 REACH = declare(
     "dependabot-package-roots",
     discover=_roots,
-    floor=26,
+    floor=27,  # mid-window: population 27, window (27, 27)
     what="tracked (ecosystem, directory) package roots",
 )
 
