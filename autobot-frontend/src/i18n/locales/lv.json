@@ -110,7 +110,8 @@
       "medium": "Vidējs",
       "high": "Augsts",
       "critical": "Kritisks"
-    }
+    },
+    "logsLoadFailed": "Neizdevās ielādēt žurnālus: {error}"
   },
   "chat": {
     "sendMessage": "Nosūtīt ziņu...",

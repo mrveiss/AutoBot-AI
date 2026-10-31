@@ -1359,7 +1359,8 @@
       "showingCountOfCount2Entries": "Showing {count} of {count2} entries",
       "source": "Fonte:",
       "source1": "Fonte",
-      "time": "Time"
+      "time": "Time",
+      "loadError": "Falha ao carregar os registos: {error}"
     },
     "metricsDetailsView": {
       "activeWorkers": "Active Workers",

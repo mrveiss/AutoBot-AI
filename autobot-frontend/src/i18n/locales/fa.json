@@ -110,7 +110,8 @@
       "medium": "متوسط",
       "high": "بالا",
       "critical": "Critical"
-    }
+    },
+    "logsLoadFailed": "بارگذاری گزارش‌ها ناموفق بود: {error}"
   },
   "nav": {
     "chat": "گفتگو",

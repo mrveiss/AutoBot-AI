@@ -1359,7 +1359,8 @@
       "showingCountOfCount2Entries": "Showing {count} of {count2} entries",
       "source": "Quelle:",
       "source1": "Quelle",
-      "time": "Time"
+      "time": "Time",
+      "loadError": "Protokolle konnten nicht geladen werden: {error}"
     },
     "metricsDetailsView": {
       "activeWorkers": "Active Workers",

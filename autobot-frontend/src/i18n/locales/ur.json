@@ -110,7 +110,8 @@
       "medium": "درمیانہ",
       "high": "زیادہ",
       "critical": "Critical"
-    }
+    },
+    "logsLoadFailed": "لاگز لوڈ کرنے میں ناکامی: {error}"
   },
   "nav": {
     "chat": "چیٹ",

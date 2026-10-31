@@ -110,7 +110,8 @@
       "medium": "Médio",
       "high": "Alto",
       "critical": "Crítico"
-    }
+    },
+    "logsLoadFailed": "Falha ao carregar os registos: {error}"
   },
   "chat": {
     "sendMessage": "Envie uma mensagem...",

@@ -110,7 +110,8 @@
       "medium": "Średni",
       "high": "Wysoki",
       "critical": "Krytyczny"
-    }
+    },
+    "logsLoadFailed": "Nie udało się wczytać dzienników: {error}"
   },
   "chat": {
     "sendMessage": "Wyślij wiadomość...",

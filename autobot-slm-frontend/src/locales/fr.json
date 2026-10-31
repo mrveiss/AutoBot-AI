@@ -1359,7 +1359,8 @@
       "showingCountOfCount2Entries": "Showing {count} of {count2} entries",
       "source": "Source :",
       "source1": "Source",
-      "time": "Time"
+      "time": "Time",
+      "loadError": "Échec du chargement des journaux : {error}"
     },
     "metricsDetailsView": {
       "activeWorkers": "Active Workers",
