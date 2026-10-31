@@ -27,6 +27,7 @@ export interface SLMConfig {
   port: {
     backend: number
     frontend: number
+    frontendServed: number
     slmApi: number
     grafana: number
     prometheus: number
@@ -111,6 +112,11 @@ const config: SLMConfig = {
   port: {
     backend: getEnvPositiveInt('VITE_BACKEND_PORT', 8001),
     frontend: getEnvPositiveInt('VITE_FRONTEND_PORT', 5173),
+    // #20058: nginx's port on a nginx host, else the dev port
+    frontendServed: getEnvPositiveInt(
+      'VITE_FRONTEND_SERVED_PORT',
+      getEnvPositiveInt('VITE_FRONTEND_PORT', 5173),
+    ),
     slmApi: getEnvPositiveInt('VITE_SLM_PORT', 8000),
     grafana: getEnvPositiveInt('VITE_GRAFANA_PORT', 3000),
     prometheus: getEnvPositiveInt('VITE_PROMETHEUS_PORT', 9090),

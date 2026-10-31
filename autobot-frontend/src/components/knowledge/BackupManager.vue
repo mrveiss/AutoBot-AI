@@ -363,7 +363,8 @@ onMounted(() => {
 
 .loading-state .icon,
 .empty-state .icon {
-  font-size: 2rem;
+  width: 2rem;
+  height: 2rem;
   margin-bottom: var(--spacing-2);
   display: block;
   margin-inline: auto;

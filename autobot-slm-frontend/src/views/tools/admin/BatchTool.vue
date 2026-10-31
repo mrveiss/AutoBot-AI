@@ -16,7 +16,7 @@ const logger = createLogger('BatchTool')
 import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAutobotApi } from '@/composables/useAutobotApi'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import { BaseAlert, BaseModal, PollingPausedAlert } from '@autobot/ui'
 import { formatDuration } from '@/utils/formatHelpers'
 import { useDashboardPoller } from '@/composables/useDashboardPoller'
@@ -418,11 +418,11 @@ onMounted(() => poller.start(''))
         <div class="grid grid-cols-4 gap-4 text-sm">
           <div>
             <p class="text-gray-500">{{ $t('tools.admin.batchTool.created') }}</p>
-            <p class="text-gray-900">{{ formatDateTime(job.created_at, '-') }}</p>
+            <p class="text-gray-900">{{ formatFleetDateTime(job.created_at, '-') }}</p>
           </div>
           <div>
             <p class="text-gray-500">{{ $t('tools.admin.batchTool.started') }}</p>
-            <p class="text-gray-900">{{ formatDateTime(job.started_at, '-') }}</p>
+            <p class="text-gray-900">{{ formatFleetDateTime(job.started_at, '-') }}</p>
           </div>
           <div>
             <p class="text-gray-500">{{ $t('tools.admin.batchTool.duration') }}</p>
