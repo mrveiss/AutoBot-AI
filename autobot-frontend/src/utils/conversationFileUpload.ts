@@ -14,12 +14,10 @@
  * none of which the kit method exposes.
  */
 import { getApiBase } from '@/config/ssot-config'
+import type { components } from '@/types/generated/api'
 import { readStoredAuthToken } from '@/utils/authToken'
 
-export interface ConversationUploadResponse {
-  upload_id?: string
-  file_info?: { file_id?: string }
-}
+export type ConversationUploadResponse = components['schemas']['FileUploadResponse']
 
 /** POST `file` to the conversation's upload route; rejects on a non-200, a bad body, a network error or an abort. */
 export function postConversationUpload(
