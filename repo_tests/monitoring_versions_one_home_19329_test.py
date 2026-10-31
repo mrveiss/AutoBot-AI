@@ -8,8 +8,8 @@ Maintainer decision 2026-10-26: the compose values win -- Prometheus 2.53.0, Gra
 Before, the VM fleet ran 2.48.0 / 10.2.0, compose ran 2.53.0 / 11.1.0, and two Ansible paths
 installed Grafana ``latest``. CI already reads ``prometheus_version`` from the home to pin promtool.
 
-Consumers that cannot read an Ansible role default -- the two compose stacks' image tags, the
-``slm_manager`` role and the Grafana migration play -- carry ONE pinned copy each. This guard fails
+Consumers that cannot read an Ansible role default -- the two compose stacks' image tags -- carry
+ONE pinned copy each; every Ansible Grafana install includes the monitoring role's (#19661). This guard fails
 when a copy differs from the home, when a version literal appears anywhere else in the compose,
 infrastructure and Ansible trees, or when ``latest`` (or an untagged image) comes back.
 """
@@ -49,8 +49,6 @@ _PINNED = {
     ("docker-compose.yml", "prometheus"): 1,
     ("docker-compose.yml", "grafana"): 1,
     ("autobot-infrastructure/shared/config/logging/loki/docker-compose-loki.yml", "grafana"): 1,
-    ("autobot-slm-backend/ansible/roles/slm_manager/defaults/main.yml", "grafana"): 1,
-    ("autobot-slm-backend/ansible/migrate-grafana-to-vm.yml", "grafana"): 1,
     ("autobot-infrastructure/shared/scripts/install-slm.sh", "prometheus"): 1,
     ("autobot-infrastructure/shared/scripts/install-slm.sh", "grafana"): 1,
 }
