@@ -26,9 +26,11 @@ from __future__ import annotations
 
 from typing import Any, Dict, Tuple
 
+from autobot_shared.auth.permissions import is_admin_role
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.secret_redaction import redact_content, redact_url_credentials
 from knowledge.query_sanitizer import sanitize_for_storage
+from knowledge.write_scope import KbWriteDenied, current_caller_write, guard_caller_metadata
 
 logger = get_logger(__name__)
 
@@ -129,3 +131,30 @@ def sanitize_fact_content(content: str, metadata: Dict[str, Any] | None) -> Tupl
     if metadata[CREDENTIAL_REDACTED]:
         logger.warning("Credential pattern redacted in a stored fact: route=%s", route)
     return redacted, metadata
+
+
+def sanitize_new_fact(content: str, metadata: Dict[str, Any] | None) -> Tuple[str, Dict[str, Any]]:
+    """:func:`sanitize_fact_content` after the caller-ownership guard (#19517) -- ``store_fact``'s one entry."""
+    return sanitize_fact_content(content, guard_caller_metadata(metadata))
+
+
+def sanitize_update_metadata(metadata: Dict[str, Any]) -> Dict[str, Any]:
+    """A caller's ``update_fact`` metadata, URL-redacted and without ownership the caller may not set (#19517)."""
+    return redact_url_metadata_fields(guard_caller_metadata(metadata, stamp=False))
+
+
+async def guard_update(kb: Any, fact_id: str, stored: Dict[str, Any]) -> Dict[str, Any]:
+    """A copy of *stored*, after a non-admin scope has shown it owns the fact it is about to edit.
+
+    Ownership is required as well as ``check_access``: that answers "may read", which every
+    signed-in user can for a SYSTEM or PUBLIC fact. No ownership manager means no answer: refuse.
+    """
+    caller = current_caller_write()
+    if caller is not None and not is_admin_role(caller.role):
+        manager = getattr(kb, "ownership_manager", None)
+        owner = stored.get("owner_id") or stored.get("user_id")
+        if not (manager and caller.user_id and owner == caller.user_id):
+            raise KbWriteDenied("A caller may only update a fact it owns")
+        if not await manager.check_access(fact_id, caller.user_id, stored, user_org_id=caller.org_id):
+            raise KbWriteDenied("A caller may only update a fact it can access")
+    return dict(stored)
