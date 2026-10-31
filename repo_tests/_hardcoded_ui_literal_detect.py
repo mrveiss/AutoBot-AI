@@ -63,7 +63,7 @@ def scan(root: Path) -> dict[str, list[tuple[str, str]]]:
 REACH_UI_LITERAL_FILES = declare(
     "hardcoded-ui-literal-scan",
     discover=scanned_files,
-    floor=550,
+    floor=571,  # mid-window: population 591, window (551, 591)
     growth=40,
     skips=0,
     what=".vue files scanned for hard-coded UI text",

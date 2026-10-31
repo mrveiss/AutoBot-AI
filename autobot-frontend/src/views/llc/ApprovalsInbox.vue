@@ -56,7 +56,7 @@
           <div class="card-header">
             <span class="type-badge" :class="`type-${item.type}`">{{ formatType(item.type) }}</span>
             <span class="card-meta">{{ $t('llc.approvals.requestedBy', { id: item.requested_by_agent_id }) }}</span>
-            <span class="card-meta">{{ formatDate(item.created_at) }}</span>
+            <span class="card-meta">{{ formatDateTime(item.created_at) || '—' }}</span>
           </div>
 
           <div class="payload-section">
@@ -120,7 +120,7 @@
             <span class="type-badge" :class="`type-${item.type}`">{{ formatType(item.type) }}</span>
             <span class="status-badge" :class="`status-${item.status}`">{{ formatType(item.status) }}</span>
             <span class="card-meta">{{ $t('llc.approvals.decidedBy', { id: item.decided_by_agent_id ?? '—' }) }}</span>
-            <span class="card-meta">{{ formatDate(item.decided_at ?? item.updated_at) }}</span>
+            <span class="card-meta">{{ formatDateTime(item.decided_at ?? item.updated_at) || '—' }}</span>
           </div>
           <div class="payload-section">
             <button class="toggle-payload" @click="togglePayload(item.id)">
@@ -200,10 +200,6 @@ const filteredHistory = computed(() => {
 
 function formatType(val: string) {
   return val.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-}
-
-function formatDate(iso: string | null) {
-  return formatDateTime(iso) || '—'
 }
 
 function formatJson(payload: Record<string, unknown>) {
