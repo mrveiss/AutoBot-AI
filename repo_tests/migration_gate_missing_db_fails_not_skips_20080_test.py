@@ -79,7 +79,9 @@ def _run(tmp_path: Path, extra_env: dict[str, str]) -> subprocess.CompletedProce
 
 def _count(out: str, word: str) -> int:
     """The exact count pytest's summary line reports for `word`, 0 when absent."""
-    m = re.search(rf"\b(\d+) {word}\b", out.splitlines()[-1])
+    # stderr follows stdout in `out` and can end in a plugin's warning, so the last line need not be the summary.
+    summary = [line for line in out.splitlines() if re.search(r"\bin [\d.]+s\b", line)]
+    m = re.search(rf"\b(\d+) {word}\b", summary[-1]) if summary else None
     return int(m.group(1)) if m else 0
 
 
