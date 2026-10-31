@@ -34,6 +34,36 @@ export interface AuditEntry {
 }
 
 /**
+ * One row as `GET /audit/logs` sends it (`AuditEntry.to_response_dict` in
+ * services/audit_logger.py): `timestamp` is epoch SECONDS (a float), the
+ * operation's data is in `details`, and there is no `metadata` field (#20173).
+ * {@link AuditEntry} is the older dashboard shape and still declares the
+ * timestamp as a string; it becomes this type once the dashboard components
+ * stop treating it as one.
+ */
+export interface AuditApiEntry {
+  id: string
+  timestamp: number
+  date: string
+  operation: string
+  result: AuditResult
+  user_id: string | null
+  ip_address: string | null
+  session_id: string | null
+  user_role: string | null
+  resource: string | null
+  vm_source: string | null
+  vm_name: string | null
+  details: Record<string, unknown>
+  performance_ms: number | null
+}
+
+/** An audit row's epoch-seconds timestamp as a Date (`new Date(seconds)` reads it as milliseconds). */
+export function auditTimestampToDate(seconds: number): Date {
+  return new Date(seconds * 1000)
+}
+
+/**
  * Query parameters for audit logs
  */
 export interface AuditQueryParams {
@@ -51,11 +81,11 @@ export interface AuditQueryParams {
 /**
  * Audit log query response from backend
  */
-export interface AuditQueryResponse {
+export interface AuditQueryResponse<E = AuditEntry> {
   success: boolean
   total_returned: number
   has_more: boolean
-  entries: AuditEntry[]
+  entries: E[]
   query: AuditQueryParams
 }
 

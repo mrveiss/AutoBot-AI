@@ -23,7 +23,7 @@
  */
 
 import { createLogger } from '@/utils/debugUtils'
-import { getSlmApiBase } from '@/config/ssot-config'
+import { getEnvPositiveInt, getSlmApiBase } from '@/config/ssot-config'
 import { clearSlmSession, readSlmToken } from '@/utils/authStorage'
 import { buildLoginUrl, isLoginPathname } from '@/utils/loginRedirect'
 import {
@@ -44,11 +44,7 @@ export { SERVICE_UNAVAILABLE_STATUS, parseRetryAfterMs, withQuery }
 
 // Default request timeout. Module-level constant sourced from an env var so it
 // is never hard-coded at a call site (falls back to 30s when unset).
-const DEFAULT_TIMEOUT_MS = (() => {
-  const raw = import.meta.env.VITE_SLM_API_TIMEOUT_MS
-  const parsed = raw != null && raw !== '' ? parseInt(String(raw), 10) : NaN
-  return Number.isNaN(parsed) ? 30_000 : parsed
-})()
+const DEFAULT_TIMEOUT_MS = getEnvPositiveInt('VITE_SLM_API_TIMEOUT_MS', 30_000)
 
 // The kit owns the options type; callers keep importing it from here under its old name.
 export type { TransportRequestOptions as RequestOptions }
