@@ -1,3 +1,6 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
 # GitHub Actions workflow — backend startup-import smoke test (#6789 / #6540)
 #
 # Catches the recurring #6042 migration-regression family at PR time:
@@ -7,82 +10,29 @@
 # Fails the PR if any new backend module loses the ability to fresh-import.
 # Known-broken modules tracked in KNOWN_BROKEN_AT_TEST_INTRODUCTION inside
 # tests/test_startup_imports.py with issue refs.
+#
+# #18208: this file is the reusable BODY of one gate. ci.yml calls it; the triggers, the
+# `changes` job, the concurrency group and any required-context job that used to live here
+# are in ci.yml now. Nothing in this file may publish a required context: a job in a called
+# workflow reports as `<caller job> / <job>`, which is not the name branch protection matches.
 
-name: Backend Startup Import Smoke
+name: Backend Startup Import Smoke (reusable body)
 
 on:
-  # #14054: the merge queue builds each entrant against base + the entries
-  # ahead of it and expects the required contexts to report against that
-  # temporary ref. A required context with no `merge_group:` trigger never
-  # fires, and the queue waits on it forever. Inert until the `merge_queue`
-  # ruleset rule is enabled -- this event does not exist before then.
-  merge_group:
-  push:
-    branches: [release, main, develop]
-    #
-    # #12986: the backend-Python entries are the canonical `backend-python` set
-    # from .github/filters/backend-python-paths.yml; GitHub cannot include a file here, so
-    # pipeline-scripts/check_workflow_path_filters.py enforces the match.
-    paths:
-      - 'autobot-backend/**/*.py'
-      - 'autobot-slm-backend/**/*.py'
-      - 'autobot_shared/**/*.py'
-      - '.github/filters/backend-python-paths.yml'
-      - '**/requirements*.txt'
-      - 'requirements-ci/**'
-      - '.github/workflows/startup-import-smoke.yml'
-      - '.github/workflows/_changes.yml'
-      - '.github/workflows/backend-required-context.yml'
-  # NOTE: no pull_request.paths filter — this workflow ALWAYS runs on PRs so its
-  # required-check context ("startup-import-smoke") always reports a conclusion.
-  # A path-filtered required check that never triggers leaves the PR deadlocked
-  # on "Expected — Waiting for status". The real work is gated on the `changes`
-  # job below.
-  #
-  # That gating job SKIPS when no backend paths are touched — it does NOT report
-  # success, which is what this comment used to claim. A skipped job publishes a
-  # check run whose conclusion is `skipped`, and branch protection does not accept
-  # that for a required context, so a pull request touching no backend Python sat
-  # blocked on a context nothing could turn green. The green in that case comes
-  # from the complement shim in backend-required-context.yml, exactly as
-  # python-required-context.yml serves `python-suite` (#14353).
-  # Branch-protection promotion to required happened separately (#10022).
-  pull_request:
-    # ready_for_review is REQUIRED here: the jobs below are gated on
-    # draft == false, and marking a PR ready fires ONLY this event. Without
-    # it a required context stays `skipped` and the PR can never merge.
-    types: [opened, synchronize, reopened, ready_for_review]
-    branches: [release, main, develop]
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  workflow_call:
+    outputs:
+      ok:
+        description: "'true' only when every step of the smoke test passed"
+        value: ${{ jobs.import-smoke.outputs.ok }}
 
 permissions:
   contents: read
 
 jobs:
-  changes:
-    # DELIBERATELY UNGATED (#17957). Path detection costs seconds and
-    # every `always()` aggregate below reads `needs.changes.result`.
-    # Gating it makes those read `skipped` and exit 1, so a REQUIRED
-    # context would report FAILED on every draft -- worse than no gate.
-    # Gate the expensive jobs, never the cheap thing others read.
-    name: Detect changed paths
-    uses: ./.github/workflows/_changes.yml
-    with:
-      # #14054: dorny/paths-filter errors on an event it does not
-      # recognise unless `base` is given, and a failed `changes` job
-      # skips every job that needs it -- i.e. the required context
-      # never reports and the queue deadlocks. Empty on push/PR, so
-      # their existing behaviour is unchanged.
-      merge_group_base: true
-      # #12986: `backend` is defined in the canonical filter file.
-      filters: .github/filters/backend-python-paths.yml
-
-  startup-import-smoke:
-    needs: changes
-    if: github.event_name == 'merge_group' || needs.changes.outputs.backend == 'true'
+  import-smoke:
+    name: Backend Startup Import Smoke
+    outputs:
+      ok: ${{ steps.done.outputs.ok }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -156,3 +106,11 @@ jobs:
             echo "it as an intentional carve-out in the test's module docstring."
             exit 1
           }
+
+      # Positive evidence for the `startup-import-smoke` gate in ci.yml (#18208): this step is
+      # reached only when every step above it succeeded, so the output below is
+      # 'true' on a full pass and empty on a failure, a cancel or a timeout.
+      - name: Record that every step passed
+        id: done
+        shell: bash
+        run: echo "ok=true" >> "$GITHUB_OUTPUT"

@@ -362,6 +362,7 @@ _DECLARED_SCOPES = {
     ),
     "file-type-sets-one-home-19339": ("autobot-backend",),
     "llc-actor-id-scan": ("autobot-backend/llc",),
+    "docker-smoke-context-publishers": (".github/workflows",),
     "cache-never-in-repo": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "node-major-literals": (
         ".github",

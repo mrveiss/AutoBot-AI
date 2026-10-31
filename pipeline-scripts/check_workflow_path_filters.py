@@ -16,6 +16,14 @@ policing. A workflow's ``on.push.paths`` / ``on.pull_request.paths`` trigger
 cannot: GitHub offers no include mechanism for event path filters, so those
 copies are unavoidable. This guard is what stops them being *silent*.
 
+#18208 MOVED THE FILTERS' CONSUMER. ci.yml has one `changes` job that loads every file in
+`.github/filters/`, and no `on.*.paths` of its own, so the per-workflow `paths:` copies of the
+canonical sets that this guard policed (security, ai-security-review, startup-import-smoke,
+api-wiring, code-quality, verify-generated-types) no longer exist. What is left to police:
+the two workflows that still carry a literal copy (``INLINE_CONSUMERS``), the one filter key in
+`gate-paths.yml` that is a copy of the canonical set (``FILTER_KEY_COPIES``), and the
+shared-tree watchers, which are filter KEYS now rather than workflow triggers.
+
 TWO CANONICAL SETS, ONE CONTRACT. #15608 extracted a second one --
 `.github/filters/code-quality-paths.yml`, the path list for the REQUIRED
 ``code-quality`` context -- for the same reason plus one more: its complement
@@ -63,10 +71,7 @@ CANONICAL_FILE = Path(".github/filters/backend-python-paths.yml")
 CANONICAL_KEY = "backend-python"
 
 WORKFLOWS = Path(".github/workflows")
-
-# The one reusable `changes` job (#15360). A caller job `uses:` it and passes its
-# filter source as `with.filters`, which is as good as a dorny step of its own.
-REUSABLE_CHANGES = "./.github/workflows/_changes.yml"
+FILTERS_DIR = Path(".github/filters")
 
 # workflow filename -> event names whose `paths:` must carry the canonical set.
 #
@@ -76,31 +81,29 @@ REUSABLE_CHANGES = "./.github/workflows/_changes.yml"
 # being forgotten.
 INLINE_CONSUMERS: dict[str, tuple[str, ...]] = {
     "phase_validation.yml": ("push",),
-    "security.yml": ("pull_request",),
-    "ai-security-review.yml": ("pull_request",),
-    "startup-import-smoke.yml": ("push",),
-    "api-wiring.yml": ("push",),
     "auto-fix-generated-types.yml": ("pull_request",),
+}
+
+# Filter files whose KEYS are literal copies of the canonical set (#18208). A key here must
+# contain every canonical entry, exactly as an `on.*.paths` copy above must. `security_scope` is
+# what security.yml's `on.pull_request.paths` used to be: GitHub cannot include a file in an event
+# path filter, and dorny cannot include a key from another file either.
+#
+# filter file name -> keys
+FILTER_KEY_COPIES: dict[str, tuple[str, ...]] = {
+    "gate-paths.yml": ("security_scope",),
 }
 
 # Workflows that name a backend-Python directory but are deliberately NOT
 # consumers of the canonical set. Recorded so a reader can see they were
 # considered rather than missed.
 NOT_CONSUMERS: dict[str, str] = {
-    "verify-generated-types.yml": (
-        "its `types` and `slm_types` filters are per-product generated-types "
-        "triggers, deliberately scoped to one backend tree each; the canonical "
-        "set names BOTH backends, so adopting it would erase that split. The "
-        "shared tree they must nonetheless watch (#14885) is asserted by "
-        "SHARED_TREE_WATCHERS below instead."
-    ),
-    "backend-required-context.yml": (
-        "the complement shim publishing the required 'startup-import-smoke' "
-        "context (#15606). It reads the canonical file through its `changes` job "
-        "but declares NO `paths:` of its own, deliberately: a required-context "
-        "publisher that filters its trigger never starts on the pull requests it "
-        "is meant to rescue, which is the deadlock it exists to prevent. There "
-        "is no inline list here to keep in step with the canonical set."
+    "ci.yml": (
+        "the one workflow whose `changes` job loads this file by path (#18208). It declares NO "
+        "`paths:` of its own, deliberately -- a workflow that publishes required contexts and "
+        "filters its trigger never starts on the pull requests it is meant to gate -- so there is "
+        "no inline list to keep in step with the canonical set. REQUIRED_ABSENT_PATHS asserts the "
+        "absence."
     ),
     "llm-optimization-real-torch.yml": (
         "a narrow, non-required lane (#13049, #19170) that runs three "
@@ -125,20 +128,17 @@ NOT_CONSUMERS: dict[str, str] = {
 # The `on.push.paths` copy is the one GitHub gives no include mechanism for, so
 # it is policed here exactly like the backend-Python inline copies above.
 CODE_QUALITY_FILE = Path(".github/filters/code-quality-paths.yml")
-CODE_QUALITY_KEY = "backend"
+CODE_QUALITY_KEY = "backend"  # unique across .github/filters/ (repo_tests/filter_keys_are_unique_18208_test.py)
 
-CODE_QUALITY_INLINE_CONSUMERS: dict[str, tuple[str, ...]] = {
-    "code-quality.yml": ("push",),
-}
+# Nothing carries a literal copy any more: code-quality.yml's `on.push.paths` went with the
+# workflow (#18208). The table stays, empty, so a future copy is a table entry and not a new guard.
+CODE_QUALITY_INLINE_CONSUMERS: dict[str, tuple[str, ...]] = {}
 
 CODE_QUALITY_NOT_CONSUMERS: dict[str, str] = {
-    "code-quality-required-context.yml": (
-        "the complement shim publishing the required 'code-quality' context "
-        "(#15608). It reads the canonical file through its `changes` job but "
-        "declares NO `paths:` of its own, deliberately: a required-context "
-        "publisher that filters its trigger never starts on the pull requests it "
-        "is meant to rescue, which is the deadlock it exists to prevent. There is "
-        "no inline list here to keep in step with the canonical set."
+    "ci.yml": (
+        "its one `changes` job loads this file by path (#18208) and publishes the REQUIRED "
+        "'code-quality' context from an `if: always()` gate. It declares no `paths:`, so there is "
+        "no inline list to keep in step with the canonical set."
     ),
 }
 
@@ -159,20 +159,21 @@ SHARED_TREE_PREFIX = "autobot_shared/"
 # the #12986 defect class; the per-product split is why it cannot be closed by
 # adopting the canonical list.
 #
-# workflow filename -> (event names whose `paths:` must name it,
-#                       dorny filter keys that must name it)
-SHARED_TREE_WATCHERS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
-    "verify-generated-types.yml": (("push",), ("types", "slm_types")),
+# filter file name -> dorny filter keys that must name it. These were workflow triggers AND inline
+# filter keys of verify-generated-types.yml; the workflow is a reusable body of ci.yml now and the
+# keys live in gate-paths.yml (#18208), so keys are all that is left to watch.
+SHARED_TREE_WATCHERS: dict[str, tuple[str, ...]] = {
+    "gate-paths.yml": ("types", "slm_types"),
 }
 
 # `paths:` on this event must stay ABSENT for these workflows (#12934).
 REQUIRED_ABSENT_PATHS: dict[str, tuple[str, str]] = {
-    "api-wiring.yml": (
+    "ci.yml": (
         "pull_request",
         "#12934: a path-filtered required check never triggers, and an absent "
         "required context is treated as unsatisfied rather than passed, so the "
-        "pull request is permanently blocked. The audit is gated on the "
-        "`changes` job instead.",
+        "pull request is permanently blocked. Which gates have work is decided by "
+        "the `changes` job instead.",
     ),
 }
 
@@ -228,20 +229,16 @@ def _event_paths(parsed: dict, path: Path, event: str) -> list[str] | None:
 
 
 def _filter_sources(parsed: dict) -> list:
-    """Every raw dorny `filters` value in *parsed*, from either supported shape.
+    """Every raw dorny `filters` value in *parsed*.
 
-    A workflow either runs the dorny/paths-filter step itself, or calls the one
-    reusable ``_changes.yml`` job (#15360) and hands its filter source in as
-    ``with.filters``. Both mean "this is where the path set lives", so both are
-    yielded; the values are returned raw (possibly absent or non-string) so each
-    caller keeps its own fatal on a malformed one.
+    Values are returned raw (possibly absent or non-string) so each caller keeps its own fatal on a
+    malformed one. Before #18208 a workflow could also hand its source to the reusable
+    `_changes.yml`; that workflow is gone (repo_tests/one_paths_filter_job_15360_test.py asserts no
+    caller remains).
     """
     sources: list = []
     for job in (parsed.get("jobs") or {}).values():
         if not isinstance(job, dict):
-            continue
-        if str(job.get("uses", "")).strip() == REUSABLE_CHANGES:
-            sources.append((job.get("with") or {}).get("filters"))
             continue
         for step in job.get("steps") or []:
             if isinstance(step, dict) and "dorny/paths-filter" in str(step.get("uses", "")):
@@ -326,37 +323,35 @@ def shared_tree_paths(canonical: list[str]) -> list[str]:
     return shared
 
 
-def _dorny_filters(parsed: dict, path: Path) -> dict:
-    """The inline `filters:` block of *path*'s single dorny/paths-filter step.
+def check_filter_key_copies(canonical: list[str]) -> tuple[list[str], int]:
+    """A filter key that is a literal copy of the canonical set must contain all of it (#18208)."""
+    failures: list[str] = []
+    checked = 0
+    for name, keys in FILTER_KEY_COPIES.items():
+        path = FILTERS_DIR / name
+        parsed = _load_yaml(path)
+        if not keys:
+            failures.append(f"{path}: declared in FILTER_KEY_COPIES with no keys -- the table is stale")
+            continue
+        for key in keys:
+            entries = parsed.get(key)
+            if not isinstance(entries, list):
+                failures.append(f"{path}: filter '{key}' is absent or is not a list -- the table is stale")
+                continue
+            missing = [p for p in canonical if p not in _flatten(entries)]
+            checked += 1
+            if missing:
+                failures.append(f"{path}: filter '{key}' is missing {missing}")
+            else:
+                print(f"  OK     {path} filter '{key}' carries all {len(canonical)} canonical entries")  # noqa: print
+    return failures, checked
 
-    Every failure to find exactly one is fatal. A restructured workflow whose
-    filters this guard can no longer locate is the case where "found nothing to
-    check" and "checked and it was fine" are indistinguishable.
-    """
-    found: list[dict] = []
-    for raw in _filter_sources(parsed):
-        if not isinstance(raw, str):
-            sys.exit(f"FATAL: {path}'s path-filter source has no inline `filters:` block")
-        try:
-            block = yaml.safe_load(raw)
-        except yaml.YAMLError as exc:
-            sys.exit(f"FATAL: {path}'s inline `filters:` block is not parseable YAML: {exc}")
-        if not isinstance(block, dict) or not block:
-            sys.exit(f"FATAL: {path}'s inline `filters:` block did not parse to a non-empty mapping")
-        found.append(block)
-    if not found:
-        sys.exit(f"FATAL: {path} has no path-filter source, but this guard's table says it should")
-    # EXACTLY one, asserted rather than assumed. Returning the first of several
-    # would silently pick a block that may not hold the keys being checked; a
-    # workflow that splits its filter keys across two steps must be looked at,
-    # not guessed at.
-    if len(found) > 1:
-        sys.exit(
-            f"FATAL: {path} has {len(found)} path-filter sources (dorny steps or `_changes.yml` calls). "
-            "This guard assumes exactly one "
-            "per registered workflow — which block holds a given filter key can no longer be determined"
-        )
-    return found[0]
+
+def _flatten(entries: list) -> list[str]:
+    out: list[str] = []
+    for item in entries:
+        out.extend(_flatten(item) if isinstance(item, list) else [item] if isinstance(item, str) else [])
+    return out
 
 
 def check_shared_tree_watchers(canonical: list[str]) -> tuple[list[str], int]:
@@ -364,44 +359,31 @@ def check_shared_tree_watchers(canonical: list[str]) -> tuple[list[str], int]:
     shared = shared_tree_paths(canonical)
     failures: list[str] = []
     checked = 0
-    for name, (events, keys) in SHARED_TREE_WATCHERS.items():
-        workflow = WORKFLOWS / name
-        # Per ENTRY, not just per table. An entry with empty tuples contributes
-        # nothing to `checked` and validates nothing, while the other entries
-        # keep the global total non-zero — so the run still reports success over
-        # a workflow this table claims to police. That is the same "an empty
-        # result reads as a clean result" shape the global check already guards
+    for name, keys in SHARED_TREE_WATCHERS.items():
+        path = FILTERS_DIR / name
+        # Per ENTRY, not just per table. An entry with no keys contributes nothing to `checked`
+        # and validates nothing, while the other entries keep the global total non-zero -- so the
+        # run would report success over a file this table claims to police. That is the same
+        # "an empty result reads as a clean result" shape the global check already guards
         # against, one level down.
-        if not events or not keys:
+        if not keys:
             failures.append(
-                f"{workflow}: declared in SHARED_TREE_WATCHERS with no events and/or no filter keys "
-                "— the table is stale; it would assert nothing about this workflow"
+                f"{path}: declared in SHARED_TREE_WATCHERS with no filter keys "
+                "-- the table is stale; it would assert nothing about this file"
             )
             continue
-        parsed = _load_yaml(workflow)
-        for event in events:
-            paths = _event_paths(parsed, workflow, event)
-            if paths is None:
-                failures.append(f"{workflow}: `on.{event}` declares no `paths:` at all, but must watch {shared}")
-                continue
-            missing = [p for p in shared if p not in paths]
-            checked += 1
-            if missing:
-                failures.append(f"{workflow}: `on.{event}.paths` is missing {missing}")
-            else:
-                print(f"  OK     {workflow} on.{event}.paths watches the shared tree")  # noqa: print
-        block = _dorny_filters(parsed, workflow)
+        block = _load_yaml(path)
         for key in keys:
             entries = block.get(key)
             if not isinstance(entries, list):
-                failures.append(f"{workflow}: dorny filter '{key}' is absent or is not a list — the table is stale")
+                failures.append(f"{path}: filter '{key}' is absent or is not a list -- the table is stale")
                 continue
-            missing = [p for p in shared if p not in entries]
+            missing = [p for p in shared if p not in _flatten(entries)]
             checked += 1
             if missing:
-                failures.append(f"{workflow}: dorny filter '{key}' is missing {missing}")
+                failures.append(f"{path}: filter '{key}' is missing {missing}")
             else:
-                print(f"  OK     {workflow} filter '{key}' watches the shared tree")  # noqa: print
+                print(f"  OK     {path} filter '{key}' watches the shared tree")  # noqa: print
     return failures, checked
 
 
@@ -426,23 +408,30 @@ def check_code_quality_set() -> tuple[list[str], int]:
 
 
 def check_declarations_resolve() -> list[str]:
-    """Every declared workflow must exist.
+    """Every declared workflow and filter file must exist.
 
     An allowlist entry naming a moved file exempts nothing and does it
     silently, so the table has to be checked against the tree.
     """
-    return [
-        f"{WORKFLOWS / name}: declared in this guard's table but does not exist — the table is stale"
-        for name in sorted(
-            set(INLINE_CONSUMERS)
-            | set(NOT_CONSUMERS)
-            | set(REQUIRED_ABSENT_PATHS)
-            | set(SHARED_TREE_WATCHERS)
-            | set(CODE_QUALITY_INLINE_CONSUMERS)
-            | set(CODE_QUALITY_NOT_CONSUMERS)
-        )
+    workflows = (
+        set(INLINE_CONSUMERS)
+        | set(NOT_CONSUMERS)
+        | set(REQUIRED_ABSENT_PATHS)
+        | set(CODE_QUALITY_INLINE_CONSUMERS)
+        | set(CODE_QUALITY_NOT_CONSUMERS)
+    )
+    filters = set(FILTER_KEY_COPIES) | set(SHARED_TREE_WATCHERS)
+    stale = [
+        f"{WORKFLOWS / name}: declared in this guard's table but does not exist -- the table is stale"
+        for name in sorted(workflows)
         if not (WORKFLOWS / name).is_file()
     ]
+    stale += [
+        f"{FILTERS_DIR / name}: declared in this guard's table but does not exist -- the table is stale"
+        for name in sorted(filters)
+        if not (FILTERS_DIR / name).is_file()
+    ]
+    return stale
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -459,20 +448,23 @@ def main(argv: list[str] | None = None) -> int:
             print(f"  FAIL   {failure}")  # noqa: print
         return 1
 
-    inline_failures, checked = check_inline_consumers(canonical)
+    inline_failures, inline_checked = check_inline_consumers(canonical)
     failures += inline_failures
+    copy_failures, copy_checked = check_filter_key_copies(canonical)
+    failures += copy_failures
     shared_failures, shared_checked = check_shared_tree_watchers(canonical)
     failures += shared_failures
     failures += check_required_absences()
     failures += check_no_undeclared_consumer()
 
-    cq_failures, cq_checked = check_code_quality_set()
+    cq_failures, _ = check_code_quality_set()
     failures += cq_failures
 
-    if checked == 0 or shared_checked == 0 or cq_checked == 0:
+    checked = inline_checked + copy_checked
+    if inline_checked == 0 or copy_checked == 0 or shared_checked == 0:
         print(  # noqa: print
-            f"\n  FAIL   {checked} inline path list(s), {shared_checked} shared-tree watcher(s) "
-            f"and {cq_checked} code-quality path list(s) were checked — a zero on any side "
+            f"\n  FAIL   {inline_checked} inline path list(s), {copy_checked} filter-key copie(s) "
+            f"and {shared_checked} shared-tree watcher(s) were checked -- a zero on any side "
             "means the guard scanned nothing"
         )
         return 1
@@ -482,7 +474,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if not failures:
         print(  # noqa: print
-            f"\ncheck-workflow-path-filters: {checked + cq_checked} inline path list(s) match their "
+            f"\ncheck-workflow-path-filters: {checked} inline path list(s) match their "
             f"canonical set, {shared_checked} shared-tree watcher(s) still name it"
         )
         return 0

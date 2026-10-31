@@ -87,6 +87,7 @@ REACH_ROOTS = {
         "docker-compose",
         "docker/",
     ),
+    "repo_tests/docker_smoke_required_context_17126_test.py": (".github/workflows",),
     "repo_tests/docs_liquid_tags_are_defined_17930_test.py": ("docs",),
     "repo_tests/duplicate_names_ratchet_14908_test.py": (
         "autobot-frontend/src",
