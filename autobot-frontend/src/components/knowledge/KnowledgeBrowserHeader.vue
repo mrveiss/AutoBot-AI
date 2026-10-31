@@ -105,7 +105,8 @@ defineEmits<Emits>()
 }
 
 .category-tab .icon {
-  font-size: var(--text-sm);
+  width: var(--text-sm);
+  height: var(--text-sm);
 }
 
 .category-count {
@@ -138,7 +139,8 @@ defineEmits<Emits>()
 
 .search-bar .icon {
   color: var(--text-tertiary);
-  font-size: var(--text-sm);
+  width: var(--text-sm);
+  height: var(--text-sm);
 }
 
 .search-input {
