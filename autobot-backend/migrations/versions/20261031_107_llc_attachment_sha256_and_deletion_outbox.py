@@ -39,7 +39,7 @@ def upgrade() -> None:
     if has_table(_TABLE):
         return
     op.create_table(
-        _TABLE,
+        "llc_attachment_file_deletions",
         sa.Column("id", UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("attachment_id", UUID(as_uuid=True), nullable=False),
         sa.Column("company_id", UUID(as_uuid=True), nullable=False),
