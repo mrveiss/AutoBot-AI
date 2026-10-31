@@ -32,6 +32,7 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable, Dict, FrozenSet
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.secret_redaction import REDACTED_PLACEHOLDER
 from constants.threshold_constants import TimingConstants
 from monitoring.prometheus_metrics import get_metrics_manager
 from orchestration.success_criteria import SuccessCriteriaEvaluator
@@ -675,14 +676,13 @@ class WorkflowExecutor:
         resolved by the caller.  Do NOT log the command — it may contain live
         credential values. (Issue #2153)
         """
-        # Integrates with the terminal WebSocket system when wired up.
-        # Simulate execution for now.
+        # Integrates with the terminal WebSocket system when wired up; simulated for now.
         logger.info("Executing workflow step (session=%s)", session_id)
 
         await asyncio.sleep(TimingConstants.STANDARD_DELAY)
 
         return {
-            "command": "[redacted]",
+            "command": REDACTED_PLACEHOLDER,
             "exit_code": 0,
             "stdout": "Simulated output",
             "stderr": "",
