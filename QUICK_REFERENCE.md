@@ -6,8 +6,8 @@
 # Deploy self-hosted AutoBot on your infrastructure
 git clone https://github.com/mrveiss/AutoBot-AI.git
 cd AutoBot-AI
-cp .env.example .env
-docker compose up -d
+bash docker/generate-secrets.sh
+docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d
 
 # Access your self-hosted automation platform
 # Visit http://localhost in your browser
