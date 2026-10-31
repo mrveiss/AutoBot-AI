@@ -12,8 +12,9 @@ from pathlib import Path
 
 import pytest
 import yaml
+from repo_tests._paths import repo_root
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+REPO_ROOT = repo_root()
 GITHUB_DIR = REPO_ROOT / ".github"
 ANSIBLE_DIR = REPO_ROOT / "autobot-slm-backend" / "ansible"
 FIXTURE = GITHUB_DIR / "actions" / "setup-python-suite" / "ci-config.yaml"
