@@ -110,3 +110,8 @@ slm_agent_version: ""
 # Redis connection (Issue #9226)
 # Agent imports from autobot_shared which requires REDIS_HOST set
 slm_agent_redis_host: "{{ redis_host | default('127.0.0.1') }}"
+
+# #19461: admin-server request timeouts in seconds. Unset by default, so slm/agent/request_timeouts.py
+# keeps the one default. Set either to pass it to the agent unit.
+# slm_agent_heartbeat_timeout:
+# slm_agent_event_sync_timeout:

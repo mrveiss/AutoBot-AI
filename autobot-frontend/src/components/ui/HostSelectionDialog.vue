@@ -629,9 +629,9 @@ onUnmounted(() => {
   gap: var(--spacing-3);
 }
 
-.loading-state .icon,
-.empty-state .icon {
-  font-size: var(--font-size-2xl);
+.loading-state > .icon,
+.empty-state > .icon {
+  width: var(--font-size-2xl); height: var(--font-size-2xl);
 }
 
 .add-host-link {
@@ -743,7 +743,7 @@ onUnmounted(() => {
 }
 
 .default-badge .icon {
-  font-size: var(--text-xs);
+  width: var(--text-xs); height: var(--text-xs);
 }
 
 .host-details {

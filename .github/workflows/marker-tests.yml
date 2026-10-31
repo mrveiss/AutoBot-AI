@@ -138,6 +138,7 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/marker-tests.yml'
+      - '.github/actions/setup-python-suite/ci-config.yaml'
   pull_request:
     # ready_for_review is REQUIRED here: the jobs below are gated on
     # draft == false, and marking a PR ready fires ONLY this event. Without
@@ -239,36 +240,7 @@ jobs:
           mkdir -p data logs static config
           touch data/.gitkeep logs/.gitkeep static/.gitkeep
 
-          cat > config/config.yaml << 'EOF'
-          # CI Testing Configuration
-          llm:
-            orchestrator_llm: "mock"
-            task_llm: "mock"
-            ollama:
-              model: "mock-model"
-              models: {}
-            unified:
-              embedding:
-                providers:
-                  ollama:
-                    selected_model: "mock-embed"
-
-          # #19316: no deployment.mode -- AUTOBOT_DEPLOYMENT_MODE is the one home; unset is auto-detect.
-
-          data:
-            reliability_stats_file: "data/reliability_stats.json"
-
-          diagnostics:
-            enabled: false
-            use_llm_for_analysis: false
-            use_web_search_for_analysis: false
-            auto_apply_fixes: false
-
-          redis:
-            host: "localhost"
-            port: 6379
-            db: 0
-          EOF
+          cp .github/actions/setup-python-suite/ci-config.yaml config/config.yaml
 
       - name: Run marked tests — backend, shared, tts-worker, repo_tests
         run: |
