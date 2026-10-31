@@ -60,6 +60,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "One frontend tree's `.vue` files, against all tracked `.vue` including the other frontend and the kit.",
     ),
+    "icon-font-size-rule-vue-files": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "One frontend tree's `.vue` files, against all tracked `.vue` including the other frontend and the kit.",
+    ),
     "deployment-mode-detector-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
