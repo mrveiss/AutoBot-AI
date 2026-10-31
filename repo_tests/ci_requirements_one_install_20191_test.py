@@ -12,7 +12,6 @@ import yaml
 from repo_tests._reach import declare
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-WORKFLOWS = REPO_ROOT / ".github" / "workflows"
 ACTION = REPO_ROOT / ".github" / "actions" / "install-ci-requirements" / "action.yml"
 _OWN_INSTALL = re.compile(r"pip install\b[^\n]*-r requirements-ci\.txt|requirements-file:\s*requirements-ci\.txt")
 _CALLERS = {
