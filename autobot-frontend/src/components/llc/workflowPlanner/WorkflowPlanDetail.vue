@@ -32,6 +32,8 @@ const warnings = ref<string[]>([])
 const loadError = ref('')
 /** Set when a re-read failed: what is on screen may not be what the server holds. */
 const staleError = ref('')
+/** Which of the two reads failed: the plan, the gate, or both. */
+const staleKind = ref<'plan' | 'gate' | 'both'>('plan')
 const busy = ref(false)
 const step = ref<StepId>('map')
 const editable = computed(() => !!plan.value && isActiveStatus(plan.value.status))
@@ -56,7 +58,7 @@ async function run(call: () => Promise<Plan>) {
   busy.value = true
   try {
     plan.value = await call()
-    await refreshGate()
+    await reread(false)
   } catch (err: unknown) {
     showToast(describeApiError(err, t('llc.workflowPlanner.saveFailed')), 'error')
   } finally {
@@ -70,15 +72,28 @@ async function onConverted(next?: Plan) {
   await reread(!next)
 }
 
-/** Re-read gate (and plan when asked). A failure marks the screen stale with a retry, never a silent toast. */
+/** Re-read gate (and plan when asked), each on its own so one failure never hides the other's result. */
 async function reread(withPlan: boolean) {
-  try {
-    if (withPlan) plan.value = await props.api.get(props.planKey)
-    await refreshGate()
+  const reads = await Promise.allSettled([
+    withPlan ? props.api.get(props.planKey) : Promise.resolve(plan.value),
+    props.api.gate(props.planKey),
+  ])
+  const [planRead, gateRead] = reads
+  if (planRead.status === 'fulfilled' && planRead.value) plan.value = planRead.value
+  if (gateRead.status === 'fulfilled') gate.value = gateRead.value
+  markStale(planRead, gateRead)
+}
+
+/** A failed re-read marks the screen stale with a retry, naming what failed, never a silent toast. */
+function markStale(planRead: PromiseSettledResult<unknown>, gateRead: PromiseSettledResult<unknown>) {
+  const failed = [planRead, gateRead].find((r): r is PromiseRejectedResult => r.status === 'rejected')
+  if (!failed) {
     staleError.value = ''
-  } catch (err: unknown) {
-    staleError.value = describeApiError(err, t('llc.workflowPlanner.loadFailed'))
+    return
   }
+  const both = planRead.status === 'rejected' && gateRead.status === 'rejected'
+  staleKind.value = both ? 'both' : planRead.status === 'rejected' ? 'plan' : 'gate'
+  staleError.value = describeApiError(failed.reason, t('llc.workflowPlanner.loadFailed'))
 }
 
 const retryReread = () => reread(true)
@@ -107,7 +122,7 @@ onMounted(load)
     </div>
 
     <template v-else>
-      <BaseAlert v-if="staleError" variant="warning" class="mb-3" :message="t('llc.workflowPlanner.stale', { reason: staleError })" data-testid="plan-stale">
+      <BaseAlert v-if="staleError" variant="warning" class="mb-3" :message="t(`llc.workflowPlanner.stale.${staleKind}`, { reason: staleError })" data-testid="plan-stale">
         <template #actions>
           <BaseButton size="sm" variant="outline" data-testid="plan-reread" @click="retryReread">{{ t('llc.workflowPlanner.rereadRetry') }}</BaseButton>
         </template>

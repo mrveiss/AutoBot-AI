@@ -8989,7 +8989,11 @@
       "retry": "Mēģināt vēlreiz",
       "loading": "Notiek plānu ielāde...",
       "loadFailed": "Neizdevās ielādēt plānu.",
-      "stale": "Šo plānu neizdevās atsvaidzināt, tāpēc redzamais var būt novecojis. {reason}",
+      "stale": {
+        "plan": "Šo plānu neizdevās atsvaidzināt, tāpēc redzamais var būt novecojis. {reason}",
+        "gate": "Gatavības pārbaudes neizdevās atsvaidzināt, tāpēc trūkstošo punktu saraksts var būt novecojis. {reason}",
+        "both": "Neizdevās atsvaidzināt ne plānu, ne tā gatavības pārbaudes, tāpēc redzamais var būt novecojis. {reason}"
+      },
       "rereadRetry": "Pārlādēt plānu",
       "saveFailed": "Neizdevās saglabāt izmaiņu.",
       "createFailed": "Neizdevās izveidot plānu.",
@@ -9135,6 +9139,7 @@
         "previewFailed": "Neizdevās izveidot priekšskatījumu.",
         "approveFailed": "Neizdevās apstiprināt plānu.",
         "approveBlocked": "Apstiprināšana ir bloķēta, kamēr nav atrisināts šis:",
+        "approveDetail": "Servera detaļas: {detail}",
         "convertFailed": "Neizdevās izveidot darbplūsmas.",
         "retryFailed": "Neizdevās atkārtot MI rindu priekšlikumus."
       }

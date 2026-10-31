@@ -67,4 +67,47 @@ describe('WorkflowPlanDetail failed re-read', () => {
     expect(w.find('[data-testid="plan-stale"]').exists()).toBe(false)
     expect(w.find('[data-testid="convert-preview"]').attributes('disabled')).toBeUndefined()
   })
+
+  async function previewWith(fail: { plan?: boolean; gate?: boolean }) {
+    const w = await openConvert()
+    post.mockRejectedValue(new Error('HTTP 409: gate open'))
+    get.mockImplementation((url: string) => {
+      const isGate = url === `${BASE}/gate`
+      if (isGate ? fail.gate : fail.plan) return Promise.reject(new Error(isGate ? 'HTTP 503: gate down' : 'HTTP 502: plan down'))
+      return Promise.resolve(isGate ? GATE : PLAN)
+    })
+    await w.find('[data-testid="convert-preview"]').trigger('click')
+    await flushPromises()
+    return w
+  }
+
+  it('after a good load, a failed gate re-read is flagged stale and names the gate only', async () => {
+    const w = await previewWith({ gate: true })
+    const alert = w.find('[data-testid="plan-stale"]')
+    expect(alert.text()).toContain('readiness checks could not be refreshed')
+    expect(alert.text()).not.toContain('This plan could not be refreshed')
+    expect(w.find('[data-testid="convert-preview"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('after a good load, a failed plan re-read is flagged stale and names the plan only', async () => {
+    const w = await previewWith({ plan: true })
+    const alert = w.find('[data-testid="plan-stale"]')
+    expect(alert.text()).toContain('This plan could not be refreshed')
+    expect(alert.text()).toContain('HTTP 502: plan down')
+    expect(w.find('[data-testid="convert-preview"]').attributes('disabled')).toBeDefined()
+  })
+
+  it('says both when the plan and the gate re-reads both fail', async () => {
+    const w = await previewWith({ plan: true, gate: true })
+    expect(w.find('[data-testid="plan-stale"]').text()).toContain('Neither the plan nor its readiness checks')
+  })
+
+  it('a failed gate re-read after a successful action is stale, not a failed save', async () => {
+    const w = await openConvert()
+    post.mockResolvedValue({ ...PLAN, revision: 2, conversion: { status: 'preview', contract_errors: [], preview_errors: [] } })
+    get.mockImplementation((url: string) => (url === `${BASE}/gate` ? Promise.reject(new Error('HTTP 503: gate down')) : Promise.resolve(PLAN)))
+    await w.find('[data-testid="convert-preview"]').trigger('click')
+    await flushPromises()
+    expect(w.find('[data-testid="plan-stale"]').text()).toContain('readiness checks could not be refreshed')
+  })
 })

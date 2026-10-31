@@ -79,7 +79,12 @@ async function approve() {
     <div v-if="phase === 'previewed' && blockers.length" class="mb-3 text-sm text-autobot-text-secondary" data-testid="approve-blockers">
       <p class="font-semibold">{{ t('llc.workflowPlanner.convert.approveBlocked') }}</p>
       <ul>
-        <li v-for="b in blockers" :key="b.id" :data-testid="`approve-blocker-${b.id}`">{{ b.id }}: {{ b.messages.join('; ') }}</li>
+        <li v-for="b in blockers" :key="b.id" :data-testid="`approve-blocker-${b.id}`">
+          {{ t(`llc.workflowPlanner.gate.name.${b.id}`, t('llc.workflowPlanner.gate.unknown')) }}
+          <span v-if="b.messages.length" class="block text-autobot-text-muted" :data-testid="`approve-blocker-${b.id}-detail`">
+            {{ t('llc.workflowPlanner.convert.approveDetail', { detail: b.messages.join('; ') }) }}
+          </span>
+        </li>
       </ul>
     </div>
 
