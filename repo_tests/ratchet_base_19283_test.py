@@ -144,3 +144,13 @@ def test_no_later_merge_can_cancel_a_push_to_main():
     group = ci["concurrency"]["group"]
     assert "github.event_name == 'push' && github.sha" in group, f"push runs must key on their commit: {group!r}"
     assert ci["concurrency"]["cancel-in-progress"] == "${{ github.event_name == 'pull_request' }}"
+
+
+def test_a_table_keyed_by_a_module_constant_reads_at_the_base() -> None:
+    source = 'NAMED = "declarations"\nPINS = {NAMED: 24, "other": 2}\n'
+    assert literal_in(source, "PINS") == {"declarations": 24, "other": 2}
+
+
+def test_a_name_that_is_no_string_constant_is_still_refused() -> None:
+    with pytest.raises(ValueError):
+        literal_in("PINS = {UNKNOWN: 24}\n", "PINS")
