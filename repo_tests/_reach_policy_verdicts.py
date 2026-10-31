@@ -60,6 +60,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "One frontend tree's `.vue` files, against all tracked `.vue` including the other frontend and the kit.",
     ),
+    "icon-font-size-rule-vue-files": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "One frontend tree's `.vue` files, against all tracked `.vue` including the other frontend and the kit.",
+    ),
     "deployment-mode-detector-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -386,6 +391,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "Both GUIs' component, view and composable .ts/.vue, excluding tests, against all tracked frontend source.",
+    ),
+    "frontend-hand-built-relative-time-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Both GUIs' .ts/.vue source, excluding tests, generated types and locales, against all tracked frontend.",
     ),
     "frontend-hand-rolled-spinner-scan": (
         ABSOLUTE,
