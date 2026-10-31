@@ -262,6 +262,13 @@
     },
     "input": {
       "retryUpload": "Retry upload",
+      "uploadError": {
+        "http": "فشل الرفع (الحالة {status})",
+        "invalidResponse": "أرسل الخادم استجابة غير مقروءة",
+        "network": "خطأ في الشبكة أثناء الرفع",
+        "cancelled": "تم إلغاء الرفع",
+        "unknown": "فشل الرفع"
+      },
       "filesAttached": "{count} files attached",
       "clearAll": "Clear all",
       "removeFile": "Remove file",
