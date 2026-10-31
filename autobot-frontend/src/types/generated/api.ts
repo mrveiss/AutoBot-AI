@@ -64848,6 +64848,8 @@ export interface components {
         CodeAnalyticsRequest: {
             /** Root Path */
             root_path: string;
+        } & {
+            [key: string]: unknown;
         };
         /**
          * CodeGenRollbackRequest
