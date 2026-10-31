@@ -13,6 +13,12 @@ ABSOLUTE = "ABSOLUTE"
 CONVERTIBLE = "CONVERTIBLE"
 
 N_TO_Z: dict[str, tuple[str, str, str]] = {
+    "no_partial_key_mask_18221.sources": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test Python under three of the source trees (#18221); no tracked count moves with that "
+        "subset, because the test share and the other trees grow at their own rate.",
+    ),
     "node-major-literals": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
