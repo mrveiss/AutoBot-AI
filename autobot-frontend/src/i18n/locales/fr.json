@@ -9541,7 +9541,7 @@
     },
     "layout": {
       "title": "Espace d'administration",
-      "subtitle": "Outils d'administration pour les administrateurs et les opérateurs",
+      "subtitle": "Outils d'administration pour les administrateurs",
       "ariaLabel": "Section d'administration"
     }
   },

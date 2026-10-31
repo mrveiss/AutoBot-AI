@@ -14,7 +14,11 @@
  */
 import type { RouteLocationNormalized, RouteLocationRaw, RouteRecordRaw } from 'vue-router'
 
-/** The permission that opens the /admin section (admin and operator hold it). */
+/**
+ * The permission that opens the /admin section. The admin and operator roles hold
+ * it, but every child route keeps `meta.admin` (an administrative role), so an
+ * operator enters the parent and every page under it still sends them to /home.
+ */
 export const ADMIN_SECTION_PERMISSION = 'service.management'
 
 /** Auth facts the admin gate reads, as exposed by `useUserStore()`. */
