@@ -235,3 +235,11 @@ export type { MenuSize, MenuItemVariant, MenuItem } from './src/components/BaseD
 
 export { default as BasePopover } from './src/components/BasePopover.vue'
 export type { PopoverSize } from './src/components/BasePopover.vue'
+
+export { default as BaseAccordion } from './src/components/BaseAccordion.vue'
+export type {
+  AccordionVariant,
+  AccordionSize,
+  AccordionValue,
+  AccordionItemSpec,
+} from './src/components/BaseAccordion.vue'
