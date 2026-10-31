@@ -33,6 +33,15 @@ Code examples and sample workflows demonstrating AutoBot features.
 | `mcp_agent_workflows/research_workflow.py` | Research automation workflow |
 | `mcp_agent_workflows/vnc_monitoring.py` | VNC-based UI monitoring workflow |
 
+## Workflow Planner Plans
+
+| File | Description |
+| --- | --- |
+| `workflow-plans/client-onboarding.json` | Worked example plan: client onboarding across sales, operations and the client |
+| `workflow-plans/invoice-follow-up.json` | Worked example plan: invoice follow-up across finance, the client and the bank |
+
+Checked against the real status gate by `scripts/validate_workflow_plans.py`.
+
 ## Related Sections
 
 - [[../how-to/_index\|How-To]] — Step-by-step how-to guides

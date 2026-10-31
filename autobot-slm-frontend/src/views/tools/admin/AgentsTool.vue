@@ -19,7 +19,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { throwIfFailed, useDashboardPoller } from '@/composables/useDashboardPoller'
 import { useAutobotApi } from '@/composables/useAutobotApi'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 
 const api = useAutobotApi()
 
@@ -343,7 +343,7 @@ onMounted(() => refreshPoller.start(''))
 
         <!-- Last Activity -->
         <div class="flex items-center justify-between text-xs text-gray-500 pt-4 border-t border-gray-200">
-          <span>{{ $t('tools.admin.agentsTool.lastActivityValue0', { value0: formatDateTime(agent.last_activity) }) }}</span>
+          <span>{{ $t('tools.admin.agentsTool.lastActivityValue0', { value0: formatFleetDateTime(agent.last_activity) }) }}</span>
         </div>
 
         <!-- Actions -->

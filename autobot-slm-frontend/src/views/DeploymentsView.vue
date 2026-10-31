@@ -14,7 +14,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
-import { formatDateTime as formatDateTimeTz } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 import { createLogger } from '@/utils/debugUtils'
 import type { Deployment, BlueGreenDeployment, BlueGreenDeploymentCreate, BlueGreenStatus, NodeRole } from '@/types/slm'
 import { BaseAlert, BaseModal, useToast } from '@autobot/ui'
@@ -590,13 +590,6 @@ function getStatusIcon(status: string): string {
   }
 }
 
-// #13138: the blue-green timestamps are optional AND nullable in the contract,
-// so an absent value arrives as `undefined`.
-function formatDateTime(isoString: string | null | undefined): string {
-  if (!isoString) return '-'
-  return formatDateTimeTz(isoString)
-}
-
 function getNodeHostname(nodeId: string): string {
   const node = fleetStore.getNode(nodeId)
   return node?.hostname || nodeId
@@ -847,10 +840,10 @@ function getNodeHostname(nodeId: string): string {
                   </div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {{ formatDateTime(deployment.started_at) }}
+                  {{ formatFleetDateTime(deployment.started_at, '-') }}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {{ formatDateTime(deployment.completed_at) }}
+                  {{ formatFleetDateTime(deployment.completed_at, '-') }}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
                   <div class="flex items-center justify-end gap-2">
@@ -1056,7 +1049,7 @@ function getNodeHostname(nodeId: string): string {
                   </div>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {{ formatDateTime(deployment.started_at) }}
+                  {{ formatFleetDateTime(deployment.started_at, '-') }}
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-right">
                   <div class="flex items-center justify-end gap-2">
@@ -1468,11 +1461,11 @@ function getNodeHostname(nodeId: string): string {
         </div>
         <div>
           <p class="text-sm text-gray-500">{{ $t('deploymentsView.startedAt') }}</p>
-          <p class="text-sm">{{ formatDateTime(selectedDeployment.started_at) }}</p>
+          <p class="text-sm">{{ formatFleetDateTime(selectedDeployment.started_at, '-') }}</p>
         </div>
         <div>
           <p class="text-sm text-gray-500">{{ $t('deploymentsView.completedAt') }}</p>
-          <p class="text-sm">{{ formatDateTime(selectedDeployment.completed_at) }}</p>
+          <p class="text-sm">{{ formatFleetDateTime(selectedDeployment.completed_at, '-') }}</p>
         </div>
       </div>
 
@@ -1592,7 +1585,7 @@ function getNodeHostname(nodeId: string): string {
         </div>
         <div>
           <p class="text-sm text-gray-500">{{ $t('deploymentsView.started') }}</p>
-          <p class="text-sm font-medium">{{ formatDateTime(selectedBgDeployment.started_at) }}</p>
+          <p class="text-sm font-medium">{{ formatFleetDateTime(selectedBgDeployment.started_at, '-') }}</p>
         </div>
       </div>
       <template #actions>
