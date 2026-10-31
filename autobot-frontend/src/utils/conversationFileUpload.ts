@@ -1,0 +1,83 @@
+// Copyright 2025-2026 mrveiss
+// SPDX-License-Identifier: Apache-2.0
+// AutoBot - AI-Powered Automation Platform
+// Author: mrveiss
+
+/**
+ * The chat attachment upload transport (#20133).
+ *
+ * The route (`/conversation-files/conversation/{id}/upload`) is gated by `check_admin_permission`,
+ * which accepts a bearer JWT, `X-Session-ID`, a dev header or an internal key, and no cookie, so the
+ * request carries the stored bearer, read through the canonical reader `readStoredAuthToken`.
+ * It stays a raw XHR rather than `ApiClient.uploadFile` because the chat UI needs the byte-level
+ * progress (for ETA), the response's `file_info`/`upload_id`, and an exact `200` success check,
+ * none of which the kit method exposes.
+ */
+import { getApiBase } from '@/config/ssot-config'
+import type { components } from '@/types/generated/api'
+import { readStoredAuthToken } from '@/utils/authToken'
+
+export type ConversationUploadResponse = components['schemas']['FileUploadResponse']
+
+export type UploadErrorCode = 'http' | 'invalid_response' | 'network' | 'cancelled'
+
+/**
+ * Why a chat attachment upload failed. `message` is a diagnostic for logs, never UI text:
+ * the chat shows `describeUploadError(error, t)` so the wording is translated.
+ */
+export class ConversationUploadError extends Error {
+  constructor(
+    readonly code: UploadErrorCode,
+    readonly status?: number
+  ) {
+    super(`conversation upload failed: ${code}${status === undefined ? '' : ` (${status})`}`)
+    this.name = 'ConversationUploadError'
+  }
+}
+
+type Translate = (key: string, params?: Record<string, unknown>) => string
+
+const UPLOAD_ERROR_KEYS: Record<UploadErrorCode, string> = {
+  http: 'chat.input.uploadError.http',
+  invalid_response: 'chat.input.uploadError.invalidResponse',
+  network: 'chat.input.uploadError.network',
+  cancelled: 'chat.input.uploadError.cancelled',
+}
+
+/** The translated text the chat shows for a rejected upload; any other rejection gets the generic key. */
+export function describeUploadError(error: unknown, t: Translate): string {
+  if (!(error instanceof ConversationUploadError)) return t('chat.input.uploadError.unknown')
+  return error.code === 'http'
+    ? t(UPLOAD_ERROR_KEYS.http, { status: error.status })
+    : t(UPLOAD_ERROR_KEYS[error.code])
+}
+
+/** POST `file` to the conversation's upload route; rejects on a non-200, a bad body, a network error or an abort. */
+export function postConversationUpload(
+  sessionId: string,
+  file: File,
+  onProgress: (loaded: number, total: number) => void
+): Promise<ConversationUploadResponse> {
+  const formData = new FormData()
+  formData.append('file', file)
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable) onProgress(event.loaded, event.total)
+    })
+    xhr.addEventListener('load', () => {
+      if (xhr.status !== 200) return reject(new ConversationUploadError('http', xhr.status))
+      try {
+        resolve(JSON.parse(xhr.responseText) as ConversationUploadResponse)
+      } catch {
+        reject(new ConversationUploadError('invalid_response'))
+      }
+    })
+    xhr.addEventListener('error', () => reject(new ConversationUploadError('network')))
+    xhr.addEventListener('abort', () => reject(new ConversationUploadError('cancelled')))
+    xhr.open('POST', `${getApiBase()}/conversation-files/conversation/${sessionId}/upload`)
+    const token = readStoredAuthToken()
+    if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
+    xhr.send(formData)
+  })
+}
