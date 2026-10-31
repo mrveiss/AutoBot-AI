@@ -205,8 +205,13 @@ async def test_delete_removes_file(tmp_path: Path):
 
     row = _make_row(storage_path=str(fake_file))
     session = _make_session(scalar_one_or_none=row)
+    session.add = MagicMock()
 
-    with patch.object(svc, "get", AsyncMock(return_value=row)):
+    # #19756: the outbox only unlinks inside the storage root, so the root is the tmp dir.
+    with (
+        patch("llc.services.attachment_service._LOCAL_STORAGE_PATH", tmp_path),
+        patch.object(svc, "get", AsyncMock(return_value=row)),
+    ):
         await svc.delete(
             session,
             attachment_id=str(row.id),
