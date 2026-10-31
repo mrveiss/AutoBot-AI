@@ -289,6 +289,7 @@ def test_the_principal_of_a_superadmin_still_comes_from_the_verified_identity():
         ({"node_id": "n-1", "doc_id": "d-1", "metadata": {}}, "n-1"),
         ({"doc_id": "d-1"}, "d-1"),
         ({"fact_id": "f-2"}, "f-2"),
+        ({"content": "no id at all"}, "unknown:0"),
     ],
 )
 def test_the_ledger_names_a_fact_in_the_shape_the_store_returns(result, expected):

@@ -137,6 +137,16 @@ async def test_a_bypassing_read_writes_an_audit_record_naming_only_the_bypassed_
 
 
 @pytest.mark.asyncio
+async def test_a_bypassing_read_names_a_fact_in_the_shape_the_store_returns():
+    metadata = {"fact_id": "f-b", "owner_id": "B", "visibility": "private"}
+    real_shape = {"node_id": "n-b", "doc_id": "d-b", "metadata": metadata}
+    audit = AsyncMock(return_value=True)
+    with patch(AUDIT, new=audit):
+        kept = await filter_for_principal([real_shape], kb_principal(SUPERADMIN), _kb().ownership_manager)
+    assert kept == [real_shape] and audit.await_args.kwargs["details"]["fact_ids"] == ["f-b"]
+
+
+@pytest.mark.asyncio
 async def test_a_read_that_needed_no_bypass_writes_no_audit_record():
     audit = AsyncMock(return_value=True)
     with patch(AUDIT, new=audit):

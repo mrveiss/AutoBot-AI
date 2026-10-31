@@ -79,12 +79,13 @@ def audit_unavailable() -> HTTPException:
 def fact_ids_of(results: List[Dict]) -> List[str]:
     """The fact id of each search result, whichever shape the store returned it in."""
 
-    def one(result: Dict) -> str:
+    def one(index: int, result: Dict) -> str:
         metadata = result.get("metadata") or {}
         found = result.get("id") or result.get("fact_id") or metadata.get("fact_id")
-        return str(found or result.get("node_id") or result.get("doc_id") or "")
+        found = found or result.get("node_id") or result.get("doc_id")
+        return str(found) if found else f"unknown:{index}"
 
-    return [one(r) for r in results]
+    return [one(i, r) for i, r in enumerate(results)]
 
 
 class AdminReadLedger:
