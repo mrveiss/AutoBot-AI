@@ -257,7 +257,7 @@ class AttachmentService:
         staging sweep retries the move.
         """
         try:
-            await asyncio.to_thread(files.publish, staged, dest)
+            await asyncio.to_thread(files.publish_staged, staged, dest)
         except OSError as exc:
             logger.error(
                 "#19756: attachment %s committed but publishing %s failed: %s; the staging sweep will retry",

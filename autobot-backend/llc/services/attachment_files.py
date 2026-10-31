@@ -86,7 +86,7 @@ def stage_bytes(root: Path, attachment_id: str, content: bytes) -> Path:
     return staged
 
 
-def publish(staged: Path, dest: Path) -> None:
+def publish_staged(staged: Path, dest: Path) -> None:
     """Move a staged file to its final path, then fsync the directory that now holds it.
 
     ``os.replace`` is atomic on one filesystem. A staged file that is already gone while the
@@ -148,7 +148,7 @@ async def _publish_for_row(row: LLCWorkItemAttachment, staged: Path, dest: Path)
     if await asyncio.to_thread(dest.exists):
         return await _both_copies_exist(row, staged, dest)
     try:
-        await asyncio.to_thread(publish, staged, dest)
+        await asyncio.to_thread(publish_staged, staged, dest)
     except OSError as exc:
         logger.error("#19756: publishing staged attachment %s to %s failed: %s", row.id, dest, exc)
         return "failed"

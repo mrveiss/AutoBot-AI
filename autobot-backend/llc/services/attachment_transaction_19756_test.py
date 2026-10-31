@@ -399,9 +399,9 @@ def test_a_publish_that_lost_the_race_to_another_publisher_is_not_a_failure(root
     dest = root / "t" / "a.txt"
     dest.parent.mkdir()
     _write(dest, b"done")
-    files.publish(root / files.STAGING_DIRNAME / "gone.part", dest)  # staged file already moved: no error
+    files.publish_staged(root / files.STAGING_DIRNAME / "gone.part", dest)  # staged file already moved: no error
     with pytest.raises(FileNotFoundError):
-        files.publish(root / files.STAGING_DIRNAME / "gone.part", dest.parent / "other.txt")
+        files.publish_staged(root / files.STAGING_DIRNAME / "gone.part", dest.parent / "other.txt")
 
 
 @pytest.mark.asyncio
@@ -432,7 +432,7 @@ def test_staging_is_fsynced_before_the_commit_and_the_directory_after_the_rename
         staged = files.stage_bytes(root, str(uuid.uuid4()), b"x")
         assert fsync.call_count == 2  # the file, then its directory
         fsync.reset_mock()
-        files.publish(staged, root / "t" / "a.txt")
+        files.publish_staged(staged, root / "t" / "a.txt")
         assert fsync.call_count == 1
 
 
