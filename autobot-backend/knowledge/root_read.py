@@ -76,6 +76,17 @@ def audit_unavailable() -> HTTPException:
     return HTTPException(status_code=503, detail="Audit unavailable; the read is withheld")
 
 
+def fact_ids_of(results: List[Dict]) -> List[str]:
+    """The fact id of each search result, whichever shape the store returned it in."""
+
+    def one(result: Dict) -> str:
+        metadata = result.get("metadata") or {}
+        found = result.get("id") or result.get("fact_id") or metadata.get("fact_id")
+        return str(found or result.get("node_id") or result.get("doc_id") or "")
+
+    return [one(r) for r in results]
+
+
 class AdminReadLedger:
     """The facts one explicit admin read admitted, audited ONCE when the request is done (#19860).
 
@@ -91,7 +102,7 @@ class AdminReadLedger:
         return True
 
     def record(self, results: List[Dict]) -> None:
-        self.fact_ids.extend(str(r.get("id") or r.get("fact_id") or "") for r in results)
+        self.fact_ids.extend(fact_ids_of(results))
 
     async def commit(self, user_id: str, surface: str) -> None:
         if not self.fact_ids:
@@ -160,7 +171,6 @@ async def root_view(results: List[Dict], principal, ownership_manager, kept: Lis
     (:func:`audit_unavailable`): a superadmin must not mistake "audit down" for "no facts".
     """
     from knowledge.search_filters import (  # noqa: PLC0415 -- search_filters imports this module
-        _fact_ids,
         filter_search_results_by_permission,
     )
 
@@ -174,7 +184,7 @@ async def root_view(results: List[Dict], principal, ownership_manager, kept: Lis
     extra = _bypassed(everything, kept)
     if not extra:
         return kept
-    details = {"fact_ids": _fact_ids(extra), "count": len(extra), "bypass": ROOT_BYPASS_MARKER}
+    details = {"fact_ids": fact_ids_of(extra), "count": len(extra), "bypass": ROOT_BYPASS_MARKER}
     if await audit_admin_read(principal.user_id, details):
         return everything
     logger.error(

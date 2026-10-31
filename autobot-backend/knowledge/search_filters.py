@@ -21,7 +21,14 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.scoping import Principal
 from autobot_shared.ssot_config import config
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
-from knowledge.root_read import AdminReadLedger, audit_admin_read, audit_unavailable, is_superadmin_user, root_view
+from knowledge.root_read import (
+    AdminReadLedger,
+    audit_admin_read,
+    audit_unavailable,
+    fact_ids_of,
+    is_superadmin_user,
+    root_view,
+)
 from knowledge.where_combine import and_where
 
 logger = get_logger(__name__)
@@ -538,16 +545,12 @@ def scoped_reader(current_user) -> KbReader:
     return KbReader(caller_principal(current_user), False)
 
 
-def _fact_ids(results: List[Dict]) -> List[str]:
-    return [str(r.get("id") or r.get("fact_id") or (r.get("metadata") or {}).get("fact_id") or "") for r in results]
-
-
 async def _admin_read(results: List[Dict], reader: KbReader, ownership_manager) -> List[Dict]:
     """An audited admin read through the ownership helper's explicit admin input; no audit, no results."""
     kept = await filter_search_results_by_permission(
         results, reader.user_id, reader.principal.company_id, [], ownership_manager=ownership_manager, is_admin=True
     )
-    details = {"fact_ids": _fact_ids(kept), "count": len(kept)}
+    details = {"fact_ids": fact_ids_of(kept), "count": len(kept)}
     if not await audit_admin_read(reader.user_id, details):
         raise audit_unavailable()  # 503, not an empty 200 that reads as "no facts"
     return kept

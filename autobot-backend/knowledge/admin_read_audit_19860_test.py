@@ -13,7 +13,7 @@ from fastapi import HTTPException
 
 from knowledge.ownership import KnowledgeOwnership
 from knowledge.remote_read import admit_remote_read
-from knowledge.root_read import admin_read_audit
+from knowledge.root_read import AdminReadLedger, admin_read_audit
 from knowledge.search_filters import filter_search_results_by_permission, kb_principal
 
 STORE = "services.audit.store.insert_event"
@@ -280,3 +280,19 @@ async def test_the_ai_stack_chat_route_reads_root_for_a_superadmin_and_503s_when
 
 def test_the_principal_of_a_superadmin_still_comes_from_the_verified_identity():
     assert kb_principal(SUPERADMIN).is_superadmin is True
+
+
+@pytest.mark.parametrize(
+    ("result", "expected"),
+    [
+        ({"node_id": "n-1", "doc_id": "d-1", "metadata": {"fact_id": "f-1"}}, "f-1"),
+        ({"node_id": "n-1", "doc_id": "d-1", "metadata": {}}, "n-1"),
+        ({"doc_id": "d-1"}, "d-1"),
+        ({"fact_id": "f-2"}, "f-2"),
+    ],
+)
+def test_the_ledger_names_a_fact_in_the_shape_the_store_returns(result, expected):
+    """#19860: `kb.search` results carry node_id, doc_id and metadata.fact_id, not a top-level id."""
+    ledger = AdminReadLedger()
+    ledger.record([result])
+    assert ledger.fact_ids == [expected]
