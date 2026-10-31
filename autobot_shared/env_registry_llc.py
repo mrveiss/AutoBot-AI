@@ -108,6 +108,23 @@ env_registry.register_env_var(
 
 env_registry.register_env_var(
     env_registry.EnvVarSpec(
+        name="AUTOBOT_LLC_SCHEDULE_RECONCILE_INTERVAL_SECONDS",
+        type=float,
+        default=60.0,
+        description=(
+            "Seconds between passes that put a heartbeat-enabled agent or an active routine "
+            "back on the heartbeat schedule when it is missing (#20117). A pass is the longest "
+            "a member lost between a poller's claim and its re-add stays lost; each restore is "
+            "logged. Agents that are paused, terminated or heartbeat-disabled, and routines that "
+            "are not active, are left off. Floored at 5 seconds, because each pass reads the "
+            "agent and routine tables."
+        ),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
         name="AUTOBOT_LLC_DISPOSAL_EXECUTION_WINDOW_DAYS",
         type=float,
         default=7.0,
@@ -137,5 +154,34 @@ env_registry.register_env_var(
             "else the default is used (media/audio/reference_wav.py, #18477)."
         ),
         component="voice",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_TRIGGER_SECRET_AUDIT_SCHEDULE",
+        type=str,
+        default="25 3 * * *",
+        description=(
+            "5-field cron ('m h dom mon dow') for the audit that proposes a human review of webhook "
+            "trigger secrets still stored in plaintext (#19759). It files at most one pending "
+            "approval per set of trigger ids and rewrites nothing. Default daily at 03:25 UTC. "
+            "A malformed value falls back to the daily 03:00 UTC schedule with a warning."
+        ),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_TRIGGER_SECRET_AUDIT_REJECTION_DAYS",
+        type=float,
+        default=30.0,
+        description=(
+            "Days a rejected plaintext-webhook-secret proposal keeps suppressing a new proposal for the "
+            "same (or a subset of its) trigger ids (#19759), so a human's rejection is not refiled on "
+            "every audit run. Floored at 1 day."
+        ),
+        component="orchestrator",
     )
 )

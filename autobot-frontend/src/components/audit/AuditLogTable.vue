@@ -288,13 +288,9 @@ const hasDetails = computed(() => {
   return Object.keys(selectedEntry.value.details).length > 0
 })
 
-function formatTimestamp(timestamp: string): string {
-  return formatDateTime(timestamp)
-}
+const formatTimestamp = formatDateTime
 
-function formatRelativeTime(timestamp: string): string {
-  return formatTimeAgo(timestamp)
-}
+const formatRelativeTime = formatTimeAgo
 
 function formatOperationName(operation: string): string {
   return operation
