@@ -338,10 +338,19 @@ async def quota_windows(
 # ---------------------------------------------------------------------------
 
 
+class CurrencyAmountOut(BaseModel):
+    """A monthly amount in exactly one currency."""
+
+    currency: str
+    per_month: Decimal
+
+
 class RollupBucketOut(BaseModel):
     """One grouping's monthly total, with the coverage behind it.
 
-    ``per_month`` is the sum of the steps that could be costed. It is reported
+    ``per_month`` is the sum of the steps that could be costed, or ``None``
+    when the bucket spans currencies (``per_currency`` then has the amounts).
+    It is reported
     beside ``costed`` / ``not_costable`` rather than alone, because a partial
     total presented as a complete one is indistinguishable from a complete one
     by looking at it — the arithmetic form of the failure #14064, #13617 and
@@ -350,7 +359,12 @@ class RollupBucketOut(BaseModel):
 
     key: str
     label: str
-    per_month: Decimal
+    #: ``None`` when ``is_mixed_currency`` — different currencies are never
+    #: added together and no exchange rate is invented (#14670).
+    per_month: Optional[Decimal]
+    #: One entry per currency, always present; the figures to show when mixed.
+    per_currency: List[CurrencyAmountOut]
+    is_mixed_currency: bool
     costed: int
     not_costable: int
     total_steps: int
@@ -368,11 +382,13 @@ def _bucket_out(bucket) -> RollupBucketOut:  # noqa: ANN001
         key=bucket.key,
         label=bucket.label,
         per_month=bucket.per_month,
+        per_currency=[CurrencyAmountOut(currency=c, per_month=bucket.amounts[c]) for c in bucket.currencies],
+        is_mixed_currency=bucket.is_mixed_currency,
         costed=bucket.costed,
         not_costable=bucket.not_costable,
         total_steps=bucket.total_steps,
         is_complete=bucket.is_complete,
-        currencies=sorted(bucket.currencies),
+        currencies=bucket.currencies,
     )
 
 

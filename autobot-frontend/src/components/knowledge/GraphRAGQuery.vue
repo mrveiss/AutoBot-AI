@@ -641,7 +641,7 @@ onMounted(() => {
 }
 
 .no-results .icon {
-  font-size: 2rem;
+  width: 2rem; height: 2rem;
   margin-bottom: var(--spacing-md);
   color: var(--text-tertiary);
 }
