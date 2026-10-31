@@ -76,6 +76,10 @@ class SnapshotRecord:
         return cls(**{k: v for k, v in data.items() if k in known})
 
 
+class SnapshotIndexUnreadable(RuntimeError):
+    """The index file exists but cannot be read, so writing would lose its records."""
+
+
 class SnapshotIndex:
     """File-backed index of container snapshot records (GH#4458).
 
@@ -92,14 +96,25 @@ class SnapshotIndex:
     def _ensure_storage(self) -> None:
         self._storage_path.mkdir(parents=True, exist_ok=True)
 
-    def _load(self) -> Dict[str, dict]:
+    def _read(self) -> Dict[str, dict]:
+        """The stored records, or SnapshotIndexUnreadable; a missing file is an empty index."""
         if not self._index_path.exists():
             return {}
         try:
             with open(self._index_path, encoding="utf-8") as fh:
-                return json.load(fh)
+                records = json.load(fh)
         except (*JSON_ERRORS, OSError) as exc:  # a bad record: syntax, oversized int or deep nesting
-            logger.warning("Failed to load snapshot index, starting fresh: %s", exc)
+            raise SnapshotIndexUnreadable(f"Snapshot index could not be read: {exc}") from exc
+        if not isinstance(records, dict):
+            raise SnapshotIndexUnreadable("Snapshot index is not a mapping")
+        return records
+
+    def _load(self) -> Dict[str, dict]:
+        """For readers: an unreadable index reads as empty. Writers use _read, so it is never overwritten (#20169)."""
+        try:
+            return self._read()
+        except SnapshotIndexUnreadable as exc:
+            logger.warning("Reading the snapshot index as empty: %s", exc)
             return {}
 
     def _save(self, records: Dict[str, dict]) -> None:
@@ -111,7 +126,7 @@ class SnapshotIndex:
 
     def add(self, record: SnapshotRecord) -> None:
         with self._lock:
-            records = self._load()
+            records = self._read()
             records[record.snapshot_id] = record.to_dict()
             self._save(records)
             logger.debug("Snapshot %s added to index", record.snapshot_id)
@@ -175,7 +190,7 @@ class SnapshotIndex:
 
     def remove(self, snapshot_id: str) -> bool:
         with self._lock:
-            records = self._load()
+            records = self._read()
             if snapshot_id not in records:
                 return False
             del records[snapshot_id]
