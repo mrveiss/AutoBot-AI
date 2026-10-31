@@ -144,12 +144,26 @@ env_registry.register_env_var(
     env_registry.EnvVarSpec(
         name="AUTOBOT_TRIGGER_SECRET_AUDIT_SCHEDULE",
         type=str,
-        default="25 * * * *",
+        default="25 3 * * *",
         description=(
             "5-field cron ('m h dom mon dow') for the audit that proposes a human review of webhook "
             "trigger secrets still stored in plaintext (#19759). It files at most one pending "
-            "approval per set of trigger ids and rewrites nothing. A malformed value falls back "
-            "to the daily 03:00 UTC schedule with a warning."
+            "approval per set of trigger ids and rewrites nothing. Default daily at 03:25 UTC. "
+            "A malformed value falls back to the daily 03:00 UTC schedule with a warning."
+        ),
+        component="orchestrator",
+    )
+)
+
+env_registry.register_env_var(
+    env_registry.EnvVarSpec(
+        name="AUTOBOT_TRIGGER_SECRET_AUDIT_REJECTION_DAYS",
+        type=float,
+        default=30.0,
+        description=(
+            "Days a rejected plaintext-webhook-secret proposal keeps suppressing a new proposal for the "
+            "same (or a subset of its) trigger ids (#19759), so a human's rejection is not refiled on "
+            "every audit run. Floored at 1 day."
         ),
         component="orchestrator",
     )

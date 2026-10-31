@@ -6,6 +6,7 @@
 
 import hashlib
 import hmac
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
@@ -36,7 +37,14 @@ def _session_with_pending(approvals: list) -> MagicMock:
 
 
 def _pending(ids: list[str], kind: str = trigger_secrets.PROPOSAL_KIND) -> MagicMock:
-    return MagicMock(context={"kind": kind, "trigger_ids": ids})
+    return MagicMock(context={"kind": kind, "trigger_ids": ids}, status="pending", decided_at=None)
+
+
+def _rejected(ids: list[str], days_ago: float) -> MagicMock:
+    when = datetime.now(timezone.utc) - timedelta(days=days_ago)
+    return MagicMock(
+        context={"kind": trigger_secrets.PROPOSAL_KIND, "trigger_ids": ids}, status="rejected", decided_at=when
+    )
 
 
 def _redis_with_plaintext(*ids: str) -> MagicMock:
@@ -223,25 +231,47 @@ async def test_secret_write_failure_fails_registration_and_stores_nothing(with_e
     assert svc._webhook_secrets == {}
 
 
-@pytest.mark.asyncio
-async def test_trigger_write_failure_removes_the_already_stored_secret(with_encryption) -> None:
-    redis = _fake_redis_store()
-    real_setex = redis.setex.side_effect
+def _fail_nth_persist_write(redis: MagicMock, n: int) -> None:
+    """Make the nth of the three trigger writes (setex, sadd index, sadd by-workflow) raise."""
+    calls = {"n": 0}
+    setex, sadd = redis.setex.side_effect, redis.sadd.side_effect
 
-    def setex(key, ttl, value):
+    def bump():
+        calls["n"] += 1
+        if calls["n"] == n:
+            raise ConnectionError("down")
+
+    def fake_setex(key, ttl, value):
         if key.startswith(_PREFIX):
-            return real_setex(key, ttl, value)
-        raise ConnectionError("down")
+            return setex(key, ttl, value)
+        bump()
+        return setex(key, ttl, value)
 
-    redis.setex.side_effect = setex
+    def fake_sadd(key, *vals):
+        bump()
+        return sadd(key, *vals)
+
+    redis.setex.side_effect, redis.sadd.side_effect = fake_setex, fake_sadd
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failing_write", [1, 2, 3])
+async def test_a_failed_trigger_write_leaves_neither_trigger_nor_secret(with_encryption, failing_write) -> None:
+    redis = _fake_redis_store()
     svc = TriggerService()
     with patch("services.trigger_service.get_redis_client", return_value=redis):
+        keeper = await svc.register_trigger(_webhook())
+        _fail_nth_persist_write(redis, failing_write)
         with pytest.raises(ConnectionError):
             await svc.register_trigger(_webhook())
-    assert redis.get.side_effect is not None
-    assert not [k for k in redis.delete.call_args_list if not str(k.args[0]).startswith(_PREFIX)]
-    assert redis.delete.call_count == 1
-    assert svc._webhook_secrets == {}
+        remaining = {t.id for t in await svc.list_triggers()}
+        by_workflow = {
+            i.decode() if isinstance(i, bytes) else i for i in redis.smembers("workflows:triggers:by_workflow:wf-1")
+        }
+    assert remaining == {keeper} == by_workflow
+    assert redis.get(f"{_PREFIX}{keeper}") is not None
+    stored_secrets = [c.args[0] for c in redis.setex.call_args_list if c.args[0].startswith(_PREFIX)]
+    assert len(stored_secrets) == 2 and redis.get(stored_secrets[1]) is None
 
 
 @pytest.mark.asyncio
@@ -254,3 +284,61 @@ async def test_create_trigger_api_maps_a_secret_write_failure_to_503() -> None:
             await create_trigger(request, current_user={"username": "u"})
     assert exc.value.status_code == 503
     assert "not created" in exc.value.detail
+
+
+@pytest.mark.asyncio
+async def test_encrypt_value_error_is_a_503_without_inner_text(monkeypatch) -> None:
+    enc = MagicMock()
+    enc.encrypt.side_effect = ValueError("Encryption failed: key=SUPERSECRET")
+    monkeypatch.setattr(trigger_secrets, "_encryption_service", enc)
+    request = MagicMock(trigger_type=TriggerType.WEBHOOK, workflow_id="wf", config={}, conditions=[], enabled=True)
+    redis = _fake_redis_store()
+    with (
+        patch("services.trigger_service.get_redis_client", return_value=redis),
+        patch("api.triggers.get_trigger_service", return_value=TriggerService()),
+    ):
+        with pytest.raises(HTTPException) as exc:
+            await create_trigger(request, current_user={"username": "u"})
+    assert exc.value.status_code == 503
+    assert "SUPERSECRET" not in exc.value.detail
+    redis.setex.assert_not_called()
+
+
+async def _proposed(existing: list, *ids: str) -> object:
+    request_approval = AsyncMock(return_value="approval")
+    with patch("llc.services.approval.ApprovalService.request_approval", request_approval):
+        return await trigger_secrets.propose_plaintext_secret_rewrite(
+            _session_with_pending(existing), _redis_with_plaintext(*ids)
+        )
+
+
+@pytest.mark.asyncio
+async def test_a_recent_rejection_suppresses_refiling_the_same_set() -> None:
+    assert await _proposed([_rejected(["t1", "t2"], days_ago=1)], "t1", "t2") is None
+
+
+@pytest.mark.asyncio
+async def test_a_rejection_older_than_the_window_allows_a_new_proposal() -> None:
+    assert (
+        await _proposed([_rejected(["t1"], days_ago=trigger_secrets.REJECTION_SUPPRESS_DAYS + 5)], "t1") == "approval"
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_pending_superset_covers_a_smaller_changed_set() -> None:
+    assert await _proposed([_pending(["t1", "t2", "t3"])], "t1", "t2") is None
+
+
+@pytest.mark.asyncio
+async def test_a_grown_set_is_proposed_anew() -> None:
+    assert await _proposed([_pending(["t1"]), _rejected(["t2"], days_ago=1)], "t1", "t2") == "approval"
+
+
+@pytest.mark.asyncio
+async def test_publish_failure_is_logged_with_the_proposal_id(caplog) -> None:
+    from llc.scheduler import trigger_secret_audit as audit
+
+    approval = MagicMock(id="prop-42")
+    with patch("llc.services.approval.ApprovalService.publish_requested", AsyncMock(side_effect=RuntimeError("x"))):
+        await audit._publish(approval)
+    assert "prop-42" in caplog.text

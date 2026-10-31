@@ -46,7 +46,7 @@ from autobot_shared.time_utils import now_utc
 from autobot_shared.webhook_signature import verify_webhook_signature
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_90_DAYS
-from services.trigger_secrets import SECRET_PREFIX, decode_stored_secret, discard_secret, encrypt_secret, store_secret
+from services.trigger_secrets import SECRET_PREFIX, decode_stored_secret, encrypt_secret, store_secret
 
 logger = get_logger(__name__)
 
@@ -334,7 +334,7 @@ class TriggerService:
         try:
             await self._persist_trigger(tdef)
         except Exception:
-            discard_secret(redis, trigger_id)
+            await self._delete_trigger(trigger_id)  # fresh id only; also drops the secret
             raise
         if secret:
             self._webhook_secrets[trigger_id] = secret

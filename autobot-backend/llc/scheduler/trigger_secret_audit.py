@@ -50,10 +50,18 @@ async def _async_audit() -> dict:
         approval = await propose_plaintext_secret_rewrite(session, redis)
         await session.commit()
         if approval is not None:
-            from llc.services.approval import ApprovalService
-
-            await ApprovalService().publish_requested(approval)
+            await _publish(approval)
     return {"proposed": approval is not None}
+
+
+async def _publish(approval) -> None:
+    """Announce a committed proposal; a failure is logged with its id, not swallowed."""
+    from llc.services.approval import ApprovalService
+
+    try:
+        await ApprovalService().publish_requested(approval)
+    except Exception as exc:
+        logger.warning("Publishing trigger-secret proposal %s failed: %s", approval.id, type(exc).__name__)
 
 
 __all__ = ["run_trigger_secret_audit"]
