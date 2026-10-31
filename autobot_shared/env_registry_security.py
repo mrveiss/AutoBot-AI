@@ -433,3 +433,48 @@ register_env_var(
         range=(60, None),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_TRACING_ALLOWED_ORIGINS",
+        type=str,
+        default="",
+        description=(
+            "Comma-separated exact origins (scheme://host[:port]) an LLM tracing destination may use "
+            "(#19933), e.g. a self-hosted collector on a private address. Empty: none. A listed origin is "
+            "allowed even when private or loopback; link-local, cloud-metadata and unspecified hosts are "
+            "refused, and an entry with userinfo, a backslash or other non-strict shape never matches. "
+            "SSOT service origins are not trusted for tracing."
+        ),
+        component="security",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_TRACING_ALLOW_EXTERNAL",
+        type=bool,
+        default=False,
+        description=(
+            "Allow an LLM tracing destination on a public address that is not listed in "
+            "AUTOBOT_LLM_TRACING_ALLOWED_ORIGINS (#19933). Off: a tracing key alone never moves prompt "
+            "metadata off the install, and the destination is refused at startup. On: a public destination "
+            "is allowed; private, loopback and link-local ones are still refused."
+        ),
+        component="security",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_LLM_TRACING_INCLUDE_CONTENT",
+        type=bool,
+        default=False,
+        description=(
+            "Send prompt and response text to an enabled LLM tracing destination (#19933). "
+            "Off: only metadata (ids, model, token usage, latency) is sent. "
+            "On: the text is sent after the outbound credential redaction."
+        ),
+        component="security",
+    )
+)
