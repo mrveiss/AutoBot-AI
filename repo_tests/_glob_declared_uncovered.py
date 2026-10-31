@@ -137,6 +137,7 @@ GLOB_DECLARED_UNCOVERED: dict[str, tuple[set[str], str]] = {
             "repo_tests/_hardcoded_ui_literal_detect.py",
             "repo_tests/_raw_palette_detect.py",
             "repo_tests/dead_icon_selector_ratchet_19491_test.py",
+            "repo_tests/icon_rule_sets_font_size_only_19875_test.py",
             "repo_tests/slm_frontend_bare_ui_literals_test.py",
             "repo_tests/raw_table_ratchet_17562_test.py",
             "repo_tests/slm_frontend_calls_reach_served_routes_test.py",

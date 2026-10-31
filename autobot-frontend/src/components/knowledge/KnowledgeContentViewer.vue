@@ -130,7 +130,8 @@ const fileIcon = computed<IconName>(() => {
 }
 
 .placeholder-state .icon {
-  font-size: var(--text-4xl);
+  width: var(--text-4xl);
+  height: var(--text-4xl);
   margin-bottom: var(--spacing-4);
   opacity: 0.5;
 }
@@ -170,7 +171,8 @@ const fileIcon = computed<IconName>(() => {
 }
 
 .file-info .icon {
-  font-size: var(--text-2xl);
+  width: var(--text-2xl);
+  height: var(--text-2xl);
   color: var(--color-primary);
 }
 
@@ -214,7 +216,8 @@ const fileIcon = computed<IconName>(() => {
 
 .loading-content .icon,
 .error-content .icon {
-  font-size: var(--text-3xl);
+  width: var(--text-3xl);
+  height: var(--text-3xl);
   margin-bottom: var(--spacing-4);
 }
 
