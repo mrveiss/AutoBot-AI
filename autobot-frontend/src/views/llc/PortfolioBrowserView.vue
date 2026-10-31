@@ -106,7 +106,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import { formatDate as fmtDate } from '@/utils/formatHelpers'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import LlcBreadcrumb, { type BreadcrumbItem } from '@/components/llc/LlcBreadcrumb.vue'
 import { BaseAlert, BaseButton, BaseInput, BaseModal } from '@autobot/ui'
 
@@ -139,9 +139,7 @@ const form = ref({ name: '', description: '' })
 
 const breadcrumb = computed<BreadcrumbItem[]>(() => [{ label: t('llcBrowser.portfolios.title') }])
 
-function formatDate(value: string): string {
-  return fmtDate(value) || '—'
-}
+const formatDate = createDateFormatter({ kind: 'date', emptyText: '—', invalidText: '—' })
 
 async function loadPortfolios(): Promise<void> {
   loading.value = true

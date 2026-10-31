@@ -289,7 +289,7 @@ import { ref, computed, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import { formatDate as fmtDate } from '@/utils/formatHelpers'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import { BaseModal } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
 
@@ -499,9 +499,7 @@ const dailyBars = computed(() => {
   }))
 })
 
-function formatDate(iso: string | null | undefined): string {
-  return iso ? fmtDate(iso) : ''
-}
+const formatDate = createDateFormatter({ kind: 'date', invalidText: '' })
 
 /** A token count for display, or an em dash when the split is not recorded. */
 function tokenCell(value: number | null | undefined): string {

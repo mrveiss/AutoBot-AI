@@ -136,11 +136,6 @@ function getBackupStatusClass(state: string): string {
   }
 }
 
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '-'
-  return formatDateTime(dateStr)
-}
-
 function getNodeHostname(nodeId: string): string {
   const node = fleetStore.getNode(nodeId)
   return node?.hostname || nodeId
@@ -217,7 +212,7 @@ function getNodeHostname(nodeId: string): string {
               </span>
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              {{ formatDate(backup.started_at) }}
+              {{ formatDateTime(backup.started_at, '-') }}
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm space-x-3">
               <button
