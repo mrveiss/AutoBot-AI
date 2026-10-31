@@ -77,7 +77,8 @@ class MessageRouter:
                 context=context or {},
             )
             return RoutingDecision(
-                agent_type=routing_result.get("agent_type", "chat"),
+                # Decisions carry ``primary_agent`` (an AgentType), never ``agent_type`` (#19649)
+                agent_type=getattr(routing_result.get("primary_agent"), "value", None) or "chat",
                 confidence=routing_result.get("confidence", 0.5),
                 reasoning=routing_result.get("reasoning", ""),
                 metadata=routing_result,
