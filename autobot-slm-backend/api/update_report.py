@@ -8,9 +8,10 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -54,11 +55,21 @@ async def get_update_report(
     return build_update_report(SELF_UPDATE_LOG_PATH, target, await _deploy_runs_since(db, started_at))
 
 
-@router.get("/update-all/progress")
+class UpdateProgress(BaseModel):
+    """A running self-update's position in its own log (#20254)."""
+
+    state: Literal["waiting", "running", "quiet", "exited_without_recap", "finished", "unknown"]
+    play: str | None = None
+    task: str | None = None
+    last_line_at: str | None = None
+    elapsed_seconds: float | None = None
+
+
+@router.get("/update-all/progress", response_model=UpdateProgress)
 async def get_update_progress(
     _: Annotated[dict, Depends(require_permission(Permission.ADMIN_SYSTEM))],
     since: str | None = None,
-) -> dict[str, Any]:
+) -> dict[str, Any]:  # validated by response_model
     """What the running self-update is doing, from its own log, across the SLM's restart (#20254)."""
     activity = await read_deploy_activity()
     return await asyncio.to_thread(build_update_progress, SELF_UPDATE_LOG_PATH, activity.in_progress, since)

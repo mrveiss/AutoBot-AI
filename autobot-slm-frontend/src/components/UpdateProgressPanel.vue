@@ -6,7 +6,7 @@
     <p v-if="progress.last_line_at">
       {{ $t('updateProgressPanel.lastLine', { time: formatFleetDateTime(progress.last_line_at) }) }}
     </p>
-    <p v-if="progress.elapsed_seconds !== null">
+    <p v-if="progress.elapsed_seconds != null">
       {{ $t('updateProgressPanel.elapsed', { minutes: Math.floor(progress.elapsed_seconds / 60) }) }}
     </p>
     <p v-if="stateMessage" class="mt-1 font-medium" data-testid="update-progress-state">{{ $t(stateMessage) }}</p>
@@ -19,14 +19,9 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { formatFleetDateTime } from '@/composables/useTimezone'
 import slmApiClient from '@/utils/ApiClient'
+import type { components } from '@/types/generated/api'
 
-interface UpdateProgress {
-  state: 'waiting' | 'running' | 'quiet' | 'exited_without_recap' | 'finished' | 'unknown'
-  play: string | null
-  task: string | null
-  last_line_at: string | null
-  elapsed_seconds: number | null
-}
+type UpdateProgress = components['schemas']['UpdateProgress']
 
 const POLL_MS = 5000
 const STATE_MESSAGES: Partial<Record<UpdateProgress['state'], string>> = {
@@ -44,7 +39,8 @@ let timer: ReturnType<typeof setTimeout> | null = null
 async function poll(): Promise<void> {
   try {
     const query = props.since ? `?since=${encodeURIComponent(props.since)}` : ''
-    progress.value = await slmApiClient.get<UpdateProgress>(`/code-sync/update-all/progress${query}`)
+    const data: UpdateProgress = await slmApiClient.get(`/code-sync/update-all/progress${query}`)
+    progress.value = data
   } catch {
     // The SLM is restarting, or this user may not read the log: keep what is on screen and try again.
   }
