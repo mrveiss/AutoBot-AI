@@ -265,7 +265,8 @@ function toggleDetails(id: string) {
 
 .loading-state .icon,
 .empty-state .icon {
-  font-size: var(--text-3xl);
+  width: var(--text-3xl);
+  height: var(--text-3xl);
 }
 
 .timeline-list {
