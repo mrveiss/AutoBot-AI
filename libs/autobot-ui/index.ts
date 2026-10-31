@@ -243,3 +243,10 @@ export type {
   AccordionValue,
   AccordionItemSpec,
 } from './src/components/BaseAccordion.vue'
+
+export { default as BaseSelectMenu } from './src/components/BaseSelectMenu.vue'
+export type {
+  SelectMenuSize,
+  SelectMenuVariant,
+  SelectMenuOption,
+} from './src/components/BaseSelectMenu.vue'
