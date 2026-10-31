@@ -62,7 +62,7 @@ REACH = declare(
     discover=_source_population,
     # Mid-window, from REACH.window(); the arithmetic is on the PR, not here.
     # #18242: population 1132 -> window [982, 1132]; 994 sat in the bottom band, re-pinned mid-window.
-    floor=1057,
+    floor=1120,  # mid-window: population 1195, window (1045, 1195)
     what="frontend and kit source",
     roots=_ROOTS,
     growth=150,
