@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import re
 
+from tools.lint._comment_syntax import code_text
+
 # ``toLocaleString`` is also how a number is grouped, so it counts only beside a ``Date``; the
 # date-only methods and ``Intl.DateTimeFormat`` always count, except the call that merely asks
 # which timezone the browser is in.
@@ -47,11 +49,6 @@ def _skip_string(text: str, i: int) -> int:
     return i + 1
 
 
-def _skip_comment(text: str, i: int) -> int:
-    end = text.find("\n", i) if text.startswith("//", i) else text.find("*/", i)
-    return len(text) if end < 0 else end + 1 if text[i + 1] == "/" else end + 2
-
-
 def _match_close(text: str, i: int) -> int:
     """Index just past the bracket that closes the one opening at ``i`` (``-1`` when unbalanced)."""
     depth = 0
@@ -59,9 +56,6 @@ def _match_close(text: str, i: int) -> int:
         c = text[i]
         if c in "'\"`":
             i = _skip_string(text, i)
-            continue
-        if text.startswith(("//", "/*"), i):
-            i = _skip_comment(text, i)
             continue
         depth += c in "([{"
         depth -= c in ")]}"
@@ -159,6 +153,7 @@ def _formats(own: str) -> bool:
 
 def date_formatter_names(text: str) -> list[str]:
     """Names of the named local functions in ``text`` that format dates, whatever they are called."""
+    text = code_text(text, name="source.ts", strip_trailing=True)
     named = _spans(text)
     spans = sorted(named)
     return [named[s] for s in spans if _formats(_own_text(text, s, spans))]
