@@ -256,6 +256,12 @@ async def stop_llc_services(app: FastAPI, report: "_ShutdownReport") -> None:
 
 async def stop_periodic_schedulers(app: FastAPI, report: "_ShutdownReport") -> None:
     """Stop the routine, heartbeat, backup and key-rotation schedulers; drain clustering."""
+    # #20117: Stop the schedule reconciler before the pollers it repairs
+    reconciler = getattr(app.state, "schedule_reconciler_task", None)
+    if reconciler is not None and not reconciler.done():
+        reconciler.cancel()
+        await report.run("LLC schedule reconciler stop", asyncio.gather(reconciler, return_exceptions=True))
+
     # GH#8229: Stop LLC routine scheduler
     if hasattr(app.state, "llc_routine_scheduler") and app.state.llc_routine_scheduler:
         if await report.run("LLC routine scheduler shutdown", app.state.llc_routine_scheduler.shutdown()):

@@ -239,6 +239,16 @@ def strict_origin(url: object) -> Optional[str]:
     return origin if raw == origin or (default_port and raw + f":{default_port}" == origin) else None
 
 
+def operator_origins(entries: Iterable[object]) -> frozenset[str]:
+    """Strictly shaped origins of operator-listed URLs, minus literal link-local/metadata/unspecified hosts.
+
+    For an operator-named allowlist of exact origins that is NOT the SSOT service set (e.g. LLM tracing
+    destinations, #19933): the same strictness as :func:`is_internal_origin`, the same refused hosts as
+    :func:`_normalized`, without trusting any SSOT service.
+    """
+    return frozenset(o for o in (strict_origin(e) for e in entries) if o and not _never_internal(o))
+
+
 async def is_internal_origin(url: str) -> bool:
     """True when *url* is strictly shaped and its exact origin is in :func:`internal_origins`."""
     origin = strict_origin(url)

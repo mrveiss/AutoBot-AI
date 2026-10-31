@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Set
 
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 from utils.file_categorization import SKIP_DIRS
 
 from .types import CodeLocation, PatternSeverity, RegexOpportunity
@@ -498,7 +499,7 @@ class RegexPatternDetector:
         sorted_opps = sorted(
             opportunities,
             key=lambda x: (
-                {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}.get(x.severity.value, 0),
+                Severity.rank_of(x.severity.value),
                 len(x.operations_replaced),
             ),
             reverse=True,
