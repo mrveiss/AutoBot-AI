@@ -21,6 +21,7 @@ from typing import Dict, List, Optional
 from autobot_shared.fleet_constants import FLEET_INSTALL_ROOT
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.paths import project_root
+from services.execution.transcript_normalizer import JSON_ERRORS
 
 logger = get_logger(__name__)
 
@@ -97,7 +98,7 @@ class SnapshotIndex:
         try:
             with open(self._index_path, encoding="utf-8") as fh:
                 return json.load(fh)
-        except (json.JSONDecodeError, OSError) as exc:
+        except (*JSON_ERRORS, OSError) as exc:  # a bad record: syntax, oversized int or deep nesting
             logger.warning("Failed to load snapshot index, starting fresh: %s", exc)
             return {}
 
