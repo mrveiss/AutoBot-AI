@@ -35,6 +35,9 @@ from .base import LLCServiceBase
 
 logger = logging.getLogger(__name__)
 
+#: The constraint a cost event breaks when its work item no longer exists (``CompanyOsCostEvent.work_item_id``).
+WORK_ITEM_FK = "fk_company_os_cost_events_work_item"
+
 _tracker = AgentBudgetTracker()  # noqa: SRB001 — canonical SharedRuntimeBag consumer
 
 
@@ -75,17 +78,37 @@ async def _record_event(
         if owner is None or str(owner) != str(company_id):
             raise WorkItemNotInCompany(work_item_id)
     model, tokens_in, tokens_out, cost = usage
-    session.add(
-        CompanyOsCostEvent(
-            company_id=uuid.UUID(str(company_id)),
-            agent_id=agent_id,
-            work_item_id=item_id,
-            model=model,
-            tokens_in=tokens_in,
-            tokens_out=tokens_out,
-            cost=cost,
-        )
+    event = CompanyOsCostEvent(
+        company_id=uuid.UUID(str(company_id)),
+        agent_id=agent_id,
+        work_item_id=item_id,
+        model=model,
+        tokens_in=tokens_in,
+        tokens_out=tokens_out,
+        cost=cost,
     )
+    if item_id is None:
+        session.add(event)
+    else:
+        await _add_event(session, event, work_item_id)
+
+
+async def _add_event(session: AsyncSession, event: CompanyOsCostEvent, work_item_id: str) -> None:
+    """Insert the event now, so an item deleted since the ownership check is a refusal, not a 500 later (#20168).
+
+    The foreign key would otherwise fail on the caller's next statement. The add and flush sit in one savepoint,
+    so a refusal leaves the caller's transaction usable. Only that foreign key is mapped; any other integrity
+    error is a real fault and propagates.
+    """
+    try:
+        async with session.begin_nested():
+            session.add(event)
+            await session.flush()
+    except IntegrityError as exc:
+        if WORK_ITEM_FK not in str(exc.orig):
+            raise
+        logger.info("cost event refused: work item %s was deleted after the ownership check", work_item_id)
+        raise WorkItemNotInCompany(work_item_id) from None
 
 
 def _cost_of(model: str, agent_id: str, tokens_in: int, tokens_out: int) -> Decimal:
