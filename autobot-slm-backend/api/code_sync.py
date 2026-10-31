@@ -117,6 +117,7 @@ from services.fleet_sync_guard import assert_no_running_sync, fleet_sync_lock
 from services.git_tracker import DEFAULT_BRANCH, DEFAULT_REPO_PATH, get_git_tracker
 from services.playbook_executor import get_playbook_executor
 from services.schedule_executor import get_schedule_target_nodes
+from services.single_flight_cache import SingleFlightCache
 from services.slm_frontend_build import build_slm_frontend as _build_slm_frontend
 from services.slm_frontend_build import write_slm_deployed_commit_marker as _write_slm_deployed_commit_marker
 from services.ssh_utils import _ssh_key_usable, ssh_remote_path
@@ -651,7 +652,8 @@ _SELF_UPDATE_WATCH_POLL_SECONDS = env_int_clamped("SLM_SELF_UPDATE_WATCH_POLL_SE
 # node stamps progress, so this bounds the gap between two signs of life, not
 # the job's total duration.
 _UPDATE_ALL_STALE_SECONDS = env_int_clamped("SLM_UPDATE_ALL_STALE_SECONDS", 1800, min_v=60)
-_stale_components_cache: dict = {"ts": -_STALE_COMPONENTS_TTL_SECONDS - 1.0, "value": []}
+# #20250: one scan at a time; concurrent /status polls hashing with the GIL starved the event loop.
+_stale_components_cache: SingleFlightCache[list[str]] = SingleFlightCache(_STALE_COMPONENTS_TTL_SECONDS)
 
 
 async def _compute_stale_components(force: bool = False) -> list[str]:
@@ -676,10 +678,11 @@ async def _compute_stale_components(force: bool = False) -> list[str]:
     that just resynced a component need the FRESH drift state, not a stale
     cached snapshot that could still list the component they just fixed.
     """
-    now = time.monotonic()
-    if not force and now - _stale_components_cache["ts"] < _STALE_COMPONENTS_TTL_SECONDS:
-        return _stale_components_cache["value"]
+    return await _stale_components_cache.get(_scan_stale_components, force=force)
 
+
+async def _scan_stale_components() -> list[str]:
+    """Hash each deployed component against code_source. Helper for _compute_stale_components."""
     stale: list[str] = []
     loop = asyncio.get_running_loop()
     for component in sorted(VISIBILITY_COMPONENTS):
@@ -697,8 +700,6 @@ async def _compute_stale_components(force: bool = False) -> list[str]:
         except Exception:  # noqa: BLE001 - a bad component must not break /status
             logger.exception("stale-components scan failed for %s", component)
 
-    _stale_components_cache["ts"] = now
-    _stale_components_cache["value"] = stale
     return stale
 
 
@@ -708,11 +709,10 @@ def _invalidate_stale_components_cache() -> None:
     POST /code-sync/pull advances code_source/local_version but never told
     this TTL cache, so /status could keep serving a pre-pull drift snapshot
     ("up to date") for up to _STALE_COMPONENTS_TTL_SECONDS right after an
-    operator pull actually drifted a component. Resetting ts (not eagerly
-    recomputing) keeps pull() fast; the next /status call pays the
-    recompute cost exactly once — no thundering herd on repeated polls.
+    operator pull actually drifted a component. Invalidating, not eagerly
+    recomputing, keeps pull() fast.
     """
-    _stale_components_cache["ts"] = -_STALE_COMPONENTS_TTL_SECONDS - 1.0
+    _stale_components_cache.invalidate()
 
 
 async def _compute_process_divergence() -> Dict[str, str]:
