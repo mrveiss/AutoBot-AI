@@ -392,6 +392,7 @@
     "deleteSchedule": "Delete schedule \"{name}\"?"
   },
   "common": {
+    "zeroSize": "0 B",
     "codeSyncBadge": {},
     "roleReachesNoDeployPath": "Assigned, but nothing will deploy {roles}: the role reaches no ansible group and has no dedicated playbook. Add a group mapping or a playbook for it.",
     "sidebar": {
@@ -1683,7 +1684,7 @@
     "system": "Système",
     "systemValue0": "System ({value0})",
     "systemdService": "Systemd Service",
-    "target": "Cible",
+    "target": "Target",
     "targetNode": "Target Node",
     "targetPath": "Target Path *",
     "targetPath2": "Target path:",
@@ -1708,7 +1709,7 @@
   "performance": {
     "alertRulesView": {
       "actions": "Actes",
-      "alertRules": "Alert Rules",
+      "alertRules": "Règles d'alerte",
       "areYouSureYou": "Are you sure you want to delete",
       "cancel": "Annuler",
       "condition": "Condition",
@@ -1820,7 +1821,13 @@
     "performanceSections": "Performance sections",
     "performanceSummary": "Performance summary",
     "refreshPerformanceData": "Refresh performance data",
-    "sLOCompliance": "SLO Compliance:"
+    "sLOCompliance": "SLO Compliance:",
+    "tabs": {
+      "alertRules": "Règles d'alerte",
+      "overview": "Aperçu",
+      "slos": "SLO",
+      "traces": "Traces"
+    }
   },
   "redisServicePanel": {
     "actionFailed": "Failed to {action} Redis service",
@@ -2030,7 +2037,7 @@
     "sourcePathsCommaSeparated": "Source Paths (comma-separated)",
     "syncType": "Sync Type",
     "systemdService": "Systemd Service",
-    "target": "Cible",
+    "target": "Target",
     "targetNode": "Target Node *",
     "targetPath": "Target Path *",
     "times": "×",
