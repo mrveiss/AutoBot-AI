@@ -1,0 +1,16 @@
+---
+# Is there an NVIDIA GPU here? Registers nvidia_smi_probe; rc 0 with output means yes (#19731).
+#
+# A bare `nvidia-smi` is not enough: under WSL2 the binary lives in /usr/lib/wsl/lib, which is not
+# on the PATH of the account Ansible runs as, so a host with a GPU read as having none.
+# The caller decides when to include this; rc != 0 is the expected answer on a host with no GPU.
+
+- name: "GPU | Detect NVIDIA GPU via nvidia-smi (#19731)"
+  ansible.builtin.shell:
+    cmd: >-
+      PATH="$PATH:{{ nvidia_smi_extra_path | default('/usr/lib/wsl/lib') }}"
+      nvidia-smi --query-gpu=name --format=csv,noheader
+  register: nvidia_smi_probe
+  changed_when: false
+  failed_when: false
+  check_mode: false
