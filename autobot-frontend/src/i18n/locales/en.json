@@ -8498,6 +8498,7 @@
       "coverage": "Coverage",
       "coverageComplete": "All steps costed",
       "coveragePartial": "{costed} of {total} steps costed",
+      "currencyAmount": "{amount} {currency}",
       "stepRollupEmpty": "No process steps are mapped yet, so there is nothing to total.",
       "stepRollupUnavailable": "The totals could not be loaded.",
       "stepRollupToolNote": "A step counts towards every tool its role carries, so the tool totals do not add up to the role totals.",
