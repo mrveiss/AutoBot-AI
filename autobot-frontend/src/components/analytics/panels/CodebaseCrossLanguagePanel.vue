@@ -306,6 +306,7 @@ import { useShowMore } from '@autobot/ui'
 import TruncationNotice from '../TruncationNotice.vue'
 import EmptyState from '@/components/ui/EmptyState.vue'
 import { useExpansion } from '@/composables/useExpansion'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 interface PatternLocation {
   file_path: string
@@ -386,14 +387,7 @@ const emit = defineEmits<{
 type Section = 'dtoMismatches' | 'apiMismatches' | 'validationDups' | 'semanticMatches'
 const { isExpanded, toggle } = useExpansion<Section>()
 
-function formatTimestamp(timestamp: string | undefined): string {
-  if (!timestamp) return 'Unknown'
-  try {
-    return new Date(timestamp).toLocaleString()
-  } catch {
-    return String(timestamp)
-  }
-}
+const formatTimestamp = createDateFormatter({ emptyText: 'Unknown' })
 </script>
 
 <style scoped src="@/design-system/styles/panel-api-cross-shared.css"></style>

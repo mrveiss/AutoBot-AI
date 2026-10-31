@@ -72,7 +72,7 @@
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue';
-import { formatDuration } from '@/utils/formatHelpers';
+import { formatDuration, createDateFormatter } from '@/utils/formatHelpers';
 import type { ActiveWorkflow } from '@/composables/useWorkflowBuilder';
 
 const props = defineProps<{
@@ -177,10 +177,7 @@ function workflowDuration(wf: ActiveWorkflow): string {
   return formatDuration(wf.started_at, wf.completed_at, DURATION_FORMAT);
 }
 
-function formatDate(date?: string): string {
-  if (!date) return '-';
-  return new Date(date).toLocaleDateString();
-}
+const formatDate = createDateFormatter({ kind: 'date', emptyText: '-' })
 </script>
 
 <style scoped>
