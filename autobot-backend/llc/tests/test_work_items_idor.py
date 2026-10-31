@@ -58,11 +58,11 @@ def _make_idor_app(
     """
     # Deferred imports: must not be at module level (see test_suggest_ac_endpoint.py).
     from api.user_management.dependencies import get_current_user, require_org_context  # noqa: PLC0415
-    from llc.api.work_items import router as wi_router  # noqa: PLC0415
+    from llc.api import work_item_relations_routes, work_items  # noqa: PLC0415
     from llc.deps import get_session  # noqa: PLC0415
 
     app = FastAPI()
-    app.include_router(wi_router)
+    [app.include_router(m.router) for m in (work_items, work_item_relations_routes)]
 
     mock_session = AsyncMock()
     mock_session.commit = AsyncMock()

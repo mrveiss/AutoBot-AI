@@ -963,8 +963,6 @@
 1|other|autobot-slm-backend/ansible/inventory/production.yml|30
 1|other|autobot-slm-backend/ansible/migrate-grafana-to-vm.yml|60
 1|other|autobot-slm-backend/ansible/migrate-grafana-to-vm.yml|http://127\.0\.0\.1:{{
-1|other|autobot-slm-backend/ansible/migrate-grafana-to-vm.yml|https://apt.grafana.com
-1|other|autobot-slm-backend/ansible/migrate-grafana-to-vm.yml|https://apt.grafana.com/gpg.key
 1|ssot|autobot-slm-backend/ansible/migrate-grafana-to-vm.yml|:3000
 1|ssot|autobot-slm-backend/ansible/migrate-grafana-to-vm.yml|:9090
 1|other|autobot-slm-backend/ansible/playbooks/bootstrap-node.yml|"/var/lib/autobot
@@ -1116,8 +1114,6 @@
 1|ssot|autobot-slm-backend/ansible/roles/llm/defaults/main.yml|llama3.2:1b
 1|ssot|autobot-slm-backend/ansible/roles/llm/defaults/main.yml|qwen3.5:9b
 1|other|autobot-slm-backend/ansible/roles/llm/tasks/main.yml|https://ollama.ai/install.sh
-1|other|autobot-slm-backend/ansible/roles/monitoring/tasks/grafana.yml|https://apt.grafana.com
-2|other|autobot-slm-backend/ansible/roles/monitoring/tasks/grafana.yml|https://apt.grafana.com/gpg.key
 1|other|autobot-slm-backend/ansible/roles/monitoring/tasks/node_exporter.yml|https://github.com/prometheus/node_exporter/releases/download/v{{
 1|other|autobot-slm-backend/ansible/roles/monitoring/tasks/prometheus.yml|https://github.com/prometheus/prometheus/releases/download/v{{
 1|other|autobot-slm-backend/ansible/roles/npu-worker/tasks/main.yml|120
@@ -1131,8 +1127,6 @@
 1|other|autobot-slm-backend/ansible/roles/redis/vars/main.yml|300
 1|other|autobot-slm-backend/ansible/roles/slm_agent/tasks/main.yml|300
 1|other|autobot-slm-backend/ansible/roles/slm_agent/tasks/node_exporter.yml|https://github.com/prometheus/node_exporter/releases/download/v{{
-1|other|autobot-slm-backend/ansible/roles/slm_manager/tasks/grafana.yml|https://apt.grafana.com
-1|other|autobot-slm-backend/ansible/roles/slm_manager/tasks/grafana.yml|https://apt.grafana.com/gpg.key
 1|other|autobot-slm-backend/ansible/roles/slm_manager/tasks/main.yml|120
 2|other|autobot-slm-backend/ansible/roles/time_sync/tasks/main.yml|120
 1|other|autobot-slm-backend/ansible/roles/time_sync/vars/main.yml|120
