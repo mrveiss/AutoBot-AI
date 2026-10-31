@@ -1017,12 +1017,6 @@
 2|ssot|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|:11434
 1|ssot|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|:8080
 1|ssot|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|:8081
-1|ssot|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|dolphin-llama3:8b
-1|ssot|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|gemma2:2b
-1|ssot|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|llama3.2:1b
-1|ssot|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|mistral:7b-instruct
-1|ssot|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|phi3:mini
-1|ssot|autobot-slm-backend/ansible/playbooks/deploy-native-services.yml|qwen3.5:9b
 1|other|autobot-slm-backend/ansible/playbooks/deploy-nginx-proxy.yml|30
 1|other|autobot-slm-backend/ansible/playbooks/deploy-nginx-proxy.yml|60
 1|ssot|autobot-slm-backend/ansible/playbooks/deploy-service-auth.yml|:8001

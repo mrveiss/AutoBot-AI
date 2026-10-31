@@ -82,7 +82,6 @@
   "autobot-infrastructure/shared/scripts/monitoring_system.py": 2,
   "autobot-infrastructure/shared/scripts/phase_validation_system.py": 4,
   "autobot-infrastructure/shared/scripts/profile_api_endpoints.py": 1,
-  "autobot-infrastructure/shared/scripts/search_index_utility.py": 1,
   "autobot-infrastructure/shared/scripts/seq_log_forwarder.py": 2,
   "autobot-infrastructure/shared/scripts/setup/analytics/seq_auth_setup.py": 3,
   "autobot-infrastructure/shared/scripts/setup/analytics/setup_seq_analytics.py": 11,
