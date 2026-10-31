@@ -9,9 +9,20 @@
  * state itself and the formatting still lives here.
  *
  * The default texts ('—', 'Invalid', the unit names) are English fallbacks. A caller that
- * shows them to a user passes translated `nullText` / `invalidText` / `zeroText` / `units`.
+ * shows them to a user passes translated `nullText` / `invalidText` / `zeroText`, and for byte
+ * sizes `units`. Durations in the `msMinutesSeconds` style take translated `units`
+ * (`{ seconds, minutes }`); the other duration styles keep their fixed suffixes. No unit label
+ * comes from `Intl.DurationFormat`, so the output does not depend on the engine supporting it.
  */
 import type { DurationStyle } from './duration'
+
+/** Translated unit labels for the `msMinutesSeconds` style; each defaults to its English suffix. */
+export interface DurationUnitLabels {
+  /** Suffix after the seconds count (default `'s'`). */
+  seconds?: string
+  /** Suffix after the minutes count (default `'m'`). */
+  minutes?: string
+}
 
 /** Options for the numeric form of {@link formatDuration}. */
 export interface FormatDurationOptions {
@@ -23,6 +34,14 @@ export interface FormatDurationOptions {
   zeroText?: string
   /** Rounding for the top tier of `clock` / `msMinutes` styles and the seconds of `msMinutesSeconds` (default `'round'`). */
   rounding?: 'round' | 'floor'
+  /** Translated unit labels; only the `msMinutesSeconds` style reads them (default `'s'` / `'m'`). */
+  units?: DurationUnitLabels
+}
+
+function formatMinutesSeconds(secs: number, units: DurationUnitLabels = {}): string {
+  const s = units.seconds ?? 's'
+  const m = units.minutes ?? 'm'
+  return secs < 60 ? `${secs}${s}` : `${Math.floor(secs / 60)}${m} ${secs % 60}${s}`
 }
 
 function formatDurationValue(
@@ -63,7 +82,7 @@ function formatDurationValue(
     }
     case 'msMinutesSeconds': {
       const secs = Math.max(0, roundFn(value / 1000))
-      return secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`
+      return formatMinutesSeconds(secs, options.units)
     }
     case 'msCompound': {
       const secs = Math.max(0, Math.floor(value / 1000))
