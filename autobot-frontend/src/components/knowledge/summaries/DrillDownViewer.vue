@@ -345,7 +345,8 @@ h5 {
 
 h5 .icon {
   color: var(--color-primary);
-  font-size: var(--text-sm);
+  width: var(--text-sm);
+  height: var(--text-sm);
 }
 
 /* Parent */
@@ -477,7 +478,8 @@ h5 .icon {
 
 .loading-state .icon,
 .empty-state .icon {
-  font-size: var(--text-2xl);
+  width: var(--text-2xl);
+  height: var(--text-2xl);
 }
 
 .error-banner {

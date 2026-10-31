@@ -328,7 +328,8 @@ watch(
 }
 
 .graph3d-empty .icon {
-  font-size: var(--text-5xl);
+  width: var(--text-5xl);
+  height: var(--text-5xl);
   opacity: 0.3;
 }
 
