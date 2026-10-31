@@ -671,7 +671,7 @@ onUnmounted(() => {
 }
 
 .no-elements .icon {
-  font-size: var(--text-2xl);
+  width: var(--text-2xl); height: var(--text-2xl);
 }
 
 /* Text Regions */
