@@ -1,0 +1,146 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+# AutoBot - AI-Powered Automation Platform
+# Author: mrveiss
+#
+# The one Ansible Grafana install (#19661). Absent or below the pinned version: install it.
+# Newer: report it and leave it, because Grafana's database does not support a downgrade.
+# grafana_fresh_install: false (the updater) only moves a Grafana that is already there.
+---
+
+- name: Read the installed Grafana
+  ansible.builtin.command:
+    cmd: "dpkg-query -W --showformat=${Status}:${Version} grafana"
+  # (#17387) `dpkg -l <pkg>` answers "does dpkg KNOW this package", NOT "is it
+  # installed": a package removed without --purge stays in the database in `rc`
+  # state (`deinstall ok config-files`) and `dpkg -l` still exits 0. `${Status}`
+  # distinguishes all three states.
+  register: _grafana_installed
+  changed_when: false
+  failed_when: false
+  check_mode: false  # read-only query; the install guard below needs it under --check
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Compare the installed Grafana with grafana_version
+  ansible.builtin.set_fact:
+    _grafana_present: "{{ 'ok installed' in _grafana_installed.stdout | default('') }}"
+    _grafana_current: "{{ _grafana_installed.stdout | default('') | regex_search('[:]([0-9]+(?:[.][0-9]+)*)', '\\1') | default([''], true) | first }}"
+  when: ansible_facts['os_family'] == "Debian"
+
+- name: Report a Grafana newer than grafana_version
+  ansible.builtin.debug:
+    msg: "Grafana {{ _grafana_current }} is newer than the pinned {{ grafana_version }}; left as it is (no downgrade)."
+  when:
+    - ansible_facts['os_family'] == "Debian"
+    - _grafana_present | bool
+    - _grafana_current is version(grafana_version, '>')
+
+- name: Install or upgrade Grafana
+  when:
+    - ansible_facts['os_family'] == "Debian"
+    - >-
+      (_grafana_present | bool and _grafana_current is version(grafana_version, '<'))
+      or (not (_grafana_present | bool) and (grafana_fresh_install | default(true) | bool))
+  block:
+    # First: if the download fails, the host still has its working repo entries.
+    - name: Add Grafana APT signing key
+      ansible.builtin.get_url:
+        url: "https://{{ grafana_apt_host }}/gpg.key"
+        dest: /usr/share/keyrings/grafana.key
+        mode: "0644"
+
+    - name: Remove legacy Grafana APT key from trusted keyring
+      ansible.builtin.apt_key:
+        url: "https://{{ grafana_apt_host }}/gpg.key"
+        state: absent
+      # (#2872) Intentional: legacy key may not exist; removal is best-effort
+      # cleanup before adding the new signed keyring file.
+      failed_when: false
+
+    - name: Remove conflicting Grafana repo entries
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/apt/sources.list.d/grafana.list
+        - /etc/apt/sources.list.d/grafana.sources
+
+    # #7218: idempotent repo-add — preserve device-shipped Grafana repo if present.
+    # Refresh handled by the bounded-shell task below (#6719).
+    - name: "Add Grafana repository (idempotent, #7218)"
+      ansible.builtin.include_tasks: ../../_shared/tasks/add_apt_repository_idempotent.yml
+      vars:
+        apt_repo_match: "{{ grafana_apt_host }}"
+        apt_repo_spec: "deb [signed-by=/usr/share/keyrings/grafana.key] https://{{ grafana_apt_host }} stable main"
+        apt_repo_filename: "grafana"
+        apt_repo_label: "Grafana (monitoring)"
+        # #17897: derived from this file's own "Install Grafana" task
+        # (ansible.builtin.apt, name: grafana), the same name its `dpkg-query`
+        # presence check at the top of the file asks about.
+        apt_repo_verify_package: "grafana"
+
+    # #6719: bounded shell apt-get update — see roles/nginx/tasks/main.yml.
+    - name: Grafana | Refresh apt cache after PPA add (best-effort, bounded; #6719)
+      ansible.builtin.command:
+        cmd: >-
+          timeout 60 apt-get update -qq
+          -o Acquire::Retries=0
+          -o Acquire::http::Timeout=10
+      become: true
+      changed_when: false
+      failed_when: false
+
+    - name: Read whether Grafana is running
+      ansible.builtin.command:
+        cmd: systemctl is-active grafana-server
+      register: _grafana_active
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      when: _grafana_present | bool
+
+    - name: Upgrade with Grafana stopped
+      block:
+        # The running server writes to its database, so a copy taken now could be torn.
+        - name: Stop Grafana before the upgrade
+          ansible.builtin.systemd:
+            name: grafana-server
+            state: stopped
+          when:
+            - _grafana_present | bool
+            - _grafana_active.stdout | default('') == 'active'
+
+        - name: Find the Grafana database
+          ansible.builtin.stat:
+            path: /var/lib/grafana/grafana.db
+          register: _grafana_db
+          when: _grafana_present | bool
+
+        # An upgrade migrates the database and there is no downgrade: this copy is the way back.
+        # force: false keeps the first copy when a failed run is retried.
+        - name: Keep a copy of the Grafana database from before the upgrade
+          ansible.builtin.copy:
+            src: /var/lib/grafana/grafana.db
+            dest: "/var/lib/grafana/grafana.db.before-{{ grafana_version }}"
+            remote_src: true
+            force: false
+            owner: grafana
+            group: grafana
+            mode: "0640"
+          when:
+            - _grafana_present | bool
+            - _grafana_db.stat.exists
+
+        - name: Install Grafana
+          ansible.builtin.apt:
+            name: "grafana={{ grafana_version }}"
+            state: present
+      always:
+        # Also after a failed install: the old version comes back rather than staying down.
+        - name: Start Grafana again
+          ansible.builtin.systemd:
+            name: grafana-server
+            state: started
+          when:
+            - _grafana_present | bool
+            - _grafana_active.stdout | default('') == 'active'
