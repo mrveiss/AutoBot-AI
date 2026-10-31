@@ -462,7 +462,7 @@ import McpPromptPicker from './McpPromptPicker.vue'
 import { formatFileSize } from '@/utils/formatHelpers'
 import { getFileIconNameByMimeType } from '@/utils/iconMappings'
 import { createLogger } from '@/utils/debugUtils'
-import { postConversationUpload, describeUploadError } from '@/utils/conversationFileUpload'
+import { postConversationUpload, describeUploadError, ensureUploadSession } from '@/utils/conversationFileUpload'
 import type { MultiModalResponse } from '@/utils/VisionMultimodalApiClient'
 import { useVoiceOutput } from '@/composables/useVoiceOutput'
 import { useSlashCommands } from '@/composables/useSlashCommands'
@@ -1069,7 +1069,7 @@ const uploadFile = async (upload: UploadItem, file: File): Promise<void> => {
   upload.status = 'Uploading...'
 
   try {
-    const response = await postConversationUpload(store.currentSessionId || 'default', file, (loaded, total) => {
+    const response = await postConversationUpload(await ensureUploadSession(store, controller), file, (loaded, total) => {
       upload.current = loaded
       upload.total = total
       upload.progress = (loaded / total) * 100
