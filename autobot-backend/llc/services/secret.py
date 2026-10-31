@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.legacy_secret_keys import derive_llc_company_fernet
 from autobot_shared.time_utils import now_utc
 from llc.models.secret import LLCSecret
+from llc.services.actor import resolve_actor
 from services.llc_secrets_read import llc_unified_read_enabled, read_imported_llc_secret_in_session
 
 from .base import LLCServiceBase
@@ -127,10 +128,13 @@ class SecretService(LLCServiceBase):
         await session.refresh(secret)
 
         if self.activity_log:
+            who = resolve_actor(user_id=actor)
             await self.activity_log.record(
                 session=session,
                 company_id=company_id,
-                actor_id=actor,
+                actor_type=who.type,
+                actor_id=who.id,
+                metadata=who.metadata(),
                 event_type="secret.set",
                 entity_type="llc_secret",
                 entity_id=str(secret.id),
@@ -166,12 +170,12 @@ class SecretService(LLCServiceBase):
         """
         secret = await self._fetch_active(session, company_id, name)
         if llc_unified_read_enabled():
-            unified = await self._unified_get(session, secret, company_id)
+            unified = await self._envelope_store_get(session, secret, company_id)
             if unified is not None:
                 return unified
         return self._fernet(company_id).decrypt(secret.value).decode("utf-8")
 
-    async def _unified_get(self, session: AsyncSession, secret: LLCSecret, company_id: str) -> Optional[str]:
+    async def _envelope_store_get(self, session: AsyncSession, secret: LLCSecret, company_id: str) -> Optional[str]:
         """Best-effort unified-store read for an already-resolved active secret row."""
         from autobot_shared.secrets_envelope import load_root_key
 
@@ -197,10 +201,13 @@ class SecretService(LLCServiceBase):
         await session.flush()
 
         if self.activity_log:
+            who = resolve_actor(user_id=actor)
             await self.activity_log.record(
                 session=session,
                 company_id=company_id,
-                actor_id=actor,
+                actor_type=who.type,
+                actor_id=who.id,
+                metadata=who.metadata(),
                 event_type="secret.revoked",
                 entity_type="llc_secret",
                 entity_id=str(secret.id),
