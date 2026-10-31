@@ -13,7 +13,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useSlmApi } from '@/composables/useSlmApi'
 import { useSlmWebSocket } from '@/composables/useSlmWebSocket'
 import { useFleetStore } from '@/stores/fleet'
-import { formatDateTime as formatDateTimeTz } from '@/composables/useTimezone'
+import { formatDateTime } from '@/composables/useTimezone'
 import { useToast } from '@/composables/useToast'
 import { createLogger } from '@/utils/debugUtils'
 import type { Replication, ReplicationRequest } from '@/types/slm'
@@ -207,11 +207,6 @@ function getStatusClass(status: string): string {
   }
 }
 
-function formatDateTime(isoString: string | null): string {
-  if (!isoString) return '-'
-  return formatDateTimeTz(isoString)
-}
-
 function formatLag(lagBytes: number): string {
   if (lagBytes === 0) return '0 B (in sync)'
   if (lagBytes < 1024) return `${lagBytes} B`
@@ -392,7 +387,7 @@ function getNodeHostname(nodeId: string): string {
                 </span>
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                {{ formatDateTime(replication.started_at) }}
+                {{ formatDateTime(replication.started_at, '-') }}
               </td>
               <td class="px-6 py-4 whitespace-nowrap text-right">
                 <div class="flex items-center justify-end gap-2">
@@ -660,15 +655,15 @@ function getNodeHostname(nodeId: string): string {
       <div class="grid grid-cols-2 gap-4 mb-6">
         <div>
           <p class="text-sm text-gray-500">{{ $t('replicationView.created') }}</p>
-          <p class="text-sm font-medium">{{ formatDateTime(selectedReplication.created_at) }}</p>
+          <p class="text-sm font-medium">{{ formatDateTime(selectedReplication.created_at, '-') }}</p>
         </div>
         <div>
           <p class="text-sm text-gray-500">{{ $t('replicationView.started') }}</p>
-          <p class="text-sm font-medium">{{ formatDateTime(selectedReplication.started_at) }}</p>
+          <p class="text-sm font-medium">{{ formatDateTime(selectedReplication.started_at, '-') }}</p>
         </div>
         <div v-if="selectedReplication.completed_at">
           <p class="text-sm text-gray-500">{{ $t('replicationView.completed') }}</p>
-          <p class="text-sm font-medium">{{ formatDateTime(selectedReplication.completed_at) }}</p>
+          <p class="text-sm font-medium">{{ formatDateTime(selectedReplication.completed_at, '-') }}</p>
         </div>
       </div>
 
