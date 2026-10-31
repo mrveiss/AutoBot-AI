@@ -116,6 +116,7 @@ import { useI18n } from 'vue-i18n'
 import { BaseBadge, BaseTable, type BaseTableColumn } from '@autobot/ui'
 import { useAutobotApi, type SharedLinkAdminItem } from '@/composables/useAutobotApi'
 import { createLogger } from '@/utils/debugUtils'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('SharedLinksView')
 const { t } = useI18n()
@@ -141,13 +142,7 @@ const columns = computed<BaseTableColumn[]>(() => [
   { key: 'has_password', label: t('sharedLinksView.colPassword') },
 ])
 
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleString()
-  } catch {
-    return iso
-  }
-}
+const formatDate = createDateFormatter()
 
 async function fetchLinks(): Promise<void> {
   loading.value = true
