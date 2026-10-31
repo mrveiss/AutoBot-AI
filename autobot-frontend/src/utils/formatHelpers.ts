@@ -44,12 +44,17 @@ export type { DateInput, DateFormatterOptions } from '@autobot/ui'
 import { formatDuration, formatUptime, formatFileSize, formatBytes } from '@autobot/ui'
 export { formatDuration, formatUptime, formatFileSize, formatBytes }
 
-/** File-browser size text: `1.5 KB` up to GB, `0 B` for a missing size. */
-export const FILE_BROWSER_SIZE_OPTIONS = {
-  decimals: 1,
-  units: ['B', 'KB', 'MB', 'GB'],
-  nullText: '0 B',
-} as const
+/**
+ * File-browser size options: `1.5 KB` up to GB. `zeroText` is the text for a missing size; the
+ * caller passes it from an i18n key (#19885), so the formatter holds no display literal.
+ */
+export function fileBrowserSizeOptions(zeroText: string) {
+  return {
+    decimals: 1,
+    units: ['B', 'KB', 'MB', 'GB'],
+    nullText: zeroText,
+  } as const
+}
 export type { FormatDurationOptions, FormatUptimeOptions, FormatBytesOptions } from '@autobot/ui'
 
 // ==================== NUMBER FORMATTING ====================
