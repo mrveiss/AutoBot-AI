@@ -343,7 +343,7 @@ describe('AdvancedControlView.vue', () => {
     await flushPromises()
     await selectMonitoringTab(wrapper)
 
-    const stopBtn = wrapper.find('button.btn-danger-full')
+    const stopBtn = wrapper.find('button.aui-btn--error')
     expect(stopBtn.exists()).toBe(true)
     await stopBtn.trigger('click')
     await flushPromises()
@@ -362,7 +362,7 @@ describe('AdvancedControlView.vue', () => {
     await flushPromises()
     await selectMonitoringTab(wrapper)
 
-    const stopBtn = wrapper.find('button.btn-danger-full')
+    const stopBtn = wrapper.find('button.aui-btn--error')
     await stopBtn.trigger('click')
     await flushPromises()
 

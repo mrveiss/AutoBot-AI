@@ -4242,6 +4242,8 @@
     "stop": "Stop Workflow",
     "status": "Status",
     "history": {
+      "durationSeconds": "ث",
+      "durationMinutes": "د",
       "searchPlaceholder": "Search workflows...",
       "allStatus": "All Status",
       "completed": "مكتمل",
