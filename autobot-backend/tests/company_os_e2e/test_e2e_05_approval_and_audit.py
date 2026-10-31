@@ -37,7 +37,7 @@ def test_step_8_approval_can_be_filed_and_decided(scenario):  # noqa: ANN001
             json={
                 "company_id": api.company_id,
                 "type": "hire",
-                "requested_by_agent_id": scenario.agents["ceo"]["node_id"],
+                "requested_by_agent_id": scenario.agent("ceo")["node_id"],
                 "payload": {"agent_name": NEW_HIRE["agent_name"]},
             },
         )
@@ -64,7 +64,7 @@ def test_step_8_hire_happens_only_after_approval(scenario):  # noqa: ANN001
         assert refused.status_code in (403, 409, 422), f"unapproved hire answered {refused.status_code}"
         assert NEW_HIRE["agent_name"] not in _roster_names(api), "the refused hire is on the roster"
         hired = api.call(
-            "POST", api.company("/agent-hires"), json={**NEW_HIRE, "approval_id": scenario.ids["approval"]}
+            "POST", api.company("/agent-hires"), json={**NEW_HIRE, "approval_id": scenario.need("approval", 8)}
         )
         assert hired["agent_name"] == NEW_HIRE["agent_name"]
         assert NEW_HIRE["agent_name"] in _roster_names(api), "the approved hire is not on the roster"
@@ -81,18 +81,21 @@ def _all_rows(api) -> list[dict]:
         page += 1
 
 
+ENTITY_STEP = {"company": 1, "goal": 3, "project": 3, "epic": 3, "task": 3, "approval": 8}
+
+
 def _entity_ids(scn: Scenario, key: str) -> set[str]:
     if key == "company":
         return {scn.api.company_id}
     if key.startswith("agent:"):
-        agent = scn.agents[key.split(":", 1)[1]]
+        agent = scn.agent(key.split(":", 1)[1])
         return {agent["agent_id"], agent["node_id"]}
-    return {scn.ids[key]}
+    return {scn.need(key, ENTITY_STEP[key])}
 
 
 def _candidates(scn: Scenario, rows: list[dict], want: Expected) -> list[dict]:
     ids = _entity_ids(scn, want.entity)
-    since = datetime.fromisoformat(scn.ids[want.after]) if want.after else None
+    since = datetime.fromisoformat(scn.need(want.after, 6)) if want.after else None
     return [
         r
         for r in rows

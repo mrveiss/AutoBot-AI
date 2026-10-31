@@ -39,12 +39,12 @@ STEPS: dict[str, tuple[str, str]] = {
     "5": ("a scheduled heartbeat run is dispatched for the assignee", "M2.5 heartbeat scheduling (#20117, #19189)"),
     "5b": (
         "the dispatched run can reach the Agent API and take the task",
-        "M2.5 run dispatch (run-scoped API key is never issued, #20149)",
+        "M2.5 run dispatch and run-scoped key (#20149)",
     ),
     "6": ("an exhausted budget stops dispatch", "M2.6 dispatch gate (#19240, PR #19958)"),
     "7": (
         "pause and resume an agent through the API",
-        "M2.7 controls (#14189, #14164; pause 500s on the activity-log write, #20150)",
+        "M2.7 controls (#14189, #14164, #20150)",
     ),
     "7b": ("a paused agent is not dispatched until resumed", "M2.6 dispatch gate (#19240, PR #19958)"),
     "8": ("a hire approval can be filed and decided", "M2.7 board approval gates (#8214)"),
@@ -112,6 +112,17 @@ class Scenario:
         missing = [n for n in steps if n not in self.done]
         if missing:
             raise StepFailure(f"prerequisite step(s) {missing} did not complete, so this step cannot run")
+
+    def need(self, key: str, step: int) -> str:
+        """State another step records; a clear precondition failure naming that step when it is absent."""
+        if key not in self.ids:
+            raise StepFailure(f"precondition: '{key}' is recorded by step {step}, which did not complete")
+        return self.ids[key]
+
+    def agent(self, role: str) -> dict[str, str]:
+        if role not in self.agents:
+            raise StepFailure(f"precondition: agent '{role}' is hired by step 2, which did not complete")
+        return self.agents[role]
 
     def stub_invocations(self, agent_id: str | None = None) -> list[dict[str, Any]]:
         lines = Path(self.stack.stub_log).read_text(encoding="utf-8").splitlines()
