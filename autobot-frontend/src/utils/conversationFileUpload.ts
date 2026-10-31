@@ -6,9 +6,9 @@
 /**
  * The chat attachment upload transport (#20133).
  *
- * The route (`/conversation-files/conversation/{id}/upload`) is gated by `check_admin_permission`,
- * which accepts a bearer JWT, `X-Session-ID`, a dev header or an internal key, and no cookie, so the
- * request carries the stored bearer, read through the canonical reader `readStoredAuthToken`.
+ * The route (`/conversation-files/conversation/{id}/upload`) admits an admin or the user who owns the
+ * conversation (#20133); it resolves a bearer JWT, `X-Session-ID`, a dev header or an internal key, and
+ * no cookie, so the request carries the stored bearer, read through the canonical reader `readStoredAuthToken`.
  * It stays a raw XHR rather than `ApiClient.uploadFile` because the chat UI needs the byte-level
  * progress (for ETA), the response's `file_info`/`upload_id`, and an exact `200` success check,
  * none of which the kit method exposes.
@@ -80,4 +80,24 @@ export function postConversationUpload(
     if (token) xhr.setRequestHeader('Authorization', `Bearer ${token}`)
     xhr.send(formData)
   })
+}
+
+let sessionBeingCreated: Promise<string> | null = null
+
+/**
+ * The conversation a chat attachment uploads into, creating one first when the chat has none.
+ *
+ * A chat with no current session only gets one when its first message is sent, but the upload route
+ * answers 404 for a conversation that does not exist (a non-admin names one they own, #20133), so the
+ * attachment cannot ride a made-up id such as `default`. Files picked together share one creation.
+ */
+export function ensureUploadSession(
+  store: { currentSessionId: string | null },
+  controller: { createNewSession: () => Promise<string> },
+): Promise<string> {
+  if (store.currentSessionId) return Promise.resolve(store.currentSessionId)
+  sessionBeingCreated ??= controller.createNewSession().finally(() => {
+    sessionBeingCreated = null
+  })
+  return sessionBeingCreated
 }
