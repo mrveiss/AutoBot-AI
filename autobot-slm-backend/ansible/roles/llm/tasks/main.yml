@@ -252,6 +252,23 @@
     - not ansible_check_mode
   tags: ['llm', 'models']
 
+- name: "Models | Check every pulled model is the right kind for its role (#19736)"
+  ansible.builtin.include_tasks:
+    file: ../../../_shared/tasks/assert_model_kinds.yml
+    apply:
+      tags: ['llm', 'models']
+  vars:
+    # The one home of the embedding role's model. Set llm_embedding_model only when llm_cpu_models holds a
+    # different embedder, which would otherwise fail this check as a chat model.
+    model_kind_embedding: >-
+      {{ llm_embedding_model | default((lookup('file', role_path ~ '/../agent_config/defaults/main.yml')
+         | from_yaml).ollama_embedding_model) }}
+    model_kind_completion: "{{ _llm_models_to_pull }}"
+  when:
+    - llm_pull_models | default(true)
+    - not ansible_check_mode
+  tags: ['llm', 'models']
+
 - name: "Models | WARNING canonical tiers skipped on this node class"
   ansible.builtin.debug:
     msg: >-
