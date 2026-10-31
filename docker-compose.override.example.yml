@@ -4,8 +4,9 @@
 #
 # Usage:
 #   cp docker-compose.override.example.yml docker-compose.override.yml
-#   docker compose up -d                  # Automatically uses the override
-#   docker compose -f docker-compose.yml up -d  # Skip override (production)
+#   bash docker/generate-secrets.sh
+#   docker compose --env-file docker/.env.docker --env-file docker/.env.secrets up -d  # Automatically uses the override
+#   docker compose -f docker-compose.yml --env-file docker/.env.docker --env-file docker/.env.secrets up -d  # Skip override (production)
 #
 # Known limitations:
 #   - autobot_shared changes require container restart (pip -e at boot)
