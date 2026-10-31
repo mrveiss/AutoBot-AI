@@ -89,7 +89,7 @@ is returned as-is (nothing to hide) instead of `***`.
 (`**********`) replaces a redacted *value* (dict fields, events, stored snapshots), and `LOG_MASK` (`***`) replaces a
 secret scrubbed out of free *text* (log lines, error messages, output). A new redactor imports one of them and never
 spells its own; `repo_tests/redaction_placeholder_one_home_19337_test.py` counts the spellings left outside the home
-under a down-only pin (the remaining display masks are listed on #19337). Config revisions stored before #19337 keep
+under a pin of zero. A key is never partly shown, in a display mask either (#18221): `repo_tests/no_partial_key_mask_18221_test.py`. Config revisions stored before #19337 keep
 `***REDACTED***`; nothing compares it, so old rows are left as they are.
 
 **Behaviour that changed in `redact_nested` / `redact_dict` (#18205).**
