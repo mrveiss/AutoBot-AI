@@ -34,17 +34,30 @@ vi.mock('@/composables/collaboration/useCollaborationInvite', async () => {
 
 import MembersView from '../MembersView.vue'
 
-const MEMBERS = [
-  { user_id: 'u1', display_name: 'Alice', role: 'owner' },
-  { user_id: 'u2', display_name: 'Bob', role: 'member' },
-]
+const ALL_ROLES = ['owner', 'admin', 'member', 'guest', 'lead']
+const NO_OWNER = ['admin', 'member', 'guest', 'lead']
+
+// The server stamps the viewer's own standing on every row (#20073).
+function membersFor(viewerRole: string | null, grantable: string[]) {
+  return [
+    { user_id: 'u1', display_name: 'Alice', role: 'owner' },
+    { user_id: 'u2', display_name: 'Bob', role: 'member' },
+  ].map((m) => ({ ...m, viewer_role: viewerRole, viewer_grantable_roles: grantable }))
+}
+let members = membersFor('owner', ALL_ROLES)
 const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', messages: { en } })
 
 async function mountView() {
-  get.mockResolvedValue(MEMBERS.map((m) => ({ ...m })))
+  get.mockResolvedValue(members.map((m) => ({ ...m })))
   const wrapper = mount(MembersView, { global: { plugins: [i18n] } })
   await flushPromises()
   return wrapper
+}
+
+/** The role badge in the changed member's own row; the select's options also spell every role. */
+function badgeOf(wrapper: Awaited<ReturnType<typeof mountView>>, name: string) {
+  const row = wrapper.findAll('tbody tr').find((r) => r.text().includes(name))
+  return row!.find('.aui-badge').text()
 }
 
 function bobSelect(wrapper: Awaited<ReturnType<typeof mountView>>) {
@@ -62,6 +75,7 @@ describe('MembersView role change (#19960)', () => {
   beforeEach(() => {
     get.mockReset()
     patch.mockReset()
+    members = membersFor('owner', ALL_ROLES)
   })
 
   it('PATCHes the new role and updates the row', async () => {
@@ -69,7 +83,8 @@ describe('MembersView role change (#19960)', () => {
     const wrapper = await mountView()
     await choose(wrapper, 'admin')
     expect(patch).toHaveBeenCalledWith('/api/llc/companies/co1/members/u2', { role: 'admin' })
-    expect(wrapper.text()).toContain('Admin')
+    expect(badgeOf(wrapper, 'Bob')).toBe('Admin')
+    expect(badgeOf(wrapper, 'Alice')).toBe('Owner')
     expect((bobSelect(wrapper).element as HTMLSelectElement).value).toBe('admin')
     expect(wrapper.text()).not.toContain(en.llcMembers.roleChangeForbidden)
   })
