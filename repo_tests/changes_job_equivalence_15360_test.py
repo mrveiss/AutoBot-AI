@@ -164,6 +164,8 @@ ALLOWED_ADDITIONS = {
             "autobot-slm-frontend/scripts/sync-to-admin.sh",
             # #19503: its rsync guard exempts wiki.yml by concrete literal.
             f"{WORKFLOWS}/wiki.yml",
+            # #20067: cancel_gate_survives_transient_error_20067_test runs this action's step.
+            ".github/actions/cancel-run-on-cancelled-upstream/action.yml",
             # #19523: dependabot_root_coverage_19523_test reads dependabot.yml by concrete literal.
             ".github/dependabot.yml",
             # #19769: pr_conflict_gate_19769_test.py reads the conflict gate workflow.
