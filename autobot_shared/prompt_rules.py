@@ -48,11 +48,28 @@ def sanitize_injected(text: Any, limit: int) -> str:
     return collapsed[:limit]
 
 
-_FRAME_MARKER_RE = re.compile(r"<<<(?=(?:BEGIN|END)_)")
+#: Characters a reader skips over: zero-width space/joiners, word joiner, BOM.
+_INVISIBLE = "[\u200b-\u200d\u2060\ufeff]*"
+
+
+def _spelled(word: str) -> str:
+    """``word`` as a pattern that tolerates invisible characters between its letters."""
+    return _INVISIBLE.join(word)
+
+
+#: ``<<<`` (ASCII or fullwidth ``<``, invisibles between), then optional whitespace incl. newlines, then
+#: ``BEGIN_`` / ``END_`` in any case. Only the ``<<<`` is matched; the lookahead leaves the rest untouched.
+_FRAME_MARKER_RE = re.compile(
+    rf"(?:[<\uff1c]{_INVISIBLE}){{3}}(?=\s*{_INVISIBLE}(?:{_spelled('BEGIN')}|{_spelled('END')}){_INVISIBLE}_)",
+    re.IGNORECASE,
+)
 
 
 def neutralize_frame_markers(text: str) -> str:
-    """Defuse only the ``<<<BEGIN_`` / ``<<<END_`` markers of :func:`frame_untrusted_block`; keep everything else.
+    """Defuse the ``<<<BEGIN_`` / ``<<<END_`` markers of :func:`frame_untrusted_block`; keep everything else.
+
+    Variant spellings a model may still read as a delimiter are caught too (#20062): any case, whitespace or a
+    newline after the ``<<<``, invisible characters inside, and fullwidth ``<``.
 
     For untrusted text whose shape matters (code, logs): newlines, indentation and other ``<<<`` / ``>>>``
     (heredocs, REPL prompts) survive, while the text cannot forge a closing delimiter. Unlike
