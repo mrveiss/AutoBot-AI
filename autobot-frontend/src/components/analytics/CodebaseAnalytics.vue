@@ -78,10 +78,10 @@
         :message="$t('analytics.codebase.empty.description')"
       >
         <template #actions>
-          <button @click="indexCodebase" class="btn-primary btn-lg">
+          <BaseButton variant="success" @click="indexCodebase">
             <Icon name="database" />
             {{ $t('analytics.codebase.buttons.indexNow') }}
-          </button>
+          </BaseButton>
         </template>
       </EmptyState>
     </div>
@@ -430,6 +430,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 /**
  * CodebaseAnalytics.vue - Orchestration Layer
  *
@@ -1041,41 +1042,10 @@ onUnmounted(() => {
   border-radius: 999px;
 }
 
-.btn-primary {
-  padding: var(--spacing-2-5) var(--spacing-5);
-  border: none;
-  border-radius: var(--radius-lg);
-  font-weight: var(--font-semibold);
-  cursor: pointer;
-  transition: var(--transition-all);
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  background: var(--chart-green);
-  color: var(--text-on-success);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--color-success-dark);
-  transform: translateY(-1px);
-}
-
-.btn-primary:disabled {
-  background: var(--bg-tertiary);
-  color: var(--text-secondary);
-  cursor: not-allowed;
-  transform: none;
-}
-
 .empty-state-container {
   padding: var(--spacing-8) var(--spacing-4);
   display: flex;
   justify-content: center;
-}
-
-.btn-lg {
-  padding: var(--spacing-3) var(--spacing-6);
-  font-size: var(--text-base);
 }
 
 /* Traditional Analytics Section */
