@@ -91,6 +91,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { BaseBadge, BaseTable, type BaseTableColumn, type TableRow, type TableRowVariant } from '@autobot/ui'
 import { usePlugins, type AuditLogEntry } from '@/composables/usePlugins'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { getAuditLog } = usePlugins()
 const { t } = useI18n()
@@ -137,14 +138,7 @@ async function fetchAuditLog() {
   }
 }
 
-function formatTimestamp(timestamp: string): string {
-  try {
-    const date = new Date(timestamp)
-    return date.toLocaleString()
-  } catch {
-    return timestamp
-  }
-}
+const formatTimestamp = createDateFormatter()
 
 onMounted(() => {
   fetchAuditLog()
