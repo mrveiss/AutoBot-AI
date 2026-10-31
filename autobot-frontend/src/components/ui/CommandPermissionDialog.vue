@@ -450,7 +450,8 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
 }
 
 .warning-message .icon {
-  font-size: var(--font-size-base);
+  width: var(--font-size-base);
+  height: var(--font-size-base);
 }
 
 .command-footer {
@@ -474,7 +475,8 @@ const getRiskVariant = (riskLevel: string): 'success' | 'warning' | 'info' | 'pr
 }
 
 .security-note .icon {
-  font-size: var(--font-size-sm);
+  width: var(--font-size-sm);
+  height: var(--font-size-sm);
 }
 
 /* Comment Section Styles */
