@@ -195,6 +195,27 @@ export class ApiClient extends ApiClientBase<RequestOptions> {
   // AUTH, 401 POLICY AND REQUEST HEADERS — the app-specific parts of the kit transport
   // ==================================================================================
 
+  /**
+   * `VITE_API_BASE_PATH` may be an absolute URL (see getApiBase), and callers build endpoints as
+   * `${getApiBase()}/x`. Trust exactly that: same origin and the base's own path (or beneath it), by
+   * parsed URL; never a string prefix, and never an endpoint carrying userinfo or backslash/whitespace.
+   */
+  protected isTrustedAbsoluteEndpoint(endpoint: string): boolean {
+    // eslint-disable-next-line no-control-regex
+    if (/[\\\u0000-\u0020]/.test(endpoint)) return false;
+    try {
+      const base = new URL(getApiBase());
+      const target = new URL(endpoint);
+      if (base.protocol !== 'http:' && base.protocol !== 'https:') return false;
+      if (target.username || target.password || base.username || base.password) return false;
+      if (target.origin !== base.origin) return false;
+      const basePath = base.pathname.replace(/\/+$/, '');
+      return target.pathname === basePath || target.pathname.startsWith(`${basePath}/`);
+    } catch {
+      return false; // getApiBase() is relative, or the endpoint is unparseable
+    }
+  }
+
   protected resolveBaseUrl(): Promise<string> {
     return this.ensureBaseUrl();
   }
