@@ -745,19 +745,6 @@ async def get_job_status(task_id: str, req: Request):
     return response
 
 
-def _get_doc_metadata(doc_file: str, file_path, category: str) -> dict:
-    """Create metadata dict for documentation storage."""
-    return {
-        "title": f"AutoBot: {doc_file}",
-        "source": "autobot_docs_population",
-        "category": category,
-        "filename": doc_file,
-        "type": f"{category}_documentation",
-        "file_path": str(file_path),
-        "visibility": INGESTED_DOCUMENT_VISIBILITY,
-    }
-
-
 def _build_system_config_info() -> str:
     """Build system configuration info string."""
     from constants.network_constants import NetworkConstants
