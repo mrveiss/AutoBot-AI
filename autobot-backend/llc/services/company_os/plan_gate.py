@@ -7,9 +7,9 @@
 Pure functions over ``CompanyWorkflowPlan``: no session, no clock. The service calls
 ``evaluate_plan_gate`` on every write and stores the status it returns, so the client never sets one.
 
-``STATUS_LADDER`` is the one place a status is tied to its gates. G5-G7 (``approved``) and
-the conversion (``converted``) join it as further rungs when they are delivered; nothing in
-``evaluate_plan_gate`` assumes ``labeled`` is the top.
+``STATUS_LADDER`` is the one place a status is tied to its gates: G1-G2 earn ``measured``, G3-G4
+``labeled``, G5-G7 ``approved`` and the committed conversion ``converted`` (#19936). A rung is
+cumulative, and G6 reads the stored preview of the plan, never the database.
 """
 
 from __future__ import annotations
@@ -19,9 +19,14 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from .plan_types import (
     CompanyWorkflowPlan,
+    ConversionStatus,
     Edge,
     Handoff,
+    Label,
     Lane,
+    PlanApprovalType,
+    PlanConversion,
+    ProcessExecutor,
     Step,
     SubStepState,
     WorkflowPlanStatus,
@@ -162,10 +167,96 @@ def _g4_labeled(plan: CompanyWorkflowPlan) -> List[Missing]:
     return found
 
 
+def _g5_people_safe(plan: CompanyWorkflowPlan) -> List[Missing]:
+    """By Hand is acknowledged; every AI sub-step has a policy that waits for a person (FR-6.2). No ``send``.
+
+    This checks the plan's policies only. The gate is enforced once an executor exists to read them.
+    """
+    step = plan.one_number.step_key if plan.one_number else None
+    proposed = _chosen_sub_steps(plan, SubStepState.PROPOSED)
+    found: List[Missing] = []
+    if any(s.classification is Label.BY_HAND for s in proposed) and plan.by_hand_acknowledged_at is None:
+        found.append(Missing("G5", "the owner has not acknowledged the By Hand sub-steps", step))
+    covered = {
+        k for p in plan.approval_policies if p.approval_type is PlanApprovalType.WORKFLOW_GATE for k in p.sub_step_keys
+    }
+    found += [
+        Missing("G5", f"AI sub-step {s.key!r} is not covered by a workflow_gate approval policy", step)
+        for s in proposed
+        if s.classification is Label.AI and s.key not in covered
+    ]
+    return found
+
+
+def _preview_sub_step_gaps(plan: CompanyWorkflowPlan, conv: PlanConversion) -> List[Missing]:
+    step = plan.one_number.step_key if plan.one_number else None
+    process = {p.sub_step_key: p for p in conv.processes}
+    documented = {d.sub_step_key for d in conv.documentation_only}
+    found: List[Missing] = []
+    for s in _chosen_sub_steps(plan, SubStepState.PROPOSED):
+        if s.classification is None:
+            continue
+        if s.classification is not Label.BY_HAND and s.key not in process:
+            found.append(Missing("G6", f"{s.classification.value} sub-step {s.key!r} is not a process node", step))
+        if s.classification is Label.BY_HAND and s.key not in process and s.key not in documented:
+            found.append(
+                Missing("G6", f"By Hand sub-step {s.key!r} is neither a person-held node nor documented", step)
+            )
+        if (
+            s.classification is Label.BY_HAND
+            and s.key in process
+            and process[s.key].executor is not ProcessExecutor.PERSON
+        ):
+            found.append(Missing("G6", f"By Hand sub-step {s.key!r} must not be agent-executed", step))
+    return found
+
+
+def _preview_treatment_gaps(plan: CompanyWorkflowPlan, conv: PlanConversion) -> List[Missing]:
+    step = plan.one_number.step_key if plan.one_number else None
+    handled = {t.handoff_key for t in conv.handoff_treatments}
+    cases = {t.edge_case_key for t in conv.edge_case_treatments}
+    found = [
+        Missing("G6", f"handoff {h.key!r} has no treatment", step)
+        for h in plan.handoffs
+        if step in (h.from_step, h.to_step) and h.key not in handled
+    ]
+    found += [
+        Missing("G6", f"edge case {c.key!r} has no treatment", step)
+        for c in plan.edge_cases
+        if c.step_key == step and c.key not in cases
+    ]
+    return found
+
+
+def _g6_preview(plan: CompanyWorkflowPlan) -> List[Missing]:
+    """A stored preview exists, covers the chosen step, and the graph validator has no error in it."""
+    conv = plan.conversion
+    if conv is None:
+        return [Missing("G6", "no conversion preview exists yet: request one")]
+    step = plan.one_number.step_key if plan.one_number else None
+    found = [Missing("G6", msg, step) for msg in conv.contract_errors + conv.preview_errors]
+    return found + _preview_sub_step_gaps(plan, conv) + _preview_treatment_gaps(plan, conv)
+
+
+def _g7_approved(plan: CompanyWorkflowPlan) -> List[Missing]:
+    if plan.approved_at is None or plan.approved_by is None:
+        return [Missing("G7", "an owner or admin has not approved this preview")]
+    return []
+
+
+def _g_converted(plan: CompanyWorkflowPlan) -> List[Missing]:
+    conv = plan.conversion
+    if conv is None or conv.status is not ConversionStatus.COMMITTED or conv.converted_at is None:
+        return [Missing("converted", "the conversion has not been committed")]
+    return []
+
+
 #: Each rung: the status it earns and the gates that must all pass, cumulatively.
 STATUS_LADDER: Tuple[Tuple[WorkflowPlanStatus, Tuple[GateCheck, ...]], ...] = (
     (WorkflowPlanStatus.MEASURED, (_g1_map, _g2_measured)),
     (WorkflowPlanStatus.LABELED, (_g3_broken_down, _g4_labeled)),
+    (WorkflowPlanStatus.APPROVED, (_g5_people_safe, _g6_preview, _g7_approved)),
+    (WorkflowPlanStatus.CONVERTED, (_g_converted,)),
 )
 
 
