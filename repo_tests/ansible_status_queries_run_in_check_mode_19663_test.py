@@ -88,11 +88,12 @@ _KNOWN_SITES = (
     ("roles/postgresql/tasks/install.yml", "Check if PostgreSQL is already installed"),
     ("roles/redis/tasks/main.yml", "Check if Redis Stack is already installed"),
     ("playbooks/disable-idle-nginx.yml", "Check if nginx is installed"),
-    ("roles/monitoring/tasks/grafana.yml", "Check if Grafana is already installed"),
+    ("roles/monitoring/tasks/grafana_install.yml", "Read the installed Grafana"),
     ("roles/agent_config/tasks/nodejs.yml", "Verify Node.js installation"),
 )
-#: 31 queries measured at declaration (19 probes plus 12 marked verifies); a drop means the detector lost some.
-_QUERY_FLOOR = 31
+#: 31 queries measured at declaration (19 probes plus 12 marked verifies), 29 once #19661 folded three
+#: Grafana probes into one; a drop means the detector lost some.
+_QUERY_FLOOR = 29
 
 
 def test_every_status_query_runs_in_check_mode() -> None:
