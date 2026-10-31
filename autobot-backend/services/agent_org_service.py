@@ -366,6 +366,11 @@ class AgentOrgService:
                     raise ValueError(f"Manager not in this company: {reports_to!r}")
 
         if node is None:
+            if company_uuid is not None:
+                # A NEW node in a company that gates hires is a hire: it goes through the approval (#8214).
+                from llc.services.agent_hire_service import refuse_unapproved_hire  # noqa: PLC0415 -- llc layer
+
+                await refuse_unapproved_hire(self.session, company_uuid)
             node = AgentOrgNode(
                 id=uuid.uuid4(),
                 agent_id=agent_id,

@@ -924,13 +924,11 @@ async def close_sprint(
     _current_user: dict = Depends(get_current_user),
     ctx: TenantContext = Depends(require_org_context),
 ) -> LLCSprint:
-    """Manual sprint close trigger — board only, requires an APPROVED approval.
+    """Close a sprint whose SPRINT_CLOSE approval is APPROVED but not yet applied.
 
-    Flow:
-      1. Caller must first request a SPRINT_CLOSE approval via ApprovalService
-         (or let the scheduler do it automatically).
-      2. Board approves the approval record.
-      3. This endpoint is called with the approval_id to execute the close.
+    Deciding the approval closes the sprint itself (#8214), so after a decision this answers 400
+    (the sprint no longer has that approval pending). It remains for an approval granted before
+    deciding applied the close.
     """
     # IDOR guard (#10148): verify the sprint belongs to the caller's org before closing.
     _sprint_check = (await session.execute(select(LLCSprint).where(LLCSprint.id == sprint_id))).scalar_one_or_none()
@@ -944,6 +942,7 @@ async def close_sprint(
             decided_by=body.decided_by,
         )
         await session.commit()
+        _autoclose_svc.schedule_closed_sprint_summary(sprint_id)  # after the commit, off the request (#8214)
         await session.refresh(sprint)
         return sprint
     except (ApprovalNotFoundError, ApprovalStateError) as exc:
