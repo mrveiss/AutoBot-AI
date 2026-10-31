@@ -314,6 +314,13 @@
     },
     "input": {
       "retryUpload": "Retry upload",
+      "uploadError": {
+        "http": "Upload failed (status {status})",
+        "invalidResponse": "The server sent an unreadable response",
+        "network": "Network error during upload",
+        "cancelled": "Upload cancelled",
+        "unknown": "Upload failed"
+      },
       "filesAttached": "{count} files attached",
       "clearAll": "Clear all",
       "removeFile": "Remove file",
