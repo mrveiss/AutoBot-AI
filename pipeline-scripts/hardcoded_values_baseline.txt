@@ -387,8 +387,8 @@
 1|other|autobot-backend/models/document_version.py|10
 1|other|autobot-backend/models/task_context.py|"hybrid"
 3|other|autobot-backend/models/task_context.py|10
-3|other|autobot-backend/modern_ai_integration.py|"system"
-5|other|autobot-backend/modern_ai_integration.py|"user"
+2|other|autobot-backend/modern_ai_integration.py|"system"
+4|other|autobot-backend/modern_ai_integration.py|"user"
 1|other|autobot-backend/modern_ai_integration.py|https://generativelanguage.googleapis.com/v1beta/models
 3|other|autobot-backend/npu_semantic_search.py|10
 1|other|autobot-backend/operator_dashboard/gmail_service.py|https://www.googleapis.com/auth/gmail.readonly
