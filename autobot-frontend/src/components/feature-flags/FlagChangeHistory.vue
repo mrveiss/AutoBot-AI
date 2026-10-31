@@ -87,6 +87,7 @@ import Icon from '@/components/ui/Icon.vue'
 import { useI18n } from 'vue-i18n';
 import type { EnforcementMode } from '@/utils/FeatureFlagsApiClient';
 import LoadingSpinner from '@/components/ui/LoadingSpinner.vue';
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { t } = useI18n();
 
@@ -129,17 +130,7 @@ const getActionText = (mode: EnforcementMode) => {
   return texts[mode] || t('featureFlags.changeHistory.actionUpdated');
 };
 
-const formatTimestamp = (timestamp: string) => {
-  const date = new Date(timestamp);
-  return date.toLocaleString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-};
+const formatTimestamp = createDateFormatter({ locale: 'en-US', intl: { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' } });
 
 const formatRelativeTime = (timestamp: string) => {
   const date = new Date(timestamp);
