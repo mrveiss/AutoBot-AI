@@ -451,6 +451,7 @@ import { getCssVar } from '@/composables/useCssVars'
 import { useDebouncedFn } from '@/composables/useDebounce'
 import MemoryOrphanManager from '@/components/knowledge/MemoryOrphanManager.vue'
 import { isReducedMotion } from '@/composables/useReducedMotion'
+import { createDateFormatter } from '@/utils/formatHelpers'
 const KnowledgeGraph3D = defineAsyncComponent(() =>
   import('@/components/knowledge/KnowledgeGraph3D.vue')
 )
@@ -697,13 +698,7 @@ function formatTypeName(type: string): string {
  * @param timestamp - Unix timestamp in seconds
  * @returns Formatted date string (e.g., 'Jan 7, 2026')
  */
-function formatDate(timestamp: number): string {
-  return new Date(timestamp * 1000).toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric'
-  })
-}
+const formatDate = createDateFormatter({ kind: 'date', locale: 'en-US', unit: 'seconds', intl: { year: 'numeric', month: 'short', day: 'numeric' } })
 
 // ============================================================================
 // Cytoscape Initialization
@@ -1855,7 +1850,7 @@ watch(layoutMode, () => {
 }
 
 .relation-target .icon {
-  font-size: var(--text-xs);
+  width: var(--text-xs); height: var(--text-xs);
   color: var(--text-tertiary);
 }
 

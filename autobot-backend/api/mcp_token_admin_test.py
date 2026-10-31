@@ -20,6 +20,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from api.mcp_token_admin import router
+from autobot_shared.secret_redaction import REDACTED_PLACEHOLDER
 from testkit.canonical_gate import canonical_resolver
 
 # ---------------------------------------------------------------------------
@@ -216,7 +217,7 @@ def test_list_tokens_with_entries():
     assert data["count"] == 1
     token_rec = data["tokens"][0]
     assert token_rec["token_id"] == tid
-    assert token_rec["masked_secret"] == "aaaa..."
+    assert token_rec["masked_secret"] == REDACTED_PLACEHOLDER
     assert "kb" in token_rec["scopes"]
     assert token_rec["last_used"] is not None
 

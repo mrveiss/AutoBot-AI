@@ -14,9 +14,9 @@
  */
 
 import { ref, computed, onMounted } from 'vue'
-import { BaseModal } from '@autobot/ui'
+import { BaseModal, BaseButton } from '@autobot/ui'
 import { useRoles, type NodeRolesInfo } from '@/composables/useRoles'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 
 const props = defineProps<{
   nodeId: string
@@ -135,9 +135,6 @@ function getStatusClass(status: string): string {
   }
 }
 
-function formatDate(dateStr: string | null): string {
-  return formatDateTime(dateStr)
-}
 </script>
 
 <template>
@@ -198,25 +195,23 @@ function formatDate(dateStr: string | null): string {
                 </span>
               </td>
               <td>{{ role.current_version?.slice(0, 12) || '-' }}</td>
-              <td>{{ formatDate(role.last_synced_at) }}</td>
+              <td>{{ formatFleetDateTime(role.last_synced_at) }}</td>
               <td class="actions">
-                <button
-                  class="btn btn-sm btn-primary"
+                <BaseButton size="sm"
                   :disabled="isSyncing"
                   @click="handleSyncRole(role.role_name)"
                   :aria-label="$t('roleManagementModal.syncRoleAria', { roleName: role.role_name })"
                 >
                   {{ $t('roleManagementModal.sync') }}
-                </button>
-                <button
+                </BaseButton>
+                <BaseButton variant="error" size="sm"
                   v-if="role.assignment_type === 'manual'"
-                  class="btn btn-sm btn-error"
                   :disabled="isSaving || isRemoving"
                   @click="handleRemoveRole(role.role_name)"
                   :aria-label="$t('roleManagementModal.removeRoleAria', { roleName: role.role_name })"
                 >
                   {{ $t('roleManagementModal.remove') }}
-                </button>
+                </BaseButton>
               </td>
             </tr>
           </tbody>
@@ -241,13 +236,12 @@ function formatDate(dateStr: string | null): string {
               {{ role.display_name || role.name }}
             </option>
           </select>
-          <button
-            class="btn btn-primary"
+          <BaseButton
             :disabled="!selectedRole || isSaving"
             @click="handleAssignRole"
           >
             {{ $t('roleManagementModal.assign') }}
-          </button>
+          </BaseButton>
         </div>
       </section>
 
@@ -277,22 +271,20 @@ function formatDate(dateStr: string | null): string {
             {{ $t('roleManagementModal.thisWillStopAnd') }}
           </p>
           <div class="confirm-actions">
-            <button
+            <BaseButton size="sm"
               v-if="isDataBearingRole"
-              class="btn btn-sm btn-primary"
               @click="confirmRemove(true)"
             >
               {{ $t('roleManagementModal.backupAmpRemove') }}
-            </button>
-            <button
-              class="btn btn-sm btn-error"
+            </BaseButton>
+            <BaseButton variant="error" size="sm"
               @click="confirmRemove(false)"
             >
               {{ isDataBearingRole ? $t('roleManagementModal.removeWithoutBackup') : $t('roleManagementModal.remove') }}
-            </button>
-            <button class="btn btn-sm btn-secondary" @click="cancelRemove">
+            </BaseButton>
+            <BaseButton variant="secondary" size="sm" @click="cancelRemove">
               {{ $t('roleManagementModal.cancel') }}
-            </button>
+            </BaseButton>
           </div>
         </div>
       </div>
@@ -304,18 +296,12 @@ function formatDate(dateStr: string | null): string {
     </div>
 
     <template #actions>
-      <button class="btn btn-secondary" @click="emit('close')">{{ $t('roleManagementModal.close') }}</button>
+      <BaseButton variant="secondary" @click="emit('close')">{{ $t('roleManagementModal.close') }}</BaseButton>
     </template>
   </BaseModal>
 </template>
 
 <style scoped>
-
-
-
-
-
-
 
 .loading {
   padding: var(--spacing-10);
@@ -465,40 +451,6 @@ function formatDate(dateStr: string | null): string {
   background: var(--info-bg);
   border-radius: var(--radius-default);
   color: var(--info-color);
-}
-
-
-.btn {
-  padding: var(--spacing-2) var(--spacing-4);
-  border: none;
-  border-radius: var(--radius-default);
-  cursor: pointer;
-  font-weight: 500;
-}
-
-.btn-sm {
-  padding: var(--spacing-1) var(--spacing-2);
-  font-size: var(--text-xs);
-}
-
-.btn-primary {
-  background: var(--primary-color);
-  color: white;
-}
-
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-.btn-error {
-  background: var(--error-color);
-  color: white;
 }
 
 /* Removal confirmation dialog (Issue #1041) */

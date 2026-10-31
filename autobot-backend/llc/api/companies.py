@@ -16,8 +16,7 @@ Route group: /llc/companies
   POST   /{id}/suspend             — status transition -> PAUSED (GH#12211)
   POST   /{id}/offboard            — status transition -> OFFBOARDING (GH#12234)
   POST   /{id}/archive             — status transition -> ARCHIVED (GH#12211)
-  POST   /{id}/members             — add a member (GH#8223)
-  DELETE /{id}/members/{user_id}   — remove a member (GH#8223)
+  POST, PATCH, DELETE /{id}/members — membership writes: see company_members.py (#19654)
   GET    /{id}/members             — list members (GH#8223)
   GET    /{id}/teams               — list teams + their member user ids (GH#13938)
   POST   /{id}/export/template     — export structural template, secrets scrubbed (GH#8245)
@@ -73,9 +72,8 @@ from llc.services.company import (
     CompanyService,
 )
 from llc.services.company_move_lock import CompanyMoveContendedError
+from llc.services.member_standing import member_people, person_is_active, viewer_standing
 from llc.services.membership_service import (
-    MemberAlreadyExistsError,
-    MemberNotFoundError,
     MembershipService,
 )
 from llc.services.org_chart_placement import apply_reporting_lines, assemble_forest
@@ -97,11 +95,6 @@ _kb_manager = KbCollectionManager()
 # ------------------------------------------------------------------
 # Member management schemas (GH#8223)
 # ------------------------------------------------------------------
-
-
-class MemberAddRequest(BaseModel):
-    user_id: uuid.UUID
-    role: MembershipRole = MembershipRole.MEMBER
 
 
 class MemberRead(BaseModel):
@@ -572,31 +565,12 @@ async def list_members(
 ) -> List[Dict[str, Any]]:
     # Issue #12233: tenant authz — caller's org must match company_id unless admin.
     assert_company_access(ctx, company_id)  # shared guard (#12238)
-    from sqlalchemy import select  # noqa: PLC0415
-
-    from user_management.models.user import User  # noqa: PLC0415
-
     members = await svc.list_members(session, str(company_id))
-    # Resolve display names so the assignee/reviewer pickers show people, not UUIDs.
-    user_ids = [m.user_id for m in members]
-    names: Dict[uuid.UUID, str] = {}
-    # #13956: whether each member may still be given work. Carried, not
-    # filtered -- see `_person_is_active`. The picker needs both facts: who is
-    # a member, and which of them can take an assignment.
-    active: Dict[uuid.UUID, bool] = {}
-    if user_ids:
-        # #13957: ``User.full_name`` is a hybrid property, so the canonical
-        # "display_name, else username" rule is selected in SQL here rather than
-        # re-spelled in the comprehension below. This is an inner select on
-        # ``users``, so a returned row always has the NOT NULL ``username`` to
-        # fall back to and the two-rung rule is complete.
-        rows = (
-            await session.execute(
-                select(User.id, User.full_name, User.is_active, User.deleted_at).where(User.id.in_(user_ids))
-            )
-        ).all()
-        names = {uid: name for uid, name, _ia, _da in rows}
-        active = {uid: _person_is_active(ia, da) for uid, _name, ia, da in rows}
+    # Resolve display names so the assignee/reviewer pickers show people, not UUIDs. `active` is #13956:
+    # whether each member may still be given work. Carried, not filtered -- see `person_is_active`.
+    names, active = await member_people(session, [m.user_id for m in members])
+    # #20073: the caller's own standing, computed here from the verified context so the view only reflects it.
+    standing = await viewer_standing(session, company_id, ctx.user_id, platform_admin=ctx.is_platform_admin)
     return [
         {
             **_to_member_read(m),
@@ -605,48 +579,10 @@ async def list_members(
             # False: nothing is known about them, and unknown must not read as
             # available.
             "is_active": active.get(m.user_id, False),
+            **standing,
         }
         for m in members
     ]
-
-
-@router.post("/{company_id}/members", status_code=status.HTTP_201_CREATED)
-async def add_member(
-    company_id: uuid.UUID,
-    body: MemberAddRequest,
-    session: AsyncSession = Depends(get_async_session),
-    svc: MembershipService = Depends(_get_membership_service),
-    _current_user: dict = Depends(get_current_user),
-    ctx: TenantContext = Depends(require_org_context),
-) -> Dict[str, Any]:
-    # Issue #12233: tenant authz — caller's org must match company_id unless admin.
-    assert_company_access(ctx, company_id)  # shared guard (#12238)
-    try:
-        membership = await svc.add_member(session, str(company_id), str(body.user_id), body.role)
-        await session.commit()
-        return _to_member_read(membership)
-    except MemberAlreadyExistsError:
-        await session.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Internal server error")
-
-
-@router.delete("/{company_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def remove_member(
-    company_id: uuid.UUID,
-    user_id: uuid.UUID,
-    session: AsyncSession = Depends(get_async_session),
-    svc: MembershipService = Depends(_get_membership_service),
-    _current_user: dict = Depends(get_current_user),
-    ctx: TenantContext = Depends(require_org_context),
-) -> None:
-    # Issue #12233: tenant authz — caller's org must match company_id unless admin.
-    assert_company_access(ctx, company_id)  # shared guard (#12238)
-    try:
-        await svc.remove_member(session, str(company_id), str(user_id))
-        await session.commit()
-    except MemberNotFoundError:
-        await session.rollback()
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Internal server error")
 
 
 # ------------------------------------------------------------------
@@ -892,33 +828,6 @@ class OrgChartResponse(BaseModel):
     nodes: List[OrgChartNode]
 
 
-def _person_is_active(is_active: Optional[bool], deleted_at: Optional[Any]) -> bool:
-    """Whether a person may still be given work (#13956).
-
-    Both the members picker and the org chart ask this, and the issue is
-    explicit that they must not diverge -- so neither computes it inline.
-
-    Deliberately *not* a filter. The org chart is where a company reads its own
-    structure, and dropping someone who has left rewrites that structure
-    silently: their work items stay behind (they are only reassigned
-    explicitly), the role they held stays behind, and a chart that omits them
-    cannot explain who those items belong to. Precedent in this module already
-    chose the same way -- ``_compose_human_nodes`` uses an outer join
-    specifically so "a membership whose user row is gone still yields a node
-    instead of vanishing silently".
-
-    So the answer is rendered, not applied: the surfaces show the person and
-    mark them, and the picker refuses them as an assignee.
-
-    A user row that is missing entirely (outer join miss) is inactive: nothing
-    is known about them, and "unknown" must never read as "available".
-    """
-    if deleted_at is not None:
-        return False
-    # `None` reaches here from an outer-join miss, not from a real column value.
-    return bool(is_active)
-
-
 def _heartbeat_status_to_org_status(run_status: Optional[str]) -> str:
     """Map an ``LLCRunStatus`` value onto the org-chart node status vocabulary."""
     if run_status == "running":
@@ -1050,7 +959,7 @@ async def _compose_human_nodes(session: AsyncSession, company_id: uuid.UUID) -> 
                 status="idle",
                 adapter_type=_HUMAN_ADAPTER_TYPE,
                 is_human=True,
-                is_active=_person_is_active(is_active, deleted_at),
+                is_active=person_is_active(is_active, deleted_at),
                 last_heartbeat=None,
                 budget_spent=0.0,
                 budget_total=0.0,

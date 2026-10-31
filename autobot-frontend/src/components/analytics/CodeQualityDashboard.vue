@@ -12,15 +12,15 @@
         </div>
       </div>
       <div class="header-actions">
-        <button class="btn-refresh" @click="refreshData" :disabled="loading">
+        <BaseButton variant="secondary" size="sm" @click="refreshData" :disabled="loading">
           <span class="icon">↻</span>
           {{ loading ? $t('analytics.codeQuality.loading') : $t('analytics.codeQuality.refresh') }}
-        </button>
+        </BaseButton>
         <div class="export-dropdown" v-click-outside="closeExportMenu">
-          <button class="btn-export" @click="exportMenuOpen = !exportMenuOpen">
+          <BaseButton variant="info" size="sm" @click="exportMenuOpen = !exportMenuOpen">
             <span class="icon">↓</span>
             {{ $t('analytics.codeQuality.export') }}
-          </button>
+          </BaseButton>
           <div v-if="exportMenuOpen" class="dropdown-menu">
             <button @click="exportReport('json')">{{ $t('analytics.codeQuality.exportJson') }}</button>
             <button @click="exportReport('csv')">{{ $t('analytics.codeQuality.exportCsv') }}</button>
@@ -425,7 +425,7 @@
           </div>
       </template>
       <template #actions>
-        <button class="btn-secondary" @click="drillDownCategory = null">{{ $t('analytics.codeQuality.close') }}</button>
+        <BaseButton variant="secondary" size="sm" @click="drillDownCategory = null">{{ $t('analytics.codeQuality.close') }}</BaseButton>
       </template>
     </BaseModal>
   </div>
@@ -434,7 +434,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue';
 import TruncationNotice from './TruncationNotice.vue';
-import { useShowMore } from '@autobot/ui'
+import { useShowMore, BaseButton } from '@autobot/ui'
 import type { DirectiveBinding } from 'vue';
 import { BaseBadge, BaseModal, BaseTable, type BadgeVariant, type BaseTableColumn } from '@autobot/ui'
 import { useRoute } from 'vue-router';
@@ -1101,39 +1101,6 @@ watch(selectedPeriod, () => {
   gap: var(--spacing-3);
 }
 
-.btn-refresh,
-.btn-export {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-2) var(--spacing-4);
-  border-radius: var(--radius-md);
-  font-size: var(--text-sm);
-  cursor: pointer;
-  transition: var(--transition-all);
-}
-
-.btn-refresh {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  color: var(--text-primary);
-}
-
-.btn-refresh:hover:not(:disabled) {
-  background: var(--bg-tertiary);
-  border-color: var(--border-strong);
-}
-
-.btn-export {
-  background: var(--color-info);
-  border: none;
-  color: var(--text-on-primary);
-}
-
-.btn-export:hover {
-  background: var(--color-info-hover);
-}
-
 .export-dropdown {
   position: relative;
 }
@@ -1447,7 +1414,7 @@ watch(selectedPeriod, () => {
 }
 
 .severity-filter button.active {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   border-color: var(--color-info);
   color: var(--text-on-primary);
 }
@@ -1684,7 +1651,7 @@ watch(selectedPeriod, () => {
 }
 
 .period-selector button.active {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   border-color: var(--color-info);
   color: var(--text-on-primary);
 }
@@ -1821,17 +1788,4 @@ watch(selectedPeriod, () => {
   color: var(--text-muted);
 }
 
-.btn-secondary {
-  padding: var(--spacing-2) var(--spacing-4);
-  background: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  color: var(--text-primary);
-  font-size: var(--text-sm);
-  cursor: pointer;
-}
-
-.btn-secondary:hover {
-  background: var(--bg-tertiary);
-}
 </style>

@@ -182,6 +182,7 @@
     src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-slm-backend/"
     dest: "{{ slm_backend_dir }}/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       # Re-includes come first -- rsync applies the first matching rule, and
       # `.env.example` is tracked source that the `.env.*` family below would
       # otherwise swallow (#14231).
@@ -318,6 +319,7 @@
     src: "{{ playbook_dir }}/../../../autobot_shared/"
     dest: "{{ slm_base_dir }}/autobot_shared/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=__pycache__"
       - "--exclude=*.pyc"
       - "--exclude=*.egg-info"
@@ -472,6 +474,13 @@
       {{ autobot_secrets_root_key
          if (autobot_secrets_root_key | default('') | trim | length > 0)
          else lookup('pipe', 'openssl rand -base64 32') | replace('+', '-') | replace('/', '_') }}
+    # #19864: chat-history and device-token encryption, on for new installs only. No back-fill
+    # below: losing this key makes everything written after it unreadable, so an existing
+    # install opts in rather than having an update switch it on (owner decision).
+    autobot_encryption_key: >-
+      {{ autobot_encryption_key
+         if (autobot_encryption_key | default('') | trim | length > 0)
+         else lookup('pipe', 'openssl rand -hex 32') }}
     # #16299: backend_secret_key's own role default (roles/backend/defaults/main.yml)
     # was the guessable literal "change-me-in-production", shipped unchanged on every
     # deployment that never overrode it. Generated here, once, the same way
@@ -848,6 +857,7 @@
     src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/autobot-plugins/"
     dest: "{{ slm_base_dir }}/autobot-plugins/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=node_modules"
       - "--exclude=dist"
       - "--exclude=.git"
@@ -877,6 +887,7 @@
     src: "{{ code_source_dir | default(autobot.base_dir ~ '/code_source') }}/libs/"
     dest: "{{ slm_base_dir }}/libs/"
     rsync_opts:
+      - "--chmod=o-w"  # #19503
       - "--exclude=node_modules"
       - "--exclude=dist"
       - "--exclude=.git"

@@ -476,7 +476,7 @@ onUnmounted(() => {
 }
 
 .stat-chip .icon {
-  font-size: var(--text-base);
+  width: var(--text-base); height: var(--text-base);
   color: var(--text-secondary);
 }
 
@@ -554,7 +554,7 @@ onUnmounted(() => {
 
 .empty-state .icon,
 .loading-state .icon {
-  font-size: 40px;
+  width: 40px; height: 40px;
   margin-bottom: var(--spacing-3);
 }
 
@@ -712,7 +712,7 @@ onUnmounted(() => {
 }
 
 .timeline-dot.failed {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   border-color: var(--color-error);
   color: white;
 }

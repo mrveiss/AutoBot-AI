@@ -218,7 +218,10 @@ def test_a_declared_scope_that_the_sweep_does_not_reach_is_refused() -> None:
 #: Compared as a SET in both directions. Adding a scoped declaration means adding a line here,
 #: and that is the point -- the scope is a decision, so it is written twice on purpose.
 _DECLARED_SCOPES = {
+    "no_partial_key_mask_18221.sources": ("autobot_shared", "autobot-backend", "autobot-slm-backend"),
+    "autobot-has-no-pro-tier-in-user-text": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "dead-icon-selector-vue-files": ("autobot-frontend/src",),
+    "icon-font-size-rule-vue-files": ("autobot-frontend/src",),
     "kit-shadow-ts-files-scanned-14908": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "duplicate-type-names-ts-files-scanned-14908": (
         "autobot-frontend/src",
@@ -383,6 +386,9 @@ _DECLARED_SCOPES = {
     "llc-sigterm-grace-copies": ("autobot-backend/llc",),
     "frontend-http-transports": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "frontend-local-formatter-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
+    "frontend-local-date-formatter-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
+    "frontend-hand-built-relative-time-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
+    "frontend-hand-rolled-spinner-scan": ("autobot-frontend/src", "autobot-slm-frontend/src", "autobot-plugins"),
     "search-mode-copies": ("autobot-backend",),
     "redaction-placeholder-literals": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "one-system-knowledge-template-tree": ("autobot-backend",),
@@ -464,6 +470,15 @@ _DECLARED_SCOPES = {
     "data-db-path-production-python": ("autobot-backend", "autobot_shared"),
     "jekyll-processed-docs": ("docs",),
     "kb-populate-doc-patterns": ("autobot-infrastructure",),
+    "frontend-url-served-by-scan": (
+        "autobot-backend",
+        "autobot-slm-backend",
+        "autobot_shared",
+        "autobot-infrastructure",
+        "autobot-npu-worker",
+        "scripts",
+        ".env",
+    ),
     "kb-admin-read-bypass": ("autobot-backend/", "autobot_shared/"),
     "kb-construction-18122-scan": (
         "autobot-backend/",

@@ -21,6 +21,27 @@ from autobot_shared.env_registry import EnvVarSpec, register_env_var
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_UPDATE_CODE_SOURCE_FETCH_RETRY_DELAY_S",
+        type=int,
+        default=5,
+        description="Seconds before retrying a failed git fetch of the code source (#20089).",
+        component="slm",
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_SLM_UPDATE_REPORT_DEPLOY_RUNS",
+        type=int,
+        default=50,
+        description="Newest role deploys listed in the update report (api/update_report.py, #19962).",
+        component="slm",
+        range=(1, 500),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_PLAYBOOK_PIPE_LINE_LIMIT",
         type=int,
         default=10 * 1024 * 1024,

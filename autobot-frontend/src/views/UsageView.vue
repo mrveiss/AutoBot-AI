@@ -14,21 +14,21 @@
           <option :value="30">Last 30 days</option>
           <option :value="90">Last 90 days</option>
         </select>
-        <button class="btn-action-secondary" :disabled="loading" @click="load">
+        <BaseButton variant="secondary" :disabled="loading" @click="load">
           <Icon name="sync-alt" :spin="loading" />
           Refresh
-        </button>
-        <button v-if="isAdmin" class="btn-action-secondary" :disabled="csvLoading" @click="downloadCsv">
+        </BaseButton>
+        <BaseButton variant="secondary" v-if="isAdmin" :disabled="csvLoading" @click="downloadCsv">
           <Icon name="download" :spin="csvLoading" />
           Export CSV
-        </button>
+        </BaseButton>
       </div>
     </div>
 
     <div v-if="error" class="error-banner">
       <Icon name="exclamation-circle" />
       <span>{{ error }}</span>
-      <button class="btn-dismiss" :aria-label="$t('common.dismiss')" @click="error = null"><Icon name="times" /></button>
+      <BaseButton variant="ghost" size="sm" :aria-label="$t('common.dismiss')" @click="error = null"><Icon name="times" /></BaseButton>
     </div>
 
     <!-- Tabs -->
@@ -239,12 +239,14 @@
 </template>
 
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 import { ref, computed, onMounted } from 'vue'
 import { getApiBase } from '@/config/ssot-config'
 import { useApiClient } from '@/plugins/api'
 import { useUserStore } from '@/stores/useUserStore'
 import { createLogger } from '@/utils/debugUtils'
 import { fetchWithAuth } from '@/utils/fetchWithAuth'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import Icon from '@/components/ui/Icon.vue'
 
 const logger = createLogger('UsageView')
@@ -384,9 +386,7 @@ function fmtSeconds(s: number): string {
   return `${m}m ${sec}s`
 }
 
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleString()
-}
+const fmtDate = createDateFormatter()
 
 onMounted(load)
 </script>
@@ -421,31 +421,6 @@ onMounted(load)
   cursor: pointer;
 }
 
-.btn-action-secondary {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-2);
-  padding: var(--spacing-2) var(--spacing-4);
-  font-size: var(--text-sm);
-  font-weight: var(--font-medium);
-  color: var(--text-primary);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  text-decoration: none;
-  transition: background var(--duration-150) var(--ease-in-out);
-}
-
-.btn-action-secondary:hover:not(:disabled) {
-  background: var(--bg-tertiary);
-}
-
-.btn-action-secondary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .error-banner {
   display: flex;
   align-items: center;
@@ -458,15 +433,6 @@ onMounted(load)
 }
 
 .error-banner span { flex: 1; font-size: var(--text-sm); }
-
-.btn-dismiss {
-  padding: var(--spacing-1) var(--spacing-2);
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  border-radius: var(--radius-md);
-}
 
 .tab-bar {
   display: flex;
@@ -577,7 +543,7 @@ onMounted(load)
 }
 
 .text-warning {
-  color: var(--color-warning, #f59e0b);
+  color: var(--color-warning);
   font-weight: var(--font-medium);
 }
 </style>

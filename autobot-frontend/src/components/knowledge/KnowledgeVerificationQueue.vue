@@ -435,9 +435,7 @@ function formatSourceType(type: string): string {
   return typeMap[type] || type
 }
 
-function formatTimestamp(timestamp: string): string {
-  return formatDate(new Date(timestamp))
-}
+const formatTimestamp = formatDate
 
 function truncateContent(content: string): string {
   if (content.length <= 200) return content
@@ -603,7 +601,7 @@ onMounted(() => {
 }
 
 .loading-state .icon {
-  font-size: var(--text-2xl);
+  width: var(--text-2xl); height: var(--text-2xl);
   margin-bottom: var(--spacing-3);
 }
 

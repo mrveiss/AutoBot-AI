@@ -12,9 +12,7 @@
       <div class="async-loading">
         <div class="loading-container">
           <div class="loading-spinner">
-            <div class="spinner-ring"></div>
-            <div class="spinner-ring"></div>
-            <div class="spinner-ring"></div>
+            <BaseSpinner size="xl" />
           </div>
           <div class="loading-content">
             <h3 class="loading-title">Loading {{ componentDisplayName }}...</h3>
@@ -41,7 +39,7 @@
 </template>
 
 <script setup lang="ts">
-import { RETRY_BACKOFF, backoffDelay } from '@autobot/ui'
+import { RETRY_BACKOFF, backoffDelay, BaseSpinner } from '@autobot/ui'
 import { ref, computed, onUnmounted, inject, useAttrs } from 'vue'
 import type { Component, AsyncComponentLoader } from 'vue'
 import AsyncErrorFallback from './AsyncErrorFallback.vue'
@@ -255,25 +253,6 @@ onUnmounted(() => {
   @apply relative inline-flex items-center justify-center w-16 h-16 mb-6;
 }
 
-.spinner-ring {
-  @apply absolute border-2 border-transparent rounded-full animate-spin;
-}
-
-.spinner-ring:nth-child(1) {
-  @apply w-16 h-16 border-t-blue-500 border-r-blue-500;
-  animation: spin 1.5s linear infinite;
-}
-
-.spinner-ring:nth-child(2) {
-  @apply w-12 h-12 border-t-green-500 border-r-green-500;
-  animation: spin 1s linear infinite reverse;
-}
-
-.spinner-ring:nth-child(3) {
-  @apply w-8 h-8 border-t-purple-500 border-r-purple-500;
-  animation: spin 2s linear infinite;
-}
-
 .loading-title {
   @apply text-xl font-semibold text-autobot-text-secondary mb-2;
 }
@@ -292,11 +271,5 @@ onUnmounted(() => {
 
 .loading-time {
   @apply text-sm text-autobot-text-muted;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 </style>

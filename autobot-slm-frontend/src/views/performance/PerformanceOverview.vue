@@ -17,7 +17,7 @@ import { useI18n } from 'vue-i18n'
 import { formatDuration } from '@/utils/formatHelpers'
 import { usePerformanceMonitoring } from '@/composables/usePerformanceMonitoring'
 import { injectPerformanceMonitoring } from '@/composables/monitoringPollContext'
-import { formatDateTime } from '@/composables/useTimezone'
+import { formatFleetDateTime } from '@/composables/useTimezone'
 
 // #19851: PerformanceView owns the poll and shows the paused notice; this view only
 // polls (and shows its own notice) when rendered without that layout.
@@ -90,9 +90,6 @@ function statusBadgeClass(status: string): string {
  * Format duration for display.
  */
 
-function formatDate(dateStr: string): string {
-  return formatDateTime(dateStr)
-}
 </script>
 
 <template>
@@ -234,7 +231,7 @@ function formatDate(dateStr: string): string {
                 {{ trace.source_node_id ?? '-' }}
               </td>
               <td class="px-4 py-2 text-sm text-gray-500 whitespace-nowrap">
-                {{ formatDate(trace.created_at) }}
+                {{ formatFleetDateTime(trace.created_at) }}
               </td>
             </tr>
           </tbody>

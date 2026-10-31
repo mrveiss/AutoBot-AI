@@ -69,9 +69,9 @@
             <li>{{ $t('setupWizardView.knowledgeOfWhichServices') }}</li>
           </ul>
         </div>
-        <button class="btn-primary" @click="completeStep('welcome')">
+        <BaseButton @click="completeStep('welcome')">
           {{ $t('setupWizardView.getStarted') }}
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Add Nodes -->
@@ -142,18 +142,17 @@
               autocomplete="current-password"
             />
           </label>
-          <button class="btn-secondary" @click="addNode" :disabled="addingNode">
+          <BaseButton variant="secondary" @click="addNode" :disabled="addingNode">
             {{ addingNode ? $t('setupWizardView.adding') : $t('setupWizardView.addNode') }}
-          </button>
+          </BaseButton>
         </div>
 
-        <button
-          class="btn-primary"
+        <BaseButton
           @click="completeStep('add_nodes')"
           :disabled="nodes.length === 0"
         >
           {{ $t('setupWizardView.continue') }}
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Test Connections -->
@@ -174,16 +173,15 @@
           </div>
         </div>
 
-        <button class="btn-secondary" @click="testAllConnections" :disabled="testingConnections">
+        <BaseButton variant="secondary" @click="testAllConnections" :disabled="testingConnections">
           {{ testingConnections ? $t('setupWizardView.testing') : $t('setupWizardView.testAllConnections') }}
-        </button>
-        <button
-          class="btn-primary"
+        </BaseButton>
+        <BaseButton
           @click="completeStep('test_connections')"
           :disabled="!allConnectionsTested"
         >
           {{ $t('setupWizardView.continue') }}
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Enroll Agents -->
@@ -204,16 +202,15 @@
           </div>
         </div>
 
-        <button class="btn-secondary" @click="enrollAllNodes" :disabled="enrolling">
+        <BaseButton variant="secondary" @click="enrollAllNodes" :disabled="enrolling">
           {{ enrolling ? $t('setupWizardView.enrolling') : $t('setupWizardView.enrollAllNodes') }}
-        </button>
-        <button
-          class="btn-primary"
+        </BaseButton>
+        <BaseButton
           @click="completeStep('enroll_agents')"
           :disabled="!allNodesEnrolled"
         >
           {{ $t('setupWizardView.continue') }}
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Assign Roles -->
@@ -334,9 +331,9 @@
           </div>
         </div>
 
-        <button class="btn-primary" @click="saveAndContinueRoles" :disabled="savingRoles">
+        <BaseButton @click="saveAndContinueRoles" :disabled="savingRoles">
           {{ savingRoles ? $t('setupWizardView.saving') : $t('setupWizardView.saveContinue') }}
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Configure Secrets / API Keys (#3079) -->
@@ -366,12 +363,12 @@
           {{ $t('setupWizardView.secretsSavedTheyWill') }}
         </div>
 
-        <button class="btn-secondary" @click="saveSecrets" :disabled="savingSecrets">
+        <BaseButton variant="secondary" @click="saveSecrets" :disabled="savingSecrets">
           {{ savingSecrets ? $t('setupWizardView.saving') : $t('setupWizardView.saveAPIKeys') }}
-        </button>
-        <button class="btn-primary" @click="completeStep('configure_secrets')">
+        </BaseButton>
+        <BaseButton @click="completeStep('configure_secrets')">
           {{ Object.values(secretValues).some(v => v) ? 'Continue' : 'Skip' }}
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Provision Fleet -->
@@ -425,20 +422,18 @@
           </div>
         </div>
 
-        <button
-          class="btn-primary"
+        <BaseButton
           @click="provisionFleet"
           :disabled="provisioning"
         >
           {{ provisioning ? $t('setupWizardView.provisioning') : $t('setupWizardView.startProvisioning') }}
-        </button>
-        <button
+        </BaseButton>
+        <BaseButton
           v-if="provisionComplete"
-          class="btn-primary"
           @click="completeStep('provision_fleet')"
         >
           {{ $t('setupWizardView.continue') }}
-        </button>
+        </BaseButton>
 
         <!--
           #15825: a failed provision used to render NO control at all — the
@@ -453,9 +448,9 @@
             {{ $t('setupWizardView.provisioningFailed') }}
           </p>
           <p v-if="provisionError" class="provision-failure-detail">{{ provisionError }}</p>
-          <button class="btn-primary" :disabled="provisioning" @click="provisionFleet">
+          <BaseButton :disabled="provisioning" @click="provisionFleet">
             {{ $t('setupWizardView.retryProvisioning') }}
-          </button>
+          </BaseButton>
         </div>
       </div>
 
@@ -478,16 +473,15 @@
           </ul>
         </div>
 
-        <button class="btn-secondary" @click="checkFleetHealth" :disabled="checkingHealth">
+        <BaseButton variant="secondary" @click="checkFleetHealth" :disabled="checkingHealth">
           {{ checkingHealth ? $t('setupWizardView.checking') : $t('setupWizardView.checkFleetHealth') }}
-        </button>
-        <button
-          class="btn-primary"
+        </BaseButton>
+        <BaseButton
           @click="completeStep('verify_health')"
           :disabled="!fleetHealth || !fleetHealth.ready"
         >
           {{ $t('setupWizardView.continue') }}
-        </button>
+        </BaseButton>
       </div>
 
       <!-- Complete -->
@@ -495,9 +489,9 @@
         <div class="success-icon">&#10003;</div>
         <h2>{{ $t('setupWizardView.setupComplete') }}</h2>
         <p>{{ $t('setupWizardView.yourAutoBotFleetIs') }}</p>
-        <button class="btn-primary" @click="goToDashboard">
+        <BaseButton @click="goToDashboard">
           {{ $t('setupWizardView.goToDashboard') }}
-        </button>
+        </BaseButton>
       </div>
     </div>
   </div>
@@ -516,7 +510,7 @@ import type { NodeRole } from '@/types/slm'
 import { createLogger } from '@/utils/debugUtils'
 import { useToast } from '@/composables/useToast'
 import { useI18n } from 'vue-i18n'
-import { PollingPausedAlert } from '@autobot/ui'
+import { PollingPausedAlert, BaseButton } from '@autobot/ui'
 
 const logger = createLogger('SetupWizard')
 
@@ -767,7 +761,7 @@ async function saveSecrets() {
     secretsSaved.value = true
   } catch (err) {
     logger.error('Failed to save secrets:', err)
-    alert('Failed to save API keys. Check the console for details.')
+    showToast(t('setupWizardView.failedToSaveKeys'), 'error')
   } finally {
     savingSecrets.value = false
   }
@@ -914,8 +908,8 @@ async function addNode() {
     newNode.value = { hostname: '', ip_address: '', ssh_user: 'autobot', auth_method: 'key', ssh_password: '' }
     await loadNodes()
   } catch (err: unknown) {
-    const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Failed to add node'
-    alert(msg)
+    const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail || t('setupWizardView.failedToAddNode')
+    showToast(msg, 'error')
   } finally {
     addingNode.value = false
   }
@@ -1254,6 +1248,11 @@ onMounted(async () => {
   padding: 2rem;
 }
 
+.step-panel :deep(.aui-btn) {
+  margin-top: 1rem;
+  margin-right: 0.5rem;
+}
+
 .step-panel h2 {
   margin: 0 0 0.5rem;
   font-size: 1.4rem;
@@ -1285,49 +1284,6 @@ onMounted(async () => {
 .info-box li {
   margin-bottom: 0.3rem;
   color: var(--text-secondary);
-}
-
-/* Buttons */
-.btn-primary,
-.btn-secondary {
-  padding: 0.6rem 1.5rem;
-  border-radius: var(--radius-md);
-  font-size: 0.9rem;
-  font-weight: 500;
-  cursor: pointer;
-  border: none;
-  transition: all 0.15s;
-  margin-top: 1rem;
-  margin-right: 0.5rem;
-}
-
-.btn-primary {
-  background: var(--color-primary);
-  color: var(--color-white);
-}
-
-.btn-primary:hover:not(:disabled) {
-  background: var(--slm-blue-600);
-}
-
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-}
-
-.btn-secondary:hover:not(:disabled) {
-  background: var(--bg-hover);
-}
-
-.btn-secondary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* Nodes list */

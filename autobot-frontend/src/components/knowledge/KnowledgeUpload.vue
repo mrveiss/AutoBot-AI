@@ -1018,7 +1018,7 @@ onMounted(() => {
 }
 
 .method-header .icon {
-  font-size: var(--text-xl);
+  width: var(--text-xl); height: var(--text-xl);
   color: var(--color-primary);
 }
 
@@ -1175,7 +1175,7 @@ onMounted(() => {
 
 .drop-zone-content {
   position: relative;
-  z-index: 1;
+  z-index: var(--z-raised);
 }
 
 .drop-zone-content.compact {
@@ -1202,7 +1202,7 @@ onMounted(() => {
 }
 
 .drop-icon-wrapper .icon {
-  font-size: var(--text-4xl);
+  width: var(--text-4xl); height: var(--text-4xl);
   color: var(--text-tertiary);
   transition: all var(--duration-200);
 }
@@ -1379,7 +1379,7 @@ onMounted(() => {
 }
 
 .suggested-category .icon {
-  font-size: 0.5rem;
+  width: var(--text-xs); height: var(--text-xs);
 }
 
 .file-actions {

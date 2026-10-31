@@ -28,7 +28,6 @@ Rate-limit recovery (GH#8204):
 """
 
 import asyncio
-import logging
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -43,6 +42,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from autobot_shared.env_utils import env_float, env_float_clamped
 from autobot_shared.feature_flags import is_feature_enabled
+from autobot_shared.logging_manager import get_logger
 from autobot_shared.redis_client import get_async_redis_client
 from autobot_shared.singleton_factory import lazy_singleton
 from user_management.database import get_async_session_factory
@@ -72,8 +72,9 @@ from .replay_recording import record_run_for_replay as _record_run_for_replay
 from .run_context import enrich_run_context
 from .run_status import RunSuperseded, latest_run_in, mark_running
 from .run_workspace import acquire_run_workspace, release_run_workspace, release_workspace_best_effort
+from .schedule_members import agent_due_members, drop_unschedulable_member
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 _SCHEDULE_KEY = "llc:heartbeat:schedule"
 _POLL_INTERVAL = 5.0  # seconds between sorted-set polls
@@ -190,7 +191,7 @@ class LLCHeartbeatScheduler:
             # NX was previously used but prevented cron expression updates from
             # taking effect — an updated schedule would be silently ignored.
             await redis.zadd(_SCHEDULE_KEY, mapping, gt=True)
-            logger.info("Scheduled %d agents in sorted set", len(mapping))
+            logger.info("Scheduled %d of %d heartbeat-enabled agents in sorted set", len(mapping), len(agents))
 
         # Re-queue any rate-limited agents whose retry_after is still in the
         # future — they may have been evicted from Redis if the server restarted.
@@ -258,7 +259,7 @@ class LLCHeartbeatScheduler:
             return
 
         now = datetime.now(tz=timezone.utc).timestamp()
-        due: list[bytes] = await redis.zrangebyscore(_SCHEDULE_KEY, 0, now)
+        due = agent_due_members(await redis.zrangebyscore(_SCHEDULE_KEY, 0, now))
         if not due:
             return
 
@@ -276,10 +277,9 @@ class LLCHeartbeatScheduler:
                     agent_id,
                     int(_POLL_INTERVAL),
                 )
-                retry_ts = datetime.now(tz=timezone.utc).timestamp() + _POLL_INTERVAL
-                await redis.zadd(_SCHEDULE_KEY, {agent_id: retry_ts})
+                await self._requeue(redis, agent_id, cycles=1, why="dispatch error")
 
-    async def _requeue(self, redis: Any, agent_id: str, cycles: int = 6) -> None:
+    async def _requeue(self, redis: Any, agent_id: str, cycles: int = 6, why: str = "deferred") -> None:
         """Put *agent_id* back on the schedule a few poll cycles from now.
 
         One place decides how long a deferred wake waits; three copies of a backoff
@@ -287,6 +287,7 @@ class LLCHeartbeatScheduler:
         """
         retry_ts = datetime.now(tz=timezone.utc).timestamp() + _POLL_INTERVAL * cycles
         await redis.zadd(_SCHEDULE_KEY, {agent_id: retry_ts})
+        logger.info("Heartbeat agent=%s re-queued in %.0fs (%s)", agent_id, retry_ts - time.time(), why)
 
     async def _handle_due_agent(self, agent_id: str, redis: Any) -> None:
         """Create (or resume) a run record, dispatch adapter, advance sorted-set score.
@@ -300,14 +301,11 @@ class LLCHeartbeatScheduler:
         factory = get_async_session_factory()
         async with factory() as session:
             agent = await self._get_agent_config(session, agent_id)
-            if agent is None:
-                await redis.zrem(_SCHEDULE_KEY, agent_id)
+            if agent is None or not agent.get("heartbeat_cron"):
+                await drop_unschedulable_member(redis, _SCHEDULE_KEY, agent_id, agent)
                 return
 
-            cron_expr = agent.get("heartbeat_cron")
-            if not cron_expr:
-                await redis.zrem(_SCHEDULE_KEY, agent_id)
-                return
+            cron_expr = agent["heartbeat_cron"]
 
             # Check for an active rate-limited run to resume.
             rate_limited_run = await self._find_rate_limited_run(session, agent_id)
@@ -348,14 +346,15 @@ class LLCHeartbeatScheduler:
                     )
                 except ValueError as exc:
                     logger.warning("Skipping heartbeat for agent %s (no organization): %s", agent_id, exc)
-                    await self._requeue(redis, agent_id)
+                    await self._requeue(redis, agent_id, why="no organization")
                     return
 
                 await enrich_run_context(agent, context, run)
+                logger.info("Heartbeat run %s created for agent %s", run.id, agent_id)
 
             # #16818: the run leases its workspace, or defers rather than sharing it.
             if not await acquire_run_workspace(session, agent, agent_id, run.id, context):
-                await self._requeue(redis, agent_id)
+                await self._requeue(redis, agent_id, why="workspace lease unavailable")
                 return
             await session.commit()
 
@@ -384,7 +383,7 @@ class LLCHeartbeatScheduler:
             await redis.zrem(_SCHEDULE_KEY, agent_id)
             return
         await redis.zadd(_SCHEDULE_KEY, {agent_id: next_ts})
-        logger.debug("Heartbeat scheduled agent=%s run=%s next=%.0f", agent_id, run_id, next_ts)
+        logger.info("Heartbeat scheduled agent=%s run=%s next=%.0f", agent_id, run_id, next_ts)
 
     async def _has_pending_work(self, session: AsyncSession, agent: Dict[str, Any]) -> bool:
         """Whether a checkout would find anything for this agent (#17726).
@@ -430,6 +429,7 @@ class LLCHeartbeatScheduler:
             await redis.hincrby(key, "count", 1)
             await redis.hset(key, "at", datetime.now(tz=timezone.utc).isoformat())
             await redis.expire(key, int(_IDLE_WAKE_TTL_SECONDS))
+            logger.info("Heartbeat wake skipped for agent %s: no eligible work (idle wake recorded)", agent_id)
         except Exception:
             logger.warning("Could not record idle wake for agent %s", agent_id, exc_info=True)
 
@@ -654,22 +654,12 @@ class LLCHeartbeatScheduler:
                 new_retry_count,
                 run_id,
             )
-            factory = get_async_session_factory()
-            try:
-                async with factory() as session:
-                    await session.execute(
-                        update(LLCHeartbeatRun)
-                        .where(LLCHeartbeatRun.id == run_id)
-                        .values(
-                            status=LLCRunStatus.FAILED.value,
-                            finished_at=datetime.now(tz=timezone.utc),
-                            error=f"Rate-limit retries exhausted ({new_retry_count}): {exc}",
-                            retry_count=new_retry_count,
-                        )
-                    )
-                    await session.commit()
-            except Exception:
-                logger.exception("Could not write FAILED status for rate-exhausted run %s", run_id)
+            await _write_rate_limit_outcome(
+                run_id,
+                status=LLCRunStatus.FAILED.value,
+                error=f"Rate-limit retries exhausted ({new_retry_count}): {exc}",
+                retry_count=new_retry_count,
+            )
             return
 
         # Exponential backoff: use provider hint if available, else compute.
@@ -690,23 +680,13 @@ class LLCHeartbeatScheduler:
             retry_after_dt.isoformat(),
         )
 
-        factory = get_async_session_factory()
-        try:
-            async with factory() as session:
-                await session.execute(
-                    update(LLCHeartbeatRun)
-                    .where(LLCHeartbeatRun.id == run_id)
-                    .values(
-                        status=LLCRunStatus.RATE_LIMITED.value,
-                        finished_at=datetime.now(tz=timezone.utc),
-                        error=str(exc),
-                        retry_after=retry_after_dt,
-                        retry_count=new_retry_count,
-                    )
-                )
-                await session.commit()
-        except Exception:
-            logger.exception("Could not write RATE_LIMITED status for run %s", run_id)
+        if not await _write_rate_limit_outcome(
+            run_id,
+            status=LLCRunStatus.RATE_LIMITED.value,
+            error=str(exc),
+            retry_after=retry_after_dt,
+            retry_count=new_retry_count,
+        ):
             return
 
         # Re-queue the agent in Redis at retry_after so it fires automatically.
@@ -784,6 +764,22 @@ def get_heartbeat_scheduler() -> LLCHeartbeatScheduler:
 # ------------------------------------------------------------------
 # Module-level helpers
 # ------------------------------------------------------------------
+
+
+async def _write_rate_limit_outcome(run_id: uuid.UUID, *, status: str, **values: Any) -> bool:
+    """Close a rate-limited run; False when the write failed, which is logged here."""
+    try:
+        async with get_async_session_factory()() as session:
+            await session.execute(
+                update(LLCHeartbeatRun)
+                .where(LLCHeartbeatRun.id == run_id)
+                .values(status=status, finished_at=datetime.now(tz=timezone.utc), **values)
+            )
+            await session.commit()
+    except Exception:
+        logger.exception("Could not write %s status for run %s", status, run_id)
+        return False
+    return True
 
 
 def _next_fire(cron_expr: str, base_ts: float) -> float:

@@ -798,7 +798,7 @@ export default {
 }
 
 .badge-success { background: var(--color-success); color: var(--text-on-success); }
-.badge-info { background: var(--color-info); color: var(--text-on-primary); }
+.badge-info { background: var(--color-info-solid); color: var(--text-on-primary); }
 .badge-warning { background: var(--color-warning); color: var(--text-on-warning); }
 .badge-secondary { background: var(--color-secondary); color: var(--text-on-primary); }
 
@@ -825,7 +825,7 @@ export default {
 
 .not-integrated .icon {
   color: var(--color-info);
-  font-size: var(--text-2xl);
+  width: var(--text-2xl); height: var(--text-2xl);
 }
 
 .error {
@@ -834,7 +834,7 @@ export default {
 
 .error .icon {
   color: var(--color-error);
-  font-size: var(--text-2xl);
+  width: var(--text-2xl); height: var(--text-2xl);
 }
 
 .integration-stats {
@@ -890,7 +890,7 @@ export default {
 }
 
 .command-tag {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: var(--text-on-primary);
   padding: var(--spacing-1) var(--spacing-2);
   border-radius: var(--radius-full);
@@ -1052,7 +1052,7 @@ export default {
 
 .loading .icon,
 .no-data .icon {
-  font-size: var(--text-xl);
+  width: var(--text-xl); height: var(--text-xl);
 }
 
 /* Responsive Design */

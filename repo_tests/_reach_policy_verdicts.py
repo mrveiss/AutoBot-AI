@@ -60,6 +60,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "One frontend tree's `.vue` files, against all tracked `.vue` including the other frontend and the kit.",
     ),
+    "icon-font-size-rule-vue-files": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "One frontend tree's `.vue` files, against all tracked `.vue` including the other frontend and the kit.",
+    ),
     "deployment-mode-detector-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -102,6 +107,18 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "step of a fraction is worth more files than the constant's own band -- 0.99 implies a "
         "floor BELOW the constant it would replace, which #17914 AC2 refuses, and 1.00 fires on "
         "a single index-versus-filesystem skew.",
+    ),
+    "autobot-has-no-pro-name": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Every tracked file minus changelogs and the guard itself (#19982); files are added in every PR, "
+        "so an exact floor would fail any new file, and the changelog share grows at its own rate.",
+    ),
+    "autobot-has-no-pro-tier-in-user-text": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "The .vue components and locale JSON of two frontends (#19982), a subset of tracked files; "
+        "every new component grows it, and the rest of the tree grows at its own rate.",
     ),
     "audio-extension-allowlist": (
         ABSOLUTE,
@@ -370,6 +387,21 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Both GUIs' component, view and composable .ts/.vue, excluding tests, against all tracked frontend source.",
     ),
+    "frontend-local-date-formatter-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Both GUIs' component, view and composable .ts/.vue, excluding tests, against all tracked frontend source.",
+    ),
+    "frontend-hand-built-relative-time-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Both GUIs' .ts/.vue source, excluding tests, generated types and locales, against all tracked frontend.",
+    ),
+    "frontend-hand-rolled-spinner-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Both GUIs' and the plugins' .vue/.css, excluding tests, against all tracked frontend source.",
+    ),
     "frontend-model-literal-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",
@@ -478,6 +510,12 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         ABSOLUTE,
         "SUBSET_DRIFTS",
         "Non-test .ts/.js files under the two apps' src/utils; the test-file share and other trees drift on their own.",
+    ),
+    "frontend-url-served-by-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Non-test Python, shell, YAML, Jinja, env and unit files under six roots plus the root .env profiles, a "
+        "subset of tracked files; the test share and the other extensions grow at their own rate.",
     ),
 }
 

@@ -115,7 +115,7 @@ const {
   align-items: center;
   gap: var(--spacing-3);
   padding: var(--spacing-4);
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-error);
 }
 
@@ -229,7 +229,8 @@ const {
 }
 
 .preview-overlay .icon {
-  font-size: var(--text-2xl);
+  width: var(--text-2xl);
+  height: var(--text-2xl);
 }
 
 /* Actions */
@@ -261,7 +262,7 @@ const {
 }
 
 .btn-vnc {
-  background: var(--color-info);
+  background: var(--color-info-solid);
   color: var(--text-on-primary);
 }
 

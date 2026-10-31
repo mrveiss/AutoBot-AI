@@ -206,7 +206,9 @@ MIN_READS_FOUND = 40
 #: metadata to make the visibility decision itself; classified SCOPED.
 #: Then 65 -> 64 (#16665, #19644): ``/ai-stack/knowledge/search`` scopes its local hits to the caller, so the scan
 #: marks it filtered and its _SCOPED_ADMIN_ROUTER allowlist entry is removed.
-UNFILTERED_READ_CEILING = 64
+#: Then 64 -> 66 (#19647): the backup's vector read and the restore's existence check, both NOT_USER_FACING.
+#: Then 66 -> 67 (#20028): the sync's pre-delete check of a replaced fact, NOT_USER_FACING.
+UNFILTERED_READ_CEILING = 67
 
 _REASON_PREFIXES = ("TRACKED_GAP #", "SCOPED: ", "NOT_USER_FACING: ", "IMPL: ", "ADMIN_ONLY: ")
 _NESTED = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
@@ -246,7 +248,7 @@ def _production_files(root: Path) -> list[str]:
 REACH = declare(
     "kb-read-visibility-production-sweep",
     discover=_production_files,
-    floor=2866,  # mid-window: population 2991, window (2741, 2991)
+    floor=2975,  # mid-window: population 3100, window (2850, 3100)
     growth=250,
     skips=0,
     what="production python files",

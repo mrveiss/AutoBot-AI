@@ -351,7 +351,8 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 }
 
 .tab-btn .icon {
-  font-size: var(--text-sm);
+  width: var(--text-sm);
+  height: var(--text-sm);
 }
 
 .profile-section {
@@ -534,8 +535,8 @@ function formatDate(dateValue: Date | string | undefined | null): string {
 }
 
 .toast.error {
-  background: var(--color-error);
-  color: var(--text-inverse);
+  background: var(--color-error-solid);
+  color: var(--text-on-error);
 }
 
 @keyframes slideIn {

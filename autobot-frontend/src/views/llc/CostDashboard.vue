@@ -182,8 +182,13 @@
               <tr v-for="bucket in group.buckets" :key="bucket.key">
                 <td>{{ bucket.label }}</td>
                 <td class="num-cell">
-                  {{ bucket.per_month }}
-                  <span v-if="bucket.currencies.length">{{ bucket.currencies.join(' / ') }}</span>
+                  <template v-if="bucket.is_mixed_currency">
+                    <div v-for="entry in bucket.per_currency" :key="entry.currency">{{ $t('llc.cost.currencyAmount', { amount: entry.per_month, currency: entry.currency }) }}</div>
+                  </template>
+                  <template v-else>
+                    {{ bucket.per_month }}
+                    <span v-if="bucket.currencies.length">{{ bucket.currencies.join(' / ') }}</span>
+                  </template>
                 </td>
                 <!-- Coverage sits beside every total, never behind a tooltip: a
                      partial figure presented alone reads as a complete one. -->
@@ -289,9 +294,10 @@ import { ref, computed, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
 import { createLogger } from '@/utils/debugUtils'
-import { formatDate as fmtDate } from '@/utils/formatHelpers'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import { BaseModal } from '@autobot/ui'
 import { useI18n } from 'vue-i18n'
+import type { components } from '@/types/generated/api'
 
 const logger = createLogger('CostDashboard')
 const api = useApiClient()
@@ -349,16 +355,7 @@ const costEvents = ref<CostEvent[]>([])
  * is excluded from the sum and counted in `not_costable` — never folded in as
  * zero, which would make a partial total indistinguishable from a complete one.
  */
-interface RollupBucket {
-  key: string
-  label: string
-  per_month: string
-  costed: number
-  not_costable: number
-  total_steps: number
-  is_complete: boolean
-  currencies: string[]
-}
+type RollupBucket = components['schemas']['RollupBucketOut']
 const rollupByRole = ref<RollupBucket[]>([])
 const rollupByTool = ref<RollupBucket[]>([])
 /** The request did not answer — distinct from answering "nothing is mapped". */
@@ -499,9 +496,7 @@ const dailyBars = computed(() => {
   }))
 })
 
-function formatDate(iso: string | null | undefined): string {
-  return iso ? fmtDate(iso) : ''
-}
+const formatDate = createDateFormatter({ kind: 'date', invalidText: '' })
 
 /** A token count for display, or an em dash when the split is not recorded. */
 function tokenCell(value: number | null | undefined): string {
@@ -587,7 +582,7 @@ async function fetchStepRollup() {
   if (!companyId.value) return
   rollupFailed.value = false
   try {
-    const data = await api.get<{ by_role?: RollupBucket[]; by_tool?: RollupBucket[] }>(
+    const data = await api.get<components['schemas']['StepRollupResponse']>(
       `/api/llc/costs/step-rollup?company_id=${companyId.value}`,
     )
     // Validated before it is rendered: a payload of the wrong shape reaching

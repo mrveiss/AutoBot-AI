@@ -216,7 +216,12 @@
 
     - name: Test Redis connectivity
       # #16678: the username always travels with the password -- a nopass server refuses AUTH <pw> alone
-      shell: redis-cli --user {{ (autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default') | quote }} -a {{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) | quote }} ping
+      shell: redis-cli --user {{ (autobot_redis_username | default(lookup('env', 'AUTOBOT_REDIS_USERNAME')) or 'default') | quote }} ping
+      # #19846: REDISCLI_AUTH, not -a: the password stays out of the task log and of ps
+      vars:
+        _redis_password: "{{ autobot_redis_password | default(lookup('env', 'AUTOBOT_REDIS_PASSWORD')) }}"
+      environment: "{{ {'REDISCLI_AUTH': _redis_password} if _redis_password else {} }}"
+      no_log: true
       register: redis_test
 
     - name: Display Redis status
@@ -231,23 +236,9 @@
   vars: *deploy_paths
 
   tasks:
-    - name: Install Node.js 20
-      block:
-        - name: Add NodeSource GPG key
-          apt_key:
-            url: "{{ nodesource_base_url }}/gpgkey/nodesource.gpg.key"
-            state: present
-
-        - name: Add NodeSource repository
-          apt_repository:
-            repo: "deb {{ nodesource_base_url }}/node_{{ node_major }}.x {{ ansible_facts['distribution_release'] }} main"
-            state: present
-
-        - name: Install Node.js
-          apt:
-            name: nodejs
-            state: present
-            update_cache: true
+    - name: Install Node.js
+      ansible.builtin.include_role:
+        name: nodejs
 
     - name: Copy frontend source files from deployment directory
       copy:
@@ -416,6 +407,8 @@
         recursive: true
         owner: false
         group: false
+        rsync_opts:
+          - "--chmod=o-w"  # #19503
       delegate_to: localhost
 
     - name: Set ownership of source code for NPU Worker
@@ -589,6 +582,9 @@
   hosts: aiml
   become: true
   vars: *deploy_paths
+  # One home for the pulled model set and its embedding role (#19736), as in deploy-hybrid-docker.yml.
+  vars_files:
+    - ../roles/agent_config/defaults/main.yml
 
   tasks:
     - name: Install Python dependencies for AI services
@@ -613,6 +609,8 @@
         recursive: true
         owner: false
         group: false
+        rsync_opts:
+          - "--chmod=o-w"  # #19503
       delegate_to: localhost
 
     - name: Set ownership of source code
@@ -703,14 +701,14 @@
           become_user: autobot-service
           async: 600
           poll: 15
-          loop:
-            - "llama3.2:1b"           # Routing tier
-            - "gemma2:2b"             # Classification tier
-            - "phi3:mini"             # Light processing tier
-            - "mistral:7b-instruct"   # Instruction tier
-            - "dolphin-llama3:8b"     # System/uncensored tier
-            - "qwen3.5:9b"            # Quality tier
-            - "nomic-embed-text:latest"  # Embeddings (DEFAULT_EMBEDDING_MODEL)
+          loop: "{{ ollama_models }}"
+
+        - name: Check every pulled model is the right kind for its role (#19736)
+          ansible.builtin.include_tasks: ../_shared/tasks/assert_model_kinds.yml
+          vars:
+            model_kind_cli: /usr/local/bin/ollama
+            model_kind_embedding: "{{ ollama_embedding_model }}"
+            model_kind_completion: "{{ ollama_models }}"
 
     - name: Create AI Stack service
       copy:
@@ -803,9 +801,11 @@
           - xvfb
           - fluxbox
           - xterm
-          - nodejs
-          - npm
         state: present
+
+    - name: Install Node.js
+      ansible.builtin.include_role:
+        name: nodejs
 
     - name: Install Playwright
       shell: |
@@ -821,6 +821,8 @@
         recursive: true
         owner: false
         group: false
+        rsync_opts:
+          - "--chmod=o-w"  # #19503
       delegate_to: localhost
 
     - name: Set ownership of source code

@@ -221,6 +221,7 @@ import {
   type UIElement,
   type ElementTypeInfo,
 } from '@/utils/VisionMultimodalApiClient';
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const { t } = useI18n();
 const logger = createLogger('ScreenCaptureViewer');
@@ -310,9 +311,7 @@ const selectElement = (element: UIElement) => {
   selectedElement.value = element;
 };
 
-const formatTimestamp = (timestamp: number): string => {
-  return new Date(timestamp * 1000).toLocaleTimeString();
-};
+const formatTimestamp = createDateFormatter({ kind: 'time', unit: 'seconds' });
 
 const truncateText = (text: string, maxLength: number): string => {
   if (text.length <= maxLength) return text;
@@ -672,7 +671,7 @@ onUnmounted(() => {
 }
 
 .no-elements .icon {
-  font-size: var(--text-2xl);
+  width: var(--text-2xl); height: var(--text-2xl);
 }
 
 /* Text Regions */

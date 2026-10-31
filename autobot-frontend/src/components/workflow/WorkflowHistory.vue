@@ -72,7 +72,8 @@
 import type { IconName } from '@/components/ui/Icon.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { ref, computed } from 'vue';
-import { formatDuration } from '@/utils/formatHelpers';
+import { useI18n } from 'vue-i18n';
+import { formatDuration, createDateFormatter } from '@/utils/formatHelpers';
 import type { ActiveWorkflow } from '@/composables/useWorkflowBuilder';
 
 const props = defineProps<{
@@ -169,18 +170,26 @@ function getSkippedCount(wf: ActiveWorkflow): number {
   return wf.steps.filter(s => s.status === 'skipped').length;
 }
 
-// Whole seconds, floored, as 'Ns' or 'Nm Ns'; '-' unless the run has both a start and an end.
-const DURATION_FORMAT = { style: 'msMinutesSeconds', rounding: 'floor', nullText: '-' } as const
+const { t } = useI18n();
+
+// Whole seconds, floored, as 'N<s>' or 'N<m> N<s>' with translated unit labels; '-' unless the
+// run has both a start and an end.
+const durationFormat = computed(() => ({
+  style: 'msMinutesSeconds',
+  rounding: 'floor',
+  nullText: '-',
+  units: {
+    seconds: t('workflow.history.durationSeconds'),
+    minutes: t('workflow.history.durationMinutes'),
+  },
+}) as const)
 
 function workflowDuration(wf: ActiveWorkflow): string {
   if (!wf.started_at || !wf.completed_at) return '-';
-  return formatDuration(wf.started_at, wf.completed_at, DURATION_FORMAT);
+  return formatDuration(wf.started_at, wf.completed_at, durationFormat.value);
 }
 
-function formatDate(date?: string): string {
-  if (!date) return '-';
-  return new Date(date).toLocaleDateString();
-}
+const formatDate = createDateFormatter({ kind: 'date', emptyText: '-' })
 </script>
 
 <style scoped>
@@ -195,7 +204,7 @@ function formatDate(date?: string): string {
 .filter-group select { padding: var(--spacing-2-5) var(--spacing-3); background: var(--bg-secondary); border: 1px solid var(--border-default); border-radius: var(--radius-lg); color: var(--text-primary); font-size: var(--text-sm); cursor: pointer; }
 
 .empty-state { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-tertiary); padding: var(--spacing-10); }
-.empty-state .icon { font-size: var(--text-5xl); margin-bottom: var(--spacing-4); }
+.empty-state > .icon { width: var(--text-5xl); height: var(--text-5xl); margin-bottom: var(--spacing-4); }
 .empty-state h3 { margin: var(--spacing-0) var(--spacing-0) var(--spacing-2); color: var(--text-primary); }
 
 .history-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: var(--spacing-3); }

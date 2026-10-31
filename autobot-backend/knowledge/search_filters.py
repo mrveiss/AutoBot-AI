@@ -530,25 +530,28 @@ def _fact_ids(results: List[Dict]) -> List[str]:
     return [str(r.get("id") or r.get("fact_id") or (r.get("metadata") or {}).get("fact_id") or "") for r in results]
 
 
-async def _admin_read(results: List[Dict], reader: KbReader, ownership_manager) -> List[Dict]:
-    """An audited admin read through the ownership helper's explicit admin input; no audit, no results."""
+async def audit_admin_read(user_id: str, details: Dict) -> bool:
+    """Record an admin's explicit read (``kb.admin_read``); False when the entry cannot be written (#16665)."""
     from services.audit.taxonomy import AuditAction
     from services.audit_logger import audit_log
 
-    kept = await filter_search_results_by_permission(
-        results, reader.user_id, reader.principal.company_id, [], ownership_manager=ownership_manager, is_admin=True
-    )
     try:
         await audit_log(
-            AuditAction.KNOWLEDGE_ADMIN_READ.value,
-            user_id=reader.user_id,
-            resource="knowledge_base",
-            details={"fact_ids": _fact_ids(kept), "count": len(kept)},
+            AuditAction.KNOWLEDGE_ADMIN_READ.value, user_id=user_id, resource="knowledge_base", details=details
         )
     except Exception:
         logger.error("kb.admin_read audit failed; withholding the admin read (#16665)", exc_info=True)
-        return []
-    return kept
+        return False
+    return True
+
+
+async def _admin_read(results: List[Dict], reader: KbReader, ownership_manager) -> List[Dict]:
+    """An audited admin read through the ownership helper's explicit admin input; no audit, no results."""
+    kept = await filter_search_results_by_permission(
+        results, reader.user_id, reader.principal.company_id, [], ownership_manager=ownership_manager, is_admin=True
+    )
+    details = {"fact_ids": _fact_ids(kept), "count": len(kept)}
+    return kept if await audit_admin_read(reader.user_id, details) else []
 
 
 async def _filter_reader(results: List[Dict], kb, reader: KbReader) -> List[Dict]:

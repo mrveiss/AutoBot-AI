@@ -14,6 +14,28 @@ from autobot_shared.env_registry import EnvVarSpec, register_env_var
 
 register_env_var(
     EnvVarSpec(
+        name="AUTOBOT_KB_EMBED_WINDOW_CHARS",
+        type=int,
+        default=4000,
+        description=("Characters per window when a fact is too long for the embedding model (#20066)."),
+        component="knowledge",
+        range=(200, 100000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_EMBED_MAX_WINDOWS",
+        type=int,
+        default=32,
+        description=("Windows embedded for one long fact; past this only the leading ones are searchable (#20066)."),
+        component="knowledge",
+        range=(1, 1000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
         name="AUTOBOT_KB_CHUNK_MAX_TOKENS",
         type=int,
         default=800,
@@ -126,6 +148,20 @@ register_env_var(
         ),
         component="knowledge",
         range=(0.0, 300.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_BACKUP_EMBEDDING_BATCH_SIZE",
+        type=int,
+        default=500,
+        description=(
+            "Facts read from the vector collection per call while a knowledge backup or export "
+            "includes their embeddings (knowledge/backup_embeddings.py, #19647)."
+        ),
+        component="knowledge",
+        range=(1, 5000),
     )
 )
 
@@ -294,5 +330,41 @@ register_env_var(
         ),
         component="knowledge",
         range=(0.0, 10.0),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_EVENT_OVERFETCH_FACTOR",
+        type=int,
+        default=5,
+        description=(
+            "How many times the requested page the event routes fetch before filtering by what the "
+            "caller may see, so a filtered page can still fill; api/knowledge_graph_routes.py (#16665)."
+        ),
+        component="knowledge",
+        range=(1, 100),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_EVENT_FETCH_CAP",
+        type=int,
+        default=2500,
+        description="Most events fetched per request by those routes; api/knowledge_graph_routes.py (#16665).",
+        component="knowledge",
+        range=(1, 100000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_SOURCE_LOOKUP_CONCURRENCY",
+        type=int,
+        default=8,
+        description="Source-fact lookups at once for one visibility pass; knowledge/summary_visibility.py (#16665).",
+        component="knowledge",
+        range=(1, 256),
     )
 )

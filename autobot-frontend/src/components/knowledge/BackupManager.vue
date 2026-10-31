@@ -363,7 +363,8 @@ onMounted(() => {
 
 .loading-state .icon,
 .empty-state .icon {
-  font-size: 2rem;
+  width: 2rem;
+  height: 2rem;
   margin-bottom: var(--spacing-2);
   display: block;
   margin-inline: auto;
@@ -467,7 +468,7 @@ onMounted(() => {
 }
 
 .action-btn.delete:hover {
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-primary);
 }
 

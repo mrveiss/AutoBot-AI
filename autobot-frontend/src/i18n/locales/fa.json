@@ -1,5 +1,6 @@
 {
   "common": {
+    "appName": "AutoBot",
     "submit": "ارسال",
     "cancel": "لغو",
     "save": "ذخیره",
@@ -109,7 +110,8 @@
       "medium": "متوسط",
       "high": "بالا",
       "critical": "Critical"
-    }
+    },
+    "logsLoadFailed": "بارگذاری گزارش‌ها ناموفق بود: {error}"
   },
   "nav": {
     "chat": "گفتگو",
@@ -3312,11 +3314,12 @@
       "preservedSuffix": "; {count} preserved"
     },
     "treeNode": {
-      "vectorizeFolderTitle": "Vectorize folder title",
+      "itemsCount": "Items count",
       "retryTitle": "Retry title",
       "unvectorized": "Unvectorized",
-      "itemsCount": "Items count",
-      "vectorizeTitle": "Vectorize title"
+      "vectorizeFolderTitle": "Vectorize folder title",
+      "vectorizeTitle": "Vectorize title",
+      "zeroSize": "0B"
     },
     "memoryOrphan": {
       "title": "Title",
@@ -3652,6 +3655,8 @@
       "executionStrategies": "Execution Strategies"
     },
     "history": {
+      "durationSeconds": "ث",
+      "durationMinutes": "د",
       "allStatus": "All Status",
       "reRun": "Re-run",
       "passed": "passed",
@@ -3767,7 +3772,8 @@
       "agentsAriaLabel": "Agent capabilities",
       "visionOfflineBanner": "⚠️ Vision services are currently offline. Screen Analysis, Video Processing, and Media Gallery are unavailable.",
       "resolvingCompany": "در حال باز کردن خودکارسازی شرکت شما…",
-      "companyRequired": "برای باز کردن خودکارسازی یک شرکت انتخاب کنید."
+      "companyRequired": "برای باز کردن خودکارسازی یک شرکت انتخاب کنید.",
+      "planBeforeBuilding": "پیش از ساخت برنامه‌ریزی کنید"
     },
     "runner": {
       "completed": "Completed",
@@ -3980,7 +3986,9 @@
       "loading": "Loading configuration...",
       "emailHint": "Comma-separated email addresses",
       "selectWorkflow": "Workflow",
-      "channelMappingHint": "Select which channels receive notifications for each event type."
+      "channelMappingHint": "Select which channels receive notifications for each event type.",
+      "invalidEmail": "نشانی ایمیل نامعتبر: {emails}",
+      "invalidUrl": "قالب URL نامعتبر است"
     },
     "modal": {
       "saveWorkflowAriaLabel": "Save workflow",
@@ -4280,7 +4288,8 @@
       "emergencyKillFailed": "❌ توقف اضطراری ناموفق بود: {message}",
       "interrupted": "^C (فرایند توسط کاربر قطع شد)",
       "error": "خطا: {error}"
-    }
+    },
+    "urlCopied": "نشانی URL ترمینال در کلیپ‌بورد کپی شد!"
   },
   "manpage": {
     "manager": {
@@ -4841,6 +4850,7 @@
   },
   "ui": {
     "themeToggle": {
+      "accentPurpleDescription": "بنفش — خلاق و شیک",
       "system": "سیستمی",
       "highContrast": "کنتراست بالا",
       "monochrome": "تک‌رنگ",
@@ -5229,6 +5239,7 @@
       "status": {
         "failed": "Failed",
         "streaming": "Streaming",
+        "waiting_explanation": "در انتظار توضیح",
         "explaining": "Explaining",
         "pending": "Pending",
         "completed": "Completed",
@@ -5496,6 +5507,13 @@
       "chatMessage": "Chat message",
       "attachFile": "Attach file",
       "retryUpload": "Retry upload",
+      "uploadError": {
+        "http": "بارگذاری ناموفق بود (وضعیت {status})",
+        "invalidResponse": "سرور پاسخ ناخوانایی ارسال کرد",
+        "network": "خطای شبکه هنگام بارگذاری",
+        "cancelled": "بارگذاری لغو شد",
+        "unknown": "بارگذاری ناموفق بود"
+      },
       "removeFile": "Remove file",
       "overseerLabel": "Overseer",
       "managePresets": "Manage slash command presets",
@@ -5512,7 +5530,10 @@
       "thinkingOffLabel": "thinking Off",
       "thinkingOn": "Thinking on",
       "thinkingOnLabel": "thinking On",
-      "moreActions": "More actions"
+      "moreActions": "More actions",
+      "fileTooLarge": "فایل «{name}» بیش از حد بزرگ است (حداکثر {max})",
+      "voiceUnsupported": "ورودی صوتی به Chrome، Edge یا Safari 15+ نیاز دارد. رونویسی در این مرورگر در دسترس نیست.",
+      "micDenied": "دسترسی به میکروفون رد شد. لطفاً در تنظیمات مرورگر اجازه دسترسی به میکروفون را بدهید."
     },
     "visualBrowser": {
       "disconnected": "Disconnected",
@@ -7268,7 +7289,16 @@
     },
     "progress": {}
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "قوانین هشدار",
+      "overview": "نمای کلی",
+      "slos": "SLOها",
+      "traces": "ردیابی‌ها"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "treeView": {
       "noStructure": "No directory structure available",
       "title": "Directory Structure",
@@ -7289,7 +7319,8 @@
       "listView": "List View",
       "refreshAriaLabel": "Refresh files",
       "errorRenamingFile": "Error renaming file",
-      "errorLoadingContents": "Error loading contents"
+      "errorLoadingContents": "Error loading contents",
+      "uploadFailedHint": "لطفاً محدودیت‌های اندازه فایل و الزامات قالب را بررسی کنید"
     },
     "fileTypes": {
       "shell": "Shell Script",
@@ -8082,6 +8113,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "فعال‌سازی پنجره نگهداری ناموفق بود",
+      "completeWindowFailed": "تکمیل پنجره نگهداری ناموفق بود",
+      "deleteWindowFailed": "حذف پنجره نگهداری ناموفق بود",
+      "drainNodeFailed": "تخلیه گره ناموفق بود. لطفاً دوباره تلاش کنید.",
+      "resumeNodeFailed": "از سرگیری گره ناموفق بود. لطفاً دوباره تلاش کنید.",
+      "saveKeysFailed": "ذخیره کلیدهای API ناموفق بود. برای جزئیات کنسول را بررسی کنید.",
+      "addNodeFailed": "افزودن گره ناموفق بود"
     }
   },
   "mobile": {
@@ -8593,7 +8633,8 @@
       "toolDisplayName": "{tool} ({roles})",
       "canvasToolsUnavailable": "اطلاعات ابزارها در حال حاضر در دسترس نیست — این فهرست ممکن است ناقص باشد.",
       "canvasNoToolsDefined": "هیچ ابزاری به هیچ نقشی در این شرکت پیوست نشده است.",
-      "deepLinkNodeNotFound": "این پیوند به گره‌ای اشاره دارد که در اینجا یافت نشد. ممکن است حذف شده باشد یا شما به آن دسترسی نداشته باشید."
+      "deepLinkNodeNotFound": "این پیوند به گره‌ای اشاره دارد که در اینجا یافت نشد. ممکن است حذف شده باشد یا شما به آن دسترسی نداشته باشید.",
+      "viewPlanner": "برنامه‌ریز"
     },
     "executorRollup": {
       "title": "خلاصه مجریان",
@@ -8937,6 +8978,162 @@
         "notFound": "این وظیفه دیگر این ادعا را در اختیار ندارد — برای دیدن دارندهٔ فعلی بازخوانی کنید.",
         "unavailable": "دسترسی به دفتر ممکن نشد؛ چیزی ارسال نشد.",
         "error": "خطایی رخ داد و تحویل تأیید نشد. صفحه را تازه کنید تا ببینید آیا ادعا هنوز نگه داشته شده است."
+      }
+    },
+    "workflowPlanner": {
+      "title": "برنامه‌ریز گردش کار",
+      "plans": "برنامه‌ها",
+      "newPlan": "برنامه جدید",
+      "open": "باز کردن",
+      "back": "بازگشت به برنامه‌ها",
+      "retry": "تلاش دوباره",
+      "loading": "در حال بارگذاری برنامه‌ها...",
+      "loadFailed": "بارگذاری برنامه ممکن نشد.",
+      "saveFailed": "ذخیره تغییر ممکن نشد.",
+      "createFailed": "ایجاد برنامه ممکن نشد.",
+      "emptyTitle": "هنوز برنامه‌ای نیست",
+      "emptyHint": "یک برنامه شروع کنید تا یک فرایند را ترسیم و اندازه‌گیری کنید و یک عدد برای بهبود انتخاب کنید.",
+      "unavailableTitle": "برنامه‌ریز گردش کار در دسترس نیست",
+      "unavailableHint": "این قابلیت برای فضای کار شما خاموش است، پس هنوز چیزی برای نمایش نیست.",
+      "statusFlow": "پیشرفت برنامه",
+      "status": {
+        "draft": "پیش‌نویس",
+        "measured": "اندازه‌گیری‌شده",
+        "labeled": "برچسب‌خورده",
+        "approved": "تأییدشده",
+        "converted": "تبدیل‌شده"
+      },
+      "col": {
+        "name": "برنامه",
+        "revision": "بازنگری",
+        "status": "وضعیت",
+        "actions": "عملیات"
+      },
+      "form": {
+        "name": "نام برنامه",
+        "startsAt": "فرایند از کجا شروع می‌شود",
+        "endsAt": "فرایند کجا تمام می‌شود",
+        "create": "ایجاد برنامه"
+      },
+      "steps": {
+        "map": "ترسیم",
+        "measure": "اندازه‌گیری",
+        "oneNumber": "انتخاب یک عدد",
+        "label": "تفکیک و برچسب‌زنی",
+        "convert": "ایجاد گردش کار"
+      },
+      "map": {
+        "empty": "هنوز چیزی ترسیم نشده",
+        "emptyHint": "ابتدا افراد درگیر (مسیرها) و سپس گام‌های هرکدام را اضافه کنید.",
+        "handoffs": "{count} تحویل",
+        "waitNote": "در این تحویل چه چیزی منتظر می‌ماند؟",
+        "laneName": "نام مسیر",
+        "addLane": "افزودن مسیر",
+        "stepLabel": "گام",
+        "stepLane": "مسیر گام",
+        "addStep": "افزودن گام"
+      },
+      "source": {
+        "self_reported": "شما گفتید",
+        "email": "با ایمیل بررسی شد",
+        "calendar": "با تقویم بررسی شد"
+      },
+      "measure": {
+        "hint": "هر گام چند بار رخ می‌دهد و چقدر طول می‌کشد؟",
+        "needSteps": "ابتدا دست‌کم یک گام ترسیم کنید.",
+        "perWeek": "در هفته",
+        "duration": "مدت",
+        "unit": "واحد مدت",
+        "save": "ذخیره",
+        "clear": "پاک کردن"
+      },
+      "unit": {
+        "minutes": "دقیقه",
+        "hours": "ساعت",
+        "days": "روز"
+      },
+      "oneNumber": {
+        "hint": "گام‌های اندازه‌گیری‌شده، با طولانی‌ترین انتظار در ابتدا. شما تصمیم می‌گیرید کدام مهم است.",
+        "needMetrics": "ابتدا دست‌کم یک گام را اندازه‌گیری کنید.",
+        "rate": "{freq} در هفته، {dur} {unit}",
+        "title": "نامی برای این عدد بگذارید",
+        "returnKind": "آنچه پس می‌گیرید",
+        "target": "هدف",
+        "save": "ذخیره به‌عنوان عدد من"
+      },
+      "returnKind": {
+        "hours_back": "ساعت‌های بازگشتی",
+        "more_yeses": "پاسخ مثبت بیشتر",
+        "money_sooner": "پول سریع‌تر"
+      },
+      "label": {
+        "needNumber": "ابتدا عدد خود را انتخاب کنید؛ گام آن اینجا تفکیک می‌شود.",
+        "subStep": "زیرگام",
+        "addSubStep": "افزودن زیرگام",
+        "unlabel": "حذف برچسب",
+        "edgeCase": "مورد مرزی: {text}",
+        "byHandNote": "این‌ها نزد انسان‌ها می‌ماند. هوش مصنوعی هرگز روی آن‌ها اقدام نمی‌کند.",
+        "acknowledge": "فهرست دستی را خواندم",
+        "acknowledged": "فهرست دستی خوانده شد"
+      },
+      "labels": {
+        "ai": "هوش مصنوعی",
+        "automation": "خودکارسازی",
+        "by_hand": "دستی"
+      },
+      "gate": {
+        "missing": "هنوز کم است",
+        "title": "آماده ساخت هستید؟",
+        "unknown": "بررسی دیگر",
+        "state": {
+          "met": "برآورده",
+          "open": "باز",
+          "pending": "هنوز بررسی نشده"
+        },
+        "name": {
+          "G1": "نقشه معتبر است",
+          "G2": "هر مرحله اندازه‌گیری شده است",
+          "G3": "مرحلهٔ انتخاب‌شده تفکیک شده است",
+          "G4": "هر زیرمرحله و حالت مرزی برچسب دارد",
+          "G5": "فهرست «دستی» خوانده شد و مرحله‌های هوش مصنوعی با تأییدها پوشش داده شده‌اند",
+          "G6": "پیش‌نمایش خطایی ندارد",
+          "G7": "شما این طرح را تأیید کردید",
+          "converted": "گردش‌کارها ساخته شده‌اند"
+        }
+      },
+      "readOnly": "وضعیت این طرح: {status} است، بنابراین مرحله‌های ۱ تا ۴ فقط‌خواندنی هستند.",
+      "firstProcess": {
+        "title": "شرکت شما آماده است",
+        "body": "نخستین فرایند خود را برنامه‌ریزی کنید: آن را ترسیم کنید، اندازه بگیرید و یک عددی را که باید بهتر شود انتخاب کنید.",
+        "plan": "برنامه‌ریزی نخستین فرایند من",
+        "later": "بعداً"
+      },
+      "convert": {
+        "notReady": "ابتدا مرحله‌های ۱ تا ۴ را کامل کنید. بررسی‌های بالا نشان می‌دهند چه چیزی هنوز کم است.",
+        "previewTitle": "آنچه ساخته می‌شود (پیش‌نمایش، هنوز چیزی وجود ندارد)",
+        "createdTitle": "آنچه ساخته شد",
+        "counts": "گردش‌کارها: {workflows}. فرایندها: {processes}.",
+        "ownerLane": "مسئول: {lane}",
+        "errors": "خطاهایی که پیش از تأیید باید رفع شوند",
+        "warnings": "هشدارها",
+        "documented": "به‌صورت متن راهنما نگه داشته شد، ساخته نشد:",
+        "failedProposals": "ثبت {count} پیشنهاد خط هوش مصنوعی ممکن نشد. برای ثبت آن‌ها دوباره تلاش کنید.",
+        "turnOnNotAvailable": "روشن کردن گردش‌کارها هنوز در دسترس نیست: تا آن زمان چیزی آن‌ها را اجرا نمی‌کند.",
+        "openWorkflows": "باز کردن گردش‌کارها",
+        "unavailable": "این کار در دسترس نیست: برنامه‌ریز گردش‌کار برای فضای کاری شما خاموش است یا طرح دیگر وجود ندارد.",
+        "blocked": "هنوز آماده نیست. بررسی‌های بالا نشان می‌دهند چه چیزی کم است.",
+        "approvedBy": "تأییدشده توسط {by} در {at}.",
+        "preview": "پیش‌نمایش آنچه ساخته می‌شود",
+        "previewAgain": "تازه‌سازی پیش‌نمایش",
+        "approve": "تأیید",
+        "create": "ساخت گردش‌کارها",
+        "retry": "تلاش دوبارهٔ پیشنهادهای خط هوش مصنوعی",
+        "approveTitle": "این طرح تأیید شود؟",
+        "approveMessage": "شما پیش‌نمایش نمایش‌داده‌شده را تأیید می‌کنید. هر ویرایش بعدی طرح این تأیید را پاک می‌کند.",
+        "previewFailed": "ساخت پیش‌نمایش ممکن نشد.",
+        "approveFailed": "تأیید طرح ممکن نشد.",
+        "convertFailed": "ساخت گردش‌کارها ممکن نشد.",
+        "retryFailed": "تلاش دوبارهٔ پیشنهادهای خط هوش مصنوعی ممکن نشد."
       }
     }
   },

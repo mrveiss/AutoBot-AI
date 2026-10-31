@@ -12,6 +12,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useSecretsAuditApi } from '@/composables/useSecretsAuditApi'
 import { createLogger } from '@/utils/debugUtils'
+import { auditTimestampToDate } from '@/types/audit'
 
 const logger = createLogger('SecretAuditLog')
 const { t } = useI18n()
@@ -35,7 +36,7 @@ interface DisplayAuditEntry {
   userId: string
   username: string
   timestamp: Date
-  metadata?: Record<string, unknown>
+  details: Record<string, unknown>
   rawOperation: string
 }
 
@@ -93,29 +94,31 @@ const loadAuditLogs = async () => {
 const transformedEntries = computed((): DisplayAuditEntry[] => {
   return auditApi.entries.value
     .filter(entry => {
-      // Only include secret-related operations
-      return entry.operation && entry.operation.startsWith('secrets.')
+      // The backend writes `secret.<verb>` (api/secrets_audit.py SECRET_OPERATIONS)
+      return entry.operation && entry.operation.startsWith('secret.')
     })
     .map(entry => {
-      // Extract action from operation (e.g., 'secrets.access' -> 'access')
+      // Extract action from operation (e.g., 'secret.access' -> 'access')
       const action = (entry.operation?.split('.')[1] || 'access') as SecretAction
 
-      // Extract secret name and ID from metadata or resource
-      const secretName = (entry.metadata?.secret_name as string) || 'Unknown Secret'
-      const secretId = (entry.metadata?.secret_id as string) || entry.resource || 'unknown'
+      // The name travels in `details` (create only); `resource` is a one-way
+      // hash of the id, never the id, so it is only a correlator.
+      const details = entry.details || {}
+      const secretName = (details.name as string) || entry.resource || t('common.unknown')
+      const secretId = entry.resource || t('common.unknown')
 
-      // Extract username from user_id or metadata
-      const username = (entry.metadata?.username as string) || entry.user_id || 'Unknown'
+      // The backend sends a user id, never a username
+      const username = entry.user_id || t('common.unknown')
 
       return {
         id: entry.id,
         secretId,
         secretName,
         action,
-        userId: entry.user_id || 'unknown',
+        userId: entry.user_id || t('common.unknown'),
         username,
-        timestamp: new Date(entry.timestamp),
-        metadata: entry.metadata || {},
+        timestamp: auditTimestampToDate(entry.timestamp),
+        details,
         rawOperation: entry.operation
       }
     })
@@ -326,10 +329,10 @@ const prevPage = async () => {
             </div>
 
             <!-- Metadata -->
-            <div v-if="entry.metadata && Object.keys(entry.metadata).length > 0" class="text-xs text-autobot-text-muted mt-1">
+            <div v-if="Object.keys(entry.details).length > 0" class="text-xs text-autobot-text-muted mt-1">
               <details class="cursor-pointer">
                 <summary class="hover:text-autobot-text-muted">{{ $t('secrets.auditLog.details') }}</summary>
-                <pre class="mt-1 p-2 bg-autobot-bg-secondary rounded text-xs overflow-x-auto">{{ JSON.stringify(entry.metadata, null, 2) }}</pre>
+                <pre class="mt-1 p-2 bg-autobot-bg-secondary rounded text-xs overflow-x-auto">{{ JSON.stringify(entry.details, null, 2) }}</pre>
               </details>
             </div>
           </div>

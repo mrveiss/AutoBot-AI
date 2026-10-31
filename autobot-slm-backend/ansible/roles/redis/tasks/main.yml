@@ -264,11 +264,13 @@
     {{ redis_cli_path | default('/usr/bin/redis-cli') }}
     -h 127.0.0.1 -p {{ redis_port }}
     {% if redis_username is defined and redis_username %}--user {{ redis_username }}{% endif %}
-    {% if redis_client_password is defined and redis_client_password %}-a {{ redis_client_password }}{% endif %}
     ping
   register: redis_ping
   changed_when: false
-  no_log: "{{ redis_client_password is defined and redis_client_password | default(false) | bool }}"
+  # #19846: REDISCLI_AUTH, not -a, and an unconditional no_log: the old condition cast the
+  # password to bool, which is false for any real password, so the task logged it.
+  environment: "{{ {'REDISCLI_AUTH': redis_client_password} if (redis_client_password | default('', true)) else {} }}"
+  no_log: true
   retries: 60
   delay: 5
   until: redis_ping is succeeded

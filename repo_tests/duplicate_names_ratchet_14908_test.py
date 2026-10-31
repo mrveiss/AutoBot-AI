@@ -40,11 +40,23 @@ _MODULE_STMT = re.compile(r"\b(?:import|export)\b[^;'\"]*?\bfrom\s*['\"]([^'\"]+
 _KIT_SPEC = re.compile(r"^@autobot/ui(/|$)")
 _SKIPPED_DIRS = {"node_modules", "dist"}
 
-# Measured on e71921c5fe: 28 type names declared in both apps (SystemHealthStatus is one of them
-# until the SLM's useAutobotApi.ts, held by an open PR, renames its probe vocabulary), 2 declared
-# in an app and the kit (RiskTier, ServiceHealth, the two documented in the sibling guard), 1 util
-# filename implemented twice (ApiClient.ts).
-PINS = {"type_names_in_both_apps": 28, "type_names_in_app_and_kit": 2, "util_filenames_in_both_apps": 1}
+# Measured on e71921c5fe: 28 type names declared in both apps, 2 declared in an app and the kit
+# (RiskTier, ServiceHealth, the two documented in the sibling guard), 1 util filename implemented
+# twice (ApiClient.ts). #19910 resolved 14 both-apps names by renaming the one that is a different
+# concept, #14908 moved the ApiClient options type into the kit (13 left), and #19910 then moved the
+# agent-ledger rows and the permission rule into the kit (one declaration, both apps import it) and
+# renamed the different-concept names (Agent, CacheStats, WebResearchSettings, the plugin audit row,
+# the TLS upload body). 2 left, each stated in TYPE_EXCEPTIONS with its reason.
+PINS = {"type_names_in_both_apps": 1, "type_names_in_app_and_kit": 2, "util_filenames_in_both_apps": 1}
+
+# Stated exceptions: a type name declared in both apps until the audit-entry shape is fixed once.
+TYPE_EXCEPTIONS = {
+    "AuditQueryResponse": (
+        "one backend envelope (`AuditQueryResponse`, entries are untyped dicts so no generated row type exists); the "
+        "main copy (types/audit.ts) is typed on the main `AuditEntry` (timestamp string, error_message, user_agent), "
+        "which the audit dashboard components read; it moves with AuditLogEntry once that row has one shape"
+    ),
+}
 
 # Stated exceptions: a util filename implemented in both apps until its own PR lands.
 UTIL_EXCEPTIONS = {
@@ -240,6 +252,14 @@ def test_every_duplicated_util_filename_is_a_stated_exception() -> None:
         f"{sorted(UTIL_EXCEPTIONS)} (#14908)"
     )
     assert all(UTIL_EXCEPTIONS.values()), "an exception needs its reason"
+
+
+def test_every_duplicated_type_name_is_a_stated_exception() -> None:
+    both = _measure()[0]
+    assert sorted(both) == sorted(
+        TYPE_EXCEPTIONS
+    ), f"type names declared in both apps {both} differ from the stated exceptions {sorted(TYPE_EXCEPTIONS)} (#19910)"
+    assert all(TYPE_EXCEPTIONS.values()), "an exception needs its reason"
 
 
 def test_the_pins_were_not_raised_against_the_base() -> None:

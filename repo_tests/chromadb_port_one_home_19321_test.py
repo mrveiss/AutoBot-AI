@@ -31,6 +31,7 @@ from pathlib import Path
 
 import yaml
 from repo_tests._paths import repo_root
+from repo_tests._pinned_sweep import masked
 from repo_tests._reach import declare
 
 from autobot_shared.ssot_config import PortConfig
@@ -103,24 +104,6 @@ def named_definitions(text: str) -> list[int]:
     return out
 
 
-def masked(text: str, pattern: str) -> str:
-    """*text* with each capture of *pattern* overwritten by ``_``: the pinned sites, and only them.
-
-    The capture, not the whole match, so a definition inside a multi-line pin's context is still
-    swept, and every line keeps its length and number.
-    """
-
-    def _blank(m: re.Match[str]) -> str:
-        out, last = [], m.start()
-        for group in range(1, (m.re.groups or 0) + 1):
-            if m.start(group) >= 0:
-                out += [text[last : m.start(group)], "_" * (m.end(group) - m.start(group))]
-                last = m.end(group)
-        return "".join(out) + text[last : m.end()]
-
-    return re.sub(pattern, _blank, text, flags=re.M)
-
-
 def unrecorded_definitions(texts: dict[str, str]) -> list[str]:
     """``path: values`` for each named ChromaDB port definition outside the record."""
     found = []
@@ -149,7 +132,7 @@ def _swept(root: Path) -> list[str]:
 SCAN = declare(
     "chromadb-port-one-home-scan",
     discover=_swept,
-    floor=6587,  # mid-window: population 6671, window (6512, 6662)
+    floor=6657,  # mid-window: population 6741, window (6582, 6732)
     growth=150,
     skips=9,  # tracked binaries (images, icons, executables) that do not decode as UTF-8
     what="tracked non-doc, non-test files swept for a named ChromaDB port definition",

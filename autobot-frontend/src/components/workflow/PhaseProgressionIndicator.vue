@@ -435,7 +435,7 @@ function formatStatus(status: string): string {
   align-items: center;
   gap: var(--spacing-2);
   padding: var(--spacing-2) var(--spacing-4);
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: var(--text-on-error);
   border: none;
   border-radius: var(--radius-md);
@@ -458,7 +458,7 @@ function formatStatus(status: string): string {
 }
 
 .no-data-content .icon {
-  font-size: var(--text-3xl);
+  width: var(--text-3xl); height: var(--text-3xl);
   color: var(--color-info);
 }
 
@@ -611,7 +611,7 @@ function formatStatus(status: string): string {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10;
+  z-index: var(--z-10);
 }
 
 .loading-spinner {
@@ -624,7 +624,7 @@ function formatStatus(status: string): string {
 }
 
 .loading-spinner .icon {
-  font-size: var(--text-3xl);
+  width: var(--text-3xl); height: var(--text-3xl);
 }
 
 @media (max-width: 640px) {

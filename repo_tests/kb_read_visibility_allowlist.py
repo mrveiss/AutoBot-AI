@@ -201,6 +201,20 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "last_accessed before it reaches the response -- fact content never leaves (#16665)"
     ),
     (
+        "autobot-backend/knowledge/backup_embeddings.py",
+        "fetch_backup_embeddings",
+    ): (
+        "NOT_USER_FACING: adds only the vector and its model name to facts the backup and export "
+        "serialisers already read through read_every_fact; no document or other metadata is kept (#19647)"
+    ),
+    (
+        "autobot-backend/knowledge/backup_embeddings.py",
+        "restore_backup_embedding",
+    ): (
+        "NOT_USER_FACING: a restore asking whether the fact already has a vector; reads ids only, "
+        "and nothing reaches a chat or prompt (#19647)"
+    ),
+    (
         "autobot-backend/knowledge/quarantine.py",
         "read_every_fact",
     ): (
@@ -213,6 +227,9 @@ ALLOWLIST: dict[tuple[str, str], str] = {
         "autobot-backend/knowledge/vector_search_engine.py",
         "_CPUBackend.search",
     ): "IMPL: the KB's own CPU backend calling its vector primitive",
+    ("autobot-backend/knowledge_sync_replacement.py", "_delete_one"): (
+        "NOT_USER_FACING: the sync reads a fact it is replacing, to check it is untouched before deleting it"
+    ),
     ("autobot-backend/mcp_server/autobot_server.py", "AutoBotMCPServer._kb_get_document"): _MCP_NON_PRIVATE,
     ("autobot-backend/mcp_server/autobot_server.py", "AutoBotMCPServer._kb_search"): _MCP_NON_PRIVATE,
     ("autobot-backend/npu_semantic_search.py", "NPUSemanticSearch._handle_search_error"): _T2,

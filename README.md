@@ -115,7 +115,8 @@ in **SLM Admin > Settings > LLM** (`http://localhost/slm/`, then Settings, then 
   the same file -- the SLM admin password (the installer prints it when it generated it). The main app is served by the
   node you assign the frontend role to.
 - Until onboarding is complete, the main app sends a newly logged-in user to its
-  `/onboarding` page.
+  `/onboarding` page, which has three steps: **System Check**, **Choose Preset**, and
+  **Review & Apply**.
 
 → Full install options and the two-phase deployment flow: [INSTALL.md](INSTALL.md).
 
@@ -487,7 +488,7 @@ the support contact path live in **[FUNDING.md](FUNDING.md)**.
 ### Under Consideration
 - Cloud deployment templates
 - Managed hosting option
-- Enterprise features (SAML)
+- SAML Single Logout
 
 ---
 

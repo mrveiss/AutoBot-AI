@@ -24,7 +24,7 @@ add and configure fleet nodes (which may all be the same machine).
 | 1 — Pre-flight | Checks root, systemd, Debian/Ubuntu, disk space (5 GB), memory (2 GB), internet |
 | 2 — System Setup | Installs Python 3.14, Node 20, Ansible, nginx, git, openssl, rsync; creates `autobot` user with passwordless sudo; generates ED25519 SSH key at `/home/autobot/.ssh/autobot_key`; copies to `/etc/autobot/ssh/` |
 | 3 — Code Deployment | Clones `main` to `/opt/autobot/code_source`; rsyncs `autobot-slm-backend`, `autobot-slm-frontend`, `autobot_shared`, `autobot-infrastructure` to `/opt/autobot/` |
-| 4 — Ansible Deployment | Generates `inventory/localhost.yml`; writes `/etc/autobot/slm-secrets.env` (secret key, encryption key, admin password, server IP, network subnet/gateway); runs `deploy-slm-manager.yml --skip-tags seed,provision` |
+| 4 — Ansible Deployment | Generates `inventory/localhost.yml`; writes `/etc/autobot/slm-secrets.env` (secret key, encryption key, admin password, server IP, network subnet/gateway); runs `deploy-slm-manager.yml --skip-tags seed` |
 | 5 — Service Verification | Waits up to 7 minutes for `autobot-slm-backend` to pass `GET /api/health`; verifies PostgreSQL and nginx |
 | 6 — Register Local Node | Authenticates with SLM API; registers the machine as node `00-SLM-Manager` with roles `slm-backend`, `slm-frontend`, `slm-database`, `slm-monitoring`; assigns code source |
 | 7 — Finalize | Writes install marker at `/opt/autobot/.autobot-installed`; saves credentials to `/root/autobot-credentials.txt` |
@@ -94,7 +94,7 @@ sudo ./install.sh
 sudo ./install.sh --unattended
 
 # Custom admin password + specific branch
-sudo ./install.sh --admin-pass=MySecurePass --branch=main
+sudo ./install.sh --admin-pass-file=/path/to/password-file --branch=main
 
 # Multi-interface host: specify which IP to bind
 sudo ./install.sh --ip=192.168.1.100

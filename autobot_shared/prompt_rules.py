@@ -14,6 +14,7 @@ Issue #15651: the untrusted-text sanitize/frame pair, moved here from
 ``orchestration/orchestrator_prompts.py`` once a third caller needed it.
 """
 
+import re
 from typing import Any, List
 
 LEDGER_VS_EXECUTOR_RULE = """
@@ -45,6 +46,40 @@ def sanitize_injected(text: Any, limit: int) -> str:
     """
     collapsed = " ".join(str(text).split()).replace("<<<", "").replace(">>>", "")
     return collapsed[:limit]
+
+
+#: Characters a reader skips over: zero-width space/joiners, word joiner, BOM.
+_INVISIBLE_CHARS = "\u200b-\u200d\u2060\ufeff"
+#: Possessive (``*+``): a run is consumed once and never re-split, so matching stays linear in the input.
+_INVISIBLE = f"[{_INVISIBLE_CHARS}]*+"
+_GAP = rf"[\s{_INVISIBLE_CHARS}]*+"
+
+
+def _spelled(word: str) -> str:
+    """``word`` as a pattern that tolerates invisible characters between its letters."""
+    return _INVISIBLE.join(word)
+
+
+#: ``<<<`` (ASCII or fullwidth ``<``, invisibles between), then whitespace incl. newlines or invisibles, then
+#: ``BEGIN_`` / ``END_`` in any case. Only the ``<<<`` is matched; the lookahead leaves the rest untouched.
+_FRAME_MARKER_RE = re.compile(
+    rf"[<\uff1c](?:{_INVISIBLE}[<\uff1c]){{2}}(?={_GAP}(?:{_spelled('BEGIN')}|{_spelled('END')}){_INVISIBLE}_)",
+    re.IGNORECASE,
+)
+
+
+def neutralize_frame_markers(text: str) -> str:
+    """Defuse the ``<<<BEGIN_`` / ``<<<END_`` markers of :func:`frame_untrusted_block`; keep everything else.
+
+    Variant spellings a model may still read as a delimiter are caught too (#20062): any case, whitespace or a
+    newline after the ``<<<``, invisible characters inside, and fullwidth ``<``. This is defence in depth, so it also
+    rewrites harmless lookalikes such as ``cat <<< END_OF_FILE`` or ``x <<< end_time``.
+
+    For untrusted text whose shape matters (code, logs): newlines, indentation and other ``<<<`` / ``>>>``
+    (heredocs, REPL prompts) survive, while the text cannot forge a closing delimiter. Unlike
+    :func:`sanitize_injected` it neither flattens whitespace nor truncates; callers cap size themselves.
+    """
+    return _FRAME_MARKER_RE.sub("&lt;&lt;&lt;", text)
 
 
 def frame_untrusted_block(label: str, warning_lines: List[str], body_lines: List[str]) -> str:

@@ -81,15 +81,16 @@ ISSUE_17822_ENTRIES = tuple(
         (Path(__file__).parent / "fixtures" / "issue_17822_migration_gate_entries.json").read_text(encoding="utf-8")
     )
 )
-# 21 = the eleven #17822 entries plus `services/__init__.py`, `services/approval_gate_service.py` and
+# 24 = the eleven #17822 entries plus `services/__init__.py`, `services/approval_gate_service.py` and
 # `llc/services/workspace_lease.py` (#17996), `llc/services/company.py` + `company_ceo.py` (#15907's
 # concurrent-move test), `llc/services/authz.py` + `membership_service.py` (the move's authorization,
 # #19634), `llc/services/company_move_lock.py` (the move's row locks, #19593), `autobot_shared/db_errors.py`
 # (its deadlock SQLSTATE) and `llc/scheduler/run_status.py` (#19582's concurrent-claim test), which the
-# migration tests import.
+# migration tests import, `llc/services/membership_policy.py` (#19985's two-session membership-lock test), and
+# `llc/services/budget.py` + `llc/exceptions.py` (#20168's cost event foreign key test).
 assert (
-    len(ISSUE_17822_ENTRIES) == 21
-), "the pinned migration-gate set is 21 entries; an emptied fixture would pin nothing"
+    len(ISSUE_17822_ENTRIES) == 24
+), "the pinned migration-gate set is 24 entries; an emptied fixture would pin nothing"
 ISSUE_17822_WORKFLOW = "migration-gate"
 EVENTS = ("push", "pull_request", "merge_group", "schedule", "workflow_dispatch")
 MG_SHA = "merge-group-base-sha"  # a stand-in value; only its presence or absence is compared
@@ -160,6 +161,12 @@ ALLOWED_ADDITIONS = {
             f"{WORKFLOWS}/_changes.yml",
             f"{WORKFLOWS}/migration-gate.yml",
             f"{WORKFLOWS}/ai-security-review.yml",
+            # #19503: install_and_code_sync_modes_19503_test reads this shell sync by concrete literal.
+            "autobot-slm-frontend/scripts/sync-to-admin.sh",
+            # #19503: its rsync guard exempts wiki.yml by concrete literal.
+            f"{WORKFLOWS}/wiki.yml",
+            # #20067: cancel_gate_survives_transient_error_20067_test runs this action's step.
+            ".github/actions/cancel-run-on-cancelled-upstream/action.yml",
             # #19523: dependabot_root_coverage_19523_test reads dependabot.yml by concrete literal.
             ".github/dependabot.yml",
             # #19769: pr_conflict_gate_19769_test.py reads the conflict gate workflow.
@@ -171,6 +178,9 @@ ALLOWED_ADDITIONS = {
             "INSTALL.md",
             "docker-compose.yml",
             "docker/frontend/Dockerfile",
+            # #19817: guards sweep every tracked Dockerfile, under either naming.
+            "**/Dockerfile*",
+            "**/*.Dockerfile",
             # #18556: one_static_data_copy_18556_test.py reads the canonical static data files.
             "autobot-backend/config/permission_rules.yaml",
             "autobot-backend/static/error_messages.yaml",
@@ -218,6 +228,7 @@ ALLOWED_ADDITIONS = {
             f"{WORKFLOWS}/co-located-smoke.yml",
             # #17500, #18729: both guards read the secrets generator, so editing it must run the suite.
             "docker/generate-secrets.sh",
+            "docker/postgres/init-databases.sh",
             # #19178: user_docs_stay_consistent_19178_test.py reads docs/README.md.
             "docs/README.md",
             # #18266: social_preview_18266_test.py pins the rendered preview image.

@@ -56,7 +56,7 @@
           <div class="card-header">
             <span class="type-badge" :class="`type-${item.type}`">{{ formatType(item.type) }}</span>
             <span class="card-meta">{{ $t('llc.approvals.requestedBy', { id: item.requested_by_agent_id }) }}</span>
-            <span class="card-meta">{{ formatDate(item.created_at) }}</span>
+            <span class="card-meta">{{ formatDateTime(item.created_at) || '—' }}</span>
           </div>
 
           <div class="payload-section">
@@ -67,27 +67,24 @@
           </div>
 
           <div class="card-actions">
-            <button
-              class="btn-approve"
+            <BaseButton variant="success" size="sm"
               :disabled="processing.has(item.id)"
               @click="decide(item.id, 'approved')"
             >
               {{ $t('llc.approvals.approve') }}
-            </button>
-            <button
-              class="btn-reject"
+            </BaseButton>
+            <BaseButton variant="error" size="sm"
               :disabled="processing.has(item.id)"
               @click="openDecisionNote(item.id, 'rejected')"
             >
               {{ $t('llc.approvals.reject') }}
-            </button>
-            <button
-              class="btn-changes"
+            </BaseButton>
+            <BaseButton variant="warning" size="sm"
               :disabled="processing.has(item.id)"
               @click="openDecisionNote(item.id, 'changes_requested')"
             >
               {{ $t('llc.approvals.requestChanges') }}
-            </button>
+            </BaseButton>
           </div>
 
           <div v-if="noteTarget?.id === item.id" class="note-form">
@@ -98,14 +95,13 @@
               rows="3"
             />
             <div class="note-actions">
-              <button class="btn-secondary" @click="noteTarget = null">{{ $t('llc.approvals.cancel') }}</button>
-              <button
-                class="btn-primary"
+              <BaseButton variant="secondary" @click="noteTarget = null">{{ $t('llc.approvals.cancel') }}</BaseButton>
+              <BaseButton
                 :disabled="!decisionNote.trim() || processing.has(item.id)"
                 @click="submitWithNote(item.id)"
               >
                 {{ $t('llc.approvals.confirm') }}
-              </button>
+              </BaseButton>
             </div>
           </div>
         </div>
@@ -124,7 +120,7 @@
             <span class="type-badge" :class="`type-${item.type}`">{{ formatType(item.type) }}</span>
             <span class="status-badge" :class="`status-${item.status}`">{{ formatType(item.status) }}</span>
             <span class="card-meta">{{ $t('llc.approvals.decidedBy', { id: item.decided_by_agent_id ?? '—' }) }}</span>
-            <span class="card-meta">{{ formatDate(item.decided_at ?? item.updated_at) }}</span>
+            <span class="card-meta">{{ formatDateTime(item.decided_at ?? item.updated_at) || '—' }}</span>
           </div>
           <div class="payload-section">
             <button class="toggle-payload" @click="togglePayload(item.id)">
@@ -139,6 +135,7 @@
 </template>
 
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useApiClient } from '@/plugins/api'
@@ -203,10 +200,6 @@ const filteredHistory = computed(() => {
 
 function formatType(val: string) {
   return val.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
-}
-
-function formatDate(iso: string | null) {
-  return formatDateTime(iso) || '—'
 }
 
 function formatJson(payload: Record<string, unknown>) {
@@ -321,7 +314,7 @@ onUnmounted(() => {
   min-width: 1.5rem;
   height: 1.5rem;
   padding: 0 0.4rem;
-  background: var(--color-error);
+  background: var(--color-error-solid);
   color: white;
   font-size: 0.75rem;
   font-weight: 700;
@@ -461,29 +454,6 @@ onUnmounted(() => {
   gap: 0.5rem;
 }
 
-.btn-approve,
-.btn-reject,
-.btn-changes {
-  padding: 0.4rem 0.875rem;
-  border: none;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-
-.btn-approve { background: var(--color-success); color: white; }
-.btn-reject { background: var(--color-error); color: white; }
-.btn-changes { background: var(--color-warning); color: white; }
-
-.btn-approve:disabled,
-.btn-reject:disabled,
-.btn-changes:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .note-form {
   display: flex;
   flex-direction: column;
@@ -506,32 +476,5 @@ onUnmounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
-}
-
-.btn-primary {
-  padding: 0.4rem 1rem;
-  background: var(--color-primary);
-  color: white;
-  border: none;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
-}
-
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-secondary {
-  padding: 0.4rem 1rem;
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  border: 1px solid var(--border-default);
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
-  font-weight: 500;
-  cursor: pointer;
 }
 </style>

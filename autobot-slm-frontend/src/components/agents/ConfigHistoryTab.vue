@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseButton } from '@autobot/ui'
 // AutoBot - AI-Powered Automation Platform
 // Copyright (c) 2025 mrveiss
 // Author: mrveiss
@@ -15,6 +16,7 @@
 
 import { useI18n } from 'vue-i18n'
 import { ref, watch } from 'vue'
+import { createDateFormatter } from '@/utils/formatHelpers'
 import {
   useAutobotApi,
   autobotApiErrorMessage,
@@ -82,10 +84,7 @@ function sourceBadgeClass(source: string): string {
   return source === 'rollback' ? 'badge-orange' : source === 'api' ? 'badge-blue' : 'badge-gray'
 }
 
-function formatTime(iso: string | null): string {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleString()
-}
+const formatTime = createDateFormatter({ emptyText: '—' })
 
 watch([entityType, entityId], () => {
   if (entityId.value) fetchRevisions()
@@ -121,9 +120,9 @@ watch([entityType, entityId], () => {
           <option v-for="e in systemEntities" :key="e" :value="e">{{ e }}</option>
         </select>
       </div>
-      <button class="btn-primary" @click="fetchRevisions" :disabled="!entityId">
+      <BaseButton @click="fetchRevisions" :disabled="!entityId">
         {{ $t('agents.configHistoryTab.loadHistory') }}
-      </button>
+      </BaseButton>
     </div>
 
     <div v-if="loading" class="loading">{{ $t('agents.configHistoryTab.loadingRevisions') }}</div>
@@ -157,25 +156,23 @@ watch([entityType, entityId], () => {
         <div class="diff-header">
           <h3>{{ $t('agents.configHistoryTab.revisionDetails') }}</h3>
           <div class="diff-actions">
-            <button
+            <BaseButton variant="warning" size="sm"
               v-if="!showRollbackConfirm"
-              class="btn-rollback"
               @click="showRollbackConfirm = true"
             >
               {{ $t('agents.configHistoryTab.rollbackToThis') }}
-            </button>
+            </BaseButton>
             <template v-else>
               <span class="confirm-text">{{ $t('agents.configHistoryTab.confirmRollback') }}</span>
-              <button
-                class="btn-confirm"
+              <BaseButton variant="error" size="sm"
                 :disabled="rollbackLoading"
                 @click="rollback(selectedRevision!.id)"
               >
                 {{ rollbackLoading ? $t('agents.configHistoryTab.rollingBack') : $t('agents.configHistoryTab.yesRollback') }}
-              </button>
-              <button class="btn-cancel" @click="showRollbackConfirm = false">
+              </BaseButton>
+              <BaseButton variant="secondary" size="sm" @click="showRollbackConfirm = false">
                 {{ $t('agents.configHistoryTab.cancel') }}
-              </button>
+              </BaseButton>
             </template>
           </div>
         </div>
@@ -209,9 +206,6 @@ watch([entityType, entityId], () => {
 .selector-group { display: flex; flex-direction: column; gap: var(--spacing-1); }
 .selector-group label { font-size: 13px; font-weight: 500; color: var(--text-secondary); }
 .selector-group select, .selector-group input { padding: var(--spacing-2) var(--spacing-3); border: 1px solid var(--slm-gray-300); border-radius: var(--radius-lg); font-size: var(--text-sm); min-width: 180px; }
-.btn-primary { background: var(--slm-indigo-500); color: white; border: none; padding: var(--spacing-2) var(--spacing-4); border-radius: var(--radius-md); font-size: var(--text-sm); font-weight: 500; cursor: pointer; }
-.btn-primary:hover { background: var(--slm-indigo-600); }
-.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 .revisions-layout { display: grid; grid-template-columns: 400px 1fr; gap: var(--spacing-6); }
 .revisions-list { background: white; border-radius: var(--radius-xl); box-shadow: 0 1px 3px rgba(0,0,0,0.1); padding: var(--spacing-5); max-height: 700px; overflow-y: auto; }
 .revisions-list h3 { font-size: var(--text-lg); font-weight: 600; margin: 0 0 var(--spacing-4) 0; color: var(--text-primary); }
@@ -230,10 +224,6 @@ watch([entityType, entityId], () => {
 .diff-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: var(--spacing-4); }
 .diff-header h3 { font-size: var(--text-lg); font-weight: 600; margin: 0; color: var(--text-primary); }
 .diff-actions { display: flex; align-items: center; gap: var(--spacing-2); }
-.btn-rollback { background: var(--slm-amber-500); color: white; border: none; padding: 6px 14px; border-radius: var(--radius-md); font-size: 13px; font-weight: 500; cursor: pointer; }
-.btn-rollback:hover { background: var(--slm-amber-600); }
-.btn-confirm { background: var(--color-error-500); color: white; border: none; padding: 6px 14px; border-radius: var(--radius-md); font-size: 13px; font-weight: 500; cursor: pointer; }
-.btn-cancel { background: var(--slm-gray-200); color: var(--slm-gray-700); border: none; padding: 6px 14px; border-radius: var(--radius-md); font-size: 13px; cursor: pointer; }
 .confirm-text { font-size: 13px; color: var(--color-error-500); font-weight: 500; }
 .diff-meta { display: flex; gap: var(--spacing-5); flex-wrap: wrap; font-size: 13px; color: var(--text-secondary); margin-bottom: var(--spacing-4); padding-bottom: var(--spacing-3); border-bottom: 1px solid var(--slm-gray-200); }
 .diff-content { display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-4); }

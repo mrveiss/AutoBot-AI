@@ -17,12 +17,13 @@ import { useSlmApi } from '@/composables/useSlmApi'
 import type {
   RecentError,
   ErrorStatistics,
-  CategoryBreakdown,
+  ErrorCategoryShare,
   ComponentBreakdown,
 } from '@/types/api-responses'
 import { createLogger } from '@/utils/debugUtils'
 import { formatRelativeTime } from '@/utils/dateUtils'
-import { getTimezone } from '@/composables/useTimezone'
+import { getTimezoneOption } from '@/composables/useTimezone'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('ErrorMonitor')
 const api = useSlmApi()
@@ -39,7 +40,7 @@ const stats = ref<ErrorStatistics>({
   error_rate_per_hour: 0,
   trend: 'stable',
 })
-const categories = ref<CategoryBreakdown[]>([])
+const categories = ref<ErrorCategoryShare[]>([])
 const components = ref<ComponentBreakdown[]>([])
 const isLoading = ref(false)
 const selectedError = ref<RecentError | null>(null)
@@ -120,17 +121,10 @@ function getTrendColor(trend: string): string {
   }
 }
 
-function formatTimestamp(ts: string): string {
-  const date = new Date(ts)
-  const tz = getTimezone()
-  return date.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    ...(tz ? { timeZone: tz } : {}),
-  })
-}
+const formatTimestamp = createDateFormatter({
+  locale: 'en-US',
+  intl: () => ({ month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', ...getTimezoneOption() }),
+})
 
 
 

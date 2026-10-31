@@ -54,6 +54,7 @@ from autobot_shared import postgres_identity as _pg
 from autobot_shared.env_utils import env_int_clamped
 from autobot_shared.paths import install_base_dir, project_root
 from autobot_shared.secret_redaction import RedactedReprMixin
+from autobot_shared.ssot_company_os_flags import CompanyOsFeatureFlags
 from autobot_shared.ssot_llm_oauth_config import LlmOAuthConfig
 from autobot_shared.ssot_role_mirrors import (  # #19319: SSOT defaults an Ansible role mirrors
     FEATURE_ROUTERS_STRICT_DEFAULT,
@@ -185,7 +186,8 @@ class PortConfig(RedactedSettings):
     model_config = SettingsConfigDict(env_file=str(PROJECT_ROOT / ".env"), env_file_encoding="utf-8", extra="ignore")
 
     backend: int = Field(default=8001, alias="AUTOBOT_BACKEND_PORT")
-    frontend: int = Field(default=5173, alias="AUTOBOT_FRONTEND_PORT")
+    frontend: int = Field(default=5173, alias="AUTOBOT_FRONTEND_PORT")  # Vite dev server only (#19326)
+    frontend_http: int = Field(default=80, alias="AUTOBOT_FRONTEND_HTTP_PORT")  # nginx HTTP; HTTPS is tls (#19326)
     redis: int = Field(default=6379, alias="AUTOBOT_REDIS_PORT")
     ollama: int = Field(default=11434, alias="AUTOBOT_OLLAMA_PORT")
     vnc: int = Field(default=6080, alias="AUTOBOT_VNC_PORT")
@@ -1540,7 +1542,6 @@ class MiscConfig(RedactedSettings):
     coqui_model: str = Field(default="", alias="AUTOBOT_COQUI_MODEL")
     database_url: str = Field(default="", alias="AUTOBOT_DATABASE_URL")
     data_db: str = Field(default="", alias="AUTOBOT_DATA_DB")
-    db_host: str = Field(default="", alias="AUTOBOT_DB_HOST")
     db_path: str = Field(default="", alias="AUTOBOT_DB_PATH")
     default_agent_model: str = Field(default="", alias="AUTOBOT_DEFAULT_AGENT_MODEL")
     default_choice: str = Field(default="", alias="AUTOBOT_DEFAULT_CHOICE")
@@ -2065,7 +2066,7 @@ class MiscConfig(RedactedSettings):
     vnc_resolution: str = Field(default="", alias="VNC_RESOLUTION")
 
 
-class FeatureConfig(RedactedSettings):
+class FeatureConfig(RedactedSettings, CompanyOsFeatureFlags):
     """Feature flags configuration."""
 
     model_config = SettingsConfigDict(
@@ -2133,15 +2134,6 @@ class FeatureConfig(RedactedSettings):
     # ever run, so a company enabling the policy on an install where this is off
     # still costs nothing extra.
     cross_vendor_review_enabled: bool = Field(default=False, alias="AUTOBOT_LLC_CROSS_VENDOR_REVIEW_ENABLED")
-
-    # Issue #16950/#16974: enforce each Company OS agent's org-role tool bound at
-    # dispatch. Off by default -- copilot_local/copilot_subscription take no
-    # tool-permission flags today, so turning this on refuses every dispatch to
-    # those two adapters (codex_subscription is already a non-functional stub).
-    # Flips on once those adapters can actually enforce a bound, or the owner
-    # accepts the refusal; whether the underlying CLI even exposes such a flag
-    # is unknown and external to this repo.
-    org_role_bound_enabled: bool = Field(default=False, alias="AUTOBOT_FEATURE_ORG_ROLE_BOUND")
 
 
 class CostModelConfig(RedactedSettings):
@@ -2334,6 +2326,7 @@ class AutoBotConfig(RedactedSettings):
     environment: _Env = _profile.ENVIRONMENT_DEFAULT  # #19315: one normalisation, deployment_profile.env_field
     debug: bool = Field(default=_profile.DEBUG_DEFAULT, alias="AUTOBOT_DEBUG")
     log_level: str = Field(default="INFO", alias="AUTOBOT_LOG_LEVEL")
+    frontend_served_by: str = Field(default="", alias="AUTOBOT_FRONTEND_SERVED_BY")  # #19326: vite|nginx, no default
 
     # GH#8995: Data-hygiene TTL settings (retention OFF by default — 0 means disabled)
     # Safe defaults: nothing is deleted unless an admin explicitly sets a period.
@@ -2441,8 +2434,7 @@ class AutoBotConfig(RedactedSettings):
             return PortConfig()
         return v
 
-    # Computed URL properties for backward compatibility
-    # Issue #164: Support HTTPS when TLS is enabled
+    # Computed URL properties for backward compatibility; HTTPS when TLS is enabled (Issue #164)
     @property
     def backend_url(self) -> str:
         """Get the full backend API URL (HTTP or HTTPS based on TLS config)."""
@@ -2452,10 +2444,8 @@ class AutoBotConfig(RedactedSettings):
 
     @property
     def frontend_url(self) -> str:
-        """Get the full frontend URL (HTTP or HTTPS based on TLS config)."""
-        if self.tls.frontend_tls_enabled:
-            return f"https://{self.vm.frontend}:{self.tls.frontend_tls_port}"
-        return f"http://{self.vm.frontend}:{self.port.frontend}"
+        """The frontend's served URL, by what serves it (#19326); unset or unknown ``frontend_served_by`` raises."""
+        return _profile.frontend_url(self)
 
     @property
     def redis_url(self) -> str:
@@ -2594,20 +2584,20 @@ class AutoBotConfig(RedactedSettings):
             Service URL or None if not found
         """
         url_map = {
-            "backend": self.backend_url,
-            "frontend": self.frontend_url,
-            "redis": self.redis_url,
-            "ollama": self.ollama_url,
-            "websocket": self.websocket_url,
-            "aistack": self.aistack_url,
-            "ai_stack": self.aistack_url,
-            "npu": self.npu_worker_url,
-            "npu_worker": self.npu_worker_url,
-            "browser": self.browser_service_url,
-            "vnc": self.vnc_url,
-            "slm": self.slm_url,  # Issue #768
+            "backend": "backend_url",
+            "frontend": "frontend_url",
+            "redis": "redis_url",
+            "ollama": "ollama_url",
+            "websocket": "websocket_url",
+            "aistack": "aistack_url",
+            "ai_stack": "aistack_url",
+            "npu": "npu_worker_url",
+            "npu_worker": "npu_worker_url",
+            "browser": "browser_service_url",
+            "vnc": "vnc_url",
+            "slm": "slm_url",  # Issue #768
         }
-        return url_map.get(service_name.lower())
+        return getattr(self, url_map[key]) if (key := service_name.lower()) in url_map else None
 
     def get_vm_ip(self, vm_name: str) -> str | None:
         """
