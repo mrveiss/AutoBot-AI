@@ -262,6 +262,13 @@
     },
     "input": {
       "retryUpload": "Reintentar subir",
+      "uploadError": {
+        "http": "Error al subir el archivo (estado {status})",
+        "invalidResponse": "El servidor envió una respuesta ilegible",
+        "network": "Error de red durante la subida",
+        "cancelled": "Subida cancelada",
+        "unknown": "Error al subir el archivo"
+      },
       "filesAttached": "Archivos {count} adjuntos",
       "clearAll": "Borrar todo",
       "removeFile": "Eliminar archivo",

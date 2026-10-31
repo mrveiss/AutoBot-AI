@@ -262,6 +262,13 @@
     },
     "input": {
       "retryUpload": "Spróbuj przesłać ponownie",
+      "uploadError": {
+        "http": "Przesyłanie nie powiodło się (status {status})",
+        "invalidResponse": "Serwer wysłał nieczytelną odpowiedź",
+        "network": "Błąd sieci podczas przesyłania",
+        "cancelled": "Przesyłanie anulowano",
+        "unknown": "Przesyłanie nie powiodło się"
+      },
       "filesAttached": "Załączone pliki {count}",
       "clearAll": "Wyczyść wszystko",
       "removeFile": "Usuń plik",

@@ -262,6 +262,13 @@
     },
     "input": {
       "retryUpload": "Réessayez de télécharger",
+      "uploadError": {
+        "http": "Échec du téléversement (statut {status})",
+        "invalidResponse": "Le serveur a envoyé une réponse illisible",
+        "network": "Erreur réseau pendant le téléversement",
+        "cancelled": "Téléversement annulé",
+        "unknown": "Échec du téléversement"
+      },
       "filesAttached": "Fichiers {count} joints",
       "clearAll": "Tout effacer",
       "removeFile": "Supprimer le fichier",
