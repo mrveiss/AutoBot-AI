@@ -32,6 +32,7 @@ import type { ProcessNodeSource, ToolNodeSource } from '@/composables/llc/orgCan
 import { WORKFLOW_QUERY_KEY } from '@/composables/workflow/workflowDeepLink'
 import { canvasNodeIdFromQuery } from '@/composables/workflow/canvasNodeDeepLink'
 import OrgPeopleList from '@/components/llc/OrgPeopleList.vue'
+import WorkflowPlannerPanel from '@/components/llc/workflowPlanner/WorkflowPlannerPanel.vue'
 import CanvasNodeSidebar from '@/components/llc/CanvasNodeSidebar.vue'
 import {
   buildOrgPeople,
@@ -87,14 +88,11 @@ const ALL_UNITS_TAB = 'all'
 // GH#13938: the People list is a third render of the company — the only one
 // that shows contacts, which are not hierarchy members and so appear in
 // neither the tree nor the canvas.
-type OrgViewMode = 'tree' | 'canvas' | 'people'
-const VIEW_MODES: readonly OrgViewMode[] = ['tree', 'canvas', 'people'] as const
-const VIEW_MODE_LABEL_KEY: Record<OrgViewMode, string> = {
-  tree: 'llc.orgChart.viewTree',
-  canvas: 'llc.orgChart.viewCanvas',
-  people: 'llc.orgChart.viewPeople',
-}
-const viewMode = ref<OrgViewMode>('tree')
+// #19938: the Workflow Planner is a fourth mode — no new nav entry.
+type OrgViewMode = 'tree' | 'canvas' | 'people' | 'planner'
+const VIEW_MODES: readonly OrgViewMode[] = ['tree', 'canvas', 'people', 'planner'] as const
+const VIEW_MODE_LABEL_KEY: Record<OrgViewMode, string> = { tree: 'llc.orgChart.viewTree', canvas: 'llc.orgChart.viewCanvas', people: 'llc.orgChart.viewPeople', planner: 'llc.orgChart.viewPlanner' }
+const viewMode = ref<OrgViewMode>(route?.query?.view === 'planner' ? 'planner' : 'tree')
 const activeTabId = ref<string>(ALL_UNITS_TAB)
 
 // GH#13938: contacts and teams are fetched only when the People list is first
@@ -1125,12 +1123,14 @@ onMounted(() => {
       />
     </div>
 
-    <div v-if="error" class="rounded-lg bg-autobot-error-bg border border-autobot-error p-4 text-autobot-error text-sm mb-4">
+    <div v-if="error && viewMode !== 'planner'" class="rounded-lg bg-autobot-error-bg border border-autobot-error p-4 text-autobot-error text-sm mb-4">
       {{ error }}
       <button class="ml-4 underline" @click="fetchTree">{{ t('llc.orgChart.retry') }}</button>
     </div>
 
-    <div v-if="isLoading" class="text-center py-12 text-autobot-text-muted">{{ t('llc.orgChart.loading') }}</div>
+    <WorkflowPlannerPanel v-if="viewMode === 'planner'" />
+
+    <div v-else-if="isLoading" class="text-center py-12 text-autobot-text-muted">{{ t('llc.orgChart.loading') }}</div>
 
     <div
       v-else-if="companyUnresolved"

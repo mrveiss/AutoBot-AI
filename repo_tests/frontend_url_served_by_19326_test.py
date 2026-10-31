@@ -29,6 +29,7 @@ from repo_tests._paths import repo_root
 from repo_tests._reach import declare
 
 from autobot_shared.deployment_profile import FRONTEND_SERVED_BY_VALUES, FrontendServedByError, try_frontend_url
+from autobot_shared.network_constants import ServiceURLs
 from autobot_shared.ssot_config import AutoBotConfig, PortConfig
 from autobot_shared.ssot_tls import TLSConfig
 from tools.lint import check_getenv_ssot_drift  # noqa: F401 -- puts tools/lint on sys.path for the sibling import
@@ -68,7 +69,13 @@ PINNED: tuple[Pin, ...] = (
     Pin("dev", f"{_ANSIBLE}/deploy-hybrid.sh", r"^AUTOBOT_FRONTEND_PORT=(\d+)$", 1),
     Pin("http", ".env.example", r"^AUTOBOT_FRONTEND_HTTP_PORT=(\d+)$", 1),
     Pin("http", _SHELL_SSOT, r"AUTOBOT_FRONTEND_HTTP_PORT:=(\d+)", 1),
-    Pin("http", f"{_ANSIBLE}/deploy-native.sh", r"^AUTOBOT_FRONTEND_HTTP_PORT=(\d+)$", 1),
+    Pin("http", f"{_ANSIBLE}/roles/backend/defaults/main.yml", r"^frontend_http_port: (\d+)$", 1),
+    Pin("http", f"{_ANSIBLE}/roles/frontend/defaults/main.yml", r"^nginx_http_port: (\d+)$", 1),
+    Pin("http", f"{_ANSIBLE}/roles/frontend/vars/main.yml", r"^nginx_port: (\d+)$", 1),
+    Pin("http", f"{_ANSIBLE}/setup-user-frontend.yml", r"^    nginx_http_port: (\d+)$", 1),
+    Pin("tls", f"{_ANSIBLE}/roles/frontend/vars/main.yml", r"^nginx_ssl_port: (\d+)$", 1),
+    Pin("http", f"{_ANSIBLE}/inventory/production.yml", r"^\s+nginx_port: (\d+)$", 1),
+    Pin("tls", f"{_ANSIBLE}/inventory/production.yml", r"^\s+nginx_ssl_port: (\d+)$", 1),
     Pin("tls", _SHELL_SSOT, r"AUTOBOT_FRONTEND_TLS_PORT:=(\d+)", 1),
     Pin("tls", f"{_ANSIBLE}/fix-slm-env-ports.yml", r'^    frontend_tls_port: "(\d+)"$', 1),
     Pin("tls", f"{_ANSIBLE}/setup-user-frontend.yml", r"^    frontend_tls_port: (\d+)$", 1),
@@ -107,9 +114,7 @@ FORBIDDEN: tuple[re.Pattern[str], ...] = (
     re.compile(r"VITE_FRONTEND_PORT(?:=|:=|:-)(?:80\b|443\b|\{\{ *frontend_tls_port)"),
 )
 #: file -> how many sites of a FORBIDDEN shape stay; shrink-only (empty: none remain).
-#: The one left: the SPA builds its OAuth callback from this port on a nginx host, so it cannot go
-#: until the SPA has a served-URL input (#20058).
-KNOWN: dict[str, int] = {f"{_ANSIBLE}/fix-slm-env-ports.yml": 1}
+KNOWN: dict[str, int] = {}
 
 _SUFFIXES = (".py", ".sh", ".yml", ".yaml", ".j2", ".env", ".service")
 _SCAN_ROOTS = (*scan_mod.SCAN_ROOTS,)
@@ -132,7 +137,7 @@ def _scanned_files(root: Path) -> list[str]:
 FILES = declare(
     "frontend-url-served-by-scan",
     discover=_scanned_files,
-    floor=4308,  # mid-window: population 4358, window (4258, 4358)
+    floor=4352,  # mid-window: population 4402, window (4302, 4402)
     growth=100,
     what="production sources and env profiles",
     roots=(*_SCAN_ROOTS, ".env"),
@@ -211,6 +216,8 @@ def test_a_drifted_pin_is_caught() -> None:
         "AUTOBOT_FRONTEND_PORT=443",
         "${AUTOBOT_FRONTEND_PORT:-443}",
         "frontend_port: 443\n",
+        "VITE_FRONTEND_PORT=443\n",
+        "VITE_FRONTEND_PORT={{ frontend_tls_port }}\n",
         '"frontend_port": 80',
         'AUTOBOT_FRONTEND_PORT: "443"',
     ],
@@ -224,6 +231,8 @@ def test_a_served_port_under_the_dev_ports_name_is_caught(text: str) -> None:
     [
         "AUTOBOT_FRONTEND_PORT=5173\n",
         "AUTOBOT_FRONTEND_PORT=15173",
+        "VITE_FRONTEND_PORT=5173\n",
+        "VITE_FRONTEND_SERVED_PORT={{ frontend_tls_port }}\n",
         "AUTOBOT_FRONTEND_PORT=8443",
         "frontend_tls_port: 443\n",
         "AUTOBOT_FRONTEND_TLS_PORT=443",
@@ -327,3 +336,44 @@ def test_get_service_url_does_not_evaluate_the_frontend_for_other_services(monke
     assert cfg.get_service_url("backend") is not None and cfg.get_service_url("nope") is None
     with pytest.raises(FrontendServedByError):
         cfg.get_service_url("frontend")
+
+
+_ANSIBLE_NAME = re.compile(
+    r"^\s*(frontend_tls_port|frontend_http_port|nginx_http_port|nginx_port|nginx_ssl_port): \"?(\d+)", re.M
+)
+
+
+def test_every_ansible_statement_of_a_served_port_is_pinned() -> None:
+    """#20058: a new literal under a served-port name fails here, so PINNED cannot fall behind the tree."""
+    pinned = {pin.rel for pin in PINNED}
+    paths = [p for p in (_ROOT / _ANSIBLE).rglob("*") if p.suffix in (".yml", ".yaml", ".j2") and p.is_file()]
+    assert len(paths) >= 100, f"the sweep read {len(paths)} Ansible files -- a clean result would be blind"
+    stated = {
+        p.relative_to(_ROOT).as_posix() for p in paths if _ANSIBLE_NAME.search(_read(p.relative_to(_ROOT).as_posix()))
+    }
+    assert len(stated) >= 5, f"found {len(stated)} files -- the pattern stopped matching?"
+    assert stated - pinned == set()
+
+
+@pytest.mark.parametrize(
+    ("env", "vm", "local"),
+    [
+        ({"AUTOBOT_FRONTEND_SERVED_BY": "vite"}, "http://ui.example.test:5173", "http://localhost:5173"),
+        (
+            {"AUTOBOT_FRONTEND_SERVED_BY": "nginx", "AUTOBOT_FRONTEND_TLS_ENABLED": "true"},
+            "https://ui.example.test:443",
+            "https://localhost:443",
+        ),
+        (
+            {"AUTOBOT_FRONTEND_SERVED_BY": "nginx", "AUTOBOT_FRONTEND_TLS_ENABLED": "false"},
+            "http://ui.example.test:80",
+            "http://localhost:80",
+        ),
+    ],
+)
+def test_service_urls_follow_the_served_model(monkeypatch: pytest.MonkeyPatch, env: dict, vm: str, local: str) -> None:
+    """#20058: ``ServiceURLs`` reads the same model as ``config.frontend_url``, not the dev port."""
+    cfg = _config(monkeypatch, **env)
+    monkeypatch.setattr("autobot_shared.ssot_config.config", cfg)
+    assert ServiceURLs.FRONTEND_VM == vm == cfg.frontend_url
+    assert ServiceURLs.FRONTEND_LOCAL == local
