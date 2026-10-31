@@ -21,9 +21,9 @@ Two rules keep it from fighting the pollers:
 
 import asyncio
 from datetime import datetime, timezone
-from typing import Any, List, Tuple
+from typing import Any, List, NamedTuple, Set, Tuple
 
-from sqlalchemy import bindparam, text
+from sqlalchemy import bindparam, select, text
 
 from autobot_shared.env_utils import env_float_clamped
 from autobot_shared.logging_manager import get_logger
@@ -31,6 +31,8 @@ from autobot_shared.redis_client import get_async_redis_client
 from user_management.database import get_async_session_factory
 
 from ..models.enums import LLCAgentStatus, RoutineStatus
+from ..models.routine import LLCRoutine
+from ..services.controls_service import NEVER_SCHEDULED_STATUSES
 from .heartbeat_scheduler import _SCHEDULE_KEY, _next_fire
 from .schedule_members import ROUTINE_MEMBER_PREFIX
 
@@ -38,70 +40,127 @@ logger = get_logger(__name__)
 
 #: Seconds between reconciles; the longest a lost member stays lost.
 SCHEDULE_RECONCILE_INTERVAL_SECONDS = env_float_clamped(
-    "AUTOBOT_LLC_SCHEDULE_RECONCILE_INTERVAL_SECONDS", 60.0, min_v=5.0, positive_finite=True
+    "AUTOBOT_LLC_SCHEDULE_RECONCILE_INTERVAL_SECONDS", 60.0, min_v=30.0, positive_finite=True
 )
-_ROUTINE_LIMIT = 10000  # same page the startup load reads
-_OFF_STATUSES = (LLCAgentStatus.PAUSED.value, LLCAgentStatus.TERMINATED.value)
+_ROUTINE_PAGE = 1000
+#: Off the schedule on purpose. ``on_leave`` and ``offboarding`` are NOT here: nothing in the
+#: code stops the poller waking such an agent, and a reconcile stricter than the poller would
+#: leave a member absent that the poller still fires once it is present.
+_OFF_STATUSES = tuple(sorted(NEVER_SCHEDULED_STATUSES | {LLCAgentStatus.PAUSED.value}))
+_BAD_CRON_CAP = 1000
+_reported_bad_crons: Set[Tuple[str, str]] = set()
 
-#: ``(member, kind, cron)`` -- what the set should hold.
-_Wanted = Tuple[str, str, str]
+
+class _Wanted(NamedTuple):
+    """One member the set should hold, and the Redis pause flags that keep it off."""
+
+    member: str
+    kind: str
+    cron: str
+    pause_keys: Tuple[str, ...]
+
+
+def _pause_keys(agent_id: Any, company_id: Any) -> Tuple[str, ...]:
+    keys = []
+    if agent_id:
+        keys.append(f"llc:agent:{agent_id}:paused")
+    if company_id:
+        keys.append(f"llc:company:{company_id}:paused")
+    return tuple(keys)
 
 
 async def _enabled_agents() -> List[_Wanted]:
-    """Heartbeat-enabled agents with a cron, excluding paused and terminated ones."""
+    """Heartbeat-enabled agents with a non-blank cron, excluding off statuses."""
     factory = get_async_session_factory()
     async with factory() as session:
         result = await session.execute(
             text(
-                "SELECT aon.agent_id, aon.heartbeat_cron FROM agent_org_nodes aon"
-                " WHERE aon.heartbeat_enabled = true AND aon.heartbeat_cron IS NOT NULL"
-                " AND (aon.status IS NULL OR aon.status NOT IN :off)"
+                "SELECT aon.agent_id, aon.heartbeat_cron, aon.company_id FROM agent_org_nodes aon"
+                " WHERE aon.heartbeat_enabled = true AND btrim(coalesce(aon.heartbeat_cron, '')) <> ''"
+                " AND (aon.status IS NULL OR aon.status NOT IN :off) ORDER BY aon.agent_id"
             ).bindparams(bindparam("off", expanding=True)),
             {"off": list(_OFF_STATUSES)},
         )
-        return [(row["agent_id"], "agent", row["heartbeat_cron"]) for row in result.mappings().all()]
+        return [
+            _Wanted(r["agent_id"], "agent", r["heartbeat_cron"], _pause_keys(r["agent_id"], r["company_id"]))
+            for r in result.mappings().all()
+        ]
 
 
 async def _active_routines() -> List[_Wanted]:
-    """ACTIVE routines, as ``routine:<uuid>`` members."""
-    from ..services.routine_service import RoutineService
-
+    """ACTIVE routines with a non-blank cron, read in id order so paging cannot skip any."""
+    wanted: List[_Wanted] = []
     factory = get_async_session_factory()
     async with factory() as session:
-        rows = await RoutineService().list(session, status=RoutineStatus.ACTIVE, limit=_ROUTINE_LIMIT)
-    return [(f"{ROUTINE_MEMBER_PREFIX}{r.id}", "routine", r.cron_schedule) for r in rows]
+        offset = 0
+        while True:
+            stmt = select(LLCRoutine).where(LLCRoutine.status == RoutineStatus.ACTIVE)
+            rows = list(
+                (await session.execute(stmt.order_by(LLCRoutine.id).limit(_ROUTINE_PAGE).offset(offset))).scalars()
+            )
+            wanted += [
+                _Wanted(
+                    f"{ROUTINE_MEMBER_PREFIX}{r.id}",
+                    "routine",
+                    r.cron_schedule,
+                    _pause_keys(r.assignee_agent_id, r.company_id),
+                )
+                for r in rows
+                if (r.cron_schedule or "").strip()
+            ]
+            if len(rows) < _ROUTINE_PAGE:
+                return wanted
+            offset += _ROUTINE_PAGE
 
 
-async def _agent_flagged_off(redis: Any, member: str, kind: str) -> bool:
-    """Whether the pause flag (set on pause and on terminate) is up for this agent."""
-    return kind == "agent" and bool(await redis.exists(f"llc:agent:{member}:paused"))
+async def _present_members(redis: Any) -> Set[str]:
+    """Every member of the schedule set, in one read."""
+    return {m.decode() if isinstance(m, bytes) else m for m in await redis.zrange(_SCHEDULE_KEY, 0, -1)}
 
 
-async def _restore_member(redis: Any, wanted: _Wanted) -> bool:
-    """Add one absent member at its next fire time; True when it was missing."""
-    member, kind, cron = wanted
-    if await _agent_flagged_off(redis, member, kind):
-        return False
-    next_ts = _next_fire(cron, datetime.now(tz=timezone.utc).timestamp())
-    added = await redis.zadd(_SCHEDULE_KEY, {member: next_ts}, nx=True)
-    if added:
-        logger.warning("Schedule reconcile restored %s %s (next fire %.0f)", kind, member, next_ts)
-    return bool(added)
+async def _flagged_off(redis: Any, absent: List[_Wanted]) -> Set[str]:
+    """Members of *absent* with a pause flag up, from one pipelined round trip of EXISTS."""
+    checks = [(w.member, key) for w in absent for key in w.pause_keys]
+    if not checks:
+        return set()
+    pipe = redis.pipeline(transaction=False)
+    for _, key in checks:
+        pipe.exists(key)
+    results = await pipe.execute()
+    return {member for (member, _), hit in zip(checks, results) if hit}
+
+
+def _next_or_report(item: _Wanted) -> float | None:
+    """The next fire time, or None after reporting an unusable cron once per member and value."""
+    try:
+        return _next_fire(item.cron, datetime.now(tz=timezone.utc).timestamp())
+    except Exception as exc:  # croniter raises several unrelated types for a bad cron
+        seen = (item.member, item.cron)
+        if seen in _reported_bad_crons:
+            logger.debug("Schedule reconcile: %s %s still has an unusable cron", item.kind, item.member)
+        else:
+            if len(_reported_bad_crons) >= _BAD_CRON_CAP:
+                _reported_bad_crons.clear()
+            _reported_bad_crons.add(seen)
+            logger.error("Schedule reconcile could not restore %s %s: %s", item.kind, item.member, exc)
+        return None
 
 
 async def reconcile_schedule(redis: Any) -> List[str]:
     """Re-add every enabled agent and active routine missing from the set; return those restored.
 
-    A member whose cron cannot be read is logged and skipped, never allowed to stop the rest.
+    One read of the set finds who is absent; only those are checked for a pause flag and
+    added with NX, so a present member is never touched.
     """
-    wanted = await _enabled_agents() + await _active_routines()
+    present = await _present_members(redis)
+    absent = [w for w in await _enabled_agents() + await _active_routines() if w.member not in present]
+    off = await _flagged_off(redis, absent)
     restored: List[str] = []
-    for item in wanted:
-        try:
-            if await _restore_member(redis, item):
-                restored.append(item[0])
-        except Exception as exc:  # croniter raises several unrelated types for a bad cron
-            logger.error("Schedule reconcile could not restore %s %s: %s", item[1], item[0], exc)
+    for item in absent:
+        next_ts = None if item.member in off else _next_or_report(item)
+        if next_ts is not None and await redis.zadd(_SCHEDULE_KEY, {item.member: next_ts}, nx=True):
+            logger.warning("Schedule reconcile restored %s %s (next fire %.0f)", item.kind, item.member, next_ts)
+            restored.append(item.member)
     return restored
 
 
