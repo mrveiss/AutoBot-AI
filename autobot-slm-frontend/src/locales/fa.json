@@ -1707,7 +1707,7 @@
   "performance": {
     "alertRulesView": {
       "actions": "عملیات",
-      "alertRules": "Alert Rules",
+      "alertRules": "قوانین هشدار",
       "areYouSureYou": "آیا مطمئن هستید که می‌خواهید حذف کنید",
       "cancel": "لغو",
       "condition": "Condition",

@@ -7575,7 +7575,16 @@
       "initComplete": "Initialization complete"
     }
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "Alert Rules",
+      "overview": "Overview",
+      "slos": "SLOs",
+      "traces": "Traces"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "browser": {
       "contentsOf": "{path} Contents",
       "refresh": "Refresh",

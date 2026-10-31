@@ -7368,7 +7368,16 @@
       "initComplete": "Inicialización completada"
     }
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "Reglas de alerta",
+      "overview": "Resumen",
+      "slos": "SLO",
+      "traces": "Trazas"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "browser": {
       "contentsOf": "{path} Contents",
       "refresh": "Refresh",

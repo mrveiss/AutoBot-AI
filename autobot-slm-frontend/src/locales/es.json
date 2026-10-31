@@ -1707,7 +1707,7 @@
   "performance": {
     "alertRulesView": {
       "actions": "Acciones",
-      "alertRules": "Alert Rules",
+      "alertRules": "Reglas de alerta",
       "areYouSureYou": "¿Está seguro de que desea eliminar",
       "cancel": "Cancelar",
       "condition": "Condition",
@@ -1822,7 +1822,7 @@
     "sLOCompliance": "SLO Compliance:",
     "tabs": {
       "alertRules": "Reglas de alerta",
-      "overview": "Resumen",
+      "overview": "Overview",
       "slos": "SLO",
       "traces": "Trazas"
     }

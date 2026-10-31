@@ -1707,7 +1707,7 @@
   "performance": {
     "alertRulesView": {
       "actions": "Ações",
-      "alertRules": "Alert Rules",
+      "alertRules": "Regras de alerta",
       "areYouSureYou": "Tem certeza de que deseja excluir",
       "cancel": "Cancelar",
       "condition": "Condition",

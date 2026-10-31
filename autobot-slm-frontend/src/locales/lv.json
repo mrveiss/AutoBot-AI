@@ -1707,7 +1707,7 @@
   "performance": {
     "alertRulesView": {
       "actions": "Darbības",
-      "alertRules": "Alert Rules",
+      "alertRules": "Brīdinājumu noteikumi",
       "areYouSureYou": "Vai tiešām vēlaties dzēst",
       "cancel": "Atcelt",
       "condition": "Condition",

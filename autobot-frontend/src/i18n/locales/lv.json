@@ -7368,7 +7368,16 @@
       "initComplete": "Inicializācija pabeigta"
     }
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "Brīdinājumu noteikumi",
+      "overview": "Pārskats",
+      "slos": "SLO",
+      "traces": "Izsekojumi"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "browser": {
       "contentsOf": "{path} Contents",
       "refresh": "Refresh",

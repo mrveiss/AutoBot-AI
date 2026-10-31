@@ -7368,7 +7368,16 @@
       "initComplete": "Initialization complete"
     }
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "قواعد التنبيه",
+      "overview": "نظرة عامة",
+      "slos": "أهداف مستوى الخدمة",
+      "traces": "التتبعات"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "browser": {
       "contentsOf": "{path} Contents",
       "refresh": "تحديث",

@@ -1707,7 +1707,7 @@
   "performance": {
     "alertRulesView": {
       "actions": "Actions",
-      "alertRules": "Alert Rules",
+      "alertRules": "قواعد التنبيه",
       "areYouSureYou": "هل أنت متأكد من رغبتك في الحذف",
       "cancel": "إلغاء",
       "condition": "Condition",

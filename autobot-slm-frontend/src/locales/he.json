@@ -1707,7 +1707,7 @@
   "performance": {
     "alertRulesView": {
       "actions": "פעולות",
-      "alertRules": "Alert Rules",
+      "alertRules": "כללי התראה",
       "areYouSureYou": "האם אתה בטוח שברצונך למחוק",
       "cancel": "Cancel",
       "condition": "Condition",
@@ -1822,7 +1822,7 @@
     "sLOCompliance": "SLO Compliance:",
     "tabs": {
       "alertRules": "כללי התראה",
-      "overview": "סקירה כללית",
+      "overview": "סקירה",
       "slos": "SLOs",
       "traces": "עקבות"
     }

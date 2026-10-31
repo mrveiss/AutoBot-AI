@@ -7277,7 +7277,16 @@
     },
     "progress": {}
   },
+  "performanceView": {
+    "tabs": {
+      "alertRules": "قوانین هشدار",
+      "overview": "نمای کلی",
+      "slos": "SLOها",
+      "traces": "ردیابی‌ها"
+    }
+  },
   "fileBrowser": {
+    "zeroSize": "0 B",
     "treeView": {
       "noStructure": "No directory structure available",
       "title": "Directory Structure",

@@ -1707,7 +1707,7 @@
   "performance": {
     "alertRulesView": {
       "actions": "Actes",
-      "alertRules": "Alert Rules",
+      "alertRules": "Règles d'alerte",
       "areYouSureYou": "Are you sure you want to delete",
       "cancel": "Annuler",
       "condition": "Condition",
