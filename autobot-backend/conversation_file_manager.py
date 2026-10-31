@@ -20,8 +20,6 @@ import importlib
 import json
 import sqlite3
 import uuid
-from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -38,6 +36,8 @@ from autobot_shared.ssot_config import config
 from config import unified_config_manager
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_1_HOUR
+from conversation_file_route_api import FILE_INFO_COLUMNS, ConversationFileRouteApi
+from conversation_file_upload_info import UploadInfo
 from utils.chat_utils import validate_chat_session_id
 
 # Module-level project root constant (Issue #380 - avoid repeated Path computation)
@@ -46,62 +46,10 @@ from utils.chat_utils import validate_chat_session_id
 # instead of /app/autobot-backend/, causing schema/data lookups to miss. (#1861)
 _PROJECT_ROOT = Path(__file__).parent
 
-
-@dataclass
-class UploadInfo:
-    """Issue #375: Dataclass to group file-related parameters and reduce function signatures.
-
-    Groups commonly passed file attributes to reduce long parameter lists across
-    _store_new_file, _insert_file_record, _build_file_response, and related methods.
-    """
-
-    file_id: str
-    session_id: str
-    original_filename: str
-    stored_filename: str
-    file_path: Path
-    file_size: int
-    file_hash: str
-    mime_type: str | None = None
-    uploaded_by: str | None = None
-    message_id: str | None = None
-    metadata: Dict[str, Any] | None = None
-    deduplicated: bool = False
-
-    def to_response_dict(self) -> Dict[str, Any]:
-        """Convert to API response dictionary."""
-        return {
-            "file_id": self.file_id,
-            "session_id": self.session_id,
-            "original_filename": self.original_filename,
-            "stored_filename": self.stored_filename,
-            "file_path": str(self.file_path),
-            "file_size": self.file_size,
-            "file_hash": self.file_hash,
-            "mime_type": self.mime_type,
-            "uploaded_at": datetime.now(tz=timezone.utc).isoformat(),
-            "deduplicated": self.deduplicated,
-        }
-
-    def to_db_tuple(self) -> tuple:
-        """Convert to database insert tuple (for conversation_files table)."""
-        return (
-            self.file_id,
-            self.session_id,
-            self.original_filename,
-            self.stored_filename,
-            str(self.file_path),
-            self.file_size,
-            self.file_hash,
-            self.mime_type,
-            self.uploaded_by,
-        )
-
-
 logger = get_logger(__name__)
 
 
-class ConversationFileManager:
+class ConversationFileManager(ConversationFileRouteApi):
     """
     Manages conversation-specific file uploads with SQLite persistence and Redis caching.
 
@@ -682,16 +630,16 @@ class ConversationFileManager:
             raise ValueError(f"File size ({file_size} bytes) exceeds maximum " f"({self.MAX_FILE_SIZE} bytes)")
         return file_size
 
-    async def _check_existing_file(self, connection, file_hash: str):
-        """Check for existing file with same hash for deduplication."""
+    async def _check_existing_file(self, connection, session_id: str, file_hash: str):
+        """Find an identical file stored by THIS session; never another session's (#20133)."""
         async with connection.execute(
             """
             SELECT file_id, stored_filename, file_path
             FROM conversation_files
-            WHERE file_hash = ? AND is_deleted = 0
+            WHERE file_hash = ? AND session_id = ? AND is_deleted = 0
             LIMIT 1
             """,
-            (file_hash,),
+            (file_hash, session_id),
         ) as cursor:
             return await cursor.fetchone()
 
@@ -703,14 +651,14 @@ class ConversationFileManager:
         message_id: str | None,
         association_type: str,
     ) -> None:
-        """Create session file association record."""
+        """Create the association unless the session already has it (NULL message_ids are distinct under UNIQUE)."""
         await connection.execute(
             """
-            INSERT INTO session_file_associations
-            (session_id, file_id, message_id, association_type)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO session_file_associations (session_id, file_id, message_id, association_type)
+            SELECT ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM session_file_associations
+                WHERE session_id = ? AND file_id = ? AND message_id IS ?)
             """,
-            (session_id, file_id, message_id, association_type),
+            (session_id, file_id, message_id, association_type, session_id, file_id, message_id),
         )
 
     async def _handle_deduplicated_file(self, connection, existing_file, file_info: UploadInfo) -> Dict[str, Any]:
@@ -734,9 +682,9 @@ class ConversationFileManager:
 
         await self._log_access(
             existing_file_id,
-            "reference",
+            "upload",  # the CHECK on file_access_log has no 'reference'; the metadata says it was one (#20225)
             file_info.uploaded_by,
-            {"session_id": file_info.session_id, "deduplication": True},
+            {"session_id": file_info.session_id, "deduplication": True, "reference": True},
         )
         await self._invalidate_session_cache(file_info.session_id)
 
@@ -750,6 +698,7 @@ class ConversationFileManager:
             file_size=file_info.file_size,
             file_hash=file_info.file_hash,
             mime_type=file_info.mime_type,
+            uploaded_by=file_info.uploaded_by,
             deduplicated=True,
         )
         return response_info.to_response_dict()
@@ -869,7 +818,7 @@ class ConversationFileManager:
 
             connection = await self._get_async_db_connection()
             try:
-                existing_file = await self._check_existing_file(connection, file_info.file_hash)
+                existing_file = await self._check_existing_file(connection, file_info.session_id, file_info.file_hash)
                 if existing_file:
                     return await self._handle_deduplicated_file(connection, existing_file, file_info)
                 return await self._store_new_file(connection, file_info, file_content)
@@ -899,20 +848,14 @@ class ConversationFileManager:
     async def _get_paginated_files(self, connection, session_id: str, page_size: int, offset: int) -> List[Dict]:
         """Get paginated files for a session."""
         async with connection.execute(
-            """
-            SELECT
-                cf.file_id, cf.session_id, cf.original_filename as filename,
-                cf.original_filename, cf.stored_filename, cf.file_path,
-                cf.file_size as size, cf.file_hash, cf.mime_type, cf.uploaded_at,
-                cf.uploaded_by, cf.is_deleted, cf.deleted_at, sfa.association_type,
-                sfa.message_id, sfa.associated_at,
-                LOWER(SUBSTR(cf.original_filename, INSTR(cf.original_filename, '.') + 1)) as extension
+            f"""
+            SELECT {FILE_INFO_COLUMNS}, sfa.association_type, sfa.message_id, sfa.associated_at
             FROM conversation_files cf
             JOIN session_file_associations sfa ON cf.file_id = sfa.file_id
             WHERE sfa.session_id = ? AND cf.is_deleted = 0
             ORDER BY sfa.associated_at DESC
             LIMIT ? OFFSET ?
-            """,
+            """,  # nosec B608  # FILE_INFO_COLUMNS is a hardcoded constant
             (session_id, page_size, offset),
         ) as cursor:
             rows = await cursor.fetchall()
