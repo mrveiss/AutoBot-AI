@@ -382,6 +382,11 @@ _A_TO_M: dict[str, tuple[str, str, str]] = {
         "SUBSET_DRIFTS",
         "Both GUIs' component, view and composable .ts/.vue, excluding tests, against all tracked frontend source.",
     ),
+    "frontend-local-date-formatter-scan": (
+        ABSOLUTE,
+        "SUBSET_DRIFTS",
+        "Both GUIs' component, view and composable .ts/.vue, excluding tests, against all tracked frontend source.",
+    ),
     "frontend-model-literal-scan": (
         ABSOLUTE,
         "SUBSET_DRIFTS",

@@ -355,6 +355,7 @@ import PatternEvolutionChart from '@/components/charts/PatternEvolutionChart.vue
 import CodeEvolutionTimeline from '@/components/analytics/CodeEvolutionTimeline.vue'
 import Icon from '@/components/ui/Icon.vue'
 import { BaseModal } from '@autobot/ui'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 // Issue #3436: read sourceId from route param set by codebase/:sourceId parent
 const route = useRoute()
@@ -443,18 +444,7 @@ function formatMetricName(metric: string): string {
     .join(' ')
 }
 
-function formatDate(dateString: string): string {
-  if (!dateString) return 'N/A'
-  try {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  } catch {
-    return dateString
-  }
-}
+const formatDate = createDateFormatter({ kind: 'date', locale: 'en-US', intl: { year: 'numeric', month: 'short', day: 'numeric' }, emptyText: 'N/A' })
 
 // Load all data on mount
 onMounted(async () => {

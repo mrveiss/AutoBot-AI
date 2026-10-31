@@ -384,6 +384,7 @@ _DECLARED_SCOPES = {
     "llc-sigterm-grace-copies": ("autobot-backend/llc",),
     "frontend-http-transports": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "frontend-local-formatter-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
+    "frontend-local-date-formatter-scan": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "search-mode-copies": ("autobot-backend",),
     "redaction-placeholder-literals": ("autobot-backend", "autobot-slm-backend", "autobot_shared"),
     "one-system-knowledge-template-tree": ("autobot-backend",),

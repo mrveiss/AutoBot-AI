@@ -6,6 +6,7 @@ import { useRouter } from 'vue-router'
 import { useTranscriberApi, type Project } from '@/composables/transcriber/useTranscriberApi'
 import { useTranscriberStore } from '@/stores/transcriber/useTranscriberStore'
 import { createLogger } from '@/utils/debugUtils'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('TranscriberProjectsView')
 
@@ -77,10 +78,7 @@ function openProject(projectId: number) {
   router.push({ name: 'transcriber-project-detail', params: { projectId: String(projectId) } })
 }
 
-function formatDate(iso: string): string {
-  const d = new Date(iso)
-  return Number.isNaN(d.getTime()) ? '—' : d.toLocaleDateString()
-}
+const formatDate = createDateFormatter({ kind: 'date', emptyText: '—', invalidText: '—' })
 
 onMounted(load)
 </script>
