@@ -154,3 +154,9 @@ def test_a_table_keyed_by_a_module_constant_reads_at_the_base() -> None:
 def test_a_name_that_is_no_string_constant_is_still_refused() -> None:
     with pytest.raises(ValueError):
         literal_in("PINS = {UNKNOWN: 24}\n", "PINS")
+
+
+def test_a_frozenset_table_reads_as_a_set() -> None:
+    """#19704: an exemption list is a frozenset, and its base copy has to read as one."""
+    source = 'ITEM = "a"\nEXEMPT = frozenset({ITEM, "b"})\n'
+    assert literal_in(source, "EXEMPT") == frozenset({"a", "b"})

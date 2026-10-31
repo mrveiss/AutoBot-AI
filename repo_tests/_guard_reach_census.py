@@ -139,8 +139,7 @@ MIN_GUARDS_EXAMINED = 330
 #:
 #: Recorded as an exemption rather than by narrowing the regex, because a receiver-resolving
 #: detector is a second instrument with its own blind spot, and the one being replaced has a
-#: known, enumerated population. SHRINKS ONLY, mirrored in `_EXEMPT_BASELINE` so an addition
-#: takes two edits a reviewer sees.
+#: known, enumerated population. SHRINKS ONLY, checked against the base commit's list (#19704).
 #:
 #: Confirmed non-scanning and needing no `declare()`: the first two glob a `tmp_path` they
 #: created. The third globs `/usr/lib/postgresql` -- the HOST -- which is a separate question
@@ -149,15 +148,6 @@ MIN_GUARDS_EXAMINED = 330
 #: stable size -- on a runner without PostgreSQL the glob yields nothing and the guard passes
 #: having examined nothing, which no reach floor over this tree can detect.
 _EXEMPT_NON_SCANNING = frozenset(
-    {
-        "repo_tests/hook_self_sync_atomic_test.py",
-        "repo_tests/prepush_hook_sync_17578_test.py",
-        "repo_tests/sync_to_slm_db_update_classify_14459_test.py",
-    }
-)
-
-#: `_EXEMPT_NON_SCANNING` as last recorded -- the same two-copy shape as `_GRANDFATHERED_BASELINE`.
-_EXEMPT_BASELINE = frozenset(
     {
         "repo_tests/hook_self_sync_atomic_test.py",
         "repo_tests/prepush_hook_sync_17578_test.py",
