@@ -15,7 +15,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import { ref } from 'vue'
 import en from '@/i18n/locales/en.json'
-import { routes } from '@/router'
+import { adminChildren } from '@/router/adminRoutes'
 
 // ---------------------------------------------------------------------------
 // Module mocks
@@ -124,7 +124,7 @@ describe('AdvancedControlView.vue', () => {
   })
 
   it('is registered as an admin-gated route (same guard as sibling admin routes)', () => {
-    const route = routes.find((r) => r.path === '/admin/advanced-control')
+    const route = adminChildren.find((r) => r.path === 'advanced-control')
     expect(route).toBeTruthy()
     expect(route?.meta?.requiresAuth).toBe(true)
     expect(route?.meta?.admin).toBe(true)

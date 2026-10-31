@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # AutoBot - AI-Powered Automation Platform
 # Author: mrveiss
-"""Merge main into every open same-repo PR branch and every PR-less branch (#19548).
+"""Merge main into every open same-repo PR branch; a branch with no open PR is left alone (#20261).
 
 Run by ``.github/workflows/sync-branches-with-main.yml`` from a full clone of main.
 ``git push`` authenticates with ``AUTOBOT_PUSH_TOKEN`` and nothing else, as a
@@ -315,7 +315,7 @@ def _emit(text: str) -> None:
 
 def render_summary(results: Dict[str, List[str]], dry_run: bool) -> str:
     order = (core.SYNCED, core.CURRENT, core.CONFLICT, core.WORKFLOW, core.HEAD_MOVED, core.FORK)
-    order += (core.OTHER_BASE, core.POLICY, core.UNREACHABLE, core.ERROR)
+    order += (core.OTHER_BASE, core.NO_OPEN_PR, core.POLICY, core.UNREACHABLE, core.ERROR)
     lines = ["## Branch sync with main (#19548)", ""]
     if dry_run:
         lines += ["**Dry run: nothing was pushed, labelled or commented.**", ""]

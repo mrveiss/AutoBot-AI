@@ -133,7 +133,7 @@ def _includes_check(node) -> list[dict]:
         return []
     target = node.get("ansible.builtin.include_tasks", "")
     target = target.get("file", "") if isinstance(target, dict) else str(target)
-    found = [node] if target.endswith("assert_model_kinds.yml") else []
+    found = [node] if target.endswith("_shared/tasks/assert_model_kinds.yml") else []
     for key in ("tasks", "block", "rescue", "always", "pre_tasks", "post_tasks"):
         found += _includes_check(node.get(key))
     return found
