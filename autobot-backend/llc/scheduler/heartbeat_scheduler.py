@@ -654,22 +654,12 @@ class LLCHeartbeatScheduler:
                 new_retry_count,
                 run_id,
             )
-            factory = get_async_session_factory()
-            try:
-                async with factory() as session:
-                    await session.execute(
-                        update(LLCHeartbeatRun)
-                        .where(LLCHeartbeatRun.id == run_id)
-                        .values(
-                            status=LLCRunStatus.FAILED.value,
-                            finished_at=datetime.now(tz=timezone.utc),
-                            error=f"Rate-limit retries exhausted ({new_retry_count}): {exc}",
-                            retry_count=new_retry_count,
-                        )
-                    )
-                    await session.commit()
-            except Exception:
-                logger.exception("Could not write FAILED status for rate-exhausted run %s", run_id)
+            await _write_rate_limit_outcome(
+                run_id,
+                status=LLCRunStatus.FAILED.value,
+                error=f"Rate-limit retries exhausted ({new_retry_count}): {exc}",
+                retry_count=new_retry_count,
+            )
             return
 
         # Exponential backoff: use provider hint if available, else compute.
@@ -690,23 +680,13 @@ class LLCHeartbeatScheduler:
             retry_after_dt.isoformat(),
         )
 
-        factory = get_async_session_factory()
-        try:
-            async with factory() as session:
-                await session.execute(
-                    update(LLCHeartbeatRun)
-                    .where(LLCHeartbeatRun.id == run_id)
-                    .values(
-                        status=LLCRunStatus.RATE_LIMITED.value,
-                        finished_at=datetime.now(tz=timezone.utc),
-                        error=str(exc),
-                        retry_after=retry_after_dt,
-                        retry_count=new_retry_count,
-                    )
-                )
-                await session.commit()
-        except Exception:
-            logger.exception("Could not write RATE_LIMITED status for run %s", run_id)
+        if not await _write_rate_limit_outcome(
+            run_id,
+            status=LLCRunStatus.RATE_LIMITED.value,
+            error=str(exc),
+            retry_after=retry_after_dt,
+            retry_count=new_retry_count,
+        ):
             return
 
         # Re-queue the agent in Redis at retry_after so it fires automatically.
@@ -784,6 +764,22 @@ def get_heartbeat_scheduler() -> LLCHeartbeatScheduler:
 # ------------------------------------------------------------------
 # Module-level helpers
 # ------------------------------------------------------------------
+
+
+async def _write_rate_limit_outcome(run_id: uuid.UUID, *, status: str, **values: Any) -> bool:
+    """Close a rate-limited run; False when the write failed, which is logged here."""
+    try:
+        async with get_async_session_factory()() as session:
+            await session.execute(
+                update(LLCHeartbeatRun)
+                .where(LLCHeartbeatRun.id == run_id)
+                .values(status=status, finished_at=datetime.now(tz=timezone.utc), **values)
+            )
+            await session.commit()
+    except Exception:
+        logger.exception("Could not write %s status for run %s", status, run_id)
+        return False
+    return True
 
 
 def _next_fire(cron_expr: str, base_ts: float) -> float:

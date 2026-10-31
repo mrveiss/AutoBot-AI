@@ -77,19 +77,19 @@ from ..services.work_item_service import (
     resolve_actor_role,
 )
 from ..services.work_product_service import WorkProductService
+from ._common import actor_id as verified_user_id
 from .activity import ActivityLogEntry, ActivityLogResponse
 from .github_webhooks import validate_github_pr_url
 from .work_item_comments import serialize_comment
 
 
 class HumanClaimRequest(BaseModel):
-    user_id: str
-    company_id: str
+    user_id: Optional[str] = None  # accepted, ignored: claimant and tenant are the session's (#13999)
+    company_id: Optional[str] = None
 
 
-class HumanUnclaimRequest(BaseModel):
-    user_id: str
-    company_id: str
+class HumanUnclaimRequest(HumanClaimRequest):
+    """The same accepted-and-ignored fields as a claim."""
 
 
 class CoworkerRequest(BaseModel):
@@ -713,8 +713,8 @@ async def claim_work_item(
         item = await _service().claim_human(
             session,
             work_item_id=work_item_id,
-            user_id=body.user_id,
-            company_id=body.company_id,
+            user_id=str(verified_user_id(_current_user)),
+            company_id=str(ctx.org_id),
         )
         await session.commit()
         return await _item_to_dict(item, session)
@@ -743,8 +743,8 @@ async def unclaim_work_item(
         item = await _service().unclaim_human(
             session,
             work_item_id=work_item_id,
-            user_id=body.user_id,
-            company_id=body.company_id,
+            user_id=str(verified_user_id(_current_user)),
+            company_id=str(ctx.org_id),
         )
         await session.commit()
         return await _item_to_dict(item, session)
