@@ -69,7 +69,7 @@ async def require_company_admin(
     """
     if actor_user_id is None:
         raise NotAuthorisedError("an actor is required for this change")
-    name = await _membership_role(session, company_id, actor_user_id, for_update=for_update)
+    name = await membership_role(session, company_id, actor_user_id, for_update=for_update)
     if name is None:
         raise NotAuthorisedError(f"user {actor_user_id} is not a member of company {company_id}")
     if name not in GRANTING_ROLES:
@@ -79,7 +79,7 @@ async def require_company_admin(
     return name
 
 
-async def _membership_role(
+async def membership_role(
     session: AsyncSession, company_id: uuid.UUID, actor_user_id: uuid.UUID, *, for_update: bool
 ) -> Optional[str]:
     stmt = select(LLCCompanyMembership.role).where(
