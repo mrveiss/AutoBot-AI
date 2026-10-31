@@ -74,6 +74,7 @@ import llc.models.company  # noqa: E402,F401
 import llc.models.goal  # noqa: E402,F401  (work_item FK target)
 from llc.models.budget import LLCAgentBudget  # noqa: E402
 from llc.models.company_ceo import LLCCompanyCEO  # noqa: E402
+from llc.models.company_os_cost import CompanyOsCostEvent  # noqa: E402
 from llc.models.goal import LLCGoal  # noqa: E402
 from llc.models.heartbeat_run import LLCHeartbeatRun  # noqa: E402
 from llc.models.label import LLCLabel, LLCWorkItemLabel  # noqa: E402
@@ -107,6 +108,7 @@ _LOOP_MODELS = [
     LLCWorkItemRelation,
     LLCWorkProduct,
     LLCAgentBudget,
+    CompanyOsCostEvent,  # #16016: every ingest writes a per-event row
     LLCHeartbeatRun,
     LLCReviewGatePolicy,
     LLCCompanyMembership,
