@@ -114,9 +114,6 @@ git log --since="2025-01-01" --name-only --pretty=format: -- "*.md" "docs/" | so
 # Re-run the population script (the one KB populate entry point, #19339;
 # --patterns 'docs/**/*.md' limits it to the docs tree)
 python autobot-infrastructure/shared/scripts/populate_knowledge_base.py
-
-# Or use API approach
-python scripts/fix_search.py
 ```
 
 #### Automated Update Workflow
