@@ -30,6 +30,7 @@ from autobot_shared.doc_chunking import create_chunk as _create_chunk
 from autobot_shared.doc_chunking import estimate_tokens as _estimate_tokens
 from autobot_shared.doc_chunking import process_h2_sections as _process_h2_sections
 from autobot_shared.frontmatter import split_frontmatter
+from autobot_shared.kb_doc_set import in_doc_set
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.slug import sanitize_token
 from services.knowledge.index_cache_paths import doc_index_hashes
@@ -79,12 +80,11 @@ def _auto_reindex_on_dim_mismatch() -> bool:
 
 
 # ============================================================================
-# TIER DEFINITIONS (from CLI tool)
+# TIER DEFINITIONS: a priority order over kb_doc_set, and a curated subset of it (#20063)
 # ============================================================================
 
 TIER_1_FILES = [
     "CLAUDE.md",
-    "docs/system-state.md",
     "docs/api/COMPREHENSIVE_API_DOCUMENTATION.md",
     "docs/architecture/DISTRIBUTED_ARCHITECTURE.md",
     "docs/architecture/README.md",
@@ -340,37 +340,26 @@ def _should_exclude(file_path: str) -> bool:
 
 
 def _discover_files(root_dir: Path, tier: int | None = None) -> List[Tuple[str, int]]:
-    """Discover markdown files to index by tier."""
-    files: List[Tuple[str, int]] = []
+    """Discover markdown files to index by tier; only files in the canonical doc set qualify (#20063)."""
+    found: dict[str, int] = {}
+
+    def add(path: Path, number: int) -> None:
+        if in_doc_set(path.relative_to(root_dir).as_posix()):
+            found.setdefault(str(path), number)
 
     if tier is None or tier == 1:
         for file_rel in TIER_1_FILES:
-            file_path = root_dir / file_rel
-            if file_path.exists():
-                files.append((str(file_path), 1))
+            if (root_dir / file_rel).exists():
+                add(root_dir / file_rel, 1)
 
-    if tier is None or tier == 2:
-        for dir_rel in TIER_2_DIRS:
-            dir_path = root_dir / dir_rel
-            if dir_path.exists():
-                for md_file in dir_path.rglob("*.md"):
-                    file_str = str(md_file)
-                    if not _should_exclude(file_str):
-                        if not any(f[0] == file_str for f in files):
-                            files.append((file_str, 2))
+    for number, dirs in ((2, TIER_2_DIRS), (3, TIER_3_DIRS + TIER_3_DIRS_EXTRA)):
+        if tier is None or tier == number:
+            for dir_rel in dirs:
+                for md_file in (root_dir / dir_rel).rglob("*.md"):
+                    if not _should_exclude(str(md_file)):
+                        add(md_file, number)
 
-    if tier is None or tier == 3:
-        all_tier3 = TIER_3_DIRS + TIER_3_DIRS_EXTRA
-        for dir_rel in all_tier3:
-            dir_path = root_dir / dir_rel
-            if dir_path.exists():
-                for md_file in dir_path.rglob("*.md"):
-                    file_str = str(md_file)
-                    if not _should_exclude(file_str):
-                        if not any(f[0] == file_str for f in files):
-                            files.append((file_str, 3))
-
-    return files
+    return list(found.items())
 
 
 # ============================================================================

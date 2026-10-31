@@ -24,7 +24,7 @@ from llc.models.company_os_plan import CompanyOsWorkflowPlan
 
 from .errors import CompanyOsConflict, CompanyOsNotFound
 from .plan_gate import GateReport, evaluate_plan_gate
-from .plan_types import CompanyWorkflowPlan, StatusChange, WorkflowPlanStatus
+from .plan_types import CompanyWorkflowPlan, ConversionStatus, StatusChange, WorkflowPlanStatus
 
 logger = get_logger(__name__)
 
@@ -112,6 +112,11 @@ async def save_plan(
     """Recompute the status, store the document and the status column together."""
     if clears_approval:
         plan.approved_at, plan.approved_by = None, None
+        # An acknowledgement covers the plan the owner saw: any ordinary edit voids it (#20187).
+        plan.by_hand_acknowledged_at = None
+        # A preview describes the plan it was built from; an edit makes it stale. A committed one is history.
+        if plan.conversion is not None and plan.conversion.status is ConversionStatus.PREVIEW:
+            plan.conversion = None
     changed = _record_status(plan, evaluate_plan_gate(plan), actor)
     row.document = plan.model_dump(mode="json")
     row.status, row.name = plan.status.value, plan.name
