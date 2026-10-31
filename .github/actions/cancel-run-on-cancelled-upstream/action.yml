@@ -47,6 +47,16 @@ runs:
         RUN_ID: ${{ github.run_id }}
       run: |
         set -euo pipefail
+        # #20067: a transient GitHub error must not turn a gate with no verdict into a red check.
+        retry() {
+          local attempt
+          for attempt in 1 2 3 4; do
+            "$@" && return 0
+            echo "::warning::attempt $attempt failed: $1 ${*:2:2}" >&2  # stderr: a caller captures stdout
+            sleep $((attempt * 5))
+          done
+          "$@"
+        }
         echo "upstream results: $RESULTS"
         case " $RESULTS " in
           *" cancelled "*) ;;
@@ -54,14 +64,14 @@ runs:
         esac
         # A job that exceeded its timeout-minutes can also read `cancelled` in needs.<job>.result,
         # but the jobs API keeps it apart as `timed_out`. A hung upstream is a real defect: fail red.
-        timed_out=$(gh api "repos/$REPO/actions/runs/$RUN_ID/jobs?per_page=100" --paginate \
+        timed_out=$(retry gh api "repos/$REPO/actions/runs/$RUN_ID/jobs?per_page=100" --paginate \
           --jq '.jobs[] | select(.conclusion == "timed_out") | .name')
         if [ -n "$timed_out" ]; then
           echo "::error::upstream job(s) timed out, which is a failure, not a parked run: ${timed_out//$'\n'/, } (#17764)"
           exit 1
         fi
         echo "::notice::An upstream job was cancelled (the run was parked or superseded), so this gate has no verdict. Cancelling the run: the gate ends cancelled, not failed, and still blocks merge until a real run exists (#17764)."
-        gh api -X POST "repos/$REPO/actions/runs/$RUN_ID/force-cancel" >/dev/null
+        retry gh api -X POST "repos/$REPO/actions/runs/$RUN_ID/force-cancel" >/dev/null
         sleep "$WAIT_SECONDS"
         echo "::error::the force-cancel did not stop this job within ${WAIT_SECONDS}s, so the gate fails closed (#17764)"
         exit 1
