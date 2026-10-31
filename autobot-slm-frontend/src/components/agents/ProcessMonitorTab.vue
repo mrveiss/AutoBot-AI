@@ -26,7 +26,7 @@ import { BaseButton } from '@autobot/ui'
  */
 
 import { useI18n } from 'vue-i18n'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { getBackendUrl } from '@/config/ssot-config'
 import { useAuthStore } from '@/stores/auth'
 import { formatDuration, createDateFormatter } from '@/utils/formatHelpers'
@@ -201,7 +201,14 @@ function statusBadgeClass(status: string): string {
   return map[status] || 'badge-gray'
 }
 
-const DURATION_OPTIONS = { style: 'msMinutesSeconds', nullText: '—' } as const
+const DURATION_OPTIONS = computed(() => ({
+  style: 'msMinutesSeconds',
+  nullText: '—',
+  units: {
+    seconds: t('agents.processMonitorTab.durationSeconds'),
+    minutes: t('agents.processMonitorTab.durationMinutes'),
+  },
+}) as const)
 
 const formatTime = createDateFormatter({ emptyText: '—' })
 </script>
