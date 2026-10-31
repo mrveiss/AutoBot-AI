@@ -370,9 +370,17 @@
   register: _tts_predownload
   # Exit 2 = could not download (gated/no-token or offline); the worker retries
   # on first start, so do not fail provisioning. Only a crash (rc 1) is fatal.
-  failed_when: _tts_predownload.rc not in [0, 2]
+  no_log: true  # #19846: the environment carries the Hugging Face token
+  failed_when: false
   changed_when: _tts_predownload.rc == 0
   timeout: 900  # Model shards are large; cap the download like the torch step.
+  when: tts_predownload_model | default(true) | bool
+  tags: ['tts', 'model']
+
+- name: "TTS Worker | Check the pre-download did not crash"
+  ansible.builtin.assert:
+    that: _tts_predownload.rc in [0, 2]
+    fail_msg: "predownload-model.py exited {{ _tts_predownload.rc }}: {{ _tts_predownload.stderr_lines | default([]) | last | default('') }}"
   when: tts_predownload_model | default(true) | bool
   tags: ['tts', 'model']
 
