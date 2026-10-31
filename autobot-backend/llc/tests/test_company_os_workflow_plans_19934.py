@@ -88,7 +88,11 @@ def _client(maker, company: uuid.UUID, user: uuid.UUID) -> httpx.AsyncClient:
             yield s
 
     app.dependency_overrides[get_session] = _session
-    app.dependency_overrides[get_current_user] = lambda: {"id": str(user)}
+    app.dependency_overrides[get_current_user] = lambda: {
+        "id": str(user),
+        "auth_method": "session",
+        "username": "person",
+    }
     app.dependency_overrides[require_org_context] = lambda: TenantContext(
         org_id=company, user_id=user, is_platform_admin=False
     )
