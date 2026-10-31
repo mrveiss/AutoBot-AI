@@ -175,6 +175,7 @@ import { createLogger } from '@/utils/debugUtils'
 import { useTransientError } from '@/composables/useTransientError'
 import { extractEntities as extractEntitiesApi } from '@/composables/knowledge/useKnowledgeEntities'
 import type { EntityMessage } from '@/composables/knowledge/useKnowledgeEntities'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('EntityExtractor')
 const { t } = useI18n()
@@ -341,13 +342,7 @@ function selectHistoryItem(item: ExtractionResult): void {
   extractionResult.value = item
 }
 
-function formatTime(timestamp?: number): string {
-  if (!timestamp) return ''
-  return new Date(timestamp).toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
+const formatTime = createDateFormatter({ kind: 'time', locale: 'en-US', intl: { hour: '2-digit', minute: '2-digit' } })
 </script>
 
 <style scoped>
