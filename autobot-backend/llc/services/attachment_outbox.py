@@ -96,7 +96,17 @@ def claim_statement(root_id: str, only_id: Optional[uuid.UUID] = None) -> sa.Sel
 
 
 def _unlink(root: Path, storage_path: str) -> None:
-    removal_target(root, storage_path).unlink(missing_ok=True)
+    """Remove the file; a file already gone under a present directory counts as removed.
+
+    A missing root or parent directory is a failure, not success: an unmounted volume looks the
+    same as "nothing there", and clearing the entry would leave the real file with no retry.
+    """
+    target = removal_target(root, storage_path)
+    if not root.is_dir():
+        raise FileNotFoundError(f"storage root is not present: {root}")
+    if not target.parent.is_dir():
+        raise FileNotFoundError(f"parent directory of the attachment file is not present: {target.parent}")
+    target.unlink(missing_ok=True)
 
 
 def _record_failure(entry: Entry, exc: Exception) -> None:

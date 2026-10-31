@@ -57,6 +57,11 @@ async def _async_sweep() -> dict:
     # Every number is reported, zeros included: a sweep that found nothing and one that did
     # not run must not look the same in the logs.
     logger.info("#19756: attachment file sweep outbox %s; staging %s", outbox, staging)
+    if outbox["other_root"]:
+        logger.warning(
+            "#19756: %d attachment file removal(s) belong to another node's storage and were not drained here",
+            outbox["other_root"],
+        )
     if outbox["stuck"]:
         logger.error("#19756: %d attachment file removal(s) are stuck and need a person", outbox["stuck"])
     return {**outbox, **staging}

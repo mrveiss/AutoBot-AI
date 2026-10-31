@@ -301,6 +301,53 @@ async def test_a_failing_entry_does_not_stop_a_later_one_in_the_same_drain(root)
     assert result["removed"] == 1 and not good_file.exists() and bad not in session.deleted
 
 
+@pytest.mark.asyncio
+async def test_a_missing_parent_directory_is_a_failure_and_the_entry_stays(root):
+    """An unmounted volume looks like 'nothing there'; clearing the entry would strand the real file."""
+    gone = root / _COMPANY / _ITEM / f"{uuid.uuid4()}.txt"  # tenant directory does not exist
+    entry = _entry(gone, root)
+    session = FakeAsyncSession(results=[FakeResult([entry]), FakeResult([0]), FakeResult([0])])
+    assert (await AttachmentService().drain_removals(session))["removed"] == 0
+    assert entry not in session.deleted and "FileNotFoundError" in entry.last_error and entry.attempts == 1
+
+
+@pytest.mark.asyncio
+async def test_a_missing_root_is_a_failure_and_the_entry_stays(tmp_path):
+    absent = tmp_path / "unmounted"
+    entry = _entry(absent / "t" / "a.txt", absent)
+    session = FakeAsyncSession(results=[FakeResult([entry])])
+    with patch("llc.services.attachment_outbox.validate_path", return_value=absent / "t" / "a.txt"):
+        assert await outbox.drain_removals(session, absent, entry.root_id) == 0
+    assert entry not in session.deleted and "storage root is not present" in entry.last_error
+
+
+@pytest.mark.asyncio
+async def test_a_file_missing_under_a_present_parent_still_counts_as_removed(root):
+    parent = root / _COMPANY / _ITEM
+    parent.mkdir(parents=True)
+    entry = _entry(parent / f"{uuid.uuid4()}.txt", root)
+    session = FakeAsyncSession(results=[FakeResult([entry])])
+    assert await outbox.drain_removals(session, root, entry.root_id) == 1 and entry in session.deleted
+
+
+@pytest.mark.asyncio
+async def test_the_sweep_warns_with_a_count_and_no_path_when_entries_belong_to_another_node(caplog):
+    from unittest.mock import AsyncMock
+
+    from llc.scheduler import attachment_file_sweep as sweep
+
+    service = AsyncMock()
+    service.drain_removals.return_value = {"removed": 0, "stuck": 0, "other_root": 3}
+    service.sweep_staging.return_value = {}
+    with (
+        patch.object(sweep, "AttachmentService", return_value=service),
+        patch.object(sweep, "get_async_session_factory", return_value=FakeAsyncSession),
+    ):
+        await sweep._async_sweep()
+    warned = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+    assert any("3 attachment file removal(s) belong to another node" in m for m in warned)
+
+
 def test_the_root_identity_follows_the_root_and_the_override(tmp_path):
     a, b = tmp_path / "a", tmp_path / "b"
     a.mkdir()
