@@ -220,6 +220,7 @@ def test_a_declared_scope_that_the_sweep_does_not_reach_is_refused() -> None:
 _DECLARED_SCOPES = {
     "autobot-has-no-pro-tier-in-user-text": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "dead-icon-selector-vue-files": ("autobot-frontend/src",),
+    "icon-font-size-rule-vue-files": ("autobot-frontend/src",),
     "kit-shadow-ts-files-scanned-14908": ("autobot-frontend/src", "autobot-slm-frontend/src"),
     "duplicate-type-names-ts-files-scanned-14908": (
         "autobot-frontend/src",
