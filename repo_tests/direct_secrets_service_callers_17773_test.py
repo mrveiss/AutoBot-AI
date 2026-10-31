@@ -227,7 +227,7 @@ def _discover(root: Path) -> list[str]:
 REACH = declare(
     "direct-secrets-service-callers",
     discover=_discover,
-    floor=2936,  # mid-window: population 3036, window [2836, 3036] (#19582)
+    floor=3021,  # mid-window: population 3121, window (2921, 3121)
     growth=200,
     # Scope as data (#17844): "the backend and shared trees" named neither, and this guard is
     # one of the seven whose unqualified claim #17844 measured.
