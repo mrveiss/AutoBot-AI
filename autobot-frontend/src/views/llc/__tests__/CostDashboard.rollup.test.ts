@@ -31,6 +31,17 @@ const COMPLETE = {
   key: 'r2', label: 'SRE', per_month: '120.000000',
   costed: 2, not_costable: 0, total_steps: 2, is_complete: true, currencies: ['EUR'],
 }
+// #20123: the backend returns no total when the bucket spans currencies; each
+// currency's amount is what is shown.
+const MIXED = {
+  key: 'r3', label: 'Triage', per_month: null,
+  per_currency: [
+    { currency: 'EUR', per_month: '300.000000' },
+    { currency: 'USD', per_month: '500.000000' },
+  ],
+  is_mixed_currency: true,
+  costed: 2, not_costable: 0, total_steps: 2, is_complete: true, currencies: ['EUR', 'USD'],
+}
 
 function respond(rollup: unknown): void {
   get.mockImplementation((url: string) => {
@@ -104,6 +115,26 @@ describe('step rollup on the cost dashboard (#14599)', () => {
   // be evidence of nothing. The guard stays because it is cheap and because
   // this exact failure took a view down twice (#13617, #14598); it is honest
   // to record that it is unproven rather than to assert coverage it lacks.
+
+  it('lists each currency of a mixed bucket and states no single total (#20123)', async () => {
+    respond({ by_role: [MIXED], by_tool: [] })
+    const wrapper = await mountDashboard()
+
+    const amounts = wrapper.find('[data-testid="step-rollup-role"]').find('tbody td.num-cell')
+    expect(amounts.text()).toContain('300.000000 EUR')
+    expect(amounts.text()).toContain('500.000000 USD')
+    // No total, and no joined currency list standing in for one.
+    expect(amounts.text()).not.toContain('800')
+    expect(amounts.text()).not.toContain('EUR / USD')
+  })
+
+  it('renders a single-currency bucket as one figure with its currency', async () => {
+    respond({ by_role: [COMPLETE], by_tool: [] })
+    const wrapper = await mountDashboard()
+
+    const amounts = wrapper.find('[data-testid="step-rollup-role"]').find('tbody td.num-cell')
+    expect(amounts.text()).toBe('120.000000 EUR')
+  })
 
   it('explains why tool totals do not add up to role totals', async () => {
     respond({ by_role: [PARTIAL], by_tool: [{ ...PARTIAL, key: 'crm', label: 'crm' }] })
