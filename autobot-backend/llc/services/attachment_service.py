@@ -14,6 +14,7 @@ Text-extractable extensions: .txt .md .py .ts .js .json .yaml .yml .toml .csv
 Binary files are stored without extraction (text_extracted remains False).
 """
 
+import asyncio
 import os
 import uuid
 from pathlib import Path
@@ -27,6 +28,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.security.path_validator import validate_path
 from llc.models.attachment import LLCWorkItemAttachment
 from llc.services import attachment_files as files
+from llc.services import attachment_outbox as outbox
 from llc.storage_root import LLC_ATTACHMENT_STAGING_MAX_AGE_SECONDS, llc_local_storage_root
 
 logger = get_logger(__name__)
@@ -166,6 +168,7 @@ def _new_row(
     content_type: str,
     content: bytes,
     dest: Path,
+    sha256: str,
     extracted: Optional[str],
 ) -> LLCWorkItemAttachment:
     return LLCWorkItemAttachment(
@@ -177,7 +180,7 @@ def _new_row(
         filename=filename,
         content_type=content_type,
         size_bytes=len(content),
-        sha256=files.sha256_hex(content),
+        sha256=sha256,
         storage_path=str(dest),
         text_extracted=extracted is not None,
         extracted_text=extracted,
@@ -211,7 +214,7 @@ class AttachmentService:
         uploaded_by_user_uuid = uuid.UUID(uploaded_by_user_id) if uploaded_by_user_id else None
         dest = _storage_path(company_id, work_item_id, attachment_id, filename)
         # Stage -> commit -> publish (#19756). Nothing reaches `dest` until the row is durable.
-        staged = files.stage_bytes(_resolve_storage_root(), attachment_id, content)
+        staged = await asyncio.to_thread(files.stage_bytes, _resolve_storage_root(), attachment_id, content)
         row = _new_row(
             attachment_id=attachment_id,
             company_id=company_id,
@@ -222,11 +225,12 @@ class AttachmentService:
             content_type=content_type,
             content=content,
             dest=dest,
-            extracted=_extract_text(staged, filename),
+            sha256=await asyncio.to_thread(files.sha256_hex, content),
+            extracted=await asyncio.to_thread(_extract_text, staged, filename),
         )
         session.add(row)
         await self._commit_staged(session, staged)
-        self._publish_committed(staged, dest, attachment_id)
+        await self._publish_committed(staged, dest, attachment_id)
         await session.refresh(row)
         return row
 
@@ -245,7 +249,7 @@ class AttachmentService:
             raise
 
     @staticmethod
-    def _publish_committed(staged: Path, dest: Path, attachment_id: str) -> None:
+    async def _publish_committed(staged: Path, dest: Path, attachment_id: str) -> None:
         """Move the file into place once its row is durable.
 
         A failure here leaves a committed row whose file is still staged. That is not hidden: it
@@ -253,7 +257,7 @@ class AttachmentService:
         staging sweep retries the move.
         """
         try:
-            files.publish(staged, dest)
+            await asyncio.to_thread(files.publish, staged, dest)
         except OSError as exc:
             logger.error(
                 "#19756: attachment %s committed but publishing %s failed: %s; the staging sweep will retry",
@@ -312,7 +316,7 @@ class AttachmentService:
             company_id=company_id,
         )
         staged = files.staging_path(_resolve_storage_root(), str(row.id))
-        content = _read_local(Path(row.storage_path), staged)
+        content = await asyncio.to_thread(_read_local, Path(row.storage_path), staged)
         return row, content
 
     async def get_text(
@@ -346,18 +350,36 @@ class AttachmentService:
             company_id=company_id,
         )
         # The removal is recorded in this transaction (#19756); the unlink happens after it commits.
-        entry = files.enqueue_removal(session, row)
+        root = _resolve_storage_root()
+        entry_id = outbox.enqueue_removal(session, row, outbox.storage_root_id(root)).id
         await session.delete(row)
         await session.commit()
-        await files.drain_removals(session, _resolve_storage_root(), [entry])
+        await self._drain_after_delete(session, root, entry_id)
 
-    async def drain_removals(self, session: AsyncSession) -> int:
-        """Retry every outbox entry; returns how many files are now gone."""
-        entries = await files.pending_removals(session)
-        return await files.drain_removals(session, _resolve_storage_root(), entries)
+    @staticmethod
+    async def _drain_after_delete(session: AsyncSession, root: Path, entry_id: uuid.UUID) -> None:
+        """Best-effort unlink right after the delete committed.
+
+        The row delete is already durable, so a failure here must not turn the request into a 500:
+        it is logged and the entry stays in the outbox for the sweep.
+        """
+        try:
+            await outbox.drain_removals(session, root, outbox.storage_root_id(root), only_id=entry_id)
+        except Exception:
+            logger.exception(
+                "#19756: immediate file removal for outbox entry %s failed; the sweep will retry", entry_id
+            )
+            await session.rollback()
+
+    async def drain_removals(self, session: AsyncSession) -> dict[str, int]:
+        """Drain this node's outbox; returns {removed, stuck, other_root}."""
+        root = _resolve_storage_root()
+        root_id = outbox.storage_root_id(root)
+        removed = await outbox.drain_removals(session, root, root_id)
+        return {"removed": removed, **await outbox.outbox_counts(session, root_id)}
 
     async def sweep_staging(self, session: AsyncSession) -> dict[str, int]:
-        """Publish committed-but-unpublished uploads and unlink stale uncommitted ones."""
+        """Publish committed-but-unpublished uploads; quarantine (never delete) stale uncommitted ones."""
         return await files.sweep_staging(
             session, _resolve_storage_root(), LLC_ATTACHMENT_STAGING_MAX_AGE_SECONDS, _dest_for_row
         )

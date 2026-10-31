@@ -32,7 +32,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from autobot_shared.env_utils import env_int_clamped
+from autobot_shared.env_utils import env_int_clamped, env_str
 
 #: Env var naming the local storage root. Unprefixed and pre-existing; kept as
 #: the single spelling rather than introduced here.
@@ -56,3 +56,13 @@ LLC_ATTACHMENT_STAGING_MAX_AGE_SECONDS = env_int_clamped(
 
 #: Seconds between runs of the attachment file sweep (#19756).
 LLC_ATTACHMENT_SWEEP_INTERVAL_SECONDS = env_int_clamped("AUTOBOT_LLC_ATTACHMENT_SWEEP_INTERVAL_SECONDS", 300, min_v=30)
+
+#: Failed removals an outbox entry may accumulate before it is marked stuck and skipped (#19756).
+LLC_ATTACHMENT_REMOVAL_MAX_ATTEMPTS = env_int_clamped("AUTOBOT_LLC_ATTACHMENT_REMOVAL_MAX_ATTEMPTS", 10, min_v=1)
+
+#: Seconds an outbox entry waits after a failed attempt before it is retried (#19756).
+LLC_ATTACHMENT_REMOVAL_RETRY_SECONDS = env_int_clamped("AUTOBOT_LLC_ATTACHMENT_REMOVAL_RETRY_SECONDS", 300, min_v=30)
+
+#: Names the storage this node owns, stamped on every outbox row (#19756). Empty means derive it
+#: from host and root path; set the SAME value on every node that mounts one shared volume.
+LLC_ATTACHMENT_ROOT_ID_OVERRIDE = env_str("AUTOBOT_LLC_ATTACHMENT_ROOT_ID", "")

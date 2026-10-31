@@ -34,6 +34,11 @@ class LLCAttachmentFileDeletion(Base):
     attachment_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     company_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     storage_path: Mapped[str] = mapped_column(sa.Text, nullable=False)
+    #: The storage identity of the node that deleted the row. Only a node with the same identity
+    #: drains the entry: a missing file elsewhere proves nothing about this one's (#19756).
+    root_id: Mapped[str] = mapped_column(sa.Text, nullable=False, index=True)
     attempts: Mapped[int] = mapped_column(sa.Integer, nullable=False, server_default=sa.text("0"))
     last_error: Mapped[Optional[str]] = mapped_column(sa.Text, nullable=True)
     last_attempt_at: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True), nullable=True)
+    #: Set after too many failed attempts. A stuck entry is kept, skipped and counted; never deleted.
+    stuck_at: Mapped[Optional[datetime]] = mapped_column(sa.DateTime(timezone=True), nullable=True)

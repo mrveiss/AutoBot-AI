@@ -8,12 +8,12 @@ Two passes, in this order:
 
 1. **Retry owed removals.** Every row in the attachment deletion outbox is a file whose
    attachment row a caller already deleted. The file is unlinked and the entry removed; a
-   failure keeps the entry, with its error, for the next tick. This decides nothing new about
+   failure keeps the entry, with its error, for a later tick, and after repeated failures the
+   entry is marked stuck, skipped and counted in the result. This decides nothing new about
    what is deleted (#17038) -- it completes a delete somebody asked for.
 2. **Settle stale staging files.** A staged file whose row was committed is published to its
-   final path; one with no row is the remains of an upload that never committed and is
-   unlinked. Only the staging directory is read, and only files older than
-   ``AUTOBOT_LLC_ATTACHMENT_STAGING_MAX_AGE_SECONDS``.
+   final path; one with no row, older than ``AUTOBOT_LLC_ATTACHMENT_STAGING_MAX_AGE_SECONDS``,
+   is moved to ``.staging/quarantine``. Nothing is deleted. Only the staging directory is read.
 """
 
 import asyncio
@@ -52,12 +52,14 @@ async def _async_sweep() -> dict:
     service = AttachmentService()
     factory = get_async_session_factory()
     async with factory() as session:
-        removed = await service.drain_removals(session)
+        outbox = await service.drain_removals(session)
         staging = await service.sweep_staging(session)
     # Every number is reported, zeros included: a sweep that found nothing and one that did
     # not run must not look the same in the logs.
-    logger.info("#19756: attachment file sweep removed %d file(s); staging %s", removed, staging)
-    return {"removed": removed, **staging}
+    logger.info("#19756: attachment file sweep outbox %s; staging %s", outbox, staging)
+    if outbox["stuck"]:
+        logger.error("#19756: %d attachment file removal(s) are stuck and need a person", outbox["stuck"])
+    return {**outbox, **staging}
 
 
 __all__ = ["run_attachment_file_sweep"]

@@ -23,6 +23,7 @@ import pytest
 from llc.models.attachment import LLCWorkItemAttachment
 from llc.models.attachment_deletion import LLCAttachmentFileDeletion
 from llc.services import attachment_files as files
+from llc.services import attachment_outbox as outbox
 from llc.services.attachment_service import AttachmentNotFound, AttachmentService
 from testkit.fake_async_session import FakeAsyncSession, FakeResult
 
@@ -144,8 +145,29 @@ async def test_a_missing_file_with_nothing_staged_is_still_not_found(root):
 # --- AC2: delete goes through the outbox --------------------------------------------------
 
 
+def _delete_session(row, **kw) -> FakeAsyncSession:
+    """A session answering the row lookup, then the outbox claim with whatever delete() enqueued."""
+    session = FakeAsyncSession(
+        results=[
+            FakeResult([row]),
+            lambda _stmt: [o for o in session.added if isinstance(o, LLCAttachmentFileDeletion)],
+        ],
+        **kw,
+    )
+    return session
+
+
+async def _delete(session, row) -> None:
+    await AttachmentService().delete(session, attachment_id=str(row.id), work_item_id=_ITEM, company_id=_COMPANY)
+
+
 async def _uploaded(root: Path) -> LLCWorkItemAttachment:
     return await _upload(FakeAsyncSession())
+
+
+def _entry(path: Path | str, root: Path, **kw) -> LLCAttachmentFileDeletion:
+    fields = {"root_id": outbox.storage_root_id(root), "attachment_id": uuid.uuid4(), "company_id": uuid.uuid4()}
+    return LLCAttachmentFileDeletion(id=uuid.uuid4(), storage_path=str(path), **{**fields, **kw})
 
 
 @pytest.mark.asyncio
@@ -157,12 +179,13 @@ async def test_delete_records_the_removal_in_the_same_transaction_and_unlinks_af
     def at_commit(_n: int):
         on_disk_at_commit.append(path.exists())
 
-    session = FakeAsyncSession(results=[FakeResult([row])], commit_error=at_commit)
-    await AttachmentService().delete(session, attachment_id=str(row.id), work_item_id=_ITEM, company_id=_COMPANY)
+    session = _delete_session(row, commit_error=at_commit)
+    await _delete(session, row)
 
     assert on_disk_at_commit[0] is True  # the commit that deletes the row runs BEFORE the unlink
     entries = [o for o in session.added if isinstance(o, LLCAttachmentFileDeletion)]
     assert len(entries) == 1 and entries[0].storage_path == str(path) and entries[0].attachment_id == row.id
+    assert entries[0].root_id == outbox.storage_root_id(root)
     assert row in session.deleted and entries[0] in session.deleted  # cleared once the file was gone
     assert not path.exists()
 
@@ -170,9 +193,8 @@ async def test_delete_records_the_removal_in_the_same_transaction_and_unlinks_af
 @pytest.mark.asyncio
 async def test_a_failed_delete_commit_leaves_the_file_and_unlinks_nothing(root):
     row = await _uploaded(root)
-    session = FakeAsyncSession(results=[FakeResult([row])], commit_error=RuntimeError("commit failed"))
     with pytest.raises(RuntimeError):
-        await AttachmentService().delete(session, attachment_id=str(row.id), work_item_id=_ITEM, company_id=_COMPANY)
+        await _delete(_delete_session(row, commit_error=RuntimeError("commit failed")), row)
     assert Path(row.storage_path).exists()
 
 
@@ -180,16 +202,112 @@ async def test_a_failed_delete_commit_leaves_the_file_and_unlinks_nothing(root):
 async def test_a_forced_unlink_failure_leaves_an_outbox_row_that_a_retry_clears(root):
     row = await _uploaded(root)
     path = Path(row.storage_path)
-    session = FakeAsyncSession(results=[FakeResult([row])])
+    session = _delete_session(row)
     with patch.object(Path, "unlink", side_effect=PermissionError("denied")):
-        await AttachmentService().delete(session, attachment_id=str(row.id), work_item_id=_ITEM, company_id=_COMPANY)
+        await _delete(session, row)
     entry = next(o for o in session.added if isinstance(o, LLCAttachmentFileDeletion))
     assert entry not in session.deleted and path.exists()
     assert entry.attempts == 1 and "PermissionError" in entry.last_error
 
-    retry = FakeAsyncSession(results=[FakeResult([entry])])
-    assert await AttachmentService().drain_removals(retry) == 1
-    assert not path.exists() and entry in retry.deleted and entry.attempts == 2
+    retry = FakeAsyncSession(results=[FakeResult([entry]), FakeResult([0]), FakeResult([0])])
+    result = await AttachmentService().drain_removals(retry)
+    assert result["removed"] == 1 and not path.exists() and entry in retry.deleted and entry.attempts == 2
+
+
+@pytest.mark.asyncio
+async def test_a_failure_in_the_request_path_drain_does_not_fail_a_committed_delete(root, caplog):
+    row = await _uploaded(root)
+    session = _delete_session(row, commit_error=lambda n: RuntimeError("db gone") if n >= 2 else None)
+    await _delete(session, row)  # must not raise: the row delete is already durable
+    assert row in session.deleted and session.rollbacks == 1  # the entry stays for the sweep
+    assert any("sweep will retry" in r.getMessage() and r.levelname == "ERROR" for r in caplog.records)
+
+
+@pytest.mark.asyncio
+async def test_a_lost_race_drains_nothing_and_unlinks_nothing(root):
+    """Another worker holds the entry (SKIP LOCKED hides it): this drain claims nothing."""
+    victim = root / "t" / "keep.txt"
+    victim.parent.mkdir()
+    _write(victim, b"keep")
+    assert (
+        await outbox.drain_removals(FakeAsyncSession(results=[FakeResult([])]), root, outbox.storage_root_id(root)) == 0
+    )
+    assert victim.exists()
+
+
+def test_the_claim_is_skip_locked_oldest_attempt_first_and_excludes_stuck_and_foreign_entries(root):
+    from sqlalchemy.dialects import postgresql
+
+    sql = str(
+        outbox.claim_statement("node-a").compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
+    )
+    assert "FOR UPDATE SKIP LOCKED" in sql and "NULLS FIRST" in sql
+    assert "root_id = 'node-a'" in sql and "stuck_at IS NULL" in sql and "last_attempt_at <=" in sql
+
+
+@pytest.mark.asyncio
+async def test_the_claim_runs_on_sqlite_and_selects_only_what_this_node_may_drain(tmp_path):
+    from datetime import timedelta
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from autobot_shared.time_utils import now_utc
+
+    engine = create_async_engine(  # canonical: ignore py-adhoc-db-engine (test-local engine)
+        f"sqlite+aiosqlite:///{tmp_path / 'o.db'}"
+    )
+    async with engine.begin() as conn:
+        await conn.run_sync(LLCAttachmentFileDeletion.__table__.create)
+    now = now_utc()
+    mine = [
+        _entry(f"/x/{n}", tmp_path, root_id="me", **kw)
+        for n, kw in enumerate(
+            [{}, {"last_attempt_at": now - timedelta(days=1)}, {"last_attempt_at": now}, {"stuck_at": now}]
+        )
+    ]
+    foreign = _entry("/x/f", tmp_path, root_id="other")
+    made = async_sessionmaker(  # canonical: ignore py-adhoc-db-engine (test-local factory)
+        engine, expire_on_commit=False
+    )
+    async with made() as session:
+        session.add_all([*mine, foreign])
+        await session.commit()
+        claimed = (await session.execute(outbox.claim_statement("me"))).scalars().all()
+    await engine.dispose()
+    # never-attempted first, then the older attempt; not the just-tried one (backoff), the stuck one or the foreign one
+    assert [e.storage_path for e in claimed] == ["/x/0", "/x/1"]
+
+
+@pytest.mark.asyncio
+async def test_a_stuck_entry_is_kept_marked_skipped_and_counted(root):
+    from llc.storage_root import LLC_ATTACHMENT_REMOVAL_MAX_ATTEMPTS
+
+    entry = _entry("/etc/passwd", root, attempts=LLC_ATTACHMENT_REMOVAL_MAX_ATTEMPTS - 1)
+    session = FakeAsyncSession(results=[FakeResult([entry]), FakeResult([1]), FakeResult([0])])
+    result = await AttachmentService().drain_removals(session)
+    assert entry.stuck_at is not None and entry not in session.deleted and "ValueError" in entry.last_error
+    assert result == {"removed": 0, "stuck": 1, "other_root": 0}
+
+
+@pytest.mark.asyncio
+async def test_a_failing_entry_does_not_stop_a_later_one_in_the_same_drain(root):
+    bad = _entry("/etc/passwd", root)
+    good_file = root / "t" / "a.txt"
+    good_file.parent.mkdir()
+    _write(good_file, b"x")
+    good = _entry(good_file, root)
+    session = FakeAsyncSession(results=[FakeResult([bad, good]), FakeResult([0]), FakeResult([0])])
+    result = await AttachmentService().drain_removals(session)
+    assert result["removed"] == 1 and not good_file.exists() and bad not in session.deleted
+
+
+def test_the_root_identity_follows_the_root_and_the_override(tmp_path):
+    a, b = tmp_path / "a", tmp_path / "b"
+    a.mkdir()
+    b.mkdir()
+    assert outbox.storage_root_id(a) == outbox.storage_root_id(a) != outbox.storage_root_id(b)
+    with patch("llc.services.attachment_outbox.LLC_ATTACHMENT_ROOT_ID_OVERRIDE", "shared-volume"):
+        assert outbox.storage_root_id(a) == outbox.storage_root_id(b) == "shared-volume"
 
 
 # --- the outbox is bounded by the storage root --------------------------------------------
@@ -199,13 +317,10 @@ async def test_a_forced_unlink_failure_leaves_an_outbox_row_that_a_retry_clears(
 async def test_an_outbox_path_outside_the_root_is_refused_and_recorded(root, tmp_path_factory):
     outside = tmp_path_factory.mktemp("elsewhere") / "keep.txt"
     _write(outside, b"keep")
-    entry = LLCAttachmentFileDeletion(
-        id=uuid.uuid4(), attachment_id=uuid.uuid4(), company_id=uuid.uuid4(), storage_path=str(outside)
-    )
-    session = FakeAsyncSession(results=[FakeResult([entry])])
-    assert await AttachmentService().drain_removals(session) == 0
-    assert _read(outside) == b"keep" and entry not in session.deleted
-    assert "ValueError" in entry.last_error
+    entry = _entry(outside, root)
+    session = FakeAsyncSession(results=[FakeResult([entry]), FakeResult([0]), FakeResult([0])])
+    assert (await AttachmentService().drain_removals(session))["removed"] == 0
+    assert _read(outside) == b"keep" and entry not in session.deleted and "ValueError" in entry.last_error
 
 
 @pytest.mark.asyncio
@@ -215,10 +330,9 @@ async def test_an_outbox_path_naming_the_root_or_staging_is_refused(root, target
     victim.parent.mkdir(parents=True, exist_ok=True)
     if target == "staging":
         _write(victim, b"staged")
-    entry = LLCAttachmentFileDeletion(
-        id=uuid.uuid4(), attachment_id=uuid.uuid4(), company_id=uuid.uuid4(), storage_path=str(victim)
-    )
-    assert await AttachmentService().drain_removals(FakeAsyncSession(results=[FakeResult([entry])])) == 0
+    entry = _entry(victim, root)
+    session = FakeAsyncSession(results=[FakeResult([entry]), FakeResult([0]), FakeResult([0])])
+    assert (await AttachmentService().drain_removals(session))["removed"] == 0
     assert victim.exists() and entry.last_error
 
 
@@ -230,9 +344,8 @@ def _age(path: Path, seconds: int = 7200) -> None:
     os.utime(path, (old, old))
 
 
-def _stage(root: Path, name: str | None = None, age: int = 7200) -> Path:
-    attachment_id = name or str(uuid.uuid4())
-    staged = files.stage_bytes(root, attachment_id, b"x") if name is None else _raw_stage(root, name)
+def _stage(root: Path, age: int = 7200) -> Path:
+    staged = files.stage_bytes(root, str(uuid.uuid4()), b"x")
     _age(staged, age)
     return staged
 
@@ -240,12 +353,12 @@ def _stage(root: Path, name: str | None = None, age: int = 7200) -> Path:
 def _raw_stage(root: Path, name: str) -> Path:
     path = root / files.STAGING_DIRNAME / name
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(b"x")
+    _write(path, b"x")
     return path
 
 
 @pytest.mark.asyncio
-async def test_the_sweep_unlinks_an_old_staged_file_with_no_row_and_nothing_else(root):
+async def test_the_sweep_quarantines_an_old_staged_file_with_no_row_and_deletes_nothing(root):
     orphan = _stage(root)
     young = _stage(root, age=0)
     stray = _raw_stage(root, "notes.txt")  # not named for an attachment
@@ -254,13 +367,51 @@ async def test_the_sweep_unlinks_an_old_staged_file_with_no_row_and_nothing_else
     tenant.mkdir(parents=True)
     published = tenant / f"{uuid.uuid4()}.txt"
     _write(published, b"live")
-    _age(published)
 
-    session = FakeAsyncSession(default_result=FakeResult([]))
-    counts = await AttachmentService().sweep_staging(session)
+    counts = await AttachmentService().sweep_staging(FakeAsyncSession(default_result=FakeResult([])))
 
-    assert counts == {"published": 0, "discarded": 1, "skipped": 0, "failed": 0}
+    assert counts["quarantined"] == 1 and counts["waiting"] == 1 and counts["published"] == 0
     assert not orphan.exists() and young.exists() and stray.exists() and published.exists()
+    quarantined = list((root / files.STAGING_DIRNAME / files.QUARANTINE_DIRNAME).iterdir())
+    assert len(quarantined) == 1 and _read(quarantined[0]) == b"x"
+
+
+@pytest.mark.asyncio
+async def test_a_staged_file_with_a_row_is_published_whatever_its_age(root):
+    row = await _upload(FakeAsyncSession())
+    Path(row.storage_path).unlink()
+    staged = files.stage_bytes(root, str(row.id), b"hello")  # age 0: the row is the proof, not the clock
+    counts = await AttachmentService().sweep_staging(FakeAsyncSession(results=[FakeResult([row])]))
+    assert counts["published"] == 1 and _read(Path(row.storage_path)) == b"hello" and not staged.exists()
+
+
+@pytest.mark.asyncio
+async def test_the_sweep_locks_the_row_while_it_publishes(root):
+    row = await _upload(FakeAsyncSession())
+    Path(row.storage_path).unlink()
+    files.stage_bytes(root, str(row.id), b"hello")
+    session = FakeAsyncSession(results=[FakeResult([row])])
+    await AttachmentService().sweep_staging(session)
+    assert "FOR UPDATE" in str(session.statements[0]) and "SKIP LOCKED" not in str(session.statements[0])
+
+
+def test_a_publish_that_lost_the_race_to_another_publisher_is_not_a_failure(root):
+    dest = root / "t" / "a.txt"
+    dest.parent.mkdir()
+    _write(dest, b"done")
+    files.publish(root / files.STAGING_DIRNAME / "gone.part", dest)  # staged file already moved: no error
+    with pytest.raises(FileNotFoundError):
+        files.publish(root / files.STAGING_DIRNAME / "gone.part", dest.parent / "other.txt")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("published", "key"), [(b"hello", "duplicate"), (b"DIFFERENT", "conflict")])
+async def test_both_copies_existing_is_counted_and_neither_is_deleted(root, published, key):
+    row = await _upload(FakeAsyncSession())
+    _write(Path(row.storage_path), published)
+    staged = files.stage_bytes(root, str(row.id), b"hello")
+    counts = await AttachmentService().sweep_staging(FakeAsyncSession(results=[FakeResult([row])]))
+    assert counts[key] == 1 and staged.exists() and _read(Path(row.storage_path)) == published
 
 
 @pytest.mark.asyncio
@@ -272,9 +423,17 @@ async def test_the_sweep_never_reads_outside_the_staging_directory(root):
     link = root / files.STAGING_DIRNAME
     link.mkdir()
     (link / f"{uuid.uuid4()}.part").symlink_to(victim)
-    session = FakeAsyncSession(default_result=FakeResult([]))
-    await AttachmentService().sweep_staging(session)
+    await AttachmentService().sweep_staging(FakeAsyncSession(default_result=FakeResult([])))
     assert victim.exists()
+
+
+def test_staging_is_fsynced_before_the_commit_and_the_directory_after_the_rename(root):
+    with patch("llc.services.attachment_files.os.fsync") as fsync:
+        staged = files.stage_bytes(root, str(uuid.uuid4()), b"x")
+        assert fsync.call_count == 2  # the file, then its directory
+        fsync.reset_mock()
+        files.publish(staged, root / "t" / "a.txt")
+        assert fsync.call_count == 1
 
 
 # --- wiring ------------------------------------------------------------------------------
@@ -293,3 +452,21 @@ def test_the_task_is_registered_on_the_scheduler_package():
     from llc.scheduler.attachment_file_sweep import run_attachment_file_sweep
 
     assert scheduler.run_attachment_file_sweep is run_attachment_file_sweep
+
+
+def test_module_constants_agree_with_the_registry_defaults_and_floors():
+    """Defaults live in code and in the registry; this ties the two homes together (#19756)."""
+    import autobot_shared.env_registry_llc  # noqa: F401
+    from autobot_shared import env_registry
+    from llc import storage_root as sr
+
+    pairs = {
+        "AUTOBOT_LLC_ATTACHMENT_STAGING_MAX_AGE_SECONDS": (sr.LLC_ATTACHMENT_STAGING_MAX_AGE_SECONDS, 300),
+        "AUTOBOT_LLC_ATTACHMENT_SWEEP_INTERVAL_SECONDS": (sr.LLC_ATTACHMENT_SWEEP_INTERVAL_SECONDS, 30),
+        "AUTOBOT_LLC_ATTACHMENT_REMOVAL_MAX_ATTEMPTS": (sr.LLC_ATTACHMENT_REMOVAL_MAX_ATTEMPTS, 1),
+        "AUTOBOT_LLC_ATTACHMENT_REMOVAL_RETRY_SECONDS": (sr.LLC_ATTACHMENT_REMOVAL_RETRY_SECONDS, 30),
+    }
+    for name, (value, floor) in pairs.items():
+        spec = env_registry.REGISTRY[name]
+        assert spec.range == (floor, None), name
+        assert value == spec.default, name

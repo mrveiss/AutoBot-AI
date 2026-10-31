@@ -12,6 +12,9 @@ Create Date: 2026-10-31 00:00:01.000000
 backfilled (a backfill would read every stored file). Rows uploaded earlier keep a NULL
 ``sha256``. Guarded for a database that ``create_all`` already built.
 
+Downgrade drops the ``sha256`` column (the hashes are derived from the stored files, so they
+can be recomputed) and the outbox table, and refuses to drop the table while it holds entries.
+
 Chain note: ``20261031_106`` (company OS cost events) also revises ``20261030_105``. Whichever
 of the two merges second re-points its ``down_revision`` at the other.
 """
@@ -43,13 +46,16 @@ def upgrade() -> None:
         sa.Column("attachment_id", UUID(as_uuid=True), nullable=False),
         sa.Column("company_id", UUID(as_uuid=True), nullable=False),
         sa.Column("storage_path", sa.Text, nullable=False),
+        sa.Column("root_id", sa.Text, nullable=False),
         sa.Column("attempts", sa.Integer, nullable=False, server_default=sa.text("0")),
         sa.Column("last_error", sa.Text, nullable=True),
         sa.Column("last_attempt_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("stuck_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
     )
     op.create_index(f"ix_{_TABLE}_attachment_id", _TABLE, ["attachment_id"])
+    op.create_index(f"ix_{_TABLE}_root_id", _TABLE, ["root_id"])
 
 
 def downgrade() -> None:
@@ -61,6 +67,7 @@ def downgrade() -> None:
             raise NotImplementedError(
                 f"{pending} attachment file removal(s) still pending in {_TABLE}; drain them first"
             )
+        op.drop_index(f"ix_{_TABLE}_root_id", table_name=_TABLE)
         op.drop_index(f"ix_{_TABLE}_attachment_id", table_name=_TABLE)
         op.drop_table(_TABLE)
     if has_column("llc_work_item_attachments", "sha256"):
