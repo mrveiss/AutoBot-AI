@@ -106,7 +106,7 @@ def _scanned_files(root: Path) -> list[str]:
 SCAN_REACH = declare(
     "deployment-mode-detector-scan",
     discover=_scanned_files,
-    floor=5261,  # re-pinned mid-window (train 82 on main)
+    floor=5326,  # re-pinned mid-window (train 82 on main)
     growth=150,
     what="python files scanned for a second deployment-mode decision body",
     roots=("autobot-backend/", "autobot-infrastructure/"),
