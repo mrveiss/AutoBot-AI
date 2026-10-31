@@ -195,3 +195,13 @@ def test_the_bound_cuts_a_redacted_value() -> None:
 @pytest.mark.parametrize("text", ["fatal: unable to access u: Couldn't connect to server"])
 def test_a_refused_connection_in_curls_wording_counts_as_transient(text: str) -> None:
     assert gf.is_transient(text)
+
+
+def test_a_long_first_line_cannot_hide_the_transient_marker() -> None:
+    detail = gf.failure_detail(f"fatal: {'x' * 1000}: the remote end hung up".encode())
+    assert gf.is_transient(detail)
+    assert len(detail) == gf.GIT_FAILURE_DETAIL_CHARS
+
+
+def test_a_long_failure_with_no_marker_stays_not_transient() -> None:
+    assert not gf.is_transient(gf.failure_detail(f"fatal: {'x' * 1000}".encode()))

@@ -22,6 +22,15 @@ def redacted(text: str) -> str:
     return redact_content(redact_text(text))
 
 
+def _bounded(text: str) -> str:
+    """Cut to the limit, keeping a transient marker past it: the retry decision reads this text."""
+    marker = _TRANSIENT.search(text)
+    if marker is None or marker.end() <= GIT_FAILURE_DETAIL_CHARS:
+        return text[:GIT_FAILURE_DETAIL_CHARS]
+    found = marker.group(0)
+    return f"{text[: GIT_FAILURE_DETAIL_CHARS - len(found) - 5]} ... {found}"
+
+
 def failure_detail(stderr: bytes | None) -> str:
     """One redacted line: git's own fatal/error messages, or all of stderr when it printed none.
 
@@ -30,7 +39,7 @@ def failure_detail(stderr: bytes | None) -> str:
     """
     lines = [line.strip() for line in (stderr or b"").decode("utf-8", errors="replace").splitlines() if line.strip()]
     messages = [line for line in lines if _GIT_MESSAGE.match(line)] or lines
-    return redacted("; ".join(messages))[:GIT_FAILURE_DETAIL_CHARS]
+    return _bounded(redacted("; ".join(messages)))
 
 
 def is_transient(failure: str) -> bool:
