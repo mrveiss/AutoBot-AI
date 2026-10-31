@@ -145,6 +145,7 @@ import { useTranscriberApi } from '@/composables/transcriber/useTranscriberApi'
 import type { Project } from '@/composables/transcriber/useTranscriberApi'
 import { createLogger } from '@/utils/debugUtils'
 import { BaseModal, BaseButton } from '@autobot/ui'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const PAGE_SIZE = 50
 
@@ -247,17 +248,7 @@ async function executeDelete() {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    })
-  } catch {
-    return iso
-  }
-}
+const formatDate = createDateFormatter({ kind: 'date', intl: { year: 'numeric', month: 'short', day: 'numeric' } })
 </script>
 
 <style scoped>
