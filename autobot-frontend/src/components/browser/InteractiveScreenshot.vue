@@ -3,6 +3,7 @@
 // Author: mrveiss
 
 <script setup lang="ts">
+import { BaseSpinner } from '@autobot/ui'
 /**
  * InteractiveScreenshot — Shared interactive browser screenshot component (#1416)
  *
@@ -126,7 +127,7 @@ function submitType() {
         @click="handleClick"
       />
       <div v-if="loading" class="loading-overlay">
-        <div class="loading-spinner" />
+        <BaseSpinner size="lg" />
       </div>
 
       <!-- Region-marking overlay (#5136) -->
@@ -266,19 +267,6 @@ function submitType() {
   justify-content: center;
   background: rgba(0, 0, 0, 0.15);
   pointer-events: none;
-}
-
-.loading-spinner {
-  width: var(--spacing-8);
-  height: var(--spacing-8);
-  border: 3px solid rgba(255, 255, 255, 0.3);
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
 }
 
 .no-screenshot {
