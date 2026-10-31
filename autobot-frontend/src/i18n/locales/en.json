@@ -9213,8 +9213,6 @@
       "unavailableTitle": "Workflow Planner is not available",
       "unavailableHint": "This feature is switched off for your workspace, so there is nothing to show here yet.",
       "statusFlow": "Plan progress",
-      "statusNotAvailable": "This plan is {status}. Approval and conversion are not available yet, so it is shown read-only.",
-      "convertNotAvailable": "Creating workflows from a plan is not available yet.",
       "status": {
         "draft": "Draft",
         "measured": "Measured",
@@ -9301,7 +9299,58 @@
         "by_hand": "By Hand"
       },
       "gate": {
-        "missing": "Still missing"
+        "missing": "Still missing",
+        "title": "Ready to create?",
+        "unknown": "Other check",
+        "state": {
+          "met": "Met",
+          "open": "Open",
+          "pending": "Not checked yet"
+        },
+        "name": {
+          "G1": "Map is valid",
+          "G2": "Every step is measured",
+          "G3": "The chosen step is broken down",
+          "G4": "Every sub-step and edge case is labelled",
+          "G5": "By Hand list read and AI steps covered by approvals",
+          "G6": "Preview has no errors",
+          "G7": "You approved this plan",
+          "converted": "The workflows are created"
+        }
+      },
+      "readOnly": "This plan is {status}, so steps 1 to 4 are read-only.",
+      "firstProcess": {
+        "title": "Your company is ready",
+        "body": "Plan your first process: map it, measure it and pick the one number to improve.",
+        "plan": "Plan my first process",
+        "later": "Later"
+      },
+      "convert": {
+        "notReady": "Finish steps 1 to 4 first. The checks above show what is still missing.",
+        "previewTitle": "What will be created (preview, nothing exists yet)",
+        "createdTitle": "What was created",
+        "counts": "Workflows: {workflows}. Processes: {processes}.",
+        "ownerLane": "Owner: {lane}",
+        "errors": "Errors to fix before approving",
+        "warnings": "Warnings",
+        "documented": "Kept as handbook text, not built:",
+        "failedProposals": "{count} AI line proposals could not be filed. Retry to file them.",
+        "turnOnNotAvailable": "Turning workflows on is not available yet: nothing runs these workflows until it is.",
+        "openWorkflows": "Open workflows",
+        "unavailable": "This action is not available: the Workflow Planner is switched off for your workspace, or the plan no longer exists.",
+        "blocked": "Not ready yet. The checks above show what is missing.",
+        "approvedBy": "Approved by {by} at {at}.",
+        "preview": "Preview what will be created",
+        "previewAgain": "Refresh the preview",
+        "approve": "Approve",
+        "create": "Create workflows",
+        "retry": "Retry AI line proposals",
+        "approveTitle": "Approve this plan?",
+        "approveMessage": "You approve the preview shown. Any later edit to the plan clears this approval.",
+        "previewFailed": "Could not build the preview.",
+        "approveFailed": "Could not approve the plan.",
+        "convertFailed": "Could not create the workflows.",
+        "retryFailed": "Could not retry the AI line proposals."
       }
     }
   },
