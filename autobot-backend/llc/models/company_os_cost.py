@@ -31,7 +31,7 @@ class CompanyOsCostEvent(Base):
     __tablename__ = "company_os_cost_events"
 
     id: Mapped[uuid.UUID] = mapped_column(sa.Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    company_id: Mapped[str] = mapped_column(sa.String(255), nullable=False, index=True)
+    company_id: Mapped[uuid.UUID] = mapped_column(sa.Uuid(as_uuid=True), nullable=False, index=True)
     agent_id: Mapped[str] = mapped_column(sa.String(255), nullable=False)
     work_item_id: Mapped[uuid.UUID | None] = mapped_column(
         sa.Uuid(as_uuid=True),
