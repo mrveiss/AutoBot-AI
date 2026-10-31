@@ -61,10 +61,30 @@ describe('UpdateProgressPanel', () => {
     get.mockRejectedValueOnce(new Error('502')).mockResolvedValue(running)
     const w = mountPanel()
     await flushPromises()
-    expect(w.find('[data-testid="update-progress"]').exists()).toBe(false)
+    expect(w.get('[data-testid="update-progress-unavailable"]').text()).toContain('Could not read')
     await vi.advanceTimersByTimeAsync(5000)
     await flushPromises()
     expect(w.text()).toContain('install deps')
+    expect(w.find('[data-testid="update-progress-unavailable"]').exists()).toBe(false)
+  })
+
+  it('does not say a stopped run continues in the background', async () => {
+    get.mockResolvedValue({ ...running, state: 'exited_without_recap' })
+    const w = mountPanel()
+    await flushPromises()
+    expect(w.text()).toContain('stopped without finishing')
+    expect(w.text()).not.toContain('continues in the background')
+  })
+
+  it('does not show the last run when a new run becomes active', async () => {
+    get.mockResolvedValueOnce(running)
+    const w = mountPanel(false)
+    await flushPromises()
+    expect(w.text()).toContain('install deps')
+    get.mockImplementationOnce(() => new Promise(() => {}))
+    await w.setProps({ active: true })
+    expect(w.text()).not.toContain('install deps')
+    w.unmount()
   })
 
   it('shows a live run with no job on the page, as after a reload', async () => {

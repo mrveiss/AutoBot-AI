@@ -264,6 +264,7 @@
     "quiet": "The log has not moved for a while, but the update process is still running. Some steps are silent for a long time.",
     "task": "Task: {name}",
     "title": "Update progress",
+    "unavailable": "Could not read the update's progress just now. Trying again.",
     "unknown": "Could not tell whether the update process is still running.",
     "waiting": "Waiting for the update to write its log."
   },

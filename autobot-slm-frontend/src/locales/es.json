@@ -255,6 +255,19 @@
     "selectANode": "Select a node...",
     "update": "Actualizar"
   },
+  "updateProgressPanel": {
+    "elapsed": "Running for {minutes} min",
+    "exited": "The update process has stopped without finishing. Check the update report before running it again.",
+    "lastLine": "Last log line: {time}",
+    "note": "The update continues in the background. A long pause does not mean it failed.",
+    "play": "Play: {name}",
+    "quiet": "The log has not moved for a while, but the update process is still running. Some steps are silent for a long time.",
+    "task": "Task: {name}",
+    "title": "Update progress",
+    "unavailable": "Could not read the update's progress just now. Trying again.",
+    "unknown": "Could not tell whether the update process is still running.",
+    "waiting": "Waiting for the update to write its log."
+  },
   "codeSyncView": {
     "actions": "Acciones",
     "addSchedule": "Add Schedule",
