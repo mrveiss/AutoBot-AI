@@ -24,8 +24,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from autobot_shared.local_models import is_local_model
 from autobot_shared.redis_client import get_async_redis_client
 from llc.config import DEFAULT_BUDGET_LIMIT
-from llc.exceptions import BudgetExhausted, UnpricedModel
+from llc.exceptions import BudgetExhausted, UnpricedModel, WorkItemNotInCompany
 from llc.models.budget import LLCAgentBudget
+from llc.models.company_os_cost import CompanyOsCostEvent
+from llc.models.work_item import LLCWorkItem
 from llm_shared.pricing.sync_cache import PricingCacheCold, get_cached_price
 
 from .agent_budget_tracker import AgentBudgetState, AgentBudgetTracker
@@ -50,6 +52,72 @@ def _for_agent(agent_id: str, company_id: str):
         LLCAgentBudget.agent_id == agent_id,
         LLCAgentBudget.company_id == company_id,
     )
+
+
+async def _record_event(
+    session: AsyncSession, agent_id: str, company_id: str, work_item_id: Optional[str], usage: tuple
+) -> None:
+    """Add the per-event cost row (#16016); a work item must be in ``company_id``.
+
+    Refuses rather than recording unattributed: a caller that names an item and gets
+    a ``200`` believes the cost landed on it. Unknown and foreign ids are
+    indistinguishable on purpose, so the refusal does not confirm another company's id.
+    """
+    item_id = None
+    if work_item_id is not None:
+        try:
+            item_id = uuid.UUID(str(work_item_id))
+        except ValueError:
+            raise WorkItemNotInCompany(work_item_id) from None
+        owner = (
+            await session.execute(select(LLCWorkItem.company_id).where(LLCWorkItem.id == item_id))
+        ).scalar_one_or_none()
+        if owner is None or str(owner) != str(company_id):
+            raise WorkItemNotInCompany(work_item_id)
+    model, tokens_in, tokens_out, cost = usage
+    session.add(
+        CompanyOsCostEvent(
+            company_id=company_id,
+            agent_id=agent_id,
+            work_item_id=item_id,
+            model=model,
+            tokens_in=tokens_in,
+            tokens_out=tokens_out,
+            cost=cost,
+        )
+    )
+
+
+def _cost_of(model: str, agent_id: str, tokens_in: int, tokens_out: int) -> Decimal:
+    """Dollar cost of one call; ``UnpricedModel`` if it cannot be priced (moved out of ``ingest_cost_event``)."""
+    if is_local_model(model):
+        # #16316: free by construction -- a local model was never going to
+        # appear in a hosted-API price catalogue, and that absence is not
+        # the same fact as "nobody has priced this yet". Checked before the
+        # cache is consulted at all, so a cold or unpopulated snapshot can
+        # never affect a local model's cost.
+        return Decimal("0")
+    try:
+        pricing = get_cached_price(model)
+    except PricingCacheCold:
+        # #16316: the local mirror has not completed its first read from
+        # Redis yet. "Cannot compute right now" and "genuinely unpriced"
+        # both mean the same thing to a caller -- refuse, do not guess --
+        # so both raise the same exception; only the log line differs,
+        # because this one is transient and the other is not.
+        logger.warning(
+            "ingest_cost_event: pricing cache cold for model=%r agent=%s -- refusing rather than guessing",
+            model,
+            agent_id,
+        )
+        raise UnpricedModel(model=model, agent_id=agent_id) from None
+    if pricing is None:
+        # #15860: this used to log and charge zero. A cost of 0 and a cost
+        # that could not be computed are the same number, and only one of
+        # them is a fact -- so an unpriced model made dollar budgets
+        # silently inapplicable rather than visibly broken.
+        raise UnpricedModel(model=model, agent_id=agent_id)
+    return Decimal(str((tokens_in * pricing.input_per_1m + tokens_out * pricing.output_per_1m) / 1_000_000))
 
 
 class BudgetService(LLCServiceBase):
@@ -109,8 +177,12 @@ class BudgetService(LLCServiceBase):
         tokens_in: int,
         tokens_out: int,
         model: str,
+        work_item_id: Optional[str] = None,
     ) -> Decimal:
         """Record token cost for an agent and enforce budget limits (GH#8215, GH#8997).
+
+        Also writes one ``company_os_cost_events`` row (#16016), tied to ``work_item_id``
+        when given. Raises ``WorkItemNotInCompany`` if that item is not in ``company_id``.
 
         Supports two budget modes:
         - DOLLARS: tracks cost in USD, enforces budget_limit
@@ -124,37 +196,10 @@ class BudgetService(LLCServiceBase):
         Raises BudgetExhausted if spending exceeds the active budget mode limit,
         and UnpricedModel if the model is neither local nor in the live catalogue.
         """
-        if is_local_model(model):
-            # #16316: free by construction -- a local model was never going to
-            # appear in a hosted-API price catalogue, and that absence is not
-            # the same fact as "nobody has priced this yet". Checked before the
-            # cache is consulted at all, so a cold or unpopulated snapshot can
-            # never affect a local model's cost.
-            cost = Decimal("0")
-        else:
-            try:
-                pricing = get_cached_price(model)
-            except PricingCacheCold:
-                # #16316: the local mirror has not completed its first read from
-                # Redis yet. "Cannot compute right now" and "genuinely unpriced"
-                # both mean the same thing to a caller -- refuse, do not guess --
-                # so both raise the same exception; only the log line differs,
-                # because this one is transient and the other is not.
-                logger.warning(
-                    "ingest_cost_event: pricing cache cold for model=%r agent=%s -- refusing rather than guessing",
-                    model,
-                    agent_id,
-                )
-                raise UnpricedModel(model=model, agent_id=agent_id) from None
-            if pricing is None:
-                # #15860: this used to log and charge zero. A cost of 0 and a cost
-                # that could not be computed are the same number, and only one of
-                # them is a fact -- so an unpriced model made dollar budgets
-                # silently inapplicable rather than visibly broken.
-                raise UnpricedModel(model=model, agent_id=agent_id)
-            cost = Decimal(str((tokens_in * pricing.input_per_1m + tokens_out * pricing.output_per_1m) / 1_000_000))
+        cost = _cost_of(model, agent_id, tokens_in, tokens_out)
 
         total_tokens = tokens_in + tokens_out
+        await _record_event(session, agent_id, company_id, work_item_id, (model, tokens_in, tokens_out, cost))
 
         # Atomic increment — prevents lost-update across concurrent workers
         # Always update both dollar and token counters for analytics (GH#8997)
