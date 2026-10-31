@@ -17,11 +17,11 @@ Celery beat schedule entry:
 The schedule is registered in celery_app.py so that beat picks it up.
 """
 
-import logging
 from typing import TYPE_CHECKING, Optional
 
 from celery import shared_task
 
+from autobot_shared.logging_manager import get_logger
 from user_management.database import get_async_session_factory
 from utils.celery_reliability import (
     CELERY_MAX_RETRIES,
@@ -33,7 +33,7 @@ from utils.celery_reliability import (
 if TYPE_CHECKING:  # import cost paid only by type checkers
     from ..services.sprint_autoclose import SprintAutoCloseService
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # #13332: this module is imported EAGERLY by llc/scheduler/__init__.py, because
 # that is the only way Celery's autodiscovery reaches the @shared_task below
