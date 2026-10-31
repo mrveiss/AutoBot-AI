@@ -164,31 +164,40 @@ def test_the_task_runs_the_one_script() -> None:
     assert (repo_root() / _TASK).parent.joinpath("../files/check_model_kinds.sh").resolve() == repo_root() / _SCRIPT
 
 
-def _run_bare_metal_check(tmp_path: Path, model: str, reachable: bool = True):
-    """The installer's real library, sourced, against the fake model server."""
-    _fake_ollama(tmp_path, reachable)
+def _run_bare_metal_check(tmp_path: Path, reachable: bool = True):
+    """The installer's real library, sourced, against a fake model server answering every model as ``caps``."""
+    head = ['[ "$1" = list ] && exit 0', '[ "$1" = pull ] && exit 0'] if reachable else ["exit 1"]
+    cli = tmp_path / "ollama"
+    body = "printf '  Capabilities\\n    %s\\n\\n' \"$FAKE_CAPS\""
+    cli.write_text("\n".join(["#!/bin/sh", *head, body]) + "\n", encoding="utf-8")
+    cli.chmod(0o755)
     stubs = 'log_warn() { echo "WARN $*"; }; log_error() { echo "ERROR $*"; }'
-    script = f'{stubs}\nsource "{repo_root() / _BARE_METAL_LIB}"\npull_embedding_model {model}'
-    env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}"}
-    return subprocess.run(["bash", "-c", script], capture_output=True, text=True, check=False, env=env)
+    script = f'{stubs}\nsource "{repo_root() / _BARE_METAL_LIB}"\npull_embedding_model'
+    return lambda caps: subprocess.run(
+        ["bash", "-c", script],
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "FAKE_CAPS": caps},
+    )
 
 
 def test_the_bare_metal_install_stops_on_a_chat_model_in_the_embedding_role(tmp_path: Path) -> None:
-    out = _run_bare_metal_check(tmp_path, "chatty")
-    assert out.returncode == 1 and "WRONG-KIND chatty" in out.stdout
+    out = _run_bare_metal_check(tmp_path)("completion")
+    assert out.returncode == 1 and "WRONG-KIND nomic-embed-text:latest" in out.stdout
 
 
 def test_the_bare_metal_install_accepts_an_embedder(tmp_path: Path) -> None:
-    out = _run_bare_metal_check(tmp_path, "embedder")
+    out = _run_bare_metal_check(tmp_path)("embedding")
     assert out.returncode == 0 and "ERROR" not in out.stdout
 
 
 def test_the_bare_metal_install_only_warns_when_the_server_is_unreachable(tmp_path: Path) -> None:
-    out = _run_bare_metal_check(tmp_path, "embedder", reachable=False)
+    out = _run_bare_metal_check(tmp_path, reachable=False)("embedding")
     assert out.returncode == 0 and "WARN Could not check" in out.stdout
 
 
 def test_the_bare_metal_install_pulls_through_the_library() -> None:
     text = (repo_root() / _BARE_METAL).read_text(encoding="utf-8")
-    assert "lib/pull-embedding-model.sh" in text and "pull_embedding_model nomic-embed-text:latest" in text
-    assert "ollama pull nomic-embed-text:latest ||" not in text
+    assert "lib/pull-embedding-model.sh" in text
+    assert "nomic-embed-text" not in text, "the name's one home is agent_config's defaults"
