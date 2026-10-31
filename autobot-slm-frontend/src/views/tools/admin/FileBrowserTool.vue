@@ -52,10 +52,6 @@ const breadcrumbs = computed(() => {
 // Format file size
 const SIZE_OPTIONS = { decimals: 2, units: ['B', 'KB', 'MB', 'GB', 'TB'] } as const
 
-function formatDate(dateStr: string): string {
-  return formatDateTime(dateStr)
-}
-
 // Get file icon
 function getFileIcon(entry: FileEntry): string {
   if (entry.type === 'directory') {
@@ -279,7 +275,7 @@ onMounted(() => {
                   {{ entry.type === 'directory' ? '-' : formatFileSize(entry.size, SIZE_OPTIONS) }}
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                  {{ formatDate(entry.modified) }}
+                  {{ formatDateTime(entry.modified) }}
                 </td>
                 <td class="px-4 py-3 whitespace-nowrap text-sm text-gray-500 font-mono">
                   {{ entry.permissions }}
