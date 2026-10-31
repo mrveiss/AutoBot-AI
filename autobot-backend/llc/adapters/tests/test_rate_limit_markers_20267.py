@@ -191,6 +191,16 @@ async def test_real_overloaded_error_run_is_rate_limited(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_rate_limit_event_before_an_oversized_result_line_is_seen(tmp_path) -> None:
+    from llc.models.enums import LLCRunStatus
+
+    limited = {"type": "error", "error": {"type": "rate_limit_error", "message": "slow down"}}
+    result_event = {"type": "result", "subtype": "success", "is_error": True, "result": "other " + "z" * 9000}
+    result = await _status_run(tmp_path, [limited, result_event])
+    assert result.status == LLCRunStatus.RATE_LIMITED
+
+
+@pytest.mark.asyncio
 async def test_expired_login_run_with_529_uuid_is_auth_failed_not_rate_limited(tmp_path) -> None:
     from llc.models.enums import LLCRunStatus
 
