@@ -43,6 +43,7 @@ def upgrade() -> None:
         sa.Column("tokens_out", sa.BigInteger, nullable=False),
         sa.Column("cost", sa.Numeric(15, 6), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(
             ["work_item_id"], ["llc_work_items.id"], name="fk_company_os_cost_events_work_item", ondelete="SET NULL"
         ),
