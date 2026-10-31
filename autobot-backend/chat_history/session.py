@@ -864,7 +864,7 @@ class SessionMixin:
         # Save updated data (always use new format, #1721)
         chat_file_new = str(validate_relative_path(f"{session_id}_chat.json", chats_directory))
         async with aiofiles.open(chat_file_new, "w", encoding="utf-8") as f:
-            await f.write(json.dumps(chat_data, indent=2, ensure_ascii=False))
+            await f.write(self._encrypt_data(chat_data))  # #19864: a rename must not leave plaintext
 
         # Update Redis cache using existing helper
         await self._update_redis_session_cache(session_id, chat_data)

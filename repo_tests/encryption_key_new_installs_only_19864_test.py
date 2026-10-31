@@ -104,3 +104,11 @@ def test_install_sh_generates_only_without_a_secrets_file() -> None:
     line = next(ln for ln in text.splitlines() if ln.strip().startswith("autobot_encryption_key=$("))
     assert line.index('if [[ -f "${SECRETS_FILE}" ]]') < line.index("grep -oP") < line.index("openssl rand -hex 32")
     assert "AUTOBOT_ENCRYPTION_KEY=${autobot_encryption_key}" in text
+
+
+def test_the_key_read_accepts_the_line_shapes_the_root_key_read_does() -> None:
+    text = _read(f"{_ANS}/roles/backend/tasks/read_encryption_key.yml")
+    pattern = re.search(r"grep -oP '([^']+)'", text).group(1).replace(r"\K", "")
+    for line in ("AUTOBOT_ENCRYPTION_KEY=abc", "export AUTOBOT_ENCRYPTION_KEY=abc", '  AUTOBOT_ENCRYPTION_KEY="abc"'):
+        assert re.match(pattern, line), line
+    assert "regex_replace" in text
