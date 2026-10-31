@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import importlib
 
+import pytest
+
 import services.execution.snapshot_index as snapshot_index
 from autobot_shared.paths import project_root
 
@@ -53,3 +55,15 @@ def test_deployed_install_still_resolves_to_the_original_default(monkeypatch):
     finally:
         monkeypatch.delenv("AUTOBOT_PROJECT_ROOT", raising=False)
         importlib.reload(snapshot_index)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    ["[" * 200_000, '{"n": ' + "9" * 5000 + "}"],
+    ids=["deeply-nested", "over-long-integer"],
+)
+def test_unparseable_index_is_a_bad_record_not_an_exception(tmp_path, payload):
+    (tmp_path / snapshot_index._INDEX_FILENAME).write_text(payload, encoding="utf-8")
+    index = snapshot_index.SnapshotIndex(storage_path=tmp_path)
+    assert index.get("any") is None
+    assert index.list_by_session("any") == []
