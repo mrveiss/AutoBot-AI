@@ -309,12 +309,6 @@
  "autobot-frontend/src/components/chat/ChatFilePanel.vue": [
   "605c9515"
  ],
- "autobot-frontend/src/components/chat/ChatInput.vue": [
-  "11f7ab8c",
-  "1d33149c",
-  "56797029",
-  "64bbaf1e"
- ],
  "autobot-frontend/src/components/chat/ChatInterface.vue": [
   "0486524d",
   "9439e749",
