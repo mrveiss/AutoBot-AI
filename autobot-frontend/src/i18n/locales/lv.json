@@ -262,6 +262,13 @@
     },
     "input": {
       "retryUpload": "Mēģiniet augšupielādēt vēlreiz",
+      "uploadError": {
+        "http": "Augšupielāde neizdevās (statuss {status})",
+        "invalidResponse": "Serveris nosūtīja nelasāmu atbildi",
+        "network": "Tīkla kļūda augšupielādes laikā",
+        "cancelled": "Augšupielāde atcelta",
+        "unknown": "Augšupielāde neizdevās"
+      },
       "filesAttached": "{count} faili pievienoti",
       "clearAll": "Notīrīt visu",
       "removeFile": "Noņemt failu",
