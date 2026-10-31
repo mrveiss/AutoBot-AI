@@ -229,7 +229,8 @@ const {
 }
 
 .preview-overlay .icon {
-  font-size: var(--text-2xl);
+  width: var(--text-2xl);
+  height: var(--text-2xl);
 }
 
 /* Actions */
