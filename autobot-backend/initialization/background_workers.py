@@ -101,6 +101,24 @@ async def start_background_workers(app: FastAPI) -> None:
     await start_doc_sync_queue_worker(app)
     await start_vector_reconciler(app)
     await start_telegram_poller(app)
+    await start_schedule_reconciler(app)
+
+
+async def start_schedule_reconciler(app: FastAPI) -> None:
+    """Start the heartbeat-schedule reconcile loop (#20117).
+
+    Independent of the pollers it repairs: it keeps running when ``RoutineScheduler``
+    failed to start, which is the case where due routine members otherwise sit unread.
+    """
+    try:
+        from llc.scheduler.schedule_reconcile import SCHEDULE_RECONCILE_INTERVAL_SECONDS, reconcile_loop
+
+        app.state.schedule_reconciler_task = asyncio.create_task(reconcile_loop(), name="llc-schedule-reconciler")
+        logger.info("LLC schedule reconciler: started, every %.0fs", SCHEDULE_RECONCILE_INTERVAL_SECONDS)
+    except Exception:
+        logger.exception(
+            "LLC schedule reconciler NOT started; a member lost from the schedule stays lost until restart"
+        )
 
 
 async def start_telegram_poller(app: FastAPI) -> None:
@@ -116,6 +134,7 @@ async def start_telegram_poller(app: FastAPI) -> None:
 __all__ = [
     "start_background_workers",
     "start_doc_sync_queue_worker",
+    "start_schedule_reconciler",
     "start_telegram_poller",
     "start_vector_reconciler",
     "wire_llm_service",
