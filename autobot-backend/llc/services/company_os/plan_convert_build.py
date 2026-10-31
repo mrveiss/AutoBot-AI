@@ -133,19 +133,22 @@ def _branch_cases(plan: CompanyWorkflowPlan, chain_keys: set) -> Dict[str, List[
     return out
 
 
-def _edge_case_kind(case: EdgeCase, branched: set) -> EdgeCaseTreatmentKind:
+def _edge_case_kind(case: EdgeCase, branched: set, chain_keys: set) -> EdgeCaseTreatmentKind:
+    """``handled_in_step`` needs a node: a By Hand case on a leading or unconverted step is documentation (#20187)."""
     if case.key in branched:
         return EdgeCaseTreatmentKind.BRANCH
-    if case.classification is Label.BY_HAND and case.sub_step_key:
+    if case.classification is Label.BY_HAND and case.sub_step_key in chain_keys:
         return EdgeCaseTreatmentKind.HANDLED_IN_STEP
     return EdgeCaseTreatmentKind.DOCUMENTATION
 
 
-def _edge_case_treatments(plan: CompanyWorkflowPlan, branches: Dict[str, List[EdgeCase]]) -> List[EdgeCaseTreatment]:
+def _edge_case_treatments(
+    plan: CompanyWorkflowPlan, branches: Dict[str, List[EdgeCase]], chain_keys: set
+) -> List[EdgeCaseTreatment]:
     step = plan.one_number.step_key if plan.one_number else None
     branched = {c.key for cases in branches.values() for c in cases}
     return [
-        EdgeCaseTreatment(edge_case_key=c.key, treatment=_edge_case_kind(c, branched))
+        EdgeCaseTreatment(edge_case_key=c.key, treatment=_edge_case_kind(c, branched, chain_keys))
         for c in plan.edge_cases
         if c.step_key == step
     ]
@@ -180,22 +183,48 @@ def _workflow_drafts(
     return drafts
 
 
+def _skips_the_chain(h, step: str, adjacent: set, owning: set) -> bool:  # noqa: ANN001
+    """A handoff between two lanes of the chain that are not neighbours: no transition is drafted for it."""
+    between = h.from_lane in owning and h.to_lane in owning and h.from_lane != h.to_lane
+    return step in (h.from_step, h.to_step) and between and (h.from_lane, h.to_lane) not in adjacent
+
+
+def _handoff_kind(h, step: str, adjacent: set, owning: set, lane_kind: dict) -> HandoffTreatmentKind:  # noqa: ANN001
+    """What the conversion does with one plan handoff; a transition is claimed only where one is drafted."""
+    if step not in (h.from_step, h.to_step):
+        return HandoffTreatmentKind.OUT_OF_SCOPE
+    if (h.from_lane, h.to_lane) in adjacent:
+        return HandoffTreatmentKind.HANDOFF_TRANSITION
+    if h.from_lane in owning and h.to_lane in owning:
+        return HandoffTreatmentKind.OUT_OF_SCOPE  # a placeholder: ``_handoff_errors`` blocks the conversion
+    if h.to_step == step:
+        return HandoffTreatmentKind.TRIGGER
+    ends = lane_kind.get(h.to_lane) in NO_ROLE_HOLDERS
+    return HandoffTreatmentKind.END if ends else HandoffTreatmentKind.OUT_OF_SCOPE
+
+
+def _handoff_errors(plan: CompanyWorkflowPlan, segments: List[List[SubStep]]) -> List[str]:
+    """One error per handoff that skips over a lane of the chain: the author must restructure it (#20187)."""
+    step = plan.one_number.step_key if plan.one_number else None
+    owning = {seg[0].lane_key for seg in segments}
+    adjacent = {(a[0].lane_key, b[0].lane_key) for a, b in zip(segments, segments[1:])}
+    return [
+        f"handoff {h.key!r} runs from lane {h.from_lane!r} to lane {h.to_lane!r}, which are not neighbours in the "
+        "chain: no transition is drafted for it, so restructure the plan"
+        for h in plan.handoffs
+        if _skips_the_chain(h, step, adjacent, owning)
+    ]
+
+
 def _handoff_treatments(plan: CompanyWorkflowPlan, segments: List[List[SubStep]]) -> List[HandoffTreatment]:
     step = plan.one_number.step_key if plan.one_number else None
     owning = {seg[0].lane_key for seg in segments}
+    adjacent = {(a[0].lane_key, b[0].lane_key) for a, b in zip(segments, segments[1:])}
     lane_kind = {ln.key: ln.holder_kind for ln in plan.lanes}
-    out = []
-    for h in plan.handoffs:
-        if step not in (h.from_step, h.to_step):
-            kind = HandoffTreatmentKind.OUT_OF_SCOPE
-        elif h.from_lane in owning and h.to_lane in owning:
-            kind = HandoffTreatmentKind.HANDOFF_TRANSITION
-        elif h.to_step == step:
-            kind = HandoffTreatmentKind.TRIGGER
-        else:
-            ends = lane_kind.get(h.to_lane) in NO_ROLE_HOLDERS
-            kind = HandoffTreatmentKind.END if ends else HandoffTreatmentKind.OUT_OF_SCOPE
-        out.append(HandoffTreatment(handoff_key=h.key, treatment=kind))
+    out = [
+        HandoffTreatment(handoff_key=h.key, treatment=_handoff_kind(h, step, adjacent, owning, lane_kind))
+        for h in plan.handoffs
+    ]
     for a, b in zip(segments, segments[1:]):
         out.append(
             HandoffTreatment(handoff_key=f"{a[-1].key}->{b[0].key}", treatment=HandoffTreatmentKind.HANDOFF_TRANSITION)
@@ -227,6 +256,7 @@ def build_conversion(plan: CompanyWorkflowPlan, facts: ConversionFacts) -> PlanC
     docs, chain = split_chain(subs)
     errors = _chain_errors(plan, chain, facts)
     segments = _segments(chain, errors)
+    errors += _handoff_errors(plan, segments)
     branches = _branch_cases(plan, {s.key for s in chain})
     workflows = _workflow_drafts(plan, segments, branches, facts) if chain else []
     errors += [
@@ -240,7 +270,7 @@ def build_conversion(plan: CompanyWorkflowPlan, facts: ConversionFacts) -> PlanC
         creation_order=[w.workflow_id for w in reversed(workflows)],
         documentation_only=[DocumentationOnly(sub_step_key=s.key, reason=DOC_REASON) for s in docs],
         handoff_treatments=_handoff_treatments(plan, segments),
-        edge_case_treatments=_edge_case_treatments(plan, branches),
+        edge_case_treatments=_edge_case_treatments(plan, branches, {s.key for s in chain}),
         ai_line_proposals=_ai_line_proposals(subs, errors),
         approval_policies=list(plan.approval_policies),
         contract_errors=errors,
