@@ -74,12 +74,6 @@ export function formatFleetDateTime(dateStr: string | null | undefined, emptyTex
 }
 
 /**
- * The name this function had before the kit's own `formatDateTime` (no timezone) existed beside
- * it. Callers keep their import; new code uses `formatFleetDateTime`.
- */
-export { formatFleetDateTime as formatDateTime }
-
-/**
  * Return the current cached timezone value (may be null if not yet loaded).
  */
 export function getTimezone(): string | null {

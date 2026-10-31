@@ -112,6 +112,8 @@ async def save_plan(
     """Recompute the status, store the document and the status column together."""
     if clears_approval:
         plan.approved_at, plan.approved_by = None, None
+        # An acknowledgement covers the plan the owner saw: any ordinary edit voids it (#20187).
+        plan.by_hand_acknowledged_at = None
         # A preview describes the plan it was built from; an edit makes it stale. A committed one is history.
         if plan.conversion is not None and plan.conversion.status is ConversionStatus.PREVIEW:
             plan.conversion = None
