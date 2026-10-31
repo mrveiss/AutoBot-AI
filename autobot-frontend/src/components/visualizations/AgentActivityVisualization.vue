@@ -211,7 +211,7 @@ import { useRouter } from 'vue-router'
 import { getCssVar } from '@/composables/useCssVars'
 import { useExpansion } from '@/composables/useExpansion'
 import { usePollingJob } from '@/composables/usePollingJob'
-import { useAgentActivityData, type Agent } from '@/composables/visualizations/useAgentActivityData'
+import { useAgentActivityData, type ActivityAgent } from '@/composables/visualizations/useAgentActivityData'
 import { agentActivityFormat } from '@/composables/visualizations/agentActivityFormat'
 
 const { t } = useI18n()
@@ -232,8 +232,8 @@ const props = withDefaults(defineProps<Props>(), {
 
 // Emit
 const emit = defineEmits<{
-  (e: 'agent-click', agent: Agent): void
-  (e: 'pause-agent', agent: Agent): void
+  (e: 'agent-click', agent: ActivityAgent): void
+  (e: 'pause-agent', agent: ActivityAgent): void
 }>()
 
 // State
@@ -277,16 +277,16 @@ function toggleExpand(agentId: string) {
   if (!wasExpanded) expandAgent(agentId)
 }
 
-function viewDetails(agent: Agent) {
+function viewDetails(agent: ActivityAgent) {
   emit('agent-click', agent)
 }
 
 // TASK 8: open the per-agent activity diary (logs) for a failed agent
-function viewLogs(agent: Agent) {
+function viewLogs(agent: ActivityAgent) {
   router.push({ path: '/agents/activity', query: { agent: agent.id } })
 }
 
-function pauseAgent(agent: Agent) {
+function pauseAgent(agent: ActivityAgent) {
   emit('pause-agent', agent)
 }
 

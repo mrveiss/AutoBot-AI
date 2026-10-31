@@ -9,14 +9,10 @@
  */
 
 import type { components as backend } from '@autobot/backend-contract'
+import type { PermissionRule } from '@autobot/ui'
 
-/** A tool permission rule (autobot-backend/api/permissions.py); rules have no id. */
-export interface PermissionRule {
-  tool: string
-  pattern: string
-  action: 'allow' | 'ask' | 'deny'
-  description?: string
-}
+/** A tool permission rule (autobot-backend/api/permissions.py); rules have no id. The kit declares it. */
+export type { PermissionRule }
 
 /** GET /api/mcp/external_servers item (api/schemas_mcp_external_servers.py MCPServerResponse). */
 export interface MCPServer {
