@@ -14,7 +14,7 @@ qualify stays in the KB, which #20015 accounts for.
 from __future__ import annotations
 
 import asyncio
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterable, List, Set
 
 from autobot_shared.logging_manager import get_llm_logger
 
@@ -51,6 +51,25 @@ _SYNC_FACT_KEYS = frozenset(
         "last_accessed",
     }
 )
+
+
+def fact_ids_held_by(files: Iterable[Any]) -> Set[str]:
+    """Every fact id these files' metadata relies on; deleting one would take a chunk from a file (#20074)."""
+    return {fid for meta in files for fid in (*meta.fact_ids, *meta.shared_fact_ids)}
+
+
+async def _delete_fact_safe(kb: Any, fact_id: str) -> bool:
+    """Safely delete a fact from knowledge base (Issue #315 - extracted helper)."""
+    try:
+        result = await kb.delete_fact(fact_id)
+        # delete_fact reports a failure in its result, it does not raise (#20026).
+        if isinstance(result, dict) and result.get("status") == "error":
+            logger.warning("Failed to delete fact %s: %s", fact_id, result.get("message"))
+            return False
+        return True
+    except Exception as e:
+        logger.warning("Failed to delete fact %s: %s", fact_id, e)
+        return False
 
 
 def _provenance_defaults() -> Dict[str, Any]:
