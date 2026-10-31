@@ -25,6 +25,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import signal
 import time
 from typing import Any
@@ -47,9 +48,11 @@ _logger = get_logger(__name__)
 # psutil.Error`` alone. Every create_time() call site must catch both.
 _CREATE_TIME_ERRORS: tuple[type[BaseException], ...] = (psutil.Error, RuntimeError)
 
-# Keywords that identify a provider rate-limit or quota error in CLI output or
+# Phrases that identify a provider rate-limit or quota error in CLI output or
 # exception messages.  Shared by subprocess adapters (output-file scan) and
-# AutoBotAgentAdapter (exception message matching).  GH#9773.
+# AutoBotAgentAdapter (exception message matching).  GH#9773.  Matched on word
+# boundaries.  ``rate_limit_event`` is deliberately absent: the CLI emits it on
+# successful runs too, so it is not an error marker (#20267).
 _RL_KEYWORDS: frozenset[str] = frozenset(
     {
         "rate_limit_error",
@@ -58,9 +61,17 @@ _RL_KEYWORDS: frozenset[str] = frozenset(
         "quota",
         "overloaded",
         "capacity_error",
-        "429",
-        "529",
     }
+)
+_RL_PHRASE_RE = re.compile(r"\b(?:" + "|".join(re.escape(k) for k in sorted(_RL_KEYWORDS)) + r")\b", re.IGNORECASE)
+
+# 429 / 529 only as a standalone number that follows an error-context word
+# ("HTTP 529", "status: 429", "Error code: 429", ``"api_error_status":429``).  A bare
+# substring also matched inside uuids, session ids, costs and counts (#20267: the
+# "529" of a message uuid turned an expired login into RATE_LIMITED).
+_RL_CODE_RE = re.compile(
+    r"(?:http|status|status_code|error|code)[\"']?\s*[:=]?\s*[\"']?(?:429|529)(?![\w.\-])",
+    re.IGNORECASE,
 )
 
 
@@ -72,12 +83,12 @@ def is_rate_limit_output(text: str | None) -> bool:
     this function only sees tails where the final JSONL result event is absent
     (process killed mid-stream) or has ``is_error`` true / a non-success
     subtype, so false-positive reclassification of successful runs is
-    structurally impossible.
+    structurally impossible.  Numeric codes count only in an error context
+    (see ``_RL_CODE_RE``), never as a substring of an id or number.
     """
     if not text:
         return False
-    lower = text.lower()
-    return any(kw in lower for kw in _RL_KEYWORDS)
+    return bool(_RL_PHRASE_RE.search(text) or _RL_CODE_RE.search(text))
 
 
 # Maximum bytes read from the tail of a subprocess output file when scanning
