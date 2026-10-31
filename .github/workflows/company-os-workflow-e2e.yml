@@ -1,0 +1,124 @@
+# Copyright 2025-2026 mrveiss
+# SPDX-License-Identifier: Apache-2.0
+#
+# Company OS workflow exit proof (#19253, milestone M2.10)
+#
+# One scripted scenario through the public API of the REAL backend (create_app() and its
+# lifespan, started as a subprocess) against REAL Postgres and Redis service containers:
+#   create a company, hire a CEO and two heartbeat-enabled agents, set a goal, a project and
+#   work items, assign a task, wait for a scheduled heartbeat run, exhaust a budget, pause and
+#   resume an agent, gate a hire behind an approval, and read the audit log.
+# Only the model call is stubbed, at the adapter registry (autobot-backend/tests/company_os_e2e).
+#
+# Distinct from company-os-contract.yml, whose `company-os-e2e` job is a hermetic SQLite
+# core-loop test with no Postgres, no Redis and mounted routers: that one proves the loop's
+# services, this one proves the milestone. Neither replaces the other.
+#
+# A step whose fix is an open PR is a non-strict xfail naming that PR, so this job is green
+# while the PR is open and reports XPASS once it lands: remove the marker then. The step
+# names and the M2.x issue each maps to are in tests/company_os_e2e/scenario.py (STEPS).
+#
+# Not a required context. The scenario waits on real cron boundaries (about ten minutes).
+
+name: Company OS Workflow E2E
+
+on:
+  push:
+    branches: [ release, main ]
+    paths: &paths
+      - 'autobot-backend/llc/**'
+      - 'autobot-backend/api/llc/**'
+      - 'autobot-backend/models/agent_org.py'
+      - 'autobot-backend/migrations/**'
+      - 'autobot-backend/tests/company_os_e2e/**'
+      - '.github/workflows/company-os-workflow-e2e.yml'
+  pull_request:
+    # ready_for_review fires ONLY this event when a draft is marked ready; the job is gated on
+    # draft == false, so without it the job would stay skipped on a PR that became ready.
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [ release, main ]
+    paths: *paths
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  company-os-workflow:
+    name: Company OS workflow end-to-end
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.draft == false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    services:
+      postgres:
+        # Mirror of the upstream image (ci-image-mirror.yml, #18160): anonymous pulls hit the
+        # per-IP quota. Same image and credentials as migration-gate.yml.
+        image: ghcr.io/mrveiss/ci-postgres:16
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        env:
+          POSTGRES_USER: e2e
+          POSTGRES_PASSWORD: e2e  # pragma: allowlist secret
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U e2e"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: ghcr.io/mrveiss/ci-redis:7-alpine
+        credentials:
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python and install backend dependencies
+        uses: ./.github/actions/setup-python-ci
+        with:
+          requirements-file: requirements-ci.txt
+          # The test is an HTTP client plus a subprocess launcher; the server needs uvicorn.
+          extra-packages: pytest pytest-asyncio httpx asyncpg bcrypt uvicorn
+          cache-dependency-path: |
+            requirements*.txt
+            .github/workflows/company-os-workflow-e2e.yml
+
+      - name: Run the Company OS workflow scenario
+        working-directory: autobot-backend
+        env:
+          # PG_USER and PG_PASSWORD must match the postgres service container above.
+          AUTOBOT_COMPANY_OS_E2E_PG_HOST: 127.0.0.1
+          AUTOBOT_COMPANY_OS_E2E_PG_PORT: 5432
+          AUTOBOT_COMPANY_OS_E2E_PG_USER: e2e
+          AUTOBOT_COMPANY_OS_E2E_PG_PASSWORD: e2e  # pragma: allowlist secret
+          AUTOBOT_COMPANY_OS_E2E_REDIS_HOST: 127.0.0.1
+          AUTOBOT_COMPANY_OS_E2E_REDIS_PORT: 6379
+          AUTOBOT_COMPANY_OS_E2E_ARTIFACT_DIR: ${{ runner.temp }}/company-os-e2e-logs
+        run: |
+          export PYTHONPATH="$PWD/..:$PWD:${PYTHONPATH:-}"
+          python -m pytest tests/company_os_e2e -v -rA -p no:cacheprovider \
+            -c ../pytest.ini --rootdir=..
+
+      - name: Upload server and stub logs
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: company-os-workflow-e2e-logs
+          path: ${{ runner.temp }}/company-os-e2e-logs
+          if-no-files-found: ignore
+          retention-days: 7
