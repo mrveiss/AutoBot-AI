@@ -21,7 +21,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.scoping import Principal
 from autobot_shared.ssot_config import config
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER
-from knowledge.root_read import is_superadmin_role, root_view
+from knowledge.root_read import audit_admin_read, is_superadmin_user, root_view
 from knowledge.where_combine import and_where
 
 logger = get_logger(__name__)
@@ -419,7 +419,7 @@ def kb_principal(current_user) -> Principal:
     ``is_superadmin`` and the one filter, :func:`filter_for_principal`, audits and lets it read all.
     """
     user_id, org_id, group_ids = extract_user_context_from_request(current_user)
-    return _authenticated_principal(user_id, org_id, group_ids, is_superadmin_role(_user_field(current_user, "role")))
+    return _authenticated_principal(user_id, org_id, group_ids, is_superadmin_user(current_user))
 
 
 def _authenticated_principal(user_id, org_id, group_ids, is_superadmin: bool = False) -> Principal:
@@ -483,7 +483,7 @@ async def filter_for_principal(results: List[Dict], principal: KbPrincipal, owne
         list(principal.group_ids),
         ownership_manager=ownership_manager,
     )
-    if principal.is_superadmin and ownership_manager:
+    if principal.is_superadmin:
         return await root_view(results, principal, ownership_manager, kept)
     return kept
 
@@ -537,23 +537,6 @@ def scoped_reader(current_user) -> KbReader:
 
 def _fact_ids(results: List[Dict]) -> List[str]:
     return [str(r.get("id") or r.get("fact_id") or (r.get("metadata") or {}).get("fact_id") or "") for r in results]
-
-
-async def audit_admin_read(user_id: str, details: Dict) -> bool:
-    """Record an admin's explicit read (``kb.admin_read``); False when the entry cannot be written (#16665)."""
-    from services.audit.taxonomy import AuditAction
-    from services.audit_logger import audit_log
-
-    try:
-        written = await audit_log(
-            AuditAction.KNOWLEDGE_ADMIN_READ.value, user_id=user_id, resource="knowledge_base", details=details
-        )
-    except Exception:
-        logger.error("kb.admin_read audit failed; withholding the admin read (#16665)", exc_info=True)
-        return False
-    if not written:  # audit_log reports a failed write as False, not an exception (#19860)
-        logger.error("kb.admin_read audit was not written; withholding the read (#19860)")
-    return bool(written)
 
 
 async def _admin_read(results: List[Dict], reader: KbReader, ownership_manager) -> List[Dict]:
