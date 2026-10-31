@@ -118,7 +118,8 @@ ISSUE_17822_FIXTURE = Path(__file__).parent / "fixtures" / "issue_17822_migratio
 #: `llc/services/workspace_lease.py` (#17996), and `llc/services/company.py` + `company_ceo.py` (#15907's
 #: concurrent-move test), which the migration tests import, plus `company_move_lock.py`, `authz.py`,
 #: `membership_service.py`, `scheduler/run_status.py` and `autobot_shared/db_errors.py` (#19634's move tests).
-ISSUE_17822_COUNT = 21
+#: `membership_policy.py` is #19985's two-session membership-lock test.
+ISSUE_17822_COUNT = 22
 
 
 def test_the_issue_17822_migration_entries_are_still_read():

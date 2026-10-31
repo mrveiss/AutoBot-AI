@@ -140,6 +140,7 @@ jobs:
       - name: Run migration matrix
         env:
           AUTOBOT_MIGRATION_TEST_ADMIN_URL: postgresql+asyncpg://migtest:migtest@127.0.0.1:5432/postgres
+          AUTOBOT_MIGRATION_TEST_REQUIRE_DB: "1"  # #20080: a missing URL fails, never skips
         run: |
           python -m pytest autobot-backend/tests/migrations/ \
             -m migration_gate -v --tb=short -p no:cacheprovider

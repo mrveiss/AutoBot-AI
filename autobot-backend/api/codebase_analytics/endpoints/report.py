@@ -21,6 +21,7 @@ from fastapi.responses import PlainTextResponse
 from api.codebase_analytics.problem_severity import PROBLEM_SEVERITY_ORDER
 from autobot_shared.error_boundaries import ROUTE_DEADLINE_GRACE, ErrorCategory, bounded, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from autobot_shared.status_enums import Severity
 from code_intelligence.bug_predictor import BugPredictor, PredictionResult
 
 # Issue #244: Cross-Language Pattern Detection
@@ -354,7 +355,7 @@ def _generate_risk_distribution(prediction: PredictionResult) -> List[str]:
         "| Risk Level | Files |",
         "|------------|-------|",
     ]
-    for level in ["critical", "high", "medium", "low", "minimal"]:
+    for level in (s.value for s in Severity.risk_ladder()):
         count = prediction.risk_distribution.get(level, 0)
         emoji = _get_risk_emoji(level)
         lines.append(f"| {emoji} {level.capitalize()} | {count} |")
@@ -1008,11 +1009,10 @@ def _generate_severity_distribution(report: PatternAnalysisReport) -> List[str]:
         "low": "🟢",
         "info": "🔵",
     }
-    for severity in ["critical", "high", "medium", "low", "info"]:
+    for severity in (s.value for s in reversed(Severity.finding_ladder())):
         count = report.severity_distribution.get(severity, 0)
         if count > 0:
-            emoji = severity_emojis.get(severity, "⚪")
-            lines.append(f"| {emoji} {severity.capitalize()} | {count} |")
+            lines.append(f"| {severity_emojis.get(severity, '⚪')} {severity.capitalize()} | {count} |")
     lines.append("")
     return lines
 

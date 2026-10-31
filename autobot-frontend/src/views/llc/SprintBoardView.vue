@@ -149,7 +149,7 @@ import { useWorkItemLabels } from '@/composables/useWorkItemLabels'
 import WorkItemDetail from './WorkItemDetail.vue'
 import WorkItemBadge from '@/components/llc/WorkItemBadge.vue'
 import { useLiveEvents } from '@/composables/useLiveEvents'
-import { formatDate as fmtDate } from '@/utils/formatHelpers'
+import { createDateFormatter } from '@/utils/formatHelpers'
 
 const logger = createLogger('SprintBoardView')
 const api = useApiClient()
@@ -229,9 +229,7 @@ function itemsByColumn(colId: string) {
   return items.value.filter(i => i.column_id === colId)
 }
 
-function formatDate(iso: string) {
-  return fmtDate(iso, { month: 'short', day: 'numeric' })
-}
+const formatDate = createDateFormatter({ kind: 'date', intl: { month: 'short', day: 'numeric' }, invalidText: '' })
 
 function switchToTimeline() {
   // #11701: preserve the current board/sprint context so the Gantt scopes to
