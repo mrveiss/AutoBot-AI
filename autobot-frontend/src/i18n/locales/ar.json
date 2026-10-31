@@ -533,6 +533,7 @@
         "pending": "في الانتظار",
         "running": "جارٍ التشغيل",
         "streaming": "Streaming",
+        "waiting_explanation": "في انتظار الشرح",
         "explaining": "Explaining",
         "completed": "مكتمل",
         "failed": "فشل"

@@ -533,6 +533,7 @@
         "pending": "Gaida",
         "running": "Skriešana",
         "streaming": "Straumēšana",
+        "waiting_explanation": "Gaida paskaidrojumu",
         "explaining": "Izskaidrojot",
         "completed": "Pabeigts",
         "failed": "Neizdevās"

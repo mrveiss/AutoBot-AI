@@ -533,6 +533,7 @@
         "pending": "En attente",
         "running": "En cours d'exécution",
         "streaming": "Diffusion",
+        "waiting_explanation": "En attente d'explication",
         "explaining": "Expliquer",
         "completed": "Complété",
         "failed": "Échoué"

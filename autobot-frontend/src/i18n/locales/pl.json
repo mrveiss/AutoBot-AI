@@ -533,6 +533,7 @@
         "pending": "Aż do",
         "running": "Działanie",
         "streaming": "Przesyłanie",
+        "waiting_explanation": "Oczekiwanie na wyjaśnienie",
         "explaining": "Wyjaśnianie",
         "completed": "Zakończony",
         "failed": "Przegrany"

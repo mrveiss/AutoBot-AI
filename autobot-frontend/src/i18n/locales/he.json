@@ -5235,6 +5235,7 @@
       "status": {
         "failed": "Failed",
         "streaming": "Streaming",
+        "waiting_explanation": "ממתין להסבר",
         "explaining": "Explaining",
         "pending": "Pending",
         "completed": "Completed",
