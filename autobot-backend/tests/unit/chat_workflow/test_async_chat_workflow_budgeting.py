@@ -27,6 +27,8 @@ Scenarios:
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from tests.helpers._llm_service_double import make_llm_service_double
+
 _MODULE = "async_chat_workflow"
 _CWM_MODULE = "context_window_manager"
 _SVC_MODULE = "services.knowledge.service"
@@ -45,6 +47,7 @@ def _make_kb_result(content: str = "AutoBot fact", source: str = "doc-1", score:
 def _make_llm_response(content: str = "answer") -> MagicMock:
     resp = MagicMock()
     resp.content = content
+    resp.error = None
     resp.model = "llama3"
     resp.tokens_used = 10
     resp.processing_time = 0.1
@@ -200,8 +203,8 @@ class TestGenerateLlmResponseUsesBudget:
 
         workflow = AsyncChatWorkflow()
         kb_results = [_make_kb_result("grounding fact")]
-        mock_llm = MagicMock()
-        mock_llm.chat_completion = AsyncMock(return_value=_make_llm_response())
+        mock_llm = make_llm_service_double()
+        mock_llm.chat.return_value = _make_llm_response()
 
         with patch.object(
             AsyncChatWorkflow, "_budget_kb_context", new=AsyncMock(return_value="[Source 1]\ngrounding fact")
@@ -216,32 +219,32 @@ class TestGenerateLlmResponseUsesBudget:
 
         workflow = AsyncChatWorkflow()
         kb_results = [_make_kb_result("budgeted fact")]
-        mock_llm = MagicMock()
-        mock_llm.chat_completion = AsyncMock(return_value=_make_llm_response())
+        mock_llm = make_llm_service_double()
+        mock_llm.chat.return_value = _make_llm_response()
 
         budgeted_context = "[Source 1]\nbudgeted fact"
         with patch.object(AsyncChatWorkflow, "_budget_kb_context", new=AsyncMock(return_value=budgeted_context)):
             await workflow._generate_llm_response("question", mock_llm, kb_results)
 
-        call_messages = mock_llm.chat_completion.call_args[0][0]
-        system_msg = next(m for m in call_messages if m.role == "system")
-        assert "budgeted fact" in system_msg.content
-        assert "[Source 1]" in system_msg.content
+        call_messages = mock_llm.chat.call_args[0][0]
+        system_msg = next(m for m in call_messages if m["role"] == "system")
+        assert "budgeted fact" in system_msg["content"]
+        assert "[Source 1]" in system_msg["content"]
 
     async def test_no_kb_context_when_results_empty(self):
         """(regression) Empty kb_results → _budget_kb_context returns '' → no injection."""
         from async_chat_workflow import AsyncChatWorkflow
 
         workflow = AsyncChatWorkflow()
-        mock_llm = MagicMock()
-        mock_llm.chat_completion = AsyncMock(return_value=_make_llm_response())
+        mock_llm = make_llm_service_double()
+        mock_llm.chat.return_value = _make_llm_response()
 
         await workflow._generate_llm_response("question", mock_llm, [])
 
-        call_messages = mock_llm.chat_completion.call_args[0][0]
-        system_msg = next(m for m in call_messages if m.role == "system")
-        assert "[Source" not in system_msg.content
-        assert "KNOWLEDGE CONTEXT" not in system_msg.content
+        call_messages = mock_llm.chat.call_args[0][0]
+        system_msg = next(m for m in call_messages if m["role"] == "system")
+        assert "[Source" not in system_msg["content"]
+        assert "KNOWLEDGE CONTEXT" not in system_msg["content"]
 
 
 # ---------------------------------------------------------------------------
