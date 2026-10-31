@@ -103,6 +103,10 @@ def test_phrase_markers_still_match(text: str) -> None:
     assert is_rate_limit_output(text)
 
 
+def test_an_overloaded_error_type_with_no_message_or_status_matches() -> None:
+    assert is_rate_limit_output(json.dumps({"type": "error", "error": {"type": "overloaded_error"}}))
+
+
 def test_rate_limit_event_on_a_successful_run_is_not_a_marker() -> None:
     event = {
         "type": "rate_limit_event",

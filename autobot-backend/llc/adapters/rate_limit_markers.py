@@ -20,7 +20,7 @@ from typing import Any
 # Phrases that identify a provider rate-limit or quota error.  ``rate_limit_event`` is
 # deliberately absent: the CLI emits it on successful runs too (#20267).
 _RL_KEYWORDS: frozenset[str] = frozenset(
-    {"rate_limit_error", "rate limit", "too many requests", "quota", "overloaded", "capacity_error"}
+    {"rate_limit_error", "rate limit", "too many requests", "quota", "overloaded", "overloaded_error", "capacity_error"}
 )
 _RL_PHRASE_RE = re.compile(r"\b(?:" + "|".join(re.escape(k) for k in sorted(_RL_KEYWORDS)) + r")\b", re.IGNORECASE)
 
