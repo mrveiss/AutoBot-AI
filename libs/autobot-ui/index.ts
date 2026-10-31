@@ -223,3 +223,9 @@ export type {
 
 // A tool permission rule as the backend serves it, declared once (#19910).
 export type { PermissionRule } from './src/types/permission'
+
+// Headless-library interaction primitives (#14779) -- behaviour from Reka UI, styling from the kit
+// tokens, copy supplied by the app. `BaseTooltip` above stays hand-written.
+export { default as BaseTabs } from './src/components/BaseTabs.vue'
+export type { TabsVariant, TabsSize, TabItem } from './src/components/BaseTabs.vue'
+export type { KitDirection } from './src/utils/direction'
