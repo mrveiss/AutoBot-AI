@@ -320,7 +320,8 @@ const getQualityClass = (score: number): string => {
 }
 
 .export-btn .icon {
-  font-size: 0.7rem;
+  width: 0.7rem;
+  height: 0.7rem;
 }
 
 .metrics-grid {
