@@ -8,7 +8,7 @@
  *
  * The formatters are the kit's (`@autobot/ui`, #14908); this module keeps the import path
  * the SLM's callers already use.
- * Timezone-aware date text is `useTimezone`'s `formatDateTime`, built on the kit's formatter.
+ * Timezone-aware date text is `useTimezone`'s `formatFleetDateTime`, built on the kit's formatter.
  *
  * @module formatHelpers
  */
