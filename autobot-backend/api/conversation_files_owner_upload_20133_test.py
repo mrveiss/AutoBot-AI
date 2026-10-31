@@ -194,14 +194,19 @@ def test_the_filename_policy_is_unchanged_for_the_owner(world):
     world.manager.upload_file.assert_not_awaited()
 
 
+#: The owner's file panel (#20195) joined the upload on the ownership gate; its rules are pinned in
+#: ``conversation_files_owner_routes_20195_test.py``.
+_OWNER_ROUTE_SUFFIXES = ("/upload", "/list", "/download/{file_id}", "/preview/{file_id}", "/files/{file_id}")
+
+
 def _other_routes(world):
-    routes = [r for r in effective_routes(world.module.router) if not r.path.endswith("/upload")]
-    assert len(routes) == 14, [(sorted(r.methods), r.path) for r in routes]
+    routes = [r for r in effective_routes(world.module.router) if not r.path.endswith(_OWNER_ROUTE_SUFFIXES)]
+    assert len(routes) == 10, [(sorted(r.methods), r.path) for r in routes]
     return routes
 
 
 def test_every_other_route_stays_admin_only_for_the_owner(world):
-    """The decision names the upload only: the owner of the conversation still gets 403 elsewhere."""
+    """Past the owner routes (upload, list, download, preview, delete) the owner still gets 403."""
     world.user, world.owner = dict(_ALICE), "alice"
     for route in _other_routes(world):
         path = "/api" + route.path.replace("{session_id}", "s-1").replace("{file_id}", "f1")

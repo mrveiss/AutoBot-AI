@@ -16,6 +16,7 @@ import { useBatchSelection } from './useBatchSelection'
 import { createLogger } from '@/utils/debugUtils'
 import { extractApiErrorMessage } from '@/utils/errorExtract'
 import { getApiBase } from '@/config/ssot-config'
+import { mapFileList, type BackendFileList } from '@/utils/conversationFileList'
 import { useLoadingState } from '@/composables/useLoadingState'
 
 // Create scoped logger for useConversationFiles
@@ -121,16 +122,12 @@ export function useConversationFiles(sessionId: string) {
     error.value = null
     await wrap(async () => {
       try {
-        const data = await api.get<{ files: ConversationFile[]; stats: FileStats }>(`${getApiBase()}/conversation-files/conversation/${sessionId}/list`)
+        const data = await api.get<BackendFileList>(`${API}/list`)
 
         if (data) {
-          files.value = data.files || []
-          stats.value = data.stats || {
-            total_files: 0,
-            total_size_bytes: 0,
-            uploads_count: 0,
-            generated_count: 0
-          }
+          const mapped = mapFileList(data, API)
+          files.value = mapped.files
+          stats.value = mapped.stats
         }
       } catch (err: unknown) {
         error.value = extractApiErrorMessage(err, 'Failed to load files')
