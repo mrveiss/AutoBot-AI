@@ -38,8 +38,8 @@ def test_downgrade_refuses_while_events_exist_then_drops_when_empty(conn):
     conn.execute(
         sa.text(
             "INSERT INTO company_os_cost_events"
-            " (id, company_id, agent_id, model, tokens_in, tokens_out, cost, created_at)"
-            " VALUES ('00000000000000000000000000000001', 'c', 'a', 'm', 1, 1, 0.5, '2026-10-31')"
+            " (id, company_id, agent_id, model, tokens_in, tokens_out, cost, created_at, updated_at)"
+            " VALUES ('00000000000000000000000000000001', 'c', 'a', 'm', 1, 1, 0.5, '2026-10-31', '2026-10-31')"
         )
     )
     with pytest.raises(NotImplementedError, match="1 cost event"):
