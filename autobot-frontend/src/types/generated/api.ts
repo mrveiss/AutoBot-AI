@@ -6238,6 +6238,8 @@ export interface paths {
          *     using AI Stack's system knowledge manager.
          *
          *     Issue #744: Requires authenticated user.
+         *     #16665: the remote service gets no caller identity and its store is not visible from this repo, so only an
+         *     admin reads it, audited (``knowledge.remote_read``); anyone else is refused.
          */
         get: operations["get_system_knowledge_insights_api_knowledge_base_ai_stack_system_insights_get"];
         put?: never;
@@ -9933,6 +9935,8 @@ export interface paths {
          *     using AI Stack's system knowledge manager.
          *
          *     Issue #744: Requires authenticated user.
+         *     #16665: the remote service gets no caller identity and its store is not visible from this repo, so only an
+         *     admin reads it, audited (``knowledge.remote_read``); anyone else is refused.
          */
         get: operations["get_system_knowledge_insights_api_knowledge_base_system_insights_get"];
         put?: never;
@@ -46044,6 +46048,7 @@ export interface paths {
          * @description Get system-wide knowledge insights.
          *
          *     Issue #744: Requires admin authentication.
+         *     #16665: the remote read is audited before the call (``knowledge.remote_read``).
          */
         get: operations["get_system_knowledge_api_ai_stack_knowledge_system_get"];
         put?: never;
@@ -47977,7 +47982,7 @@ export interface paths {
         };
         /**
          * Search Events
-         * @description Search temporal events with filters.
+         * @description Search temporal events with filters; only events of documents the caller may read (#16665).
          */
         get: operations["search_events_api_knowledge_graph_events_get"];
         put?: never;
@@ -47997,7 +48002,7 @@ export interface paths {
         };
         /**
          * Get Event Timeline
-         * @description Get chronological timeline of events for an entity.
+         * @description Chronological timeline of events for an entity; only events of documents the caller may read (#16665).
          */
         get: operations["get_event_timeline_api_knowledge_graph_events__entity_name__timeline_get"];
         put?: never;

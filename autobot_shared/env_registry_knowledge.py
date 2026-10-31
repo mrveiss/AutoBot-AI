@@ -332,3 +332,39 @@ register_env_var(
         range=(0.0, 10.0),
     )
 )
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_EVENT_OVERFETCH_FACTOR",
+        type=int,
+        default=5,
+        description=(
+            "How many times the requested page the event routes fetch before filtering by what the "
+            "caller may see, so a filtered page can still fill; api/knowledge_graph_routes.py (#16665)."
+        ),
+        component="knowledge",
+        range=(1, 100),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_EVENT_FETCH_CAP",
+        type=int,
+        default=2500,
+        description="Most events fetched per request by those routes; api/knowledge_graph_routes.py (#16665).",
+        component="knowledge",
+        range=(1, 100000),
+    )
+)
+
+register_env_var(
+    EnvVarSpec(
+        name="AUTOBOT_KB_SOURCE_LOOKUP_CONCURRENCY",
+        type=int,
+        default=8,
+        description="Source-fact lookups at once for one visibility pass; knowledge/summary_visibility.py (#16665).",
+        component="knowledge",
+        range=(1, 256),
+    )
+)
