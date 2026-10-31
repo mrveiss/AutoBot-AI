@@ -435,9 +435,7 @@ function formatSourceType(type: string): string {
   return typeMap[type] || type
 }
 
-function formatTimestamp(timestamp: string): string {
-  return formatDate(new Date(timestamp))
-}
+const formatTimestamp = formatDate
 
 function truncateContent(content: string): string {
   if (content.length <= 200) return content
