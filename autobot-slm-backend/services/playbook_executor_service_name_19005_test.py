@@ -79,7 +79,7 @@ class _Run:
         self.stage = tmp_path / "stage"
         self.stage.mkdir()
         self.executor = playbook_executor.PlaybookExecutor(ansible_dir=ansible_dir)
-        self.sync = AsyncMock(return_value=True)
+        self.sync = AsyncMock(return_value=None)
         self.written: dict = {}
 
         async def _run_subprocess(cmd, *_a, **_kw):
