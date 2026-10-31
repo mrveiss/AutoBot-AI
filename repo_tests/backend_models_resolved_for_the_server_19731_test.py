@@ -144,7 +144,14 @@ def test_the_gpu_list_here_is_the_roles_list() -> None:
 )
 def test_every_render_of_the_backend_env_resolves_first(site: str) -> None:
     text = (repo_root() / _ANS / site).read_text(encoding="utf-8")
-    assert text.index("resolve_models.yml") < text.index("backend.env.j2", text.index("resolve_models.yml"))
+    resolve = text.index("resolve_models.yml")
+    assert resolve < text.index("src: ", resolve), "the resolve must come before the render"
+    assert text.index("read_deployed_embedding_model.yml") < resolve, "and after the deployed embedding read (#15502)"
+
+
+def test_the_check_asks_the_server_agents_call() -> None:
+    text = (repo_root() / _ANS / "roles/backend/tasks/resolve_models.yml").read_text(encoding="utf-8")
+    assert "backend_llm_endpoint" in text
 
 
 def test_the_updater_only_warns_on_a_missing_model() -> None:

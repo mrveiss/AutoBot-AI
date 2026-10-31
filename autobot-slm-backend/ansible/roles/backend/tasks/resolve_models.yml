@@ -10,7 +10,10 @@
 ---
 - name: "Backend | Ask the model server what it holds (#19731)"
   ansible.builtin.uri:
-    url: "http://{{ backend_ollama_host | default('127.0.0.1') }}:{{ backend_ollama_port | default('11434') }}/api/tags"
+    # The server agents really call: an operator can point this elsewhere than the host and port.
+    url: >-
+      {{ (backend_llm_endpoint | default('http://' ~ (backend_ollama_host | default('127.0.0.1')) ~ ':'
+      ~ (backend_ollama_port | default('11434')))) | regex_replace('/+$', '') }}/api/tags
     return_content: true
     timeout: 10
   register: _backend_model_tags
@@ -38,8 +41,10 @@
         backend_light_model: "{{ backend_light_model | default('') }}"
         backend_instruction_model: "{{ backend_instruction_model | default('') }}"
         backend_system_model: "{{ backend_system_model | default('') }}"
-        # A var left unset means the template's own default applies.
-        backend_embedding_model: "{{ backend_embedding_model | default('') }}"
+        # On a new install: the one home of the embedding role's model, which the template's default repeats.
+        backend_embedding_model: >-
+          {{ backend_embedding_model
+             | default((lookup('file', '../../agent_config/defaults/main.yml') | from_yaml).ollama_embedding_model, true) }}
   register: _backend_model_plan
   changed_when: false
   check_mode: false

@@ -28,9 +28,6 @@
     - name: Read the encryption key (#19864)
       ansible.builtin.include_tasks: ../roles/backend/tasks/read_encryption_key.yml
 
-    - name: Resolve the models for this model server (#19731)
-      ansible.builtin.include_tasks: ../roles/backend/tasks/resolve_models.yml
-
   tasks:
     - name: Create backend directories if they don't exist
       ansible.builtin.file:
@@ -50,6 +47,9 @@
       ansible.builtin.include_tasks: ../_shared/tasks/read_deployed_embedding_model.yml
       vars:
         deployed_embedding_env_files: ["{{ backend_code_dir }}/.env"]
+
+    - name: Resolve the models for this model server (#19731)
+      ansible.builtin.include_tasks: ../roles/backend/tasks/resolve_models.yml
 
     - name: Deploy backend environment file
       ansible.builtin.template:
