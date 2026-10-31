@@ -34,6 +34,11 @@ def _try_extract_choices_content(response: Dict) -> str | None:
 def extract_response_content(response: Any) -> str:
     """Extract text content from LLM response."""
     try:
+        # LLMService.chat() returns an LLMResponse object, not a dict (#19649).
+        object_content = getattr(response, "content", None)
+        if isinstance(object_content, str):
+            return object_content.strip()
+
         if isinstance(response, dict):
             content = _try_extract_message_content(response)
             if content:

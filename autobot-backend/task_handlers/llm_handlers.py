@@ -12,11 +12,22 @@ from typing import Any, Dict
 
 from autobot_shared.logging_manager import get_logger
 from autobot_shared.models.task_result import task_error, task_success
+from llm_shared.models import LLMResponse
 from models.task_context import TaskExecutionContext
 
 from .base import TaskHandler
 
 logger = get_logger(__name__)
+
+
+def _response_payload(response: LLMResponse) -> Dict[str, Any]:
+    """The JSON-safe part of an LLMResponse a task result carries (#19649)."""
+    return {
+        "content": response.content,
+        "model": response.model,
+        "provider": response.provider,
+        "usage": response.usage,
+    }
 
 
 class LLMChatCompletionHandler(TaskHandler):
@@ -28,12 +39,16 @@ class LLMChatCompletionHandler(TaskHandler):
         messages = ctx.require_payload_value("messages")
         llm_kwargs = ctx.get_payload_value("kwargs", {})
 
-        response = await ctx.worker.llm_interface.chat_completion(model_name, messages, **llm_kwargs)
+        # #19649: LLMService.chat() records the spend; the task id attributes it
+        # unless the payload names its own conversation.
+        response = await ctx.worker.llm_service.chat(
+            messages, **{"conversation_id": ctx.task_id, "model_name": model_name, **llm_kwargs}
+        )
 
-        if response:
+        if response.content and not response.error:
             result = task_success(
                 "LLM completion successful.",
-                data={"response": response},
+                data={"response": _response_payload(response)},
             )
             ctx.audit_log(
                 "llm_chat_completion",
@@ -45,7 +60,7 @@ class LLMChatCompletionHandler(TaskHandler):
             ctx.audit_log(
                 "llm_chat_completion",
                 "failure",
-                {"model": model_name, "reason": "llm_failed"},
+                {"model": model_name, "reason": "llm_failed", "error": response.error},
             )
 
         return result

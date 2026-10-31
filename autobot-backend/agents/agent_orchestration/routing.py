@@ -21,6 +21,7 @@ from autobot_shared.logging_manager import get_logger
 from constants.threshold_constants import LLMDefaults
 from llm_shared.types import LLMType
 
+from ..llm_response_content import extract_response_content
 from .topology import AgentTopology, InMemoryTopologyDB
 from .topology_routing import TopologyAwareRouter
 from .types import (
@@ -337,13 +338,18 @@ class AgentRouter:
                 {"role": "user", "content": f"Request to route: {request}"},
             ]
 
-            response = await self.llm_interface.chat_completion(
-                messages=messages,
+            # #19649: LLMService.chat() records the spend; the session id (if the
+            # caller's context carries one) attributes it.
+            response = await self.llm_interface.chat(
+                messages,
+                conversation_id=self._context_conversation_id(context),
                 llm_type=LLMType.ORCHESTRATOR,
                 temperature=0.3,  # Lower temperature for consistent routing
                 max_tokens=LLMDefaults.CHAT_MAX_TOKENS,
                 top_p=0.8,
             )
+            if response.error:
+                raise RuntimeError(f"routing LLM call failed: {response.error}")
 
             # Parse routing decision
             routing_decision = self._parse_routing_response(response)
@@ -357,6 +363,12 @@ class AgentRouter:
             logger.error("Error in routing decision: %s", e)
             # Fallback to simple routing
             return self.quick_route_analysis(request)
+
+    @staticmethod
+    def _context_conversation_id(context: Dict[str, Any] | None) -> str | None:
+        """Session identifier the caller's context carries, for spend attribution (#19649)."""
+        ctx = context or {}
+        return ctx.get("session_id") or ctx.get("conversation_id")
 
     async def _apply_preference_bias(
         self,
@@ -595,47 +607,9 @@ class AgentRouter:
 
         return "\n".join(info_parts)
 
-    def _try_extract_message_content(self, response: dict) -> str | None:
-        """Try to extract content from message dict (Issue #334 - extracted helper)."""
-        if "message" not in response or not isinstance(response["message"], dict):
-            return None
-        content = response["message"].get("content")
-        return content.strip() if content else None
-
-    def _try_extract_choices_content(self, response: dict) -> str | None:
-        """Try to extract content from choices list (Issue #334 - extracted helper)."""
-        if "choices" not in response or not isinstance(response["choices"], list):
-            return None
-        if len(response["choices"]) == 0:
-            return None
-        choice = response["choices"][0]
-        if "message" in choice and "content" in choice["message"]:
-            return choice["message"]["content"].strip()
-        return None
-
     def extract_response_content(self, response: Any) -> str:
-        """Extract text content from LLM response."""
-        try:
-            if isinstance(response, dict):
-                content = self._try_extract_message_content(response)
-                if content:
-                    return content
-
-                content = self._try_extract_choices_content(response)
-                if content:
-                    return content
-
-                if "content" in response:
-                    return response["content"].strip()
-
-            if isinstance(response, str):
-                return response.strip()
-
-            return str(response)
-
-        except Exception as e:
-            logger.error("Error extracting response content: %s", e)
-            return "Error extracting response"
+        """Extract text content from LLM response (shared extractor, #19649)."""
+        return extract_response_content(response)
 
     def _parse_routing_response(self, response: Any) -> Dict[str, Any]:
         """Parse routing decision from LLM response."""

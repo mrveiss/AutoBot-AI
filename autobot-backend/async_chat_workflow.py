@@ -23,7 +23,7 @@ from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER as _RESEARCH_QUARANT
 from knowledge.search import map_kb_result_to_dict
 from knowledge.search_filters import filter_for_user_id
 from knowledge_base_factory import get_knowledge_base_or_none
-from llm_shared.models import LLMChatMessage, LLMResponse  # Phase 2D #3185
+from llm_shared.models import LLMResponse  # Phase 2D #3185
 from retry_mechanism import RetryPolicy, RetryStrategy, with_retry
 
 logger = get_logger(__name__)
@@ -155,7 +155,7 @@ class AsyncChatWorkflow:
             knowledge_status, kb_results = await self._workflow_knowledge_search(user_message, user_id)
 
             # Stage 3: LLM response generation (grounded with KB results, #10732)
-            llm_response = await self._workflow_llm_generate(user_message, llm, workflow_steps, kb_results)
+            llm_response = await self._workflow_llm_generate(user_message, llm, workflow_steps, kb_results, chat_id)
 
             # Stage 4: Build and return result
             return self._build_success_result(
@@ -247,11 +247,12 @@ class AsyncChatWorkflow:
         llm,
         workflow_steps: List[Dict[str, Any]],
         kb_results: List[Dict[str, Any]] | None = None,
+        chat_id: str | None = None,
     ) -> LLMResponse:
         """Generate LLM response and log workflow step. Issue #281: Extracted helper."""
         await self.add_workflow_message("thought", "🧠 Generating response using LLM...", step="llm_generation")
         await self.add_workflow_message("debug", "🔗 WORKFLOW: Connecting to Ollama...", step="llm_connection")
-        llm_response = await self._generate_llm_response(user_message, llm, kb_results or [])
+        llm_response = await self._generate_llm_response(user_message, llm, kb_results or [], chat_id)
         await self.add_workflow_message(
             "utility",
             "✅ LLM response received",
@@ -351,7 +352,11 @@ class AsyncChatWorkflow:
 
     @with_retry(RetryPolicy(max_attempts=3, base_delay=1.0, max_delay=10.0, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
     async def _generate_llm_response(
-        self, user_message: str, llm, kb_results: List[Dict[str, Any]] | None = None
+        self,
+        user_message: str,
+        llm,
+        kb_results: List[Dict[str, Any]] | None = None,
+        chat_id: str | None = None,
     ) -> LLMResponse:
         """Generate LLM response with retry logic. #10732: grounded when kb_results provided."""
         base_system = (
@@ -361,17 +366,19 @@ class AsyncChatWorkflow:
         kb_context = await self._budget_kb_context(kb_results or [])
         system_prompt = f"{kb_context}\n\n{base_system}" if kb_context else base_system
 
-        # Prepare chat messages
+        # LLMService.chat() takes OpenAI-format dicts (#19649)
         messages = [
-            LLMChatMessage(role="system", content=system_prompt),
-            LLMChatMessage(role="user", content=user_message),
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_message},
         ]
 
-        # Generate response with timeout
+        # Generate response with timeout; chat() records the spend against chat_id
         response = await asyncio.wait_for(
-            llm.chat_completion(messages, stream=False),
+            llm.chat(messages, conversation_id=chat_id),
             timeout=TimingConstants.SHORT_TIMEOUT,
         )
+        if response.error:
+            raise RuntimeError(f"LLM chat failed: {response.error}")
 
         return response
 
