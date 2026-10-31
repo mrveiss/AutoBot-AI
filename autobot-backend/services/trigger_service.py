@@ -46,31 +46,9 @@ from autobot_shared.time_utils import now_utc
 from autobot_shared.webhook_signature import verify_webhook_signature
 from constants.threshold_constants import TimingConstants
 from constants.ttl_constants import TTL_90_DAYS
+from services.trigger_secrets import SECRET_PREFIX, decode_stored_secret, encrypt_secret
 
 logger = get_logger(__name__)
-
-# Lazy-initialised encryption service for webhook HMAC secrets at rest.
-# Populated on first call to _get_encryption_service() to avoid import-time
-# side effects and to tolerate environments where AUTOBOT_ENCRYPTION_KEY is
-# not set until runtime.
-_encryption_service = None
-
-
-def _get_encryption_service():
-    """Return a singleton EncryptionService, or None if unavailable."""
-    global _encryption_service  # noqa: PLW0603
-    if _encryption_service is None:
-        try:
-            from encryption_service import EncryptionService
-
-            _encryption_service = EncryptionService()
-        except Exception as exc:  # pragma: no cover
-            logger.warning(
-                "EncryptionService unavailable — webhook secrets stored unencrypted: %s",
-                exc,
-            )
-    return _encryption_service
-
 
 # Redis TTL for trigger records: 90 days (triggers are long-lived)
 _TRIGGER_TTL_SECONDS = TTL_90_DAYS
@@ -79,9 +57,7 @@ _TRIGGER_TTL_SECONDS = TTL_90_DAYS
 _KEY_PREFIX = "workflows:trigger:"
 _INDEX_KEY = "workflows:triggers:index"
 _BY_WORKFLOW_PREFIX = "workflows:triggers:by_workflow:"
-_SECRET_PREFIX = (
-    "workflows:trigger_secret:"  # nosec B105  # Redis key prefix for webhook secrets, not a hardcoded secret
-)
+_SECRET_PREFIX = SECRET_PREFIX
 
 
 # ---------------------------------------------------------------------------
@@ -334,6 +310,10 @@ class TriggerService:
         """
         self._validate_config(config)
 
+        # Fail closed before anything is stored (#19759): no encryption, no trigger.
+        secret = secrets.token_hex(32) if config.trigger_type == TriggerType.WEBHOOK else None
+        encrypted_secret = encrypt_secret(secret) if secret else None
+
         trigger_id = str(uuid.uuid4())
         now = now_utc().isoformat()
 
@@ -356,10 +336,9 @@ class TriggerService:
         )
 
         # Generate HMAC secret for webhook triggers
-        if config.trigger_type == TriggerType.WEBHOOK:
-            secret = secrets.token_hex(32)
+        if secret:
             self._webhook_secrets[trigger_id] = secret
-            await self._store_webhook_secret(trigger_id, secret)
+            await self._store_webhook_secret(trigger_id, encrypted_secret)
 
         # Start background task for non-webhook triggers if service is running
         if self._running and config.enabled and config.trigger_type != TriggerType.WEBHOOK:
@@ -797,15 +776,13 @@ class TriggerService:
         except Exception as exc:
             logger.error("_delete_trigger %s failed: %s", trigger_id, exc)
 
-    async def _store_webhook_secret(self, trigger_id: str, secret: str) -> None:
-        """Persist HMAC secret for webhook signature validation.
+    async def _store_webhook_secret(self, trigger_id: str, stored: str) -> None:
+        """Persist the already-encrypted HMAC secret (see ``encrypt_secret``).
 
-        The secret is encrypted at rest using AES-GCM before writing to Redis
-        so that a Redis dump does not expose raw HMAC signing keys.
+        Callers encrypt first so a Redis dump never exposes raw HMAC signing keys
+        and an unavailable encryption service refuses the write (#19759).
         """
         try:
-            enc = _get_encryption_service()
-            stored = enc.encrypt(secret) if enc is not None else secret
             redis = get_redis_client(database="workflows")
             redis.setex(
                 f"{_SECRET_PREFIX}{trigger_id}",
@@ -824,9 +801,9 @@ class TriggerService:
             raw = redis.get(f"{_SECRET_PREFIX}{trigger_id}")
             if raw:
                 stored = raw.decode() if isinstance(raw, bytes) else raw
-                enc = _get_encryption_service()
-                secret = enc.decrypt(stored) if enc is not None else stored
-                self._webhook_secrets[trigger_id] = secret
+                secret = decode_stored_secret(stored)
+                if secret:
+                    self._webhook_secrets[trigger_id] = secret
                 return secret
         except Exception as exc:
             logger.warning("_get_webhook_secret failed for %s: %s", trigger_id, exc)

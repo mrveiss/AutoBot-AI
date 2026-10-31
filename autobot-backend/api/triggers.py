@@ -27,6 +27,7 @@ from api.schemas_workflows import (
 from auth_middleware import get_current_user
 from autobot_shared.error_boundaries import ErrorCategory, with_error_handling
 from autobot_shared.logging_manager import get_logger
+from services.trigger_secrets import EncryptionUnavailableError
 from services.trigger_service import (
     TriggerConfig,
     TriggerDefinition,
@@ -98,6 +99,12 @@ async def create_trigger(
     except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)  # user-facing validation error
+        ) from exc
+    except EncryptionUnavailableError as exc:
+        logger.error("create_trigger refused: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Webhook triggers are temporarily unavailable: secret encryption is not configured",
         ) from exc
 
     webhook_url: str | None = None
