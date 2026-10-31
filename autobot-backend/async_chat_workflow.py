@@ -19,6 +19,7 @@ from autobot_shared.logging_manager import get_logger
 from autobot_shared.singleton_factory import lazy_singleton
 from constants.threshold_constants import TimingConstants
 from dependency_container import inject_services
+from exceptions import LLMResponseError
 from knowledge.quarantine import RESEARCH_QUARANTINE_FILTER as _RESEARCH_QUARANTINE_FILTER
 from knowledge.search import map_kb_result_to_dict
 from knowledge.search_filters import filter_for_user_id
@@ -33,6 +34,19 @@ TERMINAL_KEYWORDS = {"terminal", "command", "bash", "shell", "run"}
 DESKTOP_KEYWORDS = {"desktop", "gui", "window", "screen"}
 SYSTEM_KEYWORDS = {"system", "config", "install", "setup"}
 RESEARCH_KEYWORDS = {"research", "find", "search", "investigate"}
+
+
+# #19649: an error *response* is not retried. ``LLMResponse.error`` is a bare string that
+# does not say transient from permanent, and ``chat()`` has already walked its provider
+# fallback chain, so retrying multiplies spend on a persistent error. Timeouts and
+# connection errors still retry.
+_LLM_CALL_RETRY_POLICY = RetryPolicy(
+    max_attempts=3,
+    base_delay=1.0,
+    max_delay=10.0,
+    strategy=RetryStrategy.EXPONENTIAL_BACKOFF,
+    non_retryable_exceptions=RetryPolicy.non_retryable_exceptions + (LLMResponseError,),
+)
 
 
 class ChatMessageType(Enum):
@@ -350,7 +364,7 @@ class AsyncChatWorkflow:
         context, _ = await budget_grounded_context(kb_results, model_name=None)
         return context
 
-    @with_retry(RetryPolicy(max_attempts=3, base_delay=1.0, max_delay=10.0, strategy=RetryStrategy.EXPONENTIAL_BACKOFF))
+    @with_retry(_LLM_CALL_RETRY_POLICY)
     async def _generate_llm_response(
         self,
         user_message: str,
@@ -378,7 +392,7 @@ class AsyncChatWorkflow:
             timeout=TimingConstants.SHORT_TIMEOUT,
         )
         if response.error:
-            raise RuntimeError(f"LLM chat failed: {response.error}")
+            raise LLMResponseError(f"LLM chat failed: {response.error}")
 
         return response
 

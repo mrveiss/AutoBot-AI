@@ -10,6 +10,7 @@ Contains routing decision logic, quick route analysis, and LLM-based routing.
 Issue #2092: Added Q-learning RL router between pattern-match and LLM fallback.
 """
 
+import asyncio
 import json
 import os
 import re
@@ -22,6 +23,7 @@ from constants.threshold_constants import LLMDefaults
 from llm_shared.types import LLMType
 
 from ..llm_response_content import extract_response_content
+from .routing_validation import ROUTING_LLM_TIMEOUT_SECONDS, validate_routing_decision
 from .topology import AgentTopology, InMemoryTopologyDB
 from .topology_routing import TopologyAwareRouter
 from .types import (
@@ -328,31 +330,13 @@ class AgentRouter:
             if rl_result:
                 return rl_result
 
-            # Use LLM for complex routing decisions
-            system_prompt = self._get_routing_system_prompt()
-            agent_info = self._build_agent_info_context()
-
-            messages = [
-                {"role": "system", "content": system_prompt},
-                {"role": "system", "content": f"Available Agents:\n{agent_info}"},
-                {"role": "user", "content": f"Request to route: {request}"},
-            ]
-
-            # #19649: LLMService.chat() records the spend; the session id (if the
-            # caller's context carries one) attributes it.
-            response = await self.llm_interface.chat(
-                messages,
-                conversation_id=self._context_conversation_id(context),
-                llm_type=LLMType.ORCHESTRATOR,
-                temperature=0.3,  # Lower temperature for consistent routing
-                max_tokens=LLMDefaults.CHAT_MAX_TOKENS,
-                top_p=0.8,
-            )
-            if response.error:
-                raise RuntimeError(f"routing LLM call failed: {response.error}")
+            # Use LLM for complex routing decisions (#19649: bounded, quick routing on timeout)
+            response = await self._ask_routing_llm(request, context)
+            if response is None:
+                return quick_routing
 
             # Parse routing decision
-            routing_decision = self._parse_routing_response(response)
+            routing_decision = self._parse_routing_response(response, request)
 
             # Issue #6821: augment with topology collaborators when enabled.
             routing_decision = await self._maybe_augment_with_topology(request, context, routing_decision)
@@ -363,6 +347,32 @@ class AgentRouter:
             logger.error("Error in routing decision: %s", e)
             # Fallback to simple routing
             return self.quick_route_analysis(request)
+
+    async def _ask_routing_llm(self, request: str, context: Dict[str, Any] | None) -> Any | None:
+        """The routing LLM's reply, or None on timeout. ``chat()`` records the spend (#19649)."""
+        messages = [
+            {"role": "system", "content": self._get_routing_system_prompt()},
+            {"role": "system", "content": f"Available Agents:\n{self._build_agent_info_context()}"},
+            {"role": "user", "content": f"Request to route: {request}"},
+        ]
+        try:
+            response = await asyncio.wait_for(
+                self.llm_interface.chat(
+                    messages,
+                    conversation_id=self._context_conversation_id(context),
+                    llm_type=LLMType.ORCHESTRATOR,
+                    temperature=0.3,  # Lower temperature for consistent routing
+                    max_tokens=LLMDefaults.CHAT_MAX_TOKENS,
+                    top_p=0.8,
+                ),
+                timeout=ROUTING_LLM_TIMEOUT_SECONDS,
+            )
+        except asyncio.TimeoutError:
+            logger.warning("Routing LLM timed out after %.1fs; using quick routing", ROUTING_LLM_TIMEOUT_SECONDS)
+            return None
+        if response.error:
+            raise RuntimeError(f"routing LLM call failed: {response.error}")
+        return response
 
     @staticmethod
     def _context_conversation_id(context: Dict[str, Any] | None) -> str | None:
@@ -581,7 +591,7 @@ class AgentRouter:
             "Respond in JSON format:\n"
             "{\n"
             '    "strategy": "single_agent|multi_agent|orchestrator_analysis",\n'
-            '    "primary_agent": "chat|system_commands|rag|knowledge_retrieval|research",\n'
+            '    "primary_agent": "chat|rag|knowledge_retrieval|research",\n'
             '    "secondary_agents": ["agent1", "agent2"],\n'
             '    "confidence": 0.8,\n'
             '    "reasoning": "explanation of routing decision"\n'
@@ -611,32 +621,16 @@ class AgentRouter:
         """Extract text content from LLM response (shared extractor, #19649)."""
         return extract_response_content(response)
 
-    def _parse_routing_response(self, response: Any) -> Dict[str, Any]:
-        """Parse routing decision from LLM response."""
+    def _parse_routing_response(self, response: Any, request: str) -> Dict[str, Any]:
+        """Validated routing decision from the LLM reply; quick routing on any violation (#19649)."""
         try:
-            content = self.extract_response_content(response)
-
-            # Try to parse as JSON
-            parsed = json.loads(content)
-
-            # Convert agent names to AgentType enums
-            if "primary_agent" in parsed:
-                parsed["primary_agent"] = AgentType(parsed["primary_agent"])
-
-            if "secondary_agents" in parsed:
-                parsed["secondary_agents"] = [AgentType(agent) for agent in parsed["secondary_agents"]]
-
-            return parsed
-
-        except Exception as e:
-            logger.error("Error parsing routing response: %s", e)
-            # Fallback routing
-            return {
-                "strategy": "single_agent",
-                "primary_agent": AgentType.CHAT,
-                "confidence": 0.3,
-                "reasoning": "Parsing error, fallback routing",
-            }
+            decision, reason = validate_routing_decision(json.loads(self.extract_response_content(response)))
+        except ValueError as exc:  # json.JSONDecodeError is a ValueError
+            decision, reason = None, f"reply is not JSON: {exc}"
+        if decision is None:
+            logger.warning("Rejected LLM routing reply (%s); using quick routing", reason)
+            return self.quick_route_analysis(request)
+        return decision
 
     def adapt_request_for_secondary(
         self,

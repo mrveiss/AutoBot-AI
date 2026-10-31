@@ -25,7 +25,7 @@ KNOWN_LARGE: dict[str, int] = {
     "autobot-backend/agent_loop/types.py": 669,
     "autobot-backend/agents/agent_orchestration/distributed_management.py": 649,
     "autobot-backend/agents/agent_orchestration/distributed_management_test.py": 731,
-    "autobot-backend/agents/agent_orchestration/routing.py": 655,
+    "autobot-backend/agents/agent_orchestration/routing.py": 649,
     "autobot-backend/agents/browser/captcha_solver.py": 663,
     "autobot-backend/agents/development_speedup_agent.py": 831,
     "autobot-backend/agents/graph_entity_extractor.py": 790,

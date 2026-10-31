@@ -11,7 +11,7 @@ from autobot_shared.logging_manager import get_logger
 logger = get_logger(__name__)
 
 
-def _try_extract_message_content(response: Dict) -> str | None:
+def try_extract_message_content(response: Dict) -> str | None:
     """Try to extract content from message dict (Issue #334 - extracted helper)."""
     if "message" not in response or not isinstance(response["message"], dict):
         return None
@@ -19,7 +19,7 @@ def _try_extract_message_content(response: Dict) -> str | None:
     return content.strip() if content else None
 
 
-def _try_extract_choices_content(response: Dict) -> str | None:
+def try_extract_choices_content(response: Dict) -> str | None:
     """Try to extract content from choices list (Issue #334 - extracted helper)."""
     if "choices" not in response or not isinstance(response["choices"], list):
         return None
@@ -40,10 +40,10 @@ def extract_response_content(response: Any) -> str:
             return object_content.strip()
 
         if isinstance(response, dict):
-            content = _try_extract_message_content(response)
+            content = try_extract_message_content(response)
             if content:
                 return content
-            content = _try_extract_choices_content(response)
+            content = try_extract_choices_content(response)
             if content:
                 return content
             if "content" in response:
