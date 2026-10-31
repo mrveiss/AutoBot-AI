@@ -110,7 +110,8 @@
       "medium": "درمیانہ",
       "high": "زیادہ",
       "critical": "Critical"
-    }
+    },
+    "logsLoadFailed": "لاگز لوڈ کرنے میں ناکامی: {error}"
   },
   "nav": {
     "chat": "چیٹ",
@@ -8099,6 +8100,15 @@
     "novnc": {
       "selectHost": "Select a host to connect",
       "selectHostDesc": "Choose a VNC-capable host from the list to open a remote desktop session."
+    },
+    "failures": {
+      "activateWindowFailed": "مینٹیننس ونڈو فعال کرنے میں ناکامی",
+      "completeWindowFailed": "مینٹیننس ونڈو مکمل کرنے میں ناکامی",
+      "deleteWindowFailed": "مینٹیننس ونڈو حذف کرنے میں ناکامی",
+      "drainNodeFailed": "نوڈ کو خالی کرنے میں ناکامی۔ براہ کرم دوبارہ کوشش کریں۔",
+      "resumeNodeFailed": "نوڈ کو دوبارہ شروع کرنے میں ناکامی۔ براہ کرم دوبارہ کوشش کریں۔",
+      "saveKeysFailed": "API کیز محفوظ کرنے میں ناکامی۔ تفصیلات کے لیے کنسول دیکھیں۔",
+      "addNodeFailed": "نوڈ شامل کرنے میں ناکامی"
     }
   },
   "mobile": {
