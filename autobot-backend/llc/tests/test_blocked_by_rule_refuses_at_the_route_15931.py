@@ -38,9 +38,10 @@ import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from llc.models.enums import WorkItemRelationType, WorkItemStatus, WorkItemType
+from llc.models.enums import WorkItemStatus, WorkItemType
 from llc.services.work_item_service import WorkItemService
 from llc.tests import _e2e_harness as harness
+from llc.tests._blocked_by_seed import block
 
 pytestmark = pytest.mark.asyncio
 
@@ -106,19 +107,6 @@ async def _item(session: AsyncSession, *, status: WorkItemStatus, title: str):
     return item
 
 
-async def _block(session: AsyncSession, blocker, blocked) -> None:
-    from llc.services.work_item_relations import WorkItemRelationService  # noqa: PLC0415
-
-    await WorkItemRelationService().add(
-        session,
-        company_id=_COMPANY,
-        source_id=str(blocker.id),
-        target_id=str(blocked.id),
-        relation_type=WorkItemRelationType.BLOCKED_BY,
-    )
-    await session.commit()
-
-
 async def _transition(client: AsyncClient, item, status: WorkItemStatus):
     return await client.post(
         f"/api/llc/work-items/{item.id}/transition",
@@ -135,7 +123,7 @@ async def test_the_route_refuses_a_blocked_item(client, session):  # noqa: ANN00
     """
     blocker = await _item(session, status=WorkItemStatus.READY, title="blocker")
     blocked = await _item(session, status=WorkItemStatus.BLOCKED, title="blocked")
-    await _block(session, blocker, blocked)
+    await block(session, _COMPANY, blocker, blocked)
 
     response = await _transition(client, blocked, WorkItemStatus.IN_PROGRESS)
 
@@ -159,7 +147,7 @@ async def test_the_route_allows_an_item_whose_blocker_is_resolved(client, sessio
     """
     blocker = await _item(session, status=WorkItemStatus.DONE, title="resolved blocker")
     blocked = await _item(session, status=WorkItemStatus.BLOCKED, title="unblocked")
-    await _block(session, blocker, blocked)
+    await block(session, _COMPANY, blocker, blocked)
 
     response = await _transition(client, blocked, WorkItemStatus.IN_PROGRESS)
 
