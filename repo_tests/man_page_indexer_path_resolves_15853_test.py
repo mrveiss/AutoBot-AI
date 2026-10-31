@@ -78,6 +78,7 @@ _EXPECTED_EXECUTORS = frozenset({"autobot-backend/tasks/man_page_indexing.py"})
 #: time is not a rule.
 _ALLOWED = {
     "repo_tests/man_page_indexer_path_resolves_15853_test.py": "this guard; the name is its subject",
+    "repo_tests/kb_write_chokepoint_19517_test.py": "classifies that script as a knowledge writer; it does not run it",
     "autobot-backend/api/api_endpoint_migrations_test.py": (
         "PARKED under #15173 and skipped -- 1017 source-text assertions frozen by #5359 Option C. "
         "Its assertion that `refresh_system_knowledge` contains the script name describes the "
