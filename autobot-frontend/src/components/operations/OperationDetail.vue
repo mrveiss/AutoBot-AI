@@ -158,7 +158,7 @@ import {
   canCancel,
   canResume
 } from '@/types/operations'
-import { formatDuration } from '@/utils/formatHelpers'
+import { formatDuration, createDateFormatter } from '@/utils/formatHelpers'
 import { useClipboard } from '@/composables/useClipboard'
 import OperationProgress from './OperationProgress.vue'
 
@@ -186,10 +186,7 @@ const hasContext = computed(() =>
 const canCancelOp = computed(() => canCancel(props.operation))
 const canResumeOp = computed(() => canResume(props.operation))
 
-function formatDateTime(timestamp: string | null): string {
-  if (!timestamp) return '-'
-  return new Date(timestamp).toLocaleString()
-}
+const formatDateTime = createDateFormatter({ emptyText: '-' })
 
 async function handleCancel() {
   actionLoading.value = true

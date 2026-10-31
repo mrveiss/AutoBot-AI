@@ -313,10 +313,6 @@ function formatVersion(version: string | null | undefined): string {
   return getCommitHashDisplay(version).display
 }
 
-function formatDate(dateStr: string | null): string {
-  return formatDateTime(dateStr)
-}
-
 async function handleRefresh(): Promise<void> {
   logger.info('Refreshing code sync status')
   await codeSync.refreshVersion()
@@ -1190,7 +1186,7 @@ onUnmounted(() => {
         <div>
           <span class="text-sm text-gray-500 block mb-1">{{ $t('codeSyncView.lastFetch') }}</span>
           <span class="text-lg font-semibold text-gray-900">
-            {{ formatDate(codeSync.status.value?.last_fetch ?? null) }}
+            {{ formatDateTime(codeSync.status.value?.last_fetch ?? null) }}
           </span>
         </div>
         <div>
@@ -1427,7 +1423,7 @@ onUnmounted(() => {
             <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
             </svg>{{ $t('codeSyncView.noDriftDetectedValue0FilesCompared', { value0: driftReport.total_compared }) }}</span>
-          <span class="text-sm text-gray-400">{{ $t('codeSyncView.checkedValue0', { value0: formatDate(driftReport.checked_at) }) }}</span>
+          <span class="text-sm text-gray-400">{{ $t('codeSyncView.checkedValue0', { value0: formatDateTime(driftReport.checked_at) }) }}</span>
         </div>
 
         <div class="text-xs text-gray-400 mb-3">
